@@ -28,15 +28,28 @@ export default async function LeadsPage({
     ];
   }
 
-  const [leads, total] = await Promise.all([
+  const [leadsRaw, total] = await Promise.all([
     prisma.lead.findMany({
       where,
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: "desc" },
+      include: {
+        simulations: { select: { source: true } },
+      },
     }),
     prisma.lead.count({ where }),
   ]);
+
+  // Niveau d'intention : a-t-il demandé un devis (via sim ou directement) ?
+  const leads = leadsRaw.map((l) => {
+    const devisDemande =
+      l.source === "SITE_DEVIS" ||
+      l.statut === "DEVIS_DEMANDE" ||
+      l.simulations.some((s) => s.source === "SITE_DEVIS");
+    const aSimule = l.simulations.length > 0 || l.source === "SITE_SIMULATEUR";
+    return { ...l, devisDemande, aSimule };
+  });
 
   return (
     <div className="space-y-6">

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { revalidatePath } from "next/cache";
+import { promises as fs } from "fs";
+import path from "path";
+import { resolveUploadsDir } from "@/lib/uploads";
 
 // Rate limiting (in-memory, resets on cold start)
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
@@ -44,10 +47,12 @@ const webhookSchema = z.object({
   prixDevis: z.number().optional(),
   lienSimulation: z.string().optional(),
   notes: z.string().optional(),
+  // Simulation images (base64 data URLs or raw base64)
+  imageBefore: z.string().optional(),
+  imageAfter: z.string().optional(),
 });
 
 function normalizeData(body: z.infer<typeof webhookSchema>) {
-  // Detect Meta/n8n format
   const isMeta = !!(body.first_name || body.last_name || body.phone);
 
   const prenom = body.prenom || body.first_name || "Inconnu";
@@ -80,47 +85,102 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
 
 function calculateScore(data: ReturnType<typeof normalizeData>): number {
   let score = 0;
-
-  // Source scoring
   const sourceScores: Record<string, number> = {
     META_ADS: 15, TIKTOK: 10, INSTAGRAM: 15,
     ORGANIQUE: 25, REFERENCE: 40, AUTRE: 10,
+    SITE_SIMULATEUR: 30, SITE_DEVIS: 45, SITE_CONTACT: 35,
   };
   score += sourceScores[data.source] || 10;
 
-  // Time scoring (9h-12h or 14h-18h = peak hours)
   const hour = new Date().getHours();
   if ((hour >= 9 && hour <= 12) || (hour >= 14 && hour <= 18)) score += 10;
 
-  // City scoring (proximity to Montpellier)
   const nearMontpellier = ["montpellier", "lattes", "perols", "castelnau", "mauguio", "palavas", "grabels", "juvignac", "saint-jean-de-vedas", "villeneuve-les-maguelone"];
   const majorCities = ["nimes", "beziers", "sete", "perpignan", "narbonne", "ales", "lunel"];
   const cityLower = data.ville.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (nearMontpellier.some(c => cityLower.includes(c))) score += 20;
   else if (majorCities.some(c => cityLower.includes(c))) score += 10;
 
-  // Project type scoring
   const projectScores: Record<string, number> = {
     CUISINE: 25, SDB: 20, MEUBLES: 15, PRO: 20, AUTRE: 10,
   };
   score += projectScores[data.typeProjet] || 10;
 
-  // Contact info bonus
   if (data.email) score += 5;
   if (data.telephone && data.telephone.length >= 10) score += 5;
 
   return Math.min(score, 100);
 }
 
+// Normalize phone for dedup comparison: keep only digits, strip leading 0/33
+function normalizePhone(phone: string): string {
+  const digits = (phone || "").replace(/\D/g, "");
+  if (digits.startsWith("33") && digits.length === 11) return digits.slice(2);
+  if (digits.startsWith("0")) return digits.slice(1);
+  return digits;
+}
+
+async function findExistingLead(telephone: string, email?: string) {
+  const normalized = normalizePhone(telephone);
+  const candidates = await prisma.lead.findMany({
+    where: {
+      OR: [
+        telephone ? { telephone } : undefined,
+        email ? { email } : undefined,
+      ].filter(Boolean) as { telephone?: string; email?: string }[],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  // Refine by normalized phone (covers spaces, + prefix, etc.)
+  const match = candidates.find((l) => {
+    if (email && l.email && l.email.toLowerCase() === email.toLowerCase()) return true;
+    if (normalized && normalizePhone(l.telephone) === normalized) return true;
+    return false;
+  });
+  return match || null;
+}
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB décodés, garde-fou
+
+// Strip data URL prefix and write base64 to file. Returns relative path.
+// Ne throw JAMAIS — retourne null en cas d'échec (lead/simulation restent OK).
+async function saveBase64Image(
+  base64: string,
+  leadId: string,
+  simulationId: string,
+  filename: string
+): Promise<string | null> {
+  try {
+    if (!base64 || typeof base64 !== "string") return null;
+    const m = base64.match(/^data:([^;]+);base64,(.+)$/);
+    const raw = m ? m[2] : base64;
+    // Vérif taille avant décode
+    const approxBytes = Math.floor((raw.length * 3) / 4);
+    if (approxBytes > MAX_IMAGE_BYTES) {
+      console.warn(`[webhook] Image trop grosse (${Math.round(approxBytes / 1024)}KB), ignorée`);
+      return null;
+    }
+    const buf = Buffer.from(raw, "base64");
+    const baseDir = resolveUploadsDir();
+    const dir = path.join(baseDir, leadId, simulationId);
+    await fs.mkdir(dir, { recursive: true });
+    const full = path.join(dir, filename);
+    await fs.writeFile(full, buf);
+    return `${leadId}/${simulationId}/${filename}`;
+  } catch (err) {
+    // Ne jamais casser le webhook pour un échec d'écriture image
+    console.error("[webhook] Échec sauvegarde image (non bloquant):", err);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
     if (!checkRateLimit(ip)) {
       return NextResponse.json({ error: "Trop de requêtes. Réessayez dans 1 minute." }, { status: 429 });
     }
 
-    // Auth check
     if (!process.env.WEBHOOK_SECRET) {
       console.error("WEBHOOK_SECRET is not configured");
       return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 500 });
@@ -138,37 +198,103 @@ export async function POST(request: NextRequest) {
 
     const data = normalizeData(parsed.data);
 
-    // Validate minimum required data
-    if (!data.nom || data.nom === "Inconnu" && !data.telephone) {
+    if (!data.nom || (data.nom === "Inconnu" && !data.telephone)) {
       return NextResponse.json({ error: "Nom ou téléphone requis au minimum" }, { status: 400 });
     }
 
-    const scoreSignature = calculateScore(data);
+    // ── DEDUP: existing lead by phone OR email? ──
+    const existing = await findExistingLead(data.telephone, data.email);
 
-    const lead = await prisma.lead.create({
-      data: { ...data, scoreSignature },
-    });
+    let lead;
+    let isNew = false;
+    if (existing) {
+      lead = existing;
+      // Enrichissement: met à jour les champs manquants si le nouveau payload les a
+      const updates: Record<string, unknown> = {};
+      if (!existing.email && data.email) updates.email = data.email;
+      if (existing.ville === "Non renseignée" && data.ville !== "Non renseignée") updates.ville = data.ville;
+      if (!existing.codePostal && data.codePostal) updates.codePostal = data.codePostal;
+      if (!existing.referenceChoisie && data.referenceChoisie) updates.referenceChoisie = data.referenceChoisie;
+      if (!existing.mlEstimes && data.mlEstimes) updates.mlEstimes = data.mlEstimes;
+      if (!existing.prixDevis && data.prixDevis) updates.prixDevis = data.prixDevis;
+      // Si le nouveau lead est un SITE_DEVIS, élever le statut
+      if (data.source === "SITE_DEVIS" && existing.statut === "NOUVEAU") {
+        updates.statut = "DEVIS_DEMANDE";
+      }
+      if (Object.keys(updates).length > 0) {
+        lead = await prisma.lead.update({ where: { id: existing.id }, data: updates });
+      }
+    } else {
+      isNew = true;
+      const scoreSignature = calculateScore(data);
+      lead = await prisma.lead.create({
+        data: { ...data, scoreSignature },
+      });
+    }
 
-    // Create initial interaction
-    await prisma.interaction.create({
-      data: {
-        type: "NOTE",
-        contenu: `Lead reçu via webhook (${data.source})${data.notes ? ` — ${data.notes}` : ""}`,
-        leadId: lead.id,
-      },
-    });
+    // ── Handle simulation (images + record) ──
+    const hasImages = !!(parsed.data.imageBefore || parsed.data.imageAfter);
+    const isSimulation = data.source === "SITE_SIMULATEUR" || hasImages;
+
+    if (isSimulation) {
+      const simulation = await prisma.simulation.create({
+        data: {
+          leadId: lead.id,
+          source: data.source,
+          referenceChoisie: data.referenceChoisie,
+          mlEstimes: data.mlEstimes,
+          prixDevis: data.prixDevis,
+          lienSimulation: data.lienSimulation,
+          notes: data.notes,
+        },
+      });
+
+      const imageBeforePath = parsed.data.imageBefore
+        ? await saveBase64Image(parsed.data.imageBefore, lead.id, simulation.id, "before.jpg")
+        : null;
+      const imageAfterPath = parsed.data.imageAfter
+        ? await saveBase64Image(parsed.data.imageAfter, lead.id, simulation.id, "after.jpg")
+        : null;
+
+      if (imageBeforePath || imageAfterPath) {
+        await prisma.simulation.update({
+          where: { id: simulation.id },
+          data: { imageBeforePath, imageAfterPath },
+        });
+      }
+
+      await prisma.interaction.create({
+        data: {
+          type: "NOTE",
+          contenu: `Nouvelle simulation cuisine (${data.source})${data.referenceChoisie ? ` — réf. ${data.referenceChoisie}` : ""}${data.notes ? ` — ${data.notes}` : ""}`,
+          leadId: lead.id,
+        },
+      });
+    } else {
+      const prefix = isNew ? "Lead reçu via webhook" : "Nouveau contact du client";
+      await prisma.interaction.create({
+        data: {
+          type: "NOTE",
+          contenu: `${prefix} (${data.source})${data.notes ? ` — ${data.notes}` : ""}`,
+          leadId: lead.id,
+        },
+      });
+    }
 
     revalidatePath("/leads");
+    revalidatePath(`/leads/${lead.id}`);
     revalidatePath("/dashboard");
 
-    return NextResponse.json({ success: true, leadId: lead.id, score: scoreSignature }, { status: 200 });
+    return NextResponse.json(
+      { success: true, leadId: lead.id, deduped: !isNew },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Webhook error:", error);
     return NextResponse.json({ error: "Erreur serveur", message: error instanceof Error ? error.message : "Unknown" }, { status: 500 });
   }
 }
 
-// CORS preflight for n8n/testing tools
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,

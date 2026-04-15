@@ -29,6 +29,22 @@ model Lead {
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
+  simulations      Simulation[]
+}
+
+model Simulation {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  leadId          String
+  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  source          String   @default("SITE_SIMULATEUR")
+  referenceChoisie String?
+  mlEstimes       Float?
+  prixDevis       Float?
+  lienSimulation  String?
+  imageBeforePath String?
+  imageAfterPath  String?
+  notes           String?
 }
 
 model Interaction {

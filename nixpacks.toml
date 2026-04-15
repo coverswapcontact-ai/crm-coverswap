@@ -1,3 +1,6 @@
 # Force Node 20 pour Next.js 16
-[phases.setup]
-nixPkgs = ["nodejs_20", "npm-9_x", "openssl"]
+# Voir aussi NIXPACKS_NODE_VERSION=20 dans les variables Railway
+providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"

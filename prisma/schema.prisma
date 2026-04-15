@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id               String        @id @default(cuid())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  nom              String
+  prenom           String
+  email            String?
+  telephone        String
+  ville            String
+  codePostal       String?
+  source           String        @default("AUTRE")
+  statut           String        @default("NOUVEAU")
+  typeProjet       String        @default("CUISINE")
+  referenceChoisie String?
+  mlEstimes        Float?
+  prixDevis        Float?
+  lienSimulation   String?
+  scoreSignature   Int           @default(0)
+  notes            String?
+  interactions     Interaction[]
+  devis            Devis[]
+  chantier         Chantier?
+}
+
+model Interaction {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  type      String
+  contenu   String
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model Devis {
+  id               String   @id @default(cuid())
+  numero           String   @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  expiresAt        DateTime
+  statut           String   @default("BROUILLON")
+  reference        String
+  mlTotal          Float
+  prixMatiere      Float
+  prixVente        Float
+  margeNette       Float
+  fraisDeplacement Float    @default(0)
+  acompte30        Float
+  solde70          Float
+  leadId           String
+  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  facture          Facture?
+}
+
+model Facture {
+  id           String    @id @default(cuid())
+  numero       String    @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  statut       String    @default("ACOMPTE_EN_ATTENTE")
+  montantTotal Float
+  acompteRecu  Boolean   @default(false)
+  acompteDate  DateTime?
+  soldeRecu    Boolean   @default(false)
+  soldeDate    DateTime?
+  devisId      String    @unique
+  devis        Devis     @relation(fields: [devisId], references: [id], onDelete: Cascade)
+}
+
+model Chantier {
+  id               String     @id @default(cuid())
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  dateIntervention DateTime
+  adresse          String
+  reference        String
+  mlCommandes      Float
+  prixMatiere      Float
+  margeNette       Float
+  statut           String     @default("COMMANDE_PASSEE")
+  acompteRecu      Boolean    @default(false)
+  soldeRecu        Boolean    @default(false)
+  photosAvant      String     @default("[]")
+  photosApres      String     @default("[]")
+  leadId           String     @unique
+  lead             Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  commandes        Commande[]
+}
+
+model Commande {
+  id                   String    @id @default(cuid())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  reference            String
+  quantiteML           Float
+  prixMatiere          Float
+  fournisseur          String    @default("Tego France")
+  emailFournisseur     String    @default("France@tego.eu")
+  statut               String    @default("A_COMMANDER")
+  dateCommande         DateTime?
+  dateReceptionEstimee DateTime?
+  dateReceptionReelle  DateTime?
+  chantierId           String
+  chantier             Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+}
+
+model Objectif {
+  id              String   @id @default(cuid())
+  periode         String   @unique
+  caMensuel       Float
+  nombreChantiers Int
+  tauxConversion  Float
+  createdAt       DateTime @default(now())
+}

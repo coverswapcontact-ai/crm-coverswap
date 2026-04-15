@@ -5,6 +5,10 @@ import CommandCenter from "@/components/layout/CommandCenter";
 import { ViewModeProvider } from "@/components/layout/ViewModeProvider";
 import prisma from "@/lib/prisma";
 
+// Toutes les pages CRM sont dynamiques (interrogent la DB à chaque requête)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const getCachedCounts = unstable_cache(
   async () => {
     const [leadsCount, facturesCount] = await Promise.all([

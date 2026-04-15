@@ -28,6 +28,26 @@ interface Lead {
   scoreSignature: number;
   createdAt: string;
   notes?: string | null;
+  devisDemande?: boolean;
+  aSimule?: boolean;
+}
+
+function IntentBadge({ devisDemande, aSimule }: { devisDemande?: boolean; aSimule?: boolean }) {
+  if (devisDemande) {
+    return (
+      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 whitespace-nowrap">
+        Devis demandé
+      </span>
+    );
+  }
+  if (aSimule) {
+    return (
+      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 whitespace-nowrap">
+        Simulation seule
+      </span>
+    );
+  }
+  return null;
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -104,6 +124,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${STATUT_STYLES[lead.statut] || ""}`}>
                       {lead.statut.replace(/_/g, " ")}
                     </span>
+                    <IntentBadge devisDemande={lead.devisDemande} aSimule={lead.aSimule} />
                   </div>
                   <p className="text-[12px] text-gray-400 truncate">
                     {SOURCE_LABELS[lead.source] || lead.source} · {lead.typeProjet} · {lead.ville || "—"} · {timeAgo(lead.createdAt)}
@@ -202,9 +223,12 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                   </span>
                 </TableCell>
                 <TableCell>
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUT_STYLES[lead.statut] || ""}`}>
-                    {lead.statut.replace(/_/g, " ")}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUT_STYLES[lead.statut] || ""}`}>
+                      {lead.statut.replace(/_/g, " ")}
+                    </span>
+                    <IntentBadge devisDemande={lead.devisDemande} aSimule={lead.aSimule} />
+                  </div>
                 </TableCell>
                 <TableCell className="text-gray-500 text-[13px]">{lead.typeProjet}</TableCell>
                 <TableCell className="text-gray-500 text-[12px] font-mono">{lead.referenceChoisie || "—"}</TableCell>

@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft, Phone, Mail, MapPin, FileText } from "lucide-react";
+import { ArrowLeft, FileText, Download, Image as ImageIcon } from "lucide-react";
 import { StatusChanger, InteractionForm } from "@/components/leads/LeadActions";
+import LeadEditor from "@/components/leads/LeadEditor";
 
 export default async function LeadDetailPage({
   params,
@@ -20,12 +21,18 @@ export default async function LeadDetailPage({
       interactions: { orderBy: { createdAt: "desc" } },
       devis: true,
       chantier: true,
+      simulations: { orderBy: { createdAt: "desc" } },
     },
   });
 
   if (!lead) notFound();
 
-  const now = new Date();
+  // Niveau d'intention : simple simulation ou vraie demande de devis ?
+  const devisDemande =
+    lead.source === "SITE_DEVIS" ||
+    lead.statut === "DEVIS_DEMANDE" ||
+    lead.simulations.some((s) => s.source === "SITE_DEVIS");
+  const aSimule = lead.simulations.length > 0 || lead.source === "SITE_SIMULATEUR";
 
   return (
     <div className="space-y-6">
@@ -45,66 +52,106 @@ export default async function LeadDetailPage({
           </p>
         </div>
         <StatusChanger leadId={lead.id} currentStatut={lead.statut} />
+        {devisDemande ? (
+          <span className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-semibold uppercase tracking-wider">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            Devis demandé — chaud
+          </span>
+        ) : aSimule ? (
+          <span className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+            Simulation seule — à relancer
+          </span>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Informations */}
-          <Card className="bg-[#262626] border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Informations</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Telephone</span>
-                <p className="text-white flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {lead.telephone}
-                </p>
-              </div>
-              {lead.email && (
-                <div>
-                  <span className="text-gray-400">Email</span>
-                  <p className="text-white flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    {lead.email}
-                  </p>
-                </div>
-              )}
-              <div>
-                <span className="text-gray-400">Source</span>
-                <p className="text-white">
-                  <Badge variant="outline" className="border-white/20">
-                    {sourceLabel(lead.source)}
-                  </Badge>
-                </p>
-              </div>
-              <div>
-                <span className="text-gray-400">Type projet</span>
-                <p className="text-white">{lead.typeProjet}</p>
-              </div>
-              {lead.referenceChoisie && (
-                <div>
-                  <span className="text-gray-400">Reference</span>
-                  <p className="text-white font-mono">{lead.referenceChoisie}</p>
-                </div>
-              )}
-              {lead.mlEstimes && (
-                <div>
-                  <span className="text-gray-400">ML estimes</span>
-                  <p className="text-white">{lead.mlEstimes} ml</p>
-                </div>
-              )}
-              {lead.prixDevis && (
-                <div>
-                  <span className="text-gray-400">Prix devis</span>
-                  <p className="text-red-400 font-bold text-lg">
-                    {formatEuros(lead.prixDevis)}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Informations (éditable + suppression) */}
+          <LeadEditor lead={lead} />
+
+          {/* Source */}
+          <div className="text-xs text-gray-400 flex items-center gap-2">
+            <span>Source :</span>
+            <Badge variant="outline" className="border-white/20">
+              {sourceLabel(lead.source)}
+            </Badge>
+          </div>
+
+          {/* Simulations */}
+          {lead.simulations.length > 0 && (
+            <Card className="bg-[#262626] border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Simulations ({lead.simulations.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {lead.simulations.map((s) => (
+                  <div key={s.id} className="p-3 rounded-lg bg-white/5 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-white font-medium">
+                            {s.referenceChoisie || "Simulation cuisine"}
+                          </p>
+                          {s.source === "SITE_DEVIS" ? (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-500/15 border border-red-500/40 text-red-400">
+                              Devis demandé
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-400">
+                              Simulation
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatDate(s.createdAt)}
+                          {s.prixDevis ? ` — ${formatEuros(s.prixDevis)}` : ""}
+                        </p>
+                      </div>
+                      <a
+                        href={`/api/simulations/${s.id}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                          <Download className="h-3 w-3 mr-1" />
+                          PDF
+                        </Button>
+                      </a>
+                    </div>
+                    {(s.imageBeforePath || s.imageAfterPath) && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {s.imageBeforePath && (
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">Avant</p>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/uploads/${s.imageBeforePath}`}
+                              alt="Avant"
+                              className="w-full h-40 object-cover rounded border border-white/10"
+                            />
+                          </div>
+                        )}
+                        {s.imageAfterPath && (
+                          <div>
+                            <p className="text-xs text-gray-400 mb-1">Après</p>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`/api/uploads/${s.imageAfterPath}`}
+                              alt="Après"
+                              className="w-full h-40 object-cover rounded border border-white/10"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Timeline */}
           <Card className="bg-[#262626] border-white/10">

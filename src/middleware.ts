@@ -51,7 +51,8 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     pathname === "/api/webhook" ||
     pathname.startsWith("/api/webhook/") ||
-    pathname === "/api/health";
+    pathname === "/api/health" ||
+    pathname.startsWith("/api/cron/");
 
   /* 2. HTTP Basic Auth sur tout sauf routes publiques */
   if (!isPublicRoute && !checkBasicAuth(request)) {

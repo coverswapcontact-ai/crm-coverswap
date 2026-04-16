@@ -147,6 +147,33 @@ export async function PUT(
         });
       }
       revalidatePath("/factures");
+
+      // Auto-création du chantier si pas déjà existant
+      const existingChantier = await prisma.chantier.findUnique({
+        where: { leadId: devis.leadId },
+      });
+      if (!existingChantier) {
+        const adresse = devis.lead.ville && devis.lead.ville !== "Non renseignée"
+          ? devis.lead.ville
+          : "À compléter";
+        await prisma.chantier.create({
+          data: {
+            leadId: devis.leadId,
+            dateIntervention: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // +14j par défaut
+            adresse,
+            reference: devis.reference || devis.nomReference || `CHANTIER-${devis.id.slice(-6)}`,
+            mlCommandes: devis.mlTotal,
+            prixMatiere: devis.prixMatiere,
+            margeNette: devis.margeNette,
+          },
+        });
+        // Passer le lead en CHANTIER_PLANIFIE
+        await prisma.lead.update({
+          where: { id: devis.leadId },
+          data: { statut: "CHANTIER_PLANIFIE" },
+        });
+        revalidatePath("/chantiers");
+      }
     }
 
     // -----------------------------------------------------------------------

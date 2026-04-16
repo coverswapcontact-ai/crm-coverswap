@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { fetchMetaLead, sendConversionEvent } from "@/lib/meta";
+import { Resend } from "resend";
 
 // ============================================================================
 // GET — Vérification webhook Meta (hub.challenge)
@@ -129,6 +130,34 @@ export async function POST(request: NextRequest) {
           city: metaLead.ville,
           eventId: `lead-${lead.id}`,
         });
+
+        // Notification email au gérant pour chaque nouveau lead
+        if (!existing) {
+          try {
+            const resend = new Resend(process.env.RESEND_API_KEY);
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
+            await resend.emails.send({
+              from: process.env.EMAIL_FROM || "CoverSwap <noreply@coverswap.fr>",
+              to: "coverswap.contact@gmail.com",
+              subject: `🔔 Nouveau lead Meta — ${metaLead.prenom} ${metaLead.nom}`,
+              html: `
+                <h2>Nouveau lead reçu via Meta Ads</h2>
+                <table style="border-collapse:collapse;font-family:sans-serif;">
+                  <tr><td style="padding:4px 12px;font-weight:bold;">Nom</td><td>${metaLead.prenom} ${metaLead.nom}</td></tr>
+                  <tr><td style="padding:4px 12px;font-weight:bold;">Téléphone</td><td>${metaLead.telephone || "—"}</td></tr>
+                  <tr><td style="padding:4px 12px;font-weight:bold;">Email</td><td>${metaLead.email || "—"}</td></tr>
+                  <tr><td style="padding:4px 12px;font-weight:bold;">Ville</td><td>${metaLead.ville || "—"}</td></tr>
+                  ${metaLead.formName ? `<tr><td style="padding:4px 12px;font-weight:bold;">Formulaire</td><td>${metaLead.formName}</td></tr>` : ""}
+                </table>
+                <br/>
+                <a href="${appUrl}/leads/${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+              `,
+            });
+          } catch (emailErr) {
+            console.error("[meta-webhook] Erreur notification email:", emailErr);
+            // Non bloquant — le lead est déjà créé
+          }
+        }
 
         results.push({ leadgenId, leadId: lead.id, success: true });
       }

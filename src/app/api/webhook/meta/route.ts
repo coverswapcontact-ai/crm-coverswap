@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
             const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
             await resend.emails.send({
               from: process.env.EMAIL_FROM || "CoverSwap <noreply@coverswap.fr>",
-              to: "coverswap.contact@gmail.com",
+              to: "contact@coverswap.fr",
               subject: `🔔 Nouveau lead Meta — ${metaLead.prenom} ${metaLead.nom}`,
               html: `
                 <h2>Nouveau lead reçu via Meta Ads</h2>

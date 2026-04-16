@@ -75,7 +75,7 @@ export async function GET(
         Lucas Villemin<br>
         73 rue Simone Veil, 34470 Pérols<br>
         Tél : 06 70 35 28 69<br>
-        Email : coverswap.contact@gmail.com<br>
+        Email : contact@coverswap.fr<br>
         SIRET : 94518036200010<br>
         APE : 4334Z
       </div>

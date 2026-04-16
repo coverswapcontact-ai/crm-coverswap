@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { promises as fs } from "fs";
 import path from "path";
 import { resolveUploadsDir } from "@/lib/uploads";
+import { Resend } from "resend";
 
 // Rate limiting (in-memory, resets on cold start)
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
@@ -279,6 +280,41 @@ export async function POST(request: NextRequest) {
           leadId: lead.id,
         },
       });
+    }
+
+    // Notification email au gérant pour chaque nouveau lead
+    if (isNew) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
+        const sourceLabel: Record<string, string> = {
+          SITE_SIMULATEUR: "Simulation IA",
+          SITE_DEVIS: "Demande de devis",
+          SITE_CONTACT: "Formulaire contact",
+          META_ADS: "Meta Ads",
+        };
+        await resend.emails.send({
+          from: process.env.EMAIL_FROM || "CoverSwap <noreply@coverswap.fr>",
+          to: "contact@coverswap.fr",
+          subject: `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
+          html: `
+            <h2>Nouveau lead reçu</h2>
+            <table style="border-collapse:collapse;font-family:sans-serif;">
+              <tr><td style="padding:4px 12px;font-weight:bold;">Nom</td><td>${data.prenom} ${data.nom}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Téléphone</td><td>${data.telephone || "—"}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Email</td><td>${data.email || "—"}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Ville</td><td>${data.ville || "—"}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Source</td><td>${sourceLabel[data.source] || data.source}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Projet</td><td>${data.typeProjet}</td></tr>
+              ${data.referenceChoisie ? `<tr><td style="padding:4px 12px;font-weight:bold;">Référence</td><td>${data.referenceChoisie}</td></tr>` : ""}
+            </table>
+            <br/>
+            <a href="${appUrl}/leads/${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+          `,
+        });
+      } catch (emailErr) {
+        console.error("[webhook] Erreur notification email:", emailErr);
+      }
     }
 
     revalidatePath("/leads");

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -57,23 +58,30 @@ model Interaction {
 }
 
 model Devis {
-  id               String   @id @default(cuid())
-  numero           String   @unique
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  expiresAt        DateTime
-  statut           String   @default("BROUILLON")
-  reference        String
-  mlTotal          Float
-  prixMatiere      Float
-  prixVente        Float
-  margeNette       Float
-  fraisDeplacement Float    @default(0)
-  acompte30        Float
-  solde70          Float
-  leadId           String
-  lead             Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  facture          Facture?
+  id                   String   @id @default(cuid())
+  numero               String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  expiresAt            DateTime
+  statut               String   @default("BROUILLON")
+  reference            String   // code libre ex "K1"
+  nomReference         String?  // nom commercial ex "Black mat"
+  gamme                String   @default("ESSENTIAL") // GammeCode
+  complexite           Int      @default(1) // 1=standard, 2=+10%, 3=+20%
+  mlTotal              Float
+  prixVenteHTml        Float    @default(0) // prix vente unitaire HT/ml
+  prixMatiere          Float    // coût matière TTC réel (pour marge interne)
+  prixVente            Float    // total vente client (= TTC pour CoverSwap 293B)
+  margeNette           Float
+  fraisDeplacement     Float    @default(0)
+  acompte30            Float
+  solde70              Float
+  objet                String?  // "Rénovation par covering meuble coiffeur"
+  lignesAdditionnelles String   @default("[]") // JSON LigneAdditionnelle[]
+  notesInternes        String?
+  leadId               String
+  lead                 Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  facture              Facture?
 }
 
 model Facture {

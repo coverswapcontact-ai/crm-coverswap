@@ -21,7 +21,7 @@ export const LEAD_SOURCES = ["META_ADS", "TIKTOK", "INSTAGRAM", "ORGANIQUE", "RE
 export const LEAD_STATUTS = ["NOUVEAU", "CONTACTE", "DEVIS_ENVOYE", "SIGNE", "CHANTIER_PLANIFIE", "TERMINE", "PERDU"] as const;
 export const TYPE_PROJETS = ["CUISINE", "SDB", "MEUBLES", "PRO", "AUTRE"] as const;
 export const DEVIS_STATUTS = ["BROUILLON", "ENVOYE", "SIGNE", "REFUSE", "EXPIRE"] as const;
-export const FACTURE_STATUTS = ["ACOMPTE_EN_ATTENTE", "ACOMPTE_RECU", "SOLDEE", "IMPAYEE"] as const;
+export const FACTURE_STATUTS = ["ACOMPTE_EN_ATTENTE", "ACOMPTE_RECU", "SOLDEE", "IMPAYEE", "ANNULEE"] as const;
 export const CHANTIER_STATUTS = ["COMMANDE_PASSEE", "MATIERE_RECUE", "EN_COURS", "TERMINE", "FACTURE"] as const;
 export const COMMANDE_STATUTS = ["A_COMMANDER", "COMMANDEE", "EN_TRANSIT", "RECUE"] as const;
 
@@ -42,6 +42,7 @@ export function statutColor(statut: string): string {
     ACOMPTE_RECU: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     SOLDEE: "bg-green-500/20 text-green-400 border-green-500/30",
     IMPAYEE: "bg-red-500/20 text-red-400 border-red-500/30",
+    ANNULEE: "bg-gray-500/20 text-gray-400 border-gray-500/30 line-through",
     COMMANDE_PASSEE: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     MATIERE_RECUE: "bg-green-500/20 text-green-400 border-green-500/30",
     EN_COURS: "bg-orange-500/20 text-orange-400 border-orange-500/30",

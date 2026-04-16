@@ -6,10 +6,14 @@ import { calculerDevis } from "@/lib/calcul-devis";
 
 const createDevisSchema = z.object({
   leadId: z.string().min(1, "Lead requis"),
-  reference: z.string().min(1, "Reference requise"),
-  mlTotal: z.number().positive("ML doit etre positif"),
-  prixHT: z.number().positive("Prix HT doit etre positif"),
+  reference: z.string().min(1, "Code référence requis"),
+  nomReference: z.string().optional(),
+  gamme: z.string().min(1, "Gamme requise"),
+  complexite: z.number().int().min(1).max(3).default(1),
+  mlTotal: z.number().positive("ML doit être positif"),
   fraisDeplacement: z.number().min(0).optional(),
+  objet: z.string().optional(),
+  notesInternes: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("GET /api/devis error:", error);
     return NextResponse.json(
-      { error: "Erreur lors de la recuperation des devis" },
+      { error: "Erreur lors de la récupération des devis" },
       { status: 500 }
     );
   }
@@ -57,41 +61,60 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Donnees invalides", details: parsed.error.flatten() },
+        { error: "Données invalides", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    const { leadId, reference, mlTotal, prixHT, fraisDeplacement = 0 } = parsed.data;
+    const {
+      leadId,
+      reference,
+      nomReference,
+      gamme,
+      complexite,
+      mlTotal,
+      fraisDeplacement = 0,
+      objet,
+      notesInternes,
+    } = parsed.data;
 
-    // Calculate pricing
-    const calcul = calculerDevis(prixHT, mlTotal, fraisDeplacement);
+    // Calcul via nouvelle formule
+    const calcul = calculerDevis({
+      gammeCode: gamme,
+      ml: mlTotal,
+      complexite,
+      fraisDeplacement,
+    });
 
-    // ExpiresAt = 30 days from now
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    // Use transaction for atomic numero generation
     const devis = await prisma.$transaction(async (tx) => {
       const year = new Date().getFullYear();
       const last = await tx.devis.findFirst({
         orderBy: { numero: "desc" },
-        where: { numero: { startsWith: `DEVIS-${year}` } },
+        where: { numero: { startsWith: `${year}-` } },
       });
       const num = last ? parseInt(last.numero.split("-").pop()!) + 1 : 1;
-      const numero = `DEVIS-${year}-${String(num).padStart(4, "0")}`;
+      const numero = `${year}-${String(num).padStart(4, "0")}`;
 
       return tx.devis.create({
         data: {
           numero,
           reference,
+          nomReference: nomReference ?? null,
+          gamme,
+          complexite,
           mlTotal: calcul.mlArrondi,
-          prixMatiere: calcul.prixMatiere,
+          prixVenteHTml: calcul.prixVenteHTml,
+          prixMatiere: calcul.coutMatiereTTC + calcul.supplementCoverStyl,
           prixVente: calcul.prixVente,
           margeNette: calcul.margeNette,
           fraisDeplacement,
           acompte30: calcul.acompte30,
           solde70: calcul.solde70,
+          objet: objet ?? null,
+          notesInternes: notesInternes ?? null,
           expiresAt,
           leadId,
         },
@@ -104,7 +127,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/devis error:", error);
     return NextResponse.json(
-      { error: "Erreur lors de la creation du devis" },
+      { error: "Erreur lors de la création du devis" },
       { status: 500 }
     );
   }

@@ -27,9 +27,62 @@ interface Lead {
   prixDevis: number | null;
   scoreSignature: number;
   createdAt: string;
+  lastActivityAt?: string;
   notes?: string | null;
   devisDemande?: boolean;
   aSimule?: boolean;
+}
+
+// Action attendue + urgence par statut
+function getNextAction(statut: string): string {
+  switch (statut) {
+    case "NOUVEAU": return "À contacter";
+    case "CONTACTE": return "Attente retour";
+    case "DEVIS_ENVOYE": return "Relancer devis";
+    case "SIGNE": return "Planifier chantier";
+    case "CHANTIER_PLANIFIE": return "Commander matière";
+    case "TERMINE": return "—";
+    case "PERDU": return "—";
+    default: return "";
+  }
+}
+
+// Code couleur selon le temps écoulé depuis la dernière activité
+// et la sensibilité au temps du statut courant
+function getRelanceColor(days: number, statut: string): {
+  bg: string;
+  text: string;
+  border: string;
+  label: string;
+  urgent: boolean;
+} {
+  const terminal = statut === "TERMINE" || statut === "PERDU";
+  if (terminal) {
+    return { bg: "bg-gray-50", text: "text-gray-400", border: "border-gray-100", label: `${days}j`, urgent: false };
+  }
+
+  // Seuils adaptés selon statut
+  let seuilVert = 2;
+  let seuilJaune = 5;
+  let seuilOrange = 10;
+
+  if (statut === "NOUVEAU") {
+    seuilVert = 0; seuilJaune = 1; seuilOrange = 3; // très urgent sur lead neuf
+  } else if (statut === "DEVIS_ENVOYE") {
+    seuilVert = 3; seuilJaune = 7; seuilOrange = 14;
+  } else if (statut === "CONTACTE") {
+    seuilVert = 2; seuilJaune = 5; seuilOrange = 10;
+  }
+
+  if (days <= seuilVert)  return { bg: "bg-green-50",  text: "text-green-600",  border: "border-green-200",  label: days === 0 ? "Auj." : `${days}j`, urgent: false };
+  if (days <= seuilJaune) return { bg: "bg-yellow-50", text: "text-yellow-600", border: "border-yellow-200", label: `${days}j`, urgent: false };
+  if (days <= seuilOrange)return { bg: "bg-orange-50", text: "text-orange-600", border: "border-orange-200", label: `${days}j`, urgent: true };
+  return { bg: "bg-red-50",    text: "text-red-600",    border: "border-red-200",    label: `${days}j`, urgent: true };
+}
+
+function daysSince(dateStr: string | undefined): number {
+  if (!dateStr) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000));
 }
 
 function IntentBadge({ devisDemande, aSimule }: { devisDemande?: boolean; aSimule?: boolean }) {
@@ -107,27 +160,39 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
         {/* List */}
         <div className="glass-card overflow-hidden">
           <div className="divide-y divide-gray-50">
-            {leads.map((lead) => (
+            {leads.map((lead) => {
+              const d = daysSince(lead.lastActivityAt || lead.createdAt);
+              const rc = getRelanceColor(d, lead.statut);
+              const action = getNextAction(lead.statut);
+              return (
               <Link
                 key={lead.id}
                 href={`/leads/${lead.id}`}
-                className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/80 transition-colors group"
+                className={`flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/80 transition-colors group ${rc.urgent ? "bg-red-50/30" : ""}`}
               >
-                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-[13px] font-semibold shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-[13px] font-semibold shrink-0 relative">
                   {lead.prenom[0]}{lead.nom[0]}
+                  {rc.urgent && (
+                    <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white animate-pulse" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[14px] font-medium text-gray-900 truncate">
                       {lead.prenom} {lead.nom}
                     </p>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${STATUT_STYLES[lead.statut] || ""}`}>
                       {lead.statut.replace(/_/g, " ")}
                     </span>
+                    {action && action !== "—" && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${rc.bg} ${rc.text} ${rc.border}`}>
+                        {action} · {rc.label}
+                      </span>
+                    )}
                     <IntentBadge devisDemande={lead.devisDemande} aSimule={lead.aSimule} />
                   </div>
                   <p className="text-[12px] text-gray-400 truncate">
-                    {SOURCE_LABELS[lead.source] || lead.source} · {lead.typeProjet} · {lead.ville || "—"} · {timeAgo(lead.createdAt)}
+                    {SOURCE_LABELS[lead.source] || lead.source} · {lead.typeProjet} · {lead.ville || "—"} · créé {timeAgo(lead.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -145,7 +210,8 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                   </a>
                 </div>
               </Link>
-            ))}
+              );
+            })}
             {leads.length === 0 && (
               <div className="text-center text-gray-400 py-12 text-[14px]">
                 Aucun lead trouve
@@ -205,6 +271,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
               <TableHead className="text-gray-500 text-[12px] font-semibold">Ville</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Source</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Statut</TableHead>
+              <TableHead className="text-gray-500 text-[12px] font-semibold">Relance</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Type</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Ref.</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Prix Devis</TableHead>
@@ -213,9 +280,18 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {leads.map((lead) => (
-              <TableRow key={lead.id} className="border-gray-50 hover:bg-gray-50/60">
-                <TableCell className="text-gray-900 font-medium text-[13px]">{lead.prenom} {lead.nom}</TableCell>
+            {leads.map((lead) => {
+              const d = daysSince(lead.lastActivityAt || lead.createdAt);
+              const rc = getRelanceColor(d, lead.statut);
+              const action = getNextAction(lead.statut);
+              return (
+              <TableRow key={lead.id} className={`border-gray-50 hover:bg-gray-50/60 ${rc.urgent ? "bg-red-50/30" : ""}`}>
+                <TableCell className="text-gray-900 font-medium text-[13px]">
+                  <div className="flex items-center gap-2">
+                    {rc.urgent && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />}
+                    {lead.prenom} {lead.nom}
+                  </div>
+                </TableCell>
                 <TableCell className="text-gray-500 text-[13px]">{lead.ville}</TableCell>
                 <TableCell>
                   <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -229,6 +305,18 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                     </span>
                     <IntentBadge devisDemande={lead.devisDemande} aSimule={lead.aSimule} />
                   </div>
+                </TableCell>
+                <TableCell>
+                  {action && action !== "—" ? (
+                    <div className="flex flex-col gap-0.5">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border w-fit ${rc.bg} ${rc.text} ${rc.border}`}>
+                        {action}
+                      </span>
+                      <span className={`text-[10px] ${rc.text}`}>{rc.label} sans contact</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-gray-300">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-gray-500 text-[13px]">{lead.typeProjet}</TableCell>
                 <TableCell className="text-gray-500 text-[12px] font-mono">{lead.referenceChoisie || "—"}</TableCell>
@@ -251,9 +339,10 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                   </Link>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
             {leads.length === 0 && (
-              <TableRow><TableCell colSpan={9} className="text-center text-gray-400 py-8">Aucun lead trouve</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center text-gray-400 py-8">Aucun lead trouve</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

@@ -50,6 +50,7 @@ export async function middleware(request: NextRequest) {
   /* 1. Routes publiques (webhook site + healthcheck Railway) */
   const isPublicRoute =
     pathname === "/api/webhook" ||
+    pathname.startsWith("/api/webhook/") ||
     pathname === "/api/health";
 
   /* 2. HTTP Basic Auth sur tout sauf routes publiques */

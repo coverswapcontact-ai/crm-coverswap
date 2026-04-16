@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
+import { sendConversionEvent, devisStatutToConversion } from "@/lib/meta";
 
 const updateDevisSchema = z.object({
   statut: z.string().optional(),
@@ -164,6 +165,26 @@ export async function PUT(
         data: { statut: "ANNULEE" },
       });
       revalidatePath("/factures");
+    }
+
+    // -----------------------------------------------------------------------
+    // Meta Conversions API — remonter l'événement pour optimiser les pubs
+    // (non bloquant, fire-and-forget)
+    // -----------------------------------------------------------------------
+    if (parsed.data.statut && parsed.data.statut !== before.statut) {
+      const conv = devisStatutToConversion(parsed.data.statut);
+      if (conv) {
+        sendConversionEvent({
+          eventName: conv.eventName,
+          email: devis.lead.email || undefined,
+          phone: devis.lead.telephone || undefined,
+          firstName: devis.lead.prenom,
+          lastName: devis.lead.nom,
+          city: devis.lead.ville || undefined,
+          value: parsed.data.statut === "SIGNE" ? devis.prixVente : undefined,
+          eventId: `devis-${devis.id}-${parsed.data.statut}`,
+        }).catch(() => {}); // jamais bloquant
+      }
     }
 
     // Recharger pour refléter changements facture/lead

@@ -282,8 +282,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Notification email au gérant pour chaque nouveau lead
-    if (isNew) {
+    // Notification email au gérant — uniquement pour les vrais leads (pas les simulations)
+    const notifSources = ["SITE_DEVIS", "SITE_CONTACT", "META_ADS", "REFERENCE", "ORGANIQUE"];
+    if (isNew && notifSources.includes(data.source)) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";

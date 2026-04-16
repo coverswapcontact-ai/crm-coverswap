@@ -207,7 +207,7 @@ function DevisPDF({ d }: { d: DevisData }) {
             <Text style={s.emitter}>Monsieur Lucas VILLEMIN</Text>
             <Text style={s.emitter}>73 rue Simone Veil</Text>
             <Text style={s.emitter}>34470 Pérols</Text>
-            <Text style={s.emitter}>coverswap.contact@gmail.com</Text>
+            <Text style={s.emitter}>contact@coverswap.fr</Text>
           </View>
         </View>
         <Text style={s.phone}>06 70 35 28 69</Text>

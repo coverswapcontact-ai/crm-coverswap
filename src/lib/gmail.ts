@@ -78,7 +78,7 @@ Cordialement,
 Lucas Villemin
 CoverSwap — Rénovation adhésive premium
 06 70 35 28 69
-coverswap.contact@gmail.com
+contact@coverswap.fr
 73 rue Simone Veil, 34470 Pérols`;
 
   return { subject, body };

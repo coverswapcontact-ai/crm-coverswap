@@ -6,25 +6,24 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "./ViewModeProvider";
 import {
-  LayoutDashboard, Users, Kanban, FileText, Receipt,
-  HardHat, Package, TrendingUp, BarChart3, Bot,
-  Menu, X, MessageSquare,
+  LayoutDashboard, Users, FileText, Receipt,
+  HardHat, Bot, Menu, X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 /* ──────────────────────────────────────────────────────────────
    NAV ITEMS — simple = les 4 essentiels, advanced = tout
 ────────────────────────────────────────────────────────────── */
+// Sidebar simplifiée : 6 entrées max.
+// - Kanban accessible via bouton sur /leads (plus dans la sidebar)
+// - Commandes intégrées dans /chantiers
+// - Finances + Analytics fusionnées dans /dashboard
 const navItems = [
   { href: "/dashboard", label: "Accueil", icon: LayoutDashboard, simple: true },
   { href: "/leads", label: "Leads", icon: Users, badge: "leads", simple: true },
-  { href: "/leads/kanban", label: "Kanban", icon: Kanban, simple: false },
   { href: "/devis", label: "Devis", icon: FileText, simple: true },
-  { href: "/factures", label: "Factures", icon: Receipt, badge: "factures", simple: false },
+  { href: "/factures", label: "Factures", icon: Receipt, badge: "factures", simple: true },
   { href: "/chantiers", label: "Chantiers", icon: HardHat, simple: true },
-  { href: "/commandes", label: "Commandes", icon: Package, simple: false },
-  { href: "/finances", label: "Finances", icon: TrendingUp, simple: false },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, simple: false },
   { href: "/assistant", label: "Assistant IA", icon: Bot, simple: false },
 ];
 

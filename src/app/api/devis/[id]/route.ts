@@ -6,8 +6,22 @@ import { z } from "zod/v4";
 const updateDevisSchema = z.object({
   statut: z.string().optional(),
   reference: z.string().optional(),
+  nomReference: z.string().optional(),
+  gamme: z.string().optional(),
+  complexite: z.number().int().min(1).max(3).optional(),
+  mlTotal: z.number().positive().optional(),
   fraisDeplacement: z.number().min(0).optional(),
+  objet: z.string().optional(),
+  lignesAdditionnelles: z.string().optional(), // JSON string
+  notesInternes: z.string().optional(),
   expiresAt: z.string().datetime().optional(),
+  // Champs recalculés côté serveur si fournis
+  prixVenteHTml: z.number().optional(),
+  prixMatiere: z.number().optional(),
+  prixVente: z.number().optional(),
+  margeNette: z.number().optional(),
+  acompte30: z.number().optional(),
+  solde70: z.number().optional(),
 });
 
 export async function GET(
@@ -57,41 +71,112 @@ export async function PUT(
       data.expiresAt = new Date(data.expiresAt as string);
     }
 
+    // Lire l'état actuel pour détecter les transitions
+    const before = await prisma.devis.findUnique({
+      where: { id },
+      include: { facture: true, lead: true },
+    });
+    if (!before) {
+      return NextResponse.json({ error: "Devis non trouvé" }, { status: 404 });
+    }
+
     const devis = await prisma.devis.update({
       where: { id },
       data,
       include: { lead: true, facture: true },
     });
 
-    // When statut changes to SIGNE, auto-create Facture with atomic numero generation
-    if (parsed.data.statut === "SIGNE" && !devis.facture) {
-      const facture = await prisma.$transaction(async (tx) => {
-        const year = new Date().getFullYear();
-        const lastFacture = await tx.facture.findFirst({
-          orderBy: { numero: "desc" },
-          where: { numero: { startsWith: `FACT-${year}` } },
+    // -----------------------------------------------------------------------
+    // Sync automatique du statut du Lead en fonction du statut du Devis
+    // -----------------------------------------------------------------------
+    if (parsed.data.statut && parsed.data.statut !== before.statut) {
+      const newDevisStatut = parsed.data.statut;
+      const leadStatutMap: Record<string, string> = {
+        BROUILLON: "CONTACTE",
+        ENVOYE: "DEVIS_ENVOYE",
+        SIGNE: "SIGNE",
+        REFUSE: "PERDU",
+      };
+      const targetLeadStatut = leadStatutMap[newDevisStatut];
+      // Ne pas écraser un statut déjà plus avancé (CHANTIER_PLANIFIE, TERMINE)
+      const advanced = ["CHANTIER_PLANIFIE", "TERMINE"];
+      if (
+        targetLeadStatut &&
+        !advanced.includes(devis.lead.statut) &&
+        devis.lead.statut !== targetLeadStatut
+      ) {
+        await prisma.lead.update({
+          where: { id: devis.leadId },
+          data: { statut: targetLeadStatut },
         });
-        const num = lastFacture
-          ? parseInt(lastFacture.numero.split("-").pop()!) + 1
-          : 1;
-        const numero = `FACT-${year}-${String(num).padStart(4, "0")}`;
-
-        return tx.facture.create({
-          data: {
-            numero,
-            montantTotal: devis.prixVente,
-            devisId: devis.id,
-          },
-        });
-      });
-
-      revalidatePath("/devis");
-      revalidatePath("/factures");
-      return NextResponse.json({ ...devis, facture });
+      }
     }
 
+    // -----------------------------------------------------------------------
+    // Transition vers SIGNE → créer la facture si pas déjà existante
+    // (ou la "ressusciter" si elle était ANNULEE)
+    // -----------------------------------------------------------------------
+    if (parsed.data.statut === "SIGNE" && before.statut !== "SIGNE") {
+      if (devis.facture) {
+        // Réactiver une facture annulée
+        if (devis.facture.statut === "ANNULEE") {
+          await prisma.facture.update({
+            where: { id: devis.facture.id },
+            data: { statut: "ACOMPTE_EN_ATTENTE" },
+          });
+        }
+      } else {
+        await prisma.$transaction(async (tx) => {
+          const year = new Date().getFullYear();
+          const lastFacture = await tx.facture.findFirst({
+            orderBy: { numero: "desc" },
+            where: { numero: { startsWith: `FACT-${year}` } },
+          });
+          const num = lastFacture
+            ? parseInt(lastFacture.numero.split("-").pop()!) + 1
+            : 1;
+          const numero = `FACT-${year}-${String(num).padStart(4, "0")}`;
+          await tx.facture.create({
+            data: {
+              numero,
+              montantTotal: devis.prixVente,
+              devisId: devis.id,
+            },
+          });
+        });
+      }
+      revalidatePath("/factures");
+    }
+
+    // -----------------------------------------------------------------------
+    // Annulation d'un devis SIGNE → marquer la facture comme ANNULEE
+    // (réversibilité totale, pas de suppression)
+    // -----------------------------------------------------------------------
+    if (
+      before.statut === "SIGNE" &&
+      parsed.data.statut &&
+      parsed.data.statut !== "SIGNE" &&
+      devis.facture &&
+      devis.facture.statut !== "ANNULEE"
+    ) {
+      await prisma.facture.update({
+        where: { id: devis.facture.id },
+        data: { statut: "ANNULEE" },
+      });
+      revalidatePath("/factures");
+    }
+
+    // Recharger pour refléter changements facture/lead
+    const fresh = await prisma.devis.findUnique({
+      where: { id },
+      include: { lead: true, facture: true },
+    });
+
     revalidatePath("/devis");
-    return NextResponse.json(devis);
+    revalidatePath(`/devis/${id}`);
+    revalidatePath("/leads");
+    revalidatePath(`/leads/${devis.leadId}`);
+    return NextResponse.json(fresh);
   } catch (error) {
     console.error("PUT /api/devis/[id] error:", error);
     return NextResponse.json(

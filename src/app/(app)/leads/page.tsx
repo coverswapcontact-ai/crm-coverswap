@@ -36,19 +36,24 @@ export default async function LeadsPage({
       orderBy: { createdAt: "desc" },
       include: {
         simulations: { select: { source: true } },
+        interactions: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, type: true } },
       },
     }),
     prisma.lead.count({ where }),
   ]);
 
-  // Niveau d'intention : a-t-il demandé un devis (via sim ou directement) ?
+  // Niveau d'intention + date dernière activité (interaction ou création)
   const leads = leadsRaw.map((l) => {
     const devisDemande =
       l.source === "SITE_DEVIS" ||
       l.statut === "DEVIS_DEMANDE" ||
       l.simulations.some((s) => s.source === "SITE_DEVIS");
     const aSimule = l.simulations.length > 0 || l.source === "SITE_SIMULATEUR";
-    return { ...l, devisDemande, aSimule };
+    const lastInteraction = l.interactions[0];
+    const lastActivityAt = lastInteraction
+      ? (lastInteraction.createdAt > l.updatedAt ? lastInteraction.createdAt : l.updatedAt)
+      : l.createdAt;
+    return { ...l, devisDemande, aSimule, lastActivityAt };
   });
 
   return (

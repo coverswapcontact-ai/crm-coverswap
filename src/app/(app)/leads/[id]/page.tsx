@@ -5,9 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft, FileText, Download, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, FileText, Download, Image as ImageIcon, Mail, Phone, MessageSquare } from "lucide-react";
 import { StatusChanger, InteractionForm } from "@/components/leads/LeadActions";
 import LeadEditor from "@/components/leads/LeadEditor";
+import { buildGmailComposeUrl, emailRelanceDevisTemplate } from "@/lib/gmail";
 
 export default async function LeadDetailPage({
   params,
@@ -110,16 +111,26 @@ export default async function LeadDetailPage({
                           {s.prixDevis ? ` — ${formatEuros(s.prixDevis)}` : ""}
                         </p>
                       </div>
-                      <a
-                        href={`/api/simulations/${s.id}/pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                          <Download className="h-3 w-3 mr-1" />
-                          PDF
-                        </Button>
-                      </a>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/devis/nouveau?leadId=${lead.id}${s.referenceChoisie ? `&reference=${encodeURIComponent(s.referenceChoisie)}` : ""}${s.mlEstimes ? `&ml=${s.mlEstimes}` : ""}`}
+                        >
+                          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+                            <FileText className="h-3 w-3 mr-1" />
+                            Créer devis
+                          </Button>
+                        </Link>
+                        <a
+                          href={`/api/simulations/${s.id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                            <Download className="h-3 w-3 mr-1" />
+                            PDF
+                          </Button>
+                        </a>
+                      </div>
                     </div>
                     {(s.imageBeforePath || s.imageAfterPath) && (
                       <div className="grid grid-cols-2 gap-2">
@@ -222,15 +233,72 @@ export default async function LeadDetailPage({
           {/* Interaction Form */}
           <InteractionForm leadId={lead.id} />
 
-          {/* Actions */}
-          <div className="space-y-2">
-            <Link href={`/devis/nouveau?leadId=${lead.id}`} className="block">
-              <Button className="w-full bg-red-600 hover:bg-red-700">
-                <FileText className="h-4 w-4 mr-2" />
-                Creer un devis
-              </Button>
-            </Link>
-          </div>
+          {/* Actions rapides — hub central */}
+          <Card className="bg-[#262626] border-white/10">
+            <CardHeader>
+              <CardTitle className="text-white text-sm">Actions rapides</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Link href={`/devis/nouveau?leadId=${lead.id}`} className="block">
+                <Button className="w-full bg-red-600 hover:bg-red-700 justify-start">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Créer un devis
+                </Button>
+              </Link>
+              {lead.email && (
+                <a
+                  href={buildGmailComposeUrl({
+                    to: lead.email,
+                    subject: `CoverSwap — ${lead.prenom} ${lead.nom}`,
+                    body: `Bonjour ${lead.prenom},\n\n`,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 justify-start">
+                    <Mail className="h-4 w-4 mr-2" />
+                    Email Gmail
+                  </Button>
+                </a>
+              )}
+              {lead.devis.length > 0 && lead.email && (
+                <a
+                  href={buildGmailComposeUrl({
+                    to: lead.email,
+                    ...emailRelanceDevisTemplate({
+                      prenomClient: lead.prenom,
+                      numero: lead.devis[0].numero,
+                    }),
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 justify-start">
+                    <Mail className="h-4 w-4 mr-2" />
+                    Relancer devis
+                  </Button>
+                </a>
+              )}
+              {lead.telephone && (
+                <a href={`tel:${lead.telephone}`} className="block">
+                  <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 justify-start">
+                    <Phone className="h-4 w-4 mr-2" />
+                    {lead.telephone}
+                  </Button>
+                </a>
+              )}
+              {lead.telephone && (
+                <a href={`sms:${lead.telephone}`} className="block">
+                  <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10 justify-start">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    SMS
+                  </Button>
+                </a>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Devis list */}
           {lead.devis.length > 0 && (

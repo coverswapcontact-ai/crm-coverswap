@@ -17,7 +17,7 @@ const USERS: { id: string; name: string; email: string; passwordEnv: string; fal
   {
     id: "2",
     name: "Elisabeth Villemin",
-    email: "elisabeth.villemin@coverswap.fr",
+    email: "elisabeth.villemin@yahoo.com",
     passwordEnv: "ELISABETH_PASSWORD",
     fallback: "elisabeth2026",
   },

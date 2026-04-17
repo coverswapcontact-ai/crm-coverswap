@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, Mail, Truck, Package } from "lucide-react";
+import DeleteRowButton from "@/components/ui/delete-row-button";
 
 interface CommandeActionsProps {
   commandeId: string;
@@ -61,6 +62,7 @@ export default function CommandeActions({ commandeId, statut, reference, quantit
           {loading === "RECUE" ? <Loader2 className="h-3 w-3 animate-spin" /> : <><CheckCircle className="h-3 w-3 mr-1" />Reçue</>}
         </Button>
       )}
+      <DeleteRowButton url={`/api/commandes/${commandeId}`} entityLabel={`commande ${reference}`} />
     </div>
   );
 }

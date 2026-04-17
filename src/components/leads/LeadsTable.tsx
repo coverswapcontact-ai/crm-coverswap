@@ -12,6 +12,7 @@ import { Search, ChevronLeft, ChevronRight, Eye, Phone } from "lucide-react";
 import { useViewMode } from "@/components/layout/ViewModeProvider";
 import Link from "next/link";
 import LeadFunnel from "@/components/leads/LeadFunnel";
+import DeleteRowButton from "@/components/ui/delete-row-button";
 
 interface Lead {
   id: string;
@@ -288,12 +289,20 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
               const rc = getRelanceColor(d, lead.statut);
               const action = getNextAction(lead.statut);
               return (
-              <TableRow key={lead.id} className={`border-gray-50 hover:bg-gray-50/60 ${rc.urgent ? "bg-red-50/30" : ""}`}>
+              <TableRow
+                key={lead.id}
+                onClick={() => router.push(`/leads/${lead.id}`)}
+                className={`border-gray-50 hover:bg-gray-50/60 cursor-pointer ${rc.urgent ? "bg-red-50/30" : ""}`}
+              >
                 <TableCell className="text-gray-900 font-medium text-[13px]">
-                  <div className="flex items-center gap-2">
+                  <Link
+                    href={`/leads/${lead.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 hover:text-[#CC0000] transition-colors"
+                  >
                     {rc.urgent && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />}
                     {lead.prenom} {lead.nom}
-                  </div>
+                  </Link>
                 </TableCell>
                 <TableCell className="text-gray-500 text-[12px] whitespace-nowrap">
                   <div className="flex flex-col leading-tight">
@@ -335,12 +344,15 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                 <TableCell>
                   <LeadFunnel statut={lead.statut} soldeRecu={lead.soldeRecu} />
                 </TableCell>
-                <TableCell>
-                  <Link href={`/leads/${lead.id}`}>
-                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-900 h-8 w-8">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </Link>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 justify-end">
+                    <Link href={`/leads/${lead.id}`}>
+                      <Button variant="ghost" size="icon" className="text-gray-400 hover:text-gray-900 h-8 w-8">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    <DeleteRowButton url={`/api/leads/${lead.id}`} entityLabel={`lead ${lead.prenom} ${lead.nom}`} />
+                  </div>
                 </TableCell>
               </TableRow>
               );

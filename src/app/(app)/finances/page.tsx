@@ -1,6 +1,5 @@
 import prisma from "@/lib/prisma";
 import { formatEuros } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Euro, TrendingUp, TrendingDown, Percent, Receipt, PiggyBank } from "lucide-react";
 import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -48,20 +47,21 @@ export default async function FinancesPage() {
         : 0;
 
   const kpis = [
-    { label: "CA Ce Mois", value: formatEuros(caThisMonth), icon: Euro, color: "text-green-400" },
+    { label: "CA ce mois", value: formatEuros(caThisMonth), icon: Euro, color: "text-emerald-500", bg: "bg-emerald-50" },
     {
       label: "Evolution vs M-1",
       value: `${evolution >= 0 ? "+" : ""}${evolution}%`,
       icon: evolution >= 0 ? TrendingUp : TrendingDown,
-      color: evolution >= 0 ? "text-green-400" : "text-red-400",
+      color: evolution >= 0 ? "text-emerald-500" : "text-red-500",
+      bg: evolution >= 0 ? "bg-emerald-50" : "bg-red-50",
     },
-    { label: "CA Total", value: formatEuros(caTotal), icon: PiggyBank, color: "text-blue-400" },
-    { label: "Marge Chantiers", value: formatEuros(margeChantiers), icon: TrendingUp, color: "text-emerald-400" },
-    { label: "Taux de Marge", value: `${tauxMarge}%`, icon: Percent, color: "text-yellow-400" },
-    { label: "Marge Devis Signes", value: formatEuros(margeDevis), icon: Receipt, color: "text-purple-400" },
+    { label: "CA total", value: formatEuros(caTotal), icon: PiggyBank, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "Marge chantiers", value: formatEuros(margeChantiers), icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "Taux de marge", value: `${tauxMarge}%`, icon: Percent, color: "text-amber-500", bg: "bg-amber-50" },
+    { label: "Marge devis signes", value: formatEuros(margeDevis), icon: Receipt, color: "text-purple-500", bg: "bg-purple-50" },
   ];
 
-  // Monthly recap: last 6 months - single query instead of N+1
+  // Monthly recap: last 6 months
   const sixMonthsAgo = startOfMonth(subMonths(now, 5));
   const allSoldees6Months = await prisma.facture.findMany({
     where: { statut: "SOLDEE", soldeDate: { gte: sixMonthsAgo, lte: monthEnd } },
@@ -85,46 +85,46 @@ export default async function FinancesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">Finances</h1>
-        <p className="text-gray-400 mt-1">Suivi financier CoverSwap</p>
+        <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Finances</h1>
+        <p className="text-gray-400 mt-0.5 text-[14px]">Suivi financier CoverSwap</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {kpis.map((kpi) => (
-          <Card key={kpi.label} className="bg-[#262626] border-white/10">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">{kpi.label}</p>
-                  <p className="text-2xl font-bold text-white mt-1">{kpi.value}</p>
-                </div>
-                <kpi.icon className={`h-8 w-8 ${kpi.color} opacity-80`} />
+          <div key={kpi.label} className="glass-card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] text-gray-400 font-medium">{kpi.label}</p>
+                <p className="text-[20px] font-bold text-gray-900 mt-1 truncate">{kpi.value}</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center shrink-0`}>
+                <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Simple bar chart */}
-      <Card className="bg-[#262626] border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white">CA Mensuel (6 derniers mois)</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* CA mensuel barchart */}
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-gray-900 px-1">CA mensuel (6 derniers mois)</h2>
+        <div className="glass-card p-5">
           <div className="flex items-end gap-3 h-48">
             {monthlyData.map((m) => (
-              <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
-                <span className="text-xs text-gray-400">{formatEuros(m.ca)}</span>
+              <div key={m.month} className="flex-1 flex flex-col items-center gap-2 min-w-0">
+                <span className="text-[10px] text-gray-500 font-medium truncate">
+                  {m.ca >= 1000 ? `${(m.ca / 1000).toFixed(1)}k` : formatEuros(m.ca)}
+                </span>
                 <div
-                  className="w-full bg-red-600/80 rounded-t"
+                  className="w-full bg-[#CC0000] rounded-t-md hover:bg-[#AA0000] transition-colors"
                   style={{ height: `${Math.max((m.ca / maxCa) * 100, 2)}%` }}
                 />
-                <span className="text-xs text-gray-500">{m.month}</span>
+                <span className="text-[10px] text-gray-400 capitalize">{m.month}</span>
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   );
 }

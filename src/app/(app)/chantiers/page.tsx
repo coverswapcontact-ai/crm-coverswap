@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { CalendarDays, Hammer, CheckCircle, Clock, HardHat } from "lucide-react";
 import EmptyState from "@/components/ui/empty-state";
+import ChantierActions from "@/components/chantiers/ChantierActions";
 
 const STATUT_STYLES: Record<string, string> = {
   COMMANDE_PASSEE: "bg-amber-50 text-amber-600 border-amber-200",
@@ -88,6 +89,7 @@ export default async function ChantiersPage() {
                   <TableHead className="text-gray-500 text-[12px] font-semibold">Intervention</TableHead>
                   <TableHead className="text-gray-500 text-[12px] font-semibold">Acompte</TableHead>
                   <TableHead className="text-gray-500 text-[12px] font-semibold">Statut</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -120,6 +122,9 @@ export default async function ChantiersPage() {
                       <Badge className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUT_STYLES[c.statut] || "bg-gray-50 text-gray-500 border-gray-200"}`}>
                         {c.statut.replace(/_/g, " ")}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <ChantierActions chantierId={c.id} reference={c.reference} />
                     </TableCell>
                   </TableRow>
                 ))}

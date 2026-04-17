@@ -83,3 +83,23 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    await prisma.chantier.delete({ where: { id } });
+    revalidatePath("/chantiers");
+    revalidatePath("/commandes");
+    revalidatePath("/dashboard");
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/chantiers/[id] error:", error);
+    return NextResponse.json(
+      { error: "Erreur lors de la suppression du chantier" },
+      { status: 500 }
+    );
+  }
+}

@@ -88,3 +88,23 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    await prisma.facture.delete({ where: { id } });
+    revalidatePath("/factures");
+    revalidatePath("/dashboard");
+    revalidatePath("/finances");
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/factures/[id] error:", error);
+    return NextResponse.json(
+      { error: "Erreur lors de la suppression de la facture" },
+      { status: 500 }
+    );
+  }
+}

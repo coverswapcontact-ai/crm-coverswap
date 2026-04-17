@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Download, Send, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import DeleteRowButton from "@/components/ui/delete-row-button";
 
 interface DevisActionsProps {
   devisId: string;
@@ -57,6 +58,7 @@ export default function DevisActions({ devisId, statut, leadEmail, numero }: Dev
           </Button>
         </>
       )}
+      <DeleteRowButton url={`/api/devis/${devisId}`} entityLabel={`devis ${numero}`} />
     </div>
   );
 }

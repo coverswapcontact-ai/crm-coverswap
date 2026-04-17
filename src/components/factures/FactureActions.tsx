@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { CheckCircle, Loader2, Download } from "lucide-react";
+import DeleteRowButton from "@/components/ui/delete-row-button";
 
 interface FactureActionsProps {
   factureId: string;
@@ -64,6 +65,7 @@ export default function FactureActions({ factureId, statut, acompteRecu, soldeRe
           {loading === "solde" ? <Loader2 className="h-3 w-3 animate-spin" /> : <><CheckCircle className="h-3 w-3 mr-1" />Solde</>}
         </Button>
       )}
+      <DeleteRowButton url={`/api/factures/${factureId}`} entityLabel="facture" />
     </div>
   );
 }

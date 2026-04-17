@@ -15,6 +15,7 @@ export async function fetchMetaLead(leadgenId: string): Promise<{
   email?: string;
   ville?: string;
   formName?: string;
+  createdTime?: Date; // Date réelle de soumission du lead sur Meta
 } | null> {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) {
@@ -23,8 +24,9 @@ export async function fetchMetaLead(leadgenId: string): Promise<{
   }
 
   try {
+    // Demande explicite des champs (inclut created_time)
     const res = await fetch(
-      `${GRAPH_API}/${leadgenId}?access_token=${token}`,
+      `${GRAPH_API}/${leadgenId}?fields=field_data,form_name,created_time&access_token=${token}`,
       { cache: "no-store" }
     );
     if (!res.ok) {
@@ -60,6 +62,13 @@ export async function fetchMetaLead(leadgenId: string): Promise<{
       /situ|ville|city|o[ûu]_[eê]tes/i.test(k)
     );
 
+    // Meta renvoie created_time au format ISO 8601 "2024-01-15T14:30:00+0000"
+    let createdTime: Date | undefined;
+    if (data.created_time) {
+      const d = new Date(data.created_time);
+      if (!isNaN(d.getTime())) createdTime = d;
+    }
+
     return {
       prenom,
       nom,
@@ -67,6 +76,7 @@ export async function fetchMetaLead(leadgenId: string): Promise<{
       email: fields.email || undefined,
       ville: (villeKey && fields[villeKey]) || undefined,
       formName: data.form_name || undefined,
+      createdTime,
     };
   } catch (err) {
     console.error("[meta] Erreur fetch lead:", err);

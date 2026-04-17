@@ -92,6 +92,9 @@ export async function POST(request: NextRequest) {
           if (metaLead.telephone) score += 5;
           score += 25; // CUISINE par défaut
 
+          // Date réelle : celle fournie par Meta (submission), sinon now
+          const realCreatedAt = metaLead.createdTime || new Date();
+
           lead = await prisma.lead.create({
             data: {
               prenom: metaLead.prenom,
@@ -102,10 +105,13 @@ export async function POST(request: NextRequest) {
               source: "META_ADS",
               typeProjet: "CUISINE",
               scoreSignature: Math.min(score, 100),
+              createdAt: realCreatedAt,
+              updatedAt: realCreatedAt,
               notes: [
                 metaLead.formName ? `Form: ${metaLead.formName}` : null,
                 formId ? `FormID: ${formId}` : null,
                 pageId ? `PageID: ${pageId}` : null,
+                `LeadgenID: ${leadgenId}`,
               ].filter(Boolean).join(" | ") || undefined,
             },
           });

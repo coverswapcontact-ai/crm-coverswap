@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "./ViewModeProvider";
 import {
   LayoutDashboard, Users, FileText, Receipt,
-  HardHat, Bot, Menu, X,
+  HardHat, Bot, Menu, X, CheckCircle2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -24,6 +24,7 @@ const navItems = [
   { href: "/devis", label: "Devis", icon: FileText, simple: true },
   { href: "/factures", label: "Factures", icon: Receipt, badge: "factures", simple: true },
   { href: "/chantiers", label: "Chantiers", icon: HardHat, simple: true },
+  { href: "/clients", label: "Clients", icon: CheckCircle2, simple: true },
   { href: "/assistant", label: "Assistant IA", icon: Bot, simple: false },
 ];
 

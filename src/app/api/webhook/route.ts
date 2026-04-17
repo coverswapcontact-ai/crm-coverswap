@@ -51,6 +51,7 @@ const webhookSchema = z.object({
   // Simulation images (base64 data URLs or raw base64)
   imageBefore: z.string().optional(),
   imageAfter: z.string().optional(),
+  imageOriginal: z.string().optional(),
 });
 
 function normalizeData(body: z.infer<typeof webhookSchema>) {
@@ -141,7 +142,7 @@ async function findExistingLead(telephone: string, email?: string) {
   return match || null;
 }
 
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB décodés, garde-fou
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB décodés (pour garder la photo originale full size)
 
 // Strip data URL prefix and write base64 to file. Returns relative path.
 // Ne throw JAMAIS — retourne null en cas d'échec (lead/simulation restent OK).
@@ -256,11 +257,14 @@ export async function POST(request: NextRequest) {
       const imageAfterPath = parsed.data.imageAfter
         ? await saveBase64Image(parsed.data.imageAfter, lead.id, simulation.id, "after.jpg")
         : null;
+      const imageOriginalPath = parsed.data.imageOriginal
+        ? await saveBase64Image(parsed.data.imageOriginal, lead.id, simulation.id, "original.jpg")
+        : null;
 
-      if (imageBeforePath || imageAfterPath) {
+      if (imageBeforePath || imageAfterPath || imageOriginalPath) {
         await prisma.simulation.update({
           where: { id: simulation.id },
-          data: { imageBeforePath, imageAfterPath },
+          data: { imageBeforePath, imageAfterPath, imageOriginalPath },
         });
       }
 
@@ -282,9 +286,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Notification email au gérant — uniquement pour les vrais leads (pas les simulations)
-    const notifSources = ["SITE_DEVIS", "SITE_CONTACT", "META_ADS", "REFERENCE", "ORGANIQUE"];
-    if (isNew && notifSources.includes(data.source)) {
+    // Notification email au gérant :
+    // - tout NOUVEAU lead (peu importe la source)
+    // - OU escalade d'un lead existant vers SITE_DEVIS (passage simu → devis)
+    const escaladeDevis =
+      !isNew &&
+      data.source === "SITE_DEVIS" &&
+      existing?.source !== "SITE_DEVIS";
+    if (isNew || escaladeDevis) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
@@ -297,7 +306,9 @@ export async function POST(request: NextRequest) {
         await resend.emails.send({
           from: process.env.EMAIL_FROM || "CoverSwap <noreply@coverswap.fr>",
           to: "contact@coverswap.fr",
-          subject: `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
+          subject: escaladeDevis
+            ? `🔥 Demande de devis — ${data.prenom} ${data.nom}`
+            : `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
           html: `
             <h2>Nouveau lead reçu</h2>
             <table style="border-collapse:collapse;font-family:sans-serif;">

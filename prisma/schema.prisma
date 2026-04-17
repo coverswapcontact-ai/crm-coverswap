@@ -45,6 +45,7 @@ model Simulation {
   lienSimulation  String?
   imageBeforePath String?
   imageAfterPath  String?
+  imageOriginalPath String?
   notes           String?
 }
 

@@ -1,8 +1,6 @@
 import prisma from "@/lib/prisma";
-import { formatEuros, formatDate, statutColor } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatEuros, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -14,6 +12,15 @@ import {
 import Link from "next/link";
 import { FileText, Plus, Eye } from "lucide-react";
 import DevisActions from "@/components/devis/DevisActions";
+import EmptyState from "@/components/ui/empty-state";
+
+const STATUT_STYLES: Record<string, string> = {
+  BROUILLON: "bg-gray-50 text-gray-500 border-gray-200",
+  ENVOYE: "bg-blue-50 text-blue-600 border-blue-200",
+  SIGNE: "bg-green-50 text-green-600 border-green-200",
+  REFUSE: "bg-red-50 text-red-500 border-red-200",
+  EXPIRE: "bg-gray-50 text-gray-400 border-gray-200",
+};
 
 export default async function DevisPage({
   searchParams,
@@ -39,114 +46,124 @@ export default async function DevisPage({
     prisma.devis.count({ where }),
   ]);
 
-  const totalPages = Math.ceil(total / limit);
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Devis</h1>
-          <p className="text-gray-400 mt-1">{total} devis au total</p>
+          <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Devis</h1>
+          <p className="text-gray-400 mt-0.5 text-[14px]">{total} devis au total</p>
         </div>
         <Link href="/devis/nouveau">
-          <Button className="bg-red-600 hover:bg-red-700 text-white">
-            <Plus className="h-4 w-4 mr-2" /> Nouveau Devis
-          </Button>
+          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#CC0000] text-white text-[13px] font-semibold hover:bg-[#AA0000] transition-colors shadow-sm">
+            <Plus className="h-4 w-4" /> Nouveau devis
+          </button>
         </Link>
       </div>
 
-      <Card className="bg-[#262626] border-white/10">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-gray-400">Numero</TableHead>
-                <TableHead className="text-gray-400">Client</TableHead>
-                <TableHead className="text-gray-400">Reference</TableHead>
-                <TableHead className="text-gray-400">ML</TableHead>
-                <TableHead className="text-gray-400">Prix Vente</TableHead>
-                <TableHead className="text-gray-400">Marge</TableHead>
-                <TableHead className="text-gray-400">Statut</TableHead>
-                <TableHead className="text-gray-400">Date</TableHead>
-                <TableHead className="text-gray-400">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {devisList.map((devis) => (
-                <TableRow key={devis.id} className="border-white/10 hover:bg-white/5">
-                  <TableCell className="text-white font-mono text-sm">
-                    {devis.numero}
-                  </TableCell>
-                  <TableCell className="text-white">
-                    {devis.lead.prenom} {devis.lead.nom}
-                  </TableCell>
-                  <TableCell className="text-gray-300 font-mono text-sm">
-                    {devis.reference}
-                  </TableCell>
-                  <TableCell className="text-gray-300">{devis.mlTotal} ml</TableCell>
-                  <TableCell className="text-red-400 font-bold">
-                    {formatEuros(devis.prixVente)}
-                  </TableCell>
-                  <TableCell className="text-green-400">
-                    {formatEuros(devis.margeNette)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statutColor(devis.statut)}>
-                      {devis.statut.replace(/_/g, " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-gray-400 text-sm">
-                    {formatDate(devis.createdAt)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Link href={`/leads/${devis.leadId}`}>
-                        <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white h-8 w-8">
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                      </Link>
-                      <DevisActions
-                        devisId={devis.id}
-                        statut={devis.statut}
-                        leadEmail={devis.lead.email}
-                        numero={devis.numero}
-                      />
-                    </div>
-                  </TableCell>
+      <div className="glass-card overflow-hidden">
+        {devisList.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="Aucun devis pour le moment"
+            description="Les devis creees apparaitront ici. Commencez par un nouveau devis pour un de vos leads."
+            actionLabel="Creer un devis"
+            actionHref="/devis/nouveau"
+            tone="brand"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-100 hover:bg-transparent">
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Numero</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Client</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Reference</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">ML</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Prix vente</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Marge</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Statut</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Date</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-              {devisList.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center text-gray-500 py-8">
-                    Aucun devis
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {devisList.map((devis) => (
+                  <TableRow key={devis.id} className="border-gray-50 hover:bg-gray-50/60">
+                    <TableCell className="text-gray-900 font-mono text-[12px]">
+                      {devis.numero}
+                    </TableCell>
+                    <TableCell className="text-gray-900 text-[13px] font-medium">
+                      {devis.lead.prenom} {devis.lead.nom}
+                    </TableCell>
+                    <TableCell className="text-gray-500 font-mono text-[12px]">
+                      {devis.reference}
+                    </TableCell>
+                    <TableCell className="text-gray-500 text-[13px] text-right">
+                      {devis.mlTotal} ml
+                    </TableCell>
+                    <TableCell className="text-right text-[#CC0000] font-semibold text-[13px]">
+                      {formatEuros(devis.prixVente)}
+                    </TableCell>
+                    <TableCell className="text-right text-emerald-600 font-medium text-[13px]">
+                      {formatEuros(devis.margeNette)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUT_STYLES[devis.statut] || "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                        {devis.statut.replace(/_/g, " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-gray-400 text-[12px]">
+                      {formatDate(devis.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 justify-end">
+                        <Link href={`/leads/${devis.leadId}`}>
+                          <button className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </Link>
+                        <DevisActions
+                          devisId={devis.id}
+                          statut={devis.statut}
+                          leadEmail={devis.lead.email}
+                          numero={devis.numero}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
-          {page > 1 && (
-            <Link href={`/devis?page=${page - 1}${statut ? `&statut=${statut}` : ""}`}>
-              <Button variant="outline" size="sm" className="border-white/20 text-gray-300">
-                Precedent
-              </Button>
-            </Link>
-          )}
-          <span className="text-gray-400 text-sm flex items-center px-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[13px] text-gray-400">
             Page {page} / {totalPages}
-          </span>
-          {page < totalPages && (
-            <Link href={`/devis?page=${page + 1}${statut ? `&statut=${statut}` : ""}`}>
-              <Button variant="outline" size="sm" className="border-white/20 text-gray-300">
+          </p>
+          <div className="flex gap-1.5">
+            {page > 1 && (
+              <Link
+                href={`/devis?page=${page - 1}${statut ? `&statut=${statut}` : ""}`}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-[13px] hover:bg-gray-50"
+              >
+                Precedent
+              </Link>
+            )}
+            {page < totalPages && (
+              <Link
+                href={`/devis?page=${page + 1}${statut ? `&statut=${statut}` : ""}`}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-[13px] hover:bg-gray-50"
+              >
                 Suivant
-              </Button>
-            </Link>
-          )}
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>

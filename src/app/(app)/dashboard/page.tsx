@@ -1,13 +1,13 @@
 import prisma from "@/lib/prisma";
-import { formatEuros } from "@/lib/utils";
-import { subDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
-import Link from "next/link";
+import { subDays, startOfMonth, endOfMonth, subMonths, format } from "date-fns";
+import { fr } from "date-fns/locale";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
   const now = new Date();
   const monthStart = startOfMonth(now);
   const monthEnd = endOfMonth(now);
+  const sixMonthsAgo = startOfMonth(subMonths(now, 5));
 
   const [
     facturesSoldeesTotal,
@@ -21,6 +21,9 @@ export default async function DashboardPage() {
     acomptesEnAttente,
     chantiersProchains,
     leadsRecents,
+    facturesImpayees,
+    facturesHistorique,
+    acomptesActifs,
   ] = await Promise.all([
     prisma.facture.findMany({ where: { statut: "SOLDEE" } }),
     prisma.facture.findMany({
@@ -64,6 +67,21 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
+    // Factures impayees (urgent)
+    prisma.facture.findMany({
+      where: { statut: "IMPAYEE" },
+      include: { devis: { include: { lead: true } } },
+    }),
+    // Historique 6 mois (pour sparkline)
+    prisma.facture.findMany({
+      where: { statut: "SOLDEE", soldeDate: { gte: sixMonthsAgo, lte: monthEnd } },
+      select: { montantTotal: true, soldeDate: true },
+    }),
+    // Acomptes non encore soldés (tresorerie attendue)
+    prisma.facture.findMany({
+      where: { statut: { in: ["ACOMPTE_RECU", "ACOMPTE_EN_ATTENTE"] } },
+      select: { montantTotal: true, acompteRecu: true },
+    }),
   ]);
 
   const caTotal = facturesSoldeesTotal.reduce((s, f) => s + f.montantTotal, 0);
@@ -71,6 +89,30 @@ export default async function DashboardPage() {
   const caPipeline = pipeline.reduce((s, l) => s + (l.prixDevis || 0), 0);
   const tauxConversion = leadsTotal > 0 ? Math.round((leadsSigned / leadsTotal) * 100) : 0;
   const panierMoyen = facturesSoldeesTotal.length > 0 ? caTotal / facturesSoldeesTotal.length : 0;
+
+  // Impayes montant
+  const impayesTotal = facturesImpayees.reduce((s, f) => s + f.montantTotal, 0);
+
+  // Sparkline 6 mois
+  const caHistorique: { month: string; ca: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const mStart = startOfMonth(subMonths(now, i));
+    const mEnd = endOfMonth(subMonths(now, i));
+    const monthTotal = facturesHistorique
+      .filter((f) => f.soldeDate && f.soldeDate >= mStart && f.soldeDate <= mEnd)
+      .reduce((s, f) => s + f.montantTotal, 0);
+    caHistorique.push({
+      month: format(mStart, "MMM", { locale: fr }),
+      ca: monthTotal,
+    });
+  }
+
+  // Tresorerie prévisionnelle : acomptes en attente (30%) + soldes à venir (70%)
+  const tresoreriePrevue = acomptesActifs.reduce((s, f) => {
+    const acompte = f.montantTotal * 0.3;
+    const solde = f.montantTotal * 0.7;
+    return s + (f.acompteRecu ? solde : acompte + solde);
+  }, 0);
 
   const data = {
     caTotal,
@@ -82,10 +124,15 @@ export default async function DashboardPage() {
     leadsNouveaux,
     leadsSigned,
     devisTotal,
+    impayesTotal,
+    impayesCount: facturesImpayees.length,
+    tresoreriePrevue,
+    caHistorique,
     relances: JSON.parse(JSON.stringify(relances)),
     acomptesEnAttente: JSON.parse(JSON.stringify(acomptesEnAttente)),
     chantiersProchains: JSON.parse(JSON.stringify(chantiersProchains)),
     leadsRecents: JSON.parse(JSON.stringify(leadsRecents)),
+    facturesImpayees: JSON.parse(JSON.stringify(facturesImpayees)),
     now: now.toISOString(),
   };
 

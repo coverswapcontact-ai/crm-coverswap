@@ -1,7 +1,5 @@
 import prisma from "@/lib/prisma";
 import { formatEuros, sourceLabel } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -13,7 +11,6 @@ import {
 import { BarChart3, Target, TrendingUp, Layers } from "lucide-react";
 
 export default async function AnalyticsPage() {
-  // Use groupBy and aggregations instead of loading all records
   const [
     leadsBySource,
     leadsByStatutAndSource,
@@ -58,11 +55,9 @@ export default async function AnalyticsPage() {
     }),
   ]);
 
-  // Conversion stats per source
   const sources = ["META_ADS", "TIKTOK", "INSTAGRAM", "ORGANIQUE", "REFERENCE", "AUTRE"];
   const signedStatuts = ["SIGNE", "CHANTIER_PLANIFIE", "TERMINE"];
 
-  // Build CA by source from devis
   const caBySource = new Map<string, number>();
   devisSignedBySource.forEach((d) => {
     const src = d.lead.source;
@@ -78,19 +73,9 @@ export default async function AnalyticsPage() {
       .find((g) => g.source === src && g.statut === "PERDU")?._count.id || 0;
     const ca = caBySource.get(src) || 0;
     const taux = totalForSource > 0 ? Math.round((signedForSource / totalForSource) * 100) : 0;
-
-    return {
-      source: src,
-      label: sourceLabel(src),
-      total: totalForSource,
-      signed: signedForSource,
-      lost: lostForSource,
-      taux,
-      ca,
-    };
+    return { source: src, label: sourceLabel(src), total: totalForSource, signed: signedForSource, lost: lostForSource, taux, ca };
   });
 
-  // Top references
   const topRefs = topRefsRaw.map((r) => ({
     reference: r.reference,
     count: r._count.id,
@@ -98,7 +83,6 @@ export default async function AnalyticsPage() {
     marge: r._sum.margeNette || 0,
   }));
 
-  // Type projet stats
   const typeStatsMap = new Map<string, { total: number; signed: number; ca: number }>();
   leadsByTypeProjet.forEach((g) => {
     typeStatsMap.set(g.typeProjet, { total: g._count.id, signed: 0, ca: 0 });
@@ -120,177 +104,157 @@ export default async function AnalyticsPage() {
     }))
     .sort((a, b) => b.ca - a.ca);
 
-  // Global KPIs
   const totalLeads = totalLeadsCount;
   const totalSigned = totalSignedCount;
   const globalConversion = totalLeads > 0 ? Math.round((totalSigned / totalLeads) * 100) : 0;
   const totalCA = devisSignedAgg._sum.prixVente || 0;
   const totalMarge = devisSignedAgg._sum.margeNette || 0;
 
+  const tauxClass = (t: number) =>
+    t >= 30 ? "text-emerald-600" : t >= 15 ? "text-amber-500" : "text-red-500";
+
+  const kpis = [
+    { label: "Leads total", value: totalLeads.toString(), icon: Layers, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "Conversion", value: `${globalConversion}%`, icon: Target, color: "text-amber-500", bg: "bg-amber-50" },
+    { label: "CA signe", value: formatEuros(totalCA), icon: TrendingUp, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "Marge totale", value: formatEuros(totalMarge), icon: BarChart3, color: "text-[#CC0000]", bg: "bg-red-50" },
+  ];
+
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">Analytics</h1>
-        <p className="text-gray-400 mt-1">Analyse de performance CoverSwap</p>
+        <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Analytics</h1>
+        <p className="text-gray-400 mt-0.5 text-[14px]">Analyse de performance CoverSwap</p>
       </div>
 
-      {/* Global KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Leads Total", value: totalLeads.toString(), icon: Layers, color: "text-blue-400" },
-          { label: "Taux Conversion", value: `${globalConversion}%`, icon: Target, color: "text-yellow-400" },
-          { label: "CA Signe", value: formatEuros(totalCA), icon: TrendingUp, color: "text-green-400" },
-          { label: "Marge Totale", value: formatEuros(totalMarge), icon: BarChart3, color: "text-emerald-400" },
-        ].map((kpi) => (
-          <Card key={kpi.label} className="bg-[#262626] border-white/10">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">{kpi.label}</p>
-                  <p className="text-2xl font-bold text-white mt-1">{kpi.value}</p>
-                </div>
-                <kpi.icon className={`h-8 w-8 ${kpi.color} opacity-80`} />
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className="glass-card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[12px] text-gray-400 font-medium">{kpi.label}</p>
+                <p className="text-[20px] font-bold text-gray-900 mt-1 truncate">{kpi.value}</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className={`w-10 h-10 rounded-xl ${kpi.bg} flex items-center justify-center shrink-0`}>
+                <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* Conversion par source */}
-      <Card className="bg-[#262626] border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white">Conversion par Source</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-gray-400">Source</TableHead>
-                <TableHead className="text-gray-400 text-right">Leads</TableHead>
-                <TableHead className="text-gray-400 text-right">Signes</TableHead>
-                <TableHead className="text-gray-400 text-right">Perdus</TableHead>
-                <TableHead className="text-gray-400 text-right">Taux</TableHead>
-                <TableHead className="text-gray-400 text-right">CA Genere</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sourceStats.map((s) => (
-                <TableRow key={s.source} className="border-white/10 hover:bg-white/5">
-                  <TableCell>
-                    <Badge variant="outline" className="border-white/20 text-white">
-                      {s.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-white text-right">{s.total}</TableCell>
-                  <TableCell className="text-green-400 text-right">{s.signed}</TableCell>
-                  <TableCell className="text-red-400 text-right">{s.lost}</TableCell>
-                  <TableCell className="text-right">
-                    <span
-                      className={
-                        s.taux >= 30
-                          ? "text-green-400"
-                          : s.taux >= 15
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                      }
-                    >
-                      {s.taux}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-red-400 font-bold text-right">
-                    {formatEuros(s.ca)}
-                  </TableCell>
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-gray-900 px-1">Conversion par source</h2>
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-100 hover:bg-transparent">
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Source</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Leads</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Signes</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Perdus</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Taux</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">CA genere</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {sourceStats.map((s) => (
+                  <TableRow key={s.source} className="border-gray-50 hover:bg-gray-50/60">
+                    <TableCell>
+                      <span className="text-[11px] font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full">
+                        {s.label}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-gray-900 text-[13px] text-right">{s.total}</TableCell>
+                    <TableCell className="text-emerald-600 font-medium text-[13px] text-right">{s.signed}</TableCell>
+                    <TableCell className="text-red-500 text-[13px] text-right">{s.lost}</TableCell>
+                    <TableCell className={`text-right text-[13px] font-medium ${tauxClass(s.taux)}`}>{s.taux}%</TableCell>
+                    <TableCell className="text-right text-[#CC0000] font-semibold text-[13px]">
+                      {formatEuros(s.ca)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </section>
 
       {/* Top References */}
-      <Card className="bg-[#262626] border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white">Top References (Devis Signes)</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-gray-400">Reference</TableHead>
-                <TableHead className="text-gray-400 text-right">Nb Devis</TableHead>
-                <TableHead className="text-gray-400 text-right">CA</TableHead>
-                <TableHead className="text-gray-400 text-right">Marge</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {topRefs.map((ref) => (
-                <TableRow key={ref.reference} className="border-white/10 hover:bg-white/5">
-                  <TableCell className="text-white font-mono">{ref.reference}</TableCell>
-                  <TableCell className="text-white text-right">{ref.count}</TableCell>
-                  <TableCell className="text-red-400 font-bold text-right">
-                    {formatEuros(ref.ca)}
-                  </TableCell>
-                  <TableCell className="text-green-400 text-right">
-                    {formatEuros(ref.marge)}
-                  </TableCell>
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-gray-900 px-1">Top references (devis signes)</h2>
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-100 hover:bg-transparent">
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Reference</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Nb devis</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">CA</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Marge</TableHead>
                 </TableRow>
-              ))}
-              {topRefs.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-gray-500 py-8">
-                    Aucun devis signe
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {topRefs.map((ref) => (
+                  <TableRow key={ref.reference} className="border-gray-50 hover:bg-gray-50/60">
+                    <TableCell className="text-gray-900 font-mono text-[12px]">{ref.reference}</TableCell>
+                    <TableCell className="text-gray-900 text-[13px] text-right">{ref.count}</TableCell>
+                    <TableCell className="text-right text-[#CC0000] font-semibold text-[13px]">
+                      {formatEuros(ref.ca)}
+                    </TableCell>
+                    <TableCell className="text-emerald-600 text-[13px] text-right font-medium">
+                      {formatEuros(ref.marge)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {topRefs.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-gray-400 py-8 text-[13px]">
+                      Aucun devis signe
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </section>
 
-      {/* Conversion par Type Projet */}
-      <Card className="bg-[#262626] border-white/10">
-        <CardHeader>
-          <CardTitle className="text-white">Performance par Type de Projet</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-gray-400">Type</TableHead>
-                <TableHead className="text-gray-400 text-right">Leads</TableHead>
-                <TableHead className="text-gray-400 text-right">Signes</TableHead>
-                <TableHead className="text-gray-400 text-right">Taux</TableHead>
-                <TableHead className="text-gray-400 text-right">CA</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {typeStats.map((t) => (
-                <TableRow key={t.type} className="border-white/10 hover:bg-white/5">
-                  <TableCell className="text-white">{t.type}</TableCell>
-                  <TableCell className="text-white text-right">{t.total}</TableCell>
-                  <TableCell className="text-green-400 text-right">{t.signed}</TableCell>
-                  <TableCell className="text-right">
-                    <span
-                      className={
-                        t.taux >= 30
-                          ? "text-green-400"
-                          : t.taux >= 15
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                      }
-                    >
-                      {t.taux}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-red-400 font-bold text-right">
-                    {formatEuros(t.ca)}
-                  </TableCell>
+      {/* Type Projet */}
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-gray-900 px-1">Performance par type de projet</h2>
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-100 hover:bg-transparent">
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Type</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Leads</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Signes</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Taux</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">CA</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {typeStats.map((t) => (
+                  <TableRow key={t.type} className="border-gray-50 hover:bg-gray-50/60">
+                    <TableCell className="text-gray-900 text-[13px] font-medium">{t.type}</TableCell>
+                    <TableCell className="text-gray-900 text-[13px] text-right">{t.total}</TableCell>
+                    <TableCell className="text-emerald-600 font-medium text-[13px] text-right">{t.signed}</TableCell>
+                    <TableCell className={`text-right text-[13px] font-medium ${tauxClass(t.taux)}`}>{t.taux}%</TableCell>
+                    <TableCell className="text-right text-[#CC0000] font-semibold text-[13px]">
+                      {formatEuros(t.ca)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

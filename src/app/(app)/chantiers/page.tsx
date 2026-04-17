@@ -1,8 +1,6 @@
 import prisma from "@/lib/prisma";
-import { formatEuros, formatDate, statutColor } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { formatEuros, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,7 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
-import { CalendarDays, Hammer, CheckCircle, Clock } from "lucide-react";
+import { CalendarDays, Hammer, CheckCircle, Clock, HardHat } from "lucide-react";
+import EmptyState from "@/components/ui/empty-state";
+
+const STATUT_STYLES: Record<string, string> = {
+  COMMANDE_PASSEE: "bg-amber-50 text-amber-600 border-amber-200",
+  MATIERE_RECUE: "bg-blue-50 text-blue-600 border-blue-200",
+  EN_COURS: "bg-orange-50 text-orange-600 border-orange-200",
+  TERMINE: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  FACTURE: "bg-purple-50 text-purple-600 border-purple-200",
+};
 
 export default async function ChantiersPage() {
   const [chantiers, totalEnCours, totalTermine, totalPlanifie] = await Promise.all([
@@ -26,100 +33,101 @@ export default async function ChantiersPage() {
   ]);
 
   const stats = [
-    { label: "Planifies", value: totalPlanifie, icon: Clock, color: "text-blue-400" },
-    { label: "En Cours", value: totalEnCours, icon: Hammer, color: "text-orange-400" },
-    { label: "Termines", value: totalTermine, icon: CheckCircle, color: "text-green-400" },
+    { label: "Planifies", value: totalPlanifie, icon: Clock, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "En cours", value: totalEnCours, icon: Hammer, color: "text-orange-500", bg: "bg-orange-50" },
+    { label: "Termines", value: totalTermine, icon: CheckCircle, color: "text-emerald-500", bg: "bg-emerald-50" },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Chantiers</h1>
-          <p className="text-gray-400 mt-1">{chantiers.length} chantiers au total</p>
+          <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Chantiers</h1>
+          <p className="text-gray-400 mt-0.5 text-[14px]">{chantiers.length} chantier{chantiers.length > 1 ? "s" : ""} au total</p>
         </div>
         <Link href="/chantiers/calendrier">
-          <Button variant="outline" className="border-white/20 text-gray-300 hover:text-white">
-            <CalendarDays className="h-4 w-4 mr-2" /> Calendrier
-          </Button>
+          <button className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-50 text-[13px] font-medium transition-colors">
+            <CalendarDays className="h-4 w-4" /> Calendrier
+          </button>
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map((s) => (
-          <Card key={s.label} className="bg-[#262626] border-white/10">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-400">{s.label}</p>
-                  <p className="text-2xl font-bold text-white mt-1">{s.value}</p>
-                </div>
-                <s.icon className={`h-6 w-6 ${s.color}`} />
+          <div key={s.label} className="glass-card p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[12px] text-gray-400 font-medium">{s.label}</p>
+                <p className="text-[22px] font-bold text-gray-900 mt-1">{s.value}</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center`}>
+                <s.icon className={`h-5 w-5 ${s.color}`} />
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
-      <Card className="bg-[#262626] border-white/10">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
-                <TableHead className="text-gray-400">Client</TableHead>
-                <TableHead className="text-gray-400">Adresse</TableHead>
-                <TableHead className="text-gray-400">Reference</TableHead>
-                <TableHead className="text-gray-400">ML</TableHead>
-                <TableHead className="text-gray-400">Marge</TableHead>
-                <TableHead className="text-gray-400">Date Intervention</TableHead>
-                <TableHead className="text-gray-400">Acompte</TableHead>
-                <TableHead className="text-gray-400">Statut</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {chantiers.map((c) => (
-                <TableRow key={c.id} className="border-white/10 hover:bg-white/5">
-                  <TableCell className="text-white">
-                    <Link href={`/leads/${c.leadId}`} className="hover:text-red-400 transition">
-                      {c.lead.prenom} {c.lead.nom}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-gray-300 text-sm">{c.adresse}</TableCell>
-                  <TableCell className="text-gray-300 font-mono text-sm">
-                    {c.reference}
-                  </TableCell>
-                  <TableCell className="text-gray-300">{c.mlCommandes} ml</TableCell>
-                  <TableCell className="text-green-400 font-bold">
-                    {formatEuros(c.margeNette)}
-                  </TableCell>
-                  <TableCell className="text-gray-300 text-sm">
-                    {formatDate(c.dateIntervention)}
-                  </TableCell>
-                  <TableCell>
-                    {c.acompteRecu ? (
-                      <span className="text-green-400 text-sm">Recu</span>
-                    ) : (
-                      <span className="text-yellow-400 text-sm">En attente</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statutColor(c.statut)}>
-                      {c.statut.replace(/_/g, " ")}
-                    </Badge>
-                  </TableCell>
+      <div className="glass-card overflow-hidden">
+        {chantiers.length === 0 ? (
+          <EmptyState
+            icon={HardHat}
+            title="Aucun chantier planifie"
+            description="Les chantiers se creent automatiquement apres signature d'un devis."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-100 hover:bg-transparent">
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Client</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Adresse</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Reference</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">ML</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Marge</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Intervention</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Acompte</TableHead>
+                  <TableHead className="text-gray-500 text-[12px] font-semibold">Statut</TableHead>
                 </TableRow>
-              ))}
-              {chantiers.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500 py-8">
-                    Aucun chantier
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {chantiers.map((c) => (
+                  <TableRow key={c.id} className="border-gray-50 hover:bg-gray-50/60">
+                    <TableCell className="text-gray-900 text-[13px] font-medium">
+                      <Link href={`/leads/${c.leadId}`} className="hover:text-[#CC0000] transition">
+                        {c.lead.prenom} {c.lead.nom}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-gray-500 text-[13px]">{c.adresse}</TableCell>
+                    <TableCell className="text-gray-500 font-mono text-[12px]">
+                      {c.reference}
+                    </TableCell>
+                    <TableCell className="text-gray-500 text-[13px] text-right">{c.mlCommandes} ml</TableCell>
+                    <TableCell className="text-right text-emerald-600 font-semibold text-[13px]">
+                      {formatEuros(c.margeNette)}
+                    </TableCell>
+                    <TableCell className="text-gray-500 text-[12px]">
+                      {formatDate(c.dateIntervention)}
+                    </TableCell>
+                    <TableCell>
+                      {c.acompteRecu ? (
+                        <span className="text-[12px] font-medium text-emerald-600">Recu</span>
+                      ) : (
+                        <span className="text-[12px] font-medium text-amber-500">En attente</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${STATUT_STYLES[c.statut] || "bg-gray-50 text-gray-500 border-gray-200"}`}>
+                        {c.statut.replace(/_/g, " ")}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

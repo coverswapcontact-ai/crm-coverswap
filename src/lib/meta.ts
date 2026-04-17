@@ -38,12 +38,34 @@ export async function fetchMetaLead(leadgenId: string): Promise<{
       fields[f.name] = f.values?.[0] || "";
     }
 
+    // full_name en priorité (format courant Meta), sinon first/last
+    let prenom = "Inconnu";
+    let nom = "Inconnu";
+    if (fields.full_name) {
+      const parts = fields.full_name.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 1) {
+        prenom = parts[0];
+        nom = parts[0];
+      } else if (parts.length >= 2) {
+        prenom = parts[0];
+        nom = parts.slice(1).join(" ");
+      }
+    } else {
+      prenom = fields.first_name || fields.prénom || "Inconnu";
+      nom = fields.last_name || fields.nom || "Inconnu";
+    }
+
+    // Ville : cherche clé qui contient "situ/ville/city"
+    const villeKey = Object.keys(fields).find((k) =>
+      /situ|ville|city|o[ûu]_[eê]tes/i.test(k)
+    );
+
     return {
-      prenom: fields.first_name || fields.prénom || "Inconnu",
-      nom: fields.last_name || fields.nom || "Inconnu",
+      prenom,
+      nom,
       telephone: fields.phone_number || fields.téléphone || "",
       email: fields.email || undefined,
-      ville: fields.city || fields.ville || undefined,
+      ville: (villeKey && fields[villeKey]) || undefined,
       formName: data.form_name || undefined,
     };
   } catch (err) {

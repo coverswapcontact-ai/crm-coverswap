@@ -216,6 +216,9 @@ export async function POST(request: NextRequest) {
       if (!existing.email && data.email) updates.email = data.email;
       if (existing.ville === "Non renseignée" && data.ville !== "Non renseignée") updates.ville = data.ville;
       if (!existing.codePostal && data.codePostal) updates.codePostal = data.codePostal;
+      // Enrichir prénom/nom si le lead existant est "Inconnu"
+      if (existing.prenom === "Inconnu" && data.prenom && data.prenom !== "Inconnu") updates.prenom = data.prenom;
+      if (existing.nom === "Inconnu" && data.nom && data.nom !== "Inconnu") updates.nom = data.nom;
       if (!existing.referenceChoisie && data.referenceChoisie) updates.referenceChoisie = data.referenceChoisie;
       if (!existing.mlEstimes && data.mlEstimes) updates.mlEstimes = data.mlEstimes;
       if (!existing.prixDevis && data.prixDevis) updates.prixDevis = data.prixDevis;

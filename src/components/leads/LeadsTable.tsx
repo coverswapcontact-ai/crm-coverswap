@@ -11,6 +11,7 @@ import { formatEuros, statutColor, sourceLabel, LEAD_STATUTS, LEAD_SOURCES } fro
 import { Search, ChevronLeft, ChevronRight, Eye, Phone } from "lucide-react";
 import { useViewMode } from "@/components/layout/ViewModeProvider";
 import Link from "next/link";
+import LeadFunnel from "@/components/leads/LeadFunnel";
 
 interface Lead {
   id: string;
@@ -31,6 +32,7 @@ interface Lead {
   notes?: string | null;
   devisDemande?: boolean;
   aSimule?: boolean;
+  soldeRecu?: boolean;
 }
 
 // Action attendue + urgence par statut
@@ -268,6 +270,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
           <TableHeader>
             <TableRow className="border-gray-100 hover:bg-transparent">
               <TableHead className="text-gray-500 text-[12px] font-semibold">Nom</TableHead>
+              <TableHead className="text-gray-500 text-[12px] font-semibold">Date</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Ville</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Source</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Statut</TableHead>
@@ -275,7 +278,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
               <TableHead className="text-gray-500 text-[12px] font-semibold">Type</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold">Ref.</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Prix Devis</TableHead>
-              <TableHead className="text-gray-500 text-[12px] font-semibold text-right">Score</TableHead>
+              <TableHead className="text-gray-500 text-[12px] font-semibold">Tunnel</TableHead>
               <TableHead className="text-gray-500 text-[12px] font-semibold"></TableHead>
             </TableRow>
           </TableHeader>
@@ -290,6 +293,12 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                   <div className="flex items-center gap-2">
                     {rc.urgent && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />}
                     {lead.prenom} {lead.nom}
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-500 text-[12px] whitespace-nowrap">
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-gray-700">{new Date(lead.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+                    <span className="text-[10px] text-gray-400">{timeAgo(lead.createdAt)}</span>
                   </div>
                 </TableCell>
                 <TableCell className="text-gray-500 text-[13px]">{lead.ville}</TableCell>
@@ -323,13 +332,8 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                 <TableCell className="text-right text-[#CC0000] font-semibold text-[13px]">
                   {lead.prixDevis ? formatEuros(lead.prixDevis) : "—"}
                 </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#CC0000] rounded-full" style={{ width: `${lead.scoreSignature}%` }} />
-                    </div>
-                    <span className="text-[11px] text-gray-400 w-6">{lead.scoreSignature}</span>
-                  </div>
+                <TableCell>
+                  <LeadFunnel statut={lead.statut} soldeRecu={lead.soldeRecu} />
                 </TableCell>
                 <TableCell>
                   <Link href={`/leads/${lead.id}`}>
@@ -342,7 +346,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
               );
             })}
             {leads.length === 0 && (
-              <TableRow><TableCell colSpan={10} className="text-center text-gray-400 py-8">Aucun lead trouve</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center text-gray-400 py-8">Aucun lead trouve</TableCell></TableRow>
             )}
           </TableBody>
         </Table>

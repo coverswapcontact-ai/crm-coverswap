@@ -15,31 +15,39 @@ export default async function LeadsPage({
   const statut = params.statut || "";
   const source = params.source || "";
 
-  const where: Record<string, unknown> = {};
-  if (statut) where.statut = statut;
-  if (source) where.source = source;
+  // AND: filtres utilisateur + exclusion des clients finalises (facture soldee)
+  // Un lead "client finalise" = chantier existe ET chantier.soldeRecu = true => dans /clients
+  const andClauses: Record<string, unknown>[] = [
+    { OR: [{ chantier: { is: null } }, { chantier: { is: { soldeRecu: false } } }] },
+  ];
+  if (statut) andClauses.push({ statut });
+  if (source) andClauses.push({ source });
   if (search) {
-    where.OR = [
-      { nom: { contains: search } },
-      { prenom: { contains: search } },
-      { ville: { contains: search } },
-      { email: { contains: search } },
-      { telephone: { contains: search } },
-    ];
+    andClauses.push({
+      OR: [
+        { nom: { contains: search } },
+        { prenom: { contains: search } },
+        { ville: { contains: search } },
+        { email: { contains: search } },
+        { telephone: { contains: search } },
+      ],
+    });
   }
+  const finalWhere = { AND: andClauses };
 
   const [leadsRaw, total] = await Promise.all([
     prisma.lead.findMany({
-      where,
+      where: finalWhere,
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: "desc" },
       include: {
         simulations: { select: { source: true } },
         interactions: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, type: true } },
+        chantier: { select: { soldeRecu: true, statut: true } },
       },
     }),
-    prisma.lead.count({ where }),
+    prisma.lead.count({ where: finalWhere }),
   ]);
 
   // Niveau d'intention + date dernière activité (interaction ou création)
@@ -53,7 +61,8 @@ export default async function LeadsPage({
     const lastActivityAt = lastInteraction
       ? (lastInteraction.createdAt > l.updatedAt ? lastInteraction.createdAt : l.updatedAt)
       : l.createdAt;
-    return { ...l, devisDemande, aSimule, lastActivityAt };
+    const soldeRecu = l.chantier?.soldeRecu ?? false;
+    return { ...l, devisDemande, aSimule, lastActivityAt, soldeRecu };
   });
 
   return (

@@ -1,6 +1,28 @@
 import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
+/**
+ * Liste des utilisateurs autorisés.
+ * Les mots de passe sont lus depuis les env vars (fallback sur un default
+ * que tu dois changer sur Railway via Variables). L'email sert d'identifiant.
+ */
+const USERS: { id: string; name: string; email: string; passwordEnv: string; fallback: string }[] = [
+  {
+    id: "1",
+    name: "Lucas Villemin",
+    email: "coverswap.contact@gmail.com",
+    passwordEnv: "ADMIN_PASSWORD",
+    fallback: "coverswap2026",
+  },
+  {
+    id: "2",
+    name: "Elisabeth Villemin",
+    email: "elisabeth.villemin@coverswap.fr",
+    passwordEnv: "ELISABETH_PASSWORD",
+    fallback: "elisabeth2026",
+  },
+];
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -10,14 +32,16 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Mot de passe", type: "password" },
       },
       async authorize(credentials) {
-        // MVP: single admin user
-        if (
-          credentials?.email === "coverswap.contact@gmail.com" &&
-          credentials?.password === (process.env.ADMIN_PASSWORD || "coverswap2026")
-        ) {
-          return { id: "1", name: "Lucas Villemin", email: "coverswap.contact@gmail.com" };
-        }
-        return null;
+        if (!credentials?.email || !credentials?.password) return null;
+
+        const normalizedEmail = credentials.email.trim().toLowerCase();
+        const user = USERS.find((u) => u.email.toLowerCase() === normalizedEmail);
+        if (!user) return null;
+
+        const expected = process.env[user.passwordEnv] || user.fallback;
+        if (credentials.password !== expected) return null;
+
+        return { id: user.id, name: user.name, email: user.email };
       },
     }),
   ],

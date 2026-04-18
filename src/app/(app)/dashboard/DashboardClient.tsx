@@ -88,9 +88,17 @@ const STATUT_STYLES: Record<string, string> = {
 };
 
 function timeAgo(dateStr: string): string {
-  const days = differenceInDays(new Date(), new Date(dateStr));
-  if (days === 0) return "Aujourd'hui";
+  // Compare Paris calendar days (pas juste des fenêtres de 24h)
+  const toParisYmd = (d: Date) =>
+    d.toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
+  const today = toParisYmd(new Date());
+  const leadDay = toParisYmd(new Date(dateStr));
+  if (today === leadDay) return "Aujourd'hui";
+  const [y1, m1, d1] = today.split("-").map(Number);
+  const [y2, m2, d2] = leadDay.split("-").map(Number);
+  const days = Math.round((Date.UTC(y1, m1 - 1, d1) - Date.UTC(y2, m2 - 1, d2)) / 86400000);
   if (days === 1) return "Hier";
+  if (days < 0) return `Dans ${-days}j`;
   return `Il y a ${days}j`;
 }
 
@@ -109,7 +117,7 @@ function SimpleDashboard({ data }: { data: DashboardData }) {
         </h1>
         <p className="text-gray-400 mt-1 text-[13px] sm:text-[15px]">
           {new Date().toLocaleDateString("fr-FR", {
-            weekday: "long", day: "numeric", month: "long",
+            weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Paris",
           })}
         </p>
       </div>

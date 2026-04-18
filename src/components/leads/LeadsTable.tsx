@@ -126,9 +126,18 @@ const STATUT_STYLES: Record<string, string> = {
 };
 
 function timeAgo(dateStr: string): string {
-  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-  if (days === 0) return "Aujourd'hui";
+  // Compare Paris calendar days (fix: timestamps bruts donnaient "Aujourd'hui"
+  // pour un lead d'hier 23h quand on regardait ce matin 9h)
+  const toParisYmd = (d: Date) =>
+    d.toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" }); // "YYYY-MM-DD"
+  const today = toParisYmd(new Date());
+  const leadDay = toParisYmd(new Date(dateStr));
+  if (today === leadDay) return "Aujourd'hui";
+  const [y1, m1, d1] = today.split("-").map(Number);
+  const [y2, m2, d2] = leadDay.split("-").map(Number);
+  const days = Math.round((Date.UTC(y1, m1 - 1, d1) - Date.UTC(y2, m2 - 1, d2)) / 86400000);
   if (days === 1) return "Hier";
+  if (days < 0) return `Dans ${-days}j`;
   return `Il y a ${days}j`;
 }
 

@@ -82,7 +82,7 @@ export async function GET(
     </div>
     <div class="facture-info">
       <div class="facture-numero">${facture.numero}</div>
-      <p>Date : ${new Date(facture.createdAt).toLocaleDateString("fr-FR")}</p>
+      <p>Date : ${new Date(facture.createdAt).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}</p>
       <p>Devis associé : ${devis.numero}</p>
       <p><span class="statut-badge">${statutLabel}</span></p>
     </div>
@@ -145,7 +145,7 @@ export async function GET(
       <span>Acompte 30% — ${formatEuros(devis.acompte30)}</span>
       <span class="${facture.acompteRecu ? "payment-check" : "payment-pending"}">
         ${facture.acompteRecu
-          ? `Reçu le ${facture.acompteDate ? new Date(facture.acompteDate).toLocaleDateString("fr-FR") : ""}`
+          ? `Reçu le ${facture.acompteDate ? new Date(facture.acompteDate).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : ""}`
           : "En attente"}
       </span>
     </div>
@@ -153,7 +153,7 @@ export async function GET(
       <span>Solde 70% — ${formatEuros(devis.solde70)}</span>
       <span class="${facture.soldeRecu ? "payment-check" : "payment-pending"}">
         ${facture.soldeRecu
-          ? `Reçu le ${facture.soldeDate ? new Date(facture.soldeDate).toLocaleDateString("fr-FR") : ""}`
+          ? `Reçu le ${facture.soldeDate ? new Date(facture.soldeDate).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : ""}`
           : "En attente"}
       </span>
     </div>

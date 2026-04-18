@@ -133,7 +133,7 @@ export default async function ClientsPage({
                           )}
                           {dateFin && (
                             <span className="text-gray-400">
-                              Finalise le {new Date(dateFin).toLocaleDateString("fr-FR")}
+                              Finalise le {new Date(dateFin).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}
                             </span>
                           )}
                         </div>

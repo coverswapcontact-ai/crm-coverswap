@@ -57,6 +57,7 @@ export async function GET(
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "Europe/Paris",
   });
   page.drawText(`Client : ${client}`, {
     x: 40, y: height - 75, size: 11, font, color: rgb(0.2, 0.2, 0.2),

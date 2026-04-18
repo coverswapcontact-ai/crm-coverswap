@@ -306,7 +306,7 @@ export default function LeadsTable({ leads, total, page, totalPages }: { leads: 
                 </TableCell>
                 <TableCell className="text-gray-500 text-[12px] whitespace-nowrap">
                   <div className="flex flex-col leading-tight">
-                    <span className="text-gray-700">{new Date(lead.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" })}</span>
+                    <span className="text-gray-700">{new Date(lead.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "Europe/Paris" })}</span>
                     <span className="text-[10px] text-gray-400">{timeAgo(lead.createdAt)}</span>
                   </div>
                 </TableCell>

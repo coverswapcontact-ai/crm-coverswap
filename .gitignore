@@ -45,3 +45,5 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+.meta-leads-backfill.json
+.meta-leads-import-results.json

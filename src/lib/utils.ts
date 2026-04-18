@@ -10,11 +10,11 @@ export function formatEuros(amount: number): string {
 }
 
 export function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(date));
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Paris" }).format(new Date(date));
 }
 
 export function formatDateLong(date: Date | string): string {
-  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric" }).format(new Date(date));
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }).format(new Date(date));
 }
 
 export const LEAD_SOURCES = ["META_ADS", "TIKTOK", "INSTAGRAM", "ORGANIQUE", "REFERENCE", "AUTRE"] as const;

@@ -121,7 +121,7 @@ const s = StyleSheet.create({
   totalLabel: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#CC0000" },
   totalValue: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#CC0000" },
   note: { fontSize: 8, fontStyle: "italic", marginBottom: 4 },
-  prestationNote: { fontSize: 9, fontFamily: "Helvetica-Bold", fontStyle: "italic", marginBottom: 12 },
+  prestationNote: { fontSize: 9, fontFamily: "Helvetica-BoldOblique", marginBottom: 12 },
   condTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", marginBottom: 4 },
   condItem: { fontSize: 9, marginBottom: 2, paddingLeft: 10 },
   signature: {
@@ -145,8 +145,8 @@ const s = StyleSheet.create({
     paddingTop: 4,
   },
   footerRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 1 },
-  sectionHead: { fontFamily: "Helvetica-Bold", fontStyle: "italic", fontSize: 9 },
-  refLine: { fontFamily: "Helvetica-Bold", fontStyle: "italic", fontSize: 9, marginTop: 4 },
+  sectionHead: { fontFamily: "Helvetica-BoldOblique", fontSize: 9 },
+  refLine: { fontFamily: "Helvetica-BoldOblique", fontSize: 9, marginTop: 4 },
   gammeLine: { fontSize: 8, color: "#666", marginTop: 2 },
 });
 

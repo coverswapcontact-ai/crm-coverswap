@@ -313,8 +313,8 @@ export async function POST(request: NextRequest) {
           META_ADS: "Meta Ads",
         };
         await resend.emails.send({
-          from: process.env.EMAIL_FROM || "CoverSwap <noreply@coverswap.fr>",
-          to: "contact@coverswap.fr",
+          from: process.env.EMAIL_FROM || "CoverSwap <onboarding@resend.dev>",
+          to: process.env.LEAD_NOTIFICATION_EMAIL || "contact@coverswap.fr",
           subject: escaladeDevis
             ? `🔥 Demande de devis — ${data.prenom} ${data.nom}`
             : `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,

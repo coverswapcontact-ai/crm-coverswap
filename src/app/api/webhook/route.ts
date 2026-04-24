@@ -193,6 +193,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
+    // ── Health check shortcut: webhook is reachable + secret OK, skip DB write ──
+    if (body && typeof body === "object" && (body as Record<string, unknown>).__health_check === true) {
+      return NextResponse.json({ ok: true, health: "webhook-reachable", at: new Date().toISOString() });
+    }
+
     const parsed = webhookSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Données invalides", details: parsed.error.issues }, { status: 400 });

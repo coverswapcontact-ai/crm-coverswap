@@ -21,71 +21,65 @@ export async function GET(request: NextRequest) {
   const d7 = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
   const d30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
 
-  const [
-    total,
-    today,
-    last7d,
-    last30d,
-    bySource30d,
-    bySource7d,
-    recent10,
-    byDay7d,
-  ] = await Promise.all([
-    prisma.lead.count(),
-    prisma.lead.count({ where: { createdAt: { gte: startOfDay } } }),
-    prisma.lead.count({ where: { createdAt: { gte: d7 } } }),
-    prisma.lead.count({ where: { createdAt: { gte: d30 } } }),
-    prisma.lead.groupBy({
-      by: ["source"],
-      where: { createdAt: { gte: d30 } },
-      _count: true,
-      orderBy: { _count: { source: "desc" } },
-    }),
-    prisma.lead.groupBy({
-      by: ["source"],
-      where: { createdAt: { gte: d7 } },
-      _count: true,
-      orderBy: { _count: { source: "desc" } },
-    }),
-    prisma.lead.findMany({
-      take: 10,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        createdAt: true,
-        nom: true,
-        prenom: true,
-        email: true,
-        telephone: true,
-        ville: true,
-        source: true,
-        statut: true,
-        typeProjet: true,
-      },
-    }),
-    prisma.$queryRaw`
-      SELECT strftime('%Y-%m-%d', createdAt/1000, 'unixepoch') as day,
-             source,
-             COUNT(*) as n
-      FROM Lead
-      WHERE createdAt >= ${d7.getTime()}
-      GROUP BY day, source
-      ORDER BY day DESC
-    `.catch(() => []),
-  ]);
+  try {
+    const [
+      total,
+      today,
+      last7d,
+      last30d,
+      bySource30d,
+      bySource7d,
+      byStatut,
+      recent20,
+    ] = await Promise.all([
+      prisma.lead.count(),
+      prisma.lead.count({ where: { createdAt: { gte: startOfDay } } }),
+      prisma.lead.count({ where: { createdAt: { gte: d7 } } }),
+      prisma.lead.count({ where: { createdAt: { gte: d30 } } }),
+      prisma.lead.groupBy({
+        by: ["source"],
+        where: { createdAt: { gte: d30 } },
+        _count: { id: true },
+      }),
+      prisma.lead.groupBy({
+        by: ["source"],
+        where: { createdAt: { gte: d7 } },
+        _count: { id: true },
+      }),
+      prisma.lead.groupBy({
+        by: ["statut"],
+        _count: { id: true },
+      }),
+      prisma.lead.findMany({
+        take: 20,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          createdAt: true,
+          nom: true,
+          prenom: true,
+          email: true,
+          telephone: true,
+          ville: true,
+          source: true,
+          statut: true,
+          typeProjet: true,
+        },
+      }),
+    ]);
 
-  return NextResponse.json({
-    now: now.toISOString(),
-    counts: { total, today, last7d, last30d },
-    bySource30d: bySource30d.map((r: { source: string; _count: number }) => ({
-      source: r.source,
-      count: r._count,
-    })),
-    bySource7d: bySource7d.map((r: { source: string; _count: number }) => ({
-      source: r.source,
-      count: r._count,
-    })),
-    byDay7d,
-    recent10,
-  });
+    return NextResponse.json({
+      now: now.toISOString(),
+      counts: { total, today, last7d, last30d },
+      bySource30d: bySource30d.map((r) => ({ source: r.source, count: r._count.id })),
+      bySource7d: bySource7d.map((r) => ({ source: r.source, count: r._count.id })),
+      byStatut: byStatut.map((r) => ({ statut: r.statut, count: r._count.id })),
+      recent20,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: "stats-failed", detail: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
+    );
+  }
 }

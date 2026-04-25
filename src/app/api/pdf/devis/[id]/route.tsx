@@ -24,7 +24,13 @@ function formatDateFR(d: Date): string {
 }
 
 function euros(n: number): string {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+  // Intl.NumberFormat("fr-FR") utilise des espaces insécables (U+202F narrow nbsp
+  // et U+00A0 nbsp) qui ne sont pas supportés par les polices Helvetica de
+  // @react-pdf/renderer et apparaissent comme `/` dans le PDF.
+  // On les remplace par un espace classique.
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" })
+    .format(n)
+    .replace(/[\u202F\u00A0]/g, " ");
 }
 
 // ── Styles ───────────────────────────────────────────────────────────

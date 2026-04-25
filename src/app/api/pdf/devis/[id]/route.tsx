@@ -213,7 +213,7 @@ function DevisPDF({ d }: { d: DevisData }) {
         <Text style={s.phone}>06 70 35 28 69</Text>
 
         <Text style={s.siretLine}>
-          SIRET : 94518036200010 00010 / Code APE : 4334Z
+          SIRET : 94518036200010 — Code APE : 4334Z
         </Text>
 
         {/* Client */}
@@ -270,7 +270,7 @@ function DevisPDF({ d }: { d: DevisData }) {
             MAIN_OEUVRE_EXTRA: "Main d'oeuvre supplémentaire",
             DEPLACEMENT: "Frais de déplacement",
             FOURNITURES: "Fournitures",
-            DEMONTAGE_REMONTAGE: "Démontage / remontage",
+            DEMONTAGE_REMONTAGE: "Démontage et remontage",
             REMISE: "Remise commerciale",
             LIBRE: "",
           };

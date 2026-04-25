@@ -58,7 +58,7 @@ const TYPES_LIGNE: { value: LigneAdditionnelleType; label: string; defaultQty: n
   { value: "MAIN_OEUVRE_EXTRA", label: "Main d'œuvre supplémentaire", defaultQty: 1, suggestion: "Prestation de pose additionnelle" },
   { value: "DEPLACEMENT", label: "Déplacement", defaultQty: 1, suggestion: "Frais de déplacement" },
   { value: "FOURNITURES", label: "Fournitures", defaultQty: 1, suggestion: "Colle, protection sol, outillage spécifique" },
-  { value: "DEMONTAGE_REMONTAGE", label: "Démontage / remontage", defaultQty: 1, suggestion: "Démontage et repose éléments (électroménager, plomberie...)" },
+  { value: "DEMONTAGE_REMONTAGE", label: "Démontage et remontage", defaultQty: 1, suggestion: "Démontage et repose éléments (électroménager, plomberie...)" },
   { value: "REMISE", label: "Remise commerciale", defaultQty: 1, suggestion: "Remise commerciale" },
   { value: "LIBRE", label: "Ligne libre", defaultQty: 1, suggestion: "" },
 ];

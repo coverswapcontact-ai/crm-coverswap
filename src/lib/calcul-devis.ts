@@ -33,14 +33,14 @@ export const GAMMES: Gamme[] = [
   { code: "ESSENTIAL",                  label: "Color Essential",                   prixMatiereHT: 11.5, ratioVente: 1.00 },
   { code: "SILK",                       label: "Color Silk",                        prixMatiereHT: 13.5, ratioVente: 1.05 },
   { code: "SILK_PRESTIGE",              label: "Color Silk Prestige",               prixMatiereHT: 15.5, ratioVente: 1.10 },
-  { code: "WOOD_STONE_CONCRETE_STEEL",  label: "Wood / Stone / Concrete / Steel",   prixMatiereHT: 18.5, ratioVente: 1.12 },
+  { code: "WOOD_STONE_CONCRETE_STEEL",  label: "Wood · Stone · Concrete · Steel",   prixMatiereHT: 18.5, ratioVente: 1.12 },
   { code: "WOOD_PAINTED_PRESTIGE",      label: "Wood Painted Prestige",             prixMatiereHT: 19.5, ratioVente: 1.15 },
-  { code: "PVC_FREE_WSC",               label: "PVC-Free Wood/Stone/Concrete",      prixMatiereHT: 20.5, ratioVente: 1.18 },
+  { code: "PVC_FREE_WSC",               label: "PVC-Free Wood · Stone · Concrete",  prixMatiereHT: 20.5, ratioVente: 1.18 },
   { code: "GLITTER",                    label: "Glitter",                           prixMatiereHT: 28.0, ratioVente: 1.20 },
-  { code: "TEXTILE_HIGH_RES",           label: "Textile Natural/Leather / High-Resistant", prixMatiereHT: 30.0, ratioVente: 1.22 },
+  { code: "TEXTILE_HIGH_RES",           label: "Textile Natural · Leather · High-Resistant", prixMatiereHT: 30.0, ratioVente: 1.22 },
   { code: "EXTERIOR",                   label: "Exterior",                          prixMatiereHT: 35.0, ratioVente: 1.25 },
   { code: "TEXTILE_PRESTIGE",           label: "Textile Prestige",                  prixMatiereHT: 42.0, ratioVente: 1.28 },
-  { code: "CORK_BRUSHED_AURORA",        label: "Cork / Brushed Prestige / Aurora",  prixMatiereHT: 50.0, ratioVente: 1.30 },
+  { code: "CORK_BRUSHED_AURORA",        label: "Cork · Brushed Prestige · Aurora",  prixMatiereHT: 50.0, ratioVente: 1.30 },
 ];
 
 export const BASE_ESSENTIAL = 15; // €/ml — base Essential (10€ × 1.25 × 1.20 = 15€)

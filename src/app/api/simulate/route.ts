@@ -31,8 +31,9 @@ const ALLOWED_ORIGINS = [
 // Seul l'hôte S3 Cover Styl' est autorisé pour les swatches (anti-SSRF).
 const ALLOWED_SWATCH_HOST = "ssi.s3.fr-par.scw.cloud";
 
-// OpenAI peut être lent ; on coupe à 120s pour ne pas pendre indéfiniment.
-const OPENAI_TIMEOUT_MS = 120_000;
+// OpenAI peut être lent (quality high + input_fidelity high = 60-150s).
+// Railway n'a aucun plafond ; on coupe à 180s seulement pour ne pas pendre.
+const OPENAI_TIMEOUT_MS = 180_000;
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -174,13 +175,18 @@ export async function POST(req: NextRequest) {
       else if (ratio < 0.85) outputSize = "1024x1536";
     }
 
-    // 5) Appel OpenAI — quality "medium" : on a le temps (pas de plafond Vercel),
-    //    donc on privilégie la qualité de rendu sur la vitesse.
+    // 5) Appel OpenAI — on privilégie LA QUALITÉ (pas de plafond temps sur Railway) :
+    //    - quality "high" : meilleure fidélité couleur + détail.
+    //    - input_fidelity "high" : LE levier clé. Préserve fidèlement l'image
+    //      d'entrée (visages, personnes, objets, zones non touchées) ET respecte
+    //      mieux les swatches de référence → corrige la dérive de teinte et les
+    //      modifications parasites du reste de la cuisine.
     const formData = new FormData();
     formData.append("model", "gpt-image-1");
     formData.append("prompt", prompt);
     formData.append("size", outputSize);
-    formData.append("quality", "medium");
+    formData.append("quality", "high");
+    formData.append("input_fidelity", "high");
     formData.append(
       "image[]",
       new Blob([new Uint8Array(photoBuffer)], { type: "image/png" }),

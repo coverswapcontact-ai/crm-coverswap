@@ -175,17 +175,18 @@ export async function POST(req: NextRequest) {
       else if (ratio < 0.85) outputSize = "1024x1536";
     }
 
-    // 5) Appel OpenAI — on privilégie LA QUALITÉ (pas de plafond temps sur Railway) :
-    //    - quality "high" : meilleure fidélité couleur + détail.
-    //    - input_fidelity "high" : LE levier clé. Préserve fidèlement l'image
-    //      d'entrée (visages, personnes, objets, zones non touchées) ET respecte
-    //      mieux les swatches de référence → corrige la dérive de teinte et les
-    //      modifications parasites du reste de la cuisine.
+    // 5) Appel OpenAI — réglage COÛT/QUALITÉ optimal :
+    //    - input_fidelity "high" : LE levier qui corrige les 3 symptômes
+    //      (dérive de teinte, application partielle, modifs parasites de la
+    //      cuisine). Préserve l'image d'entrée + respecte les swatches. ON LE GARDE.
+    //    - quality "medium" : suffisant ici. Le passage à "high" triplait le coût
+    //      (~0,20€ vs ~0,07€/simulation) sans gain sur CES problèmes précis, qui
+    //      dépendent de input_fidelity + du prompt, pas du niveau de quality.
     const formData = new FormData();
     formData.append("model", "gpt-image-1");
     formData.append("prompt", prompt);
     formData.append("size", outputSize);
-    formData.append("quality", "high");
+    formData.append("quality", "medium");
     formData.append("input_fidelity", "high");
     formData.append(
       "image[]",

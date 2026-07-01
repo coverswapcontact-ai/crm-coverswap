@@ -297,12 +297,10 @@ export async function POST(request: NextRequest) {
 
     // Notification email au gérant :
     // - tout NOUVEAU lead (peu importe la source)
-    // - OU escalade d'un lead existant vers SITE_DEVIS (passage simu → devis)
-    const escaladeDevis =
-      !isNew &&
-      data.source === "SITE_DEVIS" &&
-      existing?.source !== "SITE_DEVIS";
-    if (isNew || escaladeDevis) {
+    // - OU TOUTE demande de devis, même d'un client déjà en base (un client
+    //   qui redemande un devis est très chaud → à ne jamais rater).
+    const isDevis = data.source === "SITE_DEVIS";
+    if (isNew || isDevis) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
@@ -315,8 +313,8 @@ export async function POST(request: NextRequest) {
         await resend.emails.send({
           from: process.env.EMAIL_FROM || "CoverSwap <onboarding@resend.dev>",
           to: process.env.LEAD_NOTIFICATION_EMAIL || "contact@coverswap.fr",
-          subject: escaladeDevis
-            ? `🔥 Demande de devis — ${data.prenom} ${data.nom}`
+          subject: isDevis
+            ? `🔥 Demande de devis${!isNew ? " (client existant)" : ""} — ${data.prenom} ${data.nom}`
             : `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
           html: `
             <h2>Nouveau lead reçu</h2>

@@ -3,9 +3,8 @@ import { Resend } from "resend";
 
 /**
  * DIAGNOSTIC EMAIL TEMPORAIRE — à supprimer après usage.
- * Tente un envoi Resend avec la config actuelle et renvoie l'erreur exacte,
- * pour savoir précisément pourquoi les notifications de leads ne partent pas.
- * Protégé par un token en query.
+ * Placé hors des préfixes protégés par le middleware NextAuth.
+ * Tente un envoi Resend avec la config actuelle et renvoie l'erreur exacte.
  */
 export const dynamic = "force-dynamic";
 

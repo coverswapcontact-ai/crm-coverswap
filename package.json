@@ -6,7 +6,11 @@
     "dev": "next dev --port 3001",
     "build": "prisma generate && next build",
     "start": "prisma db push --skip-generate --accept-data-loss && next start -p ${PORT:-3001}",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:seed:prospection": "tsx prisma/seed-prospection.ts",
+    "prospection:sourcing": "tsx scripts/sourcing-prospection.ts",
+    "prospection:scoring": "tsx scripts/scoring-prospection.ts",
+    "prospection:avis-refresh": "tsx scripts/refetch-avis-prospection.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

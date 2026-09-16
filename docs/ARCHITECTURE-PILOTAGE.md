@@ -802,3 +802,80 @@ fiscales.
 - Les délais et taux sur de très petits nombres sont affichés avec leur effectif
   (entre parenthèses) : en dessous de cinq, une indication, pas une tendance.
 
+## 15. Connexion Google et miroir Drive
+
+### Connexion Google (`src/lib/google/`)
+
+Une seule connexion au compte Google de l'entreprise sert au miroir Drive et à
+l'agent mail. Appels REST directs (aucun SDK Google ajouté), simulables en test.
+
+- **OAuth 2 « application web »** : bouton « Connecter le compte Google » dans
+  Paramètres → consentement Google → retour sur `/api/google/retour` (état
+  anti-falsification vérifié par cookie). Portées au plus juste : `drive.file`
+  (le CRM ne voit que les fichiers qu'il a créés), `gmail.modify` (lire, ranger,
+  archiver ; le code n'appelle jamais la corbeille ni la suppression),
+  `gmail.send`.
+- **Jeton de renouvellement chiffré** (AES-256-GCM) avec `GOOGLE_TOKEN_KEY`,
+  clé hors base : une copie de la base (ou du journal) ne donne pas accès au
+  compte. Les jetons d'accès restent en mémoire.
+- Déconnexion : révocation chez Google ; la ligne reste, datée. Accès révoqué
+  côté Google : les tâches s'arrêtent en le disant, la connexion affiche
+  « reconnecter ».
+
+**À faire une fois (Lucas)** : dans Google Cloud Console, créer un projet,
+activer les API Drive et Gmail, configurer l'écran de consentement (type
+« interne » si Google Workspace, sinon « externe » en mode test avec
+`coverswap.contact@gmail.com` comme utilisateur test), créer un identifiant
+OAuth « application web » avec l'URI de redirection
+`https://<adresse du CRM>/api/google/retour`, puis définir sur le serveur
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et `GOOGLE_TOKEN_KEY` (générée par
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
+Perdre `GOOGLE_TOKEN_KEY` oblige seulement à reconnecter le compte.
+
+### Miroir Drive (`src/lib/drive/`)
+
+La base est la source ; Drive en est une **copie lisible**, jamais lue pour
+nourrir le CRM.
+
+```
+CoverSwap CRM/
+  Clients/<client · code>/<AAAA-MM objet>/
+    Photos avant/   Photos après/   Devis et factures/   Fiche du dossier.txt
+  Clients/Sans fiche client/…
+  Comptabilité/<année>/Livre des recettes <année>.csv
+  Comptabilité/<année>/Justificatifs de dépenses/<AAAA-MM>/<date fournisseur montant>
+  Archives (retirés du CRM)/
+```
+
+- **Plan puis passage** : `planMiroir` calcule l'arbre voulu (chaque élément a
+  une clé stable : `client:<id>`, `document:<id>`…) ; `synchroniserMiroir`
+  crée ce qui manque, renomme ou déplace ce qui a changé, renvoie un fichier dont
+  le contenu a changé (fiche, livre des recettes). Idempotent et rejouable : un
+  second passage ne fait rien ; un élément en échec est repris au suivant.
+- **Rien ne se supprime** : un élément qui sort du plan (photo retirée, client
+  fusionné) est déplacé dans « Archives (retirés du CRM) ».
+- **Vérification quotidienne** : un élément supprimé, mis à la corbeille ou
+  renommé à la main dans Drive est reconstruit ou renommé comme le CRM le dit.
+- **Ne bloque jamais l'interface** : passage toutes les 30 minutes en tâche de
+  fond, « Synchroniser maintenant » met une tâche en file.
+- **Inactif sans connexion Google** (ou avec `MIROIR_DRIVE=0`).
+- État technique (`MiroirDrive`) hors journal : réécrit à chaque passage, sans
+  donnée métier.
+
+### Photos après chantier
+
+Les photos « après » (portfolio) s'ajoutent depuis le dossier ; elles sont
+rangées dans `photos-apres/` sur le volume et dans « Photos après » sur Drive.
+Retirer une photo la range aux archives (le libellé « Supprimer définitivement »
+de l'écran était faux et devient « Retirer »).
+
+### Limites connues
+
+- Non testé contre les vrais serveurs de Google (identifiants absents du poste
+  de développement) : testé contre un Drive simulé en mémoire. Premier passage
+  réel à surveiller dans l'écran des tâches.
+- Le premier passage envoie tous les fichiers existants : prévoir quelques
+  minutes selon le volume de photos.
+- La fiche du dossier contient les coordonnées du client : le Drive doit rester
+  privé au compte de l'entreprise (ne pas partager le dossier « CoverSwap CRM »).
+

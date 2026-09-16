@@ -37,6 +37,7 @@ import { CoordonneesClient } from "./CoordonneesClient";
 import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
+import { DepensesDossier } from "./DepensesDossier";
 import { PaiementsDossier } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
 import { TimelineEtapes } from "./TimelineEtapes";
@@ -216,6 +217,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
+          <DepensesDossier detail={detail} />
           <section>
             <TitreSection>Étapes et notes</TitreSection>
             <TimelineEtapes detail={detail} onNoteAjoutee={onRecharger} />

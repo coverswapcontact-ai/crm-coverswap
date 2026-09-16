@@ -636,3 +636,48 @@ L'ancien écran `/finances` (calculé sur les factures « soldées » de l'ancie
   synthèse : ils permettront de montrer l'écart entre le déclaré et le
   recalculé quand une recette est saisie en retard.
 
+## 12. Dépenses : rattachées au chantier, saisies au téléphone
+
+### Pourquoi et comment
+
+Un micro-entrepreneur prestataire ne déduit pas ses dépenses : elles servent à
+**connaître la marge de chaque chantier** (et, plus tard, la synthèse par
+dimension). Une dépense porte : date, montant payé, fournisseur, catégorie,
+moyen, justificatif (photo du ticket ou PDF), et son **rattachement** : un
+chantier, ou « hors chantier » choisi explicitement (frais généraux). Ni l'un ni
+l'autre : « à rattacher », compté et signalé.
+
+### Rattacher est plus facile qu'oublier
+
+- L'écran de saisie (`/depenses/nouvelle`, pensé pour le téléphone) liste les
+  chantiers où l'on travaille (à la pose, puis planifiés au plus près du jour,
+  puis signés) et **pré-choisit le chantier probable** quand il n'y a pas
+  d'ambiguïté (un seul à la pose, ou un seul planifié à trois jours près).
+- Depuis un dossier, « + Dépense » ouvre la saisie avec son chantier choisi.
+- Une catégorie de frais généraux (publicité, logiciels, assurance…) propose
+  « hors chantier » tant que le rattachement n'a pas été choisi à la main.
+- Le dossier affiche ses dépenses et une marge indicative (facturé, à défaut
+  devis signé, moins dépensé).
+
+### Rien ne se perd, rien ne se supprime
+
+- **Coupure réseau** (4G du chantier) : la saisie, photo comprise, est gardée
+  dans le navigateur (IndexedDB) et part dès que le réseau revient (page ouverte)
+  ou à la prochaine ouverture de la page. Chaque saisie porte un identifiant :
+  renvoyée deux fois, elle n'est enregistrée qu'une fois.
+- **Même ticket deux fois** : l'empreinte (SHA-256) du justificatif signale le
+  doublon probable ; « Enregistrer quand même » reste possible.
+- Une dépense saisie par erreur se **retire avec son motif** (archivée,
+  toujours visible barrée dans son dossier) ; un justificatif remplacé part aux
+  archives, sa ligne `Fichier` est archivée.
+- Les justificatifs ne sont servis qu'avec une session (route `/api`, sans
+  extension de fichier : toujours filtrée par le proxy).
+
+### Limites connues
+
+- La page de saisie doit avoir été ouverte avec du réseau : sans application
+  installable (service worker), elle ne se charge pas hors ligne ; seul l'envoi
+  est protégé.
+- Pas de lecture automatique du ticket (montant, fournisseur) : saisie à la
+  main, aidée par les fournisseurs récents.
+

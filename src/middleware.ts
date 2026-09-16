@@ -93,6 +93,8 @@ export async function middleware(request: NextRequest) {
     // Module prospection : le POST /api/prospection/sourcing consomme des
     // crédits Google Places, il ne doit jamais être joignable sans session.
     "/prospection", "/api/prospection",
+    // Module dossiers : coordonnées et photos des clients, devis et factures.
+    "/dossiers", "/api/dossiers",
   ];
   const needsAuth = protectedPaths.some((p) => pathname.startsWith(p));
 
@@ -103,7 +105,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
       }
       const signInUrl = new URL("/auth/signin", request.url);
-      signInUrl.searchParams.set("callbackUrl", pathname);
+      // Paramètres conservés : un lien /dossiers?dossier=… rouvre le dossier après connexion.
+      signInUrl.searchParams.set("callbackUrl", pathname + request.nextUrl.search);
       return NextResponse.redirect(signInUrl);
     }
   }

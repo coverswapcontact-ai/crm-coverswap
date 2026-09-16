@@ -42,22 +42,26 @@ export function PhotosDossier({
   onRecharger: () => Promise<void>;
 }) {
   const entree = useRef<HTMLInputElement>(null);
-  const [envoi, setEnvoi] = useState<string | null>(null);
+  const entreeApres = useRef<HTMLInputElement>(null);
+  const [envoi, setEnvoi] = useState<{ apres: boolean; texte: string } | null>(null);
   const [agrandie, setAgrandie] = useState<PhotoVue | null>(null);
   const [confirmation, setConfirmation] = useState(false);
   const [suppression, setSuppression] = useState(false);
+  const avant = detail.photos.filter((photo) => !photo.apres);
+  const apres = detail.photos.filter((photo) => photo.apres);
 
-  async function ajouter(fichiers: FileList | null) {
+  async function ajouter(fichiers: FileList | null, apres: boolean) {
     const liste = Array.from(fichiers ?? []);
     if (liste.length === 0) return;
     let ajoutees = 0;
     for (const [index, fichier] of liste.entries()) {
-      setEnvoi(liste.length > 1 ? `Envoi ${index + 1}/${liste.length}…` : "Envoi…");
+      setEnvoi({ apres, texte: liste.length > 1 ? `Envoi ${index + 1}/${liste.length}…` : "Envoi…" });
       try {
         const photo = await preparerPhoto(fichier);
         if (photoTropLourde(photo)) throw new Error(`« ${fichier.name} » dépasse 9 Mo.`);
         const formulaire = new FormData();
         formulaire.set("photo", photo);
+        if (apres) formulaire.set("apres", "1");
         await appelApi(`/api/dossiers/${detail.id}/photos`, { method: "POST", body: formulaire });
         ajoutees++;
       } catch (probleme) {
@@ -66,6 +70,7 @@ export function PhotosDossier({
     }
     setEnvoi(null);
     if (entree.current) entree.current.value = "";
+    if (entreeApres.current) entreeApres.current.value = "";
     if (ajoutees > 0) {
       toast.success(ajoutees > 1 ? `${ajoutees} photos ajoutées` : "Photo ajoutée");
       await onRecharger();
@@ -77,10 +82,10 @@ export function PhotosDossier({
     try {
       await envoyerJson(`/api/dossiers/${detail.id}/photos/${photo.id}`, "DELETE");
       setAgrandie(null);
-      toast.success("Photo supprimée");
+      toast.success("Photo retirée", { description: "Elle reste aux archives." });
       await onRecharger();
     } catch (probleme) {
-      toast.error("Photo non supprimée", { description: messageErreur(probleme) });
+      toast.error("Photo non retirée", { description: messageErreur(probleme) });
     } finally {
       setSuppression(false);
       setConfirmation(false);
@@ -99,25 +104,25 @@ export function PhotosDossier({
               multiple
               className="sr-only"
               aria-label="Ajouter des photos"
-              onChange={(evenement) => void ajouter(evenement.target.files)}
+              onChange={(evenement) => void ajouter(evenement.target.files, false)}
             />
             <Bouton
               variante="secondaire"
               taille="sm"
               icone={<Camera size={13} aria-hidden />}
-              chargement={envoi !== null}
+              chargement={envoi !== null && !envoi.apres}
               onClick={() => entree.current?.click()}
             >
-              {envoi ?? "Ajouter"}
+              {envoi && !envoi.apres ? envoi.texte : "Ajouter"}
             </Bouton>
           </>
         }
       >
-        Photos du chantier ({detail.photos.length})
+        Photos du chantier ({avant.length})
       </TitreSection>
 
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-        {detail.photos.map((photo) => (
+        {avant.map((photo) => (
           <button
             key={photo.id}
             type="button"
@@ -136,12 +141,57 @@ export function PhotosDossier({
         ))}
       </div>
 
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <p className="text-[12px] font-medium text-[#9CA3AF]">Après chantier · portfolio ({apres.length})</p>
+        <input
+          ref={entreeApres}
+          type="file"
+          accept="image/*"
+          multiple
+          className="sr-only"
+          aria-label="Ajouter des photos après chantier"
+          onChange={(evenement) => void ajouter(evenement.target.files, true)}
+        />
+        <Bouton
+          variante="secondaire"
+          taille="sm"
+          icone={<Camera size={13} aria-hidden />}
+          chargement={envoi !== null && envoi.apres}
+          onClick={() => entreeApres.current?.click()}
+        >
+          {envoi && envoi.apres ? envoi.texte : "Photos après"}
+        </Bouton>
+      </div>
+      {apres.length === 0 ? (
+        <p className="mt-1.5 text-[12px] text-[#6B7280]">Une fois la pose finie : les photos du résultat, pour le portfolio.</p>
+      ) : (
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {apres.map((photo) => (
+            <button
+              key={photo.id}
+              type="button"
+              onClick={() => {
+                setConfirmation(false);
+                setAgrandie(photo);
+              }}
+              className={cn(
+                "relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-[#1D9E75]/40 bg-[#1C1F25] hover:border-[#5DCAA5]",
+                TRANS
+              )}
+              aria-label="Agrandir la photo après chantier"
+            >
+              <Vignette photo={photo} taille="(max-width: 640px) 33vw, 150px" className="object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+
       {agrandie ? (
         <Modale
           ouverte
           onFermer={() => setAgrandie(null)}
           largeur="lg"
-          titre="Photo du chantier"
+          titre={agrandie.apres ? "Photo après chantier" : "Photo du chantier"}
           pied={
             <div className="flex flex-wrap items-center justify-between gap-2">
               <a
@@ -153,19 +203,19 @@ export function PhotosDossier({
                 <ExternalLink size={13} aria-hidden />
                 Ouvrir l&apos;original
               </a>
-              {detail.photos.length > 1 ? (
+              {agrandie.apres || avant.length > 1 ? (
                 confirmation ? (
                   <div className="flex gap-2">
                     <Bouton variante="fantome" onClick={() => setConfirmation(false)}>
                       Annuler
                     </Bouton>
                     <Bouton variante="danger" chargement={suppression} onClick={() => void supprimer(agrandie)}>
-                      Supprimer définitivement
+                      Retirer (reste aux archives)
                     </Bouton>
                   </div>
                 ) : (
                   <Bouton variante="danger" icone={<Trash2 size={14} aria-hidden />} onClick={() => setConfirmation(true)}>
-                    Supprimer
+                    Retirer
                   </Bouton>
                 )
               ) : (

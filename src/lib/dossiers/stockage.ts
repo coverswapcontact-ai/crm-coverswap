@@ -69,11 +69,16 @@ export function verifierPhoto(fichier: File): void {
   }
 }
 
+/** Photo « après chantier » (portfolio) : rangée dans photos-apres/, le reste est « avant ». */
+export function estPhotoApres(chemin: string): boolean {
+  return path.posix.basename(path.posix.dirname(chemin)) === "photos-apres";
+}
+
 /** Écrit une photo (déjà vérifiée) et renvoie son chemin relatif. */
-export async function enregistrerPhoto(dossierId: string, fichier: File): Promise<string> {
+export async function enregistrerPhoto(dossierId: string, fichier: File, apres = false): Promise<string> {
   verifierPhoto(fichier);
   const id = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
-  const relatif = path.posix.join(RACINE, dossierId, "photos", `${id}.${FORMATS_PHOTO[fichier.type]}`);
+  const relatif = path.posix.join(RACINE, dossierId, apres ? "photos-apres" : "photos", `${id}.${FORMATS_PHOTO[fichier.type]}`);
   const absolu = cheminAbsolu(relatif);
   await fs.mkdir(path.dirname(absolu), { recursive: true });
   await fs.writeFile(absolu, Buffer.from(await fichier.arrayBuffer()));

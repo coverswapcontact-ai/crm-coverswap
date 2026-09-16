@@ -410,3 +410,49 @@ model MigrationDonnees {
   resume     String // JSON : compteurs de la migration
   ecriture   String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
+
+// ─────────────────────────────────────────────
+// File de tâches de fond (src/lib/taches)
+// Travail asynchrone et rejouable : miroir Drive, envois validés, relève des
+// mails… Jamais dans le chemin d'une requête : l'interface ne l'attend pas.
+// Hors journal (mécanique interne) ; ses effets, eux, sont journalisés.
+// ─────────────────────────────────────────────
+
+model Tache {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  type            String // TypeTache (src/lib/taches/registre.ts)
+  cle             String    @unique // idempotence : deux mises en file de la même clé = une seule tâche
+  charge          String    @default("{}") // JSON : paramètres de la tâche
+  statut          String    @default("EN_ATTENTE") // EN_ATTENTE | EN_COURS | TERMINEE | ECHEC_DEFINITIF | ANNULEE
+  priorite        Int       @default(0) // plus grand = plus urgent
+  tentatives      Int       @default(0)
+  tentativesMax   Int       @default(8)
+  prochainEssaiLe DateTime  @default(now())
+  verrouJusqua    DateTime? // bail d'exécution : passé ce délai, une tâche EN_COURS est reprise
+  aRejouer        Boolean   @default(false) // remise en file pendant son exécution : rejouer une fois finie
+  commenceLe      DateTime?
+  termineLe       DateTime?
+  derniereErreur  String?
+  resultat        String? // JSON rendu par le traitement
+  demandeePar     String // acteur qui a mis la tâche en file
+  ecriture        String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([statut, prochainEssaiLe])
+  @@index([type, statut])
+}
+
+// Travaux périodiques (relève des mails, vérification du miroir, alertes…) :
+// une ligne par travail, son dernier passage et ses échecs consécutifs.
+model Planification {
+  nom               String    @id
+  actif             Boolean   @default(true)
+  dernierDebut      DateTime?
+  dernierFin        DateTime?
+  dernierStatut     String? // SUCCES | ECHEC | IGNORE
+  derniereErreur    String?
+  echecsConsecutifs Int       @default(0)
+  prochainPassage   DateTime  @default(now())
+  ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+}

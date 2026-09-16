@@ -46,16 +46,35 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   "Planification",
 ]);
 
+export type RegleImmuabilite = {
+  /** Colonnes qui peuvent encore changer. */
+  modifiables: readonly string[];
+  /** Colonnes qui peuvent être renseignées une fois (depuis NULL), jamais changées ensuite. */
+  completables?: readonly string[];
+  /** Condition SQL sur OLD à partir de laquelle la ligne est figée (par défaut : dès sa création). */
+  quand?: string;
+  message?: string;
+};
+
 /**
- * Modèles dont une ligne, une fois écrite, ne se modifie plus (la base le
- * refuse) : un consentement se retire par une nouvelle déclaration, un
- * instantané mensuel ne se recalcule pas. Seules les colonnes listées peuvent
- * encore changer (rattachement à la fiche conservée lors d'une fusion).
+ * Modèles dont une ligne, une fois écrite (ou à partir d'une condition), ne se
+ * modifie plus : la base le refuse. Un consentement se retire par une nouvelle
+ * déclaration, un paramètre change par une nouvelle valeur datée.
  */
-export const MODELES_IMMUABLES: ReadonlyMap<string, readonly string[]> = new Map([
-  ["ConsentementMail", ["clientId", "ecriture"]],
-  ["Parametre", ["ecriture"]],
+export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<string, RegleImmuabilite>([
+  ["ConsentementMail", { modifiables: ["clientId", "ecriture"] }],
+  ["Parametre", { modifiables: ["ecriture"] }],
 ]);
+
+export function messageImmuabilite(nomModele: string): string {
+  return MODELES_IMMUABLES.get(nomModele)?.message ?? `Une ligne de « ${nomModele} » ne se modifie pas : enregistrer une nouvelle ligne.`;
+}
+
+export function messageSuppression(nomModele: string): string {
+  return `Suppression interdite sur « ${nomModele} » : rien ne se supprime, l'enregistrement s'archive.`;
+}
+
+export const MESSAGE_JOURNAL_IMMUABLE = "Le journal des modifications est immuable : seul un caviardage RGPD est permis, une seule fois.";
 
 /** Préfixes de nom : tout déclencheur ainsi nommé appartient à cette couche. */
 export const PREFIXES_DECLENCHEURS = ["journal_", "interdit_suppression_", "immuable_"] as const;
@@ -139,19 +158,26 @@ export function declencheursDuModele(modele: ModeleSql): Declencheur[] {
       nom: `interdit_suppression_${table}`,
       sql: `CREATE TRIGGER ${ident(`interdit_suppression_${table}`)} BEFORE DELETE ON ${ident(table)}
 BEGIN
-  SELECT RAISE(ABORT, ${texte(`Suppression interdite sur « ${modele.name} » : rien ne se supprime, l'enregistrement s'archive.`)});
+  SELECT RAISE(ABORT, ${texte(messageSuppression(modele.name))});
 END;`,
     },
   ];
-  const modifiables = MODELES_IMMUABLES.get(modele.name);
-  if (modifiables) {
-    const verrouillees = liste.filter((colonne) => !modifiables.includes(colonne.champ));
+  const regle = MODELES_IMMUABLES.get(modele.name);
+  if (regle) {
+    const completables = regle.completables ?? [];
+    const verrouillees = liste.filter((colonne) => !regle.modifiables.includes(colonne.champ) && !completables.includes(colonne.champ));
+    const changements = [
+      ...verrouillees.map((colonne) => `OLD.${ident(colonne.nom)} IS NOT NEW.${ident(colonne.nom)}`),
+      ...liste
+        .filter((colonne) => completables.includes(colonne.champ))
+        .map((colonne) => `(OLD.${ident(colonne.nom)} IS NOT NULL AND OLD.${ident(colonne.nom)} IS NOT NEW.${ident(colonne.nom)})`),
+    ];
     resultat.push({
       nom: `immuable_${table}_modification`,
       sql: `CREATE TRIGGER ${ident(`immuable_${table}_modification`)} BEFORE UPDATE ON ${ident(table)}
-WHEN ${verrouillees.map((colonne) => `OLD.${ident(colonne.nom)} IS NOT NEW.${ident(colonne.nom)}`).join(" OR ")}
+WHEN ${regle.quand ? `(${regle.quand}) AND ` : ""}(${changements.join(" OR ")})
 BEGIN
-  SELECT RAISE(ABORT, ${texte(`Une ligne de « ${modele.name} » ne se modifie pas : enregistrer une nouvelle ligne.`)});
+  SELECT RAISE(ABORT, ${texte(messageImmuabilite(modele.name))});
 END;`,
     });
   }
@@ -200,7 +226,7 @@ export function declencheursDuJournal(): Declencheur[] {
       sql: `CREATE TRIGGER ${ident(`immuable_${TABLE_JOURNAL}_modification`)} BEFORE UPDATE ON ${ident(TABLE_JOURNAL)}
 WHEN NOT (OLD."caviardeLe" IS NULL AND NEW."caviardeLe" IS NOT NULL AND ${inchanges})
 BEGIN
-  SELECT RAISE(ABORT, 'Le journal des modifications est immuable : seul un caviardage RGPD est permis, une seule fois.');
+  SELECT RAISE(ABORT, ${texte(MESSAGE_JOURNAL_IMMUABLE)});
 END;`,
     },
   ];

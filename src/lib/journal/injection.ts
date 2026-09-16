@@ -10,6 +10,9 @@
  * l'enfant lui-même (update de l'enfant), jamais par ces opérations.
  */
 
+import { ErreurMetier } from "@/lib/commun/erreurs";
+import { messageSuppression } from "./declencheurs";
+
 export type ChampDmmf = {
   name: string;
   kind: string;
@@ -22,9 +25,9 @@ export type ModeleDmmf = {
   fields: readonly ChampDmmf[];
 };
 
-export class SuppressionInterdite extends Error {
+export class SuppressionInterdite extends ErreurMetier {
   constructor(modele: string) {
-    super(`Suppression interdite sur « ${modele} » : rien ne se supprime, l'enregistrement s'archive.`);
+    super(messageSuppression(modele), 409);
     this.name = "SuppressionInterdite";
   }
 }

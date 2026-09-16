@@ -265,7 +265,7 @@ describe("rien ne se supprime", () => {
     const cree = await m.avecActeur(HUMAIN, () => m.prisma.lead.create({ data: lead() }));
     await assert.rejects(
       () => m.prisma.$executeRawUnsafe(`DELETE FROM "Lead" WHERE "id" = ?`, cree.id),
-      /Suppression interdite/
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "EcritureRefusee" && /Suppression interdite/.test(erreur.message)
     );
     assert.ok(await m.prisma.lead.findUnique({ where: { id: cree.id } }));
   });
@@ -306,7 +306,7 @@ describe("le journal est immuable", () => {
     );
     await assert.rejects(
       () => m.prisma.$executeRawUnsafe(`UPDATE "JournalModification" SET "acteur" = 'HUMAIN:faussaire' WHERE "id" = ?`, id),
-      /immuable/
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "EcritureRefusee" && /immuable/.test(erreur.message)
     );
     await assert.rejects(
       () => m.prisma.$executeRawUnsafe(`DELETE FROM "JournalModification" WHERE "id" = ?`, id),
@@ -318,7 +318,7 @@ describe("le journal est immuable", () => {
     );
     await assert.rejects(
       () => m.prisma.$executeRawUnsafe(`UPDATE "JournalModification" SET "apres" = '{}', "caviardeLe" = 2 WHERE "id" = ?`, id),
-      /immuable/
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "EcritureRefusee" && /immuable/.test(erreur.message)
     );
   });
 });

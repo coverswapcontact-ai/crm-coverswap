@@ -106,6 +106,16 @@ requête partirait hors de lui et perdrait son auteur.
   fichier dans `archives/<horodatage>-<raison>/` sous le répertoire d'upload.
 - Le journal lui-même ne se modifie pas, sauf un **caviardage RGPD** (une fois,
   sans toucher à l'horodatage, l'auteur, l'opération ni l'identifiant).
+- **Refus lisibles** : le moteur SQLite de Prisma rapporte toute erreur levée
+  par un déclencheur comme « Foreign key constraint violated », sans son
+  message. La couche (`src/lib/journal/refus.ts`) le retrouve : en SQL brut, le
+  message du déclencheur est transmis ; pour une opération de modèle, une
+  modification refusée sur un modèle immuable qui ne pose aucun lien ne peut
+  venir que de son déclencheur, dont elle reprend le message. L'appelant reçoit
+  une `EcritureRefusee` (HTTP 409, message en français). Les tests vérifient le
+  type d'erreur, pas seulement un motif de texte : l'extrait de code qu'ajoute
+  Prisma à ses messages contient les lignes du test et faisait passer des
+  assertions à tort.
 
 ### Modèles hors journal
 

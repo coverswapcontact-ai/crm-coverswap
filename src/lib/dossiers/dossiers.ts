@@ -600,10 +600,24 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
       });
     }
     await tx.dossier.update({ where: { id: dossierId }, data });
+    if (ouvertLe || data.clientId) await reculerPremierContact(tx, dossierId);
   });
 }
 
 /* ── Dates réelles ──────────────────────────────────────────────── */
+
+/**
+ * La fiche client d'un dossier était en contact au plus tard à son ouverture
+ * réelle : un dossier repris en juin fait d'un client saisi en septembre un
+ * client de juin (acquisition et nouveaux clients de /synthese). Le premier
+ * contact recule, il n'avance jamais.
+ */
+export async function reculerPremierContact(tx: Transaction, dossierId: string): Promise<void> {
+  const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { clientId: true, ouvertLe: true, createdAt: true } });
+  if (!dossier?.clientId) return;
+  const ouverture = dossier.ouvertLe ?? dossier.createdAt;
+  await tx.client.updateMany({ where: { id: dossier.clientId, anonymiseLe: null, premierContactLe: { gt: ouverture } }, data: { premierContactLe: ouverture } });
+}
 
 async function evenementOuverture(tx: Transaction, dossierId: string) {
   const changements = await tx.dossierEvenement.findMany({
@@ -642,7 +656,10 @@ export async function modifierDateEvenement(dossierId: string, evenementId: stri
         ...(metadata.dateInconnue ? { metadata: JSON.stringify(sansInconnue) } : {}),
       },
     });
-    if (metadata.nature === "OUVERTURE") await tx.dossier.update({ where: { id: dossierId }, data: { ouvertLe: date } });
+    if (metadata.nature === "OUVERTURE") {
+      await tx.dossier.update({ where: { id: dossierId }, data: { ouvertLe: date } });
+      await reculerPremierContact(tx, dossierId);
+    }
     if (metadata.vers === "PERDU") {
       const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
       const dernierePerte = (await tx.dossierEvenement.findMany({

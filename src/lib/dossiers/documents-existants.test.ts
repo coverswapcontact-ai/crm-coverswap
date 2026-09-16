@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { preparerBaseEssai } from "@/test/base-essai";
+import { numerosProposables } from "./numeros-libres";
+import type { NumeroLibre } from "./registre";
 
 preparerBaseEssai();
 process.env.UPLOADS_DIR = mkdtempSync(path.join(tmpdir(), "coverswap-uploads-"));
@@ -36,6 +38,23 @@ before(async () => {
 
 after(async () => {
   await prisma.$disconnect();
+});
+
+describe("numéros proposés à un document repris", () => {
+  test("le type connu du registre prime sur la série ; un type inconnu se lit à la série", () => {
+    const libre = (numero: string, type: NumeroLibre["type"]): NumeroLibre => ({ id: numero, numero, type, emisLe: null, destinataire: null, montant: null });
+    const registre = [
+      libre("2026-034", "DEVIS"),
+      libre("2026-032", "FACTURE"),
+      libre("2026-029", "INCONNU"),
+      libre("F2026-004", "INCONNU"),
+      libre("F2026-003", "FACTURE"),
+      libre("A2026-001", "AVOIR"),
+    ];
+    const numeros = (type: "DEVIS" | "FACTURE") => numerosProposables(registre, type).map((ligne) => ligne.numero);
+    assert.deepEqual(numeros("DEVIS"), ["2026-034", "2026-029"]);
+    assert.deepEqual(numeros("FACTURE"), ["2026-032", "2026-029", "F2026-004", "F2026-003"], "une facture d'avant le CRM, sans préfixe, est proposée");
+  });
 });
 
 describe("documents émis avant le CRM", () => {

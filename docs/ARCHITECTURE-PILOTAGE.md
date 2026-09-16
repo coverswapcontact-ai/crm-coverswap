@@ -1289,6 +1289,11 @@ Un dossier signé en juillet porte juillet, pas le jour de sa saisie.
   redate `perteLe` ; une date « inconnue » (reprise) devient connue. Une date
   hors de l'ordre du parcours est signalée, puis le parcours se remet dans
   l'ordre des dates (à date égale, l'ordre de saisie).
+- **Fiche client** : son premier contact recule à l'ouverture réelle d'un de
+  ses dossiers quand elle est plus ancienne (reprise, ouverture redatée, dossier
+  rattaché à une autre fiche ; `reculerPremierContact`), jamais l'inverse. Un
+  client repris en septembre pour un dossier ouvert en juin compte parmi les
+  nouveaux clients de juin.
 - **Lecteurs** : parcours et délais du dossier (`delais.ts`), historique (à la
   date réelle), ancienneté de la liste, synthèse (cohorte au mois de
   l'ouverture réelle, signatures et pertes au mois de leur date réelle,
@@ -1304,7 +1309,11 @@ réelle, montant, statut du devis (envoyé, accepté, refusé), acompte prévu,
 objet, PDF.
 
 - **Registre** : le numéro doit y être (les numéros libres, émis hors du CRM et
-  pas encore rattachés, sont proposés à la saisie). Le compteur ne bouge pas :
+  pas encore rattachés, sont proposés à la saisie : ceux que le registre donne
+  pour ce type, quelle que soit leur série, puisque devis et factures
+  partageaient la série sans préfixe avant le CRM ; un numéro de type inconnu à
+  une facture, et à un devis s'il est sans préfixe — `numeros-libres.ts`). Le
+  compteur ne bouge pas :
   la ligne du registre reçoit seulement `documentId`, le montant, et la date et
   le destinataire s'ils manquaient. Un numéro déjà rattaché est refusé (il ne
   sert qu'une fois). Un numéro absent du registre est refusé avec
@@ -1315,7 +1324,8 @@ objet, PDF.
   d'émission du registre, renseignée une fois, n'y change pas.
 - **Document** `origine = REPRISE` (migration `20260918100000_documents_repris`,
   colonne à défaut `CRM`) : pas de lignes, pas de mentions ; événement
-  « Document repris » à la date d'émission. Une facture reprise reçoit les
+  « Document repris » à la date d'émission ; pastille « Repris », et une
+  facture reprise se lit « Émise » (et non « Généré »). Une facture reprise reçoit les
   paiements déjà enregistrés sur le dossier, comme une facture générée.
 - **Correction** : date, montant (le reste dû suit ; un trop-perçu est
   signalé), objet, statut, acompte ; jamais le numéro. Le PDF s'importe ou se

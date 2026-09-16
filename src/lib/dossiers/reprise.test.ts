@@ -74,6 +74,8 @@ describe("reprise d'un dossier en cours", () => {
     assert.ok(detail.documents.every((document) => document.origine === "REPRISE"));
     assert.equal((await soldes.faitsPaiements(prisma, resultat.id)).resteCentimes, 110000, "les paiements s'imputent sur la facture reprise");
     assert.deepEqual(detail.completude.map((point) => point.code), ["ADRESSE", "PHOTO"]);
+    const fiche = await prisma.client.findUniqueOrThrow({ where: { id: detail.client!.id } });
+    assert.equal(fiche.premierContactLe.toISOString(), "2026-06-02T12:00:00.000Z", "le client est en contact depuis l'ouverture réelle");
 
     const signature = await prisma.dossierEvenement.findMany({ where: { dossierId: resultat.id, type: "CHANGEMENT_ETAPE" } });
     const signe = signature.map((evenement) => JSON.parse(evenement.metadata)).find((metadata) => metadata.vers === "SIGNE");

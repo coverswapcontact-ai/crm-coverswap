@@ -2,24 +2,23 @@ import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 /**
- * Liste des utilisateurs autorisés.
- * Les mots de passe sont lus depuis les env vars (fallback sur un default
- * que tu dois changer sur Railway via Variables). L'email sert d'identifiant.
+ * Liste des utilisateurs autorisés. L'email sert d'identifiant.
+ * Les mots de passe sont lus uniquement depuis les env vars (Railway >
+ * Variables). Aucune valeur de repli : le dépôt est public, une variable
+ * absente bloque la connexion du compte concerné.
  */
-const USERS: { id: string; name: string; email: string; passwordEnv: string; fallback: string }[] = [
+const USERS: { id: string; name: string; email: string; passwordEnv: string }[] = [
   {
     id: "1",
     name: "Lucas Villemin",
     email: "coverswap.contact@gmail.com",
     passwordEnv: "ADMIN_PASSWORD",
-    fallback: "coverswap2026",
   },
   {
     id: "2",
     name: "Elisabeth Villemin",
     email: "elisabeth.villemin@yahoo.com",
     passwordEnv: "ELISABETH_PASSWORD",
-    fallback: "elisabeth2026",
   },
 ];
 
@@ -38,7 +37,11 @@ export const authOptions: NextAuthOptions = {
         const user = USERS.find((u) => u.email.toLowerCase() === normalizedEmail);
         if (!user) return null;
 
-        const expected = process.env[user.passwordEnv] || user.fallback;
+        const expected = process.env[user.passwordEnv];
+        if (!expected) {
+          console.error(`[auth] ${user.passwordEnv} non définie : connexion refusée pour ce compte`);
+          return null;
+        }
         if (credentials.password !== expected) return null;
 
         return { id: user.id, name: user.name, email: user.email };

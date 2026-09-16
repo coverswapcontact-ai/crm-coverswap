@@ -14,7 +14,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | Rien ne se supprime | Déclencheur `BEFORE DELETE` sur chaque table + refus dans la couche Prisma ; archivage (`archiveLe`, `archiveMotif`) ; fichiers déplacés dans `archives/` | `src/lib/journal/` |
 | Aucune donnée perdue | Sauvegarde vérifiée avant toute migration de schéma ou de données ; `db push` sans `--accept-data-loss` ; migrations de données idempotentes | `scripts/avant-demarrage.mjs`, `src/lib/base/` |
 | Aucun numéro émis réattribué | (volet comptabilité) | |
-| L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | (volets validation et agent) | |
+| L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | Toute action proposée passe par `Proposition` ; seule une personne connectée valide ou rejette ; une proposition sensible ne s'exécute jamais seule ni en lot | `src/lib/validation/` |
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
 | Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
 | RGPD | (volet RGPD) | |
@@ -252,4 +252,46 @@ seule navigation.
   « Anciens écrans » tant qu'ils ne sont pas remplacés.
 - **Tâches de fond** (`/taches`) : travaux périodiques et leur dernier passage,
   tâches en échec avec leur erreur, relance et annulation à la main.
+
+## 5. Validation : « l'agent propose, je valide »
+
+Une seule mécanique pour tout ce qu'un agent ou le système propose :
+rattacher un mail, noter, changer une étape, relancer, envoyer un devis,
+fusionner deux clients… (table `Proposition`, écran `/validation`). Elle
+reprend le geste de la file de /prospection (valider, corriger, rejeter) et le
+généralise.
+
+- **Définitions explicites** : `src/lib/validation/catalogue.ts` liste chaque
+  type avec son schéma de contenu (zod), ses champs corrigeables, ses motifs de
+  rejet propres, son mode d'exécution et sa sensibilité.
+- **Seule une personne décide.** Valider ou rejeter exige un acteur `HUMAIN`
+  (session vérifiée) : un agent, un script ou une tâche reçoit un refus 403.
+- **Sensible = argent ou client** (étapes Signé, Facturé, Encaissé, Perdu ;
+  envoi d'un mail ; encaissement…) : jamais exécutée sans décision humaine,
+  jamais validée en lot, signalée « Argent ou client » à l'écran. La
+  sensibilité peut dépendre du contenu (un changement d'étape vers Simulation
+  ne l'est pas).
+- **Exécution sans validation** : réservée aux types déclarés `automatisable`
+  (archiver du bruit, noter un événement certain), au-dessus d'un seuil de
+  confiance, et refusée d'office pour une proposition sensible — c'est le
+  verrou du principe, testé. Elle reste tracée (statut `AUTOMATIQUE`).
+- **Corriger avant de valider** : seuls les champs déclarés corrigeables sont
+  pris en compte (on ne change pas le dossier visé par l'API) ; la version de
+  l'agent reste (`contenu`), la version exécutée aussi (`contenuValide`), et
+  `modifiee` mesure le taux de correction.
+- **Rejeter** : motif obligatoire en un clic (liste fermée), commentaire exigé
+  pour « Autre ». Ces motifs servent à mesurer l'agent (synthèse).
+- **Exécution IMMEDIATE** (écritures en base) : dans la transaction de la
+  validation ; si elle échoue, rien n'est écrit, la proposition reste à valider
+  et l'erreur est affichée sur la carte. **FILE** (service extérieur : envoi) :
+  par la file de tâches, au nom de la personne qui a validé ; en échec après
+  5 tentatives, « Réessayer » la relance ; rejouer la tâche n'exécute jamais
+  deux fois.
+- **Une même chose n'est proposée qu'une fois** (`cleUnicite`), rejetée ou non :
+  l'agent ne harcèle pas avec ce qu'on a déjà refusé.
+- **Devenue sans objet** (dossier archivé, étape déjà atteinte) : annulée au
+  moment de la validation, sans être exécutée. Une échéance (`expireLe`) fait
+  expirer les propositions périmées (travail périodique horaire).
+- Raisonnement de l'agent et confiance (calculée par le code) conservés et
+  affichés (« Pourquoi ? »).
 

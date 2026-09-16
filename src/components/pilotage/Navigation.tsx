@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowUpRight,
+  CircleCheckBig,
   FolderKanban,
   Menu,
   Radar,
@@ -16,9 +17,9 @@ import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { TRANS } from "./ui";
 
-export type Compteurs = { tachesEnEchec: number };
+export type Compteurs = { aValider: number; tachesEnEchec: number };
 
-/** À déclencher après une action qui change un compteur (relance d'une tâche…). */
+/** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
 export const EVENEMENT_COMPTEURS = "pilotage:compteurs";
 export function rafraichirCompteurs(): void {
   window.dispatchEvent(new Event(EVENEMENT_COMPTEURS));
@@ -36,6 +37,7 @@ type Entree = {
 // Écrans principaux, dans l'ordre de la journée.
 const PRINCIPALES: Entree[] = [
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
+  { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
 ];
 
 // Écrans secondaires, dans le menu « Plus ».
@@ -68,7 +70,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesEnEchec: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ aValider: 0, tachesEnEchec: 0 });
   const [menuOuvert, setMenuOuvert] = useState(false);
 
   const charger = useCallback(() => {

@@ -456,3 +456,47 @@ model Planification {
   prochainPassage   DateTime  @default(now())
   ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
+
+// ─────────────────────────────────────────────
+// Validation : « l'agent propose, je valide » (src/lib/validation)
+// Toute action proposée par un agent ou par le système (rattacher un mail,
+// changer une étape, envoyer un devis, fusionner deux clients…) passe par une
+// proposition. Rien de ce qui engage de l'argent ou part chez un client ne
+// s'exécute sans décision humaine.
+// ─────────────────────────────────────────────
+
+model Proposition {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  type             String // TypeProposition (src/lib/validation/types.ts)
+  statut           String    @default("EN_ATTENTE") // EN_ATTENTE | VALIDEE (exécution en file) | EXECUTEE | ECHEC | REJETEE | EXPIREE | ANNULEE | AUTOMATIQUE
+  auteur           String // acteur qui propose : AGENT:mail, SYSTEME:doublons, SYSTEME:relances…
+  titre            String // une phrase lisible : « Rattacher le mail de M. Durand au dossier Cuisine Pérols »
+  resume           String? // détail lisible
+  raisonnement     String? // pourquoi : conservé tel que formulé par l'agent
+  confiance        Float? // 0 à 1, calculée par le code (jamais déclarée par le modèle seul)
+  contenu          String // JSON : la proposition telle que faite, jamais modifiée
+  contenuValide    String? // JSON : ce qui a été exécuté (la version modifiée, le cas échéant)
+  modifiee         Boolean   @default(false) // la personne a corrigé la proposition avant de la valider
+  cleUnicite       String?   @unique // une même chose n'est proposée qu'une fois, rejetée ou non
+  clientId         String?
+  dossierId        String?
+  messageId        String?
+  expireLe         DateTime?
+  decideLe         DateTime?
+  decidePar        String? // HUMAIN:email, ou l'acteur d'une exécution automatique autorisée
+  motifRejet       String? // code de MOTIFS_REJET
+  commentaireRejet String?
+  executeLe        DateTime?
+  resultat         String? // JSON rendu par l'exécution
+  erreurExecution  String?
+  archiveLe        DateTime? // archivage : rien ne se supprime
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([statut, type])
+  @@index([dossierId])
+  @@index([clientId])
+  @@index([messageId])
+}

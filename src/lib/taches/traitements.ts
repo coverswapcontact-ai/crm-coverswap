@@ -1,3 +1,5 @@
+import { enregistrerTachesValidation } from "@/lib/validation/taches";
+
 /**
  * Point d'enregistrement unique des traitements et des travaux périodiques de
  * chaque volet, appelé au démarrage avant l'exécuteur (src/instrumentation.ts).
@@ -5,5 +7,5 @@
  * en arrière-plan.
  */
 export function enregistrerTousLesTraitements(): void {
-  // Chaque volet ajoute ici son appel d'enregistrement.
+  enregistrerTachesValidation();
 }

@@ -156,33 +156,41 @@ export type EntreeChangementEtape = DonneesTransition & {
   devisAccepteId?: string;
 };
 
-/** Changement d'étape demandé depuis l'interface (ou, plus tard, validé depuis la file d'un agent). */
-export async function changerEtape(dossierId: string, entree: EntreeChangementEtape): Promise<ChangementEtape> {
-  const changement = await prisma.$transaction(async (tx) => {
-    const { dossier, faits, avantSortie } = await chargerEtatEtape(tx, dossierId);
-    const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
-    if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
+/**
+ * Vérifie et écrit un changement d'étape dans la transaction de l'appelant.
+ * Les effets (lead, Meta) restent à lancer après la transaction.
+ */
+export async function changerEtapeDansTransaction(
+  tx: Transaction,
+  dossierId: string,
+  entree: EntreeChangementEtape
+): Promise<ChangementEtape> {
+  const { dossier, faits, avantSortie } = await chargerEtatEtape(tx, dossierId);
+  const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
+  if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
 
-    let documentId: string | undefined;
-    if (entree.vers === "SIGNE" && verification.nature === "SUIVANTE") {
-      const devis = dossier.documents.filter((document) => document.type === "DEVIS");
-      const signe = entree.devisAccepteId
-        ? devis.find((document) => document.id === entree.devisAccepteId)
-        : devis[0];
-      if (!signe) throw new ErreurMetier("Devis signé introuvable dans ce dossier.", 400);
-      await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
-      documentId = signe.id;
-    }
+  let documentId: string | undefined;
+  if (entree.vers === "SIGNE" && verification.nature === "SUIVANTE") {
+    const devis = dossier.documents.filter((document) => document.type === "DEVIS");
+    const signe = entree.devisAccepteId ? devis.find((document) => document.id === entree.devisAccepteId) : devis[0];
+    if (!signe) throw new ErreurMetier("Devis signé introuvable dans ce dossier.", 400);
+    await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
+    documentId = signe.id;
+  }
 
-    return appliquerChangementEtape(tx, {
-      dossierId,
-      de: faits.etape,
-      vers: entree.vers,
-      nature: verification.nature,
-      donnees: entree,
-      documentId,
-    });
+  return appliquerChangementEtape(tx, {
+    dossierId,
+    de: faits.etape,
+    vers: entree.vers,
+    nature: verification.nature,
+    donnees: entree,
+    documentId,
   });
+}
+
+/** Changement d'étape demandé depuis l'interface. */
+export async function changerEtape(dossierId: string, entree: EntreeChangementEtape): Promise<ChangementEtape> {
+  const changement = await prisma.$transaction((tx) => changerEtapeDansTransaction(tx, dossierId, entree));
   await effetsDuChangementEtape(changement);
   return changement;
 }

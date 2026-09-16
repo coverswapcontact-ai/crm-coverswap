@@ -13,6 +13,7 @@ import type {
   TypeEvenement,
   Unite,
 } from "./constants";
+import type { PaiementsDossier } from "@/lib/encaissements/types";
 import type { FaitsDossier } from "./regles";
 import type { DelaisCles, EcartsPrix, PassageEtape } from "./delais";
 
@@ -89,6 +90,7 @@ export type DossierDetail = DossierResume & {
   notes: NoteVue[];
   evenements: EvenementVue[];
   documents: DocumentVue[];
+  paiements: PaiementsDossier;
 };
 
 export type PresetVue = {
@@ -133,6 +135,8 @@ export function faitsDepuisDetail(detail: DossierDetail): FaitsDossier {
     dateChantier: detail.dateChantier,
     aDevisGenere: genere("DEVIS"),
     aFactureGeneree: genere("FACTURE"),
+    acompteEnregistre: detail.paiements.acompteEnregistre,
+    soldeEncaisse: detail.paiements.soldeEncaisse,
   };
 }
 

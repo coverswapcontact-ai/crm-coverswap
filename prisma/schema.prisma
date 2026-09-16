@@ -314,6 +314,7 @@ model Dossier {
   notes                  DossierNote[]
   evenements             DossierEvenement[]
   documents              Document[]
+  encaissements          Encaissement[]
   archiveLe              DateTime? // archivage : rien ne se supprime
   archiveMotif           String?
   ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -576,6 +577,7 @@ model Client {
   prospects          Prospect[]
   dossiers           Dossier[]
   documents          Document[]
+  encaissements      Encaissement[]
   archiveLe          DateTime? // archivage : rien ne se supprime
   archiveMotif       String?
   ecriture           String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -662,21 +664,73 @@ model Parametre {
 // ─────────────────────────────────────────────
 
 model NumeroDocument {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
-  cle          String    @unique // famille:année:rang, ex. « F:2026:12 », « :2026:38 »
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now())
+  cle          String                    @unique // famille:année:rang, ex. « F:2026:12 », « :2026:38 »
   numero       String // tel qu'imprimé
   famille      String // préfixe : "" (série 2026 partagée puis devis), "F" (factures et avoirs), "FACT" (ancien écran)
   annee        Int
   rang         Int
   type         String // DEVIS | FACTURE | AVOIR | INCONNU
   origine      String // CRM | ANCIEN_CRM | MANUEL
-  documentId   String?   @unique
+  documentId   String?                   @unique
   emisLe       DateTime?
   destinataire String?
   montant      Float?
   note         String?
+  affectations AffectationEncaissement[]
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([famille, annee, rang])
+}
+
+// Argent reçu. Ne se supprime ni ne se modifie : s'annule (erreur de saisie) ou
+// se rejette (chèque impayé), daté et motivé (la base le refuse autrement).
+model Encaissement {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  clientId     String? // payeur, client pérenne (suit les fusions)
+  client       Client?                   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  dossierId    String? // chantier concerné ; null pour une facture hors CRM
+  dossier      Dossier?                  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  payeur       String // nom du payeur tel que saisi
+  montant      Float // euros, strictement positif
+  moyen        String? // MoyenPaiement : VIREMENT | CHEQUE | ESPECES | CARTE | AUTRE ; null = non renseigné (reprise)
+  reference    String? // n° de chèque, libellé du virement
+  recuLe       DateTime // réception : virement arrivé, chèque ou espèces remis
+  crediteLe    DateTime? // chèque : crédit sur le compte
+  statut       String                    @default("VALIDE") // VALIDE | REJETE | ANNULE
+  finLe        DateTime? // date du rejet ou de l'annulation
+  motifFin     String?
+  origine      String                    @default("SAISIE") // SAISIE | REPRISE_ANCIEN_ECRAN
+  cleReprise   String?                   @unique // idempotence d'une reprise
+  note         String?
+  affectations AffectationEncaissement[]
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([recuLe])
+  @@index([dossierId])
+  @@index([clientId])
+  @@index([statut])
+}
+
+// Part d'un encaissement imputée sur une pièce du registre : devis (acompte) ou
+// facture (du CRM, manuelle, de l'ancien écran). Ne se modifie pas : cesse de
+// compter (TRANSFEREE sur la facture, LIBEREE) et une nouvelle la remplace.
+model AffectationEncaissement {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now())
+  encaissementId   String
+  encaissement     Encaissement   @relation(fields: [encaissementId], references: [id], onDelete: Restrict)
+  numeroDocumentId String
+  numeroDocument   NumeroDocument @relation(fields: [numeroDocumentId], references: [id], onDelete: Restrict)
+  montant          Float
+  statut           String         @default("ACTIVE") // ACTIVE | TRANSFEREE | LIBEREE
+  finLe            DateTime?
+  motifFin         String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([encaissementId])
+  @@index([numeroDocumentId, statut])
 }

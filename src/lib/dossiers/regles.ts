@@ -47,9 +47,14 @@ export type FaitsDossier = {
   dateChantier: Date | string | null;
   aDevisGenere: boolean;
   aFactureGeneree: boolean;
+  /** Un encaissement valide est enregistré sur le dossier. */
+  acompteEnregistre: boolean;
+  /** Le dossier a au moins une facture active, et toutes sont réglées. */
+  soldeEncaisse: boolean;
 };
 
-export const CRITERES_DECLARATIFS = ["BON_POUR_ACCORD", "ACOMPTE_ENCAISSE", "SOLDE_ENCAISSE"] as const;
+// L'acompte et le solde ne se déclarent plus : ils s'enregistrent (encaissements).
+export const CRITERES_DECLARATIFS = ["BON_POUR_ACCORD"] as const;
 export type CritereDeclaratif = (typeof CRITERES_DECLARATIFS)[number];
 
 export function estCritereDeclaratif(critere: CritereEntree): critere is CritereDeclaratif {
@@ -65,6 +70,12 @@ export type DonneesTransition = {
   perteCommentaire?: string;
   dateChantier?: string; // AAAA-MM-JJ
   confirmations?: Partial<Record<CritereDeclaratif, boolean>>;
+  /** Signature : acompte reçu, enregistré avec le changement d'étape. */
+  acompte?: { montant: number } | null;
+  /** Signature sans acompte : le motif, obligatoire. */
+  sansAcompte?: { motif: string; precision?: string } | null;
+  /** Encaissement : paiement du solde, enregistré avec le changement d'étape. */
+  solde?: { montant: number } | null;
 };
 
 export function critereRempli(
@@ -90,9 +101,11 @@ export function critereRempli(
     case "MOTIF_PERTE":
       return Boolean(donnees.motifPerte && (MOTIFS_PERTE as readonly string[]).includes(donnees.motifPerte));
     case "BON_POUR_ACCORD":
-    case "ACOMPTE_ENCAISSE":
-    case "SOLDE_ENCAISSE":
       return donnees.confirmations?.[critere] === true;
+    case "ACOMPTE_ENCAISSE":
+      return faits.acompteEnregistre || Boolean(donnees.acompte) || Boolean(donnees.sansAcompte?.motif);
+    case "SOLDE_ENCAISSE":
+      return faits.soldeEncaisse || Boolean(donnees.solde);
   }
 }
 
@@ -180,7 +193,14 @@ export type MetadataChangementEtape = {
   /** Étape active quittée au moment de la perte. */
   perteEtape?: EtapeDossier;
   dateChantier?: string; // AAAA-MM-JJ
-  confirmations?: CritereDeclaratif[];
+  /** Critères déclarés (anciens événements : aussi ACOMPTE_ENCAISSE, SOLDE_ENCAISSE). */
+  confirmations?: string[];
+  /** Signature : acompte enregistré avec le changement d'étape. */
+  acompte?: { montant: number };
+  /** Signature sans acompte : motif en clair. */
+  sansAcompte?: string;
+  /** Changement automatique : ce qui l'a provoqué. */
+  raison?: string;
   documentId?: string;
 };
 

@@ -1,5 +1,12 @@
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
+import {
+  imputerSurFacture,
+  libererReglementsFacture,
+  mentionsReglements,
+  planImputationFacture,
+  suivreSoldeDossier,
+} from "@/lib/encaissements/service";
 import { rendreDocumentPdf, type DonneesDocumentPdf } from "@/lib/pdf/DocumentPdf";
 import {
   ACOMPTE_PCT_DEFAUT,
@@ -200,13 +207,18 @@ async function emettre(emission: Emission) {
 
   const dateEmission = new Date();
   const { destinataire, clientId } = await destinataireDuDossier(emission.dossierId);
-  const { mentions, echeanceLe } = await mentionsLegales({
+  const legales = await mentionsLegales({
     type: emission.type,
     categorie: destinataire.categorie,
     dateEmission,
     factureOrigine: emission.factureOrigine,
     motifAvoir: emission.motifAvoir,
   });
+  const { echeanceLe } = legales;
+  // Facture : les paiements déjà reçus (acomptes) lui sont imputés et imprimés, avec le reste à payer.
+  const planReglements = emission.type === "FACTURE" ? await planImputationFacture(prisma, emission.dossierId, totalHtCentimes) : [];
+  const reglements = mentionsReglements(planReglements, totalHtCentimes);
+  const mentions = legales.mentions || reglements.length > 0 ? [...(legales.mentions ?? []), ...reglements] : null;
   const donneesPdf: DonneesDocumentPdf = {
     type: emission.type,
     numero: numeroFactice(emission.type, dateEmission),
@@ -258,6 +270,9 @@ async function emettre(emission: Emission) {
           where: { id: registreId },
           data: { documentId: document.id, destinataire: destinataire.nom, montant: document.totalHt },
         });
+        if (emission.type === "FACTURE") {
+          await imputerSurFacture(tx, { dossierId: emission.dossierId, registreId, numero, totalCentimes: totalHtCentimes }, planReglements);
+        }
         if (emission.pendant) await emission.pendant(tx, { id: document.id, numero });
 
         await tx.dossierEvenement.create({
@@ -271,20 +286,25 @@ async function emettre(emission: Emission) {
         });
 
         const vers = etapeApresGeneration(emission.type, emission.etape);
-        const changement: ChangementEtape | null = vers
-          ? await appliquerChangementEtape(tx, {
-              dossierId: emission.dossierId,
-              de: emission.etape,
-              vers,
-              nature: "AUTOMATIQUE",
-              documentId: document.id,
-            })
-          : null;
-        return { document, changement };
+        const changements: ChangementEtape[] = vers
+          ? [
+              await appliquerChangementEtape(tx, {
+                dossierId: emission.dossierId,
+                de: emission.etape,
+                vers,
+                nature: "AUTOMATIQUE",
+                documentId: document.id,
+              }),
+            ]
+          : [];
+        // Facture déjà couverte par les acomptes : le dossier est encaissé.
+        const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
+        if (solde) changements.push(solde);
+        return { document, changements };
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
-    if (resultat.changement) await effetsDuChangementEtape(resultat.changement);
+    for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
     return resultat;
   } catch (erreur) {
     // Transaction annulée : le numéro n'a jamais existé (compteur et registre
@@ -384,12 +404,13 @@ export async function genererAvoir(dossierId: string, factureId: string, entree:
     documentOrigineId: facture.id,
     motifAvoir,
     factureOrigine: { numero: numeroFacture, dateEmission: facture.dateEmission },
-    pendant: async (tx) => {
+    pendant: async (tx, avoir) => {
       const { count } = await tx.document.updateMany({
         where: { id: facture.id, statut: { not: "ANNULEE" } },
         data: { statut: "ANNULEE" },
       });
       if (count !== 1) throw new ErreurMetier("La facture vient d'être annulée ailleurs : recharge le dossier.", 409);
+      await libererReglementsFacture(tx, facture.id, avoir.numero);
     },
   });
 

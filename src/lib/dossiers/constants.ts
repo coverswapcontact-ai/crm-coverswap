@@ -59,10 +59,10 @@ export const CRITERES_ENTREE = [
   "PHOTO", // au moins une photo du chantier archivée
   "DEVIS_GENERE", // au moins un devis généré (statut ≠ BROUILLON)
   "BON_POUR_ACCORD", // déclaratif : bon pour accord signé reçu
-  "ACOMPTE_ENCAISSE", // déclaratif : acompte encaissé
+  "ACOMPTE_ENCAISSE", // acompte enregistré (encaissement), ou signature sans acompte motivée
   "DATE_CHANTIER", // date de chantier fixée
   "FACTURE_GENEREE", // au moins une facture générée (statut ≠ BROUILLON)
-  "SOLDE_ENCAISSE", // déclaratif : solde encaissé
+  "SOLDE_ENCAISSE", // factures du dossier réglées par des encaissements enregistrés
   "MOTIF_PERTE", // motif de perte choisi dans MOTIFS_PERTE
 ] as const;
 export type CritereEntree = (typeof CRITERES_ENTREE)[number];
@@ -73,10 +73,10 @@ export const LIBELLES_CRITERE: Record<CritereEntree, string> = {
   PHOTO: "Au moins une photo du chantier",
   DEVIS_GENERE: "Un devis généré",
   BON_POUR_ACCORD: "Bon pour accord reçu",
-  ACOMPTE_ENCAISSE: "Acompte encaissé",
+  ACOMPTE_ENCAISSE: "Acompte enregistré (ou motif d'absence d'acompte)",
   DATE_CHANTIER: "Date de chantier fixée",
   FACTURE_GENEREE: "Une facture générée",
-  SOLDE_ENCAISSE: "Solde encaissé",
+  SOLDE_ENCAISSE: "Factures réglées",
   MOTIF_PERTE: "Motif de perte",
 };
 
@@ -121,7 +121,7 @@ export const REGLES_ETAPES: Record<EtapeDossier, RegleEtape> = {
     sorties: ["SIGNE"],
   },
   SIGNE: {
-    description: "Bon pour accord reçu, acompte encaissé",
+    description: "Bon pour accord reçu, acompte enregistré (ou motif d'absence)",
     responsable: "CLIENT",
     entree: ["DEVIS_GENERE", "BON_POUR_ACCORD", "ACOMPTE_ENCAISSE"],
     sorties: ["PLANIFIE"],
@@ -215,6 +215,10 @@ export const TYPES_EVENEMENT = [
   "DEVIS_ENVOYE",
   "FACTURE_GENEREE",
   "AVOIR_GENERE",
+  "ENCAISSEMENT_ENREGISTRE",
+  "ENCAISSEMENT_CREDITE",
+  "ENCAISSEMENT_REJETE",
+  "ENCAISSEMENT_ANNULE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
 ] as const;
@@ -233,6 +237,10 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   DEVIS_ENVOYE: "Devis envoyé",
   FACTURE_GENEREE: "Facture générée",
   AVOIR_GENERE: "Avoir généré",
+  ENCAISSEMENT_ENREGISTRE: "Paiement reçu",
+  ENCAISSEMENT_CREDITE: "Chèque crédité",
+  ENCAISSEMENT_REJETE: "Chèque rejeté",
+  ENCAISSEMENT_ANNULE: "Paiement annulé",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
 };

@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRightLeft,
+  Ban,
   ChevronDown,
+  Euro,
   ExternalLink,
   FileText,
+  Landmark,
   Mail,
   MessageSquare,
   Phone,
   StickyNote,
+  Undo2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +37,7 @@ import { CoordonneesClient } from "./CoordonneesClient";
 import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
+import { PaiementsDossier } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
 import { TimelineEtapes } from "./TimelineEtapes";
 import { appelApi, envoyerJson, messageErreur } from "./client";
@@ -210,6 +215,7 @@ function ContenuPanneau({
             onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
             onMisAJour={onMisAJour}
           />
+          <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
           <section>
             <TitreSection>Étapes et notes</TitreSection>
             <TimelineEtapes detail={detail} onNoteAjoutee={onRecharger} />
@@ -343,7 +349,12 @@ const ICONES_EVENEMENT: Partial<Record<TypeEvenement, typeof FileText>> = {
   CHANGEMENT_ETAPE: ArrowRightLeft,
   DEVIS_GENERE: FileText,
   FACTURE_GENEREE: FileText,
+  AVOIR_GENERE: FileText,
   DEVIS_ENVOYE: FileText,
+  ENCAISSEMENT_ENREGISTRE: Euro,
+  ENCAISSEMENT_CREDITE: Landmark,
+  ENCAISSEMENT_REJETE: Ban,
+  ENCAISSEMENT_ANNULE: Undo2,
   NOTE_AJOUTEE: StickyNote,
   APPEL: Phone,
   MAIL_RECU: Mail,

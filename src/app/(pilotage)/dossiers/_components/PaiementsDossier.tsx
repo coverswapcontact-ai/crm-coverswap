@@ -1,0 +1,328 @@
+"use client";
+
+import { useState } from "react";
+import { Ban, CircleCheck, Landmark, Plus, Undo2 } from "lucide-react";
+import { toast } from "sonner";
+import { ChampsPaiement, lirePaiement, saisiePaiement, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
+import { Pastille, Puces } from "@/components/pilotage/ui";
+import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
+import { formatMontant } from "@/lib/dossiers/montants";
+import type { DossierDetail } from "@/lib/dossiers/types";
+import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET } from "@/lib/encaissements/constantes";
+import type { EncaissementVue, PieceVue } from "@/lib/encaissements/types";
+import { cn } from "@/lib/utils";
+import { envoyerJson, messageErreur } from "./client";
+import { Bouton, Champ, CLASSE_SAISIE, Modale, TitreSection } from "./ui";
+
+const AUTOMATIQUE = "";
+
+/** Montant attendu : reste des factures, sinon l'acompte prévu au devis en vigueur. */
+function montantAttendu(detail: DossierDetail): number | null {
+  const { paiements } = detail;
+  if (paiements.resteDu > 0) return paiements.resteDu;
+  if (paiements.pieces.some((piece) => piece.type === "FACTURE" && piece.active)) return null;
+  const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.numero && document.statut !== "REMPLACE");
+  const enVigueur = devis.find((document) => document.statut === "ACCEPTE") ?? devis[0];
+  if (!enVigueur || paiements.acompteEnregistre) return null;
+  return enVigueur.acomptePct ? Math.round(enVigueur.totalHt * enVigueur.acomptePct) / 100 : null;
+}
+
+function libellePiece(piece: PieceVue): string {
+  if (piece.type === "DEVIS") return `Acompte sur le devis ${piece.numero}`;
+  return `Facture ${piece.numero}${piece.reste !== null ? ` · reste ${formatMontant(piece.reste)}` : ""}`;
+}
+
+function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
+  // Une facture en cours : le paiement la règle ; sinon, c'est un acompte sur un devis.
+  const factureActive = detail.paiements.pieces.some((piece) => piece.type === "FACTURE" && piece.active);
+  const pieces = detail.paiements.pieces.filter((piece) =>
+    factureActive ? piece.type === "FACTURE" && piece.active && (piece.reste ?? 0) > 0 : piece.type === "DEVIS" && piece.active
+  );
+  const [saisie, setSaisie] = useState<SaisiePaiement>(() => saisiePaiement(montantAttendu(detail)));
+  const [piece, setPiece] = useState(AUTOMATIQUE);
+  const [envoi, setEnvoi] = useState(false);
+  const { paiement } = lirePaiement(saisie);
+
+  async function enregistrer() {
+    if (!paiement) return;
+    setEnvoi(true);
+    try {
+      const nouveau = await envoyerJson<DossierDetail>(`/api/dossiers/${detail.id}/encaissements`, "POST", {
+        paiement,
+        numeroDocumentId: piece || null,
+      });
+      onFait(nouveau);
+      toast.success("Paiement enregistré", {
+        description: nouveau.etape !== detail.etape ? `Le dossier passe à l'étape suivante.` : undefined,
+      });
+      onFermer();
+    } catch (erreur) {
+      toast.error("Paiement non enregistré", { description: messageErreur(erreur) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      largeur="sm"
+      titre="Enregistrer un paiement reçu"
+      description="Un paiement enregistré ne se modifie plus : en cas d'erreur, il s'annule avec son motif."
+      pied={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Annuler
+          </Bouton>
+          <Bouton variante="primaire" disabled={!paiement} chargement={envoi} onClick={() => void enregistrer()}>
+            Enregistrer le paiement
+          </Bouton>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <ChampsPaiement saisie={saisie} onChange={setSaisie} />
+        {pieces.length > 1 ? (
+          <div>
+            <label htmlFor="piece-reglee" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+              Ce paiement règle
+            </label>
+            <select id="piece-reglee" value={piece} onChange={(evenement) => setPiece(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}>
+              <option value={AUTOMATIQUE}>
+                {factureActive ? "Automatique : factures non réglées, la plus ancienne d'abord" : "Automatique : acompte sur le devis en vigueur"}
+              </option>
+              {pieces.map((option) => (
+                <option key={option.registreId} value={option.registreId}>
+                  {libellePiece(option)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+    </Modale>
+  );
+}
+
+type Action = { type: "credit" | "rejet" | "annulation"; encaissement: EncaissementVue };
+
+function ModaleAction({ detail, action, onFermer, onFait }: { detail: DossierDetail; action: Action; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
+  const { encaissement } = action;
+  const [le, setLe] = useState(jourParis(new Date()));
+  const [motif, setMotif] = useState<string | null>(null);
+  const [precision, setPrecision] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+  const description = `${formatMontant(encaissement.montant)}${encaissement.moyen ? ` par ${LIBELLES_MOYEN[encaissement.moyen].toLowerCase()}` : ""}${
+    encaissement.reference ? ` n° ${encaissement.reference}` : ""
+  }, reçu le ${formatDateCourte(encaissement.recuLe)}.`;
+  const motifs = action.type === "rejet" ? MOTIFS_REJET : MOTIFS_ANNULATION;
+  const complet = action.type === "credit" ? Boolean(le) : Boolean(motif) && (motif !== "AUTRE" || precision.trim().length >= 3) && (action.type !== "rejet" || Boolean(le));
+
+  async function valider() {
+    if (!complet) return;
+    setEnvoi(true);
+    try {
+      const corps =
+        action.type === "credit"
+          ? { crediteLe: le }
+          : action.type === "rejet"
+            ? { le, motif, precision: precision.trim() || undefined }
+            : { motif, precision: precision.trim() || undefined };
+      const nouveau = await envoyerJson<DossierDetail>(`/api/encaissements/${encaissement.id}/${action.type}`, "POST", corps);
+      onFait(nouveau);
+      toast.success(action.type === "credit" ? "Chèque crédité" : action.type === "rejet" ? "Chèque rejeté" : "Paiement annulé", {
+        description: nouveau.etape !== detail.etape ? "L'étape du dossier suit : la facture est de nouveau due." : undefined,
+      });
+      onFermer();
+    } catch (erreur) {
+      toast.error("Action refusée", { description: messageErreur(erreur) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  const titres = { credit: "Chèque crédité sur le compte", rejet: "Chèque rejeté", annulation: "Annuler ce paiement" };
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      largeur="sm"
+      titre={titres[action.type]}
+      description={
+        action.type === "annulation"
+          ? `${description} Pour une erreur de saisie : le paiement reste visible, barré, et ne compte plus.`
+          : action.type === "rejet"
+            ? `${description} Le paiement ne compte plus ; ce qu'il réglait est de nouveau dû.`
+            : description
+      }
+      pied={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Retour
+          </Bouton>
+          <Bouton variante={action.type === "credit" ? "primaire" : "danger"} disabled={!complet} chargement={envoi} onClick={() => void valider()}>
+            {action.type === "credit" ? "Enregistrer le crédit" : action.type === "rejet" ? "Enregistrer le rejet" : "Annuler le paiement"}
+          </Bouton>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {action.type !== "annulation" ? (
+          <Champ
+            libelle={action.type === "credit" ? "Crédité le (date du relevé)" : "Rejeté le"}
+            obligatoire
+            type="date"
+            min={jourParis(encaissement.recuLe)}
+            max={jourParis(new Date())}
+            value={le}
+            onChange={(evenement) => setLe(evenement.target.value)}
+          />
+        ) : null}
+        {action.type !== "credit" ? (
+          <>
+            <Puces libelle="Motif" obligatoire options={motifs.map((option) => ({ valeur: option.code, libelle: option.libelle }))} valeur={motif} onChange={setMotif} />
+            <Champ
+              libelle={motif === "AUTRE" ? "Précision" : "Précision (facultative)"}
+              obligatoire={motif === "AUTRE"}
+              maxLength={300}
+              value={precision}
+              onChange={(evenement) => setPrecision(evenement.target.value)}
+            />
+          </>
+        ) : null}
+      </div>
+    </Modale>
+  );
+}
+
+function imputations(encaissement: EncaissementVue): string {
+  const actives = encaissement.affectations.filter((affectation) => affectation.statut === "ACTIVE");
+  const transferees = encaissement.affectations.filter((affectation) => affectation.statut === "TRANSFEREE");
+  const parties = actives.map((affectation) =>
+    affectation.type === "DEVIS" ? `acompte sur le devis ${affectation.numero}` : `facture ${affectation.numero}`
+  );
+  if (transferees.length > 0 && actives.some((affectation) => affectation.type === "FACTURE")) {
+    parties[0] = `acompte (devis ${transferees[0].numero}) imputé sur la ${parties[0]}`;
+  }
+  if (encaissement.statut === "VALIDE" && encaissement.nonAffecte > 0) parties.push(`${formatMontant(encaissement.nonAffecte)} non imputés`);
+  return parties.join(" · ");
+}
+
+function LigneEncaissement({ encaissement, onAction }: { encaissement: EncaissementVue; onAction: (action: Action) => void }) {
+  const termine = encaissement.statut !== "VALIDE";
+  const aCrediter = encaissement.statut === "VALIDE" && encaissement.moyen === "CHEQUE" && !encaissement.crediteLe;
+  return (
+    <li className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-3 first:border-t-0">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className={cn("text-[14px] font-medium tabular-nums", termine ? "text-[#6B7280] line-through" : "text-[#F2F3F5]")}>
+          {formatMontant(encaissement.montant)}
+        </span>
+        <span className="text-[12.5px] text-[#9CA3AF]">
+          {encaissement.moyen ? LIBELLES_MOYEN[encaissement.moyen] : "Moyen non renseigné"}
+          {encaissement.reference ? ` n° ${encaissement.reference}` : ""} · reçu le {formatDateCourte(encaissement.recuLe)}
+        </span>
+        {aCrediter ? <Pastille ton="ambre">À créditer</Pastille> : null}
+        {encaissement.crediteLe ? <span className="text-[12px] text-[#6B7280]">crédité le {formatDateCourte(encaissement.crediteLe)}</span> : null}
+        {encaissement.statut === "REJETE" ? <Pastille ton="rouge">Rejeté le {formatDateCourte(encaissement.finLe!)}</Pastille> : null}
+        {encaissement.statut === "ANNULE" ? <Pastille>Annulé</Pastille> : null}
+      </div>
+      {imputations(encaissement) ? <p className="mt-0.5 text-[12px] text-[#6B7280]">{imputations(encaissement)}</p> : null}
+      {termine && encaissement.motifFin ? <p className="mt-0.5 text-[12px] text-[#9CA3AF]">Motif : {encaissement.motifFin}</p> : null}
+      {encaissement.statut === "VALIDE" ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {aCrediter ? (
+            <>
+              <Bouton taille="sm" icone={<Landmark size={13} aria-hidden />} onClick={() => onAction({ type: "credit", encaissement })}>
+                Crédité
+              </Bouton>
+              <Bouton taille="sm" variante="danger" icone={<Ban size={13} aria-hidden />} onClick={() => onAction({ type: "rejet", encaissement })}>
+                Rejeté
+              </Bouton>
+            </>
+          ) : null}
+          <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => onAction({ type: "annulation", encaissement })}>
+            Annuler (erreur)
+          </Bouton>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
+  const [saisie, setSaisie] = useState(false);
+  const [action, setAction] = useState<Action | null>(null);
+  const { paiements } = detail;
+  const factures = paiements.pieces.filter((piece) => piece.type === "FACTURE" && piece.active);
+  const facture = factures.reduce((somme, piece) => somme + (piece.total ?? 0), 0);
+  const recu = paiements.encaissements.filter((encaissement) => encaissement.statut === "VALIDE").reduce((somme, encaissement) => somme + encaissement.montant, 0);
+  const aDocuments = paiements.pieces.length > 0;
+
+  return (
+    <section>
+      <TitreSection
+        action={
+          aDocuments || paiements.encaissements.length > 0 ? (
+            <Bouton taille="sm" variante="secondaire" icone={<Plus size={13} aria-hidden />} onClick={() => setSaisie(true)}>
+              Paiement reçu
+            </Bouton>
+          ) : null
+        }
+      >
+        Paiements
+      </TitreSection>
+
+      {!aDocuments && paiements.encaissements.length === 0 ? (
+        <p className="text-[12.5px] text-[#6B7280]">Les paiements s&apos;enregistrent une fois le devis émis.</p>
+      ) : (
+        <div className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-[0.5px] border-[#2A2D34] px-3.5 py-2.5 text-[12.5px]">
+            {factures.length > 0 ? (
+              <>
+                <span className="text-[#9CA3AF]">
+                  Facturé <span className="text-[#F2F3F5] tabular-nums">{formatMontant(facture)}</span>
+                </span>
+                <span className="text-[#9CA3AF]">
+                  Reçu <span className="text-[#F2F3F5] tabular-nums">{formatMontant(recu)}</span>
+                </span>
+                {paiements.soldeEncaisse ? (
+                  <span className="flex items-center gap-1 text-[#5DCAA5]">
+                    <CircleCheck size={13} aria-hidden /> Factures réglées
+                  </span>
+                ) : (
+                  <span className="text-[#F5B454]">
+                    Reste à encaisser <span className="font-medium tabular-nums">{formatMontant(paiements.resteDu)}</span>
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-[#9CA3AF]">
+                {recu > 0 ? (
+                  <>
+                    Reçu avant facture <span className="text-[#F2F3F5] tabular-nums">{formatMontant(recu)}</span>
+                  </>
+                ) : (
+                  "Aucun paiement reçu pour l'instant."
+                )}
+              </span>
+            )}
+            {paiements.nonAffecte > 0 ? (
+              <span className="text-[#F5B454]">{formatMontant(paiements.nonAffecte)} reçus non imputés</span>
+            ) : null}
+          </div>
+          {paiements.encaissements.length > 0 ? (
+            <ul>
+              {paiements.encaissements.map((encaissement) => (
+                <LigneEncaissement key={encaissement.id} encaissement={encaissement} onAction={setAction} />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      )}
+
+      {saisie ? <ModalePaiement detail={detail} onFermer={() => setSaisie(false)} onFait={onMisAJour} /> : null}
+      {action ? <ModaleAction key={`${action.type}:${action.encaissement.id}`} detail={detail} action={action} onFermer={() => setAction(null)} onFait={onMisAJour} /> : null}
+    </section>
+  );
+}

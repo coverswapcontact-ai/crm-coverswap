@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
+import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import {
   ETAPES,
   LIBELLES_ETAPE,
@@ -216,6 +217,8 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       .filter((passage) => passage.vers)
   );
 
+  const paiements = await chargerPaiementsDossier(prisma, dossierId);
+
   const photos: PhotoVue[] = lirePhotos(dossier.photos).map((chemin) => ({
     id: idPhoto(chemin),
     url: urlPhoto(dossier.id, chemin),
@@ -284,6 +287,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       documentsLies: document.documentsLies.map((lie) => ({ ...lie, type: lie.type as TypeDocument })),
       motifAvoir: document.motifAvoir,
     })),
+    paiements,
   };
 }
 

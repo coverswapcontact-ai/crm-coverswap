@@ -315,6 +315,7 @@ model Dossier {
   evenements             DossierEvenement[]
   documents              Document[]
   encaissements          Encaissement[]
+  depenses               Depense[]
   archiveLe              DateTime? // archivage : rien ne se supprime
   archiveMotif           String?
   ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -733,4 +734,50 @@ model AffectationEncaissement {
 
   @@index([encaissementId])
   @@index([numeroDocumentId, statut])
+}
+
+// Fichier conservé sur le volume (justificatif de dépense…) : jamais supprimé,
+// archivé avec son motif ; l'empreinte reconnaît un même fichier envoyé deux fois.
+model Fichier {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  chemin       String // relatif au répertoire d'upload
+  nomOriginal  String?
+  typeMime     String
+  taille       Int
+  empreinte    String // SHA-256 du contenu
+  archiveLe    DateTime?
+  archiveMotif String?
+  depenses     Depense[]
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([empreinte])
+}
+
+// Argent dépensé. Rattachée à un chantier, ou explicitement hors chantier (frais
+// généraux) ; « à rattacher » tant que ni l'un ni l'autre. Une dépense saisie
+// par erreur s'archive avec son motif.
+model Depense {
+  id                   String    @id @default(cuid())
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  payeeLe              DateTime // date du ticket ou de la facture fournisseur
+  montant              Float // euros payés (franchise de TVA : rien à récupérer)
+  fournisseur          String
+  categorie            String // CategorieDepense (src/lib/depenses/constantes.ts)
+  libelle              String?
+  moyen                String? // CARTE | VIREMENT | ESPECES | CHEQUE | PRELEVEMENT | AUTRE
+  dossierId            String?
+  dossier              Dossier?  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  horsChantier         Boolean   @default(false) // frais généraux, choisis explicitement
+  justificatifId       String?
+  justificatif         Fichier?  @relation(fields: [justificatifId], references: [id], onDelete: Restrict)
+  identifiantHorsLigne String?   @unique // saisie sur téléphone : renvoyée sans doublon après une coupure réseau
+  note                 String?
+  archiveLe            DateTime?
+  archiveMotif         String?
+  ecriture             String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([payeeLe])
+  @@index([dossierId])
 }

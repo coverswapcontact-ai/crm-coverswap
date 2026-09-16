@@ -81,3 +81,20 @@ export type LigneAcquisition = {
   clientsSignes: number;
   montantSigne: number;
 };
+
+/** Un établissement trouvé dans l'annuaire public des entreprises. */
+export type EntrepriseAnnuaire = {
+  siren: string;
+  siret: string | null;
+  /** Dénomination légale, celle des factures. */
+  raisonSociale: string | null;
+  /** Nom commercial ou enseigne, quand il diffère de la dénomination. */
+  enseigne: string | null;
+  /** Voie seule : numéro, rue, complément. */
+  adresse: string | null;
+  codePostal: string | null;
+  ville: string | null;
+  siege: boolean;
+  /** Établissement fermé ou entreprise cessée. */
+  ferme: boolean;
+};

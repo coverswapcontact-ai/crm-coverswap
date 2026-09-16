@@ -1,27 +1,72 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UserPlus } from "lucide-react";
+import { Building2, UserPlus, UserRound } from "lucide-react";
 import { toast } from "sonner";
-import { envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, ListeDeroulante, Modale, Puces } from "@/components/pilotage/ui";
-import {
-  CATEGORIES_CLIENT,
-  LIBELLES_CATEGORIE_CLIENT,
-  LIBELLES_SOURCE_CLIENT,
-  SOURCES_CLIENT,
-  type CategorieClient,
-  type SourceClient,
-} from "@/lib/clients/constantes";
+import { ErreurApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { Bouton, Champ, ListeDeroulante, Modale, Puces, TRANS } from "@/components/pilotage/ui";
+import { LIBELLES_SOURCE_CLIENT, SOURCES_CLIENT, type CategorieClient, type SourceClient } from "@/lib/clients/constantes";
+import { erreurSaisieSiret, formaterSiret } from "@/lib/clients/normalisation";
+import type { EntrepriseAnnuaire } from "@/lib/clients/types";
+import { cn } from "@/lib/utils";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
+import { RechercheAnnuaire } from "./RechercheAnnuaire";
 
-export function CreationClient({ onFermer }: { onFermer: () => void }) {
+const RELATIONS_PRO: { valeur: Exclude<CategorieClient, "PARTICULIER">; libelle: string }[] = [
+  { valeur: "PROFESSIONNEL", libelle: "Client direct" },
+  { valeur: "DONNEUR_ORDRE", libelle: "Donneur d'ordre (sous-traitance)" },
+];
+
+function ChoixType({ estPro, onChange }: { estPro: boolean; onChange: (estPro: boolean) => void }) {
+  const options = [
+    { pro: false, libelle: "Particulier", detail: "Une personne", icone: UserRound },
+    { pro: true, libelle: "Entreprise", detail: "Société, commerce, syndic…", icone: Building2 },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Le client est" className="grid grid-cols-2 gap-2">
+      {options.map(({ pro, libelle, detail, icone: Icone }) => {
+        const choisi = pro === estPro;
+        return (
+          <button
+            key={libelle}
+            type="button"
+            role="radio"
+            aria-checked={choisi}
+            onClick={() => onChange(pro)}
+            className={cn(
+              "flex min-h-14 items-center gap-2.5 rounded-[10px] border-[0.5px] px-3 py-2 text-left",
+              "focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
+              choisi ? "border-[#1D9E75]/60 bg-[#112B22]" : "border-[#2A2D34] bg-[#16181D] hover:border-[#3A3E47]",
+              TRANS
+            )}
+          >
+            <Icone size={18} aria-hidden className={cn("shrink-0", choisi ? "text-[#5DCAA5]" : "text-[#6B7280]")} />
+            <span className="min-w-0">
+              <span className={cn("block text-[13.5px] font-medium", choisi ? "text-[#5DCAA5]" : "text-[#F2F3F5]")}>{libelle}</span>
+              <span className="hidden text-[11.5px] text-[#6B7280] sm:block">{detail}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Nouveau client saisi à la main. Un particulier est une personne (prénom,
+ * nom) ; un client pro est une entité (raison sociale, SIRET, adresse de
+ * facturation), sans prénom ni nom.
+ */
+export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: { onFermer: () => void; categorieInitiale?: CategorieClient }) {
   const router = useRouter();
-  const [categorie, setCategorie] = useState<CategorieClient>("PARTICULIER");
+  const [categorie, setCategorie] = useState<CategorieClient>(categorieInitiale);
   const [prenom, setPrenom] = useState("");
   const [nomFamille, setNomFamille] = useState("");
   const [raisonSociale, setRaisonSociale] = useState("");
+  const [siret, setSiret] = useState("");
+  const [siretQuitte, setSiretQuitte] = useState(false);
   const [telephone, setTelephone] = useState("");
   const [email, setEmail] = useState("");
   const [adresse, setAdresse] = useState("");
@@ -31,21 +76,34 @@ export function CreationClient({ onFermer }: { onFermer: () => void }) {
   const [sourceDetail, setSourceDetail] = useState("");
   const [recommandeur, setRecommandeur] = useState<Recommandeur>({ id: null, nom: null, texte: null });
   const [envoi, setEnvoi] = useState(false);
-  const [doublon, setDoublon] = useState<string | null>(null);
+  const [doublon, setDoublon] = useState<{ message: string; clientId: string | null } | null>(null);
 
-  const estPersonne = categorie === "PARTICULIER";
-  const nomRenseigne = estPersonne ? Boolean(prenom.trim() || nomFamille.trim()) : Boolean(raisonSociale.trim());
+  const estPro = categorie !== "PARTICULIER";
+  const nomRenseigne = estPro ? Boolean(raisonSociale.trim()) : Boolean(prenom.trim() || nomFamille.trim());
+  const siretEnErreur = estPro ? erreurSaisieSiret(siret, true) : null;
+
+  function remplirDepuisAnnuaire(entreprise: EntrepriseAnnuaire) {
+    if (entreprise.raisonSociale) setRaisonSociale(entreprise.raisonSociale);
+    setSiret(entreprise.siret ? formaterSiret(entreprise.siret) : "");
+    setSiretQuitte(false);
+    if (entreprise.adresse || entreprise.codePostal || entreprise.ville) {
+      setAdresse(entreprise.adresse ?? "");
+      setCodePostal(entreprise.codePostal ?? "");
+      setVille(entreprise.ville ?? "");
+    }
+    setDoublon(null);
+  }
 
   async function creer(forcer: boolean) {
-    if (!nomRenseigne || !source) return;
+    if (!nomRenseigne || !source || siretEnErreur) return;
     setEnvoi(true);
     try {
       const { id } = await envoyerJson<{ id: string }>("/api/clients", "POST", {
         categorie,
-        prenom: estPersonne ? prenom : null,
-        nomFamille: estPersonne ? nomFamille : null,
-        raisonSociale: estPersonne ? null : raisonSociale,
-        siret: null,
+        prenom: estPro ? null : prenom,
+        nomFamille: estPro ? null : nomFamille,
+        raisonSociale: estPro ? raisonSociale : null,
+        siret: estPro ? siret : null,
         adresse,
         codePostal,
         ville,
@@ -61,12 +119,15 @@ export function CreationClient({ onFermer }: { onFermer: () => void }) {
         email: email || null,
         forcer,
       });
-      toast.success("Fiche client créée");
+      toast.success(estPro ? "Fiche entreprise créée" : "Fiche client créée");
       router.push(`/clients/${id}`);
     } catch (erreur) {
-      const message = messageErreur(erreur);
-      if (message.includes("déjà cet e-mail ou ce numéro")) setDoublon(message);
-      else toast.error("Création impossible", { description: message });
+      if (erreur instanceof ErreurApi && erreur.status === 409) {
+        const corps = erreur.corps as { clientExistantId?: unknown } | null;
+        setDoublon({ message: erreur.message, clientId: typeof corps?.clientExistantId === "string" ? corps.clientExistantId : null });
+      } else {
+        toast.error("Création impossible", { description: messageErreur(erreur) });
+      }
     } finally {
       setEnvoi(false);
     }
@@ -76,8 +137,12 @@ export function CreationClient({ onFermer }: { onFermer: () => void }) {
     <Modale
       ouverte
       onFermer={onFermer}
-      titre="Nouveau client"
-      description="Recommandation, bouche-à-oreille, sous-traitance : tout client qui n'arrive pas par un formulaire."
+      titre={estPro ? "Nouveau client pro" : "Nouveau client"}
+      description={
+        estPro
+          ? "La fiche porte l'entreprise : raison sociale, SIRET, adresse de facturation."
+          : "Recommandation, bouche-à-oreille : tout particulier qui n'arrive pas par un formulaire."
+      }
       pied={
         <div className="flex flex-wrap items-center justify-end gap-2">
           {doublon ? (
@@ -90,8 +155,8 @@ export function CreationClient({ onFermer }: { onFermer: () => void }) {
           </Bouton>
           <Bouton
             variante="primaire"
-            icone={<UserPlus size={15} aria-hidden />}
-            disabled={!nomRenseigne || !source}
+            icone={estPro ? <Building2 size={15} aria-hidden /> : <UserPlus size={15} aria-hidden />}
+            disabled={!nomRenseigne || !source || Boolean(siretEnErreur)}
             chargement={envoi && !doublon}
             onClick={() => void creer(false)}
           >
@@ -102,30 +167,65 @@ export function CreationClient({ onFermer }: { onFermer: () => void }) {
     >
       <div className="flex flex-col gap-4">
         {doublon ? (
-          <p className="rounded-[8px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2 text-[13px] text-[#F5B454]">
-            {doublon} La paire sera proposée à la fusion si tu crées quand même.
-          </p>
+          <div className="rounded-[8px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2 text-[13px] text-[#F5B454]">
+            {doublon.message} La paire sera proposée à la fusion si tu crées quand même.
+            {doublon.clientId ? (
+              <Link href={`/clients/${doublon.clientId}`} className="ml-1 font-medium underline underline-offset-2 hover:text-[#F2F3F5]">
+                Ouvrir sa fiche
+              </Link>
+            ) : null}
+          </div>
         ) : null}
-        <Puces
-          libelle="Catégorie"
-          obligatoire
-          options={CATEGORIES_CLIENT.map((valeur) => ({ valeur, libelle: LIBELLES_CATEGORIE_CLIENT[valeur] }))}
-          valeur={categorie}
-          onChange={setCategorie}
-        />
-        {estPersonne ? (
+
+        <ChoixType estPro={estPro} onChange={(pro) => setCategorie(pro ? (estPro ? categorie : "PROFESSIONNEL") : "PARTICULIER")} />
+
+        {estPro ? (
+          <>
+            <Puces libelle="Relation" obligatoire options={RELATIONS_PRO} valeur={categorie} onChange={setCategorie} />
+            <RechercheAnnuaire onChoisir={remplirDepuisAnnuaire} />
+            <div className="grid gap-3 sm:grid-cols-[1fr_190px]">
+              <Champ
+                libelle="Raison sociale"
+                obligatoire
+                autoComplete="organization"
+                value={raisonSociale}
+                maxLength={160}
+                onChange={(evenement) => setRaisonSociale(evenement.target.value)}
+              />
+              <Champ
+                libelle="SIRET"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={17}
+                placeholder="14 chiffres"
+                value={siret}
+                erreur={erreurSaisieSiret(siret, siretQuitte)}
+                onBlur={() => setSiretQuitte(true)}
+                onChange={(evenement) => {
+                  setSiret(evenement.target.value);
+                  setSiretQuitte(false);
+                }}
+              />
+            </div>
+          </>
+        ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <Champ libelle="Prénom" value={prenom} maxLength={80} onChange={(evenement) => setPrenom(evenement.target.value)} />
             <Champ libelle="Nom" value={nomFamille} maxLength={120} onChange={(evenement) => setNomFamille(evenement.target.value)} />
           </div>
-        ) : (
-          <Champ libelle="Raison sociale" obligatoire value={raisonSociale} maxLength={160} onChange={(evenement) => setRaisonSociale(evenement.target.value)} />
         )}
+
         <div className="grid gap-3 sm:grid-cols-2">
           <Champ libelle="Téléphone" type="tel" inputMode="tel" autoComplete="off" value={telephone} onChange={(evenement) => setTelephone(evenement.target.value)} />
           <Champ libelle="E-mail" type="email" inputMode="email" autoComplete="off" value={email} onChange={(evenement) => setEmail(evenement.target.value)} />
         </div>
-        <Champ libelle="Adresse" value={adresse} maxLength={200} onChange={(evenement) => setAdresse(evenement.target.value)} />
+        <Champ
+          libelle={estPro ? "Adresse de facturation" : "Adresse"}
+          aide={estPro ? "Siège ou établissement facturé. Le lieu du chantier se saisit dans le dossier." : undefined}
+          value={adresse}
+          maxLength={200}
+          onChange={(evenement) => setAdresse(evenement.target.value)}
+        />
         <div className="grid grid-cols-[110px_1fr] gap-3">
           <Champ libelle="Code postal" inputMode="numeric" maxLength={5} value={codePostal} onChange={(evenement) => setCodePostal(evenement.target.value)} />
           <Champ libelle="Ville" value={ville} maxLength={80} onChange={(evenement) => setVille(evenement.target.value)} />

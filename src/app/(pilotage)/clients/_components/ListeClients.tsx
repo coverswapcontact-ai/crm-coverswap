@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, Search, UserPlus, Users } from "lucide-react";
+import { Building2, Copy, Search, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
@@ -117,7 +117,7 @@ export default function ListeClients({
   const [source, setSource] = useState("");
   const [archives, setArchives] = useState(false);
   const [chargement, setChargement] = useState(false);
-  const [creation, setCreation] = useState(false);
+  const [creation, setCreation] = useState<CategorieClient | null>(null);
   const [rechercheDoublons, setRechercheDoublons] = useState(false);
 
   const filtresActifs = recherche.trim() !== "" || categorie !== null || source !== "" || archives;
@@ -180,7 +180,10 @@ export default function ListeClients({
             <Bouton icone={<Copy size={14} aria-hidden />} chargement={rechercheDoublons} onClick={() => void chercherDoublons()}>
               Chercher les doublons
             </Bouton>
-            <Bouton variante="primaire" icone={<UserPlus size={15} aria-hidden />} onClick={() => setCreation(true)}>
+            <Bouton icone={<Building2 size={15} aria-hidden />} onClick={() => setCreation("PROFESSIONNEL")}>
+              Nouveau client pro
+            </Bouton>
+            <Bouton variante="primaire" icone={<UserPlus size={15} aria-hidden />} onClick={() => setCreation("PARTICULIER")}>
               Nouveau client
             </Bouton>
           </>
@@ -282,7 +285,7 @@ export default function ListeClients({
         )}
       </section>
 
-      {creation ? <CreationClient onFermer={() => setCreation(false)} /> : null}
+      {creation ? <CreationClient categorieInitiale={creation} onFermer={() => setCreation(null)} /> : null}
     </div>
   );
 }

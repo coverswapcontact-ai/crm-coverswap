@@ -3,14 +3,19 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
+import { ErreurMetier } from "@/lib/commun/erreurs";
 import { preparerBaseEssai } from "@/test/base-essai";
+import { definirTransportAnnuaireEssai, lireReponseAnnuaire, rechercherEntreprises, termeAnnuaire } from "./annuaire";
 import {
   cleNom,
+  erreurSaisieSiret,
+  formaterSiret,
   formaterTelephone,
   lireNotesAcquisition,
   nomAffichage,
   normaliserEmail,
   normaliserTelephone,
+  siretValide,
   sourceDepuisLead,
 } from "./normalisation";
 
@@ -56,6 +61,117 @@ describe("normalisation", () => {
     assert.deepEqual(lireNotesAcquisition("Client très motivé, rappeler le soir"), {});
     assert.deepEqual(sourceDepuisLead("TIKTOK"), { source: "RESEAUX_SOCIAUX", sourceDetail: "TikTok" });
     assert.deepEqual(sourceDepuisLead("REFERENCE"), { source: "RECOMMANDATION" });
+  });
+
+  test("SIRET : 14 chiffres et clé de contrôle, exception de La Poste comprise", () => {
+    assert.equal(siretValide("912 345 678 00011"), true);
+    assert.equal(siretValide("91234567800012"), false, "un chiffre faux");
+    assert.equal(siretValide("9123456780001"), false, "13 chiffres");
+    assert.equal(siretValide("35600000049837"), true, "La Poste : somme des chiffres multiple de 5");
+    assert.equal(siretValide("35600000011111"), false);
+    assert.equal(formaterSiret("91234567800011"), "912 345 678 00011");
+    assert.equal(erreurSaisieSiret("912 345", false), null, "rien tant que la saisie n'est pas finie");
+    assert.equal(erreurSaisieSiret("912 345", true), "14 chiffres attendus.");
+    assert.equal(erreurSaisieSiret("912 345 678 0001A", false), "14 chiffres attendus.");
+    assert.equal(erreurSaisieSiret("912 345 678 00012", false), "Un chiffre est faux (clé de contrôle).");
+    assert.equal(erreurSaisieSiret("", true), null);
+  });
+});
+
+describe("annuaire des entreprises", () => {
+  // Réponse de recherche-entreprises.api.gouv.fr, réduite aux champs lus ; entreprises fictives.
+  const reponse = {
+    results: [
+      {
+        siren: "912345678",
+        nom_complet: "HOTEL DES FLOTS (LES FLOTS BLEUS)",
+        nom_raison_sociale: "HOTEL DES FLOTS",
+        etat_administratif: "A",
+        siege: { siret: "91234567800011", adresse: "3 RUE DU PORT 34470 PEROLS", code_postal: "34470", libelle_commune: "PEROLS", est_siege: true, etat_administratif: "A" },
+        matching_etablissements: [
+          {
+            siret: "91234567800029",
+            adresse: "12 AVENUE DE LA MER 34280 LA GRANDE-MOTTE",
+            code_postal: "34280",
+            libelle_commune: "LA GRANDE-MOTTE",
+            est_siege: false,
+            etat_administratif: "F",
+            liste_enseignes: ["LES FLOTS BLEUS"],
+          },
+          {
+            siret: "91234567800011",
+            adresse: "3 RUE DU PORT 34470 PEROLS",
+            code_postal: "34470",
+            libelle_commune: "PEROLS",
+            est_siege: true,
+            etat_administratif: "A",
+            nom_commercial: "HOTEL DES FLOTS",
+          },
+        ],
+      },
+      {
+        siren: "987654321",
+        nom_complet: "[NON-DIFFUSIBLE]",
+        nom_raison_sociale: "[NON-DIFFUSIBLE]",
+        etat_administratif: "A",
+        siege: { siret: "98765432100015", adresse: "[NON-DIFFUSIBLE]", code_postal: "[NON-DIFFUSIBLE]", libelle_commune: "LATTES", est_siege: true, etat_administratif: "A" },
+        matching_etablissements: [],
+      },
+      { siren: "pas un siren" },
+    ],
+  };
+
+  test("établissements lus : voie seule, enseigne distincte, non diffusible vidé, fermés en dernier", () => {
+    const lus = lireReponseAnnuaire(reponse);
+    assert.deepEqual(
+      lus.map((etablissement) => etablissement.siret),
+      ["91234567800011", "98765432100015", "91234567800029"]
+    );
+    assert.deepEqual(lus[0], {
+      siren: "912345678",
+      siret: "91234567800011",
+      raisonSociale: "HOTEL DES FLOTS",
+      enseigne: null,
+      adresse: "3 RUE DU PORT",
+      codePostal: "34470",
+      ville: "PEROLS",
+      siege: true,
+      ferme: false,
+    });
+    assert.equal(lus[1].raisonSociale, null);
+    assert.equal(lus[1].adresse, null);
+    assert.equal(lus[1].codePostal, null);
+    assert.equal(lus[1].ville, "LATTES");
+    assert.equal(lus[2].enseigne, "LES FLOTS BLEUS");
+    assert.equal(lus[2].adresse, "12 AVENUE DE LA MER");
+    assert.equal(lus[2].ferme, true);
+    assert.deepEqual(lireReponseAnnuaire({ erreur: "inattendu" }), []);
+  });
+
+  test("recherche : SIRET tapé avec espaces, saisie trop courte sans appel, annuaire saturé ou injoignable", async () => {
+    const appels: string[] = [];
+    definirTransportAnnuaireEssai(async (url) => {
+      appels.push(url);
+      return new Response(JSON.stringify(reponse), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    try {
+      assert.equal(termeAnnuaire("  hô "), null);
+      assert.deepEqual(await rechercherEntreprises("hô"), []);
+      assert.equal(appels.length, 0, "rien ne part pour moins de trois caractères");
+
+      const trouves = await rechercherEntreprises("912 345 678 00011");
+      assert.equal(new URL(appels[0]).searchParams.get("q"), "91234567800011");
+      assert.equal(trouves[0].raisonSociale, "HOTEL DES FLOTS");
+
+      definirTransportAnnuaireEssai(async () => new Response("{}", { status: 429 }));
+      await assert.rejects(rechercherEntreprises("hotel des flots"), (erreur: unknown) => erreur instanceof ErreurMetier && erreur.status === 503 && /saturé/.test(erreur.message));
+      definirTransportAnnuaireEssai(async () => {
+        throw new TypeError("fetch failed");
+      });
+      await assert.rejects(rechercherEntreprises("hotel des flots"), /injoignable/);
+    } finally {
+      definirTransportAnnuaireEssai(null);
+    }
   });
 });
 
@@ -329,6 +445,79 @@ describe("nouveaux contacts", () => {
       ),
       /déjà cet e-mail ou ce numéro/
     );
+  });
+
+  test("client pro : l'entité sans prénom ni nom, SIRET contrôlé et unique sauf à forcer", async () => {
+    const entreprise = {
+      categorie: "PROFESSIONNEL" as const,
+      prenom: "Marie",
+      nomFamille: "Martin",
+      raisonSociale: "SARL Les Flots Bleus",
+      siret: "91234567800011",
+      adresse: "3 rue du Port",
+      codePostal: "34470",
+      ville: "Pérols",
+      source: "PROSPECTION" as const,
+      sourceDetail: null,
+      campagne: null,
+      publicite: null,
+      formulaire: null,
+      recommandeParId: null,
+      recommandeParTexte: null,
+      notes: null,
+    };
+    const id = await avecActeur(LUCAS, () => fiches.creerClientManuel(entreprise));
+    const cree = await prisma.client.findUniqueOrThrow({ where: { id } });
+    assert.equal(cree.nom, "SARL Les Flots Bleus");
+    assert.equal(cree.prenom, null, "un client pro n'a pas de prénom");
+    assert.equal(cree.nomFamille, null);
+    assert.equal(cree.siret, "91234567800011");
+
+    await assert.rejects(avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: null })), /raison sociale/);
+    await assert.rejects(avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, siret: "91234567800012" })), /clé de contrôle/);
+    await assert.rejects(
+      avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: "Les Flots Bleus" })),
+      (erreur: unknown) => erreur instanceof ErreurMetier && erreur.status === 409 && /déjà ce SIRET/.test(erreur.message) && erreur.details?.clientExistantId === id
+    );
+    const forcee = await avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: "Les Flots Bleus", forcer: true }));
+    assert.notEqual(forcee, id);
+
+    const particulier = await avecActeur(LUCAS, () =>
+      fiches.creerClientManuel({ ...entreprise, categorie: "PARTICULIER", siret: "98765432100015", telephone: "07 11 22 33 44" })
+    );
+    const personne = await prisma.client.findUniqueOrThrow({ where: { id: particulier } });
+    assert.equal(personne.nom, "Marie Martin");
+    assert.equal(personne.raisonSociale, null, "un particulier n'a ni raison sociale ni SIRET");
+    assert.equal(personne.siret, null);
+  });
+
+  test("modifier une fiche : l'entité ne perd pas son nom, un SIRET nouveau est contrôlé, une fiche ancienne reste modifiable", async () => {
+    const pro = await prisma.client.findFirstOrThrow({ where: { raisonSociale: "SARL Les Flots Bleus" } });
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { raisonSociale: null })), /raison sociale/);
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "98765432100016" })), /clé de contrôle/);
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { categorie: "PARTICULIER", raisonSociale: null, siret: null })), /prénom ou un nom/);
+    await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "98765432100015", notes: "Facturer au siège" }));
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: pro.id } })).siret, "98765432100015");
+
+    // Un SIRET enregistré avant le contrôle ne bloque pas la fiche.
+    await avecActeur(LUCAS, () => prisma.client.update({ where: { id: pro.id }, data: { siret: "12345678901234" } }));
+    await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "12345678901234", sourceDetail: "Salon de l'hôtellerie" }));
+
+    // Un particulier qui devient pro doit recevoir sa raison sociale.
+    const personne = await prisma.client.findFirstOrThrow({ where: { nom: "Marie Martin" } });
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(personne.id, { categorie: "PROFESSIONNEL" })), /raison sociale/);
+    await avecActeur(LUCAS, () => fiches.modifierClient(personne.id, { categorie: "PROFESSIONNEL", raisonSociale: "Martin Déco" }));
+    const devenuPro = await prisma.client.findUniqueOrThrow({ where: { id: personne.id } });
+    assert.equal(devenuPro.nom, "Martin Déco");
+    assert.equal(devenuPro.prenom, "Marie", "le contact reste tant qu'on ne le retire pas");
+
+    // Fiche pro venue d'un formulaire, sans nom d'entreprise : modifiable en attendant de le connaître.
+    const formulaire = await avecActeur({ acteur: "EXTERNE:/api/webhook" }, () =>
+      identification.creerClient(prisma, { categorie: "PROFESSIONNEL", prenom: "Paul", nomFamille: "Durand", source: "SITE_DEVIS", premierContactLe: new Date() })
+    );
+    await avecActeur(LUCAS, () => fiches.modifierClient(formulaire.id, { categorie: "PROFESSIONNEL", raisonSociale: null, sourceDetail: "Formulaire pro" }));
+    await avecActeur(LUCAS, () => fiches.modifierClient(formulaire.id, { raisonSociale: "Durand Agencement" }));
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: formulaire.id } })).nom, "Durand Agencement");
   });
 
   test("un client avec un dossier en cours ne s'archive pas", async () => {

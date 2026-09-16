@@ -6,6 +6,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  ArrowUpRight,
   FolderPlus,
   GitMerge,
   Mail,
@@ -44,8 +45,8 @@ import {
   type SourceClient,
   type StatutConsentement,
 } from "@/lib/clients/constantes";
-import { formaterTelephone, sourceDepuisLead } from "@/lib/clients/normalisation";
-import type { ClientDetail, CoordonneeVue } from "@/lib/clients/types";
+import { erreurSaisieSiret, formaterSiret, formaterTelephone, sourceDepuisLead } from "@/lib/clients/normalisation";
+import type { ClientDetail, CoordonneeVue, EntrepriseAnnuaire } from "@/lib/clients/types";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
@@ -54,6 +55,7 @@ import { PastilleEtape } from "../../dossiers/_components/ui";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
 import { AnonymisationClient } from "./AnonymisationClient";
 import { MessagesClient } from "./MessagesClient";
+import { RechercheAnnuaire } from "./RechercheAnnuaire";
 
 function Carte({ titre, action, children }: { titre: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -420,14 +422,44 @@ function ModaleModification({
     texte: client.recommandeParTexte,
   });
   const [envoi, setEnvoi] = useState(false);
+  const [siretQuitte, setSiretQuitte] = useState(false);
   const changer = (cle: keyof typeof champs) => (evenement: { target: { value: string } }) =>
     setChamps((actuels) => ({ ...actuels, [cle]: evenement.target.value }));
+
+  const estPro = champs.categorie !== "PARTICULIER";
+  // Une fiche pro venue d'un formulaire ou d'un mail peut porter le nom de la personne qui a écrit :
+  // il reste visible (et effaçable) tant qu'il existe ; une fiche pro créée ici n'en a pas.
+  const contactEnregistre = Boolean(client.prenom || client.nomFamille);
+  const siretModifie = champs.siret.replace(/\s/g, "") !== (client.siret ?? "");
+  const siretEnErreur = estPro && siretModifie ? erreurSaisieSiret(champs.siret, true) : null;
+  const raisonSocialeExigee = client.categorie === "PARTICULIER" || Boolean(client.raisonSociale);
+  const raisonSocialeManquante = estPro && raisonSocialeExigee && !champs.raisonSociale.trim();
+  const nomManquant = !estPro && client.categorie !== "PARTICULIER" && !champs.prenom.trim() && !champs.nomFamille.trim();
+  const identiteRetiree = !estPro && (client.raisonSociale || client.siret);
+
+  function remplirDepuisAnnuaire(entreprise: EntrepriseAnnuaire) {
+    setSiretQuitte(false);
+    setChamps((actuels) => ({
+      ...actuels,
+      raisonSociale: entreprise.raisonSociale ?? actuels.raisonSociale,
+      siret: entreprise.siret ? formaterSiret(entreprise.siret) : "",
+      ...(entreprise.adresse || entreprise.codePostal || entreprise.ville
+        ? { adresse: entreprise.adresse ?? "", codePostal: entreprise.codePostal ?? "", ville: entreprise.ville ?? "" }
+        : {}),
+    }));
+  }
 
   async function enregistrer() {
     setEnvoi(true);
     try {
+      const { prenom, nomFamille, raisonSociale, siret, ...autres } = champs;
+      // Un pro est une entité : le contact n'est renvoyé que s'il était affiché. Un particulier perd raison sociale et SIRET.
+      const identite = estPro
+        ? { raisonSociale, siret, ...(contactEnregistre ? { prenom, nomFamille } : {}) }
+        : { prenom, nomFamille, raisonSociale: null, siret: null };
       const { client: misAJour } = await envoyerJson<{ client: ClientDetail }>(`/api/clients/${client.id}`, "PATCH", {
-        ...champs,
+        ...autres,
+        ...identite,
         recommandeParId: recommandeur.id,
         recommandeParTexte: recommandeur.texte,
       });
@@ -452,7 +484,12 @@ function ModaleModification({
           <Bouton variante="fantome" onClick={onFermer}>
             Annuler
           </Bouton>
-          <Bouton variante="primaire" chargement={envoi} onClick={() => void enregistrer()}>
+          <Bouton
+            variante="primaire"
+            chargement={envoi}
+            disabled={Boolean(siretEnErreur) || raisonSocialeManquante || nomManquant}
+            onClick={() => void enregistrer()}
+          >
             Enregistrer
           </Bouton>
         </div>
@@ -466,13 +503,60 @@ function ModaleModification({
             valeur={champs.categorie}
             onChange={(valeur: CategorieClient) => setChamps((actuels) => ({ ...actuels, categorie: valeur }))}
           />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Champ libelle="Prénom" value={champs.prenom} maxLength={80} onChange={changer("prenom")} />
-            <Champ libelle="Nom" value={champs.nomFamille} maxLength={120} onChange={changer("nomFamille")} />
-          </div>
-          <Champ libelle="Raison sociale" value={champs.raisonSociale} maxLength={160} onChange={changer("raisonSociale")} />
-          <Champ libelle="SIRET" inputMode="numeric" value={champs.siret} onChange={changer("siret")} />
-          <Champ libelle="Adresse" value={champs.adresse} maxLength={200} onChange={changer("adresse")} />
+          {estPro ? (
+            <>
+              <RechercheAnnuaire onChoisir={remplirDepuisAnnuaire} />
+              <div className="grid gap-3 sm:grid-cols-[1fr_170px]">
+                <Champ
+                  libelle="Raison sociale"
+                  obligatoire={raisonSocialeExigee}
+                  erreur={raisonSocialeManquante ? "Pour un client pro, c'est l'entreprise qui est le client." : null}
+                  value={champs.raisonSociale}
+                  maxLength={160}
+                  onChange={changer("raisonSociale")}
+                />
+                <Champ
+                  libelle="SIRET"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={17}
+                  placeholder="14 chiffres"
+                  value={champs.siret}
+                  erreur={siretModifie ? erreurSaisieSiret(champs.siret, siretQuitte) : null}
+                  onBlur={() => setSiretQuitte(true)}
+                  onChange={(evenement) => {
+                    changer("siret")(evenement);
+                    setSiretQuitte(false);
+                  }}
+                />
+              </div>
+              {contactEnregistre ? (
+                <div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Champ libelle="Contact : prénom" value={champs.prenom} maxLength={80} onChange={changer("prenom")} />
+                    <Champ libelle="Contact : nom" value={champs.nomFamille} maxLength={120} onChange={changer("nomFamille")} />
+                  </div>
+                  <p className="mt-1 text-[12px] text-[#6B7280]">Personne qui a pris contact. Vide ces champs pour ne garder que l&apos;entreprise.</p>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Champ libelle="Prénom" value={champs.prenom} maxLength={80} onChange={changer("prenom")} />
+              <Champ libelle="Nom" value={champs.nomFamille} maxLength={120} onChange={changer("nomFamille")} />
+            </div>
+          )}
+          {nomManquant ? <p className="text-[12px] text-[#F87171]">Indique un prénom ou un nom : un particulier est une personne.</p> : null}
+          {identiteRetiree ? (
+            <p className="text-[12px] text-[#F5B454]">La raison sociale et le SIRET seront retirés de la fiche ; l&apos;historique les garde.</p>
+          ) : null}
+          <Champ
+            libelle={estPro ? "Adresse de facturation" : "Adresse"}
+            aide={estPro ? "Siège ou établissement facturé. Le lieu du chantier se saisit dans le dossier." : undefined}
+            value={champs.adresse}
+            maxLength={200}
+            onChange={changer("adresse")}
+          />
           <div className="grid grid-cols-[110px_1fr] gap-3">
             <Champ libelle="Code postal" inputMode="numeric" maxLength={5} value={champs.codePostal} onChange={changer("codePostal")} />
             <Champ libelle="Ville" value={champs.ville} maxLength={80} onChange={changer("ville")} />
@@ -526,6 +610,9 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
   }
 
   const lieu = [client.codePostal, client.ville].filter(Boolean).join(" ");
+  const estPro = client.categorie !== "PARTICULIER";
+  // Sur une fiche pro, la personne qui a pris contact, quand la raison sociale donne déjà le nom de la fiche.
+  const contact = estPro && client.raisonSociale ? [client.prenom, client.nomFamille].filter(Boolean).join(" ") : "";
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
@@ -544,6 +631,23 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
             <span>client depuis le {formatDateCourte(client.premierContactLe)}</span>
             {client.archiveLe ? <Pastille ton="ambre">Archivée{client.archiveMotif ? ` : ${client.archiveMotif}` : ""}</Pastille> : null}
           </p>
+          {estPro && (client.siret || contact) ? (
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px] text-[#9CA3AF]">
+              {client.siret ? (
+                <a
+                  href={`https://annuaire-entreprises.data.gouv.fr/etablissement/${client.siret}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Voir l'établissement dans l'annuaire des entreprises"
+                  className={cn("inline-flex items-center gap-0.5 tabular-nums hover:text-[#F2F3F5]", TRANS)}
+                >
+                  SIRET {formaterSiret(client.siret)}
+                  <ArrowUpRight size={11} aria-hidden />
+                </a>
+              ) : null}
+              {contact ? <span>Contact : {contact}</span> : null}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {client.anonymiseLe ? null : client.archiveLe ? (

@@ -34,6 +34,39 @@ export function normaliserTelephone(saisie: string | null | undefined): string |
   return seuls.length >= 9 ? seuls : null;
 }
 
+/**
+ * SIRET plausible : 14 chiffres dont la clé de Luhn est juste. Exception
+ * connue : les établissements de La Poste (SIREN 356 000 000), dont la somme
+ * des chiffres est un multiple de 5. Attrape la faute de frappe, pas le
+ * SIRET inventé.
+ */
+export function siretValide(saisie: string | null | undefined): boolean {
+  const siret = (saisie ?? "").replace(/\s/g, "");
+  if (!/^\d{14}$/.test(siret)) return false;
+  const chiffres = [...siret].map(Number);
+  const luhn = chiffres.reduce((somme, chiffre, rang) => {
+    const pondere = rang % 2 === 0 ? chiffre * 2 : chiffre;
+    return somme + (pondere > 9 ? pondere - 9 : pondere);
+  }, 0);
+  if (luhn % 10 === 0) return true;
+  return siret.startsWith("356000000") && chiffres.reduce((somme, chiffre) => somme + chiffre, 0) % 5 === 0;
+}
+
+/** Message sous un champ SIRET en cours de saisie ; null s'il est vide ou plausible. `complet` : la saisie est finie. */
+export function erreurSaisieSiret(saisie: string, complet: boolean): string | null {
+  const chiffres = saisie.replace(/\s/g, "");
+  if (!chiffres) return null;
+  if (!/^\d*$/.test(chiffres) || chiffres.length > 14) return "14 chiffres attendus.";
+  if (chiffres.length < 14) return complet ? "14 chiffres attendus." : null;
+  return siretValide(chiffres) ? null : "Un chiffre est faux (clé de contrôle).";
+}
+
+/** « 353 033 764 00021 » : SIREN en trois groupes, puis le numéro d'établissement. */
+export function formaterSiret(siret: string): string {
+  const chiffres = siret.replace(/\s/g, "");
+  return /^\d{14}$/.test(chiffres) ? `${chiffres.slice(0, 3)} ${chiffres.slice(3, 6)} ${chiffres.slice(6, 9)} ${chiffres.slice(9)}` : siret;
+}
+
 /** « 06 12 34 56 78 » pour un numéro français normalisé ; sinon tel quel. */
 export function formaterTelephone(numero: string): string {
   const francais = /^\+33(\d{9})$/.exec(numero);

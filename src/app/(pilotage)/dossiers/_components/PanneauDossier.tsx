@@ -30,6 +30,7 @@ import { PastilleRetard, ProchaineActionResume } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { ChangementEtape } from "./ChangementEtape";
 import { CoordonneesClient } from "./CoordonneesClient";
+import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
 import { PhotosDossier } from "./PhotosDossier";
@@ -202,6 +203,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <ChangementEtape detail={detail} onMisAJour={onMisAJour} />
+          <DelaisEcarts detail={detail} />
           <DocumentsDossier
             detail={detail}
             onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}

@@ -92,6 +92,9 @@ export const propositionChangementEtape = definirProposition({
     dossierId: idDossier,
     vers: z.enum(ETAPES, "Étape invalide."),
     motifPerte: z.enum(MOTIFS_PERTE, "Motif de perte invalide.").optional(),
+    perteConcurrent: z.string().trim().max(160).optional(),
+    perteMontantConcurrent: z.number().min(0).max(10_000_000).optional(),
+    perteCommentaire: z.string().trim().max(2000).optional(),
     dateChantier: z.string("Date de chantier invalide.").refine(estJourValide, "Date de chantier invalide.").optional(),
   }),
   sensible: (contenu) => ETAPES_ENGAGEANTES.includes(contenu.vers),
@@ -111,6 +114,8 @@ export const propositionChangementEtape = definirProposition({
       aide: "Obligatoire pour « Perdu ».",
       options: MOTIFS_PERTE.map((motif) => ({ valeur: motif, libelle: LIBELLES_MOTIF_PERTE[motif] })),
     },
+    { cle: "perteConcurrent", libelle: "Remporté par", nature: "texte", aide: "Pour « Perdu », si on le sait." },
+    { cle: "perteCommentaire", libelle: "Ce que le client a dit", nature: "texteLong" },
     { cle: "dateChantier", libelle: "Date du chantier", nature: "jour", aide: "Obligatoire pour « Planifié »." },
   ],
   motifsRejet: [{ code: "MAUVAISE_ETAPE", libelle: "Ce n'est pas la bonne étape" }],
@@ -120,6 +125,9 @@ export const propositionChangementEtape = definirProposition({
     const changement = await changerEtapeDansTransaction(tx, contenu.dossierId, {
       vers: contenu.vers,
       motifPerte: contenu.motifPerte,
+      perteConcurrent: contenu.perteConcurrent,
+      perteMontantConcurrent: contenu.perteMontantConcurrent,
+      perteCommentaire: contenu.perteCommentaire,
       dateChantier: contenu.dateChantier,
     });
     return { resultat: changement, apresValidation: () => effetsDuChangementEtape(changement) };

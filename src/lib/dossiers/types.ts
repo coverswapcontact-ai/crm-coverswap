@@ -14,6 +14,7 @@ import type {
   Unite,
 } from "./constants";
 import type { FaitsDossier } from "./regles";
+import type { DelaisCles, EcartsPrix, PassageEtape } from "./delais";
 
 export type DossierResume = {
   id: string;
@@ -64,6 +65,18 @@ export type DossierDetail = DossierResume & {
   clientEmail: string | null;
   clientTelephone: string;
   motifPerte: MotifPerte | null;
+  perte: {
+    le: string | null;
+    etape: EtapeDossier | null;
+    concurrent: string | null;
+    montantConcurrent: number | null;
+    montantPropose: number | null;
+    commentaire: string | null;
+  } | null;
+  /** Étapes traversées et temps passé dans chacune ; délais clés du parcours. */
+  parcours: PassageEtape[];
+  delais: DelaisCles;
+  ecarts: EcartsPrix;
   dateChantier: string | null;
   origine: { type: "LEAD" | "PROSPECT"; id: string; nom: string } | null;
   photos: PhotoVue[];

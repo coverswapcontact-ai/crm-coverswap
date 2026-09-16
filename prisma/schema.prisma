@@ -279,36 +279,44 @@ model ProspectActivity {
 // ─────────────────────────────────────────────
 
 model Dossier {
-  id                  String             @id @default(cuid())
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  leadId              String? // Lead B2C d'origine (Meta Ads, site, simulateur)
-  lead                Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  prospectId          String? // Prospect B2B d'origine (/prospection)
-  prospect            Prospect?          @relation(fields: [prospectId], references: [id], onDelete: SetNull)
-  clientId            String? // client pérenne ; les champs client* restent les coordonnées de ce chantier
-  client              Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  clientNom           String
-  clientAdresse       String
-  clientCp            String
-  clientVille         String
-  clientEmail         String?
-  clientTelephone     String
-  objet               String // ex. "Recouvrement façades de cuisine"
-  etape               String             @default("QUALIFICATION") // EtapeDossier
-  montantEstime       Float?
-  source              String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE
-  motifPerte          String? // MotifPerte, obligatoire à l'entrée en PERDU
-  prochaineAction     String?
-  prochaineActionDate DateTime?
-  dateChantier        DateTime? // exigée à l'entrée en PLANIFIE
-  photos              String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
-  notes               DossierNote[]
-  evenements          DossierEvenement[]
-  documents           Document[]
-  archiveLe           DateTime? // archivage : rien ne se supprime
-  archiveMotif        String?
-  ecriture            String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+  id                     String             @id @default(cuid())
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  leadId                 String? // Lead B2C d'origine (Meta Ads, site, simulateur)
+  lead                   Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  prospectId             String? // Prospect B2B d'origine (/prospection)
+  prospect               Prospect?          @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  clientId               String? // client pérenne ; les champs client* restent les coordonnées de ce chantier
+  client                 Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientNom              String
+  clientAdresse          String
+  clientCp               String
+  clientVille            String
+  clientEmail            String?
+  clientTelephone        String
+  objet                  String // ex. "Recouvrement façades de cuisine"
+  etape                  String             @default("QUALIFICATION") // EtapeDossier
+  montantEstime          Float?
+  source                 String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE
+  motifPerte             String? // MotifPerte, obligatoire à l'entrée en PERDU
+  // Perte : figée au moment où le dossier passe en PERDU (retirée à la reprise ;
+  // l'événement de changement d'étape la garde pour toujours).
+  perteLe                DateTime?
+  perteEtape             String? // étape active quittée
+  perteConcurrent        String? // qui a remporté le marché, si on le sait
+  perteMontantConcurrent Float? // son prix, si on le sait
+  perteMontantPropose    Float? // notre dernier prix (dernier devis émis, sinon estimation)
+  perteCommentaire       String?
+  prochaineAction        String?
+  prochaineActionDate    DateTime?
+  dateChantier           DateTime? // exigée à l'entrée en PLANIFIE
+  photos                 String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
+  notes                  DossierNote[]
+  evenements             DossierEvenement[]
+  documents              Document[]
+  archiveLe              DateTime? // archivage : rien ne se supprime
+  archiveMotif           String?
+  ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([etape])
   @@index([prochaineActionDate])

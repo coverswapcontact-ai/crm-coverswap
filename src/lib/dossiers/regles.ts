@@ -59,6 +59,10 @@ export function estCritereDeclaratif(critere: CritereEntree): critere is Critere
 /** Ce que la personne (ou l'agent) apporte au moment du changement d'étape. */
 export type DonneesTransition = {
   motifPerte?: MotifPerte;
+  /** Perte : qui a remporté le marché, à quel prix, précisions (facultatifs). */
+  perteConcurrent?: string;
+  perteMontantConcurrent?: number;
+  perteCommentaire?: string;
   dateChantier?: string; // AAAA-MM-JJ
   confirmations?: Partial<Record<CritereDeclaratif, boolean>>;
 };
@@ -168,6 +172,13 @@ export type MetadataChangementEtape = {
   vers: EtapeDossier;
   nature: NatureTransition | "OUVERTURE" | "AUTOMATIQUE";
   motifPerte?: MotifPerte;
+  perteConcurrent?: string;
+  perteMontantConcurrent?: number;
+  perteCommentaire?: string;
+  /** Notre dernier prix au moment de la perte. */
+  perteMontantPropose?: number;
+  /** Étape active quittée au moment de la perte. */
+  perteEtape?: EtapeDossier;
   dateChantier?: string; // AAAA-MM-JJ
   confirmations?: CritereDeclaratif[];
   documentId?: string;

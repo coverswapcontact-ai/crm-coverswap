@@ -14,7 +14,7 @@ import {
   type MotifPerte,
 } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
-import { formatMontant } from "@/lib/dossiers/montants";
+import { formatMontant, lireNombre } from "@/lib/dossiers/montants";
 import {
   CRITERES_DECLARATIFS,
   critereRempli,
@@ -27,10 +27,13 @@ import {
 import { faitsDepuisDetail, type DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { envoyerJson, messageErreur } from "./client";
-import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TitreSection, TRANS } from "./ui";
+import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
 
 type DonneesEtape = {
   motifPerte?: MotifPerte;
+  perteConcurrent?: string;
+  perteMontantConcurrent?: number;
+  perteCommentaire?: string;
   dateChantier?: string;
   confirmations?: Partial<Record<CritereDeclaratif, boolean>>;
   devisAccepteId?: string;
@@ -99,7 +102,16 @@ export function ChangementEtape({
           <span className="text-[#9CA3AF]"> · {REGLES_ETAPES[detail.etape].description}</span>
         </p>
         {detail.etape === "PERDU" && detail.motifPerte ? (
-          <p className="mt-1 text-[12px] text-[#F87171]">Motif : {LIBELLES_MOTIF_PERTE[detail.motifPerte]}</p>
+          <p className="mt-1 text-[12px] text-[#F87171]">
+            Motif : {LIBELLES_MOTIF_PERTE[detail.motifPerte]}
+            {detail.perte?.etape ? ` · à l'étape « ${LIBELLES_ETAPE[detail.perte.etape]} »` : ""}
+            {detail.perte?.concurrent ? ` · remporté par ${detail.perte.concurrent}` : ""}
+            {detail.perte?.montantConcurrent != null ? ` (${formatMontant(detail.perte.montantConcurrent)})` : ""}
+            {detail.perte?.montantPropose != null ? ` · notre prix : ${formatMontant(detail.perte.montantPropose)}` : ""}
+          </p>
+        ) : null}
+        {detail.etape === "PERDU" && detail.perte?.commentaire ? (
+          <p className="mt-1 text-[12px] whitespace-pre-wrap text-[#9CA3AF]">{detail.perte.commentaire}</p>
         ) : null}
         {detail.dateChantier ? (
           <p className="mt-1 text-[12px] text-[#9CA3AF]">Chantier prévu le {formatDateCourte(detail.dateChantier)}</p>
@@ -216,6 +228,9 @@ function FenetreEtape({
   const criteres = criteresAVerifier(transition);
   const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.statut !== "BROUILLON");
   const [motif, setMotif] = useState<MotifPerte | "">("");
+  const [concurrent, setConcurrent] = useState("");
+  const [prixConcurrent, setPrixConcurrent] = useState("");
+  const [commentairePerte, setCommentairePerte] = useState("");
   const [dateChantier, setDateChantier] = useState(detail.dateChantier ? jourParis(detail.dateChantier) : "");
   const [confirmations, setConfirmations] = useState<Record<CritereDeclaratif, boolean>>({
     BON_POUR_ACCORD: false,
@@ -229,7 +244,10 @@ function FenetreEtape({
   const declaratifs = CRITERES_DECLARATIFS.filter((critere) => criteres.includes(critere));
   const choixDevis = transition.vers === "SIGNE" && transition.nature === "SUIVANTE" && devis.length > 1;
 
+  const prixConcurrentLu = prixConcurrent.trim() ? lireNombre(prixConcurrent) : null;
+  const prixConcurrentInvalide = prixConcurrent.trim() !== "" && (prixConcurrentLu === null || prixConcurrentLu < 0);
   const complet =
+    !prixConcurrentInvalide &&
     (!demandeMotif || motif !== "") &&
     (!demandeDate || dateChantier !== "") &&
     declaratifs.every((critere) => confirmations[critere]);
@@ -245,6 +263,9 @@ function FenetreEtape({
     if (!complet) return;
     onValider({
       ...(demandeMotif && motif ? { motifPerte: motif } : {}),
+      ...(demandeMotif && concurrent.trim() ? { perteConcurrent: concurrent.trim() } : {}),
+      ...(demandeMotif && prixConcurrentLu !== null ? { perteMontantConcurrent: prixConcurrentLu } : {}),
+      ...(demandeMotif && commentairePerte.trim() ? { perteCommentaire: commentairePerte.trim() } : {}),
       ...(demandeDate ? { dateChantier } : {}),
       ...(declaratifs.length > 0 ? { confirmations: Object.fromEntries(declaratifs.map((c) => [c, true])) } : {}),
       ...(transition.vers === "SIGNE" && devisId ? { devisAccepteId: devisId } : {}),
@@ -304,6 +325,34 @@ function FenetreEtape({
               ))}
             </div>
           </fieldset>
+        ) : null}
+
+        {demandeMotif ? (
+          <div className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
+            <p className="text-[12px] text-[#6B7280]">Facultatif, mais précieux pour comprendre ce qui fait perdre.</p>
+            <Champ
+              libelle="Remporté par"
+              placeholder="Entreprise, cuisiniste, ou « le client le fait lui-même »"
+              maxLength={160}
+              value={concurrent}
+              onChange={(evenement) => setConcurrent(evenement.target.value)}
+            />
+            <Champ
+              libelle="Son prix (€)"
+              inputMode="decimal"
+              placeholder="Ex. 3 200"
+              value={prixConcurrent}
+              erreur={prixConcurrentInvalide ? "Montant invalide." : null}
+              onChange={(evenement) => setPrixConcurrent(evenement.target.value)}
+            />
+            <ZoneTexte
+              libelle="Ce que le client a dit"
+              rows={2}
+              maxLength={2000}
+              value={commentairePerte}
+              onChange={(evenement) => setCommentairePerte(evenement.target.value)}
+            />
+          </div>
         ) : null}
 
         {demandeDate ? (

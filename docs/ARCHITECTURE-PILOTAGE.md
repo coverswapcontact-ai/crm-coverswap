@@ -359,3 +359,20 @@ leads et dossiers restés sans client.
 - « Ouvrir un dossier » cherche d'abord parmi les clients, puis les leads et les
   prospects.
 
+## 7. Échecs et délais des dossiers
+
+- **Perte figée** : au passage en « Perdu », le motif (obligatoire, en un clic),
+  et en facultatif qui a remporté le marché, à quel prix et ce qu'a dit le
+  client ; le système fige aussi l'étape perdue (celle d'avant une éventuelle
+  pause) et notre dernier prix (dernier devis émis, sinon estimation). Colonnes
+  `perte*` du dossier pour les requêtes ; la reprise les retire, mais
+  l'événement de changement d'étape les garde pour toujours.
+- **Délais** (`src/lib/dossiers/delais.ts`, pur) : parcours des étapes lu dans
+  les événements, temps cumulé par étape (un retour ajoute un second passage),
+  délais clés (ouverture → signature, signature → chantier, facturation →
+  encaissement, bout en bout). Rien n'est stocké : tout se recalcule depuis
+  l'historique, qui fait foi.
+- **Écarts de prix** : estimation, premier et dernier devis émis, devis signé et
+  écart avec le premier devis (montant et pourcentage), facturé.
+- Panneau du dossier : section « Délais et prix ».
+

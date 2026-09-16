@@ -39,6 +39,7 @@ import {
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
+import { delaisCles, ecartsPrix, parcoursEtapes } from "./delais";
 
 /* ── Validation ─────────────────────────────────────────────────── */
 
@@ -198,6 +199,17 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     .map((evenement) => lireMetadataChangementEtape(evenement.metadata))
     .filter((metadata): metadata is MetadataChangementEtape => metadata !== null);
 
+  const passages = await prisma.dossierEvenement.findMany({
+    where: { dossierId, type: "CHANGEMENT_ETAPE" },
+    orderBy: { createdAt: "asc" },
+    select: { createdAt: true, metadata: true },
+  });
+  const parcours = parcoursEtapes(
+    passages
+      .map((passage) => ({ createdAt: passage.createdAt, vers: lireMetadataChangementEtape(passage.metadata)?.vers ?? "" }))
+      .filter((passage) => passage.vers)
+  );
+
   const photos: PhotoVue[] = lirePhotos(dossier.photos).map((chemin) => ({
     id: idPhoto(chemin),
     url: urlPhoto(dossier.id, chemin),
@@ -211,6 +223,20 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     clientEmail: dossier.clientEmail,
     clientTelephone: dossier.clientTelephone,
     motifPerte: dossier.motifPerte as MotifPerte | null,
+    perte:
+      dossier.etape === "PERDU"
+        ? {
+            le: dossier.perteLe?.toISOString() ?? null,
+            etape: dossier.perteEtape && estEtape(dossier.perteEtape) ? dossier.perteEtape : null,
+            concurrent: dossier.perteConcurrent,
+            montantConcurrent: dossier.perteMontantConcurrent,
+            montantPropose: dossier.perteMontantPropose,
+            commentaire: dossier.perteCommentaire,
+          }
+        : null,
+    parcours,
+    delais: delaisCles(parcours),
+    ecarts: ecartsPrix(dossier.documents, dossier.montantEstime),
     dateChantier: dossier.dateChantier?.toISOString() ?? null,
     origine: dossier.lead
       ? {

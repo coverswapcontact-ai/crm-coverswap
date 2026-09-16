@@ -7,6 +7,9 @@
 // VACUUM INTO produit une copie compacte et cohérente, dont l'intégrité est
 // vérifiée avant de rendre la main. Aucune sauvegarde n'est jamais effacée ici.
 //
+// Les commentaires turbopackIgnore empêchent Next de tracer tout le projet : ces
+// chemins ne sont connus qu'à l'exécution.
+//
 // Variables : DATABASE_URL (file:…), SAUVEGARDES_DIR (optionnel),
 //             TURSO_DATABASE_URL (si présente : base distante, pas de copie locale).
 
@@ -18,7 +21,7 @@ import path from "node:path";
 export function fichierDeLaBase(url = process.env.DATABASE_URL) {
   if (!url || !url.startsWith("file:")) return null;
   const cheminBrut = url.slice("file:".length).split("?")[0];
-  return path.isAbsolute(cheminBrut) ? cheminBrut : path.resolve("prisma", cheminBrut);
+  return path.isAbsolute(cheminBrut) ? cheminBrut : path.resolve(/*turbopackIgnore: true*/ process.cwd(), "prisma", cheminBrut);
 }
 
 /**
@@ -32,13 +35,13 @@ export async function sauvegarderBase({ raison = "manuelle", url = process.env.D
   }
   const fichier = fichierDeLaBase(url);
   if (!fichier) throw new Error("DATABASE_URL absente ou non SQLite : sauvegarde impossible");
-  if (!existsSync(fichier)) return { ignoree: `${fichier} n'existe pas encore` };
+  if (!existsSync(/*turbopackIgnore: true*/ fichier)) return { ignoree: `${fichier} n'existe pas encore` };
 
-  const dossier = process.env.SAUVEGARDES_DIR ?? path.join(path.dirname(fichier), "sauvegardes");
-  mkdirSync(dossier, { recursive: true });
+  const dossier = process.env.SAUVEGARDES_DIR ?? path.join(/*turbopackIgnore: true*/ path.dirname(/*turbopackIgnore: true*/ fichier), "sauvegardes");
+  mkdirSync(/*turbopackIgnore: true*/ dossier, { recursive: true });
   const horodatage = new Date().toISOString().replace(/[:.]/g, "-");
   const motif = raison.replace(/[^a-z0-9-]/gi, "-").slice(0, 60);
-  const cible = path.join(dossier, `${path.basename(fichier, path.extname(fichier))}-${motif}-${horodatage}.db`);
+  const cible = path.join(/*turbopackIgnore: true*/ dossier, `${path.basename(/*turbopackIgnore: true*/ fichier, path.extname(fichier))}-${motif}-${horodatage}.db`);
   const cibleUrl = cible.split(path.sep).join("/");
 
   const base = new PrismaClient({ datasources: { db: { url: `file:${fichier.split(path.sep).join("/")}` } } });
@@ -57,5 +60,5 @@ export async function sauvegarderBase({ raison = "manuelle", url = process.env.D
   } finally {
     await copie.$disconnect();
   }
-  return { fichier: cible, octets: statSync(cible).size };
+  return { fichier: cible, octets: statSync(/*turbopackIgnore: true*/ cible).size };
 }

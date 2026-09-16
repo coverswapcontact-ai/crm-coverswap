@@ -51,6 +51,7 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     prochaineActionDate: detail.prochaineActionDate,
     etapeAvantSortie: detail.etapeAvantSortie,
     aCompleter: detail.completude.length,
+    ouvertLe: detail.ouvertLe,
     createdAt: detail.createdAt,
     updatedAt: detail.updatedAt,
   };

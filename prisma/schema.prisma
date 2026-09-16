@@ -296,6 +296,7 @@ model Dossier {
   clientTelephone        String
   objet                  String // ex. "Recouvrement façades de cuisine"
   etape                  String             @default("QUALIFICATION") // EtapeDossier
+  ouvertLe               DateTime? // date réelle d'ouverture (dossier repris d'avant le CRM) ; null = createdAt
   montantEstime          Float?
   source                 String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE | INCONNUE
   motifPerte             String? // MotifPerte, demandé à l'entrée en PERDU (signalé s'il manque)
@@ -349,6 +350,7 @@ model DossierEvenement {
   direction    String // ENTRANT | SORTANT | INTERNE
   contenu      String
   metadata     String    @default("{}") // JSON libre selon le type (ex. { de, vers } pour un changement d'étape)
+  survenuLe    DateTime? // date réelle de l'événement quand elle diffère de sa saisie (corrigée, reprise) ; null = createdAt
   archiveLe    DateTime? // archivage : un mail rattaché au mauvais dossier en sort sans disparaître
   archiveMotif String?
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal

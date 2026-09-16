@@ -15,7 +15,7 @@ import {
   type TypeDocument,
   type TypeEvenement,
 } from "./constants";
-import { dateDepuisJour, estJourValide } from "./dates";
+import { dateDepuisJour, estJourValide, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
@@ -53,6 +53,13 @@ const texteLibre = (max: number, trop: string) =>
     .max(max, trop)
     .nullable()
     .transform((valeur) => valeur ?? "");
+
+/** Jour passé ou présent : une date réelle n'est jamais à venir. */
+const jourPasse = (message: string, avenir: string) =>
+  z
+    .string(message)
+    .refine(estJourValide, message)
+    .refine((jour) => jour <= jourParis(new Date()), avenir);
 
 const jourOuNull = (message: string) =>
   z
@@ -117,6 +124,8 @@ export const schemaModification = champsDossier
     dateChantier: jourOuNull("Date de chantier invalide."),
     /** Fiche client rattachée : ses documents et paiements la suivent. */
     clientId: z.string("Fiche client invalide.").min(1, "Fiche client invalide.").max(40, "Fiche client invalide."),
+    /** Date réelle d'ouverture (dossier commencé avant le CRM). */
+    ouvertLe: jourPasse("Date d'ouverture invalide.", "La date d'ouverture est à venir."),
   })
   .partial();
 export type EntreeModification = z.output<typeof schemaModification>;
@@ -162,6 +171,7 @@ function versResume(
     prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null,
     etapeAvantSortie: avantSortie,
     aCompleter,
+    ouvertLe: (dossier.ouvertLe ?? dossier.createdAt).toISOString(),
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
   };
@@ -307,14 +317,25 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     .filter((metadata): metadata is MetadataChangementEtape => metadata !== null);
 
   const passages = await prisma.dossierEvenement.findMany({
-    where: { dossierId, type: "CHANGEMENT_ETAPE" },
-    orderBy: { createdAt: "asc" },
-    select: { createdAt: true, metadata: true },
+    where: { dossierId, type: "CHANGEMENT_ETAPE", archiveLe: null },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, createdAt: true, survenuLe: true, metadata: true },
   });
   const parcours = parcoursEtapes(
-    passages
-      .map((passage) => ({ createdAt: passage.createdAt, vers: lireMetadataChangementEtape(passage.metadata)?.vers ?? "" }))
-      .filter((passage) => passage.vers)
+    passages.flatMap((passage) => {
+      const metadata = lireMetadataChangementEtape(passage.metadata);
+      if (!metadata) return [];
+      return [
+        {
+          createdAt: passage.createdAt,
+          survenuLe: passage.survenuLe,
+          vers: metadata.vers,
+          evenementId: passage.id,
+          ouverture: metadata.nature === "OUVERTURE",
+          dateInconnue: metadata.dateInconnue === true,
+        },
+      ];
+    })
   );
 
   const [paiements, completude] = await Promise.all([
@@ -369,14 +390,19 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       contenu: note.contenu,
       createdAt: note.createdAt.toISOString(),
     })),
-    evenements: dossier.evenements.map((evenement) => ({
-      id: evenement.id,
-      type: evenement.type as TypeEvenement,
-      direction: evenement.direction as DirectionEvenement,
-      contenu: evenement.contenu,
-      createdAt: evenement.createdAt.toISOString(),
-      messageId: messageDeLEvenement(evenement.metadata),
-    })),
+    // Du plus récent au plus ancien, à leur date réelle ; la date de saisie reste lisible.
+    evenements: dossier.evenements
+      .map((evenement) => ({
+        id: evenement.id,
+        type: evenement.type as TypeEvenement,
+        direction: evenement.direction as DirectionEvenement,
+        contenu: evenement.contenu,
+        createdAt: evenement.createdAt.toISOString(),
+        date: (evenement.survenuLe ?? evenement.createdAt).toISOString(),
+        saisiLe: evenement.survenuLe ? evenement.createdAt.toISOString() : null,
+        messageId: messageDeLEvenement(evenement.metadata),
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
     documents: dossier.documents.map((document) => ({
       id: document.id,
       type: document.type as TypeDocument,
@@ -528,7 +554,7 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
-  const { prochaineActionDate, dateChantier, clientId, ...champs } = entree;
+  const { prochaineActionDate, dateChantier, clientId, ouvertLe, ...champs } = entree;
   const data: Prisma.DossierUncheckedUpdateInput = { ...champs };
   if (prochaineActionDate !== undefined) {
     data.prochaineActionDate = prochaineActionDate ? dateDepuisJour(prochaineActionDate) : null;
@@ -536,6 +562,12 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   if (dateChantier !== undefined) data.dateChantier = dateChantier ? dateDepuisJour(dateChantier) : null;
 
   await prisma.$transaction(async (tx) => {
+    if (ouvertLe) {
+      // La date d'ouverture est celle de l'événement d'ouverture : les deux restent d'accord.
+      data.ouvertLe = dateDepuisJour(ouvertLe);
+      const ouverture = await evenementOuverture(tx, dossierId);
+      if (ouverture) await tx.dossierEvenement.update({ where: { id: ouverture.id }, data: { survenuLe: dateDepuisJour(ouvertLe) } });
+    }
     if (clientId !== undefined && clientId !== dossier.clientId) {
       const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, nom: true, archiveLe: true } });
       if (!client || client.archiveLe) throw new ErreurMetier("Fiche client introuvable ou archivée.", 404);
@@ -556,6 +588,58 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
       });
     }
     await tx.dossier.update({ where: { id: dossierId }, data });
+  });
+}
+
+/* ── Dates réelles ──────────────────────────────────────────────── */
+
+async function evenementOuverture(tx: Transaction, dossierId: string) {
+  const changements = await tx.dossierEvenement.findMany({
+    where: { dossierId, type: "CHANGEMENT_ETAPE" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, metadata: true },
+  });
+  return changements.find((changement) => lireMetadataChangementEtape(changement.metadata)?.nature === "OUVERTURE") ?? null;
+}
+
+export const schemaDateEvenement = z.object({
+  survenuLe: jourPasse("Date invalide.", "La date est à venir."),
+});
+
+/**
+ * Date réelle d'un passage d'étape : « signé en juillet » plutôt que le jour
+ * de la saisie. La date de saisie reste sur l'événement, l'ancienne date au
+ * journal ; une date « inconnue » (reprise) devient connue. Corriger
+ * l'ouverture corrige aussi la date d'ouverture du dossier, une perte sa date
+ * de perte.
+ */
+export async function modifierDateEvenement(dossierId: string, evenementId: string, entree: z.output<typeof schemaDateEvenement>): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const evenement = await tx.dossierEvenement.findFirst({ where: { id: evenementId, dossierId } });
+    if (!evenement) throw new ErreurMetier("Événement introuvable dans ce dossier.", 404);
+    const metadata = evenement.type === "CHANGEMENT_ETAPE" ? lireMetadataChangementEtape(evenement.metadata) : null;
+    if (!metadata) throw new ErreurMetier("Seule la date d'un passage d'étape se corrige ici.", 400);
+
+    const date = dateDepuisJour(entree.survenuLe);
+    const sansInconnue = { ...metadata };
+    delete sansInconnue.dateInconnue;
+    await tx.dossierEvenement.update({
+      where: { id: evenementId },
+      data: {
+        survenuLe: date,
+        ...(metadata.dateInconnue ? { metadata: JSON.stringify(sansInconnue) } : {}),
+      },
+    });
+    if (metadata.nature === "OUVERTURE") await tx.dossier.update({ where: { id: dossierId }, data: { ouvertLe: date } });
+    if (metadata.vers === "PERDU") {
+      const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+      const dernierePerte = (await tx.dossierEvenement.findMany({
+        where: { dossierId, type: "CHANGEMENT_ETAPE" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { id: true, metadata: true },
+      })).find((changement) => lireMetadataChangementEtape(changement.metadata)?.vers === "PERDU");
+      if (dossier?.etape === "PERDU" && dernierePerte?.id === evenementId) await tx.dossier.update({ where: { id: dossierId }, data: { perteLe: date } });
+    }
   });
 }
 

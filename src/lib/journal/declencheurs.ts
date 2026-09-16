@@ -124,10 +124,16 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
   [
     "Encaissement",
     {
-      modifiables: ["clientId", "note", "statut", "updatedAt", "ecriture"],
-      completables: ["dossierId", "moyen", "reference", "crediteLe", "finLe", "motifFin"],
-      message: "Un encaissement ne se modifie pas : l'annuler (avec son motif) puis enregistrer le bon.",
+      // Montant, dates, moyen, référence et payeur se corrigent (le journal garde chaque valeur) ;
+      // l'origine et la clé de reprise ne changent pas.
+      modifiables: ["clientId", "note", "statut", "updatedAt", "ecriture", "payeur", "montant", "moyen", "reference", "recuLe", "crediteLe"],
+      completables: ["dossierId", "finLe", "motifFin"],
+      message: "Un encaissement garde son origine : seuls son montant, ses dates, son moyen, sa référence, son payeur et sa note se corrigent.",
       interdits: [
+        {
+          condition: `OLD."statut" <> 'VALIDE' AND (NEW."montant" IS NOT OLD."montant" OR NEW."recuLe" IS NOT OLD."recuLe")`,
+          message: "Un paiement annulé ou rejeté ne se corrige plus : enregistrer le bon paiement.",
+        },
         {
           condition: `OLD."statut" <> 'VALIDE' AND NEW."statut" IS NOT OLD."statut"`,
           message: "Un encaissement annulé ou rejeté le reste : enregistrer un nouvel encaissement.",

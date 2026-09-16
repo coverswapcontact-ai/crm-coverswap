@@ -561,21 +561,25 @@ c'est eux que comptent le livre des recettes, l'URSSAF et les seuils.
 - Un encaissement se découpe sur plusieurs pièces, une facture se règle en
   plusieurs encaissements (acompte, puis solde).
 
-### Rien ne se supprime, rien ne se réécrit
+### Rien ne se supprime, tout se trace
 
 La base refuse (déclencheurs) :
 
-- de modifier montant, date de réception, payeur d'un encaissement, ou le
-  montant et la pièce d'une affectation ;
+- de changer l'origine ou la clé de reprise d'un encaissement, ou le montant et
+  la pièce d'une affectation ;
+- de corriger le montant ou la date d'un encaissement annulé ou rejeté ;
 - de rouvrir un encaissement annulé ou rejeté, ou une affectation qui a cessé
   de compter ;
 - d'annuler ou de rejeter sans date ni motif.
 
-Ce qui se complète une fois : le moyen (inconnu à la reprise), la référence,
-la date de crédit, le dossier. Une **erreur de saisie s'annule** avec son motif
-(le paiement reste visible, barré) ; un **chèque impayé se rejette**, daté et
-motivé. Dans les deux cas, ses affectations passent `LIBEREE` : ce qu'il
-réglait redevient dû.
+Un **paiement se corrige** (montant, date de réception, moyen, référence,
+payeur, date de crédit, note : `modifierEncaissement`), le journal gardant
+chaque ancienne valeur et le dossier un événement « Paiement corrigé ». Un
+montant corrigé libère ses affectations et les refait sur les mêmes pièces,
+jusqu'à ce qui y reste dû. Une **erreur de saisie peut aussi s'annuler** avec
+son motif (le paiement reste visible, barré) ; un **chèque impayé se rejette**,
+daté et motivé. Dans ces deux cas, ses affectations passent `LIBEREE` : ce
+qu'il réglait redevient dû. Le dossier se complète une fois.
 
 ### Les étapes suivent l'argent
 
@@ -639,12 +643,15 @@ justificatives (devis et factures réglés).
   `DATE_RECETTE_CHEQUE` en vigueur à sa réception (à la réception, ou au crédit
   sur le compte). Tant que la règle n'est pas choisie, aucun chiffre qui en
   dépend ne s'affiche : rien n'est supposé.
-- **Contre-passation, jamais de rature** : un encaissement déjà compté puis
+- **Contre-passation pour une annulation** : un encaissement déjà compté puis
   annulé ou rejeté garde sa ligne et reçoit une ligne négative à la date de
-  l'annulation ou du rejet. Une période passée, peut-être déjà déclarée, n'est
-  jamais réécrite : la correction tombe dans la période où elle a lieu. C'est
-  la pratique comptable ; le prix est un couple +X / −X visible pour une coquille
-  corrigée le jour même.
+  l'annulation ou du rejet ; la période passée garde son montant.
+- **Correction à la date réelle** : un paiement saisi en retard (reprise
+  d'avant le CRM) ou corrigé (date, montant) compte à sa date réelle, donc
+  peut changer une période passée. La fenêtre de correction le dit (« le livre
+  de juillet change : si ce mois est déjà déclaré, la déclaration est à
+  corriger ») ; les mois figés de /synthese gardent ce qui était figé et
+  montrent l'écart. Le journal garde les anciennes valeurs.
 - Export CSV pour le comptable (`/api/finances/livre?annee=…`) : points-virgules,
   montants à la française, UTF-8 avec BOM pour Excel.
 
@@ -1235,3 +1242,28 @@ imputations) : le même calcul partout.
 - Cartes du kanban et liste : « n à compléter ».
 - /synthese, qualité des données : le nombre de dossiers concernés par point,
   à ce jour, archivés exclus (remplace « Dossiers sans client rattaché »).
+
+### Dates réelles (`ouvertLe`, `survenuLe`)
+
+Un dossier signé en juillet porte juillet, pas le jour de sa saisie.
+
+- **Colonnes** : `Dossier.ouvertLe` (ouverture réelle) et
+  `DossierEvenement.survenuLe` (date réelle d'un événement) ; nulles, la date
+  de saisie (`createdAt`) vaut date réelle. La saisie reste donc toujours
+  lisible (« saisi le … ») et chaque correction est au journal. Migration
+  `20260918090000_dates_reelles` : deux `ADD COLUMN` nullables.
+- **Au passage** : la fenêtre de changement d'étape a une « Date du passage »
+  (aujourd'hui par défaut, jamais à venir) ; une perte datée dans le passé
+  prend cette date pour `perteLe`.
+- **Après coup** : chaque passage d'étape se redate depuis « Délais et prix »
+  (`PATCH /api/dossiers/[id]/evenements/[evenementId]`). Redater l'ouverture
+  redate le dossier (`ouvertLe`) ; redater la dernière perte d'un dossier perdu
+  redate `perteLe` ; une date « inconnue » (reprise) devient connue. Une date
+  hors de l'ordre du parcours est signalée, puis le parcours se remet dans
+  l'ordre des dates (à date égale, l'ordre de saisie).
+- **Lecteurs** : parcours et délais du dossier (`delais.ts`), historique (à la
+  date réelle), ancienneté de la liste, synthèse (cohorte au mois de
+  l'ouverture réelle, signatures et pertes au mois de leur date réelle,
+  délais), alerte « moins de nouveaux dossiers ». Une date inconnue compte
+  pour l'étape atteinte, jamais pour une période ni un délai.
+- **Paiements** : voir section 10, « Rien ne se supprime, tout se trace ».

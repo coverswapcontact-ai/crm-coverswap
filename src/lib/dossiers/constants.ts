@@ -220,6 +220,7 @@ export const TYPES_EVENEMENT = [
   "ENCAISSEMENT_CREDITE",
   "ENCAISSEMENT_REJETE",
   "ENCAISSEMENT_ANNULE",
+  "ENCAISSEMENT_CORRIGE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
 ] as const;
@@ -242,6 +243,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ENCAISSEMENT_CREDITE: "Chèque crédité",
   ENCAISSEMENT_REJETE: "Chèque rejeté",
   ENCAISSEMENT_ANNULE: "Paiement annulé",
+  ENCAISSEMENT_CORRIGE: "Paiement corrigé",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
 };

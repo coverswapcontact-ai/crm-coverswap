@@ -33,6 +33,8 @@ export type DossierResume = {
   etapeAvantSortie: EtapeActive | null;
   /** Nombre de points à compléter (completude.ts). */
   aCompleter: number;
+  /** Date réelle d'ouverture (reprise d'un dossier commencé avant le CRM), à défaut sa création. */
+  ouvertLe: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,6 +49,10 @@ export type EvenementVue = {
   direction: DirectionEvenement;
   contenu: string;
   createdAt: string;
+  /** Date réelle de l'événement (corrigée ou reprise), à défaut sa saisie. */
+  date: string;
+  /** Date de saisie, quand la date réelle en diffère. */
+  saisiLe: string | null;
   /** Mail rangé dans le dossier : lisible depuis l'historique. */
   messageId: string | null;
 };

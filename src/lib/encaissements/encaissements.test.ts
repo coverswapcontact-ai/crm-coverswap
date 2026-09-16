@@ -146,17 +146,18 @@ describe("du devis signé au dossier encaissé", () => {
     await assert.rejects(() => service.rejeterEncaissement(chequeAcompteId, { le: aujourdhui, motif: "AUTRE", precision: "x" }), refus(/déjà rejeté/));
   });
 
-  test("la base refuse de rouvrir, de modifier ou de supprimer un encaissement", async () => {
+  test("la base refuse de rouvrir, de corriger un paiement rejeté, de changer son origine ou de le supprimer", async () => {
     // En SQL brut, le message du déclencheur qui refuse est transmis tel quel.
     const sql = (requete: string, ...valeurs: unknown[]) => () => prisma.$executeRawUnsafe(requete, ...valeurs);
     await assert.rejects(sql(`UPDATE "Encaissement" SET "statut" = 'VALIDE' WHERE "id" = ?`, chequeAcompteId), refusBase(/^Un encaissement annulé ou rejeté le reste/));
-    await assert.rejects(sql(`UPDATE "Encaissement" SET "montant" = 1 WHERE "id" = ?`, chequeAcompteId), refusBase(/^Un encaissement ne se modifie pas/));
+    await assert.rejects(sql(`UPDATE "Encaissement" SET "montant" = 1 WHERE "id" = ?`, chequeAcompteId), refusBase(/^Un paiement annulé ou rejeté ne se corrige plus/));
+    await assert.rejects(sql(`UPDATE "Encaissement" SET "origine" = 'REPRISE_ANCIEN_ECRAN' WHERE "id" = ?`, chequeAcompteId), refusBase(/^Un encaissement garde son origine/));
     const [affectation] = await prisma.affectationEncaissement.findMany({ where: { encaissementId: chequeAcompteId, statut: "LIBEREE" } });
     await assert.rejects(sql(`UPDATE "AffectationEncaissement" SET "statut" = 'ACTIVE' WHERE "id" = ?`, affectation.id), refusBase(/^Une affectation qui a cessé de compter ne revient pas/));
     const valide = await prisma.encaissement.findFirstOrThrow({ where: { dossierId, statut: "VALIDE" } });
     await assert.rejects(sql(`UPDATE "Encaissement" SET "statut" = 'ANNULE' WHERE "id" = ?`, valide.id), refusBase(/^Un rejet ou une annulation d'encaissement se date et se motive/));
     // Par la couche Prisma : refusé aussi, avec les règles du modèle.
-    await assert.rejects(() => prisma.encaissement.update({ where: { id: chequeAcompteId }, data: { montant: 1 } }), refusBase(/ne se modifie pas/));
+    await assert.rejects(() => prisma.encaissement.update({ where: { id: chequeAcompteId }, data: { montant: 1 } }), refusBase(/ne se corrige plus/));
     await assert.rejects(() => prisma.encaissement.delete({ where: { id: chequeAcompteId } }), (erreur: unknown) => erreur instanceof Error && erreur.name === "SuppressionInterdite");
   });
 
@@ -251,8 +252,9 @@ describe("reprise de l'ancien écran", () => {
     const affectations = await prisma.affectationEncaissement.findMany({ where: { encaissementId: repris.id }, include: { numeroDocument: true } });
     assert.equal(affectations[0].numeroDocument.numero, "FACT-2026-0101");
     assert.equal(affectations[0].numeroDocument.origine, "ANCIEN_CRM");
-    // Le moyen, inconnu à la reprise, se complète une fois.
+    // Le moyen, inconnu à la reprise, se complète puis se corrige ; l'origine de la reprise ne change pas.
     await prisma.encaissement.update({ where: { id: repris.id }, data: { moyen: "VIREMENT" } });
-    await assert.rejects(() => prisma.encaissement.update({ where: { id: repris.id }, data: { moyen: "CHEQUE" } }), refusBase(/ne se modifie pas/));
+    await prisma.encaissement.update({ where: { id: repris.id }, data: { moyen: "CHEQUE" } });
+    await assert.rejects(() => prisma.encaissement.update({ where: { id: repris.id }, data: { cleReprise: "autre" } }), refusBase(/garde son origine/));
   });
 });

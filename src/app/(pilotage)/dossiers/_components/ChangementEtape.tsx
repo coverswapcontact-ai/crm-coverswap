@@ -45,6 +45,7 @@ type DonneesEtape = {
   acompte?: PaiementLu;
   sansAcompte?: { motif: string; precision?: string };
   solde?: PaiementLu;
+  survenuLe?: string;
 };
 
 // Critères qui se renseignent dans la fenêtre de changement d'étape
@@ -289,6 +290,8 @@ function FenetreEtape({
   const [precisionSansAcompte, setPrecisionSansAcompte] = useState("");
   const [soldeRecu, setSoldeRecu] = useState(false);
   const [solde, setSolde] = useState<SaisiePaiement>(() => saisiePaiement(detail.paiements.resteDu));
+  const aujourdhui = jourParis(new Date());
+  const [survenuLe, setSurvenuLe] = useState(aujourdhui);
 
   const demandeMotif = criteres.includes("MOTIF_PERTE");
   const demandeDate = criteres.includes("DATE_CHANTIER");
@@ -306,7 +309,9 @@ function FenetreEtape({
     prixConcurrentInvalide ||
     (demandeAcompte && modeAcompte === "RECU" && acompteLu === null) ||
     (demandeAcompte && modeAcompte === "SANS" && (motifSansAcompte === null || (motifSansAcompte === "AUTRE" && precisionSansAcompte.trim().length < 3))) ||
-    (demandeSolde && soldeRecu && soldeLu === null);
+    (demandeSolde && soldeRecu && soldeLu === null) ||
+    !survenuLe ||
+    survenuLe > aujourdhui;
 
   const donnees: DonneesEtape = {
     ...(demandeMotif && motif ? { motifPerte: motif } : {}),
@@ -323,6 +328,7 @@ function FenetreEtape({
       ? { sansAcompte: { motif: motifSansAcompte, precision: precisionSansAcompte.trim() || undefined } }
       : {}),
     ...(demandeSolde && soldeRecu && soldeLu ? { solde: soldeLu } : {}),
+    ...(survenuLe && survenuLe !== aujourdhui ? { survenuLe } : {}),
   };
   const avertissements = avertissementsTransition(faitsDepuisDetail(detail), transition.vers, donnees as DonneesTransition, detail.etapeAvantSortie);
 
@@ -364,6 +370,16 @@ function FenetreEtape({
     >
       <div className="space-y-3">
         <ListeAvertissements avertissements={avertissements} />
+
+        <Champ
+          libelle="Date du passage"
+          type="date"
+          max={aujourdhui}
+          value={survenuLe}
+          erreur={survenuLe > aujourdhui ? "La date est à venir." : null}
+          aide={survenuLe === aujourdhui ? "Aujourd'hui ; une date passée pour ce qui est arrivé avant." : "Date réelle : la saisie d'aujourd'hui reste au journal."}
+          onChange={(evenement) => setSurvenuLe(evenement.target.value)}
+        />
 
         {demandeMotif ? (
           <fieldset>

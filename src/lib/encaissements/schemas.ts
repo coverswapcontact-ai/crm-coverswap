@@ -39,6 +39,31 @@ export const schemaEncaissement = z.object({
 
 export const schemaCredit = z.object({ crediteLe: jour("Date de crédit invalide.") });
 
+/**
+ * Correction d'un paiement enregistré : ce qui est fourni remplace l'ancienne
+ * valeur (le journal la garde). Une date reste passée ; un chèque se crédite
+ * après sa réception.
+ */
+export const schemaCorrectionEncaissement = z
+  .object({
+    montant: z.number("Montant invalide.").gt(0, "Le montant doit être supérieur à zéro.").max(1_000_000, "Montant invalide.").optional(),
+    recuLe: jour("Date de réception invalide.")
+      .refine((valeur) => valeur <= jourParis(new Date()), "La date de réception est à venir.")
+      .refine((valeur) => valeur >= "2020-01-01", "Date de réception invalide.")
+      .optional(),
+    moyen: z.enum(MOYENS_PAIEMENT, "Moyen de paiement invalide.").nullable().optional(),
+    reference: z.string().trim().max(120, "Référence trop longue : 120 caractères maximum.").nullable().optional(),
+    crediteLe: jour("Date de crédit invalide.")
+      .refine((valeur) => valeur <= jourParis(new Date()), "La date de crédit est à venir.")
+      .nullable()
+      .optional(),
+    payeur: z.string().trim().min(1, "Indique le nom du payeur.").max(160, "Nom du payeur trop long.").optional(),
+    note: z.string().trim().max(500, "Note trop longue : 500 caractères maximum.").nullable().optional(),
+  })
+  .refine((entree) => Object.values(entree).some((valeur) => valeur !== undefined), { message: "Rien à corriger." });
+
+export type CorrectionEncaissement = z.output<typeof schemaCorrectionEncaissement>;
+
 const motifAvecPrecision = (liste: readonly { code: string }[], message: string) =>
   z
     .object({

@@ -12,7 +12,7 @@ import {
   MOTIFS_PERTE,
   type EtapeDossier,
 } from "./constants";
-import { dateDepuisJour, estJourValide } from "./dates";
+import { dateDepuisJour, estJourValide, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import {
   CRITERES_DECLARATIFS,
@@ -101,6 +101,8 @@ type Application = ChangementEtape & {
  */
 export async function appliquerChangementEtape(tx: Transaction, application: Application): Promise<ChangementEtape> {
   const { dossierId, de, vers, nature, donnees = {}, documentId, avertissements = [] } = application;
+  // Passage daté dans le passé (dossier signé en juillet, saisi en septembre) : la date réelle est gardée à part.
+  const survenuLe = donnees.survenuLe && donnees.survenuLe !== jourParis(new Date()) ? dateDepuisJour(donnees.survenuLe) : null;
 
   const data: Prisma.DossierUpdateManyMutationInput = { etape: vers };
   let perte: Pick<MetadataChangementEtape, "perteEtape" | "perteMontantPropose"> = {};
@@ -123,7 +125,7 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
     };
     Object.assign(data, {
       motifPerte: donnees.motifPerte ?? null,
-      perteLe: new Date(),
+      perteLe: survenuLe ?? new Date(),
       perteEtape: perte.perteEtape ?? null,
       perteConcurrent: donnees.perteConcurrent?.trim() || null,
       perteMontantConcurrent: donnees.perteMontantConcurrent ?? null,
@@ -198,6 +200,7 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
       direction: "INTERNE",
       contenu,
       metadata: JSON.stringify(metadata),
+      survenuLe,
     },
   });
 
@@ -229,6 +232,12 @@ export const schemaChangementEtape = z.object({
   sansAcompte: schemaSansAcompte.optional(),
   /** Encaissement : le paiement du solde, enregistré en même temps. */
   solde: schemaPaiement.optional(),
+  /** Jour réel du passage, s'il a eu lieu avant aujourd'hui. */
+  survenuLe: z
+    .string("Date du passage invalide.")
+    .refine(estJourValide, "Date du passage invalide.")
+    .refine((jour) => jour <= jourParis(new Date()), "La date du passage est à venir.")
+    .optional(),
 });
 
 export type EntreeChangementEtape = DonneesTransition & {

@@ -17,8 +17,8 @@ export async function PATCH(requete: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params;
     const modification = analyser(schemaModificationClient, await lireCorpsJson(requete));
-    await modifierClient(id, modification);
-    return NextResponse.json({ client: await chargerFiche(id) });
+    const avertissements = await modifierClient(id, modification);
+    return NextResponse.json({ client: await chargerFiche(id), avertissements });
   } catch (erreur) {
     return reponseErreur(erreur, "PATCH /api/clients/[id]");
   }

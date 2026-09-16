@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { preparerBaseEssai } from "@/test/base-essai";
 import { definirTransportAnnuaireEssai, lireReponseAnnuaire, rechercherEntreprises, termeAnnuaire } from "./annuaire";
 import {
+  avertissementSiret,
   cleNom,
   erreurSaisieSiret,
   formaterSiret,
@@ -63,7 +65,7 @@ describe("normalisation", () => {
     assert.deepEqual(sourceDepuisLead("REFERENCE"), { source: "RECOMMANDATION" });
   });
 
-  test("SIRET : 14 chiffres et clé de contrôle, exception de La Poste comprise", () => {
+  test("SIRET : 14 chiffres exigés, clé de contrôle signalée (exception de La Poste comprise)", () => {
     assert.equal(siretValide("912 345 678 00011"), true);
     assert.equal(siretValide("91234567800012"), false, "un chiffre faux");
     assert.equal(siretValide("9123456780001"), false, "13 chiffres");
@@ -73,7 +75,10 @@ describe("normalisation", () => {
     assert.equal(erreurSaisieSiret("912 345", false), null, "rien tant que la saisie n'est pas finie");
     assert.equal(erreurSaisieSiret("912 345", true), "14 chiffres attendus.");
     assert.equal(erreurSaisieSiret("912 345 678 0001A", false), "14 chiffres attendus.");
-    assert.equal(erreurSaisieSiret("912 345 678 00012", false), "Un chiffre est faux (clé de contrôle).");
+    assert.equal(erreurSaisieSiret("912 345 678 00012", false), null, "une clé fausse n'empêche pas d'enregistrer");
+    assert.match(avertissementSiret("912 345 678 00012") ?? "", /Clé de contrôle fausse/);
+    assert.equal(avertissementSiret("912 345 678 00011"), null);
+    assert.equal(avertissementSiret("912 345"), null, "le format se dit par l'erreur, pas par l'avertissement");
     assert.equal(erreurSaisieSiret("", true), null);
   });
 });
@@ -447,7 +452,7 @@ describe("nouveaux contacts", () => {
     );
   });
 
-  test("client pro : l'entité sans prénom ni nom, SIRET contrôlé et unique sauf à forcer", async () => {
+  test("client pro : l'entité sans prénom ni nom, SIRET à la clé fausse signalé, unique sauf à forcer", async () => {
     const entreprise = {
       categorie: "PROFESSIONNEL" as const,
       prenom: "Marie",
@@ -466,7 +471,8 @@ describe("nouveaux contacts", () => {
       recommandeParTexte: null,
       notes: null,
     };
-    const id = await avecActeur(LUCAS, () => fiches.creerClientManuel(entreprise));
+    const { id, avertissements } = await avecActeur(LUCAS, () => fiches.creerClientManuel(entreprise));
+    assert.deepEqual(avertissements, []);
     const cree = await prisma.client.findUniqueOrThrow({ where: { id } });
     assert.equal(cree.nom, "SARL Les Flots Bleus");
     assert.equal(cree.prenom, null, "un client pro n'a pas de prénom");
@@ -474,15 +480,25 @@ describe("nouveaux contacts", () => {
     assert.equal(cree.siret, "91234567800011");
 
     await assert.rejects(avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: null })), /raison sociale/);
-    await assert.rejects(avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, siret: "91234567800012" })), /clé de contrôle/);
+    const cleFausse = await avecActeur(LUCAS, () =>
+      fiches.creerClientManuel(fiches.schemaCreationClient.parse({ ...entreprise, raisonSociale: "Atelier Clé Fausse", siret: "912 345 678 00012", source: null }))
+    );
+    assert.deepEqual(cleFausse.avertissements, [
+      "Clé de contrôle fausse : un chiffre est sans doute mal saisi. Le SIRET est gardé tel quel.",
+      "Source non renseignée : elle manquera aux statistiques d'acquisition.",
+    ]);
+    const gardee = await prisma.client.findUniqueOrThrow({ where: { id: cleFausse.id } });
+    assert.equal(gardee.siret, "91234567800012");
+    assert.equal(gardee.source, "INCONNUE");
+    assert.throws(() => fiches.schemaCreationClient.parse({ ...entreprise, siret: "912 345" }), /14 chiffres/);
     await assert.rejects(
       avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: "Les Flots Bleus" })),
       (erreur: unknown) => erreur instanceof ErreurMetier && erreur.status === 409 && /déjà ce SIRET/.test(erreur.message) && erreur.details?.clientExistantId === id
     );
     const forcee = await avecActeur(LUCAS, () => fiches.creerClientManuel({ ...entreprise, raisonSociale: "Les Flots Bleus", forcer: true }));
-    assert.notEqual(forcee, id);
+    assert.notEqual(forcee.id, id);
 
-    const particulier = await avecActeur(LUCAS, () =>
+    const { id: particulier } = await avecActeur(LUCAS, () =>
       fiches.creerClientManuel({ ...entreprise, categorie: "PARTICULIER", siret: "98765432100015", telephone: "07 11 22 33 44" })
     );
     const personne = await prisma.client.findUniqueOrThrow({ where: { id: particulier } });
@@ -491,17 +507,20 @@ describe("nouveaux contacts", () => {
     assert.equal(personne.siret, null);
   });
 
-  test("modifier une fiche : l'entité ne perd pas son nom, un SIRET nouveau est contrôlé, une fiche ancienne reste modifiable", async () => {
+  test("modifier une fiche : l'entité ne perd pas son nom, un SIRET nouveau à la clé fausse est signalé, une fiche ancienne reste modifiable", async () => {
     const pro = await prisma.client.findFirstOrThrow({ where: { raisonSociale: "SARL Les Flots Bleus" } });
     await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { raisonSociale: null })), /raison sociale/);
-    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "98765432100016" })), /clé de contrôle/);
+    assert.deepEqual(await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "98765432100016" })), [
+      "Clé de contrôle fausse : un chiffre est sans doute mal saisi. Le SIRET est gardé tel quel.",
+    ]);
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: pro.id } })).siret, "98765432100016");
     await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { categorie: "PARTICULIER", raisonSociale: null, siret: null })), /prénom ou un nom/);
     await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "98765432100015", notes: "Facturer au siège" }));
     assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: pro.id } })).siret, "98765432100015");
 
     // Un SIRET enregistré avant le contrôle ne bloque pas la fiche.
     await avecActeur(LUCAS, () => prisma.client.update({ where: { id: pro.id }, data: { siret: "12345678901234" } }));
-    await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "12345678901234", sourceDetail: "Salon de l'hôtellerie" }));
+    assert.deepEqual(await avecActeur(LUCAS, () => fiches.modifierClient(pro.id, { siret: "12345678901234", sourceDetail: "Salon de l'hôtellerie" })), [], "rien de neuf à signaler");
 
     // Un particulier qui devient pro doit recevoir sa raison sociale.
     const personne = await prisma.client.findFirstOrThrow({ where: { nom: "Marie Martin" } });
@@ -520,8 +539,101 @@ describe("nouveaux contacts", () => {
     assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: formulaire.id } })).nom, "Durand Agencement");
   });
 
-  test("un client avec un dossier en cours ne s'archive pas", async () => {
-    const avecDossier = await prisma.client.findFirstOrThrow({ where: { dossiers: { some: { etape: "QUALIFICATION" } } } });
-    await assert.rejects(avecActeur(LUCAS, () => fiches.archiverClient(avecDossier.id, "Test")), /dossiers en cours/);
+  test("rien d'obligatoire au-delà du nom : fiche créée sans coordonnée ni source, code postal étranger accepté", async () => {
+    const vide = {
+      categorie: "PARTICULIER",
+      prenom: null,
+      nomFamille: "Coquille",
+      raisonSociale: null,
+      siret: null,
+      adresse: null,
+      codePostal: "B-1050",
+      ville: "Ixelles",
+      source: null,
+      sourceDetail: null,
+      campagne: null,
+      publicite: null,
+      formulaire: null,
+      recommandeParId: null,
+      recommandeParTexte: null,
+      notes: null,
+    };
+    const { id, avertissements } = await avecActeur(LUCAS, () => fiches.creerClientManuel(fiches.schemaCreationClient.parse(vide)));
+    assert.deepEqual(avertissements, ["Source non renseignée : elle manquera aux statistiques d'acquisition."]);
+    const fiche = await prisma.client.findUniqueOrThrow({ where: { id }, include: { emails: true, telephones: true } });
+    assert.equal(fiche.nom, "Coquille");
+    assert.equal(fiche.codePostal, "B-1050");
+    assert.equal(fiche.emails.length + fiche.telephones.length, 0);
+    await assert.rejects(
+      avecActeur(LUCAS, () => fiches.creerClientManuel(fiches.schemaCreationClient.parse({ ...vide, nomFamille: null }))),
+      /prénom ou un nom/
+    );
+  });
+
+  test("une coordonnée mal saisie se corrige sur place, le journal garde l'ancienne valeur ; une fiche fusionnée reste figée", async () => {
+    const { id } = await avecActeur(LUCAS, () =>
+      fiches.creerClientManuel(
+        fiches.schemaCreationClient.parse({
+          categorie: "PARTICULIER",
+          prenom: "Jeanne",
+          nomFamille: "Faute",
+          raisonSociale: null,
+          siret: null,
+          adresse: null,
+          codePostal: null,
+          ville: null,
+          source: "BOUCHE_A_OREILLE",
+          sourceDetail: null,
+          campagne: null,
+          publicite: null,
+          formulaire: null,
+          recommandeParId: null,
+          recommandeParTexte: null,
+          notes: null,
+          telephone: "06 99 88 77 66",
+          email: "jeane@exemple.fr",
+        })
+      )
+    );
+    const telephone = await prisma.clientTelephone.findFirstOrThrow({ where: { clientId: id } });
+    await avecActeur(LUCAS, () => fiches.modifierCoordonnee(id, "telephone", telephone.id, { valeur: "06 99 88 77 65", libelle: "perso" }));
+    const corrige = await prisma.clientTelephone.findUniqueOrThrow({ where: { id: telephone.id } });
+    assert.equal(corrige.numero, "+33699887765");
+    assert.equal(corrige.saisi, "06 99 88 77 65");
+    assert.equal(corrige.libelle, "perso");
+    assert.equal(corrige.principal, true, "la coordonnée corrigée garde son rang");
+    const journal = await prisma.$queryRawUnsafe<{ avant: string | null; apres: string }[]>(
+      `SELECT "avant", "apres" FROM "JournalModification" WHERE "modele" = 'ClientTelephone' AND "enregistrementId" = ? ORDER BY "horodatage", rowid`,
+      telephone.id
+    );
+    assert.ok(journal.some((ligne) => ligne.avant?.includes("+33699887766") && ligne.apres.includes("+33699887765")), "l'ancienne valeur reste au journal");
+
+    const email = await prisma.clientEmail.findFirstOrThrow({ where: { clientId: id } });
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierCoordonnee(id, "email", email.id, { valeur: "jeanne@" })), /illisible/);
+    await avecActeur(LUCAS, () => fiches.ajouterCoordonnee(id, "email", "jeanne.pro@exemple.fr", null));
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierCoordonnee(id, "email", email.id, { valeur: "Jeanne.Pro@exemple.fr" })), /déjà sur la fiche/);
+    await avecActeur(LUCAS, () => fiches.modifierCoordonnee(id, "email", email.id, { valeur: " Jeanne@Exemple.fr " }));
+    assert.equal((await prisma.clientEmail.findUniqueOrThrow({ where: { id: email.id } })).adresse, "jeanne@exemple.fr");
+
+    const absorbee = await prisma.client.findFirstOrThrow({ where: { ...AVEC_ARCHIVES, fusionneDansId: { not: null } } });
+    await assert.rejects(avecActeur(LUCAS, () => fiches.modifierClient(absorbee.id, { notes: "Trop tard" })), /fiche conservée qui se modifie/);
+  });
+
+  test("un client avec un dossier en cours s'archive, c'est signalé ; la fiche archivée reste modifiable", async () => {
+    const avecDossier = await prisma.client.findFirstOrThrow({
+      where: { archiveLe: null, fusionneDansId: null, dossiers: { some: { etape: "QUALIFICATION", archiveLe: null } } },
+    });
+    const avertissements = await avecActeur(LUCAS, () => fiches.archiverClient(avecDossier.id, "Déménagement"));
+    assert.equal(avertissements.length, 1);
+    assert.match(avertissements[0], /^\d+ dossiers? en cours restent? ouverts? dans Dossiers\.$/);
+    assert.ok((await prisma.dossier.count({ where: { clientId: avecDossier.id, archiveLe: null, etape: "QUALIFICATION" } })) > 0, "le dossier n'est pas touché");
+
+    assert.deepEqual(await avecActeur(LUCAS, () => fiches.modifierClient(avecDossier.id, { notes: "Nouvelle adresse à demander" })), []);
+    const telephone = await prisma.clientTelephone.findFirst({ where: { clientId: avecDossier.id, archiveLe: null } });
+    if (telephone) await avecActeur(LUCAS, () => fiches.modifierCoordonnee(avecDossier.id, "telephone", telephone.id, { libelle: "ancien" }));
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: avecDossier.id } })).notes, "Nouvelle adresse à demander");
+
+    await avecActeur(LUCAS, () => fiches.restaurerClient(avecDossier.id));
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: avecDossier.id } })).archiveLe, null);
   });
 });

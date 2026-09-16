@@ -45,7 +45,7 @@ import {
   type SourceClient,
   type StatutConsentement,
 } from "@/lib/clients/constantes";
-import { erreurSaisieSiret, formaterSiret, formaterTelephone, sourceDepuisLead } from "@/lib/clients/normalisation";
+import { avertissementSiret, erreurSaisieSiret, formaterSiret, formaterTelephone, sourceDepuisLead } from "@/lib/clients/normalisation";
 import type { ClientDetail, CoordonneeVue, EntrepriseAnnuaire } from "@/lib/clients/types";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
@@ -88,7 +88,9 @@ function libelleActeur(acteur: string): string {
 /* ── Coordonnées ───────────────────────────────────────────────────── */
 
 function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJour: (client: ClientDetail) => void }) {
+  const figee = Boolean(client.anonymiseLe || client.fusionneDans);
   const [ajout, setAjout] = useState<"email" | "telephone" | null>(null);
+  const [edition, setEdition] = useState<{ nature: "email" | "telephone"; coordonnee: CoordonneeVue; valeur: string; libelle: string } | null>(null);
   const [valeur, setValeur] = useState("");
   const [libelle, setLibelle] = useState("");
   const [enArchivage, setEnArchivage] = useState<{ nature: "email" | "telephone"; coordonnee: CoordonneeVue } | null>(null);
@@ -135,7 +137,7 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
                 <Bouton
                   taille="sm"
                   variante="fantome"
-                  disabled={envoi || Boolean(client.archiveLe)}
+                  disabled={envoi || figee}
                   onClick={() =>
                     void appeler(`/api/clients/${client.id}/coordonnees/${coordonnee.id}`, { action: "principale", nature }, "Coordonnée principale changée")
                   }
@@ -146,8 +148,19 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
               <Bouton
                 taille="sm"
                 variante="fantome"
+                aria-label="Corriger"
+                disabled={envoi || figee}
+                onClick={() =>
+                  setEdition({ nature, coordonnee, valeur: nature === "email" ? coordonnee.valeur : (coordonnee.saisi ?? formaterTelephone(coordonnee.valeur)), libelle: coordonnee.libelle ?? "" })
+                }
+              >
+                <Pencil size={13} aria-hidden />
+              </Bouton>
+              <Bouton
+                taille="sm"
+                variante="fantome"
                 aria-label="Archiver"
-                disabled={envoi || Boolean(client.archiveLe)}
+                disabled={envoi || figee}
                 onClick={() => {
                   setMotif("");
                   setEnArchivage({ nature, coordonnee });
@@ -172,7 +185,7 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
     <Carte
       titre="Coordonnées"
       action={
-        client.archiveLe ? null : (
+        figee ? null : (
           <span className="flex gap-1">
             <Bouton taille="sm" variante="fantome" icone={<Plus size={13} aria-hidden />} onClick={() => setAjout("telephone")}>
               Numéro
@@ -237,6 +250,49 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
           />
           <Champ libelle="Libellé (facultatif)" placeholder="pro, perso, comptabilité…" maxLength={40} value={libelle} onChange={(evenement) => setLibelle(evenement.target.value)} />
         </div>
+      </Modale>
+
+      <Modale
+        ouverte={edition !== null}
+        onFermer={() => setEdition(null)}
+        titre={edition?.nature === "email" ? "Corriger l'adresse e-mail" : "Corriger le numéro"}
+        description="Une faute de frappe se corrige sur place ; l'ancienne valeur reste au journal. Une coordonnée qui n'est plus utilisée s'archive plutôt."
+        largeur="sm"
+        pied={
+          <div className="flex justify-end gap-2">
+            <Bouton variante="fantome" onClick={() => setEdition(null)}>
+              Annuler
+            </Bouton>
+            <Bouton
+              variante="primaire"
+              chargement={envoi}
+              disabled={!edition?.valeur.trim()}
+              onClick={() =>
+                edition &&
+                void appeler(
+                  `/api/clients/${client.id}/coordonnees/${edition.coordonnee.id}`,
+                  { action: "modifier", nature: edition.nature, valeur: edition.valeur, libelle: edition.libelle.trim() || null },
+                  "Coordonnée corrigée"
+                ).then((ok) => ok && setEdition(null))
+              }
+            >
+              Enregistrer
+            </Bouton>
+          </div>
+        }
+      >
+        {edition ? (
+          <div className="flex flex-col gap-3">
+            <Champ
+              libelle={edition.nature === "email" ? "Adresse" : "Numéro"}
+              type={edition.nature === "email" ? "email" : "tel"}
+              inputMode={edition.nature === "email" ? "email" : "tel"}
+              value={edition.valeur}
+              onChange={(evenement) => setEdition({ ...edition, valeur: evenement.target.value })}
+            />
+            <Champ libelle="Libellé (facultatif)" placeholder="pro, perso, comptabilité…" maxLength={40} value={edition.libelle} onChange={(evenement) => setEdition({ ...edition, libelle: evenement.target.value })} />
+          </div>
+        ) : null}
       </Modale>
 
       <Modale
@@ -320,7 +376,7 @@ function Consentement({ client, onMiseAJour }: { client: ClientDetail; onMiseAJo
     <Carte
       titre="Mails commerciaux"
       action={
-        client.archiveLe ? null : (
+        client.anonymiseLe || client.fusionneDans ? null : (
           <Bouton taille="sm" variante="fantome" icone={<ShieldCheck size={13} aria-hidden />} onClick={() => setOuverte(true)}>
             Enregistrer une réponse
           </Bouton>
@@ -457,7 +513,7 @@ function ModaleModification({
       const identite = estPro
         ? { raisonSociale, siret, ...(contactEnregistre ? { prenom, nomFamille } : {}) }
         : { prenom, nomFamille, raisonSociale: null, siret: null };
-      const { client: misAJour } = await envoyerJson<{ client: ClientDetail }>(`/api/clients/${client.id}`, "PATCH", {
+      const { client: misAJour, avertissements } = await envoyerJson<{ client: ClientDetail; avertissements: string[] }>(`/api/clients/${client.id}`, "PATCH", {
         ...autres,
         ...identite,
         recommandeParId: recommandeur.id,
@@ -465,7 +521,7 @@ function ModaleModification({
       });
       onMiseAJour(misAJour);
       onFermer();
-      toast.success("Fiche enregistrée");
+      toast.success("Fiche enregistrée", { description: avertissements.length ? avertissements.join(" ") : undefined });
     } catch (erreur) {
       toast.error("Enregistrement impossible", { description: messageErreur(erreur) });
     } finally {
@@ -523,6 +579,7 @@ function ModaleModification({
                   placeholder="14 chiffres"
                   value={champs.siret}
                   erreur={siretModifie ? erreurSaisieSiret(champs.siret, siretQuitte) : null}
+                  aide={siretModifie ? (avertissementSiret(champs.siret) ?? undefined) : undefined}
                   onBlur={() => setSiretQuitte(true)}
                   onChange={(evenement) => {
                     changer("siret")(evenement);
@@ -558,7 +615,7 @@ function ModaleModification({
             onChange={changer("adresse")}
           />
           <div className="grid grid-cols-[110px_1fr] gap-3">
-            <Champ libelle="Code postal" inputMode="numeric" maxLength={5} value={champs.codePostal} onChange={changer("codePostal")} />
+            <Champ libelle="Code postal" inputMode="numeric" maxLength={10} value={champs.codePostal} onChange={changer("codePostal")} />
             <Champ libelle="Ville" value={champs.ville} maxLength={80} onChange={changer("ville")} />
           </div>
         </div>
@@ -596,9 +653,9 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
   async function appeler(url: string, methode: "POST" | "PATCH", donnees: unknown, succes: string) {
     setEnvoi(true);
     try {
-      const { client: misAJour } = await envoyerJson<{ client: ClientDetail }>(url, methode, donnees);
+      const { client: misAJour, avertissements } = await envoyerJson<{ client: ClientDetail; avertissements?: string[] }>(url, methode, donnees);
       setClient(misAJour);
-      toast.success(succes);
+      toast.success(succes, { description: avertissements?.length ? avertissements.join(" ") : undefined });
       rafraichirCompteurs();
       return true;
     } catch (erreur) {
@@ -610,6 +667,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
   }
 
   const lieu = [client.codePostal, client.ville].filter(Boolean).join(" ");
+  const dossiersEnCours = client.dossiers.filter((dossier) => !dossier.archiveLe && dossier.etape !== "PERDU" && dossier.etape !== "ENCAISSE").length;
   const estPro = client.categorie !== "PARTICULIER";
   // Sur une fiche pro, la personne qui a pris contact, quand la raison sociale donne déjà le nom de la fiche.
   const contact = estPro && client.raisonSociale ? [client.prenom, client.nomFamille].filter(Boolean).join(" ") : "";
@@ -652,9 +710,14 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
         <div className="flex flex-wrap gap-2">
           {client.anonymiseLe ? null : client.archiveLe ? (
             client.fusionneDans ? null : (
-              <Bouton icone={<ArchiveRestore size={14} aria-hidden />} chargement={envoi} onClick={() => void appeler(`/api/clients/${client.id}/restaurer`, "POST", undefined, "Fiche restaurée")}>
-                Restaurer
-              </Bouton>
+              <>
+                <Bouton icone={<ArchiveRestore size={14} aria-hidden />} chargement={envoi} onClick={() => void appeler(`/api/clients/${client.id}/restaurer`, "POST", undefined, "Fiche restaurée")}>
+                  Restaurer
+                </Bouton>
+                <Bouton variante="fantome" icone={<Pencil size={14} aria-hidden />} onClick={() => setModification(true)}>
+                  Modifier
+                </Bouton>
+              </>
             )
           ) : (
             <>
@@ -783,7 +846,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
           <Carte
             titre="Passif"
             action={
-              notes !== (client.notes ?? "") && !client.archiveLe ? (
+              notes !== (client.notes ?? "") && !client.anonymiseLe && !client.fusionneDans ? (
                 <Bouton taille="sm" variante="primaire" chargement={envoi} onClick={() => void appeler(`/api/clients/${client.id}`, "PATCH", { notes }, "Passif enregistré")}>
                   Enregistrer
                 </Bouton>
@@ -795,7 +858,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               classeConteneur="[&>label]:sr-only"
               rows={4}
               maxLength={10000}
-              disabled={Boolean(client.archiveLe)}
+              disabled={Boolean(client.anonymiseLe || client.fusionneDans)}
               placeholder="Habitudes, exigences, incidents, contexte familial ou d'entreprise…"
               value={notes}
               onChange={(evenement) => setNotes(evenement.target.value)}
@@ -872,6 +935,11 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
         }
       >
         <Champ libelle="Motif" obligatoire value={motifArchivage} maxLength={500} onChange={(evenement) => setMotifArchivage(evenement.target.value)} />
+        {dossiersEnCours > 0 ? (
+          <p className="mt-3 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+            {dossiersEnCours} dossier{dossiersEnCours > 1 ? "s" : ""} en cours : {dossiersEnCours > 1 ? "ils restent ouverts" : "il reste ouvert"} dans Dossiers, rattaché{dossiersEnCours > 1 ? "s" : ""} à cette fiche archivée.
+          </p>
+        ) : null}
       </Modale>
     </div>
   );

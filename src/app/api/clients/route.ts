@@ -24,11 +24,11 @@ export async function GET(requete: NextRequest) {
   }
 }
 
-/** POST : nouvelle fiche client ; 409 si un client a déjà ce SIRET, cet e-mail ou ce numéro (sauf `forcer`). */
+/** POST : nouvelle fiche client, seul le nom exigé ; 409 si un client a déjà ce SIRET, cet e-mail ou ce numéro (sauf `forcer`). Rend { id, avertissements }. */
 export async function POST(requete: NextRequest) {
   try {
     const entree = analyser(schemaCreationClient, await lireCorpsJson(requete));
-    return NextResponse.json({ id: await creerClientManuel(entree) }, { status: 201 });
+    return NextResponse.json(await creerClientManuel(entree), { status: 201 });
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/clients");
   }

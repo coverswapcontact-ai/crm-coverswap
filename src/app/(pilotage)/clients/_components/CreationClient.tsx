@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ErreurApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Champ, ListeDeroulante, Modale, Puces, TRANS } from "@/components/pilotage/ui";
 import { LIBELLES_SOURCE_CLIENT, SOURCES_CLIENT, type CategorieClient, type SourceClient } from "@/lib/clients/constantes";
-import { erreurSaisieSiret, formaterSiret } from "@/lib/clients/normalisation";
+import { avertissementSiret, erreurSaisieSiret, formaterSiret } from "@/lib/clients/normalisation";
 import type { EntrepriseAnnuaire } from "@/lib/clients/types";
 import { cn } from "@/lib/utils";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
@@ -95,10 +95,10 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
   }
 
   async function creer(forcer: boolean) {
-    if (!nomRenseigne || !source || siretEnErreur) return;
+    if (!nomRenseigne || siretEnErreur) return;
     setEnvoi(true);
     try {
-      const { id } = await envoyerJson<{ id: string }>("/api/clients", "POST", {
+      const { id, avertissements } = await envoyerJson<{ id: string; avertissements: string[] }>("/api/clients", "POST", {
         categorie,
         prenom: estPro ? null : prenom,
         nomFamille: estPro ? null : nomFamille,
@@ -107,7 +107,7 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
         adresse,
         codePostal,
         ville,
-        source,
+        source: source || null,
         sourceDetail,
         campagne: null,
         publicite: null,
@@ -119,7 +119,7 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
         email: email || null,
         forcer,
       });
-      toast.success(estPro ? "Fiche entreprise créée" : "Fiche client créée");
+      toast.success(estPro ? "Fiche entreprise créée" : "Fiche client créée", { description: avertissements.length ? avertissements.join(" ") : undefined });
       router.push(`/clients/${id}`);
     } catch (erreur) {
       if (erreur instanceof ErreurApi && erreur.status === 409) {
@@ -156,7 +156,7 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
           <Bouton
             variante="primaire"
             icone={estPro ? <Building2 size={15} aria-hidden /> : <UserPlus size={15} aria-hidden />}
-            disabled={!nomRenseigne || !source || Boolean(siretEnErreur)}
+            disabled={!nomRenseigne || Boolean(siretEnErreur)}
             chargement={envoi && !doublon}
             onClick={() => void creer(false)}
           >
@@ -200,6 +200,7 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
                 placeholder="14 chiffres"
                 value={siret}
                 erreur={erreurSaisieSiret(siret, siretQuitte)}
+                aide={avertissementSiret(siret) ?? undefined}
                 onBlur={() => setSiretQuitte(true)}
                 onChange={(evenement) => {
                   setSiret(evenement.target.value);
@@ -227,15 +228,14 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
           onChange={(evenement) => setAdresse(evenement.target.value)}
         />
         <div className="grid grid-cols-[110px_1fr] gap-3">
-          <Champ libelle="Code postal" inputMode="numeric" maxLength={5} value={codePostal} onChange={(evenement) => setCodePostal(evenement.target.value)} />
+          <Champ libelle="Code postal" inputMode="numeric" maxLength={10} value={codePostal} onChange={(evenement) => setCodePostal(evenement.target.value)} />
           <Champ libelle="Ville" value={ville} maxLength={80} onChange={(evenement) => setVille(evenement.target.value)} />
         </div>
         <ListeDeroulante
           libelle="D'où vient ce client ?"
-          obligatoire
           value={source}
-          onChange={(evenement) => setSource(evenement.target.value as SourceClient)}
-          options={[{ valeur: "", libelle: "Choisir…" }, ...SOURCES_CLIENT.map((valeur) => ({ valeur, libelle: LIBELLES_SOURCE_CLIENT[valeur] }))]}
+          onChange={(evenement) => setSource(evenement.target.value as SourceClient | "")}
+          options={[{ valeur: "", libelle: "Non renseignée" }, ...SOURCES_CLIENT.filter((valeur) => valeur !== "INCONNUE").map((valeur) => ({ valeur, libelle: LIBELLES_SOURCE_CLIENT[valeur] }))]}
         />
         {source && source !== "RECOMMANDATION" ? (
           <Champ libelle="Précision" placeholder="Nom du salon, du réseau, de l'apporteur…" value={sourceDetail} maxLength={160} onChange={(evenement) => setSourceDetail(evenement.target.value)} />

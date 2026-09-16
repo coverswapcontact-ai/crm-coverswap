@@ -18,7 +18,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
 | Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
 | RGPD | Consentement distinct, daté, immuable ; durées de conservation paramétrées → anonymisation proposée, décidée par une personne ; carte des données personnelles vérifiée sur le schéma ; journal caviardé ; pièces comptables gardées | `src/lib/rgpd/`, section 17 |
-| Signaler, jamais bloquer | Une règle métier qui empêchait une action devient un avertissement lu puis confirmé, gardé dans l'historique ; ce qui manque est signalé sur le dossier et dans la qualité des données de /synthese. Restent protégés : les mails (validés), les numéros émis, la suppression | `src/lib/dossiers/regles.ts`, `completude.ts`, section 18 |
+| Signaler, jamais bloquer | Une règle métier qui empêchait une action devient un avertissement lu puis confirmé, gardé dans l'historique ; ce qui manque est signalé sur le dossier et dans la qualité des données de /synthese. Restent protégés : les mails (validés), les numéros émis, la suppression | `src/lib/dossiers/regles.ts`, `completude.ts`, `src/lib/clients/fiches.ts`, sections 6 et 18 |
 
 ## 1. Traçabilité intégrale : le journal des modifications
 
@@ -383,14 +383,15 @@ leads et dossiers restés sans client.
   (« projet pro ») ou d'un mail peut porter le nom de la personne qui a écrit :
   il reste visible dans « Modifier » sous « Contact », effaçable, et la fiche
   reste modifiable tant que le nom de l'entreprise n'est pas connu.
-- **Règles** (`creerClientManuel`, `modifierClient`) : raison sociale exigée à
-  la création d'un pro, quand un particulier devient pro et quand un pro en a
-  déjà une (elle ne s'efface pas) ; un pro qui redevient particulier doit avoir
-  un nom de personne. Le SIRET a 14 chiffres et sa clé de Luhn est contrôlée
-  (exception de La Poste, SIREN 356 000 000) ; seul un SIRET nouvellement saisi
-  est contrôlé, pour qu'une fiche ancienne reste modifiable. Un SIRET déjà porté
-  par une fiche active arrête la création (409 avec l'identifiant de la fiche,
-  « Créer quand même » sinon, et la paire est proposée à la fusion).
+- **Règles** (`creerClientManuel`, `modifierClient`) : le nom est la seule
+  exigence. Pour un pro, c'est la raison sociale : exigée à la création, quand un
+  particulier devient pro et quand un pro en a déjà une (elle ne s'efface pas) ;
+  un pro qui redevient particulier doit avoir un nom de personne. Un SIRET saisi
+  a 14 chiffres ; une clé de Luhn fausse (exception de La Poste, SIREN
+  356 000 000) est **signalée, pas refusée** : le SIRET est gardé tel quel, et
+  seul un SIRET nouvellement saisi est signalé. Un SIRET déjà porté par une
+  fiche active arrête la création (409 avec l'identifiant de la fiche, « Créer
+  quand même » sinon, et la paire est proposée à la fusion).
 - **Annuaire des entreprises** (`src/lib/clients/annuaire.ts`, route
   `/api/clients/annuaire`, protégée comme les autres) : recherche par nom, SIREN
   ou SIRET dans l'API publique de l'État (recherche-entreprises.api.gouv.fr,
@@ -401,6 +402,30 @@ leads et dossiers restés sans client.
   diffusibles laissés vides. Annuaire injoignable ou saturé : message, et la
   fiche se remplit à la main.
 
+### Rien d'obligatoire au-delà du nom, tout se modifie
+
+Même principe que les dossiers (section 18) : ce qui manque est signalé, pas
+exigé.
+
+- **Facultatif** : coordonnées, adresse, source. Une source non renseignée vaut
+  « Inconnue » et le dit à la création ; /synthese compte les nouveaux clients
+  sans source et les clients sans e-mail ni téléphone. Le code postal est libre
+  (10 caractères : un client à l'étranger).
+- **Refusé, parce qu'inutilisable** : un e-mail ou un numéro illisible (il ne
+  servirait ni à joindre ni à retrouver le client) et un SIRET qui n'a pas 14
+  chiffres. Le champ se laisse vide plutôt que faux.
+- **Une fiche archivée se modifie** : identité, coordonnées, passif,
+  consentement, puis « Restaurer ». Restent figées la fiche anonymisée (RGPD) et
+  la fiche absorbée par une fusion (c'est la fiche conservée qui se modifie).
+- **Coordonnée mal saisie** : corrigée sur place (`modifierCoordonnee`, crayon
+  à côté du numéro ou de l'adresse), valeur et libellé ; elle garde son rang de
+  principale, l'ancienne valeur reste au journal, et une valeur déjà sur la
+  fiche n'est pas dupliquée. Une coordonnée qui n'est plus utilisée s'archive.
+- **Archivage avec des dossiers en cours** : permis et signalé (« 2 dossiers en
+  cours restent ouverts dans Dossiers ») ; les dossiers ne sont pas touchés.
+- Le **consentement** reste une suite de déclarations que la base refuse de
+  modifier : on en enregistre une nouvelle, à sa date réelle.
+
 ### Écrans
 
 - `/clients` : recherche (nom, ville, e-mail, téléphone), filtres catégorie et
@@ -409,9 +434,9 @@ leads et dossiers restés sans client.
   déjà connu, avec un lien vers la fiche, « Créer quand même » sinon).
 - `/clients/[id]` : coordonnées, provenance et recommandations, consentement,
   dossiers, passif, contacts entrants, historique de la fiche (lu dans le
-  journal), « Ouvrir un dossier » pré-rempli, archivage (refusé tant qu'un
-  dossier est en cours). Pour un pro : SIRET (lien vers sa page de l'annuaire)
-  et contact éventuel sous le nom.
+  journal), « Ouvrir un dossier » pré-rempli, archivage (signalé si un dossier
+  est en cours), « Modifier » et « Restaurer » sur une fiche archivée. Pour un
+  pro : SIRET (lien vers sa page de l'annuaire) et contact éventuel sous le nom.
 - « Ouvrir un dossier » cherche d'abord parmi les clients, puis les leads et les
   prospects.
 

@@ -231,3 +231,25 @@ unique sur Railway, une base SQLite déjà sauvegardée ; un service de plus ser
 une panne de plus et un secret de plus, pour un volume de quelques centaines de
 tâches par jour.
 
+## 4. Interface : un gabarit commun aux écrans de pilotage
+
+Les écrans du pilotage (Dossiers, À valider, Prospection, Tâches, puis Clients,
+Finances, Dépenses, Boîte mail, Synthèse) vivent dans le groupe de routes
+`src/app/(pilotage)` : même charte sombre que /prospection et /dossiers, une
+seule navigation.
+
+- **Ordinateur** : barre du haut, compteurs à côté des entrées (propositions à
+  valider, tâches en échec).
+- **Téléphone** : barre du bas au pouce, quatre écrans au plus et « Plus » pour
+  le reste ; le contenu réserve la hauteur de la barre (et la zone de sécurité
+  de l'iPhone).
+- **Primitives partagées** : `src/components/pilotage/ui.tsx` (boutons, champs à
+  16 px sur mobile pour éviter le zoom de Safari, modale plein écran sur
+  téléphone, puces de choix rapide, pastilles) et `client.ts` (appels d'API aux
+  erreurs en français). Les outils communs des routes (`analyser`,
+  `reponseErreur`, `ErreurMetier`) sont dans `src/lib/commun/`.
+- Les anciens écrans (groupe `(app)`, charte claire) restent joignables par
+  « Anciens écrans » tant qu'ils ne sont pas remplacés.
+- **Tâches de fond** (`/taches`) : travaux périodiques et leur dernier passage,
+  tâches en échec avec leur erreur, relance et annulation à la main.
+

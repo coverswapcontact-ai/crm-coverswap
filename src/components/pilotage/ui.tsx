@@ -4,32 +4,12 @@ import { useId } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { EtapeDossier } from "@/lib/dossiers/constants";
 
-// Primitives du module Dossiers, sur la charte sombre de /prospection.
+// Primitives des écrans de pilotage (Dossiers, Validation, Clients, Finances…),
+// sur la charte sombre de /prospection.
 
-// Transition unique du module : 150 ms ease (cf. /prospection)
+// Transition unique : 150 ms ease (cf. /prospection)
 export const TRANS = "transition-colors duration-150 ease-[ease]";
-
-// Couleur de chaque étape, la même dans le kanban, la liste et le panneau.
-// Du froid au chaud à mesure qu'on approche de l'encaissement, l'objectif ;
-// perdu et en pause sortent de la gamme, en gris neutre. Le rouge reste
-// réservé au retard.
-export const GRIS_HORS_PARCOURS = "#8B919C";
-
-export const COULEURS_ETAPE: Record<EtapeDossier, string> = {
-  QUALIFICATION: "#818CF8",
-  SIMULATION: "#60A5FA",
-  DEVIS_ENVOYE: "#22D3EE",
-  RELANCE: "#2DD4BF",
-  SIGNE: "#4ADE80",
-  PLANIFIE: "#A3E635",
-  CHANTIER: "#FDE047",
-  FACTURE: "#FBBF24",
-  ENCAISSE: "#F97316",
-  PERDU: GRIS_HORS_PARCOURS,
-  EN_PAUSE: GRIS_HORS_PARCOURS,
-};
 
 /* ── Boutons ─────────────────────────────────────────────────────── */
 
@@ -245,20 +225,6 @@ export function CaseACocher({
 
 /* ── Affichage ───────────────────────────────────────────────────── */
 
-export function PastilleEtape({ etape, libelle }: { etape: EtapeDossier; libelle: string }) {
-  const couleur = COULEURS_ETAPE[etape];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
-      // Suffixes hexadécimaux d'opacité : 1A ≈ 10 %, 4D ≈ 30 %.
-      style={{ color: couleur, backgroundColor: `${couleur}1A`, borderColor: `${couleur}4D` }}
-    >
-      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: couleur }} />
-      {libelle}
-    </span>
-  );
-}
-
 export function TitreSection({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
@@ -329,5 +295,116 @@ export function Modale({
         {pied ? <div className="border-t-[0.5px] border-[#2A2D34] bg-[#16181D]/60 px-5 py-3">{pied}</div> : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ── Choix rapides ───────────────────────────────────────────────── */
+
+/**
+ * Puces à choix unique : un motif de rejet, une catégorie de dépense… Plus
+ * rapide qu'une liste déroulante au doigt, et chaque option reste lisible.
+ */
+export function Puces<V extends string>({
+  libelle,
+  options,
+  valeur,
+  onChange,
+  obligatoire,
+  erreur,
+}: {
+  libelle: string;
+  options: readonly { valeur: V; libelle: string }[];
+  valeur: V | null;
+  onChange: (valeur: V) => void;
+  obligatoire?: boolean;
+  erreur?: string | null;
+}) {
+  const id = useId();
+  return (
+    <div role="radiogroup" aria-labelledby={id} aria-invalid={erreur ? true : undefined}>
+      <p id={id} className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+        {libelle}
+        {obligatoire ? <span className="text-[#5DCAA5]"> *</span> : null}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const choisie = option.valeur === valeur;
+          return (
+            <button
+              key={option.valeur}
+              type="button"
+              role="radio"
+              aria-checked={choisie}
+              onClick={() => onChange(option.valeur)}
+              className={cn(
+                "min-h-9 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-7 sm:text-[12px]",
+                choisie
+                  ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]"
+                  : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+                TRANS
+              )}
+            >
+              {option.libelle}
+            </button>
+          );
+        })}
+      </div>
+      {erreur ? <p className="mt-1 text-[12px] text-[#F87171]">{erreur}</p> : null}
+    </div>
+  );
+}
+
+/* ── En-tête de page et pastilles ────────────────────────────────── */
+
+export function EnTetePage({
+  titre,
+  sousTitre,
+  actions,
+}: {
+  titre: string;
+  sousTitre?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+      <div className="min-w-0">
+        <h1 className="text-[18px] font-medium tracking-tight text-[#F2F3F5]">{titre}</h1>
+        {sousTitre ? <p className="mt-1 text-[13px] text-[#9CA3AF]">{sousTitre}</p> : null}
+      </div>
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+    </header>
+  );
+}
+
+const TONS_PASTILLE = {
+  neutre: "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF]",
+  vert: "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]",
+  ambre: "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]",
+  rouge: "border-[#EF4444]/40 bg-[#EF4444]/10 text-[#F87171]",
+  bleu: "border-[#60A5FA]/40 bg-[#60A5FA]/10 text-[#93C5FD]",
+} as const;
+
+export function Pastille({
+  ton = "neutre",
+  children,
+  className,
+  titre,
+}: {
+  ton?: keyof typeof TONS_PASTILLE;
+  children: React.ReactNode;
+  className?: string;
+  titre?: string;
+}) {
+  return (
+    <span
+      title={titre}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap",
+        TONS_PASTILLE[ton],
+        className
+      )}
+    >
+      {children}
+    </span>
   );
 }

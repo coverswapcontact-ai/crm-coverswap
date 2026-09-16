@@ -1,16 +1,7 @@
 import prisma from "@/lib/prisma";
 import { resoudreContexte } from "@/lib/journal/acteur";
 
-export const STATUTS_TACHE = ["EN_ATTENTE", "EN_COURS", "TERMINEE", "ECHEC_DEFINITIF", "ANNULEE"] as const;
-export type StatutTache = (typeof STATUTS_TACHE)[number];
-
-export const LIBELLES_STATUT_TACHE: Record<StatutTache, string> = {
-  EN_ATTENTE: "En attente",
-  EN_COURS: "En cours",
-  TERMINEE: "Terminée",
-  ECHEC_DEFINITIF: "En échec",
-  ANNULEE: "Annulée",
-};
+export { LIBELLES_STATUT_TACHE, STATUTS_TACHE, type StatutTache } from "./statuts";
 
 export type MiseEnFile = {
   type: string;

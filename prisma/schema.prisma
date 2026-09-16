@@ -27,6 +27,14 @@ model Lead {
   lienSimulation   String?
   scoreSignature   Int           @default(0)
   notes            String?
+  // Client pérenne auquel ce contact est rattaché (src/lib/clients)
+  clientId         String?
+  client           Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  // Acquisition, en champs (avant : noyée dans `notes`)
+  campagne         String?
+  publicite        String?
+  formulaire       String?
+  metaLeadgenId    String?
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
@@ -35,6 +43,8 @@ model Lead {
   archiveLe        DateTime? // archivage : rien ne se supprime
   archiveMotif     String?
   ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([clientId])
 }
 
 model Simulation {
@@ -215,6 +225,8 @@ model Prospect {
   fermetureHebdo  String? // jour(s) de fermeture hebdo ex. "lundi" ou "dimanche, lundi" — null si 7j/7 ou inconnu
   optOut          Boolean            @default(false)
   optOutAt        DateTime?
+  clientId        String? // client pérenne, à la conversion seulement
+  client          Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict)
   emailDrafts     EmailDraft[]
   activites       ProspectActivity[]
   dossiers        Dossier[]
@@ -274,6 +286,8 @@ model Dossier {
   lead                Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
   prospectId          String? // Prospect B2B d'origine (/prospection)
   prospect            Prospect?          @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  clientId            String? // client pérenne ; les champs client* restent les coordonnées de ce chantier
+  client              Client?            @relation(fields: [clientId], references: [id], onDelete: Restrict)
   clientNom           String
   clientAdresse       String
   clientCp            String
@@ -298,6 +312,7 @@ model Dossier {
 
   @@index([etape])
   @@index([prochaineActionDate])
+  @@index([clientId])
 }
 
 model DossierNote {
@@ -499,4 +514,101 @@ model Proposition {
   @@index([dossierId])
   @@index([clientId])
   @@index([messageId])
+}
+
+// ─────────────────────────────────────────────
+// Clients pérennes (src/lib/clients)
+// Une personne ou une entreprise, au-delà d'un lead ou d'un dossier : son
+// historique, ses dossiers, d'où elle vient, qui l'a recommandée.
+// ─────────────────────────────────────────────
+
+model Client {
+  id                 String             @id @default(cuid())
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  categorie          String             @default("PARTICULIER") // CategorieClient : PARTICULIER | PROFESSIONNEL | DONNEUR_ORDRE
+  nom                String // nom d'affichage : « Alice Durand », « Hôtel du Parc »
+  prenom             String?
+  nomFamille         String?
+  raisonSociale      String?
+  siret              String?
+  adresse            String?
+  codePostal         String?
+  ville              String?
+  // Acquisition : d'où vient le client (posée au premier contact, corrigeable)
+  source             String // SourceClient (src/lib/clients/constantes.ts)
+  sourceDetail       String? // précision : « salon Habitat », « Instagram »…
+  campagne           String?
+  publicite          String?
+  formulaire         String?
+  premierContactLe   DateTime
+  recommandeParId    String?
+  recommandePar      Client?            @relation("Recommandations", fields: [recommandeParId], references: [id], onDelete: Restrict)
+  recommandations    Client[]           @relation("Recommandations")
+  recommandeParTexte String? // recommandé par quelqu'un qui n'est pas (encore) client
+  fusionneDansId     String? // absorbé par une fusion validée : le client conservé
+  notes              String? // passif, contexte durable
+  anonymiseLe        DateTime? // RGPD : identité retirée, données comptables conservées
+  emails             ClientEmail[]
+  telephones         ClientTelephone[]
+  consentements      ConsentementMail[]
+  leads              Lead[]
+  prospects          Prospect[]
+  dossiers           Dossier[]
+  archiveLe          DateTime? // archivage : rien ne se supprime
+  archiveMotif       String?
+  ecriture           String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([nom])
+  @@index([source])
+  @@index([recommandeParId])
+}
+
+model ClientEmail {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  adresse      String // minuscules, sans espaces
+  libelle      String? // « pro », « perso », « comptabilité »…
+  principale   Boolean   @default(false)
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([adresse])
+  @@index([clientId])
+}
+
+model ClientTelephone {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  clientId     String
+  client       Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  numero       String // normalisé : +33612345678
+  saisi        String // tel que reçu ou saisi
+  libelle      String?
+  principal    Boolean   @default(false)
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([numero])
+  @@index([clientId])
+}
+
+// Consentement aux mails commerciaux : une ligne par déclaration, jamais
+// modifiée (la base le refuse). L'état courant est la ligne la plus récente.
+model ConsentementMail {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  statut      String // ACCORDE | REFUSE | RETIRE
+  recueilliLe DateTime // date où la personne a donné ou retiré son accord
+  moyen       String // FORMULAIRE_SITE | META_ADS | ORAL | ECRIT | EMAIL | AUTRE
+  preuve      String? // texte de la case cochée, référence du formulaire, du mail…
+  ecriture    String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([clientId, recueilliLe])
 }

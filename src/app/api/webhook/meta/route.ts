@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { fetchMetaLead, sendConversionEvent } from "@/lib/meta";
 import { Resend } from "resend";
+import { rattacherLead } from "@/lib/clients/identification";
 
 // ============================================================================
 // GET — Vérification webhook Meta (hub.challenge)
@@ -125,6 +126,8 @@ export async function POST(request: NextRequest) {
               scoreSignature: Math.min(score, 100),
               createdAt: realCreatedAt,
               updatedAt: realCreatedAt,
+              formulaire: metaLead.formName ?? null,
+              metaLeadgenId: leadgenId,
               notes: [
                 metaLead.formName ? `Form: ${metaLead.formName}` : null,
                 formId ? `FormID: ${formId}` : null,
@@ -133,6 +136,13 @@ export async function POST(request: NextRequest) {
               ].filter(Boolean).join(" | ") || undefined,
             },
           });
+        }
+
+        // Client pérenne (jamais bloquant : rattrapé par le travail périodique)
+        try {
+          await rattacherLead(prisma, lead.id);
+        } catch (erreurClient) {
+          console.error("[meta-webhook] rattachement du client (non bloquant) :", erreurClient);
         }
 
         // Interaction

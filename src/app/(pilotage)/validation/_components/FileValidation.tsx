@@ -46,8 +46,9 @@ function libelleAuteur(auteur: string): string {
   const [type, ...reste] = auteur.split(":");
   const nom = reste.join(":");
   if (type === "AGENT") return nom === "mail" ? "Agent mail" : `Agent ${nom}`;
-  if (type === "SYSTEME") return "Système";
-  if (type === "HUMAIN") return nom;
+  if (type === "SYSTEME") return nom === "doublons" ? "Recherche des doublons" : "Système";
+  if (type === "MIGRATION") return "Reprise des données";
+  if (type === "HUMAIN") return nom === "poste-local" ? "Moi" : nom;
   return auteur;
 }
 
@@ -128,6 +129,14 @@ function CarteProposition({
             </Link>
           </>
         ) : null}
+        {proposition.liens.map((lien) => (
+          <span key={lien.href} className="contents">
+            <span aria-hidden>·</span>
+            <Link href={lien.href} className={cn("inline-flex min-h-6 items-center text-[#9CA3AF] underline-offset-2 hover:text-[#F2F3F5] hover:underline", TRANS)}>
+              {lien.libelle}
+            </Link>
+          </span>
+        ))}
       </p>
 
       {proposition.raisonnement ? (

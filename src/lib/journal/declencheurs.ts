@@ -46,6 +46,16 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   "Planification",
 ]);
 
+/**
+ * Modèles dont une ligne, une fois écrite, ne se modifie plus (la base le
+ * refuse) : un consentement se retire par une nouvelle déclaration, un
+ * instantané mensuel ne se recalcule pas. Seules les colonnes listées peuvent
+ * encore changer (rattachement à la fiche conservée lors d'une fusion).
+ */
+export const MODELES_IMMUABLES: ReadonlyMap<string, readonly string[]> = new Map([
+  ["ConsentementMail", ["clientId", "ecriture"]],
+]);
+
 /** Préfixes de nom : tout déclencheur ainsi nommé appartient à cette couche. */
 export const PREFIXES_DECLENCHEURS = ["journal_", "interdit_suppression_", "immuable_"] as const;
 
@@ -132,6 +142,18 @@ BEGIN
 END;`,
     },
   ];
+  const modifiables = MODELES_IMMUABLES.get(modele.name);
+  if (modifiables) {
+    const verrouillees = liste.filter((colonne) => !modifiables.includes(colonne.champ));
+    resultat.push({
+      nom: `immuable_${table}_modification`,
+      sql: `CREATE TRIGGER ${ident(`immuable_${table}_modification`)} BEFORE UPDATE ON ${ident(table)}
+WHEN ${verrouillees.map((colonne) => `OLD.${ident(colonne.nom)} IS NOT NEW.${ident(colonne.nom)}`).join(" OR ")}
+BEGIN
+  SELECT RAISE(ABORT, ${texte(`Une ligne de « ${modele.name} » ne se modifie pas : enregistrer une nouvelle ligne.`)});
+END;`,
+    });
+  }
   if (MODELES_HORS_JOURNAL.has(modele.name)) return resultat;
 
   const valide = aEcriture ? `json_valid(NEW."ecriture")` : null;

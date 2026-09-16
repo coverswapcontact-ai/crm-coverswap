@@ -295,3 +295,67 @@ généralise.
 - Raisonnement de l'agent et confiance (calculée par le code) conservés et
   affichés (« Pourquoi ? »).
 
+## 6. Clients pérennes
+
+Un **client** (`Client`) est une personne ou une entreprise, au-delà d'un lead
+ou d'un dossier : ses dossiers, ses contacts entrants, sa provenance, qui l'a
+recommandé et qui il a recommandé, son passif, son consentement aux mails.
+
+- **Coordonnées multiples** : `ClientEmail` et `ClientTelephone`, normalisés
+  (`+33612345678`, minuscules), une principale, archivables (jamais effacées).
+- **Provenance** : `source` en liste fermée (publicité Meta, site, recommandation,
+  bouche-à-oreille, réseaux, prospection, sous-traitance, salon…), précision,
+  campagne, publicité et formulaire (extraits des anciennes notes des webhooks,
+  écrits en champs désormais), date du premier contact. Les familles de sources
+  permettent de chiffrer « bouche-à-oreille contre Meta » : nombre de clients,
+  clients signés, montant signé, sur l'écran /clients.
+- **Recommandations** : `recommandeParId` (une fiche, donc chiffrable : ce que
+  les recommandés ont signé) ou `recommandeParTexte` pour quelqu'un qui n'est
+  pas client.
+- **Consentement** (`ConsentementMail`) : une ligne par déclaration, datée, avec
+  le moyen et la preuve ; **la base refuse toute modification** (seul le
+  rattachement à la fiche conservée lors d'une fusion peut changer). Sans
+  déclaration, pas de mail commercial.
+
+### Retrouver le client : règle d'identité
+
+Une adresse e-mail ou un numéro identiques, une fois normalisés, désignent le
+même client (`trouverClientParCoordonnees`). C'est la règle que les webhooks
+appliquaient déjà aux leads ; elle sert aux leads entrants (site, Meta, Zapier)
+et à l'ouverture d'un dossier. Un rattachement qui échoue ne bloque jamais la
+réception d'un lead : le travail périodique `rattachement-clients` rattrape les
+leads et dossiers restés sans client.
+
+### Doublons : proposés, jamais imposés
+
+- **Reprise de l'existant** (migration `2026-09-17-clients-perennes`) : une fiche
+  par lead, **sans chercher les fiches existantes** — même deux leads au même
+  numéro gardent chacun leur fiche. Les dossiers rejoignent la fiche de leur
+  lead ou de leur prospect, sinon une fiche créée depuis leurs coordonnées ; les
+  prospects convertis reçoivent la leur.
+- **Détection** (`doublons-clients`, chaque jour, ou « Chercher les doublons ») :
+  même e-mail, même numéro, même SIRET, même nom dans la même ville, nom à une
+  lettre près. Chaque paire devient une proposition `FUSION_CLIENTS` avec ses
+  indices et une confiance. Dans un groupe, chaque fiche est rapprochée de la
+  fiche de référence (plus de dossiers, puis plus ancienne) et non de toutes les
+  autres ; une coordonnée partagée par plus de 4 fiches est un standard ou une
+  valeur générique, sans proposition (constaté sur les données de démonstration :
+  11 fiches au même numéro donnaient 55 propositions).
+- **Fusion** (après validation seulement, jamais en lot) : tout ce qui porte un
+  `clientId` — lu dans le schéma, un nouveau modèle est couvert d'office — passe
+  sur la fiche conservée ; les blancs sont complétés ; l'acquisition retenue est
+  celle du premier contact ; la fiche absorbée est archivée avec
+  `fusionneDansId`. Une paire rejetée n'est jamais reproposée.
+
+### Écrans
+
+- `/clients` : recherche (nom, ville, e-mail, téléphone), filtres catégorie et
+  source, provenance des clients avec montants signés, « Nouveau client » (refus
+  explicite si l'e-mail ou le numéro est déjà connu, « Créer quand même » sinon).
+- `/clients/[id]` : coordonnées, provenance et recommandations, consentement,
+  dossiers, passif, contacts entrants, historique de la fiche (lu dans le
+  journal), « Ouvrir un dossier » pré-rempli, archivage (refusé tant qu'un
+  dossier est en cours).
+- « Ouvrir un dossier » cherche d'abord parmi les clients, puis les leads et les
+  prospects.
+

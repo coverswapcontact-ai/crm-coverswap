@@ -66,6 +66,7 @@ export type PropositionVue = {
   validationGroupee: boolean;
   champs: ChampModifiable[];
   motifsRejet: MotifRejet[];
+  liens: { libelle: string; href: string }[];
   clientId: string | null;
   dossierId: string | null;
   messageId: string | null;

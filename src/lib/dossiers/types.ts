@@ -91,7 +91,7 @@ export type PreRemplissageDossier = {
 };
 
 export type LeadTrouve = {
-  origine: "LEAD" | "PROSPECT";
+  origine: "CLIENT" | "LEAD" | "PROSPECT";
   id: string;
   libelle: string;
   detail: string;

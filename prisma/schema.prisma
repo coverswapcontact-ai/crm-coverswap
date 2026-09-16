@@ -793,3 +793,39 @@ model InstantaneMensuel {
   empreinte String // SHA-256 du contenu
   ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
+
+// Connexion au compte Google (Drive, Gmail). Le jeton de renouvellement est
+// chiffré (AES-256-GCM, clé GOOGLE_TOKEN_KEY hors base) ; une déconnexion garde
+// la ligne (deconnecteLe), une reconnexion en crée une nouvelle.
+model ConnexionGoogle {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  compte         String // adresse du compte autorisé
+  portees        String // portées accordées, séparées par des espaces
+  jetonChiffre   String // jeton de renouvellement chiffré
+  deconnecteLe   DateTime?
+  derniereErreur String?
+  ecriture       String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+}
+
+// État du miroir Google Drive : un élément du CRM (client, dossier, photo,
+// document, justificatif…) et sa copie dans Drive. La base reste la source :
+// Drive n'est jamais lu pour nourrir le CRM. Hors journal : état technique
+// réécrit à chaque passage (voir docs, section 15).
+model MiroirDrive {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  cle            String    @unique // ce que l'élément représente : « client:<id> », « document:<id> »…
+  driveId        String?
+  nom            String
+  parentCle      String?
+  empreinte      String? // version du contenu envoyé (fichiers)
+  etat           String    @default("A_CREER") // A_CREER | A_JOUR | ARCHIVE
+  synchroniseLe  DateTime?
+  derniereErreur String?
+  ecriture       String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([etat])
+}

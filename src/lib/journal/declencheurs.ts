@@ -44,6 +44,9 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   // d'exécution (tentatives, erreurs, résultat) ; les effets des tâches, eux, sont journalisés.
   "Tache",
   "Planification",
+  // État du miroir Drive : réécrit à chaque synchronisation ; le miroir ne porte
+  // aucune donnée métier (la base reste la source), ses échecs se lisent sur la ligne.
+  "MiroirDrive",
 ]);
 
 export type RegleImmuabilite = {

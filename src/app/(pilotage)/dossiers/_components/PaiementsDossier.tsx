@@ -3,16 +3,17 @@
 import { useState } from "react";
 import { Ban, CircleCheck, Landmark, Plus, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import { ModaleActionEncaissement, type TypeActionEncaissement } from "@/components/pilotage/ActionsEncaissement";
 import { ChampsPaiement, lirePaiement, saisiePaiement, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
-import { Pastille, Puces } from "@/components/pilotage/ui";
-import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
+import { Pastille } from "@/components/pilotage/ui";
+import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
-import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET } from "@/lib/encaissements/constantes";
+import { LIBELLES_MOYEN } from "@/lib/encaissements/constantes";
 import type { EncaissementVue, PieceVue } from "@/lib/encaissements/types";
 import { cn } from "@/lib/utils";
 import { envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, CLASSE_SAISIE, Modale, TitreSection } from "./ui";
+import { Bouton, CLASSE_SAISIE, Modale, TitreSection } from "./ui";
 
 const AUTOMATIQUE = "";
 
@@ -105,96 +106,7 @@ function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; o
   );
 }
 
-type Action = { type: "credit" | "rejet" | "annulation"; encaissement: EncaissementVue };
-
-function ModaleAction({ detail, action, onFermer, onFait }: { detail: DossierDetail; action: Action; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
-  const { encaissement } = action;
-  const [le, setLe] = useState(jourParis(new Date()));
-  const [motif, setMotif] = useState<string | null>(null);
-  const [precision, setPrecision] = useState("");
-  const [envoi, setEnvoi] = useState(false);
-  const description = `${formatMontant(encaissement.montant)}${encaissement.moyen ? ` par ${LIBELLES_MOYEN[encaissement.moyen].toLowerCase()}` : ""}${
-    encaissement.reference ? ` n° ${encaissement.reference}` : ""
-  }, reçu le ${formatDateCourte(encaissement.recuLe)}.`;
-  const motifs = action.type === "rejet" ? MOTIFS_REJET : MOTIFS_ANNULATION;
-  const complet = action.type === "credit" ? Boolean(le) : Boolean(motif) && (motif !== "AUTRE" || precision.trim().length >= 3) && (action.type !== "rejet" || Boolean(le));
-
-  async function valider() {
-    if (!complet) return;
-    setEnvoi(true);
-    try {
-      const corps =
-        action.type === "credit"
-          ? { crediteLe: le }
-          : action.type === "rejet"
-            ? { le, motif, precision: precision.trim() || undefined }
-            : { motif, precision: precision.trim() || undefined };
-      const nouveau = await envoyerJson<DossierDetail>(`/api/encaissements/${encaissement.id}/${action.type}`, "POST", corps);
-      onFait(nouveau);
-      toast.success(action.type === "credit" ? "Chèque crédité" : action.type === "rejet" ? "Chèque rejeté" : "Paiement annulé", {
-        description: nouveau.etape !== detail.etape ? "L'étape du dossier suit : la facture est de nouveau due." : undefined,
-      });
-      onFermer();
-    } catch (erreur) {
-      toast.error("Action refusée", { description: messageErreur(erreur) });
-    } finally {
-      setEnvoi(false);
-    }
-  }
-
-  const titres = { credit: "Chèque crédité sur le compte", rejet: "Chèque rejeté", annulation: "Annuler ce paiement" };
-  return (
-    <Modale
-      ouverte
-      onFermer={onFermer}
-      largeur="sm"
-      titre={titres[action.type]}
-      description={
-        action.type === "annulation"
-          ? `${description} Pour une erreur de saisie : le paiement reste visible, barré, et ne compte plus.`
-          : action.type === "rejet"
-            ? `${description} Le paiement ne compte plus ; ce qu'il réglait est de nouveau dû.`
-            : description
-      }
-      pied={
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Bouton variante="fantome" onClick={onFermer}>
-            Retour
-          </Bouton>
-          <Bouton variante={action.type === "credit" ? "primaire" : "danger"} disabled={!complet} chargement={envoi} onClick={() => void valider()}>
-            {action.type === "credit" ? "Enregistrer le crédit" : action.type === "rejet" ? "Enregistrer le rejet" : "Annuler le paiement"}
-          </Bouton>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        {action.type !== "annulation" ? (
-          <Champ
-            libelle={action.type === "credit" ? "Crédité le (date du relevé)" : "Rejeté le"}
-            obligatoire
-            type="date"
-            min={jourParis(encaissement.recuLe)}
-            max={jourParis(new Date())}
-            value={le}
-            onChange={(evenement) => setLe(evenement.target.value)}
-          />
-        ) : null}
-        {action.type !== "credit" ? (
-          <>
-            <Puces libelle="Motif" obligatoire options={motifs.map((option) => ({ valeur: option.code, libelle: option.libelle }))} valeur={motif} onChange={setMotif} />
-            <Champ
-              libelle={motif === "AUTRE" ? "Précision" : "Précision (facultative)"}
-              obligatoire={motif === "AUTRE"}
-              maxLength={300}
-              value={precision}
-              onChange={(evenement) => setPrecision(evenement.target.value)}
-            />
-          </>
-        ) : null}
-      </div>
-    </Modale>
-  );
-}
+type Action = { type: TypeActionEncaissement; encaissement: EncaissementVue };
 
 function imputations(encaissement: EncaissementVue): string {
   const actives = encaissement.affectations.filter((affectation) => affectation.statut === "ACTIVE");
@@ -322,7 +234,16 @@ export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail
       )}
 
       {saisie ? <ModalePaiement detail={detail} onFermer={() => setSaisie(false)} onFait={onMisAJour} /> : null}
-      {action ? <ModaleAction key={`${action.type}:${action.encaissement.id}`} detail={detail} action={action} onFermer={() => setAction(null)} onFait={onMisAJour} /> : null}
+      {action ? (
+        <ModaleActionEncaissement<DossierDetail>
+          key={`${action.type}:${action.encaissement.id}`}
+          encaissement={action.encaissement}
+          type={action.type}
+          onFermer={() => setAction(null)}
+          onFait={onMisAJour}
+          precisionSucces={(nouveau) => (nouveau.etape !== detail.etape ? "L'étape du dossier suit : la facture est de nouveau due." : undefined)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -80,6 +80,8 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
     "NumeroDocument",
     {
       modifiables: ["type", "documentId", "destinataire", "montant", "note", "ecriture"],
+      // Numéro manuel inscrit sans date : elle se renseigne une fois.
+      completables: ["emisLe"],
       message: "Un numéro inscrit au registre ne change pas : seuls ses compléments se renseignent.",
     },
   ],

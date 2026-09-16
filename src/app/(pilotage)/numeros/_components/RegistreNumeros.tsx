@@ -125,6 +125,7 @@ export default function RegistreNumeros({ initiales }: { initiales: SerieRegistr
       const reponse = enComplement
         ? await envoyerJson<{ series: SerieRegistre[] }>(`/api/numeros/${enComplement.id}`, "PATCH", {
             type: saisie.type,
+            ...(!enComplement.emisLe && saisie.emisLe ? { emisLe: saisie.emisLe } : {}),
             destinataire: saisie.destinataire || null,
             montant,
             note: saisie.note || null,
@@ -242,7 +243,9 @@ export default function RegistreNumeros({ initiales }: { initiales: SerieRegistr
         <div className="flex flex-col gap-3">
           {enComplement ? null : <Champ libelle="Numéro tel qu'imprimé" obligatoire placeholder="ex. 2026-012 ou F2026-012" value={saisie.numero} onChange={changer("numero")} />}
           <ListeDeroulante libelle="Nature" value={saisie.type} onChange={changer("type")} options={OPTIONS_TYPE} />
-          {enComplement ? null : <Champ libelle="Date d'émission" type="date" value={saisie.emisLe} onChange={changer("emisLe")} />}
+          {enComplement?.emisLe ? null : (
+            <Champ libelle="Date d'émission" aide={enComplement ? "Se renseigne une fois." : undefined} type="date" value={saisie.emisLe} onChange={changer("emisLe")} />
+          )}
           <Champ libelle="Destinataire" maxLength={160} value={saisie.destinataire} onChange={changer("destinataire")} />
           <Champ libelle="Montant (€)" inputMode="decimal" value={saisie.montant} onChange={changer("montant")} />
           <ZoneTexte libelle="Note" rows={2} maxLength={500} value={saisie.note} onChange={changer("note")} />

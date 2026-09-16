@@ -12,6 +12,7 @@ import {
   Radar,
   SlidersHorizontal,
   Users,
+  Wallet,
   Workflow,
   X,
   type LucideIcon,
@@ -42,6 +43,7 @@ const PRINCIPALES: Entree[] = [
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
+  { href: "/finances", libelle: "Finances", icone: Wallet, mobile: true },
 ];
 
 // Écrans secondaires, dans le menu « Plus ».
@@ -121,23 +123,27 @@ export function Navigation() {
             CoverSwap
             <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>
           </Link>
-          <ul className="flex flex-1 items-center gap-1">
+          <ul className="flex min-w-0 flex-1 items-center gap-1">
             {[...PRINCIPALES, ...SECONDAIRES].map((entree) => {
               const active = estActive(pathname, entree.href);
               const Icone = entree.icone;
+              // Écrans secondaires : l'icône seule tant que la place manque, le libellé en grand écran.
+              const secondaire = SECONDAIRES.includes(entree);
               return (
                 <li key={entree.href}>
                   <Link
                     href={entree.href}
                     aria-current={active ? "page" : undefined}
+                    aria-label={secondaire ? entree.libelle : undefined}
+                    title={secondaire ? entree.libelle : undefined}
                     className={cn(
-                      "flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium",
+                      "flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap",
                       active ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:bg-[#1C1F25] hover:text-[#F2F3F5]",
                       TRANS
                     )}
                   >
                     <Icone size={14} aria-hidden />
-                    {entree.libelle}
+                    <span className={secondaire ? "hidden xl:inline" : undefined}>{entree.libelle}</span>
                     {entree.compteur ? <Compteur valeur={compteurs[entree.compteur]} ton={tonDe(entree.compteur)} /> : null}
                   </Link>
                 </li>
@@ -146,7 +152,7 @@ export function Navigation() {
           </ul>
           <Link
             href="/dashboard"
-            className={cn("flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}
           >
             Anciens écrans
             <ArrowUpRight size={12} aria-hidden />

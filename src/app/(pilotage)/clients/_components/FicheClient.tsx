@@ -716,7 +716,14 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
 
           <MessagesClient clientId={client.id} />
 
-          <Carte titre="Historique de la fiche">
+          <Carte
+            titre="Historique de la fiche"
+            action={
+              <Link href={`/journal?clientId=${client.id}`} className={cn("text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+                Journal complet
+              </Link>
+            }
+          >
             {client.historique.length === 0 ? (
               <EtatVide titre="Aucune modification enregistrée" />
             ) : (

@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
-import prisma from "@/lib/prisma";
+import prisma, { type Transaction } from "@/lib/prisma";
 import { sendConversionEvent } from "@/lib/meta";
 import {
   ETAPES,
@@ -33,7 +33,7 @@ export type ChangementEtape = {
 };
 
 /** Lit un dossier et tout ce qu'il faut pour vérifier un changement d'étape. */
-export async function chargerEtatEtape(tx: Prisma.TransactionClient, dossierId: string) {
+export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
   const dossier = await tx.dossier.findUnique({
     where: { id: dossierId },
     include: {
@@ -83,7 +83,7 @@ type Application = ChangementEtape & {
  * l'événement CHANGEMENT_ETAPE, dans la transaction de l'appelant.
  */
 export async function appliquerChangementEtape(
-  tx: Prisma.TransactionClient,
+  tx: Transaction,
   application: Application
 ): Promise<ChangementEtape> {
   const { dossierId, de, vers, nature, donnees = {}, documentId } = application;

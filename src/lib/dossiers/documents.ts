@@ -13,7 +13,7 @@ import { ErreurMetier } from "./erreurs";
 import { calculerMontants, formatCentimes, versCentimes } from "./montants";
 import { attribuerNumero, numeroFactice } from "./numerotation";
 import { estEtape } from "./regles";
-import { enregistrerPdf, lireFichier, lireLignes, supprimerFichier } from "./stockage";
+import { archiverFichier, enregistrerPdf, lireFichier, lireLignes } from "./stockage";
 import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "./transitions";
 
 const arrondiCentieme = (valeur: number) => versCentimes(valeur) / 100;
@@ -190,8 +190,9 @@ export async function genererDocument(dossierId: string, entree: EntreeGeneratio
     if (resultat.changement) await effetsDuChangementEtape(resultat.changement);
     return resultat;
   } catch (erreur) {
-    // Transaction annulée : le numéro retourne au compteur, le PDF écrit part avec lui.
-    if (ecrit.chemin) await supprimerFichier(ecrit.chemin).catch(() => {});
+    // Transaction annulée : le numéro retourne au compteur ; le PDF écrit sous ce
+    // numéro quitte sa place (le prochain document le reprendra) mais reste aux archives.
+    if (ecrit.chemin) await archiverFichier(ecrit.chemin, "generation-annulee").catch(() => {});
     throw erreur;
   }
 }

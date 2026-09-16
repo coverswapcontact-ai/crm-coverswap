@@ -29,13 +29,11 @@ const STATUTS_PIPELINE = [
 ];
 
 async function main() {
-  console.log("🧹 Nettoyage...");
-  await prisma.interaction.deleteMany();
-  await prisma.commande.deleteMany();
-  await prisma.chantier.deleteMany();
-  await prisma.facture.deleteMany();
-  await prisma.devis.deleteMany();
-  await prisma.lead.deleteMany();
+  // Rien ne se supprime (la base refuse les DELETE) : base vide uniquement.
+  const existants = await prisma.lead.count();
+  if (existants > 0) {
+    throw new Error(`La base contient déjà ${existants} lead(s) : jeu de démonstration refusé (base vide uniquement).`);
+  }
 
   console.log("🌱 Création des leads...");
 

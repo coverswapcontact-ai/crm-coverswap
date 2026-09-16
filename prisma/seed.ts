@@ -4,14 +4,12 @@ import { subDays, addDays } from "date-fns";
 const prisma = new PrismaClient();
 
 async function main() {
-  // Clean existing data
-  await prisma.commande.deleteMany();
-  await prisma.chantier.deleteMany();
-  await prisma.facture.deleteMany();
-  await prisma.devis.deleteMany();
-  await prisma.interaction.deleteMany();
-  await prisma.objectif.deleteMany();
-  await prisma.lead.deleteMany();
+  // Rien ne se supprime (la base refuse les DELETE) : le jeu de démonstration
+  // ne s'installe que sur une base vide, jamais par-dessus des données.
+  const existants = await prisma.lead.count();
+  if (existants > 0) {
+    throw new Error(`La base contient déjà ${existants} lead(s) : jeu de démonstration refusé (base vide uniquement).`);
+  }
 
   const now = new Date();
 

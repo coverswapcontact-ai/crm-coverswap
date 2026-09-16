@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
+import { ERREUR_MOTIF_ARCHIVAGE, motifDArchivage } from "@/lib/journal/archivage";
 import { z } from "zod/v4";
 
 const interactionSchema = z.object({
@@ -112,21 +113,24 @@ export async function PUT(
   }
 }
 
+/** Archive le lead (rien ne se supprime) : corps JSON { motif }. */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const motif = await motifDArchivage(request);
+    if (!motif) return NextResponse.json({ error: ERREUR_MOTIF_ARCHIVAGE }, { status: 400 });
 
-    await prisma.lead.delete({ where: { id } });
+    await prisma.lead.update({ where: { id }, data: { archiveLe: new Date(), archiveMotif: motif } });
 
     revalidatePath("/leads");
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/leads/[id] error:", error);
     return NextResponse.json(
-      { error: "Erreur lors de la suppression du lead" },
+      { error: "Erreur lors de l'archivage du lead" },
       { status: 500 }
     );
   }

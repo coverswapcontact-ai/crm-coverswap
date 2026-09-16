@@ -11,7 +11,7 @@ import {
   type EntreeChangementEtape,
 } from "@/lib/dossiers/transitions";
 import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET, libelleMotif, type MoyenPaiement } from "./constantes";
-import type { EntreePaiement } from "./schemas";
+import type { CorrectionEncaissement, EntreePaiement } from "./schemas";
 import { faitsPaiements, piecesDuDossier } from "./soldes";
 
 /**
@@ -326,6 +326,105 @@ export async function annulerEncaissement(id: string, entree: { motif: string; p
     evenement: "Paiement annulé",
     type: "ENCAISSEMENT_ANNULE",
   });
+}
+
+/* ── Correction ──────────────────────────────────────────────────── */
+
+/**
+ * Corrige un paiement enregistré (montant, date de réception, moyen,
+ * référence, payeur, crédit du chèque, note) au lieu de l'annuler et de le
+ * ressaisir. Un montant corrigé libère les imputations et les refait sur les
+ * mêmes pièces, jusqu'à ce qui y reste dû (le surplus reste non imputé). Le
+ * livre des recettes suit la nouvelle date : l'écran prévient quand un mois
+ * passé change. L'étape suit l'argent, sans reculer un dossier qui n'était
+ * pas réglé.
+ */
+export async function modifierEncaissement(id: string, entree: CorrectionEncaissement): Promise<string | null> {
+  const encaissement = await prisma.encaissement.findUnique({ where: { id } });
+  if (!encaissement) throw new ErreurMetier("Encaissement introuvable.", 404);
+  const touchePaiement = entree.montant !== undefined || entree.recuLe !== undefined || entree.moyen !== undefined || entree.crediteLe !== undefined;
+  if (encaissement.statut !== "VALIDE" && touchePaiement) {
+    throw new ErreurMetier("Ce paiement est annulé ou rejeté : il ne se corrige plus, enregistre le bon paiement.", 409);
+  }
+
+  const recuLe = entree.recuLe ? dateDepuisJour(entree.recuLe) : encaissement.recuLe;
+  const moyen = entree.moyen !== undefined ? entree.moyen : encaissement.moyen;
+  const crediteLe = entree.crediteLe !== undefined ? (entree.crediteLe ? dateDepuisJour(entree.crediteLe) : null) : encaissement.crediteLe;
+  if (crediteLe && moyen !== "CHEQUE") throw new ErreurMetier("Seul un chèque a une date de crédit.", 400);
+  if (crediteLe && jourParis(crediteLe) < jourParis(recuLe)) throw new ErreurMetier("Un chèque se crédite après sa réception.", 400);
+
+  const ancienCentimes = versCentimes(encaissement.montant);
+  const nouveauCentimes = entree.montant !== undefined ? versCentimes(entree.montant) : ancienCentimes;
+
+  const changement = await prisma.$transaction(async (tx) => {
+    const etaitSolde = encaissement.dossierId ? (await faitsPaiements(tx, encaissement.dossierId)).soldeEncaisse : false;
+    const { count } = await tx.encaissement.updateMany({
+      where: { id, updatedAt: encaissement.updatedAt },
+      data: {
+        montant: nouveauCentimes / 100,
+        recuLe,
+        moyen,
+        crediteLe: moyen === "CHEQUE" ? crediteLe : null,
+        ...(entree.reference !== undefined ? { reference: entree.reference || null } : {}),
+        ...(entree.payeur !== undefined ? { payeur: entree.payeur } : {}),
+        ...(entree.note !== undefined ? { note: entree.note || null } : {}),
+      },
+    });
+    if (count !== 1) throw new ErreurMetier("Ce paiement vient de changer : recharge la page.", 409);
+
+    if (nouveauCentimes !== ancienCentimes) await reimputer(tx, id, ancienCentimes, nouveauCentimes);
+    if (!encaissement.dossierId) return null;
+
+    const avant = { montant: encaissement.montant, moyen: encaissement.moyen, reference: encaissement.reference, recuLe: encaissement.recuLe };
+    const apres = { montant: nouveauCentimes / 100, moyen, reference: entree.reference !== undefined ? entree.reference || null : encaissement.reference, recuLe };
+    const differences = [
+      ...(nouveauCentimes !== ancienCentimes ? [`montant ${formatCentimes(nouveauCentimes)} (au lieu de ${formatCentimes(ancienCentimes)})`] : []),
+      ...(jourParis(recuLe) !== jourParis(encaissement.recuLe) ? [`reçu le ${formatDateCourte(recuLe)} (au lieu du ${formatDateCourte(encaissement.recuLe)})`] : []),
+      ...(moyen !== encaissement.moyen ? [`par ${libelleMoyen(moyen)} (au lieu de ${libelleMoyen(encaissement.moyen)})`] : []),
+    ];
+    await tx.dossierEvenement.create({
+      data: {
+        dossierId: encaissement.dossierId,
+        type: "ENCAISSEMENT_CORRIGE",
+        direction: "INTERNE",
+        contenu: `Paiement corrigé : ${differences.length ? differences.join(", ") : descriptionPaiement(apres)}`,
+        metadata: JSON.stringify({ encaissementId: id, avant, apres }),
+      },
+    });
+    return suivreSoldeDossier(tx, encaissement.dossierId, "paiement corrigé", etaitSolde);
+  });
+  if (changement) await effetsDuChangementEtape(changement);
+  return encaissement.dossierId;
+}
+
+/** Montant corrigé : les imputations actives cessent de compter et se refont sur les mêmes pièces, dans la limite de ce qui y reste dû. */
+async function reimputer(tx: Transaction, encaissementId: string, ancienCentimes: number, nouveauCentimes: number): Promise<void> {
+  const actives = await tx.affectationEncaissement.findMany({
+    where: { encaissementId, statut: "ACTIVE" },
+    orderBy: { createdAt: "asc" },
+    select: { numeroDocumentId: true },
+  });
+  if (actives.length === 0) return;
+  await tx.affectationEncaissement.updateMany({
+    where: { encaissementId, statut: "ACTIVE" },
+    data: { statut: "LIBEREE", finLe: new Date(), motifFin: `Montant corrigé : ${formatCentimes(nouveauCentimes)} au lieu de ${formatCentimes(ancienCentimes)}` },
+  });
+  let reste = nouveauCentimes;
+  for (const numeroDocumentId of [...new Set(actives.map((affectation) => affectation.numeroDocumentId))]) {
+    if (reste <= 0) break;
+    const ligne = await tx.numeroDocument.findUnique({
+      where: { id: numeroDocumentId },
+      include: { affectations: { where: { statut: "ACTIVE" }, select: { montant: true } } },
+    });
+    if (!ligne) continue;
+    const document = ligne.documentId ? await tx.document.findUnique({ where: { id: ligne.documentId }, select: { totalHt: true } }) : null;
+    const total = document ? versCentimes(document.totalHt) : ligne.montant !== null ? versCentimes(ligne.montant) : null;
+    const regle = ligne.affectations.reduce((somme, affectation) => somme + versCentimes(affectation.montant), 0);
+    const part = total === null ? reste : Math.min(reste, Math.max(0, total - regle));
+    if (part <= 0) continue;
+    await tx.affectationEncaissement.create({ data: { encaissementId, numeroDocumentId, montant: part / 100 } });
+    reste -= part;
+  }
 }
 
 /* ── Facturation ─────────────────────────────────────────────────── */

@@ -82,6 +82,8 @@ export type DonneesTransition = {
   sansAcompte?: { motif: string; precision?: string } | null;
   /** Encaissement : paiement du solde, enregistré avec le changement d'étape. */
   solde?: { montant: number } | null;
+  /** Jour réel du passage (AAAA-MM-JJ), s'il a eu lieu avant aujourd'hui. */
+  survenuLe?: string;
 };
 
 /** Champs de coordonnées vides, dans l'ordre où on les lit. */

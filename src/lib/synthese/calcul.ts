@@ -67,6 +67,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
       select: {
         id: true,
         createdAt: true,
+        ouvertLe: true,
         updatedAt: true,
         etape: true,
         source: true,
@@ -74,7 +75,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
         clientCp: true,
         montantEstime: true,
         client: { select: { source: true, categorie: true } },
-        evenements: { where: { type: "CHANGEMENT_ETAPE" }, select: { createdAt: true, metadata: true }, orderBy: { createdAt: "asc" } },
+        evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { createdAt: true, survenuLe: true, metadata: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
         documents: { where: { numero: { not: null } }, select: { id: true, type: true, statut: true, totalHt: true, dateEmission: true, createdAt: true } },
         depenses: { select: { montant: true } },
       },
@@ -119,17 +120,21 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
 
   /* ── Commercial ─────────────────────────────────────────────────── */
   const rang = (etape: string) => (ETAPES_ACTIVES as readonly string[]).indexOf(etape);
+  // Chaque passage compte à sa date réelle (corrigée, ou reprise d'avant le CRM) ; une date inconnue ne compte
+  // ni dans l'activité d'une période ni dans les délais, mais l'étape atteinte compte pour la cohorte.
   const lus = dossiers.map((dossier) => {
     const changements = dossier.evenements
-      .map((evenement) => ({ createdAt: evenement.createdAt, metadata: lireMetadataChangementEtape(evenement.metadata) }))
-      .filter((changement): changement is { createdAt: Date; metadata: NonNullable<typeof changement.metadata> } => changement.metadata !== null);
+      .map((evenement) => ({ createdAt: evenement.survenuLe ?? evenement.createdAt, metadata: lireMetadataChangementEtape(evenement.metadata) }))
+      .filter((changement): changement is { createdAt: Date; metadata: NonNullable<typeof changement.metadata> } => changement.metadata !== null)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     const atteintes = new Set(changements.map((changement) => changement.metadata.vers));
     const rangMax = Math.max(-1, ...[...atteintes].map(rang));
-    const premier = (etape: EtapeDossier) => changements.find((changement) => changement.metadata.vers === etape)?.createdAt ?? null;
-    return { dossier, changements, rangMax, premier };
+    const dates = changements.filter((changement) => !changement.metadata.dateInconnue);
+    const premier = (etape: EtapeDossier) => dates.find((changement) => changement.metadata.vers === etape)?.createdAt ?? null;
+    return { dossier, changements: dates, rangMax, premier };
   });
 
-  const cohorte = lus.filter(({ dossier }) => dans(dossier.createdAt));
+  const cohorte = lus.filter(({ dossier }) => dans(dossier.ouvertLe ?? dossier.createdAt));
   const signesCohorte = cohorte.filter(({ rangMax }) => rangMax >= rang("SIGNE"));
   const devisCohorte = cohorte.filter(({ rangMax }) => rangMax >= rang("DEVIS_ENVOYE"));
 
@@ -151,7 +156,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     const valeurs = lus.flatMap(({ dossier, changements, premier }) => {
       const arrivee = premier(a);
       if (!arrivee || !dans(arrivee)) return [];
-      const depart = de === "OUVERTURE" ? (changements[0]?.createdAt ?? dossier.createdAt) : premier(de);
+      const depart = de === "OUVERTURE" ? (dossier.ouvertLe ?? changements[0]?.createdAt ?? dossier.createdAt) : premier(de);
       return depart && arrivee >= depart ? [(arrivee.getTime() - depart.getTime()) / JOUR_MS] : [];
     });
     const valeur = mediane(valeurs);

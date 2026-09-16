@@ -38,7 +38,7 @@ export function trierDossiers(dossiers: DossierResume[], tri: Tri): DossierResum
       if (ma === null || mb === null) return ma === mb ? 0 : ma === null ? 1 : -1;
       return (ma - mb) * signe;
     }
-    if (tri.cle === "anciennete") return a.createdAt.localeCompare(b.createdAt) * signe;
+    if (tri.cle === "anciennete") return a.ouvertLe.localeCompare(b.ouvertLe) * signe;
     if (!a.prochaineActionDate || !b.prochaineActionDate) return comparerParEcheance(a, b);
     return a.prochaineActionDate.localeCompare(b.prochaineActionDate) * signe;
   });
@@ -156,7 +156,7 @@ export function VueListe({
                     <ProchaineActionResume dossier={dossier} maintenant={maintenant} />
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-[#9CA3AF]">
-                    {formatDistanceStrict(new Date(dossier.createdAt), maintenant, { locale: fr })}
+                    {formatDistanceStrict(new Date(dossier.ouvertLe), maintenant, { locale: fr })}
                   </td>
                 </tr>
               );

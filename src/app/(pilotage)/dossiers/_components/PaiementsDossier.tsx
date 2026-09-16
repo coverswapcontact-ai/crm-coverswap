@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Ban, CircleCheck, Landmark, Plus, Undo2 } from "lucide-react";
+import { AlertTriangle, Ban, CircleCheck, Landmark, Pencil, Plus, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { ModaleActionEncaissement, type TypeActionEncaissement } from "@/components/pilotage/ActionsEncaissement";
 import { ChampsPaiement, lirePaiement, saisiePaiement, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
 import { Pastille } from "@/components/pilotage/ui";
-import { formatDateCourte } from "@/lib/dossiers/dates";
+import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { LIBELLES_MOYEN } from "@/lib/encaissements/constantes";
@@ -109,6 +109,80 @@ function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; o
   );
 }
 
+const FORMAT_MOIS = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric", timeZone: "Europe/Paris" });
+const libelleMois = (jour: string) => FORMAT_MOIS.format(new Date(`${jour}T12:00:00Z`));
+
+/** Correction d'un paiement enregistré : montant, date, moyen, référence. L'ancienne valeur reste au journal. */
+function ModaleCorrection({ detail, encaissement, onFermer, onFait }: { detail: DossierDetail; encaissement: EncaissementVue; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
+  const initiale: SaisiePaiement = {
+    montant: String(encaissement.montant).replace(".", ","),
+    recuLe: jourParis(encaissement.recuLe),
+    moyen: encaissement.moyen,
+    reference: encaissement.reference ?? "",
+  };
+  const [saisie, setSaisie] = useState<SaisiePaiement>(initiale);
+  const [envoi, setEnvoi] = useState(false);
+  const { paiement } = lirePaiement(saisie);
+  const moisCourant = jourParis(new Date()).slice(0, 7);
+  // Un mois passé du livre des recettes change : peut-être déjà déclaré.
+  const moisTouches = paiement
+    ? [...new Set([initiale.recuLe, paiement.recuLe].filter((jour) => jour.slice(0, 7) < moisCourant).map((jour) => jour.slice(0, 7)))]
+    : [];
+  const change =
+    paiement !== null &&
+    (paiement.montant !== encaissement.montant || paiement.recuLe !== initiale.recuLe || paiement.moyen !== encaissement.moyen || (paiement.reference ?? "") !== (encaissement.reference ?? ""));
+
+  async function enregistrer() {
+    if (!paiement || !change) return;
+    setEnvoi(true);
+    try {
+      const nouveau = await envoyerJson<DossierDetail>(`/api/encaissements/${encaissement.id}`, "PATCH", {
+        ...(paiement.montant !== encaissement.montant ? { montant: paiement.montant } : {}),
+        ...(paiement.recuLe !== initiale.recuLe ? { recuLe: paiement.recuLe } : {}),
+        ...(paiement.moyen !== encaissement.moyen ? { moyen: paiement.moyen } : {}),
+        ...((paiement.reference ?? "") !== (encaissement.reference ?? "") ? { reference: paiement.reference } : {}),
+      });
+      onFait(nouveau);
+      toast.success("Paiement corrigé", { description: nouveau.etape !== detail.etape ? "L'étape du dossier suit." : "L'ancienne valeur reste au journal." });
+      onFermer();
+    } catch (erreur) {
+      toast.error("Correction non enregistrée", { description: messageErreur(erreur) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      largeur="sm"
+      titre="Corriger ce paiement"
+      description="Montant, date de réception, moyen ou référence : la correction est tracée, l'ancienne valeur reste au journal."
+      pied={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Annuler
+          </Bouton>
+          <Bouton variante="primaire" disabled={!paiement || !change} chargement={envoi} onClick={() => void enregistrer()}>
+            Enregistrer la correction
+          </Bouton>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <ChampsPaiement saisie={saisie} onChange={setSaisie} />
+        {change && moisTouches.length > 0 ? (
+          <p className="flex gap-1.5 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+            <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
+            Le livre des recettes de {moisTouches.map((mois) => libelleMois(`${mois}-15`)).join(" et ")} change : si ce mois est déjà déclaré, la déclaration est à corriger.
+          </p>
+        ) : null}
+      </div>
+    </Modale>
+  );
+}
+
 type Action = { type: TypeActionEncaissement; encaissement: EncaissementVue };
 
 function imputations(encaissement: EncaissementVue): string {
@@ -124,7 +198,15 @@ function imputations(encaissement: EncaissementVue): string {
   return parties.join(" · ");
 }
 
-function LigneEncaissement({ encaissement, onAction }: { encaissement: EncaissementVue; onAction: (action: Action) => void }) {
+function LigneEncaissement({
+  encaissement,
+  onAction,
+  onCorriger,
+}: {
+  encaissement: EncaissementVue;
+  onAction: (action: Action) => void;
+  onCorriger: (encaissement: EncaissementVue) => void;
+}) {
   const termine = encaissement.statut !== "VALIDE";
   const aCrediter = encaissement.statut === "VALIDE" && encaissement.moyen === "CHEQUE" && !encaissement.crediteLe;
   return (
@@ -156,6 +238,9 @@ function LigneEncaissement({ encaissement, onAction }: { encaissement: Encaissem
               </Bouton>
             </>
           ) : null}
+          <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => onCorriger(encaissement)}>
+            Corriger
+          </Bouton>
           <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => onAction({ type: "annulation", encaissement })}>
             Annuler (erreur)
           </Bouton>
@@ -168,6 +253,7 @@ function LigneEncaissement({ encaissement, onAction }: { encaissement: Encaissem
 export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
   const [saisie, setSaisie] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
+  const [correction, setCorrection] = useState<EncaissementVue | null>(null);
   const { paiements } = detail;
   const factures = paiements.pieces.filter((piece) => piece.type === "FACTURE" && piece.active);
   const facture = factures.reduce((somme, piece) => somme + (piece.total ?? 0), 0);
@@ -227,7 +313,7 @@ export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail
           {paiements.encaissements.length > 0 ? (
             <ul>
               {paiements.encaissements.map((encaissement) => (
-                <LigneEncaissement key={encaissement.id} encaissement={encaissement} onAction={setAction} />
+                <LigneEncaissement key={encaissement.id} encaissement={encaissement} onAction={setAction} onCorriger={setCorrection} />
               ))}
             </ul>
           ) : null}
@@ -235,6 +321,9 @@ export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail
       )}
 
       {saisie ? <ModalePaiement detail={detail} onFermer={() => setSaisie(false)} onFait={onMisAJour} /> : null}
+      {correction ? (
+        <ModaleCorrection key={correction.id} detail={detail} encaissement={correction} onFermer={() => setCorrection(null)} onFait={onMisAJour} />
+      ) : null}
       {action ? (
         <ModaleActionEncaissement<DossierDetail>
           key={`${action.type}:${action.encaissement.id}`}

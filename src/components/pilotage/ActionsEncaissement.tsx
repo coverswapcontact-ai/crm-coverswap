@@ -166,7 +166,7 @@ export function ModalePaiementFacture({
       onFermer={onFermer}
       largeur="sm"
       titre={`Paiement reçu · facture ${facture.numero}`}
-      description={`${facture.client} · reste ${formatMontant(facture.reste)}. Un paiement enregistré ne se modifie plus : en cas d'erreur, il s'annule avec son motif.`}
+      description={`${facture.client} · reste ${formatMontant(facture.reste)}. À la date où il a été reçu, même lointaine.`}
       pied={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Bouton variante="fantome" onClick={onFermer}>

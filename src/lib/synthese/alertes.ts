@@ -83,8 +83,9 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
   const il30 = new Date(maintenant.getTime() - 30 * JOUR_MS);
   const il210 = new Date(maintenant.getTime() - 210 * JOUR_MS);
   const [recents, anterieurs] = await Promise.all([
-    prisma.dossier.count({ where: { createdAt: { gte: il30 } } }),
-    prisma.dossier.count({ where: { createdAt: { gte: il210, lt: il30 } } }),
+    // À la date réelle d'ouverture : un dossier repris d'avant le CRM ne gonfle pas le mois de sa saisie.
+    prisma.dossier.count({ where: { OR: [{ ouvertLe: { gte: il30 } }, { ouvertLe: null, createdAt: { gte: il30 } }] } }),
+    prisma.dossier.count({ where: { OR: [{ ouvertLe: { gte: il210, lt: il30 } }, { ouvertLe: null, createdAt: { gte: il210, lt: il30 } }] } }),
   ]);
   const moyenne = anterieurs / 6;
   if (moyenne >= 2 && recents < (moyenne * SEUILS_ALERTE.baisseActivitePct) / 100) {

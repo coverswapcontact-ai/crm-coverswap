@@ -5,12 +5,28 @@ import { ETAPES, type EtapeDossier } from "./constants";
 
 export type PassageEtape = {
   etape: EtapeDossier;
-  debut: string; // ISO
+  debut: string; // ISO, date réelle du passage
   fin: string | null; // null : étape en cours
   dureeMs: number;
+  /** Événement du passage (pour corriger sa date). */
+  evenementId?: string;
+  /** Ouverture du dossier. */
+  ouverture?: boolean;
+  /** Dossier repris : la date réelle n'est pas connue (écartée des délais). */
+  dateInconnue?: boolean;
+  /** Date de saisie, quand la date réelle a été corrigée ou reprise. */
+  saisiLe?: string;
 };
 
-type Changement = { createdAt: Date | string; vers: string };
+type Changement = {
+  createdAt: Date | string;
+  /** Date réelle, quand elle diffère de la saisie ; à défaut, createdAt. */
+  survenuLe?: Date | string | null;
+  vers: string;
+  evenementId?: string;
+  ouverture?: boolean;
+  dateInconnue?: boolean;
+};
 
 const JOUR_MS = 24 * 60 * 60_000;
 
@@ -22,16 +38,26 @@ function estEtape(valeur: string): valeur is EtapeDossier {
 export function parcoursEtapes(changements: Changement[], maintenant: Date = new Date()): PassageEtape[] {
   const tries = changements
     .filter((changement) => estEtape(changement.vers))
-    .map((changement) => ({ date: new Date(changement.createdAt), vers: changement.vers as EtapeDossier }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-  return tries.map((changement, index) => {
+    .map((changement, ordre) => ({
+      date: new Date(changement.survenuLe ?? changement.createdAt),
+      ordre,
+      changement,
+      vers: changement.vers as EtapeDossier,
+    }))
+    // À date égale (plusieurs étapes reprises le même jour), l'ordre de saisie.
+    .sort((a, b) => a.date.getTime() - b.date.getTime() || a.ordre - b.ordre);
+  return tries.map(({ date, changement, vers }, index) => {
     const suivant = tries[index + 1];
     const fin = suivant ? suivant.date : null;
     return {
-      etape: changement.vers,
-      debut: changement.date.toISOString(),
+      etape: vers,
+      debut: date.toISOString(),
       fin: fin?.toISOString() ?? null,
-      dureeMs: Math.max(0, (fin ?? maintenant).getTime() - changement.date.getTime()),
+      dureeMs: Math.max(0, (fin ?? maintenant).getTime() - date.getTime()),
+      ...(changement.evenementId ? { evenementId: changement.evenementId } : {}),
+      ...(changement.ouverture ? { ouverture: true } : {}),
+      ...(changement.dateInconnue ? { dateInconnue: true } : {}),
+      ...(changement.survenuLe ? { saisiLe: new Date(changement.createdAt).toISOString() } : {}),
     };
   });
 }
@@ -55,10 +81,12 @@ export type DelaisCles = {
 };
 
 export function delaisCles(parcours: PassageEtape[]): DelaisCles {
-  const premier = (etape: EtapeDossier) => parcours.find((passage) => passage.etape === etape)?.debut ?? null;
+  // Une date inconnue (dossier repris) ne fait pas de délai.
+  const connus = parcours.filter((passage) => !passage.dateInconnue);
+  const premier = (etape: EtapeDossier) => connus.find((passage) => passage.etape === etape)?.debut ?? null;
   const ecart = (de: string | null, a: string | null) =>
     de && a && new Date(a) >= new Date(de) ? new Date(a).getTime() - new Date(de).getTime() : null;
-  const ouverture = parcours[0]?.debut ?? null;
+  const ouverture = parcours[0] && !parcours[0].dateInconnue ? parcours[0].debut : null;
   return {
     ouvertureASignature: ecart(ouverture, premier("SIGNE")),
     signatureAChantier: ecart(premier("SIGNE"), premier("CHANTIER")),

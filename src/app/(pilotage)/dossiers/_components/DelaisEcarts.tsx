@@ -1,11 +1,16 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Clock, Pencil } from "lucide-react";
+import { toast } from "sonner";
+import { Pastille } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
-import { dureeParEtape, formatDuree } from "@/lib/dossiers/delais";
+import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
+import { dureeParEtape, formatDuree, type PassageEtape } from "@/lib/dossiers/delais";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
-import { COULEURS_ETAPE, TitreSection } from "./ui";
+import { envoyerJson, messageErreur } from "./client";
+import { Bouton, Champ, COULEURS_ETAPE, Modale, TitreSection } from "./ui";
 
 function LignePrix({ libelle, montant, accent }: { libelle: string; montant: number | null; accent?: string }) {
   if (montant === null) return null;
@@ -20,8 +25,83 @@ function LignePrix({ libelle, montant, accent }: { libelle: string; montant: num
   );
 }
 
-/** Temps passé à chaque étape et chemin du prix, du premier devis au facturé. */
-export function DelaisEcarts({ detail }: { detail: DossierDetail }) {
+const libellePassage = (passage: PassageEtape) =>
+  passage.ouverture ? `Ouverture · ${LIBELLES_ETAPE[passage.etape]}` : LIBELLES_ETAPE[passage.etape];
+
+/** Date réelle d'un passage : « signé en juillet », même saisi en septembre. L'ordre du parcours suit les dates. */
+function ModaleDatePassage({
+  detail,
+  index,
+  onFermer,
+  onMisAJour,
+}: {
+  detail: DossierDetail;
+  index: number;
+  onFermer: () => void;
+  onMisAJour: (detail: DossierDetail) => void;
+}) {
+  const passage = detail.parcours[index];
+  const precedent = detail.parcours[index - 1];
+  const suivant = detail.parcours[index + 1];
+  const aujourdhui = jourParis(new Date());
+  const [jour, setJour] = useState(passage.dateInconnue ? "" : jourParis(passage.debut));
+  const [envoi, setEnvoi] = useState(false);
+
+  const avertissement =
+    jour && precedent && !precedent.dateInconnue && jour < jourParis(precedent.debut)
+      ? `C'est avant « ${libellePassage(precedent)} » (${formatDateCourte(precedent.debut)}) : le parcours sera remis dans l'ordre des dates.`
+      : jour && suivant && !suivant.dateInconnue && jour > jourParis(suivant.debut)
+        ? `C'est après « ${libellePassage(suivant)} » (${formatDateCourte(suivant.debut)}) : le parcours sera remis dans l'ordre des dates.`
+        : null;
+
+  async function enregistrer() {
+    if (!jour || !passage.evenementId) return;
+    setEnvoi(true);
+    try {
+      onMisAJour(await envoyerJson<DossierDetail>(`/api/dossiers/${detail.id}/evenements/${passage.evenementId}`, "PATCH", { survenuLe: jour }));
+      toast.success("Date enregistrée", { description: "L'ancienne date reste au journal." });
+      onFermer();
+    } catch (probleme) {
+      toast.error("Date non enregistrée", { description: messageErreur(probleme) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      largeur="sm"
+      titre={`Date réelle : ${libellePassage(passage)}`}
+      description={passage.saisiLe ? `Saisi dans le CRM le ${formatDateCourte(passage.saisiLe)}.` : "Le jour où c'est vraiment arrivé, même avant la saisie dans le CRM."}
+      pied={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Annuler
+          </Bouton>
+          <Bouton variante="primaire" disabled={!jour || jour > aujourdhui} chargement={envoi} onClick={() => void enregistrer()}>
+            Enregistrer la date
+          </Bouton>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Champ libelle="Date" type="date" max={aujourdhui} value={jour} onChange={(evenement) => setJour(evenement.target.value)} erreur={jour > aujourdhui ? "La date est à venir." : null} />
+        {avertissement ? (
+          <p className="flex gap-1.5 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+            <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
+            {avertissement}
+          </p>
+        ) : null}
+      </div>
+    </Modale>
+  );
+}
+
+/** Temps passé à chaque étape, dates réelles des passages (corrigeables) et chemin du prix, du premier devis au facturé. */
+export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
+  const [enCorrection, setEnCorrection] = useState<number | null>(null);
   const courant = detail.parcours.at(-1);
   const durees = dureeParEtape(detail.parcours);
   const total = detail.parcours.reduce((somme, passage) => somme + passage.dureeMs, 0);
@@ -69,6 +149,30 @@ export function DelaisEcarts({ detail }: { detail: DossierDetail }) {
           </div>
         ) : null}
 
+        {detail.parcours.length > 0 ? (
+          <ol aria-label="Dates des étapes" className="border-t-[0.5px] border-[#2A2D34] pt-2">
+            {detail.parcours.map((passage, index) => (
+              <li key={passage.evenementId ?? `${passage.etape}-${index}`} className="flex min-h-8 items-center justify-between gap-3 text-[13px]">
+                <span className="min-w-0 truncate text-[#9CA3AF]">{libellePassage(passage)}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  {passage.dateInconnue ? (
+                    <Pastille ton="ambre">date inconnue</Pastille>
+                  ) : (
+                    <span className="text-[#F2F3F5] tabular-nums" title={passage.saisiLe ? `Saisi le ${formatDateCourte(passage.saisiLe)}` : undefined}>
+                      {formatDateCourte(passage.debut)}
+                    </span>
+                  )}
+                  {passage.evenementId ? (
+                    <Bouton variante="fantome" taille="icone" className="h-8 w-8 sm:h-7 sm:w-7" aria-label={`Corriger la date : ${libellePassage(passage)}`} onClick={() => setEnCorrection(index)}>
+                      <Pencil size={12} aria-hidden />
+                    </Bouton>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+
         {delaisVisibles.length > 0 ? (
           <ul className="border-t-[0.5px] border-[#2A2D34] pt-2">
             {delaisVisibles.map((ligne) => (
@@ -101,6 +205,9 @@ export function DelaisEcarts({ detail }: { detail: DossierDetail }) {
           </div>
         ) : null}
       </div>
+      {enCorrection !== null && detail.parcours[enCorrection] ? (
+        <ModaleDatePassage key={enCorrection} detail={detail} index={enCorrection} onFermer={() => setEnCorrection(null)} onMisAJour={onMisAJour} />
+      ) : null}
     </section>
   );
 }

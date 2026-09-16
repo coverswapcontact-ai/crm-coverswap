@@ -166,7 +166,7 @@ function ContenuPanneau({
               {detail.clientNom}
             </SheetTitle>
             <SheetDescription className="mt-0.5 text-[12px] text-[#9CA3AF]">
-              {lieu} · ouvert le {formatDateCourte(detail.createdAt)}
+              {lieu} · ouvert le {formatDateCourte(detail.ouvertLe)}
             </SheetDescription>
           </div>
           <Bouton variante="fantome" taille="icone" onClick={onFermer} aria-label="Fermer le dossier" className="-mr-2">
@@ -215,7 +215,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <ChangementEtape detail={detail} onMisAJour={onMisAJour} />
-          <DelaisEcarts detail={detail} />
+          <DelaisEcarts detail={detail} onMisAJour={onMisAJour} />
           <DocumentsDossier
             detail={detail}
             onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
@@ -426,7 +426,8 @@ function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierI
                 <div className="min-w-0">
                   <p className="text-[13px] break-words text-[#D1D5DB]">{evenement.contenu}</p>
                   <p className="mt-0.5 text-[11px] text-[#6B7280]">
-                    {LIBELLES_TYPE_EVENEMENT[evenement.type]} · {formatHorodatage(evenement.createdAt)}
+                    {LIBELLES_TYPE_EVENEMENT[evenement.type]} ·{" "}
+                    {evenement.saisiLe ? `${formatDateCourte(evenement.date)} (saisi le ${formatDateCourte(evenement.saisiLe)})` : formatHorodatage(evenement.date)}
                     {evenement.messageId ? (
                       <>
                         {" · "}

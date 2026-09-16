@@ -8,7 +8,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,7 +21,9 @@ function versUrl(fichier: string): string {
 }
 
 function baseModele(): string {
-  const empreinte = createHash("sha256").update(readFileSync(SCHEMA)).digest("hex").slice(0, 16);
+  // Fins de ligne ignorées : un même schéma extrait sous Windows (CRLF) partage sa base modèle.
+  const schema = readFileSync(SCHEMA, "utf8").split(String.fromCharCode(13)).join("");
+  const empreinte = createHash("sha256").update(schema).digest("hex").slice(0, 16);
   const dossier = path.join(tmpdir(), "coverswap-essais");
   mkdirSync(dossier, { recursive: true });
   const modele = path.join(dossier, `modele-${empreinte}.db`);
@@ -34,7 +36,15 @@ function baseModele(): string {
     stdio: "pipe",
   });
   // Renommage atomique : deux fichiers de test lancés en parallèle ne lisent jamais une base à moitié créée.
-  if (!existsSync(modele)) renameSync(provisoire, modele);
+  // S'ils la créent au même instant, le second renommage échoue (fichier en cours de copie sous
+  // Windows) : la base de l'autre, complète, sert.
+  try {
+    if (!existsSync(modele)) renameSync(provisoire, modele);
+  } catch (erreur) {
+    if (!existsSync(modele)) throw erreur;
+  } finally {
+    rmSync(provisoire, { force: true });
+  }
   return modele;
 }
 

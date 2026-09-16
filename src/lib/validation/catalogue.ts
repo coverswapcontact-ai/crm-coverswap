@@ -4,6 +4,7 @@ import {
   propositionProchaineAction,
 } from "@/lib/dossiers/propositions";
 import { propositionFusionClients } from "@/lib/clients/fusion";
+import { propositionEnvoiMail } from "@/lib/mail/propositions";
 import type { DefinitionProposition } from "./definitions";
 
 /**
@@ -16,6 +17,7 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionProchaineAction,
   propositionChangementEtape,
   propositionFusionClients,
+  propositionEnvoiMail,
 ] as unknown as DefinitionProposition<never>[];
 
 // Types ajoutés à l'exécution (tests).

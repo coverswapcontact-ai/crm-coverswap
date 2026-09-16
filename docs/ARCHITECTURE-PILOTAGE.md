@@ -681,3 +681,52 @@ l'autre : « à rattacher », compté et signalé.
 - Pas de lecture automatique du ticket (montant, fournisseur) : saisie à la
   main, aidée par les fournisseurs récents.
 
+## 13. Mails vers les clients et relances : proposés, jamais envoyés seuls
+
+### Ce qui a changé
+
+La route `/api/cron/relance` **envoyait seule** une relance aux clients dont le
+devis (ancien écran) avait plus de trois jours : contraire à « aucun mail
+envoyé sans validation ». Elle ne fait plus que **proposer** les relances dues ;
+la même proposition tourne en tâche de fond toutes les six heures.
+
+### Un seul chemin pour un mail vers un client
+
+Tout mail qui part chez un client est une proposition `ENVOI_MAIL`
+(`src/lib/mail/propositions.ts`) : destinataire, objet, message, documents
+joints (PDF du devis ou de la facture). Elle est **sensible** : jamais exécutée
+sans décision humaine, jamais validée en lot, jamais exécutée par un agent.
+
+- Rédigée par le système (relance), plus tard par l'agent mail, ou par la
+  personne elle-même (« Envoyer par mail » sur un devis ou une facture, qui
+  propose et valide dans le même geste) : le circuit est le même.
+- Le texte validé (modifiable) est celui qui part ; il est gardé dans la trace.
+- L'envoi passe par la file de tâches (nouvel essai en cas de panne). La trace
+  `MAIL_ENVOYE` est écrite dès l'envoi et empêche un second envoi si la tâche
+  est rejouée.
+- Effets : document « Envoyé » ; une relance fait passer « Devis envoyé » à
+  « Relance ».
+- Envoyeur : Resend si `RESEND_API_KEY` et `EMAIL_FROM` sont configurées (la
+  boîte Gmail prendra le relais une fois connectée) ; sans envoyeur, la tâche
+  échoue en le disant et rien ne part. Réponse attendue sur
+  `coverswap.contact@gmail.com` (Reply-To).
+
+### Relances de devis (`src/lib/relances/service.ts`)
+
+- Délai : le paramètre daté `DELAI_RELANCE_DEVIS` ; sans lui, rien n'est
+  proposé.
+- Dossier à l'étape « Devis envoyé » ou « Relance », devis en vigueur, adresse
+  connue ; deux relances par devis au plus (la seconde, « une dernière fois »,
+  un délai après la première).
+- Client qui a refusé ou retiré son accord pour les mails : pas de relance par
+  mail (compté, à relancer autrement).
+- Une relance ne se propose qu'une fois par rang (même rejetée) ; une
+  proposition non traitée expire au bout de quatorze jours, et devient sans
+  objet si le dossier a changé d'étape entre-temps.
+
+### Limites connues
+
+- Les relances ne portent que sur les dossiers du module Dossiers, plus sur
+  l'ancien écran des devis.
+- Pas de suivi de lecture ni de réponse ici : c'est le rôle de l'agent mail.
+

@@ -41,16 +41,15 @@ export const LIBELLES_ETAPE: Record<EtapeDossier, string> = {
 };
 
 /* ── Règles d'entrée et de sortie ─────────────────────────────────
-   Écrites pour qu'un humain ET un futur agent puissent décider
-   d'avancer un dossier. Lecture :
-   - `entree`  : ce qui doit être vrai pour entrer dans l'étape en avançant ;
-   - `sorties` : les étapes suivantes permises depuis cette étape.
-   En plus de `sorties`, toujours permis depuis une étape active :
-   - revenir à une étape active antérieure (correction, tracée) ;
-   - sortir vers PERDU (motif obligatoire) ou EN_PAUSE, sauf depuis ENCAISSE.
-   Depuis PERDU ou EN_PAUSE, seule la reprise est permise : elle ramène à
-   l'étape quittée, lue dans le dernier événement CHANGEMENT_ETAPE.
-   Un retour arrière ou une reprise ne revérifie pas `entree`.
+   Écrites pour qu'un humain ET un futur agent sachent ce qu'une étape
+   suppose. Signaler, jamais bloquer : toute étape peut passer à toute
+   autre, dans les deux sens (src/lib/dossiers/regles.ts). Lecture :
+   - `entree`  : ce qui devrait être vrai en entrant dans l'étape ; ce qui
+                 manque devient un avertissement, lu puis confirmé, gardé
+                 dans l'historique du passage ;
+   - `sorties` : le chemin habituel depuis cette étape, mis en avant.
+   Avancer de plusieurs étapes rappelle les critères de chaque étape
+   franchie ; un retour, une pause ou une reprise ne rappellent rien.
 ──────────────────────────────────────────────────────────────── */
 
 export const CRITERES_ENTREE = [
@@ -173,6 +172,7 @@ export const SOURCES_DOSSIER = [
   "SOUS_TRAITANCE",
   "ENTRANT",
   "AUTRE",
+  "INCONNUE", // non renseignée à l'ouverture : signalée, à compléter
 ] as const;
 export type SourceDossier = (typeof SOURCES_DOSSIER)[number];
 
@@ -182,6 +182,7 @@ export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
   SOUS_TRAITANCE: "Sous-traitance",
   ENTRANT: "Entrant (site, Meta, appel)",
   AUTRE: "Autre",
+  INCONNUE: "Non renseignée",
 };
 
 export const MOTIFS_PERTE = [

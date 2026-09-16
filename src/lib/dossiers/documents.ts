@@ -315,22 +315,17 @@ async function emettre(emission: Emission) {
   }
 }
 
+/** Étape du dossier : un document se génère à toute étape (perdu, en pause ou encaissé : c'est signalé à l'écran). */
 async function etapeGenerable(dossierId: string): Promise<EtapeDossier> {
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
   if (!estEtape(dossier.etape)) throw new Error(`Étape inconnue en base : ${dossier.etape}`);
-  if (dossier.etape === "PERDU" || dossier.etape === "EN_PAUSE") {
-    throw new ErreurMetier("Reprends le dossier avant de générer un document.", 409);
-  }
   return dossier.etape;
 }
 
 /** Devis ou facture depuis l'éditeur de lignes. */
 export async function genererDocument(dossierId: string, entree: EntreeGeneration) {
   const etape = await etapeGenerable(dossierId);
-  if (etape === "ENCAISSE") {
-    throw new ErreurMetier("Dossier encaissé : ouvre un nouveau dossier pour une nouvelle prestation.", 409);
-  }
 
   let remplace: { id: string; numero: string } | null = null;
   if (entree.remplaceDocumentId) {

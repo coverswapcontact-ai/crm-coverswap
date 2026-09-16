@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRightLeft,
   Ban,
   ChevronDown,
@@ -153,6 +154,7 @@ function ContenuPanneau({
 }) {
   const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue } | null>(null);
   const telephone = detail.clientTelephone.replace(/[^\d+]/g, "");
+  const lieu = [detail.clientVille, LIBELLES_SOURCE[detail.source]].filter(Boolean).join(" · ");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -164,14 +166,14 @@ function ContenuPanneau({
               {detail.clientNom}
             </SheetTitle>
             <SheetDescription className="mt-0.5 text-[12px] text-[#9CA3AF]">
-              {detail.clientVille} · {LIBELLES_SOURCE[detail.source]} · ouvert le {formatDateCourte(detail.createdAt)}
+              {lieu} · ouvert le {formatDateCourte(detail.createdAt)}
             </SheetDescription>
           </div>
           <Bouton variante="fantome" taille="icone" onClick={onFermer} aria-label="Fermer le dossier" className="-mr-2">
             <X size={16} />
           </Bouton>
         </div>
-        <p className="mt-2 truncate text-[13px] text-[#D1D5DB]">{detail.objet}</p>
+        <p className={cn("mt-2 truncate text-[13px]", detail.objet ? "text-[#D1D5DB]" : "text-[#6B7280] italic")}>{detail.objet || "Objet du chantier à préciser"}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PastilleEtape etape={detail.etape} libelle={LIBELLES_ETAPE[detail.etape]} />
           <BadgeMain main={mainDe(detail, maintenant)} long />
@@ -179,10 +181,12 @@ function ContenuPanneau({
         </div>
         <BarreProgression etape={detail.etape} etapeAvantSortie={detail.etapeAvantSortie} className="mt-3 max-w-[420px]" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <a href={`tel:${telephone}`} className={CLASSE_PUCE_LIEN}>
-            <Phone size={12} aria-hidden />
-            {detail.clientTelephone}
-          </a>
+          {telephone ? (
+            <a href={`tel:${telephone}`} className={CLASSE_PUCE_LIEN}>
+              <Phone size={12} aria-hidden />
+              {detail.clientTelephone}
+            </a>
+          ) : null}
           {detail.clientEmail ? (
             <a href={`mailto:${detail.clientEmail}`} className={CLASSE_PUCE_LIEN}>
               <Mail size={12} aria-hidden />
@@ -203,6 +207,7 @@ function ContenuPanneau({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="space-y-8 px-5 py-5">
+          {detail.completude.length > 0 ? <ACompleter detail={detail} /> : null}
           <ProchaineActionEditeur
             key={`${detail.id}:${detail.prochaineAction}:${detail.prochaineActionDate}`}
             detail={detail}
@@ -258,6 +263,27 @@ function ContenuPanneau({
         />
       ) : null}
     </div>
+  );
+}
+
+/* ── À compléter ─────────────────────────────────────────────────── */
+
+/** Ce qui manque au dossier : signalé, jamais exigé. Chaque point se complète plus bas. */
+function ACompleter({ detail }: { detail: DossierDetail }) {
+  return (
+    <section aria-label="À compléter" className="rounded-[11px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] px-3.5 py-3">
+      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5B454]">
+        <AlertTriangle size={13} aria-hidden />
+        À compléter · {detail.completude.length}
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+        {detail.completude.map((point) => (
+          <li key={point.code} className="rounded-full border-[0.5px] border-[#EF9F27]/30 px-2 py-0.5 text-[12px] text-[#FCD9A0]">
+            {point.libelle}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

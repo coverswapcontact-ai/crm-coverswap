@@ -203,8 +203,7 @@ export function PhotosDossier({
                 <ExternalLink size={13} aria-hidden />
                 Ouvrir l&apos;original
               </a>
-              {agrandie.apres || avant.length > 1 ? (
-                confirmation ? (
+              {confirmation ? (
                   <div className="flex gap-2">
                     <Bouton variante="fantome" onClick={() => setConfirmation(false)}>
                       Annuler
@@ -217,10 +216,7 @@ export function PhotosDossier({
                   <Bouton variante="danger" icone={<Trash2 size={14} aria-hidden />} onClick={() => setConfirmation(true)}>
                     Retirer
                   </Bouton>
-                )
-              ) : (
-                <span className="text-[12px] text-[#6B7280]">Un dossier garde au moins une photo.</span>
-              )}
+                )}
             </div>
           }
         >

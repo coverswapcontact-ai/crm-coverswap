@@ -35,9 +35,11 @@ export type ChangementEtape = {
   nature: MetadataChangementEtape["nature"];
   /** Document concerné (devis accepté à la signature, document généré). */
   documentId?: string;
+  /** Ce qui manquait au passage, lu et confirmé. */
+  avertissements?: string[];
 };
 
-/** Lit un dossier et tout ce qu'il faut pour vérifier un changement d'étape. */
+/** Lit un dossier et tout ce qu'il faut pour évaluer un changement d'étape. */
 export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
   const dossier = await tx.dossier.findUnique({
     where: { id: dossierId },
@@ -50,13 +52,14 @@ export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
       evenements: {
         where: { type: "CHANGEMENT_ETAPE" },
         select: { metadata: true },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       },
     },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
   if (!estEtape(dossier.etape)) throw new Error(`Étape inconnue en base : ${dossier.etape}`);
 
+  const paiements = await faitsPaiements(tx, dossierId);
   const faits: FaitsDossier = {
     etape: dossier.etape,
     clientNom: dossier.clientNom,
@@ -70,7 +73,9 @@ export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
     aDevisGenere: dossier.documents.some((document) => document.type === "DEVIS"),
     // Une facture annulée par un avoir ne compte plus : le dossier attend la nouvelle.
     aFactureGeneree: dossier.documents.some((document) => document.type === "FACTURE" && document.statut !== "ANNULEE"),
-    ...(await faitsPaiements(tx, dossierId).then(({ acompteEnregistre, soldeEncaisse }) => ({ acompteEnregistre, soldeEncaisse }))),
+    acompteEnregistre: paiements.acompteEnregistre,
+    soldeEncaisse: paiements.soldeEncaisse,
+    resteDu: paiements.resteCentimes / 100,
   };
   const avantSortie = etapeAvantSortie(
     dossier.evenements
@@ -90,14 +95,12 @@ type Application = ChangementEtape & {
 };
 
 /**
- * Écrit un changement d'étape déjà vérifié : l'étape du dossier et
- * l'événement CHANGEMENT_ETAPE, dans la transaction de l'appelant.
+ * Écrit un changement d'étape : l'étape du dossier et l'événement
+ * CHANGEMENT_ETAPE (avec ce qui manquait, s'il manquait quelque chose), dans
+ * la transaction de l'appelant.
  */
-export async function appliquerChangementEtape(
-  tx: Transaction,
-  application: Application
-): Promise<ChangementEtape> {
-  const { dossierId, de, vers, nature, donnees = {}, documentId } = application;
+export async function appliquerChangementEtape(tx: Transaction, application: Application): Promise<ChangementEtape> {
+  const { dossierId, de, vers, nature, donnees = {}, documentId, avertissements = [] } = application;
 
   const data: Prisma.DossierUpdateManyMutationInput = { etape: vers };
   let perte: Pick<MetadataChangementEtape, "perteEtape" | "perteMontantPropose"> = {};
@@ -138,7 +141,7 @@ export async function appliquerChangementEtape(
       perteCommentaire: null,
     });
   }
-  if (vers === "PLANIFIE" && donnees.dateChantier) data.dateChantier = dateDepuisJour(donnees.dateChantier);
+  if (donnees.dateChantier) data.dateChantier = dateDepuisJour(donnees.dateChantier);
 
   // Garde optimiste : si l'étape a bougé depuis la lecture, rien n'est écrit.
   const { count } = await tx.dossier.updateMany({ where: { id: dossierId, etape: de }, data });
@@ -146,7 +149,7 @@ export async function appliquerChangementEtape(
     throw new ErreurMetier("Le dossier a changé entre-temps : recharge-le puis réessaie.", 409);
   }
 
-  // Retour avant « Signé » : le devis accepté redevient un simple devis généré.
+  // Retour avant « Signé » : le devis accepté redevient un simple devis émis.
   if (estEtapeActive(vers) && rangEtape(vers) < rangEtape("SIGNE")) {
     await tx.document.updateMany({
       where: { dossierId, type: "DEVIS", statut: "ACCEPTE" },
@@ -155,10 +158,9 @@ export async function appliquerChangementEtape(
   }
 
   const confirmations = CRITERES_DECLARATIFS.filter((critere) => donnees.confirmations?.[critere]);
-  const sansAcompte =
-    vers === "SIGNE" && donnees.sansAcompte?.motif
-      ? libelleMotif(MOTIFS_SANS_ACOMPTE, donnees.sansAcompte.motif, donnees.sansAcompte.precision)
-      : null;
+  const sansAcompte = donnees.sansAcompte?.motif
+    ? libelleMotif(MOTIFS_SANS_ACOMPTE, donnees.sansAcompte.motif, donnees.sansAcompte.precision)
+    : null;
   const metadata: MetadataChangementEtape = {
     de,
     vers,
@@ -168,12 +170,13 @@ export async function appliquerChangementEtape(
     ...(vers === "PERDU" && donnees.perteMontantConcurrent != null ? { perteMontantConcurrent: donnees.perteMontantConcurrent } : {}),
     ...(vers === "PERDU" && donnees.perteCommentaire?.trim() ? { perteCommentaire: donnees.perteCommentaire.trim() } : {}),
     ...perte,
-    ...(vers === "PLANIFIE" && donnees.dateChantier ? { dateChantier: donnees.dateChantier } : {}),
+    ...(donnees.dateChantier ? { dateChantier: donnees.dateChantier } : {}),
     ...(confirmations.length > 0 ? { confirmations } : {}),
-    ...(vers === "SIGNE" && donnees.acompte ? { acompte: { montant: donnees.acompte.montant } } : {}),
+    ...(donnees.acompte ? { acompte: { montant: donnees.acompte.montant } } : {}),
     ...(sansAcompte ? { sansAcompte } : {}),
     ...(application.raison ? { raison: application.raison } : {}),
     ...(documentId ? { documentId } : {}),
+    ...(avertissements.length > 0 ? { avertissements } : {}),
   };
 
   let contenu = `${LIBELLES_ETAPE[de]} → ${LIBELLES_ETAPE[vers]}`;
@@ -184,6 +187,9 @@ export async function appliquerChangementEtape(
   else if (nature === "AUTOMATIQUE") contenu += ", à la génération du document";
   if (nature === "RETOUR") contenu += " (retour en arrière)";
   if (nature === "REPRISE") contenu += " (reprise)";
+  if (avertissements.length > 0) {
+    contenu += `. Passé en connaissance de cause : ${avertissements.map((message) => message.replace(/\.$/, "").toLowerCase()).join(" ; ")}.`;
+  }
 
   await tx.dossierEvenement.create({
     data: {
@@ -195,7 +201,7 @@ export async function appliquerChangementEtape(
     },
   });
 
-  return { dossierId, de, vers, nature, ...(documentId ? { documentId } : {}) };
+  return { dossierId, de, vers, nature, ...(documentId ? { documentId } : {}), ...(avertissements.length > 0 ? { avertissements } : {}) };
 }
 
 export const schemaChangementEtape = z.object({
@@ -231,8 +237,9 @@ export type EntreeChangementEtape = DonneesTransition & {
 };
 
 /**
- * Vérifie et écrit un changement d'étape dans la transaction de l'appelant.
- * Les effets (lead, Meta) restent à lancer après la transaction.
+ * Évalue et écrit un changement d'étape dans la transaction de l'appelant.
+ * Rien ne l'empêche, sauf de rester à la même étape : ce qui manque est gardé
+ * dans l'événement. Les effets (lead, Meta) restent à lancer après la transaction.
  */
 export async function changerEtapeDansTransaction(
   tx: Transaction,
@@ -243,13 +250,21 @@ export async function changerEtapeDansTransaction(
   const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
   if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
 
+  // Franchir « Signé » en avançant : le devis choisi (à défaut le dernier) est le devis accepté.
   let documentId: string | undefined;
-  if (entree.vers === "SIGNE" && verification.nature === "SUIVANTE") {
+  const reference = estEtapeActive(faits.etape) ? faits.etape : avantSortie;
+  const franchitSignature =
+    estEtapeActive(entree.vers) && rangEtape(entree.vers) >= rangEtape("SIGNE") && (reference === null || rangEtape(reference) < rangEtape("SIGNE"));
+  if (franchitSignature) {
     const devis = dossier.documents.filter((document) => document.type === "DEVIS" && document.statut !== "REMPLACE");
-    const signe = entree.devisAccepteId ? devis.find((document) => document.id === entree.devisAccepteId) : devis[0];
-    if (!signe) throw new ErreurMetier("Devis signé introuvable dans ce dossier.", 400);
-    await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
-    documentId = signe.id;
+    const signe = entree.devisAccepteId
+      ? devis.find((document) => document.id === entree.devisAccepteId)
+      : (devis.find((document) => document.statut === "ACCEPTE") ?? devis[0]);
+    if (entree.devisAccepteId && !signe) throw new ErreurMetier("Devis signé introuvable dans ce dossier.", 400);
+    if (signe) {
+      if (signe.statut !== "ACCEPTE") await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
+      documentId = signe.id;
+    }
   }
 
   return appliquerChangementEtape(tx, {
@@ -260,6 +275,7 @@ export async function changerEtapeDansTransaction(
     donnees: entree,
     documentId,
     etapeReference: avantSortie,
+    avertissements: verification.avertissements.map((avertissement) => avertissement.message),
   });
 }
 

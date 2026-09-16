@@ -18,15 +18,7 @@ import {
 import { dateDepuisJour, estJourValide } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import { versCentimes } from "./montants";
-import {
-  estEtape,
-  estEtapeActive,
-  estEtapeSortie,
-  etapeAvantSortie,
-  lireMetadataChangementEtape,
-  rangEtape,
-  type MetadataChangementEtape,
-} from "./regles";
+import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
 import {
   enregistrerPhoto,
   estPhotoApres,
@@ -41,12 +33,26 @@ import {
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
+import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { pointsACompleter, type PointACompleter } from "./completude";
 import { delaisCles, ecartsPrix, parcoursEtapes } from "./delais";
 
 /* ── Validation ─────────────────────────────────────────────────── */
 
-const texteObligatoire = (vide: string, max: number, trop: string) =>
-  z.string(vide).trim().min(1, vide).max(max, trop);
+// Signaler, jamais bloquer : seul le nom du client est exigé. Ce qui manque
+// (adresse, téléphone, objet, source, photos) est signalé sur le dossier
+// (completude.ts). Est refusé seulement ce qui ne peut pas s'enregistrer tel
+// quel : un texte trop long, une adresse e-mail illisible, un montant qui
+// n'est pas un nombre, une date impossible.
+
+/** Texte facultatif d'une colonne non nulle : vide = « » (null accepté). */
+const texteLibre = (max: number, trop: string) =>
+  z
+    .string(trop)
+    .trim()
+    .max(max, trop)
+    .nullable()
+    .transform((valeur) => valeur ?? "");
 
 const jourOuNull = (message: string) =>
   z
@@ -56,18 +62,15 @@ const jourOuNull = (message: string) =>
     .transform((valeur) => valeur || null);
 
 const champsDossier = z.object({
-  clientNom: texteObligatoire("Le nom du client est obligatoire.", 120, "Nom trop long : 120 caractères maximum."),
-  clientAdresse: texteObligatoire("L'adresse est obligatoire.", 200, "Adresse trop longue : 200 caractères maximum."),
-  clientCp: z
-    .string("Code postal invalide : 5 chiffres attendus.")
+  clientNom: z
+    .string("Le nom du client est obligatoire.")
     .trim()
-    .regex(/^\d{5}$/, "Code postal invalide : 5 chiffres attendus."),
-  clientVille: texteObligatoire("La ville est obligatoire.", 80, "Ville trop longue : 80 caractères maximum."),
-  clientTelephone: z
-    .string("Le téléphone est obligatoire.")
-    .trim()
-    .max(30, "Numéro de téléphone invalide.")
-    .refine((valeur) => (valeur.match(/\d/g)?.length ?? 0) >= 9, "Numéro de téléphone invalide."),
+    .min(1, "Le nom du client est obligatoire.")
+    .max(120, "Nom trop long : 120 caractères maximum."),
+  clientAdresse: texteLibre(200, "Adresse trop longue : 200 caractères maximum."),
+  clientCp: texteLibre(10, "Code postal trop long : 10 caractères maximum."),
+  clientVille: texteLibre(80, "Ville trop longue : 80 caractères maximum."),
+  clientTelephone: texteLibre(30, "Numéro de téléphone trop long : 30 caractères maximum."),
   clientEmail: z
     .string("Adresse e-mail invalide.")
     .trim()
@@ -75,8 +78,11 @@ const champsDossier = z.object({
     .refine((valeur) => valeur === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valeur), "Adresse e-mail invalide.")
     .nullable()
     .transform((valeur) => valeur || null),
-  objet: texteObligatoire("L'objet du chantier est obligatoire.", 160, "Objet trop long : 160 caractères maximum."),
-  source: z.enum(SOURCES_DOSSIER, "Source invalide."),
+  objet: texteLibre(160, "Objet trop long : 160 caractères maximum."),
+  source: z
+    .enum(SOURCES_DOSSIER, "Source invalide.")
+    .nullable()
+    .transform((valeur) => valeur ?? "INCONNUE"),
   montantEstime: z
     .number("Montant estimé invalide.")
     .min(0, "Le montant estimé ne peut pas être négatif.")
@@ -92,16 +98,26 @@ const champsDossier = z.object({
   prochaineActionDate: jourOuNull("Date de prochaine action invalide."),
 });
 
-export const schemaCreation = champsDossier.extend({
-  leadId: z.string().max(40).nullable(),
-  prospectId: z.string().max(40).nullable(),
-  // Nouveau dossier ouvert depuis une fiche client.
-  clientId: z.string().max(40).nullable().optional(),
-});
+export const schemaCreation = champsDossier
+  .partial()
+  .required({ clientNom: true })
+  .extend({
+    leadId: z.string().max(40).nullable().optional(),
+    prospectId: z.string().max(40).nullable().optional(),
+    // Nouveau dossier ouvert depuis une fiche client.
+    clientId: z.string().max(40).nullable().optional(),
+    /** Étape de départ : un dossier déjà avancé naît à son étape actuelle. */
+    etape: z.enum(ETAPES, "Étape invalide.").optional(),
+    dateChantier: jourOuNull("Date de chantier invalide.").optional(),
+  });
 export type EntreeCreation = z.output<typeof schemaCreation>;
 
 export const schemaModification = champsDossier
-  .extend({ dateChantier: jourOuNull("Date de chantier invalide.") })
+  .extend({
+    dateChantier: jourOuNull("Date de chantier invalide."),
+    /** Fiche client rattachée : ses documents et paiements la suivent. */
+    clientId: z.string("Fiche client invalide.").min(1, "Fiche client invalide.").max(40, "Fiche client invalide."),
+  })
   .partial();
 export type EntreeModification = z.output<typeof schemaModification>;
 
@@ -130,7 +146,8 @@ type DossierAvecDernierDevis = Prisma.DossierGetPayload<{
 
 function versResume(
   dossier: Omit<DossierAvecDernierDevis, "photos">,
-  avantSortie: EtapeActive | null
+  avantSortie: EtapeActive | null,
+  aCompleter: number
 ): DossierResume {
   return {
     id: dossier.id,
@@ -144,9 +161,77 @@ function versResume(
     prochaineAction: dossier.prochaineAction,
     prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null,
     etapeAvantSortie: avantSortie,
+    aCompleter,
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Points à compléter de dossiers (ceux du filtre, archivés exclus par défaut),
+ * en quelques requêtes : liste, panneau et synthèse lisent les mêmes.
+ */
+export async function pointsACompleterDossiers(
+  lecteur: Transaction,
+  filtre: Prisma.DossierWhereInput = {}
+): Promise<Map<string, PointACompleter[]>> {
+  const dossiers = await lecteur.dossier.findMany({
+    where: filtre,
+    select: {
+      id: true,
+      etape: true,
+      clientId: true,
+      clientAdresse: true,
+      clientCp: true,
+      clientVille: true,
+      clientTelephone: true,
+      objet: true,
+      source: true,
+      photos: true,
+      dateChantier: true,
+      motifPerte: true,
+      documents: { where: { numero: { not: null }, archiveLe: null }, select: { type: true, statut: true, totalHt: true } },
+      encaissements: { where: { statut: "VALIDE" }, select: { montant: true } },
+      evenements: {
+        where: { type: "CHANGEMENT_ETAPE", archiveLe: null },
+        select: { metadata: true },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      },
+    },
+  });
+  const resultat = new Map<string, PointACompleter[]>();
+  for (const dossier of dossiers) {
+    const changements = dossier.evenements
+      .map((evenement) => lireMetadataChangementEtape(evenement.metadata))
+      .filter((metadata): metadata is MetadataChangementEtape => metadata !== null);
+    const factures = dossier.documents.filter((document) => document.type === "FACTURE" && document.statut !== "ANNULEE");
+    const factureCentimes = factures.reduce((somme, document) => somme + versCentimes(document.totalHt), 0);
+    const recuCentimes = dossier.encaissements.reduce((somme, encaissement) => somme + versCentimes(encaissement.montant), 0);
+    resultat.set(
+      dossier.id,
+      pointsACompleter({
+        etape: etapeLue(dossier.etape),
+        etapeAvantSortie: etapeAvantSortie(changements),
+        clientId: dossier.clientId,
+        clientAdresse: dossier.clientAdresse,
+        clientCp: dossier.clientCp,
+        clientVille: dossier.clientVille,
+        clientTelephone: dossier.clientTelephone,
+        objet: dossier.objet,
+        source: dossier.source,
+        nbPhotos: lirePhotos(dossier.photos).length,
+        dateChantier: dossier.dateChantier,
+        nbDevis: dossier.documents.filter((document) => document.type === "DEVIS").length,
+        nbFactures: factures.length,
+        nbPaiements: dossier.encaissements.length,
+        sansAcompteMotive: changements.some((changement) => Boolean(changement.sansAcompte)),
+        resteDu: Math.max(0, factureCentimes - recuCentimes) / 100,
+        motifPerte: dossier.motifPerte,
+        nbDatesInconnues: changements.filter((changement) => changement.dateInconnue).length,
+      })
+    );
+  }
+  return resultat;
 }
 
 const DERNIER_DEVIS = {
@@ -179,7 +264,10 @@ export async function listerDossiers(): Promise<DossierResume[]> {
     if (metadata) parDossier.set(changement.dossierId, [...(parDossier.get(changement.dossierId) ?? []), metadata]);
   }
 
-  return dossiers.map((dossier) => versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? [])));
+  const completude = await pointsACompleterDossiers(prisma);
+  return dossiers.map((dossier) =>
+    versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id)?.length ?? 0)
+  );
 }
 
 function messageDeLEvenement(metadata: string): string | null {
@@ -197,6 +285,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     include: {
       lead: { select: { id: true, prenom: true, nom: true } },
       prospect: { select: { id: true, nom: true } },
+      client: { select: { id: true, nom: true } },
       notes: { orderBy: { createdAt: "asc" } },
       // Un mail rangé puis déplacé ailleurs laisse une trace archivée, hors de l'historique affiché.
       evenements: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 300 },
@@ -228,7 +317,10 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       .filter((passage) => passage.vers)
   );
 
-  const paiements = await chargerPaiementsDossier(prisma, dossierId);
+  const [paiements, completude] = await Promise.all([
+    chargerPaiementsDossier(prisma, dossierId),
+    pointsACompleterDossiers(prisma, { ...AVEC_ARCHIVES, id: dossierId }).then((points) => points.get(dossierId) ?? []),
+  ]);
 
   const photos: PhotoVue[] = lirePhotos(dossier.photos).map((chemin) => ({
     id: idPhoto(chemin),
@@ -238,7 +330,9 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
   }));
 
   return {
-    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }, etapeAvantSortie(changements)),
+    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }, etapeAvantSortie(changements), completude.length),
+    completude,
+    client: dossier.client,
     clientAdresse: dossier.clientAdresse,
     clientCp: dossier.clientCp,
     clientEmail: dossier.clientEmail,
@@ -317,23 +411,25 @@ export async function ouvrirDossier(
   entree: EntreeCreation,
   origine: { leadId: string | null; prospectId: string | null } = { leadId: null, prospectId: null }
 ) {
-  const ouverture: MetadataChangementEtape = { de: null, vers: "QUALIFICATION", nature: "OUVERTURE" };
+  const etape = entree.etape ?? "QUALIFICATION";
+  const ouverture: MetadataChangementEtape = { de: null, vers: etape, nature: "OUVERTURE" };
   const cree = await tx.dossier.create({
     data: {
       leadId: origine.leadId,
       prospectId: origine.prospectId,
       clientNom: entree.clientNom,
-      clientAdresse: entree.clientAdresse,
-      clientCp: entree.clientCp,
-      clientVille: entree.clientVille,
-      clientEmail: entree.clientEmail,
-      clientTelephone: entree.clientTelephone,
-      objet: entree.objet,
-      source: entree.source,
-      montantEstime: entree.montantEstime,
-      prochaineAction: entree.prochaineAction,
+      clientAdresse: entree.clientAdresse ?? "",
+      clientCp: entree.clientCp ?? "",
+      clientVille: entree.clientVille ?? "",
+      clientEmail: entree.clientEmail ?? null,
+      clientTelephone: entree.clientTelephone ?? "",
+      objet: entree.objet ?? "",
+      source: entree.source ?? "INCONNUE",
+      montantEstime: entree.montantEstime ?? null,
+      prochaineAction: entree.prochaineAction ?? null,
       prochaineActionDate: entree.prochaineActionDate ? dateDepuisJour(entree.prochaineActionDate) : null,
-      etape: "QUALIFICATION",
+      dateChantier: entree.dateChantier ? dateDepuisJour(entree.dateChantier) : null,
+      etape,
     },
   });
   await tx.dossierEvenement.create({
@@ -341,7 +437,7 @@ export async function ouvrirDossier(
       dossierId: cree.id,
       type: "CHANGEMENT_ETAPE",
       direction: "INTERNE",
-      contenu: `Dossier ouvert : ${LIBELLES_ETAPE.QUALIFICATION}`,
+      contenu: `Dossier ouvert : ${LIBELLES_ETAPE[etape]}`,
       metadata: JSON.stringify(ouverture),
     },
   });
@@ -359,12 +455,11 @@ export async function ouvrirDossier(
 }
 
 /**
- * Ouvre un dossier : règle de conversion vérifiée (coordonnées complètes,
- * objet, au moins une photo), événement d'ouverture, photos archivées.
- * Si une photo ne peut pas être écrite, la création est annulée.
+ * Ouvre un dossier : événement d'ouverture à l'étape choisie, photos
+ * archivées (facultatives). Si une photo envoyée ne peut pas être écrite, la
+ * création est annulée.
  */
 export async function creerDossier(entree: EntreeCreation, photos: File[]): Promise<string> {
-  if (photos.length === 0) throw new ErreurMetier("Ajoute au moins une photo du chantier.");
   photos.forEach(verifierPhoto);
   if (entree.leadId && entree.prospectId) {
     throw new ErreurMetier("Un dossier vient d'un lead ou d'un prospect, pas des deux.");
@@ -383,7 +478,7 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
   try {
     const chemins: string[] = [];
     for (const photo of photos) chemins.push(await enregistrerPhoto(dossier.id, photo));
-    await prisma.dossier.update({ where: { id: dossier.id }, data: { photos: JSON.stringify(chemins) } });
+    if (chemins.length > 0) await prisma.dossier.update({ where: { id: dossier.id }, data: { photos: JSON.stringify(chemins) } });
   } catch (erreur) {
     // Rien ne se supprime : la création interrompue reste au journal, archivée.
     await prisma.dossier
@@ -425,21 +520,43 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
 
 /* ── Modification ───────────────────────────────────────────────── */
 
+/** Tout se modifie ; ce qui manque ensuite est signalé sur le dossier. Le journal garde chaque valeur. */
 export async function modifierDossier(dossierId: string, entree: EntreeModification): Promise<void> {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    select: { clientId: true, client: { select: { nom: true } } },
+  });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
-  const etape = etapeLue(dossier.etape);
-  if (entree.dateChantier === null && estEtapeActive(etape) && rangEtape(etape) >= rangEtape("PLANIFIE")) {
-    throw new ErreurMetier("La date de chantier est exigée à partir de l'étape « Planifié ».", 409);
-  }
 
-  const { prochaineActionDate, dateChantier, ...champs } = entree;
-  const data: Prisma.DossierUpdateInput = { ...champs };
+  const { prochaineActionDate, dateChantier, clientId, ...champs } = entree;
+  const data: Prisma.DossierUncheckedUpdateInput = { ...champs };
   if (prochaineActionDate !== undefined) {
     data.prochaineActionDate = prochaineActionDate ? dateDepuisJour(prochaineActionDate) : null;
   }
   if (dateChantier !== undefined) data.dateChantier = dateChantier ? dateDepuisJour(dateChantier) : null;
-  await prisma.dossier.update({ where: { id: dossierId }, data });
+
+  await prisma.$transaction(async (tx) => {
+    if (clientId !== undefined && clientId !== dossier.clientId) {
+      const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, nom: true, archiveLe: true } });
+      if (!client || client.archiveLe) throw new ErreurMetier("Fiche client introuvable ou archivée.", 404);
+      data.clientId = client.id;
+      // Les pièces et paiements du dossier suivent la fiche (le journal garde l'ancienne).
+      await tx.document.updateMany({ where: { dossierId, clientId: dossier.clientId }, data: { clientId: client.id } });
+      await tx.encaissement.updateMany({ where: { dossierId, clientId: dossier.clientId }, data: { clientId: client.id } });
+      await tx.dossierEvenement.create({
+        data: {
+          dossierId,
+          type: "NOTE_AJOUTEE",
+          direction: "INTERNE",
+          contenu: dossier.client
+            ? `Dossier rattaché à la fiche client « ${client.nom} » (au lieu de « ${dossier.client.nom} »)`
+            : `Dossier rattaché à la fiche client « ${client.nom} »`,
+          metadata: JSON.stringify({ clientId: client.id, ancienClientId: dossier.clientId }),
+        },
+      });
+    }
+    await tx.dossier.update({ where: { id: dossierId }, data });
+  });
 }
 
 /* ── Notes ──────────────────────────────────────────────────────── */
@@ -506,9 +623,6 @@ export async function supprimerPhoto(dossierId: string, photoId: string): Promis
   const { brut, chemins } = await photosDuDossier(dossierId);
   const chemin = ID_PHOTO.test(photoId) ? chemins.find((c) => idPhoto(c) === photoId) : undefined;
   if (!chemin) throw new ErreurMetier("Photo introuvable.", 404);
-  if (!estPhotoApres(chemin) && chemins.filter((c) => !estPhotoApres(c)).length <= 1) {
-    throw new ErreurMetier("Un dossier garde au moins une photo du chantier.", 409);
-  }
   if (!(await remplacerPhotos(dossierId, brut, chemins.filter((c) => c !== chemin)))) {
     throw new ErreurMetier("Les photos ont changé entre-temps : recharge le dossier.", 409);
   }

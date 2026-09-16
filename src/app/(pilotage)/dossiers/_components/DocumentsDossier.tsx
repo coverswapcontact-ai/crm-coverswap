@@ -199,11 +199,12 @@ export function DocumentsDossier({
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
   const [aEnvoyer, setAEnvoyer] = useState<DocumentVue | null>(null);
-  const bloque =
+  // Rien n'empêche de générer : l'étape inhabituelle est seulement dite.
+  const remarque =
     detail.etape === "PERDU" || detail.etape === "EN_PAUSE"
-      ? "Reprends le dossier pour générer un document."
+      ? `Dossier ${detail.etape === "PERDU" ? "perdu" : "en pause"} : le document se génère quand même, l'étape ne change pas.`
       : detail.etape === "ENCAISSE"
-        ? "Dossier encaissé : une nouvelle prestation ouvre un nouveau dossier."
+        ? "Dossier encaissé : pour une nouvelle prestation, un nouveau dossier est souvent plus clair."
         : null;
   const documents = detail.documents.filter((document) => document.numero);
 
@@ -211,14 +212,14 @@ export function DocumentsDossier({
     <section>
       <TitreSection>Documents</TitreSection>
       <div className="flex flex-wrap gap-2">
-        <Bouton variante="primaire" icone={<FilePlus2 size={14} aria-hidden />} disabled={bloque !== null} onClick={() => onGenerer("DEVIS")}>
+        <Bouton variante="primaire" icone={<FilePlus2 size={14} aria-hidden />} onClick={() => onGenerer("DEVIS")}>
           Générer un devis
         </Bouton>
-        <Bouton variante="secondaire" icone={<Receipt size={14} aria-hidden />} disabled={bloque !== null} onClick={() => onGenerer("FACTURE")}>
+        <Bouton variante="secondaire" icone={<Receipt size={14} aria-hidden />} onClick={() => onGenerer("FACTURE")}>
           Générer une facture
         </Bouton>
       </div>
-      {bloque ? <p className="mt-2 text-[12px] text-[#9CA3AF]">{bloque}</p> : null}
+      {remarque ? <p className="mt-2 text-[12px] text-[#F5B454]">{remarque}</p> : null}
 
       {documents.length === 0 ? (
         <p className="mt-3 text-[12px] text-[#6B7280]">Aucun document généré pour ce dossier.</p>
@@ -227,9 +228,8 @@ export function DocumentsDossier({
           {documents.map((document) => {
             const avoir = document.documentsLies.find((lie) => lie.type === "AVOIR");
             const remplacant = document.documentsLies.find((lie) => lie.type === "DEVIS");
-            const peutRefaire =
-              document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE"].includes(document.statut) && bloque === null;
-            const peutAnnuler = document.type === "FACTURE" && document.statut !== "ANNULEE" && detail.etape !== "PERDU" && detail.etape !== "EN_PAUSE";
+            const peutRefaire = document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE"].includes(document.statut);
+            const peutAnnuler = document.type === "FACTURE" && document.statut !== "ANNULEE";
             const peutEnvoyer = (document.type === "DEVIS" || document.type === "FACTURE") && document.statut !== "REMPLACE" && document.statut !== "ANNULEE";
             return (
               <li key={document.id} className="border-t-[0.5px] border-[#2A2D34] px-3 py-2.5 first:border-t-0">

@@ -3,15 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, ImageIcon, Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { LIBELLES_SOURCE, SOURCES_DOSSIER, type SourceDossier } from "@/lib/dossiers/constants";
+import { ETAPES, LIBELLES_ETAPE, LIBELLES_SOURCE, SOURCES_DOSSIER, type EtapeDossier, type SourceDossier } from "@/lib/dossiers/constants";
 import { lireNombre } from "@/lib/dossiers/montants";
+import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { appelApi, messageErreur, photoTropLourde, preparerPhoto } from "./client";
 import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TRANS } from "./ui";
-import { validerCoordonnees, type ChampsCoordonnees } from "./validation";
+import { avertissementsCoordonnees, manquesCoordonnees, validerCoordonnees, type ChampsCoordonnees } from "./validation";
 
-type Champs = ChampsCoordonnees & { prochaineAction: string; prochaineActionDate: string };
+type Champs = ChampsCoordonnees & { prochaineAction: string; prochaineActionDate: string; etape: EtapeDossier; dateChantier: string };
 type Erreurs = Partial<Record<keyof Champs | "photos", string>>;
 type PhotoChoisie = { cle: string; fichier: File; apercu: string };
 type Mode = "lead" | "direct";
@@ -32,13 +33,16 @@ function champsDepuis(lead: LeadTrouve | null, conserves?: Champs): Champs {
     montantEstime: conserves?.montantEstime ?? "",
     prochaineAction: conserves?.prochaineAction ?? "",
     prochaineActionDate: conserves?.prochaineActionDate ?? "",
+    etape: conserves?.etape ?? "QUALIFICATION",
+    dateChantier: conserves?.dateChantier ?? "",
   };
 }
 
 /**
- * « Ouvrir un dossier » : depuis un lead existant (coordonnées pré-remplies,
- * lien conservé) ou en création directe. Règle de conversion : coordonnées
- * complètes, objet et au moins une photo.
+ * « Ouvrir un dossier » : depuis un client ou un lead existant (coordonnées
+ * pré-remplies, lien conservé) ou en création directe, à l'étape où en est
+ * le chantier. Seul le nom du client est exigé : ce qui manque est signalé
+ * sur le dossier.
  */
 export function CreationDossier({
   ouverte,
@@ -136,10 +140,9 @@ export function CreationDossier({
 
   async function ouvrir() {
     const trouvees: Erreurs = { ...validerCoordonnees(champs) };
-    if (photos.length === 0) trouvees.photos = "Ajoute au moins une photo du chantier.";
     setErreurs(trouvees);
     if (Object.keys(trouvees).length > 0) {
-      toast.error("Dossier incomplet", { description: "Corrige les champs signalés en rouge." });
+      toast.error("Dossier non ouvert", { description: "Corrige les champs signalés en rouge." });
       return;
     }
 
@@ -153,6 +156,7 @@ export function CreationDossier({
       }
 
       setEnvoi(prets.length > 1 ? `Envoi de la photo 1 sur ${prets.length}…` : "Ouverture du dossier…");
+      const avance = estEtapeActive(champs.etape) && rangEtape(champs.etape) >= rangEtape("PLANIFIE");
       const formulaire = new FormData();
       formulaire.set(
         "donnees",
@@ -164,16 +168,18 @@ export function CreationDossier({
           clientCp: champs.clientCp,
           clientVille: champs.clientVille,
           objet: champs.objet,
-          source: champs.source,
+          source: champs.source || null,
           montantEstime: champs.montantEstime.trim() ? lireNombre(champs.montantEstime) : null,
           prochaineAction: champs.prochaineAction || null,
           prochaineActionDate: champs.prochaineActionDate || null,
+          etape: champs.etape,
+          dateChantier: avance && champs.dateChantier ? champs.dateChantier : null,
           leadId: origine?.origine === "LEAD" ? origine.id : null,
           prospectId: origine?.origine === "PROSPECT" ? origine.id : null,
           clientId: origine?.origine === "CLIENT" ? origine.id : null,
         })
       );
-      formulaire.append("photos", prets[0]);
+      if (prets[0]) formulaire.append("photos", prets[0]);
       const { id } = await appelApi<{ id: string }>("/api/dossiers", { method: "POST", body: formulaire });
 
       // Photos suivantes une à une : le corps d'une requête est limité à 10 Mo.
@@ -204,13 +210,16 @@ export function CreationDossier({
   }
 
   const formulaireVisible = mode === "direct" || origine !== null;
+  const avertissements = avertissementsCoordonnees(champs);
+  const manques = [...manquesCoordonnees(champs), ...(photos.length === 0 ? ["photos"] : [])];
+  const etapeAvancee = estEtapeActive(champs.etape) && rangEtape(champs.etape) >= rangEtape("PLANIFIE");
 
   return (
     <Modale
       ouverte={ouverte}
       onFermer={() => (envoi ? undefined : onFermer())}
       titre="Ouvrir un dossier"
-      description="Photos du chantier, coordonnées complètes du client et nature du chantier : sans les trois, pas de dossier."
+      description="Seul le nom du client est obligatoire : ce qui manque sera signalé sur le dossier, à compléter quand tu l'as."
       pied={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Bouton variante="fantome" onClick={onFermer} disabled={envoi !== null}>
@@ -325,18 +334,27 @@ export function CreationDossier({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Champ libelle="Nom du client" obligatoire value={champs.clientNom} onChange={modifier("clientNom")} erreur={erreurs.clientNom} classeConteneur="sm:col-span-2" />
-            <Champ libelle="Téléphone" obligatoire type="tel" inputMode="tel" value={champs.clientTelephone} onChange={modifier("clientTelephone")} erreur={erreurs.clientTelephone} />
+            <Champ libelle="Téléphone" type="tel" inputMode="tel" value={champs.clientTelephone} onChange={modifier("clientTelephone")} erreur={erreurs.clientTelephone} aide={avertissements.clientTelephone} />
             <Champ libelle="E-mail" type="email" inputMode="email" value={champs.clientEmail} onChange={modifier("clientEmail")} erreur={erreurs.clientEmail} />
-            <Champ libelle="Adresse" obligatoire value={champs.clientAdresse} onChange={modifier("clientAdresse")} erreur={erreurs.clientAdresse} classeConteneur="sm:col-span-2" />
-            <Champ libelle="Code postal" obligatoire inputMode="numeric" maxLength={5} value={champs.clientCp} onChange={modifier("clientCp")} erreur={erreurs.clientCp} />
-            <Champ libelle="Ville" obligatoire value={champs.clientVille} onChange={modifier("clientVille")} erreur={erreurs.clientVille} />
-            <Champ libelle="Objet du chantier" obligatoire placeholder="Ex. Recouvrement façades de cuisine" value={champs.objet} onChange={modifier("objet")} erreur={erreurs.objet} classeConteneur="sm:col-span-2" />
+            <Champ libelle="Adresse du chantier" value={champs.clientAdresse} onChange={modifier("clientAdresse")} erreur={erreurs.clientAdresse} classeConteneur="sm:col-span-2" />
+            <Champ libelle="Code postal" inputMode="numeric" maxLength={10} value={champs.clientCp} onChange={modifier("clientCp")} erreur={erreurs.clientCp} aide={avertissements.clientCp} />
+            <Champ libelle="Ville" value={champs.clientVille} onChange={modifier("clientVille")} erreur={erreurs.clientVille} />
+            <Champ libelle="Objet du chantier" placeholder="Ex. Recouvrement façades de cuisine" value={champs.objet} onChange={modifier("objet")} erreur={erreurs.objet} classeConteneur="sm:col-span-2" />
+            <ListeDeroulante
+              libelle="Étape actuelle"
+              options={ETAPES.map((etape) => ({ valeur: etape, libelle: LIBELLES_ETAPE[etape] }))}
+              value={champs.etape}
+              onChange={(evenement) => setChamps((actuels) => ({ ...actuels, etape: evenement.target.value as EtapeDossier }))}
+              aide={champs.etape === "QUALIFICATION" ? "Un chantier déjà avancé s'ouvre à son étape." : undefined}
+            />
+            {etapeAvancee ? (
+              <Champ libelle="Date du chantier" type="date" value={champs.dateChantier} onChange={modifier("dateChantier")} />
+            ) : null}
             <ListeDeroulante
               libelle="Source"
-              obligatoire
               options={[
-                { valeur: "", libelle: "Choisir…" },
-                ...SOURCES_DOSSIER.map((source) => ({ valeur: source, libelle: LIBELLES_SOURCE[source] })),
+                { valeur: "", libelle: "Non renseignée" },
+                ...SOURCES_DOSSIER.filter((source) => source !== "INCONNUE").map((source) => ({ valeur: source, libelle: LIBELLES_SOURCE[source] })),
               ]}
               value={champs.source}
               onChange={(evenement) => {
@@ -351,9 +369,7 @@ export function CreationDossier({
           </div>
 
           <div>
-            <p className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">
-              Photos du chantier <span className="text-[#5DCAA5]">*</span>
-            </p>
+            <p className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">Photos du chantier</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {photos.map((photo) => (
                 <div key={photo.cle} className="relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
@@ -385,8 +401,7 @@ export function CreationDossier({
                 type="button"
                 onClick={() => entreePhotos.current?.click()}
                 className={cn(
-                  "flex aspect-square flex-col items-center justify-center gap-1 rounded-[9px] border-[0.5px] border-dashed text-[12px] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
-                  erreurs.photos ? "border-[#EF4444]/60 text-[#F87171]" : "border-[#3A3E47] text-[#9CA3AF]",
+                  "flex aspect-square flex-col items-center justify-center gap-1 rounded-[9px] border-[0.5px] border-dashed border-[#3A3E47] text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
                   TRANS
                 )}
               >
@@ -403,12 +418,14 @@ export function CreationDossier({
               aria-label="Choisir des photos du chantier"
               onChange={(evenement) => ajouterPhotos(evenement.target.files)}
             />
-            {erreurs.photos ? (
-              <p className="mt-1 text-[12px] text-[#F87171]">{erreurs.photos}</p>
-            ) : (
-              <p className="mt-1 text-[12px] text-[#6B7280]">Au moins une photo. Elles sont réduites avant l&apos;envoi.</p>
-            )}
+            <p className="mt-1 text-[12px] text-[#6B7280]">Facultatives, réduites avant l&apos;envoi. Ajoutables ensuite depuis le dossier.</p>
           </div>
+
+          {manques.length > 0 ? (
+            <p className="rounded-[8px] bg-[#22262D] px-3 py-2 text-[12px] text-[#9CA3AF]">
+              Sera signalé à compléter sur le dossier : {manques.join(", ")}.
+            </p>
+          ) : null}
         </div>
       ) : null}
     </Modale>

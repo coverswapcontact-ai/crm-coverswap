@@ -12,7 +12,8 @@ const jour = (message: string) => z.string(message).refine(estJourValide, messag
 export const schemaPaiement = z
   .object({
     montant: z.number("Montant invalide.").gt(0, "Le montant doit être supérieur à zéro.").max(1_000_000, "Montant invalide."),
-    moyen: z.enum(MOYENS_PAIEMENT, "Choisis le moyen de paiement."),
+    /** Facultatif : un paiement repris d'avant le CRM peut ne pas l'avoir (« non renseigné » au livre). */
+    moyen: z.enum(MOYENS_PAIEMENT, "Moyen de paiement invalide.").nullable().optional().transform((valeur) => valeur ?? null),
     recuLe: jour("Date de réception invalide."),
     reference: z.string().trim().max(120, "Référence trop longue : 120 caractères maximum.").nullable().optional(),
     /** Chèque déjà crédité au moment de la saisie. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Pause, RotateCcw, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, Pause, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ChampsPaiement, lirePaiement, saisiePaiement, type PaiementLu, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
 import { Puces } from "@/components/pilotage/ui";
@@ -19,11 +19,13 @@ import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, lireNombre } from "@/lib/dossiers/montants";
 import {
   CRITERES_DECLARATIFS,
-  critereRempli,
+  avertissementsTransition,
   criteresAVerifier,
   estCritereDeclaratif,
   transitionsPossibles,
+  type Avertissement,
   type CritereDeclaratif,
+  type DonneesTransition,
   type TransitionPossible,
 } from "@/lib/dossiers/regles";
 import { faitsDepuisDetail, type DocumentVue, type DossierDetail } from "@/lib/dossiers/types";
@@ -65,6 +67,27 @@ function libelleTransition(transition: TransitionPossible): string {
   return LIBELLES_ETAPE[transition.vers];
 }
 
+/** Ce qui manque, dit avant de confirmer : on peut passer quand même. */
+function ListeAvertissements({ avertissements, className }: { avertissements: Avertissement[]; className?: string }) {
+  if (avertissements.length === 0) return null;
+  return (
+    <div className={cn("rounded-[9px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2.5", className)}>
+      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5B454]">
+        <AlertTriangle size={13} aria-hidden />
+        À savoir avant de passer
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {avertissements.map((avertissement) => (
+          <li key={avertissement.critere} className="text-[12.5px] text-[#FCD9A0]">
+            {avertissement.message}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[11.5px] text-[#C9A46A]">Tu peux passer quand même : ce sera noté dans l&apos;historique du dossier.</p>
+    </div>
+  );
+}
+
 export function ChangementEtape({
   detail,
   onMisAJour,
@@ -77,12 +100,12 @@ export function ChangementEtape({
 
   const faits = faitsDepuisDetail(detail);
   const transitions = transitionsPossibles(detail.etape, detail.etapeAvantSortie);
-  const enAvant = transitions.filter((t) => t.nature === "SUIVANTE" || t.nature === "REPRISE");
-  const sorties = transitions.filter((t) => t.nature === "SORTIE");
-  const retours = transitions.filter((t) => t.nature === "RETOUR");
+  const enAvant = transitions.filter((t) => t.suggeree && (t.nature === "SUIVANTE" || t.nature === "REPRISE"));
+  const sorties = transitions.filter((t) => t.suggeree && t.nature === "SORTIE");
+  const autres = transitions.filter((t) => !t.suggeree);
 
-  const manquants = (transition: TransitionPossible) =>
-    criteresAVerifier(transition).filter((critere) => !saisiDansLaFenetre(critere) && !critereRempli(critere, faits));
+  const avertissements = (transition: TransitionPossible) =>
+    avertissementsTransition(faits, transition.vers, {}, detail.etapeAvantSortie);
 
   async function executer(transition: TransitionPossible, donnees: DonneesEtape = {}) {
     setEnCours(transition.vers);
@@ -95,17 +118,22 @@ export function ChangementEtape({
       setFenetre(null);
       toast.success(`Dossier passé à « ${LIBELLES_ETAPE[transition.vers]} »`);
     } catch (probleme) {
-      toast.error("Changement d'étape refusé", { description: messageErreur(probleme) });
+      toast.error("Changement d'étape non enregistré", { description: messageErreur(probleme) });
     } finally {
       setEnCours(null);
     }
   }
 
   function choisir(transition: TransitionPossible) {
-    const aSaisir = criteresAVerifier(transition).some(saisiDansLaFenetre);
-    if (aSaisir || transition.nature === "RETOUR") setFenetre(transition);
-    else void executer(transition);
+    const aSaisir = criteresAVerifier(detail.etape, transition.vers, detail.etapeAvantSortie).some(saisiDansLaFenetre);
+    const direct = transition.suggeree && transition.nature !== "RETOUR" && !aSaisir && avertissements(transition).length === 0;
+    if (direct) void executer(transition);
+    else setFenetre(transition);
   }
+
+  const versAvancer = autres.filter((t) => t.nature === "SUIVANTE" || t.nature === "REPRISE");
+  const versRevenir = autres.filter((t) => t.nature === "RETOUR");
+  const versSortir = autres.filter((t) => t.nature === "SORTIE");
 
   return (
     <section>
@@ -115,9 +143,9 @@ export function ChangementEtape({
           <span className="font-medium">{LIBELLES_ETAPE[detail.etape]}</span>
           <span className="text-[#9CA3AF]"> · {REGLES_ETAPES[detail.etape].description}</span>
         </p>
-        {detail.etape === "PERDU" && detail.motifPerte ? (
+        {detail.etape === "PERDU" ? (
           <p className="mt-1 text-[12px] text-[#F87171]">
-            Motif : {LIBELLES_MOTIF_PERTE[detail.motifPerte]}
+            {detail.motifPerte ? `Motif : ${LIBELLES_MOTIF_PERTE[detail.motifPerte]}` : "Motif non renseigné"}
             {detail.perte?.etape ? ` · à l'étape « ${LIBELLES_ETAPE[detail.perte.etape]} »` : ""}
             {detail.perte?.concurrent ? ` · remporté par ${detail.perte.concurrent}` : ""}
             {detail.perte?.montantConcurrent != null ? ` (${formatMontant(detail.perte.montantConcurrent)})` : ""}
@@ -128,24 +156,28 @@ export function ChangementEtape({
           <p className="mt-1 text-[12px] whitespace-pre-wrap text-[#9CA3AF]">{detail.perte.commentaire}</p>
         ) : null}
         {detail.dateChantier ? (
-          <p className="mt-1 text-[12px] text-[#9CA3AF]">Chantier prévu le {formatDateCourte(detail.dateChantier)}</p>
+          <p className="mt-1 text-[12px] text-[#9CA3AF]">Chantier le {formatDateCourte(detail.dateChantier)}</p>
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
           {enAvant.map((transition) => {
-            const bloquants = manquants(transition);
+            const nombre = avertissements(transition).length;
             return (
               <Bouton
                 key={transition.vers}
                 variante="primaire"
-                disabled={bloquants.length > 0}
                 chargement={enCours === transition.vers}
-                icone={
-                  transition.nature === "REPRISE" ? <RotateCcw size={14} aria-hidden /> : <ArrowRight size={14} aria-hidden />
-                }
+                icone={transition.nature === "REPRISE" ? <RotateCcw size={14} aria-hidden /> : <ArrowRight size={14} aria-hidden />}
+                title={nombre > 0 ? `${nombre} point${nombre > 1 ? "s" : ""} à savoir avant de passer` : undefined}
                 onClick={() => choisir(transition)}
               >
                 {libelleTransition(transition)}
+                {nombre > 0 ? (
+                  <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-[#0B1612]/25 px-1.5 text-[11px]">
+                    <AlertTriangle size={10} aria-hidden />
+                    {nombre}
+                  </span>
+                ) : null}
               </Bouton>
             );
           })}
@@ -162,51 +194,49 @@ export function ChangementEtape({
           ))}
         </div>
 
-        {enAvant.some((transition) => manquants(transition).length > 0) ? (
-          <ul className="mt-2.5 space-y-1">
-            {enAvant.map((transition) => {
-              const bloquants = manquants(transition);
-              if (bloquants.length === 0) return null;
-              return (
-                <li key={transition.vers} className="text-[12px] text-[#9CA3AF]">
-                  Pour « {LIBELLES_ETAPE[transition.vers]} » :{" "}
-                  {bloquants
-                    .map((critere) =>
-                      critere === "DEVIS_GENERE"
-                        ? "générer un devis"
-                        : critere === "FACTURE_GENEREE"
-                          ? "générer une facture"
-                          : LIBELLES_CRITERE[critere].toLowerCase()
-                    )
-                    .join(", ")}
-                  .
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-
-        {retours.length > 0 ? (
+        {autres.length > 0 ? (
           <label className="mt-3 flex items-center gap-2 text-[12px] text-[#6B7280]">
-            <RotateCcw size={12} aria-hidden />
-            <span className="sr-only">Revenir à une étape précédente</span>
+            <ArrowRight size={12} aria-hidden />
+            <span className="sr-only">Passer à une autre étape</span>
             <select
               value=""
               onChange={(evenement) => {
-                const transition = retours.find((t) => t.vers === evenement.target.value);
-                if (transition) choisir(transition);
+                const transition = autres.find((t) => t.vers === evenement.target.value);
+                if (transition) setFenetre(transition);
               }}
               className={cn(
-                "h-9 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-transparent px-2 text-[16px] text-[#9CA3AF] hover:border-[#3A3E47] sm:h-7 sm:text-[12px] [color-scheme:dark]",
+                "h-9 max-w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-transparent px-2 text-[16px] text-[#9CA3AF] hover:border-[#3A3E47] sm:h-7 sm:text-[12px] [color-scheme:dark]",
                 TRANS
               )}
             >
-              <option value="">Revenir à une étape précédente…</option>
-              {retours.map((transition) => (
-                <option key={transition.vers} value={transition.vers}>
-                  {LIBELLES_ETAPE[transition.vers]}
-                </option>
-              ))}
+              <option value="">Passer à une autre étape…</option>
+              {versAvancer.length > 0 ? (
+                <optgroup label="Avancer à">
+                  {versAvancer.map((transition) => (
+                    <option key={transition.vers} value={transition.vers}>
+                      {LIBELLES_ETAPE[transition.vers]}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {versRevenir.length > 0 ? (
+                <optgroup label="Revenir à">
+                  {versRevenir.map((transition) => (
+                    <option key={transition.vers} value={transition.vers}>
+                      {LIBELLES_ETAPE[transition.vers]}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {versSortir.length > 0 ? (
+                <optgroup label="Sortir">
+                  {versSortir.map((transition) => (
+                    <option key={transition.vers} value={transition.vers}>
+                      {LIBELLES_ETAPE[transition.vers]}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </label>
         ) : null}
@@ -226,6 +256,8 @@ export function ChangementEtape({
   );
 }
 
+type ModeAcompte = "PLUS_TARD" | "RECU" | "SANS";
+
 function FenetreEtape({
   detail,
   transition,
@@ -239,71 +271,69 @@ function FenetreEtape({
   onFermer: () => void;
   onValider: (donnees: DonneesEtape) => void;
 }) {
-  const criteres = criteresAVerifier(transition);
+  const criteres = criteresAVerifier(detail.etape, transition.vers, detail.etapeAvantSortie);
   const devis = detail.documents.filter(
-    (document) => document.type === "DEVIS" && document.statut !== "BROUILLON" && document.statut !== "REMPLACE"
+    (document) => document.type === "DEVIS" && document.numero && document.statut !== "BROUILLON" && document.statut !== "REMPLACE"
   );
-  const [motif, setMotif] = useState<MotifPerte | "">("");
+  const [motif, setMotif] = useState<MotifPerte | null>(null);
   const [concurrent, setConcurrent] = useState("");
   const [prixConcurrent, setPrixConcurrent] = useState("");
   const [commentairePerte, setCommentairePerte] = useState("");
   const [dateChantier, setDateChantier] = useState(detail.dateChantier ? jourParis(detail.dateChantier) : "");
   const [confirmations, setConfirmations] = useState<Record<CritereDeclaratif, boolean>>({ BON_POUR_ACCORD: false });
-  const [devisId, setDevisId] = useState(devis[0]?.id ?? "");
-  // Acompte : reçu (pré-rempli au montant prévu) ou, à défaut, pourquoi il n'y en a pas.
-  const [modeAcompte, setModeAcompte] = useState<"RECU" | "SANS">("RECU");
+  const [devisId, setDevisId] = useState((devis.find((document) => document.statut === "ACCEPTE") ?? devis[0])?.id ?? "");
+  // Acompte : rien pour l'instant (par défaut), reçu, ou pourquoi il n'y en a pas.
+  const [modeAcompte, setModeAcompte] = useState<ModeAcompte>("PLUS_TARD");
   const [acompte, setAcompte] = useState<SaisiePaiement>(() => saisiePaiement(acomptePrevu(devis[0])));
   const [motifSansAcompte, setMotifSansAcompte] = useState<string | null>(null);
   const [precisionSansAcompte, setPrecisionSansAcompte] = useState("");
+  const [soldeRecu, setSoldeRecu] = useState(false);
   const [solde, setSolde] = useState<SaisiePaiement>(() => saisiePaiement(detail.paiements.resteDu));
 
   const demandeMotif = criteres.includes("MOTIF_PERTE");
   const demandeDate = criteres.includes("DATE_CHANTIER");
   const declaratifs = CRITERES_DECLARATIFS.filter((critere) => criteres.includes(critere));
-  const choixDevis = transition.vers === "SIGNE" && transition.nature === "SUIVANTE" && devis.length > 1;
+  const choixDevis = criteres.includes("BON_POUR_ACCORD") && devis.length > 1;
   const demandeAcompte = criteres.includes("ACOMPTE_ENCAISSE") && !detail.paiements.acompteEnregistre;
   const demandeSolde = criteres.includes("SOLDE_ENCAISSE") && !detail.paiements.soldeEncaisse;
   const acompteLu = lirePaiement(acompte).paiement;
   const soldeLu = lirePaiement(solde).paiement;
-  const acompteComplet =
-    modeAcompte === "RECU"
-      ? acompteLu !== null
-      : motifSansAcompte !== null && (motifSansAcompte !== "AUTRE" || precisionSansAcompte.trim().length >= 3);
 
   const prixConcurrentLu = prixConcurrent.trim() ? lireNombre(prixConcurrent) : null;
   const prixConcurrentInvalide = prixConcurrent.trim() !== "" && (prixConcurrentLu === null || prixConcurrentLu < 0);
-  const complet =
-    !prixConcurrentInvalide &&
-    (!demandeMotif || motif !== "") &&
-    (!demandeDate || dateChantier !== "") &&
-    (!demandeAcompte || acompteComplet) &&
-    (!demandeSolde || soldeLu !== null) &&
-    declaratifs.every((critere) => confirmations[critere]);
+  // Seule une saisie commencée et illisible retient la confirmation ; ce qui manque est signalé.
+  const saisieInvalide =
+    prixConcurrentInvalide ||
+    (demandeAcompte && modeAcompte === "RECU" && acompteLu === null) ||
+    (demandeAcompte && modeAcompte === "SANS" && (motifSansAcompte === null || (motifSansAcompte === "AUTRE" && precisionSansAcompte.trim().length < 3))) ||
+    (demandeSolde && soldeRecu && soldeLu === null);
+
+  const donnees: DonneesEtape = {
+    ...(demandeMotif && motif ? { motifPerte: motif } : {}),
+    ...(demandeMotif && concurrent.trim() ? { perteConcurrent: concurrent.trim() } : {}),
+    ...(demandeMotif && prixConcurrentLu !== null && !prixConcurrentInvalide ? { perteMontantConcurrent: prixConcurrentLu } : {}),
+    ...(demandeMotif && commentairePerte.trim() ? { perteCommentaire: commentairePerte.trim() } : {}),
+    ...(demandeDate && dateChantier ? { dateChantier } : {}),
+    ...(declaratifs.some((critere) => confirmations[critere])
+      ? { confirmations: Object.fromEntries(declaratifs.filter((critere) => confirmations[critere]).map((critere) => [critere, true])) }
+      : {}),
+    ...(criteres.includes("BON_POUR_ACCORD") && devisId ? { devisAccepteId: devisId } : {}),
+    ...(demandeAcompte && modeAcompte === "RECU" && acompteLu ? { acompte: acompteLu } : {}),
+    ...(demandeAcompte && modeAcompte === "SANS" && motifSansAcompte
+      ? { sansAcompte: { motif: motifSansAcompte, precision: precisionSansAcompte.trim() || undefined } }
+      : {}),
+    ...(demandeSolde && soldeRecu && soldeLu ? { solde: soldeLu } : {}),
+  };
+  const avertissements = avertissementsTransition(faitsDepuisDetail(detail), transition.vers, donnees as DonneesTransition, detail.etapeAvantSortie);
 
   const titre =
     transition.nature === "RETOUR"
       ? `Revenir à « ${LIBELLES_ETAPE[transition.vers]} » ?`
       : transition.vers === "PERDU"
         ? "Marquer le dossier perdu"
-        : `Passer à « ${LIBELLES_ETAPE[transition.vers]} »`;
-
-  function valider() {
-    if (!complet) return;
-    onValider({
-      ...(demandeMotif && motif ? { motifPerte: motif } : {}),
-      ...(demandeMotif && concurrent.trim() ? { perteConcurrent: concurrent.trim() } : {}),
-      ...(demandeMotif && prixConcurrentLu !== null ? { perteMontantConcurrent: prixConcurrentLu } : {}),
-      ...(demandeMotif && commentairePerte.trim() ? { perteCommentaire: commentairePerte.trim() } : {}),
-      ...(demandeDate ? { dateChantier } : {}),
-      ...(declaratifs.length > 0 ? { confirmations: Object.fromEntries(declaratifs.map((c) => [c, true])) } : {}),
-      ...(transition.vers === "SIGNE" && devisId ? { devisAccepteId: devisId } : {}),
-      ...(demandeAcompte && modeAcompte === "RECU" && acompteLu ? { acompte: acompteLu } : {}),
-      ...(demandeAcompte && modeAcompte === "SANS" && motifSansAcompte
-        ? { sansAcompte: { motif: motifSansAcompte, precision: precisionSansAcompte.trim() || undefined } }
-        : {}),
-      ...(demandeSolde && soldeLu ? { solde: soldeLu } : {}),
-    });
-  }
+        : transition.nature === "REPRISE"
+          ? `Reprendre en « ${LIBELLES_ETAPE[transition.vers]} »`
+          : `Passer à « ${LIBELLES_ETAPE[transition.vers]} »`;
 
   return (
     <Modale
@@ -323,28 +353,28 @@ function FenetreEtape({
           </Bouton>
           <Bouton
             variante={transition.vers === "PERDU" ? "danger" : "primaire"}
-            disabled={!complet}
+            disabled={saisieInvalide}
             chargement={enCours}
-            onClick={valider}
+            onClick={() => !saisieInvalide && onValider(donnees)}
           >
-            {transition.nature === "RETOUR" ? "Revenir à cette étape" : "Confirmer"}
+            {transition.nature === "RETOUR" ? "Revenir à cette étape" : avertissements.length > 0 ? "Passer quand même" : "Confirmer"}
           </Bouton>
         </div>
       }
     >
       <div className="space-y-3">
+        <ListeAvertissements avertissements={avertissements} />
+
         {demandeMotif ? (
           <fieldset>
-            <legend className="mb-2 text-[12px] font-medium text-[#9CA3AF]">
-              Motif de perte <span className="text-[#5DCAA5]">*</span>
-            </legend>
+            <legend className="mb-2 text-[12px] font-medium text-[#9CA3AF]">Motif de perte</legend>
             <div className="grid grid-cols-2 gap-2">
               {MOTIFS_PERTE.map((valeur) => (
                 <button
                   key={valeur}
                   type="button"
                   aria-pressed={motif === valeur}
-                  onClick={() => setMotif(valeur)}
+                  onClick={() => setMotif((actuel) => (actuel === valeur ? null : valeur))}
                   className={cn(
                     "h-10 rounded-[8px] border-[0.5px] px-3 text-left text-[13px] sm:h-9",
                     motif === valeur
@@ -389,13 +419,7 @@ function FenetreEtape({
         ) : null}
 
         {demandeDate ? (
-          <Champ
-            libelle="Date du chantier"
-            obligatoire
-            type="date"
-            value={dateChantier}
-            onChange={(evenement) => setDateChantier(evenement.target.value)}
-          />
+          <Champ libelle="Date du chantier" type="date" value={dateChantier} onChange={(evenement) => setDateChantier(evenement.target.value)} />
         ) : null}
 
         {choixDevis ? (
@@ -432,12 +456,11 @@ function FenetreEtape({
 
         {demandeAcompte ? (
           <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">
-              Acompte <span className="text-[#5DCAA5]">*</span>
-            </legend>
+            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">Acompte</legend>
             <Puces
               libelle="À la signature"
               options={[
+                { valeur: "PLUS_TARD" as const, libelle: "Rien pour l'instant" },
                 { valeur: "RECU" as const, libelle: "Acompte reçu" },
                 { valeur: "SANS" as const, libelle: "Pas d'acompte" },
               ]}
@@ -446,11 +469,10 @@ function FenetreEtape({
             />
             {modeAcompte === "RECU" ? (
               <ChampsPaiement saisie={acompte} onChange={setAcompte} libelleMontant="Acompte reçu (€)" />
-            ) : (
+            ) : modeAcompte === "SANS" ? (
               <>
                 <Puces
                   libelle="Pourquoi"
-                  obligatoire
                   options={MOTIFS_SANS_ACOMPTE.map((option) => ({ valeur: option.code as string, libelle: option.libelle }))}
                   valeur={motifSansAcompte}
                   onChange={setMotifSansAcompte}
@@ -463,19 +485,15 @@ function FenetreEtape({
                   onChange={(evenement) => setPrecisionSansAcompte(evenement.target.value)}
                 />
               </>
-            )}
+            ) : null}
           </fieldset>
         ) : null}
 
         {demandeSolde ? (
           <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">
-              Paiement du solde <span className="text-[#5DCAA5]">*</span>
-            </legend>
-            <p className="text-[12px] text-[#6B7280]">
-              Le dossier passe à « Encaissé » si ce paiement règle toutes ses factures ; sinon, enregistre-le dans « Paiements ».
-            </p>
-            <ChampsPaiement saisie={solde} onChange={setSolde} />
+            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">Paiement du solde</legend>
+            <CaseACocher libelle="J'ai reçu un paiement, je l'enregistre" checked={soldeRecu} onChange={setSoldeRecu} />
+            {soldeRecu ? <ChampsPaiement saisie={solde} onChange={setSolde} /> : null}
           </fieldset>
         ) : null}
 

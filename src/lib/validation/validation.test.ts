@@ -50,6 +50,24 @@ before(async () => {
       },
     })
   );
+  // Règle métier qui refuse à l'exécution, après avoir commencé à écrire : tout doit revenir en arrière.
+  const { ErreurMetier } = await import("@/lib/commun/erreurs");
+  catalogue.enregistrerTypeProposition(
+    definirProposition({
+      type: "ESSAI_REFUS",
+      libelle: "Action refusée à l'exécution",
+      schema: z.object({ dossierId: z.string() }),
+      sensible: false,
+      validationGroupee: false,
+      champs: [],
+      execution: "IMMEDIATE",
+      async executer(contenu, { tx }) {
+        await tx!.dossierEvenement.create({ data: { dossierId: contenu.dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: "Écrit avant le refus" } });
+        await tx!.dossier.update({ where: { id: contenu.dossierId }, data: { etape: "PLANIFIE" } });
+        throw new ErreurMetier("La règle d'essai refuse cette action.", 409);
+      },
+    })
+  );
   // Action automatisable (bruit) et action automatisable mais sensible (interdite).
   catalogue.enregistrerTypeProposition(
     definirProposition({
@@ -181,13 +199,13 @@ describe("valider", () => {
     const { id: dossierId } = await dossier();
     const { id } = await avecActeur(AGENT, () =>
       service.proposer({
-        type: "CHANGEMENT_ETAPE",
-        titre: "Planifier le chantier",
-        contenu: { dossierId, vers: "PLANIFIE" },
+        type: "ESSAI_REFUS",
+        titre: "Action refusée à l'exécution",
+        contenu: { dossierId },
         dossierId,
       })
     );
-    await assert.rejects(avecActeur(LUCAS, () => service.validerProposition(id)), /Exécution impossible/);
+    await assert.rejects(avecActeur(LUCAS, () => service.validerProposition(id)), /Exécution impossible : La règle d'essai refuse/);
     const enBase = await prisma.proposition.findUniqueOrThrow({ where: { id } });
     assert.equal(enBase.statut, "EN_ATTENTE");
     assert.ok(enBase.erreurExecution);

@@ -297,8 +297,8 @@ model Dossier {
   objet                  String // ex. "Recouvrement façades de cuisine"
   etape                  String             @default("QUALIFICATION") // EtapeDossier
   montantEstime          Float?
-  source                 String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE
-  motifPerte             String? // MotifPerte, obligatoire à l'entrée en PERDU
+  source                 String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE | INCONNUE
+  motifPerte             String? // MotifPerte, demandé à l'entrée en PERDU (signalé s'il manque)
   // Perte : figée au moment où le dossier passe en PERDU (retirée à la reprise ;
   // l'événement de changement d'étape la garde pour toujours).
   perteLe                DateTime?
@@ -309,7 +309,7 @@ model Dossier {
   perteCommentaire       String?
   prochaineAction        String?
   prochaineActionDate    DateTime?
-  dateChantier           DateTime? // exigée à l'entrée en PLANIFIE
+  dateChantier           DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
   photos                 String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
   notes                  DossierNote[]
   evenements             DossierEvenement[]

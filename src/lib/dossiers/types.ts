@@ -14,6 +14,7 @@ import type {
   Unite,
 } from "./constants";
 import type { PaiementsDossier } from "@/lib/encaissements/types";
+import type { PointACompleter } from "./completude";
 import type { FaitsDossier } from "./regles";
 import type { DelaisCles, EcartsPrix, PassageEtape } from "./delais";
 
@@ -30,6 +31,8 @@ export type DossierResume = {
   prochaineActionDate: string | null;
   /** Perdu ou en pause : étape active quittée (la progression y reste figée). */
   etapeAvantSortie: EtapeActive | null;
+  /** Nombre de points à compléter (completude.ts). */
+  aCompleter: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +72,10 @@ export type DocumentVue = {
 };
 
 export type DossierDetail = DossierResume & {
+  /** Ce qui manque au dossier : signalé, jamais exigé. */
+  completude: PointACompleter[];
+  /** Fiche client rattachée. */
+  client: { id: string; nom: string } | null;
   clientAdresse: string;
   clientCp: string;
   clientEmail: string | null;
@@ -139,6 +146,7 @@ export function faitsDepuisDetail(detail: DossierDetail): FaitsDossier {
     aFactureGeneree: genere("FACTURE"),
     acompteEnregistre: detail.paiements.acompteEnregistre,
     soldeEncaisse: detail.paiements.soldeEncaisse,
+    resteDu: detail.paiements.resteDu,
   };
 }
 

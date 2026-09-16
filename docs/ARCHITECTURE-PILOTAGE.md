@@ -18,6 +18,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
 | Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
 | RGPD | Consentement distinct, daté, immuable ; durées de conservation paramétrées → anonymisation proposée, décidée par une personne ; carte des données personnelles vérifiée sur le schéma ; journal caviardé ; pièces comptables gardées | `src/lib/rgpd/`, section 17 |
+| Signaler, jamais bloquer | Une règle métier qui empêchait une action devient un avertissement lu puis confirmé, gardé dans l'historique ; ce qui manque est signalé sur le dossier et dans la qualité des données de /synthese. Restent protégés : les mails (validés), les numéros émis, la suppression | `src/lib/dossiers/regles.ts`, `completude.ts`, section 18 |
 
 ## 1. Traçabilité intégrale : le journal des modifications
 
@@ -416,8 +417,8 @@ leads et dossiers restés sans client.
 
 ## 7. Échecs et délais des dossiers
 
-- **Perte figée** : au passage en « Perdu », le motif (obligatoire, en un clic),
-  et en facultatif qui a remporté le marché, à quel prix et ce qu'a dit le
+- **Perte figée** : au passage en « Perdu », le motif (en un clic, signalé
+  s'il manque), qui a remporté le marché, à quel prix et ce qu'a dit le
   client ; le système fige aussi l'étape perdue (celle d'avant une éventuelle
   pause) et notre dernier prix (dernier devis émis, sinon estimation). Colonnes
   `perte*` du dossier pour les requêtes ; la reprise les retire, mais
@@ -578,18 +579,21 @@ réglait redevient dû.
 
 ### Les étapes suivent l'argent
 
-- **« Signé » exige l'acompte** : la fenêtre de signature propose l'acompte
-  pré-rempli (pourcentage du devis choisi), à confirmer d'un moyen de
-  paiement ; l'éviter demande de choisir pourquoi (paiement à la facture,
-  sous-traitance, petit montant…), motif écrit dans l'événement. Enregistrer
-  l'acompte est plus rapide que s'en passer.
+- **« Signé » rappelle l'acompte** : la fenêtre de signature propose
+  d'enregistrer l'acompte reçu (pré-rempli au pourcentage du devis choisi) ou
+  de dire pourquoi il n'y en a pas (motif écrit dans l'événement) ; sans l'un
+  ni l'autre, le passage se fait avec l'avertissement « Aucun acompte
+  enregistré », gardé dans l'événement et signalé sur le dossier (section 18).
 - **« Encaissé » est un fait** : un dossier « Facturé » dont toutes les
-  factures sont réglées y passe tout seul ; la fenêtre « Encaissé » propose le
-  paiement du solde, pré-rempli au reste dû, et refuse (sans rien écrire) s'il
-  ne solde pas.
-- **Chèque rejeté ou paiement annulé** : un dossier « Encaissé » dont une
-  facture n'est plus réglée revient à « Facturé » ; un acompte rejeté devient la
-  prochaine action (« réclamer un nouveau paiement »).
+  factures sont réglées y passe tout seul. La fenêtre « Encaissé » propose
+  d'enregistrer le paiement du solde ; s'il ne solde pas, le passage se fait
+  quand même, avec le reste dû dans l'avertissement et sur le dossier.
+- **Chèque rejeté ou paiement annulé** : un dossier « Encaissé » qui était
+  réglé et ne l'est plus revient à « Facturé » ; un dossier mis à « Encaissé »
+  à la main sans être réglé garde son étape (l'écart est signalé). Un acompte
+  rejeté devient la prochaine action (« réclamer un nouveau paiement »).
+- **Paiement au-delà de la pièce** : imputé jusqu'à ce qui reste dû, le
+  surplus gardé non imputé et affiché, au lieu d'un refus.
 - Anciens dossiers signés ou encaissés par simple case à cocher : leur
   historique reste tel quel ; les paiements s'y ajoutent à la main.
 
@@ -1168,3 +1172,66 @@ construit : il faut d'abord un compte WhatsApp Business vérifié par Meta.
   contacts du téléphone restent à traiter à la main.
 - Droit d'accès et portabilité : pas d'export dédié ; la fiche client, ses
   dossiers et ses mails en tiennent lieu.
+
+## 18. Reprise d'activité : signaler, jamais bloquer
+
+L'activité réelle bascule sur le CRM avec des dossiers commencés avant lui, à
+des étapes différentes, avec des devis émis à la main. Le module les accueille
+tels quels : la discipline vient de ce qui se voit, pas de l'interdiction.
+
+### Règles devenues avertissements (`src/lib/dossiers/regles.ts`)
+
+- **Toute étape vers toute autre**, dans les deux sens, y compris depuis
+  « Encaissé » ; seul le passage à l'étape où l'on est déjà est refusé (il ne
+  changerait rien). `REGLES_ETAPES.sorties` ne dit plus ce qui est permis mais
+  le chemin habituel, mis en avant à l'écran ; les autres étapes sont dans
+  « Passer à une autre étape… ».
+- **Avertissements** : en avançant, les critères d'entrée de chaque étape
+  franchie (sauter du devis au chantier rappelle la signature, l'acompte et la
+  date de chantier), le motif pour une perte ; un retour, une pause ou une
+  reprise ne rappellent rien. Ils sont calculés par la même fonction pure à
+  l'écran (« À savoir avant de passer », puis « Passer quand même ») et au
+  serveur, qui les écrit dans l'événement (`avertissements`) et dans son texte
+  (« Passé en connaissance de cause : … »). Ce qui est apporté dans la fenêtre
+  (acompte, motif, date de chantier, bon pour accord) lève l'avertissement
+  correspondant.
+- **Franchir « Signé »** en avançant, même d'un saut : le devis choisi (à
+  défaut le dernier) devient le devis accepté ; sans devis, rien n'est accepté
+  et c'est signalé.
+- **Plus de refus métier ailleurs** : un document se génère à toute étape
+  (perdu, en pause, encaissé : c'est dit à l'écran), la date de chantier se
+  vide, la dernière photo se retire, un paiement s'enregistre sans devis ni
+  facture (gardé non imputé, imputé à la facture) et sans moyen de paiement
+  (« non renseigné » au livre).
+
+### Rien d'obligatoire sauf le nom (`src/lib/dossiers/dossiers.ts`)
+
+- À la création comme à la modification, seul le nom du client est exigé.
+  Adresse, code postal, ville, téléphone et objet vides s'enregistrent vides ;
+  une source absente vaut `INCONNUE` (« Non renseignée ») ; les photos sont
+  facultatives, y compris pour un dossier ouvert depuis un mail validé.
+- Un dossier naît à l'étape choisie (« Étape actuelle ») : l'événement
+  d'ouverture porte cette étape.
+- Reste refusé ce qui ne peut pas s'enregistrer tel quel : un texte trop long,
+  une adresse e-mail illisible, un montant qui n'est pas un nombre, une date
+  impossible. Un téléphone incomplet ou un code postal qui n'a pas cinq
+  chiffres sont gardés tels quels, avec une remarque sous le champ.
+- La fiche client rattachée se change depuis le dossier : ses devis, factures
+  et paiements rattachés à l'ancienne fiche la suivent, un événement le dit et
+  le journal garde l'ancienne valeur.
+
+### Ce qui manque se voit (`src/lib/dossiers/completude.ts`)
+
+Une seule fonction pure dit ce qui manque, selon l'étape : fiche client,
+téléphone, adresse complète, objet, photos, source ; à partir de « Devis
+envoyé » un devis, de « Signé » un acompte ou son motif, de « Planifié » une
+date de chantier, de « Facturé » une facture ; « Encaissé » avec un reste dû ;
+des dates d'étape inconnues. Un dossier perdu ne réclame que son motif ; un
+dossier en pause est jugé à l'étape quittée. Le « reste dû » compare les
+factures actives aux paiements valides du dossier (sans le détail des
+imputations) : le même calcul partout.
+
+- Panneau du dossier : bloc « À compléter » en tête.
+- Cartes du kanban et liste : « n à compléter ».
+- /synthese, qualité des données : le nombre de dossiers concernés par point,
+  à ce jour, archivés exclus (remplace « Dossiers sans client rattaché »).

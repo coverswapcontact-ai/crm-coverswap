@@ -2,9 +2,11 @@ import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { LIBELLES_CATEGORIE_CLIENT, LIBELLES_FAMILLE_SOURCE, familleDeSource, type CategorieClient, type FamilleSource } from "@/lib/clients/constantes";
 import { libelleCategorie } from "@/lib/depenses/constantes";
+import { CODES_COMPLETUDE, LIBELLES_QUALITE_DOSSIERS } from "@/lib/dossiers/completude";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, LIBELLES_SOURCE, type EtapeDossier, type MotifPerte, type SourceDossier } from "@/lib/dossiers/constants";
 import { dateEnLettres, jourParis } from "@/lib/dossiers/dates";
 import { ecartsPrix } from "@/lib/dossiers/delais";
+import { pointsACompleterDossiers } from "@/lib/dossiers/dossiers";
 import { versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { chargerLivre, totalCentimes } from "@/lib/finances/livre";
@@ -254,9 +256,15 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
   ).size;
 
   /* ── Qualité des données ────────────────────────────────────────── */
+  // Dossiers incomplets, à ce jour (archivés exclus) : ce que chaque dossier signale « à compléter ».
+  const completude = [...(await pointsACompleterDossiers(prisma)).values()].flat();
   const qualite: Repartition[] = [
     { cle: "ECRITURES_HORS_COUCHE", libelle: "Écritures faites hors de l'application (auteur inconnu) dans la période", valeur: Number(inconnus[0]?.n ?? 0) },
-    { cle: "DOSSIERS_SANS_CLIENT", libelle: "Dossiers sans client rattaché", valeur: dossiers.filter((dossier) => !dossier.clientId).length },
+    ...CODES_COMPLETUDE.map((code) => ({
+      cle: `DOSSIERS_${code}`,
+      libelle: LIBELLES_QUALITE_DOSSIERS[code],
+      valeur: completude.filter((point) => point.code === code).length,
+    })),
     { cle: "CLIENTS_INJOIGNABLES", libelle: "Clients sans e-mail ni téléphone", valeur: clients.filter((client) => !client.anonymiseLe && client.emails.length === 0 && client.telephones.length === 0).length },
     { cle: "SOURCE_INCONNUE", libelle: "Nouveaux clients de la période sans source renseignée", valeur: nouveaux.filter((client) => familleDeSource(client.source) === "NON_RENSEIGNE").length },
     { cle: "PERTES_SANS_CONCURRENT", libelle: "Pertes de la période sans « remporté par »", valeur: pertes.filter(({ metadata }) => !metadata.perteConcurrent).length },

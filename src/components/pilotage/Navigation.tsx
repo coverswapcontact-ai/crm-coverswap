@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Menu,
   Radar,
+  SlidersHorizontal,
   Users,
   Workflow,
   X,
@@ -46,6 +47,7 @@ const PRINCIPALES: Entree[] = [
 const SECONDAIRES: Entree[] = [
   { href: "/prospection", libelle: "Prospection", icone: Radar },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
+  { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 
 function estActive(pathname: string, href: string): boolean {

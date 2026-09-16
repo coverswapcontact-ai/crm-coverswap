@@ -620,3 +620,22 @@ model ConsentementMail {
 
   @@index([clientId, recueilliLe])
 }
+
+// ─────────────────────────────────────────────
+// Paramètres datés (src/lib/parametres) : seuils, taux, règles. Aucune valeur
+// par défaut dans le code ; chaque saisie est une ligne, jamais modifiée, avec
+// sa date d'effet et sa source. La valeur d'une date est la plus récente
+// saisie dont la date d'effet est passée.
+// ─────────────────────────────────────────────
+
+model Parametre {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  cle       String // CleParametre (src/lib/parametres/definitions.ts)
+  valeur    String // JSON : nombre ou texte
+  valableDu DateTime
+  source    String? // d'où vient la valeur : « URSSAF 2026 », « comptable, mail du 12/09 »
+  ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([cle, valableDu])
+}

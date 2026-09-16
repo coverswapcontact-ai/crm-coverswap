@@ -376,3 +376,22 @@ leads et dossiers restés sans client.
   écart avec le premier devis (montant et pourcentage), facturé.
 - Panneau du dossier : section « Délais et prix ».
 
+## 8. Paramètres datés, sans valeur par défaut
+
+Seuils de franchise de TVA, plafond micro, taux de cotisations, de CFP et de
+versement libératoire, périodicité de déclaration, règle de date des chèques,
+délai de paiement et pénalités des factures aux professionnels, indemnité de
+recouvrement, escompte, délai de relance (`src/lib/parametres/definitions.ts`).
+
+- **Aucune valeur dans le code.** Un seuil ou un taux faux fausserait les
+  calculs sans que personne ne le voie ; le code dit seulement où trouver la
+  valeur (URSSAF, impots.gouv.fr, article de loi, comptable).
+- **Saisie forcée à la première utilisation** : un calcul ou un document qui a
+  besoin d'un paramètre absent à la date voulue lève `ParametresManquants`
+  (HTTP 428 avec la liste) ; l'écran ouvre la fenêtre de saisie de tous les
+  paramètres manquants puis relance l'action (`useParametresExiges`).
+- **Datés et immuables** : chaque saisie est une ligne `Parametre` avec sa date
+  d'effet et sa source, que la base refuse de modifier ; une nouvelle valeur ne
+  réécrit jamais le passé (une recette de mars se calcule au taux de mars).
+- Écran `/parametres` : valeur en vigueur, valeurs à venir, historique.
+

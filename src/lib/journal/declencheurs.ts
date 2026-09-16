@@ -54,6 +54,7 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
  */
 export const MODELES_IMMUABLES: ReadonlyMap<string, readonly string[]> = new Map([
   ["ConsentementMail", ["clientId", "ecriture"]],
+  ["Parametre", ["ecriture"]],
 ]);
 
 /** Préfixes de nom : tout déclencheur ainsi nommé appartient à cette couche. */

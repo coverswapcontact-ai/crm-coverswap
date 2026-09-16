@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Pastille, TitreSection } from "@/components/pilotage/ui";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
+import { dureeRestante } from "@/lib/google/echeance";
 import type { EtatMiroir } from "@/lib/drive/synchronisation";
 import type { EtatConnexionGoogle } from "@/lib/google/connexion";
 import type { EtatAgentMail } from "@/lib/messages/constantes";
@@ -74,6 +75,23 @@ export default function Connexions({ retour }: { retour: { google: string | null
                 <CircleCheck size={14} aria-hidden /> {google.connexion.compte}
               </p>
               <p className="mt-1">Connecté depuis le {formatDateCourte(google.connexion.depuis)}</p>
+              {google.connexion.echeance.expireLe && !google.connexion.echeance.coupee ? (
+                <p
+                  className={cn(
+                    "mt-1",
+                    google.connexion.echeance.niveau === "EXPIREE"
+                      ? "text-[#F87171]"
+                      : google.connexion.echeance.niveau === "LOINTAINE"
+                        ? "text-[#9CA3AF]"
+                        : "text-[#F5B454]"
+                  )}
+                >
+                  {google.connexion.echeance.niveau === "EXPIREE"
+                    ? `Expirée le ${formatHorodatage(google.connexion.echeance.expireLe)} : reconnecter.`
+                    : `Expire le ${formatHorodatage(google.connexion.echeance.expireLe)}, dans ${dureeRestante(google.connexion.echeance.resteMs ?? 0)}.`}{" "}
+                  <span className="text-[#6B7280]">Application Google en mode Test : reconnexion tous les 7 jours.</span>
+                </p>
+              ) : null}
               {google.connexion.derniereErreur ? <p className="mt-1 text-[#F87171]">{google.connexion.derniereErreur}</p> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <a href="/api/google/connexion" className="inline-flex h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">

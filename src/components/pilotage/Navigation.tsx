@@ -21,11 +21,14 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
+import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
 export type Compteurs = { aValider: number; messagesATrier: number; tachesEnEchec: number };
+type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
 export const EVENEMENT_COMPTEURS = "pilotage:compteurs";
@@ -87,11 +90,15 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 export function Navigation() {
   const pathname = usePathname();
   const [compteurs, setCompteurs] = useState<Compteurs>({ aValider: 0, messagesATrier: 0, tachesEnEchec: 0 });
+  const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 
   const charger = useCallback(() => {
-    appelApi<Compteurs>("/api/pilotage/compteurs")
-      .then(setCompteurs)
+    appelApi<EtatNavigation>("/api/pilotage/compteurs")
+      .then(({ rappelGoogle: rappel, ...nombres }) => {
+        setCompteurs(nombres);
+        setRappelGoogle(rappel ?? null);
+      })
       .catch(() => {
         // Compteurs indicatifs : une panne réseau ne doit rien bloquer.
       });
@@ -171,6 +178,8 @@ export function Navigation() {
           </Link>
         </div>
       </nav>
+
+      {rappelGoogle ? <BandeauRappelGoogle rappel={rappelGoogle} /> : null}
 
       {/* Téléphone : barre du bas, au pouce */}
       <nav

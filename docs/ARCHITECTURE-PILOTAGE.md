@@ -905,6 +905,17 @@ l'agent mail. Appels REST directs (aucun SDK Google ajouté), simulables en test
 - Déconnexion : révocation chez Google ; la ligne reste, datée. Accès révoqué
   côté Google : les tâches s'arrêtent en le disant, la connexion affiche
   « reconnecter ».
+- **Mode Test : reconnexion tous les 7 jours.** Tant que l'application reste en
+  mode Test dans Google Cloud, Google fait expirer le jeton de renouvellement
+  7 jours après l'autorisation (portées Drive et Gmail). L'échéance se calcule
+  depuis la connexion (`src/lib/google/echeance.ts`) : date et délai dans
+  Paramètres ; à 48 h, bandeau orange sous la navigation de tous les écrans de
+  pilotage, avec « Reconnecter Google » (appuyé les dernières 24 h) ; expirée,
+  ou refusée par Google, bandeau rouge (miroir Drive et agent mail à l'arrêt).
+  Le bandeau suit les compteurs de la navigation (`/api/pilotage/compteurs`,
+  chaque minute). Reconnecter crée une nouvelle connexion : 7 jours de plus.
+  Une fois l'application publiée, `GOOGLE_APPLICATION_PUBLIEE=1` éteint le
+  rappel des 7 jours (un refus de Google reste signalé).
 
 **À faire une fois (Lucas)** : dans Google Cloud Console, créer un projet,
 activer les API Drive et Gmail, configurer l'écran de consentement (type

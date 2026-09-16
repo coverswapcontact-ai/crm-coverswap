@@ -111,7 +111,7 @@ export async function planMiroir(maintenant: Date = new Date()): Promise<Element
         dateChantier: true,
         prochaineAction: true,
         photos: true,
-        documents: { where: { numero: { not: null } }, select: { id: true, type: true, numero: true, statut: true, totalHt: true, dateEmission: true, pdfPath: true, destinataire: true } },
+        documents: { where: { numero: { not: null } }, select: { id: true, type: true, numero: true, statut: true, totalHt: true, dateEmission: true, pdfPath: true, destinataire: true, origine: true } },
       },
     }),
   ]);
@@ -148,7 +148,8 @@ export async function planMiroir(maintenant: Date = new Date()): Promise<Element
       });
     }
 
-    for (const document of dossier.documents) {
+    // Un document repris sans PDF importé n'a rien à copier.
+    for (const document of dossier.documents.filter((candidat) => candidat.origine === "CRM" || candidat.pdfPath)) {
       plan.push({
         cle: `document:${document.id}`,
         nom: nomFichierPdf(document.type, document.numero!, dossier.clientNom),

@@ -374,6 +374,7 @@ model Document {
   noteMl            Boolean    @default(true)
   pdfPath           String?
   statut            String     @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE | REMPLACE | ANNULEE
+  origine           String     @default("CRM") // CRM : généré ici, figé à l'émission | REPRISE : émis avant le CRM, rattaché avec son numéro du registre
   // Figé à l'émission : un document émis ne se modifie plus (la base le refuse).
   clientId          String? // client pérenne (suit les fusions)
   client            Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)

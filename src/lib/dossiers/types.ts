@@ -69,6 +69,8 @@ export type DocumentVue = {
   noteMl: boolean;
   statut: StatutDocument;
   pdfUrl: string | null;
+  /** CRM : généré ici, figé ; REPRISE : émis avant le CRM, rattaché avec son numéro, corrigeable. */
+  origine: "CRM" | "REPRISE";
   echeanceLe: string | null;
   /** Avoir : facture annulée ; devis refait : devis remplacé. */
   documentOrigine: { id: string; numero: string | null } | null;

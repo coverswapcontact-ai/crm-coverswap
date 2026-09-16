@@ -28,6 +28,7 @@ async function documentEnvoyable(dossierId: string, documentId: string) {
   if (document.type !== "DEVIS" && document.type !== "FACTURE") throw new ErreurMetier("Seuls un devis ou une facture s'envoient par mail d'ici.", 400);
   if (document.statut === "REMPLACE") throw new ErreurMetier("Ce devis a été remplacé : envoyer le nouveau.", 409);
   if (document.statut === "ANNULEE") throw new ErreurMetier("Cette facture est annulée par un avoir : envoyer la nouvelle.", 409);
+  if (document.origine === "REPRISE" && !document.pdfPath) throw new ErreurMetier("Document repris sans PDF : importe son PDF avant de l'envoyer.", 409);
   return document;
 }
 

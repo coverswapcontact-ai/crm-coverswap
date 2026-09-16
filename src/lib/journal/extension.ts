@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { resoudreContexte } from "./acteur";
 import { InjecteurEcriture, SuppressionInterdite } from "./injection";
+import { traduireRefus } from "./refus";
 
 const OPERATIONS_ECRITURE = new Set(["create", "createMany", "createManyAndReturn", "update", "updateMany", "upsert"]);
 // findUnique n'y est pas : un lien direct vers un enregistrement archivé doit l'afficher (« archivé le … »).
@@ -36,6 +37,8 @@ function mentionneArchive(where: unknown): boolean {
  *   recopient dans le journal ;
  * - delete et deleteMany sont refusés avant même d'atteindre la base (qui les
  *   refuserait aussi) : rien ne se supprime, on archive ;
+ * - un refus de la base (document émis, registre, journal…) remonte avec son
+ *   message en français (voir refus.ts) ;
  * - les listes et les comptes ignorent les enregistrements archivés, sauf si la
  *   requête parle elle-même de `archiveLe` (voir AVEC_ARCHIVES).
  */
@@ -56,8 +59,41 @@ export const extensionJournal = Prisma.defineExtension({
 
         if (!OPERATIONS_ECRITURE.has(operation)) return query(args);
         const ecriture = await ecritureCourante();
-        return query(injecteur.injecter(model, operation, args, ecriture) as typeof args);
+        try {
+          return await query(injecteur.injecter(model, operation, args, ecriture) as typeof args);
+        } catch (erreur) {
+          throw traduireRefus(erreur, model, operation, args);
+        }
       },
+    },
+    // SQL brut : le refus d'un déclencheur garde son message, en français.
+    async $executeRaw({ args, query }) {
+      try {
+        return await query(args);
+      } catch (erreur) {
+        throw traduireRefus(erreur);
+      }
+    },
+    async $executeRawUnsafe({ args, query }) {
+      try {
+        return await query(args);
+      } catch (erreur) {
+        throw traduireRefus(erreur);
+      }
+    },
+    async $queryRaw({ args, query }) {
+      try {
+        return await query(args);
+      } catch (erreur) {
+        throw traduireRefus(erreur);
+      }
+    },
+    async $queryRawUnsafe({ args, query }) {
+      try {
+        return await query(args);
+      } catch (erreur) {
+        throw traduireRefus(erreur);
+      }
     },
   },
 });

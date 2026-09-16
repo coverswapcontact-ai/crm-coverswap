@@ -50,8 +50,11 @@ describe("paramètres datés", () => {
     const ligne = await prisma.parametre.findFirstOrThrow({ where: { cle: "TAUX_COTISATIONS_SOCIALES" } });
     await assert.rejects(
       () => prisma.parametre.update({ where: { id: ligne.id }, data: { valeur: "30" } }),
-      /ne se modifie pas/
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "EcritureRefusee" && /ne se modifie pas/.test(erreur.message)
     );
-    await assert.rejects(() => prisma.parametre.delete({ where: { id: ligne.id } }), /Suppression interdite/);
+    await assert.rejects(
+      () => prisma.parametre.delete({ where: { id: ligne.id } }),
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "SuppressionInterdite"
+    );
   });
 });

@@ -246,7 +246,7 @@ describe("consentement", () => {
     const client = await prisma.client.findFirstOrThrow({ where: { consentements: { some: {} } }, include: { consentements: true } });
     await assert.rejects(
       () => prisma.consentementMail.update({ where: { id: client.consentements[0].id }, data: { statut: "RETIRE" } }),
-      /ne se modifie pas/
+      (erreur: unknown) => erreur instanceof Error && erreur.name === "EcritureRefusee" && /ne se modifie pas/.test(erreur.message)
     );
     await avecActeur(LUCAS, () =>
       fiches.enregistrerConsentement(client.id, { statut: "RETIRE", moyen: "EMAIL", recueilliLe: "2026-09-01", preuve: "Mail du 1er septembre" })

@@ -1,0 +1,30 @@
+// Routes joignables sans session. TOUT le reste exige une connexion : une route
+// ajoutée demain est protégée d'office (refus par défaut). Ajouter une entrée
+// ici impose de dire comment la route se protège elle-même.
+// Fichier sans dépendance Node : il est importé par le proxy.
+
+export type RoutePublique = {
+  chemin: string;
+  /** Vrai : le chemin et tout ce qui est en dessous (le chemin doit finir par « / »). */
+  prefixe?: boolean;
+  /** Comment la route se protège sans session. */
+  protection: string;
+};
+
+export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
+  { chemin: "/auth/signin", protection: "page de connexion" },
+  { chemin: "/api/auth/", prefixe: true, protection: "NextAuth : connexion limitée en fréquence par le proxy" },
+  { chemin: "/api/health", protection: "sonde de santé Railway, ne lit ni n'écrit rien" },
+  { chemin: "/api/webhook", protection: "formulaires du site : en-tête X-Webhook-Secret vérifié par la route" },
+  { chemin: "/api/webhook/meta", protection: "Meta : jeton de vérification, signature X-Hub-Signature-256 si META_APP_SECRET" },
+  { chemin: "/api/webhook/zapier", protection: "Zapier : secret partagé vérifié par la route" },
+  { chemin: "/api/cron/", prefixe: true, protection: "tâches planifiées : Authorization Bearer CRON_SECRET, refus si absente" },
+  { chemin: "/api/simulate", protection: "simulateur du site : signature HMAC et origine vérifiées par la route" },
+  { chemin: "/robots.txt", protection: "consigne aux robots, statique" },
+];
+
+export function estRoutePublique(chemin: string): boolean {
+  return ROUTES_PUBLIQUES.some((route) =>
+    route.prefixe ? chemin.startsWith(route.chemin) : chemin === route.chemin
+  );
+}

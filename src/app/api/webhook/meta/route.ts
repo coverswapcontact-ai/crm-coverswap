@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
@@ -24,13 +25,30 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Vérification échouée" }, { status: 403 });
 }
 
+// Signature Meta (X-Hub-Signature-256 = HMAC-SHA256 du corps avec la clé
+// secrète de l'application). Vérifiée dès que META_APP_SECRET est définie ;
+// sans elle, un faux appel échoue de toute façon à la lecture du lead dans
+// l'API Graph, mais la variable est recommandée.
+function signatureMetaValide(corps: string, entete: string | null): boolean {
+  const secret = process.env.META_APP_SECRET;
+  if (!secret) return true;
+  if (!entete?.startsWith("sha256=")) return false;
+  const attendue = Buffer.from(createHmac("sha256", secret).update(corps, "utf8").digest("hex"));
+  const recue = Buffer.from(entete.slice("sha256=".length));
+  return attendue.length === recue.length && timingSafeEqual(attendue, recue);
+}
+
 // ============================================================================
 // POST — Réception des leads Meta Lead Ads
 // Meta envoie: { object: "page", entry: [{ changes: [{ field: "leadgen", value: { leadgen_id, ... } }] }] }
 // ============================================================================
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const brut = await request.text();
+    if (!signatureMetaValide(brut, request.headers.get("x-hub-signature-256"))) {
+      return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
+    }
+    const body = JSON.parse(brut);
 
     // Meta envoie toujours { object: "page", entry: [...] }
     if (body.object !== "page" || !body.entry) {

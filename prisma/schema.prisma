@@ -31,6 +31,7 @@ model Lead {
   devis            Devis[]
   chantier         Chantier?
   simulations      Simulation[]
+  dossiers         Dossier[]
 }
 
 model Simulation {
@@ -193,6 +194,7 @@ model Prospect {
   optOutAt        DateTime?
   emailDrafts     EmailDraft[]
   activites       ProspectActivity[]
+  dossiers        Dossier[]
 
   @@index([agentProfileId, statut])
   @@index([score])
@@ -225,4 +227,106 @@ model ProspectActivity {
   details    String?  // JSON : payload libre selon le type d'activité
 
   @@index([prospectId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// Module Dossiers en cours (/dossiers)
+// Un dossier = une affaire réelle, créée à la conversion (photos + coordonnées
+// complètes + objet). Valeurs des champs String et structures JSON documentées
+// dans src/lib/dossiers/constants.ts (SQLite : pas d'enum ni de Json natifs).
+// ─────────────────────────────────────────────
+
+model Dossier {
+  id                  String             @id @default(cuid())
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  leadId              String? // Lead B2C d'origine (Meta Ads, site, simulateur)
+  lead                Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  prospectId          String? // Prospect B2B d'origine (/prospection)
+  prospect            Prospect?          @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  clientNom           String
+  clientAdresse       String
+  clientCp            String
+  clientVille         String
+  clientEmail         String?
+  clientTelephone     String
+  objet               String // ex. "Recouvrement façades de cuisine"
+  etape               String             @default("QUALIFICATION") // EtapeDossier
+  montantEstime       Float?
+  source              String // SourceDossier : PROSPECTION | RECOMMANDATION | SOUS_TRAITANCE | ENTRANT | AUTRE
+  motifPerte          String? // MotifPerte, obligatoire à l'entrée en PERDU
+  prochaineAction     String?
+  prochaineActionDate DateTime?
+  dateChantier        DateTime? // exigée à l'entrée en PLANIFIE
+  photos              String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
+  notes               DossierNote[]
+  evenements          DossierEvenement[]
+  documents           Document[]
+
+  @@index([etape])
+  @@index([prochaineActionDate])
+}
+
+model DossierNote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  etape     String // étape à laquelle la note se rattache
+  contenu   String
+
+  @@index([dossierId, etape])
+}
+
+model DossierEvenement {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  dossierId String
+  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  type      String // TypeEvenement : MAIL_RECU | MAIL_ENVOYE | WHATSAPP_RECU | WHATSAPP_ENVOYE | APPEL | DEVIS_GENERE | DEVIS_ENVOYE | FACTURE_GENEREE | CHANGEMENT_ETAPE | NOTE_AJOUTEE
+  direction String // ENTRANT | SORTANT | INTERNE
+  contenu   String
+  metadata  String   @default("{}") // JSON libre selon le type (ex. { de, vers } pour un changement d'étape)
+
+  @@index([dossierId, createdAt])
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  dossierId    String
+  dossier      Dossier  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  type         String // TypeDocument : DEVIS | FACTURE
+  numero       String? // attribué à la génération, jamais réutilisé (voir NUMEROTATION) ; null tant que BROUILLON
+  dateEmission DateTime? // fixée à la génération, avec le numéro
+  objet        String
+  lignes       String // JSON LigneDocument[] : prestations et lignes de section
+  totalHt      Float
+  acomptePct   Int? // 30 par défaut sur un devis, null sur une facture
+  noteMl       Boolean  @default(true)
+  pdfPath      String?
+  statut       String   @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE
+
+  @@unique([type, numero])
+  @@index([dossierId])
+}
+
+model CompteurNumerotation {
+  serie  String // compteur (voir NUMEROTATION) : DEVIS | FACTURE
+  annee  Int
+  valeur Int // dernier numéro attribué
+
+  @@id([serie, annee])
+}
+
+model PresetTarif {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  designation  String
+  unite        String // ml | jour | forfait
+  prixUnitaire Float? // null = à saisir à chaque devis (carburant, péage, mission)
+  ordre        Int      @default(0)
+  actif        Boolean  @default(true)
 }

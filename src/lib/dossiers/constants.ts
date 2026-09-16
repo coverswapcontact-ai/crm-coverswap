@@ -1,0 +1,349 @@
+// ─────────────────────────────────────────────
+// Module Dossiers — constantes partagées (client et serveur)
+// SQLite ne supporte pas les enums Prisma : les valeurs autorisées des champs
+// `String` du schéma sont définies ici, source de vérité côté code
+// (même convention que src/lib/prospection/constants.ts).
+// ─────────────────────────────────────────────
+
+/* ── Étapes du tunnel ─────────────────────────────────────────── */
+
+export const ETAPES_ACTIVES = [
+  "QUALIFICATION",
+  "SIMULATION",
+  "DEVIS_ENVOYE",
+  "RELANCE",
+  "SIGNE",
+  "PLANIFIE",
+  "CHANTIER",
+  "FACTURE",
+  "ENCAISSE",
+] as const;
+export type EtapeActive = (typeof ETAPES_ACTIVES)[number];
+
+export const ETAPES_SORTIE = ["PERDU", "EN_PAUSE"] as const;
+export type EtapeSortie = (typeof ETAPES_SORTIE)[number];
+
+export const ETAPES = [...ETAPES_ACTIVES, ...ETAPES_SORTIE] as const;
+export type EtapeDossier = (typeof ETAPES)[number];
+
+export const LIBELLES_ETAPE: Record<EtapeDossier, string> = {
+  QUALIFICATION: "Qualification",
+  SIMULATION: "Simulation",
+  DEVIS_ENVOYE: "Devis envoyé",
+  RELANCE: "Relance",
+  SIGNE: "Signé",
+  PLANIFIE: "Planifié",
+  CHANTIER: "Chantier",
+  FACTURE: "Facturé",
+  ENCAISSE: "Encaissé",
+  PERDU: "Perdu",
+  EN_PAUSE: "En pause",
+};
+
+/* ── Règles d'entrée et de sortie ─────────────────────────────────
+   Écrites pour qu'un humain ET un futur agent puissent décider
+   d'avancer un dossier. Lecture :
+   - `entree`  : ce qui doit être vrai pour entrer dans l'étape en avançant ;
+   - `sorties` : les étapes suivantes permises depuis cette étape.
+   En plus de `sorties`, toujours permis depuis une étape active :
+   - revenir à une étape active antérieure (correction, tracée) ;
+   - sortir vers PERDU (motif obligatoire) ou EN_PAUSE, sauf depuis ENCAISSE.
+   Depuis PERDU ou EN_PAUSE, seule la reprise est permise : elle ramène à
+   l'étape quittée, lue dans le dernier événement CHANGEMENT_ETAPE.
+   Un retour arrière ou une reprise ne revérifie pas `entree`.
+──────────────────────────────────────────────────────────────── */
+
+export const CRITERES_ENTREE = [
+  "COORDONNEES_COMPLETES", // nom, adresse, code postal, ville, téléphone renseignés
+  "OBJET", // objet du chantier renseigné
+  "PHOTO", // au moins une photo du chantier archivée
+  "DEVIS_GENERE", // au moins un devis généré (statut ≠ BROUILLON)
+  "BON_POUR_ACCORD", // déclaratif : bon pour accord signé reçu
+  "ACOMPTE_ENCAISSE", // déclaratif : acompte encaissé
+  "DATE_CHANTIER", // date de chantier fixée
+  "FACTURE_GENEREE", // au moins une facture générée (statut ≠ BROUILLON)
+  "SOLDE_ENCAISSE", // déclaratif : solde encaissé
+  "MOTIF_PERTE", // motif de perte choisi dans MOTIFS_PERTE
+] as const;
+export type CritereEntree = (typeof CRITERES_ENTREE)[number];
+
+export const LIBELLES_CRITERE: Record<CritereEntree, string> = {
+  COORDONNEES_COMPLETES: "Coordonnées client complètes (nom, adresse, code postal, ville, téléphone)",
+  OBJET: "Objet du chantier renseigné",
+  PHOTO: "Au moins une photo du chantier",
+  DEVIS_GENERE: "Un devis généré",
+  BON_POUR_ACCORD: "Bon pour accord reçu",
+  ACOMPTE_ENCAISSE: "Acompte encaissé",
+  DATE_CHANTIER: "Date de chantier fixée",
+  FACTURE_GENEREE: "Une facture générée",
+  SOLDE_ENCAISSE: "Solde encaissé",
+  MOTIF_PERTE: "Motif de perte",
+};
+
+export type RegleEtape = {
+  description: string;
+  entree: readonly CritereEntree[];
+  sorties: readonly EtapeActive[];
+  terminale?: boolean;
+};
+
+export const REGLES_ETAPES: Record<EtapeDossier, RegleEtape> = {
+  QUALIFICATION: {
+    description: "Infos reçues, dossier ouvert",
+    entree: ["COORDONNEES_COMPLETES", "OBJET", "PHOTO"],
+    sorties: ["SIMULATION", "DEVIS_ENVOYE"],
+  },
+  SIMULATION: {
+    description: "Préparation des visuels et rendus",
+    entree: [],
+    sorties: ["DEVIS_ENVOYE"],
+  },
+  DEVIS_ENVOYE: {
+    description: "Devis généré et transmis au client",
+    entree: ["DEVIS_GENERE"],
+    sorties: ["RELANCE", "SIGNE"],
+  },
+  RELANCE: {
+    description: "Client relancé, en attente de décision",
+    entree: ["DEVIS_GENERE"],
+    sorties: ["SIGNE"],
+  },
+  SIGNE: {
+    description: "Bon pour accord reçu, acompte encaissé",
+    entree: ["DEVIS_GENERE", "BON_POUR_ACCORD", "ACOMPTE_ENCAISSE"],
+    sorties: ["PLANIFIE"],
+  },
+  PLANIFIE: {
+    description: "Date de chantier calée",
+    entree: ["DATE_CHANTIER"],
+    sorties: ["CHANTIER"],
+  },
+  CHANTIER: {
+    description: "Pose en cours ou faite",
+    entree: [],
+    sorties: ["FACTURE"],
+  },
+  FACTURE: {
+    description: "Facture émise",
+    entree: ["FACTURE_GENEREE"],
+    sorties: ["ENCAISSE"],
+  },
+  ENCAISSE: {
+    description: "Solde encaissé — étape terminale",
+    entree: ["SOLDE_ENCAISSE"],
+    sorties: [],
+    terminale: true,
+  },
+  PERDU: {
+    description: "Affaire perdue",
+    entree: ["MOTIF_PERTE"],
+    sorties: [],
+  },
+  EN_PAUSE: {
+    description: "Client injoignable ou projet reporté",
+    entree: [],
+    sorties: [],
+  },
+};
+
+/* ── Sources, motifs de perte ─────────────────────────────────── */
+
+export const SOURCES_DOSSIER = [
+  "PROSPECTION",
+  "RECOMMANDATION",
+  "SOUS_TRAITANCE",
+  "ENTRANT",
+  "AUTRE",
+] as const;
+export type SourceDossier = (typeof SOURCES_DOSSIER)[number];
+
+export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
+  PROSPECTION: "Prospection",
+  RECOMMANDATION: "Recommandation",
+  SOUS_TRAITANCE: "Sous-traitance",
+  ENTRANT: "Entrant (site, Meta, appel)",
+  AUTRE: "Autre",
+};
+
+export const MOTIFS_PERTE = [
+  "PRIX",
+  "DELAI",
+  "SANS_REPONSE",
+  "PROJET_ABANDONNE",
+  "CONCURRENT",
+  "AUTRE",
+] as const;
+export type MotifPerte = (typeof MOTIFS_PERTE)[number];
+
+export const LIBELLES_MOTIF_PERTE: Record<MotifPerte, string> = {
+  PRIX: "Prix",
+  DELAI: "Délai",
+  SANS_REPONSE: "Sans réponse",
+  PROJET_ABANDONNE: "Projet abandonné",
+  CONCURRENT: "Concurrent",
+  AUTRE: "Autre",
+};
+
+/* ── Événements (socle des futurs agents mail / WhatsApp) ─────── */
+
+export const TYPES_EVENEMENT = [
+  "MAIL_RECU",
+  "MAIL_ENVOYE",
+  "WHATSAPP_RECU",
+  "WHATSAPP_ENVOYE",
+  "APPEL",
+  "DEVIS_GENERE",
+  "DEVIS_ENVOYE",
+  "FACTURE_GENEREE",
+  "CHANGEMENT_ETAPE",
+  "NOTE_AJOUTEE",
+] as const;
+export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
+
+export const DIRECTIONS_EVENEMENT = ["ENTRANT", "SORTANT", "INTERNE"] as const;
+export type DirectionEvenement = (typeof DIRECTIONS_EVENEMENT)[number];
+
+export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
+  MAIL_RECU: "Mail reçu",
+  MAIL_ENVOYE: "Mail envoyé",
+  WHATSAPP_RECU: "WhatsApp reçu",
+  WHATSAPP_ENVOYE: "WhatsApp envoyé",
+  APPEL: "Appel",
+  DEVIS_GENERE: "Devis généré",
+  DEVIS_ENVOYE: "Devis envoyé",
+  FACTURE_GENEREE: "Facture générée",
+  CHANGEMENT_ETAPE: "Changement d'étape",
+  NOTE_AJOUTEE: "Note ajoutée",
+};
+// Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
+
+/* ── Documents (devis et factures) ────────────────────────────── */
+
+export const TYPES_DOCUMENT = ["DEVIS", "FACTURE"] as const;
+export type TypeDocument = (typeof TYPES_DOCUMENT)[number];
+
+export const LIBELLES_TYPE_DOCUMENT: Record<TypeDocument, string> = {
+  DEVIS: "Devis",
+  FACTURE: "Facture",
+};
+
+export const STATUTS_DOCUMENT = ["BROUILLON", "GENERE", "ENVOYE", "ACCEPTE", "REFUSE"] as const;
+export type StatutDocument = (typeof STATUTS_DOCUMENT)[number];
+
+export const LIBELLES_STATUT_DOCUMENT: Record<StatutDocument, string> = {
+  BROUILLON: "Brouillon",
+  GENERE: "Généré",
+  ENVOYE: "Envoyé",
+  ACCEPTE: "Accepté",
+  REFUSE: "Refusé",
+};
+
+export const UNITES = ["ml", "jour", "forfait"] as const;
+export type Unite = (typeof UNITES)[number];
+
+export const ACOMPTE_PCT_DEFAUT = 30;
+
+/* Structure du champ JSON Document.lignes */
+export type LignePrestation = {
+  type: "PRESTATION";
+  designation: string;
+  sousDesignation?: string; // gras italique, entre parenthèses, sur une seconde ligne
+  quantite: number;
+  unite: Unite;
+  prixUnitaire: number;
+};
+export type LigneSection = {
+  type: "SECTION"; // bandeau gris fusionné sur toute la largeur
+  libelle: string;
+};
+export type LigneDocument = LignePrestation | LigneSection;
+
+/* ── Numérotation ─────────────────────────────────────────────────
+   Jusqu'ici, 2026 a été numéroté à la main en UNE série partagée entre
+   devis et factures : 030 facture (Cabinet Bautes), 031 devis (Parsis),
+   032 facture (Signasud), 033 à 037 devis. Dernier numéro attribué :
+   2026-037.
+
+   Choix retenu, EN ATTENTE DE VALIDATION PAR LE COMPTABLE :
+   - devis   : la série sans préfixe continue à 2026-038 ;
+   - factures : série distincte avec préfixe (F2026-001…), continue et sans
+     trou, ce qu'une série partagée avec les devis ne permet pas.
+   Le préfixe garantit qu'aucune facture ne reprend un numéro déjà envoyé.
+
+   Si le comptable préfère garder une série unique : passer FACTURE à
+   { compteur: "DEVIS", prefixe: "" }. Aucun autre changement n'est requis
+   et aucun numéro déjà émis ne peut être réattribué.
+
+   Un numéro est attribué à la génération du PDF, dans la même transaction
+   que la création du document : un brouillon abandonné ne crée pas de trou.
+──────────────────────────────────────────────────────────────── */
+
+export const NUMEROTATION: Record<TypeDocument, { compteur: string; prefixe: string }> = {
+  DEVIS: { compteur: "DEVIS", prefixe: "" },
+  FACTURE: { compteur: "FACTURE", prefixe: "F" },
+};
+
+/** Dernier numéro déjà attribué, par compteur et par année, avant le premier
+ *  document émis par le CRM. Lu uniquement à la création de la ligne du compteur. */
+export const AMORCES_COMPTEURS: Record<string, Record<number, number>> = {
+  DEVIS: { 2026: 37 },
+  FACTURE: {},
+};
+
+/* ── Presets de tarifs de départ ──────────────────────────────── */
+
+export const PRESETS_DEPART: { designation: string; unite: Unite; prixUnitaire: number | null }[] = [
+  { designation: "Revêtement adhésif — cuisine / façades", unite: "ml", prixUnitaire: 110 },
+  { designation: "Revêtement adhésif — cuisine (variante)", unite: "ml", prixUnitaire: 120 },
+  { designation: "Revêtement adhésif — portes de dressing", unite: "ml", prixUnitaire: 50 },
+  { designation: "Revêtement adhésif — meuble TV", unite: "ml", prixUnitaire: 65 },
+  { designation: "Revêtement adhésif — bar / comptoir", unite: "ml", prixUnitaire: 55 },
+  { designation: "Prestation de pose — tarif journalier", unite: "jour", prixUnitaire: 300 },
+  { designation: "Dépose / repose nouvelle crédence", unite: "forfait", prixUnitaire: 650 },
+  { designation: "Nouvelle crédence Dibond", unite: "forfait", prixUnitaire: 350 },
+  { designation: "Consommables", unite: "forfait", prixUnitaire: 80 },
+  { designation: "Frais de carburant", unite: "forfait", prixUnitaire: null },
+  { designation: "Frais de péage", unite: "forfait", prixUnitaire: null },
+  { designation: "Frais de mission (hébergement et restauration)", unite: "forfait", prixUnitaire: null },
+];
+
+export const LIBELLES_UNITE: Record<Unite, string> = {
+  ml: "ml",
+  jour: "jour",
+  forfait: "forfait",
+};
+
+/* ── Photos ───────────────────────────────────────────────────────
+   Une photo par requête : avec un middleware, Next.js ne garde que les
+   10 premiers Mo du corps d'une requête (proxyClientMaxBodySize), sans
+   erreur. Le navigateur réduit les photos avant l'envoi quand il sait
+   les décoder ; le serveur refuse au-delà de PHOTO_OCTETS_MAX.
+──────────────────────────────────────────────────────────────── */
+
+export const PHOTO_OCTETS_MAX = 9 * 1024 * 1024;
+
+export const FORMATS_PHOTO: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+};
+
+/* ── Identité de l'émetteur (devis et factures) ───────────────── */
+
+export const EMETTEUR = {
+  raisonSociale: "COVER SWAP",
+  gerant: "Monsieur Lucas VILLEMIN",
+  adresse: "73 rue Simone Veil",
+  codePostalVille: "34470 Pérols",
+  email: "coverswap.contact@gmail.com",
+  telephone: "06 70 35 28 69",
+  ligneSiret:
+    "SIRET de l'établissement : 94518036200010 00010 / Code APE de l'établissement : 4334Z",
+  ligneRib: "RIB : FR76 1610 6700 2096 0145 0427 085 – Code BIC – Code SWIFT : AGRIFRPP861",
+  piedSiret: "SIRET de l'établissement : 94518036200010",
+  piedApe: "Code APE de l'établissement : 4334Z",
+  piedNom: "Cover Swap",
+  mentionTva: "TVA : NON APPLICABLE, ARTICLE 293 B DU CGI",
+} as const;

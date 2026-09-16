@@ -47,3 +47,6 @@ next-env.d.ts
 *.db-journal
 .meta-leads-backfill.json
 .meta-leads-import-results.json
+
+# uploads locaux (photos de clients, PDF) : jamais dans le dépôt
+/.uploads/

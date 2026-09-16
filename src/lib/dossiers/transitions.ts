@@ -76,6 +76,8 @@ export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
 type Application = ChangementEtape & {
   donnees?: DonneesTransition;
   documentId?: string;
+  /** Étape active de référence (celle quittée avant une pause), pour situer une perte. */
+  etapeReference?: EtapeDossier | null;
 };
 
 /**
@@ -89,8 +91,44 @@ export async function appliquerChangementEtape(
   const { dossierId, de, vers, nature, donnees = {}, documentId } = application;
 
   const data: Prisma.DossierUpdateManyMutationInput = { etape: vers };
-  if (vers === "PERDU") data.motifPerte = donnees.motifPerte ?? null;
-  else if (de === "PERDU") data.motifPerte = null;
+  let perte: Pick<MetadataChangementEtape, "perteEtape" | "perteMontantPropose"> = {};
+  if (vers === "PERDU") {
+    // La perte est figée maintenant : à quelle étape, contre qui, à quel prix.
+    const [dernierDevis, dossier] = await Promise.all([
+      tx.document.findFirst({
+        where: { dossierId, type: "DEVIS", statut: { not: "BROUILLON" } },
+        orderBy: { createdAt: "desc" },
+        select: { totalHt: true },
+      }),
+      tx.dossier.findUnique({ where: { id: dossierId }, select: { montantEstime: true } }),
+    ]);
+    const etapePerdue = estEtapeActive(de) ? de : (application.etapeReference ?? null);
+    perte = {
+      ...(etapePerdue ? { perteEtape: etapePerdue } : {}),
+      ...((dernierDevis?.totalHt ?? dossier?.montantEstime) != null
+        ? { perteMontantPropose: dernierDevis?.totalHt ?? dossier!.montantEstime! }
+        : {}),
+    };
+    Object.assign(data, {
+      motifPerte: donnees.motifPerte ?? null,
+      perteLe: new Date(),
+      perteEtape: perte.perteEtape ?? null,
+      perteConcurrent: donnees.perteConcurrent?.trim() || null,
+      perteMontantConcurrent: donnees.perteMontantConcurrent ?? null,
+      perteMontantPropose: perte.perteMontantPropose ?? null,
+      perteCommentaire: donnees.perteCommentaire?.trim() || null,
+    });
+  } else if (de === "PERDU") {
+    Object.assign(data, {
+      motifPerte: null,
+      perteLe: null,
+      perteEtape: null,
+      perteConcurrent: null,
+      perteMontantConcurrent: null,
+      perteMontantPropose: null,
+      perteCommentaire: null,
+    });
+  }
   if (vers === "PLANIFIE" && donnees.dateChantier) data.dateChantier = dateDepuisJour(donnees.dateChantier);
 
   // Garde optimiste : si l'étape a bougé depuis la lecture, rien n'est écrit.
@@ -113,6 +151,10 @@ export async function appliquerChangementEtape(
     vers,
     nature,
     ...(vers === "PERDU" && donnees.motifPerte ? { motifPerte: donnees.motifPerte } : {}),
+    ...(vers === "PERDU" && donnees.perteConcurrent?.trim() ? { perteConcurrent: donnees.perteConcurrent.trim() } : {}),
+    ...(vers === "PERDU" && donnees.perteMontantConcurrent != null ? { perteMontantConcurrent: donnees.perteMontantConcurrent } : {}),
+    ...(vers === "PERDU" && donnees.perteCommentaire?.trim() ? { perteCommentaire: donnees.perteCommentaire.trim() } : {}),
+    ...perte,
     ...(vers === "PLANIFIE" && donnees.dateChantier ? { dateChantier: donnees.dateChantier } : {}),
     ...(confirmations.length > 0 ? { confirmations } : {}),
     ...(documentId ? { documentId } : {}),
@@ -120,6 +162,7 @@ export async function appliquerChangementEtape(
 
   let contenu = `${LIBELLES_ETAPE[de]} → ${LIBELLES_ETAPE[vers]}`;
   if (metadata.motifPerte) contenu += ` (motif : ${LIBELLES_MOTIF_PERTE[metadata.motifPerte].toLowerCase()})`;
+  if (metadata.perteConcurrent) contenu += `, remporté par ${metadata.perteConcurrent}`;
   if (nature === "AUTOMATIQUE") contenu += ", à la génération du document";
   if (nature === "RETOUR") contenu += " (retour en arrière)";
   if (nature === "REPRISE") contenu += " (reprise)";
@@ -140,6 +183,13 @@ export async function appliquerChangementEtape(
 export const schemaChangementEtape = z.object({
   vers: z.enum(ETAPES, "Étape invalide."),
   motifPerte: z.enum(MOTIFS_PERTE, "Motif de perte invalide.").optional(),
+  perteConcurrent: z.string().trim().max(160, "Nom du concurrent trop long.").optional(),
+  perteMontantConcurrent: z
+    .number("Prix du concurrent invalide.")
+    .min(0, "Prix du concurrent invalide.")
+    .max(10_000_000, "Prix du concurrent invalide.")
+    .optional(),
+  perteCommentaire: z.string().trim().max(2000, "Précision trop longue.").optional(),
   dateChantier: z.string("Date de chantier invalide.").refine(estJourValide, "Date de chantier invalide.").optional(),
   confirmations: z
     .object({
@@ -185,6 +235,7 @@ export async function changerEtapeDansTransaction(
     nature: verification.nature,
     donnees: entree,
     documentId,
+    etapeReference: avantSortie,
   });
 }
 

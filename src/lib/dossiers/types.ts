@@ -34,7 +34,7 @@ export type DossierResume = {
   updatedAt: string;
 };
 
-export type PhotoVue = { id: string; url: string; type: string };
+export type PhotoVue = { id: string; url: string; type: string; /** Après chantier (portfolio). */ apres: boolean };
 
 export type NoteVue = { id: string; etape: EtapeDossier; contenu: string; createdAt: string };
 

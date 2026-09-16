@@ -29,6 +29,7 @@ import {
 } from "./regles";
 import {
   enregistrerPhoto,
+  estPhotoApres,
   idPhoto,
   lireFichier,
   lireLignes,
@@ -223,6 +224,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     id: idPhoto(chemin),
     url: urlPhoto(dossier.id, chemin),
     type: typeMimePhoto(chemin),
+    apres: estPhotoApres(chemin),
   }));
 
   return {
@@ -463,14 +465,14 @@ async function remplacerPhotos(dossierId: string, avant: string, chemins: string
   return count === 1;
 }
 
-export async function ajouterPhoto(dossierId: string, fichier: File): Promise<PhotoVue> {
+export async function ajouterPhoto(dossierId: string, fichier: File, apres = false): Promise<PhotoVue> {
   verifierPhoto(fichier);
   await photosDuDossier(dossierId);
-  const chemin = await enregistrerPhoto(dossierId, fichier);
+  const chemin = await enregistrerPhoto(dossierId, fichier, apres);
   for (let essai = 0; essai < 3; essai++) {
     const { brut, chemins } = await photosDuDossier(dossierId);
     if (await remplacerPhotos(dossierId, brut, [...chemins, chemin])) {
-      return { id: idPhoto(chemin), url: urlPhoto(dossierId, chemin), type: typeMimePhoto(chemin) };
+      return { id: idPhoto(chemin), url: urlPhoto(dossierId, chemin), type: typeMimePhoto(chemin), apres: estPhotoApres(chemin) };
     }
   }
   await archiverFichier(chemin, "photo-non-rattachee").catch(() => {});
@@ -481,7 +483,9 @@ export async function supprimerPhoto(dossierId: string, photoId: string): Promis
   const { brut, chemins } = await photosDuDossier(dossierId);
   const chemin = ID_PHOTO.test(photoId) ? chemins.find((c) => idPhoto(c) === photoId) : undefined;
   if (!chemin) throw new ErreurMetier("Photo introuvable.", 404);
-  if (chemins.length <= 1) throw new ErreurMetier("Un dossier garde au moins une photo du chantier.", 409);
+  if (!estPhotoApres(chemin) && chemins.filter((c) => !estPhotoApres(c)).length <= 1) {
+    throw new ErreurMetier("Un dossier garde au moins une photo du chantier.", 409);
+  }
   if (!(await remplacerPhotos(dossierId, brut, chemins.filter((c) => c !== chemin)))) {
     throw new ErreurMetier("Les photos ont changé entre-temps : recharge le dossier.", 409);
   }

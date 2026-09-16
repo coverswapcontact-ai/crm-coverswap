@@ -11,7 +11,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 
 | Principe | Mécanisme | Où |
 | --- | --- | --- |
-| Rien ne se supprime | Déclencheur `BEFORE DELETE` sur chaque table + refus dans la couche Prisma ; archivage (`archiveLe`, `archiveMotif`) ; fichiers déplacés dans `archives/` | `src/lib/journal/` |
+| Rien ne se supprime | Déclencheur `BEFORE DELETE` sur chaque table + refus dans la couche Prisma ; archivage (`archiveLe`, `archiveMotif`) ; fichiers déplacés dans `archives/` ; clients Gmail et Drive sans aucune fonction de corbeille ni de suppression (archivage par libellé, dossier d'archives) | `src/lib/journal/`, `src/lib/messages/gmail.ts`, `src/lib/drive/client.ts` |
 | Aucune donnée perdue | Sauvegarde vérifiée avant toute migration de schéma ou de données ; `db push` sans `--accept-data-loss` ; migrations de données idempotentes | `scripts/avant-demarrage.mjs`, `src/lib/base/` |
 | Aucun numéro émis réattribué | Registre `NumeroDocument` de tout numéro émis (manuel, ancien écran, CRM) ; un numéro inscrit est sauté, jamais réattribué ni modifié ; document émis figé par la base (avoir, devis refait) | `src/lib/dossiers/numerotation.ts`, section 9 |
 | L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | Toute action proposée passe par `Proposition` ; seule une personne connectée valide ou rejette ; une proposition sensible ne s'exécute jamais seule ni en lot | `src/lib/validation/` |
@@ -127,7 +127,11 @@ doit être justifié ici :
 - `Tache` et `Planification` (file de tâches, section 3) : leurs lignes sont
   déjà un historique d'exécution (tentatives, erreurs, résultat) et changent à
   chaque tour ; les écritures faites **par** les tâches sont journalisées,
-  attribuées à l'acteur du traitement avec l'origine `tache:<TYPE>`.
+  attribuées à l'acteur du traitement avec l'origine `tache:<TYPE>` ;
+- `MiroirDrive` (section 15) : état technique du miroir, réécrit à chaque passage ;
+- `ContenuMessage` (section 16) : le texte d'un mail reçu, écrit une fois avec
+  son `Message` (lui journalisé) ; la base en refuse toute modification, sauf
+  son effacement RGPD, une fois. Le journaliser dupliquerait chaque mail.
 
 ### Limites connues
 
@@ -706,9 +710,9 @@ sans décision humaine, jamais validée en lot, jamais exécutée par un agent.
   est rejouée.
 - Effets : document « Envoyé » ; une relance fait passer « Devis envoyé » à
   « Relance ».
-- Envoyeur : Resend si `RESEND_API_KEY` et `EMAIL_FROM` sont configurées (la
-  boîte Gmail prendra le relais une fois connectée) ; sans envoyeur, la tâche
-  échoue en le disant et rien ne part. Réponse attendue sur
+- Envoyeur : la boîte Gmail connectée avec l'accès d'envoi (section 16), sinon
+  Resend si `RESEND_API_KEY` et `EMAIL_FROM` sont configurées ; sans envoyeur,
+  la tâche échoue en le disant et rien ne part. Réponse attendue sur
   `coverswap.contact@gmail.com` (Reply-To).
 
 ### Relances de devis (`src/lib/relances/service.ts`)
@@ -728,7 +732,7 @@ sans décision humaine, jamais validée en lot, jamais exécutée par un agent.
 
 - Les relances ne portent que sur les dossiers du module Dossiers, plus sur
   l'ancien écran des devis.
-- Pas de suivi de lecture ni de réponse ici : c'est le rôle de l'agent mail.
+- Pas de suivi de lecture : les réponses des clients arrivent par l'agent mail (section 16).
 
 ## 14. Synthèse, mois figés et alertes
 
@@ -879,3 +883,161 @@ de l'écran était faux et devient « Retirer »).
 - La fiche du dossier contient les coordonnées du client : le Drive doit rester
   privé au compte de l'entreprise (ne pas partager le dossier « CoverSwap CRM »).
 
+## 16. Agent mail : trier la boîte, nourrir les dossiers, proposer le reste
+
+### Ce qu'il fait (`src/lib/messages/`)
+
+- **Relevé** toutes les 5 minutes (tâche de fond) des mails reçus et envoyés de
+  la boîte connectée : depuis le dernier message connu moins un jour ; au
+  premier passage, depuis la semaine qui précède la connexion. Spam, corbeille
+  et brouillons sont ignorés. Rejouable sans doublon (identifiant Gmail unique).
+- **Stockage** : `Message` (qui, quand, statut du tri, client, dossier ;
+  journalisé), `ContenuMessage` (texte brut — le HTML n'est jamais affiché —,
+  en-têtes utiles au tri et aux réponses ; écrit une fois, immuable),
+  `PieceMessage` (description des pièces jointes).
+- **Analyse** (tâche `ANALYSE_MESSAGE`, acteur `AGENT:mail`) : les règles sûres
+  (`regles.ts`, fonction pure, testée), la conservation des pièces jointes,
+  puis la lecture par l'IA si elle est active. Chaque analyse est gardée
+  (`AnalyseMessage`, immuable) avec son raisonnement.
+
+### Ce que l'agent fait seul — et seulement cela
+
+| Geste | Condition (toutes requises) | Confiance |
+| --- | --- | --- |
+| Archiver un mail publicitaire : retiré de la boîte de réception, libellé « CoverSwap CRM/Bruit archivé » | classé par Gmail en Promotions ou Réseaux sociaux ; en-tête de liste de diffusion (`List-Unsubscribe`, `Precedence: bulk`) ; expéditeur inconnu du CRM ; pas de réponse de notre part dans la conversation ; pas de PDF joint | 0,99 |
+| Ranger un mail chez le client | adresse exacte d'une seule fiche client active ; dossier : le seul en cours, ou celui où la conversation est déjà rangée (sinon la fiche seule, et le choix du dossier est proposé) | 0,97 à 0,98 |
+| Classer hors clients | mail envoyé à quelqu'un qui n'est pas client, ou de la boîte à elle-même | 0,99 |
+
+Ces gestes passent par `executerSansValidation` (types déclarés automatisables,
+jamais sensibles, seuil 0,95) : statut `AUTOMATIQUE`, visibles dans
+l'historique de « À valider ». « Ce n'est pas du bruit » défait un archivage et
+remet le mail dans la boîte ; ranger ailleurs un mail rangé seul se fait en un
+geste.
+
+### Ce qu'il propose, et que la personne décide
+
+- Sans IA : archivage probable (notification, adresse `noreply`), rangement
+  suggéré (fiche archivée, autre adresse dans une conversation déjà rangée),
+  choix du dossier pour un client qui en a plusieurs en cours.
+- Avec l'IA : le classement (fournisseur, administratif, personnel…), une
+  **nouvelle demande prête** — fiche client, et dossier ouvert avec les photos
+  reçues quand l'adresse du chantier, le téléphone, l'objet et une photo sont
+  là ; sinon la fiche seule, et la réponse proposée demande ce qui manque —, une
+  note, une prochaine action, un changement d'étape, un brouillon de réponse.
+- La file **« À trier »** (`/messages`) garde ce qui n'est pas rangé. Chaque
+  mail s'y trie en un geste : ranger chez un client (recherche pré-remplie avec
+  le nom de l'expéditeur), nouvelle demande (formulaire pré-rempli par l'agent
+  ou, à défaut, par le mail : nom, téléphone, code postal), bruit, hors
+  clients, répondre, relire avec l'IA.
+- **Motifs de rejet sans saisie** : quand la personne trie depuis la file, la
+  proposition de l'agent est validée si c'est la même décision (il est
+  crédité) ; sinon elle est rejetée avec le motif que la décision rend évident
+  (« Mauvais dossier ou mauvais client », « Information inexacte ») et la
+  décision prise en commentaire. La mesure de l'agent reste juste sans rien
+  demander de plus.
+
+### Garde-fous
+
+- **Aucune suppression dans Gmail** : le client Gmail (`gmail.ts`) n'a ni
+  corbeille ni suppression ; les tests vérifient qu'aucun appel `DELETE`,
+  `trash` ou `batchDelete` n'est jamais émis.
+- **Aucun mail envoyé sans validation** : réponse = `ENVOI_MAIL` (sensible),
+  exécutée par la file au nom de la personne qui a validé.
+- **Aucune fusion de clients** : une nouvelle demande dont l'adresse ou le
+  numéro existe déjà s'arrête (« ranger le mail sur sa fiche ») ; les
+  rapprochements restent des propositions `FUSION_CLIENTS`.
+- **Étapes d'argent jamais automatiques** ; une étape n'est proposée que si la
+  phrase citée par le modèle figure mot pour mot dans le mail.
+- **Le mail est une donnée, pas une consigne** : le texte du mail est isolé
+  dans des balises que le mail ne peut pas imiter ; la sortie du modèle est un
+  outil imposé, validé par zod ; le modèle n'a aucun moyen d'agir ; un
+  identifiant de dossier hors de la liste fournie, un téléphone ou un code
+  postal absents du mail sont écartés ; une consigne adressée à l'IA trouvée
+  dans le mail est signalée (« Alerte ») et ignorée. Le destinataire d'une
+  réponse est toujours l'expéditeur réel, jamais une adresse lue dans le texte.
+- **Confiance calculée par le code** (certitude déclarée → 0,85 / 0,65 / 0,40,
+  plafonnée) : une proposition issue de l'IA ne s'exécute jamais seule.
+
+### L'IA : un seul point d'appel, un budget (`src/lib/ia/modele.ts`)
+
+- **Désactivée par défaut** : il faut la clé `ANTHROPIC_API_KEY` sur le serveur
+  et, dans Paramètres → « Agent mail et IA », l'interrupteur « Active », le
+  modèle, ses deux prix (euros par million de jetons lus et écrits) et le
+  budget mensuel. Aucune valeur par défaut : rien ne se dépense sans décision.
+- **Plafond** : un appel dont le coût estimé dépasserait le budget du mois civil
+  (heure de Paris) n'est pas fait ; le mail le dit (« Pas lu par l'IA : budget
+  du mois atteint »). « En pause » coupe l'IA sans rien défaire.
+- **Registre** `AppelIa` : chaque appel, réussi ou non, avec ses jetons, son
+  coût aux prix datés en vigueur et sa durée. Pas de cache des consignes : à ce
+  volume, les écritures de cache coûteraient plus qu'elles n'économisent.
+- **Pourquoi le modèle est un paramètre daté** : modèles et prix changent ; un
+  nouveau modèle se saisit avec ses prix à la même date et le coût passé reste
+  juste, sans redéploiement.
+
+### Envoi par la boîte Gmail
+
+- Connectée avec l'accès d'envoi, la boîte envoie tout mail validé (devis,
+  facture, relance, réponse) : il figure dans ses « Messages envoyés », une
+  réponse reste dans sa conversation (`threadId`, `In-Reply-To`,
+  `References`), et le message envoyé est connu du CRM (pas relevé en double).
+  À défaut, Resend ; sinon rien ne part.
+- Le mail MIME est construit sans dépendance (`mime.ts`) : en-têtes encodés,
+  noms de pièces jointes accentués, aucune injection d'en-tête possible (testé).
+
+### Pièces jointes, dossiers, fiches
+
+- Photos et PDF (9 Mo au plus) conservés dans le CRM dès que le mail n'est pas
+  du bruit (`Fichier`, servis seulement dans une session) ; les autres pièces
+  restent dans Gmail. Images intégrées (logos, signatures) ignorées. Une
+  nouvelle demande validée copie les photos reçues dans le dossier.
+- Mail rangé dans un dossier : événement « Mail reçu » ou « Mail envoyé » daté
+  de sa réception, avec ses pièces, lisible depuis l'historique du dossier.
+  Rangé ensuite ailleurs : l'ancien événement est archivé
+  (`DossierEvenement.archiveLe`), jamais effacé.
+- Fiche client : section « Mails ».
+
+### WhatsApp demain
+
+Le modèle est prévu pour plusieurs canaux : `Message.canal` (`EMAIL`,
+`WHATSAPP`), `identifiantCanal` et `filCanal`, `MessageRecu` indépendant du
+fournisseur, événements `WHATSAPP_RECU` / `WHATSAPP_ENVOYE` déjà définis. Pour
+brancher WhatsApp Business (API Cloud de Meta) : une route webhook (signature
+`X-Hub-Signature-256` vérifiée avec `META_APP_SECRET`, route publique déclarée
+dans `routes-publiques.ts`) qui traduit chaque message en `MessageRecu` (de =
+numéro normalisé) puis appelle `enregistrerMessageRecu` et met en file
+`ANALYSE_MESSAGE` ; dans les règles, le numéro exact remplace l'adresse
+(`trouverClientParCoordonnees` sait déjà le faire) ; l'archivage dans la boîte
+est sans objet ; l'envoi passerait par une proposition `ENVOI_WHATSAPP`
+sensible (fenêtre de 24 h et modèles de message imposés par Meta). Non
+construit : il faut d'abord un compte WhatsApp Business vérifié par Meta.
+
+### Réglages et interrupteurs
+
+- Paramètres → Connexions : état de l'agent (dernier relevé, mails à trier) et
+  de l'IA (modèle, dépense du mois sur le budget) ; « Relever maintenant ».
+- `AGENT_MAIL=0` coupe l'agent (relevé compris) sans toucher à la connexion
+  Google ; le miroir Drive garde son propre interrupteur (`MIROIR_DRIVE`).
+
+### Limites connues
+
+- Non testé contre les vrais serveurs de Gmail et d'Anthropic (identifiants
+  absents du poste de développement, aucun appel payant fait) : testé contre
+  une boîte Gmail et un modèle simulés. Surveiller le premier relevé réel et
+  les premières lectures (écran des tâches, analyses affichées sur les mails).
+- L'archivage automatique s'appuie sur le classement de Gmail : un expéditeur
+  légitime classé en Promotions, avec lien de désinscription, serait archivé.
+  Il reste dans « Tous les messages » sous le libellé du CRM, et « Ce n'est pas
+  du bruit » le remet dans la boîte.
+- Un client qui écrit d'une adresse non enregistrée reste à trier (par
+  principe, aucun rapprochement flou) — sauf dans une conversation déjà rangée,
+  où le rangement est proposé.
+- Relevé par fenêtre de dates : un mail remis avec plus d'un jour de retard sur
+  le dernier connu pourrait être manqué. Si cela arrive, passer à l'historique
+  Gmail (`history.list`).
+- L'historique cité est retiré d'après les formules usuelles (« Le … a écrit : »,
+  « De : … Envoyé : ») ; le texte complet reste consultable.
+- Une réponse sans dossier dont la tâche s'interromprait entre l'envoi et son
+  enregistrement pourrait repartir à la reprise (fenêtre de quelques
+  millisecondes) ; un envoi rangé dans un dossier est protégé par sa trace.
+- Le coût d'un appel est estimé d'avance (environ 3 caractères par jeton) ; le
+  coût enregistré est celui des jetons réellement facturés.

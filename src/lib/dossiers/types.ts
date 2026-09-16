@@ -44,6 +44,8 @@ export type EvenementVue = {
   direction: DirectionEvenement;
   contenu: string;
   createdAt: string;
+  /** Mail rangé dans le dossier : lisible depuis l'historique. */
+  messageId: string | null;
 };
 
 export type DocumentVue = {

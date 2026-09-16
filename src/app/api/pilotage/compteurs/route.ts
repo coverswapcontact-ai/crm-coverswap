@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { reponseErreur } from "@/lib/commun/api";
+import { compterMessagesATrier } from "@/lib/messages/consultation";
 import { compterPropositionsEnAttente } from "@/lib/validation/service";
 
 export const dynamic = "force-dynamic";
 
-/** Compteurs de la navigation : propositions à valider, tâches de fond en échec. */
+/** Compteurs de la navigation : propositions à valider, mails à trier, tâches de fond en échec. */
 export async function GET() {
   try {
-    const [aValider, tachesEnEchec] = await Promise.all([
+    const [aValider, messagesATrier, tachesEnEchec] = await Promise.all([
       compterPropositionsEnAttente(),
+      compterMessagesATrier(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
     ]);
-    return NextResponse.json({ aValider, tachesEnEchec });
+    return NextResponse.json({ aValider, messagesATrier, tachesEnEchec });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");
   }

@@ -35,7 +35,8 @@ export type DefinitionProposition<C = Record<string, unknown>> = {
    * proposition est sensible.
    */
   automatisable?: boolean;
-  champs?: ChampModifiable[];
+  /** Champs corrigeables avant validation ; une fonction quand ils dépendent de la proposition (choix entre ses candidats). */
+  champs?: ChampModifiable[] | ((contenu: C) => ChampModifiable[]);
   motifsRejet?: MotifRejet[];
   /** IMMEDIATE : dans la transaction de la validation. FILE : par la file de tâches (services extérieurs). */
   execution: "IMMEDIATE" | "FILE";
@@ -51,6 +52,10 @@ export function definirProposition<C extends Record<string, unknown>>(
   definition: DefinitionProposition<C>
 ): DefinitionProposition<C> {
   return definition;
+}
+
+export function champsDe<C>(definition: DefinitionProposition<C>, contenu: C): ChampModifiable[] {
+  return typeof definition.champs === "function" ? definition.champs(contenu) : (definition.champs ?? []);
 }
 
 export function estSensible<C>(definition: DefinitionProposition<C>, contenu: C): boolean {

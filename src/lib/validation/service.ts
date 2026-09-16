@@ -7,7 +7,7 @@ import { avecActeur, typeActeur } from "@/lib/journal/contexte";
 import { mettreEnFile, relancerTache } from "@/lib/taches/file";
 import { ErreurDefinitive, type ContexteTraitement } from "@/lib/taches/registre";
 import { definitionDe } from "./catalogue";
-import { estSensible, type DefinitionProposition, type ResultatExecution } from "./definitions";
+import { champsDe, estSensible, type DefinitionProposition, type ResultatExecution } from "./definitions";
 import {
   LIBELLES_STATUT_PROPOSITION,
   MOTIFS_REJET_COMMUNS,
@@ -69,7 +69,7 @@ export function vueProposition(proposition: Proposition): PropositionVue {
     // Type inconnu : prudence, traité comme sensible.
     sensible: definition ? estSensible(definition, contenu) : true,
     validationGroupee: definition ? definition.validationGroupee && !estSensible(definition, contenu) : false,
-    champs: definition?.champs ?? [],
+    champs: definition ? champsDe(definition, contenu) : [],
     motifsRejet: motifsDe(definition),
     liens: definition?.liens?.(contenu) ?? [],
     clientId: proposition.clientId,
@@ -242,7 +242,7 @@ export async function validerProposition(id: string, corrections?: Record<string
   const definition = definitionObligatoire(proposition.type);
 
   const original = analyser(definition.schema, lireJson(proposition.contenu) ?? {});
-  const modifiables = new Set((definition.champs ?? []).map((champ) => champ.cle));
+  const modifiables = new Set(champsDe(definition, original).map((champ) => champ.cle));
   const retenues = Object.fromEntries(Object.entries(corrections ?? {}).filter(([cle]) => modifiables.has(cle)));
   const final = analyser(definition.schema, { ...original, ...retenues });
   const modifiee = JSON.stringify(final) !== JSON.stringify(original);

@@ -74,7 +74,8 @@ export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[]
   const [enModification, setEnModification] = useState<CleParametre | null>(null);
   const [saisie, setSaisie] = useState(saisieVide());
   const [envoi, setEnvoi] = useState(false);
-  const aRenseigner = parametres.filter((parametre) => !parametre.courante).length;
+  // Les réglages de l'IA sont facultatifs : sans eux, elle reste simplement désactivée.
+  const aRenseigner = parametres.filter((parametre) => !parametre.courante && parametre.groupe !== "AGENT").length;
 
   function ouvrir(cle: CleParametre) {
     setSaisie({ ...saisieVide(), valableDu: new Date().toISOString().slice(0, 10) });
@@ -122,6 +123,11 @@ export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[]
         return (
           <section key={groupe} className="mt-6">
             <TitreSection>{GROUPES_PARAMETRES[groupe]}</TitreSection>
+            {groupe === "AGENT" ? (
+              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
+                Facultatif : tant que ces réglages manquent, l&apos;IA ne lit aucun mail et ne coûte rien ; l&apos;agent trie avec ses règles sûres. La clé ANTHROPIC_API_KEY se pose sur le serveur, jamais ici.
+              </p>
+            ) : null}
             <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]", TRANS)}>
               {liste.map((parametre) => (
                 <LigneParametre key={parametre.cle} parametre={parametre} onModifier={() => ouvrir(parametre.cle)} />

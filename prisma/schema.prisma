@@ -316,6 +316,7 @@ model Dossier {
   documents              Document[]
   encaissements          Encaissement[]
   depenses               Depense[]
+  messages               Message[]
   archiveLe              DateTime? // archivage : rien ne se supprime
   archiveMotif           String?
   ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -340,15 +341,17 @@ model DossierNote {
 }
 
 model DossierEvenement {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  dossierId String
-  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
-  type      String // TypeEvenement : MAIL_RECU | MAIL_ENVOYE | WHATSAPP_RECU | WHATSAPP_ENVOYE | APPEL | DEVIS_GENERE | DEVIS_ENVOYE | FACTURE_GENEREE | CHANGEMENT_ETAPE | NOTE_AJOUTEE
-  direction String // ENTRANT | SORTANT | INTERNE
-  contenu   String
-  metadata  String   @default("{}") // JSON libre selon le type (ex. { de, vers } pour un changement d'étape)
-  ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  dossierId    String
+  dossier      Dossier   @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  type         String // TypeEvenement : MAIL_RECU | MAIL_ENVOYE | WHATSAPP_RECU | WHATSAPP_ENVOYE | APPEL | DEVIS_GENERE | DEVIS_ENVOYE | FACTURE_GENEREE | CHANGEMENT_ETAPE | NOTE_AJOUTEE
+  direction    String // ENTRANT | SORTANT | INTERNE
+  contenu      String
+  metadata     String    @default("{}") // JSON libre selon le type (ex. { de, vers } pour un changement d'étape)
+  archiveLe    DateTime? // archivage : un mail rattaché au mauvais dossier en sort sans disparaître
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([dossierId, createdAt])
 }
@@ -577,6 +580,7 @@ model Client {
   leads              Lead[]
   prospects          Prospect[]
   dossiers           Dossier[]
+  messages           Message[]
   documents          Document[]
   encaissements      Encaissement[]
   archiveLe          DateTime? // archivage : rien ne se supprime
@@ -739,8 +743,8 @@ model AffectationEncaissement {
 // Fichier conservé sur le volume (justificatif de dépense…) : jamais supprimé,
 // archivé avec son motif ; l'empreinte reconnaît un même fichier envoyé deux fois.
 model Fichier {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
+  id           String         @id @default(cuid())
+  createdAt    DateTime       @default(now())
   chemin       String // relatif au répertoire d'upload
   nomOriginal  String?
   typeMime     String
@@ -749,6 +753,7 @@ model Fichier {
   archiveLe    DateTime?
   archiveMotif String?
   depenses     Depense[]
+  pieces       PieceMessage[]
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([empreinte])
@@ -828,4 +833,124 @@ model MiroirDrive {
   ecriture       String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([etat])
+}
+
+// ─────────────────────────────────────────────
+// Messages (src/lib/messages) : la boîte mail aujourd'hui, WhatsApp demain
+// (même modèle, autre canal). L'agent trie : bruit archivé dans la boîte (jamais
+// supprimé), mail rattaché au client et au dossier, le reste dans la file « À
+// trier ». Ses analyses et ses appels au modèle sont gardés, jamais réécrits.
+// ─────────────────────────────────────────────
+
+model Message {
+  id               String           @id @default(cuid())
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  canal            String // EMAIL | WHATSAPP
+  compte           String // boîte (ou numéro) qui a reçu ou envoyé
+  identifiantCanal String // identifiant du message chez le fournisseur (Gmail…)
+  filCanal         String? // fil de discussion chez le fournisseur
+  sens             String // ENTRANT | SORTANT
+  de               String // adresse e-mail (ou numéro) normalisée de l'expéditeur
+  deNom            String?
+  a                String           @default("[]") // JSON string[] : destinataires normalisés
+  objet            String?
+  extrait          String?
+  recuLe           DateTime
+  statut           String           @default("A_ANALYSER") // A_ANALYSER | A_TRIER | RATTACHE | BRUIT | IGNORE
+  categorie        String? // décidée : CLIENT | NOUVELLE_DEMANDE | FOURNISSEUR | ADMINISTRATIF | PERSONNEL | BRUIT | AUTRE
+  clientId         String?
+  client           Client?          @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  dossierId        String?
+  dossier          Dossier?         @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  trieLe           DateTime? // dernière décision de tri
+  triePar          String? // acteur de cette décision (personne, ou agent pour une action autorisée)
+  boiteArchiveLe   DateTime? // retiré de la boîte de réception chez le fournisseur (jamais supprimé)
+  bruitAnnuleLe    DateTime? // « ce n'est pas du bruit » : tri corrigé, remis dans la boîte
+  contenu          ContenuMessage?
+  pieces           PieceMessage[]
+  analyses         AnalyseMessage[]
+  archiveLe        DateTime?
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@unique([canal, identifiantCanal])
+  @@index([statut, recuLe])
+  @@index([clientId])
+  @@index([dossierId])
+  @@index([filCanal])
+  @@index([de])
+}
+
+// Contenu reçu, écrit une fois (hors journal : le journal en dupliquerait chaque
+// mail) ; la base refuse de le modifier, sauf son effacement RGPD, une fois.
+model ContenuMessage {
+  messageId   String    @id
+  message     Message   @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  texte       String? // texte brut (HTML converti), tronqué
+  entetes     String    @default("{}") // JSON : en-têtes utiles au tri et aux réponses
+  anonymiseLe DateTime?
+  ecriture    String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+}
+
+// Pièce jointe : décrite à la réception ; photo ou PDF conservé dans le CRM
+// (Fichier) dès que le message n'est pas du bruit.
+model PieceMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  rang      Int
+  nom       String
+  typeMime  String
+  taille    Int
+  partie    String // partie du message chez le fournisseur (partId Gmail)
+  enLigne   Boolean  @default(false) // image intégrée au corps (logo, signature…)
+  statut    String   @default("A_CONSERVER") // A_CONSERVER | CONSERVEE | NON_CONSERVEE
+  raison    String? // pourquoi non conservée
+  fichierId String?
+  fichier   Fichier? @relation(fields: [fichierId], references: [id], onDelete: Restrict)
+  ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@unique([messageId, rang])
+}
+
+// Une analyse d'un message : par les règles (signaux relevés) ou par le modèle
+// (son raisonnement, sa sortie structurée). Jamais réécrite.
+model AnalyseMessage {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  messageId    String
+  message      Message   @relation(fields: [messageId], references: [id], onDelete: Restrict)
+  methode      String // REGLES | MODELE
+  categorie    String?
+  confiance    Float? // calculée par le code
+  raisonnement String? // tel que formulé : signaux des règles, ou explication du modèle
+  resultat     String    @default("{}") // JSON : décision, sortie du modèle, propositions faites
+  erreur       String?
+  appelIaId    String?
+  appelIa      AppelIa?  @relation(fields: [appelIaId], references: [id], onDelete: Restrict)
+  anonymiseLe  DateTime? // RGPD : raisonnement et résultat effacés, une fois
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([messageId, createdAt])
+}
+
+// Registre des appels à un modèle d'IA : jetons et coût (prix datés en vigueur).
+// Sert au plafond mensuel ; jamais réécrit.
+model AppelIa {
+  id           String           @id @default(cuid())
+  createdAt    DateTime         @default(now())
+  usage        String // ANALYSE_MESSAGE…
+  modele       String
+  jetonsEntree Int              @default(0)
+  jetonsSortie Int              @default(0)
+  coutEuros    Float? // null si les prix n'étaient pas connus
+  dureeMs      Int
+  statut       String // REUSSI | ECHEC
+  erreur       String?
+  analyses     AnalyseMessage[]
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([createdAt])
 }

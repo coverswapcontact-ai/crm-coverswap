@@ -5,7 +5,7 @@ import { STATUTS_PROPOSITION, type StatutProposition } from "@/lib/validation/ty
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/validation?statut=EN_ATTENTE,ECHEC&type=…&dossierId=… */
+/** GET /api/validation?statut=EN_ATTENTE,ECHEC&type=…&dossierId=…&clientId=…&messageId=… */
 export async function GET(requete: NextRequest) {
   try {
     const parametres = requete.nextUrl.searchParams;
@@ -17,6 +17,7 @@ export async function GET(requete: NextRequest) {
       type: parametres.get("type") ?? undefined,
       dossierId: parametres.get("dossierId") ?? undefined,
       clientId: parametres.get("clientId") ?? undefined,
+      messageId: parametres.get("messageId") ?? undefined,
       limite: Number(parametres.get("limite")) || undefined,
     });
     return NextResponse.json({ propositions });

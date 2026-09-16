@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
-import prisma from "@/lib/prisma";
+import prisma, { type Transaction } from "@/lib/prisma";
 import {
   ETAPES,
   LIBELLES_ETAPE,
@@ -366,25 +366,28 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
 
 /* ── Notes ──────────────────────────────────────────────────────── */
 
-export async function ajouterNote(dossierId: string, entree: z.output<typeof schemaNote>): Promise<NoteVue> {
-  const note = await prisma.$transaction(async (tx) => {
-    const existe = await tx.dossier.findUnique({ where: { id: dossierId }, select: { id: true } });
-    if (!existe) throw new ErreurMetier("Dossier introuvable.", 404);
-    const creee = await tx.dossierNote.create({ data: { dossierId, etape: entree.etape, contenu: entree.contenu } });
-    const extrait = entree.contenu.length > 280 ? `${entree.contenu.slice(0, 279)}…` : entree.contenu;
-    await tx.dossierEvenement.create({
-      data: {
-        dossierId,
-        type: "NOTE_AJOUTEE",
-        direction: "INTERNE",
-        contenu: `${LIBELLES_ETAPE[entree.etape]} : ${extrait}`,
-        metadata: JSON.stringify({ noteId: creee.id, etape: entree.etape }),
-      },
-    });
-    // Une note fait bouger le dossier dans le tri « récemment modifié ».
-    await tx.dossier.update({ where: { id: dossierId }, data: { updatedAt: new Date() } });
-    return creee;
+/** Écrit une note et son événement dans la transaction de l'appelant (interface ou proposition validée). */
+export async function ecrireNote(tx: Transaction, dossierId: string, entree: z.output<typeof schemaNote>) {
+  const existe = await tx.dossier.findUnique({ where: { id: dossierId }, select: { id: true } });
+  if (!existe) throw new ErreurMetier("Dossier introuvable.", 404);
+  const creee = await tx.dossierNote.create({ data: { dossierId, etape: entree.etape, contenu: entree.contenu } });
+  const extrait = entree.contenu.length > 280 ? `${entree.contenu.slice(0, 279)}…` : entree.contenu;
+  await tx.dossierEvenement.create({
+    data: {
+      dossierId,
+      type: "NOTE_AJOUTEE",
+      direction: "INTERNE",
+      contenu: `${LIBELLES_ETAPE[entree.etape]} : ${extrait}`,
+      metadata: JSON.stringify({ noteId: creee.id, etape: entree.etape }),
+    },
   });
+  // Une note fait bouger le dossier dans le tri « récemment modifié ».
+  await tx.dossier.update({ where: { id: dossierId }, data: { updatedAt: new Date() } });
+  return creee;
+}
+
+export async function ajouterNote(dossierId: string, entree: z.output<typeof schemaNote>): Promise<NoteVue> {
+  const note = await prisma.$transaction((tx) => ecrireNote(tx, dossierId, entree));
   return { id: note.id, etape: entree.etape, contenu: note.contenu, createdAt: note.createdAt.toISOString() };
 }
 

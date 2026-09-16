@@ -371,15 +371,46 @@ leads et dossiers restés sans client.
   celle du premier contact ; la fiche absorbée est archivée avec
   `fusionneDansId`. Une paire rejetée n'est jamais reproposée.
 
+### Particulier ou entité
+
+- **Particulier** : une personne, prénom et nom ; ni raison sociale ni SIRET
+  (retirés s'ils arrivent).
+- **Professionnel** (client direct) et **donneur d'ordre** (sous-traitance) :
+  une entité. La fiche porte la raison sociale (qui fait son nom, et celui des
+  devis et factures), le SIRET et l'adresse de facturation ; créée à la main,
+  elle n'a **ni prénom ni nom de personne**. Une fiche pro venue d'un formulaire
+  (« projet pro ») ou d'un mail peut porter le nom de la personne qui a écrit :
+  il reste visible dans « Modifier » sous « Contact », effaçable, et la fiche
+  reste modifiable tant que le nom de l'entreprise n'est pas connu.
+- **Règles** (`creerClientManuel`, `modifierClient`) : raison sociale exigée à
+  la création d'un pro, quand un particulier devient pro et quand un pro en a
+  déjà une (elle ne s'efface pas) ; un pro qui redevient particulier doit avoir
+  un nom de personne. Le SIRET a 14 chiffres et sa clé de Luhn est contrôlée
+  (exception de La Poste, SIREN 356 000 000) ; seul un SIRET nouvellement saisi
+  est contrôlé, pour qu'une fiche ancienne reste modifiable. Un SIRET déjà porté
+  par une fiche active arrête la création (409 avec l'identifiant de la fiche,
+  « Créer quand même » sinon, et la paire est proposée à la fusion).
+- **Annuaire des entreprises** (`src/lib/clients/annuaire.ts`, route
+  `/api/clients/annuaire`, protégée comme les autres) : recherche par nom, SIREN
+  ou SIRET dans l'API publique de l'État (recherche-entreprises.api.gouv.fr,
+  Insee et RNE), **sans clé ni compte**. Un clic remplit raison sociale, SIRET et
+  adresse ; rien n'est enregistré avant la création de la fiche, et seul le texte
+  cherché part vers l'annuaire. Pour chaque entreprise : les établissements qui
+  correspondent à la recherche, sinon le siège ; fermés en dernier, champs non
+  diffusibles laissés vides. Annuaire injoignable ou saturé : message, et la
+  fiche se remplit à la main.
+
 ### Écrans
 
 - `/clients` : recherche (nom, ville, e-mail, téléphone), filtres catégorie et
-  source, provenance des clients avec montants signés, « Nouveau client » (refus
-  explicite si l'e-mail ou le numéro est déjà connu, « Créer quand même » sinon).
+  source, provenance des clients avec montants signés, « Nouveau client » et
+  « Nouveau client pro » (refus explicite si le SIRET, l'e-mail ou le numéro est
+  déjà connu, avec un lien vers la fiche, « Créer quand même » sinon).
 - `/clients/[id]` : coordonnées, provenance et recommandations, consentement,
   dossiers, passif, contacts entrants, historique de la fiche (lu dans le
   journal), « Ouvrir un dossier » pré-rempli, archivage (refusé tant qu'un
-  dossier est en cours).
+  dossier est en cours). Pour un pro : SIRET (lien vers sa page de l'annuaire)
+  et contact éventuel sous le nom.
 - « Ouvrir un dossier » cherche d'abord parmi les clients, puis les leads et les
   prospects.
 

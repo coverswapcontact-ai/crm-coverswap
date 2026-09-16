@@ -24,7 +24,7 @@ export async function GET(requete: NextRequest) {
   }
 }
 
-/** POST : nouvelle fiche client ; 409 si un client a déjà cet e-mail ou ce numéro (sauf `forcer`). */
+/** POST : nouvelle fiche client ; 409 si un client a déjà ce SIRET, cet e-mail ou ce numéro (sauf `forcer`). */
 export async function POST(requete: NextRequest) {
   try {
     const entree = analyser(schemaCreationClient, await lireCorpsJson(requete));

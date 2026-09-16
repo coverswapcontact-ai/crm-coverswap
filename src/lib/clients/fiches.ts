@@ -16,7 +16,7 @@ import {
   type StatutConsentement,
 } from "./constantes";
 import { completerCoordonnees, creerClient, trouverClientParCoordonnees } from "./identification";
-import { nomAffichage, normaliserEmail, normaliserTelephone } from "./normalisation";
+import { nomAffichage, normaliserEmail, normaliserTelephone, siretValide } from "./normalisation";
 import type { ClientDetail, ClientResume, CoordonneeVue, LigneAcquisition } from "./types";
 
 const ETAPES_CLOSES = new Set(["PERDU", "ENCAISSE"]);
@@ -377,6 +377,9 @@ async function verifierRecommandeur(clientId: string | null, recommandeParId: st
   if (!recommandeur || recommandeur.archiveLe) throw new ErreurMetier("Client recommandeur introuvable ou archivé.", 404);
 }
 
+const SIRET_FAUX = "SIRET invalide : un chiffre est faux (clé de contrôle). Vérifie-le sur l'avis de situation ou dans l'annuaire.";
+const RAISON_SOCIALE_MANQUANTE = "Indique la raison sociale : pour un client pro, c'est l'entreprise qui est le client.";
+
 export async function modifierClient(clientId: string, modification: ModificationClient): Promise<void> {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
@@ -384,14 +387,25 @@ export async function modifierClient(clientId: string, modification: Modificatio
   if (client.archiveLe) throw new ErreurMetier("Fiche archivée : la restaurer avant de la modifier.", 409);
   await verifierRecommandeur(clientId, modification.recommandeParId);
 
+  const apres = <C extends "categorie" | "prenom" | "nomFamille" | "raisonSociale">(champ: C) =>
+    modification[champ] !== undefined ? modification[champ] : client[champ];
+  // Un particulier qui devient pro, ou un pro qui a déjà sa raison sociale, ne s'en passe pas. Une fiche
+  // pro venue d'un formulaire sans nom d'entreprise reste modifiable en attendant qu'on le connaisse.
+  const raisonSocialeExigee = client.categorie === "PARTICULIER" || nomAffichage({ raisonSociale: client.raisonSociale }) !== null;
+  if (apres("categorie") !== "PARTICULIER" && raisonSocialeExigee && !nomAffichage({ raisonSociale: apres("raisonSociale") })) {
+    throw new ErreurMetier(RAISON_SOCIALE_MANQUANTE, 400);
+  }
+  // Un pro qui devient particulier doit avoir un nom de personne (une fiche ancienne peut n'en avoir aucun).
+  if (modification.categorie === "PARTICULIER" && client.categorie !== "PARTICULIER" && !nomAffichage({ prenom: apres("prenom"), nomFamille: apres("nomFamille") })) {
+    throw new ErreurMetier("Indique un prénom ou un nom : un particulier est une personne.", 400);
+  }
+  // Seul un SIRET nouvellement saisi est contrôlé : une fiche ancienne reste modifiable.
+  if (modification.siret && modification.siret !== client.siret && !siretValide(modification.siret)) throw new ErreurMetier(SIRET_FAUX, 400);
+
   const { premierContactLe, ...champs } = modification;
   const data: Prisma.ClientUncheckedUpdateInput = { ...champs };
   if (premierContactLe) data.premierContactLe = dateDepuisJour(premierContactLe);
-  const nom = nomAffichage({
-    prenom: modification.prenom !== undefined ? modification.prenom : client.prenom,
-    nomFamille: modification.nomFamille !== undefined ? modification.nomFamille : client.nomFamille,
-    raisonSociale: modification.raisonSociale !== undefined ? modification.raisonSociale : client.raisonSociale,
-  });
+  const nom = nomAffichage({ prenom: apres("prenom"), nomFamille: apres("nomFamille"), raisonSociale: apres("raisonSociale") });
   if (nom) data.nom = nom;
   await prisma.client.update({ where: { id: clientId }, data });
 }
@@ -406,16 +420,31 @@ export const schemaCreationClient = z.object({
 });
 export type CreationClient = z.output<typeof schemaCreationClient>;
 
-export async function creerClientManuel(entree: CreationClient): Promise<string> {
-  if (!nomAffichage(entree)) throw new ErreurMetier("Indique un nom ou une raison sociale.", 400);
+/**
+ * Fiche créée à la main. Un particulier est une personne (prénom, nom) ; un
+ * professionnel ou un donneur d'ordre est une entité (raison sociale, SIRET),
+ * sans prénom ni nom de personne.
+ */
+export async function creerClientManuel(saisie: CreationClient): Promise<string> {
+  const estPro = saisie.categorie !== "PARTICULIER";
+  const entree: CreationClient = estPro
+    ? { ...saisie, prenom: null, nomFamille: null }
+    : { ...saisie, raisonSociale: null, siret: null };
+  if (estPro && !nomAffichage({ raisonSociale: entree.raisonSociale })) throw new ErreurMetier(RAISON_SOCIALE_MANQUANTE, 400);
+  if (!estPro && !nomAffichage(entree)) throw new ErreurMetier("Indique un prénom ou un nom.", 400);
+  if (entree.siret && !siretValide(entree.siret)) throw new ErreurMetier(SIRET_FAUX, 400);
   if (entree.email && !normaliserEmail(entree.email)) throw new ErreurMetier("Adresse e-mail invalide.", 400);
   if (entree.telephone && !normaliserTelephone(entree.telephone)) throw new ErreurMetier("Numéro de téléphone invalide.", 400);
   await verifierRecommandeur(null, entree.recommandeParId);
 
   if (!entree.forcer) {
+    const memeSiret = entree.siret ? await prisma.client.findFirst({ where: { siret: entree.siret }, select: { id: true, nom: true } }) : null;
+    if (memeSiret) {
+      throw new ErreurMetier(`Un client a déjà ce SIRET : « ${memeSiret.nom} ».`, 409, { clientExistantId: memeSiret.id });
+    }
     const existant = await trouverClientParCoordonnees({ emails: [entree.email], telephones: [entree.telephone] });
     if (existant) {
-      throw new ErreurMetier(`Un client a déjà cet e-mail ou ce numéro : « ${existant.nom} ». Ouvre sa fiche, ou crée quand même.`, 409);
+      throw new ErreurMetier(`Un client a déjà cet e-mail ou ce numéro : « ${existant.nom} ».`, 409, { clientExistantId: existant.id });
     }
   }
   return prisma.$transaction(async (tx) => {

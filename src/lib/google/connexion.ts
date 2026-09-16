@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { ErreurDefinitive } from "@/lib/taches/registre";
 import { chiffrer, dechiffrer, lireCle } from "./chiffrement";
+import { applicationGooglePubliee, echeanceJetonGoogle, type EcheanceGoogle, type RappelGoogle } from "./echeance";
 
 /**
  * Connexion au compte Google de l'entreprise, partagée par le miroir Drive et
@@ -136,7 +137,7 @@ export async function terminerConnexion(entree: { code: string | null; etat: str
 export type EtatConnexionGoogle = {
   configuree: boolean;
   manquantes: string[];
-  connexion: { compte: string; depuis: string; portees: string[]; derniereErreur: string | null } | null;
+  connexion: { compte: string; depuis: string; portees: string[]; derniereErreur: string | null; echeance: EcheanceGoogle } | null;
 };
 
 export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
@@ -146,9 +147,27 @@ export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
     configuree: configuration !== null,
     manquantes,
     connexion: connexion
-      ? { compte: connexion.compte, depuis: connexion.createdAt.toISOString(), portees: connexion.portees.split(" "), derniereErreur: connexion.derniereErreur }
+      ? {
+          compte: connexion.compte,
+          depuis: connexion.createdAt.toISOString(),
+          portees: connexion.portees.split(" "),
+          derniereErreur: connexion.derniereErreur,
+          echeance: echeanceJetonGoogle({ depuis: connexion.createdAt, derniereErreur: connexion.derniereErreur }, { modeTest: !applicationGooglePubliee() }),
+        }
       : null,
   };
+}
+
+/**
+ * Rappel affiché sur tous les écrans : connexion qui expire dans moins de
+ * 48 h (mode Test) ou déjà coupée. null quand tout va bien, ou sans connexion.
+ */
+export async function rappelConnexionGoogle(maintenant: Date = new Date()): Promise<RappelGoogle | null> {
+  if (!configurationGoogle().configuration) return null;
+  const connexion = await prisma.connexionGoogle.findFirst({ where: { deconnecteLe: null }, orderBy: { createdAt: "desc" } });
+  if (!connexion) return null;
+  const echeance = echeanceJetonGoogle({ depuis: connexion.createdAt, derniereErreur: connexion.derniereErreur }, { maintenant, modeTest: !applicationGooglePubliee() });
+  return echeance.niveau === "LOINTAINE" ? null : { ...echeance, compte: connexion.compte };
 }
 
 /** Déconnexion : l'accès est révoqué chez Google, la ligne reste (datée). */

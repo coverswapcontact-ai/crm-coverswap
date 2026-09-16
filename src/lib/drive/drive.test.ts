@@ -127,6 +127,18 @@ describe("connexion Google", () => {
     assert.ok(journal.every((ligneJournal) => !ligneJournal.apres.includes("renouvellement-secret")));
     const etatConnexion = await google.etatConnexionGoogle();
     assert.equal(etatConnexion.connexion?.compte, "coverswap.essai@example.test");
+
+    // Mode Test : le jeton expire 7 jours après l'autorisation ; le rappel s'affiche à 48 h.
+    assert.equal(etatConnexion.connexion?.echeance.expireLe, new Date(ligne.createdAt.getTime() + 7 * 86_400_000).toISOString());
+    assert.equal(await google.rappelConnexionGoogle(), null, "pas de rappel tant que l'échéance est loin");
+    const dans = (jours: number) => new Date(ligne.createdAt.getTime() + jours * 86_400_000);
+    assert.equal((await google.rappelConnexionGoogle(dans(5.5)))?.niveau, "PROCHE");
+    assert.equal((await google.rappelConnexionGoogle(dans(6.5)))?.niveau, "IMMINENTE");
+    const expiree = await google.rappelConnexionGoogle(dans(7.1));
+    assert.deepEqual([expiree?.niveau, expiree?.compte], ["EXPIREE", "coverswap.essai@example.test"]);
+    process.env.GOOGLE_APPLICATION_PUBLIEE = "1";
+    assert.equal(await google.rappelConnexionGoogle(dans(30)), null, "application publiée : plus de reconnexion tous les 7 jours");
+    delete process.env.GOOGLE_APPLICATION_PUBLIEE;
   });
 });
 
@@ -214,6 +226,8 @@ describe("miroir Drive", () => {
     });
     await assert.rejects(() => miroir.synchroniserMiroir(), (erreur: unknown) => erreur instanceof Error && erreur.name === "ErreurDefinitive" && /révoqué/.test(erreur.message));
     assert.match((await prisma.connexionGoogle.findFirstOrThrow({ where: { deconnecteLe: null } })).derniereErreur ?? "", /reconnecter/);
+    const rappel = await google.rappelConnexionGoogle();
+    assert.deepEqual([rappel?.niveau, rappel?.coupee], ["EXPIREE", true], "une connexion coupée s'affiche sur tous les écrans");
     google.definirTransportGoogleEssai(fauxGoogle);
 
     // Ni suppression, ni corbeille, ni vidage de corbeille.

@@ -125,8 +125,14 @@ export async function chargerLivre(du: string, au: string): Promise<ResultatLivr
     },
   });
   const lire = await historiqueParametres(["DATE_RECETTE_CHEQUE"]);
+  // Un encaissement dont toutes les dates (réception, crédit, fin) précèdent la
+  // période n'y met aucune ligne : il ne compte pas, et sa règle de chèque non
+  // plus (un vieux chèque sans règle ne bloque pas les périodes suivantes).
+  const concernes = encaissements.filter((encaissement) =>
+    [encaissement.recuLe, encaissement.crediteLe, encaissement.finLe].some((date) => date && jourParis(date) >= du)
+  );
   const resultat = lignesDuLivre(
-    encaissements.map((encaissement) => ({
+    concernes.map((encaissement) => ({
       ...encaissement,
       objetDossier: encaissement.dossier?.objet ?? null,
       pieces: encaissement.affectations.map((affectation) => affectation.numeroDocument),

@@ -52,6 +52,7 @@ import { formatMontant } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
 import { PastilleEtape } from "../../dossiers/_components/ui";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
+import { AnonymisationClient } from "./AnonymisationClient";
 import { MessagesClient } from "./MessagesClient";
 
 function Carte({ titre, action, children }: { titre: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -157,7 +158,8 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
         ))}
         {archivees.map((coordonnee) => (
           <li key={coordonnee.id} className="py-1 text-[12px] text-[#6B7280] line-through decoration-[#6B7280]/50" title={coordonnee.archiveMotif ?? undefined}>
-            {nature === "email" ? coordonnee.valeur : formaterTelephone(coordonnee.valeur)} — archivé{coordonnee.archiveMotif ? ` (${coordonnee.archiveMotif})` : ""}
+            {coordonnee.valeur.startsWith("anonymise-") ? "Effacé (RGPD)" : nature === "email" ? coordonnee.valeur : formaterTelephone(coordonnee.valeur)} — archivé
+            {coordonnee.archiveMotif ? ` (${coordonnee.archiveMotif})` : ""}
           </li>
         ))}
       </>
@@ -316,9 +318,11 @@ function Consentement({ client, onMiseAJour }: { client: ClientDetail; onMiseAJo
     <Carte
       titre="Mails commerciaux"
       action={
-        <Bouton taille="sm" variante="fantome" icone={<ShieldCheck size={13} aria-hidden />} onClick={() => setOuverte(true)}>
-          Enregistrer une réponse
-        </Bouton>
+        client.archiveLe ? null : (
+          <Bouton taille="sm" variante="fantome" icone={<ShieldCheck size={13} aria-hidden />} onClick={() => setOuverte(true)}>
+            Enregistrer une réponse
+          </Bouton>
+        )
       }
     >
       {courant ? (
@@ -542,7 +546,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {client.archiveLe ? (
+          {client.anonymiseLe ? null : client.archiveLe ? (
             client.fusionneDans ? null : (
               <Bouton icone={<ArchiveRestore size={14} aria-hidden />} chargement={envoi} onClick={() => void appeler(`/api/clients/${client.id}/restaurer`, "POST", undefined, "Fiche restaurée")}>
                 Restaurer
@@ -568,8 +572,16 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               </Bouton>
             </>
           )}
+          <AnonymisationClient client={client} onAnonymise={setClient} />
         </div>
       </header>
+
+      {client.anonymiseLe ? (
+        <p className="mt-4 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-4 py-3 text-[13px] text-[#9CA3AF]">
+          Fiche anonymisée le {formatDateCourte(client.anonymiseLe)} (RGPD) : identité, coordonnées, photos et mails effacés. Factures, avoirs et paiements sont conservés ; étapes et
+          montants restent dans les statistiques, sans nom.
+        </p>
+      ) : null}
 
       {client.fusionneDans ? (
         <p className="mt-4 flex flex-wrap items-center gap-2 rounded-[10px] border-[0.5px] border-[#60A5FA]/40 bg-[#60A5FA]/10 px-4 py-3 text-[13px] text-[#93C5FD]">

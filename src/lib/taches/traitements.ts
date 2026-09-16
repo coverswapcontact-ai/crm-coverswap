@@ -3,6 +3,7 @@ import { enregistrerTachesDrive } from "@/lib/drive/synchronisation";
 import { enregistrerTachesEncaissements } from "@/lib/encaissements/reprise";
 import { enregistrerTachesMessages } from "@/lib/messages/taches";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
+import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
 import { enregistrerTachesSynthese } from "@/lib/synthese/instantanes";
 import { enregistrerTachesValidation } from "@/lib/validation/taches";
 
@@ -20,4 +21,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesSynthese();
   enregistrerTachesDrive();
   enregistrerTachesMessages();
+  enregistrerTachesRgpd();
 }

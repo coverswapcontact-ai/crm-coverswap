@@ -11,6 +11,7 @@ import {
   propositionNouvelleDemande,
   propositionRattacherMessage,
 } from "@/lib/messages/propositions";
+import { propositionAnonymisationClient } from "@/lib/rgpd/propositions";
 import type { DefinitionProposition } from "./definitions";
 
 /**
@@ -28,6 +29,7 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionNouvelleDemande,
   propositionArchiverMessage,
   propositionClasserMessage,
+  propositionAnonymisationClient,
 ] as unknown as DefinitionProposition<never>[];
 
 // Types ajoutés à l'exécution (tests).

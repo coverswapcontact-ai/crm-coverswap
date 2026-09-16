@@ -3,7 +3,7 @@
 // voie. Chaque paramètre se saisit à sa première utilisation, avec sa date
 // d'effet et sa source ; l'historique reste. Aucune dépendance serveur.
 
-export type NatureParametre = "euros" | "pourcentage" | "jours" | "choix" | "texte";
+export type NatureParametre = "euros" | "pourcentage" | "jours" | "mois" | "choix" | "texte";
 
 export type DefinitionParametre = {
   libelle: string;
@@ -20,6 +20,7 @@ export const GROUPES_PARAMETRES = {
   ENCAISSEMENT: "Encaissements",
   FACTURATION: "Factures aux professionnels",
   COMMERCIAL: "Suivi commercial",
+  RGPD: "Données personnelles (RGPD)",
   AGENT: "Agent mail et IA",
 } as const;
 export type GroupeParametre = keyof typeof GROUPES_PARAMETRES;
@@ -121,6 +122,18 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "jours",
     groupe: "COMMERCIAL",
   },
+  RGPD_CONSERVATION_PROSPECTS: {
+    libelle: "Conservation des contacts qui n'ont rien signé",
+    aide: "Nombre de mois après le dernier échange au-delà duquel l'anonymisation d'un prospect est proposée (jamais faite seule). La CNIL recommande 3 ans pour la prospection ; à confirmer avec un avocat ou un conseil RGPD.",
+    nature: "mois",
+    groupe: "RGPD",
+  },
+  RGPD_CONSERVATION_CLIENTS: {
+    libelle: "Conservation des clients",
+    aide: "Nombre de mois après le dernier dossier clos au-delà duquel l'anonymisation d'un client est proposée. Tient compte des garanties et délais de réclamation ; les factures restent conservées 10 ans quoi qu'il arrive. À fixer avec un avocat.",
+    nature: "mois",
+    groupe: "RGPD",
+  },
   IA_AGENT_MAIL: {
     libelle: "Lecture des mails par l'IA",
     aide: "Active : l'agent fait lire chaque mail utile à un modèle d'IA pour proposer un rattachement, une note, une réponse (coût par mail, plafonné par le budget mensuel). En pause : seules les règles sûres trient. L'IA ne décide jamais : tout passe par « À valider ».",
@@ -184,6 +197,8 @@ export function formaterValeurParametre(cle: CleParametre, valeur: ValeurParamet
       return `${Number(valeur).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} %`;
     case "jours":
       return `${valeur} jour${Number(valeur) > 1 ? "s" : ""}`;
+    case "mois":
+      return `${valeur} mois`;
     case "choix":
       return definition.options?.find((option) => option.valeur === valeur)?.libelle ?? String(valeur);
     default:

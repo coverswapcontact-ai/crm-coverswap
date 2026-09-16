@@ -9,8 +9,8 @@ import { revalidatePath } from "next/cache";
 //   2. l'interaction NOTE "leadgen_id: 123..." pour les anciens
 // Puis on interroge Graph API pour récupérer created_time réel.
 //
-// Protection : requiert ?secret=... = WEBHOOK_SECRET ou META_VERIFY_TOKEN
-// Usage : POST /api/admin/backfill-meta-dates?secret=XXX
+// Protection : session NextAuth (middleware) + ?secret=... = WEBHOOK_SECRET ou META_VERIFY_TOKEN
+// Usage : connecté au CRM, POST /api/admin/backfill-meta-dates?secret=XXX
 // ============================================================================
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";

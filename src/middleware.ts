@@ -82,9 +82,14 @@ export async function middleware(request: NextRequest) {
   /* 4. Auth NextAuth sur routes protégées */
   const protectedPaths = [
     "/dashboard", "/leads", "/devis", "/factures", "/chantiers",
-    "/commandes", "/finances", "/analytics", "/assistant",
+    "/commandes", "/finances", "/analytics", "/assistant", "/clients",
     "/api/leads", "/api/devis", "/api/factures", "/api/chantiers",
     "/api/commandes", "/api/assistant", "/api/email", "/api/pdf",
+    // Photos des clients (volume /data/uploads) et PDF de simulation :
+    // données personnelles, jamais servies sans session.
+    "/api/uploads", "/api/simulations",
+    // Backfill Meta : son ?secret= (partagé avec Zapier et le site) ne suffit pas.
+    "/api/admin",
     // Module prospection : le POST /api/prospection/sourcing consomme des
     // crédits Google Places, il ne doit jamais être joignable sans session.
     "/prospection", "/api/prospection",
@@ -113,6 +118,12 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Match tout sauf _next, favicon, fichiers statiques
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico)$).*)"],
+  matcher: [
+    // Match tout sauf _next, favicon, fichiers statiques
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico)$).*)",
+    // … mais toujours les routes API, même terminées par .jpg ou .png : sans
+    // cette ligne, /api/uploads/<lead>/<simulation>/before.jpg échappait au
+    // middleware, donc au contrôle de session.
+    "/api/:path*",
+  ],
 };

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { ArrowRight, Pause, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { ChampsPaiement, lirePaiement, saisiePaiement, type PaiementLu, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
+import { Puces } from "@/components/pilotage/ui";
 import {
   LIBELLES_CRITERE,
   LIBELLES_ETAPE,
@@ -24,7 +26,8 @@ import {
   type CritereDeclaratif,
   type TransitionPossible,
 } from "@/lib/dossiers/regles";
-import { faitsDepuisDetail, type DossierDetail } from "@/lib/dossiers/types";
+import { faitsDepuisDetail, type DocumentVue, type DossierDetail } from "@/lib/dossiers/types";
+import { MOTIFS_SANS_ACOMPTE } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
 import { envoyerJson, messageErreur } from "./client";
 import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
@@ -37,12 +40,23 @@ type DonneesEtape = {
   dateChantier?: string;
   confirmations?: Partial<Record<CritereDeclaratif, boolean>>;
   devisAccepteId?: string;
+  acompte?: PaiementLu;
+  sansAcompte?: { motif: string; precision?: string };
+  solde?: PaiementLu;
 };
 
 // Critères qui se renseignent dans la fenêtre de changement d'étape
 // (les autres dépendent du dossier : devis généré, photo…).
 const saisiDansLaFenetre = (critere: CritereEntree) =>
-  estCritereDeclaratif(critere) || critere === "MOTIF_PERTE" || critere === "DATE_CHANTIER";
+  estCritereDeclaratif(critere) ||
+  critere === "MOTIF_PERTE" ||
+  critere === "DATE_CHANTIER" ||
+  critere === "ACOMPTE_ENCAISSE" ||
+  critere === "SOLDE_ENCAISSE";
+
+/** Acompte prévu au devis : son pourcentage appliqué à son total. */
+const acomptePrevu = (devis: DocumentVue | undefined) =>
+  devis?.acomptePct ? Math.round(devis.totalHt * devis.acomptePct) / 100 : null;
 
 function libelleTransition(transition: TransitionPossible): string {
   if (transition.nature === "REPRISE") return `Reprendre en « ${LIBELLES_ETAPE[transition.vers]} »`;
@@ -226,23 +240,35 @@ function FenetreEtape({
   onValider: (donnees: DonneesEtape) => void;
 }) {
   const criteres = criteresAVerifier(transition);
-  const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.statut !== "BROUILLON");
+  const devis = detail.documents.filter(
+    (document) => document.type === "DEVIS" && document.statut !== "BROUILLON" && document.statut !== "REMPLACE"
+  );
   const [motif, setMotif] = useState<MotifPerte | "">("");
   const [concurrent, setConcurrent] = useState("");
   const [prixConcurrent, setPrixConcurrent] = useState("");
   const [commentairePerte, setCommentairePerte] = useState("");
   const [dateChantier, setDateChantier] = useState(detail.dateChantier ? jourParis(detail.dateChantier) : "");
-  const [confirmations, setConfirmations] = useState<Record<CritereDeclaratif, boolean>>({
-    BON_POUR_ACCORD: false,
-    ACOMPTE_ENCAISSE: false,
-    SOLDE_ENCAISSE: false,
-  });
+  const [confirmations, setConfirmations] = useState<Record<CritereDeclaratif, boolean>>({ BON_POUR_ACCORD: false });
   const [devisId, setDevisId] = useState(devis[0]?.id ?? "");
+  // Acompte : reçu (pré-rempli au montant prévu) ou, à défaut, pourquoi il n'y en a pas.
+  const [modeAcompte, setModeAcompte] = useState<"RECU" | "SANS">("RECU");
+  const [acompte, setAcompte] = useState<SaisiePaiement>(() => saisiePaiement(acomptePrevu(devis[0])));
+  const [motifSansAcompte, setMotifSansAcompte] = useState<string | null>(null);
+  const [precisionSansAcompte, setPrecisionSansAcompte] = useState("");
+  const [solde, setSolde] = useState<SaisiePaiement>(() => saisiePaiement(detail.paiements.resteDu));
 
   const demandeMotif = criteres.includes("MOTIF_PERTE");
   const demandeDate = criteres.includes("DATE_CHANTIER");
   const declaratifs = CRITERES_DECLARATIFS.filter((critere) => criteres.includes(critere));
   const choixDevis = transition.vers === "SIGNE" && transition.nature === "SUIVANTE" && devis.length > 1;
+  const demandeAcompte = criteres.includes("ACOMPTE_ENCAISSE") && !detail.paiements.acompteEnregistre;
+  const demandeSolde = criteres.includes("SOLDE_ENCAISSE") && !detail.paiements.soldeEncaisse;
+  const acompteLu = lirePaiement(acompte).paiement;
+  const soldeLu = lirePaiement(solde).paiement;
+  const acompteComplet =
+    modeAcompte === "RECU"
+      ? acompteLu !== null
+      : motifSansAcompte !== null && (motifSansAcompte !== "AUTRE" || precisionSansAcompte.trim().length >= 3);
 
   const prixConcurrentLu = prixConcurrent.trim() ? lireNombre(prixConcurrent) : null;
   const prixConcurrentInvalide = prixConcurrent.trim() !== "" && (prixConcurrentLu === null || prixConcurrentLu < 0);
@@ -250,6 +276,8 @@ function FenetreEtape({
     !prixConcurrentInvalide &&
     (!demandeMotif || motif !== "") &&
     (!demandeDate || dateChantier !== "") &&
+    (!demandeAcompte || acompteComplet) &&
+    (!demandeSolde || soldeLu !== null) &&
     declaratifs.every((critere) => confirmations[critere]);
 
   const titre =
@@ -269,6 +297,11 @@ function FenetreEtape({
       ...(demandeDate ? { dateChantier } : {}),
       ...(declaratifs.length > 0 ? { confirmations: Object.fromEntries(declaratifs.map((c) => [c, true])) } : {}),
       ...(transition.vers === "SIGNE" && devisId ? { devisAccepteId: devisId } : {}),
+      ...(demandeAcompte && modeAcompte === "RECU" && acompteLu ? { acompte: acompteLu } : {}),
+      ...(demandeAcompte && modeAcompte === "SANS" && motifSansAcompte
+        ? { sansAcompte: { motif: motifSansAcompte, precision: precisionSansAcompte.trim() || undefined } }
+        : {}),
+      ...(demandeSolde && soldeLu ? { solde: soldeLu } : {}),
     });
   }
 
@@ -373,7 +406,15 @@ function FenetreEtape({
             <select
               id="devis-signe"
               value={devisId}
-              onChange={(evenement) => setDevisId(evenement.target.value)}
+              onChange={(evenement) => {
+                const precedent = devis.find((document) => document.id === devisId);
+                const suivant = devis.find((document) => document.id === evenement.target.value);
+                // Montant d'acompte non retouché : il suit le devis choisi.
+                if (acompte.montant === saisiePaiement(acomptePrevu(precedent)).montant) {
+                  setAcompte((actuel) => ({ ...actuel, montant: saisiePaiement(acomptePrevu(suivant)).montant }));
+                }
+                setDevisId(evenement.target.value);
+              }}
               className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}
             >
               {devis.map((document) => (
@@ -383,6 +424,59 @@ function FenetreEtape({
               ))}
             </select>
           </div>
+        ) : null}
+
+        {criteres.includes("ACOMPTE_ENCAISSE") && detail.paiements.acompteEnregistre ? (
+          <p className="text-[13px] text-[#5DCAA5]">Acompte déjà enregistré dans les paiements du dossier.</p>
+        ) : null}
+
+        {demandeAcompte ? (
+          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
+            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">
+              Acompte <span className="text-[#5DCAA5]">*</span>
+            </legend>
+            <Puces
+              libelle="À la signature"
+              options={[
+                { valeur: "RECU" as const, libelle: "Acompte reçu" },
+                { valeur: "SANS" as const, libelle: "Pas d'acompte" },
+              ]}
+              valeur={modeAcompte}
+              onChange={setModeAcompte}
+            />
+            {modeAcompte === "RECU" ? (
+              <ChampsPaiement saisie={acompte} onChange={setAcompte} libelleMontant="Acompte reçu (€)" />
+            ) : (
+              <>
+                <Puces
+                  libelle="Pourquoi"
+                  obligatoire
+                  options={MOTIFS_SANS_ACOMPTE.map((option) => ({ valeur: option.code as string, libelle: option.libelle }))}
+                  valeur={motifSansAcompte}
+                  onChange={setMotifSansAcompte}
+                />
+                <Champ
+                  libelle={motifSansAcompte === "AUTRE" ? "Précision" : "Précision (facultative)"}
+                  obligatoire={motifSansAcompte === "AUTRE"}
+                  maxLength={300}
+                  value={precisionSansAcompte}
+                  onChange={(evenement) => setPrecisionSansAcompte(evenement.target.value)}
+                />
+              </>
+            )}
+          </fieldset>
+        ) : null}
+
+        {demandeSolde ? (
+          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
+            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">
+              Paiement du solde <span className="text-[#5DCAA5]">*</span>
+            </legend>
+            <p className="text-[12px] text-[#6B7280]">
+              Le dossier passe à « Encaissé » si ce paiement règle toutes ses factures ; sinon, enregistre-le dans « Paiements ».
+            </p>
+            <ChampsPaiement saisie={solde} onChange={setSolde} />
+          </fieldset>
         ) : null}
 
         {declaratifs.map((critere) => (

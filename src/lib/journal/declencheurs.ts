@@ -54,6 +54,8 @@ export type RegleImmuabilite = {
   /** Condition SQL sur OLD à partir de laquelle la ligne est figée (par défaut : dès sa création). */
   quand?: string;
   message?: string;
+  /** Changements refusés en plus, chacun avec sa condition SQL (sur OLD et NEW) et son message. */
+  interdits?: readonly { condition: string; message: string }[];
 };
 
 /**
@@ -81,10 +83,47 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
       message: "Un numéro inscrit au registre ne change pas : seuls ses compléments se renseignent.",
     },
   ],
+  [
+    "Encaissement",
+    {
+      modifiables: ["clientId", "note", "statut", "updatedAt", "ecriture"],
+      completables: ["dossierId", "moyen", "reference", "crediteLe", "finLe", "motifFin"],
+      message: "Un encaissement ne se modifie pas : l'annuler (avec son motif) puis enregistrer le bon.",
+      interdits: [
+        {
+          condition: `OLD."statut" <> 'VALIDE' AND NEW."statut" IS NOT OLD."statut"`,
+          message: "Un encaissement annulé ou rejeté le reste : enregistrer un nouvel encaissement.",
+        },
+        {
+          condition: `NEW."statut" <> 'VALIDE' AND (NEW."finLe" IS NULL OR NEW."motifFin" IS NULL)`,
+          message: "Un rejet ou une annulation d'encaissement se date et se motive.",
+        },
+      ],
+    },
+  ],
+  [
+    "AffectationEncaissement",
+    {
+      modifiables: ["statut", "ecriture"],
+      completables: ["finLe", "motifFin"],
+      message: "Une affectation de paiement ne se modifie pas : elle cesse de compter et une nouvelle la remplace.",
+      interdits: [
+        {
+          condition: `OLD."statut" <> 'ACTIVE' AND NEW."statut" IS NOT OLD."statut"`,
+          message: "Une affectation qui a cessé de compter ne revient pas.",
+        },
+      ],
+    },
+  ],
 ]);
 
 export function messageImmuabilite(nomModele: string): string {
   return MODELES_IMMUABLES.get(nomModele)?.message ?? `Une ligne de « ${nomModele} » ne se modifie pas : enregistrer une nouvelle ligne.`;
+}
+
+/** Tous les refus possibles d'un modèle immuable (colonnes figées et changements interdits). */
+export function messagesRefus(nomModele: string): string[] {
+  return [messageImmuabilite(nomModele), ...(MODELES_IMMUABLES.get(nomModele)?.interdits ?? []).map((interdit) => interdit.message)];
 }
 
 export function messageSuppression(nomModele: string): string {
@@ -196,6 +235,16 @@ WHEN ${regle.quand ? `(${regle.quand}) AND ` : ""}(${changements.join(" OR ")})
 BEGIN
   SELECT RAISE(ABORT, ${texte(messageImmuabilite(modele.name))});
 END;`,
+    });
+    (regle.interdits ?? []).forEach((interdit, index) => {
+      resultat.push({
+        nom: `immuable_${table}_regle_${index + 1}`,
+        sql: `CREATE TRIGGER ${ident(`immuable_${table}_regle_${index + 1}`)} BEFORE UPDATE ON ${ident(table)}
+WHEN ${interdit.condition}
+BEGIN
+  SELECT RAISE(ABORT, ${texte(interdit.message)});
+END;`,
+      });
     });
   }
   if (MODELES_HORS_JOURNAL.has(modele.name)) return resultat;

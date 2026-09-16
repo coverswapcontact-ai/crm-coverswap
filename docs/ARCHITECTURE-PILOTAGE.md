@@ -496,3 +496,82 @@ Un document émis ne s'archive pas non plus : il reste visible.
 - Les numéros 001 à 029 de la série manuelle restent « nature inconnue » tant
   qu'ils ne sont pas complétés à l'écran.
 
+## 10. Encaissements : l'argent reçu, distinct de ce qui est facturé
+
+Une facture est une créance ; un encaissement est de l'argent effectivement
+reçu. La comptabilité d'un micro-entrepreneur se tient sur les encaissements :
+c'est eux que comptent le livre des recettes, l'URSSAF et les seuils.
+
+### Le modèle
+
+- `Encaissement` : payeur, montant, moyen (virement, chèque, espèces, carte,
+  autre), référence (n° de chèque, libellé du virement), **date de réception**
+  et, pour un chèque, **date de crédit** sur le compte, statut.
+- `AffectationEncaissement` : la part d'un encaissement imputée sur une pièce
+  **du registre des numéros** (section 9) : un devis pour un acompte, une
+  facture du CRM, une facture manuelle ou de l'ancien écran. Passer par le
+  registre donne une seule façon de régler toutes les factures, y compris
+  celles émises hors du CRM.
+- Un encaissement se découpe sur plusieurs pièces, une facture se règle en
+  plusieurs encaissements (acompte, puis solde).
+
+### Rien ne se supprime, rien ne se réécrit
+
+La base refuse (déclencheurs) :
+
+- de modifier montant, date de réception, payeur d'un encaissement, ou le
+  montant et la pièce d'une affectation ;
+- de rouvrir un encaissement annulé ou rejeté, ou une affectation qui a cessé
+  de compter ;
+- d'annuler ou de rejeter sans date ni motif.
+
+Ce qui se complète une fois : le moyen (inconnu à la reprise), la référence,
+la date de crédit, le dossier. Une **erreur de saisie s'annule** avec son motif
+(le paiement reste visible, barré) ; un **chèque impayé se rejette**, daté et
+motivé. Dans les deux cas, ses affectations passent `LIBEREE` : ce qu'il
+réglait redevient dû.
+
+### Les étapes suivent l'argent
+
+- **« Signé » exige l'acompte** : la fenêtre de signature propose l'acompte
+  pré-rempli (pourcentage du devis choisi), à confirmer d'un moyen de
+  paiement ; l'éviter demande de choisir pourquoi (paiement à la facture,
+  sous-traitance, petit montant…), motif écrit dans l'événement. Enregistrer
+  l'acompte est plus rapide que s'en passer.
+- **« Encaissé » est un fait** : un dossier « Facturé » dont toutes les
+  factures sont réglées y passe tout seul ; la fenêtre « Encaissé » propose le
+  paiement du solde, pré-rempli au reste dû, et refuse (sans rien écrire) s'il
+  ne solde pas.
+- **Chèque rejeté ou paiement annulé** : un dossier « Encaissé » dont une
+  facture n'est plus réglée revient à « Facturé » ; un acompte rejeté devient la
+  prochaine action (« réclamer un nouveau paiement »).
+- Anciens dossiers signés ou encaissés par simple case à cocher : leur
+  historique reste tel quel ; les paiements s'y ajoutent à la main.
+
+### Facture et avoir
+
+- À la génération d'une facture, les acomptes imputés sur les devis du dossier
+  lui sont **transférés** (l'affectation au devis passe `TRANSFEREE`, une
+  nouvelle compte sur la facture), puis les sommes reçues non imputées.
+  La facture **imprime** ces règlements (« Acompte reçu le … (chèque) : … »)
+  et le reste à payer, figés avec ses mentions. Si un paiement change pendant
+  la génération, elle est refusée plutôt que d'imprimer un montant faux.
+- Un avoir libère ce qui réglait la facture annulée : la facture corrigée le
+  reprend à sa génération.
+
+### Reprise de l'ancien écran
+
+Les paiements cochés dans l'ancien écran des factures (acompte et solde, avec
+leur date) deviennent des encaissements, aux montants du devis d'origine, moyen
+« non renseigné ». La reprise est une tâche horaire idempotente (clé de reprise)
+et ne crée rien sans date : ces cas sont comptés, à saisir à la main.
+
+### Limites connues
+
+- Pas de remboursement ni de trop-perçu rendu : une somme reçue au-delà du dû
+  reste « non imputée » et signalée sur le dossier.
+- Un rejet de virement se traite comme une annulation (motif à préciser).
+- Pas de facture d'acompte : l'acompte est imputé sur le devis puis imprimé sur
+  la facture finale. **À faire valider par le comptable**, en particulier pour
+  les clients professionnels.
+

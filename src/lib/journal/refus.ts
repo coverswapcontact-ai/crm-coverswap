@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { MESSAGE_JOURNAL_IMMUABLE, MODELES_IMMUABLES, TABLE_JOURNAL, messageImmuabilite, messageSuppression } from "./declencheurs";
+import { MESSAGE_JOURNAL_IMMUABLE, MODELES_IMMUABLES, TABLE_JOURNAL, messageSuppression, messagesRefus } from "./declencheurs";
 
 /** Écriture refusée par la base (déclencheur) : son message, en français, part tel quel à l'interface. */
 export class EcritureRefusee extends ErreurMetier {
@@ -14,7 +14,7 @@ const OPERATIONS_MODIFICATION = new Set(["update", "updateMany", "upsert"]);
 
 const MESSAGES_CONNUS = [
   MESSAGE_JOURNAL_IMMUABLE,
-  ...[...MODELES_IMMUABLES.keys()].map(messageImmuabilite),
+  ...[...MODELES_IMMUABLES.keys()].flatMap(messagesRefus),
   ...Prisma.dmmf.datamodel.models.map((modele) => messageSuppression(modele.name)),
 ];
 
@@ -55,11 +55,10 @@ export function traduireRefus(erreur: unknown, modele?: string, operation?: stri
     const donnees = (args as { data?: unknown; update?: unknown } | undefined)?.[operation === "upsert" ? "update" : "data"];
     const liens = CHAMPS_DE_LIEN.get(modele);
     const poseUnLien = typeof donnees === "object" && donnees !== null && Object.keys(donnees).some((champ) => liens?.has(champ));
-    return new EcritureRefusee(
-      poseUnLien
-        ? `${messageImmuabilite(modele)} (À défaut, un lien pointe vers un enregistrement introuvable.)`
-        : messageImmuabilite(modele)
-    );
+    // Plusieurs règles possibles (colonnes figées, changements interdits) : toutes sont citées.
+    const messages = messagesRefus(modele);
+    if (poseUnLien) messages.push("Un lien pointe vers un enregistrement introuvable.");
+    return new EcritureRefusee(messages.join(" Ou : "));
   }
   return new EcritureRefusee("Enregistrement impossible : un lien pointe vers un enregistrement introuvable. Recharge la page puis réessaie.");
 }

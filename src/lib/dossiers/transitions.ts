@@ -1,6 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
+import { MOTIFS_SANS_ACOMPTE, libelleMotif } from "@/lib/encaissements/constantes";
+import { schemaPaiement, schemaSansAcompte } from "@/lib/encaissements/schemas";
+import { faitsPaiements } from "@/lib/encaissements/soldes";
 import { sendConversionEvent } from "@/lib/meta";
 import {
   ETAPES,
@@ -30,6 +33,8 @@ export type ChangementEtape = {
   de: EtapeDossier;
   vers: EtapeDossier;
   nature: MetadataChangementEtape["nature"];
+  /** Document concerné (devis accepté à la signature, document généré). */
+  documentId?: string;
 };
 
 /** Lit un dossier et tout ce qu'il faut pour vérifier un changement d'étape. */
@@ -65,6 +70,7 @@ export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
     aDevisGenere: dossier.documents.some((document) => document.type === "DEVIS"),
     // Une facture annulée par un avoir ne compte plus : le dossier attend la nouvelle.
     aFactureGeneree: dossier.documents.some((document) => document.type === "FACTURE" && document.statut !== "ANNULEE"),
+    ...(await faitsPaiements(tx, dossierId).then(({ acompteEnregistre, soldeEncaisse }) => ({ acompteEnregistre, soldeEncaisse }))),
   };
   const avantSortie = etapeAvantSortie(
     dossier.evenements
@@ -79,6 +85,8 @@ type Application = ChangementEtape & {
   documentId?: string;
   /** Étape active de référence (celle quittée avant une pause), pour situer une perte. */
   etapeReference?: EtapeDossier | null;
+  /** Changement automatique ou retour provoqué par un fait (paiement, avoir) : écrit dans l'événement. */
+  raison?: string;
 };
 
 /**
@@ -147,6 +155,10 @@ export async function appliquerChangementEtape(
   }
 
   const confirmations = CRITERES_DECLARATIFS.filter((critere) => donnees.confirmations?.[critere]);
+  const sansAcompte =
+    vers === "SIGNE" && donnees.sansAcompte?.motif
+      ? libelleMotif(MOTIFS_SANS_ACOMPTE, donnees.sansAcompte.motif, donnees.sansAcompte.precision)
+      : null;
   const metadata: MetadataChangementEtape = {
     de,
     vers,
@@ -158,13 +170,18 @@ export async function appliquerChangementEtape(
     ...perte,
     ...(vers === "PLANIFIE" && donnees.dateChantier ? { dateChantier: donnees.dateChantier } : {}),
     ...(confirmations.length > 0 ? { confirmations } : {}),
+    ...(vers === "SIGNE" && donnees.acompte ? { acompte: { montant: donnees.acompte.montant } } : {}),
+    ...(sansAcompte ? { sansAcompte } : {}),
+    ...(application.raison ? { raison: application.raison } : {}),
     ...(documentId ? { documentId } : {}),
   };
 
   let contenu = `${LIBELLES_ETAPE[de]} → ${LIBELLES_ETAPE[vers]}`;
   if (metadata.motifPerte) contenu += ` (motif : ${LIBELLES_MOTIF_PERTE[metadata.motifPerte].toLowerCase()})`;
   if (metadata.perteConcurrent) contenu += `, remporté par ${metadata.perteConcurrent}`;
-  if (nature === "AUTOMATIQUE") contenu += ", à la génération du document";
+  if (sansAcompte) contenu += ` (sans acompte : ${sansAcompte.toLowerCase()})`;
+  if (application.raison) contenu += ` : ${application.raison}`;
+  else if (nature === "AUTOMATIQUE") contenu += ", à la génération du document";
   if (nature === "RETOUR") contenu += " (retour en arrière)";
   if (nature === "REPRISE") contenu += " (reprise)";
 
@@ -178,7 +195,7 @@ export async function appliquerChangementEtape(
     },
   });
 
-  return { dossierId, de, vers, nature };
+  return { dossierId, de, vers, nature, ...(documentId ? { documentId } : {}) };
 }
 
 export const schemaChangementEtape = z.object({
@@ -200,6 +217,12 @@ export const schemaChangementEtape = z.object({
     })
     .optional(),
   devisAccepteId: z.string().max(40).optional(),
+  /** Signature : l'acompte reçu, enregistré en même temps. */
+  acompte: schemaPaiement.optional(),
+  /** Signature sans acompte : pourquoi. */
+  sansAcompte: schemaSansAcompte.optional(),
+  /** Encaissement : le paiement du solde, enregistré en même temps. */
+  solde: schemaPaiement.optional(),
 });
 
 export type EntreeChangementEtape = DonneesTransition & {
@@ -222,7 +245,7 @@ export async function changerEtapeDansTransaction(
 
   let documentId: string | undefined;
   if (entree.vers === "SIGNE" && verification.nature === "SUIVANTE") {
-    const devis = dossier.documents.filter((document) => document.type === "DEVIS");
+    const devis = dossier.documents.filter((document) => document.type === "DEVIS" && document.statut !== "REMPLACE");
     const signe = entree.devisAccepteId ? devis.find((document) => document.id === entree.devisAccepteId) : devis[0];
     if (!signe) throw new ErreurMetier("Devis signé introuvable dans ce dossier.", 400);
     await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });

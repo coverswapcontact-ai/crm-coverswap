@@ -38,6 +38,7 @@ import {
   verifierPhoto,
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
+import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
 
 /* ── Validation ─────────────────────────────────────────────────── */
 
@@ -91,6 +92,8 @@ const champsDossier = z.object({
 export const schemaCreation = champsDossier.extend({
   leadId: z.string().max(40).nullable(),
   prospectId: z.string().max(40).nullable(),
+  // Nouveau dossier ouvert depuis une fiche client.
+  clientId: z.string().max(40).nullable().optional(),
 });
 export type EntreeCreation = z.output<typeof schemaCreation>;
 
@@ -299,7 +302,17 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
         metadata: JSON.stringify(ouverture),
       },
     });
-    return cree;
+    // Client pérenne : celui choisi, celui du lead ou du prospect, sinon retrouvé
+    // par e-mail ou téléphone, sinon créé depuis ces coordonnées.
+    if (entree.clientId) {
+      const choisi = await tx.client.findUnique({ where: { id: entree.clientId }, select: { id: true, archiveLe: true } });
+      if (!choisi || choisi.archiveLe) throw new ErreurMetier("Client introuvable ou archivé.", 404);
+      await tx.dossier.update({ where: { id: cree.id }, data: { clientId: choisi.id } });
+      await completerCoordonnees(tx, choisi.id, { emails: [entree.clientEmail], telephones: [entree.clientTelephone] });
+      return { ...cree, clientId: choisi.id };
+    }
+    const clientId = await rattacherDossier(tx, cree);
+    return { ...cree, clientId };
   });
 
   try {

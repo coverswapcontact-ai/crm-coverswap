@@ -60,17 +60,14 @@ describe("installation", () => {
     await m.preparation.preparerBase();
     await m.preparation.preparerBase(); // rejouable
 
-    const lignes = await journalDe("Lead", "ancien");
+    const lignes = (await journalDe("Lead", "ancien")).filter((ligne) => ligne.operation === "ETAT_INITIAL");
     assert.equal(lignes.length, 1);
-    assert.equal(lignes[0].operation, "ETAT_INITIAL");
     assert.equal(lignes[0].acteur, "MIGRATION:2026-09-16-journal-etat-initial");
     assert.equal(JSON.parse(lignes[0].apres).nom, "Martin");
 
     const migrations = await m.prisma.migrationDonnees.findMany();
-    assert.deepEqual(
-      migrations.map((migration) => migration.nom),
-      ["2026-09-16-journal-etat-initial"]
-    );
+    assert.ok(migrations.some((migration) => migration.nom === "2026-09-16-journal-etat-initial"));
+    assert.equal(new Set(migrations.map((migration) => migration.nom)).size, migrations.length, "chaque migration une seule fois");
   });
 
   test("les déclencheurs sont réinstallables sans doublon", async () => {

@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { formatDate, sourceLabel } from "@/lib/utils";
+import { formaterTelephone } from "@/lib/clients/normalisation";
+import type { SourceDossier } from "./constants";
 import type { LeadTrouve } from "./types";
 
 // Recherche « Ouvrir un dossier depuis un lead » : leads B2C (site, Meta,
@@ -51,7 +53,25 @@ export async function rechercherLeads(recherche: string): Promise<LeadTrouve[]> 
     })),
   };
 
-  const [leads, prospects] = await Promise.all([
+  const [clients, leads, prospects] = await Promise.all([
+    prisma.client.findMany({
+      where: {
+        AND: termes.map((mot) => {
+          const chiffres = mot.replace(/\D/g, "").replace(/^0/, "");
+          return {
+            OR: [
+              { nom: { contains: mot } },
+              { ville: { contains: mot } },
+              { emails: { some: { adresse: { contains: mot.toLowerCase() } } } },
+              ...(chiffres.length >= 4 ? [{ telephones: { some: { numero: { contains: chiffres } } } }] : []),
+            ],
+          };
+        }),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      include: inclusionClient,
+    }),
     prisma.lead.findMany({
       where: whereLead,
       orderBy: { createdAt: "desc" },
@@ -66,7 +86,58 @@ export async function rechercherLeads(recherche: string): Promise<LeadTrouve[]> 
     }),
   ]);
 
-  return [...leads.map(leadVersResultat), ...prospects.map(prospectVersResultat)];
+  // Un lead ou un prospect déjà rattaché à un client trouvé n'est pas proposé deux fois.
+  const clientsTrouves = new Set(clients.map((client) => client.id));
+  return [
+    ...clients.map(clientVersResultat),
+    ...leads.filter((lead) => !lead.clientId || !clientsTrouves.has(lead.clientId)).map(leadVersResultat),
+    ...prospects.filter((prospect) => !prospect.clientId || !clientsTrouves.has(prospect.clientId)).map(prospectVersResultat),
+  ];
+}
+
+const inclusionClient = {
+  _count: { select: { dossiers: true } },
+  emails: { where: { archiveLe: null }, orderBy: [{ principale: "desc" }, { createdAt: "asc" }], take: 1 },
+  telephones: { where: { archiveLe: null }, orderBy: [{ principal: "desc" }, { createdAt: "asc" }], take: 1 },
+  dossiers: { orderBy: { createdAt: "desc" }, take: 1, select: { clientAdresse: true, clientCp: true, clientVille: true } },
+} satisfies Prisma.ClientInclude;
+
+type ClientAvecCompte = Prisma.ClientGetPayload<{ include: typeof inclusionClient }>;
+
+const SOURCE_DOSSIER_PAR_SOURCE_CLIENT: Record<string, SourceDossier> = {
+  RECOMMANDATION: "RECOMMANDATION",
+  BOUCHE_A_OREILLE: "RECOMMANDATION",
+  SOUS_TRAITANCE: "SOUS_TRAITANCE",
+  PROSPECTION: "PROSPECTION",
+};
+
+function clientVersResultat(client: ClientAvecCompte): LeadTrouve {
+  const dernier = client.dossiers[0];
+  const ville = client.ville ?? dernier?.clientVille ?? "";
+  return {
+    origine: "CLIENT",
+    id: client.id,
+    libelle: client.nom,
+    detail: ["Client", ville || null, client._count.dossiers > 0 ? "déjà client" : null].filter(Boolean).join(" · "),
+    nbDossiers: client._count.dossiers,
+    preRemplissage: {
+      clientNom: client.nom,
+      // Adresse de la fiche, sinon celle du dernier chantier : à vérifier s'il s'agit d'un autre lieu.
+      clientAdresse: client.adresse ?? dernier?.clientAdresse ?? "",
+      clientCp: client.codePostal ?? dernier?.clientCp ?? "",
+      clientVille: ville,
+      clientTelephone: client.telephones[0] ? formaterTelephone(client.telephones[0].numero) : "",
+      clientEmail: client.emails[0]?.adresse ?? "",
+      objet: "",
+      source: SOURCE_DOSSIER_PAR_SOURCE_CLIENT[client.source] ?? "ENTRANT",
+    },
+  };
+}
+
+/** Pré-remplissage depuis une fiche client (bouton « Ouvrir un dossier » de la fiche). */
+export async function clientPourDossier(clientId: string): Promise<LeadTrouve | null> {
+  const client = await prisma.client.findUnique({ where: { id: clientId }, include: inclusionClient });
+  return client && !client.archiveLe ? clientVersResultat(client) : null;
 }
 
 type LeadAvecCompte = Prisma.LeadGetPayload<{ include: { _count: { select: { dossiers: true } } } }>;

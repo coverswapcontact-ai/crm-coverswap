@@ -1,0 +1,29 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod/v4";
+import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
+import { archiverCoordonnee, chargerFiche, definirPrincipale } from "@/lib/clients/fiches";
+
+const schema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("principale"), nature: z.enum(["email", "telephone"]) }),
+  z.object({
+    action: z.literal("archiver"),
+    nature: z.enum(["email", "telephone"]),
+    motif: z.string("Motif obligatoire.").trim().min(3, "Motif obligatoire.").max(300),
+  }),
+]);
+
+/** POST { action: "principale" | "archiver", nature, motif? } */
+export async function POST(
+  requete: NextRequest,
+  { params }: { params: Promise<{ id: string; coordonneeId: string }> }
+) {
+  try {
+    const { id, coordonneeId } = await params;
+    const demande = analyser(schema, await lireCorpsJson(requete));
+    if (demande.action === "principale") await definirPrincipale(id, demande.nature, coordonneeId);
+    else await archiverCoordonnee(id, demande.nature, coordonneeId, demande.motif);
+    return NextResponse.json({ client: await chargerFiche(id) });
+  } catch (erreur) {
+    return reponseErreur(erreur, "POST /api/clients/[id]/coordonnees/[coordonneeId]");
+  }
+}

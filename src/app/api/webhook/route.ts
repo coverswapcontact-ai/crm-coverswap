@@ -6,6 +6,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { Resend } from "resend";
+import { rattacherLead } from "@/lib/clients/identification";
 
 // Rate limiting (in-memory, resets on cold start)
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
@@ -48,6 +49,9 @@ const webhookSchema = z.object({
   prixDevis: z.number().optional(),
   lienSimulation: z.string().optional(),
   notes: z.string().optional(),
+  // Consentement aux mails commerciaux : case distincte du formulaire, jamais présumé
+  consentementMail: z.boolean().optional(),
+  consentementTexte: z.string().max(1000).optional(),
   // Simulation images (base64 data URLs or raw base64)
   imageBefore: z.string().optional(),
   imageAfter: z.string().optional(),
@@ -82,6 +86,9 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
     mlEstimes: body.mlEstimes,
     lienSimulation: body.lienSimulation,
     notes,
+    formulaire: body.form_name,
+    publicite: body.ad_name,
+    campagne: body.campaign_name,
   };
 }
 
@@ -241,6 +248,25 @@ export async function POST(request: NextRequest) {
       lead = await prisma.lead.create({
         data: { ...data, scoreSignature },
       });
+    }
+
+    // ── Client pérenne : retrouvé par e-mail ou téléphone, sinon créé ──
+    // Jamais bloquant : un lead sans client est rattrapé par le travail périodique.
+    try {
+      await rattacherLead(
+        prisma,
+        lead.id,
+        parsed.data.consentementMail === undefined
+          ? null
+          : {
+              accorde: parsed.data.consentementMail,
+              moyen: "FORMULAIRE_SITE",
+              recueilliLe: new Date(),
+              preuve: parsed.data.consentementTexte ?? `Formulaire du site (${data.source})`,
+            }
+      );
+    } catch (erreurClient) {
+      console.error("[webhook] rattachement du client (non bloquant) :", erreurClient);
     }
 
     // ── Handle simulation (images + record) ──

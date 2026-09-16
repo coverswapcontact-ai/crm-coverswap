@@ -91,6 +91,7 @@ export default function DossiersPilotage({
     if (dossierOuvertId) url.searchParams.set("dossier", dossierOuvertId);
     else url.searchParams.delete("dossier");
     url.searchParams.delete("lead");
+    url.searchParams.delete("client");
     window.history.replaceState(window.history.state, "", url);
   }, [dossierOuvertId]);
 

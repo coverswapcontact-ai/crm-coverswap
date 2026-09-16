@@ -71,6 +71,7 @@ export function vueProposition(proposition: Proposition): PropositionVue {
     validationGroupee: definition ? definition.validationGroupee && !estSensible(definition, contenu) : false,
     champs: definition?.champs ?? [],
     motifsRejet: motifsDe(definition),
+    liens: definition?.liens?.(contenu) ?? [],
     clientId: proposition.clientId,
     dossierId: proposition.dossierId,
     messageId: proposition.messageId,

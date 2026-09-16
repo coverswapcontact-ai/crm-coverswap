@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Menu,
   Radar,
+  Users,
   Workflow,
   X,
   type LucideIcon,
@@ -38,6 +39,7 @@ type Entree = {
 const PRINCIPALES: Entree[] = [
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
+  { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
 ];
 
 // Écrans secondaires, dans le menu « Plus ».

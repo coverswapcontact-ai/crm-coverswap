@@ -40,6 +40,8 @@ export type DefinitionProposition<C = Record<string, unknown>> = {
   /** IMMEDIATE : dans la transaction de la validation. FILE : par la file de tâches (services extérieurs). */
   execution: "IMMEDIATE" | "FILE";
   executer: (contenu: C, contexte: ContexteExecution) => Promise<ResultatExecution | void>;
+  /** Liens utiles pour décider (fiches, dossier, message), affichés sur la carte. */
+  liens?: (contenu: C) => { libelle: string; href: string }[];
   /** Encore pertinente ? Rend le motif qui la rend sans objet, ou null. */
   pertinente?: (contenu: C) => Promise<string | null>;
 };

@@ -16,6 +16,8 @@ type Erreurs = Partial<Record<keyof Champs | "photos", string>>;
 type PhotoChoisie = { cle: string; fichier: File; apercu: string };
 type Mode = "lead" | "direct";
 
+const LIBELLES_ORIGINE: Record<LeadTrouve["origine"], string> = { CLIENT: "Client", LEAD: "Lead", PROSPECT: "Prospect" };
+
 function champsDepuis(lead: LeadTrouve | null, conserves?: Champs): Champs {
   const pre = lead?.preRemplissage;
   return {
@@ -168,6 +170,7 @@ export function CreationDossier({
           prochaineActionDate: champs.prochaineActionDate || null,
           leadId: origine?.origine === "LEAD" ? origine.id : null,
           prospectId: origine?.origine === "PROSPECT" ? origine.id : null,
+          clientId: origine?.origine === "CLIENT" ? origine.id : null,
         })
       );
       formulaire.append("photos", prets[0]);
@@ -228,7 +231,7 @@ export function CreationDossier({
       >
         {(
           [
-            { valeur: "lead", libelle: "Depuis un lead" },
+            { valeur: "lead", libelle: "Client ou lead existant" },
             { valeur: "direct", libelle: "Création directe" },
           ] as const
         ).map(({ valeur, libelle }) => (
@@ -252,7 +255,7 @@ export function CreationDossier({
       {mode === "lead" && origine === null ? (
         <div>
           <label className="relative block">
-            <span className="sr-only">Rechercher un lead</span>
+            <span className="sr-only">Rechercher un client, un lead ou un prospect</span>
             <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
             <input
               type="search"
@@ -268,7 +271,7 @@ export function CreationDossier({
           </label>
           {resultats === null ? null : resultats.length === 0 ? (
             <p className="mt-4 text-[13px] text-[#9CA3AF]">
-              Aucun lead trouvé.{" "}
+              Aucun client ni lead trouvé.{" "}
               <button type="button" onClick={() => changerMode("direct")} className="text-[#5DCAA5] underline-offset-2 hover:underline">
                 Créer le dossier directement
               </button>
@@ -293,7 +296,7 @@ export function CreationDossier({
                         </span>
                       ) : null}
                       <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-px text-[11px] text-[#9CA3AF]">
-                        {resultat.origine === "LEAD" ? "Lead" : "Prospect"}
+                        {LIBELLES_ORIGINE[resultat.origine]}
                       </span>
                     </span>
                   </button>
@@ -309,7 +312,7 @@ export function CreationDossier({
           {origine ? (
             <div className="flex items-center justify-between gap-3 rounded-[9px] border-[0.5px] border-[#1D9E75]/30 bg-[#112B22]/60 px-3 py-2">
               <p className="min-w-0 truncate text-[13px] text-[#D1FAE5]">
-                {origine.origine === "LEAD" ? "Lead" : "Prospect"} : <span className="font-medium">{origine.libelle}</span>
+                {LIBELLES_ORIGINE[origine.origine]} : <span className="font-medium">{origine.libelle}</span>
                 {origine.nbDossiers > 0 ? (
                   <span className="text-[#EF9F27]"> · déjà {origine.nbDossiers} dossier{origine.nbDossiers > 1 ? "s" : ""}</span>
                 ) : null}

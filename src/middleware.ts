@@ -85,6 +85,9 @@ export async function middleware(request: NextRequest) {
     "/commandes", "/finances", "/analytics", "/assistant",
     "/api/leads", "/api/devis", "/api/factures", "/api/chantiers",
     "/api/commandes", "/api/assistant", "/api/email", "/api/pdf",
+    // Module prospection : le POST /api/prospection/sourcing consomme des
+    // crédits Google Places, il ne doit jamais être joignable sans session.
+    "/prospection", "/api/prospection",
   ];
   const needsAuth = protectedPaths.some((p) => pathname.startsWith(p));
 

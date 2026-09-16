@@ -145,3 +145,84 @@ model Objectif {
   tauxConversion  Float
   createdAt       DateTime @default(now())
 }
+
+// ─────────────────────────────────────────────
+// Module Prospection (agent IA B2B hôtels/restaurants)
+// SQLite : pas d'enum ni de Json natifs — valeurs et structures
+// documentées en commentaire, types TS dans src/lib/prospection/constants.ts
+// ─────────────────────────────────────────────
+
+model AgentProfile {
+  id        String     @id @default(cuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  slug      String     @unique // "hotels" | "restaurants"
+  nom       String
+  actif     Boolean    @default(true)
+  config    String     @default("{}") // JSON AgentProfileConfig : typesGooglePlaces, motsClesSignaux, blacklistMarques, angleVente, quotaJournalier
+  prospects Prospect[]
+}
+
+model Prospect {
+  id              String             @id @default(cuid())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  agentProfileId  String
+  agentProfile    AgentProfile       @relation(fields: [agentProfileId], references: [id], onDelete: Cascade)
+  googlePlaceId   String             @unique
+  nom             String
+  adresse         String?
+  ville           String?
+  codePostal      String?
+  telephone       String?
+  siteWeb         String?
+  email           String?
+  emailType       String             @default("INCONNU") // EmailType : GENERIQUE | NOMINATIF | INCONNU
+  noteGoogle      Float?
+  nbAvis          Int?
+  siret           String?
+  anneeCreation   Int?
+  statut          String             @default("SOURCE") // StatutProspect : SOURCE | QUALIFIE | ECARTE | CONTACTE | RELANCE | REPONDU | RDV | CLIENT | OPT_OUT
+  score           Int                @default(0)
+  scoreDetails    String?            // JSON : décomposition du score par signal
+  signalPrincipal String?            // citation d'avis ou fait saillant détecté
+  angleSuggere    String?            // angle d'approche proposé pour l'email
+  avisBruts       String?            // JSON AvisBrut[] : avis Google bruts (servira au scoring étape 3)
+  fermetureHebdo  String?            // jour(s) de fermeture hebdo ex. "lundi" ou "dimanche, lundi" — null si 7j/7 ou inconnu
+  optOut          Boolean            @default(false)
+  optOutAt        DateTime?
+  emailDrafts     EmailDraft[]
+  activites       ProspectActivity[]
+
+  @@index([agentProfileId, statut])
+  @@index([score])
+}
+
+model EmailDraft {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  prospectId       String
+  prospect         Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  sequencePosition Int       @default(1) // 1=initial, 2=relance1, 3=relance2
+  sujet            String
+  corps            String
+  statut           String    @default("BROUILLON") // StatutEmailDraft : BROUILLON | VALIDE | EDITE | REJETE | ENVOYE
+  corpsOriginal    String?   // version IA avant édition humaine (boucle de feedback)
+  envoyeAt         DateTime?
+  ouvertAt         DateTime?
+  reponduAt        DateTime?
+
+  @@index([statut])
+}
+
+model ProspectActivity {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  type       String   // TypeActivite : SOURCING | SCORING | DRAFT_CREE | VALIDATION | EDITION | ENVOI | OUVERTURE | REPONSE | OPT_OUT | NOTE
+  details    String?  // JSON : payload libre selon le type d'activité
+
+  @@index([prospectId, createdAt])
+}

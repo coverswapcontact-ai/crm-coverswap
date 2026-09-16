@@ -33,6 +33,7 @@ import {
 } from "@/lib/dossiers/montants";
 import type { DocumentVue, DossierDetail, PresetVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
+import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
 import { GestionTarifs } from "./GestionTarifs";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TRANS } from "./ui";
@@ -95,15 +96,19 @@ type Resultat = { type: TypeDocument; numero: string; pdfUrl: string; totalHtCen
 export function GenerateurDocument({
   detail,
   typeInitial,
+  remplace = null,
   onFermer,
   onGenere,
 }: {
   detail: DossierDetail;
   typeInitial: TypeDocument;
+  /** Devis refait : ses lignes servent de départ, il sera marqué « Remplacé ». */
+  remplace?: DocumentVue | null;
   onFermer: () => void;
   onGenere: (detail: DossierDetail) => void;
 }) {
-  const depart = documentDeDepart(detail, typeInitial);
+  const { executer: avecParametres, modale: modaleParametres } = useParametresExiges();
+  const depart = remplace ?? documentDeDepart(detail, typeInitial);
   const [type, setType] = useState<TypeDocument>(typeInitial);
   const [objet, setObjet] = useState(depart?.objet ?? detail.objet);
   const [lignes, setLignes] = useState<LigneSaisie[]>(() => (depart ? saisieDepuis(depart.lignes) : [prestationVide()]));
@@ -233,22 +238,27 @@ export function GenerateurDocument({
     }
     setEnvoi(true);
     try {
-      const reponse = await envoyerJson<{
-        document: { numero: string; pdfUrl: string };
-        dossier: DossierDetail;
-      }>(`/api/dossiers/${detail.id}/documents`, "POST", {
-        type,
-        objet: objet.trim(),
-        lignes: valides,
-        noteMl,
-        acomptePct: type === "DEVIS" ? lireAcompte(acompte) : null,
-      });
-      onGenere(reponse.dossier);
-      setResultat({
-        type,
-        numero: reponse.document.numero,
-        pdfUrl: reponse.document.pdfUrl,
-        totalHtCentimes: calculerMontants(valides, null).totalHtCentimes,
+      // Facture à un professionnel : si un paramètre légal manque (échéance,
+      // pénalités…), la fenêtre de saisie s'ouvre puis la génération reprend.
+      await avecParametres(async () => {
+        const reponse = await envoyerJson<{
+          document: { numero: string; pdfUrl: string };
+          dossier: DossierDetail;
+        }>(`/api/dossiers/${detail.id}/documents`, "POST", {
+          type,
+          objet: objet.trim(),
+          lignes: valides,
+          noteMl,
+          acomptePct: type === "DEVIS" ? lireAcompte(acompte) : null,
+          remplaceDocumentId: type === "DEVIS" && remplace ? remplace.id : null,
+        });
+        onGenere(reponse.dossier);
+        setResultat({
+          type,
+          numero: reponse.document.numero,
+          pdfUrl: reponse.document.pdfUrl,
+          totalHtCentimes: calculerMontants(valides, null).totalHtCentimes,
+        });
       });
     } catch (probleme) {
       toast.error("Génération impossible", { description: messageErreur(probleme) });
@@ -261,10 +271,13 @@ export function GenerateurDocument({
   const titre = resultat
     ? `${LIBELLES_TYPE_DOCUMENT[resultat.type]} ${resultat.numero}`
     : type === "DEVIS"
-      ? "Nouveau devis"
+      ? remplace
+        ? `Refaire le devis ${remplace.numero}`
+        : "Nouveau devis"
       : "Nouvelle facture";
 
   return (
+    <>
     <Modale
       ouverte
       onFermer={onFermer}
@@ -339,7 +352,8 @@ export function GenerateurDocument({
               aria-label="Type de document"
               className="flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-[3px]"
             >
-              {(["DEVIS", "FACTURE"] as const).map((valeur) => (
+              {/* Un devis refait reste un devis : une facture s'annule par un avoir. */}
+              {(remplace ? (["DEVIS"] as const) : (["DEVIS", "FACTURE"] as const)).map((valeur) => (
                 <button
                   key={valeur}
                   type="button"
@@ -599,6 +613,8 @@ export function GenerateurDocument({
         </div>
       )}
     </Modale>
+    {modaleParametres}
+    </>
   );
 }
 

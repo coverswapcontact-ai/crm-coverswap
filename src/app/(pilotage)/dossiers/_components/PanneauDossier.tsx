@@ -24,7 +24,7 @@ import {
 } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
 import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
-import type { DossierDetail, EvenementVue } from "@/lib/dossiers/types";
+import type { DocumentVue, DossierDetail, EvenementVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { PastilleRetard, ProchaineActionResume } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
@@ -144,7 +144,7 @@ function ContenuPanneau({
   onMisAJour: (detail: DossierDetail) => void;
   onRecharger: () => Promise<void>;
 }) {
-  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number } | null>(null);
+  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue } | null>(null);
   const telephone = detail.clientTelephone.replace(/[^\d+]/g, "");
 
   return (
@@ -207,6 +207,8 @@ function ContenuPanneau({
           <DocumentsDossier
             detail={detail}
             onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
+            onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
+            onMisAJour={onMisAJour}
           />
           <section>
             <TitreSection>Étapes et notes</TitreSection>
@@ -241,6 +243,7 @@ function ContenuPanneau({
           key={generateur.cle}
           detail={detail}
           typeInitial={generateur.type}
+          remplace={generateur.remplace ?? null}
           onFermer={() => setGenerateur(null)}
           onGenere={onMisAJour}
         />

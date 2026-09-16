@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   CircleCheckBig,
   FolderKanban,
+  Hash,
   Menu,
   Radar,
   SlidersHorizontal,
@@ -47,6 +48,7 @@ const PRINCIPALES: Entree[] = [
 const SECONDAIRES: Entree[] = [
   { href: "/prospection", libelle: "Prospection", icone: Radar },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
+  { href: "/numeros", libelle: "Registre des numéros", icone: Hash },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 

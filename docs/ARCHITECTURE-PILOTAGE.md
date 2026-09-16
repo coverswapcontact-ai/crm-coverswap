@@ -13,7 +13,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | --- | --- | --- |
 | Rien ne se supprime | Déclencheur `BEFORE DELETE` sur chaque table + refus dans la couche Prisma ; archivage (`archiveLe`, `archiveMotif`) ; fichiers déplacés dans `archives/` | `src/lib/journal/` |
 | Aucune donnée perdue | Sauvegarde vérifiée avant toute migration de schéma ou de données ; `db push` sans `--accept-data-loss` ; migrations de données idempotentes | `scripts/avant-demarrage.mjs`, `src/lib/base/` |
-| Aucun numéro émis réattribué | (volet comptabilité) | |
+| Aucun numéro émis réattribué | Registre `NumeroDocument` de tout numéro émis (manuel, ancien écran, CRM) ; un numéro inscrit est sauté, jamais réattribué ni modifié ; document émis figé par la base (avoir, devis refait) | `src/lib/dossiers/numerotation.ts`, section 9 |
 | L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | Toute action proposée passe par `Proposition` ; seule une personne connectée valide ou rejette ; une proposition sensible ne s'exécute jamais seule ni en lot | `src/lib/validation/` |
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
 | Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
@@ -404,4 +404,95 @@ recouvrement, escompte, délai de relance (`src/lib/parametres/definitions.ts`).
   d'effet et sa source, que la base refuse de modifier ; une nouvelle valeur ne
   réécrit jamais le passé (une recette de mars se calcule au taux de mars).
 - Écran `/parametres` : valeur en vigueur, valeurs à venir, historique.
+
+## 9. Numérotation et documents émis
+
+### La situation de départ
+
+2026 a d'abord été numéroté à la main, en **une série partagée** entre devis et
+factures : 2026-001 à 2026-037, dont 030 et 032 sont des factures, 031 et 033 à
+037 des devis (la nature de 001 à 029 n'est pas connue). L'ancien écran du CRM
+numérotait ensuite « 2026-0001 » (devis) et « FACT-2026-0001 » (factures) ; le
+module Dossiers, une série de devis et une série F de factures. Un numéro déjà
+envoyé à un client ne doit jamais resservir, et une série de factures doit être
+continue et chronologique.
+
+### Le registre : tout numéro émis, d'où qu'il vienne
+
+`NumeroDocument` inscrit chaque numéro émis, une ligne par numéro, identifié
+par une clé `famille:année:rang` (« F:2026:12 », « :2026:38 ») :
+
+- numéros manuels (inscrits par la migration de données, ou déclarés à l'écran
+  `/numeros`), numéros de l'ancien écran, documents du CRM ;
+- « 2026-0001 » et « 2026-001 » ont la même clé : ils se lisent pareil pour un
+  client. Si deux sources ont émis le même numéro, la migration le **signale**
+  dans la note de la ligne, sans rien écraser ;
+- la base refuse de changer un numéro inscrit (seuls nature, destinataire,
+  montant et note se complètent) et, comme partout, de le supprimer.
+
+### L'attribution (`src/lib/dossiers/numerotation.ts`)
+
+- Dans la transaction qui crée le document : si la génération échoue, compteur
+  et registre reviennent en arrière et le numéro n'a jamais existé (le PDF déjà
+  écrit part aux archives).
+- Une seule instruction lit et incrémente le compteur : deux générations
+  simultanées n'obtiennent jamais le même numéro.
+- Un compteur démarre, à sa création, après le plus haut rang inscrit pour ses
+  familles précédentes (la série F reprend après les « FACT-… » de l'année),
+  à défaut après l'amorce du code (devis 2026 : 37).
+- **Un numéro déjà inscrit est sauté**, jamais réattribué.
+- Une facture ou un avoir ne peut pas être daté avant le dernier document daté
+  de sa série (horloge du serveur déréglée).
+
+Déclarer un numéro à la main (`/numeros`) : refusé s'il est déjà inscrit ; dans
+la série des factures, refusé s'il se glisserait derrière la numérotation du
+CRM ou rouvrirait une série close (« FACT » après le passage à F). L'écran
+signale les rangs sans inscription d'une série : un trou dans une série de
+factures est à déclarer ou à expliquer.
+
+### Choix des séries : le plus prudent, à faire valider
+
+Devis : la série sans préfixe continue (2026-038…). Factures et avoirs : une
+seule série F continue et chronologique (F2026-001…). Une série partagée avec
+les devis ne peut pas être continue pour les factures ; des séries distinctes
+sont admises quand elles sont justifiées, mais **le comptable doit valider ce
+choix**. S'il préfère une série unique, la modification tient dans
+`NUMEROTATION` (`src/lib/dossiers/constants.ts`) ; le registre garantit dans
+tous les cas qu'aucun numéro émis ne resservira.
+
+### Un document émis est figé
+
+À l'émission, le document reçoit et garde : destinataire tel qu'imprimé
+(nom, adresse, SIRET), catégorie du client ce jour-là, mentions légales,
+échéance. Le PDF archivé se reconstitue à l'identique depuis ces données, même
+si la fiche client change ensuite.
+
+La base refuse toute modification d'un document numéroté, sauf : son statut,
+son PDF archivé, son client pérenne (qui suit une fusion validée) ; destinataire
+et catégorie se renseignent une fois pour les documents émis avant le gel.
+Un document émis ne s'archive pas non plus : il reste visible.
+
+- **Facture erronée** : avoir total (même montant, même série F, mentions « Avoir
+  sur la facture n° … du … » et motif obligatoire), la facture passe « Annulée
+  par avoir » ; s'il n'en reste aucune active, le dossier revient à « Chantier »
+  en attendant la facture corrigée. Pas d'avoir partiel : annuler puis refaire.
+- **Devis à revoir** : « Refaire ce devis » émet un nouveau numéro et marque
+  l'ancien « Remplacé » (un devis accepté ne se remplace pas).
+
+### Mentions selon le destinataire (`src/lib/dossiers/mentions.ts`)
+
+- Particulier : « Paiement à réception de facture ».
+- Professionnel ou donneur d'ordre : date d'échéance, taux des pénalités de
+  retard, indemnité forfaitaire de recouvrement, conditions d'escompte. Ces
+  valeurs sont des **paramètres datés sans défaut** (section 8) : sans elles,
+  la génération demande leur saisie, et **aucun numéro n'est consommé**.
+- Le PDF imprime les mentions figées du document : il s'adapte seul au
+  destinataire.
+
+### Limites connues
+
+- La catégorie (particulier ou professionnel) vient de la fiche client ; un
+  dossier sans client pérenne est traité en particulier.
+- Les numéros 001 à 029 de la série manuelle restent « nature inconnue » tant
+  qu'ils ne sont pas complétés à l'écran.
 

@@ -101,7 +101,8 @@ export function ecartsPrix(documents: DocumentPourEcart[], estimation: number | 
     .sort((a, b) => new Date(a.dateEmission ?? a.createdAt).getTime() - new Date(b.dateEmission ?? b.createdAt).getTime());
   const devis = emis.filter((document) => document.type === "DEVIS");
   const signe = [...devis].reverse().find((document) => document.statut === "ACCEPTE") ?? null;
-  const factures = emis.filter((document) => document.type === "FACTURE");
+  // Une facture annulée par un avoir ne compte plus.
+  const factures = emis.filter((document) => document.type === "FACTURE" && document.statut !== "ANNULEE");
   const premierDevis = devis[0]?.totalHt ?? null;
   const ecartSignature = signe && premierDevis !== null ? Math.round((signe.totalHt - premierDevis) * 100) / 100 : null;
   return {

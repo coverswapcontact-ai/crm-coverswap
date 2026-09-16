@@ -188,7 +188,13 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       prospect: { select: { id: true, nom: true } },
       notes: { orderBy: { createdAt: "asc" } },
       evenements: { orderBy: { createdAt: "desc" }, take: 300 },
-      documents: { orderBy: { createdAt: "desc" } },
+      documents: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          documentOrigine: { select: { id: true, numero: true } },
+          documentsLies: { select: { id: true, type: true, numero: true } },
+        },
+      },
     },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
@@ -273,6 +279,10 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       noteMl: document.noteMl,
       statut: document.statut as StatutDocument,
       pdfUrl: document.numero ? urlPdf(dossier.id, document.id) : null,
+      echeanceLe: document.echeanceLe?.toISOString() ?? null,
+      documentOrigine: document.documentOrigine,
+      documentsLies: document.documentsLies.map((lie) => ({ ...lie, type: lie.type as TypeDocument })),
+      motifAvoir: document.motifAvoir,
     })),
   };
 }

@@ -214,6 +214,7 @@ export const TYPES_EVENEMENT = [
   "DEVIS_GENERE",
   "DEVIS_ENVOYE",
   "FACTURE_GENEREE",
+  "AVOIR_GENERE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
 ] as const;
@@ -231,6 +232,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   DEVIS_GENERE: "Devis généré",
   DEVIS_ENVOYE: "Devis envoyé",
   FACTURE_GENEREE: "Facture générée",
+  AVOIR_GENERE: "Avoir généré",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
 };
@@ -238,15 +240,18 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
 
 /* ── Documents (devis et factures) ────────────────────────────── */
 
-export const TYPES_DOCUMENT = ["DEVIS", "FACTURE"] as const;
+export const TYPES_DOCUMENT = ["DEVIS", "FACTURE", "AVOIR"] as const;
 export type TypeDocument = (typeof TYPES_DOCUMENT)[number];
+/** Documents générés depuis l'éditeur de lignes (un avoir se génère depuis sa facture). */
+export const TYPES_DOCUMENT_EDITABLES = ["DEVIS", "FACTURE"] as const;
 
 export const LIBELLES_TYPE_DOCUMENT: Record<TypeDocument, string> = {
   DEVIS: "Devis",
   FACTURE: "Facture",
+  AVOIR: "Avoir",
 };
 
-export const STATUTS_DOCUMENT = ["BROUILLON", "GENERE", "ENVOYE", "ACCEPTE", "REFUSE"] as const;
+export const STATUTS_DOCUMENT = ["BROUILLON", "GENERE", "ENVOYE", "ACCEPTE", "REFUSE", "REMPLACE", "ANNULEE"] as const;
 export type StatutDocument = (typeof STATUTS_DOCUMENT)[number];
 
 export const LIBELLES_STATUT_DOCUMENT: Record<StatutDocument, string> = {
@@ -255,7 +260,17 @@ export const LIBELLES_STATUT_DOCUMENT: Record<StatutDocument, string> = {
   ENVOYE: "Envoyé",
   ACCEPTE: "Accepté",
   REFUSE: "Refusé",
+  REMPLACE: "Remplacé",
+  ANNULEE: "Annulée par avoir",
 };
+
+export const MOTIFS_AVOIR = [
+  { code: "ERREUR_MONTANT", libelle: "Erreur de montant ou de quantité" },
+  { code: "ERREUR_CLIENT", libelle: "Erreur sur le client ou l'adresse" },
+  { code: "PRESTATION_ANNULEE", libelle: "Prestation annulée" },
+  { code: "GESTE_COMMERCIAL", libelle: "Geste commercial" },
+  { code: "AUTRE", libelle: "Autre" },
+] as const;
 
 export const UNITES = ["ml", "jour", "forfait"] as const;
 export type Unite = (typeof UNITES)[number];
@@ -278,28 +293,37 @@ export type LigneSection = {
 export type LigneDocument = LignePrestation | LigneSection;
 
 /* ── Numérotation ─────────────────────────────────────────────────
-   Jusqu'ici, 2026 a été numéroté à la main en UNE série partagée entre
-   devis et factures : 030 facture (Cabinet Bautes), 031 devis (Parsis),
-   032 facture (Signasud), 033 à 037 devis. Dernier numéro attribué :
-   2026-037.
+   Avant le CRM, 2026 a été numéroté à la main en UNE série partagée entre
+   devis et factures (2026-001 à 2026-037 ; 030 et 032 sont des factures).
+   L'ancien écran du CRM numérotait « 2026-0001 » (devis) et
+   « FACT-2026-0001 » (factures).
 
-   Choix retenu, EN ATTENTE DE VALIDATION PAR LE COMPTABLE :
-   - devis   : la série sans préfixe continue à 2026-038 ;
-   - factures : série distincte avec préfixe (F2026-001…), continue et sans
-     trou, ce qu'une série partagée avec les devis ne permet pas.
-   Le préfixe garantit qu'aucune facture ne reprend un numéro déjà envoyé.
+   Choix retenu, le plus prudent, À FAIRE VALIDER PAR LE COMPTABLE :
+   - devis : la série sans préfixe continue après le plus haut numéro connu ;
+   - factures et avoirs : une seule série à préfixe F (F2026-001…), continue
+     et chronologique, ce qu'une série partagée avec les devis ne permet pas.
 
-   Si le comptable préfère garder une série unique : passer FACTURE à
-   { compteur: "DEVIS", prefixe: "" }. Aucun autre changement n'est requis
-   et aucun numéro déjà émis ne peut être réattribué.
+   Garanties (src/lib/dossiers/numerotation.ts) :
+   - tout numéro émis où que ce soit est inscrit au registre NumeroDocument
+     (numérotation manuelle déclarée, ancien écran, CRM) ; un numéro inscrit
+     est sauté, jamais réattribué ;
+   - une série démarre après le plus haut rang inscrit de ses familles
+     précédentes (famillesPrecedentes), à défaut après AMORCES_COMPTEURS ;
+   - un numéro est attribué à la génération du PDF, dans la transaction qui
+     crée le document : un brouillon abandonné ne crée pas de trou ;
+   - une facture ne peut pas être datée avant la dernière de sa série.
 
-   Un numéro est attribué à la génération du PDF, dans la même transaction
-   que la création du document : un brouillon abandonné ne crée pas de trou.
+   Si le comptable préfère une série unique : FACTURE et AVOIR à
+   { compteur: "DEVIS", prefixe: "", famillesPrecedentes: [""] }.
 ──────────────────────────────────────────────────────────────── */
 
-export const NUMEROTATION: Record<TypeDocument, { compteur: string; prefixe: string }> = {
-  DEVIS: { compteur: "DEVIS", prefixe: "" },
-  FACTURE: { compteur: "FACTURE", prefixe: "F" },
+export const NUMEROTATION: Record<TypeDocument, { compteur: string; prefixe: string; famillesPrecedentes: readonly string[] }> = {
+  // Les devis continuent la série partagée de la numérotation manuelle de 2026.
+  DEVIS: { compteur: "DEVIS", prefixe: "", famillesPrecedentes: [""] },
+  // Factures et avoirs : une seule série continue et chronologique, qui démarre
+  // après la plus haute facture de l'ancien écran de l'année (« FACT-2026-… »).
+  FACTURE: { compteur: "FACTURE", prefixe: "F", famillesPrecedentes: ["F", "FACT"] },
+  AVOIR: { compteur: "FACTURE", prefixe: "F", famillesPrecedentes: ["F", "FACT"] },
 };
 
 /** Dernier numéro déjà attribué, par compteur et par année, avant le premier

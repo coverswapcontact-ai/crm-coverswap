@@ -57,13 +57,30 @@ export type RegleImmuabilite = {
 };
 
 /**
- * Modèles dont une ligne, une fois écrite (ou à partir d'une condition), ne se
- * modifie plus : la base le refuse. Un consentement se retire par une nouvelle
- * déclaration, un paramètre change par une nouvelle valeur datée.
+ * Modèles dont une ligne, une fois écrite (ou une fois émise), ne se modifie
+ * plus : la base le refuse. Un consentement se retire par une nouvelle
+ * déclaration, un paramètre change par une nouvelle valeur datée, une facture
+ * émise s'annule par un avoir.
  */
 export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<string, RegleImmuabilite>([
   ["ConsentementMail", { modifiables: ["clientId", "ecriture"] }],
   ["Parametre", { modifiables: ["ecriture"] }],
+  [
+    "Document",
+    {
+      quand: `OLD."numero" IS NOT NULL`,
+      modifiables: ["statut", "pdfPath", "clientId", "updatedAt", "ecriture"],
+      completables: ["destinataire", "categorieClient"],
+      message: "Document émis : il ne se modifie plus. Pour une facture, faire un avoir puis une nouvelle facture ; pour un devis, le refaire.",
+    },
+  ],
+  [
+    "NumeroDocument",
+    {
+      modifiables: ["type", "documentId", "destinataire", "montant", "note", "ecriture"],
+      message: "Un numéro inscrit au registre ne change pas : seuls ses compléments se renseignent.",
+    },
+  ],
 ]);
 
 export function messageImmuabilite(nomModele: string): string {

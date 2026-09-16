@@ -142,13 +142,25 @@ export type DonneesDocumentPdf = {
   lignes: LigneDocument[];
   acomptePct: number | null;
   noteMl: boolean;
-  client: { nom: string; adresse: string; codePostal: string; ville: string };
+  client: { nom: string; adresse: string; codePostal: string; ville: string; siret?: string | null };
+  /**
+   * Mentions légales figées à l'émission (échéance, pénalités et indemnité
+   * pour un professionnel, référence de la facture pour un avoir). null :
+   * document émis avant le gel des mentions, rendu comme à l'époque.
+   */
+  mentions?: string[] | null;
 };
 
 function puces(donnees: DonneesDocumentPdf): string[] {
   const { totalTtcCentimes, acompteCentimes, soldeCentimes } = calculerMontants(donnees.lignes, donnees.acomptePct);
   const modes = "Paiement par virement – chèque ou espèces";
+  if (donnees.type === "AVOIR") {
+    return [`Montant de l'avoir : ${formatCentimes(totalTtcCentimes)} TTC`, ...(donnees.mentions ?? [])];
+  }
   if (donnees.type === "FACTURE") {
+    if (donnees.mentions) {
+      return [`Montant total à régler : ${formatCentimes(totalTtcCentimes)} TTC`, ...donnees.mentions, modes];
+    }
     return [`Montant total à régler : ${formatCentimes(totalTtcCentimes)} TTC`, "Paiement à réception de facture", modes];
   }
   const reglement =
@@ -183,12 +195,12 @@ function Cellule({
 export function DocumentPdf({ donnees, compact }: { donnees: DonneesDocumentPdf; compact: boolean }) {
   const marges = compact ? MARGES.compact : MARGES.normal;
   const { totalHtCentimes, totalTtcCentimes } = calculerMontants(donnees.lignes, donnees.acomptePct);
-  const libelleType = donnees.type === "DEVIS" ? "DEVIS" : "FACTURE";
+  const libelleType = donnees.type;
   const largeurLibelleTotal = LARGEUR_DESIGNATION + LARGEUR_QTE + LARGEUR_PU;
 
   return (
     <Document
-      title={pourPdf(`${libelleType === "DEVIS" ? "Devis" : "Facture"} ${donnees.numero} — ${donnees.client.nom}`)}
+      title={pourPdf(`${{ DEVIS: "Devis", FACTURE: "Facture", AVOIR: "Avoir" }[libelleType]} ${donnees.numero} — ${donnees.client.nom}`)}
       author={EMETTEUR.raisonSociale}
       creator="CRM CoverSwap"
       producer="CRM CoverSwap"
@@ -229,6 +241,7 @@ export function DocumentPdf({ donnees, compact }: { donnees: DonneesDocumentPdf;
           <Text>{pourPdf(donnees.client.nom)}</Text>
           <Text>{pourPdf(donnees.client.adresse)}</Text>
           <Text>{pourPdf(`${donnees.client.codePostal} ${donnees.client.ville}`)}</Text>
+          {donnees.client.siret ? <Text>{pourPdf(`SIRET : ${donnees.client.siret}`)}</Text> : null}
         </View>
         <Text style={s.objet}>
           <Text style={s.gras}>Objet : </Text>
@@ -317,7 +330,7 @@ export function DocumentPdf({ donnees, compact }: { donnees: DonneesDocumentPdf;
         ) : null}
 
         <View style={s.conditions} wrap={false}>
-          <Text style={s.conditionsTitre}>Conditions de règlement :</Text>
+          <Text style={s.conditionsTitre}>{donnees.type === "AVOIR" ? "Références de l'avoir :" : "Conditions de règlement :"}</Text>
           {puces(donnees).map((texte) => (
             <View key={texte} style={s.puce}>
               <View style={s.carre} />

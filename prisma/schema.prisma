@@ -352,27 +352,39 @@ model DossierEvenement {
 }
 
 model Document {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  dossierId    String
-  dossier      Dossier   @relation(fields: [dossierId], references: [id], onDelete: Restrict)
-  type         String // TypeDocument : DEVIS | FACTURE
-  numero       String? // attribué à la génération, jamais réutilisé (voir NUMEROTATION) ; null tant que BROUILLON
-  dateEmission DateTime? // fixée à la génération, avec le numéro
-  objet        String
-  lignes       String // JSON LigneDocument[] : prestations et lignes de section
-  totalHt      Float
-  acomptePct   Int? // 30 par défaut sur un devis, null sur une facture
-  noteMl       Boolean   @default(true)
-  pdfPath      String?
-  statut       String    @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE
-  archiveLe    DateTime? // archivage : rien ne se supprime
-  archiveMotif String?
-  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+  id                String     @id @default(cuid())
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  dossierId         String
+  dossier           Dossier    @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  type              String // TypeDocument : DEVIS | FACTURE | AVOIR
+  numero            String? // attribué à la génération, jamais réutilisé (voir NUMEROTATION) ; null tant que BROUILLON
+  dateEmission      DateTime? // fixée à la génération, avec le numéro
+  objet             String
+  lignes            String // JSON LigneDocument[] : prestations et lignes de section
+  totalHt           Float
+  acomptePct        Int? // 30 par défaut sur un devis, null sur une facture
+  noteMl            Boolean    @default(true)
+  pdfPath           String?
+  statut            String     @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE | REMPLACE | ANNULEE
+  // Figé à l'émission : un document émis ne se modifie plus (la base le refuse).
+  clientId          String? // client pérenne (suit les fusions)
+  client            Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  destinataire      String? // JSON : nom, adresse, code postal, ville, catégorie, SIRET, tels qu'imprimés
+  categorieClient   String? // PARTICULIER | PROFESSIONNEL | DONNEUR_ORDRE au jour de l'émission
+  mentions          String? // JSON string[] : mentions légales imprimées ; null = émis avant le gel des mentions
+  echeanceLe        DateTime? // facture : échéance imprimée
+  documentOrigineId String? // avoir : facture annulée ; devis refait : devis remplacé
+  documentOrigine   Document?  @relation("DocumentsLies", fields: [documentOrigineId], references: [id], onDelete: Restrict)
+  documentsLies     Document[] @relation("DocumentsLies")
+  motifAvoir        String? // avoir : pourquoi la facture est annulée
+  archiveLe         DateTime? // archivage : rien ne se supprime
+  archiveMotif      String?
+  ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@unique([type, numero])
   @@index([dossierId])
+  @@index([clientId])
 }
 
 model CompteurNumerotation {
@@ -563,6 +575,7 @@ model Client {
   leads              Lead[]
   prospects          Prospect[]
   dossiers           Dossier[]
+  documents          Document[]
   archiveLe          DateTime? // archivage : rien ne se supprime
   archiveMotif       String?
   ecriture           String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -638,4 +651,32 @@ model Parametre {
   ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([cle, valableDu])
+}
+
+// ─────────────────────────────────────────────
+// Registre des numéros (src/lib/dossiers/numerotation.ts)
+// Tout numéro de devis, de facture ou d'avoir émis, où que ce soit (numérotation
+// manuelle, ancien écran, module Dossiers), y a sa ligne : un numéro inscrit
+// n'est jamais réattribué. Lignes jamais supprimées ; seuls les compléments
+// (type, destinataire, montant, note, document lié) peuvent être renseignés.
+// ─────────────────────────────────────────────
+
+model NumeroDocument {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  cle          String    @unique // famille:année:rang, ex. « F:2026:12 », « :2026:38 »
+  numero       String // tel qu'imprimé
+  famille      String // préfixe : "" (série 2026 partagée puis devis), "F" (factures et avoirs), "FACT" (ancien écran)
+  annee        Int
+  rang         Int
+  type         String // DEVIS | FACTURE | AVOIR | INCONNU
+  origine      String // CRM | ANCIEN_CRM | MANUEL
+  documentId   String?   @unique
+  emisLe       DateTime?
+  destinataire String?
+  montant      Float?
+  note         String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([famille, annee, rang])
 }

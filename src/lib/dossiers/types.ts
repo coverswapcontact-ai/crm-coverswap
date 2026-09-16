@@ -57,6 +57,12 @@ export type DocumentVue = {
   noteMl: boolean;
   statut: StatutDocument;
   pdfUrl: string | null;
+  echeanceLe: string | null;
+  /** Avoir : facture annulée ; devis refait : devis remplacé. */
+  documentOrigine: { id: string; numero: string | null } | null;
+  /** Facture annulée : son avoir ; devis remplacé : le nouveau devis. */
+  documentsLies: { id: string; type: TypeDocument; numero: string | null }[];
+  motifAvoir: string | null;
 };
 
 export type DossierDetail = DossierResume & {
@@ -114,7 +120,7 @@ export type LeadTrouve = {
 
 export function faitsDepuisDetail(detail: DossierDetail): FaitsDossier {
   const genere = (type: TypeDocument) =>
-    detail.documents.some((document) => document.type === type && document.statut !== "BROUILLON");
+    detail.documents.some((document) => document.type === type && document.statut !== "BROUILLON" && document.statut !== "ANNULEE");
   return {
     etape: detail.etape,
     clientNom: detail.clientNom,

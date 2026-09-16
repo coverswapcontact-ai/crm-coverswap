@@ -63,7 +63,8 @@ export async function chargerEtatEtape(tx: Transaction, dossierId: string) {
     nbPhotos: lirePhotos(dossier.photos).length,
     dateChantier: dossier.dateChantier,
     aDevisGenere: dossier.documents.some((document) => document.type === "DEVIS"),
-    aFactureGeneree: dossier.documents.some((document) => document.type === "FACTURE"),
+    // Une facture annulée par un avoir ne compte plus : le dossier attend la nouvelle.
+    aFactureGeneree: dossier.documents.some((document) => document.type === "FACTURE" && document.statut !== "ANNULEE"),
   };
   const avantSortie = etapeAvantSortie(
     dossier.evenements

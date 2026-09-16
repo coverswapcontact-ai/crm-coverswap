@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowUpRight,
+  ChartColumn,
   CircleCheckBig,
   FolderKanban,
   Hash,
@@ -49,6 +50,7 @@ const PRINCIPALES: Entree[] = [
 
 // Écrans secondaires, dans le menu « Plus ».
 const SECONDAIRES: Entree[] = [
+  { href: "/synthese", libelle: "Synthèse", icone: ChartColumn },
   { href: "/prospection", libelle: "Prospection", icone: Radar },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },

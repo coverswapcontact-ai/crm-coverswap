@@ -781,3 +781,15 @@ model Depense {
   @@index([payeeLe])
   @@index([dossierId])
 }
+
+// Synthèse d'un mois écoulé, figée une fois et jamais recalculée (la base refuse
+// de la modifier). Sans nom de personne : clients et dossiers par identifiant.
+model InstantaneMensuel {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  mois      String   @unique // AAAA-MM
+  version   Int // VERSION_SYNTHESE au moment du gel
+  contenu   String // JSON Synthese
+  empreinte String // SHA-256 du contenu
+  ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+}

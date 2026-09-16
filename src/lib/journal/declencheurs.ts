@@ -67,6 +67,7 @@ export type RegleImmuabilite = {
 export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<string, RegleImmuabilite>([
   ["ConsentementMail", { modifiables: ["clientId", "ecriture"] }],
   ["Parametre", { modifiables: ["ecriture"] }],
+  ["InstantaneMensuel", { modifiables: ["ecriture"], message: "Un instantané mensuel est figé : il ne se recalcule ni ne se modifie." }],
   [
     "Document",
     {

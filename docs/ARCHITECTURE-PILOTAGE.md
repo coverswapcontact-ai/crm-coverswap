@@ -730,3 +730,75 @@ sans décision humaine, jamais validée en lot, jamais exécutée par un agent.
   l'ancien écran des devis.
 - Pas de suivi de lecture ni de réponse ici : c'est le rôle de l'agent mail.
 
+## 14. Synthèse, mois figés et alertes
+
+### Deux formats, une seule source
+
+`calculerSynthese(du, au)` (`src/lib/synthese/calcul.ts`) rend une synthèse
+**structurée** ; `redigerSynthese` en tire une **version rédigée** en
+français. La rédaction est un gabarit déterministe, sans modèle de langue :
+mêmes données, même texte, aucun coût, rien d'inventé. Exports : texte et
+JSON (`/api/synthese/export`).
+
+- **Commercial** : cohorte (dossiers ouverts dans la période, suivis jusqu'à
+  aujourd'hui : devis, signés, encaissés, perdus, taux de signature, par
+  source) et activité de la période (devis émis, signatures, factures, avoirs,
+  pertes) ; délais médians entre étapes ; écart moyen entre premier devis et
+  devis signé ; pertes par motif, par étape, concurrents et leur écart de prix.
+- **Finances** : encaissé (livre des recettes) par mois, par origine des
+  clients, par type de client, par département ; dépenses par catégorie ; marge
+  brute ; paniers moyens ; reste à encaisser ; marge des dossiers facturés.
+- **Clients** : nouveaux par origine et campagne ; recommandations et qui
+  recommande ; relations contre publicité payante (nouveaux clients et
+  encaissé) ; clients revenus ; anciens clients sans nouvelle depuis un an.
+- **Agent** : par auteur (agent mail, relances, doublons…) propositions,
+  validées, corrigées avant validation, rejetées, expirées, taux d'acceptation,
+  délai de décision ; motifs de rejet.
+- **Qualité des données** : écritures hors de l'application, dossiers sans
+  client, clients injoignables, sources inconnues, pertes sans concurrent,
+  dépenses à rattacher ou sans justificatif, et les points de `/finances`.
+- **Guide de lecture** intégré à l'écran : ce que dit chaque indicateur et ce
+  qu'il ne dit pas.
+
+### Aucun nom dans la synthèse
+
+La synthèse structurée désigne clients et dossiers par **identifiant** ; les
+noms sont résolus à l'affichage (`references.ts`). Le **mode anonymisé**
+remplace ces noms par des pseudonymes stables (« Client 3K7Q ») et retire les
+noms des alertes ; montants et répartitions restent exacts, les concurrents
+(entreprises) restent nommés.
+
+### Mois figés (`InstantaneMensuel`)
+
+Une tâche quotidienne fige chaque mois écoulé depuis le premier mois
+d'activité : la synthèse du mois est enregistrée **une fois** (avec son
+empreinte SHA-256) et la base refuse toute modification. Parce qu'elle ne
+contient aucun nom, un instantané reste compatible avec l'anonymisation d'un
+client. À la lecture, l'instantané est comparé à un recalcul du jour : un écart
+(encaissé, signatures, factures…) signale une saisie tardive ou une correction,
+à regarder avant une déclaration. Un mois dont les encaissements ne se
+calculent pas encore (règle de date des chèques manquante) n'est pas figé ; il
+le sera au passage suivant.
+
+Correctif trouvé en chemin : le livre des recettes ne tient compte que des
+encaissements qui peuvent mettre une ligne dans la période ; un vieux chèque
+sans règle de date bloquait sinon toutes les périodes suivantes.
+
+### Alertes (`alertes.ts`)
+
+Calculées à la demande, jamais stockées, les plus graves d'abord : devis sans
+réponse (au-delà de deux fois le délai de relance), factures impayées depuis
+plus de 30 jours (urgent au-delà de 60), seuil fiscal atteint à 80 % ou dépassé
+en projection, baisse des nouveaux dossiers (moins de la moitié de la moyenne
+des six mois précédents), acceptation des propositions de l'agent en baisse
+d'au moins 20 points, tâches de fond en échec, paramètres manquants. Ces seuils
+d'alerte sont des choix de lecture nommés dans le code, pas des règles
+fiscales.
+
+### Limites connues
+
+- Le reste à encaisser d'un instantané est celui du jour du gel, pas celui du
+  dernier jour du mois.
+- Les délais et taux sur de très petits nombres sont affichés avec leur effectif
+  (entre parenthèses) : en dessous de cinq, une indication, pas une tendance.
+

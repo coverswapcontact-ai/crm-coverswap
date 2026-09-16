@@ -16,7 +16,7 @@ import {
   type StatutConsentement,
 } from "./constantes";
 import { completerCoordonnees, creerClient, trouverClientParCoordonnees } from "./identification";
-import { nomAffichage, normaliserEmail, normaliserTelephone, siretValide } from "./normalisation";
+import { avertissementSiret, nomAffichage, normaliserEmail, normaliserTelephone } from "./normalisation";
 import type { ClientDetail, ClientResume, CoordonneeVue, LigneAcquisition } from "./types";
 
 const ETAPES_CLOSES = new Set(["PERDU", "ENCAISSE"]);
@@ -350,13 +350,17 @@ const champsClient = {
     .transform((valeur) => valeur || null),
   adresse: texteOuNull(200, "Adresse trop longue."),
   codePostal: z
-    .string("Code postal invalide : 5 chiffres attendus.")
+    .string("Code postal invalide.")
     .trim()
-    .refine((valeur) => valeur === "" || /^\d{5}$/.test(valeur), "Code postal invalide : 5 chiffres attendus.")
+    .max(10, "Code postal trop long : 10 caractères maximum.")
     .nullable()
     .transform((valeur) => valeur || null),
   ville: texteOuNull(80, "Ville trop longue."),
-  source: z.enum(SOURCES_CLIENT, "Source invalide."),
+  // Facultative : une source absente vaut « Inconnue » (signalée dans la qualité des données).
+  source: z
+    .enum(SOURCES_CLIENT, "Source invalide.")
+    .nullable()
+    .transform((valeur) => valeur ?? "INCONNUE"),
   sourceDetail: texteOuNull(160, "Précision trop longue."),
   campagne: texteOuNull(200, "Campagne trop longue."),
   publicite: texteOuNull(200, "Publicité trop longue."),
@@ -377,14 +381,20 @@ async function verifierRecommandeur(clientId: string | null, recommandeParId: st
   if (!recommandeur || recommandeur.archiveLe) throw new ErreurMetier("Client recommandeur introuvable ou archivé.", 404);
 }
 
-const SIRET_FAUX = "SIRET invalide : un chiffre est faux (clé de contrôle). Vérifie-le sur l'avis de situation ou dans l'annuaire.";
 const RAISON_SOCIALE_MANQUANTE = "Indique la raison sociale : pour un client pro, c'est l'entreprise qui est le client.";
 
-export async function modifierClient(clientId: string, modification: ModificationClient): Promise<void> {
+/** Une fiche se modifie, même archivée ; restent figées une fiche anonymisée (RGPD) et une fiche absorbée par une fusion. */
+async function ficheModifiable(clientId: string) {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
   if (client.anonymiseLe) throw new ErreurMetier(FICHE_ANONYMISEE, 409);
-  if (client.archiveLe) throw new ErreurMetier("Fiche archivée : la restaurer avant de la modifier.", 409);
+  if (client.fusionneDansId) throw new ErreurMetier("Fiche fusionnée dans une autre : c'est la fiche conservée qui se modifie.", 409);
+  return client;
+}
+
+/** Tout se modifie ; seul le nom reste exigé. Rend ce qui mérite d'être signalé (SIRET à la clé fausse). */
+export async function modifierClient(clientId: string, modification: ModificationClient): Promise<string[]> {
+  const client = await ficheModifiable(clientId);
   await verifierRecommandeur(clientId, modification.recommandeParId);
 
   const apres = <C extends "categorie" | "prenom" | "nomFamille" | "raisonSociale">(champ: C) =>
@@ -399,8 +409,8 @@ export async function modifierClient(clientId: string, modification: Modificatio
   if (modification.categorie === "PARTICULIER" && client.categorie !== "PARTICULIER" && !nomAffichage({ prenom: apres("prenom"), nomFamille: apres("nomFamille") })) {
     throw new ErreurMetier("Indique un prénom ou un nom : un particulier est une personne.", 400);
   }
-  // Seul un SIRET nouvellement saisi est contrôlé : une fiche ancienne reste modifiable.
-  if (modification.siret && modification.siret !== client.siret && !siretValide(modification.siret)) throw new ErreurMetier(SIRET_FAUX, 400);
+  // Un SIRET nouvellement saisi à la clé fausse est signalé, pas refusé.
+  const avertissements = modification.siret && modification.siret !== client.siret ? [avertissementSiret(modification.siret)].filter((texte): texte is string => Boolean(texte)) : [];
 
   const { premierContactLe, ...champs } = modification;
   const data: Prisma.ClientUncheckedUpdateInput = { ...champs };
@@ -408,6 +418,7 @@ export async function modifierClient(clientId: string, modification: Modificatio
   const nom = nomAffichage({ prenom: apres("prenom"), nomFamille: apres("nomFamille"), raisonSociale: apres("raisonSociale") });
   if (nom) data.nom = nom;
   await prisma.client.update({ where: { id: clientId }, data });
+  return avertissements;
 }
 
 export const schemaCreationClient = z.object({
@@ -425,14 +436,15 @@ export type CreationClient = z.output<typeof schemaCreationClient>;
  * professionnel ou un donneur d'ordre est une entité (raison sociale, SIRET),
  * sans prénom ni nom de personne.
  */
-export async function creerClientManuel(saisie: CreationClient): Promise<string> {
+export async function creerClientManuel(saisie: CreationClient): Promise<{ id: string; avertissements: string[] }> {
   const estPro = saisie.categorie !== "PARTICULIER";
   const entree: CreationClient = estPro
     ? { ...saisie, prenom: null, nomFamille: null }
     : { ...saisie, raisonSociale: null, siret: null };
   if (estPro && !nomAffichage({ raisonSociale: entree.raisonSociale })) throw new ErreurMetier(RAISON_SOCIALE_MANQUANTE, 400);
   if (!estPro && !nomAffichage(entree)) throw new ErreurMetier("Indique un prénom ou un nom.", 400);
-  if (entree.siret && !siretValide(entree.siret)) throw new ErreurMetier(SIRET_FAUX, 400);
+  const avertissements = [avertissementSiret(entree.siret)].filter((texte): texte is string => Boolean(texte));
+  if (entree.source === "INCONNUE") avertissements.push("Source non renseignée : elle manquera aux statistiques d'acquisition.");
   if (entree.email && !normaliserEmail(entree.email)) throw new ErreurMetier("Adresse e-mail invalide.", 400);
   if (entree.telephone && !normaliserTelephone(entree.telephone)) throw new ErreurMetier("Numéro de téléphone invalide.", 400);
   await verifierRecommandeur(null, entree.recommandeParId);
@@ -447,7 +459,7 @@ export async function creerClientManuel(saisie: CreationClient): Promise<string>
       throw new ErreurMetier(`Un client a déjà cet e-mail ou ce numéro : « ${existant.nom} ».`, 409, { clientExistantId: existant.id });
     }
   }
-  return prisma.$transaction(async (tx) => {
+  const id = await prisma.$transaction(async (tx) => {
     const cree = await creerClient(tx, {
       ...entree,
       premierContactLe: entree.premierContactLe ? dateDepuisJour(entree.premierContactLe) : new Date(),
@@ -467,6 +479,7 @@ export async function creerClientManuel(saisie: CreationClient): Promise<string>
     }
     return cree.id;
   });
+  return { id, avertissements };
 }
 
 export async function ajouterCoordonnee(
@@ -475,9 +488,7 @@ export async function ajouterCoordonnee(
   valeur: string,
   libelle: string | null
 ): Promise<void> {
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { archiveLe: true } });
-  if (!client) throw new ErreurMetier("Client introuvable.", 404);
-  if (client.archiveLe) throw new ErreurMetier("Fiche archivée : la restaurer avant de la modifier.", 409);
+  await ficheModifiable(clientId);
   if (nature === "email") {
     const adresse = normaliserEmail(valeur);
     if (!adresse) throw new ErreurMetier("Adresse e-mail invalide.", 400);
@@ -530,6 +541,48 @@ export async function archiverCoordonnee(
   });
 }
 
+/**
+ * Corrige une coordonnée (valeur mal saisie, libellé) sans l'archiver : le
+ * journal garde l'ancienne valeur. Une adresse ou un numéro déjà sur la fiche
+ * n'est pas dupliqué.
+ */
+export async function modifierCoordonnee(
+  clientId: string,
+  nature: "email" | "telephone",
+  coordonneeId: string,
+  entree: { valeur?: string; libelle?: string | null }
+): Promise<void> {
+  await ficheModifiable(clientId);
+  await prisma.$transaction(async (tx) => {
+    if (nature === "email") {
+      const ligne = await tx.clientEmail.findFirst({ where: { id: coordonneeId, clientId } });
+      if (!ligne) throw new ErreurMetier("Adresse introuvable.", 404);
+      const adresse = entree.valeur !== undefined ? normaliserEmail(entree.valeur) : ligne.adresse;
+      if (!adresse) throw new ErreurMetier("Adresse e-mail illisible : corrige-la.", 400);
+      if (adresse !== ligne.adresse && (await tx.clientEmail.findFirst({ where: { clientId, adresse, id: { not: ligne.id } } }))) {
+        throw new ErreurMetier("Cette adresse est déjà sur la fiche.", 409);
+      }
+      await tx.clientEmail.update({ where: { id: ligne.id }, data: { adresse, ...(entree.libelle !== undefined ? { libelle: entree.libelle || null } : {}) } });
+    } else {
+      const ligne = await tx.clientTelephone.findFirst({ where: { id: coordonneeId, clientId } });
+      if (!ligne) throw new ErreurMetier("Numéro introuvable.", 404);
+      const numero = entree.valeur !== undefined ? normaliserTelephone(entree.valeur) : ligne.numero;
+      if (!numero) throw new ErreurMetier("Numéro illisible : il faut au moins 9 chiffres.", 400);
+      if (numero !== ligne.numero && (await tx.clientTelephone.findFirst({ where: { clientId, numero, id: { not: ligne.id } } }))) {
+        throw new ErreurMetier("Ce numéro est déjà sur la fiche.", 409);
+      }
+      await tx.clientTelephone.update({
+        where: { id: ligne.id },
+        data: {
+          numero,
+          ...(entree.valeur !== undefined ? { saisi: entree.valeur.trim().slice(0, 40) } : {}),
+          ...(entree.libelle !== undefined ? { libelle: entree.libelle || null } : {}),
+        },
+      });
+    }
+  });
+}
+
 export async function definirPrincipale(clientId: string, nature: "email" | "telephone", coordonneeId: string): Promise<void> {
   await prisma.$transaction(async (tx) => {
     if (nature === "email") {
@@ -571,17 +624,17 @@ export function consentementCourant(consentements: { statut: StatutConsentement;
   return consentements[0]?.statut ?? null;
 }
 
-export async function archiverClient(clientId: string, motif: string): Promise<void> {
+/** Archive la fiche ; des dossiers encore en cours sont signalés (ils restent ouverts et visibles dans Dossiers). */
+export async function archiverClient(clientId: string, motif: string): Promise<string[]> {
   const client = await prisma.client.findUnique({
     where: { id: clientId },
     select: { archiveLe: true, dossiers: { where: { archiveLe: null }, select: { etape: true } } },
   });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
   if (client.archiveLe) throw new ErreurMetier("Fiche déjà archivée.", 409);
-  if (client.dossiers.some((dossier) => !ETAPES_CLOSES.has(dossier.etape))) {
-    throw new ErreurMetier("Ce client a des dossiers en cours : clos-les ou archive-les d'abord.", 409);
-  }
   await prisma.client.update({ where: { id: clientId }, data: { archiveLe: new Date(), archiveMotif: motif } });
+  const enCours = client.dossiers.filter((dossier) => !ETAPES_CLOSES.has(dossier.etape)).length;
+  return enCours > 0 ? [`${enCours} dossier${enCours > 1 ? "s" : ""} en cours reste${enCours > 1 ? "nt" : ""} ouvert${enCours > 1 ? "s" : ""} dans Dossiers.`] : [];
 }
 
 export async function restaurerClient(clientId: string): Promise<void> {

@@ -52,13 +52,23 @@ export function siretValide(saisie: string | null | undefined): boolean {
   return siret.startsWith("356000000") && chiffres.reduce((somme, chiffre) => somme + chiffre, 0) % 5 === 0;
 }
 
-/** Message sous un champ SIRET en cours de saisie ; null s'il est vide ou plausible. `complet` : la saisie est finie. */
+/**
+ * Erreur sous un champ SIRET en cours de saisie : ce qui n'est pas un SIRET
+ * (14 chiffres) ne s'enregistre pas ; null s'il est vide ou bien formé.
+ * `complet` : la saisie est finie.
+ */
 export function erreurSaisieSiret(saisie: string, complet: boolean): string | null {
   const chiffres = saisie.replace(/\s/g, "");
   if (!chiffres) return null;
   if (!/^\d*$/.test(chiffres) || chiffres.length > 14) return "14 chiffres attendus.";
   if (chiffres.length < 14) return complet ? "14 chiffres attendus." : null;
-  return siretValide(chiffres) ? null : "Un chiffre est faux (clé de contrôle).";
+  return null;
+}
+
+/** Remarque sur un SIRET bien formé dont la clé est fausse : signalé, gardé tel quel. */
+export function avertissementSiret(saisie: string | null | undefined): string | null {
+  const chiffres = (saisie ?? "").replace(/\s/g, "");
+  return /^\d{14}$/.test(chiffres) && !siretValide(chiffres) ? "Clé de contrôle fausse : un chiffre est sans doute mal saisi. Le SIRET est gardé tel quel." : null;
 }
 
 /** « 353 033 764 00021 » : SIREN en trois groupes, puis le numéro d'établissement. */

@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
-import { ArrowLeft, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
+import { CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
 import { toast } from "sonner";
 import { echeanceDe, estAFaire } from "@/lib/dossiers/pilotage";
 import { estEtapeSortie } from "@/lib/dossiers/regles";
@@ -157,15 +156,7 @@ export default function DossiersPilotage({
 
   return (
     <div className="mx-auto w-full max-w-[1680px] px-5 py-6 md:px-8 md:py-8">
-      <Link
-        href="/dashboard"
-        className={cn("inline-flex items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}
-      >
-        <ArrowLeft size={13} aria-hidden />
-        CRM
-      </Link>
-
-      <header className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         <div>
           <h1 className="text-[18px] font-medium tracking-tight text-[#F2F3F5]">Dossiers en cours</h1>
           <p className="mt-1 text-[13px] text-[#9CA3AF]">

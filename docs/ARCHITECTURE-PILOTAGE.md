@@ -575,3 +575,64 @@ et ne crée rien sans date : ces cas sont comptés, à saisir à la main.
   la facture finale. **À faire valider par le comptable**, en particulier pour
   les clients professionnels.
 
+## 11. Livre des recettes et tableau des finances
+
+### Le livre se calcule, il ne se tient pas
+
+Le livre des recettes (`src/lib/finances/livre.ts`) est **recalculé à chaque
+lecture** depuis les encaissements : rien n'y est saisi, il se reconstruit à
+l'identique et ne peut pas diverger de ce qui a été enregistré. Chaque ligne
+porte ce qu'exige un livre de micro-entrepreneur : date d'encaissement, client,
+nature de la prestation (objet du chantier), mode de règlement, pièces
+justificatives (devis et factures réglés).
+
+- **Date d'une recette** : sa réception ; pour un chèque, la règle du paramètre
+  `DATE_RECETTE_CHEQUE` en vigueur à sa réception (à la réception, ou au crédit
+  sur le compte). Tant que la règle n'est pas choisie, aucun chiffre qui en
+  dépend ne s'affiche : rien n'est supposé.
+- **Contre-passation, jamais de rature** : un encaissement déjà compté puis
+  annulé ou rejeté garde sa ligne et reçoit une ligne négative à la date de
+  l'annulation ou du rejet. Une période passée, peut-être déjà déclarée, n'est
+  jamais réécrite : la correction tombe dans la période où elle a lieu. C'est
+  la pratique comptable ; le prix est un couple +X / −X visible pour une coquille
+  corrigée le jour même.
+- Export CSV pour le comptable (`/api/finances/livre?annee=…`) : points-virgules,
+  montants à la française, UTF-8 avec BOM pour Excel.
+
+### Le tableau `/finances`
+
+- Encaissé de l'année (et de l'année précédente), du mois, par mois.
+- **URSSAF** : la période en cours et la précédente, selon
+  `PERIODICITE_DECLARATION`, avec la date limite de déclaration (dernier jour du
+  mois qui suit la période). Chaque recette est multipliée par les taux **en
+  vigueur à sa date** (cotisations, CFP, versement libératoire si l'option est
+  prise) ; un arrondi par jeu de taux. Présenté comme une estimation : l'URSSAF
+  calcule le montant exact.
+- **Seuils** : chiffre d'affaires encaissé de l'année face aux seuils de
+  franchise de TVA et au plafond micro, avec une projection au rythme actuel
+  (à partir de 30 jours de recul). Les règles de dépassement (année précédente,
+  seuil majoré) restent à lire avec le comptable ; le tableau n'en tire aucune
+  conclusion à sa place.
+- **Reste à encaisser** : factures actives non réglées, du CRM comme émises
+  ailleurs (dès que leur montant est au registre), avec leur retard depuis
+  l'échéance (à réception pour un particulier) ; un paiement s'y enregistre
+  d'un geste.
+- **Chèques à créditer**, avec crédit et rejet sur place.
+- **À corriger pour des chiffres justes** : paiements repris sans mode de
+  règlement, paiements de l'ancien écran sans date, factures hors CRM sans
+  montant, dossiers « Encaissé » sans paiement, sommes non imputées, chèques non
+  crédités depuis plus de 15 jours. Les chiffres ne cachent pas leurs trous.
+- Chaque section qui dépend d'un paramètre absent le dit et ouvre sa saisie ;
+  les autres s'affichent quand même.
+
+L'ancien écran `/finances` (calculé sur les factures « soldées » de l'ancien
+écran) est remplacé : il comptait des factures, pas de l'argent reçu.
+
+### Limites connues
+
+- Pas d'export PDF du livre (le CSV suffit au comptable ; un PDF viendra si
+  besoin).
+- Les instantanés mensuels figés (ce qui a été déclaré) arrivent avec la vue de
+  synthèse : ils permettront de montrer l'écart entre le déclaré et le
+  recalculé quand une recette est saisie en retard.
+

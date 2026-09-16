@@ -138,6 +138,8 @@ export async function declarerNumero(entree: z.output<typeof schemaDeclaration>)
 
 export const schemaComplement = z.object({
   type: z.enum(TYPES_NUMERO, "Type invalide.").optional(),
+  /** Date d'émission d'un numéro inscrit sans date : renseignée une fois. */
+  emisLe: z.string().refine(estJourValide, "Date d'émission invalide.").nullable().optional(),
   destinataire: z.string().trim().max(160).nullable().optional(),
   montant: z.number().min(0).max(10_000_000).nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
@@ -151,8 +153,13 @@ export const schemaComplement = z.object({
 export async function completerNumero(id: string, entree: z.output<typeof schemaComplement>): Promise<void> {
   const ligne = await prisma.numeroDocument.findUnique({ where: { id } });
   if (!ligne) throw new ErreurMetier("Numéro introuvable au registre.", 404);
-  if (ligne.origine === "CRM" && (entree.type !== undefined || entree.destinataire !== undefined || entree.montant !== undefined)) {
+  if (ligne.origine === "CRM" && (entree.type !== undefined || entree.destinataire !== undefined || entree.montant !== undefined || entree.emisLe)) {
     throw new ErreurMetier("Ce numéro a été émis par le CRM : nature, destinataire et montant se lisent sur son document. Seule la note se complète.", 409);
   }
-  await prisma.numeroDocument.update({ where: { id }, data: entree });
+  const { emisLe, ...complements } = entree;
+  if (emisLe && ligne.emisLe) throw new ErreurMetier("La date d'émission de ce numéro est déjà renseignée : elle ne change plus.", 409);
+  await prisma.numeroDocument.update({
+    where: { id },
+    data: { ...complements, ...(emisLe ? { emisLe: dateDepuisJour(emisLe) } : {}) },
+  });
 }

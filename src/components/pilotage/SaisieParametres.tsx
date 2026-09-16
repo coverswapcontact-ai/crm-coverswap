@@ -107,6 +107,13 @@ export function useParametresExiges() {
     }
   }, []);
 
+  /** Ouvre la saisie de ces paramètres ; `apres` est relancée une fois qu'ils sont enregistrés. */
+  const demander = useCallback((cles: CleParametre[], apres?: () => Promise<void>) => {
+    setManquants(cles);
+    setSaisies(Object.fromEntries(cles.map((cle) => [cle, saisieVide()])));
+    setReprise(() => apres ?? null);
+  }, []);
+
   async function enregistrer() {
     if (!manquants) return;
     setEnvoi(true);
@@ -156,5 +163,5 @@ export function useParametresExiges() {
     </Modale>
   );
 
-  return { executer, modale };
+  return { executer, demander, modale };
 }

@@ -153,3 +153,21 @@ export async function parametresPourEcran(maintenant: Date = new Date()): Promis
     };
   });
 }
+
+/**
+ * Toutes les valeurs datées de quelques paramètres, lues en une fois : pour
+ * appliquer à chaque recette le taux ou la règle en vigueur à sa date.
+ */
+export async function historiqueParametres<C extends CleParametre>(
+  cles: readonly C[]
+): Promise<(cle: C, date: Date) => ValeurParametre | null> {
+  const lignes = await prisma.parametre.findMany({
+    where: { cle: { in: [...cles] } },
+    orderBy: [{ valableDu: "desc" }, { createdAt: "desc" }],
+    select: { cle: true, valeur: true, valableDu: true },
+  });
+  return (cle, date) => {
+    const ligne = lignes.find((candidate) => candidate.cle === cle && candidate.valableDu <= date);
+    return ligne ? lireValeur(ligne.valeur) : null;
+  };
+}

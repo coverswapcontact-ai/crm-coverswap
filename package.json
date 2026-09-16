@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "prisma generate && next build",
-    "start": "prisma db push --skip-generate --accept-data-loss && next start -p ${PORT:-3001}",
+    "start": "node scripts/avant-demarrage.mjs && prisma db push --skip-generate && next start -p ${PORT:-3001}",
     "lint": "eslint",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "base:sauvegarder": "node scripts/sauvegarder-base.mjs manuelle",
+    "base:pousser": "node scripts/avant-demarrage.mjs && prisma db push && tsx scripts/preparer-base.ts",
     "db:seed:prospection": "tsx prisma/seed-prospection.ts",
     "prospection:sourcing": "tsx scripts/sourcing-prospection.ts",
     "prospection:scoring": "tsx scripts/scoring-prospection.ts",

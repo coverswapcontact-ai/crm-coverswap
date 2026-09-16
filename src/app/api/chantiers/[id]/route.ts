@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
+import { ERREUR_MOTIF_ARCHIVAGE, motifDArchivage } from "@/lib/journal/archivage";
 import { z } from "zod/v4";
 
 const updateChantierSchema = z.object({
@@ -84,13 +85,23 @@ export async function PUT(
   }
 }
 
+/** Archive le chantier et ses commandes (rien ne se supprime) : corps JSON { motif }. */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    await prisma.chantier.delete({ where: { id } });
+    const motif = await motifDArchivage(request);
+    if (!motif) return NextResponse.json({ error: ERREUR_MOTIF_ARCHIVAGE }, { status: 400 });
+    const archiveLe = new Date();
+    await prisma.$transaction([
+      prisma.chantier.update({ where: { id }, data: { archiveLe, archiveMotif: motif } }),
+      prisma.commande.updateMany({
+        where: { chantierId: id, archiveLe: null },
+        data: { archiveLe, archiveMotif: `Chantier archivé : ${motif}` },
+      }),
+    ]);
     revalidatePath("/chantiers");
     revalidatePath("/commandes");
     revalidatePath("/dashboard");
@@ -98,7 +109,7 @@ export async function DELETE(
   } catch (error) {
     console.error("DELETE /api/chantiers/[id] error:", error);
     return NextResponse.json(
-      { error: "Erreur lors de la suppression du chantier" },
+      { error: "Erreur lors de l'archivage du chantier" },
       { status: 500 }
     );
   }

@@ -32,8 +32,8 @@ import {
   lireFichier,
   lireLignes,
   lirePhotos,
-  supprimerFichier,
-  supprimerFichiersDossier,
+  archiverFichier,
+  archiverFichiersDossier,
   typeMimePhoto,
   verifierPhoto,
 } from "./stockage";
@@ -307,10 +307,16 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
     for (const photo of photos) chemins.push(await enregistrerPhoto(dossier.id, photo));
     await prisma.dossier.update({ where: { id: dossier.id }, data: { photos: JSON.stringify(chemins) } });
   } catch (erreur) {
-    await prisma.dossier.delete({ where: { id: dossier.id } }).catch((suppression: unknown) => {
-      console.error("[dossiers] annulation de la création impossible :", suppression);
-    });
-    await supprimerFichiersDossier(dossier.id).catch(() => {});
+    // Rien ne se supprime : la création interrompue reste au journal, archivée.
+    await prisma.dossier
+      .update({
+        where: { id: dossier.id },
+        data: { archiveLe: new Date(), archiveMotif: "Création interrompue : photos non enregistrées" },
+      })
+      .catch((archivage: unknown) => {
+        console.error("[dossiers] archivage de la création interrompue impossible :", archivage);
+      });
+    await archiverFichiersDossier(dossier.id, "creation-interrompue").catch(() => {});
     throw erreur;
   }
 
@@ -411,7 +417,7 @@ export async function ajouterPhoto(dossierId: string, fichier: File): Promise<Ph
       return { id: idPhoto(chemin), url: urlPhoto(dossierId, chemin), type: typeMimePhoto(chemin) };
     }
   }
-  await supprimerFichier(chemin).catch(() => {});
+  await archiverFichier(chemin, "photo-non-rattachee").catch(() => {});
   throw new ErreurMetier("Les photos ont changé entre-temps : réessaie.", 409);
 }
 
@@ -423,7 +429,7 @@ export async function supprimerPhoto(dossierId: string, photoId: string): Promis
   if (!(await remplacerPhotos(dossierId, brut, chemins.filter((c) => c !== chemin)))) {
     throw new ErreurMetier("Les photos ont changé entre-temps : recharge le dossier.", 409);
   }
-  await supprimerFichier(chemin);
+  await archiverFichier(chemin, "photo-retiree");
 }
 
 export async function lirePhoto(dossierId: string, photoId: string): Promise<{ contenu: Buffer; type: string }> {

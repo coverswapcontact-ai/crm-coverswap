@@ -1,5 +1,5 @@
-import type { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { ecritureCourante } from "@/lib/journal/extension";
+import prisma, { type Transaction } from "@/lib/prisma";
 import { AMORCES_COMPTEURS, NUMEROTATION, type TypeDocument } from "./constants";
 import { anneeParis } from "./dates";
 
@@ -22,16 +22,19 @@ function amorce(compteur: string, annee: number): number {
  * et l'index unique Document(type, numero) refuse un doublon).
  */
 export async function attribuerNumero(
-  tx: Prisma.TransactionClient,
+  tx: Transaction,
   type: TypeDocument,
   dateEmission: Date
 ): Promise<string> {
   const { compteur } = NUMEROTATION[type];
   const annee = anneeParis(dateEmission);
+  // SQL brut : la colonne `ecriture` est posée à la main pour que le journal
+  // attribue l'incrément à son auteur.
+  const ecriture = await ecritureCourante();
   const lignes = await tx.$queryRaw<{ valeur: number | bigint }[]>`
-    INSERT INTO "CompteurNumerotation" ("serie", "annee", "valeur")
-    VALUES (${compteur}, ${annee}, ${amorce(compteur, annee) + 1})
-    ON CONFLICT ("serie", "annee") DO UPDATE SET "valeur" = "valeur" + 1
+    INSERT INTO "CompteurNumerotation" ("serie", "annee", "valeur", "ecriture")
+    VALUES (${compteur}, ${annee}, ${amorce(compteur, annee) + 1}, ${ecriture})
+    ON CONFLICT ("serie", "annee") DO UPDATE SET "valeur" = "valeur" + 1, "ecriture" = excluded."ecriture"
     RETURNING "valeur"`;
   const valeur = Number(lignes[0]?.valeur);
   if (!Number.isInteger(valeur) || valeur < 1) {

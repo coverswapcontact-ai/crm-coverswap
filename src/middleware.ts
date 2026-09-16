@@ -1,5 +1,6 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+import { ENTETE_ORIGINE, ENTETE_REQUETE } from "@/lib/journal/entetes";
 
 /* ────────────────────────────────────────────────────────────
    Rate limiting en mémoire (reset sur cold start — acceptable)
@@ -111,8 +112,15 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  /* 5. Headers sécurité + noindex global */
-  const res = NextResponse.next();
+  /* 5. Origine de la requête, pour le journal des modifications. Toute valeur
+        envoyée par le navigateur est écrasée : ces en-têtes datent et
+        regroupent les écritures, ils n'identifient personne. */
+  const entetesRequete = new Headers(request.headers);
+  entetesRequete.set(ENTETE_ORIGINE, `${request.method} ${pathname}`);
+  entetesRequete.set(ENTETE_REQUETE, crypto.randomUUID());
+
+  /* 6. Headers sécurité + noindex global */
+  const res = NextResponse.next({ request: { headers: entetesRequete } });
   res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");

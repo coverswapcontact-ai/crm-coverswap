@@ -32,31 +32,40 @@ model Lead {
   chantier         Chantier?
   simulations      Simulation[]
   dossiers         Dossier[]
+  archiveLe        DateTime? // archivage : rien ne se supprime
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Simulation {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now())
-  leadId          String
-  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  source          String   @default("SITE_SIMULATEUR")
-  referenceChoisie String?
-  mlEstimes       Float?
-  prixDevis       Float?
-  lienSimulation  String?
-  imageBeforePath String?
-  imageAfterPath  String?
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  leadId            String
+  lead              Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  source            String    @default("SITE_SIMULATEUR")
+  referenceChoisie  String?
+  mlEstimes         Float?
+  prixDevis         Float?
+  lienSimulation    String?
+  imageBeforePath   String?
+  imageAfterPath    String?
   imageOriginalPath String?
-  notes           String?
+  notes             String?
+  archiveLe         DateTime? // archivage : rien ne se supprime
+  archiveMotif      String?
+  ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Interaction {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  type      String
-  contenu   String
-  leadId    String
-  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  type         String
+  contenu      String
+  leadId       String
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Devis {
@@ -66,24 +75,25 @@ model Devis {
   updatedAt            DateTime @updatedAt
   expiresAt            DateTime
   statut               String   @default("BROUILLON")
-  reference            String   // code libre ex "K1"
-  nomReference         String?  // nom commercial ex "Black mat"
+  reference            String // code libre ex "K1"
+  nomReference         String? // nom commercial ex "Black mat"
   gamme                String   @default("ESSENTIAL") // GammeCode
   complexite           Int      @default(1) // 1=standard, 2=+10%, 3=+20%
   mlTotal              Float
   prixVenteHTml        Float    @default(0) // prix vente unitaire HT/ml
-  prixMatiere          Float    // coût matière TTC réel (pour marge interne)
-  prixVente            Float    // total vente client (= TTC pour CoverSwap 293B)
+  prixMatiere          Float // coût matière TTC réel (pour marge interne)
+  prixVente            Float // total vente client (= TTC pour CoverSwap 293B)
   margeNette           Float
   fraisDeplacement     Float    @default(0)
   acompte30            Float
   solde70              Float
-  objet                String?  // "Rénovation par covering meuble coiffeur"
+  objet                String? // "Rénovation par covering meuble coiffeur"
   lignesAdditionnelles String   @default("[]") // JSON LigneAdditionnelle[]
   notesInternes        String?
   leadId               String
   lead                 Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   facture              Facture?
+  ecriture             String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Facture {
@@ -99,6 +109,7 @@ model Facture {
   soldeDate    DateTime?
   devisId      String    @unique
   devis        Devis     @relation(fields: [devisId], references: [id], onDelete: Cascade)
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Chantier {
@@ -119,6 +130,9 @@ model Chantier {
   leadId           String     @unique
   lead             Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
   commandes        Commande[]
+  archiveLe        DateTime? // archivage : rien ne se supprime
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Commande {
@@ -136,15 +150,21 @@ model Commande {
   dateReceptionReelle  DateTime?
   chantierId           String
   chantier             Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  archiveLe            DateTime? // archivage : rien ne se supprime
+  archiveMotif         String?
+  ecriture             String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Objectif {
-  id              String   @id @default(cuid())
-  periode         String   @unique
+  id              String    @id @default(cuid())
+  periode         String    @unique
   caMensuel       Float
   nombreChantiers Int
   tauxConversion  Float
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
+  archiveLe       DateTime? // archivage : rien ne se supprime
+  archiveMotif    String?
+  ecriture        String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 // ─────────────────────────────────────────────
@@ -154,14 +174,17 @@ model Objectif {
 // ─────────────────────────────────────────────
 
 model AgentProfile {
-  id        String     @id @default(cuid())
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  slug      String     @unique // "hotels" | "restaurants"
-  nom       String
-  actif     Boolean    @default(true)
-  config    String     @default("{}") // JSON AgentProfileConfig : typesGooglePlaces, motsClesSignaux, blacklistMarques, angleVente, quotaJournalier
-  prospects Prospect[]
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  slug         String     @unique // "hotels" | "restaurants"
+  nom          String
+  actif        Boolean    @default(true)
+  config       String     @default("{}") // JSON AgentProfileConfig : typesGooglePlaces, motsClesSignaux, blacklistMarques, angleVente, quotaJournalier
+  prospects    Prospect[]
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }
 
 model Prospect {
@@ -185,16 +208,19 @@ model Prospect {
   anneeCreation   Int?
   statut          String             @default("SOURCE") // StatutProspect : SOURCE | QUALIFIE | ECARTE | CONTACTE | RELANCE | REPONDU | RDV | CLIENT | OPT_OUT
   score           Int                @default(0)
-  scoreDetails    String?            // JSON : décomposition du score par signal
-  signalPrincipal String?            // citation d'avis ou fait saillant détecté
-  angleSuggere    String?            // angle d'approche proposé pour l'email
-  avisBruts       String?            // JSON AvisBrut[] : avis Google bruts (servira au scoring étape 3)
-  fermetureHebdo  String?            // jour(s) de fermeture hebdo ex. "lundi" ou "dimanche, lundi" — null si 7j/7 ou inconnu
+  scoreDetails    String? // JSON : décomposition du score par signal
+  signalPrincipal String? // citation d'avis ou fait saillant détecté
+  angleSuggere    String? // angle d'approche proposé pour l'email
+  avisBruts       String? // JSON AvisBrut[] : avis Google bruts (servira au scoring étape 3)
+  fermetureHebdo  String? // jour(s) de fermeture hebdo ex. "lundi" ou "dimanche, lundi" — null si 7j/7 ou inconnu
   optOut          Boolean            @default(false)
   optOutAt        DateTime?
   emailDrafts     EmailDraft[]
   activites       ProspectActivity[]
   dossiers        Dossier[]
+  archiveLe       DateTime? // archivage : rien ne se supprime
+  archiveMotif    String?
+  ecriture        String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([agentProfileId, statut])
   @@index([score])
@@ -210,10 +236,13 @@ model EmailDraft {
   sujet            String
   corps            String
   statut           String    @default("BROUILLON") // StatutEmailDraft : BROUILLON | VALIDE | EDITE | REJETE | ENVOYE
-  corpsOriginal    String?   // version IA avant édition humaine (boucle de feedback)
+  corpsOriginal    String? // version IA avant édition humaine (boucle de feedback)
   envoyeAt         DateTime?
   ouvertAt         DateTime?
   reponduAt        DateTime?
+  archiveLe        DateTime? // archivage : rien ne se supprime
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([statut])
 }
@@ -223,8 +252,9 @@ model ProspectActivity {
   createdAt  DateTime @default(now())
   prospectId String
   prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
-  type       String   // TypeActivite : SOURCING | SCORING | DRAFT_CREE | VALIDATION | EDITION | ENVOI | OUVERTURE | REPONSE | OPT_OUT | NOTE
-  details    String?  // JSON : payload libre selon le type d'activité
+  type       String // TypeActivite : SOURCING | SCORING | DRAFT_CREE | VALIDATION | EDITION | ENVOI | OUVERTURE | REPONSE | OPT_OUT | NOTE
+  details    String? // JSON : payload libre selon le type d'activité
+  ecriture   String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([prospectId, createdAt])
 }
@@ -262,18 +292,24 @@ model Dossier {
   notes               DossierNote[]
   evenements          DossierEvenement[]
   documents           Document[]
+  archiveLe           DateTime? // archivage : rien ne se supprime
+  archiveMotif        String?
+  ecriture            String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([etape])
   @@index([prochaineActionDate])
 }
 
 model DossierNote {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  dossierId String
-  dossier   Dossier  @relation(fields: [dossierId], references: [id], onDelete: Cascade)
-  etape     String // étape à laquelle la note se rattache
-  contenu   String
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  dossierId    String
+  dossier      Dossier   @relation(fields: [dossierId], references: [id], onDelete: Cascade)
+  etape        String // étape à laquelle la note se rattache
+  contenu      String
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([dossierId, etape])
 }
@@ -287,16 +323,17 @@ model DossierEvenement {
   direction String // ENTRANT | SORTANT | INTERNE
   contenu   String
   metadata  String   @default("{}") // JSON libre selon le type (ex. { de, vers } pour un changement d'étape)
+  ecriture  String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([dossierId, createdAt])
 }
 
 model Document {
-  id           String   @id @default(cuid())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   dossierId    String
-  dossier      Dossier  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  dossier      Dossier   @relation(fields: [dossierId], references: [id], onDelete: Restrict)
   type         String // TypeDocument : DEVIS | FACTURE
   numero       String? // attribué à la génération, jamais réutilisé (voir NUMEROTATION) ; null tant que BROUILLON
   dateEmission DateTime? // fixée à la génération, avec le numéro
@@ -304,29 +341,72 @@ model Document {
   lignes       String // JSON LigneDocument[] : prestations et lignes de section
   totalHt      Float
   acomptePct   Int? // 30 par défaut sur un devis, null sur une facture
-  noteMl       Boolean  @default(true)
+  noteMl       Boolean   @default(true)
   pdfPath      String?
-  statut       String   @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE
+  statut       String    @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@unique([type, numero])
   @@index([dossierId])
 }
 
 model CompteurNumerotation {
-  serie  String // compteur (voir NUMEROTATION) : DEVIS | FACTURE
-  annee  Int
-  valeur Int // dernier numéro attribué
+  serie    String // compteur (voir NUMEROTATION) : DEVIS | FACTURE
+  annee    Int
+  valeur   Int // dernier numéro attribué
+  ecriture String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@id([serie, annee])
 }
 
 model PresetTarif {
-  id           String   @id @default(cuid())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   designation  String
   unite        String // ml | jour | forfait
   prixUnitaire Float? // null = à saisir à chaque devis (carburant, péage, mission)
-  ordre        Int      @default(0)
-  actif        Boolean  @default(true)
+  ordre        Int       @default(0)
+  actif        Boolean   @default(true)
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+}
+
+// ─────────────────────────────────────────────
+// Journal des modifications (traçabilité intégrale)
+// Alimenté uniquement par des déclencheurs SQLite générés depuis ce schéma
+// (src/lib/journal/declencheurs.ts) : aucune écriture ne peut lui échapper.
+// Ni modifiable (sauf caviardage RGPD) ni supprimable.
+// ─────────────────────────────────────────────
+
+model JournalModification {
+  id               String    @id
+  horodatage       DateTime
+  modele           String // nom du modèle Prisma
+  enregistrementId String
+  operation        String // ETAT_INITIAL | CREATION | MODIFICATION | ARCHIVAGE | RESTAURATION
+  acteur           String // TYPE:identifiant (voir src/lib/journal/contexte.ts) : HUMAIN, AGENT, SYSTEME, EXTERNE, SCRIPT, MIGRATION, INCONNU
+  jeton            String? // identifiant de l'écriture logique (partagé par ses écritures imbriquées)
+  origine          String? // route ou tâche à l'origine de l'écriture
+  requete          String? // identifiant de la requête HTTP ou de la tâche : regroupe les écritures d'un même geste
+  avant            String? // JSON de l'enregistrement avant (null pour une création)
+  apres            String // JSON de l'enregistrement après
+  caviardeLe       DateTime? // anonymisation RGPD : contenu remplacé, la trace de l'écriture reste
+
+  @@index([modele, enregistrementId, horodatage])
+  @@index([horodatage])
+  @@index([acteur])
+  @@index([requete])
+}
+
+// Migrations de données exécutées au démarrage (idempotentes, une seule fois chacune).
+model MigrationDonnees {
+  nom        String   @id
+  executeeLe DateTime
+  dureeMs    Int
+  resume     String // JSON : compteurs de la migration
+  ecriture   String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 }

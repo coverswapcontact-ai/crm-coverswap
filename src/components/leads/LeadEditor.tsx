@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2, Save, Trash2, Pencil, X } from "lucide-react";
+import { Archive, Loader2, Save, Pencil, X } from "lucide-react";
 
 interface LeadEditorProps {
   lead: {
@@ -85,19 +85,28 @@ export default function LeadEditor({ lead }: LeadEditorProps) {
   }
 
   async function handleDelete() {
-    const ok = window.confirm(
-      `Supprimer définitivement le lead "${lead.prenom} ${lead.nom}" ?\n\nCette action est irréversible et supprimera aussi toutes les interactions, simulations, devis et chantiers associés.`
+    // Rien ne se supprime : le lead est archivé avec son motif et reste consultable au journal.
+    const motif = window.prompt(
+      `Archiver le lead "${lead.prenom} ${lead.nom}" ?\n\nMotif (doublon, erreur de saisie, spam, demande de la personne…) :`
     );
-    if (!ok) return;
+    if (motif === null) return;
+    if (motif.trim().length < 3) {
+      toast.error("Motif d'archivage obligatoire");
+      return;
+    }
     setDeleting(true);
     try {
-      const res = await fetch(`/api/leads/${lead.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motif }),
+      });
       if (!res.ok) throw new Error("Erreur");
-      toast.success("Lead supprimé");
+      toast.success("Lead archivé");
       router.push("/leads");
       router.refresh();
     } catch {
-      toast.error("Erreur lors de la suppression");
+      toast.error("Erreur lors de l'archivage");
       setDeleting(false);
     }
   }
@@ -156,9 +165,9 @@ export default function LeadEditor({ lead }: LeadEditorProps) {
                 {deleting ? (
                   <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                 ) : (
-                  <Trash2 className="h-3 w-3 mr-1" />
+                  <Archive className="h-3 w-3 mr-1" />
                 )}
-                Supprimer
+                Archiver
               </Button>
             </>
           )}

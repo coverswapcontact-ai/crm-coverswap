@@ -104,15 +104,26 @@ export async function lireFichier(relatif: string): Promise<Buffer | null> {
   }
 }
 
-export async function supprimerFichier(relatif: string): Promise<void> {
+// Rien ne se supprime, fichiers compris : un fichier retiré part dans
+//   archives/<horodatage>-<raison>/<chemin d'origine>
+// et y reste. Absent : rien à faire.
+async function deplacerVersArchives(relatif: string, raison: string): Promise<void> {
+  const horodatage = new Date().toISOString().replace(/[:.]/g, "-");
+  const destination = cheminAbsolu(path.posix.join("archives", `${horodatage}-${raison}`, relatif));
   try {
-    await fs.unlink(cheminAbsolu(relatif));
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await fs.rename(cheminAbsolu(relatif), destination);
   } catch (erreur) {
     if (!estAbsent(erreur)) throw erreur;
   }
 }
 
-/** Retire tous les fichiers d'un dossier (création annulée). */
-export async function supprimerFichiersDossier(dossierId: string): Promise<void> {
-  await fs.rm(cheminAbsolu(path.posix.join(RACINE, dossierId)), { recursive: true, force: true });
+/** Retire un fichier de son emplacement vivant, en le gardant aux archives. */
+export async function archiverFichier(relatif: string, raison: string): Promise<void> {
+  await deplacerVersArchives(relatif, raison);
+}
+
+/** Retire tous les fichiers d'un dossier (création interrompue), en les gardant aux archives. */
+export async function archiverFichiersDossier(dossierId: string, raison: string): Promise<void> {
+  await deplacerVersArchives(path.posix.join(RACINE, dossierId), raison);
 }

@@ -1,5 +1,18 @@
 // Appels API côté navigateur : erreurs en français, session expirée signalée.
 
+/** Erreur d'une route : message en français, statut HTTP et corps (détails éventuels). */
+export class ErreurApi extends Error {
+  readonly status: number;
+  readonly corps: unknown;
+
+  constructor(message: string, status: number, corps: unknown) {
+    super(message);
+    this.name = "ErreurApi";
+    this.status = status;
+    this.corps = corps;
+  }
+}
+
 export async function appelApi<T>(url: string, init?: RequestInit): Promise<T> {
   let reponse: Response;
   try {
@@ -15,9 +28,9 @@ export async function appelApi<T>(url: string, init?: RequestInit): Promise<T> {
     corps = null;
   }
   if (!reponse.ok) {
-    if (reponse.status === 401) throw new Error("Session expirée : reconnecte-toi.");
+    if (reponse.status === 401) throw new ErreurApi("Session expirée : reconnecte-toi.", 401, null);
     const message = (corps as { error?: unknown } | null)?.error;
-    throw new Error(typeof message === "string" ? message : `Erreur ${reponse.status}.`);
+    throw new ErreurApi(typeof message === "string" ? message : `Erreur ${reponse.status}.`, reponse.status, corps);
   }
   return corps as T;
 }

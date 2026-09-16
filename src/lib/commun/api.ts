@@ -39,7 +39,7 @@ export async function lireFormulaire(requete: Request): Promise<FormData> {
 
 export function reponseErreur(erreur: unknown, contexte: string): NextResponse {
   if (erreur instanceof ErreurMetier) {
-    return NextResponse.json({ error: erreur.message }, { status: erreur.status });
+    return NextResponse.json({ error: erreur.message, ...erreur.details }, { status: erreur.status });
   }
   console.error(`[api] ${contexte} :`, erreur);
   return NextResponse.json({ error: "Erreur serveur : réessaie dans un instant." }, { status: 500 });

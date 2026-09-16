@@ -513,10 +513,13 @@ tous les cas qu'aucun numéro émis ne resservira.
 échéance. Le PDF archivé se reconstitue à l'identique depuis ces données, même
 si la fiche client change ensuite.
 
-La base refuse toute modification d'un document numéroté, sauf : son statut,
-son PDF archivé, son client pérenne (qui suit une fusion validée) ; destinataire
-et catégorie se renseignent une fois pour les documents émis avant le gel.
-Un document émis ne s'archive pas non plus : il reste visible.
+La base refuse toute modification d'un document numéroté **généré par le CRM**
+(`origine = CRM`), sauf : son statut, son PDF archivé, son client pérenne (qui
+suit une fusion validée) ; destinataire et catégorie se renseignent une fois
+pour les documents émis avant le gel. Un document émis ne s'archive pas non
+plus : il reste visible. Pour tout document numéroté, repris compris, la base
+refuse de changer le numéro, le type ou l'origine (section 18, documents
+repris).
 
 - **Facture erronée** : avoir total (même montant, même série F, mentions « Avoir
   sur la facture n° … du … » et motif obligatoire), la facture passe « Annulée
@@ -1267,3 +1270,34 @@ Un dossier signé en juillet porte juillet, pas le jour de sa saisie.
   délais), alerte « moins de nouveaux dossiers ». Une date inconnue compte
   pour l'étape atteinte, jamais pour une période ni un délai.
 - **Paiements** : voir section 10, « Rien ne se supprime, tout se trace ».
+
+### Documents déjà émis (`src/lib/dossiers/documents-existants.ts`)
+
+Un devis ou une facture fait à la main avant le CRM se rattache au dossier sans
+rien générer (« Enregistrer un document existant ») : numéro, date d'émission
+réelle, montant, statut du devis (envoyé, accepté, refusé), acompte prévu,
+objet, PDF.
+
+- **Registre** : le numéro doit y être (les numéros libres, émis hors du CRM et
+  pas encore rattachés, sont proposés à la saisie). Le compteur ne bouge pas :
+  la ligne du registre reçoit seulement `documentId`, le montant, et la date et
+  le destinataire s'ils manquaient. Un numéro déjà rattaché est refusé (il ne
+  sert qu'une fois). Un numéro absent du registre est refusé avec
+  `absentDuRegistre`, et ne s'y inscrit que sur demande explicite (« L'inscrire
+  au registre et le rattacher », mêmes règles de série que la déclaration dans
+  /numeros) : une faute de frappe inscrite y resterait pour toujours.
+  Nature, date ou montant qui diffèrent du registre sont signalés ; la date
+  d'émission du registre, renseignée une fois, n'y change pas.
+- **Document** `origine = REPRISE` (migration `20260918100000_documents_repris`,
+  colonne à défaut `CRM`) : pas de lignes, pas de mentions ; événement
+  « Document repris » à la date d'émission. Une facture reprise reçoit les
+  paiements déjà enregistrés sur le dossier, comme une facture générée.
+- **Correction** : date, montant (le reste dû suit ; un trop-perçu est
+  signalé), objet, statut, acompte ; jamais le numéro. Le PDF s'importe ou se
+  remplace (vérifié : `%PDF-`, 9 Mo au plus), l'ancien part aux archives.
+- **Sans PDF** : rien ne se reconstitue à sa place (un faux PDF aux couleurs du
+  CRM serait pire que pas de PDF) ; le document ne s'ouvre ni ne s'envoie par
+  mail, et n'est pas copié dans le miroir Drive.
+- **Avoir** d'une facture reprise : une ligne « Annulation de la facture … » de
+  son montant, dans la série F comme tout avoir.
+- Les avertissements d'étape disent « aucun devis généré ni enregistré ».

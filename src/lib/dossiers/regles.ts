@@ -193,7 +193,7 @@ export function messageAvertissement(critere: CritereEntree, faits: FaitsDossier
     case "PHOTO":
       return "Aucune photo du chantier.";
     case "DEVIS_GENERE":
-      return "Aucun devis n'a été généré pour ce dossier.";
+      return "Aucun devis n'a été généré ni enregistré pour ce dossier.";
     case "BON_POUR_ACCORD":
       return "Le bon pour accord n'est pas confirmé.";
     case "ACOMPTE_ENCAISSE":
@@ -201,7 +201,7 @@ export function messageAvertissement(critere: CritereEntree, faits: FaitsDossier
     case "DATE_CHANTIER":
       return "Pas de date de chantier.";
     case "FACTURE_GENEREE":
-      return "Aucune facture n'a été générée pour ce dossier.";
+      return "Aucune facture n'a été générée ni enregistrée pour ce dossier.";
     case "SOLDE_ENCAISSE":
       return faits.aFactureGeneree
         ? faits.resteDu

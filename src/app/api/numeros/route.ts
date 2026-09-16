@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
-import { declarerNumero, lireRegistre, schemaDeclaration } from "@/lib/dossiers/registre";
+import { declarerNumero, lireRegistre, numerosLibres, schemaDeclaration } from "@/lib/dossiers/registre";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+/** GET : le registre par série ; `?libres=1` : les numéros émis hors du CRM pas encore rattachés à un document. */
+export async function GET(requete: NextRequest) {
   try {
+    if (requete.nextUrl.searchParams.get("libres") === "1") return NextResponse.json({ libres: await numerosLibres() });
     return NextResponse.json({ series: await lireRegistre() });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/numeros");

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { reponseErreur } from "@/lib/dossiers/api";
+import { lireFormulaire, reponseErreur } from "@/lib/dossiers/api";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
+import { importerPdfDocument } from "@/lib/dossiers/documents-existants";
+import { chargerDetail } from "@/lib/dossiers/dossiers";
+import { ErreurMetier } from "@/lib/dossiers/erreurs";
 
 /** PDF archivé d'un document. `?telecharger=1` force le téléchargement. */
 export async function GET(
@@ -20,5 +23,18 @@ export async function GET(
     });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/dossiers/[id]/documents/[documentId]/pdf");
+  }
+}
+
+/** POST : PDF d'un document repris (champ « pdf », un fichier) ; un PDF remplacé reste aux archives. */
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string; documentId: string }> }) {
+  try {
+    const { id, documentId } = await params;
+    const fichier = (await lireFormulaire(request)).get("pdf");
+    if (!(fichier instanceof File)) throw new ErreurMetier("Choisis le PDF du document.", 400);
+    await importerPdfDocument(id, documentId, fichier);
+    return NextResponse.json(await chargerDetail(id));
+  } catch (erreur) {
+    return reponseErreur(erreur, "POST /api/dossiers/[id]/documents/[documentId]/pdf");
   }
 }

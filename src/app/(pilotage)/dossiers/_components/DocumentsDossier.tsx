@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, FilePlus2, Mail, Receipt, RefreshCw, Send, Undo2 } from "lucide-react";
+import { Download, ExternalLink, FilePlus2, FileUp, Mail, Pencil, Receipt, RefreshCw, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
 import {
@@ -15,8 +15,9 @@ import { formatMontant } from "@/lib/dossiers/montants";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
+import { ModaleDocumentExistant } from "./DocumentExistant";
 import { Bouton, Champ, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
-import { Puces } from "@/components/pilotage/ui";
+import { Pastille, Puces } from "@/components/pilotage/ui";
 
 const CLASSE_LIEN_ICONE = cn(
   "inline-flex h-10 w-10 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34] text-[#9CA3AF] hover:border-[#3A3E47] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8 sm:w-8",
@@ -199,6 +200,8 @@ export function DocumentsDossier({
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
   const [aEnvoyer, setAEnvoyer] = useState<DocumentVue | null>(null);
+  // Document émis avant le CRM : nouveau rattachement (null) ou correction d'un document repris.
+  const [existant, setExistant] = useState<{ document?: DocumentVue } | null>(null);
   // Rien n'empêche de générer : l'étape inhabituelle est seulement dite.
   const remarque =
     detail.etape === "PERDU" || detail.etape === "EN_PAUSE"
@@ -218,11 +221,14 @@ export function DocumentsDossier({
         <Bouton variante="secondaire" icone={<Receipt size={14} aria-hidden />} onClick={() => onGenerer("FACTURE")}>
           Générer une facture
         </Bouton>
+        <Bouton variante="fantome" icone={<FileUp size={14} aria-hidden />} onClick={() => setExistant({})}>
+          Enregistrer un document existant
+        </Bouton>
       </div>
       {remarque ? <p className="mt-2 text-[12px] text-[#F5B454]">{remarque}</p> : null}
 
       {documents.length === 0 ? (
-        <p className="mt-3 text-[12px] text-[#6B7280]">Aucun document généré pour ce dossier.</p>
+        <p className="mt-3 text-[12px] text-[#6B7280]">Aucun devis ni facture pour ce dossier.</p>
       ) : (
         <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           {documents.map((document) => {
@@ -230,7 +236,9 @@ export function DocumentsDossier({
             const remplacant = document.documentsLies.find((lie) => lie.type === "DEVIS");
             const peutRefaire = document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE"].includes(document.statut);
             const peutAnnuler = document.type === "FACTURE" && document.statut !== "ANNULEE";
-            const peutEnvoyer = (document.type === "DEVIS" || document.type === "FACTURE") && document.statut !== "REMPLACE" && document.statut !== "ANNULEE";
+            const peutEnvoyer =
+              (document.type === "DEVIS" || document.type === "FACTURE") && document.statut !== "REMPLACE" && document.statut !== "ANNULEE" && document.pdfUrl !== null;
+            const repris = document.origine === "REPRISE";
             return (
               <li key={document.id} className="border-t-[0.5px] border-[#2A2D34] px-3 py-2.5 first:border-t-0">
                 <div className="flex items-center gap-3">
@@ -242,6 +250,7 @@ export function DocumentsDossier({
                       <span className={cn("rounded-full px-1.5 py-px text-[10px]", TON_STATUT[document.statut] ?? "bg-[#22262D] text-[#9CA3AF]")}>
                         {LIBELLES_STATUT_DOCUMENT[document.statut]}
                       </span>
+                      {repris ? <Pastille titre="Émis avant le CRM, rattaché avec son numéro du registre">Repris</Pastille> : null}
                     </p>
                     <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
                       {document.dateEmission ? formatDateCourte(document.dateEmission) : null} · {document.objet}
@@ -288,8 +297,14 @@ export function DocumentsDossier({
                 ) : null}
                 {avoir ? <p className="mt-1 text-[12px] text-[#F87171]">Annulée par l&apos;avoir {avoir.numero}</p> : null}
                 {remplacant ? <p className="mt-1 text-[12px] text-[#6B7280]">Remplacé par le devis {remplacant.numero}</p> : null}
-                {peutRefaire || peutAnnuler || peutEnvoyer ? (
+                {repris && !document.pdfUrl ? <p className="mt-1 text-[12px] text-[#9CA3AF]">PDF non importé.</p> : null}
+                {peutRefaire || peutAnnuler || peutEnvoyer || repris ? (
                   <div className="mt-2 flex flex-wrap gap-2">
+                    {repris ? (
+                      <Bouton taille="sm" variante="fantome" icone={document.pdfUrl ? <Pencil size={13} aria-hidden /> : <FileUp size={13} aria-hidden />} onClick={() => setExistant({ document })}>
+                        {document.pdfUrl ? "Corriger" : "Corriger, importer le PDF"}
+                      </Bouton>
+                    ) : null}
                     {peutEnvoyer ? (
                       <Bouton taille="sm" variante="fantome" icone={<Mail size={13} aria-hidden />} onClick={() => setAEnvoyer(document)}>
                         Envoyer par mail
@@ -313,6 +328,9 @@ export function DocumentsDossier({
         </ul>
       )}
       {aEnvoyer ? <ModaleEnvoiMail key={aEnvoyer.id} detail={detail} document={aEnvoyer} onFermer={() => setAEnvoyer(null)} /> : null}
+      {existant ? (
+        <ModaleDocumentExistant key={existant.document?.id ?? "nouveau"} detail={detail} document={existant.document} onFermer={() => setExistant(null)} onMisAJour={onMisAJour} />
+      ) : null}
       {aAnnuler ? (
         <ModaleAvoir detail={detail} facture={aAnnuler} onFermer={() => setAAnnuler(null)} onFait={onMisAJour} />
       ) : null}

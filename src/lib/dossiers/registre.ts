@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import prisma from "@/lib/prisma";
+import prisma, { type Transaction } from "@/lib/prisma";
 import { NUMEROTATION } from "./constants";
 import { dateDepuisJour, estJourValide } from "./dates";
 import { ErreurMetier } from "./erreurs";
@@ -95,10 +95,15 @@ export const schemaDeclaration = z.object({
  * il est inscrit au registre et ne sera jamais attribué par le CRM.
  */
 export async function declarerNumero(entree: z.output<typeof schemaDeclaration>): Promise<void> {
+  await inscrireNumeroManuel(prisma, entree);
+}
+
+/** Inscription d'un numéro émis hors du CRM, dans la transaction de l'appelant (déclaration, document repris). */
+export async function inscrireNumeroManuel(lecteur: Transaction, entree: z.output<typeof schemaDeclaration>) {
   const lu = lireNumero(entree.numero);
   if (!lu) throw new ErreurMetier("Numéro illisible : format attendu 2026-012, F2026-012 ou FACT-2026-0012.", 400);
   const cle = cleNumero(lu.famille, lu.annee, lu.rang);
-  const existant = await prisma.numeroDocument.findUnique({ where: { cle } });
+  const existant = await lecteur.numeroDocument.findUnique({ where: { cle } });
   if (existant) throw new ErreurMetier(`Ce numéro est déjà inscrit au registre (${existant.numero}).`, 409);
 
   // Série des factures, continue et chronologique : un numéro déclaré ne se
@@ -107,7 +112,7 @@ export async function declarerNumero(entree: z.output<typeof schemaDeclaration>)
   const { prefixe, famillesPrecedentes } = NUMEROTATION.FACTURE;
   const familleFactures = prefixe.toUpperCase();
   if (famillesPrecedentes.some((famille) => famille.toUpperCase() === lu.famille)) {
-    const dernierCrm = await prisma.numeroDocument.findFirst({
+    const dernierCrm = await lecteur.numeroDocument.findFirst({
       where: { famille: familleFactures, annee: lu.annee, origine: "CRM" },
       orderBy: { rang: "desc" },
     });
@@ -119,7 +124,7 @@ export async function declarerNumero(entree: z.output<typeof schemaDeclaration>)
     }
   }
 
-  await prisma.numeroDocument.create({
+  return lecteur.numeroDocument.create({
     data: {
       cle,
       numero: entree.numero,
@@ -134,6 +139,25 @@ export async function declarerNumero(entree: z.output<typeof schemaDeclaration>)
       note: entree.note || null,
     },
   });
+}
+
+export type NumeroLibre = { id: string; numero: string; type: LigneRegistre["type"]; emisLe: string | null; destinataire: string | null; montant: number | null };
+
+/** Numéros émis hors du CRM et pas encore rattachés à un document : ceux qu'un dossier repris peut porter. */
+export async function numerosLibres(): Promise<NumeroLibre[]> {
+  const lignes = await prisma.numeroDocument.findMany({
+    where: { documentId: null, origine: { not: "CRM" } },
+    orderBy: [{ annee: "desc" }, { famille: "asc" }, { rang: "desc" }],
+    take: 300,
+  });
+  return lignes.map((ligne) => ({
+    id: ligne.id,
+    numero: ligne.numero,
+    type: ligne.type as LigneRegistre["type"],
+    emisLe: ligne.emisLe?.toISOString() ?? null,
+    destinataire: ligne.destinataire,
+    montant: ligne.montant,
+  }));
 }
 
 export const schemaComplement = z.object({

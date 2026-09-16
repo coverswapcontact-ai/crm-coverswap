@@ -382,6 +382,12 @@ export async function genererAvoir(dossierId: string, factureId: string, entree:
   });
   if (!facture?.numero || !facture.dateEmission) throw new ErreurMetier("Facture introuvable dans ce dossier.", 404);
   if (facture.statut === "ANNULEE") throw new ErreurMetier("Cette facture est déjà annulée par un avoir.", 409);
+  // Facture reprise d'avant le CRM : pas de lignes, l'avoir porte une ligne de son montant.
+  const lignesFacture = lireLignes(facture.lignes);
+  const lignesAvoir: LigneDocument[] =
+    lignesFacture.length > 0
+      ? lignesFacture
+      : [{ type: "PRESTATION", designation: `Annulation de la facture ${facture.numero}`, quantite: 1, unite: "forfait", prixUnitaire: facture.totalHt }];
   if (entree.motif === "AUTRE" && !entree.precision) throw new ErreurMetier("Précise le motif de l'avoir.", 400);
 
   const libelleMotif = MOTIFS_AVOIR.find((motif) => motif.code === entree.motif)?.libelle ?? entree.motif;
@@ -392,7 +398,7 @@ export async function genererAvoir(dossierId: string, factureId: string, entree:
     dossierId,
     type: "AVOIR",
     objet: `Annulation de la facture ${numeroFacture} : ${facture.objet}`.slice(0, 160),
-    lignes: lireLignes(facture.lignes),
+    lignes: lignesAvoir,
     acomptePct: null,
     noteMl: facture.noteMl,
     etape,
@@ -487,6 +493,8 @@ export async function lirePdfDocument(dossierId: string, documentId: string) {
 
   const archive = document.pdfPath ? await lireFichier(document.pdfPath) : null;
   if (archive) return { contenu: archive, nomFichier };
+  // Un document repris n'a que le PDF importé : rien ne se reconstitue à sa place.
+  if (document.origine === "REPRISE") throw new ErreurMetier("PDF non importé pour ce document repris.", 404);
 
   let client: DonneesDocumentPdf["client"] | null = destinataire;
   if (!client) {

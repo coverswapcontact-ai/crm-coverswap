@@ -106,10 +106,21 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
   [
     "Document",
     {
-      quand: `OLD."numero" IS NOT NULL`,
+      // Généré par le CRM : figé à l'émission. Repris d'avant le CRM : il se corrige, sauf son numéro.
+      quand: `OLD."numero" IS NOT NULL AND OLD."origine" = 'CRM'`,
       modifiables: ["statut", "pdfPath", "clientId", "updatedAt", "ecriture"],
       completables: ["destinataire", "categorieClient"],
       message: "Document émis : il ne se modifie plus. Pour une facture, faire un avoir puis une nouvelle facture ; pour un devis, le refaire.",
+      interdits: [
+        {
+          condition: `OLD."numero" IS NOT NULL AND (NEW."numero" IS NOT OLD."numero" OR NEW."type" IS NOT OLD."type")`,
+          message: "Le numéro d'un document émis ne change jamais.",
+        },
+        {
+          condition: `NEW."origine" IS NOT OLD."origine"`,
+          message: "L'origine d'un document (généré par le CRM ou repris) ne change pas.",
+        },
+      ],
     },
   ],
   [

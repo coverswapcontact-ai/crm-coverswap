@@ -50,7 +50,7 @@ describe("règles d'étape : signaler, jamais bloquer", () => {
     assert.equal(verification.ok, true);
     assert.deepEqual(
       verification.ok ? verification.avertissements.map((avertissement) => avertissement.message) : [],
-      ["Aucun devis n'a été généré pour ce dossier.", "Le bon pour accord n'est pas confirmé.", "Aucun acompte enregistré.", "Pas de date de chantier."]
+      ["Aucun devis n'a été généré ni enregistré pour ce dossier.", "Le bon pour accord n'est pas confirmé.", "Aucun acompte enregistré.", "Pas de date de chantier."]
     );
     assert.equal(messageAvertissement("COORDONNEES_COMPLETES", FAITS), "Il manque l'adresse et le téléphone du client.");
     // Ce qui est apporté au passage lève l'avertissement correspondant.
@@ -151,13 +151,13 @@ describe("dossiers souples", () => {
     const vers = await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "FACTURE", dateChantier: "2026-07-20" }));
     assert.equal(vers.nature, "SUIVANTE");
     assert.deepEqual(vers.avertissements, [
-      "Aucun devis n'a été généré pour ce dossier.",
+      "Aucun devis n'a été généré ni enregistré pour ce dossier.",
       "Le bon pour accord n'est pas confirmé.",
       "Aucun acompte enregistré.",
-      "Aucune facture n'a été générée pour ce dossier.",
+      "Aucune facture n'a été générée ni enregistrée pour ce dossier.",
     ]);
     const passage = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
-    assert.match(passage.contenu, /^Qualification → Facturé\. Passé en connaissance de cause : aucun devis n'a été généré/);
+    assert.match(passage.contenu, /^Qualification → Facturé\. Passé en connaissance de cause : aucun devis n'a été généré ni enregistré/);
     assert.equal(JSON.parse(passage.metadata).avertissements.length, 4);
 
     await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "PERDU" }));

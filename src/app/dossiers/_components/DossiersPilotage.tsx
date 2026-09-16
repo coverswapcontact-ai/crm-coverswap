@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowLeft, Columns3, FolderOpen, FolderPlus, List, Search } from "lucide-react";
+import { ArrowLeft, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
 import { toast } from "sonner";
-import { ETAPES_SORTIE } from "@/lib/dossiers/constants";
+import { echeanceDe, estAFaire } from "@/lib/dossiers/pilotage";
+import { estEtapeSortie } from "@/lib/dossiers/regles";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { echeanceDe } from "./CarteDossier";
 import { CreationDossier } from "./CreationDossier";
+import { Legende } from "./Legende";
 import { PanneauDossier } from "./PanneauDossier";
 import { VueKanban } from "./VueKanban";
 import { LIBELLES_TRI, SENS_PAR_DEFAUT, VueListe, type CleTri, type Tri } from "./VueListe";
@@ -49,10 +50,13 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     montantDernierDevis: detail.montantDernierDevis,
     prochaineAction: detail.prochaineAction,
     prochaineActionDate: detail.prochaineActionDate,
+    etapeAvantSortie: detail.etapeAvantSortie,
     createdAt: detail.createdAt,
     updatedAt: detail.updatedAt,
   };
 }
+
+const CLASSE_ONGLET = "flex h-9 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7";
 
 export default function DossiersPilotage({
   dossiersInitiaux,
@@ -68,6 +72,8 @@ export default function DossiersPilotage({
   const [vueChoisie, setVueChoisie] = useState<Vue | null>(null);
   const vue = vueChoisie ?? vueParDefaut;
   const [afficherSorties, setAfficherSorties] = useState(false);
+  const [filtreAFaire, setFiltreAFaire] = useState(false);
+  const [legendeOuverte, setLegendeOuverte] = useState(false);
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>({ cle: "prochaineAction", sens: "asc" });
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
@@ -121,27 +127,31 @@ export default function DossiersPilotage({
     });
   }, []);
 
-  const sorties = useMemo(
-    () => dossiers.filter((dossier) => (ETAPES_SORTIE as readonly string[]).includes(dossier.etape)),
-    [dossiers]
-  );
+  const sorties = useMemo(() => dossiers.filter((dossier) => estEtapeSortie(dossier.etape)), [dossiers]);
 
+  // « À faire » : les dossiers où j'ai la main, retards compris, y compris un
+  // dossier en pause dont la date de reprise est passée. Sinon, perdus et en
+  // pause restent masqués tant que leur filtre n'est pas activé.
   const visibles = useMemo(() => {
     const termes = normaliser(recherche).split(/\s+/).filter(Boolean);
     return dossiers.filter((dossier) => {
-      if (!afficherSorties && (ETAPES_SORTIE as readonly string[]).includes(dossier.etape)) return false;
+      if (filtreAFaire) {
+        if (!estAFaire(dossier, maintenant)) return false;
+      } else if (!afficherSorties && estEtapeSortie(dossier.etape)) {
+        return false;
+      }
       if (termes.length === 0) return true;
       const texte = normaliser(
         [dossier.clientNom, dossier.clientVille, dossier.objet, dossier.prochaineAction ?? ""].join(" ")
       );
       return termes.every((terme) => texte.includes(terme));
     });
-  }, [dossiers, afficherSorties, recherche]);
+  }, [dossiers, afficherSorties, filtreAFaire, recherche, maintenant]);
 
-  const enCours = dossiers.filter(
-    (dossier) => dossier.etape !== "ENCAISSE" && !(ETAPES_SORTIE as readonly string[]).includes(dossier.etape)
-  );
-  const enRetard = enCours.filter((dossier) => echeanceDe(dossier, maintenant) === "retard").length;
+  const enCours = dossiers.filter((dossier) => dossier.etape !== "ENCAISSE" && !estEtapeSortie(dossier.etape)).length;
+  const enRetard = dossiers.filter((dossier) => echeanceDe(dossier, maintenant) === "retard").length;
+  const aFaire = dossiers.filter((dossier) => estAFaire(dossier, maintenant)).length;
+  const tous = dossiers.filter((dossier) => afficherSorties || !estEtapeSortie(dossier.etape)).length;
 
   const ouvrirCreation = () => setCreation((actuelle) => ({ ouverte: true, lead: null, cle: actuelle.cle + 1 }));
 
@@ -159,13 +169,11 @@ export default function DossiersPilotage({
         <div>
           <h1 className="text-[18px] font-medium tracking-tight text-[#F2F3F5]">Dossiers en cours</h1>
           <p className="mt-1 text-[13px] text-[#9CA3AF]">
-            {enCours.length} en cours
+            {enCours} en cours · <span className="text-[#F2F3F5]">{aFaire} à faire</span>
             {enRetard > 0 ? (
               <>
                 {" · "}
-                <span className="text-[#F87171]">
-                  {enRetard} en retard
-                </span>
+                <span className="text-[#F87171]">{enRetard} en retard</span>
               </>
             ) : null}
           </p>
@@ -176,6 +184,51 @@ export default function DossiersPilotage({
       </header>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
+        {/* Filtre rapide : « À faire » ne garde que les dossiers où j'ai la main. */}
+        <div
+          role="tablist"
+          aria-label="Filtre rapide"
+          className="flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!filtreAFaire}
+            onClick={() => setFiltreAFaire(false)}
+            className={cn(
+              CLASSE_ONGLET,
+              !filtreAFaire ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+              TRANS
+            )}
+          >
+            Tous
+            <span className="text-[11px] text-[#9CA3AF] tabular-nums">{tous}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filtreAFaire}
+            onClick={() => setFiltreAFaire(true)}
+            className={cn(
+              CLASSE_ONGLET,
+              "font-semibold",
+              filtreAFaire ? "bg-[#F2F3F5] text-[#0B0D10]" : "text-[#F2F3F5] hover:bg-[#22262D]",
+              TRANS
+            )}
+          >
+            <Play size={11} strokeWidth={2.5} className="fill-current" aria-hidden />
+            À faire
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[11px] tabular-nums",
+                filtreAFaire ? "bg-[#0B0D10]/10 text-[#0B0D10]" : "bg-[#22262D] text-[#F2F3F5]"
+              )}
+            >
+              {aFaire}
+            </span>
+          </button>
+        </div>
+
         <div
           role="tablist"
           aria-label="Affichage"
@@ -194,13 +247,14 @@ export default function DossiersPilotage({
               aria-selected={vue === valeur}
               onClick={() => choisirVue(valeur)}
               className={cn(
-                "flex h-9 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7",
+                CLASSE_ONGLET,
                 vue === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
                 TRANS
               )}
             >
               <Icone size={14} aria-hidden />
-              {libelle}
+              {/* Icône seule sur téléphone : filtre et affichage tiennent sur une ligne. */}
+              <span className="sr-only sm:not-sr-only">{libelle}</span>
             </button>
           ))}
         </div>
@@ -221,29 +275,43 @@ export default function DossiersPilotage({
           />
         </label>
 
-        <button
-          type="button"
-          aria-pressed={afficherSorties}
-          onClick={() => setAfficherSorties((valeur) => !valeur)}
-          className={cn(
-            "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
-            afficherSorties
-              ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
-              : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
-            TRANS
-          )}
+        {filtreAFaire ? null : (
+          <button
+            type="button"
+            aria-pressed={afficherSorties}
+            onClick={() => setAfficherSorties((valeur) => !valeur)}
+            className={cn(
+              "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
+              afficherSorties
+                ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
+                : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+              TRANS
+            )}
+          >
+            Perdus et en pause
+            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{sorties.length}</span>
+          </button>
+        )}
+
+        <Bouton
+          variante="fantome"
+          taille="sm"
+          icone={<Info size={13} aria-hidden />}
+          aria-expanded={legendeOuverte}
+          aria-controls="legende-dossiers"
+          onClick={() => setLegendeOuverte((valeur) => !valeur)}
+          className="h-10 sm:ml-auto sm:h-7"
         >
-          Perdus et en pause
-          <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{sorties.length}</span>
-        </button>
+          Légende
+        </Bouton>
 
         {vue === "liste" ? (
-          <label className="flex items-center gap-2 text-[12px] text-[#9CA3AF] md:hidden">
+          <label className="flex w-full items-center gap-2 text-[12px] text-[#9CA3AF] md:hidden">
             Trier par
             <select
               value={tri.cle}
               onChange={(evenement) => trier(evenement.target.value as CleTri)}
-              className="h-10 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 text-[16px] text-[#F2F3F5] [color-scheme:dark]"
+              className="h-10 min-w-0 flex-1 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 text-[16px] text-[#F2F3F5] [color-scheme:dark]"
             >
               {(Object.keys(LIBELLES_TRI) as CleTri[]).map((cle) => (
                 <option key={cle} value={cle}>
@@ -255,6 +323,8 @@ export default function DossiersPilotage({
         ) : null}
       </div>
 
+      {legendeOuverte ? <Legende onFermer={() => setLegendeOuverte(false)} /> : null}
+
       <main className="mt-5">
         {dossiers.length === 0 ? (
           <EtatVide
@@ -262,10 +332,26 @@ export default function DossiersPilotage({
             titre="Aucun dossier pour l'instant"
             texte="Un dossier s'ouvre à la conversion : photos du chantier, coordonnées complètes du client et nature du chantier."
           />
+        ) : filtreAFaire && visibles.length === 0 ? (
+          <EtatVide
+            icone={<CircleCheck size={18} className="text-[#1D9E75]" aria-hidden />}
+            titre={recherche.trim() ? "Aucun dossier à faire ne correspond" : "Rien à faire pour l'instant"}
+            texte={
+              recherche.trim()
+                ? "Modifie la recherche ou repasse sur « Tous »."
+                : "Les dossiers en cours sont chez les clients, sans retard."
+            }
+          />
         ) : visibles.length === 0 && vue === "liste" ? (
           <EtatVide titre="Aucun dossier ne correspond" texte="Modifie la recherche ou affiche les dossiers perdus et en pause." />
         ) : vue === "kanban" ? (
-          <VueKanban dossiers={visibles} afficherSorties={afficherSorties} maintenant={maintenant} onOuvrir={setDossierOuvertId} />
+          <VueKanban
+            dossiers={visibles}
+            afficherSorties={afficherSorties}
+            masquerColonnesVides={filtreAFaire}
+            maintenant={maintenant}
+            onOuvrir={setDossierOuvertId}
+          />
         ) : (
           <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={setDossierOuvertId} />
         )}

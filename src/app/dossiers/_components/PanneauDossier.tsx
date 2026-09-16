@@ -23,9 +23,11 @@ import {
   type TypeEvenement,
 } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
+import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import type { DossierDetail, EvenementVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { ProchaineActionResume } from "./CarteDossier";
+import { PastilleRetard, ProchaineActionResume } from "./CarteDossier";
+import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { ChangementEtape } from "./ChangementEtape";
 import { CoordonneesClient } from "./CoordonneesClient";
 import { DocumentsDossier } from "./DocumentsDossier";
@@ -146,7 +148,8 @@ function ContenuPanneau({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b-[0.5px] border-[#2A2D34] px-5 pt-4 pb-3">
+      <header className="relative border-b-[0.5px] border-[#2A2D34] px-5 pt-4 pb-3">
+        <Lisere couleur={couleurLisere(detail, maintenant)} />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <SheetTitle className="truncate text-[17px] font-medium tracking-tight text-[#F2F3F5]">
@@ -163,6 +166,11 @@ function ContenuPanneau({
         <p className="mt-2 truncate text-[13px] text-[#D1D5DB]">{detail.objet}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PastilleEtape etape={detail.etape} libelle={LIBELLES_ETAPE[detail.etape]} />
+          <BadgeMain main={mainDe(detail, maintenant)} long />
+          {echeanceDe(detail, maintenant) === "retard" ? <PastilleRetard className="ml-1" /> : null}
+        </div>
+        <BarreProgression etape={detail.etape} etapeAvantSortie={detail.etapeAvantSortie} className="mt-3 max-w-[420px]" />
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <a href={`tel:${telephone}`} className={CLASSE_PUCE_LIEN}>
             <Phone size={12} aria-hidden />
             {detail.clientTelephone}

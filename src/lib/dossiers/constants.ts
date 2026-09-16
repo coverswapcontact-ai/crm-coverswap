@@ -80,8 +80,16 @@ export const LIBELLES_CRITERE: Record<CritereEntree, string> = {
   MOTIF_PERTE: "Motif de perte",
 };
 
+/* Qui doit agir pour faire avancer le dossier : MOI (Lucas) ou le CLIENT.
+   Un dossier dont la prochaine action est dépassée repasse à moi, quel que soit
+   le responsable de l'étape : quand le client tarde, c'est à moi de relancer
+   (voir mainDe dans pilotage.ts). null : dossier perdu, plus personne ne joue. */
+export const RESPONSABLES = ["MOI", "CLIENT"] as const;
+export type Responsable = (typeof RESPONSABLES)[number];
+
 export type RegleEtape = {
   description: string;
+  responsable: Responsable | null;
   entree: readonly CritereEntree[];
   sorties: readonly EtapeActive[];
   terminale?: boolean;
@@ -90,57 +98,68 @@ export type RegleEtape = {
 export const REGLES_ETAPES: Record<EtapeDossier, RegleEtape> = {
   QUALIFICATION: {
     description: "Infos reçues, dossier ouvert",
+    responsable: "MOI",
     entree: ["COORDONNEES_COMPLETES", "OBJET", "PHOTO"],
     sorties: ["SIMULATION", "DEVIS_ENVOYE"],
   },
   SIMULATION: {
     description: "Préparation des visuels et rendus",
+    responsable: "MOI",
     entree: [],
     sorties: ["DEVIS_ENVOYE"],
   },
   DEVIS_ENVOYE: {
     description: "Devis généré et transmis au client",
+    responsable: "CLIENT",
     entree: ["DEVIS_GENERE"],
     sorties: ["RELANCE", "SIGNE"],
   },
   RELANCE: {
     description: "Client relancé, en attente de décision",
+    responsable: "CLIENT",
     entree: ["DEVIS_GENERE"],
     sorties: ["SIGNE"],
   },
   SIGNE: {
     description: "Bon pour accord reçu, acompte encaissé",
+    responsable: "CLIENT",
     entree: ["DEVIS_GENERE", "BON_POUR_ACCORD", "ACOMPTE_ENCAISSE"],
     sorties: ["PLANIFIE"],
   },
   PLANIFIE: {
     description: "Date de chantier calée",
+    responsable: "MOI",
     entree: ["DATE_CHANTIER"],
     sorties: ["CHANTIER"],
   },
   CHANTIER: {
     description: "Pose en cours ou faite",
+    responsable: "MOI",
     entree: [],
     sorties: ["FACTURE"],
   },
   FACTURE: {
     description: "Facture émise",
+    responsable: "MOI",
     entree: ["FACTURE_GENEREE"],
     sorties: ["ENCAISSE"],
   },
   ENCAISSE: {
     description: "Solde encaissé — étape terminale",
+    responsable: "CLIENT",
     entree: ["SOLDE_ENCAISSE"],
     sorties: [],
     terminale: true,
   },
   PERDU: {
     description: "Affaire perdue",
+    responsable: null,
     entree: ["MOTIF_PERTE"],
     sorties: [],
   },
   EN_PAUSE: {
     description: "Client injoignable ou projet reporté",
+    responsable: "CLIENT",
     entree: [],
     sorties: [],
   },

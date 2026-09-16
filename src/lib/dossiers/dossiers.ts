@@ -6,6 +6,7 @@ import {
   LIBELLES_ETAPE,
   SOURCES_DOSSIER,
   type DirectionEvenement,
+  type EtapeActive,
   type EtapeDossier,
   type MotifPerte,
   type SourceDossier,
@@ -19,6 +20,7 @@ import { versCentimes } from "./montants";
 import {
   estEtape,
   estEtapeActive,
+  estEtapeSortie,
   etapeAvantSortie,
   lireMetadataChangementEtape,
   rangEtape,
@@ -120,7 +122,10 @@ type DossierAvecDernierDevis = Prisma.DossierGetPayload<{
   include: { documents: { select: { totalHt: true } } };
 }>;
 
-function versResume(dossier: Omit<DossierAvecDernierDevis, "photos">): DossierResume {
+function versResume(
+  dossier: Omit<DossierAvecDernierDevis, "photos">,
+  avantSortie: EtapeActive | null
+): DossierResume {
   return {
     id: dossier.id,
     clientNom: dossier.clientNom,
@@ -132,6 +137,7 @@ function versResume(dossier: Omit<DossierAvecDernierDevis, "photos">): DossierRe
     montantDernierDevis: dossier.documents[0]?.totalHt ?? null,
     prochaineAction: dossier.prochaineAction,
     prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null,
+    etapeAvantSortie: avantSortie,
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
   };
@@ -149,7 +155,25 @@ export async function listerDossiers(): Promise<DossierResume[]> {
     orderBy: { updatedAt: "desc" },
     include: { documents: DERNIER_DEVIS },
   });
-  return dossiers.map(versResume);
+
+  // Perdus et en pause : la barre de progression reste à l'étape quittée,
+  // lue dans leurs changements d'étape (du plus récent au plus ancien).
+  const sortis = dossiers.filter((dossier) => estEtapeSortie(dossier.etape)).map((dossier) => dossier.id);
+  const changements =
+    sortis.length > 0
+      ? await prisma.dossierEvenement.findMany({
+          where: { dossierId: { in: sortis }, type: "CHANGEMENT_ETAPE" },
+          orderBy: { createdAt: "desc" },
+          select: { dossierId: true, metadata: true },
+        })
+      : [];
+  const parDossier = new Map<string, MetadataChangementEtape[]>();
+  for (const changement of changements) {
+    const metadata = lireMetadataChangementEtape(changement.metadata);
+    if (metadata) parDossier.set(changement.dossierId, [...(parDossier.get(changement.dossierId) ?? []), metadata]);
+  }
+
+  return dossiers.map((dossier) => versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? [])));
 }
 
 export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
@@ -178,7 +202,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
   }));
 
   return {
-    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }),
+    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }, etapeAvantSortie(changements)),
     clientAdresse: dossier.clientAdresse,
     clientCp: dossier.clientCp,
     clientEmail: dossier.clientEmail,
@@ -221,7 +245,6 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       statut: document.statut as StatutDocument,
       pdfUrl: document.numero ? urlPdf(dossier.id, document.id) : null,
     })),
-    etapeAvantSortie: etapeAvantSortie(changements),
   };
 }
 

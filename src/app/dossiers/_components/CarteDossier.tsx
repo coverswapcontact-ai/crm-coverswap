@@ -2,20 +2,23 @@
 
 import { CalendarClock } from "lucide-react";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
-import { estAujourdhui, formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
+import { formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
+import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
+import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { PastilleEtape, TRANS } from "./ui";
 
-export type Echeance = "retard" | "aujourdhui" | "avenir" | "aucune";
-
-export function echeanceDe(dossier: Pick<DossierResume, "prochaineActionDate" | "etape">, maintenant: Date): Echeance {
-  if (!dossier.prochaineActionDate) return "aucune";
-  // Un dossier perdu ou encaissé n'attend plus d'action : pas d'alerte de retard.
-  if (dossier.etape === "PERDU" || dossier.etape === "ENCAISSE") return "avenir";
-  if (joursDeRetard(dossier.prochaineActionDate, maintenant) > 0) return "retard";
-  return estAujourdhui(dossier.prochaineActionDate, maintenant) ? "aujourdhui" : "avenir";
+/** Pastille rouge : prochaine action dépassée. */
+export function PastilleRetard({ className }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Prochaine action en retard"
+      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-[#EF4444] ring-4 ring-[#EF4444]/15", className)}
+    />
+  );
 }
 
 /** Bloc « prochaine action », partagé par la carte, la liste et le panneau. */
@@ -32,8 +35,7 @@ export function ProchaineActionResume({
   const date = dossier.prochaineActionDate;
   let libelleDate: string | null = null;
   if (date && echeance === "retard") {
-    const jours = joursDeRetard(date, maintenant);
-    libelleDate = `En retard de ${jours} j · ${formatJourCourt(date)}`;
+    libelleDate = `En retard de ${joursDeRetard(date, maintenant)} j · ${formatJourCourt(date)}`;
   } else if (date && echeance === "aujourdhui") {
     libelleDate = "Aujourd'hui";
   } else if (date) {
@@ -108,19 +110,18 @@ export function CarteDossier({
       type="button"
       onClick={onOuvrir}
       className={cn(
-        "relative block w-full rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5 text-left",
+        "relative block w-full overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5 pl-4 text-left",
         "hover:border-[#3A3E47] hover:bg-[#20232A] focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
         TRANS
       )}
     >
-      {enRetard ? (
-        <span
-          role="img"
-          aria-label="Prochaine action en retard"
-          className="absolute top-3.5 right-3.5 h-2 w-2 rounded-full bg-[#EF4444] ring-4 ring-[#EF4444]/15"
-        />
-      ) : null}
-      <span className="block truncate pr-5 text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
+      <Lisere couleur={couleurLisere(dossier, maintenant)} />
+      {/* Qui a la main, en premier : c'est ce qui se lit d'abord. */}
+      <span className="flex min-h-5 items-center justify-between gap-2">
+        <BadgeMain main={mainDe(dossier, maintenant)} />
+        {enRetard ? <PastilleRetard className="mr-1" /> : null}
+      </span>
+      <span className="mt-2 block truncate text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
       <span className="mt-0.5 block truncate text-[12px] text-[#6B7280]">{dossier.clientVille}</span>
       <span className="mt-2 block truncate text-[13px] text-[#9CA3AF]">{dossier.objet}</span>
       <span className="mt-2 flex items-center justify-between gap-2">
@@ -138,6 +139,7 @@ export function CarteDossier({
         ) : null}
       </span>
       <ProchaineActionResume dossier={dossier} maintenant={maintenant} className="mt-3" />
+      <BarreProgression etape={dossier.etape} etapeAvantSortie={dossier.etapeAvantSortie} className="mt-3" />
     </button>
   );
 }

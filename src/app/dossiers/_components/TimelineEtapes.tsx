@@ -60,6 +60,7 @@ export function TimelineEtapes({
               : "a-venir";
         const notes = detail.notes.filter((note) => note.etape === etape);
         const ouverte = ouvertes.includes(etape);
+        const couleur = COULEURS_ETAPE[etape];
         const derniere = index === etapes.length - 1;
 
         return (
@@ -67,24 +68,22 @@ export function TimelineEtapes({
             {!derniere ? (
               <span
                 aria-hidden
-                className={cn("absolute top-5 bottom-0 left-[7px] w-px", statut === "passee" ? "bg-[#1D9E75]/50" : "bg-[#2A2D34]")}
+                className="absolute top-5 bottom-0 left-[7px] w-px"
+                style={{ backgroundColor: statut === "passee" ? `${couleur}66` : "#2A2D34" }}
               />
             ) : null}
             <span
               aria-hidden
               className={cn(
                 "absolute top-[7px] left-0 flex h-[15px] w-[15px] items-center justify-center rounded-full border",
-                statut === "passee" && "border-[#1D9E75] bg-[#1D9E75]",
                 statut === "a-venir" && "border-[#3A3E47] bg-[#16181D]"
               )}
               style={
                 statut === "courante"
-                  ? {
-                      borderColor: COULEURS_ETAPE[etape],
-                      backgroundColor: `${COULEURS_ETAPE[etape]}33`,
-                      boxShadow: `0 0 0 4px ${COULEURS_ETAPE[etape]}22`,
-                    }
-                  : undefined
+                  ? { borderColor: couleur, backgroundColor: `${couleur}33`, boxShadow: `0 0 0 4px ${couleur}22` }
+                  : statut === "passee"
+                    ? { borderColor: couleur, backgroundColor: couleur }
+                    : undefined
               }
             >
               {statut === "passee" ? <Check size={9} strokeWidth={3} className="text-[#0B1612]" /> : null}
@@ -108,7 +107,10 @@ export function TimelineEtapes({
               >
                 {LIBELLES_ETAPE[etape]}
                 {statut === "courante" ? (
-                  <span className="rounded-full bg-[#112B22] px-1.5 py-px text-[10px] font-medium text-[#5DCAA5]">
+                  <span
+                    className="rounded-full px-1.5 py-px text-[10px] font-medium"
+                    style={{ color: couleur, backgroundColor: `${couleur}1A` }}
+                  >
                     étape actuelle
                   </span>
                 ) : null}

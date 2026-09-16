@@ -26,6 +26,8 @@ export type DossierResume = {
   montantDernierDevis: number | null;
   prochaineAction: string | null;
   prochaineActionDate: string | null;
+  /** Perdu ou en pause : étape active quittée (la progression y reste figée). */
+  etapeAvantSortie: EtapeActive | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -68,7 +70,6 @@ export type DossierDetail = DossierResume & {
   notes: NoteVue[];
   evenements: EvenementVue[];
   documents: DocumentVue[];
-  etapeAvantSortie: EtapeActive | null;
 };
 
 export type PresetVue = {

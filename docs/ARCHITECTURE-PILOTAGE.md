@@ -16,7 +16,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | Aucun numéro émis réattribué | (volet comptabilité) | |
 | L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | (volets validation et agent) | |
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
-| Photos jamais sans authentification | (volet accès) | |
+| Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
 | RGPD | (volet RGPD) | |
 
 ## 1. Traçabilité intégrale : le journal des modifications
@@ -169,3 +169,22 @@ Commandes locales :
   migrations de données (redémarrer ensuite le serveur de développement) ;
 - `npm test` : tests sur des copies temporaires de la base (jamais la base de
   développement ni la production).
+
+## 2. Accès : refus par défaut
+
+Jusqu'ici, le middleware protégeait une **liste de préfixes** : toute nouvelle
+route était publique tant qu'on n'avait pas pensé à l'ajouter. Cinq oublis ont
+été constatés (dont les photos de clients sous `/api/uploads`). La logique est
+inversée : `src/lib/acces/routes-publiques.ts` liste les seules routes
+joignables sans session, chacune avec la manière dont elle se protège
+elle-même ; tout le reste exige une connexion.
+
+- Pages : redirection vers la connexion, en conservant l'adresse demandée.
+- API : `401 { error: "Connexion requise" }`.
+- Un test vérifie que chaque entrée publique correspond à une route existante et
+  qu'une route inconnue est refusée.
+- `/api/cron/*` refuse tout si `CRON_SECRET` n'est pas définie (avant : ouverte).
+- Webhook Meta : signature `X-Hub-Signature-256` vérifiée dès que
+  `META_APP_SECRET` est définie.
+- Le fichier suit la convention `proxy.ts` de Next 16 (`middleware.ts` est dépréciée).
+

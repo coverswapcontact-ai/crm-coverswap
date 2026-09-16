@@ -7,13 +7,13 @@ import { revalidatePath } from "next/cache";
 // ============================================================================
 // GET /api/cron/relance — Auto-relance des devis ENVOYE depuis plus de 3 jours
 // Appelable par Railway cron, Vercel cron, ou manuellement.
-// Sécurisé par CRON_SECRET en header Authorization.
+// Sécurisé par CRON_SECRET en header Authorization. Route publique (sans
+// session) : sans CRON_SECRET configurée, elle refuse tout.
 // ============================================================================
 export async function GET(request: NextRequest) {
-  // Sécurité : vérifier le token (optionnel en dev)
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 

@@ -1,5 +1,6 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest, NextResponse } from "next/server";
+import { estRoutePublique } from "@/lib/acces/routes-publiques";
 import { ENTETE_ORIGINE, ENTETE_REQUETE } from "@/lib/journal/entetes";
 
 /* ────────────────────────────────────────────────────────────
@@ -43,17 +44,14 @@ function checkBasicAuth(request: NextRequest): boolean {
 }
 
 /* ────────────────────────────────────────────────────────────
-   Middleware principal
+   Proxy principal
 ──────────────────────────────────────────────────────────── */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  /* 1. Routes publiques (webhook site + healthcheck Railway) */
-  const isPublicRoute =
-    pathname === "/api/webhook" ||
-    pathname.startsWith("/api/webhook/") ||
-    pathname === "/api/health" ||
-    pathname.startsWith("/api/cron/");
+  /* 1. Routes publiques : liste blanche explicite (src/lib/acces/routes-publiques.ts).
+        Tout le reste exige une session, y compris une route ajoutée demain. */
+  const isPublicRoute = estRoutePublique(pathname);
 
   /* 2. HTTP Basic Auth sur tout sauf routes publiques */
   if (!isPublicRoute && !checkBasicAuth(request)) {
@@ -80,30 +78,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  /* 4. Auth NextAuth sur routes protégées */
-  const protectedPaths = [
-    "/dashboard", "/leads", "/devis", "/factures", "/chantiers",
-    "/commandes", "/finances", "/analytics", "/assistant", "/clients",
-    "/api/leads", "/api/devis", "/api/factures", "/api/chantiers",
-    "/api/commandes", "/api/assistant", "/api/email", "/api/pdf",
-    // Photos des clients (volume /data/uploads) et PDF de simulation :
-    // données personnelles, jamais servies sans session.
-    "/api/uploads", "/api/simulations",
-    // Backfill Meta : son ?secret= (partagé avec Zapier et le site) ne suffit pas.
-    "/api/admin",
-    // Module prospection : le POST /api/prospection/sourcing consomme des
-    // crédits Google Places, il ne doit jamais être joignable sans session.
-    "/prospection", "/api/prospection",
-    // Module dossiers : coordonnées et photos des clients, devis et factures.
-    "/dossiers", "/api/dossiers",
-  ];
-  const needsAuth = protectedPaths.some((p) => pathname.startsWith(p));
-
-  if (needsAuth) {
+  /* 4. Session NextAuth exigée partout ailleurs (refus par défaut) */
+  if (!isPublicRoute) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     if (!token) {
       if (pathname.startsWith("/api/")) {
-        return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+        return NextResponse.json({ error: "Connexion requise" }, { status: 401 });
       }
       const signInUrl = new URL("/auth/signin", request.url);
       // Paramètres conservés : un lien /dossiers?dossier=… rouvre le dossier après connexion.
@@ -134,7 +114,7 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico)$).*)",
     // … mais toujours les routes API, même terminées par .jpg ou .png : sans
     // cette ligne, /api/uploads/<lead>/<simulation>/before.jpg échappait au
-    // middleware, donc au contrôle de session.
+    // proxy, donc au contrôle de session.
     "/api/:path*",
   ],
 };

@@ -243,7 +243,7 @@ function ContenuPanneau({
             detail={detail}
             onMisAJour={onMisAJour}
           />
-          <HistoriqueEvenements evenements={detail.evenements} onRecharger={onRecharger} />
+          <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
         </div>
       </div>
 
@@ -364,7 +364,7 @@ const ICONES_EVENEMENT: Partial<Record<TypeEvenement, typeof FileText>> = {
   MAIL_ENVOYE: Mail,
 };
 
-function HistoriqueEvenements({ evenements, onRecharger }: { evenements: EvenementVue[]; onRecharger: () => Promise<void> }) {
+function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierId: string; evenements: EvenementVue[]; onRecharger: () => Promise<void> }) {
   const [ouvert, setOuvert] = useState(false);
   const [tout, setTout] = useState(false);
   const [mail, setMail] = useState<string | null>(null);
@@ -383,6 +383,11 @@ function HistoriqueEvenements({ evenements, onRecharger }: { evenements: Eveneme
         </span>
         <ChevronDown size={15} aria-hidden className={cn("text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
       </button>
+      {ouvert ? (
+        <Link href={`/journal?dossierId=${dossierId}`} className={cn("mt-2 inline-flex min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+          Journal détaillé : chaque modification, par qui et quand
+        </Link>
+      ) : null}
       {ouvert ? (
         <ol className="mt-3 space-y-3">
           {liste.map((evenement) => {

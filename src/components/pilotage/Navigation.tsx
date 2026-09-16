@@ -13,6 +13,7 @@ import {
   Menu,
   Radar,
   Receipt,
+  ScrollText,
   SlidersHorizontal,
   Users,
   Wallet,
@@ -57,6 +58,7 @@ const SECONDAIRES: Entree[] = [
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/numeros", libelle: "Registre des numéros", icone: Hash },
+  { href: "/journal", libelle: "Journal", icone: ScrollText },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 

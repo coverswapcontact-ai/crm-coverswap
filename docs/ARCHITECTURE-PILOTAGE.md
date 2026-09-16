@@ -89,6 +89,16 @@ Piège rencontré : les requêtes Prisma sont paresseuses (elles partent au prem
 `then`). `avecActeur` attend donc la fonction **dans** le contexte, sinon la
 requête partirait hors de lui et perdrait son auteur.
 
+### Lire le journal (`/journal`)
+
+L'écran « Journal » (menu Plus) lit le journal sans jamais l'écrire : par
+auteur (personnes, agent, système, site, scripts, reprise, inconnu), par type
+d'enregistrement, par période ; limité à un dossier et tout ce qui s'y
+rattache (notes, historique, documents, paiements, dépenses, mails,
+propositions) depuis le panneau du dossier, ou à une fiche client depuis
+celle-ci. Chaque ligne montre les champs changés, avant → après ; les secrets
+(jeton Google chiffré) sont masqués ; une copie caviardée (RGPD) est signalée.
+
 ### Rien ne se supprime
 
 - Base : chaque table porte un déclencheur `BEFORE DELETE` qui refuse, y compris

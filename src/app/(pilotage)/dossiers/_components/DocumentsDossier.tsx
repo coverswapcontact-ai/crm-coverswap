@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Download, ExternalLink, FilePlus2, Receipt, RefreshCw, Undo2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, ExternalLink, FilePlus2, Mail, Receipt, RefreshCw, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
 import {
@@ -14,8 +14,8 @@ import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, Modale, TitreSection, TRANS } from "./ui";
+import { appelApi, envoyerJson, messageErreur } from "./client";
+import { Bouton, Champ, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
 import { Puces } from "@/components/pilotage/ui";
 
 const CLASSE_LIEN_ICONE = cn(
@@ -119,6 +119,73 @@ function ModaleAvoir({
   );
 }
 
+type Brouillon = { a: string; objet: string; texte: string };
+
+/** Envoi d'un devis ou d'une facture par mail : brouillon pré-rempli, relu, envoyé par la file. */
+function ModaleEnvoiMail({ detail, document, onFermer }: { detail: DossierDetail; document: DocumentVue; onFermer: () => void }) {
+  const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const url = `/api/dossiers/${detail.id}/documents/${document.id}/mail`;
+
+  useEffect(() => {
+    let actif = true;
+    appelApi<Brouillon>(url)
+      .then((reponse) => actif && setBrouillon(reponse))
+      .catch((probleme) => actif && setErreur(messageErreur(probleme)));
+    return () => {
+      actif = false;
+    };
+  }, [url]);
+
+  const complet = Boolean(brouillon && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(brouillon.a.trim()) && brouillon.objet.trim() && brouillon.texte.trim());
+
+  async function envoyer() {
+    if (!brouillon || !complet) return;
+    setEnvoi(true);
+    try {
+      await envoyerJson(url, "POST", brouillon);
+      toast.success("Mail en cours d'envoi", { description: "Il part dans quelques secondes ; l'envoi s'inscrit dans l'historique du dossier." });
+      onFermer();
+    } catch (probleme) {
+      toast.error("Envoi refusé", { description: messageErreur(probleme) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      titre={`Envoyer ${document.type === "DEVIS" ? "le devis" : "la facture"} ${document.numero}`}
+      description="Le PDF est joint. Relis le message : il part tel quel, et reste dans l'historique du dossier."
+      pied={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Annuler
+          </Bouton>
+          <Bouton variante="primaire" icone={<Send size={14} aria-hidden />} disabled={!complet} chargement={envoi} onClick={() => void envoyer()}>
+            Envoyer
+          </Bouton>
+        </div>
+      }
+    >
+      {erreur ? (
+        <p className="text-[13px] text-[#F87171]">{erreur}</p>
+      ) : !brouillon ? (
+        <p className="text-[13px] text-[#9CA3AF]">Préparation du message…</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <Champ libelle="Destinataire" obligatoire type="email" value={brouillon.a} onChange={(evenement) => setBrouillon({ ...brouillon, a: evenement.target.value })} />
+          <Champ libelle="Objet" obligatoire maxLength={200} value={brouillon.objet} onChange={(evenement) => setBrouillon({ ...brouillon, objet: evenement.target.value })} />
+          <ZoneTexte libelle="Message" obligatoire rows={10} maxLength={10000} value={brouillon.texte} onChange={(evenement) => setBrouillon({ ...brouillon, texte: evenement.target.value })} />
+        </div>
+      )}
+    </Modale>
+  );
+}
+
 export function DocumentsDossier({
   detail,
   onGenerer,
@@ -131,6 +198,7 @@ export function DocumentsDossier({
   onMisAJour: (detail: DossierDetail) => void;
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
+  const [aEnvoyer, setAEnvoyer] = useState<DocumentVue | null>(null);
   const bloque =
     detail.etape === "PERDU" || detail.etape === "EN_PAUSE"
       ? "Reprends le dossier pour générer un document."
@@ -162,6 +230,7 @@ export function DocumentsDossier({
             const peutRefaire =
               document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE"].includes(document.statut) && bloque === null;
             const peutAnnuler = document.type === "FACTURE" && document.statut !== "ANNULEE" && detail.etape !== "PERDU" && detail.etape !== "EN_PAUSE";
+            const peutEnvoyer = (document.type === "DEVIS" || document.type === "FACTURE") && document.statut !== "REMPLACE" && document.statut !== "ANNULEE";
             return (
               <li key={document.id} className="border-t-[0.5px] border-[#2A2D34] px-3 py-2.5 first:border-t-0">
                 <div className="flex items-center gap-3">
@@ -219,8 +288,13 @@ export function DocumentsDossier({
                 ) : null}
                 {avoir ? <p className="mt-1 text-[12px] text-[#F87171]">Annulée par l&apos;avoir {avoir.numero}</p> : null}
                 {remplacant ? <p className="mt-1 text-[12px] text-[#6B7280]">Remplacé par le devis {remplacant.numero}</p> : null}
-                {peutRefaire || peutAnnuler ? (
+                {peutRefaire || peutAnnuler || peutEnvoyer ? (
                   <div className="mt-2 flex flex-wrap gap-2">
+                    {peutEnvoyer ? (
+                      <Bouton taille="sm" variante="fantome" icone={<Mail size={13} aria-hidden />} onClick={() => setAEnvoyer(document)}>
+                        Envoyer par mail
+                      </Bouton>
+                    ) : null}
                     {peutRefaire ? (
                       <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} onClick={() => onRefaire(document)}>
                         Refaire ce devis
@@ -238,6 +312,7 @@ export function DocumentsDossier({
           })}
         </ul>
       )}
+      {aEnvoyer ? <ModaleEnvoiMail key={aEnvoyer.id} detail={detail} document={aEnvoyer} onFermer={() => setAEnvoyer(null)} /> : null}
       {aAnnuler ? (
         <ModaleAvoir detail={detail} facture={aAnnuler} onFermer={() => setAAnnuler(null)} onFait={onMisAJour} />
       ) : null}

@@ -89,6 +89,11 @@ describe("dates réelles d'un dossier", () => {
     assert.equal(Math.round((apres.delais.ouvertureASignature ?? 0) / JOUR), 38);
     const liste = await dossiers.listerDossiers();
     assert.equal(liste.find((dossier) => dossier.id === dossierId)?.ouvertLe, "2026-06-02T12:00:00.000Z");
+    const fiche = await prisma.client.findUniqueOrThrow({ where: { id: apres.client!.id } });
+    assert.equal(fiche.premierContactLe.toISOString(), "2026-06-02T12:00:00.000Z", "la fiche client recule avec l'ouverture réelle");
+    await avecActeur(LUCAS, () => dossiers.modifierDateEvenement(dossierId, ouverture.evenementId!, { survenuLe: "2026-06-20" }));
+    assert.equal((await prisma.client.findUniqueOrThrow({ where: { id: fiche.id } })).premierContactLe.toISOString(), "2026-06-02T12:00:00.000Z", "le premier contact n'avance jamais");
+    await avecActeur(LUCAS, () => dossiers.modifierDateEvenement(dossierId, ouverture.evenementId!, { survenuLe: "2026-06-02" }));
 
     // Une date inconnue (reprise) devient connue ; seul un passage d'étape se redate ici.
     const signature = apres.parcours.find((passage) => passage.etape === "SIGNE")!;

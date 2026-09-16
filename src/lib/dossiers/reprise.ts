@@ -5,7 +5,7 @@ import { schemaPaiement } from "@/lib/encaissements/schemas";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, type EtapeActive, type EtapeDossier } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
 import { rattacherDocumentExistant, schemaDocumentExistant } from "./documents-existants";
-import { originesDuDossier, ouvrirDossier, schemaCreation, suitesOuverture } from "./dossiers";
+import { originesDuDossier, ouvrirDossier, reculerPremierContact, schemaCreation, suitesOuverture } from "./dossiers";
 import { lireMetadataChangementEtape, rangEtape, type MetadataChangementEtape } from "./regles";
 import { effetsDuChangementEtape } from "./transitions";
 
@@ -73,6 +73,7 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
           (evenement) => lireMetadataChangementEtape(evenement.metadata)?.nature === "OUVERTURE"
         );
         if (ouverture) await tx.dossierEvenement.update({ where: { id: ouverture.id }, data: { survenuLe: ouvertLe } });
+        await reculerPremierContact(tx, dossier.id);
       }
 
       // Documents déjà émis, puis paiements déjà reçus (imputés sur ces pièces).

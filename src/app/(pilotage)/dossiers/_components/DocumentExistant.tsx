@@ -8,6 +8,7 @@ import { Puces } from "@/components/pilotage/ui";
 import { LIBELLES_STATUT_DOCUMENT } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
+import { numerosProposables } from "@/lib/dossiers/numeros-libres";
 import type { NumeroLibre } from "@/lib/dossiers/registre";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import { appelApi, envoyerJson, messageErreur } from "./client";
@@ -15,16 +16,6 @@ import { Bouton, Champ, Modale } from "./ui";
 
 type TypeExistant = "DEVIS" | "FACTURE";
 const STATUTS_DEVIS = ["ENVOYE", "ACCEPTE", "REFUSE"] as const;
-
-/** Série d'un numéro lu : « F2026-012 » → F, « 2026-012 » → rien. */
-const famille = (numero: string) => /^([A-Za-z]*)/.exec(numero.trim())?.[1]?.toUpperCase() ?? "";
-
-/** Numéros du registre qu'un document de ce type peut porter : devis dans la série sans préfixe, factures en F ou FACT. */
-function proposables(libres: NumeroLibre[], type: TypeExistant): NumeroLibre[] {
-  return libres.filter(
-    (libre) => (libre.type === type || libre.type === "INCONNU") && (type === "DEVIS" ? famille(libre.numero) === "" : famille(libre.numero) !== "")
-  );
-}
 
 /**
  * Devis ou facture émis avant le CRM : rattaché avec son numéro du registre,
@@ -76,7 +67,7 @@ export function ModaleDocumentExistant({
   const erreurAcompte = acompte.trim() && (!Number.isInteger(acompteLu) || acompteLu! < 0 || acompteLu! > 100) ? "Pourcentage entre 0 et 100." : null;
   const erreurDate = dateEmission > aujourdhui ? "La date est à venir." : null;
   const complet = Boolean(numero.trim() && dateEmission && montantLu && montantLu > 0 && !erreurDate && !erreurAcompte);
-  const suggestions = proposables(libres, type);
+  const suggestions = numerosProposables(libres, type);
   const connu = libres.find((libre) => libre.numero.toLowerCase() === numero.trim().toLowerCase());
 
   function choisirNumero(valeur: string) {

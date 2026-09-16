@@ -248,7 +248,8 @@ export function DocumentsDossier({
                         {LIBELLES_TYPE_DOCUMENT[document.type]} {document.numero}
                       </span>
                       <span className={cn("rounded-full px-1.5 py-px text-[10px]", TON_STATUT[document.statut] ?? "bg-[#22262D] text-[#9CA3AF]")}>
-                        {LIBELLES_STATUT_DOCUMENT[document.statut]}
+                        {/* Une facture reprise n'a pas été générée ici : elle a été émise avant le CRM. */}
+                        {repris && document.statut === "GENERE" ? "Émise" : LIBELLES_STATUT_DOCUMENT[document.statut]}
                       </span>
                       {repris ? <Pastille titre="Émis avant le CRM, rattaché avec son numéro du registre">Repris</Pastille> : null}
                     </p>

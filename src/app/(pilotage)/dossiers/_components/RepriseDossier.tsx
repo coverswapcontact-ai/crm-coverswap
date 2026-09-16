@@ -8,6 +8,7 @@ import type { ClientResume } from "@/lib/clients/types";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, LIBELLES_SOURCE, LIBELLES_STATUT_DOCUMENT, SOURCES_DOSSIER, type EtapeActive, type SourceDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
+import { numerosProposables } from "@/lib/dossiers/numeros-libres";
 import type { NumeroLibre } from "@/lib/dossiers/registre";
 import { LIBELLES_MOYEN, MOYENS_PAIEMENT, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,6 @@ type LigneDocument = { cle: string; type: "DEVIS" | "FACTURE"; numero: string; d
 type LignePaiement = { cle: string; montant: string; recuLe: string; moyen: MoyenPaiement | ""; reference: string };
 
 const cleUnique = () => crypto.randomUUID();
-const famille = (numero: string) => /^([A-Za-z]*)/.exec(numero.trim())?.[1]?.toUpperCase() ?? "";
 
 /** Date la plus ancienne ou la plus récente d'une liste de jours AAAA-MM-JJ. */
 const extreme = (jours: string[], sens: "min" | "max") => {
@@ -372,12 +372,12 @@ export function RepriseDossier({
           ) : (
             <ul className="space-y-2">
               <datalist id={`${idListe}-devis`}>
-                {(libres ?? []).filter((libre) => famille(libre.numero) === "" && libre.type !== "FACTURE").map((libre) => (
+                {numerosProposables(libres ?? [], "DEVIS").map((libre) => (
                   <option key={libre.id} value={libre.numero}>{[libre.destinataire, libre.montant ? formatMontant(libre.montant) : null].filter(Boolean).join(" · ")}</option>
                 ))}
               </datalist>
               <datalist id={`${idListe}-factures`}>
-                {(libres ?? []).filter((libre) => libre.type === "FACTURE" || (famille(libre.numero) !== "" && libre.type === "INCONNU")).map((libre) => (
+                {numerosProposables(libres ?? [], "FACTURE").map((libre) => (
                   <option key={libre.id} value={libre.numero}>{[libre.destinataire, libre.montant ? formatMontant(libre.montant) : null].filter(Boolean).join(" · ")}</option>
                 ))}
               </datalist>

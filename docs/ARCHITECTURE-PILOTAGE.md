@@ -110,8 +110,14 @@ requête partirait hors de lui et perdrait son auteur.
 ### Modèles hors journal
 
 `MODELES_HORS_JOURNAL` (dans `declencheurs.ts`) liste les tables dont chaque
-écriture n'est pas journalisée (leurs suppressions restent refusées). Il ne
-contient que `JournalModification`. Tout ajout doit être justifié ici.
+écriture n'est pas journalisée (leurs suppressions restent refusées). Tout ajout
+doit être justifié ici :
+
+- `JournalModification` : c'est le journal ;
+- `Tache` et `Planification` (file de tâches, section 3) : leurs lignes sont
+  déjà un historique d'exécution (tentatives, erreurs, résultat) et changent à
+  chaque tour ; les écritures faites **par** les tâches sont journalisées,
+  attribuées à l'acteur du traitement avec l'origine `tache:<TYPE>`.
 
 ### Limites connues
 
@@ -187,4 +193,41 @@ elle-même ; tout le reste exige une connexion.
 - Webhook Meta : signature `X-Hub-Signature-256` vérifiée dès que
   `META_APP_SECRET` est définie.
 - Le fichier suit la convention `proxy.ts` de Next 16 (`middleware.ts` est dépréciée).
+
+## 3. Tâches de fond
+
+Tout ce qui parle à un service extérieur (Google Drive, Gmail, envoi de mail)
+ou qui peut attendre passe par une **file de tâches en base** (`Tache`), jamais
+dans le chemin d'une requête : l'interface n'attend pas, et une panne réseau ne
+perd rien.
+
+- **Idempotence** : chaque tâche a une clé unique. Mode `UNIQUE` (défaut) : une
+  clé déjà connue n'est jamais rejouée — un envoi validé ne part qu'une fois.
+  Mode `RECONCILIATION` : la tâche remet un état en ordre (miroir Drive) ; la
+  remettre en file la rejoue, même terminée, ou après la fin si elle tourne.
+- **Transactionnel** : `mettreEnFile(demande, tx)` dans la transaction de
+  l'écriture qui la motive ; la tâche existe si et seulement si l'écriture a eu lieu.
+- **Réessais** : 30 s, 1 min, 2 min… plafonnés à 6 h (avec un peu d'aléa), 8
+  tentatives par défaut ; `ErreurDefinitive` (accès révoqué, donnée invalide)
+  abandonne tout de suite. Une tâche abandonnée reste visible, avec son erreur,
+  et se relance à la main.
+- **Reprise après plantage** : une tâche en cours porte un bail
+  (`verrouJusqua`) ; passé ce délai, elle est reprise. La réservation
+  (`UPDATE … WHERE statut = …`) garantit une seule exécution à la fois, même
+  avec plusieurs processus.
+- **Délai maximal** par traitement : au-delà, la tentative est interrompue
+  (signal d'annulation) et reprogrammée.
+- **Travaux périodiques** (`Planification`) : une ligne par travail (relève des
+  mails, vérification du miroir…), son dernier passage, ses échecs consécutifs.
+  Pas une ligne par passage : la table ne grossit pas.
+- **Exécuteur** : dans le processus Next, démarré par `src/instrumentation.ts`
+  après la préparation de la base ; un tour toutes les 15 s, ou tout de suite
+  après une mise en file. `TACHES_DESACTIVEES=1` le coupe (maintenance).
+- **Registre explicite** : `src/lib/taches/traitements.ts` est la liste de tout
+  ce qui tourne en arrière-plan.
+
+Pourquoi pas un service de file externe (Redis, BullMQ, Inngest) : une instance
+unique sur Railway, une base SQLite déjà sauvegardée ; un service de plus serait
+une panne de plus et un secret de plus, pour un volume de quelques centaines de
+tâches par jour.
 

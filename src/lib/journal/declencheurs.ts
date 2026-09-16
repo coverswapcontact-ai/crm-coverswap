@@ -38,7 +38,13 @@ export const TABLE_JOURNAL = "JournalModification";
  * n'apporte rien et noierait le journal. Leurs suppressions restent refusées.
  * Chaque ajout ici se justifie dans docs/ARCHITECTURE-PILOTAGE.md.
  */
-export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([TABLE_JOURNAL]);
+export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
+  TABLE_JOURNAL,
+  // File de tâches et travaux périodiques : leurs lignes sont déjà un historique
+  // d'exécution (tentatives, erreurs, résultat) ; les effets des tâches, eux, sont journalisés.
+  "Tache",
+  "Planification",
+]);
 
 /** Préfixes de nom : tout déclencheur ainsi nommé appartient à cette couche. */
 export const PREFIXES_DECLENCHEURS = ["journal_", "interdit_suppression_", "immuable_"] as const;

@@ -76,6 +76,8 @@ export type FiltresClients = {
   limite?: number;
 };
 
+const FICHE_ANONYMISEE = "Fiche anonymisée (RGPD) : elle ne se modifie plus.";
+
 export async function listerClients(filtres: FiltresClients = {}): Promise<ClientResume[]> {
   const termes = (filtres.recherche ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 5);
   const where: Prisma.ClientWhereInput = {
@@ -147,6 +149,7 @@ const LIBELLES_CHAMPS: Record<string, string> = {
   notes: "passif",
   archiveLe: "archivage",
   archiveMotif: "motif d'archivage",
+  anonymiseLe: "anonymisation (RGPD)",
   fusionneDansId: "fusion",
   principale: "principale",
   principal: "principal",
@@ -377,6 +380,7 @@ async function verifierRecommandeur(clientId: string | null, recommandeParId: st
 export async function modifierClient(clientId: string, modification: ModificationClient): Promise<void> {
   const client = await prisma.client.findUnique({ where: { id: clientId } });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
+  if (client.anonymiseLe) throw new ErreurMetier(FICHE_ANONYMISEE, 409);
   if (client.archiveLe) throw new ErreurMetier("Fiche archivée : la restaurer avant de la modifier.", 409);
   await verifierRecommandeur(clientId, modification.recommandeParId);
 
@@ -521,8 +525,9 @@ export const schemaConsentement = z.object({
 });
 
 export async function enregistrerConsentement(clientId: string, entree: z.output<typeof schemaConsentement>): Promise<void> {
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true } });
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, anonymiseLe: true } });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
+  if (client.anonymiseLe) throw new ErreurMetier(FICHE_ANONYMISEE, 409);
   const recueilliLe = dateDepuisJour(entree.recueilliLe);
   if (recueilliLe.getTime() > Date.now() + 24 * 60 * 60_000) {
     throw new ErreurMetier("La date du consentement ne peut pas être dans le futur.", 400);
@@ -551,8 +556,9 @@ export async function archiverClient(clientId: string, motif: string): Promise<v
 }
 
 export async function restaurerClient(clientId: string): Promise<void> {
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { archiveLe: true, fusionneDansId: true } });
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { archiveLe: true, fusionneDansId: true, anonymiseLe: true } });
   if (!client) throw new ErreurMetier("Client introuvable.", 404);
+  if (client.anonymiseLe) throw new ErreurMetier(FICHE_ANONYMISEE, 409);
   if (client.fusionneDansId) throw new ErreurMetier("Fiche fusionnée dans une autre : c'est celle-ci qui vit.", 409);
   if (!client.archiveLe) return;
   await prisma.client.update({ where: { id: clientId }, data: { archiveLe: null, archiveMotif: null } });

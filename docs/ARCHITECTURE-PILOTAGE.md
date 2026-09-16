@@ -17,7 +17,7 @@ Chaque section correspond à un volet livré dans un commit distinct (voir
 | L'agent ne décide pas seul de l'argent ni de ce qui part chez un client | Toute action proposée passe par `Proposition` ; seule une personne connectée valide ou rejette ; une proposition sensible ne s'exécute jamais seule ni en lot | `src/lib/validation/` |
 | Aucun secret en dur | Variables d'environnement uniquement ; le dépôt est public | |
 | Photos jamais sans authentification | Proxy en refus par défaut : seule une liste blanche commentée est joignable sans session | `src/proxy.ts`, `src/lib/acces/routes-publiques.ts` |
-| RGPD | (volet RGPD) | |
+| RGPD | Consentement distinct, daté, immuable ; durées de conservation paramétrées → anonymisation proposée, décidée par une personne ; carte des données personnelles vérifiée sur le schéma ; journal caviardé ; pièces comptables gardées | `src/lib/rgpd/`, section 17 |
 
 ## 1. Traçabilité intégrale : le journal des modifications
 
@@ -1041,3 +1041,89 @@ construit : il faut d'abord un compte WhatsApp Business vérifié par Meta.
   millisecondes) ; un envoi rangé dans un dossier est protégé par sa trace.
 - Le coût d'un appel est estimé d'avance (environ 3 caractères par jeton) ; le
   coût enregistré est celui des jetons réellement facturés.
+
+## 17. Données personnelles (RGPD)
+
+### Ce qui existait déjà
+
+- **Consentement** aux mails commerciaux, distinct et daté, immuable, avec sa
+  preuve (section 6) ; pas de relance par mail sans accord (section 13).
+- **Synthèse et mois figés sans nom** (section 14).
+
+### Durées de conservation (paramètres datés, sans valeur par défaut)
+
+- `RGPD_CONSERVATION_PROSPECTS` : mois après la dernière activité pour un
+  contact qui n'a rien signé ; `RGPD_CONSERVATION_CLIENTS` : mois après la
+  dernière activité pour un client qui a signé (paiement reçu, ou dossier passé
+  par « Signé »).
+- Travail quotidien `conservation-rgpd` : dès que la durée est écoulée,
+  l'anonymisation est **proposée** (`ANONYMISATION_CLIENT`, sensible : jamais
+  exécutée seule, jamais en lot). Un dossier en cours suspend tout. Dernière
+  activité : premier contact, fiche, dossiers, leads, mails, paiements ; une
+  nouvelle activité repousse l'échéance (la clé d'unicité porte la date).
+- Sans durée réglée, rien n'est proposé. Le titre de la proposition ne porte
+  pas de nom (référence seulement).
+
+### Anonymiser (fiche client → « Anonymiser (RGPD) », ou proposition validée)
+
+- **Aperçu avant de décider** : ce qui part, ce qui reste, ce qui bloque
+  (dossier en cours, fiche fusionnée dans une autre) et ce qui est à faire à la
+  main hors du CRM (adresses à chercher dans Gmail, numéros à retirer du
+  téléphone : après l'anonymisation, le CRM ne les connaît plus).
+- **Carte des données personnelles** (`src/lib/rgpd/carte.ts`) : pour chaque
+  modèle rattaché à une personne, les champs remplacés, ou la raison de tout
+  garder. Un test parcourt le schéma : un modèle qui porte un lien vers un
+  client, un lead, un dossier, un message ou un prospect et qui n'y figure pas
+  fait échouer les tests.
+- **Gardé** (obligation légale, ou statistique sans identité) : documents émis
+  (identité imprimée, PDF), paiements (payeur, montant, référence : livre des
+  recettes), registre des numéros, factures de l'ancien écran (et le nom du
+  lead qu'elles impriment), preuves de consentement, étapes, montants, dates,
+  code postal et ville, provenance, mesure de l'agent.
+- **Effacé** : identité et coordonnées (fiche et fiches fusionnées dans
+  celle-ci, leads, dossiers), notes, texte libre de l'historique (un
+  changement d'étape garde sa structure), mails (texte, en-têtes, objet,
+  expéditeur), analyses de l'agent, contenu des propositions, simulations,
+  brouillons de prospection, adresse e-mail nominative d'un prospect.
+- **Journal** : les copies des lignes concernées sont caviardées avec les mêmes
+  remplacements (le journal n'accepte qu'un caviardage par ligne ; horodatage,
+  auteur et opération restent). Les copies des pièces comptables ne le sont
+  pas : l'identité y est légale.
+- **Fichiers** : photos des dossiers (avant, après, et celles déjà retirées aux
+  archives du volume), pièces jointes des mails, images de simulation sont
+  **effacés physiquement** par la tâche `EFFACEMENT_RGPD` (rejouable). C'est la
+  seule exception délibérée à « rien ne se supprime » : décidée par une
+  personne, sur une fiche précise, avec sa trace (la proposition validée, son
+  motif et son bilan).
+- **Drive** : les copies des photos sont neutralisées (contenu remplacé, nommées
+  « Photo effacée (RGPD).txt ») puis rangées aux archives du miroir ; rien
+  n'est supprimé dans Drive. La fiche du dossier y est réécrite sans identité,
+  le dossier du client renommé.
+- **Gmail** : le CRM n'y supprime jamais rien ; l'aperçu liste les adresses à
+  traiter à la main.
+- **Ce qui était en cours** : les propositions en attente sont annulées ; un
+  envoi validé mais pas encore parti échoue (son contenu est effacé) : rien ne
+  part.
+- **Après** : fiche archivée, nommée « Client anonymisé · XXXX » (la référence
+  de la synthèse), qui ne se modifie ni ne se restaure plus.
+- **Vérifié par un test** qui anonymise un client complet (lead, simulation,
+  dossier et photos, note, historique, facture émise, paiement, mail avec pièce
+  jointe et analyse, proposition de l'agent) puis balaie toutes les tables,
+  journal compris : son nom, son adresse, son téléphone, son e-mail et une
+  phrase de ses notes ne subsistent que dans la facture et le paiement.
+
+### Limites connues, et à confirmer par un avocat
+
+- Les durées elles-mêmes (la CNIL recommande 3 ans pour les prospects ; pour les
+  clients : garanties, délais de réclamation et de prescription).
+- Les devis émis mais jamais signés sont gardés tels quels (identité imprimée) :
+  pièce commerciale plutôt que comptable ; à confirmer.
+- La preuve d'un consentement saisie à la main est immuable : la rédiger sans
+  nom (« mail du 12/09 », pas « mail de Mme X »).
+- Les sauvegardes (`sauvegardes/` sur le serveur, tirages sur le poste) gardent
+  les données d'avant l'anonymisation jusqu'à leur rotation : à inscrire dans
+  la politique de conservation.
+- Drive garde les révisions précédentes d'un fichier 30 jours ; Gmail et les
+  contacts du téléphone restent à traiter à la main.
+- Droit d'accès et portabilité : pas d'export dédié ; la fiche client, ses
+  dossiers et ses mails en tiennent lieu.

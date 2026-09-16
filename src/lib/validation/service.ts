@@ -53,6 +53,8 @@ function motifsDe(definition: Definition | undefined): MotifRejet[] {
 export function vueProposition(proposition: Proposition): PropositionVue {
   const definition = definitionDe(proposition.type);
   const contenu = lireJson(proposition.contenu) ?? {};
+  // Proposition d'un client anonymisé (RGPD) : plus de contenu, donc ni champs ni liens.
+  const anonymisee = contenu.anonymise === true;
   return {
     id: proposition.id,
     type: proposition.type,
@@ -69,9 +71,9 @@ export function vueProposition(proposition: Proposition): PropositionVue {
     // Type inconnu : prudence, traité comme sensible.
     sensible: definition ? estSensible(definition, contenu) : true,
     validationGroupee: definition ? definition.validationGroupee && !estSensible(definition, contenu) : false,
-    champs: definition ? champsDe(definition, contenu) : [],
+    champs: definition && !anonymisee ? champsDe(definition, contenu) : [],
     motifsRejet: motifsDe(definition),
-    liens: definition?.liens?.(contenu) ?? [],
+    liens: anonymisee ? [] : (definition?.liens?.(contenu) ?? []),
     clientId: proposition.clientId,
     dossierId: proposition.dossierId,
     messageId: proposition.messageId,

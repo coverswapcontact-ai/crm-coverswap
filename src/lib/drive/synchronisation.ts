@@ -14,6 +14,8 @@ import { CLE_ARCHIVES, planMiroir, type ElementPlan } from "./plan";
  *   suivant.
  * - Rien ne se supprime : un élément qui n'est plus dans le plan (photo
  *   retirée, client fusionné…) est déplacé dans « Archives (retirés du CRM) ».
+ * - Client anonymisé (RGPD) : ses photos sont marquées « à neutraliser » ; leur
+ *   contenu est remplacé dans Drive (sans suppression) avant l'archivage.
  * - Vérification (quotidienne) : un élément supprimé, mis à la corbeille ou
  *   renommé à la main dans Drive est reconstruit ou renommé comme le CRM le dit.
  * - Rien ne bloque l'interface : tout passe par les tâches de fond.
@@ -22,6 +24,11 @@ import { CLE_ARCHIVES, planMiroir, type ElementPlan } from "./plan";
 export type ResumeMiroir = { crees: number; renommes: number; deplaces: number; renvoyes: number; archives: number; reconstruits: number; erreurs: number };
 
 export const TYPE_TACHE_SYNCHRO_DRIVE = "SYNCHRO_DRIVE";
+
+/** États d'un élément à neutraliser (client anonymisé) : encore en place, ou déjà aux archives du miroir. */
+export const A_NEUTRALISER = "A_NEUTRALISER";
+export const ARCHIVE_A_NEUTRALISER = "ARCHIVE_A_NEUTRALISER";
+const CONTENU_NEUTRALISE = "Contenu effacé au titre du RGPD : le CRM ne conserve plus cette photo.";
 
 function message(erreur: unknown): string {
   return (erreur instanceof Error ? erreur.message : String(erreur)).slice(0, 500);
@@ -115,6 +122,15 @@ export async function synchroniserMiroir(options: { verifier?: boolean; signal?:
   for (const ligne of retires) {
     if (options.signal?.aborted || !archivesId) break;
     try {
+      // Anonymisation : le contenu de la copie est remplacé (Drive n'en garde que ses révisions, 30 jours).
+      if (ligne.driveId && ligne.etat.endsWith(A_NEUTRALISER)) {
+        await envoyerFichierDrive({ nom: "Photo effacée (RGPD).txt", type: "text/plain; charset=utf-8", contenu: Buffer.from(CONTENU_NEUTRALISE, "utf8"), parentId: null, fichierId: ligne.driveId });
+        if (ligne.etat === ARCHIVE_A_NEUTRALISER) {
+          await prisma.miroirDrive.update({ where: { id: ligne.id }, data: { etat: "ARCHIVE", nom: "Photo effacée (RGPD).txt", synchroniseLe: new Date(), derniereErreur: null } });
+          resume.archives++;
+          continue;
+        }
+      }
       // Un élément dont le parent part aussi aux archives y part avec lui.
       const parentRetire = ligne.parentCle !== null && retires.some((autre) => autre.cle === ligne.parentCle);
       if (ligne.driveId && !parentRetire) {

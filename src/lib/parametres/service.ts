@@ -83,6 +83,9 @@ export function validerValeur(cle: CleParametre, brute: unknown): ValeurParametr
     case "jours":
       if (!Number.isInteger(nombre) || nombre < 0 || nombre > 3650) throw new ErreurMetier(`${definition.libelle} : nombre de jours invalide.`);
       return nombre;
+    case "mois":
+      if (!Number.isInteger(nombre) || nombre < 1 || nombre > 600) throw new ErreurMetier(`${definition.libelle} : nombre de mois entier attendu (1 à 600).`);
+      return nombre;
     case "choix": {
       const valeur = String(brute ?? "");
       if (!definition.options?.some((option) => option.valeur === valeur)) throw new ErreurMetier(`${definition.libelle} : choix invalide.`);

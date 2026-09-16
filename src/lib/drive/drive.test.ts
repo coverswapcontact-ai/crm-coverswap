@@ -185,6 +185,25 @@ describe("miroir Drive", () => {
     assert.equal([...drive.values()].filter((element) => element.name === "Fiche du dossier.txt" && !element.trashed).length, 1);
   });
 
+  test("client anonymisé : le contenu des copies de ses photos est remplacé dans Drive, rien n'y est supprimé", async () => {
+    // Ce que fait l'anonymisation (src/lib/rgpd) : photos retirées du dossier, copies marquées à neutraliser.
+    const { A_NEUTRALISER, ARCHIVE_A_NEUTRALISER } = await import("./synchronisation");
+    await prisma.dossier.update({ where: { id: dossierId }, data: { photos: "[]" } });
+    await prisma.miroirDrive.updateMany({ where: { cle: { startsWith: `photo:${dossierId}:` }, etat: "ARCHIVE" }, data: { etat: ARCHIVE_A_NEUTRALISER } });
+    await prisma.miroirDrive.updateMany({ where: { cle: { startsWith: `photo:${dossierId}:` }, etat: { not: ARCHIVE_A_NEUTRALISER } }, data: { etat: A_NEUTRALISER } });
+
+    const resume = await miroir.synchroniserMiroir();
+    assert.equal(resume.erreurs, 0);
+    const copies = (await prisma.miroirDrive.findMany({ where: { cle: { startsWith: `photo:${dossierId}:` } } })).map((ligne) => drive.get(ligne.driveId!)!);
+    assert.equal(copies.length, 2);
+    for (const copie of copies) {
+      assert.equal(copie.name, "Photo effacée (RGPD).txt");
+      assert.match(copie.contenu, /effacé au titre du RGPD/);
+      assert.equal(chemin(copie.id).startsWith("CoverSwap CRM/Archives (retirés du CRM)/"), true);
+    }
+    assert.equal((await prisma.miroirDrive.count({ where: { cle: { startsWith: `photo:${dossierId}:` }, etat: "ARCHIVE" } })), 2);
+  });
+
   test("accès révoqué : arrêt net, dit sur la connexion ; jamais de suppression envoyée à Drive", async () => {
     jetonRevoque = true;
     await prisma.client.update({ where: { id: clientId }, data: { nom: "Alice Durand" } });

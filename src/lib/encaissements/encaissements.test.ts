@@ -65,14 +65,17 @@ describe("du devis signé au dossier encaissé", () => {
   let chequeAcompteId: string;
   let premiereFactureId: string;
 
-  test("signer exige l'acompte reçu ou le motif de son absence ; l'acompte s'impute sur le devis", async () => {
+  test("signer sans acompte passe, l'avertissement est gardé ; l'acompte reçu s'impute sur le devis", async () => {
+    const sansAcompte = await dossierEssai();
+    await documents.genererDocument(sansAcompte, generation("DEVIS"));
+    await service.changerEtapeAvecPaiement(sansAcompte, { vers: "SIGNE", confirmations: { BON_POUR_ACCORD: true } });
+    assert.equal(await etape(sansAcompte), "SIGNE");
+    const signature = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: sansAcompte, type: "CHANGEMENT_ETAPE" }, orderBy: { createdAt: "desc" } });
+    assert.deepEqual(JSON.parse(signature.metadata).avertissements, ["Aucun acompte enregistré."]);
+    assert.match(signature.contenu, /Passé en connaissance de cause : aucun acompte enregistré/);
+
     dossierId = await dossierEssai();
     const { document: devis } = await documents.genererDocument(dossierId, generation("DEVIS"));
-
-    await assert.rejects(
-      () => service.changerEtapeAvecPaiement(dossierId, { vers: "SIGNE", confirmations: { BON_POUR_ACCORD: true } }),
-      refus(/il manque : acompte enregistré/)
-    );
     await service.changerEtapeAvecPaiement(dossierId, {
       vers: "SIGNE",
       confirmations: { BON_POUR_ACCORD: true },
@@ -110,12 +113,20 @@ describe("du devis signé au dossier encaissé", () => {
     assert.equal(await etape(dossierId), "FACTURE");
   });
 
-  test("un paiement ne dépasse pas ce qui reste ; le solde reçu fait passer à « Encaissé »", async () => {
-    const facture = await prisma.numeroDocument.findUniqueOrThrow({ where: { documentId: premiereFactureId } });
-    await assert.rejects(
-      () => service.enregistrerEncaissement({ dossierId, numeroDocumentId: facture.id, paiement: paiement(400, "VIREMENT") }),
-      refus(/dépasse ce qui reste/)
-    );
+  test("au-delà de ce qui reste, le surplus est gardé non imputé ; le solde reçu fait passer à « Encaissé »", async () => {
+    // Sur un autre dossier : 400 € reçus pour une facture de 440 € dont 132 € d'acompte sont déjà imputés.
+    const autre = await dossierEssai("CHANTIER");
+    const { document: devisAutre } = await documents.genererDocument(autre, generation("DEVIS"));
+    const ligneDevis = await prisma.numeroDocument.findUniqueOrThrow({ where: { documentId: devisAutre.id } });
+    await service.enregistrerEncaissement({ dossierId: autre, numeroDocumentId: ligneDevis.id, paiement: paiement(132, "VIREMENT") });
+    const { document: factureAutre } = await documents.genererDocument(autre, generation("FACTURE"));
+    const ligneFacture = await prisma.numeroDocument.findUniqueOrThrow({ where: { documentId: factureAutre.id } });
+    const { encaissement, imputations } = await service.enregistrerEncaissement({ dossierId: autre, numeroDocumentId: ligneFacture.id, paiement: paiement(400, "VIREMENT") });
+    assert.deepEqual(imputations, [{ registreId: ligneFacture.id, centimes: 30800 }]);
+    const vue = await soldes.chargerPaiementsDossier(prisma, autre);
+    assert.equal(vue.encaissements.find((ligne) => ligne.id === encaissement.id)?.nonAffecte, 92);
+    assert.equal(await etape(autre), "ENCAISSE");
+
     await service.enregistrerEncaissement({ dossierId, paiement: paiement(308, "VIREMENT") });
     assert.equal(await etape(dossierId), "ENCAISSE");
     const passage = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: { createdAt: "desc" } });
@@ -173,15 +184,20 @@ describe("du devis signé au dossier encaissé", () => {
     assert.equal(await etape(dossierId), "FACTURE");
   });
 
-  test("« Encaissé » avec le paiement du solde : tout ou rien", async () => {
-    const avant = await prisma.encaissement.count({ where: { dossierId } });
-    await assert.rejects(
-      () => service.changerEtapeAvecPaiement(dossierId, { vers: "ENCAISSE", solde: paiement(100, "VIREMENT") }),
-      refus(/ne solde pas les factures : il reste 32,00 €/)
-    );
-    assert.equal(await prisma.encaissement.count({ where: { dossierId } }), avant);
-    assert.equal(await etape(dossierId), "FACTURE");
+  test("« Encaissé » avec un paiement qui ne solde pas : ça passe, le reste dû est dit et signalé", async () => {
+    await service.changerEtapeAvecPaiement(dossierId, { vers: "ENCAISSE", solde: paiement(100, "VIREMENT") });
+    assert.equal(await etape(dossierId), "ENCAISSE");
+    const passage = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: { createdAt: "desc" } });
+    assert.deepEqual(JSON.parse(passage.metadata).avertissements, ["Les factures ne sont pas réglées : il reste 32,00 €."]);
+    const { pointsACompleterDossiers } = await import("@/lib/dossiers/dossiers");
+    assert.ok((await pointsACompleterDossiers(prisma, { id: dossierId })).get(dossierId)?.some((point) => point.code === "SOLDE"));
 
+    // Déclaré « Encaissé » à la main sans être réglé : un paiement annulé ne le fait pas reculer.
+    const partiel = await prisma.encaissement.findFirstOrThrow({ where: { dossierId, montant: 100 } });
+    await service.annulerEncaissement(partiel.id, { motif: "DOUBLON" });
+    assert.equal(await etape(dossierId), "ENCAISSE");
+
+    await transitions.changerEtape(dossierId, { vers: "FACTURE" });
     await service.changerEtapeAvecPaiement(dossierId, { vers: "ENCAISSE", solde: paiement(132, "CHEQUE", "7654321") });
     assert.equal(await etape(dossierId), "ENCAISSE");
     const cheque = await prisma.encaissement.findFirstOrThrow({ where: { dossierId, reference: "7654321" } });

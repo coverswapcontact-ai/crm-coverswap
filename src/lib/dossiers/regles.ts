@@ -1,13 +1,17 @@
 // Évaluation des règles d'étape (REGLES_ETAPES). Fonctions pures, sans accès
-// à la base : l'interface s'en sert pour griser un bouton et dire ce qui
-// manque, le serveur les rejoue avant d'écrire. Un futur agent passera par
-// les mêmes fonctions pour proposer un changement d'étape.
+// à la base : l'interface s'en sert pour dire ce qui manque avant de confirmer,
+// le serveur les rejoue et garde les avertissements passés dans l'historique.
+// Un futur agent passera par les mêmes fonctions pour proposer un changement
+// d'étape.
+//
+// Signaler, jamais bloquer : toute étape peut passer à toute autre, dans les
+// deux sens. Une règle d'entrée non remplie devient un avertissement, que la
+// personne lit puis confirme.
 
 import {
   ETAPES,
   ETAPES_ACTIVES,
   ETAPES_SORTIE,
-  LIBELLES_CRITERE,
   LIBELLES_ETAPE,
   MOTIFS_PERTE,
   REGLES_ETAPES,
@@ -51,6 +55,8 @@ export type FaitsDossier = {
   acompteEnregistre: boolean;
   /** Le dossier a au moins une facture active, et toutes sont réglées. */
   soldeEncaisse: boolean;
+  /** Reste à payer sur les factures actives, en euros (pour le dire dans l'avertissement). */
+  resteDu?: number;
 };
 
 // L'acompte et le solde ne se déclarent plus : ils s'enregistrent (encaissements).
@@ -61,7 +67,7 @@ export function estCritereDeclaratif(critere: CritereEntree): critere is Critere
   return (CRITERES_DECLARATIFS as readonly string[]).includes(critere);
 }
 
-/** Ce que la personne (ou l'agent) apporte au moment du changement d'étape. */
+/** Ce que la personne (ou l'agent) apporte au moment du changement d'étape. Tout est facultatif. */
 export type DonneesTransition = {
   motifPerte?: MotifPerte;
   /** Perte : qui a remporté le marché, à quel prix, précisions (facultatifs). */
@@ -72,22 +78,27 @@ export type DonneesTransition = {
   confirmations?: Partial<Record<CritereDeclaratif, boolean>>;
   /** Signature : acompte reçu, enregistré avec le changement d'étape. */
   acompte?: { montant: number } | null;
-  /** Signature sans acompte : le motif, obligatoire. */
+  /** Signature sans acompte : le motif. */
   sansAcompte?: { motif: string; precision?: string } | null;
   /** Encaissement : paiement du solde, enregistré avec le changement d'étape. */
   solde?: { montant: number } | null;
 };
 
-export function critereRempli(
-  critere: CritereEntree,
-  faits: FaitsDossier,
-  donnees: DonneesTransition = {}
-): boolean {
+/** Champs de coordonnées vides, dans l'ordre où on les lit. */
+export function coordonneesManquantes(faits: Pick<FaitsDossier, "clientAdresse" | "clientCp" | "clientVille" | "clientTelephone">): string[] {
+  const champs: [string, string][] = [
+    ["l'adresse", faits.clientAdresse],
+    ["le code postal", faits.clientCp],
+    ["la ville", faits.clientVille],
+    ["le téléphone", faits.clientTelephone],
+  ];
+  return champs.filter(([, valeur]) => !valeur.trim()).map(([libelle]) => libelle);
+}
+
+export function critereRempli(critere: CritereEntree, faits: FaitsDossier, donnees: DonneesTransition = {}): boolean {
   switch (critere) {
     case "COORDONNEES_COMPLETES":
-      return [faits.clientNom, faits.clientAdresse, faits.clientCp, faits.clientVille, faits.clientTelephone].every(
-        (valeur) => valeur.trim().length > 0
-      );
+      return faits.clientNom.trim().length > 0 && coordonneesManquantes(faits).length === 0;
     case "OBJET":
       return faits.objet.trim().length > 0;
     case "PHOTO":
@@ -110,46 +121,114 @@ export function critereRempli(
 }
 
 /**
- * SUIVANTE : avancer vers une sortie prévue par REGLES_ETAPES (critères vérifiés).
- * RETOUR   : revenir à une étape active antérieure (correction, critères non revérifiés).
- * SORTIE   : passer en PERDU ou EN_PAUSE (critères de l'état de sortie vérifiés).
- * REPRISE  : quitter PERDU ou EN_PAUSE vers l'étape active quittée.
+ * SUIVANTE : avancer vers une étape active plus loin dans le tunnel (d'un pas ou de plusieurs).
+ * RETOUR   : revenir à une étape active antérieure (correction).
+ * SORTIE   : passer en PERDU ou EN_PAUSE (ou de l'un à l'autre).
+ * REPRISE  : quitter PERDU ou EN_PAUSE vers une étape active.
  */
 export type NatureTransition = "SUIVANTE" | "RETOUR" | "SORTIE" | "REPRISE";
 
-export type TransitionPossible = { vers: EtapeDossier; nature: NatureTransition };
+export type TransitionPossible = {
+  vers: EtapeDossier;
+  nature: NatureTransition;
+  /** Le chemin habituel depuis cette étape (REGLES_ETAPES), mis en avant à l'écran. */
+  suggeree: boolean;
+};
 
-export function transitionsPossibles(
-  etape: EtapeDossier,
-  etapeAvantSortie: EtapeActive | null
-): TransitionPossible[] {
-  if (etape === "PERDU" || etape === "EN_PAUSE") {
-    const reprise: TransitionPossible = { vers: etapeAvantSortie ?? "QUALIFICATION", nature: "REPRISE" };
-    return etape === "EN_PAUSE" ? [reprise, { vers: "PERDU", nature: "SORTIE" }] : [reprise];
-  }
-  const regle = REGLES_ETAPES[etape];
-  return [
-    ...regle.sorties.map((vers): TransitionPossible => ({ vers, nature: "SUIVANTE" })),
-    ...(regle.terminale
-      ? []
-      : ETAPES_SORTIE.map((vers): TransitionPossible => ({ vers, nature: "SORTIE" }))),
-    ...ETAPES_ACTIVES.slice(0, rangEtape(etape))
-      .reverse()
-      .map((vers): TransitionPossible => ({ vers, nature: "RETOUR" })),
-  ];
+export function natureTransition(de: EtapeDossier, vers: EtapeDossier): NatureTransition {
+  if (estEtapeSortie(vers)) return "SORTIE";
+  if (!estEtapeActive(de)) return "REPRISE";
+  return rangEtape(vers as EtapeActive) > rangEtape(de) ? "SUIVANTE" : "RETOUR";
 }
 
-/** Critères d'entrée à vérifier pour une transition donnée. */
-export function criteresAVerifier(transition: TransitionPossible): readonly CritereEntree[] {
-  return transition.nature === "SUIVANTE" || transition.nature === "SORTIE"
-    ? REGLES_ETAPES[transition.vers].entree
-    : [];
+/** Toutes les étapes sauf l'actuelle ; le chemin habituel est marqué comme suggéré. */
+export function transitionsPossibles(etape: EtapeDossier, etapeAvantSortie: EtapeActive | null): TransitionPossible[] {
+  const suggerees = new Set<EtapeDossier>(
+    estEtapeActive(etape)
+      ? [...REGLES_ETAPES[etape].sorties, ...(REGLES_ETAPES[etape].terminale ? [] : ETAPES_SORTIE)]
+      : [etapeAvantSortie ?? "QUALIFICATION", ...(etape === "EN_PAUSE" ? (["PERDU"] as const) : [])]
+  );
+  return ETAPES.filter((vers) => vers !== etape).map((vers) => ({
+    vers,
+    nature: natureTransition(etape, vers),
+    suggeree: suggerees.has(vers),
+  }));
+}
+
+/**
+ * Critères d'entrée à rappeler pour un passage : ceux de chaque étape
+ * franchie en avançant (sauter du devis au chantier rappelle la signature et
+ * la date de chantier), le motif pour une perte. Un retour, une reprise vers
+ * l'étape quittée ou une pause ne rappellent rien.
+ */
+export function criteresAVerifier(de: EtapeDossier, vers: EtapeDossier, etapeAvantSortie: EtapeActive | null = null): CritereEntree[] {
+  if (vers === "PERDU") return [...REGLES_ETAPES.PERDU.entree];
+  if (!estEtapeActive(vers)) return [];
+  const reference = estEtapeActive(de) ? de : etapeAvantSortie;
+  const depart = reference ? rangEtape(reference) : -1;
+  if (rangEtape(vers) <= depart) return [];
+  const franchies = ETAPES_ACTIVES.slice(depart + 1, rangEtape(vers) + 1);
+  return [...new Set(franchies.flatMap((etape) => REGLES_ETAPES[etape].entree))];
+}
+
+export type Avertissement = { critere: CritereEntree; message: string };
+
+const formatEuros = (montant: number) =>
+  `${new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(montant)} €`;
+
+function joindre(elements: string[]): string {
+  return elements.length <= 1 ? (elements[0] ?? "") : `${elements.slice(0, -1).join(", ")} et ${elements.at(-1)}`;
+}
+
+export function messageAvertissement(critere: CritereEntree, faits: FaitsDossier): string {
+  switch (critere) {
+    case "COORDONNEES_COMPLETES": {
+      const manquants = coordonneesManquantes(faits);
+      return manquants.length ? `Il manque ${joindre(manquants)} du client.` : "Coordonnées du client incomplètes.";
+    }
+    case "OBJET":
+      return "L'objet du chantier n'est pas renseigné.";
+    case "PHOTO":
+      return "Aucune photo du chantier.";
+    case "DEVIS_GENERE":
+      return "Aucun devis n'a été généré pour ce dossier.";
+    case "BON_POUR_ACCORD":
+      return "Le bon pour accord n'est pas confirmé.";
+    case "ACOMPTE_ENCAISSE":
+      return "Aucun acompte enregistré.";
+    case "DATE_CHANTIER":
+      return "Pas de date de chantier.";
+    case "FACTURE_GENEREE":
+      return "Aucune facture n'a été générée pour ce dossier.";
+    case "SOLDE_ENCAISSE":
+      return faits.aFactureGeneree
+        ? faits.resteDu
+          ? `Les factures ne sont pas réglées : il reste ${formatEuros(faits.resteDu)}.`
+          : "Les factures ne sont pas entièrement réglées."
+        : "Aucune facture à régler dans ce dossier.";
+    case "MOTIF_PERTE":
+      return "Le motif de perte n'est pas renseigné.";
+  }
+}
+
+/** Ce qui manque pour ce passage, dit en clair. Vide : rien à signaler. */
+export function avertissementsTransition(
+  faits: FaitsDossier,
+  vers: EtapeDossier,
+  donnees: DonneesTransition = {},
+  etapeAvantSortie: EtapeActive | null = null
+): Avertissement[] {
+  const manquants = criteresAVerifier(faits.etape, vers, etapeAvantSortie).filter((critere) => !critereRempli(critere, faits, donnees));
+  // Sans facture, « aucune facture générée » suffit : le solde n'a rien à ajouter.
+  const sansDoublon = manquants.includes("FACTURE_GENEREE") ? manquants.filter((critere) => critere !== "SOLDE_ENCAISSE") : manquants;
+  return sansDoublon.map((critere) => ({ critere, message: messageAvertissement(critere, faits) }));
 }
 
 export type VerificationTransition =
-  | { ok: true; nature: NatureTransition }
-  | { ok: false; erreur: string; criteresManquants: CritereEntree[] };
+  | { ok: true; nature: NatureTransition; avertissements: Avertissement[] }
+  | { ok: false; erreur: string };
 
+/** Un passage n'est refusé que s'il ne change rien ; sinon il passe, avec ses avertissements. */
 export function verifierTransition(
   faits: FaitsDossier,
   vers: EtapeDossier,
@@ -157,26 +236,13 @@ export function verifierTransition(
   etapeAvantSortie: EtapeActive | null
 ): VerificationTransition {
   if (vers === faits.etape) {
-    return { ok: false, erreur: `Le dossier est déjà à l'étape « ${LIBELLES_ETAPE[vers]} ».`, criteresManquants: [] };
+    return { ok: false, erreur: `Le dossier est déjà à l'étape « ${LIBELLES_ETAPE[vers]} ».` };
   }
-  const transition = transitionsPossibles(faits.etape, etapeAvantSortie).find((t) => t.vers === vers);
-  if (!transition) {
-    return {
-      ok: false,
-      erreur: `Passage de « ${LIBELLES_ETAPE[faits.etape]} » à « ${LIBELLES_ETAPE[vers]} » non autorisé.`,
-      criteresManquants: [],
-    };
-  }
-  const manquants = criteresAVerifier(transition).filter((critere) => !critereRempli(critere, faits, donnees));
-  if (manquants.length > 0) {
-    const liste = manquants.map((critere) => LIBELLES_CRITERE[critere].toLowerCase()).join(", ");
-    return {
-      ok: false,
-      erreur: `Pour passer à « ${LIBELLES_ETAPE[vers]} », il manque : ${liste}.`,
-      criteresManquants: manquants,
-    };
-  }
-  return { ok: true, nature: transition.nature };
+  return {
+    ok: true,
+    nature: natureTransition(faits.etape, vers),
+    avertissements: avertissementsTransition(faits, vers, donnees, etapeAvantSortie),
+  };
 }
 
 /** Structure du champ metadata d'un événement CHANGEMENT_ETAPE. */
@@ -202,6 +268,10 @@ export type MetadataChangementEtape = {
   /** Changement automatique : ce qui l'a provoqué. */
   raison?: string;
   documentId?: string;
+  /** Ce qui manquait, lu et confirmé par la personne au moment du passage. */
+  avertissements?: string[];
+  /** Dossier repris : le passage a eu lieu, sa date réelle n'est pas connue. */
+  dateInconnue?: boolean;
 };
 
 /**
@@ -209,9 +279,7 @@ export type MetadataChangementEtape = {
  * dans les événements CHANGEMENT_ETAPE du plus récent au plus ancien.
  * Un passage EN_PAUSE → PERDU est ignoré : la reprise ramène à l'étape active.
  */
-export function etapeAvantSortie(
-  metadonnees: Pick<MetadataChangementEtape, "de" | "vers">[]
-): EtapeActive | null {
+export function etapeAvantSortie(metadonnees: Pick<MetadataChangementEtape, "de" | "vers">[]): EtapeActive | null {
   for (const { de, vers } of metadonnees) {
     if (estEtapeSortie(vers) && de && estEtapeActive(de)) return de;
   }

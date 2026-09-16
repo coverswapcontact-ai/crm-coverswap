@@ -381,16 +381,16 @@ function ModaleNouvelleDemande({ detail, onFermer, onFait }: { detail: MessageDe
             onChange={(valeur) => setOuvrir(valeur as "OUI" | "NON")}
           />
           <p className="mt-1.5 text-[12px] text-[#6B7280]">
-            {photos > 0 ? `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""} : ajoutée${photos > 1 ? "s" : ""} au dossier.` : "Aucune photo reçue : un dossier s'ouvre avec au moins une photo (la demander dans la réponse)."}
+            {photos > 0 ? `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""} : ajoutée${photos > 1 ? "s" : ""} au dossier.` : "Aucune photo reçue : le dossier s'ouvre quand même, le manque y est signalé (les demander dans la réponse)."}
           </p>
         </div>
         {ouvrir === "OUI" ? (
           <>
-            <Champ libelle="Objet du chantier" obligatoire value={valeurs.objet} onChange={changer("objet")} placeholder="Rénovation plan de travail cuisine" classeConteneur="md:col-span-2" />
-            <Champ libelle="Adresse du chantier" obligatoire value={valeurs.adresse} onChange={changer("adresse")} classeConteneur="md:col-span-2" />
-            <Champ libelle="Code postal" obligatoire inputMode="numeric" value={valeurs.codePostal} onChange={changer("codePostal")} />
-            <Champ libelle="Ville" obligatoire value={valeurs.ville} onChange={changer("ville")} />
-            {detail.client ? <Champ libelle="Téléphone du chantier" obligatoire type="tel" inputMode="tel" value={valeurs.telephone} onChange={changer("telephone")} /> : null}
+            <Champ libelle="Objet du chantier" value={valeurs.objet} onChange={changer("objet")} placeholder="Rénovation plan de travail cuisine" classeConteneur="md:col-span-2" />
+            <Champ libelle="Adresse du chantier" value={valeurs.adresse} onChange={changer("adresse")} classeConteneur="md:col-span-2" />
+            <Champ libelle="Code postal" inputMode="numeric" value={valeurs.codePostal} onChange={changer("codePostal")} />
+            <Champ libelle="Ville" value={valeurs.ville} onChange={changer("ville")} />
+            {detail.client ? <Champ libelle="Téléphone du chantier" type="tel" inputMode="tel" value={valeurs.telephone} onChange={changer("telephone")} /> : null}
             <Champ libelle="Prochaine action" value={valeurs.prochaineAction} onChange={changer("prochaineAction")} placeholder="Appeler pour une visite" />
             <Champ libelle="Date de la prochaine action" type="date" value={valeurs.prochaineActionDate} onChange={changer("prochaineActionDate")} />
             <ZoneTexte libelle="Note au dossier" rows={3} value={valeurs.note} onChange={changer("note")} classeConteneur="md:col-span-2" />

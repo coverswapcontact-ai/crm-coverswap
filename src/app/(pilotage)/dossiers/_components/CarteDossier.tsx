@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock } from "lucide-react";
+import { AlertTriangle, CalendarClock } from "lucide-react";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
@@ -18,6 +18,19 @@ export function PastilleRetard({ className }: { className?: string }) {
       aria-label="Prochaine action en retard"
       className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-[#EF4444] ring-4 ring-[#EF4444]/15", className)}
     />
+  );
+}
+
+/** Nombre de points à compléter sur le dossier (signalés, jamais exigés). */
+export function PastilleACompleter({ nombre, className }: { nombre: number; className?: string }) {
+  return (
+    <span
+      title="Points à compléter sur le dossier"
+      className={cn("inline-flex items-center gap-1 rounded-full bg-[#EF9F27]/10 px-2 py-px text-[11px] font-medium text-[#F5B454]", className)}
+    >
+      <AlertTriangle size={10} aria-hidden />
+      {nombre} à compléter
+    </span>
   );
 }
 
@@ -122,8 +135,9 @@ export function CarteDossier({
         {enRetard ? <PastilleRetard className="mr-1" /> : null}
       </span>
       <span className="mt-2 block truncate text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
-      <span className="mt-0.5 block truncate text-[12px] text-[#6B7280]">{dossier.clientVille}</span>
-      <span className="mt-2 block truncate text-[13px] text-[#9CA3AF]">{dossier.objet}</span>
+      <span className="mt-0.5 block truncate text-[12px] text-[#6B7280]">{dossier.clientVille || "Ville à préciser"}</span>
+      <span className="mt-2 block truncate text-[13px] text-[#9CA3AF]">{dossier.objet || "Objet à préciser"}</span>
+      {dossier.aCompleter > 0 ? <PastilleACompleter nombre={dossier.aCompleter} className="mt-2" /> : null}
       <span className="mt-2 flex items-center justify-between gap-2">
         {montant !== null ? (
           <span className="text-[13px] font-medium text-[#F2F3F5] tabular-nums">{formatMontant(montant)}</span>

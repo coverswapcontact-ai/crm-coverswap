@@ -70,7 +70,7 @@ function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; o
       onFermer={onFermer}
       largeur="sm"
       titre="Enregistrer un paiement reçu"
-      description="Un paiement enregistré ne se modifie plus : en cas d'erreur, il s'annule avec son motif."
+      description="À la date où il a été reçu, même avant l'ouverture du dossier. Sans devis ni facture, il reste non imputé : il ira sur la facture."
       pied={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Bouton variante="fantome" onClick={onFermer}>
@@ -84,6 +84,9 @@ function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; o
     >
       <div className="flex flex-col gap-3">
         <ChampsPaiement saisie={saisie} onChange={setSaisie} />
+        {pieces.length === 0 ? (
+          <p className="text-[12px] text-[#9CA3AF]">Aucun devis ni facture dans ce dossier : le paiement est gardé non imputé, et imputé sur la facture à venir.</p>
+        ) : null}
         {pieces.length > 1 ? (
           <div>
             <label htmlFor="piece-reglee" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
@@ -175,18 +178,16 @@ export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail
     <section>
       <TitreSection
         action={
-          aDocuments || paiements.encaissements.length > 0 ? (
-            <Bouton taille="sm" variante="secondaire" icone={<Plus size={13} aria-hidden />} onClick={() => setSaisie(true)}>
-              Paiement reçu
-            </Bouton>
-          ) : null
+          <Bouton taille="sm" variante="secondaire" icone={<Plus size={13} aria-hidden />} onClick={() => setSaisie(true)}>
+            Paiement reçu
+          </Bouton>
         }
       >
         Paiements
       </TitreSection>
 
       {!aDocuments && paiements.encaissements.length === 0 ? (
-        <p className="text-[12.5px] text-[#6B7280]">Les paiements s&apos;enregistrent une fois le devis émis.</p>
+        <p className="text-[12.5px] text-[#6B7280]">Aucun paiement enregistré.</p>
       ) : (
         <div className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-[0.5px] border-[#2A2D34] px-3.5 py-2.5 text-[12.5px]">

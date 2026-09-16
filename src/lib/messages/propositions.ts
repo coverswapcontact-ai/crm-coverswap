@@ -210,7 +210,7 @@ export const propositionNouvelleDemande = definirProposition({
       libelle: "Ouvrir le dossier",
       nature: "choix",
       obligatoire: true,
-      aide: "Un dossier s'ouvre avec l'adresse du chantier, un téléphone et au moins une photo reçue.",
+      aide: "Seul le nom est nécessaire : l'adresse, le téléphone ou les photos qui manquent seront signalés sur le dossier.",
       options: [
         { valeur: "OUI", libelle: "Oui : fiche et dossier" },
         { valeur: "NON", libelle: "Non : la fiche seule, pour l'instant" },
@@ -298,10 +298,8 @@ export const propositionNouvelleDemande = definirProposition({
           prospectId: null,
           clientId,
         });
+        // Photos du mail, s'il y en a : sans elles le dossier s'ouvre quand même, et le manque est signalé.
         const photos = message.pieces.filter((piece) => piece.statut === "CONSERVEE" && piece.fichierId && FORMATS_PHOTO[piece.typeMime]);
-        if (photos.length === 0) {
-          throw new ErreurMetier("Aucune photo reçue et conservée dans ce mail : un dossier s'ouvre avec au moins une photo. Choisir « Ouvrir le dossier : non » pour créer la fiche seule.", 400);
-        }
         const dossier = await ouvrirDossier(tx, entree);
         dossierId = dossier.id;
         const chemins: string[] = [];
@@ -311,7 +309,7 @@ export const propositionNouvelleDemande = definirProposition({
           if (!octets) throw new ErreurMetier(`Photo « ${piece.nom} » absente du stockage.`, 409);
           chemins.push(await enregistrerPhoto(dossier.id, new File([new Uint8Array(octets)], piece.nom, { type: piece.typeMime })));
         }
-        await tx.dossier.update({ where: { id: dossier.id }, data: { photos: JSON.stringify(chemins) } });
+        if (chemins.length > 0) await tx.dossier.update({ where: { id: dossier.id }, data: { photos: JSON.stringify(chemins) } });
         if (contenu.note) await ecrireNote(tx, dossier.id, { etape: "QUALIFICATION", contenu: contenu.note });
       }
 

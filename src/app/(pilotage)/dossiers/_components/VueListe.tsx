@@ -8,7 +8,7 @@ import { formatMontant } from "@/lib/dossiers/montants";
 import { echeanceDe, mainDe, progressionDe } from "@/lib/dossiers/pilotage";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { CarteDossier, PastilleRetard, ProchaineActionResume } from "./CarteDossier";
+import { CarteDossier, PastilleACompleter, PastilleRetard, ProchaineActionResume } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { comparerParEcheance } from "./VueKanban";
 import { PastilleEtape, TRANS } from "./ui";
@@ -130,7 +130,8 @@ export function VueListe({
                     </button>
                   </td>
                   <td className="truncate px-3 py-2.5 text-[#9CA3AF]" title={dossier.objet}>
-                    {dossier.objet}
+                    {dossier.objet || <span className="text-[#6B7280] italic">Objet à préciser</span>}
+                    {dossier.aCompleter > 0 ? <PastilleACompleter nombre={dossier.aCompleter} className="mt-1 flex w-fit" /> : null}
                   </td>
                   <td className="px-3 py-2">
                     <PastilleEtape etape={dossier.etape} libelle={LIBELLES_ETAPE[dossier.etape]} />

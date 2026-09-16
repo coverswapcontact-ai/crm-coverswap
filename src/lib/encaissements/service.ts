@@ -24,7 +24,10 @@ import { faitsPaiements, piecesDuDossier } from "./soldes";
  *   facture. À la génération de la facture, les acomptes du dossier lui sont
  *   imputés ; un avoir libère ce qui réglait la facture annulée.
  * - L'étape suit les faits : « Facturé » entièrement réglé passe à
- *   « Encaissé » ; « Encaissé » qui ne l'est plus revient à « Facturé ».
+ *   « Encaissé » ; « Encaissé » qui ne l'est plus (chèque rejeté, paiement
+ *   annulé) revient à « Facturé ». Un dossier mis à « Encaissé » à la main
+ *   sans que ses factures soient réglées n'est pas ramené en arrière : c'est
+ *   signalé sur le dossier.
  */
 
 type Imputation = { registreId: string; centimes: number };
@@ -96,13 +99,9 @@ async function imputationChoisie(
   }
   const total = document ? versCentimes(document.totalHt) : ligne.montant !== null ? versCentimes(ligne.montant) : null;
   const regle = ligne.affectations.reduce((somme, affectation) => somme + versCentimes(affectation.montant), 0);
-  if (total !== null && centimes > total - regle) {
-    throw new ErreurMetier(
-      `Le paiement (${formatCentimes(centimes)}) dépasse ce qui reste sur ${ligne.numero} (${formatCentimes(Math.max(0, total - regle))}).`,
-      409
-    );
-  }
-  return { imputations: [{ registreId, centimes }], dossierId: document?.dossierId ?? dossierId };
+  // Au-delà de ce qui reste sur la pièce, le surplus est gardé non imputé (et signalé), pas refusé.
+  const part = total === null ? centimes : Math.min(centimes, Math.max(0, total - regle));
+  return { imputations: part > 0 ? [{ registreId, centimes: part }] : [], dossierId: document?.dossierId ?? dossierId };
 }
 
 /** Enregistre un encaissement et ses imputations, dans la transaction de l'appelant (sans effet sur l'étape). */
@@ -177,9 +176,16 @@ export async function enregistrerEncaissementDansTransaction(tx: Transaction, en
 
 /**
  * L'étape suit l'argent : « Facturé » entièrement réglé passe à « Encaissé » ;
- * « Encaissé » dont une facture n'est plus réglée revient à « Facturé ».
+ * « Encaissé » qui était réglé et ne l'est plus revient à « Facturé ».
+ * `etaitSolde` : l'état d'avant l'écriture ; sans lui, l'étape ne recule pas
+ * (un dossier déclaré « Encaissé » à la main garde son étape, l'écart est signalé).
  */
-export async function suivreSoldeDossier(tx: Transaction, dossierId: string, raison: string): Promise<ChangementEtape | null> {
+export async function suivreSoldeDossier(
+  tx: Transaction,
+  dossierId: string,
+  raison: string,
+  etaitSolde?: boolean
+): Promise<ChangementEtape | null> {
   const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
   if (!dossier || !estEtape(dossier.etape)) return null;
   const { soldeEncaisse, pieces } = await faitsPaiements(tx, dossierId);
@@ -187,7 +193,7 @@ export async function suivreSoldeDossier(tx: Transaction, dossierId: string, rai
   if (dossier.etape === "FACTURE" && soldeEncaisse) {
     return appliquerChangementEtape(tx, { dossierId, de: "FACTURE", vers: "ENCAISSE", nature: "AUTOMATIQUE", raison });
   }
-  if (dossier.etape === "ENCAISSE" && factures.length > 0 && !soldeEncaisse) {
+  if (dossier.etape === "ENCAISSE" && etaitSolde === true && factures.length > 0 && !soldeEncaisse) {
     return appliquerChangementEtape(tx, { dossierId, de: "ENCAISSE", vers: "FACTURE", nature: "RETOUR", raison });
   }
   return null;
@@ -251,6 +257,7 @@ async function terminerEncaissement(
 ): Promise<string | null> {
   const encaissement = await encaissementValide(id);
   const changement = await prisma.$transaction(async (tx) => {
+    const etaitSolde = encaissement.dossierId ? (await faitsPaiements(tx, encaissement.dossierId)).soldeEncaisse : false;
     const { count } = await tx.encaissement.updateMany({
       where: { id, statut: "VALIDE" },
       data: { statut: fin.statut, finLe: fin.finLe, motifFin: fin.motifFin },
@@ -288,7 +295,8 @@ async function terminerEncaissement(
     return suivreSoldeDossier(
       tx,
       encaissement.dossierId,
-      fin.statut === "REJETE" ? "chèque rejeté, facture à nouveau due" : "paiement annulé, facture à nouveau due"
+      fin.statut === "REJETE" ? "chèque rejeté, facture à nouveau due" : "paiement annulé, facture à nouveau due",
+      etaitSolde
     );
   });
   if (changement) await effetsDuChangementEtape(changement);
@@ -426,35 +434,28 @@ export async function libererReglementsFacture(tx: Transaction, factureDocumentI
 /* ── Changement d'étape avec paiement ────────────────────────────── */
 
 /**
- * « Signé » avec l'acompte reçu, « Encaissé » avec le paiement du solde : le
- * paiement et le changement d'étape s'écrivent ensemble, ou pas du tout.
+ * Changement d'étape avec le paiement reçu (acompte à la signature, solde à
+ * l'encaissement) : le paiement et le changement d'étape s'écrivent ensemble,
+ * ou pas du tout. Un solde qui ne règle pas tout passe quand même : le reste
+ * dû est dit dans l'événement et sur le dossier.
  */
 export async function changerEtapeAvecPaiement(
   dossierId: string,
   entree: EntreeChangementEtape & { acompte?: EntreePaiement; solde?: EntreePaiement }
 ): Promise<ChangementEtape> {
   const changement = await prisma.$transaction(async (tx) => {
-    if (entree.vers === "ENCAISSE" && entree.solde) {
+    if (entree.solde) {
       await enregistrerEncaissementDansTransaction(tx, { dossierId, paiement: entree.solde });
-      const { soldeEncaisse, resteCentimes } = await faitsPaiements(tx, dossierId);
-      if (!soldeEncaisse) {
-        throw new ErreurMetier(
-          resteCentimes > 0
-            ? `Ce paiement ne solde pas les factures : il reste ${formatCentimes(resteCentimes)}. Enregistre-le dans « Paiements » ; le dossier passera à « Encaissé » une fois tout réglé.`
-            : "Aucune facture active à régler dans ce dossier.",
-          409
-        );
-      }
       return changerEtapeDansTransaction(tx, dossierId, { ...entree, solde: undefined });
     }
 
     const change = await changerEtapeDansTransaction(tx, dossierId, entree);
-    if (entree.vers === "SIGNE" && entree.acompte && change.nature === "SUIVANTE") {
+    if (entree.acompte) {
+      // Sur le devis accepté quand il y en a un ; sinon sur le dossier, imputé plus tard (facture).
       const devis = change.documentId
         ? await tx.numeroDocument.findUnique({ where: { documentId: change.documentId }, select: { id: true } })
         : null;
-      if (!devis) throw new ErreurMetier("Devis signé introuvable au registre des numéros.", 409);
-      await enregistrerEncaissementDansTransaction(tx, { dossierId, numeroDocumentId: devis.id, paiement: entree.acompte });
+      await enregistrerEncaissementDansTransaction(tx, { dossierId, numeroDocumentId: devis?.id ?? null, paiement: entree.acompte });
     }
     return change;
   });

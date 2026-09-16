@@ -8,7 +8,8 @@ import { Champ, Puces } from "./ui";
 /** Saisie d'un paiement reçu, telle que l'écran la garde (textes bruts). */
 export type SaisiePaiement = { montant: string; recuLe: string; moyen: MoyenPaiement | null; reference: string };
 
-export type PaiementLu = { montant: number; recuLe: string; moyen: MoyenPaiement; reference: string | null };
+/** Moyen facultatif : un paiement repris d'avant le CRM peut ne pas l'avoir (signalé au livre). */
+export type PaiementLu = { montant: number; recuLe: string; moyen: MoyenPaiement | null; reference: string | null };
 
 /** Saisie pré-remplie : montant attendu, reçu aujourd'hui. */
 export function saisiePaiement(montant: number | null): SaisiePaiement {
@@ -25,9 +26,9 @@ export function lirePaiement(saisie: SaisiePaiement): { paiement: PaiementLu | n
   const montant = saisie.montant.trim() ? lireNombre(saisie.montant) : null;
   const erreurMontant = saisie.montant.trim() && (montant === null || montant <= 0) ? "Montant invalide." : null;
   const erreurDate = saisie.recuLe > jourParis(new Date()) ? "La date est à venir." : null;
-  const complet = montant !== null && montant > 0 && saisie.recuLe && !erreurDate && saisie.moyen;
+  const complet = montant !== null && montant > 0 && saisie.recuLe && !erreurDate;
   return {
-    paiement: complet ? { montant: montant!, recuLe: saisie.recuLe, moyen: saisie.moyen!, reference: saisie.reference.trim() || null } : null,
+    paiement: complet ? { montant: montant!, recuLe: saisie.recuLe, moyen: saisie.moyen, reference: saisie.reference.trim() || null } : null,
     erreurMontant,
     erreurDate,
   };
@@ -35,8 +36,9 @@ export function lirePaiement(saisie: SaisiePaiement): { paiement: PaiementLu | n
 
 /**
  * Champs d'un paiement reçu : montant, date de réception, moyen, référence.
- * Le moyen se choisit d'un doigt ; la date est celle du jour, à corriger si le
- * paiement est arrivé avant.
+ * Le moyen se choisit d'un doigt (facultatif, signalé s'il manque) ; la date
+ * est celle du jour, à corriger si le paiement est arrivé avant, même avant
+ * l'ouverture du dossier.
  */
 export function ChampsPaiement({
   saisie,
@@ -71,13 +73,15 @@ export function ChampsPaiement({
           onChange={(evenement) => changer("recuLe", evenement.target.value)}
         />
       </div>
-      <Puces
-        libelle="Moyen de paiement"
-        obligatoire
-        options={MOYENS_PAIEMENT.map((moyen) => ({ valeur: moyen, libelle: LIBELLES_MOYEN[moyen] }))}
-        valeur={saisie.moyen}
-        onChange={(moyen) => changer("moyen", moyen)}
-      />
+      <div>
+        <Puces
+          libelle="Moyen de paiement"
+          options={MOYENS_PAIEMENT.map((moyen) => ({ valeur: moyen, libelle: LIBELLES_MOYEN[moyen] }))}
+          valeur={saisie.moyen}
+          onChange={(moyen) => changer("moyen", saisie.moyen === moyen ? null : moyen)}
+        />
+        {saisie.moyen ? null : <p className="mt-1 text-[12px] text-[#9CA3AF]">Non renseigné : il sera signalé au livre des recettes.</p>}
+      </div>
       <Champ
         libelle={saisie.moyen === "CHEQUE" ? "N° du chèque (facultatif)" : saisie.moyen === "VIREMENT" ? "Libellé du virement (facultatif)" : "Référence (facultative)"}
         maxLength={120}

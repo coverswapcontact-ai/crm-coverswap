@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useViewMode } from "./ViewModeProvider";
 import {
   LayoutDashboard, Users, FileText, Receipt,
-  HardHat, Bot, Menu, X, CheckCircle2,
+  HardHat, Bot, Menu, X, CheckCircle2, FolderKanban,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -18,11 +18,13 @@ import { Badge } from "@/components/ui/badge";
 // - Kanban accessible via bouton sur /leads (plus dans la sidebar)
 // - Commandes intégrées dans /chantiers
 // - Finances + Analytics fusionnées dans /dashboard
+// - Devis et Factures en lecture seule depuis /dossiers : mode avancé uniquement
 const navItems = [
   { href: "/dashboard", label: "Accueil", icon: LayoutDashboard, simple: true },
+  { href: "/dossiers", label: "Dossiers", icon: FolderKanban, simple: true },
   { href: "/leads", label: "Leads", icon: Users, badge: "leads", simple: true },
-  { href: "/devis", label: "Devis", icon: FileText, simple: true },
-  { href: "/factures", label: "Factures", icon: Receipt, badge: "factures", simple: true },
+  { href: "/devis", label: "Devis", icon: FileText, simple: false },
+  { href: "/factures", label: "Factures", icon: Receipt, badge: "factures", simple: false },
   { href: "/chantiers", label: "Chantiers", icon: HardHat, simple: true },
   { href: "/clients", label: "Clients", icon: CheckCircle2, simple: true },
   { href: "/assistant", label: "Assistant IA", icon: Bot, simple: false },

@@ -10,9 +10,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import Link from "next/link";
-import { FileText, Plus, Eye } from "lucide-react";
+import { FileText, Eye } from "lucide-react";
 import DevisActions from "@/components/devis/DevisActions";
 import EmptyState from "@/components/ui/empty-state";
+import BandeauLectureSeule from "@/components/devis/BandeauLectureSeule";
 
 const STATUT_STYLES: Record<string, string> = {
   BROUILLON: "bg-gray-50 text-gray-500 border-gray-200",
@@ -55,21 +56,18 @@ export default async function DevisPage({
           <h1 className="text-[24px] font-bold text-gray-900 tracking-tight">Devis</h1>
           <p className="text-gray-400 mt-0.5 text-[14px]">{total} devis au total</p>
         </div>
-        <Link href="/devis/nouveau">
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#CC0000] text-white text-[13px] font-semibold hover:bg-[#AA0000] transition-colors shadow-sm">
-            <Plus className="h-4 w-4" /> Nouveau devis
-          </button>
-        </Link>
       </div>
+
+      <BandeauLectureSeule objet="devis" />
 
       <div className="glass-card overflow-hidden">
         {devisList.length === 0 ? (
           <EmptyState
             icon={FileText}
             title="Aucun devis pour le moment"
-            description="Les devis creees apparaitront ici. Commencez par un nouveau devis pour un de vos leads."
-            actionLabel="Creer un devis"
-            actionHref="/devis/nouveau"
+            description="Les anciens devis du CRM apparaissent ici. Les nouveaux se génèrent depuis un dossier."
+            actionLabel="Ouvrir les dossiers"
+            actionHref="/dossiers"
             tone="brand"
           />
         ) : (
@@ -124,12 +122,7 @@ export default async function DevisPage({
                             <Eye className="h-4 w-4" />
                           </button>
                         </Link>
-                        <DevisActions
-                          devisId={devis.id}
-                          statut={devis.statut}
-                          leadEmail={devis.lead.email}
-                          numero={devis.numero}
-                        />
+                        <DevisActions devisId={devis.id} />
                       </div>
                     </TableCell>
                   </TableRow>

@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Eye, Receipt, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import FactureActions from "@/components/factures/FactureActions";
 import EmptyState from "@/components/ui/empty-state";
+import BandeauLectureSeule from "@/components/devis/BandeauLectureSeule";
 
 const STATUT_STYLES: Record<string, string> = {
   ACOMPTE_EN_ATTENTE: "bg-amber-50 text-amber-600 border-amber-200",
@@ -85,6 +86,8 @@ export default async function FacturesPage({
         <p className="text-gray-400 mt-0.5 text-[14px]">{total} facture{total > 1 ? "s" : ""} au total</p>
       </div>
 
+      <BandeauLectureSeule objet="factures" />
+
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map((s) => (
@@ -107,7 +110,7 @@ export default async function FacturesPage({
           <EmptyState
             icon={Receipt}
             title="Aucune facture emise"
-            description="Les factures apparaissent apres signature d'un devis. Le CRM gere automatiquement acompte puis solde."
+            description="Les anciennes factures du CRM apparaissent ici. Les nouvelles se génèrent depuis un dossier."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -163,12 +166,7 @@ export default async function FacturesPage({
                             <Eye className="h-4 w-4" />
                           </button>
                         </Link>
-                        <FactureActions
-                          factureId={f.id}
-                          statut={f.statut}
-                          acompteRecu={f.acompteRecu}
-                          soldeRecu={f.soldeRecu}
-                        />
+                        <FactureActions factureId={f.id} />
                       </div>
                     </TableCell>
                   </TableRow>

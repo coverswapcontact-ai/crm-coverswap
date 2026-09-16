@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import { formatEuros, formatDate, sourceLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-import { FileText, Download, Image as ImageIcon, Mail, Phone, MessageSquare } from "lucide-react";
+import { Download, FolderKanban, Image as ImageIcon, Mail, Phone, MessageSquare } from "lucide-react";
 import { StatusChanger, InteractionForm } from "@/components/leads/LeadActions";
 import LeadEditor from "@/components/leads/LeadEditor";
 import LeadFunnel from "@/components/leads/LeadFunnel";
 import Breadcrumb from "@/components/ui/breadcrumb";
+import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
+import { estEtape } from "@/lib/dossiers/regles";
 import { buildGmailComposeUrl, emailRelanceDevisTemplate } from "@/lib/gmail";
 
 const CHANTIER_STATUT_STYLES: Record<string, string> = {
@@ -29,6 +31,7 @@ export default async function LeadDetailPage({
     include: {
       interactions: { orderBy: { createdAt: "desc" } },
       devis: true,
+      dossiers: { orderBy: { createdAt: "desc" }, select: { id: true, objet: true, etape: true } },
       chantier: true,
       simulations: { orderBy: { createdAt: "desc" } },
     },
@@ -126,10 +129,10 @@ export default async function LeadDetailPage({
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         <Link
-                          href={`/devis/nouveau?leadId=${lead.id}${s.referenceChoisie ? `&reference=${encodeURIComponent(s.referenceChoisie)}` : ""}${s.mlEstimes ? `&ml=${s.mlEstimes}` : ""}`}
+                          href={`/dossiers?lead=${lead.id}`}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#CC0000] text-white text-[12px] font-semibold hover:bg-[#AA0000] transition-colors"
                         >
-                          <FileText className="h-3 w-3" /> Creer devis
+                          <FolderKanban className="h-3 w-3" /> Ouvrir un dossier
                         </Link>
                         <a
                           href={`/api/simulations/${s.id}/pdf`}
@@ -212,10 +215,10 @@ export default async function LeadDetailPage({
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Actions rapides</p>
             <div className="space-y-2">
               <Link
-                href={`/devis/nouveau?leadId=${lead.id}`}
+                href={`/dossiers?lead=${lead.id}`}
                 className="flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-[#CC0000] text-white text-[13px] font-semibold hover:bg-[#AA0000] transition-colors"
               >
-                <FileText className="h-4 w-4" /> Creer un devis
+                <FolderKanban className="h-4 w-4" /> Ouvrir un dossier
               </Link>
               {lead.email && (
                 <a
@@ -265,6 +268,29 @@ export default async function LeadDetailPage({
               )}
             </div>
           </div>
+
+          {/* Dossiers list */}
+          {lead.dossiers.length > 0 && (
+            <div className="glass-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h2 className="text-[14px] font-semibold text-gray-900">Dossiers</h2>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {lead.dossiers.map((d) => (
+                  <Link
+                    key={d.id}
+                    href={`/dossiers?dossier=${d.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-gray-50/80 transition-colors"
+                  >
+                    <p className="text-gray-900 text-[13px] truncate">{d.objet}</p>
+                    <p className="text-gray-500 text-[12px] shrink-0">
+                      {estEtape(d.etape) ? LIBELLES_ETAPE[d.etape] : d.etape}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Devis list */}
           {lead.devis.length > 0 && (

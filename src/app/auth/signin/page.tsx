@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { destinationApresConnexion } from "@/lib/acces/destination";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -31,7 +32,10 @@ export default function SignInPage() {
       setError("Email ou mot de passe incorrect");
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      // Retour à la page demandée avant la connexion (lien partagé, rappel Google…).
+      const destination = destinationApresConnexion(window.location.search, window.location.origin);
+      if (destination.startsWith("/api/")) window.location.assign(destination);
+      else router.push(destination);
     }
   }
 

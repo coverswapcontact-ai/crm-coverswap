@@ -5,7 +5,8 @@ import { resolveUploadsDir } from "@/lib/uploads";
 
 /**
  * Sert les fichiers stockés sur le volume Railway (/data/uploads/...).
- * Protégé par le middleware Basic Auth comme le reste du CRM.
+ * Protégé par la session NextAuth : préfixe /api/uploads dans src/middleware.ts
+ * (le Basic Auth n'est pas actif en production).
  */
 export async function GET(
   _req: NextRequest,

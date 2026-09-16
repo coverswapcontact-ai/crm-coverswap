@@ -7,7 +7,7 @@ import { resolveUploadsDir } from "@/lib/uploads";
 
 /**
  * Génère à la volée un PDF "avant / après" pour une simulation donnée.
- * Route protégée par le middleware Basic Auth.
+ * Protégé par la session NextAuth : préfixe /api/simulations dans src/middleware.ts.
  */
 export async function GET(
   _req: NextRequest,

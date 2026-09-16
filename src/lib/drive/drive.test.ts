@@ -27,6 +27,7 @@ const drive = new Map<string, ElementFaux>();
 const appels: { methode: string; url: string }[] = [];
 let jetonRevoque = false;
 let compteur = 0;
+const sessionsEnvoi = new Map<string, { methode: string; cible: string | null; metadonnees: Record<string, unknown> }>();
 
 function json(corps: unknown, statut = 200): Response {
   return new Response(JSON.stringify(corps), { status: statut, headers: { "Content-Type": "application/json" } });
@@ -46,9 +47,40 @@ async function fauxGoogle(url: string, init: RequestInit = {}): Promise<Response
   if (adresse.href.startsWith("https://openidconnect.googleapis.com/v1/userinfo")) return json({ email: "coverswap.essai@example.test" });
   if (adresse.href.startsWith("https://oauth2.googleapis.com/revoke")) return json({});
 
-  const envoi = adresse.pathname.startsWith("/upload/drive/v3/files");
   const segments = adresse.pathname.split("/");
   const id = segments.at(-1) !== "files" ? segments.at(-1)! : null;
+
+  // Envoi en deux temps (« resumable ») : le contenu arrive par PUT sur l'adresse de session.
+  if (methode === "PUT" && adresse.searchParams.get("upload_id")) {
+    const session = sessionsEnvoi.get(adresse.searchParams.get("upload_id")!);
+    if (!session) return json({ error: { message: "Invalid upload session" } }, 404);
+    sessionsEnvoi.delete(adresse.searchParams.get("upload_id")!);
+    const contenuRecu = Buffer.from(init.body as Uint8Array).toString("utf8");
+    if (session.cible) {
+      const cible = drive.get(session.cible);
+      if (!cible) return json({ error: { message: "File not found" } }, 404);
+      if (session.metadonnees.name) cible.name = String(session.metadonnees.name);
+      cible.contenu = contenuRecu;
+      return json({ id: cible.id });
+    }
+    const cree: ElementFaux = {
+      id: `f${++compteur}`,
+      name: String(session.metadonnees.name),
+      parents: (session.metadonnees.parents as string[] | undefined) ?? ["racine-drive"],
+      trashed: false,
+      dossier: false,
+      contenu: contenuRecu,
+    };
+    drive.set(cree.id, cree);
+    return json({ id: cree.id });
+  }
+  if (adresse.pathname.startsWith("/upload/drive/v3/files") && adresse.searchParams.get("uploadType") === "resumable") {
+    const idSession = `session-${++compteur}`;
+    sessionsEnvoi.set(idSession, { methode, cible: id, metadonnees: JSON.parse(String(init.body)) });
+    return new Response(null, { status: 200, headers: { Location: `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=${idSession}` } });
+  }
+
+  const envoi = adresse.pathname.startsWith("/upload/drive/v3/files");
   let metadonnees: Record<string, unknown> = {};
   let contenu = "";
   if (envoi) {
@@ -195,6 +227,39 @@ describe("miroir Drive", () => {
     const resume = await miroir.synchroniserMiroir({ verifier: true });
     assert.equal(resume.reconstruits, 1);
     assert.equal([...drive.values()].filter((element) => element.name === "Fiche du dossier.txt" && !element.trashed).length, 1);
+  });
+
+  test("fichier de plus de 5 Mo : envoi en deux temps ; réseau coupé pendant l'envoi, rien n'est créé et le passage suivant reprend", async () => {
+    const client = await prisma.client.create({ data: { nom: "Bruno Grandfichier", source: "ENTRANT", premierContactLe: new Date() } });
+    const lourde = new File([Buffer.alloc(6 * 1024 * 1024, "a")], "photo.jpg", { type: "image/jpeg" });
+    const idDossier = await dossiers.creerDossier(
+      { clientNom: "Bruno Grandfichier", clientAdresse: "2 rue", clientCp: "34000", clientVille: "Montpellier", clientTelephone: "0600000013", clientEmail: null, objet: "Dressing", source: "ENTRANT", montantEstime: null, prochaineAction: null, prochaineActionDate: null, leadId: null, prospectId: null, clientId: client.id },
+      [lourde]
+    );
+    const copieDeLaPhoto = () => prisma.miroirDrive.findFirst({ where: { cle: { startsWith: `photo:${idDossier}:` } } });
+
+    // Session ouverte, puis le réseau tombe pendant l'envoi du contenu.
+    google.definirTransportGoogleEssai(async (url, init) => {
+      if (init?.method === "PUT") throw new TypeError("fetch failed");
+      return fauxGoogle(url, init);
+    });
+    const coupe = await miroir.synchroniserMiroir();
+    google.definirTransportGoogleEssai(fauxGoogle);
+    assert.equal(coupe.erreurs, 1);
+    const enErreur = await copieDeLaPhoto();
+    assert.equal(enErreur?.driveId ?? null, null);
+    assert.match(enErreur?.derniereErreur ?? "", /fetch failed/);
+    assert.equal([...drive.values()].filter((element) => element.contenu.length === 6 * 1024 * 1024).length, 0, "rien de créé à moitié");
+
+    const reprise = await miroir.synchroniserMiroir();
+    assert.equal(reprise.erreurs, 0);
+    const envoyee = await copieDeLaPhoto();
+    assert.equal(envoyee?.etat, "A_JOUR");
+    assert.equal(envoyee?.derniereErreur, null);
+    assert.equal(drive.get(envoyee!.driveId!)?.contenu.length, 6 * 1024 * 1024);
+    assert.ok(appels.some((appel) => appel.methode === "POST" && appel.url.includes("uploadType=resumable")));
+    assert.ok(appels.some((appel) => appel.methode === "PUT" && appel.url.includes("upload_id=")));
+    assert.equal([...drive.values()].filter((element) => element.contenu.length === 6 * 1024 * 1024).length, 1, "envoyée une seule fois");
   });
 
   test("client anonymisé : le contenu des copies de ses photos est remplacé dans Drive, rien n'y est supprimé", async () => {

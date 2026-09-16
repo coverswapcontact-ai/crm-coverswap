@@ -33,10 +33,45 @@ export async function creerDossierDrive(nom: string, parentId: string | null): P
   return String((await reponseJson(reponse, `création du dossier « ${nom} »`)).id);
 }
 
+/**
+ * Au-delà de 5 Mo, Google réserve l'envoi en une requête (multipart) aux petits
+ * fichiers et demande l'envoi « resumable » : ouverture d'une session, puis
+ * contenu. Le CRM accepte des photos et des PDF jusqu'à 9 Mo.
+ */
+export const SEUIL_ENVOI_EN_DEUX_TEMPS = 5 * 1024 * 1024;
+
+type EnvoiFichier = { nom: string; type: string; contenu: Buffer; parentId: string | null; fichierId?: string | null };
+
+async function envoyerEnDeuxTemps(entree: EnvoiFichier, metadonnees: Record<string, unknown>): Promise<string> {
+  const ouverture = await appelGoogle(`${entree.fichierId ? `${ENVOI}/${entree.fichierId}` : ENVOI}?uploadType=resumable&fields=id`, {
+    portee: PORTEES_GOOGLE.DRIVE,
+    method: entree.fichierId ? "PATCH" : "POST",
+    headers: {
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Upload-Content-Type": entree.type,
+      "X-Upload-Content-Length": String(entree.contenu.length),
+    },
+    body: JSON.stringify(metadonnees),
+  });
+  const session = ouverture.headers.get("location");
+  if (!ouverture.ok || !session) {
+    await reponseJson(ouverture, `envoi de « ${entree.nom} »`);
+    throw new Error(`Drive : envoi de « ${entree.nom} » impossible (pas de session d'envoi)`);
+  }
+  const envoi = await appelGoogle(session, {
+    portee: PORTEES_GOOGLE.DRIVE,
+    method: "PUT",
+    headers: { "Content-Type": entree.type },
+    body: new Uint8Array(entree.contenu),
+  });
+  return String((await reponseJson(envoi, `envoi de « ${entree.nom} »`)).id);
+}
+
 /** Envoie un fichier (nouveau, ou nouvelle version d'un fichier existant). */
-export async function envoyerFichierDrive(entree: { nom: string; type: string; contenu: Buffer; parentId: string | null; fichierId?: string | null }): Promise<string> {
-  const separateur = `coverswap-${randomBytes(12).toString("hex")}`;
+export async function envoyerFichierDrive(entree: EnvoiFichier): Promise<string> {
   const metadonnees = entree.fichierId ? { name: entree.nom } : { name: entree.nom, ...(entree.parentId ? { parents: [entree.parentId] } : {}) };
+  if (entree.contenu.length > SEUIL_ENVOI_EN_DEUX_TEMPS) return envoyerEnDeuxTemps(entree, metadonnees);
+  const separateur = `coverswap-${randomBytes(12).toString("hex")}`;
   const corps = Buffer.concat([
     Buffer.from(`--${separateur}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadonnees)}\r\n--${separateur}\r\nContent-Type: ${entree.type}\r\n\r\n`, "utf8"),
     entree.contenu,

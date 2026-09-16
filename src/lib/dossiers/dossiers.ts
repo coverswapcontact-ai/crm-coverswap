@@ -488,18 +488,7 @@ export async function ouvrirDossier(
  */
 export async function creerDossier(entree: EntreeCreation, photos: File[]): Promise<string> {
   photos.forEach(verifierPhoto);
-  if (entree.leadId && entree.prospectId) {
-    throw new ErreurMetier("Un dossier vient d'un lead ou d'un prospect, pas des deux.");
-  }
-  const [lead, prospect] = await Promise.all([
-    entree.leadId ? prisma.lead.findUnique({ where: { id: entree.leadId }, select: { id: true, statut: true } }) : null,
-    entree.prospectId
-      ? prisma.prospect.findUnique({ where: { id: entree.prospectId }, select: { id: true, statut: true } })
-      : null,
-  ]);
-  if (entree.leadId && !lead) throw new ErreurMetier("Lead introuvable.", 404);
-  if (entree.prospectId && !prospect) throw new ErreurMetier("Prospect introuvable.", 404);
-
+  const { lead, prospect } = await originesDuDossier(entree);
   const dossier = await prisma.$transaction((tx) => ouvrirDossier(tx, entree, { leadId: lead?.id ?? null, prospectId: prospect?.id ?? null }));
 
   try {
@@ -520,8 +509,32 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
     throw erreur;
   }
 
-  // Le lead B2C passe à « Contacté » ; le prospect B2B est converti en client
-  // (il sort des séquences de prospection), sauf s'il s'est désinscrit.
+  await suitesOuverture({ lead, prospect }, dossier.id);
+  return dossier.id;
+}
+
+type Origines = { lead: { id: string; statut: string } | null; prospect: { id: string; statut: string } | null };
+
+/** Lead ou prospect d'origine d'un dossier à ouvrir, vérifiés. */
+export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | "prospectId">): Promise<Origines> {
+  if (entree.leadId && entree.prospectId) {
+    throw new ErreurMetier("Un dossier vient d'un lead ou d'un prospect, pas des deux.");
+  }
+  const [lead, prospect] = await Promise.all([
+    entree.leadId ? prisma.lead.findUnique({ where: { id: entree.leadId }, select: { id: true, statut: true } }) : null,
+    entree.prospectId ? prisma.prospect.findUnique({ where: { id: entree.prospectId }, select: { id: true, statut: true } }) : null,
+  ]);
+  if (entree.leadId && !lead) throw new ErreurMetier("Lead introuvable.", 404);
+  if (entree.prospectId && !prospect) throw new ErreurMetier("Prospect introuvable.", 404);
+  return { lead, prospect };
+}
+
+/**
+ * Après l'ouverture, jamais bloquant : le lead B2C passe à « Contacté » ; le
+ * prospect B2B est converti en client (il sort des séquences de prospection),
+ * sauf s'il s'est désinscrit.
+ */
+export async function suitesOuverture({ lead, prospect }: Origines, dossierId: string): Promise<void> {
   try {
     if (lead?.statut === "NOUVEAU") {
       await prisma.lead.update({ where: { id: lead.id }, data: { statut: "CONTACTE" } });
@@ -533,7 +546,7 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
           data: {
             prospectId: prospect.id,
             type: "NOTE",
-            details: JSON.stringify({ message: "Dossier ouvert", dossierId: dossier.id }),
+            details: JSON.stringify({ message: "Dossier ouvert", dossierId }),
           },
         }),
       ]);
@@ -541,8 +554,6 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
   } catch (erreur) {
     console.error("[dossiers] mise à jour du lead d'origine :", erreur);
   }
-
-  return dossier.id;
 }
 
 /* ── Modification ───────────────────────────────────────────────── */

@@ -1301,3 +1301,30 @@ objet, PDF.
 - **Avoir** d'une facture reprise : une ligne « Annulation de la facture … » de
   son montant, dans la série F comme tout avoir.
 - Les avertissements d'étape disent « aucun devis généré ni enregistré ».
+
+### Mode reprise (`src/lib/dossiers/reprise.ts`)
+
+« Ouvrir un dossier » a un troisième onglet, « Reprise d'un dossier en cours » :
+un seul écran pour saisir un dossier historique en deux minutes.
+
+- **Contenu** : client (fiche existante à rattacher ou créée depuis le nom),
+  coordonnées et chantier facultatifs, étape actuelle (étapes actives), dates
+  clés (ouverture, devis envoyé, signé, chantier commencé, facturé, selon
+  l'étape ; arrivée à l'étape actuelle ; date du chantier), devis et factures
+  déjà émis (avec PDF), paiements déjà reçus.
+- **Une transaction** (`POST /api/dossiers/reprise`) : le dossier et son
+  ouverture datée, les documents (règles de la section précédente), les
+  paiements (imputés sur ces pièces), puis le parcours : un passage par jalon
+  daté et l'arrivée à l'étape actuelle, à leurs dates réelles, la signature
+  portant le devis accepté. Un document refusé (numéro déjà rattaché…) annule
+  tout. Les PDF suivent un à un sur la route du document (limite de 10 Mo par
+  requête), puis le panneau du dossier s'ouvre.
+- **Dates** : un jalon sans date ne crée pas de passage (rien n'est inventé) ;
+  l'arrivée à l'étape actuelle sans date est gardée « date inconnue »,
+  signalée sur le dossier. L'écran déduit une date vide quand il peut (premier
+  devis, première facture, date du chantier, dernier paiement pour
+  « Encaissé », plus ancienne date saisie pour l'ouverture) et le dit sous le
+  champ. Des dates qui ne se suivent pas sont signalées, pas refusées.
+- Le lead ou le prospect d'origine suit comme à une ouverture (statut du lead
+  selon l'étape) ; rien ne part chez Meta pour un dossier repris.
+

@@ -9,13 +9,14 @@ import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { appelApi, messageErreur, photoTropLourde, preparerPhoto } from "./client";
+import { RepriseDossier } from "./RepriseDossier";
 import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TRANS } from "./ui";
 import { avertissementsCoordonnees, manquesCoordonnees, validerCoordonnees, type ChampsCoordonnees } from "./validation";
 
 type Champs = ChampsCoordonnees & { prochaineAction: string; prochaineActionDate: string; etape: EtapeDossier; dateChantier: string };
 type Erreurs = Partial<Record<keyof Champs | "photos", string>>;
 type PhotoChoisie = { cle: string; fichier: File; apercu: string };
-type Mode = "lead" | "direct";
+type Mode = "lead" | "direct" | "reprise";
 
 const LIBELLES_ORIGINE: Record<LeadTrouve["origine"], string> = { CLIENT: "Client", LEAD: "Lead", PROSPECT: "Prospect" };
 
@@ -115,7 +116,7 @@ export function CreationDossier({
 
   function changerMode(nouveau: Mode) {
     setMode(nouveau);
-    if (nouveau === "direct") setOrigine(null);
+    if (nouveau !== "lead") setOrigine(null);
   }
 
   function ajouterPhotos(fichiers: FileList | null) {
@@ -210,6 +211,37 @@ export function CreationDossier({
   }
 
   const formulaireVisible = mode === "direct" || origine !== null;
+  const onglets = (
+    <div
+      role="tablist"
+      aria-label="Origine du dossier"
+      className="mb-4 flex w-full flex-wrap items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-[3px] sm:w-fit"
+    >
+      {(
+        [
+          { valeur: "lead", libelle: "Client ou lead existant" },
+          { valeur: "direct", libelle: "Création directe" },
+          { valeur: "reprise", libelle: "Reprise d'un dossier en cours" },
+        ] as const
+      ).map(({ valeur, libelle }) => (
+        <button
+          key={valeur}
+          type="button"
+          role="tab"
+          aria-selected={mode === valeur}
+          onClick={() => changerMode(valeur)}
+          className={cn(
+            "h-9 flex-1 rounded-[7px] px-3.5 text-[13px] font-medium whitespace-nowrap sm:h-7 sm:flex-none",
+            mode === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+            TRANS
+          )}
+        >
+          {libelle}
+        </button>
+      ))}
+    </div>
+  );
+  if (mode === "reprise") return <RepriseDossier ouverte={ouverte} onglets={onglets} onFermer={onFermer} onCree={onCree} />;
   const avertissements = avertissementsCoordonnees(champs);
   const manques = [...manquesCoordonnees(champs), ...(photos.length === 0 ? ["photos"] : [])];
   const etapeAvancee = estEtapeActive(champs.etape) && rangEtape(champs.etape) >= rangEtape("PLANIFIE");
@@ -233,33 +265,7 @@ export function CreationDossier({
         </div>
       }
     >
-      <div
-        role="tablist"
-        aria-label="Origine du dossier"
-        className="mb-4 flex w-full items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-[3px] sm:w-fit"
-      >
-        {(
-          [
-            { valeur: "lead", libelle: "Client ou lead existant" },
-            { valeur: "direct", libelle: "Création directe" },
-          ] as const
-        ).map(({ valeur, libelle }) => (
-          <button
-            key={valeur}
-            type="button"
-            role="tab"
-            aria-selected={mode === valeur}
-            onClick={() => changerMode(valeur)}
-            className={cn(
-              "h-9 flex-1 rounded-[7px] px-3.5 text-[13px] font-medium sm:h-7 sm:flex-none",
-              mode === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
-              TRANS
-            )}
-          >
-            {libelle}
-          </button>
-        ))}
-      </div>
+      {onglets}
 
       {mode === "lead" && origine === null ? (
         <div>

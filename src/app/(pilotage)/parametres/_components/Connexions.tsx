@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleCheck, CloudUpload, Link2, Link2Off, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Bot, CircleCheck, CloudUpload, Link2, Link2Off, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Pastille, TitreSection } from "@/components/pilotage/ui";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
 import type { EtatMiroir } from "@/lib/drive/synchronisation";
 import type { EtatConnexionGoogle } from "@/lib/google/connexion";
+import type { EtatAgentMail } from "@/lib/messages/constantes";
 import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
-type Etat = { google: EtatConnexionGoogle; drive: EtatMiroir };
+type Etat = { google: EtatConnexionGoogle; drive: EtatMiroir; agent: EtatAgentMail };
 
-/** Connexion Google (Drive, Gmail) et miroir Drive : état, connexion, synchronisation à la demande. */
+const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+/** Connexion Google (Drive, Gmail), miroir Drive et agent mail : état, connexion, actions à la demande. */
 export default function Connexions({ retour }: { retour: { google: string | null; compte: string | null; message: string | null } }) {
   const [etat, setEtat] = useState<Etat | null>(null);
   const [envoi, setEnvoi] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export default function Connexions({ retour }: { retour: { google: string | null
   }
 
   if (!etat) return <p className="mt-6 text-[13px] text-[#6B7280]">Chargement des connexions…</p>;
-  const { google, drive } = etat;
+  const { google, drive, agent } = etat;
 
   return (
     <section className="mt-6">
@@ -138,6 +142,60 @@ export default function Connexions({ retour }: { retour: { google: string | null
               </div>
             </div>
           )}
+        </div>
+
+        <div className={cn(CARTE, "p-4")}>
+          <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+            <Mail size={15} aria-hidden /> Agent mail
+          </p>
+          {!agent.actif ? (
+            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+              <Pastille ton="neutre">Inactif</Pastille>
+              <p className="mt-2">{agent.raison ? `${agent.raison.charAt(0).toUpperCase()}${agent.raison.slice(1)}` : null}</p>
+              <p className="mt-1">Actif, il relève la boîte toutes les 5 minutes, range seul ce qui est certain (client connu, publicité) et propose le reste. Il ne supprime ni n&apos;envoie rien.</p>
+            </div>
+          ) : (
+            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+              <p>
+                Relève {agent.compte}
+                {agent.dernierReleve ? ` · dernier passage le ${formatHorodatage(agent.dernierReleve)}` : ""}
+              </p>
+              <p className="mt-1">
+                {agent.recusSeptJours} mail{agent.recusSeptJours > 1 ? "s" : ""} reçu{agent.recusSeptJours > 1 ? "s" : ""} en 7 jours ·{" "}
+                <Link href="/messages" className="text-[#5DCAA5] underline-offset-2 hover:underline">
+                  {agent.aTrier} à trier
+                </Link>
+              </p>
+              {agent.derniereErreur ? <p className="mt-1 text-[#F87171]">Dernier relevé en échec : {agent.derniereErreur}</p> : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Bouton
+                  taille="sm"
+                  icone={<RefreshCw size={13} aria-hidden />}
+                  chargement={envoi === "releve"}
+                  onClick={() => void action("releve", () => envoyerJson("/api/messages/relever", "POST"), "Relevé lancé en tâche de fond")}
+                >
+                  Relever maintenant
+                </Bouton>
+              </div>
+            </div>
+          )}
+          <div className="mt-3 border-t-[0.5px] border-[#2A2D34] pt-3 text-[12.5px] text-[#9CA3AF]">
+            <p className="flex items-center gap-1.5 text-[#D1D5DB]">
+              <Bot size={13} aria-hidden /> Lecture des mails par l&apos;IA
+            </p>
+            {agent.ia.active ? (
+              <p className="mt-1">
+                Active · {agent.ia.modele} · {euros(agent.ia.depenseMois)} ce mois
+                {agent.ia.budget !== null ? ` sur ${euros(agent.ia.budget)}` : ""} ({agent.ia.appelsMois} lecture{agent.ia.appelsMois > 1 ? "s" : ""})
+              </p>
+            ) : (
+              <p className="mt-1">
+                Inactive : {agent.ia.raison}
+                {agent.ia.manquants.length > 0 ? " Réglages dans « Agent mail et IA », plus haut." : ""}
+              </p>
+            )}
+            <p className="mt-1 text-[#6B7280]">Sans IA, les règles sûres trient seules ; avec, l&apos;agent propose aussi notes, réponses et nouveaux dossiers, jamais exécutés sans ta validation.</p>
+          </div>
         </div>
       </div>
     </section>

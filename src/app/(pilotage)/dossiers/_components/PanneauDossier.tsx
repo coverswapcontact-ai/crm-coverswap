@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LecteurMessage } from "@/components/pilotage/messages/LecteurMessage";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
   LIBELLES_ETAPE,
@@ -242,7 +243,7 @@ function ContenuPanneau({
             detail={detail}
             onMisAJour={onMisAJour}
           />
-          <HistoriqueEvenements evenements={detail.evenements} />
+          <HistoriqueEvenements evenements={detail.evenements} onRecharger={onRecharger} />
         </div>
       </div>
 
@@ -363,9 +364,10 @@ const ICONES_EVENEMENT: Partial<Record<TypeEvenement, typeof FileText>> = {
   MAIL_ENVOYE: Mail,
 };
 
-function HistoriqueEvenements({ evenements }: { evenements: EvenementVue[] }) {
+function HistoriqueEvenements({ evenements, onRecharger }: { evenements: EvenementVue[]; onRecharger: () => Promise<void> }) {
   const [ouvert, setOuvert] = useState(false);
   const [tout, setTout] = useState(false);
+  const [mail, setMail] = useState<string | null>(null);
   const liste = tout ? evenements : evenements.slice(0, 20);
 
   return (
@@ -394,6 +396,14 @@ function HistoriqueEvenements({ evenements }: { evenements: EvenementVue[] }) {
                   <p className="text-[13px] break-words text-[#D1D5DB]">{evenement.contenu}</p>
                   <p className="mt-0.5 text-[11px] text-[#6B7280]">
                     {LIBELLES_TYPE_EVENEMENT[evenement.type]} · {formatHorodatage(evenement.createdAt)}
+                    {evenement.messageId ? (
+                      <>
+                        {" · "}
+                        <button type="button" onClick={() => setMail(evenement.messageId)} className={cn("text-[#9CA3AF] underline-offset-2 hover:text-[#F2F3F5] hover:underline", TRANS)}>
+                          Lire le mail
+                        </button>
+                      </>
+                    ) : null}
                   </p>
                 </div>
               </li>
@@ -408,6 +418,7 @@ function HistoriqueEvenements({ evenements }: { evenements: EvenementVue[] }) {
           ) : null}
         </ol>
       ) : null}
+      {mail ? <LecteurMessage key={mail} messageId={mail} onFermer={() => setMail(null)} onModifie={() => void onRecharger()} /> : null}
     </section>
   );
 }

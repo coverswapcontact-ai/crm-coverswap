@@ -47,6 +47,9 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   // État du miroir Drive : réécrit à chaque synchronisation ; le miroir ne porte
   // aucune donnée métier (la base reste la source), ses échecs se lisent sur la ligne.
   "MiroirDrive",
+  // Contenu d'un message reçu : écrit une fois avec son message (lui journalisé),
+  // jamais modifié (la base le refuse) ; le journal en dupliquerait chaque mail.
+  "ContenuMessage",
 ]);
 
 export type RegleImmuabilite = {
@@ -71,6 +74,35 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
   ["ConsentementMail", { modifiables: ["clientId", "ecriture"] }],
   ["Parametre", { modifiables: ["ecriture"] }],
   ["InstantaneMensuel", { modifiables: ["ecriture"], message: "Un instantané mensuel est figé : il ne se recalcule ni ne se modifie." }],
+  [
+    "ContenuMessage",
+    {
+      modifiables: ["texte", "entetes", "ecriture"],
+      completables: ["anonymiseLe"],
+      message: "Le contenu d'un message reçu ne se modifie pas.",
+      interdits: [
+        {
+          condition: `(NEW."texte" IS NOT OLD."texte" OR NEW."entetes" IS NOT OLD."entetes") AND NOT (OLD."anonymiseLe" IS NULL AND NEW."anonymiseLe" IS NOT NULL)`,
+          message: "Le contenu d'un message reçu ne se modifie pas : seul son effacement RGPD est permis, une fois.",
+        },
+      ],
+    },
+  ],
+  [
+    "AnalyseMessage",
+    {
+      modifiables: ["raisonnement", "resultat", "ecriture"],
+      completables: ["anonymiseLe"],
+      message: "L'analyse d'un message est gardée telle quelle : une nouvelle analyse s'ajoute.",
+      interdits: [
+        {
+          condition: `(NEW."raisonnement" IS NOT OLD."raisonnement" OR NEW."resultat" IS NOT OLD."resultat") AND NOT (OLD."anonymiseLe" IS NULL AND NEW."anonymiseLe" IS NOT NULL)`,
+          message: "L'analyse d'un message est gardée telle quelle : seul son effacement RGPD est permis, une fois.",
+        },
+      ],
+    },
+  ],
+  ["AppelIa", { modifiables: ["ecriture"], message: "Un appel au modèle d'IA est enregistré tel quel : il ne se modifie pas." }],
   [
     "Document",
     {

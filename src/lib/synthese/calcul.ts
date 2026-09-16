@@ -59,7 +59,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     return jour >= du && jour <= au;
   };
 
-  const [dossiers, clients, propositionsBrutes, depensesBrutes, inconnus] = await Promise.all([
+  const [dossiers, clients, propositionsBrutes, depensesBrutes, inconnus, messagesBruts, rangementsBruts, appelsIaBruts, bruitsAnnules] = await Promise.all([
     prisma.dossier.findMany({
       where: AVEC_ARCHIVES,
       select: {
@@ -103,6 +103,13 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
       debut,
       fin
     ),
+    prisma.message.findMany({ where: { sens: "ENTRANT", recuLe: { gte: new Date(debut), lte: new Date(fin) } }, select: { recuLe: true, statut: true } }),
+    prisma.proposition.findMany({
+      where: { type: { in: ["RATTACHER_MESSAGE", "ARCHIVER_MESSAGE"] }, messageId: { not: null }, statut: { in: ["AUTOMATIQUE", "EXECUTEE"] } },
+      select: { type: true, statut: true, messageId: true, createdAt: true, decideLe: true },
+    }),
+    prisma.appelIa.findMany({ where: { createdAt: { gte: new Date(debut), lte: new Date(fin) } }, select: { createdAt: true, coutEuros: true, usage: true } }),
+    prisma.message.findMany({ where: { bruitAnnuleLe: { gte: new Date(debut), lte: new Date(fin) } }, select: { bruitAnnuleLe: true } }),
   ]);
 
   const propositions = propositionsBrutes.filter((proposition) => dans(proposition.createdAt));
@@ -236,6 +243,16 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     .filter((ligne) => !ligne.auteur.startsWith("HUMAIN"))
     .sort((a, b) => b.proposees - a.proposees);
 
+  /* ── Agent mail ─────────────────────────────────────────────────── */
+  const messagesRecus = messagesBruts.filter((message) => dans(message.recuLe));
+  const appelsIa = appelsIaBruts.filter((appel) => appel.usage === "ANALYSE_MESSAGE" && dans(appel.createdAt));
+  const rangesSeulsParMessage = new Set(rangementsBruts.filter((ligne) => ligne.type === "RATTACHER_MESSAGE" && ligne.statut === "AUTOMATIQUE").map((ligne) => ligne.messageId));
+  const rangementsCorriges = new Set(
+    rangementsBruts
+      .filter((ligne) => ligne.type === "RATTACHER_MESSAGE" && ligne.statut === "EXECUTEE" && rangesSeulsParMessage.has(ligne.messageId) && dans(ligne.decideLe))
+      .map((ligne) => ligne.messageId)
+  ).size;
+
   /* ── Qualité des données ────────────────────────────────────────── */
   const qualite: Repartition[] = [
     { cle: "ECRITURES_HORS_COUCHE", libelle: "Écritures faites hors de l'application (auteur inconnu) dans la période", valeur: Number(inconnus[0]?.n ?? 0) },
@@ -342,6 +359,16 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     agent: {
       parAuteur,
       motifsRejet: repartir(propositions.filter((proposition) => proposition.motifRejet), (proposition) => proposition.motifRejet!, libelleMotifRejet),
+      mails: {
+        recus: messagesRecus.length,
+        rangesSeuls: rangementsBruts.filter((ligne) => ligne.type === "RATTACHER_MESSAGE" && ligne.statut === "AUTOMATIQUE" && dans(ligne.createdAt)).length,
+        bruitArchiveSeul: rangementsBruts.filter((ligne) => ligne.type === "ARCHIVER_MESSAGE" && ligne.statut === "AUTOMATIQUE" && dans(ligne.createdAt)).length,
+        bruitAnnule: bruitsAnnules.filter((ligne) => dans(ligne.bruitAnnuleLe)).length,
+        rangementsCorriges,
+        restantATrier: messagesRecus.filter((message) => message.statut === "A_TRIER").length,
+        lecturesIa: appelsIa.length,
+        coutIa: Math.round(appelsIa.reduce((total, appel) => total + (appel.coutEuros ?? 0), 0) * 100) / 100,
+      },
     },
     qualite,
   };

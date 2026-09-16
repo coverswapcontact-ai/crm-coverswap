@@ -5,6 +5,12 @@ import {
 } from "@/lib/dossiers/propositions";
 import { propositionFusionClients } from "@/lib/clients/fusion";
 import { propositionEnvoiMail } from "@/lib/mail/propositions";
+import {
+  propositionArchiverMessage,
+  propositionClasserMessage,
+  propositionNouvelleDemande,
+  propositionRattacherMessage,
+} from "@/lib/messages/propositions";
 import type { DefinitionProposition } from "./definitions";
 
 /**
@@ -18,6 +24,10 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionChangementEtape,
   propositionFusionClients,
   propositionEnvoiMail,
+  propositionRattacherMessage,
+  propositionNouvelleDemande,
+  propositionArchiverMessage,
+  propositionClasserMessage,
 ] as unknown as DefinitionProposition<never>[];
 
 // Types ajoutés à l'exécution (tests).

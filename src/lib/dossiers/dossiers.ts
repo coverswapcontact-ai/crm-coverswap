@@ -182,6 +182,15 @@ export async function listerDossiers(): Promise<DossierResume[]> {
   return dossiers.map((dossier) => versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? [])));
 }
 
+function messageDeLEvenement(metadata: string): string | null {
+  try {
+    const valeur = (JSON.parse(metadata) as { messageId?: unknown }).messageId;
+    return typeof valeur === "string" ? valeur : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
@@ -189,7 +198,8 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       lead: { select: { id: true, prenom: true, nom: true } },
       prospect: { select: { id: true, nom: true } },
       notes: { orderBy: { createdAt: "asc" } },
-      evenements: { orderBy: { createdAt: "desc" }, take: 300 },
+      // Un mail rangé puis déplacé ailleurs laisse une trace archivée, hors de l'historique affiché.
+      evenements: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 300 },
       documents: {
         orderBy: { createdAt: "desc" },
         include: {
@@ -271,6 +281,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       direction: evenement.direction as DirectionEvenement,
       contenu: evenement.contenu,
       createdAt: evenement.createdAt.toISOString(),
+      messageId: messageDeLEvenement(evenement.metadata),
     })),
     documents: dossier.documents.map((document) => ({
       id: document.id,
@@ -296,6 +307,58 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
 /* ── Création ───────────────────────────────────────────────────── */
 
 /**
+ * Écritures de l'ouverture d'un dossier, dans la transaction de l'appelant :
+ * le dossier, l'événement d'ouverture, le client pérenne (choisi, celui du
+ * lead ou du prospect, retrouvé par e-mail ou téléphone, sinon créé). Les
+ * photos s'écrivent ensuite (création depuis l'écran, ou depuis un mail validé).
+ */
+export async function ouvrirDossier(
+  tx: Transaction,
+  entree: EntreeCreation,
+  origine: { leadId: string | null; prospectId: string | null } = { leadId: null, prospectId: null }
+) {
+  const ouverture: MetadataChangementEtape = { de: null, vers: "QUALIFICATION", nature: "OUVERTURE" };
+  const cree = await tx.dossier.create({
+    data: {
+      leadId: origine.leadId,
+      prospectId: origine.prospectId,
+      clientNom: entree.clientNom,
+      clientAdresse: entree.clientAdresse,
+      clientCp: entree.clientCp,
+      clientVille: entree.clientVille,
+      clientEmail: entree.clientEmail,
+      clientTelephone: entree.clientTelephone,
+      objet: entree.objet,
+      source: entree.source,
+      montantEstime: entree.montantEstime,
+      prochaineAction: entree.prochaineAction,
+      prochaineActionDate: entree.prochaineActionDate ? dateDepuisJour(entree.prochaineActionDate) : null,
+      etape: "QUALIFICATION",
+    },
+  });
+  await tx.dossierEvenement.create({
+    data: {
+      dossierId: cree.id,
+      type: "CHANGEMENT_ETAPE",
+      direction: "INTERNE",
+      contenu: `Dossier ouvert : ${LIBELLES_ETAPE.QUALIFICATION}`,
+      metadata: JSON.stringify(ouverture),
+    },
+  });
+  // Client pérenne : celui choisi, celui du lead ou du prospect, sinon retrouvé
+  // par e-mail ou téléphone, sinon créé depuis ces coordonnées.
+  if (entree.clientId) {
+    const choisi = await tx.client.findUnique({ where: { id: entree.clientId }, select: { id: true, archiveLe: true } });
+    if (!choisi || choisi.archiveLe) throw new ErreurMetier("Client introuvable ou archivé.", 404);
+    await tx.dossier.update({ where: { id: cree.id }, data: { clientId: choisi.id } });
+    await completerCoordonnees(tx, choisi.id, { emails: [entree.clientEmail], telephones: [entree.clientTelephone] });
+    return { ...cree, clientId: choisi.id };
+  }
+  const clientId = await rattacherDossier(tx, cree);
+  return { ...cree, clientId };
+}
+
+/**
  * Ouvre un dossier : règle de conversion vérifiée (coordonnées complètes,
  * objet, au moins une photo), événement d'ouverture, photos archivées.
  * Si une photo ne peut pas être écrite, la création est annulée.
@@ -315,47 +378,7 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
   if (entree.leadId && !lead) throw new ErreurMetier("Lead introuvable.", 404);
   if (entree.prospectId && !prospect) throw new ErreurMetier("Prospect introuvable.", 404);
 
-  const ouverture: MetadataChangementEtape = { de: null, vers: "QUALIFICATION", nature: "OUVERTURE" };
-  const dossier = await prisma.$transaction(async (tx) => {
-    const cree = await tx.dossier.create({
-      data: {
-        leadId: lead?.id ?? null,
-        prospectId: prospect?.id ?? null,
-        clientNom: entree.clientNom,
-        clientAdresse: entree.clientAdresse,
-        clientCp: entree.clientCp,
-        clientVille: entree.clientVille,
-        clientEmail: entree.clientEmail,
-        clientTelephone: entree.clientTelephone,
-        objet: entree.objet,
-        source: entree.source,
-        montantEstime: entree.montantEstime,
-        prochaineAction: entree.prochaineAction,
-        prochaineActionDate: entree.prochaineActionDate ? dateDepuisJour(entree.prochaineActionDate) : null,
-        etape: "QUALIFICATION",
-      },
-    });
-    await tx.dossierEvenement.create({
-      data: {
-        dossierId: cree.id,
-        type: "CHANGEMENT_ETAPE",
-        direction: "INTERNE",
-        contenu: `Dossier ouvert : ${LIBELLES_ETAPE.QUALIFICATION}`,
-        metadata: JSON.stringify(ouverture),
-      },
-    });
-    // Client pérenne : celui choisi, celui du lead ou du prospect, sinon retrouvé
-    // par e-mail ou téléphone, sinon créé depuis ces coordonnées.
-    if (entree.clientId) {
-      const choisi = await tx.client.findUnique({ where: { id: entree.clientId }, select: { id: true, archiveLe: true } });
-      if (!choisi || choisi.archiveLe) throw new ErreurMetier("Client introuvable ou archivé.", 404);
-      await tx.dossier.update({ where: { id: cree.id }, data: { clientId: choisi.id } });
-      await completerCoordonnees(tx, choisi.id, { emails: [entree.clientEmail], telephones: [entree.clientTelephone] });
-      return { ...cree, clientId: choisi.id };
-    }
-    const clientId = await rattacherDossier(tx, cree);
-    return { ...cree, clientId };
-  });
+  const dossier = await prisma.$transaction((tx) => ouvrirDossier(tx, entree, { leadId: lead?.id ?? null, prospectId: prospect?.id ?? null }));
 
   try {
     const chemins: string[] = [];

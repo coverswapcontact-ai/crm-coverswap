@@ -105,6 +105,12 @@ export function redigerSynthese(synthese: Synthese, references: References, aler
     }
     if (agent.motifsRejet.length) lignes.push(`Motifs de rejet : ${agent.motifsRejet.map((motif) => `${motif.libelle} ${motif.valeur}`).join(", ")}.`);
   }
+  if (agent.mails && agent.mails.recus > 0) {
+    const m = agent.mails;
+    lignes.push(
+      `Mails reçus : ${m.recus} ; rangés seuls chez un client : ${m.rangesSeuls} (dont ${m.rangementsCorriges} rangés ailleurs ensuite) ; publicités archivées seules : ${m.bruitArchiveSeul} (${m.bruitAnnule} remises dans la boîte) ; encore à trier : ${m.restantATrier}. Lectures par l'IA : ${m.lecturesIa}, pour ${String(m.coutIa.toFixed(2)).replace(".", ",")} €.`
+    );
+  }
 
   titre("Qualité des données");
   if (qualite.length === 0) lignes.push("Rien à signaler.");

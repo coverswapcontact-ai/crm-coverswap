@@ -8,7 +8,8 @@
 
 import type { CleParametre } from "@/lib/parametres/definitions";
 
-export const VERSION_SYNTHESE = 1;
+// 2 : ajout de agent.mails (les instantanés en version 1 n'en ont pas).
+export const VERSION_SYNTHESE = 2;
 
 export type Repartition = { cle: string; libelle: string; valeur: number };
 
@@ -94,6 +95,20 @@ export type Synthese = {
       delaiDecisionMedianHeures: number | null;
     }[];
     motifsRejet: Repartition[];
+    /** Agent mail : ce qu'il a fait seul, et ce que la personne a dû corriger. Absent des instantanés en version 1. */
+    mails?: {
+      recus: number;
+      rangesSeuls: number;
+      bruitArchiveSeul: number;
+      /** « Ce n'est pas du bruit » : archivages défaits. */
+      bruitAnnule: number;
+      /** Mails rangés seuls puis rangés ailleurs par la personne. */
+      rangementsCorriges: number;
+      /** Reçus dans la période et encore à trier au moment du calcul. */
+      restantATrier: number;
+      lecturesIa: number;
+      coutIa: number;
+    };
   };
 
   qualite: Repartition[];

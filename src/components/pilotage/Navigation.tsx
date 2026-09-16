@@ -9,6 +9,7 @@ import {
   CircleCheckBig,
   FolderKanban,
   Hash,
+  Mail,
   Menu,
   Radar,
   Receipt,
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { TRANS } from "./ui";
 
-export type Compteurs = { aValider: number; tachesEnEchec: number };
+export type Compteurs = { aValider: number; messagesATrier: number; tachesEnEchec: number };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
 export const EVENEMENT_COMPTEURS = "pilotage:compteurs";
@@ -44,6 +45,7 @@ type Entree = {
 const PRINCIPALES: Entree[] = [
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
+  { href: "/messages", libelle: "Messages", icone: Mail, compteur: "messagesATrier" },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
   { href: "/finances", libelle: "Finances", icone: Wallet, mobile: true },
 ];
@@ -82,7 +84,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ aValider: 0, tachesEnEchec: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ aValider: 0, messagesATrier: 0, tachesEnEchec: 0 });
   const [menuOuvert, setMenuOuvert] = useState(false);
 
   const charger = useCallback(() => {
@@ -112,8 +114,11 @@ export function Navigation() {
     setMenuOuvert(false);
   }
 
-  const secondaireActive = SECONDAIRES.some((entree) => estActive(pathname, entree.href));
-  const alerteSecondaire = SECONDAIRES.reduce((total, entree) => total + (entree.compteur ? compteurs[entree.compteur] : 0), 0);
+  // Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires.
+  const DANS_LE_MENU = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
+  const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree.href));
+  const alerteMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "rouge" ? compteurs[entree.compteur] : 0), 0);
+  const aTraiterMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "vert" ? compteurs[entree.compteur] : 0), 0);
 
   return (
     <>
@@ -131,15 +136,16 @@ export function Navigation() {
             {[...PRINCIPALES, ...SECONDAIRES].map((entree) => {
               const active = estActive(pathname, entree.href);
               const Icone = entree.icone;
-              // Écrans secondaires : l'icône seule tant que la place manque, le libellé en grand écran.
+              // L'icône seule tant que la place manque : libellés des écrans principaux dès 1280 px,
+              // ceux des secondaires sur très grand écran.
               const secondaire = SECONDAIRES.includes(entree);
               return (
                 <li key={entree.href}>
                   <Link
                     href={entree.href}
                     aria-current={active ? "page" : undefined}
-                    aria-label={secondaire ? entree.libelle : undefined}
-                    title={secondaire ? entree.libelle : undefined}
+                    aria-label={entree.libelle}
+                    title={entree.libelle}
                     className={cn(
                       "flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap",
                       active ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:bg-[#1C1F25] hover:text-[#F2F3F5]",
@@ -147,7 +153,7 @@ export function Navigation() {
                     )}
                   >
                     <Icone size={14} aria-hidden />
-                    <span className={secondaire ? "hidden xl:inline" : undefined}>{entree.libelle}</span>
+                    <span className={secondaire ? "hidden min-[1680px]:inline" : "hidden xl:inline"}>{entree.libelle}</span>
                     {entree.compteur ? <Compteur valeur={compteurs[entree.compteur]} ton={tonDe(entree.compteur)} /> : null}
                   </Link>
                 </li>
@@ -212,9 +218,9 @@ export function Navigation() {
             >
               {menuOuvert ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
               Plus
-              {alerteSecondaire > 0 ? (
+              {alerteMenu > 0 || aTraiterMenu > 0 ? (
                 <span className="absolute top-1.5 left-1/2 ml-2">
-                  <Compteur valeur={alerteSecondaire} ton="rouge" />
+                  <Compteur valeur={alerteMenu > 0 ? alerteMenu : aTraiterMenu} ton={alerteMenu > 0 ? "rouge" : "vert"} />
                 </span>
               ) : null}
             </button>
@@ -231,7 +237,7 @@ export function Navigation() {
             onClick={(evenement) => evenement.stopPropagation()}
           >
             <ul className="flex flex-col">
-              {SECONDAIRES.map((entree) => {
+              {DANS_LE_MENU.map((entree) => {
                 const Icone = entree.icone;
                 const active = estActive(pathname, entree.href);
                 return (

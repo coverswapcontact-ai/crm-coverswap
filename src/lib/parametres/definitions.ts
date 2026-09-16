@@ -20,6 +20,7 @@ export const GROUPES_PARAMETRES = {
   ENCAISSEMENT: "Encaissements",
   FACTURATION: "Factures aux professionnels",
   COMMERCIAL: "Suivi commercial",
+  AGENT: "Agent mail et IA",
 } as const;
 export type GroupeParametre = keyof typeof GROUPES_PARAMETRES;
 
@@ -119,6 +120,40 @@ export const DEFINITIONS_PARAMETRES = {
     aide: "Nombre de jours sans réponse après l'envoi d'un devis avant que le système propose une relance (jamais envoyée sans validation).",
     nature: "jours",
     groupe: "COMMERCIAL",
+  },
+  IA_AGENT_MAIL: {
+    libelle: "Lecture des mails par l'IA",
+    aide: "Active : l'agent fait lire chaque mail utile à un modèle d'IA pour proposer un rattachement, une note, une réponse (coût par mail, plafonné par le budget mensuel). En pause : seules les règles sûres trient. L'IA ne décide jamais : tout passe par « À valider ».",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIVE", libelle: "Active" },
+      { valeur: "EN_PAUSE", libelle: "En pause" },
+    ],
+    groupe: "AGENT",
+  },
+  IA_MODELE: {
+    libelle: "Modèle d'IA",
+    aide: "Identifiant exact du modèle chez Anthropic (page « Models » de la documentation Anthropic). En changer impose de saisir ses prix à la même date.",
+    nature: "texte",
+    groupe: "AGENT",
+  },
+  IA_PRIX_ENTREE: {
+    libelle: "Prix du modèle : texte lu, par million de jetons",
+    aide: "En euros, d'après la page « Pricing » d'Anthropic pour ce modèle (colonne « Input », convertie du dollar). Sert à chiffrer chaque analyse.",
+    nature: "euros",
+    groupe: "AGENT",
+  },
+  IA_PRIX_SORTIE: {
+    libelle: "Prix du modèle : texte écrit, par million de jetons",
+    aide: "En euros, d'après la page « Pricing » d'Anthropic pour ce modèle (colonne « Output », convertie du dollar).",
+    nature: "euros",
+    groupe: "AGENT",
+  },
+  IA_BUDGET_MENSUEL: {
+    libelle: "Budget mensuel de l'IA",
+    aide: "Plafond en euros par mois civil. Une fois atteint, l'IA ne lit plus de mail jusqu'au mois suivant ; les règles sûres continuent de trier.",
+    nature: "euros",
+    groupe: "AGENT",
   },
 } as const satisfies Record<string, DefinitionParametre>;
 

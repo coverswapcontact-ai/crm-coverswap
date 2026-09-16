@@ -52,6 +52,7 @@ import { formatMontant } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
 import { PastilleEtape } from "../../dossiers/_components/ui";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
+import { MessagesClient } from "./MessagesClient";
 
 function Carte({ titre, action, children }: { titre: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -700,6 +701,8 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               </ul>
             </Carte>
           ) : null}
+
+          <MessagesClient clientId={client.id} />
 
           <Carte titre="Historique de la fiche">
             {client.historique.length === 0 ? (

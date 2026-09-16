@@ -4,7 +4,59 @@ import { EMETTEUR, LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
 import { ErreurDefinitive } from "@/lib/taches/registre";
 import { definirProposition } from "@/lib/validation/definitions";
+import { lireEntetes } from "@/lib/messages/stockage";
 import { envoyeurMail, type PieceJointe } from "./envoi";
+
+/** Le mail envoyé par la boîte connectée, rangé d'office chez son client (et son dossier). */
+async function enregistrerEnvoi(envoi: {
+  compte: string;
+  identifiant: string;
+  fil: string | null;
+  a: string;
+  objet: string;
+  texte: string;
+  clientId: string | null;
+  dossierId: string | null;
+  pieces: PieceJointe[];
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const existant = await tx.message.findFirst({ where: { archiveLe: undefined, canal: "EMAIL", identifiantCanal: envoi.identifiant }, select: { id: true } });
+    const donnees = {
+      statut: envoi.clientId ? "RATTACHE" : "IGNORE",
+      categorie: envoi.clientId ? "CLIENT" : "AUTRE",
+      clientId: envoi.clientId,
+      dossierId: envoi.clientId ? envoi.dossierId : null,
+      trieLe: new Date(),
+      triePar: "SYSTEME:envoi-mail",
+    };
+    if (existant) {
+      await tx.message.update({ where: { id: existant.id }, data: donnees });
+      return;
+    }
+    const message = await tx.message.create({
+      data: {
+        canal: "EMAIL",
+        compte: envoi.compte,
+        identifiantCanal: envoi.identifiant,
+        filCanal: envoi.fil,
+        sens: "SORTANT",
+        de: envoi.compte,
+        deNom: "CoverSwap",
+        a: JSON.stringify([envoi.a.toLowerCase()]),
+        objet: envoi.objet,
+        extrait: envoi.texte.slice(0, 300),
+        recuLe: new Date(),
+        ...donnees,
+      },
+    });
+    await tx.contenuMessage.create({ data: { messageId: message.id, texte: envoi.texte, entetes: "{}" } });
+    for (const [rang, piece] of envoi.pieces.entries()) {
+      await tx.pieceMessage.create({
+        data: { messageId: message.id, rang: rang + 1, nom: piece.nom, typeMime: piece.type, taille: piece.contenu.length, partie: "", statut: "NON_CONSERVEE", raison: "Document du CRM, joint à l'envoi." },
+      });
+    }
+  });
+}
 
 export const MOTIFS_ENVOI = ["ENVOI_DEVIS", "ENVOI_FACTURE", "RELANCE_DEVIS", "REPONSE"] as const;
 export type MotifEnvoi = (typeof MOTIFS_ENVOI)[number];
@@ -33,6 +85,8 @@ export const propositionEnvoiMail = definirProposition({
     texte: z.string("Message vide.").trim().min(1, "Message vide.").max(10_000, "Message trop long."),
     /** Documents du dossier joints en PDF (devis, facture). */
     documentIds: z.array(z.string().max(40)).max(5).default([]),
+    /** Réponse à ce mail reçu (identifiant du message dans le CRM) : la conversation est conservée. */
+    enReponseA: z.string().max(40).nullable().optional().transform((valeur) => valeur || null),
   }),
   sensible: true,
   validationGroupee: false,
@@ -47,7 +101,10 @@ export const propositionEnvoiMail = definirProposition({
     { code: "CLIENT_A_REPONDU", libelle: "Le client a déjà répondu" },
   ],
   execution: "FILE",
-  liens: (contenu) => (contenu.dossierId ? [{ libelle: "Dossier", href: `/dossiers?dossier=${contenu.dossierId}` }] : []),
+  liens: (contenu) => [
+    ...(contenu.dossierId ? [{ libelle: "Dossier", href: `/dossiers?dossier=${contenu.dossierId}` }] : []),
+    ...(contenu.enReponseA ? [{ libelle: "Mail reçu", href: `/messages?message=${contenu.enReponseA}` }] : []),
+  ],
   async pertinente(contenu) {
     if (!contenu.dossierId) return null;
     const dossier = await prisma.dossier.findUnique({ where: { id: contenu.dossierId }, select: { etape: true, archiveLe: true } });
@@ -61,15 +118,18 @@ export const propositionEnvoiMail = definirProposition({
     return null;
   },
   async executer(contenu, { propositionId }) {
+    // Réponse à un mail rangé depuis la proposition : elle suit son client et son dossier.
+    const recu = contenu.enReponseA ? await prisma.message.findUnique({ where: { id: contenu.enReponseA }, include: { contenu: { select: { entetes: true } } } }) : null;
+    const dossierCible = contenu.dossierId ?? recu?.dossierId ?? null;
     // Tâche rejouée après un envoi réussi : le mail ne repart pas.
-    if (contenu.dossierId) {
+    if (dossierCible) {
       const deja = await prisma.dossierEvenement.findFirst({
-        where: { dossierId: contenu.dossierId, type: "MAIL_ENVOYE", metadata: { contains: propositionId } },
+        where: { dossierId: dossierCible, type: "MAIL_ENVOYE", metadata: { contains: propositionId } },
         select: { id: true },
       });
       if (deja) return { resultat: { dejaEnvoye: true } };
     }
-    const envoyeur = envoyeurMail();
+    const envoyeur = await envoyeurMail();
     if (!envoyeur) {
       throw new ErreurDefinitive("Aucun envoi de mail configuré (boîte Gmail connectée, ou RESEND_API_KEY et EMAIL_FROM) : rien n'est parti.");
     }
@@ -82,10 +142,19 @@ export const propositionEnvoiMail = definirProposition({
       pieces.push({ nom: pdf.nomFichier, type: "application/pdf", contenu: pdf.contenu });
     }
 
-    const { identifiant } = await envoyeur.envoyer({ a: contenu.a, objet: contenu.objet, texte: contenu.texte, repondreA: EMETTEUR.email, pieces });
+    const entetesRecu = lireEntetes(recu?.contenu?.entetes);
+    const envoi = await envoyeur.envoyer({
+      a: contenu.a,
+      objet: contenu.objet,
+      texte: contenu.texte,
+      repondreA: EMETTEUR.email,
+      pieces,
+      enReponseA: recu ? { fil: recu.canal === "EMAIL" ? recu.filCanal : null, messageIdEntete: entetesRecu["message-id"] ?? null, references: entetesRecu.references ?? null } : null,
+    });
+    const identifiant = envoi.identifiant;
 
-    if (contenu.dossierId) {
-      const dossierId = contenu.dossierId;
+    if (dossierCible) {
+      const dossierId = dossierCible;
       // Trace écrite dès l'envoi, avant tout autre effet : c'est elle qui empêche un second envoi.
       await prisma.dossierEvenement.create({
         data: {
@@ -107,6 +176,13 @@ export const propositionEnvoiMail = definirProposition({
           : null;
       });
       if (changement) await effetsDuChangementEtape(changement);
+    }
+    // Parti de la boîte de l'entreprise : le mail y figure et devient un message connu du CRM (pas relevé en double).
+    // Après la trace du dossier : un échec ici ne doit jamais faire repartir le mail.
+    if (envoi.compte && identifiant) {
+      await enregistrerEnvoi({ compte: envoi.compte, identifiant, fil: envoi.fil ?? null, a: contenu.a, objet: contenu.objet, texte: contenu.texte, clientId: contenu.clientId ?? recu?.clientId ?? null, dossierId: dossierCible, pieces }).catch((erreur) =>
+        console.error("[mail] enregistrement du mail envoyé :", erreur)
+      );
     }
     return { resultat: { identifiant, envoyeur: envoyeur.nom } };
   },

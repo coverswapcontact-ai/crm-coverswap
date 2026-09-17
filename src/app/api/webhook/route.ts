@@ -125,15 +125,19 @@ function normalizePhone(phone: string): string {
 const FENETRE_PARCOURS_MS = 24 * 60 * 60 * 1000;
 
 async function findExistingLead(telephone: string, email?: string, parcoursId?: string) {
-  // Même parcours navigateur (simulation puis devis 1-clic) : même fiche, avant toute autre règle.
+  const normalized = normalizePhone(telephone);
+  const memeContact = (l: { email: string | null; telephone: string }) =>
+    (!!email && !!l.email && l.email.toLowerCase() === email.toLowerCase()) || (!!normalized && normalizePhone(l.telephone) === normalized);
+  // Même parcours navigateur (simulation puis devis 1-clic) : même fiche, à condition
+  // que ce soit la même personne (téléphone ou e-mail) — un appareil partagé ne fusionne pas deux contacts.
   if (parcoursId) {
-    const memeParcours = await prisma.lead.findFirst({
+    const memeParcours = await prisma.lead.findMany({
       where: { parcoursId, createdAt: { gte: new Date(Date.now() - FENETRE_PARCOURS_MS) } },
       orderBy: { createdAt: "desc" },
     });
-    if (memeParcours) return memeParcours;
+    const meme = memeParcours.find(memeContact);
+    if (meme) return meme;
   }
-  const normalized = normalizePhone(telephone);
   const candidates = await prisma.lead.findMany({
     where: {
       OR: [
@@ -144,12 +148,7 @@ async function findExistingLead(telephone: string, email?: string, parcoursId?: 
     orderBy: { createdAt: "desc" },
   });
   // Refine by normalized phone (covers spaces, + prefix, etc.)
-  const match = candidates.find((l) => {
-    if (email && l.email && l.email.toLowerCase() === email.toLowerCase()) return true;
-    if (normalized && normalizePhone(l.telephone) === normalized) return true;
-    return false;
-  });
-  return match || null;
+  return candidates.find(memeContact) || null;
 }
 
 /** Demandes récentes d'un même contact (téléphone ou e-mail) : la limite anti-abus par contact. */

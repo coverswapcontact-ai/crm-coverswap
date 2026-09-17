@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { rattacherImagesSimulation } from "@/lib/simulations/images";
+import { enregistrerSimulationSite, purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulations";
+import { simulationAutorisee } from "@/lib/acces/limite-site";
 
 /**
  * /api/simulate — GÉNÉRATEUR D'IMAGE SANS PLAFOND DE TEMPS.
@@ -111,6 +113,13 @@ export async function POST(req: NextRequest) {
     leadId?: string;
     referenceChoisie?: string;
     photo_base64?: string;
+    // Parcours sans coordonnées (simulateur v2) : la simulation est gardée ici, rattachée plus tard au lead.
+    parcoursId?: string;
+    projet?: string;
+    references?: ReferenceSimulee[];
+    page?: string;
+    source?: string;
+    campagne?: string;
   };
   try {
     body = await req.json();
@@ -118,7 +127,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON invalide." }, { status: 400, headers: cors });
   }
 
-  const { prompt, swatchUrls = [], sig, exp, leadId, referenceChoisie, photo_base64 } = body;
+  const { prompt, swatchUrls = [], sig, exp, leadId, referenceChoisie, photo_base64, projet, page, source, campagne } = body;
+  const parcoursId = typeof body.parcoursId === "string" && /^[0-9a-fA-F-]{16,64}$/.test(body.parcoursId) ? body.parcoursId : undefined;
+  const references = Array.isArray(body.references)
+    ? body.references.filter((r): r is ReferenceSimulee => !!r && typeof r === "object" && typeof r.ref === "string").slice(0, 5).map((r) => ({ zone: String(r.zone ?? ""), libelle: String(r.libelle ?? ""), ref: String(r.ref), nom: String(r.nom ?? "") }))
+    : [];
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "inconnue";
 
   if (!prompt || !sig || !exp || !photo_base64) {
     return NextResponse.json(
@@ -126,6 +140,22 @@ export async function POST(req: NextRequest) {
       { status: 400, headers: cors }
     );
   }
+
+  // 0) Limite quotidienne par IP et globale (la limite du site, en mémoire serverless, n'est qu'indicative)
+  const quota = simulationAutorisee(ip);
+  if (!quota.ok) {
+    return NextResponse.json(
+      {
+        error:
+          quota.raison === "global"
+            ? "Le quota quotidien de simulations est atteint pour l'ensemble du site. Réessayez demain ou demandez un devis : nous ferons la simulation pour vous."
+            : "Vous avez atteint la limite de simulations gratuites pour aujourd'hui. Demandez un devis : nous ferons la simulation pour vous.",
+        reason: quota.raison === "global" ? "global-quota" : "ip-quota",
+      },
+      { status: 429, headers: cors }
+    );
+  }
+  await purgerSiNecessaire();
 
   // 1) Expiration du jeton
   if (Date.now() > exp) {
@@ -138,9 +168,11 @@ export async function POST(req: NextRequest) {
   // 2) Vérification HMAC (anti-falsification prompt + anti-détournement swatchUrls
   //    + leadId : personne ne peut rattacher une image à la fiche d'un autre).
   //    Sans leadId (ancien site), l'ancienne forme reste acceptée.
+  const cle = leadId ? leadId : parcoursId ? `p:${parcoursId}` : null;
+  const base = `${prompt}\n${swatchUrls.join(",")}\n${exp}`;
   const expected = crypto
     .createHmac("sha256", secret)
-    .update(leadId ? `${prompt}\n${swatchUrls.join(",")}\n${exp}\n${leadId}` : `${prompt}\n${swatchUrls.join(",")}\n${exp}`)
+    .update(cle ? `${base}\n${cle}` : base)
     .digest("hex");
   const sigBuf = Buffer.from(sig, "hex");
   const expBuf = Buffer.from(expected, "hex");
@@ -262,8 +294,30 @@ export async function POST(req: NextRequest) {
 
     console.log(`[simulate] OK en ${Date.now() - startMs}ms (size ${outputSize}, ${swatchBuffers.length} swatches)`);
 
-    // 6) Photo avant + rendu après sur la simulation du lead (jamais bloquant).
+    // 6) Photo avant + rendu après : sur la simulation du lead (ancien parcours), ou
+    //    gardés avec le parcours en attendant la demande de devis (jamais bloquant).
     let simulationId: string | null = null;
+    let simulationSiteId: string | null = null;
+    if (!leadId && parcoursId) {
+      try {
+        const gardee = await enregistrerSimulationSite({
+          parcoursId,
+          projet: typeof projet === "string" ? projet.slice(0, 40) : "cuisine",
+          references,
+          imageAvantBase64: photo_base64,
+          imageApresBase64: `data:image/png;base64,${b64}`,
+          page: typeof page === "string" ? page.slice(0, 200) : null,
+          source: typeof source === "string" ? source.slice(0, 120) : null,
+          campagne: typeof campagne === "string" ? campagne.slice(0, 120) : null,
+          ipOrigine: ip === "inconnue" ? null : ip,
+          dureeMs: Date.now() - startMs,
+        });
+        simulationSiteId = gardee.id;
+        console.log(`[simulate] simulation gardée parcours=${parcoursId} id=${gardee.id}`);
+      } catch (err) {
+        console.error("[simulate] simulation du parcours non gardée (non bloquant) :", err);
+      }
+    }
     if (leadId) {
       try {
         simulationId = await rattacherImagesSimulation(leadId, photo_base64, `data:image/png;base64,${b64}`, referenceChoisie ?? null);
@@ -274,7 +328,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: true, image: `data:image/png;base64,${b64}`, simulationId },
+      { success: true, image: `data:image/png;base64,${b64}`, simulationId, simulationSiteId },
       { headers: cors }
     );
   } catch (err) {

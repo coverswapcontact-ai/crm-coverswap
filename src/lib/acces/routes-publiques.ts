@@ -20,6 +20,7 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/webhook/zapier", protection: "Zapier : secret partagé vérifié par la route" },
   { chemin: "/api/cron/", prefixe: true, protection: "tâches planifiées : Authorization Bearer CRON_SECRET, refus si absente" },
   { chemin: "/api/simulate", protection: "simulateur du site : signature HMAC et origine vérifiées par la route" },
+  { chemin: "/api/site/evenements", protection: "événements de parcours du site : sans donnée personnelle, origine et limite par IP vérifiées par la route" },
   { chemin: "/robots.txt", protection: "consigne aux robots, statique" },
 ];
 

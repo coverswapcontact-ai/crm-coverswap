@@ -35,6 +35,30 @@ export function contactDepasseLaLimite(nombreRecent: number): boolean {
   return nombreRecent >= LIMITE_PAR_CONTACT.max;
 }
 
+/** Simulations par jour : par adresse IP et pour tout le site (budget OpenAI). */
+export const LIMITE_SIMULATIONS = { parIp: 15, global: 150 };
+const simulationsParIp = new Map<string, { jour: string; nombre: number }>();
+let simulationsGlobales = { jour: "", nombre: 0 };
+
+function jourDe(maintenant: number): string {
+  return new Date(maintenant).toISOString().slice(0, 10);
+}
+
+/** Vrai si une nouvelle simulation est autorisée pour cette IP aujourd'hui ; la compte si oui. */
+export function simulationAutorisee(ip: string, maintenant: number = Date.now()): { ok: boolean; raison?: "ip" | "global" } {
+  const jour = jourDe(maintenant);
+  if (simulationsGlobales.jour !== jour) {
+    simulationsGlobales = { jour, nombre: 0 };
+    simulationsParIp.clear();
+  }
+  if (simulationsGlobales.nombre >= LIMITE_SIMULATIONS.global) return { ok: false, raison: "global" };
+  const entree = simulationsParIp.get(ip) ?? { jour, nombre: 0 };
+  if (entree.nombre >= LIMITE_SIMULATIONS.parIp) return { ok: false, raison: "ip" };
+  simulationsParIp.set(ip, { jour, nombre: entree.nombre + 1 });
+  simulationsGlobales.nombre += 1;
+  return { ok: true };
+}
+
 /** IP du visiteur : celle que le site transmet, sinon celle de l'appelant. */
 export function ipDuVisiteur(entetes: { get(nom: string): string | null }): string {
   const transmise = entetes.get("x-visiteur-ip")?.trim();

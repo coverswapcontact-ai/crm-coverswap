@@ -14,6 +14,7 @@ import { chargerTableauFinances } from "@/lib/finances/tableau";
 import { STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "@/lib/prospects/constantes";
 import { typesDePropositions, definitionDe } from "@/lib/validation/catalogue";
 import { MOTIFS_REJET_COMMUNS } from "@/lib/validation/types";
+import { syntheseSite } from "@/lib/site/evenements";
 import { VERSION_SYNTHESE, type Repartition, type Synthese } from "./types";
 
 /**
@@ -309,10 +310,13 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     })),
   };
 
+  const site = await syntheseSite(du, au);
+
   return {
     version: VERSION_SYNTHESE,
     periode: { du, au, libelle: libellePeriode(du, au) },
     calculeLe: maintenant.toISOString(),
+    site,
     commercial: {
       cohorte: {
         ouverts: cohorte.length,

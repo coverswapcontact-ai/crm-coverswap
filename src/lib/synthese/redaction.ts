@@ -52,6 +52,17 @@ export function redigerSynthese(synthese: Synthese, references: References, aler
       `${pluriel(c.entrants.recus, "contact entrant reçu", "contacts entrants reçus")} (${c.entrants.parSource.map((ligne) => `${ligne.libelle.toLowerCase()} : ${ligne.recus}`).join(", ")}) ; à ce jour, ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} passés en dossier, ${c.entrants.signes} signés, ${c.entrants.sansSuite} sans suite.`
     );
   }
+  if (synthese.site && synthese.site.parcours > 0) {
+    const s = synthese.site;
+    const compte = (cle: string) => s.parType.find((ligne) => ligne.cle === cle)?.valeur ?? 0;
+    lignes.push(
+      `Site : ${pluriel(s.parcours, "parcours de visite", "parcours de visite")}, ${compte("SIMULATION_LANCEE")} simulations lancées, ${compte("SIMULATION_RESULTAT")} résultats vus, ${compte("DEVIS_DEMANDE")} devis demandés, ${compte("CONTACT_ENVOYE")} formulaires envoyés${
+        s.tauxCompletionSimulateur !== null ? ` ; ${s.tauxCompletionSimulateur} % des simulations lancées ont abouti` : ""
+      }${s.tauxDevisApresResultat !== null ? `, ${s.tauxDevisApresResultat} % des résultats vus ont donné un devis demandé` : ""}${
+        s.parSource.length ? ` (par source : ${s.parSource.slice(0, 4).map((ligne) => `${ligne.libelle} ${ligne.parcours}`).join(", ")})` : ""
+      }.`
+    );
+  }
   const delaisConnus = c.delais.filter((delai) => delai.nombre > 0);
   if (delaisConnus.length) lignes.push(`Délais médians : ${delaisConnus.map((delai) => `${delai.libelle.toLowerCase()} ${jours(delai.medianeJours)} (${delai.nombre})`).join(" ; ")}.`);
   if (c.ecartPrixMoyenPct !== null) {

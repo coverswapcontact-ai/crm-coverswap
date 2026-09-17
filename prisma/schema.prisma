@@ -101,6 +101,37 @@ model EvenementSite {
   @@index([type, createdAt])
 }
 
+// Ce que le CRM publie sur le site : une réalisation (photo après, éventuellement
+// avant) ou un avis client, avec l'accord écrit de la personne. Le site ne lit
+// que les lignes publiées (publieLe posé, retireLe vide) par /api/site/publications ;
+// les photos sont servies par /api/site/photos/<id>, jamais par /api/uploads.
+model PublicationSite {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  type           String // REALISATION | AVIS
+  titre          String
+  texte          String? // légende de la réalisation ou texte de l'avis
+  ville          String?
+  typeProjet     String? // CUISINE | SDB | MEUBLES | PRO | AUTRE
+  note           Int? // avis : 1 à 5
+  auteur         String? // avis : prénom ou initiales, jamais le nom complet sans accord
+  photoAvant     String? // chemin relatif au dossier des téléversements
+  photoApres     String?
+  dossierId      String?
+  clientId       String?
+  accordClientLe DateTime? // accord écrit de la personne pour la publication
+  ordre          Int       @default(0)
+  publieLe       DateTime?
+  retireLe       DateTime?
+  archiveLe      DateTime?
+  archiveMotif   String?
+  ecriture       String?
+
+  @@index([type, publieLe])
+  @@index([dossierId])
+}
+
 // Photo jointe par la personne à sa demande (formulaire de devis du site) :
 // un fichier sous le dossier des téléversements, jamais accessible sans session.
 model PhotoLead {

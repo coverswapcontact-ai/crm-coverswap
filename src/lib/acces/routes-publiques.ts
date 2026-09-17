@@ -21,6 +21,8 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/cron/", prefixe: true, protection: "tâches planifiées : Authorization Bearer CRON_SECRET, refus si absente" },
   { chemin: "/api/simulate", protection: "simulateur du site : signature HMAC et origine vérifiées par la route" },
   { chemin: "/api/site/evenements", protection: "événements de parcours du site : sans donnée personnelle, origine et limite par IP vérifiées par la route" },
+  { chemin: "/api/site/publications", protection: "réalisations et avis publiés avec accord : lecture seule, aucun identifiant de client" },
+  { chemin: "/api/site/photos/", prefixe: true, protection: "photos des publications publiées seulement, lues par identifiant de publication" },
   { chemin: "/robots.txt", protection: "consigne aux robots, statique" },
 ];
 

@@ -1,6 +1,6 @@
 import { Navigation } from "@/components/pilotage/Navigation";
 
-// Gabarit des écrans de pilotage : charte sombre de /prospection, barre du
+// Gabarit des écrans de pilotage : charte sombre, barre du
 // haut sur ordinateur, barre du bas au pouce sur téléphone.
 export default function PilotageLayout({ children }: { children: React.ReactNode }) {
   return (

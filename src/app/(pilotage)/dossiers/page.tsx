@@ -1,12 +1,12 @@
 import { listerDossiers } from "@/lib/dossiers/dossiers";
-import { clientPourDossier, leadPourDossier } from "@/lib/dossiers/leads";
+import { clientPourDossier, leadPourDossier, prospectPourDossier } from "@/lib/dossiers/leads";
 import DossiersPilotage from "./_components/DossiersPilotage";
 
 export const dynamic = "force-dynamic";
 
 // ?dossier=<id> ouvre directement le panneau d'un dossier ;
-// ?lead=<id> ouvre « Ouvrir un dossier » pré-rempli depuis ce lead (fiche lead) ;
-// ?client=<id>, depuis une fiche client.
+// ?lead=<id> ouvre « Ouvrir un dossier » pré-rempli depuis ce contact entrant ;
+// ?prospect=<id>, depuis un établissement démarché ; ?client=<id>, depuis une fiche client.
 export default async function DossiersPage({
   searchParams,
 }: {
@@ -15,10 +15,11 @@ export default async function DossiersPage({
   const parametres = await searchParams;
   const lead = typeof parametres.lead === "string" ? parametres.lead : null;
   const client = typeof parametres.client === "string" ? parametres.client : null;
+  const prospect = typeof parametres.prospect === "string" ? parametres.prospect : null;
   const dossier = typeof parametres.dossier === "string" ? parametres.dossier : null;
   const [dossiers, leadInitial] = await Promise.all([
     listerDossiers(),
-    client ? clientPourDossier(client) : lead ? leadPourDossier(lead) : null,
+    client ? clientPourDossier(client) : lead ? leadPourDossier(lead) : prospect ? prospectPourDossier(prospect) : null,
   ]);
 
   return (

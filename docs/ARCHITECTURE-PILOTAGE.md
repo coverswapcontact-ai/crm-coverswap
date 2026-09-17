@@ -258,13 +258,14 @@ tâches par jour.
 
 ## 4. Interface : un gabarit commun aux écrans de pilotage
 
-Les écrans du pilotage (Dossiers, À valider, Prospection, Tâches, puis Clients,
-Finances, Dépenses, Boîte mail, Synthèse) vivent dans le groupe de routes
-`src/app/(pilotage)` : même charte sombre que /prospection et /dossiers, une
-seule navigation.
+Le pilotage est le seul point d'entrée du CRM. Ses écrans (Prospects, Dossiers,
+À valider, Messages, Clients, Finances, puis Synthèse, Tâches, Dépenses,
+Registre des numéros, Journal, Paramètres) vivent dans le groupe de routes
+`src/app/(pilotage)` : une charte sombre, une seule navigation. La connexion
+(`/auth/signin`) suit la même charte.
 
-- **Ordinateur** : barre du haut, compteurs à côté des entrées (propositions à
-  valider, tâches en échec).
+- **Ordinateur** : barre du haut, compteurs à côté des entrées (contacts à
+  traiter, propositions à valider, mails à trier, tâches en échec).
 - **Téléphone** : barre du bas au pouce, quatre écrans au plus et « Plus » pour
   le reste ; le contenu réserve la hauteur de la barre (et la zone de sécurité
   de l'iPhone).
@@ -273,8 +274,8 @@ seule navigation.
   téléphone, puces de choix rapide, pastilles) et `client.ts` (appels d'API aux
   erreurs en français). Les outils communs des routes (`analyser`,
   `reponseErreur`, `ErreurMetier`) sont dans `src/lib/commun/`.
-- Les anciens écrans (groupe `(app)`, charte claire) restent joignables par
-  « Anciens écrans » tant qu'ils ne sont pas remplacés.
+- L'ancien CRM (groupe `(app)`, charte claire) est retiré : voir la section 19
+  pour ce qui a été repris et les redirections de ses adresses.
 - **Tâches de fond** (`/taches`) : travaux périodiques et leur dernier passage,
   tâches en échec avec leur erreur, relance et annulation à la main.
 
@@ -282,9 +283,8 @@ seule navigation.
 
 Une seule mécanique pour tout ce qu'un agent ou le système propose :
 rattacher un mail, noter, changer une étape, relancer, envoyer un devis,
-fusionner deux clients… (table `Proposition`, écran `/validation`). Elle
-reprend le geste de la file de /prospection (valider, corriger, rejeter) et le
-généralise.
+fusionner deux clients… (table `Proposition`, écran `/validation`). Un seul
+geste pour tout : valider, corriger, rejeter.
 
 - **Définitions explicites** : `src/lib/validation/catalogue.ts` liste chaque
   type avec son schéma de contenu (zod), ses champs corrigeables, ses motifs de
@@ -1374,3 +1374,88 @@ un seul écran pour saisir un dossier historique en deux minutes.
 - Le lead ou le prospect d'origine suit comme à une ouverture (statut du lead
   selon l'étape) ; rien ne part chez Meta pour un dossier repris.
 
+## 19. Prospects : tout ce qui précède un dossier
+
+L'ancien CRM (leads) et le module de prospection (établissements Google Places)
+sont devenus une section du pilotage, `/prospects`, qui alimente les dossiers.
+Deux onglets, une même fiche latérale, un même bouton « Ouvrir un dossier ».
+
+### Entrants (modèle `Lead`, `src/lib/prospects/entrants.ts`)
+
+Ce qui arrive de soi-même : formulaires du site et simulateur (`/api/webhook`),
+publicités Meta (`/api/webhook/meta`), Zapier, et la saisie à la main
+(« Nouveau contact »).
+
+- **Groupes**, une partition calculée à la lecture (`groupeDuLead`, traduite en
+  requête par `whereGroupe`) : *À traiter* (nouveau ou devis demandé, reçu
+  depuis moins de 60 jours, sans dossier), *Contactés*, *Plus de 60 jours*,
+  *Devis ou dossier* (un dossier, ou un devis déjà envoyé, signé ou chantier
+  dans l'ancien CRM), *Sans suite*, *Archivés*. Le compteur « À traiter » est
+  celui de la navigation.
+- **Fiche** : coordonnées et gestes (appel, SMS, e-mail, fiche client),
+  statut, échanges (`Interaction` ; un appel, un SMS ou un e-mail noté fait
+  passer « Contacté »), simulations avant/après et leur PDF, demande et notes,
+  dossiers, anciens devis et factures de l'ancien CRM avec leur document,
+  archivage motivé et restauration.
+- **Sans suite** demande un motif, noté dans les échanges. **Correction** : seuls
+  les champs changés partent ; un numéro ou une adresse corrigés rejoignent
+  aussi la fiche client (les anciens y restent, archivables depuis la fiche).
+- **Dès qu'un dossier existe**, le statut suit le dossier
+  (`src/lib/dossiers/transitions.ts`) et le suivi se note sur le dossier :
+  l'API refuse (409) un statut ou un échange posé sur le contact.
+- **Saisie à la main** : un prénom ou un nom suffit ; un numéro ou une adresse
+  illisibles sont refusés ; le contact rejoint aussitôt la fiche client qui a
+  ces coordonnées, ou en crée une (`rattacherLead`, règle d'identité de la
+  section 6).
+
+### Démarchage (modèle `Prospect`, `src/lib/prospects/demarchage.ts`)
+
+- **Agents** hôtels et restaurants (`AgentProfile`) : leur configuration vit
+  dans `src/lib/prospection/agents.ts` ; la migration de données
+  `2026-09-17-agents-prospection` les crée au démarrage s'ils manquent, sans
+  jamais écraser une configuration existante.
+- **Groupes** par statut : À contacter (qualifié), En cours (contacté, relancé,
+  a répondu, rendez-vous), À scorer, Convertis, Écartés, Ne pas contacter.
+- **Scorer** : calcul local (`src/lib/prospection/scoring.ts`), aucun appel
+  extérieur. **Sourcer** : appels Google Places (jusqu'à 45 recherches et
+  60 fiches d'avis par passage), payants au-delà du quota gratuit : bouton
+  inactif sans `GOOGLE_PLACES_API_KEY`, confirmation explicite avant chaque
+  passage. Aucun message n'est envoyé.
+- **Fiche** : pourquoi ce prospect (signal, détail du score, avis), statut et
+  notes (`ProspectActivity`), « Ne pas contacter » daté (`optOut`).
+- **Ouvrir un dossier** (`/dossiers?prospect=<id>`) : formulaire pré-rempli,
+  client professionnel créé à la conversion, prospect « Converti ».
+
+### Prospects de la base locale
+
+Les prospects sourcés avant l'intégration vivaient dans la base SQLite du
+poste de Lucas. `node scripts/exporter-prospects.mjs [base.db] [fichier.json]`
+les exporte (lecture seule, format `coverswap-prospects/1`, fichier écrit hors
+du dépôt, qui est public) ; « Importer » dans l'onglet Démarchage ajoute ce qui
+manque sans rien écraser (clé : `googlePlaceId`) et reste rejouable.
+
+### L'ancien CRM : repris, réécrit, abandonné
+
+- **Réécrit dans Prospects** : liste et fiche des leads, saisie d'un lead,
+  simulations et leur PDF, échanges, anciens devis et factures (consultables
+  aussi depuis le registre des numéros), tableau et fiche de prospection (les
+  indicateurs et la file de validation factices de l'ancien écran ne sont pas
+  repris : la validation est `/validation`).
+- **Abandonné** : tableau de bord (remplacé par Dossiers et Synthèse),
+  statistiques par source (Synthèse), assistant conversationnel sans accès aux
+  données, kanban des leads (les groupes le remplacent), écrans chantiers et
+  commandes de matière (les dossiers et leur prochaine action les remplacent ;
+  les données restent en base, lisibles sur la fiche du contact), route
+  d'envoi de mail sans appelant (`/api/email` : aucun mail ne part sans
+  validation), API des anciens écrans.
+- **Gardé tel quel** : webhooks, simulateur, PDF des anciens devis et factures,
+  PDF des simulations, fichiers protégés (`/api/uploads`).
+- **Anciennes adresses** (`next.config.ts`, redirections temporaires) :
+  `/leads/<id>` → `/prospects?lead=<id>` (liens des anciens mails de
+  notification), `/leads`, `/leads/kanban`, `/leads/nouveau` → Prospects,
+  `/prospection` → onglet Démarchage, `/dashboard` → Dossiers, `/analytics` →
+  Synthèse, `/devis` → Registre des numéros, `/factures` → Finances,
+  `/chantiers`, `/commandes`, `/assistant` → Dossiers. Les nouveaux mails de
+  notification pointent directement sur `/prospects?lead=<id>`.
+- **Aucune donnée retirée** : leads, prospects, devis, factures, chantiers et
+  commandes restent en base et au journal.

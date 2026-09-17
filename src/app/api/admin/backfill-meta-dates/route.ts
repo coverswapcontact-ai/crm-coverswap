@@ -128,8 +128,7 @@ export async function POST(request: NextRequest) {
     await new Promise((r) => setTimeout(r, 150));
   }
 
-  revalidatePath("/leads");
-  revalidatePath("/dashboard");
+  revalidatePath("/prospects");
 
   return NextResponse.json({
     total: leads.length,

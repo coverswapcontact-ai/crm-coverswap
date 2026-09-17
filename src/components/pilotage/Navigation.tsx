@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ArrowUpRight,
   ChartColumn,
   CircleCheckBig,
   FolderKanban,
@@ -27,7 +26,7 @@ import { appelApi } from "./client";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-export type Compteurs = { aValider: number; messagesATrier: number; tachesEnEchec: number };
+export type Compteurs = { entrantsATraiter: number; aValider: number; messagesATrier: number; tachesEnEchec: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
@@ -45,19 +44,19 @@ type Entree = {
   mobile?: boolean;
 };
 
-// Écrans principaux, dans l'ordre de la journée.
+// Écrans principaux, dans l'ordre de la journée : les prospects alimentent les dossiers.
 const PRINCIPALES: Entree[] = [
+  { href: "/prospects", libelle: "Prospects", icone: Radar, compteur: "entrantsATraiter", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
   { href: "/messages", libelle: "Messages", icone: Mail, compteur: "messagesATrier" },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
-  { href: "/finances", libelle: "Finances", icone: Wallet, mobile: true },
+  { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
 
 // Écrans secondaires, dans le menu « Plus ».
 const SECONDAIRES: Entree[] = [
   { href: "/synthese", libelle: "Synthèse", icone: ChartColumn },
-  { href: "/prospection", libelle: "Prospection", icone: Radar },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/numeros", libelle: "Registre des numéros", icone: Hash },
@@ -89,7 +88,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ aValider: 0, messagesATrier: 0, tachesEnEchec: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ entrantsATraiter: 0, aValider: 0, messagesATrier: 0, tachesEnEchec: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 
@@ -169,13 +168,6 @@ export function Navigation() {
               );
             })}
           </ul>
-          <Link
-            href="/dashboard"
-            className={cn("flex shrink-0 items-center gap-1 text-[12px] whitespace-nowrap text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}
-          >
-            Anciens écrans
-            <ArrowUpRight size={12} aria-hidden />
-          </Link>
         </div>
       </nav>
 
@@ -269,12 +261,6 @@ export function Navigation() {
                   </li>
                 );
               })}
-              <li>
-                <Link href="/dashboard" className="flex h-12 items-center gap-3 rounded-[10px] px-3 text-[15px] text-[#9CA3AF]">
-                  <ArrowUpRight size={18} aria-hidden />
-                  Anciens écrans
-                </Link>
-              </li>
             </ul>
           </div>
         </div>

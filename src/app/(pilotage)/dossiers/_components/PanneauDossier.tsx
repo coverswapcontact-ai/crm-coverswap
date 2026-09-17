@@ -195,11 +195,11 @@ function ContenuPanneau({
           ) : null}
           {detail.origine ? (
             <Link
-              href={detail.origine.type === "LEAD" ? `/leads/${detail.origine.id}` : "/prospection"}
+              href={detail.origine.type === "LEAD" ? `/prospects?lead=${detail.origine.id}` : `/prospects?prospect=${detail.origine.id}`}
               className={CLASSE_PUCE_LIEN}
             >
               <ExternalLink size={12} aria-hidden />
-              {detail.origine.type === "LEAD" ? "Lead" : "Prospect"} : {detail.origine.nom}
+              {detail.origine.type === "LEAD" ? "Contact" : "Prospect"} : {detail.origine.nom}
             </Link>
           ) : null}
         </div>

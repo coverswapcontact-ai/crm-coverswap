@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────
 // Scoring local — module Prospection (étape 3)
 // 100 % déterministe, AUCUNE API externe ni LLM :
-//   Bloc 1 (max 30) profil Google (note sweet spot + volume d'avis)
+//   Bloc 1 (max 30) profil Google (note dans la plage cible + volume d'avis)
 //   Bloc 2 (max 60) signaux de vétusté dans les avis (lexique pondéré × récence)
 //   Bloc 3 (max 10) exploitabilité (site web, téléphone)
 // Persiste score, scoreDetails, signalPrincipal et le statut QUALIFIE/ECARTE.
@@ -157,8 +157,8 @@ function blocProfil(prospect: Prospect, agent: AgentSlug): Signal[] {
     const dansPlage = note >= cfg.noteMin && note <= cfg.noteMax;
     signaux.push({
       label: dansPlage
-        ? `Note Google ${note.toFixed(1)} (sweet spot)`
-        : `Note Google ${note.toFixed(1)} (hors sweet spot ${cfg.noteMin}-${cfg.noteMax})`,
+        ? `Note Google ${note.toFixed(1)} (plage cible)`
+        : `Note Google ${note.toFixed(1)} (hors plage ${cfg.noteMin}-${cfg.noteMax})`,
       points: pts,
     });
   } else {

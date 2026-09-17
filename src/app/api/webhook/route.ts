@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
               ${data.referenceChoisie ? `<tr><td style="padding:4px 12px;font-weight:bold;">Référence</td><td>${data.referenceChoisie}</td></tr>` : ""}
             </table>
             <br/>
-            <a href="${appUrl}/leads/${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+            <a href="${appUrl}/prospects?lead=${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
           `,
         });
       } catch (emailErr) {
@@ -362,9 +362,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    revalidatePath("/leads");
-    revalidatePath(`/leads/${lead.id}`);
-    revalidatePath("/dashboard");
+    revalidatePath("/prospects");
 
     return NextResponse.json(
       { success: true, leadId: lead.id, deduped: !isNew },

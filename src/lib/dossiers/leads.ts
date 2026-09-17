@@ -1,12 +1,13 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { formatDate, sourceLabel } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { formaterTelephone } from "@/lib/clients/normalisation";
+import { libelleSourceLead } from "@/lib/prospects/constantes";
 import type { SourceDossier } from "./constants";
 import type { LeadTrouve } from "./types";
 
 // Recherche « Ouvrir un dossier depuis un lead » : leads B2C (site, Meta,
-// simulateur) et prospects B2B (/prospection). Chaque mot saisi doit se
+// simulateur) et prospects B2B (démarchage, section Prospects). Chaque mot saisi doit se
 // retrouver dans l'un des champs (nom, prénom, téléphone, e-mail, ville).
 
 const OBJET_PAR_TYPE_PROJET: Record<string, string> = {
@@ -150,7 +151,7 @@ function leadVersResultat(lead: LeadAvecCompte): LeadTrouve {
     origine: "LEAD",
     id: lead.id,
     libelle: nom,
-    detail: [sourceLabel(lead.source), ville || null, `reçu le ${formatDate(lead.createdAt)}`]
+    detail: [libelleSourceLead(lead.source), ville || null, `reçu le ${formatDate(lead.createdAt)}`]
       .filter(Boolean)
       .join(" · "),
     nbDossiers: lead._count.dossiers,
@@ -187,11 +188,20 @@ function prospectVersResultat(prospect: ProspectAvecCompte): LeadTrouve {
   };
 }
 
-/** Pré-remplissage d'un lead précis (lien « Ouvrir un dossier » de la fiche lead). */
+/** Pré-remplissage d'un lead précis (« Ouvrir un dossier » d'un contact entrant, section Prospects). */
 export async function leadPourDossier(leadId: string): Promise<LeadTrouve | null> {
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: { _count: { select: { dossiers: true } } },
   });
   return lead ? leadVersResultat(lead) : null;
+}
+
+/** Pré-remplissage d'un établissement démarché (« Ouvrir un dossier » de l'onglet Démarchage). */
+export async function prospectPourDossier(prospectId: string): Promise<LeadTrouve | null> {
+  const prospect = await prisma.prospect.findUnique({
+    where: { id: prospectId },
+    include: { _count: { select: { dossiers: true } } },
+  });
+  return prospect && !prospect.archiveLe ? prospectVersResultat(prospect) : null;
 }

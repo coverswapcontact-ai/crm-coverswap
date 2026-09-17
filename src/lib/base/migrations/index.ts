@@ -1,4 +1,5 @@
 import type { BaseDonnees } from "@/lib/prisma";
+import { migrationAgentsProspection } from "./agents-prospection";
 import { migrationClients } from "./clients";
 import { journalEtatInitial } from "./journal-etat-initial";
 import { migrationRegistreNumeros } from "./registre-numeros";
@@ -15,4 +16,4 @@ export type MigrationDonnees = {
 };
 
 /** Dans l'ordre d'exécution. On ajoute à la fin, on ne retire ni ne réordonne jamais. */
-export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros];
+export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection];

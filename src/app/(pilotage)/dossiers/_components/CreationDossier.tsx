@@ -18,7 +18,7 @@ type Erreurs = Partial<Record<keyof Champs | "photos", string>>;
 type PhotoChoisie = { cle: string; fichier: File; apercu: string };
 type Mode = "lead" | "direct" | "reprise";
 
-const LIBELLES_ORIGINE: Record<LeadTrouve["origine"], string> = { CLIENT: "Client", LEAD: "Lead", PROSPECT: "Prospect" };
+const LIBELLES_ORIGINE: Record<LeadTrouve["origine"], string> = { CLIENT: "Client", LEAD: "Contact", PROSPECT: "Prospect" };
 
 function champsDepuis(lead: LeadTrouve | null, conserves?: Champs): Champs {
   const pre = lead?.preRemplissage;

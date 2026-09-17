@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
                   ${metaLead.formName ? `<tr><td style="padding:4px 12px;font-weight:bold;">Formulaire</td><td>${metaLead.formName}</td></tr>` : ""}
                 </table>
                 <br/>
-                <a href="${appUrl}/leads/${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+                <a href="${appUrl}/prospects?lead=${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
               `,
             });
           } catch (emailErr) {
@@ -197,8 +197,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    revalidatePath("/leads");
-    revalidatePath("/dashboard");
+    revalidatePath("/prospects");
 
     return NextResponse.json({ success: true, results }, { status: 200 });
   } catch (error) {

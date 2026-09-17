@@ -72,6 +72,16 @@ function LigneNumero({ ligne, onCompleter }: { ligne: LigneRegistre; onCompleter
           Dossier
         </Link>
       ) : null}
+      {ligne.leadId ? (
+        <Link href={`/prospects?lead=${ligne.leadId}`} className={cn("shrink-0 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+          Contact
+        </Link>
+      ) : null}
+      {ligne.ancienPdf ? (
+        <a href={ligne.ancienPdf} target="_blank" rel="noopener noreferrer" className={cn("shrink-0 text-[12px] text-[#5DCAA5] hover:underline", TRANS)}>
+          {ligne.type === "FACTURE" ? "Voir" : "PDF"}
+        </a>
+      ) : null}
       {ligne.origine !== "CRM" ? (
         <Bouton taille="icone" variante="fantome" className="shrink-0" aria-label={`Compléter ${ligne.numero}`} onClick={() => onCompleter(ligne)}>
           <Pencil size={13} aria-hidden />

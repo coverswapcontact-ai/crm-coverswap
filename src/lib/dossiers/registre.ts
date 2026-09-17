@@ -21,6 +21,9 @@ export type LigneRegistre = {
   note: string | null;
   documentId: string | null;
   dossierId: string | null;
+  /** Numéro de l'ancien CRM : son PDF d'origine et le contact auquel il se rattache. */
+  ancienPdf: string | null;
+  leadId: string | null;
 };
 
 export type SerieRegistre = {
@@ -45,6 +48,15 @@ export async function lireRegistre(): Promise<SerieRegistre[]> {
     select: { id: true, dossierId: true },
   });
   const dossierDe = new Map(documents.map((document) => [document.id, document.dossierId]));
+  const anciensNumeros = lignes.filter((ligne) => ligne.origine === "ANCIEN_CRM").map((ligne) => ligne.numero);
+  const [anciensDevis, anciennesFactures] = anciensNumeros.length
+    ? await Promise.all([
+        prisma.devis.findMany({ where: { numero: { in: anciensNumeros } }, select: { id: true, numero: true, leadId: true } }),
+        prisma.facture.findMany({ where: { numero: { in: anciensNumeros } }, select: { id: true, numero: true, devis: { select: { leadId: true } } } }),
+      ])
+    : [[], []];
+  const ancienDevis = new Map(anciensDevis.map((devis) => [devis.numero, { pdf: `/api/pdf/devis/${devis.id}`, leadId: devis.leadId }]));
+  const ancienneFacture = new Map(anciennesFactures.map((facture) => [facture.numero, { pdf: `/api/pdf/facture/${facture.id}`, leadId: facture.devis.leadId }]));
 
   const series = new Map<string, SerieRegistre>();
   for (const ligne of lignes) {
@@ -70,6 +82,10 @@ export async function lireRegistre(): Promise<SerieRegistre[]> {
       note: ligne.note,
       documentId: ligne.documentId,
       dossierId: ligne.documentId ? (dossierDe.get(ligne.documentId) ?? null) : null,
+      ...(() => {
+        const ancien = ligne.origine !== "ANCIEN_CRM" ? undefined : ligne.type === "FACTURE" ? ancienneFacture.get(ligne.numero) : ancienDevis.get(ligne.numero);
+        return { ancienPdf: ancien?.pdf ?? null, leadId: ancien?.leadId ?? null };
+      })(),
     });
     series.set(cle, serie);
   }

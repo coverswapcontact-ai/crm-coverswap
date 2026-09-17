@@ -871,7 +871,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               <ul>
                 {client.leads.map((lead) => (
                   <li key={lead.id} className="flex justify-between gap-3 py-1 text-[13px]">
-                    <Link href={`/leads/${lead.id}`} className="min-w-0 truncate text-[#D1D5DB] hover:text-[#F2F3F5]">
+                    <Link href={`/prospects?lead=${lead.id}`} className="min-w-0 truncate text-[#D1D5DB] hover:text-[#F2F3F5]">
                       {lead.formulaire ?? LIBELLES_SOURCE_CLIENT[sourceDepuisLead(lead.source).source]}
                       {lead.campagne ? ` · ${lead.campagne}` : ""}
                     </Link>

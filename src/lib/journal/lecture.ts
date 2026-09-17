@@ -92,7 +92,16 @@ function lienDe(modele: string, id: string, valeurs: Record<string, unknown>): s
     case "InstantaneMensuel":
       return "/synthese";
     case "Lead":
-      return `/leads/${id}`;
+      return `/prospects?lead=${id}`;
+    case "Interaction":
+    case "Simulation":
+      return texte("leadId") ? `/prospects?lead=${texte("leadId")}` : null;
+    case "Prospect":
+      return `/prospects?prospect=${id}`;
+    case "ProspectActivity":
+      return texte("prospectId") ? `/prospects?prospect=${texte("prospectId")}` : null;
+    case "AgentProfile":
+      return "/prospects?onglet=demarchage";
     default:
       return null;
   }

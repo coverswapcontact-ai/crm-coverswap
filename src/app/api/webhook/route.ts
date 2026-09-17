@@ -99,7 +99,7 @@ function calculateScore(data: ReturnType<typeof normalizeData>): number {
 
   const nearMontpellier = ["montpellier", "lattes", "perols", "castelnau", "mauguio", "palavas", "grabels", "juvignac", "saint-jean-de-vedas", "villeneuve-les-maguelone"];
   const majorCities = ["nimes", "beziers", "sete", "perpignan", "narbonne", "ales", "lunel"];
-  const cityLower = data.ville.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const cityLower = data.ville.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (nearMontpellier.some(c => cityLower.includes(c))) score += 20;
   else if (majorCities.some(c => cityLower.includes(c))) score += 10;
 

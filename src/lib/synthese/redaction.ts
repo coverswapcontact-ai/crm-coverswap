@@ -47,6 +47,11 @@ export function redigerSynthese(synthese: Synthese, references: References, aler
       c.activite.avoirs ? `, ${pluriel(c.activite.avoirs, "avoir")} (${formatMontant(c.activite.montantAvoirs)})` : ""
     }, ${pluriel(c.activite.pertes, "perte")}.`
   );
+  if (c.entrants && c.entrants.recus > 0) {
+    lignes.push(
+      `${pluriel(c.entrants.recus, "contact entrant reçu", "contacts entrants reçus")} (${c.entrants.parSource.map((ligne) => `${ligne.libelle.toLowerCase()} : ${ligne.recus}`).join(", ")}) ; à ce jour, ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} passés en dossier, ${c.entrants.signes} signés, ${c.entrants.sansSuite} sans suite.`
+    );
+  }
   const delaisConnus = c.delais.filter((delai) => delai.nombre > 0);
   if (delaisConnus.length) lignes.push(`Délais médians : ${delaisConnus.map((delai) => `${delai.libelle.toLowerCase()} ${jours(delai.medianeJours)} (${delai.nombre})`).join(" ; ")}.`);
   if (c.ecartPrixMoyenPct !== null) {

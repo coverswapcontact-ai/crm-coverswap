@@ -135,7 +135,7 @@ export function Navigation() {
         aria-label="Navigation principale"
         className="sticky top-0 z-40 hidden border-b-[0.5px] border-[#2A2D34] bg-[#16181D]/95 backdrop-blur md:block"
       >
-        <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-6 px-8">
+        <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-4 px-5 lg:gap-6 lg:px-8">
           <Link href="/dossiers" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
             CoverSwap
             <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>

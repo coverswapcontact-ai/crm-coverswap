@@ -53,7 +53,7 @@ function Barres({ lignes, format = (valeur) => String(valeur) }: { lignes: Repar
       {lignes.map((ligne) => (
         <div key={ligne.cle}>
           <div className="flex justify-between gap-3 text-[12.5px]">
-            <span className="truncate text-[#D1D5DB]">{ligne.libelle}</span>
+            <span className="min-w-0 truncate text-[#D1D5DB]">{ligne.libelle}</span>
             <span className="shrink-0 text-[#9CA3AF] tabular-nums">{format(ligne.valeur)}</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#2A2D34]">
@@ -176,7 +176,7 @@ export default function TableauSynthese({
             {periode.libelle}
           </button>
         ))}
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <Champ libelle="Du" type="date" value={du} max={au} onChange={(evenement) => setDu(evenement.target.value)} classeConteneur="w-[150px]" />
           <Champ libelle="Au" type="date" value={au} min={du} max={aujourdhui} onChange={(evenement) => setAu(evenement.target.value)} classeConteneur="w-[150px]" />
           <Bouton variante="secondaire" onClick={() => void charger(du, au, anonyme)}>
@@ -266,7 +266,7 @@ export default function TableauSynthese({
               <Chiffre libelle="Perdus" valeur={String(c.cohorte.perdus)} />
               <Chiffre libelle="En cours" valeur={String(c.cohorte.enCours)} />
             </div>
-            <div className="mt-2.5 grid gap-2.5 md:grid-cols-3">
+            <div className="mt-2.5 grid grid-cols-1 gap-2.5 md:grid-cols-3">
               <div className={cn(CARTE, "p-4 text-[13px]")}>
                 <p className="mb-2 text-[12px] text-[#9CA3AF]">Activité de la période</p>
                 <dl className="space-y-1.5">
@@ -313,6 +313,38 @@ export default function TableauSynthese({
                 ) : null}
               </div>
             </div>
+            {c.entrants && c.entrants.recus > 0 ? (
+              <div className={cn(CARTE, "mt-2.5 p-4 text-[13px]")}>
+                <p className="mb-1 text-[12px] text-[#9CA3AF]">Contacts entrants reçus dans la période</p>
+                <p className="mb-3 text-[12.5px] text-[#6B7280]">
+                  {`${c.entrants.recus} reçus · ${c.entrants.contactes} contactés · ${c.entrants.avecDossier} passés en dossier · ${c.entrants.signes} signés · ${c.entrants.sansSuite} sans suite`}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[420px] text-left tabular-nums">
+                    <thead>
+                      <tr className="text-[12px] text-[#6B7280]">
+                        <th className="pb-1.5 font-normal">Source</th>
+                        <th className="pb-1.5 text-right font-normal">Reçus</th>
+                        <th className="pb-1.5 text-right font-normal">En dossier</th>
+                        <th className="pb-1.5 text-right font-normal">Signés</th>
+                        <th className="pb-1.5 text-right font-normal">Passage en dossier</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {c.entrants.parSource.map((ligne) => (
+                        <tr key={ligne.cle} className="border-t-[0.5px] border-[#2A2D34]">
+                          <td className="py-1.5 text-[#D1D5DB]">{ligne.libelle}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.recus}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.avecDossier}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.signes}</td>
+                          <td className="py-1.5 text-right text-[#9CA3AF]">{pct(Math.round((ligne.avecDossier / ligne.recus) * 1000) / 10)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className="mt-8">
@@ -329,7 +361,7 @@ export default function TableauSynthese({
               <Chiffre libelle="Panier moyen signé" valeur={f.panierMoyenSigne === null ? "—" : formatMontant(f.panierMoyenSigne)} />
               <Chiffre libelle="Reste à encaisser" valeur={formatMontant(f.encours.total)} detail={`dont ${formatMontant(f.encours.plus30Jours)} à plus de 30 j`} />
             </div>
-            <div className="mt-2.5 grid gap-2.5 md:grid-cols-3">
+            <div className="mt-2.5 grid grid-cols-1 gap-2.5 md:grid-cols-3">
               <div className={cn(CARTE, "p-4")}>
                 <p className="mb-2 text-[12px] text-[#9CA3AF]">Encaissé par origine des clients</p>
                 <Barres lignes={f.parFamilleSource} format={formatMontant} />
@@ -375,7 +407,7 @@ export default function TableauSynthese({
 
           <section className="mt-8">
             <TitreSection>Clients</TitreSection>
-            <div className="grid gap-2.5 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-3">
               <div className={cn(CARTE, "p-4")}>
                 <p className="mb-2 text-[12px] text-[#9CA3AF]">{k.nouveaux} nouveaux clients, par origine</p>
                 <Barres lignes={k.parFamilleSource} />

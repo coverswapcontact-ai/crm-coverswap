@@ -9,7 +9,8 @@
 import type { CleParametre } from "@/lib/parametres/definitions";
 
 // 2 : ajout de agent.mails (les instantanés en version 1 n'en ont pas).
-export const VERSION_SYNTHESE = 2;
+// 3 : ajout de commercial.entrants (absent des instantanés en version 2 ou moins).
+export const VERSION_SYNTHESE = 3;
 
 export type Repartition = { cle: string; libelle: string; valeur: number };
 
@@ -29,6 +30,18 @@ export type Synthese = {
       enCours: number;
       tauxSignatureDevis: number | null;
       parSource: { cle: string; libelle: string; ouverts: number; signes: number }[];
+    };
+    /**
+     * Contacts entrants (leads) reçus dans la période, suivis jusqu'à aujourd'hui, par source d'arrivée
+     * (site, simulateur, Meta…). Les contacts archivés (doublons, erreurs) ne comptent pas.
+     */
+    entrants?: {
+      recus: number;
+      contactes: number;
+      avecDossier: number;
+      signes: number;
+      sansSuite: number;
+      parSource: { cle: string; libelle: string; recus: number; avecDossier: number; signes: number }[];
     };
     /** Ce qui s'est passé dans la période, quel que soit l'âge du dossier. */
     activite: {

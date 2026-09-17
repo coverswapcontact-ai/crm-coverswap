@@ -11,6 +11,7 @@ import { versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { chargerLivre, totalCentimes } from "@/lib/finances/livre";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
+import { STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "@/lib/prospects/constantes";
 import { typesDePropositions, definitionDe } from "@/lib/validation/catalogue";
 import { MOTIFS_REJET_COMMUNS } from "@/lib/validation/types";
 import { VERSION_SYNTHESE, type Repartition, type Synthese } from "./types";
@@ -61,7 +62,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     return jour >= du && jour <= au;
   };
 
-  const [dossiers, clients, propositionsBrutes, depensesBrutes, inconnus, messagesBruts, rangementsBruts, appelsIaBruts, bruitsAnnules] = await Promise.all([
+  const [dossiers, clients, propositionsBrutes, depensesBrutes, inconnus, messagesBruts, rangementsBruts, appelsIaBruts, bruitsAnnules, leadsBruts] = await Promise.all([
     prisma.dossier.findMany({
       where: AVEC_ARCHIVES,
       select: {
@@ -113,6 +114,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     }),
     prisma.appelIa.findMany({ where: { createdAt: { gte: new Date(debut), lte: new Date(fin) } }, select: { createdAt: true, coutEuros: true, usage: true } }),
     prisma.message.findMany({ where: { bruitAnnuleLe: { gte: new Date(debut), lte: new Date(fin) } }, select: { bruitAnnuleLe: true } }),
+    prisma.lead.findMany({ where: { createdAt: { gte: new Date(debut), lte: new Date(fin) } }, select: { createdAt: true, source: true, statut: true, dossiers: { select: { id: true } } } }),
   ]);
 
   const propositions = propositionsBrutes.filter((proposition) => dans(proposition.createdAt));
@@ -278,6 +280,35 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     ...tableau.qualite.map((point) => ({ cle: point.code, libelle: point.libelle, valeur: point.detail.length })),
   ].filter((point) => point.valeur > 0);
 
+  // Contacts entrants : reçus dans la période, suivis jusqu'à aujourd'hui (dossier ouvert, signé dans un
+  // dossier ou déjà dans l'ancien CRM).
+  const rangMaxParDossier = new Map(lus.map(({ dossier, rangMax }) => [dossier.id, rangMax]));
+  const leads = leadsBruts
+    .filter((lead) => dans(lead.createdAt))
+    .map((lead) => ({
+      source: lead.source,
+      contacte: !["NOUVEAU", "DEVIS_DEMANDE"].includes(lead.statut) || lead.dossiers.length > 0,
+      avecDossier: lead.dossiers.length > 0,
+      signe:
+        (STATUTS_LEAD_APRES_DEVIS as readonly string[]).filter((statut) => statut !== "DEVIS_ENVOYE").includes(lead.statut) ||
+        lead.dossiers.some((dossier) => (rangMaxParDossier.get(dossier.id) ?? -1) >= rang("SIGNE")),
+      sansSuite: lead.statut === "PERDU",
+    }));
+  const entrants = {
+    recus: leads.length,
+    contactes: leads.filter((lead) => lead.contacte).length,
+    avecDossier: leads.filter((lead) => lead.avecDossier).length,
+    signes: leads.filter((lead) => lead.signe).length,
+    sansSuite: leads.filter((lead) => lead.sansSuite).length,
+    parSource: repartir(leads, (lead) => lead.source, libelleSourceLead).map((ligne) => ({
+      cle: ligne.cle,
+      libelle: ligne.libelle,
+      recus: ligne.valeur,
+      avecDossier: leads.filter((lead) => lead.source === ligne.cle && lead.avecDossier).length,
+      signes: leads.filter((lead) => lead.source === ligne.cle && lead.signe).length,
+    })),
+  };
+
   return {
     version: VERSION_SYNTHESE,
     periode: { du, au, libelle: libellePeriode(du, au) },
@@ -298,6 +329,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
           signes: signesCohorte.filter(({ dossier }) => dossier.source === ligne.cle).length,
         })),
       },
+      entrants,
       activite: {
         devisEmis: devisEmis.length,
         montantDevis: somme(devisEmis),

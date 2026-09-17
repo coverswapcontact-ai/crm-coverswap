@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 /**
  * Récupère TOUS les leads Meta passés et les envoie au CRM.
- * Usage:  TOKEN=xxxxx node scripts/recover-meta-leads.mjs
+ * Usage:  TOKEN=xxxxx CRM_SECRET=yyyyy node scripts/recover-meta-leads.mjs
  *
- * Le token DOIT avoir leads_retrieval.
+ * Le token DOIT avoir leads_retrieval. CRM_SECRET = WEBHOOK_SECRET du CRM
+ * (variable d'environnement, jamais écrit dans le dépôt).
  */
 
 const TOKEN = process.env.TOKEN;
 const CRM_URL = process.env.CRM_URL || "https://crm.coverswap.fr/api/webhook";
-const CRM_SECRET = process.env.CRM_SECRET || "coverswap-webhook-secret";
+const CRM_SECRET = process.env.CRM_SECRET;
 const AD_ACCOUNT = process.env.AD_ACCOUNT || "act_621595161821553";
 const GRAPH = "https://graph.facebook.com/v21.0";
 
-if (!TOKEN) {
-  console.error("ERREUR : TOKEN manquant. Usage: TOKEN=xxx node scripts/recover-meta-leads.mjs");
+if (!TOKEN || !CRM_SECRET) {
+  console.error("ERREUR : TOKEN ou CRM_SECRET manquant. Usage: TOKEN=xxx CRM_SECRET=yyy node scripts/recover-meta-leads.mjs");
   process.exit(1);
 }
 

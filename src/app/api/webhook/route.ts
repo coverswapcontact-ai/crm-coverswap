@@ -126,6 +126,7 @@ function normalizePhone(phone: string): string {
 }
 
 const FENETRE_PARCOURS_MS = 24 * 60 * 60 * 1000;
+const LIBELLES_PROJET_ACCUSE: Record<string, string> = { CUISINE: "cuisine", SDB: "salle de bain", MEUBLES: "meubles", PRO: "local professionnel", AUTRE: "autre" };
 
 async function findExistingLead(telephone: string, email?: string, parcoursId?: string) {
   const normalized = normalizePhone(telephone);
@@ -328,6 +329,48 @@ export async function POST(request: NextRequest) {
           leadId: lead.id,
         },
       });
+    }
+
+    // Accusé de réception au visiteur (site seulement, jamais Meta) : ce que nous
+    // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
+    // vérifié (EMAIL_FROM) : sans lui, rien ne part et on le journalise.
+    if (data.source.startsWith("SITE_") && data.email && (isNew || data.source === "SITE_DEVIS" || simulationsRattachees.length > 0)) {
+      if (!process.env.EMAIL_FROM || !process.env.RESEND_API_KEY) {
+        console.warn("[webhook] accusé de réception non envoyé : EMAIL_FROM ou RESEND_API_KEY absente");
+      } else {
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          const objet = data.source === "SITE_SIMULATEUR" ? "Votre simulation CoverSwap et votre demande de devis" : "Votre demande de devis CoverSwap";
+          const recu = [
+            data.typeProjet ? `Projet : ${LIBELLES_PROJET_ACCUSE[data.typeProjet] ?? data.typeProjet}` : null,
+            data.ville && data.ville !== "Non renseignée" ? `Ville : ${data.ville}${data.codePostal ? ` (${data.codePostal})` : ""}` : null,
+            data.referenceChoisie ? `Finition retenue : ${data.referenceChoisie}` : null,
+            photosEcrites ? `${photosEcrites} photo(s) jointe(s)` : null,
+            simulationsRattachees.length ? `${simulationsRattachees.length} simulation(s) sur votre photo` : null,
+          ].filter(Boolean);
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM,
+            to: data.email,
+            replyTo: "contact@coverswap.fr",
+            subject: objet,
+            text: [
+              `Bonjour ${data.prenom !== "Inconnu" ? data.prenom : ""}`.trim() + ",",
+              "",
+              "Nous avons bien reçu votre demande sur coverswap.fr. Vous recevrez un devis détaillé sous 48 h ouvrées, chiffré au mètre linéaire, finition par finition.",
+              "",
+              ...(recu.length ? ["Ce que nous avons reçu :", ...recu.map((l) => `- ${l}`), ""] : []),
+              "Une question d'ici là ? Répondez à ce mail ou appelez le 06 70 35 28 69 (lundi-vendredi, 8 h-17 h).",
+              "",
+              "Lucas Villemin — CoverSwap",
+              "73 rue Simone Veil, 34470 Pérols · coverswap.fr",
+              "",
+              "Vos données servent uniquement à traiter votre demande (politique de confidentialité : https://coverswap.fr/politique-confidentialite).",
+            ].join("\n"),
+          });
+        } catch (erreurAccuse) {
+          console.error("[webhook] accusé de réception non envoyé :", erreurAccuse);
+        }
+      }
     }
 
     // Notification email au gérant :

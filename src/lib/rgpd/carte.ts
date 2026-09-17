@@ -79,6 +79,7 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   },
   PhotoLead: { remplacer: () => ({ chemin: EFFACE }), garde: "date et origine de la photo jointe (fichier effacé)" },
   SimulationSite: { remplacer: () => ({ imageBeforePath: null, imageAfterPath: null, ipOrigine: null, references: "[]" }), garde: "projet, dates, page et source du parcours (images effacées)" },
+  PublicationSite: { remplacer: () => ({ texte: null, auteur: null, photoAvant: null, photoApres: null }), garde: "titre, ville et type ; sans photo ni texte, la publication disparaît du site" },
   Devis: { remplacer: () => ({ notesInternes: null }), garde: "numéro et montants de l'ancien écran" },
   Facture: { conserve: "facture de l'ancien écran : conservation légale de 10 ans" },
   Chantier: { remplacer: () => ({ adresse: EFFACE, photosAvant: "[]", photosApres: "[]" }), garde: "dates, référence, métrage et montants (photos effacées)" },

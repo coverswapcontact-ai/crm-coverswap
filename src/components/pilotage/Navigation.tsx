@@ -19,6 +19,7 @@ import {
   Workflow,
   X,
   type LucideIcon,
+  Globe,
 } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ const PRINCIPALES: Entree[] = [
 // Écrans secondaires, dans le menu « Plus ».
 const SECONDAIRES: Entree[] = [
   { href: "/synthese", libelle: "Synthèse", icone: ChartColumn },
+  { href: "/site", libelle: "Site", icone: Globe },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/numeros", libelle: "Registre des numéros", icone: Hash },

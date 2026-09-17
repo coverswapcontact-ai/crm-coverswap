@@ -32,6 +32,7 @@ import {
   verifierPhoto,
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
+import { CATEGORIES_CLIENT } from "@/lib/clients/constantes";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { pointsACompleter, type PointACompleter } from "./completude";
@@ -116,6 +117,15 @@ export const schemaCreation = champsDossier
     /** Étape de départ : un dossier déjà avancé naît à son étape actuelle. */
     etape: z.enum(ETAPES, "Étape invalide.").optional(),
     dateChantier: jourOuNull("Date de chantier invalide.").optional(),
+    /** Sans fiche choisie : le client est un particulier ou une entreprise (sinon déduit de la source). */
+    clientCategorie: z.enum(CATEGORIES_CLIENT, "Type de client invalide.").nullable().optional(),
+    clientSiret: z
+      .string("SIRET invalide : 14 chiffres attendus.")
+      .transform((valeur) => valeur.replace(/\s/g, ""))
+      .refine((valeur) => valeur === "" || /^\d{14}$/.test(valeur), "SIRET invalide : 14 chiffres attendus.")
+      .transform((valeur) => valeur || null)
+      .nullable()
+      .optional(),
   });
 export type EntreeCreation = z.output<typeof schemaCreation>;
 
@@ -477,7 +487,7 @@ export async function ouvrirDossier(
     await completerCoordonnees(tx, choisi.id, { emails: [entree.clientEmail], telephones: [entree.clientTelephone] });
     return { ...cree, clientId: choisi.id };
   }
-  const clientId = await rattacherDossier(tx, cree);
+  const clientId = await rattacherDossier(tx, cree, { categorie: entree.clientCategorie ?? null, siret: entree.clientCategorie === "PARTICULIER" ? null : (entree.clientSiret ?? null) });
   return { ...cree, clientId };
 }
 

@@ -3,56 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, UserPlus, UserRound } from "lucide-react";
+import { Building2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ErreurApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, ListeDeroulante, Modale, Puces, TRANS } from "@/components/pilotage/ui";
+import { Bouton, Champ, ListeDeroulante, Modale } from "@/components/pilotage/ui";
 import { LIBELLES_SOURCE_CLIENT, SOURCES_CLIENT, type CategorieClient, type SourceClient } from "@/lib/clients/constantes";
 import { avertissementSiret, erreurSaisieSiret, formaterSiret } from "@/lib/clients/normalisation";
 import type { EntrepriseAnnuaire } from "@/lib/clients/types";
-import { cn } from "@/lib/utils";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
 import { RechercheAnnuaire } from "./RechercheAnnuaire";
-
-const RELATIONS_PRO: { valeur: Exclude<CategorieClient, "PARTICULIER">; libelle: string }[] = [
-  { valeur: "PROFESSIONNEL", libelle: "Client direct" },
-  { valeur: "DONNEUR_ORDRE", libelle: "Donneur d'ordre (sous-traitance)" },
-];
-
-function ChoixType({ estPro, onChange }: { estPro: boolean; onChange: (estPro: boolean) => void }) {
-  const options = [
-    { pro: false, libelle: "Particulier", detail: "Une personne", icone: UserRound },
-    { pro: true, libelle: "Entreprise", detail: "Société, commerce, syndic…", icone: Building2 },
-  ];
-  return (
-    <div role="radiogroup" aria-label="Le client est" className="grid grid-cols-2 gap-2">
-      {options.map(({ pro, libelle, detail, icone: Icone }) => {
-        const choisi = pro === estPro;
-        return (
-          <button
-            key={libelle}
-            type="button"
-            role="radio"
-            aria-checked={choisi}
-            onClick={() => onChange(pro)}
-            className={cn(
-              "flex min-h-14 items-center gap-2.5 rounded-[10px] border-[0.5px] px-3 py-2 text-left",
-              "focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
-              choisi ? "border-[#1D9E75]/60 bg-[#112B22]" : "border-[#2A2D34] bg-[#16181D] hover:border-[#3A3E47]",
-              TRANS
-            )}
-          >
-            <Icone size={18} aria-hidden className={cn("shrink-0", choisi ? "text-[#5DCAA5]" : "text-[#6B7280]")} />
-            <span className="min-w-0">
-              <span className={cn("block text-[13.5px] font-medium", choisi ? "text-[#5DCAA5]" : "text-[#F2F3F5]")}>{libelle}</span>
-              <span className="hidden text-[11.5px] text-[#6B7280] sm:block">{detail}</span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+import { CaseSousTraitance, ChoixTypeClient } from "./TypeClient";
 
 /**
  * Nouveau client saisi à la main. Un particulier est une personne (prénom,
@@ -177,11 +137,11 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
           </div>
         ) : null}
 
-        <ChoixType estPro={estPro} onChange={(pro) => setCategorie(pro ? (estPro ? categorie : "PROFESSIONNEL") : "PARTICULIER")} />
+        <ChoixTypeClient estPro={estPro} onChange={(pro) => setCategorie(pro ? (estPro ? categorie : "PROFESSIONNEL") : "PARTICULIER")} />
 
         {estPro ? (
           <>
-            <Puces libelle="Relation" obligatoire options={RELATIONS_PRO} valeur={categorie} onChange={setCategorie} />
+            <CaseSousTraitance categorie={categorie} onChange={setCategorie} />
             <RechercheAnnuaire onChoisir={remplirDepuisAnnuaire} />
             <div className="grid gap-3 sm:grid-cols-[1fr_190px]">
               <Champ

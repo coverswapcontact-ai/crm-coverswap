@@ -119,7 +119,7 @@ function clientVersResultat(client: ClientAvecCompte): LeadTrouve {
     origine: "CLIENT",
     id: client.id,
     libelle: client.nom,
-    detail: ["Client", ville || null, client._count.dossiers > 0 ? "déjà client" : null].filter(Boolean).join(" · "),
+    detail: [client.categorie === "PARTICULIER" ? "Client" : "Entreprise", ville || null, client._count.dossiers > 0 ? "déjà client" : null].filter(Boolean).join(" · "),
     nbDossiers: client._count.dossiers,
     preRemplissage: {
       clientNom: client.nom,

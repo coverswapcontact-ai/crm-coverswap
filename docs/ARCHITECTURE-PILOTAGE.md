@@ -382,7 +382,8 @@ leads et dossiers restés sans client.
 
 - **Particulier** : une personne, prénom et nom ; ni raison sociale ni SIRET
   (retirés s'ils arrivent).
-- **Professionnel** (client direct) et **donneur d'ordre** (sous-traitance) :
+- **Professionnel** (client direct) et **donneur d'ordre** (case
+  « Sous-traitance » : on travaille pour le compte de cette entreprise) :
   une entité. La fiche porte la raison sociale (qui fait son nom, et celui des
   devis et factures), le SIRET et l'adresse de facturation ; créée à la main,
   elle n'a **ni prénom ni nom de personne**. Une fiche pro venue d'un formulaire
@@ -407,6 +408,15 @@ leads et dossiers restés sans client.
   correspondent à la recherche, sinon le siège ; fermés en dernier, champs non
   diffusibles laissés vides. Annuaire injoignable ou saturé : message, et la
   fiche se remplit à la main.
+- **À l'ouverture d'un dossier** (création directe ou reprise, sans fiche
+  choisie) : « Particulier » ou « Entreprise », avec la case « Sous-traitance »,
+  la recherche dans l'annuaire et le SIRET. Le nom du dossier devient la raison
+  sociale de la fiche créée ; un SIRET déjà porté par une fiche y rattache le
+  dossier (avant même l'e-mail ou le numéro) et complète une fiche d'entreprise
+  retrouvée qui n'en avait pas. Cocher « Sous-traitance » renseigne la source du
+  dossier si elle est vide ; choisir la source « Sous-traitance » coche la case,
+  et la source « Prospection » propose « Entreprise » tant que rien n'est
+  choisi. Depuis un client, un lead ou un prospect, la fiche d'origine décide.
 
 ### Rien d'obligatoire au-delà du nom, tout se modifie
 

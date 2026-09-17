@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, ImageIcon, Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_SOURCE, SOURCES_DOSSIER, type EtapeDossier, type SourceDossier } from "@/lib/dossiers/constants";
+import type { EntrepriseAnnuaire } from "@/lib/clients/types";
 import { lireNombre } from "@/lib/dossiers/montants";
 import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { appelApi, messageErreur, photoTropLourde, preparerPhoto } from "./client";
 import { RepriseDossier } from "./RepriseDossier";
+import { PARTICULIER, TypeClientDossier, erreurTypeClient, estEntreprise, sourceSelonSousTraitance, typeClientPourEnvoi, typeSelonSource, type TypeClientSaisi } from "./TypeClientDossier";
 import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TRANS } from "./ui";
 import { avertissementsCoordonnees, manquesCoordonnees, validerCoordonnees, type ChampsCoordonnees } from "./validation";
 
@@ -59,6 +61,8 @@ export function CreationDossier({
   const [mode, setMode] = useState<Mode>("lead");
   const [origine, setOrigine] = useState<LeadTrouve | null>(leadInitial);
   const [champs, setChamps] = useState<Champs>(() => champsDepuis(leadInitial));
+  const [typeClient, setTypeClient] = useState<TypeClientSaisi>(PARTICULIER);
+  const [adresseAnnuaire, setAdresseAnnuaire] = useState(false);
   const [photos, setPhotos] = useState<PhotoChoisie[]>([]);
   const [erreurs, setErreurs] = useState<Erreurs>({});
   const [envoi, setEnvoi] = useState<string | null>(null);
@@ -108,6 +112,19 @@ export function CreationDossier({
     setErreurs((actuelles) => ({ ...actuelles, [cle]: undefined }));
   };
 
+  // Entreprise trouvée dans l'annuaire : sa raison sociale nomme le dossier ; son
+  // adresse ne remplit que des champs vides (le chantier peut être ailleurs).
+  function remplirDepuisAnnuaire(entreprise: EntrepriseAnnuaire) {
+    const adresseVide = !champs.clientAdresse.trim() && !champs.clientCp.trim() && !champs.clientVille.trim();
+    setChamps((actuels) => ({
+      ...actuels,
+      clientNom: entreprise.raisonSociale ?? actuels.clientNom,
+      ...(adresseVide ? { clientAdresse: entreprise.adresse ?? "", clientCp: entreprise.codePostal ?? "", clientVille: entreprise.ville ?? "" } : {}),
+    }));
+    setAdresseAnnuaire(adresseVide && Boolean(entreprise.adresse || entreprise.ville));
+    setErreurs((actuelles) => ({ ...actuelles, clientNom: undefined }));
+  }
+
   function choisirLead(lead: LeadTrouve) {
     setOrigine(lead);
     setChamps((actuels) => champsDepuis(lead, actuels));
@@ -141,7 +158,14 @@ export function CreationDossier({
 
   async function ouvrir() {
     const trouvees: Erreurs = { ...validerCoordonnees(champs) };
+    if (!origine && estEntreprise(typeClient) && trouvees.clientNom) trouvees.clientNom = "La raison sociale est obligatoire.";
     setErreurs(trouvees);
+    const siretFaux = origine ? null : erreurTypeClient(typeClient);
+    if (siretFaux) {
+      setTypeClient((actuel) => ({ ...actuel, siretQuitte: true }));
+      toast.error("Dossier non ouvert", { description: `SIRET : ${siretFaux} Corrige-le ou laisse-le vide.` });
+      return;
+    }
     if (Object.keys(trouvees).length > 0) {
       toast.error("Dossier non ouvert", { description: "Corrige les champs signalés en rouge." });
       return;
@@ -178,6 +202,8 @@ export function CreationDossier({
           leadId: origine?.origine === "LEAD" ? origine.id : null,
           prospectId: origine?.origine === "PROSPECT" ? origine.id : null,
           clientId: origine?.origine === "CLIENT" ? origine.id : null,
+          // Sans fiche d'origine, le client est créé tel que déclaré : particulier ou entreprise.
+          ...(origine ? {} : typeClientPourEnvoi(typeClient)),
         })
       );
       if (prets[0]) formulaire.append("photos", prets[0]);
@@ -338,11 +364,39 @@ export function CreationDossier({
             </div>
           ) : null}
 
+          {origine ? null : (
+            <TypeClientDossier
+              valeur={typeClient}
+              onChange={setTypeClient}
+              onEntreprise={remplirDepuisAnnuaire}
+              onSousTraitance={(coche) => setChamps((actuels) => ({ ...actuels, source: sourceSelonSousTraitance(actuels.source, coche) as SourceDossier | "" }))}
+              champNom={
+                <Champ
+                  libelle={estEntreprise(typeClient) ? "Raison sociale" : "Nom du client"}
+                  obligatoire
+                  autoComplete={estEntreprise(typeClient) ? "organization" : undefined}
+                  value={champs.clientNom}
+                  onChange={modifier("clientNom")}
+                  erreur={erreurs.clientNom}
+                />
+              }
+            />
+          )}
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <Champ libelle="Nom du client" obligatoire value={champs.clientNom} onChange={modifier("clientNom")} erreur={erreurs.clientNom} classeConteneur="sm:col-span-2" />
+            {origine ? (
+              <Champ libelle="Nom du client" obligatoire value={champs.clientNom} onChange={modifier("clientNom")} erreur={erreurs.clientNom} classeConteneur="sm:col-span-2" />
+            ) : null}
             <Champ libelle="Téléphone" type="tel" inputMode="tel" value={champs.clientTelephone} onChange={modifier("clientTelephone")} erreur={erreurs.clientTelephone} aide={avertissements.clientTelephone} />
             <Champ libelle="E-mail" type="email" inputMode="email" value={champs.clientEmail} onChange={modifier("clientEmail")} erreur={erreurs.clientEmail} />
-            <Champ libelle="Adresse du chantier" value={champs.clientAdresse} onChange={modifier("clientAdresse")} erreur={erreurs.clientAdresse} classeConteneur="sm:col-span-2" />
+            <Champ
+              libelle="Adresse du chantier"
+              value={champs.clientAdresse}
+              onChange={modifier("clientAdresse")}
+              erreur={erreurs.clientAdresse}
+              aide={adresseAnnuaire ? "Adresse de l'établissement, reprise de l'annuaire : corrige-la si le chantier est ailleurs." : undefined}
+              classeConteneur="sm:col-span-2"
+            />
             <Champ libelle="Code postal" inputMode="numeric" maxLength={10} value={champs.clientCp} onChange={modifier("clientCp")} erreur={erreurs.clientCp} aide={avertissements.clientCp} />
             <Champ libelle="Ville" value={champs.clientVille} onChange={modifier("clientVille")} erreur={erreurs.clientVille} />
             <Champ libelle="Objet du chantier" placeholder="Ex. Recouvrement façades de cuisine" value={champs.objet} onChange={modifier("objet")} erreur={erreurs.objet} classeConteneur="sm:col-span-2" />
@@ -364,7 +418,9 @@ export function CreationDossier({
               ]}
               value={champs.source}
               onChange={(evenement) => {
-                setChamps((actuels) => ({ ...actuels, source: evenement.target.value as SourceDossier | "" }));
+                const source = evenement.target.value as SourceDossier | "";
+                setChamps((actuels) => ({ ...actuels, source }));
+                if (!origine) setTypeClient((actuel) => typeSelonSource(actuel, source));
                 setErreurs((actuelles) => ({ ...actuelles, source: undefined }));
               }}
               erreur={erreurs.source}

@@ -515,10 +515,23 @@ export async function creerDossier(entree: EntreeCreation, photos: File[]): Prom
 
 type Origines = { lead: { id: string; statut: string } | null; prospect: { id: string; statut: string } | null };
 
-/** Lead ou prospect d'origine d'un dossier à ouvrir, vérifiés. */
-export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | "prospectId">): Promise<Origines> {
+/**
+ * Lead ou prospect d'origine d'un dossier à ouvrir, vérifiés. Ouvert depuis
+ * une fiche client (les leads entrants y sont rattachés d'office), le contact
+ * qui n'a pas encore de dossier en devient l'origine : son statut suit le
+ * dossier et la conversion est comptée pour sa source.
+ */
+export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | "prospectId"> & { clientId?: string | null }): Promise<Origines> {
   if (entree.leadId && entree.prospectId) {
     throw new ErreurMetier("Un dossier vient d'un lead ou d'un prospect, pas des deux.");
+  }
+  if (!entree.leadId && !entree.prospectId && entree.clientId) {
+    const [leadDuClient, prospectDuClient] = await Promise.all([
+      prisma.lead.findFirst({ where: { clientId: entree.clientId, dossiers: { none: {} } }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } }),
+      prisma.prospect.findFirst({ where: { clientId: entree.clientId, dossiers: { none: {} } }, orderBy: { updatedAt: "desc" }, select: { id: true, statut: true } }),
+    ]);
+    if (leadDuClient) return { lead: leadDuClient, prospect: null };
+    if (prospectDuClient) return { lead: null, prospect: prospectDuClient };
   }
   const [lead, prospect] = await Promise.all([
     entree.leadId ? prisma.lead.findUnique({ where: { id: entree.leadId }, select: { id: true, statut: true } }) : null,

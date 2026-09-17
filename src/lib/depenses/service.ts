@@ -202,24 +202,38 @@ export async function depensesDuDossier(dossierId: string): Promise<{ depenses: 
   return { depenses: depenses.map(versVue), total };
 }
 
+/** Une facture fournisseur arrive souvent après le paiement du client : ces chantiers restent proposés. */
+const ENCAISSES_RECENTS_MS = 90 * 24 * 60 * 60_000;
+
 /**
  * Ce qu'il faut pour saisir vite : les chantiers en cours d'abord (à la pose,
- * puis planifiés au plus près d'aujourd'hui, puis signés), le chantier probable
- * pré-choisi, les fournisseurs récents.
+ * puis planifiés au plus près d'aujourd'hui, puis signés, facturés, encaissés
+ * depuis peu), le chantier probable pré-choisi, les fournisseurs récents. Le
+ * dossier d'où l'on vient est toujours proposé, en premier, quelle que soit
+ * son étape.
  */
-export async function suggestionsSaisie(): Promise<{ chantiers: ChantierPropose[]; propose: string | null; fournisseurs: string[] }> {
+export async function suggestionsSaisie(
+  dossierDemande: string | null = null
+): Promise<{ chantiers: ChantierPropose[]; propose: string | null; fournisseurs: string[] }> {
   const aujourdhui = jourParis(new Date());
   const [dossiers, recents] = await Promise.all([
     prisma.dossier.findMany({
-      where: { etape: { in: ["CHANTIER", "PLANIFIE", "SIGNE", "FACTURE"] } },
+      where: {
+        OR: [
+          { etape: { in: ["CHANTIER", "PLANIFIE", "SIGNE", "FACTURE"] } },
+          { etape: "ENCAISSE", updatedAt: { gte: new Date(Date.now() - ENCAISSES_RECENTS_MS) } },
+          ...(dossierDemande ? [{ id: dossierDemande }] : []),
+        ],
+      },
       select: { id: true, clientNom: true, objet: true, etape: true, dateChantier: true, updatedAt: true },
     }),
     prisma.depense.findMany({ orderBy: { createdAt: "desc" }, take: 60, select: { fournisseur: true } }),
   ]);
-  const rang: Record<string, number> = { CHANTIER: 0, PLANIFIE: 1, SIGNE: 2, FACTURE: 3 };
+  const RANGS: Record<string, number> = { CHANTIER: 0, PLANIFIE: 1, SIGNE: 2, FACTURE: 3, ENCAISSE: 4 };
+  const rang = (dossier: { id: string; etape: string }) => (dossier.id === dossierDemande ? -1 : (RANGS[dossier.etape] ?? 5));
   const ecart = (date: Date | null) => (date ? Math.abs(Date.parse(`${jourParis(date)}T00:00:00Z`) - Date.parse(`${aujourdhui}T00:00:00Z`)) : Number.MAX_SAFE_INTEGER);
   const chantiers = dossiers
-    .sort((a, b) => rang[a.etape] - rang[b.etape] || ecart(a.dateChantier) - ecart(b.dateChantier) || b.updatedAt.getTime() - a.updatedAt.getTime())
+    .sort((a, b) => rang(a) - rang(b) || ecart(a.dateChantier) - ecart(b.dateChantier) || b.updatedAt.getTime() - a.updatedAt.getTime())
     .map((dossier) => ({
       id: dossier.id,
       clientNom: dossier.clientNom,
@@ -232,7 +246,9 @@ export async function suggestionsSaisie(): Promise<{ chantiers: ChantierPropose[
   // ou, sans chantier à la pose, un seul chantier planifié à trois jours près.
   const enPose = dossiers.filter((dossier) => dossier.etape === "CHANTIER");
   const imminents = dossiers.filter((dossier) => dossier.etape === "PLANIFIE" && ecart(dossier.dateChantier) <= 3 * 86_400_000);
-  const propose = enPose.length === 1 ? enPose[0].id : enPose.length === 0 && imminents.length === 1 ? imminents[0].id : null;
+  const propose = dossierDemande && dossiers.some((dossier) => dossier.id === dossierDemande)
+    ? dossierDemande
+    : enPose.length === 1 ? enPose[0].id : enPose.length === 0 && imminents.length === 1 ? imminents[0].id : null;
 
   const fournisseurs = [...new Set(recents.map((depense) => depense.fournisseur))].slice(0, 12);
   return { chantiers, propose, fournisseurs };

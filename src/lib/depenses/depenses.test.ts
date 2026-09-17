@@ -117,4 +117,16 @@ describe("dépenses", () => {
     assert.equal(deux.propose, null);
     assert.equal(deux.chantiers.length, 2);
   });
+
+  test("depuis un dossier, il est proposé et pré-choisi quelle que soit son étape ; les chantiers encaissés depuis peu restent proposés", async () => {
+    const encaisse = await dossier("ENCAISSE", "Chantier Payé");
+    const enQualification = await dossier("QUALIFICATION", "Visite Prévue");
+    const sansDemande = await service.suggestionsSaisie();
+    assert.ok(sansDemande.chantiers.some((chantier) => chantier.id === encaisse.id), "encaissé récemment : proposé");
+    assert.ok(!sansDemande.chantiers.some((chantier) => chantier.id === enQualification.id), "pas encore signé : pas proposé d'office");
+
+    const depuisLeDossier = await service.suggestionsSaisie(enQualification.id);
+    assert.equal(depuisLeDossier.propose, enQualification.id);
+    assert.equal(depuisLeDossier.chantiers[0].id, enQualification.id, "en premier");
+  });
 });

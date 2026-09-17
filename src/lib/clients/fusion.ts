@@ -44,6 +44,37 @@ const CHAMPS_COMPLETABLES = [
   "recommandeParTexte",
 ] as const;
 
+/**
+ * Une adresse ou un numéro présents sur les deux fiches n'apparaissent qu'une
+ * fois sur la fiche conservée : le double est archivé (jamais supprimé), la
+ * coordonnée principale ou la plus ancienne reste.
+ */
+async function archiverCoordonneesEnDouble(tx: Transaction, clientId: string): Promise<number> {
+  const motif = "En double après la fusion des fiches";
+  let archivees = 0;
+  const emails = await tx.clientEmail.findMany({ where: { clientId, archiveLe: null }, orderBy: [{ principale: "desc" }, { createdAt: "asc" }] });
+  const adresses = new Set<string>();
+  for (const ligne of emails) {
+    if (!adresses.has(ligne.adresse)) {
+      adresses.add(ligne.adresse);
+      continue;
+    }
+    await tx.clientEmail.update({ where: { id: ligne.id }, data: { archiveLe: new Date(), archiveMotif: motif, principale: false } });
+    archivees++;
+  }
+  const telephones = await tx.clientTelephone.findMany({ where: { clientId, archiveLe: null }, orderBy: [{ principal: "desc" }, { createdAt: "asc" }] });
+  const numeros = new Set<string>();
+  for (const ligne of telephones) {
+    if (!numeros.has(ligne.numero)) {
+      numeros.add(ligne.numero);
+      continue;
+    }
+    await tx.clientTelephone.update({ where: { id: ligne.id }, data: { archiveLe: new Date(), archiveMotif: motif, principal: false } });
+    archivees++;
+  }
+  return archivees;
+}
+
 export async function fusionnerClients(
   tx: Transaction,
   conserveId: string,
@@ -96,6 +127,8 @@ export async function fusionnerClients(
     const { count } = await delegue(tx, modele).updateMany({ where: { clientId: absorbeId }, data: donnees });
     if (count > 0) deplaces[modele] = count;
   }
+  const enDouble = await archiverCoordonneesEnDouble(tx, conserveId);
+  if (enDouble > 0) deplaces.coordonneesEnDouble = enDouble;
   // Clients recommandés par la fiche absorbée (sans créer d'auto-recommandation).
   const { count: recommandes } = await tx.client.updateMany({
     where: { recommandeParId: absorbeId, id: { not: conserveId } },

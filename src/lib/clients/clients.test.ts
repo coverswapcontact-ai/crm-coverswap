@@ -328,6 +328,10 @@ describe("fusion validée", () => {
     assert.equal(await prisma.consentementMail.count({ where: { clientId: conserve } }), 1);
     const telephones = await prisma.clientTelephone.findMany({ where: { clientId: conserve } });
     assert.equal(telephones.filter((telephone) => telephone.principal).length, 1);
+    const numerosActifs = telephones.filter((telephone) => !telephone.archiveLe).map((telephone) => telephone.numero);
+    assert.equal(new Set(numerosActifs).size, numerosActifs.length, "un numéro présent sur les deux fiches n'apparaît qu'une fois");
+    const emailsActifs = (await prisma.clientEmail.findMany({ where: { clientId: conserve } })).map((email) => email.adresse);
+    assert.equal(new Set(emailsActifs).size, emailsActifs.length);
     assert.equal((await moduleFusion.ficheVivante(absorbe))?.id, conserve);
 
     // Une paire rejetée ne revient pas.

@@ -20,9 +20,11 @@ const STATUTS_ONGLET: Record<Onglet, StatutProposition[]> = {
 
 /* ── Écran ─────────────────────────────────────────────────────────── */
 
-export default function FileValidation({ initiales }: { initiales: PropositionVue[] }) {
+export default function FileValidation({ initiales, totalEnAttente }: { initiales: PropositionVue[]; totalEnAttente: number }) {
   const [onglet, setOnglet] = useState<Onglet>("attente");
   const [propositions, setPropositions] = useState(initiales);
+  // La liste ne charge que les 200 plus récentes : le total vient du serveur.
+  const [total, setTotal] = useState(totalEnAttente);
   const [chargement, setChargement] = useState(false);
   const [filtreType, setFiltreType] = useState<string | null>(null);
   const [occupees, setOccupees] = useState<string[]>([]);
@@ -37,6 +39,10 @@ export default function FileValidation({ initiales }: { initiales: PropositionVu
         `/api/validation?statut=${STATUTS_ONGLET[nouvelOnglet].join(",")}&limite=200`
       );
       setPropositions(lues);
+      if (nouvelOnglet === "attente") {
+        const { aValider } = await appelApi<{ aValider: number }>("/api/pilotage/compteurs");
+        setTotal(aValider);
+      }
     } catch (erreur) {
       toast.error("Lecture impossible", { description: messageErreur(erreur) });
     } finally {
@@ -62,7 +68,10 @@ export default function FileValidation({ initiales }: { initiales: PropositionVu
   const visibles = filtreType ? propositions.filter((proposition) => proposition.type === filtreType) : propositions;
   const groupables = onglet === "attente" ? visibles.filter((proposition) => proposition.validationGroupee) : [];
 
-  const retirer = (id: string) => setPropositions((actuelles) => actuelles.filter((proposition) => proposition.id !== id));
+  const retirer = (id: string) => {
+    setPropositions((actuelles) => actuelles.filter((proposition) => proposition.id !== id));
+    if (onglet === "attente") setTotal((actuel) => Math.max(0, actuel - 1));
+  };
   const occuper = (id: string, occupee: boolean) =>
     setOccupees((actuelles) => (occupee ? [...actuelles, id] : actuelles.filter((autre) => autre !== id)));
 
@@ -127,6 +136,7 @@ export default function FileValidation({ initiales }: { initiales: PropositionVu
         { ids }
       );
       setPropositions((actuelles) => actuelles.filter((proposition) => !bilan.validees.includes(proposition.id)));
+      setTotal((actuel) => Math.max(0, actuel - bilan.validees.length));
       toast.success(`${bilan.validees.length} proposition${bilan.validees.length > 1 ? "s" : ""} validée${bilan.validees.length > 1 ? "s" : ""}`, {
         description: bilan.ignorees.length > 0 ? `${bilan.ignorees.length} laissée(s) de côté : ${bilan.ignorees[0].raison}` : undefined,
       });
@@ -136,7 +146,7 @@ export default function FileValidation({ initiales }: { initiales: PropositionVu
     }
   }
 
-  const enAttente = onglet === "attente" ? propositions.length : null;
+  const enAttente = onglet === "attente" ? Math.max(total, propositions.length) : null;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-8">
@@ -146,7 +156,7 @@ export default function FileValidation({ initiales }: { initiales: PropositionVu
           onglet === "attente"
             ? enAttente === 0
               ? "Rien en attente."
-              : `${enAttente} proposition${enAttente && enAttente > 1 ? "s" : ""} de l'agent ou du système. Rien ne part sans toi.`
+              : `${enAttente} proposition${enAttente && enAttente > 1 ? "s" : ""} de l'agent ou du système. Rien ne part sans toi.${enAttente && enAttente > propositions.length ? ` Les ${propositions.length} plus récentes sont affichées.` : ""}`
             : onglet === "echec"
               ? "Propositions validées dont l'exécution n'a pas abouti."
               : "Décisions récentes, validées, rejetées ou devenues sans objet."

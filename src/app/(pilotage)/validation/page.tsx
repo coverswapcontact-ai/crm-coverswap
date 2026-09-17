@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listerPropositions } from "@/lib/validation/service";
+import { compterPropositionsEnAttente, listerPropositions } from "@/lib/validation/service";
 import FileValidation from "./_components/FileValidation";
 
 export const metadata: Metadata = {
@@ -10,6 +10,6 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ValidationPage() {
-  const propositions = await listerPropositions({ statuts: ["EN_ATTENTE"], limite: 200 });
-  return <FileValidation initiales={propositions} />;
+  const [propositions, totalEnAttente] = await Promise.all([listerPropositions({ statuts: ["EN_ATTENTE"], limite: 200 }), compterPropositionsEnAttente()]);
+  return <FileValidation initiales={propositions} totalEnAttente={totalEnAttente} />;
 }

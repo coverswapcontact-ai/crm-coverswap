@@ -5,10 +5,10 @@ import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-// Primitives des écrans de pilotage (Dossiers, Validation, Clients, Finances…),
-// sur la charte sombre de /prospection.
+// Primitives des écrans de pilotage (Prospects, Dossiers, Validation, Clients,
+// Finances…) : charte sombre commune.
 
-// Transition unique : 150 ms ease (cf. /prospection)
+// Transition unique : 150 ms ease
 export const TRANS = "transition-colors duration-150 ease-[ease]";
 
 /* ── Boutons ─────────────────────────────────────────────────────── */

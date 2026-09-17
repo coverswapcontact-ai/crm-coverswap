@@ -92,7 +92,9 @@ export default function DossiersPilotage({
     const url = new URL(window.location.href);
     if (dossierOuvertId) url.searchParams.set("dossier", dossierOuvertId);
     else url.searchParams.delete("dossier");
+    // Pré-remplissage consommé : un rechargement ne doit pas rouvrir la création (dossier en double).
     url.searchParams.delete("lead");
+    url.searchParams.delete("prospect");
     url.searchParams.delete("client");
     window.history.replaceState(window.history.state, "", url);
   }, [dossierOuvertId]);

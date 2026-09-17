@@ -3,11 +3,8 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { LogIn } from "lucide-react";
+import { Bouton, Champ } from "@/components/pilotage/ui";
 import { destinationApresConnexion } from "@/lib/acces/destination";
 
 export default function SignInPage() {
@@ -29,7 +26,7 @@ export default function SignInPage() {
     });
 
     if (result?.error) {
-      setError("Email ou mot de passe incorrect");
+      setError("E-mail ou mot de passe incorrect.");
       setLoading(false);
     } else {
       // Retour à la page demandée avant la connexion (lien partagé, rappel Google…).
@@ -40,40 +37,41 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-[#262626] border-white/10">
-        <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-red-600 rounded-xl flex items-center justify-center font-bold text-white text-xl mb-4">
-            CS
-          </div>
-          <CardTitle className="text-white text-2xl">CoverSwap CRM</CardTitle>
-          <p className="text-gray-400 text-sm mt-2">Connectez-vous pour accéder au CRM</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label className="text-gray-400">Email</Label>
-              <Input
-                type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                placeholder="coverswap.contact@gmail.com"
-                className="bg-[#1a1a1a] border-white/10 text-white" required
-              />
-            </div>
-            <div>
-              <Label className="text-gray-400">Mot de passe</Label>
-              <Input
-                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                className="bg-[#1a1a1a] border-white/10 text-white" required
-              />
-            </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            <Button type="submit" disabled={loading} className="w-full bg-red-600 hover:bg-red-700 text-white">
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Se connecter
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="flex min-h-screen w-full flex-1 items-center justify-center bg-[#16181D] p-4 text-[#F2F3F5] antialiased">
+      <div className="w-full max-w-[380px] rounded-[14px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-6 sm:p-7">
+        <p className="flex items-baseline gap-2 text-[17px] font-semibold tracking-tight">
+          CoverSwap
+          <span className="text-[13px] font-normal text-[#6B7280]">pilotage</span>
+        </p>
+        <p className="mt-1 text-[13px] text-[#9CA3AF]">Prospects, dossiers, finances : connecte-toi pour continuer.</p>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-3.5">
+          <Champ
+            libelle="E-mail"
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Champ
+            libelle="Mot de passe"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {error ? (
+            <p role="alert" className="text-[13px] text-[#F87171]">
+              {error}
+            </p>
+          ) : null}
+          <Bouton type="submit" variante="primaire" chargement={loading} icone={<LogIn size={15} aria-hidden />} className="h-10 w-full">
+            Se connecter
+          </Bouton>
+        </form>
+      </div>
     </div>
   );
 }

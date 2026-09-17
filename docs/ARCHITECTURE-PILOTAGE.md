@@ -217,6 +217,12 @@ elle-même ; tout le reste exige une connexion.
 - `/api/cron/*` refuse tout si `CRON_SECRET` n'est pas définie (avant : ouverte).
 - Webhook Meta : signature `X-Hub-Signature-256` vérifiée dès que
   `META_APP_SECRET` est définie.
+- Webhooks du site, de n8n et de Zapier : secret partagé `WEBHOOK_SECRET`,
+  comparé à temps constant (`src/lib/acces/secret-webhook.ts`). **Rotation sans
+  perdre de lead** : poser le nouveau secret dans `WEBHOOK_SECRET` et l'ancien
+  dans `WEBHOOK_SECRET_PRECEDENT`, mettre à jour chaque expéditeur (site :
+  `CRM_WEBHOOK_SECRET` sur Vercel ; n8n ; URL Zapier ; scripts), puis retirer
+  `WEBHOOK_SECRET_PRECEDENT`.
 - Le fichier suit la convention `proxy.ts` de Next 16 (`middleware.ts` est dépréciée).
 
 ## 3. Tâches de fond

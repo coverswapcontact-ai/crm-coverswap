@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 
 // ============================================================================
 // BACKFILL — Rétablit les dates réelles des leads Meta importés avec NOW().
@@ -40,10 +41,7 @@ function extractLeadgenId(text: string | null | undefined): string | null {
 
 export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const secret = searchParams.get("secret");
-  const expected = process.env.WEBHOOK_SECRET || process.env.META_VERIFY_TOKEN;
-
-  if (!expected || secret !== expected) {
+  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 
@@ -142,10 +140,7 @@ export async function POST(request: NextRequest) {
 // GET = preview (nombre de leads concernés, sans modification)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const secret = searchParams.get("secret");
-  const expected = process.env.WEBHOOK_SECRET || process.env.META_VERIFY_TOKEN;
-
-  if (!expected || secret !== expected) {
+  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 

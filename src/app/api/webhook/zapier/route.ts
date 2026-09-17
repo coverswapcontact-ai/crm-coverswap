@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { sendConversionEvent } from "@/lib/meta";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
+import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 
 // ============================================================================
 // WEBHOOK — Zapier bridge pour leads Meta Ads
@@ -29,10 +30,7 @@ import { rattacherLead } from "@/lib/clients/identification";
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const secret = searchParams.get("secret");
-    const expected = process.env.WEBHOOK_SECRET || process.env.META_VERIFY_TOKEN;
-
-    if (!expected || secret !== expected) {
+    if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
       return NextResponse.json({ error: "Non autorise" }, { status: 403 });
     }
 
@@ -214,10 +212,7 @@ export async function POST(request: NextRequest) {
 // GET = healthcheck pour Zapier ("Test Request" pendant la config)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const secret = searchParams.get("secret");
-  const expected = process.env.WEBHOOK_SECRET || process.env.META_VERIFY_TOKEN;
-
-  if (!expected || secret !== expected) {
+  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 

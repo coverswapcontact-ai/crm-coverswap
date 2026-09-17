@@ -48,6 +48,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const leads = await client.lead.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const leadIds = leads.map((lead) => lead.id);
   const photosLead = await client.photoLead.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
+  const simulationsSite = await client.simulationSite.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
   const [interactions, simulations, devis, chantiers] = await Promise.all([
     client.interaction.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
     client.simulation.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
@@ -93,6 +94,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...dossiers.flatMap((dossier) => lirePhotos(dossier.photos)),
     ...chantiers.flatMap((chantier) => [...cheminsLocaux(chantier.photosAvant), ...cheminsLocaux(chantier.photosApres)]),
     ...photosLead.map((photo) => photo.chemin).filter((chemin) => chemin !== EFFACE),
+    ...simulationsSite.flatMap((s) => [s.imageBeforePath, s.imageAfterPath]).filter((chemin): chemin is string => Boolean(chemin)),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
   ];
@@ -119,6 +121,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       Interaction: interactions,
       Simulation: simulations,
       PhotoLead: photosLead,
+      SimulationSite: simulationsSite,
       Devis: devis.map((ligne) => Object.fromEntries(Object.entries(ligne).filter(([cle]) => cle !== "facture"))),
       Chantier: chantiers,
       Prospect: prospects,

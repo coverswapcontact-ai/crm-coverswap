@@ -7,10 +7,12 @@
 // l'anonymisation d'un client (RGPD).
 
 import type { CleParametre } from "@/lib/parametres/definitions";
+import type { SyntheseSite } from "@/lib/site/evenements";
 
 // 2 : ajout de agent.mails (les instantanés en version 1 n'en ont pas).
 // 3 : ajout de commercial.entrants (absent des instantanés en version 2 ou moins).
-export const VERSION_SYNTHESE = 3;
+// 4 : ajout de site (audience et entonnoir du site, absent des instantanés en version 3 ou moins).
+export const VERSION_SYNTHESE = 4;
 
 export type Repartition = { cle: string; libelle: string; valeur: number };
 
@@ -18,6 +20,8 @@ export type Synthese = {
   version: number;
   periode: { du: string; au: string; libelle: string };
   calculeLe: string;
+  /** Audience et entonnoir du site (événements envoyés par coverswap.fr), absent des anciens instantanés. */
+  site?: SyntheseSite;
 
   commercial: {
     /** Cohorte : dossiers ouverts dans la période, suivis jusqu'à aujourd'hui. */

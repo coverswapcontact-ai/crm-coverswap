@@ -54,6 +54,53 @@ model Lead {
   @@index([parcoursId])
 }
 
+// Simulation faite sur le site AVANT toute coordonnée : rattachée à un parcours
+// navigateur, puis à un lead quand la personne demande son devis. Sans demande
+// sous 30 jours, les images sont effacées et la ligne archivée (politique de
+// confidentialité du site).
+model SimulationSite {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  parcoursId       String
+  projet           String // cuisine | salle-de-bain | meubles | mur-plafond | professionnel
+  references       String    @default("[]") // JSON { zone, libelle, ref, nom }[]
+  referenceChoisie String?
+  imageBeforePath  String?
+  imageAfterPath   String?
+  page             String? // page du site d'où vient la simulation
+  source           String? // utm_source / medium, s'il y en a
+  campagne         String?
+  ipOrigine        String?
+  dureeMs          Int? // temps de génération
+  leadId           String? // renseigné au rattachement
+  simulationId     String? // Simulation créée sur le lead au rattachement
+  rattacheeLe      DateTime?
+  archiveLe        DateTime? // purge : images effacées, ligne conservée sans image
+  archiveMotif     String?
+  ecriture         String?
+
+  @@index([parcoursId])
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+// Événement de parcours sur le site (simulation lancée, résultat vu, devis
+// demandé…) : aucune donnée personnelle, un identifiant de parcours navigateur
+// et la page. Lu par la synthèse (audience par source et par page).
+model EvenementSite {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  parcoursId String
+  type       String
+  page       String?
+  source     String?
+  campagne   String?
+  meta       String? // JSON libre, court (projet, référence, raison d'échec…)
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+}
+
 // Photo jointe par la personne à sa demande (formulaire de devis du site) :
 // un fichier sous le dossier des téléversements, jamais accessible sans session.
 model PhotoLead {

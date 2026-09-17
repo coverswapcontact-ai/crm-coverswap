@@ -313,6 +313,48 @@ export default function TableauSynthese({
                 ) : null}
               </div>
             </div>
+            {synthese.site && synthese.site.parcours > 0 ? (
+              <div className={cn(CARTE, "mt-2.5 p-4 text-[13px]")}>
+                <p className="mb-1 text-[12px] text-[#9CA3AF]">Site : audience et entonnoir dans la période</p>
+                <p className="mb-3 text-[12.5px] text-[#6B7280]">
+                  {[
+                    `${synthese.site.parcours} parcours`,
+                    ...synthese.site.parType.filter((ligne) => ligne.cle !== "PAGE_VUE").map((ligne) => `${ligne.valeur} ${ligne.libelle.toLowerCase()}`),
+                    synthese.site.tauxCompletionSimulateur !== null ? `${synthese.site.tauxCompletionSimulateur} % de simulations abouties` : null,
+                    synthese.site.tauxDevisApresResultat !== null ? `${synthese.site.tauxDevisApresResultat} % de devis après résultat` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[420px] text-left tabular-nums">
+                    <thead>
+                      <tr className="text-[12px] text-[#6B7280]">
+                        <th className="pb-1.5 font-normal">Source</th>
+                        <th className="pb-1.5 text-right font-normal">Parcours</th>
+                        <th className="pb-1.5 text-right font-normal">Simulations</th>
+                        <th className="pb-1.5 text-right font-normal">Devis demandés</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {synthese.site.parSource.map((ligne) => (
+                        <tr key={ligne.cle} className="border-t-[0.5px] border-[#2A2D34]">
+                          <td className="py-1.5 text-[#D1D5DB]">{ligne.libelle}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.parcours}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.simulations}</td>
+                          <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.devis}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {synthese.site.parPage.length ? (
+                  <p className="mt-3 text-[12px] text-[#6B7280]">
+                    Pages : {synthese.site.parPage.slice(0, 6).map((ligne) => `${ligne.libelle} (${ligne.vues} vues, ${ligne.simulations} sim., ${ligne.devis} devis)`).join(" · ")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {c.entrants && c.entrants.recus > 0 ? (
               <div className={cn(CARTE, "mt-2.5 p-4 text-[13px]")}>
                 <p className="mb-1 text-[12px] text-[#9CA3AF]">Contacts entrants reçus dans la période</p>

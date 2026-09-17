@@ -7,6 +7,7 @@ import { rattacherLead } from "@/lib/clients/identification";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
+import { rattacherSimulationsSite } from "@/lib/site/simulations";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -39,6 +40,8 @@ const webhookSchema = z.object({
   parcoursId: z.string().regex(/^[0-9a-fA-F-]{16,64}$/, "parcoursId invalide").optional(),
   // Photos jointes à la demande (data URL), 4 au plus
   photos: z.array(z.string()).max(4).optional(),
+  // Simulations faites sur le site avant les coordonnées (SimulationSite), à rattacher
+  simulationIds: z.array(z.string().max(40)).max(10).optional(),
   // Consentement aux mails commerciaux : case distincte du formulaire, jamais présumé
   consentementMail: z.boolean().optional(),
   consentementTexte: z.string().max(1000).optional(),
@@ -261,11 +264,27 @@ export async function POST(request: NextRequest) {
     // ── Photos jointes à la demande (formulaire de devis) ──
     const photosEcrites = parsed.data.photos?.length ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;
 
+    // ── Simulations faites avant les coordonnées : rattachées à la fiche avec leurs images ──
+    let simulationsRattachees: string[] = [];
+    try {
+      simulationsRattachees = await rattacherSimulationsSite(lead.id, data.parcoursId, parsed.data.simulationIds ?? []);
+    } catch (erreurSimulations) {
+      console.error("[webhook] rattachement des simulations du site (non bloquant) :", erreurSimulations);
+    }
+
     // ── Handle simulation (images + record) ──
     const hasImages = !!(parsed.data.imageBefore || parsed.data.imageAfter);
     const isSimulation = data.source === "SITE_SIMULATEUR" || hasImages;
 
-    if (isSimulation) {
+    if (simulationsRattachees.length > 0 && !hasImages) {
+      await prisma.interaction.create({
+        data: {
+          type: "NOTE",
+          contenu: `${isNew ? "Lead reçu via le simulateur" : "Nouvelle demande via le simulateur"} (${data.source}) — ${simulationsRattachees.length} simulation(s) rattachée(s)${data.message ? ` — Message : ${data.message}` : ""}`,
+          leadId: lead.id,
+        },
+      });
+    } else if (isSimulation) {
       const simulation = await prisma.simulation.create({
         data: {
           leadId: lead.id,
@@ -358,7 +377,7 @@ export async function POST(request: NextRequest) {
     revalidatePath("/prospects");
 
     return NextResponse.json(
-      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites },
+      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites, simulations: simulationsRattachees.length },
       { status: 200 }
     );
   } catch (error) {

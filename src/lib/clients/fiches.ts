@@ -216,6 +216,7 @@ export async function chargerFiche(clientId: string): Promise<ClientDetail> {
         clientVille: true,
         montantEstime: true,
         createdAt: true,
+        ouvertLe: true,
         archiveLe: true,
         documents: {
           where: { type: "DEVIS", statut: { not: "BROUILLON" }, archiveLe: null },
@@ -284,8 +285,11 @@ export async function chargerFiche(clientId: string): Promise<ClientDetail> {
       ville: dossier.clientVille,
       montant: dossier.documents.find((document) => document.statut === "ACCEPTE")?.totalHt ?? dossier.documents[0]?.totalHt ?? dossier.montantEstime,
       createdAt: dossier.createdAt.toISOString(),
+      // Date réelle d'ouverture (reprise, ouverture redatée), sinon la saisie.
+      ouvertLe: (dossier.ouvertLe ?? dossier.createdAt).toISOString(),
       archiveLe: dossier.archiveLe?.toISOString() ?? null,
-    })),
+    }))
+      .sort((a, b) => b.ouvertLe.localeCompare(a.ouvertLe)),
     leads: client.leads.map((lead) => ({ ...lead, createdAt: lead.createdAt.toISOString() })),
     propositionsEnAttente: propositions,
     historique: journal.map((ligne) => ({

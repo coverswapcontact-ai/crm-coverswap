@@ -148,7 +148,10 @@ export default function ListeClients({
   }, [recherche, categorie, source, archives, filtresActifs]);
 
   const affiches = filtresActifs ? clients : initiaux;
-  const signes = useMemo(() => initiaux.filter((client) => client.montantSigne > 0).length, [initiaux]);
+  // Totaux sur toutes les fiches actives (la liste n'en charge que les plus récentes).
+  const totalClients = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clients, 0), [acquisition]);
+  const totalSignes = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clientsSignes, 0), [acquisition]);
+  const LIMITE_LISTE = 200;
 
   async function chercherDoublons() {
     setRechercheDoublons(true);
@@ -174,7 +177,7 @@ export default function ListeClients({
     <div className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
       <EnTetePage
         titre="Clients"
-        sousTitre={`${initiaux.length} client${initiaux.length > 1 ? "s" : ""} · ${signes} avec un devis signé`}
+        sousTitre={`${totalClients} client${totalClients > 1 ? "s" : ""} · ${totalSignes} avec un devis signé`}
         actions={
           <>
             <Bouton icone={<Copy size={14} aria-hidden />} chargement={rechercheDoublons} onClick={() => void chercherDoublons()}>
@@ -283,6 +286,13 @@ export default function ListeClients({
             ))}
           </ul>
         )}
+        {!filtresActifs && initiaux.length < totalClients ? (
+          <p className="mt-2 text-[12px] text-[#6B7280]">
+            Les {initiaux.length} fiches les plus récentes sur {totalClients} : cherche un nom, une ville, un e-mail ou un numéro pour trouver les autres.
+          </p>
+        ) : filtresActifs && clients.length >= LIMITE_LISTE ? (
+          <p className="mt-2 text-[12px] text-[#6B7280]">Les {LIMITE_LISTE} premiers résultats : précise la recherche pour trouver les autres.</p>
+        ) : null}
       </section>
 
       {creation ? <CreationClient categorieInitiale={creation} onFermer={() => setCreation(null)} /> : null}

@@ -67,6 +67,7 @@ export type ClientDetail = ClientResume & {
     ville: string;
     montant: number | null;
     createdAt: string;
+    ouvertLe: string;
     archiveLe: string | null;
   }[];
   leads: { id: string; source: string; statut: string; createdAt: string; campagne: string | null; formulaire: string | null }[];

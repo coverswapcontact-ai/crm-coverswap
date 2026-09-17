@@ -145,7 +145,8 @@ export const REGLES_ETAPES: Record<EtapeDossier, RegleEtape> = {
   },
   ENCAISSE: {
     description: "Solde encaissé — étape terminale",
-    responsable: "CLIENT",
+    // Plus personne n'a la main : ni badge « chez le client », ni place dans « À faire ».
+    responsable: null,
     entree: ["SOLDE_ENCAISSE"],
     sorties: [],
     terminale: true,

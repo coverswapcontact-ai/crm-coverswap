@@ -247,7 +247,7 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
       {attente.length > 0 ? (
         <div className={cn(CARTE, "mt-5 p-3.5")}>
           <p className="flex items-center gap-2 text-[13px] text-[#F5B454]">
-            <CloudOff size={15} aria-hidden /> {attente.length} dépense{attente.length > 1 ? "s" : ""} en attente d&apos;envoi sur ce téléphone
+            <CloudOff size={15} aria-hidden /> {`${attente.length} dépense${attente.length > 1 ? "s" : ""} en attente d'envoi sur ce téléphone`}
           </p>
           <ul className="mt-2 space-y-1.5">
             {attente.map((envoi) => (

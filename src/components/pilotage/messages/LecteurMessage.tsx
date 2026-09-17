@@ -69,7 +69,7 @@ function Analyses({ analyses }: { analyses: AnalyseVue[] }) {
   return (
     <section className="mt-4">
       <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
-        <Bot size={13} aria-hidden /> Ce que l&apos;agent en a compris
+        <Bot size={13} aria-hidden /> {"Ce que l'agent en a compris"}
       </p>
       <ul className="flex flex-col gap-2">
         {visibles.map((analyse) => (

@@ -465,7 +465,8 @@ export default function TableauSynthese({
             {agent.mails && agent.mails.recus > 0 ? (
               <p className="mt-2 text-[12.5px] leading-relaxed text-[#9CA3AF]">
                 Mails : {agent.mails.recus} reçus · {agent.mails.rangesSeuls} rangés seuls chez un client ({agent.mails.rangementsCorriges} rangés ailleurs ensuite) ·{" "}
-                {agent.mails.bruitArchiveSeul} publicités archivées seules ({agent.mails.bruitAnnule} remises dans la boîte) · {agent.mails.restantATrier} encore à trier · {agent.mails.lecturesIa} lectures par l&apos;IA (
+                {agent.mails.bruitArchiveSeul} publicités archivées seules ({agent.mails.bruitAnnule} remises dans la boîte) · {agent.mails.restantATrier} encore à trier · {agent.mails.lecturesIa}
+                {" lectures par l'IA ("}
                 {agent.mails.coutIa.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €)
               </p>
             ) : null}

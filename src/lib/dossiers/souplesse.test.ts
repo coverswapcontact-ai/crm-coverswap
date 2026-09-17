@@ -146,6 +146,26 @@ describe("dossiers souples", () => {
     assert.equal(liste.find((dossier) => dossier.id === dossierId)?.aCompleter, 8);
   });
 
+  test("ouvert depuis une fiche client, le contact entrant sans dossier en devient l'origine", async () => {
+    const client = await avecActeur(LUCAS, () => prisma.client.create({ data: { nom: "Nina Origine", source: "META_ADS", premierContactLe: new Date() } }));
+    const ancien = await avecActeur(LUCAS, () =>
+      prisma.lead.create({ data: { nom: "Origine", prenom: "Nina", telephone: "0611111111", ville: "Sète", source: "META_ADS", clientId: client.id, createdAt: new Date("2026-05-01") } })
+    );
+    const recent = await avecActeur(LUCAS, () =>
+      prisma.lead.create({ data: { nom: "Origine", prenom: "Nina", telephone: "0611111111", ville: "Sète", source: "SITE_DEVIS", clientId: client.id } })
+    );
+    const entree = dossiers.schemaCreation.parse({ clientNom: "Nina Origine", clientId: client.id });
+    const id = await avecActeur(LUCAS, () => dossiers.creerDossier(entree, []));
+    const cree = await prisma.dossier.findUniqueOrThrow({ where: { id } });
+    assert.equal(cree.leadId, recent.id, "le contact le plus récent sans dossier");
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: recent.id } })).statut, "CONTACTE");
+
+    const second = await avecActeur(LUCAS, () => dossiers.creerDossier(dossiers.schemaCreation.parse({ clientNom: "Nina Origine", clientId: client.id }), []));
+    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: second } })).leadId, ancien.id, "puis le suivant sans dossier");
+    const troisieme = await avecActeur(LUCAS, () => dossiers.creerDossier(dossiers.schemaCreation.parse({ clientNom: "Nina Origine", clientId: client.id }), []));
+    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: troisieme } })).leadId, null, "plus de contact libre : rien d'inventé");
+  });
+
   test("toute étape vers toute autre, dans les deux sens ; l'événement garde ce qui manquait", async () => {
     await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "QUALIFICATION" }));
     const vers = await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "FACTURE", dateChantier: "2026-07-20" }));

@@ -7,6 +7,7 @@ import path from "path";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
+import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 
 // Rate limiting (in-memory, resets on cold start)
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
@@ -190,12 +191,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Trop de requêtes. Réessayez dans 1 minute." }, { status: 429 });
     }
 
-    if (!process.env.WEBHOOK_SECRET) {
+    if (secretsWebhook().length === 0) {
       console.error("WEBHOOK_SECRET is not configured");
       return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 500 });
     }
-    const secret = request.headers.get("x-webhook-secret") || request.headers.get("X-Webhook-Secret");
-    if (secret !== process.env.WEBHOOK_SECRET) {
+    if (!secretWebhookValide(request.headers.get("x-webhook-secret"))) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 

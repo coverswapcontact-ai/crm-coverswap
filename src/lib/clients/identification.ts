@@ -158,6 +158,12 @@ export type OptionsRattachement = {
    * lead et laisse la détection des doublons proposer les fusions.
    */
   rechercherExistant?: boolean;
+  /**
+   * Client déclaré à l'ouverture d'un dossier : particulier ou entreprise (à
+   * défaut, déduit de la source du dossier), et le SIRET d'une entreprise.
+   */
+  categorie?: CategorieClient | null;
+  siret?: string | null;
 };
 
 /**
@@ -292,13 +298,18 @@ export async function rattacherDossier(
     if (prospect) clientId = await rattacherProspect(client, prospect, options);
   }
   const coordonnees = { emails: [dossier.clientEmail], telephones: [dossier.clientTelephone] };
+  const siret = options.siret?.replace(/\s/g, "") || null;
+  // Une entreprise se reconnaît d'abord à son SIRET, puis comme tout client à son e-mail ou son numéro.
+  if (!clientId && siret && options.rechercherExistant !== false) {
+    clientId = (await client.client.findFirst({ where: { siret, fusionneDansId: null }, orderBy: { updatedAt: "desc" }, select: { id: true } }))?.id ?? null;
+  }
   if (!clientId && options.rechercherExistant !== false) {
     const existant = await trouverClientParCoordonnees(coordonnees, client);
     clientId = existant?.id ?? null;
   }
   if (!clientId) {
     const { source, sourceDetail } = sourceDepuisDossier(dossier.source);
-    const categorie = categorieDepuisDossier(dossier.source);
+    const categorie = options.categorie ?? categorieDepuisDossier(dossier.source);
     const cree = await creerClient(client, {
       categorie,
       raisonSociale: categorie === "PARTICULIER" ? null : dossier.clientNom,
@@ -311,9 +322,12 @@ export async function rattacherDossier(
       premierContactLe: dossier.createdAt,
       ...coordonnees,
     });
+    if (siret && categorie !== "PARTICULIER") await client.client.update({ where: { id: cree.id }, data: { siret } });
     clientId = cree.id;
   } else {
     await completerCoordonnees(client, clientId, coordonnees);
+    // Fiche d'entreprise retrouvée sans SIRET : celui saisi la complète.
+    if (siret) await client.client.updateMany({ where: { id: clientId, siret: null, categorie: { not: "PARTICULIER" } }, data: { siret } });
     // L'adresse du premier chantier sert d'adresse au client qui n'en a pas.
     await client.client.updateMany({
       where: { id: clientId, adresse: null },

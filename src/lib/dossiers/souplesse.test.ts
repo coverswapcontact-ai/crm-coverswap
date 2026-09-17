@@ -166,6 +166,28 @@ describe("dossiers souples", () => {
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: troisieme } })).leadId, null, "plus de contact libre : rien d'inventé");
   });
 
+  test("entreprise déclarée à l'ouverture : fiche pro avec raison sociale et SIRET ; même SIRET, même fiche", async () => {
+    const ouvrir = (donnees: Record<string, unknown>) => avecActeur(LUCAS, () => dossiers.creerDossier(dossiers.schemaCreation.parse(donnees), []));
+    const ficheDu = async (dossierId: string) => {
+      const { clientId } = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } });
+      return prisma.client.findUniqueOrThrow({ where: { id: clientId! } });
+    };
+
+    const tilleuls = await ficheDu(await ouvrir({ clientNom: "SARL Les Tilleuls", clientCategorie: "PROFESSIONNEL", clientSiret: "732 829 320 00074", objet: "Comptoir" }));
+    assert.deepEqual([tilleuls.categorie, tilleuls.nom, tilleuls.raisonSociale, tilleuls.siret], ["PROFESSIONNEL", "SARL Les Tilleuls", "SARL Les Tilleuls", "73282932000074"]);
+    assert.equal((await ficheDu(await ouvrir({ clientNom: "Les Tilleuls, second site", clientCategorie: "PROFESSIONNEL", clientSiret: "73282932000074" }))).id, tilleuls.id, "même SIRET, même fiche");
+
+    const donneur = await ficheDu(await ouvrir({ clientNom: "Cuisines Martin", clientCategorie: "DONNEUR_ORDRE" }));
+    assert.deepEqual([donneur.categorie, donneur.raisonSociale, donneur.siret], ["DONNEUR_ORDRE", "Cuisines Martin", null]);
+
+    const particulier = await ficheDu(await ouvrir({ clientNom: "Jeanne Dupuis", clientCategorie: "PARTICULIER", clientSiret: "73282932000074" }));
+    assert.notEqual(particulier.id, tilleuls.id, "un particulier ne reprend pas le SIRET d'une entreprise");
+    assert.deepEqual([particulier.categorie, particulier.raisonSociale, particulier.siret], ["PARTICULIER", null, null]);
+
+    assert.equal((await ficheDu(await ouvrir({ clientNom: "Sans type déclaré", source: "SOUS_TRAITANCE" }))).categorie, "DONNEUR_ORDRE", "sans choix, la source décide comme avant");
+    assert.throws(() => dossiers.schemaCreation.parse({ clientNom: "Faute", clientCategorie: "PROFESSIONNEL", clientSiret: "732 829" }), /14 chiffres/);
+  });
+
   test("toute étape vers toute autre, dans les deux sens ; l'événement garde ce qui manquait", async () => {
     await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "QUALIFICATION" }));
     const vers = await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "FACTURE", dateChantier: "2026-07-20" }));

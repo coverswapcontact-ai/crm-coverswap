@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { FilePlus2, History, Plus, Receipt, Search, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { CaseACocher, Pastille, Puces } from "@/components/pilotage/ui";
-import type { ClientResume } from "@/lib/clients/types";
+import type { ClientResume, EntrepriseAnnuaire } from "@/lib/clients/types";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, LIBELLES_SOURCE, LIBELLES_STATUT_DOCUMENT, SOURCES_DOSSIER, type EtapeActive, type SourceDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
@@ -13,6 +13,7 @@ import type { NumeroLibre } from "@/lib/dossiers/registre";
 import { LIBELLES_MOYEN, MOYENS_PAIEMENT, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
+import { PARTICULIER, TypeClientDossier, erreurTypeClient, estEntreprise, sourceSelonSousTraitance, typeClientPourEnvoi, typeSelonSource, type TypeClientSaisi } from "./TypeClientDossier";
 import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "./ui";
 
 type Jalon = "DEVIS_ENVOYE" | "SIGNE" | "CHANTIER" | "FACTURE";
@@ -58,6 +59,7 @@ export function RepriseDossier({
   const [recherche, setRecherche] = useState("");
   const [clients, setClients] = useState<ClientResume[] | null>(null);
   const [champs, setChamps] = useState({ clientNom: "", clientTelephone: "", clientEmail: "", clientAdresse: "", clientCp: "", clientVille: "", objet: "", montantEstime: "" });
+  const [typeClient, setTypeClient] = useState<TypeClientSaisi>(PARTICULIER);
   const [source, setSource] = useState<SourceDossier | "">("");
   const [etape, setEtape] = useState<EtapeActive>("DEVIS_ENVOYE");
   const [ouvertLe, setOuvertLe] = useState("");
@@ -107,6 +109,18 @@ export function RepriseDossier({
     }));
     setRecherche("");
     setClients(null);
+  }
+
+  // Entreprise trouvée dans l'annuaire : raison sociale, et adresse si rien n'est encore saisi.
+  function remplirDepuisAnnuaire(entreprise: EntrepriseAnnuaire) {
+    setChamps((actuels) => {
+      const adresseVide = !actuels.clientAdresse.trim() && !actuels.clientCp.trim() && !actuels.clientVille.trim();
+      return {
+        ...actuels,
+        clientNom: entreprise.raisonSociale ?? actuels.clientNom,
+        ...(adresseVide ? { clientAdresse: entreprise.adresse ?? "", clientCp: entreprise.codePostal ?? "", clientVille: entreprise.ville ?? "" } : {}),
+      };
+    });
   }
 
   function ajouterDocument(type: "DEVIS" | "FACTURE") {
@@ -164,7 +178,8 @@ export function RepriseDossier({
     const erreur = montant === null || montant <= 0 ? "Montant manquant." : !ligne.recuLe || ligne.recuLe > aujourdhui ? "Date manquante ou à venir." : null;
     return { ligne, montant, erreur };
   });
-  const complet = champs.clientNom.trim() && documentsLus.every((lu) => !lu.erreur) && paiementsLus.every((lu) => !lu.erreur);
+  const siretFaux = client ? null : erreurTypeClient(typeClient);
+  const complet = champs.clientNom.trim() && !siretFaux && documentsLus.every((lu) => !lu.erreur) && paiementsLus.every((lu) => !lu.erreur);
 
   async function reprendre() {
     if (!complet) return;
@@ -186,6 +201,7 @@ export function RepriseDossier({
           source: source || null,
           montantEstime: montantEstime !== null && montantEstime >= 0 ? montantEstime : null,
           clientId: client?.id ?? null,
+          ...(client ? {} : typeClientPourEnvoi(typeClient)),
         },
         etape,
         dates: {
@@ -291,8 +307,19 @@ export function RepriseDossier({
               ) : null}
             </label>
           )}
+          {client ? null : (
+            <div className="mb-3">
+              <TypeClientDossier
+                valeur={typeClient}
+                onChange={setTypeClient}
+                onEntreprise={remplirDepuisAnnuaire}
+                onSousTraitance={(coche) => setSource((actuelle) => sourceSelonSousTraitance(actuelle, coche) as SourceDossier | "")}
+                champNom={<Champ libelle={estEntreprise(typeClient) ? "Raison sociale" : "Nom du client"} obligatoire value={champs.clientNom} onChange={changer("clientNom")} />}
+              />
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Champ libelle="Nom du client" obligatoire value={champs.clientNom} onChange={changer("clientNom")} classeConteneur="sm:col-span-2 lg:col-span-1" />
+            {client ? <Champ libelle="Nom du client" obligatoire value={champs.clientNom} onChange={changer("clientNom")} classeConteneur="sm:col-span-2 lg:col-span-1" /> : null}
             <Champ libelle="Téléphone" type="tel" inputMode="tel" value={champs.clientTelephone} onChange={changer("clientTelephone")} />
             <Champ libelle="E-mail" type="email" inputMode="email" value={champs.clientEmail} onChange={changer("clientEmail")} />
             <Champ libelle="Adresse du chantier" value={champs.clientAdresse} onChange={changer("clientAdresse")} classeConteneur="sm:col-span-2 lg:col-span-1" />
@@ -309,7 +336,11 @@ export function RepriseDossier({
               libelle="Source"
               options={[{ valeur: "", libelle: "Non renseignée" }, ...SOURCES_DOSSIER.filter((valeur) => valeur !== "INCONNUE").map((valeur) => ({ valeur, libelle: LIBELLES_SOURCE[valeur] }))]}
               value={source}
-              onChange={(evenement) => setSource(evenement.target.value as SourceDossier | "")}
+              onChange={(evenement) => {
+                const suivante = evenement.target.value as SourceDossier | "";
+                setSource(suivante);
+                if (!client) setTypeClient((actuel) => typeSelonSource(actuel, suivante));
+              }}
             />
             <Champ libelle="Montant estimé (€)" inputMode="decimal" value={champs.montantEstime} onChange={changer("montantEstime")} />
           </div>

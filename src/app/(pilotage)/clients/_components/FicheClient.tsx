@@ -402,7 +402,8 @@ function Consentement({ client, onMiseAJour }: { client: ClientDetail; onMiseAJo
         </>
       ) : (
         <p className="text-[13px] text-[#9CA3AF]">
-          Aucune réponse enregistrée : <span className="text-[#F2F3F5]">pas de mail commercial</span> tant que le client n&apos;a pas dit oui.
+          Aucune réponse enregistrée : <span className="text-[#F2F3F5]">pas de mail commercial</span>
+          {" tant que le client n'a pas dit oui."}
         </p>
       )}
 
@@ -828,7 +829,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
                       <span className="min-w-0">
                         <span className="block truncate text-[13.5px] text-[#F2F3F5]">{dossier.objet}</span>
                         <span className="text-[12px] text-[#6B7280]">
-                          {dossier.ville} · ouvert le {formatDateCourte(dossier.createdAt)}
+                          {dossier.ville} · ouvert le {formatDateCourte(dossier.ouvertLe)}
                           {dossier.archiveLe ? " · archivé" : ""}
                         </span>
                       </span>

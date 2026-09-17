@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { formatEuros } from "@/lib/utils";
 import { getGamme, type LigneAdditionnelle } from "@/lib/calcul-devis";
 import React from "react";
 import {
@@ -10,7 +9,6 @@ import {
   View,
   StyleSheet,
   renderToBuffer,
-  Font,
 } from "@react-pdf/renderer";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -305,9 +303,7 @@ function DevisPDF({ d }: { d: DevisData }) {
         <Text style={s.note}>*ml = mètre linéaire</Text>
 
         <Text style={s.prestationNote}>
-          Le tarif au mètre linéaire posé comprend l'intégralité de la prestation :
-          fourniture et pose du revêtement, restauration éventuelle de la surface ou
-          du meuble dégradé si nécessaire, ainsi que le nettoyage final.
+          {"Le tarif au mètre linéaire posé comprend l'intégralité de la prestation : fourniture et pose du revêtement, restauration éventuelle de la surface ou du meuble dégradé si nécessaire, ainsi que le nettoyage final."}
         </Text>
 
         {/* Conditions */}
@@ -315,12 +311,10 @@ function DevisPDF({ d }: { d: DevisData }) {
         <Text style={s.condItem}>• Acompte de 30% à la signature : {euros(d.acompte30)} TTC</Text>
         <Text style={s.condItem}>• Solde de {euros(d.solde70)} TTC à la réception des travaux</Text>
         <Text style={s.condItem}>• Paiement par virement, chèque ou espèces</Text>
-        <Text style={s.condItem}>• Devis valable 30 jours (jusqu'au {d.expiresDate})</Text>
+        <Text style={s.condItem}>{`• Devis valable 30 jours (jusqu'au ${d.expiresDate})`}</Text>
 
         {/* Signature */}
-        <Text style={s.signature}>
-          Signature du client précédée de la mention "Bon pour accord" :
-        </Text>
+        <Text style={s.signature}>{'Signature du client précédée de la mention "Bon pour accord" :'}</Text>
       </Page>
     </Document>
   );

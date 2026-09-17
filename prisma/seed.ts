@@ -22,7 +22,7 @@ async function main() {
       scoreSignature: 65, createdAt: subDays(now, 10), updatedAt: subDays(now, 10),
     },
   });
-  const lead2 = await prisma.lead.create({
+  await prisma.lead.create({
     data: {
       nom: "Martin", prenom: "Thomas", telephone: "06 23 45 67 89",
       ville: "Nîmes", codePostal: "30000", source: "TIKTOK", statut: "NOUVEAU",
@@ -64,7 +64,7 @@ async function main() {
     data: { type: "APPEL", contenu: "Restaurant à rénover, 25ml de comptoir. Demande devis détaillé.", leadId: lead5.id },
   });
 
-  const lead6 = await prisma.lead.create({
+  await prisma.lead.create({
     data: {
       nom: "Leroy", prenom: "Emma", telephone: "06 67 89 01 23", email: "emma.leroy@gmail.com",
       ville: "Perpignan", codePostal: "66000", source: "REFERENCE", statut: "CONTACTE",

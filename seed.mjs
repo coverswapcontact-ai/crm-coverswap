@@ -23,11 +23,6 @@ const REFS_CUISINE = ["AA04", "AA12", "AA21", "MK14", "NE24", "K1", "KI01", "LP0
 const REFS_SDB = ["MK14", "MK02", "NE24", "AA21", "K1"];
 const REFS_MEUBLES = ["AA04", "AA12", "LP04", "K1", "KI01"];
 
-const STATUTS_PIPELINE = [
-  "NOUVEAU", "NOUVEAU", "CONTACTE", "CONTACTE", "DEVIS_ENVOYE",
-  "DEVIS_ENVOYE", "SIGNE", "SIGNE", "CHANTIER_PLANIFIE", "TERMINE", "TERMINE", "PERDU"
-];
-
 async function main() {
   // Rien ne se supprime (la base refuse les DELETE) : base vide uniquement.
   const existants = await prisma.lead.count();

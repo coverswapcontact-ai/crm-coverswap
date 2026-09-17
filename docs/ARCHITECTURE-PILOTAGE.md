@@ -826,9 +826,12 @@ JSON (`/api/synthese/export`).
 
 - **Commercial** : cohorte (dossiers ouverts dans la période, suivis jusqu'à
   aujourd'hui : devis, signés, encaissés, perdus, taux de signature, par
-  source) et activité de la période (devis émis, signatures, factures, avoirs,
-  pertes) ; délais médians entre étapes ; écart moyen entre premier devis et
-  devis signé ; pertes par motif, par étape, concurrents et leur écart de prix.
+  source) ; contacts entrants reçus dans la période par source d'arrivée (site,
+  simulateur, Meta…), suivis jusqu'au dossier et à la signature (les archivés
+  ne comptent pas ; absent des mois figés avant la version 3) ; activité de la
+  période (devis émis, signatures, factures, avoirs, pertes) ; délais médians
+  entre étapes ; écart moyen entre premier devis et devis signé ; pertes par
+  motif, par étape, concurrents et leur écart de prix.
 - **Finances** : encaissé (livre des recettes) par mois, par origine des
   clients, par type de client, par département ; dépenses par catégorie ; marge
   brute ; paniers moyens ; reste à encaisser ; marge des dossiers facturés.
@@ -1441,8 +1444,9 @@ manque sans rien écraser (clé : `googlePlaceId`) et reste rejouable.
   aussi depuis le registre des numéros), tableau et fiche de prospection (les
   indicateurs et la file de validation factices de l'ancien écran ne sont pas
   repris : la validation est `/validation`).
-- **Abandonné** : tableau de bord (remplacé par Dossiers et Synthèse),
-  statistiques par source (Synthèse), assistant conversationnel sans accès aux
+- **Abandonné** : tableau de bord (remplacé par Dossiers et Synthèse ; les
+  statistiques par source de l'ancien écran sont réécrites dans la Synthèse,
+  section 14), assistant conversationnel sans accès aux
   données, kanban des leads (les groupes le remplacent), écrans chantiers et
   commandes de matière (les dossiers et leur prochaine action les remplacent ;
   les données restent en base, lisibles sur la fiche du contact), route

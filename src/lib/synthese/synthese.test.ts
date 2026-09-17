@@ -81,6 +81,18 @@ before(async () => {
     perteMontantPropose: 1000,
   });
 
+  // Contacts entrants de mars : Meta passé en dossier (D1, signé) ; simulateur jamais rappelé ; demande de
+  // devis sans suite ; Meta signé dans l'ancien CRM. Hors période : février, et un doublon archivé.
+  const lead = (source: string, statut: string, jour: string, extra: Record<string, unknown> = {}) =>
+    prisma.lead.create({ data: { nom: "Contact", prenom: source, telephone: "0600000000", ville: "Sète", source, statut, createdAt: le(jour), ...extra } });
+  const leadD1 = await lead("META_ADS", "CONTACTE", "2026-03-05");
+  await prisma.dossier.update({ where: { id: d1 }, data: { leadId: leadD1.id } });
+  await lead("SITE_SIMULATEUR", "NOUVEAU", "2026-03-07");
+  await lead("SITE_DEVIS", "PERDU", "2026-03-09");
+  await lead("META_ADS", "TERMINE", "2026-03-20");
+  await lead("META_ADS", "NOUVEAU", "2026-02-20");
+  await lead("SITE_DEVIS", "NOUVEAU", "2026-03-21", { archiveLe: le("2026-03-22"), archiveMotif: "Doublon" });
+
   // Ancienne cliente, encaissée il y a longtemps, qui repaie en mars.
   const d3 = await dossier("Chantal Vidal", chantal.id, "AUTRE", "2025-01-10", "ENCAISSE");
   await prisma.dossier.update({ where: { id: d3 }, data: { updatedAt: le("2025-02-01") } });
@@ -115,6 +127,24 @@ describe("synthèse d'une période", () => {
     assert.equal(commercial.ecartPrixMoyenPct, -10);
     assert.deepEqual(commercial.pertes.parMotif, [{ cle: "PRIX", libelle: "Prix", valeur: 1 }]);
     assert.deepEqual(commercial.pertes.concurrents, [{ nom: "Cuisines Martin", nombre: 1, ecartMoyenPct: -20 }]);
+  });
+
+  test("contacts entrants : reçus dans la période, suivis jusqu'au dossier et à la signature, par source", async () => {
+    const { entrants } = (await calcul.calculerSynthese(MARS.du, MARS.au)).commercial;
+    assert.ok(entrants);
+    assert.deepEqual(
+      { recus: entrants.recus, contactes: entrants.contactes, avecDossier: entrants.avecDossier, signes: entrants.signes, sansSuite: entrants.sansSuite },
+      { recus: 4, contactes: 3, avecDossier: 1, signes: 2, sansSuite: 1 },
+      "février et le doublon archivé ne comptent pas"
+    );
+    assert.deepEqual(
+      [...entrants.parSource].sort((a, b) => a.cle.localeCompare(b.cle)),
+      [
+        { cle: "META_ADS", libelle: "Publicité Meta", recus: 2, avecDossier: 1, signes: 2 },
+        { cle: "SITE_DEVIS", libelle: "Site : demande de devis", recus: 1, avecDossier: 0, signes: 0 },
+        { cle: "SITE_SIMULATEUR", libelle: "Site : simulateur", recus: 1, avecDossier: 0, signes: 0 },
+      ]
+    );
   });
 
   test("finances, clients, agent, qualité : sans aucun nom de personne", async () => {

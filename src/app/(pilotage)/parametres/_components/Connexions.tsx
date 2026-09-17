@@ -199,7 +199,7 @@ export default function Connexions({ retour }: { retour: { google: string | null
           )}
           <div className="mt-3 border-t-[0.5px] border-[#2A2D34] pt-3 text-[12.5px] text-[#9CA3AF]">
             <p className="flex items-center gap-1.5 text-[#D1D5DB]">
-              <Bot size={13} aria-hidden /> Lecture des mails par l&apos;IA
+              <Bot size={13} aria-hidden /> {"Lecture des mails par l'IA"}
             </p>
             {agent.ia.active ? (
               <p className="mt-1">

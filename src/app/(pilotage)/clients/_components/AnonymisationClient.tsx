@@ -99,13 +99,14 @@ export function AnonymisationClient({ client, onAnonymise }: { client: ClientDet
               <p className="text-[#9CA3AF]">
                 Nom, adresse, e-mails, téléphones, notes ; {pluriel(apercu.efface.dossiers, "dossier")} (coordonnées, notes, texte libre de l&apos;historique) ;{" "}
                 {pluriel(apercu.efface.photos, "photo")} et pièce{apercu.efface.photos > 1 ? "s" : ""} jointe{apercu.efface.photos > 1 ? "s" : ""} ; {pluriel(apercu.efface.mails, "mail")} ;{" "}
-                {pluriel(apercu.efface.propositions, "proposition")} de l&apos;agent ; les copies de tout cela dans le journal et, pour les photos, dans Drive.
+                {pluriel(apercu.efface.propositions, "proposition")}
+                {" de l'agent ; les copies de tout cela dans le journal et, pour les photos, dans Drive."}
               </p>
             </div>
             <div>
               <p className="font-medium text-[#F2F3F5]">Gardé</p>
               <p className="text-[#9CA3AF]">
-                {pluriel(apercu.garde.documentsEmis, "document émis")} (factures, avoirs, devis, avec l&apos;identité imprimée) et {pluriel(apercu.garde.encaissements, "paiement")} (payeur, montant) :
+                {`${apercu.garde.documentsEmis} document${apercu.garde.documentsEmis > 1 ? "s" : ""} émis`} (factures, avoirs, devis, avec l&apos;identité imprimée) et {pluriel(apercu.garde.encaissements, "paiement")} (payeur, montant) :
                 conservation légale. Étapes, montants et dates restent pour les statistiques, sans nom (référence {apercu.reference}).
               </p>
             </div>

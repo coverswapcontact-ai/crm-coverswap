@@ -227,7 +227,7 @@ export function ModaleDocumentExistant({
           <div className="rounded-[9px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2.5">
             <p className="flex items-start gap-1.5 text-[12.5px] text-[#F5B454]">
               <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
-              {numero.trim()} n&apos;est pas au registre des numéros. Vérifie la saisie : un numéro inscrit y reste pour toujours.
+              {`${numero.trim()} n'est pas au registre des numéros. Vérifie la saisie : un numéro inscrit y reste pour toujours.`}
             </p>
             <Bouton className="mt-2" taille="sm" variante="secondaire" chargement={envoi} onClick={() => void enregistrer(true)}>
               L&apos;inscrire au registre et le rattacher

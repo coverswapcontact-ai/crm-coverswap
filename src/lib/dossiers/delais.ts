@@ -86,7 +86,9 @@ export function delaisCles(parcours: PassageEtape[]): DelaisCles {
   const premier = (etape: EtapeDossier) => connus.find((passage) => passage.etape === etape)?.debut ?? null;
   const ecart = (de: string | null, a: string | null) =>
     de && a && new Date(a) >= new Date(de) ? new Date(a).getTime() - new Date(de).getTime() : null;
-  const ouverture = parcours[0] && !parcours[0].dateInconnue ? parcours[0].debut : null;
+  // L'ouverture, même si une date corrigée place un autre passage avant elle.
+  const passageOuverture = parcours.find((passage) => passage.ouverture) ?? parcours[0];
+  const ouverture = passageOuverture && !passageOuverture.dateInconnue ? passageOuverture.debut : null;
   return {
     ouvertureASignature: ecart(ouverture, premier("SIGNE")),
     signatureAChantier: ecart(premier("SIGNE"), premier("CHANTIER")),

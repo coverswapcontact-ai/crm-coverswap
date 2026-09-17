@@ -45,6 +45,26 @@ describe("délais", () => {
     assert.equal(formatDuree(5 * 60 * 60_000), "5 h");
   });
 
+  test("une date du jour ne tombe jamais dans le futur", async () => {
+    const { instantDuJour } = await import("./dates");
+    const troisHeures = new Date("2026-09-17T01:00:00.000Z");
+    assert.equal(instantDuJour("2026-09-17", troisHeures).toISOString(), "2026-09-17T01:00:00.000Z", "aujourd'hui à 3 h : maintenant, pas midi");
+    assert.equal(instantDuJour("2026-09-10", troisHeures).toISOString(), "2026-09-10T12:00:00.000Z", "un jour passé : midi");
+  });
+
+  test("un passage daté avant l'ouverture ne déplace pas l'ouverture", () => {
+    const parcours = parcoursEtapes(
+      [
+        { createdAt: jour(10), vers: "QUALIFICATION", ouverture: true },
+        { createdAt: jour(12), vers: "SIGNE" },
+        { createdAt: jour(15), survenuLe: jour(3), vers: "CHANTIER" },
+      ],
+      jour(20)
+    );
+    assert.deepEqual(parcours.map((passage) => passage.etape), ["CHANTIER", "QUALIFICATION", "SIGNE"], "remis dans l'ordre des dates");
+    assert.equal(delaisCles(parcours).ouvertureASignature, 2 * JOUR, "compté depuis l'ouverture, pas depuis le passage le plus ancien");
+  });
+
   test("écart entre premier devis et devis signé ; brouillons ignorés", () => {
     const ecarts = ecartsPrix(
       [

@@ -15,7 +15,7 @@ import {
   type TypeDocument,
   type TypeEvenement,
 } from "./constants";
-import { dateDepuisJour, estJourValide, jourParis } from "./dates";
+import { dateDepuisJour, estJourValide, instantDuJour, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
@@ -576,9 +576,9 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   await prisma.$transaction(async (tx) => {
     if (ouvertLe) {
       // La date d'ouverture est celle de l'événement d'ouverture : les deux restent d'accord.
-      data.ouvertLe = dateDepuisJour(ouvertLe);
+      data.ouvertLe = instantDuJour(ouvertLe);
       const ouverture = await evenementOuverture(tx, dossierId);
-      if (ouverture) await tx.dossierEvenement.update({ where: { id: ouverture.id }, data: { survenuLe: dateDepuisJour(ouvertLe) } });
+      if (ouverture) await tx.dossierEvenement.update({ where: { id: ouverture.id }, data: { survenuLe: instantDuJour(ouvertLe) } });
     }
     if (clientId !== undefined && clientId !== dossier.clientId) {
       const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, nom: true, archiveLe: true } });
@@ -646,7 +646,7 @@ export async function modifierDateEvenement(dossierId: string, evenementId: stri
     const metadata = evenement.type === "CHANGEMENT_ETAPE" ? lireMetadataChangementEtape(evenement.metadata) : null;
     if (!metadata) throw new ErreurMetier("Seule la date d'un passage d'étape se corrige ici.", 400);
 
-    const date = dateDepuisJour(entree.survenuLe);
+    const date = instantDuJour(entree.survenuLe);
     const sansInconnue = { ...metadata };
     delete sansInconnue.dateInconnue;
     await tx.dossierEvenement.update({

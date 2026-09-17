@@ -149,6 +149,7 @@ export async function chargerEntrant(id: string, maintenant: Date = new Date()):
     include: {
       ...inclusionResume,
       simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" } },
+      photos: { where: { archiveLe: null }, orderBy: { createdAt: "asc" } },
       interactions: { where: { archiveLe: null }, orderBy: { createdAt: "desc" } },
       dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, select: { id: true, etape: true, objet: true, ouvertLe: true, createdAt: true } },
       devis: { orderBy: { createdAt: "desc" }, select: { id: true, numero: true, statut: true, prixVente: true, createdAt: true, facture: { select: { id: true, numero: true } } } },
@@ -166,6 +167,9 @@ export async function chargerEntrant(id: string, maintenant: Date = new Date()):
     nomFamille: lead.nom,
     codePostal: lead.codePostal,
     notes: lead.notes,
+    message: lead.message,
+    styleSouhaite: lead.styleSouhaite,
+    photos: lead.photos.map((photo) => ({ id: photo.id, url: `/api/uploads/${photo.chemin}`, le: photo.createdAt.toISOString() })),
     campagne: lead.campagne,
     publicite: lead.publicite,
     formulaire: lead.formulaire,

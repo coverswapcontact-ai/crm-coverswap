@@ -2,29 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { z } from "zod/v4";
 import { revalidatePath } from "next/cache";
-import { promises as fs } from "fs";
-import path from "path";
-import { resolveUploadsDir } from "@/lib/uploads";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
-
-// Rate limiting (in-memory, resets on cold start)
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 30;
-const RATE_LIMIT_WINDOW = 60_000;
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimit.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimit.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return true;
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false;
-  entry.count++;
-  return true;
-}
+import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
+import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -50,6 +32,13 @@ const webhookSchema = z.object({
   prixDevis: z.number().optional(),
   lienSimulation: z.string().optional(),
   notes: z.string().optional(),
+  // Champs structurés du site (17/09/2026)
+  message: z.string().max(4000).optional(),
+  styleSouhaite: z.string().max(200).optional(),
+  // Identifiant du parcours navigateur : simulation puis devis = même fiche
+  parcoursId: z.string().regex(/^[0-9a-fA-F-]{16,64}$/, "parcoursId invalide").optional(),
+  // Photos jointes à la demande (data URL), 4 au plus
+  photos: z.array(z.string()).max(4).optional(),
   // Consentement aux mails commerciaux : case distincte du formulaire, jamais présumé
   consentementMail: z.boolean().optional(),
   consentementTexte: z.string().max(1000).optional(),
@@ -87,6 +76,9 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
     mlEstimes: body.mlEstimes,
     lienSimulation: body.lienSimulation,
     notes,
+    message: body.message?.trim() || undefined,
+    styleSouhaite: body.styleSouhaite?.trim() || undefined,
+    parcoursId: body.parcoursId,
     formulaire: body.form_name,
     publicite: body.ad_name,
     campagne: body.campaign_name,
@@ -107,7 +99,7 @@ function calculateScore(data: ReturnType<typeof normalizeData>): number {
 
   const nearMontpellier = ["montpellier", "lattes", "perols", "castelnau", "mauguio", "palavas", "grabels", "juvignac", "saint-jean-de-vedas", "villeneuve-les-maguelone"];
   const majorCities = ["nimes", "beziers", "sete", "perpignan", "narbonne", "ales", "lunel"];
-  const cityLower = data.ville.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const cityLower = data.ville.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   if (nearMontpellier.some(c => cityLower.includes(c))) score += 20;
   else if (majorCities.some(c => cityLower.includes(c))) score += 10;
 
@@ -130,7 +122,17 @@ function normalizePhone(phone: string): string {
   return digits;
 }
 
-async function findExistingLead(telephone: string, email?: string) {
+const FENETRE_PARCOURS_MS = 24 * 60 * 60 * 1000;
+
+async function findExistingLead(telephone: string, email?: string, parcoursId?: string) {
+  // Même parcours navigateur (simulation puis devis 1-clic) : même fiche, avant toute autre règle.
+  if (parcoursId) {
+    const memeParcours = await prisma.lead.findFirst({
+      where: { parcoursId, createdAt: { gte: new Date(Date.now() - FENETRE_PARCOURS_MS) } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (memeParcours) return memeParcours;
+  }
   const normalized = normalizePhone(telephone);
   const candidates = await prisma.lead.findMany({
     where: {
@@ -150,53 +152,31 @@ async function findExistingLead(telephone: string, email?: string) {
   return match || null;
 }
 
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 MB décodés (pour garder la photo originale full size)
-
-// Strip data URL prefix and write base64 to file. Returns relative path.
-// Ne throw JAMAIS — retourne null en cas d'échec (lead/simulation restent OK).
-async function saveBase64Image(
-  base64: string,
-  leadId: string,
-  simulationId: string,
-  filename: string
-): Promise<string | null> {
-  try {
-    if (!base64 || typeof base64 !== "string") return null;
-    const m = base64.match(/^data:([^;]+);base64,(.+)$/);
-    const raw = m ? m[2] : base64;
-    // Vérif taille avant décode
-    const approxBytes = Math.floor((raw.length * 3) / 4);
-    if (approxBytes > MAX_IMAGE_BYTES) {
-      console.warn(`[webhook] Image trop grosse (${Math.round(approxBytes / 1024)}KB), ignorée`);
-      return null;
-    }
-    const buf = Buffer.from(raw, "base64");
-    const baseDir = resolveUploadsDir();
-    const dir = path.join(baseDir, leadId, simulationId);
-    await fs.mkdir(dir, { recursive: true });
-    const full = path.join(dir, filename);
-    await fs.writeFile(full, buf);
-    return `${leadId}/${simulationId}/${filename}`;
-  } catch (err) {
-    // Ne jamais casser le webhook pour un échec d'écriture image
-    console.error("[webhook] Échec sauvegarde image (non bloquant):", err);
-    return null;
-  }
+/** Demandes récentes d'un même contact (téléphone ou e-mail) : la limite anti-abus par contact. */
+async function demandesRecentesDuContact(telephone: string, email?: string): Promise<number> {
+  const depuis = new Date(Date.now() - LIMITE_PAR_CONTACT.fenetreMs);
+  const conditions = [telephone ? { telephone } : undefined, email ? { email } : undefined].filter(Boolean) as { telephone?: string; email?: string }[];
+  if (conditions.length === 0) return 0;
+  const leads = await prisma.lead.findMany({ where: { OR: conditions }, select: { id: true } });
+  if (leads.length === 0) return 0;
+  return prisma.interaction.count({ where: { leadId: { in: leads.map((l) => l.id) }, createdAt: { gte: depuis }, type: "NOTE" } });
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
-    if (!checkRateLimit(ip)) {
-      return NextResponse.json({ error: "Trop de requêtes. Réessayez dans 1 minute." }, { status: 429 });
-    }
-
     if (secretsWebhook().length === 0) {
       console.error("WEBHOOK_SECRET is not configured");
       return NextResponse.json({ error: "Configuration serveur manquante" }, { status: 500 });
     }
     if (!secretWebhookValide(request.headers.get("x-webhook-secret"))) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    }
+
+    // Limite par visiteur : l'IP transmise par le site (secret vérifié, donc de confiance), sinon l'appelant.
+    const ipVisiteur = ipDuVisiteur(request.headers);
+    if (ipDepasseLaLimite(ipVisiteur)) {
+      console.warn(`[webhook] limite par IP atteinte (${ipVisiteur})`);
+      return NextResponse.json({ error: "Trop de demandes depuis cette adresse. Réessayez dans quelques minutes." }, { status: 429 });
     }
 
     const body = await request.json();
@@ -217,8 +197,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nom ou téléphone requis au minimum" }, { status: 400 });
     }
 
-    // ── DEDUP: existing lead by phone OR email? ──
-    const existing = await findExistingLead(data.telephone, data.email);
+    // Limite par contact : un même téléphone / e-mail ne peut pas envoyer sans fin.
+    if (contactDepasseLaLimite(await demandesRecentesDuContact(data.telephone, data.email))) {
+      console.warn(`[webhook] limite par contact atteinte (${data.telephone} / ${data.email ?? "-"})`);
+      return NextResponse.json({ error: "Nous avons déjà bien reçu vos demandes. Nous vous rappelons très vite." }, { status: 429 });
+    }
+
+    // ── DEDUP: same browser journey, then existing lead by phone OR email ──
+    const existing = await findExistingLead(data.telephone, data.email, data.parcoursId);
 
     let lead;
     let isNew = false;
@@ -235,6 +221,9 @@ export async function POST(request: NextRequest) {
       if (!existing.referenceChoisie && data.referenceChoisie) updates.referenceChoisie = data.referenceChoisie;
       if (!existing.mlEstimes && data.mlEstimes) updates.mlEstimes = data.mlEstimes;
       if (!existing.prixDevis && data.prixDevis) updates.prixDevis = data.prixDevis;
+      if (!existing.message && data.message) updates.message = data.message;
+      if (!existing.styleSouhaite && data.styleSouhaite) updates.styleSouhaite = data.styleSouhaite;
+      if (!existing.parcoursId && data.parcoursId) updates.parcoursId = data.parcoursId;
       // Si le nouveau lead est un SITE_DEVIS, élever le statut
       if (data.source === "SITE_DEVIS" && existing.statut === "NOUVEAU") {
         updates.statut = "DEVIS_DEMANDE";
@@ -246,12 +235,13 @@ export async function POST(request: NextRequest) {
       isNew = true;
       const scoreSignature = calculateScore(data);
       lead = await prisma.lead.create({
-        data: { ...data, scoreSignature },
+        data: { ...data, ipOrigine: ipVisiteur === "inconnue" ? null : ipVisiteur, scoreSignature },
       });
     }
 
     // ── Client pérenne : retrouvé par e-mail ou téléphone, sinon créé ──
     // Jamais bloquant : un lead sans client est rattrapé par le travail périodique.
+    const consentement = parsed.data.consentementMail === undefined ? null : parsed.data.consentementMail ? "ACCORDE" : "REFUSE";
     try {
       await rattacherLead(
         prisma,
@@ -268,6 +258,9 @@ export async function POST(request: NextRequest) {
     } catch (erreurClient) {
       console.error("[webhook] rattachement du client (non bloquant) :", erreurClient);
     }
+
+    // ── Photos jointes à la demande (formulaire de devis) ──
+    const photosEcrites = parsed.data.photos?.length ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;
 
     // ── Handle simulation (images + record) ──
     const hasImages = !!(parsed.data.imageBefore || parsed.data.imageAfter);
@@ -286,15 +279,10 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const imageBeforePath = parsed.data.imageBefore
-        ? await saveBase64Image(parsed.data.imageBefore, lead.id, simulation.id, "before.jpg")
-        : null;
-      const imageAfterPath = parsed.data.imageAfter
-        ? await saveBase64Image(parsed.data.imageAfter, lead.id, simulation.id, "after.jpg")
-        : null;
-      const imageOriginalPath = parsed.data.imageOriginal
-        ? await saveBase64Image(parsed.data.imageOriginal, lead.id, simulation.id, "original.jpg")
-        : null;
+      const dossier = `${lead.id}/${simulation.id}`;
+      const imageBeforePath = parsed.data.imageBefore ? await enregistrerImageBase64(parsed.data.imageBefore, dossier, "before.jpg") : null;
+      const imageAfterPath = parsed.data.imageAfter ? await enregistrerImageBase64(parsed.data.imageAfter, dossier, "after.jpg") : null;
+      const imageOriginalPath = parsed.data.imageOriginal ? await enregistrerImageBase64(parsed.data.imageOriginal, dossier, "original.jpg") : null;
 
       if (imageBeforePath || imageAfterPath || imageOriginalPath) {
         await prisma.simulation.update({
@@ -306,16 +294,19 @@ export async function POST(request: NextRequest) {
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `Nouvelle simulation cuisine (${data.source})${data.referenceChoisie ? ` — réf. ${data.referenceChoisie}` : ""}${data.notes ? ` — ${data.notes}` : ""}`,
+          contenu: `Nouvelle simulation (${data.source})${data.referenceChoisie ? ` — réf. ${data.referenceChoisie}` : ""}${data.notes ? ` — ${data.notes}` : ""}`,
           leadId: lead.id,
         },
       });
     } else {
       const prefix = isNew ? "Lead reçu via webhook" : "Nouveau contact du client";
+      const details = [data.notes, data.message ? `Message : ${data.message}` : null, data.styleSouhaite ? `Style : ${data.styleSouhaite}` : null, photosEcrites ? `${photosEcrites} photo(s) jointe(s)` : null]
+        .filter(Boolean)
+        .join(" — ");
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `${prefix} (${data.source})${data.notes ? ` — ${data.notes}` : ""}`,
+          contenu: `${prefix} (${data.source})${details ? ` — ${details}` : ""}`,
           leadId: lead.id,
         },
       });
@@ -348,10 +339,13 @@ export async function POST(request: NextRequest) {
               <tr><td style="padding:4px 12px;font-weight:bold;">Nom</td><td>${data.prenom} ${data.nom}</td></tr>
               <tr><td style="padding:4px 12px;font-weight:bold;">Téléphone</td><td>${data.telephone || "—"}</td></tr>
               <tr><td style="padding:4px 12px;font-weight:bold;">Email</td><td>${data.email || "—"}</td></tr>
-              <tr><td style="padding:4px 12px;font-weight:bold;">Ville</td><td>${data.ville || "—"}</td></tr>
+              <tr><td style="padding:4px 12px;font-weight:bold;">Ville</td><td>${data.ville || "—"}${data.codePostal ? ` (${data.codePostal})` : ""}</td></tr>
               <tr><td style="padding:4px 12px;font-weight:bold;">Source</td><td>${sourceLabel[data.source] || data.source}</td></tr>
               <tr><td style="padding:4px 12px;font-weight:bold;">Projet</td><td>${data.typeProjet}</td></tr>
               ${data.referenceChoisie ? `<tr><td style="padding:4px 12px;font-weight:bold;">Référence</td><td>${data.referenceChoisie}</td></tr>` : ""}
+              ${data.message ? `<tr><td style="padding:4px 12px;font-weight:bold;">Message</td><td>${data.message.replace(/[<>]/g, "")}</td></tr>` : ""}
+              ${photosEcrites ? `<tr><td style="padding:4px 12px;font-weight:bold;">Photos</td><td>${photosEcrites} jointe(s)</td></tr>` : ""}
+              <tr><td style="padding:4px 12px;font-weight:bold;">Mails commerciaux</td><td>${consentement === "ACCORDE" ? "accord donné" : consentement === "REFUSE" ? "case non cochée" : "non demandé"}</td></tr>
             </table>
             <br/>
             <a href="${appUrl}/prospects?lead=${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
@@ -365,7 +359,7 @@ export async function POST(request: NextRequest) {
     revalidatePath("/prospects");
 
     return NextResponse.json(
-      { success: true, leadId: lead.id, deduped: !isNew },
+      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites },
       { status: 200 }
     );
   } catch (error) {

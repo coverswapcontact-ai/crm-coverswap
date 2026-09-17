@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { rattacherImagesSimulation } from "@/lib/simulations/images";
 
 /**
  * /api/simulate — GÉNÉRATEUR D'IMAGE SANS PLAFOND DE TEMPS.
@@ -9,9 +10,10 @@ import crypto from "crypto";
  *
  * Flux : le navigateur appelle d'abord coverswap.fr/api/simulation/prepare
  * (rate-limit + lead + construction du prompt + signature HMAC), puis transmet
- * ici { prompt, swatchUrls, sig, exp, photo_base64 }. On vérifie la signature
- * (anti-falsification/anti-abus), on télécharge les swatches, on appelle OpenAI,
- * on renvoie l'image.
+ * ici { prompt, swatchUrls, sig, exp, leadId, photo_base64 }. On vérifie la
+ * signature (anti-falsification/anti-abus), on télécharge les swatches, on
+ * appelle OpenAI, on renvoie l'image — et on la rattache, avec la photo
+ * d'origine, à la simulation du lead créé par prepare (le CRM, c'est ici).
  *
  * Variables d'environnement requises sur Railway :
  *   - OPENAI_API_KEY          (clé OpenAI avec crédits image)
@@ -106,6 +108,8 @@ export async function POST(req: NextRequest) {
     swatchUrls?: string[];
     sig?: string;
     exp?: number;
+    leadId?: string;
+    referenceChoisie?: string;
     photo_base64?: string;
   };
   try {
@@ -114,7 +118,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON invalide." }, { status: 400, headers: cors });
   }
 
-  const { prompt, swatchUrls = [], sig, exp, photo_base64 } = body;
+  const { prompt, swatchUrls = [], sig, exp, leadId, referenceChoisie, photo_base64 } = body;
 
   if (!prompt || !sig || !exp || !photo_base64) {
     return NextResponse.json(
@@ -131,10 +135,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 2) Vérification HMAC (anti-falsification prompt + anti-détournement swatchUrls)
+  // 2) Vérification HMAC (anti-falsification prompt + anti-détournement swatchUrls
+  //    + leadId : personne ne peut rattacher une image à la fiche d'un autre).
+  //    Sans leadId (ancien site), l'ancienne forme reste acceptée.
   const expected = crypto
     .createHmac("sha256", secret)
-    .update(`${prompt}\n${swatchUrls.join(",")}\n${exp}`)
+    .update(leadId ? `${prompt}\n${swatchUrls.join(",")}\n${exp}\n${leadId}` : `${prompt}\n${swatchUrls.join(",")}\n${exp}`)
     .digest("hex");
   const sigBuf = Buffer.from(sig, "hex");
   const expBuf = Buffer.from(expected, "hex");
@@ -255,8 +261,20 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[simulate] OK en ${Date.now() - startMs}ms (size ${outputSize}, ${swatchBuffers.length} swatches)`);
+
+    // 6) Photo avant + rendu après sur la simulation du lead (jamais bloquant).
+    let simulationId: string | null = null;
+    if (leadId) {
+      try {
+        simulationId = await rattacherImagesSimulation(leadId, photo_base64, `data:image/png;base64,${b64}`, referenceChoisie ?? null);
+        console.log(`[simulate] images rattachées lead=${leadId} simulation=${simulationId ?? "?"}`);
+      } catch (err) {
+        console.error("[simulate] rattachement des images impossible (non bloquant) :", err);
+      }
+    }
+
     return NextResponse.json(
-      { success: true, image: `data:image/png;base64,${b64}` },
+      { success: true, image: `data:image/png;base64,${b64}`, simulationId },
       { headers: cors }
     );
   } catch (err) {

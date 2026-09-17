@@ -304,6 +304,34 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
           )}
         </section>
 
+        {detail.message || detail.styleSouhaite ? (
+          <section>
+            <TitreSection>Sa demande</TitreSection>
+            <div className={CARTE}>
+              {detail.styleSouhaite ? (
+                <p className="text-[12px] text-[#6B7280]">
+                  Style souhaité : <span className="text-[#D1D5DB]">{detail.styleSouhaite}</span>
+                </p>
+              ) : null}
+              {detail.message ? <p className="mt-1 text-[13.5px] whitespace-pre-line text-[#F2F3F5]">{detail.message}</p> : null}
+            </div>
+          </section>
+        ) : null}
+
+        {detail.photos.length > 0 ? (
+          <section>
+            <TitreSection>Photos jointes · {detail.photos.length}</TitreSection>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {detail.photos.map((photo, index) => (
+                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" />
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {detail.simulations.length > 0 ? (
           <section>
             <TitreSection>Simulations · {detail.simulations.length}</TitreSection>

@@ -34,9 +34,10 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "inconnue";
   if (ipDepasseLaLimite(`evt:${ip}`)) return NextResponse.json({ ok: false, raison: "limite" }, { status: 429, headers: entetes });
 
+  // Le site envoie en text/plain (requête simple, sans pré-vol, compatible sendBeacon).
   let corps: { parcoursId?: unknown; type?: unknown; page?: unknown; source?: unknown; campagne?: unknown; meta?: unknown };
   try {
-    corps = await req.json();
+    corps = JSON.parse(await req.text());
   } catch {
     return NextResponse.json({ ok: false }, { status: 400, headers: entetes });
   }

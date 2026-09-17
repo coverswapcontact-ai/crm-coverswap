@@ -6,7 +6,7 @@ import { ARCHIVE_A_NEUTRALISER, A_NEUTRALISER } from "@/lib/drive/synchronisatio
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { pseudonyme } from "@/lib/synthese/references";
 import { mettreEnFile } from "@/lib/taches/file";
-import { CARTE_DONNEES_PERSONNELLES, type ContexteAnonymisation } from "./carte";
+import { CARTE_DONNEES_PERSONNELLES, type ContexteAnonymisation, EFFACE } from "./carte";
 
 /**
  * Anonymisation d'un client (RGPD) : toutes les données qui l'identifient
@@ -47,6 +47,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
 
   const leads = await client.lead.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const leadIds = leads.map((lead) => lead.id);
+  const photosLead = await client.photoLead.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
   const [interactions, simulations, devis, chantiers] = await Promise.all([
     client.interaction.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
     client.simulation.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
@@ -91,6 +92,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const chemins = [
     ...dossiers.flatMap((dossier) => lirePhotos(dossier.photos)),
     ...chantiers.flatMap((chantier) => [...cheminsLocaux(chantier.photosAvant), ...cheminsLocaux(chantier.photosApres)]),
+    ...photosLead.map((photo) => photo.chemin).filter((chemin) => chemin !== EFFACE),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
   ];
@@ -116,6 +118,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       Lead: leads,
       Interaction: interactions,
       Simulation: simulations,
+      PhotoLead: photosLead,
       Devis: devis.map((ligne) => Object.fromEntries(Object.entries(ligne).filter(([cle]) => cle !== "facture"))),
       Chantier: chantiers,
       Prospect: prospects,

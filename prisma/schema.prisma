@@ -35,16 +35,39 @@ model Lead {
   publicite        String?
   formulaire       String?
   metaLeadgenId    String?
+  // Depuis le site (17/09/2026) : champs structurés au lieu de notes concaténées
+  message          String? // ce que la personne a écrit dans le formulaire
+  styleSouhaite    String? // style demandé (marbre blanc, chêne…)
+  parcoursId       String? // identifiant du parcours navigateur : simulation puis devis = même fiche
+  ipOrigine        String? // adresse IP du visiteur, pour la limite anti-abus du webhook
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
   simulations      Simulation[]
+  photos           PhotoLead[]
   dossiers         Dossier[]
   archiveLe        DateTime? // archivage : rien ne se supprime
   archiveMotif     String?
   ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([clientId])
+  @@index([parcoursId])
+}
+
+// Photo jointe par la personne à sa demande (formulaire de devis du site) :
+// un fichier sous le dossier des téléversements, jamais accessible sans session.
+model PhotoLead {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  leadId       String
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  chemin       String // relatif au dossier des téléversements
+  origine      String    @default("FORMULAIRE_SITE")
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([leadId])
 }
 
 model Simulation {

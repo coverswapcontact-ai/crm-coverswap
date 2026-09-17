@@ -38,6 +38,11 @@ export type EntrantDetail = EntrantResume & {
   nomFamille: string;
   codePostal: string | null;
   notes: string | null;
+  /** Ce que la personne a écrit dans le formulaire du site. */
+  message: string | null;
+  styleSouhaite: string | null;
+  /** Photos jointes à la demande (servies derrière la session). */
+  photos: { id: string; url: string; le: string }[];
   campagne: string | null;
   publicite: string | null;
   formulaire: string | null;

@@ -102,9 +102,15 @@ function ModaleDatePassage({
 /** Temps passé à chaque étape, dates réelles des passages (corrigeables) et chemin du prix, du premier devis au facturé. */
 export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
   const [enCorrection, setEnCorrection] = useState<number | null>(null);
-  const courant = detail.parcours.at(-1);
+  const dernier = detail.parcours.at(-1);
+  // L'étape du dossier fait foi : une date corrigée peut placer son passage avant d'autres.
+  const courant = [...detail.parcours].reverse().find((passage) => passage.etape === detail.etape) ?? dernier;
+  const desordre = Boolean(courant && dernier && courant !== dernier);
+  const ouverture = detail.parcours.find((passage) => passage.ouverture) ?? detail.parcours[0];
   const durees = dureeParEtape(detail.parcours);
-  const total = detail.parcours.reduce((somme, passage) => somme + passage.dureeMs, 0);
+  const total = ouverture
+    ? detail.parcours.filter((passage) => passage.debut >= ouverture.debut).reduce((somme, passage) => somme + passage.dureeMs, 0)
+    : 0;
   const { ecarts, delais } = detail;
   const aDesPrix = [ecarts.estimation, ecarts.premierDevis, ecarts.devisSigne, ecarts.facture].some((montant) => montant !== null);
   if (!courant && !aDesPrix) return null;
@@ -123,8 +129,22 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
         {courant ? (
           <p className="flex items-center gap-2 text-[13px] text-[#F2F3F5]">
             <Clock size={14} className="shrink-0 text-[#9CA3AF]" aria-hidden />
-            Depuis {formatDuree(courant.dureeMs)} en « {LIBELLES_ETAPE[courant.etape]} »
+            {desordre ? (
+              <>
+                En « {LIBELLES_ETAPE[courant.etape]} » depuis le {formatDateCourte(courant.debut)}
+              </>
+            ) : (
+              <>
+                Depuis {formatDuree(courant.dureeMs)} en « {LIBELLES_ETAPE[courant.etape]} »
+              </>
+            )}
             <span className="text-[#6B7280]">· dossier ouvert depuis {formatDuree(total)}</span>
+          </p>
+        ) : null}
+        {desordre ? (
+          <p className="flex items-center gap-1.5 text-[12px] text-[#F5B454]">
+            <AlertTriangle size={13} className="shrink-0" aria-hidden />
+            Des dates du parcours ne se suivent pas : vérifie-les ci-dessous.
           </p>
         ) : null}
 

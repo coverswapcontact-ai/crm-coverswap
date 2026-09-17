@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { enregistrerEncaissementDansTransaction } from "@/lib/encaissements/service";
 import { schemaPaiement } from "@/lib/encaissements/schemas";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, type EtapeActive, type EtapeDossier } from "./constants";
-import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
+import { dateDepuisJour, estJourValide, formatDateCourte, instantDuJour, jourParis } from "./dates";
 import { rattacherDocumentExistant, schemaDocumentExistant } from "./documents-existants";
 import { originesDuDossier, ouvrirDossier, reculerPremierContact, schemaCreation, suitesOuverture } from "./dossiers";
 import { lireMetadataChangementEtape, rangEtape, type MetadataChangementEtape } from "./regles";
@@ -66,7 +66,7 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
       );
 
       // Ouverture à sa date réelle.
-      const ouvertLe = entree.dates.ouvertLe ? dateDepuisJour(entree.dates.ouvertLe) : null;
+      const ouvertLe = entree.dates.ouvertLe ? instantDuJour(entree.dates.ouvertLe) : null;
       if (ouvertLe) {
         await tx.dossier.update({ where: { id: dossier.id }, data: { ouvertLe } });
         const ouverture = (await tx.dossierEvenement.findMany({ where: { dossierId: dossier.id, type: "CHANGEMENT_ETAPE" }, select: { id: true, metadata: true } })).find(
@@ -98,7 +98,7 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
         let precedente: EtapeDossier = "QUALIFICATION";
         let derniere = ouvertLe;
         const passage = async (vers: EtapeActive, jour: string | undefined) => {
-          const survenuLe = jour ? dateDepuisJour(jour) : derniere;
+          const survenuLe = jour ? instantDuJour(jour) : derniere;
           const metadata: MetadataChangementEtape = {
             de: precedente,
             vers,
@@ -118,7 +118,7 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
           });
           if (jour) {
             dates.push({ libelle: `« ${LIBELLES_ETAPE[vers]} »`, jour });
-            derniere = dateDepuisJour(jour);
+            derniere = instantDuJour(jour);
           }
           precedente = vers;
         };

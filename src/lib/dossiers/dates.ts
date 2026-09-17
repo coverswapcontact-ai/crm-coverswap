@@ -73,6 +73,16 @@ export function dateDepuisJour(jour: string): Date {
   return new Date(`${jour}T12:00:00.000Z`);
 }
 
+/**
+ * Instant d'un événement daté au jour (passage d'étape, ouverture) : midi,
+ * sans jamais dépasser maintenant. Saisi « aujourd'hui » à 3 h du matin, il ne
+ * doit pas tomber dans le futur et fausser les durées.
+ */
+export function instantDuJour(jour: string, maintenant: Date = new Date()): Date {
+  const date = dateDepuisJour(jour);
+  return date.getTime() > maintenant.getTime() ? maintenant : date;
+}
+
 /** Nombre de jours de retard (0 si la date est aujourd'hui ou à venir). */
 export function joursDeRetard(date: Date | string, maintenant: Date = new Date()): number {
   const jourEnMs = (jour: string) => Date.parse(`${jour}T00:00:00.000Z`);

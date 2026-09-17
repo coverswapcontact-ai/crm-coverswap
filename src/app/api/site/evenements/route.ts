@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 403, headers: entetes });
   }
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "inconnue";
-  if (ipDepasseLaLimite(`evt:${ip}`)) return NextResponse.json({ ok: false, raison: "limite" }, { status: 429, headers: entetes });
+  // Un visiteur normal émet quelques dizaines d'événements ; 200 par 10 min coupe seulement un robot.
+  if (ipDepasseLaLimite(`evt:${ip}`, Date.now(), 200)) return NextResponse.json({ ok: false, raison: "limite" }, { status: 429, headers: entetes });
 
   // Le site envoie en text/plain (requête simple, sans pré-vol, compatible sendBeacon).
   let corps: { parcoursId?: unknown; type?: unknown; page?: unknown; source?: unknown; campagne?: unknown; meta?: unknown };

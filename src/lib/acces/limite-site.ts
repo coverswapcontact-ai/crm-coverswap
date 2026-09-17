@@ -15,10 +15,10 @@ export const LIMITE_PAR_CONTACT = { max: 6, fenetreMs: 60 * 60 * 1000 };
 const compteursIp = new Map<string, number[]>();
 
 /** Vrai si l'IP a dépassé sa limite ; enregistre l'appel sinon. */
-export function ipDepasseLaLimite(ip: string, maintenant: number = Date.now()): boolean {
+export function ipDepasseLaLimite(ip: string, maintenant: number = Date.now(), max: number = LIMITE_PAR_IP.max): boolean {
   const debut = maintenant - LIMITE_PAR_IP.fenetreMs;
   const appels = (compteursIp.get(ip) ?? []).filter((t) => t > debut);
-  if (appels.length >= LIMITE_PAR_IP.max) {
+  if (appels.length >= max) {
     compteursIp.set(ip, appels);
     return true;
   }

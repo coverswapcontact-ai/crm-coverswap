@@ -7,6 +7,9 @@ describe("échecs de génération du simulateur", () => {
   test("un crédit épuisé est une panne de notre côté, jamais un défaut de la photo", () => {
     const quota = '{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}';
     assert.equal(classerErreurOpenAI(429, quota), "service-indisponible");
+    // Réponse réelle d'OpenAI relevée le 18/09/2026, crédit épuisé
+    const reelle = '{"error":{"message":"You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.","type":"insufficient_quota","param":null,"code":"credit_balance_exhausted"}}';
+    assert.equal(classerErreurOpenAI(429, reelle), "service-indisponible");
     const plafond = '{"error":{"message":"Billing hard limit has been reached","type":"invalid_request_error","code":"billing_hard_limit_reached"}}';
     assert.equal(classerErreurOpenAI(400, plafond), "service-indisponible");
     assert.equal(classerErreurOpenAI(401, '{"error":{"code":"invalid_api_key"}}'), "service-indisponible");

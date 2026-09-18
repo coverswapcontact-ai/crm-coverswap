@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { rattacherImagesSimulation } from "@/lib/simulations/images";
 import { enregistrerSimulationSite, purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulations";
-import { simulationAutorisee } from "@/lib/acces/limite-site";
+import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
+import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI } from "@/lib/site/erreurs-generation";
 
 /**
  * /api/simulate — GÉNÉRATEUR D'IMAGE SANS PLAFOND DE TEMPS.
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
   if (!secret || !apiKey) {
     console.error("[simulate] config manquante:", { hasSecret: !!secret, hasKey: !!apiKey });
     return NextResponse.json(
-      { error: "Service non configuré.", reason: "not-configured" },
+      { error: MESSAGES_ECHEC["service-indisponible"], reason: "service-indisponible" },
       { status: 503, headers: cors }
     );
   }
@@ -221,7 +222,8 @@ export async function POST(req: NextRequest) {
     //      (~0,20€ vs ~0,07€/simulation) sans gain sur CES problèmes précis, qui
     //      dépendent de input_fidelity + du prompt, pas du niveau de quality.
     const formData = new FormData();
-    formData.append("model", "gpt-image-1");
+    // Modèle réglable sans redéploiement du code (OPENAI_IMAGE_MODEL), gpt-image-1 par défaut.
+    formData.append("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-1");
     formData.append("prompt", prompt);
     formData.append("size", outputSize);
     formData.append("quality", "medium");
@@ -257,10 +259,8 @@ export async function POST(req: NextRequest) {
       console.error(`[simulate] OpenAI ${isAbort ? "timeout" : "fetch error"} après ${Date.now() - startMs}ms:`, err);
       return NextResponse.json(
         {
-          error: isAbort
-            ? "La génération a pris trop de temps. Réessayez."
-            : "Service de génération indisponible. Réessayez dans un instant.",
-          reason: isAbort ? "openai-timeout" : "openai-network",
+          error: isAbort ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge,
+          reason: isAbort ? "delai" : "surcharge",
         },
         { status: isAbort ? 504 : 502, headers: cors }
       );
@@ -269,17 +269,15 @@ export async function POST(req: NextRequest) {
 
     if (!imageRes.ok) {
       const errText = await imageRes.text().catch(() => "");
-      console.error(`[simulate] OpenAI HTTP ${imageRes.status}:`, errText.slice(0, 400));
-      const userMessage =
-        imageRes.status === 400
-          ? "L'IA a refusé cette photo (probablement trop sombre, floue ou non conforme). Essayez une autre photo bien éclairée."
-          : imageRes.status === 429
-          ? "Trop de requêtes vers le service IA. Réessayez dans une minute."
-          : "Erreur lors de la génération. Réessayez ou contactez-nous.";
-      return NextResponse.json(
-        { error: userMessage, reason: "openai-error", status: imageRes.status },
-        { status: 502, headers: cors }
-      );
+      const raison = classerErreurOpenAI(imageRes.status, errText);
+      console.error(`[simulate] OpenAI HTTP ${imageRes.status} (${raison}):`, errText.slice(0, 400));
+      // Panne de notre côté (crédit épuisé, clé refusée) : le visiteur le lit tel quel et peut laisser
+      // ses coordonnées ; le gérant est prévenu par mail, au plus une fois toutes les six heures.
+      if (raison === "service-indisponible") {
+        rendreSimulation(ip);
+        void alerterPanneSimulateur(imageRes.status, errText);
+      }
+      return NextResponse.json({ error: MESSAGES_ECHEC[raison], reason: raison, status: imageRes.status }, { status: raison === "service-indisponible" ? 503 : 502, headers: cors });
     }
 
     const data = await imageRes.json();

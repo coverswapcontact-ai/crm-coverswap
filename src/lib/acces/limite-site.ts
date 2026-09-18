@@ -59,6 +59,14 @@ export function simulationAutorisee(ip: string, maintenant: number = Date.now())
   return { ok: true };
 }
 
+/** Rend une simulation comptée à tort : la génération a échoué pour une raison qui est de notre côté. */
+export function rendreSimulation(ip: string, maintenant: number = Date.now()): void {
+  if (simulationsGlobales.jour !== jourDe(maintenant)) return;
+  const entree = simulationsParIp.get(ip);
+  if (entree && entree.nombre > 0) simulationsParIp.set(ip, { ...entree, nombre: entree.nombre - 1 });
+  if (simulationsGlobales.nombre > 0) simulationsGlobales.nombre -= 1;
+}
+
 /** IP du visiteur : celle que le site transmet, sinon celle de l'appelant. */
 export function ipDuVisiteur(entetes: { get(nom: string): string | null }): string {
   const transmise = entetes.get("x-visiteur-ip")?.trim();

@@ -23,7 +23,7 @@ export const MESSAGES_ECHEC: Record<RaisonEchec, string> = {
 export function classerErreurOpenAI(statut: number | undefined, corps: string | undefined): RaisonEchec {
   const texte = (corps ?? "").toLowerCase();
   // Crédit épuisé, plafond de facturation, compte inactif, clé refusée, organisation non vérifiée : c'est chez nous.
-  if (/insufficient_quota|billing|exceeded your current quota|account_deactivated|invalid_api_key|incorrect api key|must be verified|access_terminated/.test(texte)) return "service-indisponible";
+  if (/insufficient_quota|credit_balance|no credits|billing|exceeded your current quota|account_deactivated|invalid_api_key|incorrect api key|must be verified|access_terminated/.test(texte)) return "service-indisponible";
   if (statut === 401 || statut === 403) return "service-indisponible";
   if (statut === 429) return "surcharge";
   if (statut === 400) return /moderation|safety|content_policy|invalid_image|image_|unsupported|too large|could not process/.test(texte) ? "photo-refusee" : "erreur";

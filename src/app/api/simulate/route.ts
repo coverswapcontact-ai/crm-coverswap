@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { rattacherImagesSimulation } from "@/lib/simulations/images";
 import { enregistrerSimulationSite, purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulations";
 import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
+import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio } from "@/lib/simulations/cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI } from "@/lib/site/erreurs-generation";
 
 /**
@@ -206,13 +207,11 @@ export async function POST(req: NextRequest) {
     // 4) Photo client + détection de taille de sortie (match aspect ratio)
     const rawBase64 = photo_base64.replace(/^data:image\/\w+;base64,/, "");
     const photoBuffer = Buffer.from(rawBase64, "base64");
+    // La photo est mise au format du modèle avant l'envoi (lib/simulations/cadrage) : sans cela le
+    // modèle recadre à sa façon et le rendu n'est plus superposable à l'original.
     const dims = getImageDimensions(photoBuffer);
-    let outputSize = "1024x1024";
-    if (dims) {
-      const ratio = dims.width / dims.height;
-      if (ratio > 1.15) outputSize = "1536x1024";
-      else if (ratio < 0.85) outputSize = "1024x1536";
-    }
+    const cadrage = await cadrerPourGeneration(photoBuffer, dims ? tailleSelonRatio(dims.width, dims.height) : "1024x1024");
+    const outputSize = cadrage.taille;
 
     // 5) Appel OpenAI — réglage COÛT/QUALITÉ optimal :
     //    - input_fidelity "high" : LE levier qui corrige les 3 symptômes
@@ -230,7 +229,7 @@ export async function POST(req: NextRequest) {
     formData.append("input_fidelity", "high");
     formData.append(
       "image[]",
-      new Blob([new Uint8Array(photoBuffer)], { type: "image/png" }),
+      new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }),
       "kitchen.png"
     );
     swatchBuffers.forEach((buf, i) => {
@@ -281,7 +280,8 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await imageRes.json();
-    const b64 = data.data?.[0]?.b64_json;
+    const b64Brut: string | undefined = data.data?.[0]?.b64_json;
+    const b64 = b64Brut ? (await recadrerRendu(Buffer.from(b64Brut, "base64"), cadrage)).toString("base64") : undefined;
     if (!b64) {
       console.error("[simulate] réponse OpenAI sans b64_json");
       return NextResponse.json(
@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`[simulate] OK en ${Date.now() - startMs}ms (size ${outputSize}, ${swatchBuffers.length} swatches)`);
+    console.log(`[simulate] OK en ${Date.now() - startMs}ms (size ${outputSize}, zone ${cadrage.zone ? `${cadrage.zone.width}x${cadrage.zone.height}` : "entière"}, ${swatchBuffers.length} swatches)`, JSON.stringify(data.usage ?? {}));
 
     // 6) Photo avant + rendu après : sur la simulation du lead (ancien parcours), ou
     //    gardés avec le parcours en attendant la demande de devis (jamais bloquant).
@@ -326,7 +326,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: true, image: `data:image/png;base64,${b64}`, simulationId, simulationSiteId },
+      // imageAvant : la photo au cadrage exact du rendu (rognée au format du modèle), pour un avant / après superposable.
+      { success: true, image: `data:image/png;base64,${b64}`, imageAvant: cadrage.avant ? `data:image/jpeg;base64,${cadrage.avant.toString("base64")}` : null, simulationId, simulationSiteId },
       { headers: cors }
     );
   } catch (err) {

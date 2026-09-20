@@ -26,6 +26,7 @@ import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { CANAUX, CANAUX_PUSH, variablesManquantes, type Canal, type ResultatCanal } from "./configuration";
 import { decrireErreur, envoyerAvecRepli } from "./reseau";
 import { consignerAlerte } from "./registre";
+import { envoyerParRelais, relaisNtfyDisponible } from "./relais-ntfy";
 
 export {
   CANAUX,
@@ -128,35 +129,70 @@ async function envoyerTelegram(alerte: Alerte): Promise<ResultatCanal> {
   }
 }
 
+/**
+ * Chemin qui a marché en dernier vers ntfy. Quand le direct est sans réponse
+ * (adresse de Railway filtrée par ntfy.sh), chaque lead ne doit pas repayer
+ * plusieurs secondes d'attente avant de passer par la passerelle : on s'en
+ * souvient une heure, puis on retente le direct.
+ */
+const memoireNtfy = globalThis as unknown as { __ntfyDirectEnPanneJusqua?: number };
+const OUBLI_PANNE_MS = 60 * 60_000;
+
 async function envoyerNtfy(alerte: Alerte): Promise<ResultatCanal> {
   const sujet = process.env.NTFY_TOPIC;
   if (!sujet) return nonConfigure("ntfy");
   const serveur = (process.env.NTFY_SERVEUR || "https://ntfy.sh").replace(/\/$/, "");
   const tel = alerte.telephone ? telephoneInternational(alerte.telephone) : null;
-  // Un bouton « view » par action : ntfy les affiche sous la notification.
   // Le libellé voyage dans un en-tête : ASCII seulement (un « é » vaut un refus
   // HTTP 400 de ntfy), sans virgule ni point-virgule, qui séparent les actions.
   const libelle = titreAscii(alerte.libelleLien ?? "Ouvrir la fiche").replace(/[,;]/g, " ").replace(/\s{2,}/g, " ").trim();
   const actions = [tel ? `view, Appeler, tel:${tel}` : null, alerte.lien ? `view, ${libelle}, ${alerte.lien}` : null].filter(Boolean) as string[];
-  try {
+  const titre = titreAscii(alerte.titre);
+  const priorite = String(alerte.urgence ?? 4);
+  const masquer = (texte: string) => texte.replaceAll(sujet, "<sujet>").slice(0, 400);
+
+  const relais = relaisNtfyDisponible();
+  const direct = async (): Promise<ResultatCanal> => {
     const rep = await envoyerAvecRepli(`${serveur}/${encodeURIComponent(sujet)}`, {
       method: "POST",
       headers: {
         // En-têtes ntfy : ASCII seulement, les accents passent par le corps du message.
-        Title: titreAscii(alerte.titre),
-        Priority: String(alerte.urgence ?? 4),
+        Title: titre,
+        Priority: priorite,
         Tags: "bell",
         ...(actions.length ? { Actions: actions.join("; ") } : {}),
         ...(process.env.NTFY_TOKEN ? { Authorization: `Bearer ${process.env.NTFY_TOKEN}` } : {}),
       },
       body: alerte.texte,
-      delaiMs: DELAI_MS,
+      // Court quand une passerelle attend derrière : un lead ne patiente pas dix secondes.
+      delaiMs: relais ? 4000 : DELAI_MS,
     });
     if (rep.status < 200 || rep.status >= 300) return { canal: "ntfy", ok: false, configure: true, detail: `HTTP ${rep.status} ${rep.texte.slice(0, 200)}` };
+    memoireNtfy.__ntfyDirectEnPanneJusqua = 0;
     return { canal: "ntfy", ok: true, configure: true, ...(rep.chemin === "ipv4" ? { detail: "envoyée par le chemin de repli (IPv4 forcé)" } : {}) };
-  } catch (erreur) {
-    return { canal: "ntfy", ok: false, configure: true, detail: decrireErreur(erreur).replaceAll(sujet, "<sujet>").slice(0, 400) };
+  };
+  const parRelais = async (): Promise<ResultatCanal> => {
+    await envoyerParRelais({ sujet, titre, priorite, tags: "bell", actions: actions.join("; "), texte: alerte.texte, ...(process.env.NTFY_TOKEN ? { jeton: process.env.NTFY_TOKEN } : {}) });
+    return { canal: "ntfy", ok: true, configure: true, detail: "envoyée par la passerelle du site (ntfy.sh ne répond pas en direct depuis ce serveur)" };
+  };
+
+  // Ordre des chemins : le direct d'abord, sauf s'il vient d'échouer (mémoire d'une heure).
+  const directEnPanne = relais && (memoireNtfy.__ntfyDirectEnPanneJusqua ?? 0) > Date.now();
+  const chemins: ["direct" | "relais", () => Promise<ResultatCanal>][] = relais
+    ? directEnPanne
+      ? [["relais", parRelais], ["direct", direct]]
+      : [["direct", direct], ["relais", parRelais]]
+    : [["direct", direct]];
+  const echecs: string[] = [];
+  for (const [nom, envoyer] of chemins) {
+    try {
+      return await envoyer();
+    } catch (erreur) {
+      echecs.push(`${nom} : ${masquer(decrireErreur(erreur))}`);
+      if (nom === "direct" && relais) memoireNtfy.__ntfyDirectEnPanneJusqua = Date.now() + OUBLI_PANNE_MS;
+    }
   }
+  return { canal: "ntfy", ok: false, configure: true, detail: echecs.join(" ; ").slice(0, 500) };
 }
 
 async function envoyerMail(alerte: Alerte): Promise<ResultatCanal> {

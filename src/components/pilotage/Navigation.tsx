@@ -3,24 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ChartColumn,
-  CircleCheckBig,
-  FolderKanban,
-  Hash,
-  Mail,
-  Menu,
-  Radar,
-  Receipt,
-  ScrollText,
-  SlidersHorizontal,
-  Users,
-  Wallet,
-  Workflow,
-  X,
-  type LucideIcon,
-  Globe,
-} from "lucide-react";
+import { ChartColumn, CircleCheckBig, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -59,6 +42,7 @@ const PRINCIPALES: Entree[] = [
 const SECONDAIRES: Entree[] = [
   { href: "/synthese", libelle: "Synthèse", icone: ChartColumn },
   { href: "/site", libelle: "Site", icone: Globe },
+  { href: "/publicite", libelle: "Publicité", icone: Megaphone },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/numeros", libelle: "Registre des numéros", icone: Hash },

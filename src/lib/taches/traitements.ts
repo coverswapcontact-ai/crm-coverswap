@@ -2,6 +2,7 @@ import { enregistrerTachesClients } from "@/lib/clients/taches";
 import { enregistrerTachesDrive } from "@/lib/drive/synchronisation";
 import { enregistrerTachesEncaissements } from "@/lib/encaissements/reprise";
 import { enregistrerTachesMessages } from "@/lib/messages/taches";
+import { enregistrerTachesMeta } from "@/lib/meta/taches";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
 import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
 import { enregistrerTachesSynthese } from "@/lib/synthese/instantanes";
@@ -22,4 +23,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesDrive();
   enregistrerTachesMessages();
   enregistrerTachesRgpd();
+  enregistrerTachesMeta();
 }

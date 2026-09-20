@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { sendConversionEvent } from "@/lib/meta";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 
 // ============================================================================
-// WEBHOOK — Zapier bridge pour leads Meta Ads
+// WEBHOOK — pont Zapier pour les leads Meta Ads (secours)
 // ============================================================================
-// Tant que l'app CoverSwap CRM n'a pas l'Advanced Access à `leads_retrieval`,
-// on passe par Zapier qui reçoit le lead Meta puis POST ici.
+// Le chemin normal est maintenant le webhook natif de Meta : /api/webhook/meta
+// (src/lib/meta). Cette route reste en place comme filet : elle fonctionne sans
+// `leads_retrieval` puisque Zapier fournit déjà les réponses du formulaire.
+// À réactiver côté Zapier seulement si le chemin direct devait tomber.
 //
 // Config Zapier (action "Webhooks by Zapier" → POST) :
 //   URL         : https://crm.coverswap.fr/api/webhook/zapier?secret=WEBHOOK_SECRET
@@ -148,16 +149,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Conversion API — remonter le Lead à Meta pour l'optimisation
-    await sendConversionEvent({
-      eventName: "Lead",
-      email,
-      phone: telephone,
-      firstName: prenom,
-      lastName: nom,
-      city: ville,
-      eventId: `lead-${lead.id}`,
-    });
+    // Aucune conversion n'est renvoyée ici : Meta connaît déjà le lead. Ce sont les
+    // étapes du dossier (devis envoyé, signé, encaissé, perdu) qui repartent vers Meta,
+    // depuis src/lib/dossiers/transitions.ts.
 
     // Notification mail au gérant (nouveaux leads seulement)
     if (!existing) {

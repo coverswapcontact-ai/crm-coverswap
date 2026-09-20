@@ -77,6 +77,10 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     remplacer: () => ({ notes: null, lienSimulation: null, imageBeforePath: null, imageAfterPath: null, imageOriginalPath: null }),
     garde: "référence, métrage et prix estimés (images effacées)",
   },
+  MetaLead: {
+    remplacer: () => ({ reponses: null, erreur: null }),
+    garde: "identifiants Meta (leadgen, campagne, publicité), dates et statut : le suivi des campagnes sans les réponses du formulaire",
+  },
   PhotoLead: { remplacer: () => ({ chemin: EFFACE }), garde: "date et origine de la photo jointe (fichier effacé)" },
   SimulationSite: { remplacer: () => ({ imageBeforePath: null, imageAfterPath: null, ipOrigine: null, references: "[]" }), garde: "projet, dates, page et source du parcours (images effacées)" },
   PublicationSite: { remplacer: () => ({ texte: null, auteur: null, photoAvant: null, photoApres: null }), garde: "titre, ville et type ; sans photo ni texte, la publication disparaît du site" },

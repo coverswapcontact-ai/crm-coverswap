@@ -1,13 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { chargerEntrant, modifierEntrant, schemaModificationEntrant } from "@/lib/prospects/entrants";
+import { marquerFicheVue } from "@/lib/meta/leads";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_requete: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return NextResponse.json({ entrant: await chargerEntrant(id) });
+    const entrant = await chargerEntrant(id);
+    // La fiche est ouverte : plus de relance « lead non traité » pour celle-ci.
+    await marquerFicheVue(id);
+    return NextResponse.json({ entrant });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/prospects/entrants/[id]");
   }

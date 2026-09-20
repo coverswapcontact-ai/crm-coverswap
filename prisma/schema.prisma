@@ -40,6 +40,8 @@ model Lead {
   styleSouhaite    String? // style demandé (marbre blanc, chêne…)
   parcoursId       String? // identifiant du parcours navigateur : simulation puis devis = même fiche
   ipOrigine        String? // adresse IP du visiteur, pour la limite anti-abus du webhook
+  vuLe             DateTime? // première ouverture de la fiche dans le CRM : sert à la relance des leads non traités
+  metaLead         MetaLead?
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
@@ -146,6 +148,41 @@ model PhotoLead {
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([leadId])
+}
+
+/// Un formulaire Meta Lead Ads rempli : l'événement reçu du webhook, puis ce que
+/// l'API Graph en dit. Gardé même quand la récupération échoue : un lead qui
+/// échoue doit rester visible (écran Publicité) et rejouable, jamais perdu.
+model MetaLead {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  leadgenId    String    @unique // identifiant Meta : la clé d'idempotence, sert aussi au renvoi des conversions
+  pageId       String?
+  formId       String?
+  formNom      String?
+  campagneId   String?
+  campagneNom  String? // nom lisible, pas seulement l'identifiant
+  adsetId      String?
+  adsetNom     String?
+  adId         String?
+  adNom        String?
+  plateforme   String? // facebook | instagram
+  organique    Boolean   @default(false) // formulaire organique (pas une publicité payante)
+  soumisLe     DateTime // horodatage réel de la soumission (created_time de Meta)
+  recuLe       DateTime  @default(now()) // horodatage de réception du webhook
+  traiteLe     DateTime?
+  statut       String    @default("RECU") // RECU | TRAITE | ECHEC
+  erreur       String?
+  tentatives   Int       @default(0)
+  reponses     String? // JSON : toutes les réponses du formulaire, questions personnalisées comprises
+  leadId       String?   @unique
+  lead         Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  archiveLe    DateTime? // archivage : rien ne se supprime
+  archiveMotif String?
+  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([statut, recuLe])
 }
 
 model Simulation {

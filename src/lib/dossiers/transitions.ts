@@ -4,7 +4,8 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import { MOTIFS_SANS_ACOMPTE, libelleMotif } from "@/lib/encaissements/constantes";
 import { schemaPaiement, schemaSansAcompte } from "@/lib/encaissements/schemas";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
-import { sendConversionEvent } from "@/lib/meta";
+import { planifierConversion } from "@/lib/meta/taches";
+import type { EtapeConversion } from "@/lib/meta/conversions";
 import {
   ETAPES,
   LIBELLES_ETAPE,
@@ -322,13 +323,14 @@ export async function effetsDuChangementEtape(changement: ChangementEtape): Prom
     const dossier = await prisma.dossier.findUnique({
       where: { id: changement.dossierId },
       select: {
-        lead: { select: { id: true, statut: true, prenom: true, nom: true, email: true, telephone: true, ville: true } },
+        lead: { select: { id: true, statut: true, prenom: true, nom: true, email: true, telephone: true, ville: true, codePostal: true, metaLeadgenId: true, source: true } },
         documents: {
           where: { type: "DEVIS", statut: "ACCEPTE" },
           select: { totalHt: true },
           orderBy: { updatedAt: "desc" },
           take: 1,
         },
+        encaissements: { where: { statut: "VALIDE" }, select: { montant: true } },
       },
     });
     const lead = dossier?.lead;
@@ -340,19 +342,35 @@ export async function effetsDuChangementEtape(changement: ChangementEtape): Prom
     }
 
     if (changement.nature === "RETOUR" || changement.nature === "REPRISE") return;
-    const conversion =
-      changement.vers === "DEVIS_ENVOYE" ? "SubmitApplication" : changement.vers === "SIGNE" ? "Purchase" : null;
-    if (!conversion) return;
-    void sendConversionEvent({
-      eventName: conversion,
-      email: lead.email ?? undefined,
-      phone: lead.telephone || undefined,
-      firstName: lead.prenom,
-      lastName: lead.nom,
-      city: lead.ville || undefined,
-      value: conversion === "Purchase" ? dossier.documents[0]?.totalHt : undefined,
-      eventId: `dossier-${changement.dossierId}-${changement.vers}`,
-    }).catch(() => {});
+    // Renvoi à Meta : l'algorithme apprend sur les gens qui signent, pas sur ceux
+    // qui remplissent un formulaire. Rattaché au lead d'origine par son leadgen_id.
+    const etape: EtapeConversion | null =
+      changement.vers === "DEVIS_ENVOYE"
+        ? "DEVIS_ENVOYE"
+        : changement.vers === "SIGNE"
+          ? "SIGNE"
+          : changement.vers === "ENCAISSE"
+            ? "ENCAISSE"
+            : changement.vers === "PERDU"
+              ? "PERDU"
+              : null;
+    if (!etape) return;
+    // Montant réellement encaissé pour « Encaissé », montant du devis signé pour « Signé ».
+    const encaisse = dossier.encaissements.reduce((total, e) => total + e.montant, 0);
+    const valeur = etape === "ENCAISSE" ? encaisse || dossier.documents[0]?.totalHt : etape === "SIGNE" ? dossier.documents[0]?.totalHt : undefined;
+    await planifierConversion({
+      etape,
+      leadgenId: lead.metaLeadgenId,
+      email: lead.email,
+      telephone: lead.telephone,
+      prenom: lead.prenom,
+      nom: lead.nom,
+      ville: lead.ville,
+      codePostal: lead.codePostal,
+      valeur,
+      evenementId: `dossier-${changement.dossierId}-${etape}`,
+      survenuLe: new Date(),
+    });
   } catch (erreur) {
     console.error("[dossiers] effets du changement d'étape :", erreur);
   }

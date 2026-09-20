@@ -9,27 +9,27 @@ datasource db {
 }
 
 model Lead {
-  id               String        @id @default(cuid())
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id               String            @id @default(cuid())
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   nom              String
   prenom           String
   email            String?
   telephone        String
   ville            String
   codePostal       String?
-  source           String        @default("AUTRE")
-  statut           String        @default("NOUVEAU")
-  typeProjet       String        @default("CUISINE")
+  source           String            @default("AUTRE")
+  statut           String            @default("NOUVEAU")
+  typeProjet       String            @default("CUISINE")
   referenceChoisie String?
   mlEstimes        Float?
   prixDevis        Float?
   lienSimulation   String?
-  scoreSignature   Int           @default(0)
+  scoreSignature   Int               @default(0)
   notes            String?
   // Client pérenne auquel ce contact est rattaché (src/lib/clients)
   clientId         String?
-  client           Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client           Client?           @relation(fields: [clientId], references: [id], onDelete: Restrict)
   // Acquisition, en champs (avant : noyée dans `notes`)
   campagne         String?
   publicite        String?
@@ -45,13 +45,14 @@ model Lead {
   // les réponses du formulaire et le code postal ; posée à la main, elle n'est plus recalculée.
   priorite         String? // PRIORITAIRE | STANDARD | SECONDAIRE | A_ECARTER
   prioriteMotif    String? // pourquoi, en une phrase lisible
-  prioriteManuelle Boolean       @default(false)
+  prioriteManuelle Boolean           @default(false)
   occupation       String? // PROPRIETAIRE | LOCATAIRE, d'après le formulaire
   delaiProjet      String? // COURT | MOYEN | LOINTAIN | INDETERMINE
   delaiProjetTexte String? // la réponse telle que donnée
   tailleCuisine    String? // la réponse telle que donnée
   rappelLe         DateTime? // prochain rappel téléphonique prévu (issue d'appel « à rappeler »)
   metaLeads        MetaLead[]
+  conversationsSms ConversationSms[]
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
@@ -474,6 +475,8 @@ model Dossier {
   encaissements          Encaissement[]
   depenses               Depense[]
   messages               Message[]
+  espaces                EspaceClient[]
+  accords                AccordDevis[]
   archiveLe              DateTime? // archivage : rien ne se supprime
   archiveMotif           String?
   ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -745,6 +748,7 @@ model Client {
   archiveLe          DateTime? // archivage : rien ne se supprime
   archiveMotif       String?
   ecriture           String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+  ConversationSms    ConversationSms[]
 
   @@index([nom])
   @@index([source])
@@ -1128,4 +1132,201 @@ model AlerteEnvoi {
   ecriture  String?
 
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// Messagerie SMS (src/lib/sms) — mission du 20/09/2026
+// Une conversation par numéro de téléphone. Un numéro inconnu crée une
+// conversation orpheline (« à rattacher »), jamais perdue. Chaque SMS écrit
+// aussi un événement sur le dossier quand il y en a un : la messagerie est une
+// vue sur l'histoire du contact, pas un système à part.
+// ─────────────────────────────────────────────
+
+model ConversationSms {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  numero           String    @unique // format international : +33612345678
+  clientId         String?
+  client           Client?   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  leadId           String?
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  nomAffiche       String? // nom connu au moment du rattachement (la liste n'attend pas une jointure)
+  dernierMessageLe DateTime?
+  dernierExtrait   String? // aperçu du dernier message
+  dernierSens      String? // ENTRANT | SORTANT
+  nonLus           Int       @default(0) // SMS reçus pas encore ouverts
+  premierEnvoiLe   DateTime? // premier SMS sortant : c'est lui qui porte la mention STOP
+  stopLe           DateTime? // STOP reçu : plus aucun envoi vers ce numéro
+  stopTexte        String? // le message qui a valu l'arrêt, tel que reçu
+  brouillon        String? // texte en cours de saisie, gardé d'un écran et d'un appareil à l'autre
+  messages         Sms[]
+  archiveLe        DateTime? // archivage : rien ne se supprime
+  archiveMotif     String?
+  ecriture         String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@index([dernierMessageLe])
+  @@index([clientId])
+  @@index([leadId])
+}
+
+model Sms {
+  id                     String          @id @default(cuid())
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  conversationId         String
+  conversation           ConversationSms @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sens                   String // ENTRANT | SORTANT
+  texte                  String
+  statut                 String // A_ENVOYER | ENVOYE | DELIVRE | ECHEC | RECU
+  erreur                 String?
+  fournisseur            String? // ovh | brevo | simulateur | webhook
+  identifiantFournisseur String? // identifiant du message chez le fournisseur
+  origine                String          @default("MANUEL") // MANUEL | MODELE | ACCUSE_AUTO | RELANCE | LIEN_ESPACE
+  modele                 String? // code du message type proposé (ModeleSms.code)
+  // Trace des corrections : ce que le CRM proposait, à côté de ce qui est parti
+  // (`texte`). Dans un mois, on saura quelles formulations Lucas garde ou réécrit.
+  textePropose           String?
+  contexteEtape          String? // étape du dossier (ou statut du contact) au moment de l'envoi
+  propositionId          String? // proposition validée dont ce SMS est l'exécution
+  cleEnvoi               String?         @unique // idempotence : l'identifiant fabriqué par l'écran (envoi optimiste, file hors ligne)
+  segments               Int? // nombre de SMS facturés
+  envoyeLe               DateTime?
+  delivreLe              DateTime?
+  recuLe                 DateTime? // entrant : horodatage du fournisseur
+  luLe                   DateTime? // entrant : ouvert dans la messagerie
+  tentatives             Int             @default(0)
+  // Rattachements au moment du message (l'histoire ne bouge pas si la conversation est rattachée ailleurs ensuite)
+  clientId               String?
+  leadId                 String?
+  dossierId              String?
+  archiveLe              DateTime?
+  archiveMotif           String?
+  ecriture               String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+
+  @@unique([fournisseur, identifiantFournisseur])
+  @@index([conversationId, createdAt])
+  @@index([statut])
+  @@index([dossierId])
+}
+
+// Messages types : le CRM pré-remplit, Lucas corrige et envoie. Seul l'accusé de
+// réception part sans validation (`automatique`).
+model ModeleSms {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  code         String    @unique // ACCUSE_RECEPTION, LIEN_ESPACE, RELANCE_PHOTOS…
+  libelle      String
+  texte        String // variables : {prenom}, {lien}, {montant}…
+  actif        Boolean   @default(true)
+  automatique  Boolean   @default(false) // part seul (accusé de réception uniquement)
+  ordre        Int       @default(0)
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+}
+
+// ─────────────────────────────────────────────
+// Espace client (src/lib/espace) : la page personnelle du client sur
+// coverswap.fr, ouverte par un lien signé, sans compte ni mot de passe.
+// Le lien = code court + signature HMAC(secret, code + version). Révoquer =
+// incrémenter `version` : tous les anciens liens meurent d'un coup.
+// ─────────────────────────────────────────────
+
+model EspaceClient {
+  id             String             @id @default(cuid())
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  code           String             @unique // court, lisible dans l'adresse
+  version        Int                @default(1)
+  dossierId      String             @unique // un espace par dossier
+  dossier        Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  expireLe       DateTime
+  revoqueLe      DateTime?
+  premierAccesLe DateTime?
+  dernierAccesLe DateTime?
+  nbAcces        Int                @default(0)
+  souhaits       String? // JSON : teintes, style, « je veux des propositions », précisions
+  souhaitsLe     DateTime?
+  simulations    SimulationEspace[]
+  archiveLe      DateTime?
+  archiveMotif   String?
+  ecriture       String?
+}
+
+// Simulation déposée par Lucas dans l'espace d'un client : le client les compare,
+// en choisit une, commente.
+model SimulationEspace {
+  id                String       @id @default(cuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  espaceId          String
+  espace            EspaceClient @relation(fields: [espaceId], references: [id], onDelete: Restrict)
+  dossierId         String
+  chemin            String // image, relative au répertoire d'upload
+  titre             String?
+  description       String?
+  ordre             Int          @default(0)
+  choisieLe         DateTime?
+  commentaireClient String?
+  commenteeLe       DateTime?
+  archiveLe         DateTime?
+  archiveMotif      String?
+  ecriture          String?
+
+  @@index([espaceId])
+  @@index([dossierId])
+}
+
+// Bon pour accord donné par le client dans son espace : une ligne, jamais
+// modifiée. Vaut signature même sans paiement immédiat.
+model AccordDevis {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  dossierId     String
+  dossier       Dossier  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  documentId    String // le devis accepté
+  numeroDevis   String?
+  totalHt       Float // montant figé au moment de l'accord
+  acomptePct    Int?
+  nomSignataire String
+  mention       String // « Bon pour accord »
+  ip            String?
+  navigateur    String?
+  ecriture      String?
+
+  @@index([dossierId])
+  @@index([documentId])
+}
+
+// ─────────────────────────────────────────────
+// Application installée (PWA) : abonnements aux notifications poussées du
+// navigateur, et clés internes générées par le serveur (paire VAPID).
+// ─────────────────────────────────────────────
+
+model AbonnementPush {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  application    String    @default("crm") // crm | messages : l'icône depuis laquelle l'abonnement a été pris
+  utilisateur    String? // adresse de la personne connectée
+  appareil       String? // navigateur, tel qu'annoncé
+  dernierEnvoiLe DateTime?
+  echecs         Int       @default(0)
+  archiveLe      DateTime? // abonnement expiré ou révoqué par le navigateur
+  archiveMotif   String?
+  ecriture       String?
+}
+
+// Clés générées par le serveur quand aucune variable d'environnement ne les
+// fournit (paire VAPID du push web). Hors journal : le journal copierait la clé.
+model CleInterne {
+  nom       String   @id
+  valeur    String
+  createdAt DateTime @default(now())
+  ecriture  String?
 }

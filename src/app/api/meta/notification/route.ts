@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { reponseErreur } from "@/lib/commun/api";
-import { alerter, canauxConfigures } from "@/lib/alertes/canaux";
+import { CANAUX_PUSH, alerter, canauxConfigures } from "@/lib/alertes/canaux";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -26,7 +26,7 @@ export async function POST() {
     }, { origine: "essai" });
     return NextResponse.json({
       resultats,
-      pousseRecue: resultats.some((r) => r.ok && (r.canal === "telegram" || r.canal === "ntfy")),
+      pousseRecue: resultats.some((r) => r.ok && CANAUX_PUSH.includes(r.canal)),
       canauxConfigures: canauxConfigures(),
     });
   } catch (erreur) {

@@ -33,14 +33,22 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
 - [x] Réglage global IPv4 d'abord + 2,5 s par adresse (`src/lib/base/reseau-sortant.ts`) : `fetch`
       échouait par moments vers Telegram (délai de 250 ms de la sélection de famille de Node).
 - [x] Registre `AlerteEnvoi` + essai de push au démarrage tant qu'aucun push n'a réussi.
-- [ ] Lire dans les journaux Railway le constat de la migration `verifier-archiver-leads-essai-21-09`
-      (compteurs 1/0 : ville, codePostal, campagne, ensemble, publicite…) — commit `7467f18`.
+- [x] Contact `cmua6do0m00ab7eyqanajfoqc` vérifié (journaux Railway) puis archivé avec `cmu9seh…` :
+      ville 1, source META_ADS 1, client rattaché 1 ; codePostal 0, campagne/ensemble/publicité 0,
+      téléphone = 0 chiffre, pageId/formId/formNom 1, 3 réponses → lead de l'OUTIL DE TEST META
+      (données factices, aucune publicité). La chaîne unifiée l'a bien traité. À dire à Lucas : le
+      prochain vrai lead dira dans les journaux les clés reçues du Zap (`[meta] pont Zapier — clés reçues`).
 - [ ] Telegram en second canal : joignable depuis Railway (vérifié). Marche à suivre pour Lucas
       dans le rapport final (docs/META.md §6) : BotFather → TELEGRAM_BOT_TOKEN, getUpdates → TELEGRAM_CHAT_ID.
 
 ### Lots de la mission (ordre prévu)
-- [ ] Lot 1 — Priorisation des leads + liste « à rappeler » triée
-- [ ] Lot 2 — SMS : fournisseur (Brevo), envoi, réception, STOP, accusé automatique
+- [x] Lot 1 — Priorisation des leads + liste « à rappeler » triée (commit `e9ca016`, en prod : 236 contacts classés, zone 34 + 30/11/12/81 posée en paramètres)
+- [x] Lot 2 (serveur) — SMS : `src/lib/sms/` (fournisseurs ovh/brevo/simulateur, envoi par file de tâches,
+      réception idempotente, STOP, accusé automatique, messages types en base, flux SSE, contexte, suggestions),
+      routes `/api/sms/*` et `/api/webhook/sms`, push web (`src/lib/alertes/pushweb.ts`, canal `pushweb`),
+      liens signés de l'espace (`src/lib/espace/liens.ts`). Schéma : ConversationSms, Sms, ModeleSms, EspaceClient,
+      SimulationEspace, AccordDevis, AbonnementPush, CleInterne. 283 essais au vert.
+      RESTE pour le lot 2 : écran Paramètres → Messagerie SMS (état du fournisseur, messages types).
 - [ ] Lot 3 — Messagerie (conversations, fil, contexte, envoi optimiste, temps réel)
 - [ ] Lot 4 — Espace client (lien signé, photos, choix, simulations, devis, bon pour accord, acompte)
 - [ ] Lot 5 — Relances proposées (file de validation, plafond 5 messages / 10 jours, perdu sans réponse)

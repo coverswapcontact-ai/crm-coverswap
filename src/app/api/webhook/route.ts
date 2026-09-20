@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
+import { envoyerAccuseDeReception } from "@/lib/sms/accuse";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
@@ -264,7 +265,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Priorité de rappel : classée à l'arrivée, jamais bloquante ──
-    await classerLeadSansBloquer(lead.id);
+    const qualification = await classerLeadSansBloquer(lead.id);
+
+    // ── Accusé de réception par SMS : seul envoi automatique, nouveau contact seulement ──
+    if (isNew && qualification?.priorite !== "A_ECARTER") await envoyerAccuseDeReception(lead.id);
 
     // ── Photos jointes à la demande (formulaire de devis) ──
     const photosEcrites = parsed.data.photos?.length ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;

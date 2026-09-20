@@ -82,6 +82,12 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   ]);
   const fichiers = await client.fichier.findMany({ where: { ...AVEC_ARCHIVES, id: { in: pieces.map((piece) => piece.fichierId).filter((id): id is string => Boolean(id)) } } });
 
+  // Messagerie SMS et espace client (mission du 20/09/2026).
+  const conversationsSms = await client.conversationSms.findMany({ where: { ...AVEC_ARCHIVES, OR: [{ clientId: { in: clientIds } }, { leadId: { in: leadIds } }] } });
+  const sms = await client.sms.findMany({ where: { ...AVEC_ARCHIVES, conversationId: { in: conversationsSms.map((conversation) => conversation.id) } } });
+  const espaces = await client.espaceClient.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+  const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+
   const propositions = await client.proposition.findMany({
     where: {
       ...AVEC_ARCHIVES,
@@ -98,6 +104,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...simulationsSite.flatMap((s) => [s.imageBeforePath, s.imageAfterPath]).filter((chemin): chemin is string => Boolean(chemin)),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
+    ...simulationsEspace.map((simulation) => simulation.chemin).filter((chemin) => chemin !== EFFACE),
   ];
 
   return {
@@ -138,6 +145,10 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       PieceMessage: pieces,
       AnalyseMessage: analyses,
       Fichier: fichiers,
+      ConversationSms: conversationsSms,
+      Sms: sms,
+      EspaceClient: espaces,
+      SimulationEspace: simulationsEspace,
       Proposition: propositions,
     } as Record<string, Record<string, unknown>[]>,
   };

@@ -145,7 +145,11 @@ doit être justifié ici :
   son effacement RGPD, une fois. Le journaliser dupliquerait chaque mail ;
 - `AlerteEnvoi` : registre des alertes envoyées au gérant (push, mail). Déjà un
   historique — une ligne par envoi, jamais modifiée — sans donnée métier ni
-  donnée personnelle (origine de l'alerte et état de chaque canal seulement).
+  donnée personnelle (origine de l'alerte et état de chaque canal seulement) ;
+- `CleInterne` : clés générées par le serveur quand aucune variable ne les
+  fournit (paire VAPID du push web) ; le journal en garderait une copie lisible ;
+- `AbonnementPush` : abonnement d'un appareil aux notifications du navigateur
+  (adresse de livraison, clés de chiffrement), réécrit à chaque envoi.
 
 ### Limites connues
 

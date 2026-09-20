@@ -213,8 +213,8 @@ describe("la notification laisse une trace sur le lead", () => {
     const trace = JSON.parse(evenement?.notifications ?? "[]") as { canal: string; ok: boolean; configure: boolean; detail?: string }[];
     assert.deepEqual(
       trace.map((t) => t.canal),
-      ["telegram", "ntfy", "mail"],
-      "les trois canaux doivent figurer, même absents"
+      ["telegram", "ntfy", "pushweb", "mail"],
+      "tous les canaux doivent figurer, même absents"
     );
     assert.equal(trace.every((t) => !t.ok && !t.configure), true);
     assert.match(trace.find((t) => t.canal === "ntfy")?.detail ?? "", /NTFY_TOPIC absente/);

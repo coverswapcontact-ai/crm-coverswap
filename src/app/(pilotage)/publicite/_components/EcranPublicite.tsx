@@ -68,9 +68,11 @@ function Tableau({ titre, lignes }: { titre: string; lignes: ResultatParAxe[] })
 
 /** Un canal d'alerte et son état réel : configuré ou non, et son dernier envoi. */
 function CanalNotification({ etat, essai }: { etat: EtatCanal; essai: ResultatCanal | null }) {
-  const ton = !etat.configure ? (etat.pousse ? "rouge" : "ambre") : essai && !essai.ok ? "rouge" : etat.dernier && !etat.dernier.ok ? "rouge" : "vert";
+  const ton = !etat.configure ? (etat.pousse && etat.manquantes.length > 0 ? "rouge" : "ambre") : essai && !essai.ok ? "rouge" : etat.dernier && !etat.dernier.ok ? "rouge" : "vert";
   const valeur = !etat.configure
-    ? `à configurer : ${etat.manquantes.join(", ")}`
+    ? etat.manquantes.length > 0
+      ? `à configurer : ${etat.manquantes.join(", ")}`
+      : "aucun appareil abonné : installer l'application sur le téléphone, puis activer les notifications"
     : essai
       ? essai.ok
         ? "essai envoyé à l'instant"

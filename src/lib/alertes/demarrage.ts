@@ -23,6 +23,13 @@ export async function verifierAlertesAuDemarrage(): Promise<void> {
     console.error("[reseau] sonde impossible :", erreur);
   }
 
+  try {
+    const { compterAbonnes } = await import("./pushweb");
+    console.log(`[alertes] push web : ${await compterAbonnes()} appareil(s) abonné(s).`);
+  } catch (erreur) {
+    console.error("[alertes] abonnements au push web illisibles :", erreur);
+  }
+
   if (!pushDisponible()) return;
   try {
     const derniere = await derniereAlerte();

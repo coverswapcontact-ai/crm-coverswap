@@ -53,6 +53,10 @@ export type Alerte = {
   urgence?: 1 | 2 | 3 | 4 | 5;
   /** Version HTML du mail ; à défaut, le texte est repris. */
   html?: string;
+  /** Push web : l'icône à faire sonner de préférence (« messages » pour un SMS reçu). */
+  application?: "crm" | "messages";
+  /** Push web : deux notifications de même étiquette se remplacent au lieu de s'empiler. */
+  etiquette?: string;
 };
 
 
@@ -221,9 +225,19 @@ async function envoyerMail(alerte: Alerte): Promise<ResultatCanal> {
   }
 }
 
+async function envoyerParPushWeb(alerte: Alerte): Promise<ResultatCanal> {
+  try {
+    const { envoyerPushWeb } = await import("./pushweb");
+    return await envoyerPushWeb({ titre: alerte.titre, texte: alerte.texte, lien: alerte.lien, etiquette: alerte.etiquette }, { application: alerte.application });
+  } catch (erreur) {
+    return { canal: "pushweb", ok: false, configure: false, detail: `push web indisponible : ${decrireErreur(erreur).slice(0, 200)}` };
+  }
+}
+
 const ENVOIS: Record<Canal, (alerte: Alerte) => Promise<ResultatCanal>> = {
   telegram: envoyerTelegram,
   ntfy: envoyerNtfy,
+  pushweb: envoyerParPushWeb,
   mail: envoyerMail,
 };
 

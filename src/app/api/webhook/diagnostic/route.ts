@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
-import { alerter, type ResultatCanal } from "@/lib/alertes/canaux";
+import { CANAUX_PUSH, alerter, type ResultatCanal } from "@/lib/alertes/canaux";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { etatNotifications } from "@/lib/meta/sante";
 import { lienFiche } from "@/lib/meta/config";
@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
     }, { origine: "essai" });
     reponse.essai = {
       resultats,
-      pousseRecue: resultats.some((r) => r.ok && (r.canal === "telegram" || r.canal === "ntfy")),
+      pousseRecue: resultats.some((r) => r.ok && CANAUX_PUSH.includes(r.canal)),
     };
   }
 

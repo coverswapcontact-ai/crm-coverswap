@@ -53,6 +53,11 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   // Registre des alertes envoyées au gérant : déjà un historique (une ligne par
   // envoi, jamais modifiée), sans donnée métier ni donnée personnelle.
   "AlerteEnvoi",
+  // Clés générées par le serveur (paire VAPID du push web) : le journal en garderait une copie.
+  "CleInterne",
+  // Abonnements aux notifications du navigateur : état technique d'un appareil
+  // (adresse de livraison et clés de chiffrement), réécrit à chaque envoi.
+  "AbonnementPush",
 ]);
 
 export type RegleImmuabilite = {

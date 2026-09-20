@@ -124,6 +124,16 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   PieceMessage: { remplacer: () => ({ nom: EFFACE, raison: EFFACE }), garde: "type et taille (fichier effacé)" },
   AnalyseMessage: { remplacer: () => ({ raisonnement: null, resultat: "{}" }), garde: "méthode, catégorie, confiance et coût" },
   Fichier: { remplacer: () => ({ nomOriginal: null }), garde: "type, taille et empreinte (fichier effacé)" },
+  // Messagerie SMS : le numéro est la clé de la conversation, il part avec le reste.
+  ConversationSms: {
+    remplacer: (ligne) => ({ numero: `anonymise:${String(ligne.id)}`, nomAffiche: null, dernierExtrait: null, stopTexte: null, brouillon: null }),
+    garde: "dates, compteurs et date d'un éventuel STOP",
+  },
+  Sms: { remplacer: () => ({ texte: EFFACE, textePropose: null, erreur: null }), garde: "sens, dates, statut de remise, origine et message type : la mesure des relances, sans leur contenu" },
+  // Espace client : ce que la personne y a écrit et les images qui la concernent.
+  EspaceClient: { remplacer: () => ({ souhaits: null }), garde: "dates de création, d'accès et d'expiration du lien" },
+  SimulationEspace: { remplacer: () => ({ chemin: EFFACE, titre: null, description: null, commentaireClient: null }), garde: "dates de dépôt et de choix (image effacée)" },
+  AccordDevis: { conserve: "preuve du bon pour accord donné sur un devis émis : conservée avec le document, même durée légale" },
   Proposition: {
     remplacer: (ligne): Record<string, string | null> =>
       ligne.type === "ANONYMISATION_CLIENT"

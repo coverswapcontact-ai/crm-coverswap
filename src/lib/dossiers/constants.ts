@@ -225,6 +225,18 @@ export const TYPES_EVENEMENT = [
   "ENCAISSEMENT_CORRIGE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
+  // Messagerie SMS et espace client (mission du 20/09/2026)
+  "SMS_RECU",
+  "SMS_ENVOYE",
+  "ESPACE_LIEN_CREE",
+  "ESPACE_VISITE",
+  "ESPACE_PHOTOS",
+  "ESPACE_SOUHAITS",
+  "ESPACE_SIMULATION_DEPOSEE",
+  "ESPACE_SIMULATION_CHOISIE",
+  "ESPACE_COMMENTAIRE",
+  "ESPACE_COORDONNEES",
+  "ESPACE_DEVIS_ACCEPTE",
 ] as const;
 export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
 
@@ -249,6 +261,17 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ENCAISSEMENT_CORRIGE: "Paiement corrigé",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
+  SMS_RECU: "SMS reçu",
+  SMS_ENVOYE: "SMS envoyé",
+  ESPACE_LIEN_CREE: "Espace client ouvert",
+  ESPACE_VISITE: "Espace client consulté",
+  ESPACE_PHOTOS: "Photos déposées par le client",
+  ESPACE_SOUHAITS: "Souhaits du client",
+  ESPACE_SIMULATION_DEPOSEE: "Simulation déposée dans l'espace",
+  ESPACE_SIMULATION_CHOISIE: "Simulation choisie par le client",
+  ESPACE_COMMENTAIRE: "Commentaire du client",
+  ESPACE_COORDONNEES: "Coordonnées complétées par le client",
+  ESPACE_DEVIS_ACCEPTE: "Bon pour accord du client",
 };
 // Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
 

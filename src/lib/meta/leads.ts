@@ -13,6 +13,7 @@ import { CANAUX_PUSH, alerter, resumerEnvoi, type ResultatCanal } from "@/lib/al
 import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
+import { envoyerAccuseDeReception } from "@/lib/sms/accuse";
 
 /**
  * Le chemin d'un lead Meta, de l'événement reçu à la fiche du CRM.
@@ -281,6 +282,13 @@ export async function traiterLeadMeta(
     await rattacherLead(prisma, leadId);
   } catch (erreur) {
     console.error("[meta] rattachement du client (non bloquant) :", erreur);
+  }
+
+  // Accusé de réception par SMS : le seul envoi automatique. Pas pour un contact
+  // déjà connu (il a déjà mon numéro), ni hors zone (je ne promets pas un appel).
+  if (!existant && qualification?.priorite !== "A_ECARTER") {
+    const accuse = await envoyerAccuseDeReception(leadId);
+    console.log(`[meta] accusé de réception du lead ${leadgenId} : ${accuse.envoye ? "mis en file" : `non envoyé (${accuse.raison})`}`);
   }
 
   await prisma.interaction.create({

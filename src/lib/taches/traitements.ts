@@ -5,6 +5,7 @@ import { enregistrerTachesMessages } from "@/lib/messages/taches";
 import { enregistrerTachesMeta } from "@/lib/meta/taches";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
 import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
+import { enregistrerTachesSms } from "@/lib/sms/taches";
 import { enregistrerTachesSynthese } from "@/lib/synthese/instantanes";
 import { enregistrerTachesValidation } from "@/lib/validation/taches";
 
@@ -24,4 +25,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesMessages();
   enregistrerTachesRgpd();
   enregistrerTachesMeta();
+  enregistrerTachesSms();
 }

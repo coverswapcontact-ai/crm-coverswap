@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import { after, before, describe, test } from "node:test";
+import { preparerBaseEssai } from "@/test/base-essai";
+
+// Le push web lit ses abonnements en base : une base d'essai, jamais celle du poste.
+preparerBaseEssai();
 
 /**
  * Le défaut du 20/09/2026 : un canal non configuré disparaissait du compte
@@ -70,7 +74,7 @@ describe("compte rendu d'un envoi", () => {
     const resultats = await canaux.alerter({ titre: "Essai", texte: "corps" });
     assert.deepEqual(
       resultats.map((r) => r.canal),
-      ["telegram", "ntfy", "mail"]
+      ["telegram", "ntfy", "pushweb", "mail"]
     );
     assert.equal(
       resultats.every((r) => !r.ok && !r.configure),
@@ -78,6 +82,7 @@ describe("compte rendu d'un envoi", () => {
     );
     // Le détail dit quoi poser, pas seulement « échec ».
     assert.match(resultats[1].detail ?? "", /NTFY_TOPIC absente/);
+    assert.match(resultats[2].detail ?? "", /aucun appareil abonné/);
   });
 
   test("un canal qui marche est distingué d'un canal absent", async () => {

@@ -24,6 +24,8 @@
 import { Resend } from "resend";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { CANAUX, CANAUX_PUSH, variablesManquantes, type Canal, type ResultatCanal } from "./configuration";
+import { decrireErreur, envoyerAvecRepli } from "./reseau";
+import { consignerAlerte } from "./registre";
 
 export {
   CANAUX,
@@ -47,7 +49,7 @@ export type Alerte = {
   /** Numéro à appeler : devient un bouton d'appel sur Telegram et ntfy. */
   telephone?: string;
   /** Plus c'est haut, plus la notification insiste (ntfy : 3 = défaut, 4 = haute, 5 = urgente). */
-  urgence?: 3 | 4 | 5;
+  urgence?: 1 | 2 | 3 | 4 | 5;
   /** Version HTML du mail ; à défaut, le texte est repris. */
   html?: string;
 };
@@ -106,7 +108,7 @@ async function envoyerTelegram(alerte: Alerte): Promise<ResultatCanal> {
   if (tel) boutons.push([{ text: `📞 Appeler ${alerte.telephone}`, url: `tel:${tel}` }]);
   if (alerte.lien) boutons.push([{ text: alerte.libelleLien ?? "Ouvrir la fiche", url: alerte.lien }]);
   try {
-    const rep = await fetch(`https://api.telegram.org/bot${jeton}/sendMessage`, {
+    const rep = await envoyerAvecRepli(`https://api.telegram.org/bot${jeton}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -116,12 +118,13 @@ async function envoyerTelegram(alerte: Alerte): Promise<ResultatCanal> {
         disable_web_page_preview: true,
         ...(boutons.length ? { reply_markup: { inline_keyboard: boutons } } : {}),
       }),
-      signal: AbortSignal.timeout(DELAI_MS),
+      delaiMs: DELAI_MS,
     });
-    if (!rep.ok) return { canal: "telegram", ok: false, configure: true, detail: `HTTP ${rep.status} ${(await rep.text()).slice(0, 200)}` };
-    return { canal: "telegram", ok: true, configure: true };
+    if (rep.status < 200 || rep.status >= 300) return { canal: "telegram", ok: false, configure: true, detail: `HTTP ${rep.status} ${rep.texte.slice(0, 200)}` };
+    return { canal: "telegram", ok: true, configure: true, ...(rep.chemin === "ipv4" ? { detail: "envoyée par le chemin de repli (IPv4 forcé)" } : {}) };
   } catch (erreur) {
-    return { canal: "telegram", ok: false, configure: true, detail: String(erreur).slice(0, 200) };
+    // Le jeton figure dans l'adresse : ne jamais laisser une erreur le recopier.
+    return { canal: "telegram", ok: false, configure: true, detail: decrireErreur(erreur).replaceAll(jeton, "<jeton>").slice(0, 400) };
   }
 }
 
@@ -131,12 +134,12 @@ async function envoyerNtfy(alerte: Alerte): Promise<ResultatCanal> {
   const serveur = (process.env.NTFY_SERVEUR || "https://ntfy.sh").replace(/\/$/, "");
   const tel = alerte.telephone ? telephoneInternational(alerte.telephone) : null;
   // Un bouton « view » par action : ntfy les affiche sous la notification.
-  const actions = [
-    tel ? `view, Appeler, tel:${tel}` : null,
-    alerte.lien ? `view, ${alerte.libelleLien ?? "Ouvrir la fiche"}, ${alerte.lien}` : null,
-  ].filter(Boolean) as string[];
+  // Le libellé voyage dans un en-tête : ASCII seulement (un « é » vaut un refus
+  // HTTP 400 de ntfy), sans virgule ni point-virgule, qui séparent les actions.
+  const libelle = titreAscii(alerte.libelleLien ?? "Ouvrir la fiche").replace(/[,;]/g, " ").replace(/\s{2,}/g, " ").trim();
+  const actions = [tel ? `view, Appeler, tel:${tel}` : null, alerte.lien ? `view, ${libelle}, ${alerte.lien}` : null].filter(Boolean) as string[];
   try {
-    const rep = await fetch(`${serveur}/${encodeURIComponent(sujet)}`, {
+    const rep = await envoyerAvecRepli(`${serveur}/${encodeURIComponent(sujet)}`, {
       method: "POST",
       headers: {
         // En-têtes ntfy : ASCII seulement, les accents passent par le corps du message.
@@ -147,12 +150,12 @@ async function envoyerNtfy(alerte: Alerte): Promise<ResultatCanal> {
         ...(process.env.NTFY_TOKEN ? { Authorization: `Bearer ${process.env.NTFY_TOKEN}` } : {}),
       },
       body: alerte.texte,
-      signal: AbortSignal.timeout(DELAI_MS),
+      delaiMs: DELAI_MS,
     });
-    if (!rep.ok) return { canal: "ntfy", ok: false, configure: true, detail: `HTTP ${rep.status} ${(await rep.text()).slice(0, 200)}` };
-    return { canal: "ntfy", ok: true, configure: true };
+    if (rep.status < 200 || rep.status >= 300) return { canal: "ntfy", ok: false, configure: true, detail: `HTTP ${rep.status} ${rep.texte.slice(0, 200)}` };
+    return { canal: "ntfy", ok: true, configure: true, ...(rep.chemin === "ipv4" ? { detail: "envoyée par le chemin de repli (IPv4 forcé)" } : {}) };
   } catch (erreur) {
-    return { canal: "ntfy", ok: false, configure: true, detail: String(erreur).slice(0, 200) };
+    return { canal: "ntfy", ok: false, configure: true, detail: decrireErreur(erreur).replaceAll(sujet, "<sujet>").slice(0, 400) };
   }
 }
 
@@ -193,8 +196,12 @@ const ENVOIS: Record<Canal, (alerte: Alerte) => Promise<ResultatCanal>> = {
  * une ligne par canal — celui qui n'est pas configuré le dit, il ne disparaît
  * pas du compte rendu. L'appelant garde ces lignes (elles sont écrites sur le
  * lead et montrées dans l'écran Publicité).
+ *
+ * `origine` range l'envoi dans le registre des alertes (AlerteEnvoi) : c'est ce
+ * qui rend une panne de canal visible à l'écran. Sans origine, rien n'est écrit.
  */
-export async function alerter(alerte: Alerte, canaux: readonly Canal[] = CANAUX): Promise<ResultatCanal[]> {
+export async function alerter(alerte: Alerte, options: { canaux?: readonly Canal[]; origine?: string } = {}): Promise<ResultatCanal[]> {
+  const canaux = options.canaux ?? CANAUX;
   const resultats = await Promise.all(canaux.map((canal) => ENVOIS[canal](alerte)));
   for (const r of resultats) {
     if (!r.ok && r.configure) console.error(`[alertes] ${r.canal} en échec : ${r.detail}`);
@@ -204,5 +211,6 @@ export async function alerter(alerte: Alerte, canaux: readonly Canal[] = CANAUX)
   else if (!resultats.some((r) => r.ok && CANAUX_PUSH.includes(r.canal))) {
     console.error("[alertes] aucune notification POUSSÉE : le téléphone n'a pas sonné, seul un mail est parti.");
   }
+  if (options.origine) await consignerAlerte(options.origine, resultats);
   return resultats;
 }

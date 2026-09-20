@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
       libelleLien: "Ouvrir l'écran Publicité",
       telephone: "+33612345678",
       urgence: 4,
-    });
+    }, { origine: "essai" });
     reponse.essai = {
       resultats,
       pousseRecue: resultats.some((r) => r.ok && (r.canal === "telegram" || r.canal === "ntfy")),

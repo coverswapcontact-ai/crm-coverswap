@@ -318,7 +318,7 @@ async function alerterLeadIllisible(ligne: MetaLead, message: string): Promise<v
     lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/publicite`,
     libelleLien: "Voir l'écran Publicité",
     urgence: 5,
-  });
+  }, { origine: "lead-illisible" });
 }
 
 /**
@@ -374,7 +374,7 @@ export async function notifierNouveauLead(params: {
     libelleLien: "Ouvrir la fiche",
     telephone: normalise.telephone || undefined,
     urgence: params.relance ? 5 : 4,
-  });
+  }, { origine: params.relance ? "relance-lead" : "lead-meta" });
 }
 
 /**

@@ -22,6 +22,12 @@ export async function register() {
     console.error("[alertes] AUCUNE NOTIFICATION POUSSÉE : un nouveau lead ne fera pas sonner le téléphone, seul un mail partira. Poser TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID ou NTFY_TOPIC.");
   }
 
+  // Sonde du réseau sortant et essai de push : en tâche de fond, jamais bloquant.
+  if (process.env.NODE_ENV === "production") {
+    const { verifierAlertesAuDemarrage } = await import("@/lib/alertes/demarrage");
+    void verifierAlertesAuDemarrage();
+  }
+
   if (process.env.TACHES_DESACTIVEES === "1") {
     console.warn("[taches] Exécuteur désactivé (TACHES_DESACTIVEES=1) : aucune tâche de fond ne tournera.");
     return;

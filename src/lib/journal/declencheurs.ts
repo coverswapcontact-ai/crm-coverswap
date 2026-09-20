@@ -50,6 +50,9 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   // Contenu d'un message reçu : écrit une fois avec son message (lui journalisé),
   // jamais modifié (la base le refuse) ; le journal en dupliquerait chaque mail.
   "ContenuMessage",
+  // Registre des alertes envoyées au gérant : déjà un historique (une ligne par
+  // envoi, jamais modifiée), sans donnée métier ni donnée personnelle.
+  "AlerteEnvoi",
 ]);
 
 export type RegleImmuabilite = {

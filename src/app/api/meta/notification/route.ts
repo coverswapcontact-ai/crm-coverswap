@@ -23,7 +23,7 @@ export async function POST() {
       libelleLien: "Ouvrir l'écran Publicité",
       telephone: "+33612345678",
       urgence: 4,
-    });
+    }, { origine: "essai" });
     return NextResponse.json({
       resultats,
       pousseRecue: resultats.some((r) => r.ok && (r.canal === "telegram" || r.canal === "ntfy")),

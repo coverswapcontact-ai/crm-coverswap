@@ -142,7 +142,10 @@ doit être justifié ici :
 - `MiroirDrive` (section 15) : état technique du miroir, réécrit à chaque passage ;
 - `ContenuMessage` (section 16) : le texte d'un mail reçu, écrit une fois avec
   son `Message` (lui journalisé) ; la base en refuse toute modification, sauf
-  son effacement RGPD, une fois. Le journaliser dupliquerait chaque mail.
+  son effacement RGPD, une fois. Le journaliser dupliquerait chaque mail ;
+- `AlerteEnvoi` : registre des alertes envoyées au gérant (push, mail). Déjà un
+  historique — une ligne par envoi, jamais modifiée — sans donnée métier ni
+  donnée personnelle (origine de l'alerte et état de chaque canal seulement).
 
 ### Limites connues
 

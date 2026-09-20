@@ -1103,3 +1103,19 @@ model AppelIa {
 
   @@index([createdAt])
 }
+
+// Registre des alertes envoyées au gérant (push, mail) : une ligne par envoi,
+// avec le résultat de chaque canal. Sert à montrer un canal en panne ailleurs
+// que dans les journaux du serveur, et à décider de l'auto-test au démarrage.
+// Aucun nom ni numéro : seulement l'origine de l'alerte et l'état des canaux.
+model AlerteEnvoi {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  origine   String // lead-meta | relance-lead | lead-illisible | essai | demarrage | sms-recu | espace-client | …
+  abouti    Boolean // au moins un canal a abouti
+  pousse    Boolean // au moins un canal POUSSÉ (Telegram, ntfy, push web) a abouti
+  resultats String // JSON : [{canal, ok, configure, detail}]
+  ecriture  String?
+
+  @@index([createdAt])
+}

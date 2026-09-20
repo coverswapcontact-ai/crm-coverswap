@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { CANAUX, canalConfigure, pushDisponible } from "@/lib/alertes/canaux";
 
 /**
@@ -12,7 +12,10 @@ import { CANAUX, canalConfigure, pushDisponible } from "@/lib/alertes/canaux";
  */
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(requete: NextRequest) {
+  // ?reseau=1 : ce que le serveur arrive à joindre (ntfy, Telegram, Brevo…), avec
+  // la cause exacte d'un échec. Résultat gardé une minute ; aucun secret n'y figure.
+  const reseau = new URL(requete.url).searchParams.get("reseau") === "1" ? await (await import("@/lib/alertes/reseau")).sonderReseau() : undefined;
   return NextResponse.json({
     status: "ok",
     timestamp: Date.now(),
@@ -21,5 +24,6 @@ export async function GET() {
       canaux: Object.fromEntries(CANAUX.map((canal) => [canal, canalConfigure(canal)])),
       push: pushDisponible(),
     },
+    ...(reseau ? { reseau } : {}),
   });
 }

@@ -119,7 +119,7 @@ export async function verifierJeton(): Promise<VerdictJeton> {
         titre: "Meta : jeton à renouveler",
         texte: `${verdict.message}\n\nÀ faire : régénérer le jeton de page dans l'outil d'exploration de l'API Graph, puis remplacer META_PAGE_ACCESS_TOKEN sur Railway.`,
         urgence: verdict.etat === "proche" ? 4 : 5,
-      });
+      }, { origine: "jeton-meta" });
     }
   }
   return verdict;

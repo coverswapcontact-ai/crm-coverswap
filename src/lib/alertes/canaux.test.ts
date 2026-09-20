@@ -103,6 +103,14 @@ describe("compte rendu d'un envoi", () => {
     delete process.env.NTFY_TOPIC;
   });
 
+  test("un libellé de bouton accentué part en ASCII : ntfy refuse tout en-tête non ASCII (HTTP 400)", async () => {
+    process.env.NTFY_TOPIC = "essai-coverswap";
+    recues = [];
+    await canaux.alerter({ titre: "Essai", texte: "corps", lien: "https://crm.coverswap.fr/publicite", libelleLien: "Ouvrir l'écran Publicité ; vite, svp" });
+    assert.equal(recues[0].actions, "view, Ouvrir l'ecran Publicite vite svp, https://crm.coverswap.fr/publicite");
+    delete process.env.NTFY_TOPIC;
+  });
+
   test("un canal configuré mais refusé est un échec, pas une absence", async () => {
     process.env.NTFY_TOPIC = "refuse";
     const resultats = await canaux.alerter({ titre: "Essai", texte: "corps" });

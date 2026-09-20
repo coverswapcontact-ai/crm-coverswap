@@ -11,14 +11,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.NEXT_PHASE === "phase-production-build") return;
 
-  // Réseau sortant : l'hébergeur n'a pas d'IPv6. Sans ce réglage, `fetch` essaie
-  // chaque adresse 250 ms (sélection automatique de famille) et abandonne dès que
-  // la latence dépasse ce délai — vu le 21/09 vers Telegram : TCP en 155 ms,
-  // `fetch failed ← ETIMEDOUT`. IPv4 d'abord, et une vraie patience par adresse.
-  const dns = await import("node:dns");
-  const net = await import("node:net");
-  dns.setDefaultResultOrder("ipv4first");
-  net.setDefaultAutoSelectFamilyAttemptTimeout(2500);
+  // Réseau sortant : IPv4 d'abord (l'hébergeur n'a pas d'IPv6), voir le module.
+  (await import("@/lib/base/reseau-sortant")).reglerReseauSortant();
 
   const { preparerBase } = await import("@/lib/base/preparation");
   await preparerBase();

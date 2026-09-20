@@ -19,6 +19,8 @@ import {
   type GroupeEntrants,
 } from "./constantes";
 import type { EntrantDetail, EntrantResume, ListeEntrants } from "./types";
+import { PRIORITES, comparerPourRappel } from "./priorite";
+import { classerLeadSansBloquer, poserPriorite } from "./qualification";
 
 // Contacts entrants (modèle Lead) : ce que le site, Meta, Zapier et la saisie
 // à la main font arriver. Ils vivent ici jusqu'au dossier ; ensuite leur
@@ -71,6 +73,10 @@ function versResume(lead: LeadResume, maintenant: Date): EntrantResume {
     dossier: lead.dossiers[0] ?? null,
     client: lead.client,
     archiveLe: lead.archiveLe?.toISOString() ?? null,
+    priorite: lead.priorite,
+    prioriteMotif: lead.prioriteMotif,
+    prioriteManuelle: lead.prioriteManuelle,
+    rappelLe: lead.rappelLe?.toISOString() ?? null,
   };
 }
 
@@ -135,7 +141,10 @@ export async function listerEntrants(filtres: FiltresEntrants = {}, maintenant: 
     ...GROUPES_ENTRANTS.map((cle) => prisma.lead.count({ where: { ...AVEC_ARCHIVES, AND: [...communs, whereGroupe(cle, maintenant)] } })),
   ]);
   const compteurs = Object.fromEntries(GROUPES_ENTRANTS.map((cle, index) => [cle, comptes[index]])) as Record<GroupeEntrants, number>;
-  return { lignes: leads.map((lead) => versResume(lead, maintenant)), compteurs };
+  const lignes = leads.map((lead) => versResume(lead, maintenant));
+  // « À rappeler » : dans l'ordre de valeur (prioritaire, standard, secondaire, à écarter), pas d'arrivée.
+  if (groupe === "A_TRAITER") lignes.sort(comparerPourRappel);
+  return { lignes, compteurs };
 }
 
 /** Contacts à traiter (reçus depuis moins de 60 jours, sans dossier) : le compteur de la navigation. */
@@ -174,6 +183,10 @@ export async function chargerEntrant(id: string, maintenant: Date = new Date()):
     publicite: lead.publicite,
     formulaire: lead.formulaire,
     archiveMotif: lead.archiveMotif,
+    occupation: lead.occupation,
+    delaiProjet: lead.delaiProjet,
+    delaiProjetTexte: lead.delaiProjetTexte,
+    tailleCuisine: lead.tailleCuisine,
     simulations: lead.simulations.map((simulation) => ({
       id: simulation.id,
       le: simulation.createdAt.toISOString(),
@@ -225,6 +238,10 @@ export const schemaModificationEntrant = z
     notes: texte(5000, "Notes trop longues.").nullable(),
     statut: z.enum(STATUTS_LEAD_MANUELS, "Statut invalide."),
     motif: texte(300, "Motif trop long.").nullable(),
+    /** Classe de rappel décidée à la main ; « AUTO » rend la main au calcul. */
+    priorite: z.enum([...PRIORITES, "AUTO"], "Priorité invalide."),
+    /** Prochain rappel prévu (ISO), ou null pour l'effacer. */
+    rappelLe: z.iso.datetime("Date de rappel invalide.").nullable(),
   })
   .partial();
 
@@ -233,7 +250,7 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   const lead = await prisma.lead.findUnique({ where: { id }, include: { dossiers: { where: { archiveLe: null }, select: { id: true } } } });
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
   const avertissements: string[] = [];
-  const { nomFamille, motif, email, ...champs } = entree;
+  const { nomFamille, motif, email, priorite, rappelLe, ...champs } = entree;
   if (entree.statut && entree.statut !== lead.statut && lead.dossiers.length > 0) {
     throw new ErreurMetier("Ce contact a un dossier : son statut suit le dossier, c'est le dossier qu'il faut faire avancer.", 409);
   }
@@ -246,7 +263,12 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   const nomFinal = (nomFamille ?? lead.nom).trim();
   if (!prenomFinal && !nomFinal) throw new ErreurMetier("Indique au moins un prénom ou un nom.", 400);
 
-  const data: Prisma.LeadUpdateInput = { ...champs, ...(nomFamille !== undefined ? { nom: nomFamille } : {}), ...(email !== undefined ? { email: email ? normaliserEmail(email) : null } : {}) };
+  const data: Prisma.LeadUpdateInput = {
+    ...champs,
+    ...(nomFamille !== undefined ? { nom: nomFamille } : {}),
+    ...(email !== undefined ? { email: email ? normaliserEmail(email) : null } : {}),
+    ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null } : {}),
+  };
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({ where: { id }, data });
     if (nouvelEmail || nouveauTelephone) {
@@ -263,6 +285,9 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
       });
     }
   });
+  if (priorite !== undefined) await poserPriorite(id, priorite === "AUTO" ? null : priorite);
+  // Code postal ou notes corrigés : la classe de rappel peut changer (sauf si elle est posée à la main).
+  if (entree.codePostal !== undefined || entree.notes !== undefined) await classerLeadSansBloquer(id);
   if ((nouvelEmail || nouveauTelephone) && lead.clientId) {
     avertissements.push("Coordonnées ajoutées aussi à la fiche client ; les anciennes y restent, à archiver depuis la fiche si elles sont fausses.");
   }
@@ -326,7 +351,7 @@ export async function creerEntrant(entree: z.output<typeof schemaCreationEntrant
   if (!entree.prenom && !entree.nomFamille) throw new ErreurMetier("Indique au moins un prénom ou un nom.", 400);
   if (entree.telephone && !normaliserTelephone(entree.telephone)) throw new ErreurMetier("Numéro de téléphone illisible : il faut au moins 9 chiffres.", 400);
   if (entree.email && !normaliserEmail(entree.email)) throw new ErreurMetier("Adresse e-mail invalide.", 400);
-  return prisma.$transaction(async (tx) => {
+  const cree = await prisma.$transaction(async (tx) => {
     const lead = await tx.lead.create({
       data: {
         prenom: entree.prenom,
@@ -344,4 +369,6 @@ export async function creerEntrant(entree: z.output<typeof schemaCreationEntrant
     const clientId = await rattacherLead(tx, lead.id, null);
     return { id: lead.id, clientId };
   });
+  await classerLeadSansBloquer(cree.id);
+  return cree;
 }

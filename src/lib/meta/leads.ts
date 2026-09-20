@@ -11,6 +11,8 @@ import { lienFiche } from "./config";
 import { communeDuCodePostal } from "./communes";
 import { CANAUX_PUSH, alerter, resumerEnvoi, type ResultatCanal } from "@/lib/alertes/canaux";
 import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
+import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
+import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 
 /**
  * Le chemin d'un lead Meta, de l'événement reçu à la fiche du CRM.
@@ -271,6 +273,9 @@ export async function traiterLeadMeta(
     },
   });
 
+  // Priorité de rappel : lue dans les réponses du formulaire (propriétaire, délai) et le code postal.
+  const qualification = existant ? null : await classerLeadSansBloquer(leadId);
+
   // Client pérenne : jamais bloquant, rattrapé par le travail périodique.
   try {
     await rattacherLead(prisma, leadId);
@@ -293,7 +298,13 @@ export async function traiterLeadMeta(
     },
   });
 
-  const notifications = await notifierNouveauLead({ leadId, normalise, campagne: graph.campagneNom, nouveau: !existant });
+  const notifications = await notifierNouveauLead({
+    leadId,
+    normalise,
+    campagne: graph.campagneNom,
+    nouveau: !existant,
+    priorite: qualification ? { classe: qualification.priorite, motif: qualification.motif } : null,
+  });
   await enregistrerNotification(leadgenId, notifications);
   // Relance si personne n'a ouvert la fiche dans la demi-heure.
   await mettreEnFile({
@@ -353,13 +364,19 @@ export async function notifierNouveauLead(params: {
   campagne?: string | null;
   nouveau: boolean;
   relance?: boolean;
+  /** Classe de rappel : elle ouvre le titre, et règle l'insistance du push. */
+  priorite?: { classe: Priorite; motif: string } | null;
 }): Promise<ResultatCanal[]> {
   const { normalise } = params;
+  const classe = params.priorite?.classe ?? null;
+  // Prioritaire : push urgent. À écarter (hors zone) : push ordinaire, sans insister.
+  const urgenceSelonClasse = classe === "PRIORITAIRE" ? 5 : classe === "A_ECARTER" || classe === "SECONDAIRE" ? 3 : 4;
   const projet = LIBELLES_TYPE_PROJET[normalise.typeProjet] ?? normalise.typeProjet;
   const lignes = [
     `${normalise.prenom} ${normalise.nom}`.trim(),
     normalise.telephone ? `📞 ${normalise.telephone}` : "Téléphone non communiqué",
     `Projet : ${projet}${normalise.ville ? ` · ${normalise.ville}` : ""}`,
+    params.priorite ? `${LIBELLES_PRIORITE[params.priorite.classe].toUpperCase()} — ${params.priorite.motif}` : null,
     params.campagne ? `Campagne : ${params.campagne}` : null,
     ...normalise.reponsesLibres.slice(0, 3).map((r) => `${r.question} : ${r.reponse}`),
     params.nouveau ? null : "⚠️ Ce contact existait déjà : la demande a été rattachée à sa fiche.",
@@ -368,12 +385,12 @@ export async function notifierNouveauLead(params: {
   return alerter({
     titre: params.relance
       ? `Lead Meta non traité depuis 30 min — ${normalise.prenom}`
-      : `Nouveau lead Meta — ${normalise.prenom}${normalise.ville ? ` (${normalise.ville})` : ""}`,
+      : `${classe === "PRIORITAIRE" ? "PRIORITAIRE — " : classe === "A_ECARTER" ? "Hors zone — " : ""}Nouveau lead Meta — ${normalise.prenom}${normalise.ville ? ` (${normalise.ville})` : ""}`,
     texte: params.relance ? [`Personne n'a encore ouvert cette fiche.`, ...lignes].join("\n") : lignes.join("\n"),
     lien: lienFiche(params.leadId),
     libelleLien: "Ouvrir la fiche",
     telephone: normalise.telephone || undefined,
-    urgence: params.relance ? 5 : 4,
+    urgence: params.relance ? 5 : urgenceSelonClasse,
   }, { origine: params.relance ? "relance-lead" : "lead-meta" });
 }
 
@@ -388,6 +405,8 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
       vuLe: true,
       statut: true,
       archiveLe: true,
+      priorite: true,
+      prioriteMotif: true,
       prenom: true,
       nom: true,
       telephone: true,
@@ -399,6 +418,8 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
   if (!lead) return false;
   // Fiche ouverte, contact pris, statut avancé ou contact archivé : rien à rappeler.
   if (lead.vuLe || lead.archiveLe || lead.statut !== "NOUVEAU" || lead.interactions.length > 0) return false;
+  // Hors zone : Lucas a été prévenu une fois, inutile d'insister une demi-heure plus tard.
+  if (lead.priorite === "A_ECARTER") return false;
   const metaLead = await prisma.metaLead.findUnique({ where: { leadgenId }, select: { campagneNom: true, reponses: true } });
   let reponsesLibres: { question: string; reponse: string; cle: string }[] = [];
   try {
@@ -419,6 +440,7 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
     campagne: metaLead?.campagneNom ?? null,
     nouveau: true,
     relance: true,
+    priorite: lead.priorite ? { classe: lead.priorite as Priorite, motif: lead.prioriteMotif ?? "" } : null,
   });
   await enregistrerNotification(leadgenId, notifications);
   return true;
@@ -443,6 +465,12 @@ export async function recevoirLeadDuPont(
   origine = "Zapier"
 ): Promise<ResultatTraitement & { nouveau: boolean }> {
   const lead = leadDepuisChargePlate(corps);
+  // Les CLÉS reçues, jamais les valeurs : c'est ce qui dit, dans les journaux du
+  // serveur, si le Zap transmet bien campagne, ensemble et publicité. Un lead de
+  // l'outil de test de Meta n'en a pas (il ne vient d'aucune publicité).
+  const cles = Object.keys(corps);
+  const vides = cles.filter((cle) => corps[cle] === null || corps[cle] === undefined || String(corps[cle]).trim() === "");
+  console.log(`[meta] pont ${origine} — clés reçues : ${cles.join(", ") || "aucune"}${vides.length ? ` — vides : ${vides.join(", ")}` : ""}`);
   const leadgenId =
     lead.leadgenId ??
     `pont-${createHash("sha256")

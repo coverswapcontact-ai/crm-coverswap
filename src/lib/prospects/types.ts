@@ -19,6 +19,12 @@ export type EntrantResume = {
   dossier: { id: string; etape: string } | null;
   client: { id: string; nom: string } | null;
   archiveLe: string | null;
+  /** Classe de rappel (PRIORITAIRE, STANDARD, SECONDAIRE, A_ECARTER) ; null tant que le contact n'a pas été classé. */
+  priorite: string | null;
+  prioriteMotif: string | null;
+  prioriteManuelle: boolean;
+  /** Prochain rappel prévu, posé à la fin d'un appel. */
+  rappelLe: string | null;
 };
 
 export type SimulationVue = {
@@ -47,6 +53,11 @@ export type EntrantDetail = EntrantResume & {
   publicite: string | null;
   formulaire: string | null;
   archiveMotif: string | null;
+  /** Ce que le formulaire disait, lu à l'arrivée. */
+  occupation: string | null;
+  delaiProjet: string | null;
+  delaiProjetTexte: string | null;
+  tailleCuisine: string | null;
   simulations: SimulationVue[];
   echanges: { id: string; type: string; contenu: string; le: string }[];
   dossiers: { id: string; objet: string; etape: string; ouvertLe: string }[];

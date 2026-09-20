@@ -41,6 +41,16 @@ model Lead {
   parcoursId       String? // identifiant du parcours navigateur : simulation puis devis = même fiche
   ipOrigine        String? // adresse IP du visiteur, pour la limite anti-abus du webhook
   vuLe             DateTime? // première ouverture de la fiche dans le CRM : sert à la relance des leads non traités
+  // Priorité de rappel (src/lib/prospects/priorite.ts) : calculée à l'arrivée d'après
+  // les réponses du formulaire et le code postal ; posée à la main, elle n'est plus recalculée.
+  priorite         String? // PRIORITAIRE | STANDARD | SECONDAIRE | A_ECARTER
+  prioriteMotif    String? // pourquoi, en une phrase lisible
+  prioriteManuelle Boolean       @default(false)
+  occupation       String? // PROPRIETAIRE | LOCATAIRE, d'après le formulaire
+  delaiProjet      String? // COURT | MOYEN | LOINTAIN | INDETERMINE
+  delaiProjetTexte String? // la réponse telle que donnée
+  tailleCuisine    String? // la réponse telle que donnée
+  rappelLe         DateTime? // prochain rappel téléphonique prévu (issue d'appel « à rappeler »)
   metaLeads        MetaLead[]
   interactions     Interaction[]
   devis            Devis[]

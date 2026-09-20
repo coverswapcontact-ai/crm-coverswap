@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { revalidatePath } from "next/cache";
 import { Resend } from "resend";
 import { rattacherLead } from "@/lib/clients/identification";
+import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
@@ -261,6 +262,9 @@ export async function POST(request: NextRequest) {
     } catch (erreurClient) {
       console.error("[webhook] rattachement du client (non bloquant) :", erreurClient);
     }
+
+    // ── Priorité de rappel : classée à l'arrivée, jamais bloquante ──
+    await classerLeadSansBloquer(lead.id);
 
     // ── Photos jointes à la demande (formulaire de devis) ──
     const photosEcrites = parsed.data.photos?.length ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;

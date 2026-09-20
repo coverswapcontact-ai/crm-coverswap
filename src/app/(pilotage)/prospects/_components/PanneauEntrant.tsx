@@ -24,7 +24,8 @@ import {
 } from "@/lib/prospects/constantes";
 import type { EntrantDetail } from "@/lib/prospects/types";
 import { cn } from "@/lib/utils";
-import { PastilleIntention } from "./pastilles";
+import { PastilleIntention, PastillePriorite } from "./pastilles";
+import { LIBELLES_PRIORITE, PRIORITES, type Priorite } from "@/lib/prospects/priorite";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5";
 const LIEN_ACTION = cn(
@@ -129,6 +130,7 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
             {[libelleSourceLead(detail.source), detail.ville, `reçu le ${formatDateCourte(detail.recuLe)}`].filter(Boolean).join(" · ")}
           </SheetDescription>
           <p className="mt-2 flex flex-wrap gap-1.5">
+            {detail.dossier ? null : <PastillePriorite priorite={detail.priorite} motif={detail.prioriteMotif} />}
             <PastilleIntention intention={detail.intention} />
             <Pastille ton={detail.statut === "PERDU" ? "rouge" : detail.dossier ? "vert" : "neutre"}>
               {LIBELLES_STATUT_LEAD[detail.statut as StatutLead] ?? detail.statut}
@@ -179,6 +181,26 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
             </Link>
           ) : null}
         </div>
+
+        {detail.dossier || detail.archiveLe ? null : (
+          <section>
+            <TitreSection>Priorité de rappel</TitreSection>
+            <div className={CARTE}>
+              <p className="text-[13px] text-[#D1D5DB]">
+                {detail.prioriteMotif ?? "Pas encore classé."}
+                {detail.tailleCuisine ? <span className="text-[#9CA3AF]">{` · taille : ${detail.tailleCuisine}`}</span> : null}
+              </p>
+              <div className="mt-3">
+                <Puces
+                  libelle={detail.prioriteManuelle ? "Classe posée à la main" : "Classe calculée — la changer si besoin"}
+                  options={[...PRIORITES.map((valeur) => ({ valeur: valeur as Priorite | "AUTO", libelle: LIBELLES_PRIORITE[valeur] })), ...(detail.prioriteManuelle ? [{ valeur: "AUTO" as const, libelle: "Recalculer" }] : [])]}
+                  valeur={(detail.priorite as Priorite | null) ?? null}
+                  onChange={(valeur: Priorite | "AUTO") => void appeler("priorite", `/api/prospects/entrants/${detail.id}`, "PATCH", { priorite: valeur }, valeur === "AUTO" ? "Priorité recalculée" : "Priorité enregistrée")}
+                />
+              </div>
+            </div>
+          </section>
+        )}
 
         <section>
           <TitreSection>Où en est-on</TitreSection>

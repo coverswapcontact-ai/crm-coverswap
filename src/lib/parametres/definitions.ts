@@ -122,6 +122,18 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "jours",
     groupe: "COMMERCIAL",
   },
+  ZONE_DEPARTEMENTS: {
+    libelle: "Zone d'intervention : départements",
+    aide: "Numéros des départements où les chantiers se font sans se poser de question, séparés par des virgules (ex. 34). Sert à classer les contacts entrants : hors de la zone et des départements voisins, un contact est « à écarter ».",
+    nature: "texte",
+    groupe: "COMMERCIAL",
+  },
+  ZONE_DEPARTEMENTS_PROCHES: {
+    libelle: "Zone d'intervention : départements voisins acceptés",
+    aide: "Départements proches encore traités comme dans la zone, séparés par des virgules (ex. 30, 11). Écrire « aucun » pour n'en accepter aucun.",
+    nature: "texte",
+    groupe: "COMMERCIAL",
+  },
   RGPD_CONSERVATION_PROSPECTS: {
     libelle: "Conservation des contacts qui n'ont rien signé",
     aide: "Nombre de mois après le dernier échange au-delà duquel l'anonymisation d'un prospect est proposée (jamais faite seule). La CNIL recommande 3 ans pour la prospection ; à confirmer avec un avocat ou un conseil RGPD.",

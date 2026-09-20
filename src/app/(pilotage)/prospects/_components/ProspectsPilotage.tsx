@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { NouveauContact } from "./NouveauContact";
 import { PanneauEntrant } from "./PanneauEntrant";
 import { PanneauProspect } from "./PanneauProspect";
-import { PastilleIntention, PastilleScore } from "./pastilles";
+import { PastilleIntention, PastillePriorite, PastilleScore } from "./pastilles";
 
 type Onglet = "entrants" | "demarchage";
 type EtatDemarchage = ListeProspects & { agents: EtatAgent[]; sourcingDisponible: boolean };
@@ -85,6 +85,7 @@ function LigneEntrant({ entrant, onOuvrir }: { entrant: EntrantResume; onOuvrir:
         <button type="button" onClick={onOuvrir} className={cn("min-w-0 flex-1 px-4 py-3 text-left hover:bg-[#22262D]", TRANS)}>
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="truncate text-[14px] font-medium text-[#F2F3F5]">{entrant.nom}</span>
+            {entrant.groupe === "A_TRAITER" || entrant.groupe === "CONTACTES" ? <PastillePriorite priorite={entrant.priorite} motif={entrant.prioriteMotif} /> : null}
             <PastilleIntention intention={entrant.intention} />
             {entrant.dossier ? (
               <Pastille ton="vert">Dossier · {LIBELLES_ETAPE[entrant.dossier.etape as EtapeDossier] ?? entrant.dossier.etape}</Pastille>

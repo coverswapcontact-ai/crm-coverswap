@@ -247,6 +247,12 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   for (const etat of notifications.etats.filter((e) => e.configure && e.dernier && !e.dernier.ok)) {
     alertes.push(`Canal ${etat.canal} en échec au dernier envoi : ${etat.dernier?.detail ?? "raison inconnue"}.`);
   }
+  // Un lead payant sans campagne ni publicité : le Zap ne transmet pas l'attribution
+  // (ou le lead vient de l'outil de test de Meta). Sans elle, impossible de juger une publicité.
+  const sansAttribution = await prisma.metaLead.count({ where: { recuLe: { gte: septJours }, statut: "TRAITE", organique: false, campagneId: null, campagneNom: null, adId: null, adNom: null } });
+  if (sansAttribution > 0) {
+    alertes.push(`${sansAttribution} lead(s) reçus sur 7 jours sans campagne ni publicité : vérifier dans le Zap les champs campaign_name, adset_name et ad_name (un lead de l'outil de test Meta n'en porte pas).`);
+  }
   if (notifications.leadsSansPush.length > 0) {
     alertes.push(`${notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : personne n'a été prévenu sur son téléphone.`);
   }

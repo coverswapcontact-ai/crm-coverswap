@@ -45,11 +45,11 @@ const DEMANDE = { sujet: "essai-coverswap", titre: "Nouveau lead Meta - Camille"
 
 describe("passerelle ntfy par le site", () => {
   test("disponible seulement pour ntfy.sh, avec un secret partagé, et tant qu'on ne la coupe pas", () => {
-    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x" } as NodeJS.ProcessEnv), true);
-    assert.equal(relaisNtfyDisponible({ WEBHOOK_SECRET: "x" } as NodeJS.ProcessEnv), true);
-    assert.equal(relaisNtfyDisponible({} as NodeJS.ProcessEnv), false, "sans secret partagé, pas de signature possible");
-    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x", NTFY_RELAIS: "0" } as NodeJS.ProcessEnv), false);
-    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x", NTFY_SERVEUR: "https://ntfy.exemple.fr" } as NodeJS.ProcessEnv), false);
+    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x" } as unknown as NodeJS.ProcessEnv), true);
+    assert.equal(relaisNtfyDisponible({ WEBHOOK_SECRET: "x" } as unknown as NodeJS.ProcessEnv), true);
+    assert.equal(relaisNtfyDisponible({} as unknown as NodeJS.ProcessEnv), false, "sans secret partagé, pas de signature possible");
+    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x", NTFY_RELAIS: "0" } as unknown as NodeJS.ProcessEnv), false);
+    assert.equal(relaisNtfyDisponible({ SIMULATE_TOKEN_SECRET: "x", NTFY_SERVEUR: "https://ntfy.exemple.fr" } as unknown as NodeJS.ProcessEnv), false);
   });
 
   test("le site accepte l'envoi signé du secret qu'il partage, même si le CRM en connaît d'autres", async () => {

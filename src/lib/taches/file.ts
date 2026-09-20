@@ -11,6 +11,8 @@ export type MiseEnFile = {
   priorite?: number;
   /** Première exécution au plus tôt. */
   apres?: Date;
+  /** Nombre de tentatives avant abandon (8 par défaut) : lu par l'écran des tâches. */
+  tentativesMax?: number;
   /**
    * UNIQUE (défaut) : une tâche déjà connue sous cette clé n'est jamais rejouée
    *   (un envoi validé ne part qu'une fois).
@@ -48,6 +50,7 @@ export async function mettreEnFile(
           cle: demande.cle,
           charge,
           priorite: demande.priorite ?? 0,
+          ...(demande.tentativesMax ? { tentativesMax: demande.tentativesMax } : {}),
           prochainEssaiLe: demande.apres ?? new Date(),
           demandeePar: acteur,
         },

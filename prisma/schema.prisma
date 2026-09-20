@@ -41,7 +41,7 @@ model Lead {
   parcoursId       String? // identifiant du parcours navigateur : simulation puis devis = même fiche
   ipOrigine        String? // adresse IP du visiteur, pour la limite anti-abus du webhook
   vuLe             DateTime? // première ouverture de la fiche dans le CRM : sert à la relance des leads non traités
-  metaLead         MetaLead?
+  metaLeads        MetaLead[]
   interactions     Interaction[]
   devis            Devis[]
   chantier         Chantier?
@@ -176,13 +176,16 @@ model MetaLead {
   erreur       String?
   tentatives   Int       @default(0)
   reponses     String? // JSON : toutes les réponses du formulaire, questions personnalisées comprises
-  leadId       String?   @unique
+  // Pas unique : la même personne peut remplir deux formulaires, ses deux leads
+  // Meta se rattachent alors au même contact.
+  leadId       String?
   lead         Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
   archiveLe    DateTime? // archivage : rien ne se supprime
   archiveMotif String?
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([statut, recuLe])
+  @@index([leadId])
 }
 
 model Simulation {

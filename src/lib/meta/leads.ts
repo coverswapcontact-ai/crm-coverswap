@@ -1,6 +1,5 @@
 import type { MetaLead, Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { rattacherLead } from "@/lib/clients/identification";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { mettreEnFile } from "@/lib/taches/file";
@@ -30,6 +29,8 @@ import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
 export const TACHE_LEAD = "META_LEAD";
 export const TACHE_RELANCE = "META_RELANCE";
 export const DELAI_RELANCE_MS = 30 * 60_000;
+/** Tentatives de récupération d'un lead : environ trente heures d'essais. */
+export const TENTATIVES_LEAD = 14;
 
 export type EvenementLeadgen = {
   leadgenId: string;
@@ -95,7 +96,8 @@ export async function accuserReceptionLeadgen(evenement: EvenementLeadgen): Prom
 }
 
 async function mettreEnFileLead(leadgenId: string): Promise<void> {
-  await mettreEnFile({ type: TACHE_LEAD, cle: `meta-lead:${leadgenId}`, charge: { leadgenId }, priorite: 10 });
+  // 14 tentatives ≈ 30 heures : le temps qu'une permission Meta soit accordée ou qu'une panne passe.
+  await mettreEnFile({ type: TACHE_LEAD, cle: `meta-lead:${leadgenId}`, charge: { leadgenId }, priorite: 10, tentativesMax: TENTATIVES_LEAD });
 }
 
 /** Remet un lead en file après un échec (geste humain depuis l'écran Publicité). */
@@ -104,7 +106,7 @@ export async function rejouerLeadMeta(leadgenId: string): Promise<void> {
   if (!ligne) throw new Error("Lead Meta introuvable.");
   if (ligne.statut === "TRAITE") throw new Error("Ce lead est déjà dans le CRM.");
   await prisma.metaLead.update({ where: { leadgenId }, data: { statut: "RECU", erreur: null } });
-  await mettreEnFile({ type: TACHE_LEAD, cle: `meta-lead:${leadgenId}`, charge: { leadgenId }, priorite: 10, mode: "RECONCILIATION" });
+  await mettreEnFile({ type: TACHE_LEAD, cle: `meta-lead:${leadgenId}`, charge: { leadgenId }, priorite: 10, tentativesMax: TENTATIVES_LEAD, mode: "RECONCILIATION" });
 }
 
 /** Le contact déjà en base qui correspond à ce téléphone ou à cet e-mail. */
@@ -115,8 +117,10 @@ async function contactExistant(normalise: LeadMetaNormalise): Promise<{ id: stri
   if (neuf && neuf.length === 9) pistes.push({ telephone: { contains: neuf } });
   if (normalise.email) pistes.push({ email: normalise.email });
   if (pistes.length === 0) return null;
+  // Les contacts archivés ne comptent pas : un lead payant ne doit jamais se ranger
+  // derrière une fiche mise de côté ; il en ouvre une nouvelle.
   return prisma.lead.findFirst({
-    where: { ...AVEC_ARCHIVES, OR: pistes },
+    where: { OR: pistes },
     orderBy: { createdAt: "desc" },
     select: { id: true, email: true, ville: true, codePostal: true },
   });
@@ -172,7 +176,9 @@ export async function traiterLeadMeta(
 
   const normalise = graph.normalise;
   const existant = await contactExistant(normalise);
-  const notes = texteDesReponses(normalise.reponses) || null;
+  // Dans la fiche : les réponses aux questions personnalisées, celles qui ne sont pas
+  // déjà un champ du contact. Le relevé complet du formulaire reste sur MetaLead.reponses.
+  const notes = texteDesReponses(normalise.reponsesLibres) || null;
 
   let leadId: string;
   if (existant) {

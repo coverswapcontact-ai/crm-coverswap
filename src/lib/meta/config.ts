@@ -7,7 +7,8 @@
  * (l'App Review de `leads_retrieval` prend du temps).
  */
 export const VERSION_GRAPH = process.env.META_API_VERSION || "v26.0";
-export const GRAPH = `https://graph.facebook.com/${VERSION_GRAPH}`;
+/** Adresse de l'API Graph. META_GRAPH_URL sert aux essais (simulateur local) ; jamais en production. */
+export const GRAPH = `${(process.env.META_GRAPH_URL || "https://graph.facebook.com").replace(/\/$/, "")}/${VERSION_GRAPH}`;
 
 /** Jeton qui lit les leads et interroge la page : jeton de page longue durée. */
 export function jetonPage(): string | undefined {

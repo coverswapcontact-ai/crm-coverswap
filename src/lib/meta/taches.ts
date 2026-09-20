@@ -2,7 +2,7 @@ import { ErreurDefinitive, enregistrerTraitement, enregistrerTravailPeriodique }
 import { mettreEnFile } from "@/lib/taches/file";
 import { alerter } from "@/lib/alertes/canaux";
 import { lireEtatJeton } from "./graph";
-import { TACHE_LEAD, TACHE_RELANCE, relancerSiNonTraite, traiterLeadMeta } from "./leads";
+import { TACHE_LEAD, TACHE_RELANCE, TENTATIVES_LEAD, relancerSiNonTraite, traiterLeadMeta } from "./leads";
 import { envoyerConversion, type DemandeConversion } from "./conversions";
 import { etatConfiguration } from "./config";
 
@@ -28,7 +28,7 @@ export function enregistrerTachesMeta(): void {
   enregistrerTraitement(TACHE_LEAD, {
     libelle: "Lead Meta : récupération et création du contact",
     acteur: "SYSTEME:meta",
-    tentativesMax: 14,
+    tentativesMax: TENTATIVES_LEAD,
     delaiMaxMs: 60_000,
     executer: async (charge) => {
       const { leadgenId } = charge as { leadgenId: string };

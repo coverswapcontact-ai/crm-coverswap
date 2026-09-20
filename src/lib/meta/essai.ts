@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { normaliserLeadMeta } from "./champs";
@@ -18,16 +19,19 @@ import { canauxConfigures } from "@/lib/alertes/canaux";
  * Aucune donnée réelle : le contact créé porte « ESSAI » et un numéro réservé
  * aux essais, et il est archivé à la fin (rien ne se supprime).
  */
-const CHAMPS_ESSAI = [
-  { name: "full_name", values: ["ESSAI Camille Martin"] },
-  { name: "phone_number", values: ["+33600000099"] },
-  { name: "email", values: ["essai-meta@example.com"] },
-  { name: "city", values: ["Pérols"] },
-  { name: "post_code", values: ["34470"] },
-  { name: "quelle_pièce_souhaitez-vous_rénover_?", values: ["Ma cuisine"] },
-  { name: "quand_souhaitez-vous_réaliser_les_travaux_?", values: ["Dans les 3 mois"] },
-  { name: "êtes-vous_propriétaire_?", values: ["Oui"] },
-];
+/** Chaque essai a ses propres coordonnées : deux essais de suite ne se gênent pas. */
+function champsEssai(marque: string): { name: string; values: string[] }[] {
+  return [
+    { name: "full_name", values: ["ESSAI Camille Martin"] },
+    { name: "phone_number", values: [`+3360000${marque}`] },
+    { name: "email", values: [`essai-meta-${marque}@example.com`] },
+    { name: "city", values: ["Pérols"] },
+    { name: "post_code", values: ["34470"] },
+    { name: "quelle_pièce_souhaitez-vous_rénover_?", values: ["Ma cuisine"] },
+    { name: "quand_souhaitez-vous_réaliser_les_travaux_?", values: ["Dans les 3 mois"] },
+    { name: "êtes-vous_propriétaire_?", values: ["Oui"] },
+  ];
+}
 
 export type EtapeEssai = { etape: string; ok: boolean; detail: string };
 
@@ -40,9 +44,9 @@ export type RapportEssai = {
   contact: Record<string, unknown> | null;
 };
 
-function fauxLeadGraph(soumisLe: Date): LeadGraph {
+function fauxLeadGraph(soumisLe: Date, marque: string): LeadGraph {
   return {
-    normalise: normaliserLeadMeta(CHAMPS_ESSAI),
+    normalise: normaliserLeadMeta(champsEssai(marque)),
     soumisLe,
     formId: "000000000000001",
     formNom: "Formulaire d'essai — rénovation cuisine",
@@ -61,9 +65,10 @@ export async function lancerEssaiMeta(options: { notifier?: boolean; base?: stri
   const notifier = options.notifier ?? true;
   const etapes: EtapeEssai[] = [];
   const ajouter = (etape: string, ok: boolean, detail: string) => etapes.push({ etape, ok, detail });
-  // Identifiant fictif hors du format Meta réel (17 chiffres commençant par 9 999 999) :
-  // aucun risque de collision avec un vrai lead.
-  const leadgenId = `9999999${Date.now()}`.slice(0, 17);
+  // Identifiant fictif : 9 999 999 puis dix chiffres au hasard. Hors du format des vrais
+  // identifiants Meta, et deux essais lancés coup sur coup ne tombent pas sur le même.
+  const marque = String(randomInt(1000, 10000));
+  const leadgenId = `9999999${String(randomInt(0, 1_000_000)).padStart(6, "0")}${marque}`;
   const soumisLe = new Date(Date.now() - 60_000);
   const charge = {
     object: "page",
@@ -110,7 +115,7 @@ export async function lancerEssaiMeta(options: { notifier?: boolean; base?: stri
   // 4. Traitement complet, avec des réponses fictives à la place de l'appel Graph.
   let leadId: string | null = null;
   try {
-    const resultat = await traiterLeadMeta(leadgenId, async () => fauxLeadGraph(soumisLe));
+    const resultat = await traiterLeadMeta(leadgenId, async () => fauxLeadGraph(soumisLe, marque));
     leadId = resultat.leadId;
     const canaux = notifier ? resultat.notifications : [];
     ajouter("Création du contact", Boolean(leadId), leadId ? `Contact ${leadId} créé${resultat.rattache ? " (rattaché à un contact existant)" : ""}.` : "Aucun contact créé.");
@@ -130,7 +135,7 @@ export async function lancerEssaiMeta(options: { notifier?: boolean; base?: stri
 
   // 5. Le rejeu du traitement ne crée pas de second contact.
   if (leadId) {
-    const rejeu = await traiterLeadMeta(leadgenId, async () => fauxLeadGraph(soumisLe));
+    const rejeu = await traiterLeadMeta(leadgenId, async () => fauxLeadGraph(soumisLe, marque));
     const contacts = await prisma.lead.count({ where: { ...AVEC_ARCHIVES, metaLeadgenId: leadgenId } });
     ajouter("Idempotence du traitement", rejeu.leadId === leadId && contacts === 1, contacts === 1 ? "Deux traitements du même leadgen_id : un seul contact." : `${contacts} contacts pour un même leadgen_id.`);
   }
@@ -147,8 +152,8 @@ export async function lancerEssaiMeta(options: { notifier?: boolean; base?: stri
     const attendus: [string, boolean][] = [
       ["prénom", lead?.prenom === "ESSAI"],
       ["nom", lead?.nom === "Camille Martin"],
-      ["téléphone", lead?.telephone === "+33600000099"],
-      ["e-mail", lead?.email === "essai-meta@example.com"],
+      ["téléphone", lead?.telephone === `+3360000${marque}`],
+      ["e-mail", lead?.email === `essai-meta-${marque}@example.com`],
       ["ville", lead?.ville === "Pérols"],
       ["code postal", lead?.codePostal === "34470"],
       ["type de projet", lead?.typeProjet === "CUISINE"],

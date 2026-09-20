@@ -77,8 +77,10 @@ const CONTACTES = new Set(["CONTACTE", "DEVIS_DEMANDE", ...APRES_DEVIS]);
 /** Leads Meta d'une fenêtre, regroupés par campagne puis par publicité. */
 export async function resultatsMeta(jours = JOURS_RESULTATS): Promise<Resultats> {
   const depuis = new Date(Date.now() - jours * JOUR_MS);
+  // Sans les archivés : un lead d'essai ou mis de côté ne doit pas peser sur le
+  // jugement porté sur une campagne. Les compteurs de réception, eux, comptent tout.
   const lignes = await prisma.metaLead.findMany({
-    where: { ...AVEC_ARCHIVES, soumisLe: { gte: depuis } },
+    where: { soumisLe: { gte: depuis } },
     select: {
       campagneNom: true,
       campagneId: true,

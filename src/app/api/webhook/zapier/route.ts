@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { recevoirLeadDuPont } from "@/lib/meta/leads";
+import { CANAUX_PUSH } from "@/lib/alertes/canaux";
 
 /**
  * WEBHOOK — pont Zapier pour les leads Meta Ads.
@@ -49,7 +50,13 @@ export async function POST(request: NextRequest) {
       // `created` reste dans la réponse : Zapier l'affiche dans son historique.
       created: resultat.nouveau && !resultat.rattache,
       rattacheAUnContactExistant: resultat.rattache,
-      notifications: resultat.notifications.map((n) => ({ canal: n.canal, ok: n.ok })),
+      // Une ligne par canal, y compris ceux qui ne sont pas configurés : la
+      // réponse que Zapier archive doit dire si le téléphone a sonné.
+      notifications: resultat.notifications,
+      pousseRecue: resultat.notifications.some((n) => n.ok && CANAUX_PUSH.includes(n.canal)),
+      ...(resultat.notifications.some((n) => n.ok && CANAUX_PUSH.includes(n.canal))
+        ? {}
+        : { avertissement: "Aucune notification poussée n'est partie : voir /publicite ou /api/webhook/diagnostic." }),
     });
   } catch (erreur) {
     // Ne pas acquitter : Zapier rejouera, et le leadgen_id garantit l'absence de doublon.

@@ -5,8 +5,9 @@ import { AlertTriangle, BellRing, CheckCircle2, Megaphone, RefreshCw, TestTube }
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TitreSection } from "@/components/pilotage/ui";
-import type { ResultatParAxe, SanteMeta } from "@/lib/meta/sante";
+import type { EtatCanal, ResultatParAxe, SanteMeta } from "@/lib/meta/sante";
 import type { RapportEssai } from "@/lib/meta/essai";
+import type { ResultatCanal } from "@/lib/alertes/canaux";
 import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]";
@@ -65,6 +66,29 @@ function Tableau({ titre, lignes }: { titre: string; lignes: ResultatParAxe[] })
   );
 }
 
+/** Un canal d'alerte et son état réel : configuré ou non, et son dernier envoi. */
+function CanalNotification({ etat, essai }: { etat: EtatCanal; essai: ResultatCanal | null }) {
+  const ton = !etat.configure ? (etat.pousse ? "rouge" : "ambre") : essai && !essai.ok ? "rouge" : etat.dernier && !etat.dernier.ok ? "rouge" : "vert";
+  const valeur = !etat.configure
+    ? `à configurer : ${etat.manquantes.join(", ")}`
+    : essai
+      ? essai.ok
+        ? "essai envoyé à l'instant"
+        : `essai en échec — ${essai.detail ?? "raison inconnue"}`
+      : etat.dernier
+        ? etat.dernier.ok
+          ? `dernier envoi ${quand(etat.dernier.quand)}`
+          : `dernier envoi en échec — ${etat.dernier.detail ?? "raison inconnue"}`
+        : "configuré, aucun envoi encore";
+  return (
+    <Ligne
+      libelle={`${etat.canal}${etat.pousse ? " (push)" : " (mail)"}`}
+      valeur={valeur}
+      ton={ton as "vert" | "ambre" | "rouge"}
+    />
+  );
+}
+
 /**
  * Écran Publicité : l'état de la chaîne Meta en un coup d'œil — réception,
  * accès, notifications, résultats par campagne et par publicité sur la durée
@@ -76,6 +100,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
   const [jours, setJours] = useState<number>(initiale.resultats.jours);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [rapport, setRapport] = useState<RapportEssai | null>(null);
+  const [essaiNotification, setEssaiNotification] = useState<ResultatCanal[] | null>(null);
 
   const rafraichir = useCallback(async (fenetre = jours) => {
     setOccupe("rafraichir");
@@ -95,6 +120,22 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
     try {
       const { rejoues } = await envoyerJson<{ rejoues: number }>("/api/meta/rejouer", "POST", leadgenId ? { leadgenId } : {});
       toast.success(rejoues > 0 ? `${rejoues} lead(s) remis en file.` : "Aucun lead à rejouer.");
+      await rafraichir();
+    } catch (erreur) {
+      toast.error(messageErreur(erreur));
+    } finally {
+      setOccupe(null);
+    }
+  };
+
+  const testerNotification = async () => {
+    setOccupe("notification");
+    try {
+      const { resultats, pousseRecue } = await envoyerJson<{ resultats: ResultatCanal[]; pousseRecue: boolean }>("/api/meta/notification", "POST", {});
+      setEssaiNotification(resultats);
+      toast[pousseRecue ? "success" : "error"](
+        pousseRecue ? "Notification poussée envoyée : vérifiez votre téléphone." : "Aucune notification poussée n'est partie."
+      );
       await rafraichir();
     } catch (erreur) {
       toast.error(messageErreur(erreur));
@@ -181,14 +222,45 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
           <Ligne libelle="Lecture des formulaires" valeur={configuration.lecture ? "jeton présent" : "jeton absent"} ton={configuration.lecture ? "vert" : "rouge"} />
           <Ligne libelle="Jeton Meta" valeur={jeton.message} ton={jeton.etat === "sain" ? "vert" : jeton.etat === "proche" ? "ambre" : jeton.etat === "absent" ? "neutre" : "rouge"} />
           <Ligne
-            libelle="Canaux de notification"
-            valeur={notifications.canaux.length > 0 ? notifications.canaux.join(", ") : "aucun"}
-            ton={notifications.suffisant ? "vert" : notifications.canaux.length > 0 ? "ambre" : "rouge"}
+            libelle="Le téléphone sonne"
+            valeur={notifications.push ? "oui" : "NON — seul le mail part"}
+            ton={notifications.push ? (notifications.suffisant ? "vert" : "ambre") : "rouge"}
           />
           <Ligne libelle="Conversions renvoyées (7 j)" valeur={configuration.conversions ? `${conversions.envoyees7j}${conversions.enEchec ? ` · ${conversions.enEchec} en échec` : ""}` : "non configuré"} ton={configuration.conversions ? "vert" : "ambre"} />
           <Ligne libelle="Version de l'API" valeur={configuration.version} />
         </section>
       </div>
+
+      <section className={cn(CARTE, "p-4")}>
+        <TitreSection
+          action={
+            <Bouton taille="sm" icone={<BellRing size={14} aria-hidden />} chargement={occupe === "notification"} onClick={() => void testerNotification()}>
+              Tester la notification
+            </Bouton>
+          }
+        >
+          Notification d&apos;un nouveau lead
+        </TitreSection>
+        <div className="space-y-2">
+          {notifications.etats.map((etat) => (
+            <CanalNotification key={etat.canal} etat={etat} essai={essaiNotification?.find((r) => r.canal === etat.canal) ?? null} />
+          ))}
+        </div>
+        {notifications.leadsSansPush.length > 0 ? (
+          <div className="mt-3 rounded-[10px] border-[0.5px] border-[#F87171]/40 bg-[#F87171]/5 p-3">
+            <p className="text-[13px] text-[#F87171]">
+              {notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : le téléphone n&apos;a pas sonné.
+            </p>
+            <ul className="mt-1 space-y-0.5 text-[12px] text-[#9CA3AF]">
+              {notifications.leadsSansPush.slice(0, 5).map((lead) => (
+                <li key={lead.leadgenId}>
+                  {lead.nom ?? `leadgen_id ${lead.leadgenId}`} · {quand(lead.quand)} · {lead.detail}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
 
       <section className="space-y-4">
         <TitreSection

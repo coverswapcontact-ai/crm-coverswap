@@ -127,11 +127,42 @@ un sujet inventé et difficile à deviner, par exemple
 `coverswap-leads-7f3a9c2e`, et poser ce même sujet dans `NTFY_TOPIC`. Le sujet
 vaut mot de passe : quiconque le connaît peut y publier.
 
-**Mail** : `LEAD_NOTIFICATION_EMAIL`, avec `RESEND_API_KEY` déjà en place.
+**Mail** : `LEAD_NOTIFICATION_EMAIL`, avec `RESEND_API_KEY` déjà en place. Le
+mail est un filet, **pas** une notification poussée : il ne fait pas sonner un
+téléphone. Tant qu'aucun des deux canaux ci-dessus n'est posé, le CRM considère
+que personne n'est prévenu.
 
 La notification porte le prénom, le téléphone en bouton d'appel, le projet, la
 ville, la campagne et un lien vers la fiche. Si personne n'ouvre la fiche dans
 les trente minutes, une relance part.
+
+### Un canal muet se voit
+
+Un canal sans variable ne disparaît plus en silence. Il apparaît :
+
+- dans la **réponse du webhook** : une ligne par canal, `configure: false` et le
+  nom des variables à poser, plus `pousseRecue: false` et un `avertissement` ;
+- sur le **lead lui-même** (`MetaLead.notifications`, `pousseLe`) ;
+- dans l'écran **Publicité** : « Le téléphone sonne : NON », l'état de chaque
+  canal, et la liste des leads pour lesquels rien n'est parti ;
+- dans `/api/health` : `alertes.canaux` et `alertes.push`, sans session ;
+- **au démarrage du serveur**, en rouge dans les journaux Railway.
+
+### Vérifier depuis son téléphone, sans se connecter
+
+```
+https://crm.coverswap.fr/api/webhook/diagnostic?secret=<WEBHOOK_SECRET>
+https://crm.coverswap.fr/api/webhook/diagnostic?secret=<WEBHOOK_SECRET>&notifier=1
+https://crm.coverswap.fr/api/webhook/diagnostic?secret=<WEBHOOK_SECRET>&lead=<id>
+```
+
+La première dit quels canaux sont configurés et ce qu'a donné le dernier envoi.
+La deuxième envoie une **vraie** notification d'essai et rend le résultat canal
+par canal. La troisième résume un contact : ville, code postal, campagne,
+ensemble, publicité, notification, relance — et ce qui manque. Aucune valeur de
+variable n'est renvoyée, et le numéro de téléphone est masqué.
+
+Dans l'écran Publicité, le bouton **Tester la notification** fait la même chose.
 
 ## 7. Récapitulatif des variables Railway
 

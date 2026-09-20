@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
-import { canauxConfigures } from "@/lib/alertes/canaux";
+import { CANAUX, CANAUX_PUSH, canalConfigure, canauxConfigures, variablesManquantes, type Canal, type ResultatCanal } from "@/lib/alertes/canaux";
 import { abonnementPage, lireEtatJeton } from "./graph";
 import { etatConfiguration, type EtatConfiguration } from "./config";
 import { TACHE_CONVERSION, verdictJeton, type VerdictJeton } from "./taches";
@@ -43,10 +43,31 @@ export type Resultats = {
   parPublicite: ResultatParAxe[];
 };
 
+/** État d'un canal d'alerte : configuré ou non, et ce qu'a donné le dernier envoi. */
+export type EtatCanal = {
+  canal: Canal;
+  /** Vrai : ce canal fait sonner le téléphone (Telegram, ntfy). Le mail, non. */
+  pousse: boolean;
+  configure: boolean;
+  /** Variables à poser sur Railway quand le canal manque. */
+  manquantes: string[];
+  dernier: { ok: boolean; detail: string | null; quand: string } | null;
+};
+
+export type NotificationsMeta = {
+  /** Canaux configurés ; en dessous de deux, un seul point de défaillance. */
+  canaux: string[];
+  suffisant: boolean;
+  /** Au moins un canal poussé est configuré. Faux = le téléphone ne sonnera pas. */
+  push: boolean;
+  etats: EtatCanal[];
+  /** Leads récents pour lesquels aucune notification poussée n'est partie. */
+  leadsSansPush: { leadgenId: string; quand: string; nom: string | null; detail: string }[];
+};
+
 export type SanteMeta = {
   configuration: EtatConfiguration;
-  /** Canaux de notification actifs ; en dessous de deux, un seul point de défaillance. */
-  notifications: { canaux: string[]; suffisant: boolean };
+  notifications: NotificationsMeta;
   webhook: {
     /** Un événement a-t-il été reçu ces sept derniers jours ? */
     actif: boolean;
@@ -115,6 +136,74 @@ export async function resultatsMeta(jours = JOURS_RESULTATS): Promise<Resultats>
   };
 }
 
+/**
+ * L'état réel des canaux d'alerte : ce qui est configuré, et ce qu'a donné le
+ * dernier envoi sur chacun. Un canal absent apparaît ici en toutes lettres avec
+ * le nom des variables à poser — il ne disparaît pas silencieusement.
+ */
+export async function etatNotifications(jours = 7): Promise<NotificationsMeta> {
+  const depuis = new Date(Date.now() - jours * JOUR_MS);
+  // Sans les archivés : un lead d'essai mis de côté ne doit pas réclamer une
+  // notification pour l'éternité.
+  const recents = await prisma.metaLead.findMany({
+    where: { recuLe: { gte: depuis }, statut: "TRAITE" },
+    orderBy: { recuLe: "desc" },
+    take: 100,
+    select: { leadgenId: true, recuLe: true, notifications: true, pousseLe: true, lead: { select: { prenom: true, nom: true } } },
+  });
+
+  const lireResultats = (brut: string | null): ResultatCanal[] => {
+    if (!brut) return [];
+    try {
+      const lu = JSON.parse(brut) as ResultatCanal[];
+      return Array.isArray(lu) ? lu : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const etats: EtatCanal[] = CANAUX.map((canal) => {
+    const configure = canalConfigure(canal);
+    let dernier: EtatCanal["dernier"] = null;
+    for (const ligne of recents) {
+      const trouve = lireResultats(ligne.notifications).find((r) => r.canal === canal);
+      if (trouve) {
+        dernier = { ok: trouve.ok, detail: trouve.detail ?? null, quand: ligne.recuLe.toISOString() };
+        break;
+      }
+    }
+    return { canal, pousse: CANAUX_PUSH.includes(canal), configure, manquantes: variablesManquantes(canal), dernier };
+  });
+
+  // Un lead traité dont aucune notification poussée n'a abouti : le téléphone n'a
+  // pas sonné. C'est exactement ce qui s'est produit les 20 et 21 septembre.
+  const leadsSansPush = recents
+    .filter((l) => !l.pousseLe)
+    .slice(0, 20)
+    .map((l) => {
+      const resultats = lireResultats(l.notifications);
+      const push = resultats.filter((r) => CANAUX_PUSH.includes(r.canal));
+      return {
+        leadgenId: l.leadgenId,
+        quand: l.recuLe.toISOString(),
+        nom: l.lead ? `${l.lead.prenom} ${l.lead.nom}`.trim() : null,
+        detail:
+          push.length === 0
+            ? "aucun canal poussé n'a été tenté"
+            : push.map((r) => `${r.canal} : ${r.detail ?? (r.ok ? "envoyée" : "échec")}`).join(" · "),
+      };
+    });
+
+  const canaux = canauxConfigures();
+  return {
+    canaux,
+    suffisant: canaux.length >= 2,
+    push: CANAUX_PUSH.some((c) => canalConfigure(c)),
+    etats,
+    leadsSansPush,
+  };
+}
+
 export async function santeMeta(options: { interrogerMeta?: boolean; jours?: number } = {}): Promise<SanteMeta> {
   const interroger = options.interrogerMeta ?? true;
   const maintenant = Date.now();
@@ -141,7 +230,8 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
 
   const [abonnement, jetonBrut] = interroger && configuration.lecture ? await Promise.all([abonnementPage(), lireEtatJeton()]) : [null, null];
   const jeton = verdictJeton(jetonBrut);
-  const canaux = canauxConfigures();
+  const notifications = await etatNotifications();
+  const canaux = notifications.canaux;
 
   const alertes: string[] = [];
   if (!configuration.signature) alertes.push("META_APP_SECRET absente : le webhook refuse tous les appels de Meta.");
@@ -149,14 +239,24 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   if (!configuration.lecture) alertes.push("META_PAGE_ACCESS_TOKEN absente : les réponses des formulaires ne peuvent pas être lues.");
   if (!configuration.conversions) alertes.push("META_PIXEL_ID ou META_CONVERSIONS_TOKEN absente : les conversions ne repartent pas vers Meta.");
   if (canaux.length === 0) alertes.push("Aucun canal de notification : un lead qui arrive ne prévient personne.");
-  else if (canaux.length < 2) alertes.push(`Un seul canal de notification (${canaux[0]}) : prévoir un second pour éviter le point de défaillance unique.`);
+  else if (!notifications.push) {
+    // Le cas vécu : RESEND_API_KEY posée, rien d'autre. Un mail ne fait pas sonner un téléphone.
+    const aPoser = notifications.etats.filter((e) => e.pousse).flatMap((e) => e.manquantes);
+    alertes.push(`Aucune notification poussée : seul le mail part, le téléphone ne sonne pas. À poser sur Railway : ${aPoser.join(", ")}.`);
+  } else if (canaux.length < 2) alertes.push(`Un seul canal de notification (${canaux[0]}) : prévoir un second pour éviter le point de défaillance unique.`);
+  for (const etat of notifications.etats.filter((e) => e.configure && e.dernier && !e.dernier.ok)) {
+    alertes.push(`Canal ${etat.canal} en échec au dernier envoi : ${etat.dernier?.detail ?? "raison inconnue"}.`);
+  }
+  if (notifications.leadsSansPush.length > 0) {
+    alertes.push(`${notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : personne n'a été prévenu sur son téléphone.`);
+  }
   if (abonnement && !abonnement.abonne) alertes.push("La page n'est pas abonnée au champ « leadgen » : Meta n'enverra rien.");
   if (jeton.etat === "proche" || jeton.etat === "expire" || jeton.etat === "invalide") alertes.push(jeton.message);
   if (echecs.length > 0) alertes.push(`${echecs.length} lead(s) reçus mais pas encore dans le CRM.`);
 
   return {
     configuration,
-    notifications: { canaux, suffisant: canaux.length >= 2 },
+    notifications,
     webhook: {
       actif: surSeptJours > 0,
       dernierLeadLe: dernier?.recuLe.toISOString() ?? null,

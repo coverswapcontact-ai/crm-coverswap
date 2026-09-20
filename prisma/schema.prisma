@@ -154,35 +154,40 @@ model PhotoLead {
 /// l'API Graph en dit. Gardé même quand la récupération échoue : un lead qui
 /// échoue doit rester visible (écran Publicité) et rejouable, jamais perdu.
 model MetaLead {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  leadgenId    String    @unique // identifiant Meta : la clé d'idempotence, sert aussi au renvoi des conversions
-  pageId       String?
-  formId       String?
-  formNom      String?
-  campagneId   String?
-  campagneNom  String? // nom lisible, pas seulement l'identifiant
-  adsetId      String?
-  adsetNom     String?
-  adId         String?
-  adNom        String?
-  plateforme   String? // facebook | instagram
-  organique    Boolean   @default(false) // formulaire organique (pas une publicité payante)
-  soumisLe     DateTime // horodatage réel de la soumission (created_time de Meta)
-  recuLe       DateTime  @default(now()) // horodatage de réception du webhook
-  traiteLe     DateTime?
-  statut       String    @default("RECU") // RECU | TRAITE | ECHEC
-  erreur       String?
-  tentatives   Int       @default(0)
-  reponses     String? // JSON : toutes les réponses du formulaire, questions personnalisées comprises
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  leadgenId     String    @unique // identifiant Meta : la clé d'idempotence, sert aussi au renvoi des conversions
+  pageId        String?
+  formId        String?
+  formNom       String?
+  campagneId    String?
+  campagneNom   String? // nom lisible, pas seulement l'identifiant
+  adsetId       String?
+  adsetNom      String?
+  adId          String?
+  adNom         String?
+  plateforme    String? // facebook | instagram
+  organique     Boolean   @default(false) // formulaire organique (pas une publicité payante)
+  soumisLe      DateTime // horodatage réel de la soumission (created_time de Meta)
+  recuLe        DateTime  @default(now()) // horodatage de réception du webhook
+  traiteLe      DateTime?
+  statut        String    @default("RECU") // RECU | TRAITE | ECHEC
+  erreur        String?
+  tentatives    Int       @default(0)
+  reponses      String? // JSON : toutes les réponses du formulaire, questions personnalisées comprises
+  // Compte rendu du dernier envoi de notification : une ligne par canal, même
+  // non configuré. C'est ce qui rend visible un push qui n'est jamais parti.
+  notifications String? // JSON : [{canal, ok, configure, detail}]
+  notifieLe     DateTime? // au moins un canal a abouti
+  pousseLe      DateTime? // au moins un canal POUSSÉ (Telegram/ntfy) a abouti
   // Pas unique : la même personne peut remplir deux formulaires, ses deux leads
   // Meta se rattachent alors au même contact.
-  leadId       String?
-  lead         Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  archiveLe    DateTime? // archivage : rien ne se supprime
-  archiveMotif String?
-  ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
+  leadId        String?
+  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  archiveLe     DateTime? // archivage : rien ne se supprime
+  archiveMotif  String?
+  ecriture      String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([statut, recuLe])
   @@index([leadId])

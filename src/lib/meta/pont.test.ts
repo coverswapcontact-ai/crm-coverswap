@@ -4,9 +4,19 @@ import { after, before, describe, test } from "node:test";
 import { preparerBaseEssai } from "@/test/base-essai";
 
 preparerBaseEssai();
-delete process.env.TELEGRAM_BOT_TOKEN;
-delete process.env.NTFY_TOPIC;
-delete process.env.RESEND_API_KEY;
+
+/**
+ * Aucun canal d'alerte pendant les essais : rien ne part vers l'extérieur, et
+ * c'est aussi l'état exact de la production le 20/09 (seul le mail configuré).
+ * À appeler APRÈS l'import de Prisma, qui recharge « .env » au chargement.
+ */
+function sansCanauxDAlerte(): void {
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  delete process.env.TELEGRAM_CHAT_ID;
+  delete process.env.NTFY_TOPIC;
+  delete process.env.RESEND_API_KEY;
+}
+sansCanauxDAlerte();
 
 let prisma: typeof import("@/lib/prisma").default;
 let pont: typeof import("./pont");
@@ -56,6 +66,7 @@ before(async () => {
   });
   process.env.API_COMMUNES_URL = `http://127.0.0.1:${port}`;
   prisma = (await import("@/lib/prisma")).default;
+  sansCanauxDAlerte();
   pont = await import("./pont");
   leads = await import("./leads");
   sante = await import("./sante");
@@ -194,6 +205,40 @@ describe("un lead Zapier entre par la même porte qu'un lead direct", () => {
   });
 });
 
+describe("la notification laisse une trace sur le lead", () => {
+  test("aucun canal configuré : le lead le dit, il ne fait pas semblant d'avoir prévenu", async () => {
+    // Cet essai tourne sans TELEGRAM_BOT_TOKEN, sans NTFY_TOPIC, sans RESEND_API_KEY :
+    // c'est l'état exact de la production quand seul le mail partait.
+    const evenement = await prisma.metaLead.findUnique({ where: { leadgenId: "556677889900112" } });
+    const trace = JSON.parse(evenement?.notifications ?? "[]") as { canal: string; ok: boolean; configure: boolean; detail?: string }[];
+    assert.deepEqual(
+      trace.map((t) => t.canal),
+      ["telegram", "ntfy", "mail"],
+      "les trois canaux doivent figurer, même absents"
+    );
+    assert.equal(trace.every((t) => !t.ok && !t.configure), true);
+    assert.match(trace.find((t) => t.canal === "ntfy")?.detail ?? "", /NTFY_TOPIC absente/);
+    // Rien n'a abouti : ni notifieLe ni pousseLe.
+    assert.equal(evenement?.notifieLe, null);
+    assert.equal(evenement?.pousseLe, null);
+  });
+
+  test("l'écran Publicité liste les leads dont le téléphone n'a pas sonné", async () => {
+    const etat = await sante.etatNotifications();
+    assert.equal(etat.push, false, "aucun canal poussé configuré");
+    assert.deepEqual(etat.etats.find((e) => e.canal === "telegram")?.manquantes, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]);
+    assert.ok(etat.leadsSansPush.some((l) => l.leadgenId === "556677889900112"), "le lead doit apparaître comme non notifié");
+    assert.match(etat.leadsSansPush[0].detail, /non configuré/);
+  });
+
+  test("la synthèse Meta le signale comme un blocage, pas comme un détail", async () => {
+    const etat = await sante.etatNotifications();
+    assert.equal(etat.push, false);
+    const aPoser = etat.etats.filter((e) => e.pousse).flatMap((e) => e.manquantes);
+    assert.deepEqual(aPoser, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC"]);
+  });
+});
+
 describe("résultats par campagne et par publicité", () => {
   test("l'écran Publicité regroupe les leads par campagne puis par publicité", async () => {
     // Un lead archivé (essai, mis de côté) ne compte pas dans le jugement d'une campagne.
@@ -205,5 +250,13 @@ describe("résultats par campagne et par publicité", () => {
     const publicite = resultats.parPublicite.find((p) => p.nom === "Avant/après cuisine chêne");
     assert.equal(publicite?.leads, 2);
     assert.equal(resultats.jours, 21);
+
+    // Et il ne réclame plus de notification non plus : un essai mis de côté
+    // ne doit pas rester en rouge dans l'écran Publicité.
+    const etat = await sante.etatNotifications();
+    assert.equal(
+      etat.leadsSansPush.some((l) => l.leadgenId === "556677889900999"),
+      false
+    );
   });
 });

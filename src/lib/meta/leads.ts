@@ -9,7 +9,7 @@ import { lireLeadMeta, type LeadGraph } from "./graph";
 import { leadDepuisChargePlate } from "./pont";
 import { lienFiche } from "./config";
 import { communeDuCodePostal } from "./communes";
-import { alerter, type ResultatCanal } from "@/lib/alertes/canaux";
+import { CANAUX_PUSH, alerter, resumerEnvoi, type ResultatCanal } from "@/lib/alertes/canaux";
 import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
 
 /**
@@ -180,7 +180,16 @@ export async function traiterLeadMeta(
   const ligne = await prisma.metaLead.findUnique({ where: { leadgenId } });
   if (!ligne) throw new Error(`Événement Meta ${leadgenId} introuvable.`);
   if (ligne.statut === "TRAITE" && ligne.leadId) {
-    return { leadgenId, leadId: ligne.leadId, rattache: false, notifications: [] };
+    // Rejeu d'un lead déjà traité : on rend le compte rendu de la notification
+    // d'origine plutôt qu'un tableau vide, qui se lirait « rien n'est parti ».
+    let notifications: ResultatCanal[] = [];
+    try {
+      const lu = ligne.notifications ? (JSON.parse(ligne.notifications) as ResultatCanal[]) : [];
+      if (Array.isArray(lu)) notifications = lu;
+    } catch {
+      notifications = [];
+    }
+    return { leadgenId, leadId: ligne.leadId, rattache: false, notifications };
   }
 
   let graph: LeadGraph;
@@ -285,6 +294,7 @@ export async function traiterLeadMeta(
   });
 
   const notifications = await notifierNouveauLead({ leadId, normalise, campagne: graph.campagneNom, nouveau: !existant });
+  await enregistrerNotification(leadgenId, notifications);
   // Relance si personne n'a ouvert la fiche dans la demi-heure.
   await mettreEnFile({
     type: TACHE_RELANCE,
@@ -309,6 +319,31 @@ async function alerterLeadIllisible(ligne: MetaLead, message: string): Promise<v
     libelleLien: "Voir l'écran Publicité",
     urgence: 5,
   });
+}
+
+/**
+ * Garde le compte rendu de la notification SUR le lead : une ligne par canal,
+ * y compris ceux qui ne sont pas configurés. Sans cela, un push qui ne part
+ * jamais ne laisse aucune trace ailleurs que dans les journaux du serveur, et
+ * personne ne s'en aperçoit avant d'avoir perdu un lead à 78 €.
+ */
+export async function enregistrerNotification(leadgenId: string, resultats: ResultatCanal[]): Promise<void> {
+  const abouti = resultats.some((r) => r.ok);
+  const pousse = resultats.some((r) => r.ok && CANAUX_PUSH.includes(r.canal));
+  try {
+    await prisma.metaLead.update({
+      where: { leadgenId },
+      data: {
+        notifications: JSON.stringify(resultats),
+        ...(abouti ? { notifieLe: new Date() } : {}),
+        ...(pousse ? { pousseLe: new Date() } : {}),
+      },
+    });
+  } catch (erreur) {
+    // Jamais bloquant : la notification est déjà partie, seule la trace manque.
+    console.error("[meta] trace de notification non écrite :", erreur);
+  }
+  console.log(`[meta] notification du lead ${leadgenId} — ${resumerEnvoi(resultats)}`);
 }
 
 /** La notification envoyée dès qu'un lead arrive : prénom, téléphone cliquable, projet, ville, lien. */
@@ -371,7 +406,7 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
   } catch {
     reponsesLibres = [];
   }
-  await notifierNouveauLead({
+  const notifications = await notifierNouveauLead({
     leadId,
     normalise: {
       prenom: lead.prenom,
@@ -385,6 +420,7 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
     nouveau: true,
     relance: true,
   });
+  await enregistrerNotification(leadgenId, notifications);
   return true;
 }
 

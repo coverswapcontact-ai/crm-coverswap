@@ -8,9 +8,10 @@ import { creerDossier } from "@/lib/dossiers/dossiers";
  * Le lien de l'espace client : https://coverswap.fr/e/<code>-<signature>
  *
  *  - `code` : huit caractères tirés au hasard, propres à l'espace ;
- *  - `signature` : HMAC-SHA256(secret, code + version), 16 octets en base64url.
- *    Sans le secret du serveur, un lien ne se fabrique pas et ne se devine pas
- *    (2^128 essais) ; le code seul ne donne accès à rien.
+ *  - `signature` : HMAC-SHA256(secret, code + version), 12 octets en base64url
+ *    (16 caractères : le lien doit tenir dans un SMS). Sans le secret du serveur,
+ *    un lien ne se fabrique pas et ne se devine pas (2^96 essais, et chaque essai
+ *    est une requête au serveur) ; le code seul ne donne accès à rien.
  *  - Expirable : `expireLe`. Révocable : `revoqueLe`. Renouvelable : incrémenter
  *    `version` tue d'un coup tous les liens déjà envoyés, un nouveau est émis.
  *
@@ -30,7 +31,7 @@ function secretEspace(): string {
 }
 
 function signer(code: string, version: number): string {
-  return createHmac("sha256", secretEspace()).update(`${code}.${version}`).digest().subarray(0, 16).toString("base64url");
+  return createHmac("sha256", secretEspace()).update(`${code}.${version}`).digest().subarray(0, 12).toString("base64url");
 }
 
 function nouveauCode(): string {
@@ -62,7 +63,7 @@ export class LienEspaceInvalide extends ErreurMetier {
  */
 export async function espaceDuJeton(jeton: string): Promise<EspaceClient> {
   const inconnu = () => new LienEspaceInvalide("Ce lien n'est pas valide. Demandez-en un nouveau à CoverSwap.", 404, "inconnu");
-  const correspondance = /^([a-z0-9]{8})-([A-Za-z0-9_-]{22})$/.exec(jeton.trim());
+  const correspondance = /^([a-z0-9]{8})-([A-Za-z0-9_-]{16})$/.exec(jeton.trim());
   if (!correspondance) throw inconnu();
   const [, code, signature] = correspondance;
   const espace = await prisma.espaceClient.findUnique({ where: { code } });

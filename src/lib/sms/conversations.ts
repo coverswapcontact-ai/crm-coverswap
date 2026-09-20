@@ -121,6 +121,8 @@ export type ConversationResume = {
   clientId: string | null;
   brouillon: string | null;
   archivee: boolean;
+  /** Aucun SMS n'est encore parti : le prochain portera la mention STOP. */
+  premierEnvoi: boolean;
 };
 
 export function resumerConversation(c: ConversationSms): ConversationResume {
@@ -140,6 +142,7 @@ export function resumerConversation(c: ConversationSms): ConversationResume {
     clientId: c.clientId,
     brouillon: c.brouillon,
     archivee: Boolean(c.archiveLe),
+    premierEnvoi: !c.premierEnvoiLe,
   };
 }
 

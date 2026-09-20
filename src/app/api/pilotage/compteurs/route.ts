@@ -4,6 +4,7 @@ import { reponseErreur } from "@/lib/commun/api";
 import { rappelConnexionGoogle } from "@/lib/google/connexion";
 import { compterMessagesATrier } from "@/lib/messages/consultation";
 import { compterEntrantsATraiter } from "@/lib/prospects/entrants";
+import { compterSmsNonLus } from "@/lib/sms/conversations";
 import { compterPropositionsEnAttente } from "@/lib/validation/service";
 
 export const dynamic = "force-dynamic";
@@ -14,14 +15,15 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const [entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle] = await Promise.all([
+    const [entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle, smsNonLus] = await Promise.all([
       compterEntrantsATraiter(),
       compterPropositionsEnAttente(),
       compterMessagesATrier(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
       rappelConnexionGoogle(),
+      compterSmsNonLus(),
     ]);
-    return NextResponse.json({ entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle });
+    return NextResponse.json({ entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle, smsNonLus });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");
   }

@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, CircleCheckBig, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartColumn, CircleCheckBig, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, MessageSquare, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-export type Compteurs = { entrantsATraiter: number; aValider: number; messagesATrier: number; tachesEnEchec: number };
+export type Compteurs = { entrantsATraiter: number; aValider: number; messagesATrier: number; tachesEnEchec: number; smsNonLus: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
@@ -31,10 +31,11 @@ type Entree = {
 // Écrans principaux, dans l'ordre de la journée : les prospects alimentent les dossiers.
 const PRINCIPALES: Entree[] = [
   { href: "/prospects", libelle: "Prospects", icone: Radar, compteur: "entrantsATraiter", mobile: true },
+  { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
-  { href: "/messages", libelle: "Messages", icone: Mail, compteur: "messagesATrier" },
-  { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
+  { href: "/messages", libelle: "Mails", icone: Mail, compteur: "messagesATrier" },
+  { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
 
@@ -74,7 +75,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ entrantsATraiter: 0, aValider: 0, messagesATrier: 0, tachesEnEchec: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ entrantsATraiter: 0, aValider: 0, messagesATrier: 0, tachesEnEchec: 0, smsNonLus: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 

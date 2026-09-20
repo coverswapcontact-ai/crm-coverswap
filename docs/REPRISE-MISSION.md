@@ -49,7 +49,14 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       liens signés de l'espace (`src/lib/espace/liens.ts`). Schéma : ConversationSms, Sms, ModeleSms, EspaceClient,
       SimulationEspace, AccordDevis, AbonnementPush, CleInterne. 283 essais au vert.
       RESTE pour le lot 2 : écran Paramètres → Messagerie SMS (état du fournisseur, messages types).
-- [ ] Lot 3 — Messagerie (conversations, fil, contexte, envoi optimiste, temps réel)
+- [x] Lot 3 — Messagerie `/sms` : `src/components/sms/` (liste, fil en bulles, saisie avec compteur GSM-7 et
+      « simplifier », envoi optimiste + file hors ligne dans le navigateur, flux SSE + relève de secours,
+      brouillons, recherche, non-lus, contexte du dossier, actions rapides : lien espace, message type, fin
+      d'appel, note, devis, étape). `src/lib/commercial/appels.ts` (issue d'appel → suite). ESSAYÉ EN LOCAL au
+      simulateur, vue téléphone 375 px et ordinateur 1440 px : envoi, STOP ajouté, remise, SMS entrant en
+      temps réel, coupure réseau puis reprise, lien d'espace pré-rempli. Captures d'écran impossibles
+      (fenêtre en arrière-plan) : vérifié par lecture du DOM.
+      RESTE : entrée `/messagerie` sans navigation pour l'icône « Messages » (lot 7).
 - [ ] Lot 4 — Espace client (lien signé, photos, choix, simulations, devis, bon pour accord, acompte)
 - [ ] Lot 5 — Relances proposées (file de validation, plafond 5 messages / 10 jours, perdu sans réponse)
 - [ ] Lot 6 — Écran de pilotage commercial

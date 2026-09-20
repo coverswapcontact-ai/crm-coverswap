@@ -5,7 +5,7 @@ import { AlertTriangle, BellRing, CheckCircle2, Megaphone, RefreshCw, TestTube }
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TitreSection } from "@/components/pilotage/ui";
-import type { SanteMeta } from "@/lib/meta/sante";
+import type { ResultatParAxe, SanteMeta } from "@/lib/meta/sante";
 import type { RapportEssai } from "@/lib/meta/essai";
 import { cn } from "@/lib/utils";
 
@@ -30,28 +30,65 @@ function Ligne({ libelle, valeur, ton }: { libelle: string; valeur: React.ReactN
   );
 }
 
+const FENETRES = [7, 21, 30] as const;
+
+function Tableau({ titre, lignes }: { titre: string; lignes: ResultatParAxe[] }) {
+  if (lignes.length === 0) return null;
+  return (
+    <div className={cn(CARTE, "overflow-x-auto p-4")}>
+      <TitreSection>{titre}</TitreSection>
+      <table className="w-full min-w-[420px] text-[13px]">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-[#6B7280]">
+            <th className="py-1 text-left font-medium">Nom</th>
+            <th className="py-1 text-right font-medium">Leads</th>
+            <th className="py-1 text-right font-medium">Contactés</th>
+            <th className="py-1 text-right font-medium">Devis</th>
+            <th className="py-1 text-right font-medium">Signés</th>
+            <th className="py-1 text-right font-medium">Perdus</th>
+          </tr>
+        </thead>
+        <tbody className="tabular-nums">
+          {lignes.map((ligne) => (
+            <tr key={ligne.nom} className="border-t-[0.5px] border-[#2A2D34]">
+              <td className="py-1.5 pr-3 text-[#F2F3F5]">{ligne.nom}</td>
+              <td className="py-1.5 text-right text-[#F2F3F5]">{ligne.leads}</td>
+              <td className="py-1.5 text-right text-[#9CA3AF]">{ligne.contactes}</td>
+              <td className="py-1.5 text-right text-[#9CA3AF]">{ligne.devis}</td>
+              <td className="py-1.5 text-right text-[#5DCAA5]">{ligne.signes}</td>
+              <td className="py-1.5 text-right text-[#9CA3AF]">{ligne.perdus}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /**
- * Écran Publicité : l'état de l'intégration Meta en un coup d'œil — le webhook
- * reçoit-il, quand est arrivé le dernier lead, combien sur sept jours, ce qui a
- * échoué et ce qui manque encore. Avec deux gestes : rejouer les leads en
- * attente et lancer un essai complet.
+ * Écran Publicité : l'état de la chaîne Meta en un coup d'œil — réception,
+ * accès, notifications, résultats par campagne et par publicité sur la durée
+ * d'une campagne, leads en attente. Deux gestes : rejouer ce qui attend, et
+ * lancer un essai complet.
  */
 export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
   const [sante, setSante] = useState(initiale);
+  const [jours, setJours] = useState<number>(initiale.resultats.jours);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [rapport, setRapport] = useState<RapportEssai | null>(null);
 
-  const rafraichir = useCallback(async () => {
+  const rafraichir = useCallback(async (fenetre = jours) => {
     setOccupe("rafraichir");
     try {
-      const { sante: neuve } = await appelApi<{ sante: SanteMeta }>("/api/meta/sante");
+      const { sante: neuve } = await appelApi<{ sante: SanteMeta }>(`/api/meta/sante?jours=${fenetre}`);
       setSante(neuve);
+      setJours(neuve.resultats.jours);
     } catch (erreur) {
       toast.error(messageErreur(erreur));
     } finally {
       setOccupe(null);
     }
-  }, []);
+  }, [jours]);
 
   const rejouer = async (leadgenId?: string) => {
     setOccupe(leadgenId ?? "rejouer");
@@ -152,6 +189,30 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
           <Ligne libelle="Version de l'API" valeur={configuration.version} />
         </section>
       </div>
+
+      <section className="space-y-4">
+        <TitreSection
+          action={
+            <div className="flex items-center gap-1">
+              {FENETRES.map((f) => (
+                <Bouton key={f} taille="sm" variante={f === jours ? "primaire" : "secondaire"} onClick={() => void rafraichir(f)}>
+                  {f} j
+                </Bouton>
+              ))}
+            </div>
+          }
+        >
+          Résultats par campagne et par publicité · {sante.resultats.leads} lead(s) sur {sante.resultats.jours} jours
+        </TitreSection>
+        {sante.resultats.leads === 0 ? (
+          <EtatVide icone={<Megaphone size={22} aria-hidden />} titre="Aucun lead sur la période" texte="Les leads apparaîtront ici dès que la campagne tournera, avec leur campagne et leur publicité d'origine." />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Tableau titre="Par campagne" lignes={sante.resultats.parCampagne} />
+            <Tableau titre="Par publicité" lignes={sante.resultats.parPublicite} />
+          </div>
+        )}
+      </section>
 
       <section>
         <TitreSection

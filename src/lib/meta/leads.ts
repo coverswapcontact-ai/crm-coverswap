@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { MetaLead, Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { rattacherLead } from "@/lib/clients/identification";
@@ -5,7 +6,9 @@ import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { mettreEnFile } from "@/lib/taches/file";
 import { texteDesReponses, type LeadMetaNormalise } from "./champs";
 import { lireLeadMeta, type LeadGraph } from "./graph";
+import { leadDepuisChargePlate } from "./pont";
 import { lienFiche } from "./config";
+import { communeDuCodePostal } from "./communes";
 import { alerter, type ResultatCanal } from "@/lib/alertes/canaux";
 import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
 
@@ -109,6 +112,26 @@ export async function rejouerLeadMeta(leadgenId: string): Promise<void> {
   await mettreEnFile({ type: TACHE_LEAD, cle: `meta-lead:${leadgenId}`, charge: { leadgenId }, priorite: 10, tentativesMax: TENTATIVES_LEAD, mode: "RECONCILIATION" });
 }
 
+/**
+ * Complète la ville depuis le code postal quand le formulaire n'a rendu qu'un numéro.
+ * La déduction est signalée dans les réponses, et l'ambiguïté avec elle : plusieurs
+ * communes partagent souvent un code postal.
+ */
+export async function completerLaVille(normalise: LeadMetaNormalise): Promise<LeadMetaNormalise> {
+  if (normalise.ville || !normalise.codePostal) return normalise;
+  const commune = await communeDuCodePostal(normalise.codePostal);
+  if (!commune) return normalise;
+  const mention = commune.certaine
+    ? `${commune.nom} (déduite du code postal ${normalise.codePostal})`
+    : `${commune.nom} (déduite du code postal ${normalise.codePostal} ; aussi ${commune.autres.join(", ")})`;
+  return {
+    ...normalise,
+    ville: commune.nom,
+    reponses: [...normalise.reponses, { question: "Ville", reponse: mention, cle: "__ville_deduite" }],
+    reponsesLibres: [...normalise.reponsesLibres, { question: "Ville", reponse: mention, cle: "__ville_deduite" }],
+  };
+}
+
 /** Le contact déjà en base qui correspond à ce téléphone ou à cet e-mail. */
 async function contactExistant(normalise: LeadMetaNormalise): Promise<{ id: string; email: string | null; ville: string; codePostal: string | null } | null> {
   const telephone = normaliserTelephone(normalise.telephone);
@@ -174,7 +197,9 @@ export async function traiterLeadMeta(
     throw erreur;
   }
 
-  const normalise = graph.normalise;
+  // Ville absente mais code postal connu (champ libre où la personne n'a tapé que « 78660 ») :
+  // on demande la commune à l'API publique. Rien n'est inventé si elle ne répond pas.
+  const normalise = await completerLaVille(graph.normalise);
   const existant = await contactExistant(normalise);
   // Dans la fiche : les réponses aux questions personnalisées, celles qui ne sont pas
   // déjà un champ du contact. Le relevé complet du formulaire reste sur MetaLead.reponses.
@@ -366,4 +391,50 @@ export async function relancerSiNonTraite(leadgenId: string, leadId: string): Pr
 /** La fiche vient d'être ouverte dans le CRM : la relance n'a plus lieu d'être. */
 export async function marquerFicheVue(leadId: string): Promise<void> {
   await prisma.lead.updateMany({ where: { id: leadId, vuLe: null }, data: { vuLe: new Date() } });
+}
+
+/**
+ * Reçoit un lead Meta livré à plat par un intermédiaire (Zapier) et le fait
+ * entrer par la MÊME porte que le webhook natif : ligne MetaLead, champs
+ * normalisés, déduplication, notification, relance, écran Publicité.
+ *
+ * Idempotent par le `leadgen_id` de Meta. Quand l'intermédiaire ne le transmet
+ * pas, une clé stable est fabriquée à partir du contact et de l'horodatage :
+ * deux envois du même lead ne font toujours qu'une fiche.
+ */
+export async function recevoirLeadDuPont(
+  corps: Record<string, unknown>,
+  origine = "Zapier"
+): Promise<ResultatTraitement & { nouveau: boolean }> {
+  const lead = leadDepuisChargePlate(corps);
+  const leadgenId =
+    lead.leadgenId ??
+    `pont-${createHash("sha256")
+      .update(`${origine}|${lead.normalise.telephone}|${lead.normalise.email ?? ""}|${lead.soumisLe.toISOString()}`)
+      .digest("hex")
+      .slice(0, 24)}`;
+
+  const donnees = {
+    pageId: lead.pageId,
+    formId: lead.formId,
+    formNom: lead.formNom,
+    adId: lead.adId,
+    adNom: lead.adNom,
+    adsetId: lead.adsetId,
+    adsetNom: lead.adsetNom,
+    campagneId: lead.campagneId,
+    campagneNom: lead.campagneNom,
+    plateforme: lead.plateforme,
+    organique: lead.organique,
+    soumisLe: lead.soumisLe,
+  };
+  const existant = await prisma.metaLead.findUnique({ where: { leadgenId }, select: { id: true, statut: true } });
+  if (existant) {
+    console.log(`[meta] lead ${leadgenId} déjà reçu (${existant.statut}) via ${origine} : non retraité.`);
+  } else {
+    await prisma.metaLead.create({ data: { leadgenId, ...donnees } });
+  }
+
+  const resultat = await traiterLeadMeta(leadgenId, async () => lead);
+  return { ...resultat, nouveau: !existant };
 }

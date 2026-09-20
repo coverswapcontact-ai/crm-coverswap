@@ -25,6 +25,24 @@ export type LeadEnEchec = {
   campagne: string | null;
 };
 
+export type ResultatParAxe = {
+  /** Nom lisible ; l'identifiant quand Meta n'a pas rendu le nom. */
+  nom: string;
+  leads: number;
+  contactes: number;
+  devis: number;
+  signes: number;
+  perdus: number;
+};
+
+export type Resultats = {
+  jours: number;
+  depuis: string;
+  leads: number;
+  parCampagne: ResultatParAxe[];
+  parPublicite: ResultatParAxe[];
+};
+
 export type SanteMeta = {
   configuration: EtatConfiguration;
   /** Canaux de notification actifs ; en dessous de deux, un seul point de défaillance. */
@@ -43,11 +61,59 @@ export type SanteMeta = {
   enAttente: number;
   jeton: VerdictJeton;
   conversions: { envoyees7j: number; enEchec: number; derniereLe: string | null };
+  /** Résultats par campagne et par publicité sur la fenêtre demandée. */
+  resultats: Resultats;
   /** Ce qui empêche encore la chaîne de fonctionner de bout en bout. */
   alertes: string[];
 };
 
-export async function santeMeta(options: { interrogerMeta?: boolean } = {}): Promise<SanteMeta> {
+/** Durée d'observation par défaut : la longueur d'une campagne de Lucas. */
+export const JOURS_RESULTATS = 21;
+
+const APRES_DEVIS = new Set(["DEVIS_ENVOYE", "SIGNE", "CHANTIER_PLANIFIE", "TERMINE"]);
+const SIGNES = new Set(["SIGNE", "CHANTIER_PLANIFIE", "TERMINE"]);
+const CONTACTES = new Set(["CONTACTE", "DEVIS_DEMANDE", ...APRES_DEVIS]);
+
+/** Leads Meta d'une fenêtre, regroupés par campagne puis par publicité. */
+export async function resultatsMeta(jours = JOURS_RESULTATS): Promise<Resultats> {
+  const depuis = new Date(Date.now() - jours * JOUR_MS);
+  const lignes = await prisma.metaLead.findMany({
+    where: { ...AVEC_ARCHIVES, soumisLe: { gte: depuis } },
+    select: {
+      campagneNom: true,
+      campagneId: true,
+      adNom: true,
+      adId: true,
+      lead: { select: { statut: true, archiveLe: true } },
+    },
+  });
+
+  const regrouper = (cle: (l: (typeof lignes)[number]) => string): ResultatParAxe[] => {
+    const par = new Map<string, ResultatParAxe>();
+    for (const ligne of lignes) {
+      const nom = cle(ligne);
+      const axe = par.get(nom) ?? { nom, leads: 0, contactes: 0, devis: 0, signes: 0, perdus: 0 };
+      axe.leads++;
+      const statut = ligne.lead?.statut;
+      if (statut && CONTACTES.has(statut)) axe.contactes++;
+      if (statut && APRES_DEVIS.has(statut)) axe.devis++;
+      if (statut && SIGNES.has(statut)) axe.signes++;
+      if (statut === "PERDU") axe.perdus++;
+      par.set(nom, axe);
+    }
+    return [...par.values()].sort((a, b) => b.leads - a.leads || a.nom.localeCompare(b.nom, "fr"));
+  };
+
+  return {
+    jours,
+    depuis: depuis.toISOString(),
+    leads: lignes.length,
+    parCampagne: regrouper((l) => l.campagneNom ?? l.campagneId ?? "Campagne inconnue"),
+    parPublicite: regrouper((l) => l.adNom ?? l.adId ?? "Publicité inconnue"),
+  };
+}
+
+export async function santeMeta(options: { interrogerMeta?: boolean; jours?: number } = {}): Promise<SanteMeta> {
   const interroger = options.interrogerMeta ?? true;
   const maintenant = Date.now();
   const septJours = new Date(maintenant - 7 * JOUR_MS);
@@ -112,6 +178,7 @@ export async function santeMeta(options: { interrogerMeta?: boolean } = {}): Pro
     enAttente,
     jeton,
     conversions: { envoyees7j: conversions, enEchec: conversionsEchec, derniereLe: derniereConversion?.termineLe?.toISOString() ?? null },
+    resultats: await resultatsMeta(options.jours ?? JOURS_RESULTATS),
     alertes,
   };
 }

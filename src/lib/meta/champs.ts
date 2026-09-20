@@ -141,12 +141,18 @@ export function normaliserLeadMeta(champs: ChampMeta[]): LeadMetaNormalise {
         if (!email) email = normaliserEmail(valeur) ?? valeur;
         reconnues.add(cleBrute);
         break;
-      case "ville":
-        // Une adresse complète contient souvent le code postal : on le prend au passage.
+      case "ville": {
+        // Champ libre côté Meta : « Ablis », « 78660 », « 78660 Ablis », une adresse entière.
+        // On en sort le code postal, et ce qui reste est la ville — rien si c'était le seul code postal.
         if (!codePostal) codePostal = CODE_POSTAL.exec(valeur)?.[0] ?? null;
-        if (!ville) ville = valeur.replace(CODE_POSTAL, "").replace(/\s{2,}/g, " ").replace(/^[\s,;-]+|[\s,;-]+$/g, "") || valeur;
+        const reste = valeur
+          .replace(CODE_POSTAL, " ")
+          .replace(/\s{2,}/g, " ")
+          .replace(/^[\s,;-]+|[\s,;-]+$/g, "");
+        if (!ville) ville = reste || null;
         reconnues.add(cleBrute);
         break;
+      }
       case "codePostal":
         if (!codePostal) codePostal = CODE_POSTAL.exec(valeur)?.[0] ?? valeur.trim();
         reconnues.add(cleBrute);

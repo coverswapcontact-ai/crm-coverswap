@@ -1,229 +1,68 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { Resend } from "resend";
-import { rattacherLead } from "@/lib/clients/identification";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
+import { recevoirLeadDuPont } from "@/lib/meta/leads";
 
-// ============================================================================
-// WEBHOOK — pont Zapier pour les leads Meta Ads (secours)
-// ============================================================================
-// Le chemin normal est maintenant le webhook natif de Meta : /api/webhook/meta
-// (src/lib/meta). Cette route reste en place comme filet : elle fonctionne sans
-// `leads_retrieval` puisque Zapier fournit déjà les réponses du formulaire.
-// À réactiver côté Zapier seulement si le chemin direct devait tomber.
-//
-// Config Zapier (action "Webhooks by Zapier" → POST) :
-//   URL         : https://crm.coverswap.fr/api/webhook/zapier?secret=WEBHOOK_SECRET
-//   Method      : POST
-//   Data Pass-Through : No
-//   Data        : clés ci-dessous mappées depuis le trigger Facebook Lead Ads
-//
-// Champs attendus (tous optionnels sauf au moins un identifiant) :
-//   first_name, last_name, full_name
-//   phone_number (ou phone, telephone)
-//   email
-//   city (ou ville)
-//   form_name, form_id, page_id, leadgen_id
-//   created_time (ISO8601 ; sinon now())
-// ============================================================================
+/**
+ * WEBHOOK — pont Zapier pour les leads Meta Ads.
+ *
+ * Zapier livre le lead à plat, réponses comprises : ce chemin n'a besoin
+ * d'aucune permission Meta, contrairement au webhook natif (/api/webhook/meta)
+ * qui doit aller lire les réponses dans l'API Graph.
+ *
+ * Depuis le 20/09/2026 les deux chemins aboutissent au MÊME traitement
+ * (src/lib/meta/leads) : champs normalisés, campagne, ensemble et publicité
+ * conservés, déduplication sur le téléphone et l'e-mail, notification immédiate
+ * sur tous les canaux, relance à trente minutes, et visibilité dans l'écran
+ * Publicité. Avant, cette route écrivait un contact à part, sans rien de tout ça.
+ *
+ * Config Zapier (action « Webhooks by Zapier » → POST) :
+ *   URL    : https://crm.coverswap.fr/api/webhook/zapier?secret=<WEBHOOK_SECRET>
+ *   Data   : full_name (ou first_name + last_name), phone_number, email, city,
+ *            post_code, form_name, form_id, page_id, leadgen_id, created_time,
+ *            campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name.
+ * Toute autre clé envoyée est gardée comme réponse du formulaire.
+ */
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
-      return NextResponse.json({ error: "Non autorise" }, { status: 403 });
-    }
-
-    const body = await request.json();
-
-    // Parse prénom / nom — full_name en priorité (cohérent avec meta webhook)
-    let prenom = "Inconnu";
-    let nom = "Inconnu";
-    if (body.full_name) {
-      const parts = String(body.full_name).trim().split(/\s+/).filter(Boolean);
-      if (parts.length === 1) {
-        prenom = parts[0];
-        nom = parts[0];
-      } else if (parts.length >= 2) {
-        prenom = parts[0];
-        nom = parts.slice(1).join(" ");
-      }
-    } else {
-      prenom = body.first_name || body.prenom || "Inconnu";
-      nom = body.last_name || body.nom || "Inconnu";
-    }
-
-    const telephone = String(body.phone_number || body.phone || body.telephone || "");
-    const email: string | undefined = body.email || undefined;
-    const ville: string | undefined = body.city || body.ville || undefined;
-    const formName: string | undefined = body.form_name || undefined;
-    const leadgenId: string | undefined = body.leadgen_id || body.lead_id || undefined;
-    const formId: string | undefined = body.form_id || undefined;
-    const pageId: string | undefined = body.page_id || undefined;
-
-    // Date réelle de soumission (fournie par Zapier/Meta), sinon now
-    let realCreatedAt = new Date();
-    if (body.created_time) {
-      const d = new Date(body.created_time);
-      if (!isNaN(d.getTime())) realCreatedAt = d;
-    }
-
-    // Dedup par téléphone (9 derniers chiffres) ou email
-    const normalizedPhone = telephone.replace(/\D/g, "");
-    let existing = null;
-    if (normalizedPhone || email) {
-      const candidates = await prisma.lead.findMany({
-        where: {
-          OR: [
-            normalizedPhone ? { telephone: { contains: normalizedPhone.slice(-9) } } : undefined,
-            email ? { email } : undefined,
-          ].filter(Boolean) as Record<string, unknown>[],
-        },
-      });
-      existing = candidates[0] || null;
-    }
-
-    let lead;
-    if (existing) {
-      const updates: Record<string, unknown> = {};
-      if (!existing.email && email) updates.email = email;
-      if (existing.ville === "Non renseignée" && ville) updates.ville = ville;
-      if (Object.keys(updates).length > 0) {
-        lead = await prisma.lead.update({ where: { id: existing.id }, data: updates });
-      } else {
-        lead = existing;
-      }
-    } else {
-      // Scoring (identique au webhook meta direct)
-      let score = 15; // META_ADS base
-      const hour = new Date().getHours();
-      if ((hour >= 9 && hour <= 12) || (hour >= 14 && hour <= 18)) score += 10;
-      if (email) score += 5;
-      if (telephone) score += 5;
-      score += 25; // CUISINE par défaut
-
-      lead = await prisma.lead.create({
-        data: {
-          prenom,
-          nom,
-          telephone: telephone || "",
-          email,
-          ville: ville || "Non renseignée",
-          source: "META_ADS",
-          typeProjet: "CUISINE",
-          scoreSignature: Math.min(score, 100),
-          createdAt: realCreatedAt,
-          updatedAt: realCreatedAt,
-          formulaire: formName ?? null,
-          metaLeadgenId: leadgenId ?? null,
-          notes:
-            [
-              formName ? `Form: ${formName}` : null,
-              formId ? `FormID: ${formId}` : null,
-              pageId ? `PageID: ${pageId}` : null,
-              leadgenId ? `LeadgenID: ${leadgenId}` : null,
-              `Via: Zapier`,
-            ]
-              .filter(Boolean)
-              .join(" | ") || undefined,
-        },
-      });
-    }
-
-    // Client pérenne (jamais bloquant : rattrapé par le travail périodique)
-    try {
-      await rattacherLead(prisma, lead.id);
-    } catch (erreurClient) {
-      console.error("[zapier-webhook] rattachement du client (non bloquant) :", erreurClient);
-    }
-
-    // Interaction (trace)
-    await prisma.interaction.create({
-      data: {
-        type: "NOTE",
-        contenu: `Lead Meta Ads via Zapier${formName ? ` (${formName})` : ""}${
-          leadgenId ? ` — leadgen_id: ${leadgenId}` : ""
-        }`,
-        leadId: lead.id,
-      },
-    });
-
-    // Aucune conversion n'est renvoyée ici : Meta connaît déjà le lead. Ce sont les
-    // étapes du dossier (devis envoyé, signé, encaissé, perdu) qui repartent vers Meta,
-    // depuis src/lib/dossiers/transitions.ts.
-
-    // Notification mail au gérant (nouveaux leads seulement)
-    if (!existing) {
-      try {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
-        await resend.emails.send({
-          from: process.env.EMAIL_FROM || "CoverSwap <onboarding@resend.dev>",
-          to: process.env.LEAD_NOTIFICATION_EMAIL || "contact@coverswap.fr",
-          subject: `🔔 Nouveau lead Meta — ${prenom} ${nom}`,
-          html: `
-            <h2>Nouveau lead reçu via Meta Ads (bridge Zapier)</h2>
-            <table style="border-collapse:collapse;font-family:sans-serif;">
-              <tr><td style="padding:4px 12px;font-weight:bold;">Nom</td><td>${prenom} ${nom}</td></tr>
-              <tr><td style="padding:4px 12px;font-weight:bold;">Téléphone</td><td>${telephone || "—"}</td></tr>
-              <tr><td style="padding:4px 12px;font-weight:bold;">Email</td><td>${email || "—"}</td></tr>
-              <tr><td style="padding:4px 12px;font-weight:bold;">Ville</td><td>${ville || "—"}</td></tr>
-              ${formName ? `<tr><td style="padding:4px 12px;font-weight:bold;">Formulaire</td><td>${formName}</td></tr>` : ""}
-            </table>
-            <br/>
-            <a href="${appUrl}/prospects?lead=${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
-          `,
-        });
-      } catch (emailErr) {
-        console.error("[zapier-webhook] Erreur notification email:", emailErr);
-        // non bloquant
-      }
-    }
-
-    revalidatePath("/prospects");
-
-    return NextResponse.json(
-      {
-        success: true,
-        leadId: lead.id,
-        created: !existing,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("[zapier-webhook] Erreur:", error);
-    return NextResponse.json(
-      {
-        error: "Erreur serveur",
-        message: error instanceof Error ? error.message : "Unknown",
-      },
-      { status: 500 }
-    );
-  }
-}
-
-// GET = healthcheck pour Zapier ("Test Request" pendant la config)
-export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    endpoint: "zapier-webhook",
-    message: "Prêt à recevoir des leads depuis Zapier",
-  });
+  let corps: Record<string, unknown>;
+  try {
+    corps = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Corps invalide." }, { status: 400 });
+  }
+
+  try {
+    const resultat = await recevoirLeadDuPont(corps, "Zapier");
+    revalidatePath("/prospects");
+    revalidatePath("/publicite");
+    return NextResponse.json({
+      success: true,
+      leadId: resultat.leadId,
+      // `created` reste dans la réponse : Zapier l'affiche dans son historique.
+      created: resultat.nouveau && !resultat.rattache,
+      rattacheAUnContactExistant: resultat.rattache,
+      notifications: resultat.notifications.map((n) => ({ canal: n.canal, ok: n.ok })),
+    });
+  } catch (erreur) {
+    // Ne pas acquitter : Zapier rejouera, et le leadgen_id garantit l'absence de doublon.
+    console.error("[zapier-webhook] échec :", erreur);
+    return NextResponse.json({ error: "Traitement impossible, à rejouer.", message: erreur instanceof Error ? erreur.message : "inconnu" }, { status: 503 });
+  }
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+/** GET = point de santé, utilisé par Zapier pendant la configuration (« Test Request »). */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
+    return NextResponse.json({ error: "Non autorise" }, { status: 403 });
+  }
+  return NextResponse.json({ ok: true, endpoint: "zapier-webhook", message: "Prêt à recevoir des leads depuis Zapier" });
 }

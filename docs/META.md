@@ -154,7 +154,27 @@ TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, NTFY_TOPIC, LEAD_NOTIFICATION_EMAIL
    apparaître dans « Événements de test » du Gestionnaire d'événements.
 5. Archiver le contact de test.
 
-## 9. Ce que le CRM garantit
+## 9. Le pont Zapier (secours)
+
+`https://crm.coverswap.fr/api/webhook/zapier?secret=<WEBHOOK_SECRET>` reste en
+service. Il ne demande aucune permission Meta, puisque Zapier livre déjà les
+réponses : c'est le filet tant que l'App Review n'a pas abouti.
+
+Depuis le 20/09/2026, les deux chemins aboutissent au même traitement : mêmes
+champs, même déduplication, mêmes notifications, même relance, même visibilité
+dans l'écran Publicité. Champs à mapper dans Zapier :
+
+```
+full_name (ou first_name + last_name), phone_number, email, city, post_code,
+form_name, form_id, page_id, leadgen_id, created_time,
+campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name
+```
+
+Toute autre clé envoyée est gardée comme réponse du formulaire. `city` peut
+contenir une ville, un code postal ou une adresse : le CRM range le code postal
+à sa place et déduit la commune quand il ne reste que lui.
+
+## 10. Ce que le CRM garantit
 
 - Chaque appel de Meta est signé et vérifié (`X-Hub-Signature-256`) ; le reste
   est refusé sans rien écrire.

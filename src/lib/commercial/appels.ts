@@ -78,8 +78,8 @@ export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<
       const aTraiter = lead?.statut === "NOUVEAU" || lead?.statut === "DEVIS_DEMANDE";
       if (entree.issue === "PAS_INTERESSE") await tx.lead.update({ where: { id: leadId! }, data: { statut: "PERDU", rappelLe: null } });
       // Pas de réponse : la personne n'a pas été jointe, elle reste « à traiter » — avec un rappel.
-      else if (entree.issue === "PAS_DE_REPONSE") await tx.lead.update({ where: { id: leadId! }, data: { rappelLe: rappel } });
-      else await tx.lead.update({ where: { id: leadId! }, data: { ...(aTraiter ? { statut: "CONTACTE" } : {}), rappelLe: rappel } });
+      else if (entree.issue === "PAS_DE_REPONSE") await tx.lead.update({ where: { id: leadId! }, data: { rappelLe: rappel, traiteLe: null } });
+      else await tx.lead.update({ where: { id: leadId! }, data: { ...(aTraiter ? { statut: "CONTACTE" } : {}), rappelLe: rappel, ...(rappel ? { traiteLe: null } : {}) } });
     });
   }
 

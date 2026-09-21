@@ -267,7 +267,7 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
     ...champs,
     ...(nomFamille !== undefined ? { nom: nomFamille } : {}),
     ...(email !== undefined ? { email: email ? normaliserEmail(email) : null } : {}),
-    ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null } : {}),
+    ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null, ...(rappelLe ? { traiteLe: null } : {}) } : {}),
   };
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({ where: { id }, data });

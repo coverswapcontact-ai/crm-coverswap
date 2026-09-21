@@ -51,6 +51,7 @@ model Lead {
   delaiProjetTexte String? // la réponse telle que donnée
   tailleCuisine    String? // la réponse telle que donnée
   rappelLe         DateTime? // prochain rappel téléphonique prévu (issue d'appel « à rappeler »)
+  traiteLe         DateTime? // « marqué comme traité » depuis Leads : hors de la file d'appels, pas archivé ; un rappel posé l'y remet
   metaLeads        MetaLead[]
   conversationsSms ConversationSms[]
   interactions     Interaction[]

@@ -12,7 +12,7 @@ export async function GET(requete: NextRequest) {
     const source = parametres.get("source");
     return NextResponse.json(
       await listerLeads({
-        vue: parametres.get("vue") === "SANS_SUITE" ? "SANS_SUITE" : "ACTIFS",
+        vue: parametres.get("vue") === "SANS_SUITE" ? "SANS_SUITE" : parametres.get("vue") === "ARCHIVES" ? "ARCHIVES" : "ACTIFS",
         source: source && (SOURCES_LEAD as readonly string[]).includes(source) ? source : undefined,
         recherche: parametres.get("q")?.slice(0, 120) ?? undefined,
       })

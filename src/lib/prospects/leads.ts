@@ -59,12 +59,16 @@ export type LigneLead = {
   dossierId: string | null;
   /** Les dernières simulations, pour en parler pendant l'appel. */
   simulations: SimulationLead[];
+  /** Marqué comme traité depuis Leads : hors de la file d'appels. */
+  traiteLe: string | null;
+  archiveLe: string | null;
+  archiveMotif: string | null;
 };
 
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
 
-export type VueLeads = "ACTIFS" | "SANS_SUITE";
-export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number }; sources: string[] };
+export type VueLeads = "ACTIFS" | "SANS_SUITE" | "ARCHIVES";
+export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number; archives: number }; sources: string[] };
 
 const VILLES_INCONNUES = /^(|non renseign[ée]e?|inconnue?)$/i;
 const LIBELLES_OCCUPATION: Record<string, string> = { PROPRIETAIRE: "Propriétaire", LOCATAIRE: "Locataire" };
@@ -86,6 +90,7 @@ function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
   const limite = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   return {
     statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
+    traiteLe: null,
     interactions: { none: APPEL },
     dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: APPEL } } },
     AND: [
@@ -96,7 +101,11 @@ function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
 }
 
 const whereVue = (vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput =>
-  vue === "SANS_SUITE" ? { dossiers: { none: { archiveLe: null } }, statut: "PERDU" } : { OR: [sansDossierActif, simulationNonAppelee(maintenant)] };
+  vue === "ARCHIVES"
+    ? { archiveLe: { not: null } }
+    : vue === "SANS_SUITE"
+      ? { dossiers: { none: { archiveLe: null } }, statut: "PERDU" }
+      : { OR: [sansDossierActif, simulationNonAppelee(maintenant)] };
 
 const inclusion = {
   interactions: { where: { archiveLe: null, type: "APPEL" }, orderBy: { createdAt: "desc" }, select: { contenu: true, createdAt: true } },
@@ -158,6 +167,8 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     : lead.interactions.length === 0 && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE");
   const recent = maintenant.getTime() - (dossier ? arrivee : lead.createdAt).getTime() <= JOURS_A_TRAITER * JOUR_MS;
   const aAppeler =
+    !lead.archiveLe &&
+    !lead.traiteLe &&
     lead.statut !== "PERDU" &&
     lead.priorite !== "A_ECARTER" &&
     (dossier ? simulation && jamaisAppele && recent && ETAPES_AVANT_APPEL.includes(dossier.etape) : rappelEchu || (jamaisAppele && !lead.rappelLe && recent));
@@ -194,6 +205,9 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     smsNonLus: conversation?.nonLus ?? 0,
     photos: lead._count.photos,
     simulation,
+    traiteLe: lead.traiteLe?.toISOString() ?? null,
+    archiveLe: lead.archiveLe?.toISOString() ?? null,
+    archiveMotif: lead.archiveMotif,
     dossierId: dossier?.id ?? null,
     simulations: lead.simulations.map((s) => {
       const avant = s.imageOriginalPath ?? s.imageBeforePath;
@@ -223,6 +237,7 @@ function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
     AND: [
       // (une priorité absente n'est pas « à écarter » : en SQL, NOT sur une valeur nulle écarterait ces leads)
       { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] },
+      { traiteLe: null },
       {
         OR: [
           {
@@ -242,16 +257,17 @@ function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
 export async function listerLeads(filtres: { vue?: VueLeads; source?: string; recherche?: string; limite?: number } = {}, maintenant: Date = new Date()): Promise<ListeLeads> {
   const vue = filtres.vue ?? "ACTIFS";
   const communs: Prisma.LeadWhereInput[] = [filtres.source ? { source: filtres.source } : {}, whereRecherche(filtres.recherche)];
-  const [leads, actifs, aAppeler, sansSuite, sources] = await Promise.all([
-    prisma.lead.findMany({ where: { AND: [...communs, whereVue(vue, maintenant)] }, include: inclusion, orderBy: { createdAt: "desc" }, take: Math.min(filtres.limite ?? 300, 500) }),
+  const [leads, actifs, aAppeler, sansSuite, archives, sources] = await Promise.all([
+    prisma.lead.findMany({ where: { AND: [...communs, whereVue(vue, maintenant)] }, include: inclusion, orderBy: vue === "ARCHIVES" ? { archiveLe: "desc" } : { createdAt: "desc" }, take: Math.min(filtres.limite ?? 300, 500) }),
     prisma.lead.count({ where: whereVue("ACTIFS", maintenant) }),
     prisma.lead.count({ where: whereAAppeler(maintenant) }),
     prisma.lead.count({ where: whereVue("SANS_SUITE", maintenant) }),
+    prisma.lead.count({ where: whereVue("ARCHIVES", maintenant) }),
     prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS", maintenant), _count: { _all: true } }),
   ]);
   return {
     lignes: leads.map((lead) => versLigne(lead, maintenant)),
-    compteurs: { actifs, aAppeler, sansSuite },
+    compteurs: { actifs, aAppeler, sansSuite, archives },
     sources: sources.sort((a, b) => b._count._all - a._count._all).map((s) => s.source),
   };
 }

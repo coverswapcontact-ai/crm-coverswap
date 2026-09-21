@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, FolderOpen, FolderPlus, MessageSquare, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, MessageSquare, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
+import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type ActionLeads, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead, ListeLeads, SimulationLead, VueLeads } from "@/lib/prospects/leads";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
@@ -84,14 +85,37 @@ function Provenance({ lead }: { lead: LigneLead }) {
   );
 }
 
-function Ligne({ lead, maintenant, occupe, onOuvrir, onAppelNote, onDossier }: { lead: LigneLead; maintenant: number; occupe: boolean; onOuvrir: () => void; onAppelNote: () => void; onDossier: () => void }) {
+/** Le motif en un geste : quatre boutons, un tap archive. */
+function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif: MotifArchivage) => void; onAnnuler: () => void; occupe: boolean }) {
   return (
-    <li className={cn("rounded-[14px] border-[0.5px] bg-[#1C1F25] p-3.5", lead.aAppeler ? "border-[#1D9E75]/35" : "border-[#2A2D34]")}>
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Motif de l'archivage">
+      <span className="mr-0.5 text-[12px] text-[#8B919C]">Archiver :</span>
+      {MOTIFS_ARCHIVAGE.map((motif) => (
+        <button key={motif} type="button" disabled={occupe} onClick={() => onChoisir(motif)} className={cn("h-9 rounded-full border-[0.5px] border-[#EF9F27]/45 px-3 text-[13px] text-[#F5B454] hover:bg-[#EF9F27]/15 disabled:opacity-50", TRANS)}>
+          {LIBELLES_MOTIF_ARCHIVAGE[motif]}
+        </button>
+      ))}
+      <button type="button" onClick={onAnnuler} aria-label="Ne pas archiver" className="flex h-9 w-9 items-center justify-center rounded-full text-[#8B919C] hover:bg-[#22262D]">
+        <X size={14} aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, onOuvrir, onAppelNote, onDossier }: { lead: LigneLead; maintenant: number; occupe: boolean; selectionne: boolean; onSelection: () => void; onAction: (action: ActionLeads, motif?: MotifArchivage) => void; onOuvrir: () => void; onAppelNote: () => void; onDossier: () => void }) {
+  const [motifOuvert, setMotifOuvert] = useState(false);
+  const archive = Boolean(lead.archiveLe);
+  return (
+    <li className={cn("rounded-[14px] border-[0.5px] bg-[#1C1F25] p-3.5", selectionne ? "border-[#5DCAA5]/70 bg-[#1D9E75]/[0.06]" : lead.aAppeler ? "border-[#1D9E75]/35" : "border-[#2A2D34]")}>
       <div className="flex items-start gap-3">
+        <label className="-m-1.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] hover:bg-[#22262D]">
+          <input type="checkbox" checked={selectionne} onChange={onSelection} aria-label={`Sélectionner ${lead.nom}`} className="h-[18px] w-[18px] accent-[#1D9E75]" />
+        </label>
         <button type="button" onClick={onOuvrir} className="min-w-0 flex-1 text-left">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <PastillePriorite priorite={lead.priorite} motif={lead.prioriteMotif} />
             {lead.simulation ? <PastilleSimulation nombre={lead.simulations.length} /> : null}
+            {lead.traiteLe && !archive ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#9CA3AF]">Traité</span> : null}
             <span className="truncate text-[15px] font-medium text-[#F2F3F5]">{lead.nom}</span>
             {lead.smsNonLus > 0 ? <span className="rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
           </p>
@@ -105,10 +129,25 @@ function Ligne({ lead, maintenant, occupe, onOuvrir, onAppelNote, onDossier }: {
             {lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <span className="text-[#4B5563]"> · </span> : null}
             <Attente lead={lead} maintenant={maintenant} />
           </p>
-          <Reponses lead={lead} />
+          {archive ? (
+            <p className="mt-1 text-[12.5px] text-[#F5B454]">
+              Archivé le {new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+              {lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}
+            </p>
+          ) : (
+            <Reponses lead={lead} />
+          )}
         </button>
         <ChevronRight size={16} aria-hidden className="mt-1 hidden shrink-0 text-[#4B5563] sm:block" />
       </div>
+      {archive ? (
+        <div className="mt-3">
+          <button type="button" disabled={occupe} onClick={() => onAction("RESTAURER")} className={cn("flex h-11 items-center gap-2 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-4 text-[14px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 disabled:opacity-50 sm:h-9 sm:text-[13px]", TRANS)}>
+            <ArchiveRestore size={16} aria-hidden /> Restaurer
+          </button>
+        </div>
+      ) : (
+      <>
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] gap-2 sm:grid-cols-[minmax(0,15rem)_auto_auto_auto] sm:justify-start">
         {lead.telephoneLien ? (
           <a href={lead.telephoneLien} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] px-3 text-[14.5px] font-semibold tabular-nums sm:h-10 sm:text-[13.5px]", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
@@ -133,6 +172,29 @@ function Ligne({ lead, maintenant, occupe, onOuvrir, onAppelNote, onDossier }: {
           </button>
         )}
       </div>
+      <div className="mt-2.5 flex min-h-9 flex-wrap items-center justify-end gap-1.5">
+        {motifOuvert ? (
+          <ChoixMotif
+            occupe={occupe}
+            onAnnuler={() => setMotifOuvert(false)}
+            onChoisir={(motif) => {
+              setMotifOuvert(false);
+              onAction("ARCHIVER", motif);
+            }}
+          />
+        ) : (
+          <>
+            <button type="button" disabled={occupe} onClick={() => onAction(lead.traiteLe ? "REPRENDRE" : "TRAITER")} title={lead.traiteLe ? "Le remettre dans la file d'appels" : "Le sortir de la file d'appels, sans l'archiver"} className={cn("flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] disabled:opacity-50", TRANS)}>
+              {lead.traiteLe ? <Undo2 size={14} aria-hidden /> : <CheckCheck size={14} aria-hidden />} {lead.traiteLe ? "Reprendre" : "Traité"}
+            </button>
+            <button type="button" disabled={occupe} onClick={() => setMotifOuvert(true)} className={cn("flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F5B454] disabled:opacity-50", TRANS)}>
+              <Archive size={14} aria-hidden /> Archiver
+            </button>
+          </>
+        )}
+      </div>
+      </>
+      )}
     </li>
   );
 }
@@ -342,6 +404,9 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   const [nouveau, setNouveau] = useState(false);
   const [modeAppels, setModeAppels] = useState(appelsInitial);
   const [passes, setPasses] = useState<Set<string>>(new Set());
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [motifGroupe, setMotifGroupe] = useState(false);
+  const [enCours, setEnCours] = useState<Set<string>>(new Set());
   const [ouverture, setOuverture] = useState<string | null>(null);
   const [suite, setSuite] = useState<{ lead: LigneLead; suite: SuiteAppel; dossierId: string | null } | null>(null);
   const [totalAppels, setTotalAppels] = useState(() => initial.lignes.filter((lead) => lead.aAppeler && lead.priorite !== "A_ECARTER").length);
@@ -363,6 +428,13 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
       setCharge(false);
     }
   }, []);
+
+  const [vueSuivie, setVueSuivie] = useState(vue);
+  if (vueSuivie !== vue) {
+    setVueSuivie(vue);
+    setSelection(new Set());
+    setMotifGroupe(false);
+  }
 
   useEffect(() => {
     filtres.current = { vue, source, recherche };
@@ -404,6 +476,59 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
     setModeAppels(true);
   }
 
+  const INVERSE: Record<ActionLeads, ActionLeads> = { ARCHIVER: "RESTAURER", RESTAURER: "ARCHIVER", TRAITER: "REPRENDRE", REPRENDRE: "TRAITER" };
+
+  async function executer(action: ActionLeads, ids: string[], motif?: MotifArchivage): Promise<string[]> {
+    const { ids: changes } = await envoyerJson<{ ids: string[] }>("/api/leads/actions", "POST", { action, ids, ...(motif ? { motif } : {}) });
+    return changes;
+  }
+
+  /** Une action rapide, puis « Annuler » quelques secondes : l'action inverse, sur les mêmes leads. */
+  async function agir(action: ActionLeads, ids: string[], motif?: MotifArchivage, motifAnnulation?: MotifArchivage) {
+    setEnCours((actuels) => new Set([...actuels, ...ids]));
+    try {
+      const changes = await executer(action, ids, motif);
+      setSelection((actuelle) => new Set([...actuelle].filter((id) => !changes.includes(id))));
+      await rafraichir();
+      if (changes.length === 0) {
+        toast.info("Rien à changer : déjà fait.");
+        return;
+      }
+      const qui = changes.length === 1 ? (donnees.lignes.find((l) => l.id === changes[0])?.nom ?? "Lead") : `${changes.length} leads`;
+      const messages: Record<ActionLeads, string> = {
+        ARCHIVER: `${qui} archivé${changes.length > 1 ? "s" : ""}${motif ? ` · ${LIBELLES_MOTIF_ARCHIVAGE[motif]}` : ""}`,
+        RESTAURER: `${qui} restauré${changes.length > 1 ? "s" : ""}`,
+        TRAITER: `${qui} marqué${changes.length > 1 ? "s" : ""} comme traité${changes.length > 1 ? "s" : ""} : hors de la file d'appels`,
+        REPRENDRE: `${qui} remis dans la file d'appels`,
+      };
+      toast.success(messages[action], {
+        duration: 7000,
+        action: {
+          label: "Annuler",
+          onClick: () => {
+            void executer(INVERSE[action], changes, INVERSE[action] === "ARCHIVER" ? (motifAnnulation ?? "AUTRE") : undefined)
+              .then(() => rafraichir())
+              .then(() => toast.success("Annulé"))
+              .catch((erreur) => toast.error("Annulation impossible", { description: messageErreur(erreur) }));
+          },
+        },
+      });
+    } catch (erreur) {
+      toast.error("Action impossible", { description: messageErreur(erreur) });
+    } finally {
+      setEnCours((actuels) => new Set([...actuels].filter((id) => !ids.includes(id))));
+    }
+  }
+
+  function basculer(id: string) {
+    setSelection((actuelle) => {
+      const suivante = new Set(actuelle);
+      if (suivante.has(id)) suivante.delete(id);
+      else suivante.add(id);
+      return suivante;
+    });
+  }
+
   async function ouvrirDossier(lead: LigneLead, options: { rester?: boolean } = {}): Promise<string | null> {
     setOuverture(lead.id);
     try {
@@ -439,7 +564,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   const lienMessage = suite ? `/sms?${suite.dossierId ? `dossier=${suite.dossierId}` : `lead=${suite.lead.id}`}&proposer=${suite.suite.messagePropose}&retour=appels` : "#";
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8">
+    <div className={cn("mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8", selection.size > 0 && "pb-40 md:pb-28")}>
       <EnTetePage
         titre="Leads"
         sousTitre="Tout ce qui est entré et n'a pas encore de dossier. Le plus récent en haut."
@@ -473,6 +598,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
         {([
           ["ACTIFS", `En cours · ${donnees.compteurs.actifs}`],
           ["SANS_SUITE", `Sans suite · ${donnees.compteurs.sansSuite}`],
+          ["ARCHIVES", `Archivés · ${donnees.compteurs.archives}`],
         ] as const).map(([valeur, libelle]) => (
           <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
             {libelle}
@@ -496,15 +622,64 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
 
       {donnees.lignes.length === 0 ? (
         <div className="mt-8">
-          <EtatVide titre={recherche || source ? "Aucun lead ne correspond" : vue === "ACTIFS" ? "Aucun lead en attente" : "Aucun lead sans suite"} texte={vue === "ACTIFS" && !recherche && !source ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici. Ceux qui ont un dossier sont dans Dossiers." : undefined} />
+          <EtatVide titre={recherche || source ? "Aucun lead ne correspond" : vue === "ACTIFS" ? "Aucun lead en attente" : vue === "ARCHIVES" ? "Aucun lead archivé" : "Aucun lead sans suite"} texte={vue === "ACTIFS" && !recherche && !source ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici. Ceux qui ont un dossier sont dans Dossiers." : undefined} />
         </div>
       ) : (
         <ul className="mt-4 space-y-2.5">
           {donnees.lignes.map((lead) => (
-            <Ligne key={lead.id} lead={lead} maintenant={maintenant} occupe={ouverture === lead.id} onOuvrir={() => setOuvert(lead.id)} onAppelNote={() => setFeuilleAppel(lead)} onDossier={() => void ouvrirDossier(lead)} />
+            <Ligne
+              key={lead.id}
+              lead={lead}
+              maintenant={maintenant}
+              occupe={ouverture === lead.id || enCours.has(lead.id)}
+              selectionne={selection.has(lead.id)}
+              onSelection={() => basculer(lead.id)}
+              onAction={(action, motif) => void agir(action, [lead.id], motif, lead.archiveMotif ? (Object.entries(LIBELLES_MOTIF_ARCHIVAGE).find(([, libelle]) => libelle === lead.archiveMotif)?.[0] as MotifArchivage | undefined) : undefined)}
+              onOuvrir={() => setOuvert(lead.id)} onAppelNote={() => setFeuilleAppel(lead)} onDossier={() => void ouvrirDossier(lead)} />
           ))}
         </ul>
       )}
+
+      {selection.size > 0 ? (
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-3 pb-2 md:bottom-4">
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-[14px] border-[0.5px] border-[#2A2D34] bg-[#22262D] p-2.5 shadow-lg shadow-black/40">
+            <p className="px-1.5 text-[13.5px] font-medium text-[#F2F3F5]">
+              {selection.size} sélectionné{selection.size > 1 ? "s" : ""}
+            </p>
+            <button type="button" onClick={() => setSelection(new Set(donnees.lignes.map((l) => l.id)))} className="h-9 rounded-[10px] px-2.5 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5]">
+              Tout ({donnees.lignes.length})
+            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              {vue === "ARCHIVES" ? (
+                <Bouton variante="primaire" icone={<ArchiveRestore size={15} aria-hidden />} chargement={enCours.size > 0} onClick={() => void agir("RESTAURER", [...selection])}>
+                  Restaurer
+                </Bouton>
+              ) : motifGroupe ? (
+                <ChoixMotif
+                  occupe={enCours.size > 0}
+                  onAnnuler={() => setMotifGroupe(false)}
+                  onChoisir={(motif) => {
+                    setMotifGroupe(false);
+                    void agir("ARCHIVER", [...selection], motif);
+                  }}
+                />
+              ) : (
+                <>
+                  <Bouton icone={<CheckCheck size={15} aria-hidden />} chargement={enCours.size > 0} onClick={() => void agir("TRAITER", [...selection])}>
+                    Traités
+                  </Bouton>
+                  <Bouton variante="primaire" icone={<Archive size={15} aria-hidden />} onClick={() => setMotifGroupe(true)}>
+                    Archiver
+                  </Bouton>
+                </>
+              )}
+              <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-9 w-9 items-center justify-center rounded-[10px] text-[#9CA3AF] hover:bg-[#2A2F37]">
+                <X size={16} aria-hidden />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <PanneauEntrant id={ouvert} onFermer={() => setOuvert(null)} onModifie={() => void rafraichir()} />
 

@@ -1703,3 +1703,24 @@ dans Dossiers.
 - Écran : pastille « Simulation » à côté de la priorité ; « Voir le dossier » à la place
   d'« Ouvrir un dossier » ; en mode appels, ses rendus (avant / après, finition, prix)
   s'ouvrent en grand pour en parler pendant l'appel, et l'appel s'écrit dans son dossier.
+
+### Actions rapides sur les leads (21/09/2026)
+
+Sur chaque ligne de Leads, sans ouvrir la fiche (`src/lib/prospects/menage.ts`,
+`POST /api/leads/actions`) :
+
+- **Archiver**, motif en un geste (Test, Doublon, Hors cible, Autre) : le lead sort de Leads
+  et de la file ; il se retrouve dans le filtre **Archivés**, d'où on le restaure.
+- **Traité** : le lead sort de la file « à appeler » sans être archivé (`Lead.traiteLe`) ;
+  « Reprendre » l'y remet, et un rappel posé (appel « à rappeler » ou « pas de réponse »,
+  date de rappel saisie) efface « traité » de lui-même. Un lead du simulateur marqué traité
+  quitte Leads : il est dans Dossiers.
+- **Sélection multiple** : cases à cocher, barre en bas de l'écran — archiver (motif),
+  marquer traités, ou restaurer depuis Archivés.
+- Chaque action affiche « Annuler » sept secondes : l'action inverse, sur les leads
+  réellement changés. Rien ne se supprime ; le journal garde chaque changement.
+
+Le ménage des leads de test du 21/09/2026 est une migration à **liste explicite**
+(`menage-des-leads-de-test-21-09`), relevée en production en lecture seule : un
+identifiant qui ne ressemble plus à un test est laissé tel quel ; seuls les dossiers
+vides ouverts ce jour-là par le rattrapage des simulations sont archivés avec eux.

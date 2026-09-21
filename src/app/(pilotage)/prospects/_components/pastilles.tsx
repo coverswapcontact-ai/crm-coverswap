@@ -1,3 +1,4 @@
+import { Sparkles } from "lucide-react";
 import { Pastille } from "@/components/pilotage/ui";
 import type { EntrantResume } from "@/lib/prospects/types";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
@@ -22,6 +23,15 @@ export function PastillePriorite({ priorite, motif }: { priorite: string | null;
   return (
     <Pastille ton={ton} titre={motif ?? undefined}>
       {LIBELLES_PRIORITE[classe]}
+    </Pastille>
+  );
+}
+
+/** Il a fait une simulation sur le site : il a déjà vu un rendu de sa cuisine. */
+export function PastilleSimulation({ nombre }: { nombre?: number }) {
+  return (
+    <Pastille ton="bleu" titre="A fait une simulation sur le site : il a déjà vu un rendu de sa cuisine">
+      <Sparkles size={11} aria-hidden /> Simulation{nombre && nombre > 1 ? ` ×${nombre}` : ""}
     </Pastille>
   );
 }

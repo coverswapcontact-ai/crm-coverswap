@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, FolderPlus, MessageSquare, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
+import { ChevronRight, FolderOpen, FolderPlus, MessageSquare, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
-import type { LigneLead, ListeLeads, VueLeads } from "@/lib/prospects/leads";
+import type { LigneLead, ListeLeads, SimulationLead, VueLeads } from "@/lib/prospects/leads";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
@@ -17,7 +17,7 @@ import { FeuilleAppel } from "@/components/sms/FilConversation";
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "../../prospects/_components/NouveauContact";
 import { PanneauEntrant } from "../../prospects/_components/PanneauEntrant";
-import { PastillePriorite } from "../../prospects/_components/pastilles";
+import { PastillePriorite, PastilleSimulation } from "../../prospects/_components/pastilles";
 
 /* ── Temps ─────────────────────────────────────────────────────────── */
 
@@ -91,6 +91,7 @@ function Ligne({ lead, maintenant, occupe, onOuvrir, onAppelNote, onDossier }: {
         <button type="button" onClick={onOuvrir} className="min-w-0 flex-1 text-left">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <PastillePriorite priorite={lead.priorite} motif={lead.prioriteMotif} />
+            {lead.simulation ? <PastilleSimulation nombre={lead.simulations.length} /> : null}
             <span className="truncate text-[15px] font-medium text-[#F2F3F5]">{lead.nom}</span>
             {lead.smsNonLus > 0 ? <span className="rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
           </p>
@@ -122,11 +123,73 @@ function Ligne({ lead, maintenant, occupe, onOuvrir, onAppelNote, onDossier }: {
         <Link href={lead.conversationId ? `/sms?c=${lead.conversationId}` : `/sms?lead=${lead.id}`} aria-label={`Écrire à ${lead.nom}`} title="SMS" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
           <MessageSquare size={16} aria-hidden />
         </Link>
-        <button type="button" disabled={occupe} onClick={onDossier} aria-label={`Ouvrir le dossier de ${lead.nom}`} title="Ouvrir un dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 disabled:opacity-50 sm:h-10", TRANS)}>
-          <FolderPlus size={16} aria-hidden /> <span className="hidden sm:inline">{occupe ? "Ouverture…" : "Ouvrir un dossier"}</span>
-        </button>
+        {lead.dossierId ? (
+          <Link href={`/dossiers?dossier=${lead.dossierId}`} aria-label={`Voir le dossier de ${lead.nom}`} title="Voir le dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 sm:h-10", TRANS)}>
+            <FolderOpen size={16} aria-hidden /> <span className="hidden sm:inline">Voir le dossier</span>
+          </Link>
+        ) : (
+          <button type="button" disabled={occupe} onClick={onDossier} aria-label={`Ouvrir le dossier de ${lead.nom}`} title="Ouvrir un dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 disabled:opacity-50 sm:h-10", TRANS)}>
+            <FolderPlus size={16} aria-hidden /> <span className="hidden sm:inline">{occupe ? "Ouverture…" : "Ouvrir un dossier"}</span>
+          </button>
+        )}
       </div>
     </li>
+  );
+}
+
+/* ── Ses simulations, pour en parler pendant l'appel ─────────────────── */
+
+function SesSimulations({ simulations, dossierId }: { simulations: SimulationLead[]; dossierId: string | null }) {
+  const [ouverte, setOuverte] = useState<{ simulation: SimulationLead; vue: "apres" | "avant" } | null>(null);
+  return (
+    <div className="mt-4">
+      <p className="mb-2 flex items-center justify-between text-[12px] font-medium text-[#9CA3AF]">
+        Ce qu&apos;il a vu
+        {dossierId ? (
+          <a href={`/dossiers?dossier=${dossierId}`} target="_blank" rel="noopener" className="font-normal text-[#5DCAA5] hover:underline">
+            Toutes les photos du dossier
+          </a>
+        ) : null}
+      </p>
+      <ul className="grid grid-cols-3 gap-2">
+        {simulations.map((simulation) => (
+          <li key={simulation.id}>
+            <button type="button" disabled={!simulation.apres && !simulation.avant} onClick={() => setOuverte({ simulation, vue: simulation.apres ? "apres" : "avant" })} className="block w-full text-left disabled:opacity-60">
+              <span className="block aspect-[4/3] overflow-hidden rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#22262D]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
+                {simulation.apres || simulation.avant ? <img src={simulation.apres ?? simulation.avant ?? ""} alt="Rendu de la simulation" loading="lazy" className="h-full w-full object-cover" /> : null}
+              </span>
+              <span className="mt-1 block truncate text-[11.5px] text-[#8B919C]">
+                {[simulation.reference, simulation.prix ? `${Math.round(simulation.prix)} €` : null].filter(Boolean).join(" · ") || new Date(simulation.le).toLocaleDateString("fr-FR")}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {ouverte ? (
+        <div className="fixed inset-0 z-[70] flex flex-col bg-black/95" onClick={() => setOuverte(null)}>
+          <div className="flex items-center justify-between gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2" onClick={(evenement) => evenement.stopPropagation()}>
+            <div className="flex gap-1.5">
+              {(["avant", "apres"] as const).map((vue) =>
+                ouverte.simulation[vue] ? (
+                  <button key={vue} type="button" aria-pressed={ouverte.vue === vue} onClick={() => setOuverte({ ...ouverte, vue })} className={cn("h-10 rounded-full px-4 text-[14px]", ouverte.vue === vue ? "bg-[#F2F3F5] text-[#16181D]" : "bg-white/10 text-[#E5E7EB]")}>
+                    {vue === "avant" ? "Avant" : "Après"}
+                  </button>
+                ) : null
+              )}
+            </div>
+            <button type="button" onClick={() => setOuverte(null)} aria-label="Fermer" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-[#E5E7EB]">
+              <X size={18} aria-hidden />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
+            <img src={ouverte.simulation[ouverte.vue] ?? ""} alt={ouverte.vue === "avant" ? "Sa cuisine avant" : "Sa cuisine après, simulée"} className="max-h-full max-w-full rounded-[10px] object-contain" />
+          </div>
+          {ouverte.simulation.reference ? <p className="pb-4 text-center text-[13px] text-[#9CA3AF]">Finition {ouverte.simulation.reference}{ouverte.simulation.prix ? ` · ${Math.round(ouverte.simulation.prix)} € simulés` : ""}</p> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -187,6 +250,7 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
             <div className="mx-auto w-full max-w-xl">
               <p className="flex flex-wrap items-center gap-2">
                 <PastillePriorite priorite={lead.priorite} motif={lead.prioriteMotif} />
+                {lead.simulation ? <PastilleSimulation nombre={lead.simulations.length} /> : null}
                 <span className="text-[12.5px]">
                   <Attente lead={lead} maintenant={maintenant} />
                 </span>
@@ -203,6 +267,7 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
               {lead.prioriteMotif ? <p className="mt-1 text-[12.5px] text-[#8B919C]">{lead.prioriteMotif}</p> : null}
               <Reponses lead={lead} toutes />
               {lead.dernierAppel ? <p className="mt-2 text-[12.5px] text-[#8B919C]">Dernier appel : {lead.dernierAppel.contenu}</p> : null}
+              {lead.simulations.length > 0 ? <SesSimulations simulations={lead.simulations} dossierId={lead.dossierId} /> : null}
 
               {lead.telephoneLien ? (
                 <a href={lead.telephoneLien} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
@@ -221,7 +286,8 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
                 ))}
               </div>
               <textarea value={note} onChange={(evenement) => setNote(evenement.target.value)} rows={2} placeholder="En une ligne (facultatif) : cuisine de 2015, veut refaire les façades avant Noël" aria-label="Note de l'appel" className={cn(CLASSE_SAISIE, "mt-3 min-h-[64px] resize-y py-2 text-[15px] leading-relaxed sm:text-[13.5px]")} />
-              {issue === "INTERESSE" ? (
+              {issue === "INTERESSE" && lead.dossierId ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Son dossier est déjà ouvert : l&apos;appel s&apos;y écrit, puis le SMS avec le lien de son espace vous sera proposé.</p> : null}
+              {issue === "INTERESSE" && !lead.dossierId ? (
                 <label className="mt-3 flex items-start gap-2.5 text-[13.5px] leading-snug text-[#D1D5DB]">
                   <input type="checkbox" checked={avecDossier} onChange={(evenement) => setAvecDossier(evenement.target.checked)} className="mt-0.5 h-5 w-5 accent-[#1D9E75]" />
                   <span>
@@ -243,9 +309,16 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
                 {envoi ? "Enregistrement…" : "Enregistrer · suivant"}
               </button>
             </div>
-            <button type="button" onClick={() => onDossier(lead)} disabled={occupe} className="mx-auto mt-2 flex items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline disabled:opacity-50">
-              <FolderPlus size={13} aria-hidden /> Ouvrir son dossier sans noter d&apos;appel
-            </button>
+            {lead.dossierId ? (
+              // Nouvel onglet : la file d'appels reste où elle en est.
+              <a href={`/dossiers?dossier=${lead.dossierId}`} target="_blank" rel="noopener" className="mx-auto mt-2 flex w-fit items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline">
+                <FolderOpen size={13} aria-hidden /> Voir le dossier
+              </a>
+            ) : (
+              <button type="button" onClick={() => onDossier(lead)} disabled={occupe} className="mx-auto mt-2 flex items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline disabled:opacity-50">
+                <FolderPlus size={13} aria-hidden /> Ouvrir son dossier sans noter d&apos;appel
+              </button>
+            )}
           </footer>
         </>
       )}
@@ -317,7 +390,10 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   // La file d'appels : les leads à appeler, dans l'ordre de la liste, sans les « à écarter » ni ceux qu'on vient de passer.
   const aAppeler = useMemo(() => donnees.lignes.filter((lead) => lead.aAppeler), [donnees.lignes]);
   const ecartes = donnees.lignes.filter((lead) => lead.priorite === "A_ECARTER" && lead.attendDepuis).length;
-  const file = useMemo(() => aAppeler.filter((lead) => lead.priorite !== "A_ECARTER" && !passes.has(lead.id)), [aAppeler, passes]);
+  const file = useMemo(
+    () => aAppeler.filter((lead) => lead.priorite !== "A_ECARTER" && !passes.has(lead.id)).sort((a, b) => Number(b.simulation) - Number(a.simulation)),
+    [aAppeler, passes]
+  );
 
   function demarrerAppels() {
     setVue("ACTIFS");
@@ -348,7 +424,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   async function noterDansLaFile(lead: LigneLead, issue: IssueAppel, note: string, avecDossier: boolean) {
     try {
       // Intéressé + dossier : le dossier s'ouvre d'abord, l'appel et sa note s'écrivent dans SON histoire.
-      const dossierId = avecDossier ? await ouvrirDossier(lead, { rester: true }) : null;
+      const dossierId = lead.dossierId ?? (avecDossier ? await ouvrirDossier(lead, { rester: true }) : null);
       if (avecDossier && !dossierId) return;
       const { suite: resultat } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", { ...(dossierId ? { dossierId } : { leadId: lead.id }), issue, note });
       await rafraichir();

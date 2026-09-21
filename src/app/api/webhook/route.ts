@@ -344,6 +344,8 @@ export async function POST(request: NextRequest) {
 
     // ── Simulation du site (coordonnées + photo) = dossier : ouvert tout seul, photo avant et rendus rangés ──
     const ouverture = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0 ? await assurerDossierDeSimulation(lead.id) : null;
+    // La simulation vient d'être rattachée : la classe (Prioritaire d'office, sauf hors zone) est relue pour le push.
+    const classeFinale = ouverture ? ((await prisma.lead.findUnique({ where: { id: lead.id }, select: { priorite: true, prioriteMotif: true } })) ?? null) : null;
 
     // Accusé de réception au visiteur (site seulement, jamais Meta) : ce que nous
     // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
@@ -449,7 +451,7 @@ export async function POST(request: NextRequest) {
           simulations: simulationsRattachees.length + (hasImages ? 1 : 0),
           photos: photosEcrites,
           message: data.message ?? null,
-          priorite: qualification ? { classe: qualification.priorite as Priorite, motif: qualification.motif } : null,
+          priorite: classeFinale?.priorite ? { classe: classeFinale.priorite as Priorite, motif: classeFinale.prioriteMotif ?? "" } : qualification ? { classe: qualification.priorite as Priorite, motif: qualification.motif } : null,
         });
         notifications = resultats.map((r) => ({ canal: r.canal, ok: r.ok }));
       } catch (erreurPush) {

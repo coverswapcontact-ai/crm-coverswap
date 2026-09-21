@@ -11,6 +11,12 @@ import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libell
  *
  * Ordre : chronologique, le plus récent en haut. La priorité se lit sur la
  * pastille de chaque ligne ; elle ne change pas l'ordre.
+ *
+ * Exception (21/09/2026) : un lead du SIMULATEUR a son dossier ouvert tout
+ * seul, mais reste ici — et dans la file d'appels — tant qu'aucun appel n'est
+ * noté (ni sur sa fiche, ni sur son dossier), sur 60 jours, et tant que son
+ * dossier n'a pas dépassé la simulation. C'est le même contact et le même
+ * dossier, visible aux deux endroits ; le premier appel noté le fait sortir.
  */
 
 export type ReponseLead = { question: string; reponse: string };
@@ -47,7 +53,15 @@ export type LigneLead = {
   conversationId: string | null;
   smsNonLus: number;
   photos: number;
+  /** A fait une simulation sur le site : il a déjà vu un rendu de sa cuisine. */
+  simulation: boolean;
+  /** Son dossier, quand il en a déjà un (lead du simulateur pas encore appelé). */
+  dossierId: string | null;
+  /** Les dernières simulations, pour en parler pendant l'appel. */
+  simulations: SimulationLead[];
 };
+
+export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
 
 export type VueLeads = "ACTIFS" | "SANS_SUITE";
 export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number }; sources: string[] };
@@ -59,14 +73,38 @@ const LIBELLES_DELAI: Record<string, string> = { COURT: "Sous peu", MOYEN: "Dans
 /** Champs d'identité des formulaires Meta : déjà affichés ailleurs sur la ligne. */
 const CLES_IDENTITE = /^(full_name|first_name|last_name|phone_number|phone|email|city|zip|zip_code|post_code|postal_code|street_address|country|__)/i;
 
-const sansDossier: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS] } };
-const whereVue = (vue: VueLeads): Prisma.LeadWhereInput => ({ ...sansDossier, AND: [vue === "SANS_SUITE" ? { statut: "PERDU" } : { statut: { not: "PERDU" } }] });
+const JOUR_MS = 86_400_000;
+/** Étapes où un dossier ouvert par la simulation attend encore le premier appel. */
+const ETAPES_AVANT_APPEL = ["QUALIFICATION", "SIMULATION"];
+const APPEL = { type: "APPEL", archiveLe: null };
+
+/** Le cas général : pas de dossier. */
+const sansDossierActif: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] } };
+
+/** Lead du simulateur, dossier déjà ouvert, jamais appelé, depuis moins de 60 jours (arrivée ou dernière simulation). */
+function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
+  const limite = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
+  return {
+    statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
+    interactions: { none: APPEL },
+    dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: APPEL } } },
+    AND: [
+      { OR: [{ source: "SITE_SIMULATEUR" }, { simulations: { some: { archiveLe: null } } }] },
+      { OR: [{ createdAt: { gte: limite } }, { simulations: { some: { archiveLe: null, createdAt: { gte: limite } } } }] },
+    ],
+  };
+}
+
+const whereVue = (vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput =>
+  vue === "SANS_SUITE" ? { dossiers: { none: { archiveLe: null } }, statut: "PERDU" } : { OR: [sansDossierActif, simulationNonAppelee(maintenant)] };
 
 const inclusion = {
   interactions: { where: { archiveLe: null, type: "APPEL" }, orderBy: { createdAt: "desc" }, select: { contenu: true, createdAt: true } },
   metaLeads: { orderBy: { createdAt: "desc" }, take: 1, select: { reponses: true, campagneNom: true, adNom: true, formNom: true } },
   conversationsSms: { where: { archiveLe: null }, orderBy: { dernierMessageLe: "desc" }, take: 1, select: { id: true, nonLus: true } },
-  _count: { select: { photos: true } },
+  dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, _count: { select: { evenements: { where: APPEL } } } } },
+  simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, createdAt: true, referenceChoisie: true, prixDevis: true, imageBeforePath: true, imageOriginalPath: true, imageAfterPath: true } },
+  _count: { select: { photos: true, simulations: { where: { archiveLe: null } } } },
 } satisfies Prisma.LeadInclude;
 
 type LeadCharge = Prisma.LeadGetPayload<{ include: typeof inclusion }>;
@@ -109,7 +147,20 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
   const nom = (!prenom || prenom.toLowerCase() === nomFamille.toLowerCase() ? nomFamille || prenom : `${prenom} ${nomFamille}`).trim() || "Contact sans nom";
   const dernier = lead.interactions[0] ?? null;
   const rappelEchu = Boolean(lead.rappelLe && lead.rappelLe.getTime() <= maintenant.getTime());
-  const jamaisAppele = lead.interactions.length === 0 && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE");
+  const dossier = lead.dossiers[0] ?? null;
+  const simulation = lead.source === "SITE_SIMULATEUR" || lead._count.simulations > 0;
+  // Un lead revenu faire une simulation « arrive » à sa dernière simulation.
+  const derniereSimulation = lead.simulations[0]?.createdAt ?? null;
+  const arrivee = derniereSimulation && derniereSimulation > lead.createdAt ? derniereSimulation : lead.createdAt;
+  // Avec un dossier (ouvert par la simulation), un appel noté sur le dossier compte aussi.
+  const jamaisAppele = dossier
+    ? lead.interactions.length === 0 && dossier._count.evenements === 0
+    : lead.interactions.length === 0 && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE");
+  const recent = maintenant.getTime() - (dossier ? arrivee : lead.createdAt).getTime() <= JOURS_A_TRAITER * JOUR_MS;
+  const aAppeler =
+    lead.statut !== "PERDU" &&
+    lead.priorite !== "A_ECARTER" &&
+    (dossier ? simulation && jamaisAppele && recent && ETAPES_AVANT_APPEL.includes(dossier.etape) : rappelEchu || (jamaisAppele && !lead.rappelLe && recent));
   const conversation = lead.conversationsSms[0] ?? null;
   const meta = lead.metaLeads[0] ?? null;
   return {
@@ -133,15 +184,21 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     statut: lead.statut,
     reponses: reponsesDuLead(lead),
     message: lead.message?.trim() || null,
-    attendDepuis: jamaisAppele ? lead.createdAt.toISOString() : null,
+    attendDepuis: jamaisAppele ? (dossier ? arrivee : lead.createdAt).toISOString() : null,
     appels: lead.interactions.length,
     dernierAppel: dernier ? { le: dernier.createdAt.toISOString(), contenu: dernier.contenu.slice(0, 200) } : null,
     rappelLe: lead.rappelLe?.toISOString() ?? null,
     // Un lead jamais appelé reste « à appeler » soixante jours ; au-delà il reste dans la liste, mais la file d'appels ne le propose plus (un rappel posé, lui, vaut toujours).
-    aAppeler: lead.statut !== "PERDU" && lead.priorite !== "A_ECARTER" && (rappelEchu || (jamaisAppele && !lead.rappelLe && maintenant.getTime() - lead.createdAt.getTime() <= JOURS_A_TRAITER * 86_400_000)),
+    aAppeler,
     conversationId: conversation?.id ?? null,
     smsNonLus: conversation?.nonLus ?? 0,
     photos: lead._count.photos,
+    simulation,
+    dossierId: dossier?.id ?? null,
+    simulations: lead.simulations.map((s) => {
+      const avant = s.imageOriginalPath ?? s.imageBeforePath;
+      return { id: s.id, le: s.createdAt.toISOString(), reference: s.referenceChoisie, prix: s.prixDevis, avant: avant ? `/api/uploads/${avant}` : null, apres: s.imageAfterPath ? `/api/uploads/${s.imageAfterPath}` : null };
+    }),
   };
 }
 
@@ -163,12 +220,21 @@ function whereRecherche(recherche: string | undefined): Prisma.LeadWhereInput {
 /** À appeler maintenant, traduit pour la base : jamais appelé et sans rappel prévu, ou rappel échu. Les « à écarter » ne comptent pas : on ne les appelle pas. */
 function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
   return {
-    ...sansDossier,
-    // (une priorité absente n'est pas « à écarter » : en SQL, NOT sur une valeur nulle écarterait ces leads)
-    AND: [{ statut: { not: "PERDU" } }, { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] }],
-    OR: [
-      { rappelLe: { lte: maintenant } },
-      { rappelLe: null, statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, createdAt: { gte: new Date(maintenant.getTime() - JOURS_A_TRAITER * 86_400_000) }, interactions: { none: { type: "APPEL", archiveLe: null } } },
+    AND: [
+      // (une priorité absente n'est pas « à écarter » : en SQL, NOT sur une valeur nulle écarterait ces leads)
+      { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] },
+      {
+        OR: [
+          {
+            ...sansDossierActif,
+            OR: [
+              { rappelLe: { lte: maintenant } },
+              { rappelLe: null, statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, createdAt: { gte: new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS) }, interactions: { none: APPEL } },
+            ],
+          },
+          simulationNonAppelee(maintenant),
+        ],
+      },
     ],
   };
 }
@@ -177,11 +243,11 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
   const vue = filtres.vue ?? "ACTIFS";
   const communs: Prisma.LeadWhereInput[] = [filtres.source ? { source: filtres.source } : {}, whereRecherche(filtres.recherche)];
   const [leads, actifs, aAppeler, sansSuite, sources] = await Promise.all([
-    prisma.lead.findMany({ where: { AND: [...communs, whereVue(vue)] }, include: inclusion, orderBy: { createdAt: "desc" }, take: Math.min(filtres.limite ?? 300, 500) }),
-    prisma.lead.count({ where: whereVue("ACTIFS") }),
+    prisma.lead.findMany({ where: { AND: [...communs, whereVue(vue, maintenant)] }, include: inclusion, orderBy: { createdAt: "desc" }, take: Math.min(filtres.limite ?? 300, 500) }),
+    prisma.lead.count({ where: whereVue("ACTIFS", maintenant) }),
     prisma.lead.count({ where: whereAAppeler(maintenant) }),
-    prisma.lead.count({ where: whereVue("SANS_SUITE") }),
-    prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS"), _count: { _all: true } }),
+    prisma.lead.count({ where: whereVue("SANS_SUITE", maintenant) }),
+    prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS", maintenant), _count: { _all: true } }),
   ]);
   return {
     lignes: leads.map((lead) => versLigne(lead, maintenant)),

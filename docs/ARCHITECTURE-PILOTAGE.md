@@ -1673,9 +1673,8 @@ existe déjà pour ce client (ni perdu ni encaissé) : on range dedans. Généra
 mais photo transmise : le dossier s'ouvre aussi. Idempotent : `Simulation.dossierId` /
 `PhotoLead.dossierId` disent où c'est rangé. Rattrapage : migration
 `simulations-du-site-vers-dossiers` (l'existant, contacts archivés exclus) et travail
-périodique `simulations-dossiers` (quinze minutes). Conséquence : un lead du simulateur
-n'apparaît pas dans Leads, il arrive dans Dossiers avec « Appeler : simulation faite sur
-le site ». Les demandes du site déclenchent désormais un **push** (`notifierDemandeDuSite`),
+périodique `simulations-dossiers` (quinze minutes). Le lead du simulateur n'en disparaît pas pour
+autant de Leads (voir ci-dessous). Les demandes du site déclenchent désormais un **push** (`notifierDemandeDuSite`),
 comme les leads Meta — avant, seulement un mail.
 
 ### Audit des connexions (`src/lib/audit/connexions.ts`, Tâches de fond)
@@ -1687,3 +1686,20 @@ Signé, notification ; encaissement → livre des recettes ; canaux de notificat
 fournisseur de SMS. « Rien à vérifier » = le cas ne s'est pas encore présenté en
 production (il reste couvert par les essais). L'audit s'écrit aussi dans les journaux du
 serveur 45 s après chaque démarrage (`[audit] …`), et se relit par `GET /api/audit/connexions`.
+
+### Lead du simulateur : dans Leads jusqu'au premier appel (21/09/2026)
+
+Le lead le plus chaud — il a vu sa cuisine rénovée — ne doit pas être appelé en dernier.
+Son dossier s'ouvre tout seul (règle ci-dessus), mais il reste dans Leads **et** en tête de
+la file d'appels tant qu'aucun appel n'est noté, ni sur sa fiche ni sur son dossier
+(`simulationNonAppelee`, `src/lib/prospects/leads.ts`). Même contact, même dossier : deux vues,
+aucun doublon. Conditions : 60 jours depuis son arrivée ou sa dernière simulation, dossier
+encore en Qualification ou Simulation. Le premier appel noté l'y fait sortir ; il reste
+dans Dossiers.
+
+- Classe : **Prioritaire par défaut, sauf hors zone** (`qualifier`, entrée `simulation`) ;
+  reclassé quand une simulation est rangée, et une fois pour l'existant (migration
+  `priorite-des-leads-du-simulateur`). Une priorité posée à la main n'est pas touchée.
+- Écran : pastille « Simulation » à côté de la priorité ; « Voir le dossier » à la place
+  d'« Ouvrir un dossier » ; en mode appels, ses rendus (avant / après, finition, prix)
+  s'ouvrent en grand pour en parler pendant l'appel, et l'appel s'écrit dans son dossier.

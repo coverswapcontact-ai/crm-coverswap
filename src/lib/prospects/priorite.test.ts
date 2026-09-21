@@ -52,6 +52,10 @@ describe("les quatre classes de Lucas", () => {
   test("standard : propriétaire, délai indéterminé, dans la zone — le département voisin compte", () => {
     assert.equal(qualifier({ codePostal: "30000", reponses: formulaire("Propriétaire", "Je ne sais pas encore") }, ZONE).priorite, "STANDARD");
     assert.equal(qualifier({ codePostal: "34000", reponses: formulaire("Propriétaire", "3 à 6 mois") }, ZONE).priorite, "STANDARD");
+    // A fait une simulation : Prioritaire d'office, même locataire ou sans délai — sauf hors zone.
+    assert.equal(qualifier({ codePostal: "34000", reponses: formulaire("Locataire", "Dans un an"), simulation: true }, ZONE).priorite, "PRIORITAIRE");
+    assert.match(qualifier({ codePostal: "34000", simulation: true }, ZONE).motif, /simulation/);
+    assert.equal(qualifier({ codePostal: "59000", simulation: true }, ZONE).priorite, "A_ECARTER");
   });
 
   test("secondaire : locataire, ou délai lointain", () => {

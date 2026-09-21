@@ -65,7 +65,9 @@ function leadsMeta() {
 function sectionLeads() {
   return maillon("leads", "Leads : sans dossier, sans doublon, pastille lisible", async (): Promise<Resultat> => {
     const { lignes, compteurs } = await listerLeads({ limite: 500 });
-    const avecDossier = await prisma.lead.count({ where: { id: { in: lignes.map((l) => l.id) }, dossiers: { some: { archiveLe: null } } } });
+    // Seul un lead du simulateur pas encore appelé a le droit d'être ici avec son dossier (même contact, même dossier, deux vues).
+    const permis = new Set(lignes.filter((l) => l.simulation && l.dossierId && l.attendDepuis).map((l) => l.id));
+    const avecDossier = await prisma.lead.count({ where: { id: { in: lignes.filter((l) => !permis.has(l.id)).map((l) => l.id) }, dossiers: { some: { archiveLe: null } } } });
     const sansPastille = lignes.filter((l) => !l.priorite).length;
     const sansNumero = lignes.filter((l) => !l.telephoneLien).length;
     const plusieursDossiers = (await prisma.dossier.groupBy({ by: ["leadId"], where: { leadId: { not: null }, etape: { notIn: ["PERDU", "ENCAISSE"] } }, _count: { _all: true } })).filter((g) => g._count._all > 1).length;
@@ -73,9 +75,9 @@ function sectionLeads() {
     return {
       etat: ok ? (lignes.length === 0 ? "RIEN_A_VERIFIER" : "OK") : "ALERTE",
       constat: ok
-        ? `${pluriel(compteurs.actifs, "lead")} en cours, dont ${compteurs.aAppeler} à appeler ; aucun n'a de dossier ouvert.${sansPastille ? ` ${pluriel(sansPastille, "lead")} pas encore classé${sansPastille > 1 ? "s" : ""}.` : ""}`
+        ? `${pluriel(compteurs.actifs, "lead")} en cours, dont ${compteurs.aAppeler} à appeler (${permis.size} du simulateur, dossier déjà ouvert, pas encore appelés) ; aucun autre n'a de dossier.${sansPastille ? ` ${pluriel(sansPastille, "lead")} pas encore classé${sansPastille > 1 ? "s" : ""}.` : ""}`
         : `${pluriel(avecDossier, "lead")} affiché${avecDossier > 1 ? "s" : ""} alors qu'un dossier existe ; ${pluriel(plusieursDossiers, "contact")} avec plusieurs dossiers vivants.`,
-      chiffres: { enCours: compteurs.actifs, aAppeler: compteurs.aAppeler, sansSuite: compteurs.sansSuite, sansPastille, sansNumeroLisible: sansNumero, doublonsAvecDossiers: avecDossier, contactsAPlusieursDossiers: plusieursDossiers },
+      chiffres: { enCours: compteurs.actifs, aAppeler: compteurs.aAppeler, simulationsAAppeler: permis.size, sansSuite: compteurs.sansSuite, sansPastille, sansNumeroLisible: sansNumero, doublonsAvecDossiers: avecDossier, contactsAPlusieursDossiers: plusieursDossiers },
     };
   });
 }

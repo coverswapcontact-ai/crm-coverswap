@@ -59,6 +59,8 @@ describe("simulation du site → dossier", () => {
     const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ouverture!.dossierId } });
     assert.deepEqual([dossier.leadId, dossier.etape, dossier.source, dossier.clientVille, dossier.clientCp, dossier.montantEstime, dossier.prochaineAction], [contact.id, "QUALIFICATION", "ENTRANT", "Lattes", "34970", 1450, "Appeler : simulation faite sur le site"]);
     assert.equal((await photosDe(dossier.id)).length, 2, "photo avant + rendu");
+    // Il a vu sa cuisine rénovée : Prioritaire d'office (sauf hors zone).
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: contact.id } })).priorite, "PRIORITAIRE");
     // Ce que la personne a dit suit dans la première note ; la simulation s'écrit dans l'histoire du dossier.
     const note = await prisma.dossierEvenement.findFirst({ where: { dossierId: dossier.id, type: "NOTE_AJOUTEE" } });
     assert.match(note?.contenu ?? "", /Cuisine septembre[\s\S]*propriétaire[\s\S]*façades abîmées/);

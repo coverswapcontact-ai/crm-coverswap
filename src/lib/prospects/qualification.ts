@@ -36,10 +36,6 @@ export function reponsesDepuis(reponsesMeta: string | null | undefined, notes: s
     .map((m) => ({ question: m[1], reponse: m[2] }));
 }
 
-type LeadAClasser = Prisma.LeadGetPayload<{
-  select: { id: true; codePostal: true; notes: true; message: true; source: true; statut: true; prioriteManuelle: true; metaLeads: { select: { reponses: true } } };
-}>;
-
 const SELECTION = {
   id: true,
   codePostal: true,
@@ -49,7 +45,15 @@ const SELECTION = {
   statut: true,
   prioriteManuelle: true,
   metaLeads: { select: { reponses: true }, orderBy: { recuLe: "desc" as const }, take: 1 },
+  _count: { select: { simulations: { where: { archiveLe: null } } } },
 } satisfies Prisma.LeadSelect;
+
+type LeadAClasser = Prisma.LeadGetPayload<{ select: typeof SELECTION }>;
+
+/** Lead du simulateur : venu par lui, ou ayant au moins une simulation sur sa fiche. */
+export function estIssuDuSimulateur(lead: { source: string; _count: { simulations: number } }): boolean {
+  return lead.source === "SITE_SIMULATEUR" || lead._count.simulations > 0;
+}
 
 function qualifierLead(lead: LeadAClasser, zone: ZoneIntervention): Qualification {
   return qualifier(
@@ -57,6 +61,7 @@ function qualifierLead(lead: LeadAClasser, zone: ZoneIntervention): Qualificatio
       codePostal: lead.codePostal,
       reponses: reponsesDepuis(lead.metaLeads[0]?.reponses, lead.notes),
       devisDemande: lead.source === "SITE_DEVIS" || lead.statut === "DEVIS_DEMANDE",
+      simulation: estIssuDuSimulateur(lead),
     },
     zone
   );

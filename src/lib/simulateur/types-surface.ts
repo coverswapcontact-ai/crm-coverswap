@@ -78,6 +78,50 @@ export type ZoneTeinte = { zone: string; libelle: string; ref: string; nom: stri
  */
 const ZONES_COMPOSEES: Record<string, IdZone[]> = { "facades-cuisine": ["meubles-hauts", "meubles-bas"] };
 
+/**
+ * Libellés du simulateur du site (actuels et anciens) → identifiant de surface. Une simulation
+ * du site rangée sans identifiant (ancien parcours, génération de secours du site) ne garde que
+ * « Façades (toutes) : K1 (Black Mat) » : on retrouve sa zone par son libellé, sinon le projet
+ * ne se préremplit pas et le choix zone par zone ne la reconnaît pas.
+ */
+const SURFACES_PAR_LIBELLE: Record<string, string> = {
+  "facades (toutes)": "facades-cuisine",
+  facades: "facades-cuisine",
+  "facades de cuisine": "facades-cuisine",
+  "meubles hauts": "meubles-hauts",
+  "meubles bas": "meubles-bas",
+  "meubles bas, colonnes et ilot": "meubles-bas",
+  "plan de travail": "plan-de-travail",
+  credence: "credence",
+  "meuble vasque": "meuble-vasque",
+  "plan vasque": "plan-vasque",
+  "carrelage mural": "carrelage-mural",
+  "tablier de baignoire / douche": "tablier-baignoire",
+  "portes de dressing et placards": "portes-dressing",
+  "portes de dressing": "portes-dressing",
+  "portes du dressing": "portes-dressing",
+  "meuble tv": "meuble-tv",
+  "commode, buffet, bureau": "meuble-complet",
+  "bar / comptoir — habillage": "comptoir-habillage",
+  "bar / comptoir — plateau": "comptoir-plateau",
+  "distributeur ou mobilier professionnel": "mobilier-pro",
+  "facades de rangements": "rangements-pro",
+  "habillage mural": "habillage-mural",
+  "mur principal": "mur-principal",
+  "second mur": "mur-accent",
+  plafond: "plafond",
+};
+
+export function surfaceDepuisLibelle(libelle: string): string {
+  const cle = libelle
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return SURFACES_PAR_LIBELLE[cle] ?? "";
+}
+
 export function lireZones(json: string | null | undefined): ZoneTeinte[] {
   if (!json) return [];
   try {
@@ -85,7 +129,7 @@ export function lireZones(json: string | null | undefined): ZoneTeinte[] {
     if (!Array.isArray(valeur)) return [];
     const zones = valeur
       .filter((z): z is ZoneTeinte => !!z && typeof z === "object" && typeof (z as ZoneTeinte).ref === "string")
-      .map((z) => ({ zone: String(z.zone ?? ""), libelle: String(z.libelle ?? ""), ref: z.ref, nom: String(z.nom ?? "") }));
+      .map((z) => ({ zone: String(z.zone ?? "") || surfaceDepuisLibelle(String(z.libelle ?? "")), libelle: String(z.libelle ?? ""), ref: z.ref, nom: String(z.nom ?? "") }));
     // Une zone nommée pour elle-même l'emporte sur celle venue du dépliage.
     const explicites = new Set(zones.filter((z) => !ZONES_COMPOSEES[z.zone]).map((z) => z.zone));
     return zones.flatMap((z) => {

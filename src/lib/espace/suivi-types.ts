@@ -35,6 +35,7 @@ export type LigneEspace = {
     accord: string | null;
     acompte: { montant: number; recu: number } | null;
   };
-  attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string };
+  /** Qui a la main ; quand c'est Lucas, le geste qui fait avancer (un bouton dans la carte). */
+  attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string; geste?: "DEVIS" | "SIMULATEUR" | "PUBLIER" | "APPELER" };
   signaux: Signal[];
 };

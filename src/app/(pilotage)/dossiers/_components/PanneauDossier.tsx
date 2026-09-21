@@ -155,6 +155,19 @@ function ContenuPanneau({
   onRecharger: () => Promise<void>;
 }) {
   const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue } | null>(null);
+  const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
+  // « Faire le devis » depuis l'onglet Espaces clients : le dossier s'ouvre sur le générateur, une fois.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("devis") !== "nouveau") return;
+    // Le paramètre n'est consommé qu'à l'ouverture effective (un montage annulé ne le perd pas).
+    const premier = window.setTimeout(() => {
+      setGenerateur((actuel) => actuel ?? { type: "DEVIS", cle: 1 });
+      url.searchParams.delete("devis");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }, 0);
+    return () => window.clearTimeout(premier);
+  }, []);
   const telephone = detail.clientTelephone.replace(/[^\d+]/g, "");
   const lieu = [detail.clientVille, LIBELLES_SOURCE[detail.source]].filter(Boolean).join(" · ");
 
@@ -224,7 +237,7 @@ function ContenuPanneau({
             onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
             onMisAJour={onMisAJour}
           />
-          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} />
+          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} onFaireDevis={faireDevis} />
           <SimulationsDossier key={`simulations-${detail.id}`} detail={detail} onRecharger={onRecharger} />
           <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
           <DepensesDossier detail={detail} />

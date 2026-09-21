@@ -16,7 +16,7 @@ import { envoyerSms } from "@/lib/sms/envoi";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { lireModele } from "@/lib/sms/modeles";
 import { estMobileFrancais, remplirModele } from "@/lib/sms/texte";
-import { lireZones, typeSurface, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { lireZones, surfaceDepuisLibelle, typeSurface, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 
 /**
  * Les simulations d'un dossier — toutes, d'où qu'elles viennent :
@@ -86,7 +86,7 @@ async function zonesDuSite(simulationId: string, notes: string | null, reference
     .split("|")
     .map((morceau) => /^\s*(.+?)\s*:\s*([A-Za-z0-9_-]+)\s*\((.*)\)\s*$/.exec(morceau))
     .filter((m): m is RegExpExecArray => Boolean(m))
-    .map((m) => ({ zone: "", libelle: m[1], ref: m[2], nom: m[3] }));
+    .map((m) => ({ zone: surfaceDepuisLibelle(m[1]), libelle: m[1], ref: m[2], nom: m[3] }));
   if (lues.length > 0) return lues;
   return referenceChoisie ? [{ zone: "", libelle: "", ref: referenceChoisie, nom: "" }] : [];
 }

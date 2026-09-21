@@ -234,3 +234,64 @@ describe("l'aperçu de Lucas", () => {
     assert.equal(liens.apercuValide(a.espace, "x".repeat(16)), false);
   });
 });
+
+describe("le devis part du choix du client", () => {
+  const presets = [
+    { id: "p1", designation: "Revêtement adhésif — cuisine / façades", unite: "ml" as const, prixUnitaire: 110 },
+    { id: "p2", designation: "Revêtement adhésif — cuisine (variante)", unite: "ml" as const, prixUnitaire: 120 },
+    { id: "p3", designation: "Dépose / repose nouvelle crédence", unite: "forfait" as const, prixUnitaire: 650 },
+    { id: "p4", designation: "Nouvelle crédence Dibond", unite: "forfait" as const, prixUnitaire: 350 },
+    { id: "p5", designation: "Consommables", unite: "forfait" as const, prixUnitaire: 80 },
+  ];
+
+  test("façades ensemble au tarif du mètre, avec ses mètres ; ailleurs, jamais de prix inventé", async () => {
+    const { proposerLignes } = await import("./devis-propose");
+    const lignes = proposerLignes(
+      [
+        { zone: "meubles-hauts", libelle: "Meubles hauts", ref: "J3", nom: "Ultra White" },
+        { zone: "meubles-bas", libelle: "Meubles bas", ref: "AA01", nom: "Beige Oak" },
+        { zone: "plan-de-travail", libelle: "Plan de travail", ref: "NE31", nom: "Statuary White" },
+        { zone: "credence", libelle: "Crédence", ref: "NE24", nom: "Concrete" },
+      ],
+      5,
+      presets
+    );
+    assert.deepEqual(
+      lignes.map((l) => [l.designation, l.sousDesignation, l.quantite, l.unite, l.prixUnitaire]),
+      [
+        ["Revêtement adhésif — cuisine / façades", "Meubles hauts : Ultra White (J3) · Meubles bas : Beige Oak (AA01)", 5, "ml", 110],
+        // Pas de tarif « plan de travail » : prix et longueur à saisir, le générateur ne laisse pas passer.
+        ["Revêtement adhésif — plan de travail", "Statuary White (NE31)", null, "ml", null],
+        // Une nouvelle crédence (Dibond, dépose) n'est pas une crédence recouverte.
+        ["Revêtement adhésif — crédence", "Concrete (NE24)", null, "ml", null],
+      ]
+    );
+  });
+
+  test("les mètres de meubles ne vont ni au plan de travail ni à la crédence ; une zone inconnue a sa ligne", async () => {
+    const { proposerLignes } = await import("./devis-propose");
+    const seul = proposerLignes([{ zone: "plan-de-travail", libelle: "Plan de travail", ref: "NE31", nom: "Statuary White" }], 5, presets);
+    assert.equal(seul[0].quantite, null);
+    const autre = proposerLignes([{ zone: "carrelage-mural", libelle: "Murs carrelés", ref: null, nom: null }], 4, presets);
+    assert.deepEqual([autre[0].designation, autre[0].sousDesignation, autre[0].prixUnitaire], ["Revêtement adhésif — murs carrelés", "", null]);
+  });
+
+  test("d'un espace : la simulation choisie donne les teintes, le projet les mètres", async () => {
+    const { devisProposeDuDossier } = await import("./devis-propose");
+    const { dossierId, espace } = await dossierAvecEspace("Yvette");
+    assert.equal(await devisProposeDuDossier(dossierId), null, "rien dit, rien proposé");
+    await service.enregistrerProjetOuSouhaits(espace, { zones: ["meubles-hauts", "meubles-bas"], styles: ["blanc"], metres: 6, repere: null, delai: null, precisions: "" });
+    const depuisProjet = await devisProposeDuDossier(dossierId);
+    assert.equal(depuisProjet?.lignes.length, 1);
+    assert.equal(depuisProjet?.lignes[0].quantite, 6);
+    assert.equal(depuisProjet?.lignes[0].sousDesignation, "", "sans choix, pas de teinte");
+    assert.match(depuisProjet?.resume ?? "", /teintes à préciser/);
+
+    const blanc = await simulationPubliee(dossierId, [{ zone: "meubles-hauts", libelle: "Meubles hauts", ref: "J3", nom: "Ultra White" }, { zone: "meubles-bas", libelle: "Meubles bas", ref: "K1", nom: "Black Mat" }], "Blanc et noir");
+    await service.choisir(await relire(espace.id), { simulationId: blanc, commentaire: "" });
+    const depuisChoix = await devisProposeDuDossier(dossierId);
+    assert.equal(depuisChoix?.lignes[0].sousDesignation, "Meubles hauts : Ultra White (J3) · Meubles bas : Black Mat (K1)");
+    assert.equal(depuisChoix?.lignes[0].quantite, 6);
+    assert.match(depuisChoix?.resume ?? "", /Yvette.*Ultra White.*≈ 6 m/);
+  });
+});

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Eye, Link2, MessageSquare, RefreshCw, ShieldOff } from "lucide-react";
+import { Check, Copy, Eye, FileText, Link2, MessageSquare, RefreshCw, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { appelApi, envoyerJson, messageErreur } from "./client";
@@ -35,7 +35,7 @@ const jour = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr
  * son choix, combien de fois il a relu son devis. Les simulations ont leur
  * propre section (brouillons, publication).
  */
-export function EspaceDossier({ detail, onRecharger }: { detail: DossierDetail; onRecharger: () => Promise<void> }) {
+export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: DossierDetail; onRecharger: () => Promise<void>; onFaireDevis?: () => void }) {
   const [espace, setEspace] = useState<EspaceVu | null | undefined>(undefined);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
@@ -163,6 +163,13 @@ export function EspaceDossier({ detail, onRecharger }: { detail: DossierDetail; 
               </div>
             ) : null}
           </dl>
+
+          {/* Il a choisi (ou dit ce qu'il veut) et aucun devis n'existe : le devis part de là, prérempli. */}
+          {onFaireDevis && (espace.choix || espace.projet) && !detail.documents.some((d) => d.type === "DEVIS" && d.numero) ? (
+            <Bouton variante={espace.choix ? "primaire" : "secondaire"} icone={<FileText size={14} aria-hidden />} onClick={onFaireDevis}>
+              {espace.choix ? "Faire le devis depuis son choix" : "Faire le devis depuis son projet"}
+            </Bouton>
+          ) : null}
         </div>
       )}
     </section>

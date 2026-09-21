@@ -96,7 +96,10 @@ function versVue(p: PreparationSimulation): PreparationVue {
 async function cadrerPhoto(octets: Buffer): Promise<{ image: Buffer; largeur: number; hauteur: number }> {
   const sharp = (await import("sharp")).default;
   const tournee = sharp(octets).rotate();
-  const meta = await tournee.metadata();
+  // Une photo HEIC d'iPhone déposée telle quelle (ancien iOS) ne se lit pas ici : on le dit, au lieu d'une erreur muette.
+  const meta = await tournee.metadata().catch(() => {
+    throw new ErreurMetier("Cette photo ne se lit pas ici (format HEIC d'iPhone, sans doute) : choisissez-en une autre, ou demandez-la au client en JPEG.", 400);
+  });
   const quartTour = (meta.orientation ?? 1) >= 5;
   const largeur = (quartTour ? meta.height : meta.width) ?? 0;
   const hauteur = (quartTour ? meta.width : meta.height) ?? 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -131,6 +131,42 @@ export function GenerateurDocument({
     return () => {
       actif = false;
     };
+  }, []);
+
+  // Premier devis du dossier : on part de ce que le client a choisi dans son espace (teintes par
+  // zone, mètres), posé sur les tarifs. Seulement si rien n'a encore été saisi.
+  const [proposition, setProposition] = useState<string | null>(null);
+  const lignesCourantes = useRef(lignes);
+  useEffect(() => {
+    lignesCourantes.current = lignes;
+  }, [lignes]);
+  useEffect(() => {
+    if (typeInitial !== "DEVIS" || depart) return;
+    let actif = true;
+    appelApi<{ proposition: { resume: string; lignes: { designation: string; sousDesignation: string; quantite: number | null; unite: Unite; prixUnitaire: number | null }[] } | null }>(`/api/dossiers/${detail.id}/devis-propose`)
+      .then(({ proposition: proposee }) => {
+        if (!actif || !proposee || proposee.lignes.length === 0) return;
+        const depuisEspace: LigneSaisie[] = proposee.lignes.map((ligne) => ({
+          cle: nouvelleCle(),
+          type: "PRESTATION",
+          designation: ligne.designation,
+          sousDesignation: ligne.sousDesignation,
+          quantite: ligne.quantite === null ? "" : formatQuantite(ligne.quantite),
+          unite: ligne.unite,
+          prixUnitaire: ligne.prixUnitaire === null ? "" : formatQuantite(ligne.prixUnitaire),
+        }));
+        // Déjà une saisie en cours : on n'y touche pas.
+        const actuelles = lignesCourantes.current;
+        const vierge = actuelles.length === 1 && actuelles[0].type === "PRESTATION" && !actuelles[0].designation.trim() && !actuelles[0].prixUnitaire.trim();
+        if (!vierge) return;
+        setLignes(depuisEspace);
+        setProposition(proposee.resume);
+      })
+      .catch(() => undefined);
+    return () => {
+      actif = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une fois, à l'ouverture
   }, []);
 
   useEffect(() => {
@@ -383,6 +419,13 @@ export function GenerateurDocument({
             onChange={(evenement) => setObjet(evenement.target.value)}
             erreur={erreurs.objet}
           />
+
+          {proposition ? (
+            <p className="rounded-[9px] border-[0.5px] border-[#1D9E75]/40 bg-[#1D9E75]/[0.08] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#C9EFE1]">
+              <span className="font-medium text-[#5DCAA5]">Prérempli. </span>
+              {proposition} Vérifie le métré, complète les prix laissés vides, ajoute tes lignes habituelles.
+            </p>
+          ) : null}
 
           <div>
             <div className="mb-2 hidden grid-cols-[minmax(0,1fr)_72px_92px_96px_96px_108px] gap-2 px-2.5 text-[11px] font-medium text-[#6B7280] uppercase sm:grid">

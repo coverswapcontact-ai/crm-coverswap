@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, FolderOpen, MessageSquare, RefreshCw, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
+import { Check, Copy, Eye, FileText, FolderOpen, MessageSquare, Phone, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
@@ -154,6 +154,39 @@ export default function EcranEspaces({ initial }: { initial: LigneEspace[] }) {
   );
 }
 
+/** Le geste qui fait avancer ce client, quand c'est à Lucas de jouer : un bouton, pas un détour. */
+function GesteDuMoment({ ligne }: { ligne: LigneEspace }) {
+  const classe = cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-2.5 text-[12px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-7", TRANS);
+  switch (ligne.attente.geste) {
+    case "DEVIS":
+      return (
+        <Link href={`/dossiers?dossier=${ligne.dossierId}&devis=nouveau`} className={classe}>
+          <FileText size={13} aria-hidden /> Faire le devis
+        </Link>
+      );
+    case "SIMULATEUR":
+      return (
+        <Link href={`/simulateur?dossier=${ligne.dossierId}`} className={classe}>
+          <WandSparkles size={13} aria-hidden /> {ligne.attente.libelle}
+        </Link>
+      );
+    case "PUBLIER":
+      return (
+        <Link href={`/dossiers?dossier=${ligne.dossierId}`} className={classe}>
+          <Send size={13} aria-hidden /> {ligne.attente.libelle}
+        </Link>
+      );
+    case "APPELER":
+      return (
+        <a href={`tel:${ligne.telephone.replace(/[^\d+]/g, "")}`} className={classe}>
+          <Phone size={13} aria-hidden /> Appeler pour la date
+        </a>
+      );
+    default:
+      return null;
+  }
+}
+
 function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; maintenant: number; onRecharger: () => Promise<void> }) {
   const [copie, setCopie] = useState(false);
   const [occupe, setOccupe] = useState<string | null>(null);
@@ -242,6 +275,7 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
       ) : null}
 
       <div className="mt-3 flex flex-wrap gap-1.5 border-t-[0.5px] border-[#2A2D34] pt-3">
+        {ligne.attente.qui === "MOI" && ligne.attente.geste ? <GesteDuMoment ligne={ligne} /> : null}
         <Link href={`/dossiers?dossier=${ligne.dossierId}`} className={cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}>
           <FolderOpen size={13} aria-hidden /> Dossier
         </Link>
@@ -260,9 +294,11 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
             <MessageSquare size={13} aria-hidden /> Renvoyer par SMS
           </Link>
         ) : null}
-        <Link href={`/simulateur?dossier=${ligne.dossierId}`} className={cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}>
-          <WandSparkles size={13} aria-hidden /> Simulateur
-        </Link>
+        {ligne.attente.geste === "SIMULATEUR" ? null : (
+          <Link href={`/simulateur?dossier=${ligne.dossierId}`} className={cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}>
+            <WandSparkles size={13} aria-hidden /> Simulateur
+          </Link>
+        )}
         <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void agir("renouveler", ligne.revoque ? "Espace réactivé : nouveau lien, à renvoyer au client" : "Nouveau lien émis : l'ancien ne fonctionne plus")}>
           {ligne.revoque ? "Réactiver" : ligne.expire ? "Renouveler" : "Nouveau lien"}
         </Bouton>

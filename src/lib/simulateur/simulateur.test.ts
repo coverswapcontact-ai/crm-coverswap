@@ -282,4 +282,12 @@ describe("zones venues du simulateur du site", () => {
     const avecHauts = JSON.stringify([{ zone: "facades-cuisine", libelle: "Façades (toutes)", ref: "K1", nom: "Black Mat" }, { zone: "meubles-hauts", libelle: "Meubles hauts", ref: "J3", nom: "Ultra White" }]);
     assert.deepEqual(types.lireZones(avecHauts).map((z) => `${z.zone}:${z.ref}`), ["meubles-bas:K1", "meubles-hauts:J3"]);
   });
+
+  test("une simulation du site rangée sans identifiant retrouve sa zone par son libellé", () => {
+    // Ancien parcours ou génération de secours du site : seules les notes « Façades : K1 (Black mat) » restent.
+    const sansId = JSON.stringify([{ zone: "", libelle: "Façades", ref: "K1", nom: "Black mat" }, { zone: "", libelle: "Plan de travail", ref: "NE24", nom: "Raw Grey" }, { zone: "", libelle: "Bar / comptoir — plateau", ref: "AA01", nom: "Beige Oak" }]);
+    assert.deepEqual(types.lireZones(sansId).map((z) => `${z.zone}:${z.ref}`), ["meubles-hauts:K1", "meubles-bas:K1", "plan-de-travail:NE24", "comptoir-plateau:AA01"]);
+    assert.equal(types.surfaceDepuisLibelle("Meubles bas, colonnes et îlot"), "meubles-bas");
+    assert.equal(types.surfaceDepuisLibelle("Une zone inconnue"), "");
+  });
 });

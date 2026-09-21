@@ -82,7 +82,13 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     const etape = etapeEspace(faits);
     const derniereActivite = [espace.dernierAccesLe, activiteParDossier.get(d.id) ?? null].filter((x): x is Date => Boolean(x)).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
     const dernierePublication = publiees.map((s) => s.publieeLe?.getTime() ?? 0).reduce((a, b) => Math.max(a, b), 0);
-    const propositionEnAttente = Boolean(espace.propositionDemandeeLe && espace.propositionDemandeeLe.getTime() > dernierePublication);
+    // Une demande d'autre proposition vaut jusqu'à la suivante publiée — ou jusqu'à ce que le client choisisse, ou signe.
+    const propositionEnAttente = Boolean(
+      espace.propositionDemandeeLe &&
+        espace.propositionDemandeeLe.getTime() > dernierePublication &&
+        !(espace.choixLe && espace.choixLe.getTime() > espace.propositionDemandeeLe.getTime()) &&
+        !(accord && accord.createdAt.getTime() > espace.propositionDemandeeLe.getTime())
+    );
     const consultations = devis && espace.devisConsulteId === devis.id ? espace.devisConsultations : 0;
     const expire = espace.expireLe.getTime() < maintenant.getTime();
 
@@ -100,11 +106,11 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     let attente: LigneEspace["attente"];
     if (espace.revoqueLe) attente = { qui: "PERSONNE", libelle: "Lien désactivé" };
     else if (etape === "TERMINE") attente = { qui: "PERSONNE", libelle: "Chantier terminé" };
-    else if (propositionEnAttente) attente = { qui: "MOI", libelle: "Préparer une autre proposition" };
-    else if (brouillons > 0 && !accord) attente = { qui: "MOI", libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}` };
-    else if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation" };
-    else if (etape === "ATTENTE_DEVIS") attente = { qui: "MOI", libelle: "Faire le devis" };
-    else if (accord && !d.dateChantier) attente = { qui: "MOI", libelle: "Appeler : fixer la date du chantier" };
+    else if (propositionEnAttente) attente = { qui: "MOI", libelle: "Préparer une autre proposition", geste: "SIMULATEUR" };
+    else if (brouillons > 0 && !accord) attente = { qui: "MOI", libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}`, geste: "PUBLIER" };
+    else if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation", geste: "SIMULATEUR" };
+    else if (etape === "ATTENTE_DEVIS") attente = { qui: "MOI", libelle: "Faire le devis", geste: "DEVIS" };
+    else if (accord && !d.dateChantier) attente = { qui: "MOI", libelle: "Appeler : fixer la date du chantier", geste: "APPELER" };
     else if (etape === "CHANTIER") attente = { qui: "MOI", libelle: d.dateChantier ? `Chantier le ${d.dateChantier.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}` : "Chantier à planifier" };
     else attente = { qui: "CLIENT", libelle: LIBELLES_ETAPE_ESPACE[etape] };
 

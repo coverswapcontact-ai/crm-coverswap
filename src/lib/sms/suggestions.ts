@@ -103,7 +103,13 @@ export async function preparerLienEspace(conversationId: string, code: "LIEN_ESP
     throw new ErreurMetier("Cette conversation n'est rattachée à aucun contact : la rattacher d'abord, l'espace client appartient à un dossier.", 409);
   }
   const { variables } = await variablesDe(conversationId);
-  const modele = (await listerModeles()).find((m) => m.code === code && m.actif) ?? null;
+  const modeles = await listerModeles();
+  // Il a déjà fait une simulation sur le site : le SMS le lui dit (« votre simulation vous attend »), c'est ce qui fait cliquer.
+  const variante =
+    code === "LIEN_ESPACE" && (await prisma.simulation.count({ where: { dossierId, archiveLe: null, imageAfterPath: { not: null } } })) > 0
+      ? (modeles.find((m) => m.code === "LIEN_ESPACE_SIMULATION" && m.actif) ?? null)
+      : null;
+  const modele = variante ?? modeles.find((m) => m.code === code && m.actif) ?? null;
   const texte = modele ? remplirModele(modele.texte, { ...variables, lien }) : `Voici votre espace personnel CoverSwap : ${lien}`;
   return { texte, lien, modele: modele?.code ?? code, dossierId };
 }

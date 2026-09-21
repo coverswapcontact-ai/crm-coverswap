@@ -86,3 +86,32 @@ simulateur CRM et générateur de prompts » (transcript de la session).
   (santé ok des deux côtés, routes publiques/protégées vérifiées sans créer de données). 352 tests verts.
   Rapport : https://claude.ai/artifact/34t7FaQBxNzsKJh8wQ2TJR (privé). Restent chez Lucas : photo (Paramètres),
   solde OpenAI, 1re simulation API réelle (~0,34 $) et 1re préparation ChatGPT sur iPhone, relecture des prompts.
+
+## Passe 2 (21/09, soir) — Lucas a renvoyé l'énoncé : relecture critique et corrections
+
+Constat de départ (essais à 390 × 660, la hauteur utile d'un iPhone dans Safari, et 375 × 560, un
+iPhone SE) : à l'arrivée, le bouton de l'action n'est PAS visible sans défiler, la barre « Appeler
+Lucas » le recouvre. Les captures de la passe 1 étaient prises à 390 × 844, sans les barres de Safari.
+
+- [x] P1 Espace : l'action visible dès l'arrivée (accueil resserré, « qui je suis » en une ligne,
+      « sans engagement » au pied du bouton, barre d'appel claire) ; vérifier chaque étape aux deux tailles.
+- [x] P2 CRM : devis prérempli depuis le choix du client (teintes par zone, mètres, tarifs existants ;
+      jamais de prix inventé : ligne sans tarif = prix à saisir) ; raccourcis « Faire le devis ».
+- [x] P3 Espace : espaces insécables (: ; ! ? %), avis NON coché d'office pour la publication,
+      e-mail facultatif pour signer, doublon de mention sur la page photos.
+- [x] P4 (revu) SMS : pas de raccourcissement (ton dégradé pour un gain d'un SMS) ; à la place, SMS « votre simulation
+      vous attend » pour les clients venus du simulateur (LIEN_ESPACE_SIMULATION, migration sms-lien-simulation-21-09).
+- [ ] P5 Rapport : signaler le droit de rétractation (signature à distance) — décision de Lucas, pas de l'agent.
+- [ ] P6 Tests, lint, builds, déploiement CRM puis site, rapport mis à jour.
+
+Journal passe 2 :
+- Accueil resserré (bouton visible à 390 × 660 et 375 × 560, barre d'appel blanche), carte « essai du site » : image
+  2:1 puis bouton puis texte. Captures : scratchpad/passe2/img (script captures.mjs, champ « ecran » par étape).
+- CRM : `src/lib/espace/devis-propose.ts` + GET /api/dossiers/[id]/devis-propose ; générateur prérempli (bandeau) ;
+  « Faire le devis » dans le panneau Espace et dans Espaces clients (`&devis=nouveau`) ; geste du moment par carte
+  (suivi-types `attente.geste`) ; demande d'autre proposition caduque après un choix ou une signature ; « Préparer le
+  devis » remplacé à l'émission du devis (documents.ts). Tests : espace-v2.test.ts (+3).
+- Site : insécables posés par script (scratchpad/passe2/insecables.cjs, analyse TypeScript, jamais les classes) ;
+  avis non coché d'office ; e-mail facultatif pour signer ; pied de page sans doublon.
+- Piège : les tests à double montage de React (dev) consomment un paramètre d'adresse lu dans un effet : ne le
+  retirer qu'à l'ouverture effective. Données d'essai : Hélène Fabre-Essai a le numéro de Léa → même personne (normal).

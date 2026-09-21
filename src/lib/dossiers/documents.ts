@@ -300,6 +300,13 @@ async function emettre(emission: Emission) {
         // Facture déjà couverte par les acomptes : le dossier est encaissé.
         const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
         if (solde) changements.push(solde);
+        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste.
+        if (emission.type === "DEVIS") {
+          await tx.dossier.updateMany({
+            where: { id: emission.dossierId, prochaineAction: { startsWith: "Préparer le devis" } },
+            data: { prochaineAction: "Attendre l'accord du client sur le devis", prochaineActionDate: null },
+          });
+        }
         return { document, changements };
       },
       { maxWait: 10_000, timeout: 30_000 }

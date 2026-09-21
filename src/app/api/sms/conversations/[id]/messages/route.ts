@@ -26,7 +26,7 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
       cleEnvoi: entree.cleEnvoi ?? null,
       modele: entree.modele ?? null,
       textePropose: entree.textePropose ?? null,
-      origine: entree.modele === "LIEN_ESPACE" || entree.modele === "INJOIGNABLE_LIEN" || entree.modele === "LIEN_ESPACE_RAPPEL" ? "LIEN_ESPACE" : entree.modele ? "MODELE" : "MANUEL",
+      origine: entree.modele && ["LIEN_ESPACE", "LIEN_ESPACE_SIMULATION", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL"].includes(entree.modele) ? "LIEN_ESPACE" : entree.modele ? "MODELE" : "MANUEL",
     });
     publierEvenementSms({ genre: "MESSAGE", conversationId: id, smsId: sms.id });
     return NextResponse.json({

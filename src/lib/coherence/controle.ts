@@ -136,9 +136,10 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     }
     // Prochaine action ↔ faits.
     const action = d.prochaineAction ?? "";
-    if (/préparer le devis \(simulation/i.test(action) && (lecture.devis || !espace?.choixLe)) {
+    // (seulement pour un dossier qui a un espace : sans espace, c'est Lucas qui a écrit cette action, elle lui appartient)
+    if (espace && /préparer le devis \(simulation/i.test(action) && (lecture.devis || !espace.choixLe)) {
       signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors que ${lecture.devis ? "le devis est déjà émis" : "plus aucune simulation n'est validée"}.`, "Effacer cette prochaine action");
-    } else if (/autre proposition/i.test(action) && !espace?.propositionDemandeeLe) {
+    } else if (espace && /autre proposition/i.test(action) && !espace.propositionDemandeeLe) {
       signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors qu'aucune demande n'est en attente dans l'espace du client.`, "Effacer cette prochaine action");
     }
     // Leads ↔ dossiers.

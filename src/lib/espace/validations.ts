@@ -100,6 +100,10 @@ export async function devaliderProjet(espace: EspaceClient, auteur: Auteur, moti
   await ecrire(auteur, async () => {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: null, projetValidePar: null } });
     await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_DEVALIDE", direction: direction(auteur), contenu: `Projet dévalidé ${par(auteur)} (${motif})`, metadata: JSON.stringify({ auteur }) } });
+    // La prochaine action posée par la validation ne vaut plus.
+    if (dossier.prochaineAction && /\(projet validé\)/i.test(dossier.prochaineAction)) {
+      await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Attendre qu'il valide son projet (il le modifie)", prochaineActionDate: null } });
+    }
   });
   // Recul : seulement si le dossier est encore là où la validation l'avait mis, et que rien d'autre ne l'y retient.
   if (dossier.etape === "SIMULATION" && !espace.choixLe) {

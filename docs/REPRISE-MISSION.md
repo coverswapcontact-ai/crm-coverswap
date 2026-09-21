@@ -207,13 +207,13 @@ Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossie
 - [x] N3 Espace serveur : valider / dévalider le projet, retirer une photo, dévalider une simulation, retirer une
       demande, retirer l'accord ; tout événement porte le contenu entier.
 - [x] N4 Propagation (serveur) Espace → Dossier (étape, prochaine action, retour en arrière tracé) et Dossier → Espace.
-- [ ] N5 CRM : bloc « Espace client » de la fiche dossier (voir ET modifier), onglet Espaces clients au même niveau.
-- [ ] N6 Paiement : devis signé, acompte payé le … par …, solde, « Réglé, merci » ; encaissement annulé → à régler.
-- [ ] N7 Site : Projet (valider / modifier), Simulations en 2 sous-onglets, création express toutes pièces, quota 5
+- [x] N5 CRM : bloc « Espace client » de la fiche dossier (voir ET modifier), onglet Espaces clients au même niveau.
+- [x] N6 Paiement : devis signé, acompte payé le … par …, solde, « Réglé, merci » ; encaissement annulé → à régler.
+- [x] N7 Site : Projet (valider / modifier), Simulations en 2 sous-onglets, création express toutes pièces, quota 5
       (site compté), supprimer une photo, retirer une demande, changer de simulation, retirer l'accord, Paiement.
-- [ ] N8 Ménage : archiver / restaurer un dossier (lead qui revient), migration à liste explicite (26), règle
+- [x] N8 Ménage : archiver / restaurer un dossier (lead qui revient), migration à liste explicite (26), règle
       « simulation = lead, pas dossier ».
-- [ ] N9 Cohérence : `docs/COHERENCE.md`, contrôle automatique (démarrage + quotidien), Tâches de fond + corriger.
+- [x] N9 Cohérence : `docs/COHERENCE.md`, contrôle automatique (démarrage + quotidien), Tâches de fond + corriger.
 - [ ] N10 Essais locaux iPhone (parcours de l'énoncé), tests, builds, déploiement, vérifs prod, rapport.
 
 ## Journal
@@ -229,5 +229,15 @@ Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossie
   explicite `menage-des-dossiers-du-rattrapage-22-09` (26), acompte encaissé → Signé / annulé → recul
   (`suivreAcompteDossier`), `coherence/controle.ts` (14 contrôles, corriger, quotidien + démarrage), API
   `/api/coherence`. Tests : `src/lib/coherence/coherence.test.ts` (12) ; suite entière verte (377).
-- RESTE : interfaces CRM (bloc Espace du dossier, Espaces clients, Tâches de fond, archiver/restaurer un dossier),
-  site (N7), `docs/COHERENCE.md`, essais iPhone, déploiement (CRM d'abord), vérifs prod, rapport.
+- 22/09 ~02 h : INTERFACES FAITES. CRM : `EspaceDossier.tsx` réécrit (5 onglets du client, reste à faire, photos +
+  retirées, projet validé / valider à sa place / modifier / réinitialiser, simulations avec valider-dévalider-masquer,
+  demande avec son mot, devis-accord-retrait, paiement, gestes), `ArchivageDossier.tsx` (+ « Archivés » dans Dossiers),
+  `ControleCoherence.tsx` dans Tâches de fond, Espaces clients enrichi. Site : Projet (valider / modifier), Simulations
+  en 2 sous-onglets, `CreationSimulation.tsx` en ligne (toutes les pièces, repart de zéro, choix gardés seulement
+  après un échec), `BoutonAConfirmer` (ui.tsx), retrait photo / validation / demande / accord, Paiement v2.
+  `docs/COHERENCE.md` écrit. Essais iPhone complets en local (captures : scratchpad `m4/captures/{olga,jerome,nina,crm}`,
+  plans `m4/plan-m4.mjs`) : tout l'aller-retour vérifié des deux côtés. Tests 376/376, lint, builds OK, montée de
+  schéma simulée sur une copie (rien perdu). Prod : quota jamais saisi → 5 par défaut s'applique.
+- RESTE : commits, push CRM (la migration des 26 dossiers tourne au démarrage, sauvegarde avant), push site,
+  vérifs prod (dossier J. R. : 3 460 €, acompte 1 038 € payé le 18/09 par virement ; F. ; S. E. ; liste des archivés),
+  rapport avec captures.

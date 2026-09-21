@@ -309,7 +309,7 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
                       {s.choisie ? <Pastille ton="vert">Validée</Pastille> : null}
                       {s.statut === "BROUILLON" ? <Pastille ton="ambre">Brouillon</Pastille> : s.statut === "MASQUEE" ? <Pastille>Masquée</Pastille> : null}
                     </div>
-                    <p className="truncate text-[12.5px] text-[#D1D5DB]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}`).join(" · ") || s.titre || "Simulation"}</p>
+                    <p className="line-clamp-2 text-[12.5px] text-[#D1D5DB]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}`).join(" · ") || s.titre || "Simulation"}</p>
                     {s.commentaire ? <p className="text-[12px] whitespace-pre-wrap text-[#F2F3F5]">« {s.commentaire} »</p> : null}
                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
                       {s.statut === "PUBLIEE" && !s.choisie ? (

@@ -65,7 +65,12 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       ESSAYÉ EN LOCAL de bout en bout (2 serveurs) : photos réduites puis déposées, envies, simulations déposées
       par Lucas, choix + commentaire, devis, adresse complétée, bon pour accord → dossier Signé, RIB affiché.
       RESTE (facultatif) : paiement par carte Stripe (prévu : `paiementCarte` si STRIPE_SECRET_KEY, non construit).
-- [ ] Lot 5 — Relances proposées (file de validation, plafond 5 messages / 10 jours, perdu sans réponse)
+- [x] Lot 5 — Relances proposées : type de proposition `ENVOI_SMS` (`src/lib/sms/propositions.ts`, sensible, exécution
+      par la file, texte proposé + texte validé recopiés sur le SMS), moteur `src/lib/commercial/relances.ts`
+      (travail périodique horaire `relances-sms` : J+2 photos, J+3 simulation, J+4 devis, J+10 dernière, J+3
+      injoignable ; plafond 5 SMS / 10 jours ; une proposition en attente par dossier ; STOP ; « perdu — sans
+      réponse » PROPOSÉ 5 jours après la dernière relance — étape sensible, donc jamais automatique).
+      8 essais (`relances.test.ts`). 301 essais au total.
 - [ ] Lot 6 — Écran de pilotage commercial
 - [ ] Lot 7 — Application mobile (2 manifestes, 2 icônes, push web, hors ligne, appareil photo)
 - [ ] Lot 8 — Rapport final

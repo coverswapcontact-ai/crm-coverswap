@@ -12,6 +12,7 @@ import {
   propositionRattacherMessage,
 } from "@/lib/messages/propositions";
 import { propositionAnonymisationClient } from "@/lib/rgpd/propositions";
+import { propositionEnvoiSms } from "@/lib/sms/propositions";
 import type { DefinitionProposition } from "./definitions";
 
 /**
@@ -25,6 +26,7 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionChangementEtape,
   propositionFusionClients,
   propositionEnvoiMail,
+  propositionEnvoiSms,
   propositionRattacherMessage,
   propositionNouvelleDemande,
   propositionArchiverMessage,

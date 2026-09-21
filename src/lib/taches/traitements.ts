@@ -1,4 +1,5 @@
 import { enregistrerTachesClients } from "@/lib/clients/taches";
+import { enregistrerTachesCommerciales } from "@/lib/commercial/relances";
 import { enregistrerTachesDrive } from "@/lib/drive/synchronisation";
 import { enregistrerTachesEncaissements } from "@/lib/encaissements/reprise";
 import { enregistrerTachesEspace } from "@/lib/espace/taches";
@@ -28,4 +29,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesMeta();
   enregistrerTachesSms();
   enregistrerTachesEspace();
+  enregistrerTachesCommerciales();
 }

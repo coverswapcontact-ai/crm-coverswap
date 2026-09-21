@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
 import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
+import { versVueNote } from "@/lib/commercial/notes-appel";
+import type { NoteAppelVue } from "@/lib/commercial/notes-constantes";
 
 /**
  * Section Leads : tout ce qui est entré — Meta, Google Ads, formulaires du
@@ -65,6 +67,8 @@ export type LigneLead = {
   archiveMotif: string | null;
   /** Doublon probable (même nom, même ville, autre numéro et autre e-mail) : à fusionner d'un clic, ou à écarter. */
   doublon: { de: string; nom: string; motif: string; dossierId: string | null } | null;
+  /** Notes prises pendant les appels, de la plus récente à la plus ancienne. */
+  notesAppel: NoteAppelVue[];
 };
 
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
@@ -116,6 +120,7 @@ const inclusion = {
   dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, _count: { select: { evenements: { where: APPEL } } } } },
   simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, createdAt: true, referenceChoisie: true, prixDevis: true, imageBeforePath: true, imageOriginalPath: true, imageAfterPath: true } },
   _count: { select: { photos: true, simulations: { where: { archiveLe: null } } } },
+  notesAppel: { where: { archiveLe: null }, orderBy: { appelLe: "desc" }, take: 20 },
 } satisfies Prisma.LeadInclude;
 
 type LeadCharge = Prisma.LeadGetPayload<{ include: typeof inclusion }>;
@@ -212,6 +217,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     archiveMotif: lead.archiveMotif,
     doublon: lead.doublonDe && !lead.doublonTraiteLe ? { de: lead.doublonDe, nom: "", motif: lead.doublonMotif ?? "Doublon probable", dossierId: null } : null,
     dossierId: dossier?.id ?? null,
+    notesAppel: lead.notesAppel.map(versVueNote),
     simulations: lead.simulations.map((s) => {
       const avant = s.imageOriginalPath ?? s.imageBeforePath;
       return { id: s.id, le: s.createdAt.toISOString(), reference: s.referenceChoisie, prix: s.prixDevis, avant: avant ? `/api/uploads/${avant}` : null, apres: s.imageAfterPath ? `/api/uploads/${s.imageAfterPath}` : null };

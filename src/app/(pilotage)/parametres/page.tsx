@@ -3,7 +3,7 @@ import { parametresPourEcran } from "@/lib/parametres/service";
 import Connexions from "./_components/Connexions";
 import EcranParametres from "./_components/EcranParametres";
 import MessagerieSms from "./_components/MessagerieSms";
-import PortraitEspace from "./_components/PortraitEspace";
+import MarqueEspace from "./_components/MarqueEspace";
 
 export const metadata: Metadata = {
   title: "Paramètres — CoverSwap",
@@ -21,7 +21,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
       <div className="mx-auto w-full max-w-3xl px-5 pb-10 md:px-8">
         <Connexions retour={{ google: texte("google"), compte: texte("compte"), message: texte("message") }} />
         <MessagerieSms />
-        <PortraitEspace />
+        <MarqueEspace />
       </div>
     </>
   );

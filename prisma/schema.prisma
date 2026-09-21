@@ -60,6 +60,7 @@ model Lead {
   metaLeads        MetaLead[]
   conversationsSms ConversationSms[]
   interactions     Interaction[]
+  notesAppel       NoteAppel[]
   devis            Devis[]
   chantier         Chantier?
   simulations      Simulation[]
@@ -1246,33 +1247,37 @@ model ModeleSms {
 // ─────────────────────────────────────────────
 
 model EspaceClient {
-  id                    String             @id @default(cuid())
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  code                  String             @unique // court, lisible dans l'adresse
-  version               Int                @default(1)
-  dossierId             String             @unique // un espace par dossier
-  dossier               Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
-  expireLe              DateTime
-  revoqueLe             DateTime?
-  premierAccesLe        DateTime?
-  dernierAccesLe        DateTime?
-  nbAcces               Int                @default(0)
-  souhaits              String? // JSON : le projet du client (zones, styles, mètres, délai, précisions) — ancien format : teintes, style
-  souhaitsLe            DateTime?
-  choix                 String? // JSON : une simulation, ou une teinte par zone piochée dans plusieurs (choix composite)
-  choixLe               DateTime?
-  propositionDemandeeLe DateTime? // dernière demande d'une autre proposition
-  devisConsultations    Int                @default(0) // visites où le client a ouvert son devis en vigueur
-  devisConsulteId       String? // devis auquel se rapporte le compteur
-  devisConsulteLe       DateTime?
-  simulationsVuesLe     DateTime? // dernière ouverture de ses simulations : au-delà, elles sont « nouvelles »
-  avis                  String? // JSON : note, texte, accord de publication (après le chantier)
-  avisLe                DateTime?
-  simulations           SimulationEspace[]
-  archiveLe             DateTime?
-  archiveMotif          String?
-  ecriture              String?
+  id                     String             @id @default(cuid())
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  code                   String             @unique // court, lisible dans l'adresse
+  version                Int                @default(1)
+  dossierId              String             @unique // un espace par dossier
+  dossier                Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  expireLe               DateTime
+  revoqueLe              DateTime?
+  premierAccesLe         DateTime?
+  dernierAccesLe         DateTime?
+  nbAcces                Int                @default(0)
+  souhaits               String? // JSON : le projet du client (zones, styles, mètres, délai, précisions) — ancien format : teintes, style
+  souhaitsLe             DateTime?
+  choix                  String? // JSON : une simulation, ou une teinte par zone piochée dans plusieurs (choix composite)
+  choixLe                DateTime?
+  propositionDemandeeLe  DateTime? // dernière demande d'une autre proposition
+  devisConsultations     Int                @default(0) // visites où le client a ouvert son devis en vigueur
+  devisConsulteId        String? // devis auquel se rapporte le compteur
+  devisConsulteLe        DateTime?
+  simulationsVuesLe      DateTime? // dernière ouverture de ses simulations : au-delà, elles sont « nouvelles »
+  avis                   String? // JSON : note, texte, accord de publication (après le chantier)
+  avisLe                 DateTime?
+  // Espace v3 (21/09/2026) : le client crée ses simulations lui-même, dans une limite.
+  simulationsAccordees   Int                @default(0) // simulations offertes en plus du nombre gratuit (paramètre)
+  simulationsDemandeesLe DateTime? // dernière demande de simulations supplémentaires
+  favoris                String? // JSON : références Cover Styl' mises en favori par le client
+  simulations            SimulationEspace[]
+  archiveLe              DateTime?
+  archiveMotif           String?
+  ecriture               String?
 }
 
 // Simulation déposée par Lucas dans l'espace d'un client : le client les compare,
@@ -1385,6 +1390,7 @@ model PreparationSimulation {
   updatedAt     DateTime  @updatedAt
   dossierId     String
   mode          String // CHATGPT | API
+  origine       String    @default("CRM") // CRM (Lucas) | CLIENT (le client, depuis son espace)
   statut        String    @default("PREPAREE") // PREPAREE | EN_COURS | TERMINEE | ECHEC
   photoSource   String // photo du dossier choisie (chemin relatif)
   photoAvant    String? // la même, cadrée au format du modèle (chemin relatif)
@@ -1437,7 +1443,7 @@ model PromptSimulationVersion {
 model GenerationImage {
   id            String   @id @default(cuid())
   createdAt     DateTime @default(now())
-  origine       String // SITE | CRM
+  origine       String // SITE | CRM | ESPACE
   modele        String
   statut        String // REUSSI | ECHEC
   erreur        String?
@@ -1453,4 +1459,26 @@ model GenerationImage {
   ecriture      String?
 
   @@index([createdAt])
+}
+
+// Notes prises pendant un appel à un contact : une par appel, datée, avec ses étiquettes
+// (trop cher, veut réfléchir…). Enregistrées au fil de la frappe. Elles restent sur la fiche
+// du contact même s'il n'aboutit jamais ; à l'ouverture de son dossier, elles sont reprises
+// dans l'historique, à leur date (dossierEvenementId).
+model NoteAppel {
+  id                 String    @id @default(cuid())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  leadId             String
+  lead               Lead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  appelLe            DateTime  @default(now()) // début de l'appel (ou de la note)
+  texte              String    @default("")
+  etiquettes         String    @default("[]") // JSON : codes (TROP_CHER, VEUT_REFLECHIR…)
+  issue              String? // issue notée en fin d'appel (INTERESSE, A_RAPPELER…)
+  dossierEvenementId String? // reprise dans l'historique du dossier
+  archiveLe          DateTime?
+  archiveMotif       String?
+  ecriture           String?
+
+  @@index([leadId, appelLe])
 }

@@ -19,7 +19,7 @@ export async function GET(_requete: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const dossier = await prisma.dossier.findUnique({
       where: { id },
-      select: { id: true, clientNom: true, clientVille: true, clientTelephone: true, etape: true, archiveLe: true, lead: { select: { typeProjet: true } }, espaces: { select: { souhaits: true } } },
+      select: { id: true, clientNom: true, clientVille: true, clientTelephone: true, etape: true, archiveLe: true, lead: { select: { typeProjet: true } }, espaces: { select: { souhaits: true, favoris: true } } },
     });
     if (!dossier || dossier.archiveLe) throw new ErreurMetier("Dossier introuvable ou archivé.", 404);
     const typeProjet = dossier.lead?.typeProjet ?? "CUISINE";
@@ -27,15 +27,26 @@ export async function GET(_requete: NextRequest, { params }: { params: Promise<{
     const [photos, preparations, simulationsSite] = await Promise.all([
       photosAvantDuDossier(id),
       preparationsRecentes(id),
-      prisma.simulationEspace.findMany({ where: { dossierId: id, source: "SITE" }, select: { zones: true } }),
+      prisma.simulationEspace.findMany({ where: { dossierId: id, source: { in: ["SITE", "CLIENT"] }, archiveLe: null }, select: { zones: true, source: true } }),
     ]);
-    const refsSite = [...new Set(simulationsSite.flatMap((s) => lireZones(s.zones).map((z) => z.ref)))];
+    const refsSite = [...new Set(simulationsSite.filter((s) => s.source === "SITE").flatMap((s) => lireZones(s.zones).map((z) => z.ref)))];
+    // Ses favoris et les teintes de ses propres simulations (espace v3) : ce qu'il aime, proposé en premier.
+    const favoris = (() => {
+      try {
+        const valeur: unknown = JSON.parse(dossier.espaces[0]?.favoris ?? "[]");
+        return Array.isArray(valeur) ? valeur.filter((r): r is string => typeof r === "string") : [];
+      } catch {
+        return [];
+      }
+    })();
+    const refsClient = [...new Set([...favoris, ...simulationsSite.filter((s) => s.source === "CLIENT").flatMap((s) => lireZones(s.zones).map((z) => z.ref))])];
     return NextResponse.json({
       dossier: { id: dossier.id, clientNom: dossier.clientNom, ville: dossier.clientVille, telephone: dossier.clientTelephone, etape: dossier.etape, typeProjet },
       photos,
       projet: projet ? { ...projet, resume: resumerProjet(projet, typeProjet) } : null,
       typeSuggere: typeSurfacePourProjet(typeProjet, projet?.zones ?? []),
       refsSite,
+      refsClient,
       preparations,
     });
   } catch (erreur) {

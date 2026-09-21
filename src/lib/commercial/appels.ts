@@ -5,6 +5,7 @@ import { changerEtape } from "@/lib/dossiers/transitions";
 import { ecrireNote } from "@/lib/dossiers/dossiers";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type SuiteAppel } from "./constantes";
+import { noterIssueSurNote } from "./notes-appel";
 
 /**
  * Fin d'appel : une ligne de note, une issue, et le CRM fixe la suite.
@@ -82,6 +83,9 @@ export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<
       else await tx.lead.update({ where: { id: leadId! }, data: { ...(aTraiter ? { statut: "CONTACTE" } : {}), rappelLe: rappel, ...(rappel ? { traiteLe: null } : {}) } });
     });
   }
+
+  // L'issue s'inscrit aussi sur la note prise pendant l'appel (elle en garde la trace, même sans dossier).
+  if (leadId) await noterIssueSurNote(leadId, entree.issue).catch((erreur: unknown) => console.error("[appels] issue non reportée sur la note :", erreur));
 
   return {
     cible: dossierId ? "DOSSIER" : "CONTACT",

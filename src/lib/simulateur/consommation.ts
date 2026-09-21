@@ -17,7 +17,7 @@ import { coutEstime } from "@/lib/simulations/generation";
 export const SEUIL_ALERTE_DOLLARS = 2;
 
 export type Consommation = {
-  mois: { total: number; site: number; crm: number; generations: number; echecs: number };
+  mois: { total: number; site: number; crm: number; espace: number; generations: number; echecs: number };
   solde: { releve: number; releveLe: string; consommeDepuis: number; estime: number; simulationsRestantes: number } | null;
   reelOpenAI: { mois: number; lu: string } | null;
   /** La dernière génération a été refusée faute de crédit (ou clé refusée), sans réussite depuis. */
@@ -68,7 +68,7 @@ export async function consommation(maintenant: Date = new Date()): Promise<Conso
     solde = { releve: valeur, releveLe: releve.valableDu.toISOString(), consommeDepuis, estime, simulationsRestantes: Math.max(0, Math.floor(estime / coutEstime(2))) };
   }
   return {
-    mois: { total: somme(() => true), site: somme((l) => l.origine === "SITE"), crm: somme((l) => l.origine === "CRM"), generations: lignes.filter((l) => l.statut === "REUSSI").length, echecs: lignes.filter((l) => l.statut === "ECHEC").length },
+    mois: { total: somme(() => true), site: somme((l) => l.origine === "SITE"), crm: somme((l) => l.origine === "CRM"), espace: somme((l) => l.origine === "ESPACE"), generations: lignes.filter((l) => l.statut === "REUSSI").length, echecs: lignes.filter((l) => l.statut === "ECHEC").length },
     solde,
     reelOpenAI: await coutReelDuMois(debut),
     creditEpuise: dernierEchec && (!derniereReussite || derniereReussite.createdAt < dernierEchec.createdAt) ? { le: dernierEchec.createdAt.toISOString() } : null,
@@ -95,4 +95,15 @@ export async function surveillerCredit(maintenant: Date = new Date()): Promise<{
     { origine: "simulateur", canaux: ["telegram", "ntfy", "pushweb"] }
   ).catch(() => undefined);
   return { alerte: true };
+}
+
+/**
+ * Peut-on générer maintenant ? Non si la dernière génération a été refusée faute
+ * de crédit (sans réussite depuis), ou si le solde estimé ne couvre plus une
+ * simulation. L'espace client ne lance alors rien : ses choix sont gardés.
+ */
+export async function creditDisponible(maintenant: Date = new Date()): Promise<boolean> {
+  const etat = await consommation(maintenant);
+  if (etat.creditEpuise) return false;
+  return !etat.solde || etat.solde.estime >= coutEstime(1);
 }

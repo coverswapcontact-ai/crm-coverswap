@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/fermeture-mobile";
 import { Search, X } from "lucide-react";
 import { CLASSE_SAISIE, TRANS } from "@/components/pilotage/ui";
 import { correspondRecherche } from "@/lib/simulateur/recherche-teintes";
@@ -31,6 +32,7 @@ export function SelecteurTeinte({
   zone,
   styles,
   refsSite,
+  refsClient = [],
   onChoisir,
   onFermer,
 }: {
@@ -38,26 +40,31 @@ export function SelecteurTeinte({
   zone: string;
   styles: StyleClient[];
   refsSite: string[];
+  /** Ses favoris et les teintes de ses propres simulations, dans son espace. */
+  refsClient?: string[];
   onChoisir: (reference: ReferenceCatalogue) => void;
   onFermer: () => void;
 }) {
   const [recherche, setRecherche] = useState("");
   const [famille, setFamille] = useState("");
-  const [gout, setGout] = useState<StyleClient | "site" | null>(styles[0] ?? (refsSite.length ? "site" : null));
+  const [gout, setGout] = useState<StyleClient | "site" | "client" | null>(refsClient.length ? "client" : (styles[0] ?? (refsSite.length ? "site" : null)));
 
   const liste = useMemo(() => {
     const q = recherche.trim();
     return references.filter((r) => {
       if (q && !correspondRecherche(r, q)) return false;
       if (famille && r.famille !== famille) return false;
+      if (!q && !famille && gout === "client") return refsClient.includes(r.ref);
       if (!q && !famille && gout === "site") return refsSite.includes(r.ref);
       if (!q && !famille && gout) return r.styles.includes(gout);
       return true;
     });
-  }, [references, recherche, famille, gout, refsSite]);
+  }, [references, recherche, famille, gout, refsSite, refsClient]);
 
+  useRetourFerme(true, onFermer);
+  const glisser = useGlisserPourFermer(onFermer, "droite");
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#16181D]" role="dialog" aria-modal="true" aria-label={`Teinte : ${zone}`}>
+    <div style={glisser.style} {...glisser.gestionnaires} className="fixed inset-0 z-50 flex flex-col bg-[#16181D]" role="dialog" aria-modal="true" aria-label={`Teinte : ${zone}`}>
       <div className="border-b-[0.5px] border-[#2A2D34] px-4 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[15px] font-medium text-[#F2F3F5]">
@@ -72,6 +79,11 @@ export function SelecteurTeinte({
           <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Chêne, noyer, béton gris, AA01…" className={cn(CLASSE_SAISIE, "h-11 pl-9 sm:h-9")} aria-label="Rechercher une teinte" />
         </div>
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+          {refsClient.length ? (
+            <button type="button" onClick={() => { setGout("client"); setFamille(""); setRecherche(""); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === "client" && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
+              ♥ Ses favoris ({refsClient.length})
+            </button>
+          ) : null}
           {styles.map((s) => (
             <button key={s} type="button" onClick={() => { setGout(s); setFamille(""); setRecherche(""); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === s && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
               ♥ {LIBELLES_STYLE[s]}

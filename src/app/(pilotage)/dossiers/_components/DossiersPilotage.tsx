@@ -60,6 +60,23 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
 
 const CLASSE_ONGLET = "flex h-9 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7";
 
+const CLE_INACTIFS = "dossiers:masquer-inactifs";
+const JOURS_INACTIF = 30;
+
+function lireMasquerInactifs(): boolean {
+  try {
+    return window.localStorage.getItem(CLE_INACTIFS) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Inactif : rien bougé depuis 30 jours et le client a la main (un dossier qui m'attend n'est jamais masqué). */
+function estInactif(dossier: DossierResume, maintenant: Date): boolean {
+  if (estAFaire(dossier, maintenant)) return false;
+  return maintenant.getTime() - new Date(dossier.updatedAt).getTime() > JOURS_INACTIF * 86_400_000;
+}
+
 export default function DossiersPilotage({
   dossiersInitiaux,
   leadInitial,
@@ -74,6 +91,10 @@ export default function DossiersPilotage({
   const [vueChoisie, setVueChoisie] = useState<Vue | null>(null);
   const vue = vueChoisie ?? vueParDefaut;
   const [afficherSorties, setAfficherSorties] = useState(false);
+  // Masquer les dossiers sans activité depuis 30 jours (jamais ceux où j'ai la main) : mémorisé sur l'appareil.
+  const masquerInactifsParDefaut = useSyncExternalStore(sansAbonnement, lireMasquerInactifs, () => false);
+  const [masquerInactifsChoisi, setMasquerInactifsChoisi] = useState<boolean | null>(null);
+  const masquerInactifs = masquerInactifsChoisi ?? masquerInactifsParDefaut;
   const [filtreAFaire, setFiltreAFaire] = useState(false);
   const [legendeOuverte, setLegendeOuverte] = useState(false);
   const [recherche, setRecherche] = useState("");
@@ -145,13 +166,25 @@ export default function DossiersPilotage({
       } else if (!afficherSorties && estEtapeSortie(dossier.etape)) {
         return false;
       }
+      if (masquerInactifs && estInactif(dossier, maintenant)) return false;
       if (termes.length === 0) return true;
       const texte = normaliser(
         [dossier.clientNom, dossier.clientVille, dossier.objet, dossier.prochaineAction ?? ""].join(" ")
       );
       return termes.every((terme) => texte.includes(terme));
     });
-  }, [dossiers, afficherSorties, filtreAFaire, recherche, maintenant]);
+  }, [dossiers, afficherSorties, filtreAFaire, recherche, maintenant, masquerInactifs]);
+  const inactifs = dossiers.filter((dossier) => (afficherSorties || !estEtapeSortie(dossier.etape)) && estInactif(dossier, maintenant)).length;
+
+  const basculerInactifs = () => {
+    const suite = !masquerInactifs;
+    setMasquerInactifsChoisi(suite);
+    try {
+      window.localStorage.setItem(CLE_INACTIFS, suite ? "1" : "0");
+    } catch {
+      // préférence non mémorisée
+    }
+  };
 
   const enCours = dossiers.filter((dossier) => dossier.etape !== "ENCAISSE" && !estEtapeSortie(dossier.etape)).length;
   const enRetard = dossiers.filter((dossier) => echeanceDe(dossier, maintenant) === "retard").length;
@@ -293,6 +326,26 @@ export default function DossiersPilotage({
           </button>
         )}
 
+        {inactifs > 0 || masquerInactifs ? (
+          <button
+            type="button"
+            aria-pressed={masquerInactifs}
+            onClick={basculerInactifs}
+            title="Dossiers sans activité depuis 30 jours, où le client a la main"
+            className={cn(
+              "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
+              masquerInactifs
+                ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
+                : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+              TRANS
+            )}
+          >
+            <span className="sm:hidden">{masquerInactifs ? "Inactifs masqués" : "Inactifs"}</span>
+            <span className="hidden sm:inline">{masquerInactifs ? "Inactifs masqués" : "Masquer les inactifs"}</span>
+            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{inactifs}</span>
+          </button>
+        ) : null}
+
         <Bouton
           variante="fantome"
           taille="sm"
@@ -300,9 +353,10 @@ export default function DossiersPilotage({
           aria-expanded={legendeOuverte}
           aria-controls="legende-dossiers"
           onClick={() => setLegendeOuverte((valeur) => !valeur)}
+          aria-label="Légende"
           className="h-10 sm:ml-auto sm:h-7"
         >
-          Légende
+          <span className="sr-only sm:not-sr-only">Légende</span>
         </Bouton>
 
         {vue === "liste" ? (

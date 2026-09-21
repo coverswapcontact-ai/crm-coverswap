@@ -58,7 +58,8 @@ describe("une seule chose à faire à la fois", () => {
   test("l'étape suit ce qui fait signer : devis > choix > photos > projet", () => {
     assert.equal(etapes.etapeEspace(base), "PHOTOS");
     assert.equal(etapes.etapeEspace({ ...base, photos: 2 }), "PROJET");
-    assert.equal(etapes.etapeEspace({ ...base, photos: 2, projet: true }), "ATTENTE_SIMULATION");
+    // Espace v3 : projet précisé, il crée lui-même sa simulation (il n'attend plus CoverSwap).
+    assert.equal(etapes.etapeEspace({ ...base, photos: 2, projet: true }), "SIMULATIONS");
     // Un lead du simulateur retrouve sa simulation : il ne lui reste qu'à préciser.
     assert.equal(etapes.etapeEspace({ ...base, simulationsSite: 1 }), "PROJET");
     assert.equal(etapes.etapeEspace({ ...base, simulationsCrm: 2 }), "SIMULATIONS", "des simulations à choisir passent devant les photos manquantes");
@@ -69,6 +70,12 @@ describe("une seule chose à faire à la fois", () => {
     assert.equal(etapes.etapeEspace({ ...base, etapeDossier: "ENCAISSE" }), "TERMINE");
     const progression = etapes.progression({ ...base, photos: 1, projet: true, simulationsCrm: 1 });
     assert.deepEqual(progression.map((e) => [e.cle, e.fait, e.courante]), [["PHOTOS", true, false], ["PROJET", true, false], ["SIMULATIONS", false, true], ["DEVIS", false, false], ["ACOMPTE", false, false]]);
+    // Devis et Paiement verrouillés, avec ce qui les débloque, dit au client.
+    assert.deepEqual(progression.map((e) => [e.cle, e.verrouillee, e.libelle]), [["PHOTOS", false, "Photos"], ["PROJET", false, "Projet"], ["SIMULATIONS", false, "Simulations"], ["DEVIS", true, "Devis"], ["ACOMPTE", true, "Paiement"]]);
+    assert.equal(progression.find((e) => e.cle === "DEVIS")?.raison, "Validez une simulation pour recevoir votre devis.");
+    const validee = etapes.progression({ ...base, photos: 1, projet: true, simulationsClient: 1, choix: true });
+    assert.equal(validee.find((e) => e.cle === "DEVIS")?.verrouillee, false, "une simulation validée débloque le devis");
+    assert.equal(validee.find((e) => e.cle === "ACOMPTE")?.verrouillee, true, "le paiement attend le bon pour accord");
   });
 });
 
@@ -97,10 +104,28 @@ describe("le projet du client", () => {
     assert.deepEqual([avant.connu.delai, avant.connu.proprietaire, avant.connu.tailleCuisine, avant.etape], ["vite", true, "Moyenne", "PHOTOS"], "ce que le formulaire a dit n'est jamais redemandé");
     await service.enregistrerProjetOuSouhaits(espace, { zones: ["meubles-hauts", "plan-de-travail"], styles: ["bois-clair", "blanc"], metres: 5, repere: "en-l", delai: "vite", precisions: "Garder les poignées" });
     const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId, type: "ESPACE_SOUHAITS" } });
-    assert.match(evenement?.contenu ?? "", /Façades hautes, Plan de travail · Bois clair, Blanc · ≈ 5 m \(en l\) · dès que possible · « Garder les poignées »/);
+    assert.match(evenement?.contenu ?? "", /Façades hautes, Plan de travail · ≈ 5 m \(en l\) · Bois clair, Blanc · dès que possible · « Garder les poignées »/, "les goûts et le délai d'avant la v3 ne se perdent pas");
     const etat = await service.etatEspace(await relire(espace.id));
     assert.deepEqual(etat.monProjet?.zones, ["meubles-hauts", "plan-de-travail"]);
     await assert.rejects(service.enregistrerProjetOuSouhaits(espace, { zones: [], metres: 999 }), /60 mètres/);
+
+    // v3 : zones, taille, note. Enregistré à la frappe : une seule alerte, différée, avec la version posée.
+    const v3 = await dossierAvecEspace("Rose");
+    await service.enregistrerProjetOuSouhaits(v3.espace, { zones: ["meubles-bas"], metres: null, repere: null, precisions: "" });
+    await service.enregistrerProjetOuSouhaits(await relire(v3.espace.id), { zones: ["meubles-bas", "autre"], metres: 3, repere: "une-rangee", precisions: "Aussi la porte du cellier" });
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: v3.dossierId, type: "ESPACE_SOUHAITS" } }), 1, "un événement, mis à jour");
+    assert.match((await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: v3.dossierId, type: "ESPACE_SOUHAITS" } })).contenu, /Façades basses, Autre chose · ≈ 3 m \(un seul mur\) · « Aussi la porte du cellier »$/);
+    const taches = await prisma.tache.findMany({ where: { type: service.TACHE_ALERTE_PROJET, cle: `espace-projet:${v3.espace.id}` } });
+    assert.equal(taches.length, 1, "une seule alerte pour toute la saisie");
+    assert.ok(taches[0].prochainEssaiLe.getTime() > Date.now() + 120_000, "elle part quelques minutes après");
+    assert.deepEqual(await service.alerterProjetPrecise(v3.espace.id), { envoyee: true });
+    // Rien de saisi dans Paramètres : 3 simulations offertes (pas 0) ; et personne ne lui promet une proposition.
+    assert.equal(await service.simulationsGratuites(), 3);
+    const etatV3 = await service.etatEspace(await relire(v3.espace.id));
+    assert.deepEqual([etatV3.creation.restantes, etatV3.simulationsEnPreparation], [3, null]);
+    const noteSeule = await dossierAvecEspace("Sacha");
+    await service.enregistrerProjetOuSouhaits(noteSeule.espace, { zones: [], metres: null, repere: null, precisions: "Je ne sais pas encore" });
+    assert.equal((await service.etatEspace(await relire(noteSeule.espace.id))).etapes.find((e) => e.cle === "PROJET")?.fait, true, "un mot pour CoverSwap suffit");
 
     const ancien = await dossierAvecEspace("Paul");
     await service.enregistrerProjetOuSouhaits(ancien.espace, { teintes: ["Bois clair", "Noir"], style: "Chaleureux", propositions: true, precisions: "" });

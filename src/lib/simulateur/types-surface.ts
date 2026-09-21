@@ -60,8 +60,25 @@ export const TYPES_SURFACE: readonly TypeSurface[] = [
   { id: "mobilier-pro", libelle: "Mobilier professionnel", projet: "professionnel", zones: ["mobilier-pro", "rangements-pro"], aide: "Distributeur, borne, casiers, rangements du local" },
 ];
 
+/**
+ * Les simulations que le client crée dans son espace : un type par projet, avec
+ * toutes les zones de ce projet (il en choisit une ou plusieurs). Hors de la
+ * liste du simulateur du CRM, qui garde ses dix types.
+ */
+export const TYPES_SURFACE_ESPACE: Record<string, TypeSurface> = {
+  CUISINE: { id: "cuisine", libelle: "Cuisine", projet: "cuisine", zones: ["meubles-hauts", "meubles-bas", "plan-de-travail", "credence"], aide: "" },
+  SDB: { id: "plan-vasque", libelle: "Salle de bain", projet: "salle-de-bain", zones: ["meuble-vasque", "plan-vasque"], aide: "" },
+  MEUBLES: { id: "espace-meubles", libelle: "Meubles", projet: "meubles", zones: ["portes-dressing", "meuble-tv"], aide: "" },
+  PRO: { id: "espace-professionnel", libelle: "Local professionnel", projet: "professionnel", zones: ["comptoir-habillage", "comptoir-plateau", "mobilier-pro", "rangements-pro"], aide: "" },
+};
+
 export function typeSurface(id: string | null | undefined): TypeSurface | null {
-  return TYPES_SURFACE.find((t) => t.id === id) ?? null;
+  return TYPES_SURFACE.find((t) => t.id === id) ?? Object.values(TYPES_SURFACE_ESPACE).find((t) => t.id === id) ?? null;
+}
+
+/** Le type des simulations du client, selon son projet (cuisine par défaut). */
+export function typeEspacePourProjet(typeProjet: string | null | undefined): TypeSurface {
+  return TYPES_SURFACE_ESPACE[typeProjet ?? "CUISINE"] ?? TYPES_SURFACE_ESPACE.CUISINE;
 }
 
 export function estZone(id: string): id is IdZone {
@@ -164,24 +181,34 @@ export const ZONES_PROJET_CLIENT: Record<string, { id: string; libelle: string; 
     { id: "meubles-bas", libelle: "Façades basses", aide: "Les portes et tiroirs sous le plan, l'îlot" },
     { id: "plan-de-travail", libelle: "Plan de travail", aide: "Le dessus et son chant" },
     { id: "credence", libelle: "Crédence", aide: "Le mur entre le plan et les meubles hauts" },
+    { id: "autre", libelle: "Autre chose", aide: "Précisez dans la note" },
   ],
   SDB: [
     { id: "meuble-vasque", libelle: "Meuble vasque", aide: "Les façades sous le lavabo" },
     { id: "plan-vasque", libelle: "Plan vasque", aide: "Le dessus autour du lavabo" },
     { id: "carrelage-mural", libelle: "Murs carrelés", aide: "Recouvrir le carrelage existant" },
+    { id: "autre", libelle: "Autre chose", aide: "Précisez dans la note" },
   ],
   MEUBLES: [
     { id: "portes-dressing", libelle: "Dressing, placards", aide: "Portes battantes ou coulissantes" },
     { id: "meuble-tv", libelle: "Meuble TV", aide: "Façades, dessus et côtés" },
     { id: "meuble-complet", libelle: "Commode, buffet, bureau", aide: "Un meuble seul" },
+    { id: "autre", libelle: "Autre chose", aide: "Précisez dans la note" },
   ],
   PRO: [
     { id: "comptoir-habillage", libelle: "Bar, comptoir", aide: "La façade et le plateau" },
     { id: "mobilier-pro", libelle: "Mobilier", aide: "Distributeur, présentoir, casiers" },
     { id: "rangements-pro", libelle: "Rangements", aide: "Portes de placards et d'armoires" },
     { id: "habillage-mural", libelle: "Un mur", aide: "Un mur ou un panneau du local" },
+    { id: "autre", libelle: "Autre chose", aide: "Précisez dans la note" },
   ],
 };
+
+/** Le nom d'une zone dans les mots du client (« Façades hautes » plutôt que « Meubles hauts ») : celui de son Projet. */
+export function libelleZoneClient(zone: string, typeProjet: string | null | undefined): string | null {
+  const liste = ZONES_PROJET_CLIENT[typeProjet ?? "CUISINE"] ?? ZONES_PROJET_CLIENT.CUISINE;
+  return liste.find((z) => z.id === zone)?.libelle ?? Object.values(ZONES_PROJET_CLIENT).flat().find((z) => z.id === zone)?.libelle ?? null;
+}
 
 /** Type de surface du simulateur le plus proche du projet du client. */
 export function typeSurfacePourProjet(typeProjet: string | null | undefined, zones: string[] = []): string {

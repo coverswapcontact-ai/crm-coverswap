@@ -27,10 +27,11 @@ type Contexte = {
   projet: { zones: string[]; styles: StyleClient[]; propositions: boolean; resume: string } | null;
   typeSuggere: string;
   refsSite: string[];
+  refsClient?: string[];
   preparations: Preparation[];
 };
 type Consommation = {
-  mois: { total: number; site: number; crm: number; generations: number; echecs: number };
+  mois: { total: number; site: number; crm: number; espace?: number; generations: number; echecs: number };
   solde: { releve: number; releveLe: string; consommeDepuis: number; estime: number; simulationsRestantes: number } | null;
   reelOpenAI: { mois: number } | null;
   creditEpuise: { le: string } | null;
@@ -288,6 +289,7 @@ export default function EcranSimulateur({ dossierInitial }: { dossierInitial: st
           zone={ZONES[zoneOuverte].libelle}
           styles={styles}
           refsSite={contexte?.refsSite ?? []}
+          refsClient={contexte?.refsClient ?? []}
           onFermer={() => setZoneOuverte(null)}
           onChoisir={(r) => {
             setTeintes((t) => ({ ...t, [zoneOuverte]: r }));
@@ -362,7 +364,7 @@ function CompteurCredit({ consommation }: { consommation: Consommation | null })
         <Coins size={14} className="mr-1.5 inline -translate-y-px text-[#9CA3AF]" aria-hidden />
         Crédit OpenAI ce mois : <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(mois.total)}</strong>{" "}
         <span className="text-[#8B919C]">
-          ({mois.generations} image{mois.generations > 1 ? "s" : ""} · site {dollars(mois.site)} · CRM {dollars(mois.crm)})
+          ({mois.generations} image{mois.generations > 1 ? "s" : ""} · site {dollars(mois.site)} · CRM {dollars(mois.crm)}{mois.espace ? <> · espaces clients {dollars(mois.espace)}</> : null})
         </span>
       </p>
       {reelOpenAI ? <p className="text-[#8B919C]">Facturé par OpenAI ce mois : {dollars(reelOpenAI.mois)}</p> : null}

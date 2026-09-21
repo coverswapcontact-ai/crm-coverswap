@@ -11,6 +11,8 @@ import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type ActionLeads, type Moti
 import type { LigneLead, ListeLeads, SimulationLead, VueLeads } from "@/lib/prospects/leads";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
+import { NotesAppel, finAppel, noterDebutAppel, type NotesAppelRef } from "@/components/pilotage/NotesAppel";
+import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/fermeture-mobile";
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, TRANS } from "@/components/pilotage/ui";
@@ -195,7 +197,7 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
       <SignalDoublon lead={lead} onRecharger={onRecharger} />
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] gap-2 sm:grid-cols-[minmax(0,15rem)_auto_auto_auto] sm:justify-start">
         {lead.telephoneLien ? (
-          <a href={lead.telephoneLien} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] px-3 text-[14.5px] font-semibold tabular-nums sm:h-10 sm:text-[13.5px]", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
+          <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] px-3 text-[14.5px] font-semibold tabular-nums sm:h-10 sm:text-[13.5px]", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
             <Phone size={16} aria-hidden /> {lead.telephone}
           </a>
         ) : (
@@ -217,7 +219,8 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
           </button>
         )}
       </div>
-      <div className="mt-2.5 flex min-h-9 flex-wrap items-center justify-end gap-1.5">
+      <NotesAppel leadId={lead.id} notes={lead.notesAppel} />
+      <div className="mt-1 flex min-h-9 flex-wrap items-center justify-end gap-1.5">
         {motifOuvert ? (
           <ChoixMotif
             occupe={occupe}
@@ -248,6 +251,7 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
 
 function SesSimulations({ simulations, dossierId }: { simulations: SimulationLead[]; dossierId: string | null }) {
   const [ouverte, setOuverte] = useState<{ simulation: SimulationLead; vue: "apres" | "avant" } | null>(null);
+  useRetourFerme(Boolean(ouverte), () => setOuverte(null));
   return (
     <div className="mt-4">
       <p className="mb-2 flex items-center justify-between text-[12px] font-medium text-[#9CA3AF]">
@@ -305,16 +309,18 @@ function SesSimulations({ simulations, dossierId }: { simulations: SimulationLea
 function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onNote, onDossier, occupe }: { file: LigneLead[]; total: number; ecartes: number; maintenant: number; onQuitter: () => void; onPasser: (id: string) => void; onNote: (lead: LigneLead, issue: IssueAppel, note: string, ouvrirDossier: boolean) => Promise<void>; onDossier: (lead: LigneLead) => void; occupe: boolean }) {
   const lead = file[0] ?? null;
   const [issue, setIssue] = useState<IssueAppel | null>(null);
-  const [note, setNote] = useState("");
   const [avecDossier, setAvecDossier] = useState(true);
+  const notes = useRef<NotesAppelRef>(null);
   const [envoi, setEnvoi] = useState(false);
   const idCourant = lead?.id ?? null;
   const [idSuivi, setIdSuivi] = useState(idCourant);
+  // Plein écran sur téléphone : le geste retour ou un glissement depuis le bord gauche en sort.
+  useRetourFerme(true, onQuitter);
+  const glisser = useGlisserPourFermer(onQuitter, "droite");
   if (idSuivi !== idCourant) {
     // Un nouveau lead s'affiche : la feuille repart vide.
     setIdSuivi(idCourant);
     setIssue(null);
-    setNote("");
     setAvecDossier(true);
   }
 
@@ -322,14 +328,17 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
     if (!lead || !issue) return;
     setEnvoi(true);
     try {
-      await onNote(lead, issue, note, issue === "INTERESSE" && avecDossier);
+      // La note part d'abord (l'issue s'y accroche), puis l'appel est enregistré.
+      await notes.current?.vider();
+      finAppel(lead.id);
+      await onNote(lead, issue, "", issue === "INTERESSE" && avecDossier);
     } finally {
       setEnvoi(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#16181D]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#16181D]" style={glisser.style} {...glisser.gestionnaires}>
       <header className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
         <div>
           <p className="text-[15px] font-medium text-[#F2F3F5]">Appels à la suite</p>
@@ -377,14 +386,16 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
               {lead.simulations.length > 0 ? <SesSimulations simulations={lead.simulations} dossierId={lead.dossierId} /> : null}
 
               {lead.telephoneLien ? (
-                <a href={lead.telephoneLien} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
+                <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
                   <Phone size={22} aria-hidden /> {lead.telephone}
                 </a>
               ) : (
                 <p className="mt-5 rounded-[14px] bg-[#22262D] px-4 py-4 text-center text-[14px] text-[#F5B454]">Numéro illisible{lead.telephone ? ` : ${lead.telephone}` : ""}. {lead.email ? `E-mail : ${lead.email}` : ""}</p>
               )}
 
-              <p className="mt-6 mb-2 text-[12px] font-medium text-[#9CA3AF]">Issue de l&apos;appel</p>
+              <NotesAppel key={lead.id} ref={notes} leadId={lead.id} notes={lead.notesAppel} variante="appels" />
+
+              <p className="mt-5 mb-2 text-[12px] font-medium text-[#9CA3AF]">Issue de l&apos;appel</p>
               <div className="grid grid-cols-2 gap-2">
                 {ISSUES_APPEL.map((valeur) => (
                   <button key={valeur} type="button" aria-pressed={issue === valeur} onClick={() => setIssue(valeur)} className={cn("h-14 rounded-[12px] border-[0.5px] text-[15px] font-medium", issue === valeur ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#E5E7EB] hover:border-[#3A3E47]", TRANS)}>
@@ -392,7 +403,6 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
                   </button>
                 ))}
               </div>
-              <textarea value={note} onChange={(evenement) => setNote(evenement.target.value)} rows={2} placeholder="En une ligne (facultatif) : cuisine de 2015, veut refaire les façades avant Noël" aria-label="Note de l'appel" className={cn(CLASSE_SAISIE, "mt-3 min-h-[64px] resize-y py-2 text-[15px] leading-relaxed sm:text-[13.5px]")} />
               {issue === "INTERESSE" && lead.dossierId ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Son dossier est déjà ouvert : l&apos;appel s&apos;y écrit, puis le SMS avec le lien de son espace vous sera proposé.</p> : null}
               {issue === "INTERESSE" && !lead.dossierId ? (
                 <label className="mt-3 flex items-start gap-2.5 text-[13.5px] leading-snug text-[#D1D5DB]">
@@ -606,6 +616,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
     }
   }
 
+  useRetourFerme(Boolean(suite), () => setSuite(null));
   const lienMessage = suite ? `/sms?${suite.dossierId ? `dossier=${suite.dossierId}` : `lead=${suite.lead.id}`}&proposer=${suite.suite.messagePropose}&retour=appels` : "#";
 
   return (
@@ -665,7 +676,8 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
         </label>
       </div>
 
-      {donnees.lignes.length === 0 ? (
+      {/* Le mode appels couvre tout l'écran : la liste se retire (une seule note par contact à l'écran). */}
+      {modeAppels ? null : donnees.lignes.length === 0 ? (
         <div className="mt-8">
           <EtatVide titre={recherche || source ? "Aucun lead ne correspond" : vue === "ACTIFS" ? "Aucun lead en attente" : vue === "ARCHIVES" ? "Aucun lead archivé" : "Aucun lead sans suite"} texte={vue === "ACTIFS" && !recherche && !source ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici. Ceux qui ont un dossier sont dans Dossiers." : undefined} />
         </div>

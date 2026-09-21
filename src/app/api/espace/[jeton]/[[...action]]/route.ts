@@ -11,7 +11,10 @@ import {
   choisirSimulation,
   commenterSimulation,
   completerCoordonnees,
+  creerSimulationClient,
   demanderProposition,
+  demanderSimulations,
+  enregistrerFavoris,
   deposerPhotos,
   donnerAvis,
   enregistrerProjetOuSouhaits,
@@ -28,9 +31,12 @@ import {
   schemaChoix,
   schemaChoixComplet,
   schemaCoordonnees,
+  schemaCreationSimulation,
+  schemaFavoris,
   schemaProposition,
+  suivreCreation,
 } from "@/lib/espace/service";
-import { imageEchantillon } from "@/lib/simulateur/catalogue";
+import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogue";
 
 /**
  * API PUBLIQUE de l'espace client — appelée par la page coverswap.fr/e/<jeton>,
@@ -47,7 +53,9 @@ import { imageEchantillon } from "@/lib/simulateur/catalogue";
  *   GET    /api/espace/<jeton>/portrait                     la photo de Lucas
  *   GET    /api/espace/<jeton>/adresse?q=…                  saisie assistée de l'adresse (Base adresse nationale)
  *   POST   /api/espace/<jeton>/photos                       dépôt de photos (multipart)
- *   PUT    /api/espace/<jeton>/souhaits | projet | coordonnees
+ *   PUT    /api/espace/<jeton>/souhaits | projet | coordonnees | favoris
+ *   POST   /api/espace/<jeton>/simulations/creer | simulations/demande   (v3 : le client simule)
+ *   GET    /api/espace/<jeton>/simulations/creation/<id>                où en est sa simulation
  *   POST   /api/espace/<jeton>/choix                        une simulation, ou une teinte par zone
  *   POST   /api/espace/<jeton>/proposition                  demander une autre proposition
  *   POST   /api/espace/<jeton>/simulations/vues             ses simulations ont été regardées
@@ -95,8 +103,10 @@ async function traiter(requete: NextRequest, contexte: Contexte, suite: Suite, e
   try {
     const origine = requete.headers.get("origin");
     if (origine && !origineAutorisee(origine)) throw new ErreurMetier("Origine non autorisée.", 403);
-    if (ipDepasseLaLimite(`espace:${ip}`, Date.now(), 400)) throw new ErreurMetier("Trop de requêtes : réessayez dans quelques minutes.", 429);
     const { jeton, action = [] } = await contexte.params;
+    // Les échantillons du catalogue (une image par teinte parcourue) ont leur propre compteur : feuilleter ne bloque pas l'espace.
+    const echantillon = requete.method === "GET" && action[0] === "echantillons";
+    if (ipDepasseLaLimite(echantillon ? `espace-ech:${ip}` : `espace:${ip}`, Date.now(), echantillon ? 1500 : 400)) throw new ErreurMetier("Trop de requêtes : réessayez dans quelques minutes.", 429);
     let espace: EspaceClient;
     try {
       espace = await espaceDuJeton(jeton);
@@ -131,6 +141,9 @@ export async function GET(requete: NextRequest, contexte: Contexte) {
       return NextResponse.json({ espace: await etatEspace(espace, { apercu }) });
     }
     const [ressource, id, quoi] = action;
+    if (action.length === 3 && ressource === "simulations" && id === "creation") {
+      return NextResponse.json(await suivreCreation(espace, quoi));
+    }
     if (action.length === 2 && ressource === "photos") {
       const { contenu, type } = await photoDeLEspace(espace, id);
       return image(contenu, type);
@@ -140,7 +153,9 @@ export async function GET(requete: NextRequest, contexte: Contexte) {
       return image(contenu, type);
     }
     if (action.length === 2 && ressource === "echantillons") {
-      return image(await imageEchantillon(decodeURIComponent(id)), "image/jpeg", "public, max-age=604800");
+      // ?l=320 : la vignette de la grille du catalogue ; sans : l'échantillon entier (vue agrandie, planche).
+      const vignette = requete.nextUrl.searchParams.get("l") === "320";
+      return image(vignette ? await vignetteEchantillon(decodeURIComponent(id)) : await imageEchantillon(decodeURIComponent(id)), "image/jpeg", "public, max-age=604800");
     }
     if (action.length === 2 && ressource === "devis") {
       const { contenu, nomFichier } = await lirePdfDocument(espace.dossierId, id);
@@ -194,6 +209,14 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
         await donnerAvis(espace, analyser(schemaAvis, corps));
         return relu();
       }
+      if (action.length === 2 && ressource === "simulations" && id === "creer") {
+        const lancee = await creerSimulationClient(espace, analyser(schemaCreationSimulation, corps));
+        return NextResponse.json({ ...lancee, espace: await etatEspace(espace) });
+      }
+      if (action.length === 2 && ressource === "simulations" && id === "demande") {
+        await demanderSimulations(espace);
+        return relu();
+      }
       if (action.length === 2 && ressource === "simulations" && id === "vues") {
         await noterSimulationsVues(espace);
         return NextResponse.json({ ok: true });
@@ -223,6 +246,11 @@ export async function PUT(requete: NextRequest, contexte: Contexte) {
       const corps: unknown = await requete.json().catch(() => ({}));
       if (action.length === 1 && (action[0] === "souhaits" || action[0] === "projet")) {
         await enregistrerProjetOuSouhaits(espace, corps);
+        // L'état à jour revient avec la confirmation : l'écran montre « Enregistré » et ce que cela débloque.
+        return NextResponse.json({ ok: true, espace: await etatEspace(await espaceDuJeton((await contexte.params).jeton)) });
+      }
+      if (action.length === 1 && action[0] === "favoris") {
+        await enregistrerFavoris(espace, analyser(schemaFavoris, corps).refs);
         return NextResponse.json({ ok: true });
       }
       if (action.length === 1 && action[0] === "coordonnees") {

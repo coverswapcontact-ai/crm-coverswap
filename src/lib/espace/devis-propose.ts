@@ -125,7 +125,8 @@ export async function devisProposeDuDossier(dossierId: string): Promise<DevisPro
     zones = lireZones(simulation?.zones).map((z) => ({ zone: z.zone, libelle: libelleZone(z.zone, z.libelle), ref: z.ref || null, nom: z.nom || null }));
   }
   const depuisChoix = zones.length > 0;
-  if (!depuisChoix && projet) zones = projet.zones.map((zone) => ({ zone, libelle: libelleZone(zone), ref: null, nom: null }));
+  // « Autre chose » se dit dans la note du projet : pas de ligne de devis à deviner.
+  if (!depuisChoix && projet) zones = projet.zones.filter((zone) => zone !== "autre").map((zone) => ({ zone, libelle: libelleZone(zone), ref: null, nom: null }));
   if (zones.length === 0) return null;
 
   const [presets, dossier] = await Promise.all([listerPresets(), prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true } })]);

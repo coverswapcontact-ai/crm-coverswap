@@ -118,3 +118,64 @@ Journal passe 2 :
 - 21/09 (soir, fin) : PASSE 2 TERMINÉE. En plus du plan : projet en quatre questions, zones du site retrouvées
   par libellé, guide photo selon la pièce, HEIC converti par l'iPhone. Prod vérifiée (santé, routes fermées,
   lien invalide). Rapport v2 : https://claude.ai/artifact/34t7FaQBxNzsKJh8wQ2TJR
+
+---
+
+# Mission 3 (21/09/2026, soir) — Notes d'appel, Dossiers, espace client v3
+
+Énoncé : message de Lucas « Mission autonome — Notes d'appel, Dossiers, et espace client v3 » (remplace la
+mission précédente). Garder : bouton d'action visible sans défiler (hauteurs Safari 390 × 660 / 375 × 560),
+devis prérempli, conversion HEIC. Le Projet perd les goûts et le délai (le parcours en 4 questions disparaît).
+
+## Lots
+- [x] M0 Bug « valider le projet ne fait rien » : cause trouvée, corrigée ; aucun bouton de l'espace muet.
+- [x] M1 Notes d'appel : champ toujours visible (Leads + mode appels), enregistrement à la frappe, dictée,
+      appels empilés et datés, étiquettes (8), reprise dans l'historique du dossier, retour iOS sur le bon lead.
+- [x] M2 Dossiers : kanban à 30-50 cartes par colonne (hauteur fixe, défilement par colonne, compteur,
+      « à moi » en haut, compact, masquer les inactifs) ; panneaux fermables au pouce (zone de sécurité,
+      bouton bas, glissement, retour navigateur) — dossier, client, lead, appels, simulateur, paramètres, espaces.
+- [x] M3 Espace v3 : onglets Photos · Projet · Simulations · Devis · Paiement (Devis/Paiement verrouillés,
+      raison écrite), accueil = une phrase + un bouton, plus de « Votre dossier », Projet = zones (+ autre),
+      taille, note ; enregistré à la frappe.
+- [x] M4 Simulations dans l'espace : galerie (site, client, CRM publiées), simulateur intégré (même moteur),
+      catalogue miniature (familles visibles, recherche FR, grille, agrandir, favoris), quota (3 par défaut,
+      paramètre CRM, demande, accorder en un clic), crédit épuisé, réseau coupé ; validation = débloque Devis,
+      notifie, prochaine action ; changement possible tant que le devis n'est pas émis.
+- [x] M5 Marque CoverSwap dans l'espace (logo, « l'équipe CoverSwap »), « Acompte » → « Paiement » partout,
+      Paramètres : logo au lieu de « ta photo ».
+- [x] M6 CRM : événements et alertes vérifiés, zones + taille dans la fiche, simulations du client dans le
+      dossier et Drive, favoris et teintes du client en premier dans le simulateur, Espaces clients à jour.
+- [ ] M7 Essais (Forestier venu du site, client Meta sans photo, 60 ans ; limite, crédit, coupure ; notes
+      d'appel sur mobile ; kanban chargé), déploiement, rapport court.
+
+## Avancement (serveur CRM fait, non commité)
+- Base : `NoteAppel` (lead, appelLe, texte, étiquettes JSON, issue, dossierEvenementId), `EspaceClient.simulationsAccordees
+  / simulationsDemandeesLe / favoris`, `PreparationSimulation.origine` (CRM | CLIENT). Schéma d'avant :
+  scratchpad `schema-avant-mission3.prisma`. `db push` suffit (colonnes avec défaut).
+- Notes : `src/lib/commercial/notes-appel.ts` + routes `/api/leads/[id]/notes-appel[/noteId]` ; reprises dans le
+  dossier à l'ouverture (`depuis-lead.ts`), l'issue d'un appel se note sur la note de moins de 3 h. Tests 4/4.
+- Espace v3 serveur : `etapes.ts` (verrous + raisons), `service.ts` (quota, creerSimulationClient, suivreCreation,
+  demander/accorder, favoris, choix figé après devis émis), routes `simulations/creer|demande|creation/<id>`,
+  `favoris` ; paramètre `SIMULATEUR_ESPACE_GRATUITES` (3 si vide) ; Drive « Simulations » ; RGPD NoteAppel.
+  Tests simulateur 16/16 (dont quota, crédit épuisé, favoris).
+- Reste : interface du site (espace v3), interface CRM (notes, kanban, panneaux, Espaces clients), essais, déploiement.
+- (21/09 soir, suite) Site espace v3 écrit : `EspaceClient.tsx` (barre d'onglets, accueil une phrase + un bouton),
+  `EtapeProjet.tsx` (zones + autre, taille, note, enregistrement à la frappe + pastille), `EtapeSimulations.tsx`
+  (galerie, vue agrandie, validation, mélange, suivi de création avec coupure réseau), `CreationSimulation.tsx`,
+  `CatalogueTeintes.tsx` (vignettes `?l=320` servies par le CRM), `EtapePaiement.tsx` (ex-EtapeAcompte),
+  `ui.tsx` (Feuille plein écran : bouton en bas, glisser, geste retour ; Verrou ; Enregistrement ; useCopie honnête).
+  CRM : limite par défaut 3 (Number(null) = 0 corrigé), « CoverSwap prépare » seulement si brouillon/préparation,
+  libellés de zones du client (« Façades hautes »), alerte crédit dès qu'un client voit l'indisponibilité,
+  alerte « projet précisé » unique et différée (tâche ESPACE_PROJET_ALERTE), vignettes d'échantillons.
+- Essais locaux (captures dans scratchpad `m3/martine`, `m3/forestier`) : Martine (Meta, sans photo) → photos,
+  projet, création avec catalogue, validation, devis en préparation ; Forestier-Essai (site) → accueil « Vos photos
+  sont là », projet prérempli, aperçu (message à chaque geste), limite 1 + coupure réseau + demande + accord CRM,
+  crédit épuisé. Paramètre local SIMULATEUR_ESPACE_GRATUITES posé à 1 dans dev.db (essai).
+- Reste : CRM (notes d'appel UI, kanban, panneaux au pouce, Espaces clients), 60 ans, tests, build, déploiement, rapport.
+- (21/09 soir, fin) CRM : NotesAppel (liste, fiche, mode appels ; retour iOS), kanban (colonnes à
+  hauteur mesurée, cartes compactes, tri « à moi », inactifs), fermeture au pouce (fermeture-mobile.ts
+  dans SheetContent et Modale + overlays), Espaces clients (faites/restantes, validée, Accorder 3).
+  Essais : captures scratchpad `m3/crm`. Tests 363/363, lint et builds OK (site + CRM).
+- Reste M7 : commit (chemins explicites, jamais src/proxy.ts), déploiement CRM puis site, contrôle prod
+  sans créer de données, rapport court avec captures iPhone + liste de ce qui reste fragile.
+

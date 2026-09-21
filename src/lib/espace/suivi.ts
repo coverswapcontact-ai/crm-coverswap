@@ -16,11 +16,13 @@ import { photosDuClient } from "./service";
 
 export type { CodeSignal, LigneEspace, Signal } from "./suivi-types";
 import type { LigneEspace, Signal } from "./suivi-types";
+import { simulationsGratuites } from "./service";
 
 const JOUR = 86_400_000;
 const date = (d: Date | null | undefined) => d?.toISOString() ?? null;
 
 export async function listerEspaces(maintenant: Date = new Date()): Promise<LigneEspace[]> {
+  const gratuites = await simulationsGratuites();
   const espaces = await prisma.espaceClient.findMany({
     include: {
       simulations: { where: { archiveLe: null }, select: { statut: true, source: true, publieeLe: true } },
@@ -60,7 +62,9 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     const ancienEnvoi = envoi ? null : (smsAvecLien.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
     const photos = (await photosDuClient(d.id, d.photos)).length;
     const publiees = espace.simulations.filter((s) => s.statut === "PUBLIEE");
-    const crm = publiees.filter((s) => s.source !== "SITE").length;
+    const crm = publiees.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length;
+    const duClient = publiees.filter((s) => s.source === "CLIENT").length;
+    const restantes = Math.max(0, gratuites + (espace.simulationsAccordees ?? 0) - duClient);
     const brouillons = espace.simulations.filter((s) => s.statut === "BROUILLON").length;
     const devis = d.documents[0] ?? null;
     const accord = devis ? (d.accords.find((a) => a.documentId === devis.id) ?? null) : null;
@@ -72,7 +76,8 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
       photos,
       projet: projetPrecise(projet),
       simulationsCrm: crm,
-      simulationsSite: publiees.length - crm,
+      simulationsSite: publiees.filter((s) => s.source === "SITE").length,
+      simulationsClient: duClient,
       choix: Boolean(espace.choixLe),
       devis: Boolean(devis),
       accord: Boolean(accord),
@@ -94,6 +99,7 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
 
     const signaux: Signal[] = [];
     if (propositionEnAttente) signaux.push({ code: "PROPOSITION_DEMANDEE", libelle: "Autre proposition demandée", ton: "rouge" });
+    if (espace.simulationsDemandeesLe) signaux.push({ code: "SIMULATIONS_DEMANDEES", libelle: `Demande d'autres simulations (${duClient} faite${duClient > 1 ? "s" : ""})`, ton: "rouge" });
     if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && brouillons === 0 && !devis && !espace.revoqueLe) signaux.push({ code: "PHOTOS_SANS_SIMULATION", libelle: photos > 0 ? `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""}, pas de simulation` : "Simulation du site, rien de préparé", ton: "rouge" });
     if (brouillons > 0) signaux.push({ code: "BROUILLONS", libelle: `${brouillons} brouillon${brouillons > 1 ? "s" : ""} à publier`, ton: "ambre" });
     if (devis && !accord && consultations >= 2) signaux.push({ code: "HESITE", libelle: `Devis relu ${consultations} fois sans signer`, ton: consultations >= 3 ? "rouge" : "ambre" });
@@ -107,6 +113,7 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     if (espace.revoqueLe) attente = { qui: "PERSONNE", libelle: "Lien désactivé" };
     else if (etape === "TERMINE") attente = { qui: "PERSONNE", libelle: "Chantier terminé" };
     else if (propositionEnAttente) attente = { qui: "MOI", libelle: "Préparer une autre proposition", geste: "SIMULATEUR" };
+    else if (espace.simulationsDemandeesLe && !accord) attente = { qui: "MOI", libelle: "Accorder d'autres simulations", geste: "ACCORDER" };
     else if (brouillons > 0 && !accord) attente = { qui: "MOI", libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}`, geste: "PUBLIER" };
     else if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation", geste: "SIMULATEUR" };
     else if (etape === "ATTENTE_DEVIS") attente = { qui: "MOI", libelle: "Faire le devis", geste: "DEVIS" };
@@ -139,6 +146,9 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
         photos,
         projet: projetPrecise(projet) ? resumerProjet(projet, d.lead?.typeProjet ?? "CUISINE") : null,
         simulationsPubliees: publiees.length,
+        simulationsClient: duClient,
+        simulationsRestantes: restantes,
+        simulationsDemandeesLe: date(espace.simulationsDemandeesLe),
         brouillons,
         choix: espace.choixLe ? espace.choixLe.toISOString() : null,
         devis: devis ? { numero: devis.numero!, consultations, consulteLe: consultations > 0 ? date(espace.devisConsulteLe) : null } : null,

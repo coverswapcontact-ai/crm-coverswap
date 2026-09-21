@@ -291,3 +291,62 @@ describe("zones venues du simulateur du site", () => {
     assert.equal(types.surfaceDepuisLibelle("Une zone inconnue"), "");
   });
 });
+
+describe("espace v3 : le client crée ses simulations", () => {
+  const reussite = async () => ({ status: 200, corps: { data: [{ b64_json: (await image(1536, 1024, { r: 60, g: 90, b: 70 }, "png")).toString("base64") }], usage: { input_tokens: 5000, input_tokens_details: { text_tokens: 2000, image_tokens: 3000 }, output_tokens: 4000 } } });
+
+  test("dans sa limite : publiée tout de suite dans sa galerie, comptée à part ; au-delà, refusée ; accorder en rouvre", async () => {
+    const liens = await import("@/lib/espace/liens");
+    const service = await import("@/lib/espace/service");
+    const { dossierId, photoId } = await dossierAvecPhoto("Client Simule");
+    const { espace } = await liens.ouvrirEspace(dossierId);
+    // Le crédit revient (le test « crédit épuisé » est passé avant) : une génération réussit.
+    await prisma.generationImage.create({ data: { origine: "CRM", modele: "essai", statut: "REUSSI", dureeMs: 1 } });
+    await prisma.parametre.create({ data: { cle: "SIMULATEUR_ESPACE_GRATUITES", valeur: JSON.stringify("2"), valableDu: new Date(Date.now() - 60_000) } });
+    reponseOpenAI = await reussite();
+
+    for (const ref of ["AA01", "J3"]) {
+      const { preparationId } = await service.creerSimulationClient(espace, { photoId, zones: [{ zone: "meubles-hauts", ref }, { zone: "plan-de-travail", ref: "NE31" }] });
+      assert.equal((await service.suivreCreation(espace, preparationId)).statut, "EN_COURS");
+      await preparation.executerGenerationApi(preparationId);
+      const suivi = await service.suivreCreation(espace, preparationId);
+      assert.equal(suivi.statut, "PRETE");
+      const simulation = await prisma.simulationEspace.findUniqueOrThrow({ where: { id: suivi.simulationId! } });
+      assert.deepEqual([simulation.source, simulation.statut], ["CLIENT", "PUBLIEE"], "c'est lui qui l'a faite : visible tout de suite");
+    }
+    assert.equal(await prisma.generationImage.count({ where: { origine: "ESPACE", statut: "REUSSI" } }), 2, "comptées à part (espace client)");
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_SIMULATION_CLIENT" } }), 2);
+    const etat = await service.etatEspace(espace);
+    assert.deepEqual([etat.creation.faites, etat.creation.restantes, etat.simulations.filter((s) => s.source === "CLIENT").length], [2, 0, 2]);
+
+    await assert.rejects(service.creerSimulationClient(espace, { photoId, zones: [{ zone: "meubles-hauts", ref: "AA01" }] }), /Vous avez utilisé vos 2 simulations\. Demandez-en d'autres à CoverSwap\./);
+    await service.demanderSimulations(espace);
+    assert.ok((await prisma.espaceClient.findUniqueOrThrow({ where: { id: espace.id } })).simulationsDemandeesLe);
+    await service.accorderSimulations(espace.id, 3);
+    const relu = await prisma.espaceClient.findUniqueOrThrow({ where: { id: espace.id } });
+    assert.deepEqual([relu.simulationsAccordees, relu.simulationsDemandeesLe], [3, null], "la demande est close");
+    assert.equal((await service.quotaSimulations(relu)).restantes, 3);
+  });
+
+  test("crédit épuisé : rien n'est lancé, la phrase le dit ; une zone hors de son projet est refusée", async () => {
+    const liens = await import("@/lib/espace/liens");
+    const service = await import("@/lib/espace/service");
+    const { dossierId, photoId } = await dossierAvecPhoto("Client Sans Credit");
+    const { espace } = await liens.ouvrirEspace(dossierId);
+    await assert.rejects(service.creerSimulationClient(espace, { photoId, zones: [{ zone: "portes-dressing", ref: "AA01" }] }), /n'est pas une zone/);
+    await prisma.generationImage.create({ data: { origine: "SITE", modele: "essai", statut: "ECHEC", erreur: "service-indisponible : HTTP 429 insufficient_quota", dureeMs: 1 } });
+    await assert.rejects(service.creerSimulationClient(espace, { photoId, zones: [{ zone: "meubles-hauts", ref: "AA01" }] }), /momentanément indisponible\. Vos choix sont gardés/);
+    assert.equal(await prisma.preparationSimulation.count({ where: { dossierId, origine: "CLIENT" } }), 0);
+    assert.equal((await service.etatEspace(espace)).creation.disponible, false);
+    await prisma.generationImage.create({ data: { origine: "CRM", modele: "essai", statut: "REUSSI", dureeMs: 1 } });
+  });
+
+  test("ses favoris et les teintes de ses simulations passent en premier dans le simulateur du CRM", async () => {
+    const liens = await import("@/lib/espace/liens");
+    const service = await import("@/lib/espace/service");
+    const { dossierId } = await dossierAvecPhoto("Client Favoris");
+    const { espace } = await liens.ouvrirEspace(dossierId);
+    await service.enregistrerFavoris(espace, ["NE31", "J3", "NE31"]);
+    assert.deepEqual((await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: espace.id } }))).favoris, ["NE31", "J3"]);
+  });
+});

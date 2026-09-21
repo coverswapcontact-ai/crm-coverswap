@@ -15,7 +15,9 @@ import { changerEtape } from "@/lib/dossiers/transitions";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { resolveUploadsDir } from "@/lib/uploads";
-import { lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { libelleZoneClient, lireZones, typeEspacePourProjet, ZONES, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { creditDisponible } from "@/lib/simulateur/consommation";
+import { lireParametre } from "@/lib/parametres/service";
 import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type ProjetClient } from "./projet";
@@ -34,6 +36,8 @@ import { lireProjet, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SI
 const ACTEUR = { acteur: "EXTERNE:espace-client", origine: "espace-client" } as const;
 const PHOTOS_MAX_PAR_DOSSIER = 40;
 export const TACHE_ALERTE_PHOTOS = "ESPACE_PHOTOS_ALERTE";
+/** Le projet s'enregistre à la frappe : Lucas est prévenu une fois, quelques minutes après, avec la version posée. */
+export const TACHE_ALERTE_PROJET = "ESPACE_PROJET_ALERTE";
 /** Délai annoncé au client pour ses premières simulations. */
 export const DELAI_SIMULATION = "sous 24 h";
 
@@ -58,7 +62,8 @@ export type SimulationClient = {
   id: string;
   titre: string | null;
   description: string | null;
-  source: "SITE" | "CRM";
+  /** SITE : son essai sur coverswap.fr ; CLIENT : créée par lui dans son espace ; CRM : préparée et publiée par CoverSwap. */
+  source: "SITE" | "CRM" | "CLIENT";
   zones: ZoneTeinte[];
   avant: boolean;
   le: string;
@@ -119,6 +124,24 @@ export type EtatEspace = {
   chantier: { date: string | null } | null;
   apres: { photos: { id: string }[]; avis: { note: number; texte: string; le: string } | null } | null;
   contact: { nom: string; prenom: string; role: string; telephone: string; telephoneLien: string; portrait: boolean };
+  /** Espace v3 : l'espace parle au nom de CoverSwap (le numéro reste celui de Lucas). */
+  marque: { nom: string; telephone: string; telephoneLien: string };
+  /** Les simulations que le client crée lui-même : combien il en reste, celles en cours, le crédit. */
+  creation: {
+    gratuites: number;
+    accordees: number;
+    faites: number;
+    restantes: number;
+    enCours: { id: string; le: string }[];
+    demandeesLe: string | null;
+    disponible: boolean;
+    /** Zones de son projet (dans l'ordre du simulateur) et celles qu'il a cochées dans son Projet. */
+    zones: { zone: string; libelle: string }[];
+    zonesProjet: string[];
+  };
+  favoris: string[];
+  /** Il peut encore changer de simulation validée : aucun devis n'est émis. */
+  choixModifiable: boolean;
   expireLe: string;
 };
 
@@ -214,10 +237,15 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     },
   });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
-  const [simulations, photosClient, portrait] = await Promise.all([
+  const [simulations, photosClient, portrait, enPreparationCrm] = await Promise.all([
     prisma.simulationEspace.findMany({ where: { espaceId: espace.id, statut: "PUBLIEE" }, orderBy: [{ ordre: "asc" }, { createdAt: "asc" }] }),
     photosDuClient(dossier.id, dossier.photos),
     portraitExiste(),
+    // CoverSwap prépare vraiment quelque chose : un brouillon déposé, ou une préparation du CRM en cours.
+    Promise.all([
+      prisma.simulationEspace.count({ where: { espaceId: espace.id, statut: "BROUILLON" } }),
+      prisma.preparationSimulation.count({ where: { dossierId: espace.dossierId, origine: "CRM", statut: { in: ["PREPAREE", "EN_COURS"] }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
+    ]).then(([brouillons, preparations]) => brouillons + preparations > 0),
   ]);
   const devisLigne = dossier.documents[0] ?? null;
   const accord = devisLigne ? (dossier.accords.find((a) => a.documentId === devisLigne.id) ?? null) : null;
@@ -225,12 +253,14 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
   const recu = Math.round(dossier.encaissements.reduce((s, e) => s + e.montant, 0) * 100) / 100;
   const monProjet = lireProjet(espace.souhaits);
   const choix = lireChoix(espace.choix);
-  const simulationsCrm = simulations.filter((s) => s.source !== "SITE").length;
+  const simulationsCrm = simulations.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length;
+  const simulationsClient = simulations.filter((s) => s.source === "CLIENT").length;
   const faits: FaitsEspace = {
     photos: photosClient.length,
     projet: projetPrecise(monProjet),
     simulationsCrm,
-    simulationsSite: simulations.length - simulationsCrm,
+    simulationsSite: simulations.filter((s) => s.source === "SITE").length,
+    simulationsClient,
     choix: Boolean(espace.choixLe && choix),
     devis: Boolean(devis),
     accord: Boolean(accord),
@@ -296,15 +326,16 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       id: s.id,
       titre: s.titre,
       description: s.description,
-      source: s.source === "SITE" ? ("SITE" as const) : ("CRM" as const),
-      zones: lireZones(s.zones),
+      source: s.source === "SITE" ? ("SITE" as const) : s.source === "CLIENT" ? ("CLIENT" as const) : ("CRM" as const),
+      zones: lireZones(s.zones).map((z) => ({ ...z, libelle: libelleZoneClient(z.zone, typeProjet) ?? z.libelle })),
       avant: Boolean(s.photoAvant),
       le: (s.publieeLe ?? s.createdAt).toISOString(),
-      nouvelle: s.source !== "SITE" && (s.publieeLe ?? s.createdAt).getTime() > vuesLe,
+      nouvelle: s.source !== "SITE" && s.source !== "CLIENT" && (s.publieeLe ?? s.createdAt).getTime() > vuesLe,
       choisie: Boolean(s.choisieLe),
       commentaire: s.commentaireClient,
     })),
-    simulationsEnPreparation: simulationsCrm === 0 && faits.photos + faits.simulationsSite > 0 && !faits.devis ? { delai: DELAI_SIMULATION } : null,
+    // v3 : il crée lui-même ses simulations ; « CoverSwap prépare » ne s'affiche que si c'est vrai.
+    simulationsEnPreparation: enPreparationCrm && !faits.devis ? { delai: DELAI_SIMULATION } : null,
     propositionDemandeeLe: espace.propositionDemandeeLe?.toISOString() ?? null,
     choix,
     coordonnees: {
@@ -327,8 +358,147 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       ? { photos: lirePhotos(dossier.photos).filter(estPhotoApres).map((chemin) => ({ id: idPhoto(chemin) })), avis: avis && typeof avis.note === "number" ? avis : null }
       : null,
     contact: { nom: "Lucas Villemin", prenom: "Lucas", role: "Artisan poseur · CoverSwap, Pérols", telephone: EMETTEUR.telephone, telephoneLien: `+33${EMETTEUR.telephone.replace(/\D/g, "").slice(1)}`, portrait },
+    marque: { nom: "CoverSwap", telephone: EMETTEUR.telephone, telephoneLien: `+33${EMETTEUR.telephone.replace(/\D/g, "").slice(1)}` },
+    creation: await creationPourLeClient(espace, typeProjet, monProjet, Boolean(options.apercu)),
+    favoris: lireFavoris(espace.favoris),
+    choixModifiable: !devis,
     expireLe: espace.expireLe.toISOString(),
   };
+}
+
+/* ── Simulations créées par le client (espace v3) ─────────────────── */
+
+/** Simulations offertes par espace (paramètre du CRM, 3 si rien n'est saisi). */
+export async function simulationsGratuites(): Promise<number> {
+  const brut = await lireParametre("SIMULATEUR_ESPACE_GRATUITES").catch(() => null);
+  // Rien de saisi : 3 (et non 0 — Number(null) vaut 0).
+  if (brut === null || brut === undefined || String(brut).trim() === "") return 3;
+  const valeur = Number(brut);
+  return Number.isFinite(valeur) && valeur >= 0 ? Math.floor(valeur) : 3;
+}
+
+/** Le compte du client : offertes, accordées en plus, faites (réussies), en cours ; ce qu'il lui reste. */
+export async function quotaSimulations(espace: Pick<EspaceClient, "id" | "dossierId" | "simulationsAccordees">): Promise<{ gratuites: number; accordees: number; faites: number; enCours: { id: string; le: string }[]; restantes: number }> {
+  const [gratuites, faites, enCours] = await Promise.all([
+    simulationsGratuites(),
+    prisma.simulationEspace.count({ where: { espaceId: espace.id, source: "CLIENT" } }),
+    // Une génération tient une minute ; au-delà d'une demi-heure, elle est tenue pour perdue (elle ne bloque plus rien).
+    prisma.preparationSimulation.findMany({ where: { dossierId: espace.dossierId, origine: "CLIENT", statut: "EN_COURS", createdAt: { gte: new Date(Date.now() - 30 * 60_000) } }, orderBy: { createdAt: "asc" }, select: { id: true, createdAt: true } }),
+  ]);
+  const accordees = espace.simulationsAccordees ?? 0;
+  return { gratuites, accordees, faites, enCours: enCours.map((p) => ({ id: p.id, le: p.createdAt.toISOString() })), restantes: Math.max(0, gratuites + accordees - faites - enCours.length) };
+}
+
+async function creationPourLeClient(espace: EspaceClient, typeProjet: string, projet: ProjetClient | null, apercu = false): Promise<EtatEspace["creation"]> {
+  const [quota, disponible] = await Promise.all([quotaSimulations(espace), creditDisponible().catch(() => true)]);
+  // Un client tombe sur « momentanément indisponible » : Lucas le sait (au plus une alerte toutes les trois heures).
+  if (!disponible && !apercu) void alerterCreditEpuise(espace.dossierId).catch(() => undefined);
+  const type = typeEspacePourProjet(typeProjet);
+  return {
+    gratuites: quota.gratuites,
+    accordees: quota.accordees,
+    faites: quota.faites,
+    restantes: quota.restantes,
+    enCours: quota.enCours,
+    demandeesLe: espace.simulationsDemandeesLe?.toISOString() ?? null,
+    disponible,
+    zones: type.zones.map((zone) => ({ zone, libelle: libelleZoneClient(zone, typeProjet) ?? ZONES[zone].libelle })),
+    zonesProjet: (projet?.zones ?? []).filter((zone) => (type.zones as string[]).includes(zone)),
+  };
+}
+
+function lireFavoris(json: string | null): string[] {
+  try {
+    const valeur: unknown = JSON.parse(json ?? "[]");
+    return Array.isArray(valeur) ? valeur.filter((r): r is string => typeof r === "string" && /^[A-Za-z0-9_-]{1,24}$/.test(r)).slice(0, 60) : [];
+  } catch {
+    return [];
+  }
+}
+
+export const schemaCreationSimulation = z.object({
+  photoId: z.string().min(1, "Choisissez une photo.").max(80),
+  zones: z.array(z.object({ zone: z.string().min(1).max(40), ref: z.string().min(1).max(24) })).min(1, "Choisissez au moins une teinte.").max(4, "Quatre zones au plus par simulation."),
+});
+
+/**
+ * Le client lance une simulation depuis son espace : SA photo, les zones de son
+ * projet, une teinte par zone. Même chemin que le mode API du CRM (consigne du
+ * site, moteur commun) ; le résultat arrive dans sa galerie. Refusé sans rien
+ * lancer si ses simulations offertes sont épuisées ou si le crédit est épuisé :
+ * ses choix restent dans son téléphone.
+ */
+export async function creerSimulationClient(espace: EspaceClient, entree: z.output<typeof schemaCreationSimulation>): Promise<{ preparationId: string; restantes: number }> {
+  const quota = await quotaSimulations(espace);
+  const total = quota.gratuites + quota.accordees;
+  if (quota.restantes <= 0) {
+    if (quota.enCours.length > 0) throw new ErreurMetier("Votre simulation est en cours de création : patientez un instant.", 409, { raison: "en-cours" });
+    throw new ErreurMetier(`${total > 1 ? `Vous avez utilisé vos ${total} simulations.` : "Vous avez utilisé votre simulation."} Demandez-en d'autres à CoverSwap.`, 409, { raison: "quota" });
+  }
+  if (!(await creditDisponible().catch(() => true))) {
+    await alerterCreditEpuise(espace.dossierId);
+    throw new ErreurMetier("La création de simulations est momentanément indisponible. Vos choix sont gardés : réessayez plus tard, CoverSwap est prévenu.", 503, { raison: "credit" });
+  }
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, lead: { select: { typeProjet: true } } } });
+  if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
+  const photos = await photosDuClient(espace.dossierId, dossier.photos);
+  if (!photos.some((p) => p.id === entree.photoId)) throw new ErreurMetier("Cette photo n'est plus dans votre espace : choisissez-en une autre.", 404);
+  const type = typeEspacePourProjet(dossier.lead?.typeProjet);
+  const { preparerSimulation } = await import("@/lib/simulateur/preparation");
+  const preparation = await avecActeur(ACTEUR, () => preparerSimulation({ dossierId: espace.dossierId, photoId: entree.photoId, typeSurface: type.id, zones: entree.zones, mode: "API" }, { origine: "CLIENT" }));
+  return { preparationId: preparation.id, restantes: Math.max(0, quota.restantes - 1) };
+}
+
+/** Où en est une simulation lancée par le client : en cours, prête (dans sa galerie), ou pas aboutie (dit simplement). */
+export async function suivreCreation(espace: EspaceClient, preparationId: string): Promise<{ statut: "EN_COURS" | "PRETE" | "ECHEC"; simulationId: string | null; message: string | null; raison: "credit" | "echec" | null }> {
+  const p = await prisma.preparationSimulation.findFirst({ where: { id: preparationId, dossierId: espace.dossierId, origine: "CLIENT" }, select: { statut: true, resultatId: true, erreur: true, createdAt: true } });
+  if (!p) throw new ErreurMetier("Simulation introuvable.", 404);
+  if (p.statut === "TERMINEE") return { statut: "PRETE", simulationId: p.resultatId, message: null, raison: null };
+  if (p.statut === "ECHEC" || (p.statut === "EN_COURS" && Date.now() - p.createdAt.getTime() > 30 * 60_000)) {
+    const credit = /crédit|clé refusée/i.test(p.erreur ?? "");
+    return {
+      statut: "ECHEC",
+      simulationId: null,
+      raison: credit ? "credit" : "echec",
+      message: credit ? "La création de simulations est momentanément indisponible. Vos choix sont gardés ; CoverSwap est prévenu." : "Cette simulation n'a pas abouti. Elle ne compte pas : vous pouvez la relancer.",
+    };
+  }
+  return { statut: "EN_COURS", simulationId: null, message: null, raison: null };
+}
+
+let derniereAlerteCredit = 0;
+async function alerterCreditEpuise(dossierId: string): Promise<void> {
+  if (Date.now() - derniereAlerteCredit < 3 * 3_600_000) return;
+  derniereAlerteCredit = Date.now();
+  await prevenir(dossierId, { titre: "Un client ne peut pas créer de simulation", texte: "Crédit OpenAI épuisé (ou clé refusée) : la création de simulations est bloquée dans les espaces clients. Rechargez le crédit, puis notez le nouveau solde dans Paramètres.", urgence: 4, etiquette: "credit-openai-espace" });
+}
+
+/** « Demandez-en d'autres à CoverSwap » : la demande est notée, Lucas prévenu ; il accorde d'un clic depuis le CRM. */
+export async function demanderSimulations(espace: EspaceClient): Promise<void> {
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
+  const quota = await quotaSimulations(espace);
+  await avecActeur(ACTEUR, async () => {
+    await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsDemandeesLe: new Date() } });
+    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_DEMANDEES", direction: "ENTRANT", contenu: `Le client demande d'autres simulations (${quota.faites} faite${quota.faites > 1 ? "s" : ""} sur ${quota.gratuites + quota.accordees}).`, metadata: "{}" } });
+  });
+  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${quota.faites} simulation(s) faite(s) dans son espace. Accordez-en d'autres en un clic depuis Espaces clients.`, urgence: 3, telephone: dossier?.clientTelephone });
+}
+
+/** Lucas accorde des simulations de plus (Espaces clients, dossier) : la demande est close. */
+export async function accorderSimulations(espaceId: string, nombre: number): Promise<{ accordees: number }> {
+  if (!Number.isInteger(nombre) || nombre < 1 || nombre > 20) throw new ErreurMetier("Nombre de simulations invalide (1 à 20).", 400);
+  const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { id: true, dossierId: true } });
+  if (!espace) throw new ErreurMetier("Espace introuvable.", 404);
+  const mis = await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsAccordees: { increment: nombre }, simulationsDemandeesLe: null } });
+  await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_ACCORDEES", direction: "SORTANT", contenu: `${nombre} simulation${nombre > 1 ? "s" : ""} de plus accordée${nombre > 1 ? "s" : ""} au client dans son espace.`, metadata: JSON.stringify({ nombre }) } });
+  return { accordees: mis.simulationsAccordees };
+}
+
+export const schemaFavoris = z.object({ refs: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,24}$/)).max(60) });
+
+/** Ses teintes favorites : gardées pour lui, et proposées en premier à Lucas dans le simulateur. */
+export async function enregistrerFavoris(espace: EspaceClient, refs: string[]): Promise<void> {
+  await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { favoris: JSON.stringify([...new Set(refs)]) } }));
 }
 
 /** Une visite : comptée, datée ; la première est notée dans le dossier et sonne (Lucas sait que le lien a été ouvert). */
@@ -435,21 +605,26 @@ export type Souhaits = z.output<typeof schemaSouhaits>;
 
 async function enregistrerJsonProjet(espace: EspaceClient, json: string, resume: string, typeProjet: string, precise: boolean): Promise<void> {
   const premier = !espace.souhaitsLe;
-  let notifier = false;
   await avecActeur(ACTEUR, async () => {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { souhaits: json, souhaitsLe: new Date() } });
-    // Un événement à la première saisie, puis au plus un par heure : le client coche et décoche.
+    // Enregistré à la frappe : un événement à la première saisie, puis au plus un par heure (mis à jour entre-temps).
     const recent = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", createdAt: { gte: new Date(Date.now() - 3_600_000) } }, orderBy: { createdAt: "desc" } });
     const contenu = resume ? `Projet précisé par le client : ${resume}` : "Projet effacé par le client";
-    if (premier || !recent) {
-      await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ typeProjet }) } });
-      notifier = precise;
-    } else await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu } });
+    if (premier || !recent) await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ typeProjet }) } });
+    else await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu } });
+    // Une seule alerte par espace, trois minutes après le premier projet exploitable : la version posée, pas la première case cochée.
+    if (precise) await mettreEnFile({ type: TACHE_ALERTE_PROJET, cle: `espace-projet:${espace.id}`, charge: { espaceId: espace.id }, apres: new Date(Date.now() + 180_000), priorite: 6 });
   });
-  if (notifier) {
-    const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
-    await prevenir(espace.dossierId, { titre: `Projet précisé — ${dossier?.clientNom ?? "client"}`, texte: resume, urgence: 3, telephone: dossier?.clientTelephone });
-  }
+}
+
+/** L'alerte « projet précisé », avec le projet tel qu'il est au moment où elle part. */
+export async function alerterProjetPrecise(espaceId: string): Promise<{ envoyee: boolean }> {
+  const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { dossierId: true, souhaits: true, dossier: { select: { clientNom: true, clientTelephone: true, lead: { select: { typeProjet: true } } } } } });
+  if (!espace) return { envoyee: false };
+  const projet = lireProjet(espace.souhaits);
+  if (!projetPrecise(projet)) return { envoyee: false };
+  await prevenir(espace.dossierId, { titre: `Projet précisé — ${espace.dossier.clientNom}`, texte: resumerProjet(projet, espace.dossier.lead?.typeProjet ?? "CUISINE"), urgence: 3, telephone: espace.dossier.clientTelephone });
+  return { envoyee: true };
 }
 
 export async function enregistrerProjet(espace: EspaceClient, projet: ProjetClient): Promise<void> {
@@ -586,6 +761,9 @@ export const schemaChoixComplet = z
  * Le choix précédent est remplacé ; Lucas est prévenu dans les deux cas.
  */
 export async function choisir(espace: EspaceClient, entree: z.output<typeof schemaChoixComplet>): Promise<ChoixClient> {
+  // Le devis est établi sur sa simulation validée : la changer ensuite passe par CoverSwap (un appel).
+  const devisEmis = await prisma.document.count({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } } });
+  if (devisEmis > 0) throw new ErreurMetier("Votre devis est déjà établi sur la simulation validée. Pour en changer, appelez CoverSwap : nous l'ajustons avec vous.", 409, { raison: "devis-emis" });
   const maintenant = new Date();
   let choix: ChoixClient;
   let impliquees: string[];
@@ -601,12 +779,12 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
     }
     choix = { mode: "COMPOSITE", zones, commentaire: entree.commentaire || null, le: maintenant.toISOString() };
     impliquees = [...new Set(zones.map((z) => z.simulationId))];
-    resume = `Le client a composé son choix : ${zones.map((z) => `${z.libelle || z.zone} — ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}`;
+    resume = `Le client a validé son mélange : ${zones.map((z) => `${z.libelle || z.zone} — ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}`;
   } else {
     const simulation = await simulationPubliee(espace, entree.simulationId!);
     choix = { mode: "UNE", simulationId: simulation.id, commentaire: entree.commentaire || null, le: maintenant.toISOString() };
     impliquees = [simulation.id];
-    resume = `Le client a choisi la simulation${simulation.titre ? ` « ${simulation.titre} »` : ""}`;
+    resume = `Le client a validé la simulation${simulation.titre ? ` « ${simulation.titre} »` : ""}`;
   }
   const texte = `${resume}${entree.commentaire ? ` : « ${entree.commentaire} »` : ""}`;
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
@@ -619,7 +797,7 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
       prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: maintenant } }),
     ]);
   });
-  await prevenir(espace.dossierId, { titre: `Simulation choisie — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer le devis.`, urgence: 5, telephone: dossier?.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `Simulation validée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer le devis.`, urgence: 5, telephone: dossier?.clientTelephone });
   return choix;
 }
 

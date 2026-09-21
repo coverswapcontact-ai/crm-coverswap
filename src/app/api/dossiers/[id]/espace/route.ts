@@ -5,6 +5,7 @@ import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { lienApercu, lienEspace, ouvrirEspace, renouvelerEspace, revoquerEspace } from "@/lib/espace/liens";
 import { lireProjet, resumerProjet } from "@/lib/espace/projet";
+import { accorderSimulations, quotaSimulations } from "@/lib/espace/service";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,10 @@ async function vueCrm(dossierId: string) {
     devis: { consultations: espace.devisConsultations, consulteLe: espace.devisConsulteLe?.toISOString() ?? null, documentId: espace.devisConsulteId },
     propositionDemandeeLe: espace.propositionDemandeeLe?.toISOString() ?? null,
     avis: espace.avis ? (JSON.parse(espace.avis) as { note: number; texte: string }) : null,
+    creation: await (async () => {
+      const quota = await quotaSimulations(espace);
+      return { faites: quota.faites, restantes: quota.restantes, offertes: quota.gratuites + quota.accordees, enCours: quota.enCours.length, demandeesLe: espace.simulationsDemandeesLe?.toISOString() ?? null };
+    })(),
     expireLe: espace.expireLe.toISOString(),
     revoqueLe: espace.revoqueLe?.toISOString() ?? null,
     premierAccesLe: espace.premierAccesLe?.toISOString() ?? null,
@@ -67,14 +72,19 @@ export async function GET(_requete: NextRequest, { params }: { params: Promise<{
   }
 }
 
-const schema = z.object({ action: z.enum(["ouvrir", "revoquer", "renouveler"]) });
+const schema = z.object({ action: z.enum(["ouvrir", "revoquer", "renouveler", "accorder"]), nombre: z.number().int().min(1).max(20).optional() });
 
-/** POST { action } : ouvrir l'espace (ou prolonger le lien), le désactiver, ou émettre un nouveau lien. */
+/** POST { action } : ouvrir l'espace (ou prolonger le lien), le désactiver, émettre un nouveau lien, ou accorder des simulations (nombre). */
 export async function POST(requete: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { action } = analyser(schema, await lireCorpsJson(requete));
+    const { action, nombre } = analyser(schema, await lireCorpsJson(requete));
     if (action === "ouvrir") await ouvrirEspace(id);
+    else if (action === "accorder") {
+      const espace = await prisma.espaceClient.findUnique({ where: { dossierId: id }, select: { id: true } });
+      if (!espace) throw new ErreurMetier("Ce dossier n'a pas encore d'espace client.", 404);
+      await accorderSimulations(espace.id, nombre ?? 3);
+    }
     else {
       const espace = await prisma.espaceClient.findUnique({ where: { dossierId: id }, select: { id: true } });
       if (!espace) throw new ErreurMetier("Ce dossier n'a pas encore d'espace client.", 404);

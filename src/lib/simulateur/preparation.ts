@@ -125,7 +125,7 @@ export async function photosAvantDuDossier(dossierId: string): Promise<{ id: str
   return photos.reverse().map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/photos/${p.id}` }));
 }
 
-export async function preparerSimulation(entree: z.output<typeof schemaPreparation>): Promise<PreparationVue> {
+export async function preparerSimulation(entree: z.output<typeof schemaPreparation>, options: { origine?: "CRM" | "CLIENT" } = {}): Promise<PreparationVue> {
   const type = typeSurface(entree.typeSurface);
   if (!type) throw new ErreurMetier("Type de surface inconnu.", 400);
   const dossier = await prisma.dossier.findUnique({ where: { id: entree.dossierId }, select: { id: true, photos: true, archiveLe: true } });
@@ -172,6 +172,7 @@ export async function preparerSimulation(entree: z.output<typeof schemaPreparati
     data: {
       dossierId: dossier.id,
       mode: entree.mode,
+      origine: options.origine ?? "CRM",
       statut: entree.mode === "API" ? "EN_COURS" : "PREPAREE",
       photoSource: chemin,
       photoAvant,
@@ -233,6 +234,49 @@ export async function consigneDuSite(projet: string, selections: { surface: stri
 }
 
 const ACTEUR_API = { acteur: "SYSTEME:simulateur", origine: "Simulation générée par l'API depuis le CRM" };
+const ACTEUR_ESPACE = { acteur: "EXTERNE:espace-client", origine: "Simulation créée par le client dans son espace" };
+/** Message d'échec quand OpenAI refuse faute de crédit : l'espace le reconnaît (préfixe) pour parler au client autrement. */
+export const CREDIT_EPUISE = "Crédit OpenAI épuisé ou clé refusée : rechargez le crédit, puis relancez.";
+
+/**
+ * Une simulation créée par le client dans son espace : visible tout de suite
+ * dans sa galerie (c'est lui qui l'a faite, rien à relire), rangée dans le
+ * dossier (et donc dans Drive), notée dans l'historique ; Lucas est prévenu —
+ * un client qui simule se projette.
+ */
+async function publierSimulationDuClient(
+  p: { id: string; dossierId: string; photoAvant: string | null; typeSurface: string },
+  type: NonNullable<ReturnType<typeof typeSurface>>,
+  zones: ReturnType<typeof lireZones>,
+  prompt: string,
+  image: Buffer,
+  coutDollars: number,
+  clientNom: string
+): Promise<{ simulationId: string | null }> {
+  return avecActeur(ACTEUR_ESPACE, async () => {
+    const { espace } = await ouvrirEspace(p.dossierId);
+    const chemin = await ecrireImageSimulation(p.dossierId, image, "png");
+    const ordre = await prisma.simulationEspace.count({ where: { espaceId: espace.id } });
+    const maintenant = new Date();
+    const titre = `Votre simulation — ${zones.map((z) => z.nom).join(", ")}`.slice(0, 80);
+    const simulation = await prisma.$transaction(async (tx) => {
+      const creee = await tx.simulationEspace.create({
+        data: { espaceId: espace.id, dossierId: p.dossierId, chemin, titre, ordre, source: "CLIENT", statut: "PUBLIEE", publieeLe: maintenant, vueLe: maintenant, photoAvant: p.photoAvant, typeSurface: p.typeSurface, zones: JSON.stringify(zones), promptTexte: prompt, preparationId: p.id, coutDollars },
+      });
+      await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id } });
+      await tx.dossierEvenement.create({
+        data: { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ")} (≈ ${coutDollars.toFixed(2).replace(".", ",")} $)`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
+      });
+      return creee;
+    });
+    await alerter(
+      { titre: `${clientNom} a créé une simulation`, texte: `${type.libelle} : ${zones.map((z) => `${z.libelle} ${z.nom}`).join(", ")}.
+Il se projette : c'est le moment de l'appeler.`, lien: `${appUrl()}/dossiers?dossier=${p.dossierId}`, libelleLien: "Ouvrir le dossier", urgence: 3, etiquette: `simulation-client-${p.dossierId}` },
+      { origine: "espace-client", canaux: ["telegram", "ntfy", "pushweb"] }
+    ).catch(() => undefined);
+    return { simulationId: simulation.id };
+  });
+}
 const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
 
 export async function executerGenerationApi(preparationId: string): Promise<{ simulationId: string | null }> {
@@ -258,8 +302,10 @@ export async function executerGenerationApi(preparationId: string): Promise<{ si
   }
   const photo = await lireFichier(p.photoAvant ?? p.photoSource);
   if (!photo) return echouer("Photo avant introuvable sur le serveur.");
-  const resultat = await genererRendu({ prompt: consigne.prompt, swatchUrls: consigne.swatchUrls, photo, origine: "CRM", dossierId: p.dossierId, preparationId: p.id });
-  if (!resultat.ok) return echouer(resultat.raison === "service-indisponible" || resultat.raison === "config" ? "Crédit OpenAI épuisé ou clé refusée : rechargez le crédit, puis relancez." : resultat.message);
+  const duClient = p.origine === "CLIENT";
+  const resultat = await genererRendu({ prompt: consigne.prompt, swatchUrls: consigne.swatchUrls, photo, origine: duClient ? "ESPACE" : "CRM", dossierId: p.dossierId, preparationId: p.id });
+  if (!resultat.ok) return echouer(resultat.raison === "service-indisponible" || resultat.raison === "config" ? CREDIT_EPUISE : resultat.message);
+  if (duClient) return publierSimulationDuClient(p, type, zones, consigne.prompt, resultat.image, resultat.coutDollars, dossier?.clientNom ?? "Le client");
 
   return avecActeur(ACTEUR_API, async () => {
     const { espace } = await ouvrirEspace(p.dossierId);

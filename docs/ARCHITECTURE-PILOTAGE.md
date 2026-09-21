@@ -1847,3 +1847,62 @@ du dossier. Essais : `src/lib/espace/espace-v2.test.ts`, `src/lib/simulateur/sim
   illisible au recadrage du simulateur = message clair.
 - **Typographie** : insécables avant « : ; ! ? % » et dans les guillemets (échappements dans le
   source, jamais de caractère invisible) ; e-mail facultatif pour signer ; avis jamais coché d'office.
+
+## 23. Notes d'appel, kanban chargé, panneaux au pouce, espace client v3 (21/09/2026, soir)
+
+### Notes d'appel (`src/lib/commercial/notes-appel.ts`, `src/components/pilotage/NotesAppel.tsx`)
+
+Modèle `NoteAppel` (lead, `appelLe`, texte, étiquettes JSON, issue, `dossierEvenementId`). Un champ
+toujours visible — carte du lead, fiche du lead, mode « Enchaîner les appels » (grand) — qui
+s'enregistre à la frappe (1,2 s), à la sortie du champ, en passant à une autre appli (`keepalive`) ;
+sans réseau, gardé dans le téléphone (`note-appel:<lead>`) et renvoyé au retour. Une note par
+appel : la dernière de moins de 3 h se complète, au-delà la frappe en ouvre une nouvelle (« Nouvel
+appel » pour forcer). Huit étiquettes (`ETIQUETTES_APPEL`, codes stables pour les statistiques).
+L'issue enregistrée en fin d'appel s'accroche à la note ouverte (`noterIssueSurNote`). À l'ouverture
+du dossier, notes et étiquettes passent dans son historique (événement `NOTE_APPEL`, daté du jour de
+l'appel via `survenuLe`) ; les notes suivantes s'y reflètent. Un lead jamais converti garde ses notes.
+Retour de l'écran d'appel d'iOS : l'appui sur le numéro note `appel-en-cours` ; au retour
+(`visibilitychange`, `pageshow`), le champ du bon lead revient au centre, focalisé (mode appels >
+fiche > liste). Deux blocs du même lead à l'écran restent synchronisés (abonnés par lead).
+RGPD : le texte est effacé à l'anonymisation, date, étiquettes et issue restent.
+
+### Kanban des dossiers (`VueKanban.tsx`, `CarteDossier.tsx`)
+
+Hauteur des colonnes mesurée (du haut du kanban au bas de l'écran, barre du téléphone déduite) :
+chaque colonne défile seule, la page ne s'allonge plus. Cartes jamais écrasées (`shrink-0`) ;
+au-delà de 6 dossiers, cartes compactes de hauteur fixe (nom, prochaine action et date, liseré et
+pastille de retard, « À moi »). Tri par colonne : où j'ai la main d'abord, puis par échéance.
+En-tête : nombre, ▶ à faire, ● en retard, total court (« 130 k€ »). Filtre « Masquer les inactifs »
+(30 jours sans modification et le client a la main ; jamais un dossier qui m'attend), mémorisé.
+
+### Fermer au pouce (`src/components/pilotage/fermeture-mobile.ts`)
+
+`useRetourFerme(ouvert, fermer)` : chaque panneau ouvert pousse une entrée d'historique (état de Next
+conservé) ; le geste retour ferme celui du dessus ; fermé par un bouton, il retire son entrée — sauf
+si l'on a navigué ailleurs entre-temps (un lien suivi n'est jamais défait). `useGlisserPourFermer` :
+depuis le bord gauche (panneaux latéraux, plein écran) ou vers le bas (barre de titre des fenêtres).
+Branché une fois dans `SheetContent` (fiche dossier, fiche lead, prospect — bouton `Close` caché +
+zones sûres haut et bas) et `Modale` (toutes les fenêtres : zones sûres, geste retour, glisser),
+plus le mode appels, la visionneuse de simulations, le sélecteur de teinte, le volet contexte des SMS.
+
+### Espace client v3 (site `coverswap/src/components/espace`)
+
+Une seule navigation : la barre d'onglets en bas (Photos · Projet · Simulations · Devis · Paiement),
+coches « fait », cadenas et raison écrite (`RAISONS_VERROU`), point rouge sur la prochaine étape.
+Accueil = une phrase + un bouton (`prochainPas`). L'espace parle au nom de CoverSwap (logo, « nous »),
+le numéro reste celui de Lucas (`marque`). Projet : zones (+ « Autre chose »), taille (repères +
+pas de 0,5 m), un mot ; enregistré à la frappe (pastille « Enregistré », erreurs du serveur dites en
+clair, réseau coupé gardé) ; plus de goûts ni de délai (les anciens restent lus). Alerte « projet
+précisé » unique, trois minutes après (tâche `ESPACE_PROJET_ALERTE`). Simulations : galerie (site,
+lui, CoverSwap), vue agrandie avant/après + teinte de chaque zone + « Valider cette simulation »
+(ouvre le Devis, prochaine action « préparer le devis », changeable tant qu'aucun devis n'est émis),
+mélange zone par zone ; simulateur intégré (`CreationSimulation`, `CatalogueTeintes`) : sa photo ou
+une nouvelle, zones cochées d'après le Projet, une teinte par zone dans les 497 références
+(familles toutes visibles, recherche française, vignettes 320 px servies par le CRM, agrandir,
+favoris gardés et vus par Lucas), même moteur que le site et le CRM (préparation `origine CLIENT`,
+mode API). Garde-fous : `SIMULATEUR_ESPACE_GRATUITES` (3 si vide), « Demander d'autres
+simulations » → Lucas accorde 3 d'un clic (Espaces clients, fiche dossier) ; crédit épuisé : rien
+ne part, message clair, choix gardés, Lucas prévenu (au plus toutes les 3 h) ; coupure réseau
+pendant la génération : elle continue côté serveur, l'écran le dit et la montre au retour.
+Aperçu : chaque geste affiche « rien n'est enregistré » (plus aucun bouton muet). Feuilles plein
+écran (`Feuille`) : bouton de fermeture en bas, glisser vers le bas, geste retour.

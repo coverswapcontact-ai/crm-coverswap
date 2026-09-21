@@ -155,9 +155,15 @@ export default function EcranEspaces({ initial }: { initial: LigneEspace[] }) {
 }
 
 /** Le geste qui fait avancer ce client, quand c'est à Lucas de jouer : un bouton, pas un détour. */
-function GesteDuMoment({ ligne }: { ligne: LigneEspace }) {
+function GesteDuMoment({ ligne, onAccorder, accordEnCours }: { ligne: LigneEspace; onAccorder: () => void; accordEnCours: boolean }) {
   const classe = cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-2.5 text-[12px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-7", TRANS);
   switch (ligne.attente.geste) {
+    case "ACCORDER":
+      return (
+        <button type="button" disabled={accordEnCours} onClick={onAccorder} className={cn(classe, "disabled:opacity-60")}>
+          <WandSparkles size={13} aria-hidden /> {accordEnCours ? "Un instant…" : "Accorder 3 simulations"}
+        </button>
+      );
     case "DEVIS":
       return (
         <Link href={`/dossiers?dossier=${ligne.dossierId}&devis=nouveau`} className={classe}>
@@ -203,10 +209,10 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
     }
   }
 
-  async function agir(action: "renouveler" | "revoquer" | "ouvrir", succes: string) {
+  async function agir(action: "renouveler" | "revoquer" | "ouvrir" | "accorder", succes: string) {
     setOccupe(action);
     try {
-      await envoyerJson(`/api/dossiers/${ligne.dossierId}/espace`, "POST", { action });
+      await envoyerJson(`/api/dossiers/${ligne.dossierId}/espace`, "POST", action === "accorder" ? { action, nombre: 3 } : { action });
       toast.success(succes);
       await onRecharger();
     } catch (erreur) {
@@ -219,11 +225,12 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
   const faits: { libelle: string; fait: boolean }[] = [
     { libelle: f.photos ? `${f.photos} photo${f.photos > 1 ? "s" : ""}` : "Photos", fait: f.photos > 0 },
     { libelle: "Projet", fait: Boolean(f.projet) },
-    { libelle: f.simulationsPubliees ? `${f.simulationsPubliees} simulation${f.simulationsPubliees > 1 ? "s" : ""}` : "Simulation", fait: f.simulationsPubliees > 0 },
-    { libelle: "Choix", fait: Boolean(f.choix) },
+    { libelle: f.simulationsPubliees ? `${f.simulationsPubliees} publiée${f.simulationsPubliees > 1 ? "s" : ""} par moi` : "Rien de publié", fait: f.simulationsPubliees > 0 },
+    { libelle: `${f.simulationsClient} faite${f.simulationsClient > 1 ? "s" : ""} par le client · ${f.simulationsRestantes} restante${f.simulationsRestantes > 1 ? "s" : ""}`, fait: f.simulationsClient > 0 },
+    { libelle: f.choix ? "Simulation validée" : "Pas encore validée", fait: Boolean(f.choix) },
     { libelle: !f.devis ? "Devis" : f.devis.consultations > 0 ? `Devis lu ${f.devis.consultations} fois` : "Devis pas encore ouvert", fait: Boolean(f.devis && f.devis.consultations > 0) },
     { libelle: "Accord", fait: Boolean(f.accord) },
-    { libelle: "Acompte", fait: Boolean(f.acompte && f.acompte.recu >= f.acompte.montant - 0.5) },
+    { libelle: "Paiement", fait: Boolean(f.acompte && f.acompte.recu >= f.acompte.montant - 0.5) },
   ];
 
   return (
@@ -275,7 +282,12 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
       ) : null}
 
       <div className="mt-3 flex flex-wrap gap-1.5 border-t-[0.5px] border-[#2A2D34] pt-3">
-        {ligne.attente.qui === "MOI" && ligne.attente.geste ? <GesteDuMoment ligne={ligne} /> : null}
+        {ligne.attente.qui === "MOI" && ligne.attente.geste ? <GesteDuMoment ligne={ligne} accordEnCours={occupe === "accorder"} onAccorder={() => void agir("accorder", "3 simulations accordées : le client peut en refaire")} /> : null}
+        {ligne.attente.geste !== "ACCORDER" && f.simulationsRestantes === 0 && f.simulationsClient > 0 && !ligne.revoque ? (
+          <Bouton taille="sm" icone={<WandSparkles size={13} aria-hidden />} chargement={occupe === "accorder"} onClick={() => void agir("accorder", "3 simulations accordées : le client peut en refaire")}>
+            Accorder 3 simulations
+          </Bouton>
+        ) : null}
         <Link href={`/dossiers?dossier=${ligne.dossierId}`} className={cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}>
           <FolderOpen size={13} aria-hidden /> Dossier
         </Link>

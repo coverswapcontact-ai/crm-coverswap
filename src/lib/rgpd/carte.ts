@@ -73,6 +73,7 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     garde: "source, statut, ville et projet ; nom et prénom seulement si une facture de l'ancien écran les imprime",
   },
   Interaction: { remplacer: () => ({ contenu: EFFACE }), garde: "type et date" },
+  NoteAppel: { remplacer: () => ({ texte: EFFACE }), garde: "date de l'appel, étiquettes et issue (le texte est effacé) : pourquoi des affaires se perdent, sans identité" },
   Simulation: {
     remplacer: () => ({ notes: null, lienSimulation: null, imageBeforePath: null, imageAfterPath: null, imageOriginalPath: null }),
     garde: "référence, métrage et prix estimés (images effacées)",

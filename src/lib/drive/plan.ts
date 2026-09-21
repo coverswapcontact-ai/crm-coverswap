@@ -122,6 +122,14 @@ export async function planMiroir(maintenant: Date = new Date()): Promise<Element
   }
 
   const { lirePdfDocument, nomFichierPdf } = await import("@/lib/dossiers/documents");
+  // Les simulations de chaque dossier (site, CRM, faites par le client dans son espace) : leur propre dossier Drive.
+  const simulationsParDossier = new Map<string, { id: string; chemin: string; source: string; titre: string | null }[]>();
+  for (const simulation of await prisma.simulationEspace.findMany({ where: { dossierId: { in: dossiers.map((d) => d.id) }, archiveLe: null }, orderBy: { createdAt: "asc" }, select: { id: true, dossierId: true, chemin: true, source: true, titre: true } })) {
+    const liste = simulationsParDossier.get(simulation.dossierId) ?? [];
+    liste.push(simulation);
+    simulationsParDossier.set(simulation.dossierId, liste);
+  }
+  const SOURCES_SIMULATION: Record<string, string> = { SITE: "site", CLIENT: "client", API: "CRM", CHATGPT: "ChatGPT", MANUEL: "déposée" };
   for (const dossier of dossiers) {
     const cle = `dossier:${dossier.id}`;
     const parent = dossier.clientId && clients.some((client) => client.id === dossier.clientId) ? `client:${dossier.clientId}` : "clients:sans-fiche";
@@ -147,6 +155,23 @@ export async function planMiroir(maintenant: Date = new Date()): Promise<Element
         },
       });
     }
+
+    const simulations = simulationsParDossier.get(dossier.id) ?? [];
+    if (simulations.length > 0) plan.push({ cle: `${cle}:simulations`, nom: "Simulations", parentCle: cle, dossier: true });
+    simulations.forEach((simulation, index) => {
+      plan.push({
+        cle: `simulation:${simulation.id}`,
+        nom: nomLisible(`Simulation ${String(index + 1).padStart(2, "0")} (${SOURCES_SIMULATION[simulation.source] ?? simulation.source})${path.posix.extname(simulation.chemin)}`),
+        parentCle: `${cle}:simulations`,
+        dossier: false,
+        empreinte: simulation.chemin,
+        contenu: async () => {
+          const octets = await lireFichier(simulation.chemin);
+          if (!octets) throw new Error(`Simulation absente du stockage : ${simulation.chemin}`);
+          return { type: typeMimePhoto(simulation.chemin), octets };
+        },
+      });
+    });
 
     // Un document repris sans PDF importé n'a rien à copier.
     for (const document of dossier.documents.filter((candidat) => candidat.origine === "CRM" || candidat.pdfPath)) {

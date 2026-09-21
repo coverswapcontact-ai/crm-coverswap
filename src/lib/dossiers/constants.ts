@@ -239,6 +239,17 @@ export const TYPES_EVENEMENT = [
   "ESPACE_COMMENTAIRE",
   "ESPACE_COORDONNEES",
   "ESPACE_DEVIS_ACCEPTE",
+  // Écrits depuis la mission espace client v2 (21/09/2026) ; les derniers avec l'espace v3
+  "ESPACE_AVIS",
+  "ESPACE_DEVIS_CONSULTE",
+  "ESPACE_NOUVELLE_PROPOSITION",
+  "ESPACE_SIMULATION_SITE",
+  "SIMULATION_BROUILLON",
+  "ESPACE_SIMULATION_CLIENT",
+  "ESPACE_SIMULATIONS_DEMANDEES",
+  "ESPACE_SIMULATIONS_ACCORDEES",
+  // Notes prises pendant un appel au contact, reprises à leur date (NoteAppel)
+  "NOTE_APPEL",
 ] as const;
 export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
 
@@ -275,6 +286,15 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ESPACE_COMMENTAIRE: "Commentaire du client",
   ESPACE_COORDONNEES: "Coordonnées complétées par le client",
   ESPACE_DEVIS_ACCEPTE: "Bon pour accord du client",
+  ESPACE_AVIS: "Avis du client",
+  ESPACE_DEVIS_CONSULTE: "Devis consulté par le client",
+  ESPACE_NOUVELLE_PROPOSITION: "Autre proposition demandée",
+  ESPACE_SIMULATION_SITE: "Simulation refaite sur le site",
+  SIMULATION_BROUILLON: "Simulation en brouillon",
+  ESPACE_SIMULATION_CLIENT: "Simulation faite par le client",
+  ESPACE_SIMULATIONS_DEMANDEES: "Simulations supplémentaires demandées",
+  ESPACE_SIMULATIONS_ACCORDEES: "Simulations supplémentaires accordées",
+  NOTE_APPEL: "Note d'appel",
 };
 // Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
 

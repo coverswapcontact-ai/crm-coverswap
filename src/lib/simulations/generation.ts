@@ -87,7 +87,7 @@ async function telechargerEchantillon(url: string): Promise<Buffer | null> {
 }
 
 async function noter(ligne: {
-  origine: "SITE" | "CRM";
+  origine: "SITE" | "CRM" | "ESPACE";
   statut: "REUSSI" | "ECHEC";
   erreur?: string | null;
   dureeMs: number;
@@ -127,7 +127,7 @@ export async function genererRendu(entree: {
   prompt: string;
   swatchUrls: string[];
   photo: Buffer;
-  origine: "SITE" | "CRM";
+  origine: "SITE" | "CRM" | "ESPACE";
   dossierId?: string | null;
   preparationId?: string | null;
 }): Promise<ResultatGeneration> {

@@ -157,3 +157,39 @@ export function CarteDossier({
     </button>
   );
 }
+
+/**
+ * Carte compacte, pour une colonne chargée (30, 50 dossiers) : hauteur fixe,
+ * jamais écrasée, et l'essentiel reste lisible — le nom, la prochaine action
+ * et sa date, le retard (liseré et pastille rouges), qui a la main.
+ */
+export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossier: DossierResume; maintenant: Date; onOuvrir: () => void }) {
+  const echeance = echeanceDe(dossier, maintenant);
+  const enRetard = echeance === "retard";
+  const main = mainDe(dossier, maintenant);
+  const date = dossier.prochaineActionDate;
+  const quand = !date ? null : enRetard ? `retard ${joursDeRetard(date, maintenant)} j` : echeance === "aujourdhui" ? "aujourd'hui" : formatJourCourt(date);
+  return (
+    <button
+      type="button"
+      onClick={onOuvrir}
+      className={cn(
+        "relative flex h-[62px] w-full shrink-0 flex-col justify-center overflow-hidden rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] py-2 pr-3 pl-4 text-left",
+        "hover:border-[#3A3E47] hover:bg-[#20232A] focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
+        TRANS
+      )}
+    >
+      <Lisere couleur={couleurLisere(dossier, maintenant)} />
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
+        {enRetard ? <PastilleRetard /> : null}
+        {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} className="px-1.5 py-0 text-[10.5px]" /> : null}
+      </span>
+      <span className={cn("mt-1 flex min-w-0 items-center gap-1.5 text-[12px]", enRetard ? "text-[#F87171]" : echeance === "aujourdhui" ? "text-[#EF9F27]" : "text-[#9CA3AF]")}>
+        <CalendarClock size={12} className="shrink-0" aria-hidden />
+        <span className="min-w-0 truncate">{dossier.prochaineAction ?? (date ? "Action à préciser" : "Aucune prochaine action")}</span>
+        {quand ? <span className="shrink-0 font-medium tabular-nums">· {quand}</span> : null}
+      </span>
+    </button>
+  );
+}

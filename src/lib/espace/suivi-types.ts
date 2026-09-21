@@ -1,7 +1,7 @@
 import type { EtapeEspace, progression } from "./etapes";
 
 /** Types de l'onglet Espaces clients, partagés par l'écran (sans dépendance serveur). */
-export type CodeSignal = "PHOTOS_SANS_SIMULATION" | "PROPOSITION_DEMANDEE" | "BROUILLONS" | "HESITE" | "JAMAIS_OUVERT" | "EXPIRE_BIENTOT" | "EXPIRE" | "NON_ENVOYE" | "DATE_A_FIXER";
+export type CodeSignal = "PHOTOS_SANS_SIMULATION" | "PROPOSITION_DEMANDEE" | "SIMULATIONS_DEMANDEES" | "BROUILLONS" | "HESITE" | "JAMAIS_OUVERT" | "EXPIRE_BIENTOT" | "EXPIRE" | "NON_ENVOYE" | "DATE_A_FIXER";
 export type Signal = { code: CodeSignal; libelle: string; ton: "rouge" | "ambre" | "gris" };
 
 export type LigneEspace = {
@@ -29,6 +29,10 @@ export type LigneEspace = {
     photos: number;
     projet: string | null;
     simulationsPubliees: number;
+    /** Simulations créées par le client dans son espace, et ce qu'il lui en reste. */
+    simulationsClient: number;
+    simulationsRestantes: number;
+    simulationsDemandeesLe: string | null;
     brouillons: number;
     choix: string | null;
     devis: { numero: string; consultations: number; consulteLe: string | null } | null;
@@ -36,6 +40,6 @@ export type LigneEspace = {
     acompte: { montant: number; recu: number } | null;
   };
   /** Qui a la main ; quand c'est Lucas, le geste qui fait avancer (un bouton dans la carte). */
-  attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string; geste?: "DEVIS" | "SIMULATEUR" | "PUBLIER" | "APPELER" };
+  attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string; geste?: "DEVIS" | "SIMULATEUR" | "PUBLIER" | "APPELER" | "ACCORDER" };
   signaux: Signal[];
 };

@@ -7,6 +7,7 @@ import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mai
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { NotesAppelDuLead, noterDebutAppel } from "@/components/pilotage/NotesAppel";
 import { Bouton, Champ, ListeDeroulante, Modale, Pastille, Puces, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
@@ -182,7 +183,7 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
           )}
           {telephone ? (
             <>
-              <a href={`tel:${telephone}`} className={LIEN_ACTION}>
+              <a href={`tel:${telephone}`} onClick={() => noterDebutAppel(detail.id)} className={LIEN_ACTION}>
                 <Phone size={14} aria-hidden /> {detail.telephone}
               </a>
               <Link href={`/sms?lead=${detail.id}`} className={LIEN_ACTION}>
@@ -223,6 +224,13 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
             </Link>
           ) : null}
         </div>
+
+        {detail.archiveLe ? null : (
+          <section>
+            <TitreSection>Notes d&apos;appel</TitreSection>
+            <NotesAppelDuLead leadId={detail.id} />
+          </section>
+        )}
 
         {detail.dossier || detail.archiveLe ? null : (
           <section>

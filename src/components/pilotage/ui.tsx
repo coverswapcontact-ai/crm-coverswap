@@ -4,6 +4,7 @@ import { useId } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useGlisserPourFermer, useRetourFerme } from "./fermeture-mobile";
 
 // Primitives des écrans de pilotage (Prospects, Dossiers, Validation, Clients,
 // Finances…) : charte sombre commune.
@@ -270,17 +271,21 @@ export function Modale({
   pied?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  // Sur téléphone, plein écran : fermer au pouce (geste retour, glisser la barre de titre vers le bas).
+  useRetourFerme(ouverte, onFermer);
+  const glisser = useGlisserPourFermer(onFermer, "bas");
   return (
     <Dialog open={ouverte} onOpenChange={(ouvert) => (ouvert ? undefined : onFermer())}>
       <DialogContent
         showCloseButton={false}
+        style={glisser.style}
         className={cn(
           "flex flex-col gap-0 overflow-clip bg-[#1C1F25] p-0 text-[#F2F3F5] ring-[#2A2D34]",
-          "max-sm:h-[100dvh] max-sm:max-w-full max-sm:rounded-none sm:max-h-[90vh] sm:rounded-[14px]",
+          "max-sm:h-[100dvh] max-sm:max-w-full max-sm:rounded-none max-sm:pt-[env(safe-area-inset-top)] max-sm:pb-[env(safe-area-inset-bottom)] sm:max-h-[90vh] sm:rounded-[14px]",
           LARGEURS_MODALE[largeur]
         )}
       >
-        <div className="flex items-start justify-between gap-4 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
+        <div {...glisser.gestionnaires} className="flex touch-pan-x items-start justify-between gap-4 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
           <div className="min-w-0">
             <DialogTitle className="text-[15px] leading-snug font-medium text-[#F2F3F5]">{titre}</DialogTitle>
             {description ? (

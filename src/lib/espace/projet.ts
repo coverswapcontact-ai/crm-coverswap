@@ -2,10 +2,11 @@ import { z } from "zod/v4";
 import { LIBELLES_STYLE, STYLES_CLIENT, ZONES_PROJET_CLIENT } from "@/lib/simulateur/types-surface";
 
 /**
- * Le projet tel que le client le précise dans son espace : ce qu'il veut
- * traiter, ses goûts, un ordre de grandeur, son délai, un mot libre. Rangé en
- * JSON dans `EspaceClient.souhaits` (version 2 ; l'ancien format — teintes,
- * style — reste lisible).
+ * Le projet tel que le client le précise dans son espace (v3) : ce qu'il veut
+ * traiter, un ordre de grandeur, un mot libre. Plus de goûts ni de délai : les
+ * teintes se choisissent dans ses simulations. Rangé en JSON dans
+ * `EspaceClient.souhaits` ; les champs des versions précédentes (styles,
+ * propositions, délai ; teintes et style du 20/09) restent lisibles.
  */
 
 export const REPERES_METRES = [
@@ -71,23 +72,24 @@ export function lireProjet(json: string | null | undefined): ProjetClient | null
   return { zones: [], styles, propositions: ancien.data.propositions, metres: null, repere: null, delai: null, precisions };
 }
 
-/** Le projet est-il « précisé » ? Au moins ce qu'il veut traiter, ou « proposez-moi ». */
+/** Le projet est-il « précisé » ? Ce qu'il veut traiter, ou un mot pour CoverSwap (les goûts d'avant comptent encore). */
 export function projetPrecise(projet: ProjetClient | null): boolean {
-  return Boolean(projet && (projet.zones.length > 0 || projet.propositions || projet.styles.length > 0));
+  return Boolean(projet && (projet.zones.length > 0 || projet.precisions.trim().length > 0 || projet.propositions || projet.styles.length > 0));
 }
 
-/** Résumé en une ligne, pour le dossier et le CRM : « Façades hautes, Plan de travail · Bois clair, Blanc · ≈ 5 m · dès que possible ». */
+/** Résumé en une ligne, pour le dossier et le CRM : « Façades hautes, Plan de travail · ≈ 5 m (en L) · « garder les poignées » ». */
 export function resumerProjet(projet: ProjetClient | null, typeProjet = "CUISINE"): string {
   if (!projet) return "";
   const libellesZones = new Map((ZONES_PROJET_CLIENT[typeProjet] ?? ZONES_PROJET_CLIENT.CUISINE).map((z) => [z.id, z.libelle]));
   const zones = projet.zones.map((z) => libellesZones.get(z) ?? z).join(", ");
+  // Goûts et délai : saisis avant la v3, on ne les perd pas.
   const styles = projet.styles.map((s) => LIBELLES_STYLE[s]).join(", ");
   const repere = REPERES_METRES.find((r) => r.id === projet.repere);
   const delai = DELAIS_CLIENT.find((d) => d.id === projet.delai);
   return [
     zones || null,
-    [styles, projet.propositions ? "veut des propositions" : ""].filter(Boolean).join(", ") || null,
     projet.metres ? `≈ ${String(projet.metres).replace(".", ",")} m${repere ? ` (${repere.libelle.toLowerCase()})` : ""}` : repere ? repere.libelle.toLowerCase() : null,
+    [styles, projet.propositions ? "veut des propositions" : ""].filter(Boolean).join(", ") || null,
     delai ? delai.libelle.toLowerCase() : null,
     projet.precisions ? `« ${projet.precisions} »` : null,
   ]

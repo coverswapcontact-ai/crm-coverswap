@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRetourFerme } from "@/components/pilotage/fermeture-mobile";
 import { MessageSquare, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 import type { ConversationResume, ElementFil, FiltreConversations } from "@/lib/sms/conversations";
@@ -63,6 +64,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   const [fil, setFil] = useState<Fil | null>(null);
   const [chargementFil, setChargementFil] = useState(false);
   const [voletContexte, setVoletContexte] = useState(false);
+  useRetourFerme(voletContexte, () => setVoletContexte(false));
   const [nouvelle, setNouvelle] = useState(false);
   const [horsLigne, setHorsLigne] = useState(false);
   const [versionLocale, setVersionLocale] = useState(0);

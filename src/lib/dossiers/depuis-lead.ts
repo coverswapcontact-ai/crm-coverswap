@@ -243,6 +243,9 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
   }
 
   const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId, { silencieux: options.silencieux });
+  // Les notes prises pendant les appels rejoignent l'historique du dossier, à leur date : rien à recopier.
+  const { reprendreNotesDansDossier } = await import("@/lib/commercial/notes-appel");
+  await reprendreNotesDansDossier(lead.id, dossierId).catch((erreur: unknown) => console.error(`[dossiers] notes d'appel non reprises dans ${dossierId} :`, erreur));
   return { dossierId, cree, photosRangees: photos, simulationsRangees: simulations };
 }
 

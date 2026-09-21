@@ -49,8 +49,9 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const leadIds = leads.map((lead) => lead.id);
   const photosLead = await client.photoLead.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
   const simulationsSite = await client.simulationSite.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
-  const [interactions, simulations, devis, chantiers] = await Promise.all([
+  const [interactions, notesAppel, simulations, devis, chantiers] = await Promise.all([
     client.interaction.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
+    client.noteAppel.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
     client.simulation.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
     client.devis.findMany({ where: { leadId: { in: leadIds } }, include: { facture: { select: { id: true } } } }),
     client.chantier.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
@@ -129,6 +130,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       ClientTelephone: telephones,
       Lead: leads,
       Interaction: interactions,
+      NoteAppel: notesAppel,
       Simulation: simulations,
       PhotoLead: photosLead,
       SimulationSite: simulationsSite,

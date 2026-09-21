@@ -443,7 +443,7 @@ function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierI
                 <div className="min-w-0">
                   <p className="text-[13px] break-words text-[#D1D5DB]">{evenement.contenu}</p>
                   <p className="mt-0.5 text-[11px] text-[#6B7280]">
-                    {LIBELLES_TYPE_EVENEMENT[evenement.type]} ·{" "}
+                    {LIBELLES_TYPE_EVENEMENT[evenement.type] ?? "Événement"} ·{" "}
                     {evenement.saisiLe ? `${formatDateCourte(evenement.date)} (saisi le ${formatDateCourte(evenement.saisiLe)})` : formatHorodatage(evenement.date)}
                     {evenement.messageId ? (
                       <>

@@ -115,6 +115,18 @@ export async function imageEchantillon(ref: string): Promise<Buffer> {
   return octets;
 }
 
+/** Vignette d'un échantillon (grille du catalogue de l'espace client) : ~20 Ko au lieu de ~120, gardée sur le volume. */
+export async function vignetteEchantillon(ref: string, largeur = 320): Promise<Buffer> {
+  const chemin = path.join(dossierSimulateur(), "echantillons", `v${largeur}`, nomFichier(ref));
+  const enCache = await fs.readFile(chemin).catch(() => null);
+  if (enCache && enCache.length > 0) return enCache;
+  const { default: sharp } = await import("sharp");
+  const octets = await sharp(await imageEchantillon(ref)).rotate().resize(largeur, largeur, { fit: "cover" }).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
+  await fs.mkdir(path.dirname(chemin), { recursive: true });
+  await fs.writeFile(chemin, octets);
+  return octets;
+}
+
 /* ── Couleur mesurée de chaque échantillon ────────────────────────── */
 
 type Analyses = Record<string, AnalyseCouleur>;

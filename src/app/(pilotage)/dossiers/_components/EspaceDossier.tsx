@@ -25,6 +25,8 @@ type EspaceVu = {
   avis: { note: number; texte: string } | null;
   simulations: { id: string; titre: string | null; choisie: boolean }[];
   accord: { le: string; nom: string; numeroDevis: string | null; total: number } | null;
+  /** Espace v3 : les simulations que le client crée lui-même. */
+  creation?: { faites: number; restantes: number; offertes: number; enCours: number; demandeesLe: string | null };
 };
 
 const jour = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null);
@@ -53,10 +55,10 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
     return () => window.clearTimeout(premier);
   }, [charger]);
 
-  async function agir(action: "ouvrir" | "revoquer" | "renouveler", succes: string) {
+  async function agir(action: "ouvrir" | "revoquer" | "renouveler" | "accorder", succes: string) {
     setOccupe(action);
     try {
-      setEspace((await envoyerJson<{ espace: EspaceVu }>(`/api/dossiers/${detail.id}/espace`, "POST", { action })).espace);
+      setEspace((await envoyerJson<{ espace: EspaceVu }>(`/api/dossiers/${detail.id}/espace`, "POST", action === "accorder" ? { action, nombre: 3 } : { action })).espace);
       toast.success(succes);
       await onRecharger();
     } catch (erreur) {
@@ -148,6 +150,16 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
                 </dd>
               </div>
             ) : null}
+            {espace.creation ? (
+              <div>
+                <dt className="inline text-[#8B919C]">Ses simulations : </dt>
+                <dd className="inline text-[#D1D5DB]">
+                  {espace.creation.faites} faite{espace.creation.faites > 1 ? "s" : ""} sur {espace.creation.offertes} · {espace.creation.restantes} restante{espace.creation.restantes > 1 ? "s" : ""}
+                  {espace.creation.enCours ? ` · ${espace.creation.enCours} en cours` : ""}
+                  {espace.creation.demandeesLe ? <span className="text-[#F5B454]"> · en demande d&apos;autres depuis le {jour(espace.creation.demandeesLe)}</span> : null}
+                </dd>
+              </div>
+            ) : null}
             {espace.propositionDemandeeLe ? (
               <div>
                 <dt className="inline text-[#8B919C]">Autre proposition demandée : </dt>
@@ -163,6 +175,12 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
               </div>
             ) : null}
           </dl>
+
+          {espace.creation && (espace.creation.demandeesLe || espace.creation.restantes === 0) && !espace.revoqueLe ? (
+            <Bouton variante={espace.creation.demandeesLe ? "primaire" : "secondaire"} chargement={occupe === "accorder"} onClick={() => void agir("accorder", "3 simulations accordées : le client peut en refaire")}>
+              Accorder 3 simulations
+            </Bouton>
+          ) : null}
 
           {/* Il a choisi (ou dit ce qu'il veut) et aucun devis n'existe : le devis part de là, prérempli. */}
           {onFaireDevis && (espace.choix || espace.projet) && !detail.documents.some((d) => d.type === "DEVIS" && d.numero) ? (

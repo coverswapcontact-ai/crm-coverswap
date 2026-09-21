@@ -100,7 +100,9 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     const signaux: Signal[] = [];
     if (propositionEnAttente) signaux.push({ code: "PROPOSITION_DEMANDEE", libelle: "Autre proposition demandée", ton: "rouge" });
     if (espace.simulationsDemandeesLe) signaux.push({ code: "SIMULATIONS_DEMANDEES", libelle: `Demande d'autres simulations (${duClient} faite${duClient > 1 ? "s" : ""})`, ton: "rouge" });
-    if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && brouillons === 0 && !devis && !espace.revoqueLe) signaux.push({ code: "PHOTOS_SANS_SIMULATION", libelle: photos > 0 ? `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""}, pas de simulation` : "Simulation du site, rien de préparé", ton: "rouge" });
+    // v3 : le client crée lui-même ses simulations. Le signal ne vaut que s'il n'en a aucune (ni du site, ni à lui, ni de moi).
+    const aucuneSimulation = crm + faits.simulationsSite + duClient === 0;
+    if (photos > 0 && aucuneSimulation && brouillons === 0 && !devis && !espace.revoqueLe) signaux.push({ code: "PHOTOS_SANS_SIMULATION", libelle: `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""}, aucune simulation encore`, ton: "ambre" });
     if (brouillons > 0) signaux.push({ code: "BROUILLONS", libelle: `${brouillons} brouillon${brouillons > 1 ? "s" : ""} à publier`, ton: "ambre" });
     if (devis && !accord && consultations >= 2) signaux.push({ code: "HESITE", libelle: `Devis relu ${consultations} fois sans signer`, ton: consultations >= 3 ? "rouge" : "ambre" });
     if (accord && !d.dateChantier) signaux.push({ code: "DATE_A_FIXER", libelle: "Accord donné : date du chantier à fixer", ton: "rouge" });
@@ -115,7 +117,7 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     else if (propositionEnAttente) attente = { qui: "MOI", libelle: "Préparer une autre proposition", geste: "SIMULATEUR" };
     else if (espace.simulationsDemandeesLe && !accord) attente = { qui: "MOI", libelle: "Accorder d'autres simulations", geste: "ACCORDER" };
     else if (brouillons > 0 && !accord) attente = { qui: "MOI", libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}`, geste: "PUBLIER" };
-    else if ((photos > 0 || faits.simulationsSite > 0) && crm === 0 && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation", geste: "SIMULATEUR" };
+    else if (photos > 0 && aucuneSimulation && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation", geste: "SIMULATEUR" };
     else if (etape === "ATTENTE_DEVIS") attente = { qui: "MOI", libelle: "Faire le devis", geste: "DEVIS" };
     else if (accord && !d.dateChantier) attente = { qui: "MOI", libelle: "Appeler : fixer la date du chantier", geste: "APPELER" };
     else if (etape === "CHANTIER") attente = { qui: "MOI", libelle: d.dateChantier ? `Chantier le ${d.dateChantier.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}` : "Chantier à planifier" };
@@ -145,7 +147,8 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
       faits: {
         photos,
         projet: projetPrecise(projet) ? resumerProjet(projet, d.lead?.typeProjet ?? "CUISINE") : null,
-        simulationsPubliees: publiees.length,
+        // Publiées par Lucas (celles du site et celles du client ont leur propre compte).
+        simulationsPubliees: crm,
         simulationsClient: duClient,
         simulationsRestantes: restantes,
         simulationsDemandeesLe: date(espace.simulationsDemandeesLe),

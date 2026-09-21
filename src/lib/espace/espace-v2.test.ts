@@ -320,3 +320,23 @@ describe("le devis part du choix du client", () => {
     assert.match(depuisChoix?.resume ?? "", /Yvette.*Ultra White.*≈ 6 m/);
   });
 });
+
+describe("Espaces clients (v3)", () => {
+  test("qui a la main : ses photos sans aucune simulation → moi ; sa propre simulation → lui", async () => {
+    const { ajouterPhoto } = await import("@/lib/dossiers/dossiers");
+    const { listerEspaces } = await import("./suivi");
+    const seulesPhotos = await dossierAvecEspace("Yvon");
+    await ajouterPhoto(seulesPhotos.dossierId, photo("vue.jpg"));
+    const aSimule = await dossierAvecEspace("Zelie");
+    await ajouterPhoto(aSimule.dossierId, photo("vue.jpg"));
+    await prisma.simulationEspace.create({ data: { espaceId: aSimule.espace.id, dossierId: aSimule.dossierId, chemin: "x/simulation.png", source: "CLIENT", statut: "PUBLIEE", publieeLe: new Date() } });
+
+    const lignes = await listerEspaces();
+    const yvon = lignes.find((l) => l.dossierId === seulesPhotos.dossierId)!;
+    const zelie = lignes.find((l) => l.dossierId === aSimule.dossierId)!;
+    assert.deepEqual([yvon.attente.qui, yvon.attente.geste, yvon.signaux.some((s) => s.code === "PHOTOS_SANS_SIMULATION")], ["MOI", "SIMULATEUR", true]);
+    assert.equal(zelie.attente.qui, "CLIENT", "il a sa simulation : à lui de la valider");
+    assert.equal(zelie.signaux.some((s) => s.code === "PHOTOS_SANS_SIMULATION"), false);
+    assert.deepEqual([zelie.faits.simulationsClient, zelie.faits.simulationsPubliees], [1, 0], "« publiées par moi » ne compte que celles de CoverSwap");
+  });
+});

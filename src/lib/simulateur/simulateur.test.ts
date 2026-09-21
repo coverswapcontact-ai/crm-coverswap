@@ -274,3 +274,12 @@ describe("la couleur mesurée, en mots justes", () => {
     assert.match(couleurEnMots(mesure("#FFFFFF")).en, /^white/);
   });
 });
+
+describe("zones venues du simulateur du site", () => {
+  test("« Façades (toutes) » habille les meubles hauts et les meubles bas ; une zone nommée l'emporte", () => {
+    const facades = JSON.stringify([{ zone: "facades-cuisine", libelle: "Façades (toutes)", ref: "K1", nom: "Black Mat" }, { zone: "plan-de-travail", libelle: "Plan de travail", ref: "NE24", nom: "Raw Grey" }]);
+    assert.deepEqual(types.lireZones(facades).map((z) => `${z.zone}:${z.ref}:${z.libelle}`), ["meubles-hauts:K1:Meubles hauts", "meubles-bas:K1:Meubles bas", "plan-de-travail:NE24:Plan de travail"]);
+    const avecHauts = JSON.stringify([{ zone: "facades-cuisine", libelle: "Façades (toutes)", ref: "K1", nom: "Black Mat" }, { zone: "meubles-hauts", libelle: "Meubles hauts", ref: "J3", nom: "Ultra White" }]);
+    assert.deepEqual(types.lireZones(avecHauts).map((z) => `${z.zone}:${z.ref}`), ["meubles-bas:K1", "meubles-hauts:J3"]);
+  });
+});

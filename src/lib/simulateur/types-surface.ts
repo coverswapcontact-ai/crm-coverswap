@@ -71,14 +71,28 @@ export function estZone(id: string): id is IdZone {
 /** Une teinte posée sur une zone : ce que garde une simulation, et ce que montre l'espace client. */
 export type ZoneTeinte = { zone: string; libelle: string; ref: string; nom: string };
 
+/**
+ * Zones du simulateur du site qui en couvrent plusieurs ici : « Façades (toutes) » habille les
+ * meubles hauts ET les meubles bas. Dépliées à la lecture, pour que le choix zone par zone de
+ * l'espace et la validation parlent des mêmes zones que le simulateur du CRM.
+ */
+const ZONES_COMPOSEES: Record<string, IdZone[]> = { "facades-cuisine": ["meubles-hauts", "meubles-bas"] };
+
 export function lireZones(json: string | null | undefined): ZoneTeinte[] {
   if (!json) return [];
   try {
     const valeur: unknown = JSON.parse(json);
     if (!Array.isArray(valeur)) return [];
-    return valeur
+    const zones = valeur
       .filter((z): z is ZoneTeinte => !!z && typeof z === "object" && typeof (z as ZoneTeinte).ref === "string")
       .map((z) => ({ zone: String(z.zone ?? ""), libelle: String(z.libelle ?? ""), ref: z.ref, nom: String(z.nom ?? "") }));
+    // Une zone nommée pour elle-même l'emporte sur celle venue du dépliage.
+    const explicites = new Set(zones.filter((z) => !ZONES_COMPOSEES[z.zone]).map((z) => z.zone));
+    return zones.flatMap((z) => {
+      const cibles = ZONES_COMPOSEES[z.zone];
+      if (!cibles) return [z];
+      return cibles.filter((zone) => !explicites.has(zone)).map((zone) => ({ ...z, zone, libelle: ZONES[zone].libelle }));
+    });
   } catch {
     return [];
   }

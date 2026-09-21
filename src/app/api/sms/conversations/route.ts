@@ -28,14 +28,22 @@ const schemaOuverture = z
     numero: z.string().trim().max(40).optional(),
     leadId: z.string().max(40).optional(),
     clientId: z.string().max(40).optional(),
+    dossierId: z.string().max(40).optional(),
   })
-  .refine((v) => v.numero || v.leadId || v.clientId, "Indique un numéro, un contact ou un client.");
+  .refine((v) => v.numero || v.leadId || v.clientId || v.dossierId, "Indique un numéro, un contact, un client ou un dossier.");
 
 /** POST { numero } | { leadId } | { clientId } : ouvre (ou retrouve) la conversation de cette personne. */
 export async function POST(requete: NextRequest) {
   try {
     const entree = analyser(schemaOuverture, await lireCorpsJson(requete));
     let numero = entree.numero ?? null;
+    if (entree.dossierId) {
+      const dossier = await prisma.dossier.findUnique({ where: { id: entree.dossierId }, select: { clientTelephone: true, leadId: true, clientId: true } });
+      if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
+      numero = numero ?? dossier.clientTelephone;
+      entree.leadId = entree.leadId ?? dossier.leadId ?? undefined;
+      entree.clientId = entree.clientId ?? dossier.clientId ?? undefined;
+    }
     if (!numero && entree.leadId) numero = (await prisma.lead.findUnique({ where: { id: entree.leadId }, select: { telephone: true } }))?.telephone ?? null;
     if (!numero && entree.clientId) {
       const telephone = await prisma.clientTelephone.findFirst({ where: { clientId: entree.clientId }, orderBy: [{ principal: "desc" }, { createdAt: "desc" }], select: { numero: true } });

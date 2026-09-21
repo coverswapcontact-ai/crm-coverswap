@@ -126,6 +126,19 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
     const depuisAdresse = () => new URL(window.location.href).searchParams.get("c");
     const initial = depuisAdresse();
     if (initial) ouvrir(initial, { historique: false });
+    // ?lead=… ou ?dossier=… (lien « Envoyer par SMS » d'une fiche) : la conversation de cette personne s'ouvre, créée au besoin.
+    const adresse = new URL(window.location.href);
+    const cible = adresse.searchParams.get("lead") ? { leadId: adresse.searchParams.get("lead") } : adresse.searchParams.get("dossier") ? { dossierId: adresse.searchParams.get("dossier") } : null;
+    if (!initial && cible) {
+      envoyerJson<{ conversation: ConversationResume }>("/api/sms/conversations", "POST", cible)
+        .then(({ conversation }) => {
+          adresse.searchParams.delete("lead");
+          adresse.searchParams.delete("dossier");
+          window.history.replaceState(null, "", adresse);
+          ouvrir(conversation.id);
+        })
+        .catch((erreur) => toast.error(messageErreur(erreur)));
+    }
     // Le geste « retour » du téléphone referme la conversation au lieu de quitter l'écran.
     const surRetour = () => ouvrir(depuisAdresse(), { historique: false });
     window.addEventListener("popstate", surRetour);

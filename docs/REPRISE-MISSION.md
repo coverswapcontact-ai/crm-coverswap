@@ -57,7 +57,14 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       temps réel, coupure réseau puis reprise, lien d'espace pré-rempli. Captures d'écran impossibles
       (fenêtre en arrière-plan) : vérifié par lecture du DOM.
       RESTE : entrée `/messagerie` sans navigation pour l'icône « Messages » (lot 7).
-- [ ] Lot 4 — Espace client (lien signé, photos, choix, simulations, devis, bon pour accord, acompte)
+- [x] Lot 4 — Espace client. CRM : `src/lib/espace/` (liens signés, service, tâche d'alerte photos), API publique
+      `/api/espace/[jeton]/[[...action]]` (CORS coverswap.fr, limites, anti-devinette), routes CRM
+      `/api/dossiers/[id]/espace(/simulations)`, panneau `EspaceDossier.tsx`, bouton « Lien espace client » sur la
+      fiche contact. SITE : `coverswap/src/app/e/[jeton]` + `src/components/espace/EspaceClient.tsx`,
+      `HorsEspaceClient` (ni habillage ni mesure d'audience sur /e/), robots. EN PROD : site `79b272e`.
+      ESSAYÉ EN LOCAL de bout en bout (2 serveurs) : photos réduites puis déposées, envies, simulations déposées
+      par Lucas, choix + commentaire, devis, adresse complétée, bon pour accord → dossier Signé, RIB affiché.
+      RESTE (facultatif) : paiement par carte Stripe (prévu : `paiementCarte` si STRIPE_SECRET_KEY, non construit).
 - [ ] Lot 5 — Relances proposées (file de validation, plafond 5 messages / 10 jours, perdu sans réponse)
 - [ ] Lot 6 — Écran de pilotage commercial
 - [ ] Lot 7 — Application mobile (2 manifestes, 2 icônes, push web, hors ligne, appareil photo)

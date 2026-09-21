@@ -38,6 +38,7 @@ import { ChangementEtape } from "./ChangementEtape";
 import { CoordonneesClient } from "./CoordonneesClient";
 import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
+import { EspaceDossier } from "./EspaceDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
 import { DepensesDossier } from "./DepensesDossier";
 import { PaiementsDossier } from "./PaiementsDossier";
@@ -222,6 +223,7 @@ function ContenuPanneau({
             onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
             onMisAJour={onMisAJour}
           />
+          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} />
           <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
           <DepensesDossier detail={detail} />
           <section>

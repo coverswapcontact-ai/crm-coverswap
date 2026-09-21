@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -165,11 +165,33 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
               <a href={`tel:${telephone}`} className={LIEN_ACTION}>
                 <Phone size={14} aria-hidden /> {detail.telephone}
               </a>
-              <a href={`sms:${telephone}`} className={LIEN_ACTION}>
+              <Link href={`/sms?lead=${detail.id}`} className={LIEN_ACTION}>
                 <MessageSquare size={14} aria-hidden /> SMS
-              </a>
+              </Link>
             </>
           ) : null}
+          {detail.archiveLe ? null : (
+            <button
+              type="button"
+              disabled={envoi === "espace"}
+              className={LIEN_ACTION}
+              onClick={async () => {
+                setEnvoi("espace");
+                try {
+                  const { lien } = await envoyerJson<{ lien: string }>(`/api/prospects/entrants/${detail.id}/espace`, "POST");
+                  await navigator.clipboard.writeText(lien).catch(() => undefined);
+                  toast.success("Lien de l'espace client copié", { description: lien });
+                  onMisAJour(await appelApi<{ entrant: EntrantDetail }>(`/api/prospects/entrants/${detail.id}`).then((reponse) => reponse.entrant));
+                } catch (probleme) {
+                  toast.error("Espace client indisponible", { description: messageErreur(probleme) });
+                } finally {
+                  setEnvoi(null);
+                }
+              }}
+            >
+              <Link2 size={14} aria-hidden /> Lien espace client
+            </button>
+          )}
           {detail.email ? (
             <a href={`mailto:${detail.email}`} className={LIEN_ACTION}>
               <Mail size={14} aria-hidden /> E-mail

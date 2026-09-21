@@ -61,8 +61,8 @@ export function profilDe(r: Pick<Reference, "nom" | "famille" | "categorie" | "t
 }
 
 const LIBELLES_PROFIL: Record<Profil, string> = {
-  "uni-mat": "uni mat",
-  "uni-brillant": "uni brillant",
+  "uni-mat": "uni",
+  "uni-brillant": "uni",
   "uni-raye": "uni rainuré",
   bois: "bois",
   "bois-peint": "bois peint",
@@ -111,7 +111,7 @@ export function decrireTeintePourPrompt(r: Reference, analyse: AnalyseCouleur | 
     case "uni-raye":
       return `${tete} — solid colour with fine tone-on-tone embossed stripes, a few millimetres apart, running ${sens}: ${avecCouleur("colour")}; ${finitionEn(r, profil)}.`;
     case "bois":
-      return `${tete} — wood-grain decor${r.tags.length ? ` (${r.tags.filter((t) => t !== "bois").join(", ") || "wood"})` : ""}: ${avecCouleur("base tone")}; grain ${motif ?? "as on the sample"}, running ${sens}, continuous over each panel, true-to-life scale (grain lines millimetres to a few centimetres apart — never enlarged into stripes, never shrunk into noise), no visibly repeated knot; ${finitionEn(r, profil)}.`;
+      return `${tete} — wood-grain decor: ${avecCouleur("base tone")}; grain ${motif ?? "as on the sample"}, running ${sens}, continuous over each panel, true-to-life scale (grain lines millimetres to a few centimetres apart — never enlarged into stripes, never shrunk into noise), no visibly repeated knot; ${finitionEn(r, profil)}.`;
     case "bois-peint":
       return `${tete} — painted-wood decor: opaque ${avecCouleur("colour")} with a faint tone-on-tone wood grain running ${sens}; ${finitionEn(r, profil)}.`;
     case "marbre":

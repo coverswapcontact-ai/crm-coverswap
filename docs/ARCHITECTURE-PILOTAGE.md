@@ -1724,3 +1724,100 @@ Le ménage des leads de test du 21/09/2026 est une migration à **liste explicit
 (`menage-des-leads-de-test-21-09`), relevée en production en lecture seule : un
 identifiant qui ne ressemble plus à un test est laissé tel quel ; seuls les dossiers
 vides ouverts ce jour-là par le rattrapage des simulations sont archivés avec eux.
+
+## 22. Espace client v2, simulateur du CRM, bibliothèque de prompts (21/09/2026)
+
+Trois morceaux d'un même système : l'espace où le client décide, le simulateur où Lucas
+prépare les rendus, la bibliothèque qui fixe les prompts. **Un seul moteur de génération.**
+
+### Espace client (site `coverswap/src/components/espace`, API CRM `/api/espace/<jeton>/…`)
+
+Une seule chose à faire à la fois : l'étape se déduit des faits (`src/lib/espace/etapes.ts`,
+pur) — devis à signer > simulations à choisir > photos manquantes > projet à préciser > attente.
+Progression en cinq étapes (Photos, Projet, Simulation, Devis, Acompte). Rien n'est redemandé :
+ce que le formulaire Meta ou le site a dit (délai, propriétaire, taille, zones, teintes essayées)
+préremplit l'écran.
+
+- **Photos** : guide illustré (vue d'ensemble, hauts, bas, plan, détail), bons et mauvais exemples ;
+  appareil ou galerie, plusieurs à la fois ; réduction à 2 000 px avant envoi, HEIC accepté ;
+  file d'attente IndexedDB (réseau coupé : rien n'est perdu, renvoi automatique) ; progression par
+  photo. Côté CRM : un seul événement par dépôt (regroupé 15 min), alerte, photos du dossier + Drive.
+- **Projet** (`src/lib/espace/projet.ts`) : zones en cartes dessinées, goûts sur vrais échantillons
+  (« je ne sais pas, proposez-moi »), mètres avec repères (un mur ≈ 3 m, en L ≈ 5, en U ≈ 7,
+  îlot ≈ 8), délai s'il est inconnu ; enregistré au fil de la saisie ; résumé dans le dossier.
+- **Simulations** : seulement les publiées ; avant/après sur SA photo, côte à côte, plein écran ;
+  choisir une proposition ou composer zone par zone (`choix` composite) ; demander une autre
+  proposition avec un commentaire. Chaque geste : événement, prochaine action, alerte.
+- **Devis** : lignes, total, acompte/solde, conditions (celles du PDF, `src/lib/pdf/conditions.ts`),
+  PDF ; consultations comptées une fois par 30 min, de façon atomique (alerte à la 1re et à la 3e :
+  « il hésite ») ; adresse (suggestions BAN, code postal du dossier d'abord) et e-mail demandés ici
+  seulement s'ils manquent ; bon pour accord = case + signature au doigt facultative (PNG gardé avec
+  l'accord), horodatage, IP, navigateur ; sous le bouton, ce qui manque encore, en clair.
+- **Acompte** : montant, RIB copiable (l'IBAN ne se coupe qu'entre ses groupes), référence du
+  virement, emplacement « carte » activable plus tard, « et ensuite » ; après chantier : avis
+  (publication sur le site seulement avec accord).
+- Sécurité : lien signé, expirable, révocable ; aucun compte ; aucune mesure tierce (les visites
+  sont comptées par le CRM, 1 par 10 min) ; **aperçu** pour Lucas (`?apercu=`, marque signée
+  valable deux jours, lecture seule, visites non comptées).
+
+### Simulations du dossier (`src/lib/simulations/dossier.ts`)
+
+Sources SITE | CHATGPT | API | MANUEL ; statuts BROUILLON → PUBLIEE ⇄ MASQUEE ; « retirer » archive.
+Tout arrive en brouillon sauf les simulations faites par le client lui-même sur le site.
+« Publier » : visible dans l'espace, étape Simulation, SMS `SIMULATION_PRETE` proposé (décoché si
+un SMS est parti il y a moins de deux heures), texte modifiable avec compte de caractères.
+
+Client existant qui refait une simulation sur le site : rattachée par téléphone puis e-mail au
+dossier vivant, rangée dans son espace, alerte « il est en train de se décider ». Téléphone et
+e-mail différents mais même nom et même ville ou code postal sous 21 jours : **doublon probable**
+(`src/lib/prospects/doublons.ts`, `Lead.doublonDe`) signalé dans Leads, fusion en un clic (le
+doublon est archivé, ses simulations et photos rejoignent le dossier, une note reprend ses
+coordonnées et son message) ou « ce n'est pas la même personne ».
+
+### Simulateur du CRM (`/simulateur`, `src/lib/simulateur/`)
+
+Client/dossier → photo avant (parmi les siennes) → type de surface (10 types, `types-surface.ts`) →
+une teinte par zone (catalogue du site, goûts du client et teintes essayées en premier, recherche
+en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/recherche-finitions.ts`).
+
+- **Par l'API** : coût estimé sur le bouton ; la consigne vient **du site** (`POST
+  /api/simulation/consigne`, signée HMAC, mêmes prompts spécialisés que le simulateur public) et
+  la génération passe par `genererRendu` (`src/lib/simulations/generation.ts`), exactement le
+  service de `/api/simulate`. Résultat en brouillon avec son coût réel (lu dans `usage`).
+- **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
+  section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
+  film, verrous, contrôle final), planche PNG (grands échantillons étiquetés par zone,
+  `next/og`), photo avant recadrée au format de sortie. iPhone : « Enregistrer les 2 images »
+  (feuille de partage), « Copier le prompt », « Ouvrir ChatGPT », puis « Déposer l'image » : le
+  rendu reprend seul la photo avant, les teintes, le type et la version du prompt (dernière
+  préparation ChatGPT de moins de 72 h, `PreparationSimulation`).
+- **Couleurs mesurées** (`couleur.ts`) : moyenne Lab sur l'échantillon, mise en mots (un chêne est
+  « miel » ou « beige », jamais « jaune ») ; cache `analyses-couleur.json`, travail périodique
+  `catalogue-couleurs`.
+- **Crédit** (`consommation.ts`) : chaque génération (site ou CRM) laisse une `GenerationImage`
+  immuable (jetons, coût) ; compteur du mois, solde estimé depuis le paramètre
+  `SIMULATEUR_CREDIT_OPENAI` (ou `OPENAI_ADMIN_KEY` si posée), alerte sous 2 $.
+
+### Bibliothèque de prompts (`/simulateur/prompts`, `bibliotheque.ts`, `prompts-defaut.ts`)
+
+Un prompt par type de surface ; chaque enregistrement est une nouvelle version immuable
+(`PromptSimulationVersion`), « revenir » recopie une ancienne version sous un nouveau numéro.
+Vérification avant enregistrement (`verifierModele`) : une section `[zone:…]` par zone avec
+`{{teinte}}` et `{{etiquette}}`, balises équilibrées, variables connues, « Image 1 / Image 2 ».
+Chaque version affiche ses résultats (simulations, publiées, masquées, choisies).
+
+### Espaces clients (`/espaces`, `src/lib/espace/suivi.ts`)
+
+Une carte par espace : étape, ce qui est fait, dernière visite, qui a la main (moi / client) ;
+signaux (photos sans simulation, autre proposition demandée, brouillons, devis relu sans
+signature, lien jamais ouvert après 48 h, lien qui expire, date à fixer) ; tri « à moi d'abord » ;
+actions (dossier, voir comme le client, copier, renvoyer par SMS — `LIEN_ESPACE` à l'étape photos,
+`LIEN_ESPACE_RAPPEL` ensuite —, simulateur, renouveler, désactiver). Rien d'autre que l'espace :
+le reste vit dans Dossiers.
+
+### Migration et essais
+
+Migration `simulateur-espace-21-09` : prompts d'origine, messages types manquants
+(`RELANCE_DEVIS_QUESTIONS`, `LIEN_ESPACE_RAPPEL`), repérage des copies de rendus dans les photos
+du dossier. Essais : `src/lib/espace/espace-v2.test.ts`, `src/lib/simulateur/simulateur.test.ts`,
+`src/lib/prospects/doublons.test.ts`.

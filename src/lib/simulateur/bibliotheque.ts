@@ -16,9 +16,8 @@ import { TYPES_SURFACE, typeSurface } from "./types-surface";
  * produite — c'est ce qui dira, avec le temps, quels prompts rendent le mieux.
  */
 
-export type StatistiquesVersion = { simulations: number; publiees: number; masquees: number; choisies: number };
-export type VersionVue = { numero: number; note: string | null; auteur: string | null; le: string; courante: boolean; longueur: number; stats: StatistiquesVersion };
-export type PromptVue = { typeSurface: string; libelle: string; zones: string[]; versionCourante: number; texte: string; misAJourLe: string; versions: VersionVue[] };
+export type { PromptVue, StatistiquesVersion, VersionVue } from "./bibliotheque-types";
+import type { PromptVue, StatistiquesVersion } from "./bibliotheque-types";
 
 /** Pose la version 1 des prompts qui manquent ; ne réécrit jamais un prompt existant. */
 export async function poserPromptsParDefaut(client: BaseDonnees = prisma): Promise<number> {

@@ -43,22 +43,42 @@ simulateur CRM et générateur de prompts » (transcript de la session).
 
 ## Lots et avancement
 
-- [ ] A1 Schéma Prisma (colonnes + 4 modèles) et migration de données (anciennes simulations, rendus du site).
-- [ ] A2 Espace v2 côté CRM : état par étape, projet, choix composite, consultations du devis,
+- [x] A1 Schéma Prisma (colonnes + 4 modèles) et migration de données (anciennes simulations, rendus du site).
+- [x] A2 Espace v2 côté CRM : état par étape, projet, choix composite, consultations du devis,
       accord + signature, avis, adresse (BAN via CRM), portrait, aperçu, événements + notifications.
-- [ ] A3 Simulations du dossier : liste, publication (+ SMS), masquer, dépôt, synchro site.
-- [ ] A4 Simulateur : types de surface, catalogue, bibliothèque de prompts (textes soignés), préparation
+- [x] A3 Simulations du dossier : liste, publication (+ SMS), masquer, dépôt, synchro site.
+- [x] A4 Simulateur : types de surface, catalogue, bibliothèque de prompts (textes soignés), préparation
       ChatGPT (prompt, planche, photo), mode API (tâche), consommation / crédit.
-- [ ] A5 Suivi des espaces (onglet Espaces clients) : état, signaux, tri, filtres, actions.
-- [ ] A6 Site refait par un client qui a déjà un espace ; doublon probable + fusion en un clic.
-- [ ] A7 Relances : visites, consultations du devis, brouillons exclus.
-- [ ] B  Site : espace client v2 (coverswap/src/components/espace), routes catalogue + consigne,
+- [x] A5 Suivi des espaces (onglet Espaces clients) : état, signaux, tri, filtres, actions.
+- [x] A6 Site refait par un client qui a déjà un espace ; doublon probable + fusion en un clic.
+- [x] A7 Relances : visites, consultations du devis, brouillons exclus.
+  → commit local `2af0b85` (NON poussé) ; 346 tests verts. Routes site `api/catalogue` et
+    `api/simulation/consigne` écrites dans coverswap (non commitées).
+- [x] B  Site : espace client v2 (coverswap/src/components/espace), routes catalogue + consigne,
       images du guide photo et des styles, préchargement du héros hors espace.
-- [ ] C  CRM : navigation, /espaces, panneau dossier (simulations), /simulateur (+ Prompts), Leads (doublon),
+- [x] C  CRM : navigation, /espaces, panneau dossier (simulations), /simulateur (+ Prompts), Leads (doublon),
       Paramètres (portrait, crédit OpenAI).
-- [ ] D  Tests unitaires + parcours réels (iPhone, réseau lent, quitter/revenir, 60 ans ; simulateur
+- [x] D  Tests unitaires + parcours réels (iPhone, réseau lent, quitter/revenir, 60 ans ; simulateur
       ChatGPT de bout en bout ; API ; site avec un client existant).
 - [ ] E  Déploiement (CRM puis site) et vérification en production sans y créer de données.
 - [ ] F  Rapport final avec captures mobiles.
 
 ## Journal
+- 21/09 : serveur du CRM terminé et testé (lots A1-A7). Reste : interfaces (site B, CRM C), parcours réels (D),
+  déploiement (E), rapport (F). Pièges : une barre oblique inverse suivie de « n » dans un patch Python en
+  heredoc devient un vrai retour à la ligne (casse les regex) — écrire ces morceaux avec Write/Edit ; les déclencheurs d'immuabilité ne sont pas
+  posés dans la base d'essai (appeler `installerDeclencheurs()` dans le test qui en dépend).
+- 21/09 (après-midi) : parcours réels faits en local (Marie, Jeanne) : ChatGPT de bout en bout (préparation →
+  planche/photo/prompt → dépôt → brouillon → publication + SMS simulé → vu dans l'espace), API (faux OpenAI :
+  brouillon + coût + compteur), choix composé, autre proposition, devis lu/signé au doigt, acompte, simulation
+  du site par une cliente existante (rangée sans doublon), doublon probable (même nom/ville) fusionné.
+  Correctifs issus des essais : recherche de teintes en français (CRM + site), nommage des couleurs chaudes
+  (plus de « jaune » pour un chêne), comptage atomique des consultations du devis, suggestions d'adresse
+  par code postal, CORS local du simulateur (dev seulement), repli du simulateur du site si le CRM est
+  injoignable, message « il reste à… » sous « Bon pour accord », IBAN non coupé, SMS « renvoyer le lien »
+  neutre (LIEN_ESPACE_RAPPEL, posé par la migration simulateur-espace-21-09).
+  Simulation API RÉELLE impossible en local : aucune clé OpenAI sur le poste (elle n'existe que sur Railway).
+  Captures mobiles : scratchpad/captures (Chrome sans interface, script captures.mjs, plans planN.json).
+  Piège : `.next/dev` corrompu après un arrêt brutal → toutes les routes /api en 404 ; le déplacer (pas supprimer).
+  Reste : E (tests complets, lint, builds, commit chemins explicites — jamais src/proxy.ts —, push CRM puis
+  site, vérif prod) et F (rapport + captures finales).

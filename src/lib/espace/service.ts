@@ -176,7 +176,8 @@ function devisPourLeClient(devis: { id: string; numero: string | null; objet: st
     acomptePct: devis.acomptePct,
     solde: montants.soldeCentimes / 100,
     conditions: conditionsDuDevis(lignes, devis.acomptePct),
-    mentionTva: EMETTEUR.mentionTva,
+    // Le PDF l'écrit en capitales ; à l'écran, en phrase lisible.
+    mentionTva: /293 B/i.test(EMETTEUR.mentionTva) ? "TVA non applicable, article 293 B du CGI" : EMETTEUR.mentionTva,
     emisLe: emisLe.toISOString(),
     valableJusquau: new Date(emisLe.getTime() + 30 * 86_400_000).toISOString(),
     accepte: accord ? { le: accord.createdAt.toISOString(), nom: accord.nomSignataire } : null,
@@ -333,11 +334,17 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
 /** Une visite : comptée, datée ; la première est notée dans le dossier et sonne (Lucas sait que le lien a été ouvert). */
 export async function noterVisite(espace: EspaceClient): Promise<void> {
   const maintenant = new Date();
-  // Une rafale de requêtes de la même page ne compte que pour une visite.
-  if (espace.dernierAccesLe && maintenant.getTime() - espace.dernierAccesLe.getTime() < 10 * 60_000) return;
-  const premiere = !espace.premierAccesLe;
+  const ilYADixMinutes = new Date(maintenant.getTime() - 10 * 60_000);
+  // Une rafale de requêtes de la même page ne compte que pour une visite — y compris deux requêtes
+  // simultanées : la condition est vérifiée par la base, pas sur une lecture déjà périmée.
+  let premiere = false;
   await avecActeur(ACTEUR, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { dernierAccesLe: maintenant, nbAcces: { increment: 1 }, ...(premiere ? { premierAccesLe: maintenant } : {}) } });
+    const { count } = await prisma.espaceClient.updateMany({
+      where: { id: espace.id, OR: [{ dernierAccesLe: null }, { dernierAccesLe: { lt: ilYADixMinutes } }] },
+      data: { dernierAccesLe: maintenant, nbAcces: { increment: 1 } },
+    });
+    if (count === 0) return;
+    premiere = (await prisma.espaceClient.updateMany({ where: { id: espace.id, premierAccesLe: null }, data: { premierAccesLe: maintenant } })).count === 1;
     if (premiere) {
       await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_VISITE", direction: "ENTRANT", contenu: "Le client a ouvert son espace pour la première fois", metadata: JSON.stringify({ espaceId: espace.id }) } });
     }
@@ -371,9 +378,13 @@ export async function deposerPhotos(espace: EspaceClient, fichiers: File[]): Pro
       }
     }
     if (deposees > 0) {
-      await prisma.dossierEvenement.create({
-        data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu: `${deposees} photo${deposees > 1 ? "s" : ""} déposée${deposees > 1 ? "s" : ""} par le client dans son espace`, metadata: JSON.stringify({ nombre: deposees }) },
-      });
+      // Le téléphone envoie les photos une à une : un dépôt en plusieurs envois reste UN événement.
+      const recent = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", createdAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { createdAt: "desc" } });
+      const deja = recent ? Number((JSON.parse(recent.metadata || "{}") as { nombre?: number }).nombre) || 0 : 0;
+      const total = deja + deposees;
+      const contenu = `${total} photo${total > 1 ? "s" : ""} déposée${total > 1 ? "s" : ""} par le client dans son espace`;
+      if (recent) await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu, metadata: JSON.stringify({ nombre: total }) } });
+      else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ nombre: total }) } });
       // La balle passe dans le camp de Lucas.
       if (!dossier.prochaineAction || /attendre les photos/i.test(dossier.prochaineAction)) {
         await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer la simulation (photos reçues)", prochaineActionDate: new Date() } });
@@ -394,6 +405,7 @@ export async function alerterPhotosDeposees(dossierId: string): Promise<{ photos
   ]);
   if (!dossier) return { photos: 0 };
   const nombre = evenements.reduce((n, e) => n + (Number((JSON.parse(e.metadata) as { nombre?: number }).nombre) || 0), 0);
+  // (un dépôt en plusieurs envois n'écrit qu'un événement, mis à jour : sa somme est le nombre de photos du dépôt)
   if (nombre === 0) return { photos: 0 };
   await prevenir(dossierId, {
     titre: `Photos reçues — ${dossier.clientNom}`,
@@ -485,20 +497,36 @@ export async function completerCoordonnees(espace: EspaceClient, entree: z.outpu
 }
 
 /** Saisie assistée de l'adresse : la Base adresse nationale, interrogée par le CRM (le client ne parle qu'au CRM). */
-export async function proposerAdresses(recherche: string): Promise<{ libelle: string; adresse: string; codePostal: string; ville: string }[]> {
+type AdresseProposee = { libelle: string; adresse: string; codePostal: string; ville: string };
+
+/**
+ * Adresses proposées pendant la saisie (Base Adresse Nationale). Les adresses
+ * du code postal déjà connu du dossier passent en premier : « 5 rue des
+ * Cigales » tapé par une cliente de Lattes doit donner Lattes, pas un homonyme
+ * à l'autre bout de la région.
+ */
+export async function proposerAdresses(recherche: string, dossierId?: string): Promise<AdresseProposee[]> {
   const q = recherche.trim().slice(0, 120);
   if (q.length < 4) return [];
-  try {
-    const reponse = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5&autocomplete=1`, { signal: AbortSignal.timeout(4000) });
-    if (!reponse.ok) return [];
-    const donnees = (await reponse.json()) as { features?: { properties?: { label?: string; name?: string; postcode?: string; city?: string; type?: string } }[] };
-    return (donnees.features ?? [])
-      .map((f) => f.properties ?? {})
-      .filter((p) => p.label && p.postcode && p.city)
-      .map((p) => ({ libelle: p.label!, adresse: p.type === "municipality" ? "" : (p.name ?? ""), codePostal: p.postcode!, ville: p.city! }));
-  } catch {
-    return [];
-  }
+  const chercher = async (filtre: string): Promise<AdresseProposee[]> => {
+    try {
+      const reponse = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5&autocomplete=1${filtre}`, { signal: AbortSignal.timeout(4000) });
+      if (!reponse.ok) return [];
+      const donnees = (await reponse.json()) as { features?: { properties?: { label?: string; name?: string; postcode?: string; city?: string; type?: string } }[] };
+      return (donnees.features ?? [])
+        .map((f) => f.properties ?? {})
+        .filter((p) => p.label && p.postcode && p.city)
+        .map((p) => ({ libelle: p.label!, adresse: p.type === "municipality" ? "" : (p.name ?? ""), codePostal: p.postcode!, ville: p.city! }));
+    } catch {
+      return [];
+    }
+  };
+  const dossier = dossierId ? await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientCp: true } }) : null;
+  const cp = dossier?.clientCp && /^\d{5}$/.test(dossier.clientCp) && !/\b\d{5}\b/.test(q) ? dossier.clientCp : null;
+  const [proches, partout] = await Promise.all([cp ? chercher(`&postcode=${cp}`) : Promise.resolve([]), chercher("")]);
+  const vues = new Set<string>();
+  // Trois du code postal au plus : si la rue n'y existe pas, la bonne adresse ailleurs reste proposée.
+  return [...proches.slice(0, 3), ...partout].filter((a) => !vues.has(a.libelle) && Boolean(vues.add(a.libelle))).slice(0, 5);
 }
 
 /* ── Simulations ───────────────────────────────────────────────────── */
@@ -646,13 +674,28 @@ export async function noterConsultationDevis(espace: EspaceClient, documentId: s
   const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } }, select: { id: true, numero: true } });
   if (!devis) throw new ErreurMetier("Devis introuvable.", 404);
   const maintenant = new Date();
-  const memeDevis = espace.devisConsulteId === devis.id;
-  if (memeDevis && espace.devisConsulteLe && maintenant.getTime() - espace.devisConsulteLe.getTime() < 30 * 60_000) return { consultations: espace.devisConsultations };
-  const consultations = memeDevis ? espace.devisConsultations + 1 : 1;
+  const seuil = new Date(maintenant.getTime() - 30 * 60_000);
+  // Mise à jour conditionnelle, atomique : deux requêtes simultanées (double appui, page + PDF)
+  // ne comptent qu'une consultation et ne préviennent qu'une fois.
+  let pris = { count: 0 };
+  await avecActeur(ACTEUR, async () => {
+    pris = await prisma.espaceClient.updateMany({
+      where: { id: espace.id, devisConsulteId: devis.id, OR: [{ devisConsulteLe: null }, { devisConsulteLe: { lt: seuil } }] },
+      data: { devisConsultations: { increment: 1 }, devisConsulteLe: maintenant },
+    });
+    if (pris.count === 0) {
+      pris = await prisma.espaceClient.updateMany({
+        where: { id: espace.id, OR: [{ devisConsulteId: null }, { devisConsulteId: { not: devis.id } }] },
+        data: { devisConsultations: 1, devisConsulteId: devis.id, devisConsulteLe: maintenant },
+      });
+    }
+  });
+  const apres = await prisma.espaceClient.findUnique({ where: { id: espace.id }, select: { devisConsultations: true } });
+  const consultations = apres?.devisConsultations ?? 1;
+  if (pris.count === 0) return { consultations };
   const accord = await prisma.accordDevis.findFirst({ where: { documentId: devis.id }, select: { id: true } });
   const contenu = `Le client a consulté son devis ${devis.numero} ${consultations === 1 ? "pour la première fois" : `— ${consultations} fois (dernière le ${maintenant.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" })} à ${maintenant.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" })})`}`;
   await avecActeur(ACTEUR, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsultations: consultations, devisConsulteId: devis.id, devisConsulteLe: maintenant } });
     const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", metadata: { contains: devis.id } }, orderBy: { createdAt: "desc" } });
     if (evenement) await prisma.dossierEvenement.update({ where: { id: evenement.id }, data: { contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });
     else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", direction: "ENTRANT", contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });

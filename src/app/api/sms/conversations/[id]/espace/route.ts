@@ -5,7 +5,7 @@ import { preparerLienEspace } from "@/lib/sms/suggestions";
 
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ modele: z.enum(["LIEN_ESPACE", "INJOIGNABLE_LIEN"]).optional() });
+const schema = z.object({ modele: z.enum(["LIEN_ESPACE", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL"]).optional() });
 
 /**
  * POST : ouvre l'espace client (et le dossier s'il n'existe pas encore) et rend

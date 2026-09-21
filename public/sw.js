@@ -14,7 +14,7 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;

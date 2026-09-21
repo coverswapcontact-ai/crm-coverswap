@@ -152,7 +152,7 @@ export async function GET(requete: NextRequest, contexte: Contexte) {
       return image(contenu, type, "private, max-age=86400");
     }
     if (action.length === 1 && ressource === "adresse") {
-      return NextResponse.json({ adresses: await proposerAdresses(requete.nextUrl.searchParams.get("q") ?? "") });
+      return NextResponse.json({ adresses: await proposerAdresses(requete.nextUrl.searchParams.get("q") ?? "", espace.dossierId) });
     }
     throw introuvable();
   });

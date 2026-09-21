@@ -129,7 +129,7 @@ export async function fusionnerDoublon(leadId: string): Promise<ResultatFusion> 
         dossierId,
         type: "NOTE_AJOUTEE",
         direction: "INTERNE",
-        contenu: `Contact en double fusionné : ${nomNouveau}${nouveau.telephone ? `, ${nouveau.telephone}` : ""}${nouveau.email ? `, ${nouveau.email}` : ""} (arrivé le ${nouveau.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})${bilan.simulations ? ` — ${bilan.simulations} simulation(s) rejoignent ce dossier` : ""}.`,
+        contenu: `Contact en double fusionné : ${nomNouveau}${nouveau.telephone ? `, ${nouveau.telephone}` : ""}${nouveau.email ? `, ${nouveau.email}` : ""} (arrivé le ${nouveau.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})${bilan.simulations ? ` — ${bilan.simulations} simulation(s) rejoignent ce dossier` : ""}.${nouveau.message?.trim() ? `\nSon message : « ${nouveau.message.trim().slice(0, 600)} »` : ""}`,
         metadata: JSON.stringify({ leadFusionne: nouveau.id }),
       },
     });

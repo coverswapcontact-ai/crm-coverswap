@@ -36,7 +36,7 @@ export function rendrePrompt(modele: string, entree: { type: TypeSurface; zones:
     nombre_echantillons: String(entree.zones.length),
     format: entree.format,
     zones_inchangees: inchangees.length
-      ? `• NOT COVERED: the ${listeEnAnglais(inchangees.map((z) => ZONES[z].anglais))}. They keep their original material and colour exactly.`
+      ? `• NOT COVERED: the ${listeEnAnglais(inchangees.map((z) => ZONES[z].anglais))}. ${inchangees.length > 1 ? "They keep their" : "It keeps its"} original material and colour exactly.`
       : "",
   };
   return texte

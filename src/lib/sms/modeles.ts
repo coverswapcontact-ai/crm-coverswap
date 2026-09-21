@@ -41,6 +41,12 @@ export const MODELES_PAR_DEFAUT: readonly ModeleParDefaut[] = [
     ordre: 11,
   },
   {
+    code: "LIEN_ESPACE_RAPPEL",
+    libelle: "Renvoyer le lien de l'espace (projet en cours)",
+    texte: "Bonjour {prenom}, Lucas de CoverSwap. Voici à nouveau le lien de votre espace : tout votre projet y est, à jour. {lien}",
+    ordre: 13,
+  },
+  {
     code: "INJOIGNABLE_J3",
     libelle: "Pas de réponse : second SMS à J+3",
     texte: "Bonjour {prenom}, Lucas de CoverSwap. Je n'ai pas réussi à vous joindre. Dites-moi quand vous rappeler, ou déposez vos photos ici et je vous envoie une simulation : {lien}",

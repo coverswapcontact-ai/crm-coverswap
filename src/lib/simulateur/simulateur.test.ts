@@ -127,8 +127,8 @@ describe("bibliothèque de prompts", () => {
     const texte = rendu.rendrePrompt(defauts.PROMPTS_PAR_DEFAUT.cuisine.texte, { type, zones: zones.map((zone) => ({ zone, etiquette: lettres.get(zone)!, teinte: `T-${zone}` })), format: "portrait 2:3" });
     assert.match(texte, /sample "A · Meubles hauts" on Image 2/);
     assert.doesNotMatch(texte, /BACKSPLASH — sample/);
-    assert.match(texte, /NOT COVERED: the backsplash\. They keep their original material/);
-    assert.match(texte, /3 labelled square sample/);
+    assert.match(texte, /NOT COVERED: the backsplash\. It keeps its original material/);
+    assert.match(texte, /3 in all, one per zone/);
     assert.match(texte, /portrait 2:3/);
   });
 
@@ -237,5 +237,40 @@ describe("générer par l'API", () => {
     const etat = await consommation.consommation();
     assert.deepEqual([etat.solde?.releve, etat.solde?.consommeDepuis, etat.solde?.estime], [10, 0.2, 9.8]);
     assert.ok((etat.solde?.simulationsRestantes ?? 0) > 30);
+  });
+});
+
+describe("recherche de teintes en français", () => {
+  test("noyer, chêne, béton gris, début de mot, référence", async () => {
+    const { correspondRecherche } = await import("./recherche-teintes");
+    const noyer = { ref: "AZ07", nom: "Walnut Ash", resume: "bois · brun moyen · mat", famille: "bois" };
+    const beton = { ref: "NE24", nom: "Raw Grey", resume: "béton · gris moyen · mat", famille: "beton" };
+    assert.equal(correspondRecherche(noyer, "noyer"), true);
+    assert.equal(correspondRecherche(noyer, "noy"), true);
+    assert.equal(correspondRecherche(noyer, "Chêne"), false);
+    assert.equal(correspondRecherche(beton, "béton gris"), true);
+    assert.equal(correspondRecherche(beton, "beton noir"), false);
+    assert.equal(correspondRecherche(beton, "ne24"), true);
+    assert.equal(correspondRecherche({ ref: "AA01", nom: "Beige Oak", resume: "bois · beige · mat" }, "chene clair"), false);
+    assert.equal(correspondRecherche({ ref: "AA01", nom: "Beige Oak", resume: "bois · beige · mat" }, "chene beige"), true);
+  });
+});
+
+describe("la couleur mesurée, en mots justes", () => {
+  test("les bois restent des bois : beige, miel, caramel, brun — jamais « jaune »", async () => {
+    const { couleurEnMots, rgbVersLab } = await import("./couleur");
+    const mesure = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      const lab = rgbVersLab(r, g, b);
+      return { hex, clarte: lab.L, chroma: Math.hypot(lab.a, lab.b), teinte: ((Math.atan2(lab.b, lab.a) * 180) / Math.PI + 360) % 360, contraste: 6 };
+    };
+    assert.match(couleurEnMots(mesure("#E1D4BB")).en, /beige/, "Pale Oak");
+    assert.match(couleurEnMots(mesure("#B49063")).en, /honey|tan/, "Beige Oak");
+    assert.match(couleurEnMots(mesure("#7A5634")).en, /brown|caramel/, "noyer moyen");
+    assert.match(couleurEnMots(mesure("#3E2A1E")).en, /dark brown/, "noyer foncé");
+    for (const hex of ["#E1D4BB", "#B49063", "#7A5634", "#3E2A1E"]) assert.doesNotMatch(couleurEnMots(mesure(hex)).en, /yellow/, hex);
+    assert.match(couleurEnMots(mesure("#D9A300")).en, /yellow|mustard/, "un vrai jaune reste jaune");
+    assert.match(couleurEnMots(mesure("#8C8C8A")).en, /grey/);
+    assert.match(couleurEnMots(mesure("#FFFFFF")).en, /^white/);
   });
 });

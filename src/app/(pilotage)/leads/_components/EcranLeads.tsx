@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, MessageSquare, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, GitMerge, MessageSquare, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
@@ -102,7 +102,50 @@ function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif: Motif
   );
 }
 
-function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, onOuvrir, onAppelNote, onDossier }: { lead: LigneLead; maintenant: number; occupe: boolean; selectionne: boolean; onSelection: () => void; onAction: (action: ActionLeads, motif?: MotifArchivage) => void; onOuvrir: () => void; onAppelNote: () => void; onDossier: () => void }) {
+/** Doublon probable : la même personne, revenue avec un autre numéro et un autre e-mail. Fusion en un clic, ou « ce n'est pas elle ». */
+function SignalDoublon({ lead, onRecharger }: { lead: LigneLead; onRecharger: () => Promise<void> }) {
+  const [occupe, setOccupe] = useState<"fusionner" | "ecarter" | null>(null);
+  if (!lead.doublon) return null;
+  async function agir(action: "fusionner" | "ecarter") {
+    setOccupe(action);
+    try {
+      const resultat = await envoyerJson<{ dossierId?: string | null; simulations?: number }>(`/api/leads/${lead.id}/doublon`, "POST", { action });
+      toast.success(action === "fusionner" ? `Fusionné avec ${lead.doublon!.nom}` : "Signalement écarté", {
+        description: action === "fusionner" ? `${resultat.simulations ? `${resultat.simulations} simulation(s) rangée(s) dans son dossier. ` : ""}Le contact en double est archivé ; rien n'est effacé.` : undefined,
+      });
+      await onRecharger();
+    } catch (erreur) {
+      toast.error(messageErreur(erreur));
+    } finally {
+      setOccupe(null);
+    }
+  }
+  return (
+    <div className="mt-3 rounded-[10px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/[0.08] p-2.5">
+      <p className="flex items-start gap-1.5 text-[12.5px] leading-snug text-[#FCD9A0]">
+        <GitMerge size={14} className="mt-px shrink-0" aria-hidden />
+        <span>
+          Doublon probable — {lead.doublon.motif}.
+          {lead.doublon.dossierId ? (
+            <Link href={`/dossiers?dossier=${lead.doublon.dossierId}`} className="ml-1 text-[#F5B454] underline underline-offset-2">
+              Voir son dossier
+            </Link>
+          ) : null}
+        </span>
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <Bouton taille="sm" variante="primaire" chargement={occupe === "fusionner"} disabled={occupe !== null} onClick={() => void agir("fusionner")}>
+          Fusionner avec {lead.doublon.nom}
+        </Bouton>
+        <Bouton taille="sm" variante="fantome" chargement={occupe === "ecarter"} disabled={occupe !== null} onClick={() => void agir("ecarter")}>
+          Ce n&apos;est pas la même personne
+        </Bouton>
+      </div>
+    </div>
+  );
+}
+
+function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, onOuvrir, onAppelNote, onDossier, onRecharger }: { lead: LigneLead; maintenant: number; occupe: boolean; selectionne: boolean; onSelection: () => void; onAction: (action: ActionLeads, motif?: MotifArchivage) => void; onOuvrir: () => void; onAppelNote: () => void; onDossier: () => void; onRecharger: () => Promise<void> }) {
   const [motifOuvert, setMotifOuvert] = useState(false);
   const archive = Boolean(lead.archiveLe);
   return (
@@ -116,6 +159,7 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
             <PastillePriorite priorite={lead.priorite} motif={lead.prioriteMotif} />
             {lead.simulation ? <PastilleSimulation nombre={lead.simulations.length} /> : null}
             {lead.traiteLe && !archive ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#9CA3AF]">Traité</span> : null}
+            {lead.doublon && !archive ? <span className="rounded-full border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-2 py-0.5 text-[11px] text-[#F5B454]">Doublon ?</span> : null}
             <span className="truncate text-[15px] font-medium text-[#F2F3F5]">{lead.nom}</span>
             {lead.smsNonLus > 0 ? <span className="rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
           </p>
@@ -148,6 +192,7 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
         </div>
       ) : (
       <>
+      <SignalDoublon lead={lead} onRecharger={onRecharger} />
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] gap-2 sm:grid-cols-[minmax(0,15rem)_auto_auto_auto] sm:justify-start">
         {lead.telephoneLien ? (
           <a href={lead.telephoneLien} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] px-3 text-[14.5px] font-semibold tabular-nums sm:h-10 sm:text-[13.5px]", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
@@ -635,7 +680,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
               selectionne={selection.has(lead.id)}
               onSelection={() => basculer(lead.id)}
               onAction={(action, motif) => void agir(action, [lead.id], motif, lead.archiveMotif ? (Object.entries(LIBELLES_MOTIF_ARCHIVAGE).find(([, libelle]) => libelle === lead.archiveMotif)?.[0] as MotifArchivage | undefined) : undefined)}
-              onOuvrir={() => setOuvert(lead.id)} onAppelNote={() => setFeuilleAppel(lead)} onDossier={() => void ouvrirDossier(lead)} />
+              onOuvrir={() => setOuvert(lead.id)} onAppelNote={() => setFeuilleAppel(lead)} onDossier={() => void ouvrirDossier(lead)} onRecharger={rafraichir} />
           ))}
         </ul>
       )}

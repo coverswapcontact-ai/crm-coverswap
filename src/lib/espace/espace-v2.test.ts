@@ -72,6 +72,24 @@ describe("une seule chose à faire à la fois", () => {
   });
 });
 
+describe("visites et dépôts en rafale", () => {
+  test("deux ouvertures simultanées : une seule visite, une seule « première ouverture »", async () => {
+    const { espace, dossierId } = await dossierAvecEspace("Zoé");
+    await Promise.all([service.noterVisite(espace), service.noterVisite(espace), service.noterVisite(espace)]);
+    const relu = await relire(espace.id);
+    assert.equal(relu.nbAcces, 1);
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_VISITE" } }), 1);
+  });
+
+  test("photos envoyées une à une : un seul événement, qui compte tout le dépôt", async () => {
+    const { espace, dossierId } = await dossierAvecEspace("Anaïs");
+    for (const nom of ["a.jpg", "b.jpg", "c.jpg"]) await service.deposerPhotos(espace, [photo(nom)]);
+    const evenements = await prisma.dossierEvenement.findMany({ where: { dossierId, type: "ESPACE_PHOTOS" } });
+    assert.deepEqual(evenements.map((e) => e.contenu), ["3 photos déposées par le client dans son espace"]);
+    assert.deepEqual(await service.alerterPhotosDeposees(dossierId), { photos: 3 });
+  });
+});
+
 describe("le projet du client", () => {
   test("enregistré en un geste, résumé dans le dossier ; l'ancien format reste lisible", async () => {
     const { espace, dossierId } = await dossierAvecEspace("Olivia", { tailleCuisine: "Moyenne", delaiProjet: "COURT", occupation: "PROPRIETAIRE" });
@@ -179,6 +197,14 @@ describe("le devis dans l'espace", () => {
     const evenements = await prisma.dossierEvenement.findMany({ where: { dossierId, type: "ESPACE_DEVIS_CONSULTE" } });
     assert.equal(evenements.length, 1, "un seul événement, mis à jour");
     assert.match(evenements[0].contenu, /3 fois/);
+  });
+
+  test("deux ouvertures simultanées du devis (page + PDF, double appui) : une consultation, un événement", async () => {
+    const { espace, dossierId, devis } = await avecDevis("Wanda");
+    const resultats = await Promise.all([service.noterConsultationDevis(espace, devis.id), service.noterConsultationDevis(espace, devis.id), service.noterConsultationDevis(espace, devis.id)]);
+    assert.deepEqual(resultats.map((r) => r.consultations), [1, 1, 1]);
+    assert.equal((await relire(espace.id)).devisConsultations, 1);
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_DEVIS_CONSULTE" } }), 1);
   });
 
   test("bon pour accord avec signature au doigt : l'image est gardée avec l'accord ; une signature invalide est ignorée", async () => {

@@ -13,7 +13,8 @@ const PARCOURS = /^[0-9a-fA-F-]{16,64}$/;
 
 function cors(origin: string | null): Record<string, string> {
   return {
-    "Access-Control-Allow-Origin": origin && ORIGINES.includes(origin) ? origin : ORIGINES[0],
+    // En développement, le site local (localhost:3000) est accepté ; jamais en production.
+    "Access-Control-Allow-Origin": origin && (ORIGINES.includes(origin) || (process.env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(origin))) ? origin : ORIGINES[0],
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",

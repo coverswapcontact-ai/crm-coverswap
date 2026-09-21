@@ -27,7 +27,7 @@
  * version (on revient en arrière d'un clic).
  */
 
-const IMAGES = `Image 1 is a photo of my client's {{piece}}, taken with a phone. Image 2 is a reference board: a light grey sheet showing {{nombre_echantillons}} labelled square sample(s) of Cover Styl' adhesive decor film. (If the images arrive in another order, recognise them by their content: the room is Image 1, the grey sheet of samples is Image 2.)`;
+const IMAGES = `Image 1 is a photo of my client's {{piece}}, taken with a phone. Image 2 is a reference board: a light grey sheet of labelled square samples of Cover Styl' adhesive decor film — {{nombre_echantillons}} in all, one per zone, each label naming its zone. (If the images arrive in another order, recognise them by their content: the room is Image 1, the grey sheet of samples is Image 2.)`;
 
 const METHODE = `HOW THE JOB IS DONE IN REAL LIFE: an installer wraps the existing surfaces with a 0.2 mm adhesive film. The film takes the exact shape it is laid on. It adds no thickness, moves nothing, removes nothing, repairs nothing and adds no light. Keep every shape, edge and gap of Image 1; only the skin of the listed surfaces changes.`;
 

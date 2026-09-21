@@ -39,6 +39,7 @@ import { CoordonneesClient } from "./CoordonneesClient";
 import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
 import { EspaceDossier } from "./EspaceDossier";
+import { SimulationsDossier } from "./SimulationsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
 import { DepensesDossier } from "./DepensesDossier";
 import { PaiementsDossier } from "./PaiementsDossier";
@@ -224,6 +225,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} />
+          <SimulationsDossier key={`simulations-${detail.id}`} detail={detail} onRecharger={onRecharger} />
           <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
           <DepensesDossier detail={detail} />
           <section>

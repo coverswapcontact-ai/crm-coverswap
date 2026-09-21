@@ -73,7 +73,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   const minuterieBrouillon = useRef<number | null>(null);
   const [smsProposes, setSmsProposes] = useState<SmsPropose[]>([]);
   const [retourAppels, setRetourAppels] = useState(false);
-  const [aProposer, setAProposer] = useState<{ conversationId: string; modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" } | null>(null);
+  const [aProposer, setAProposer] = useState<{ conversationId: string; modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | "LIEN_ESPACE_RAPPEL" } | null>(null);
 
   /* ── Chargements ─────────────────────────────────────────────────── */
 
@@ -145,7 +145,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
       envoyerJson<{ conversation: ConversationResume }>("/api/sms/conversations", "POST", cible)
         .then(({ conversation }) => {
           const modele = adresse.searchParams.get("proposer");
-          if (modele === "LIEN_ESPACE" || modele === "INJOIGNABLE_LIEN") setAProposer({ conversationId: conversation.id, modele });
+          if (modele === "LIEN_ESPACE" || modele === "INJOIGNABLE_LIEN" || modele === "LIEN_ESPACE_RAPPEL") setAProposer({ conversationId: conversation.id, modele });
           adresse.searchParams.delete("proposer");
           adresse.searchParams.delete("lead");
           adresse.searchParams.delete("dossier");

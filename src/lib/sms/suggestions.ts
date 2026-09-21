@@ -88,7 +88,7 @@ export async function suggestionsPourConversation(conversationId: string): Promi
  * « Envoyer le lien de l'espace client » : ouvre l'espace (et le dossier s'il
  * n'existe pas encore), puis rend le message prêt à corriger. N'envoie rien.
  */
-export async function preparerLienEspace(conversationId: string, code: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" = "LIEN_ESPACE"): Promise<{ texte: string; lien: string; modele: string; dossierId: string }> {
+export async function preparerLienEspace(conversationId: string, code: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | "LIEN_ESPACE_RAPPEL" = "LIEN_ESPACE"): Promise<{ texte: string; lien: string; modele: string; dossierId: string }> {
   const conversation = await prisma.conversationSms.findUnique({ where: { id: conversationId } });
   if (!conversation) throw new ErreurMetier("Conversation introuvable.", 404);
   const dossierRef = await dossierDeLaConversation(conversation);

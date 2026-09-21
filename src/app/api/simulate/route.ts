@@ -38,7 +38,9 @@ const ALLOWED_ORIGINS = [
 ];
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  // En développement, le site local (localhost:3000) appelle le CRM local ; jamais en production.
+  const local = process.env.NODE_ENV !== "production" && origin !== null && /^http:\/\/localhost:\d+$/.test(origin);
+  const allowed = origin && (ALLOWED_ORIGINS.includes(origin) || local) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "POST, OPTIONS",

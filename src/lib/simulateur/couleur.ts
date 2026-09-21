@@ -79,17 +79,30 @@ function familleTeinte(teinte: number, chroma: number, clarte: number): { en: st
     if (clarte < 18) return { en: "black", fr: "noir" };
     return { en: "grey", fr: "gris" };
   }
+  // Tons chauds : les bois, les sables, les beiges — « jaune » ou « orange » n'y conviennent qu'aux teintes vraiment vives.
+  if (teinte >= 20 && teinte < 100 && chroma < 26) {
+    if (clarte >= 75) return chroma < 9 ? { en: "warm off-white / greige", fr: "blanc cassé chaud" } : { en: "warm beige", fr: "beige" };
+    if (clarte >= 55) return chroma < 9 ? { en: "greige (warm grey-beige)", fr: "grège" } : { en: "sand / light tan", fr: "sable" };
+    if (clarte >= 35) return { en: "mid brown", fr: "brun moyen" };
+    return { en: "dark brown", fr: "brun foncé" };
+  }
+  if (teinte >= 20 && teinte < 100 && chroma < 45) {
+    if (teinte < 50) return clarte < 45 ? { en: "chestnut / reddish brown", fr: "châtaigne" } : { en: "warm tan / caramel", fr: "caramel" };
+    if (clarte >= 68) return { en: "honey beige", fr: "beige miel" };
+    if (clarte >= 48) return { en: "honey / light tan", fr: "miel" };
+    if (clarte >= 32) return { en: "caramel brown", fr: "brun caramel" };
+    return { en: "dark brown", fr: "brun foncé" };
+  }
   if (chroma < 12) {
-    // Neutres légèrement teintés : là où se trouvent la plupart des bois clairs, des bétons et des blancs cassés.
-    if (teinte >= 40 && teinte < 100) return clarte > 70 ? { en: "warm beige", fr: "beige chaud" } : { en: "greige (warm grey-brown)", fr: "grège" };
+    // Neutres légèrement teintés : bétons, gris colorés.
     if (teinte >= 100 && teinte < 200) return { en: "green-grey", fr: "gris vert" };
     if (teinte >= 200 && teinte < 300) return { en: "cool blue-grey", fr: "gris bleuté" };
     return { en: "warm grey", fr: "gris chaud" };
   }
   if (teinte < 20 || teinte >= 345) return { en: "red", fr: "rouge" };
-  if (teinte < 45) return clarte < 50 ? { en: "reddish brown", fr: "brun rouge" } : { en: "terracotta / salmon", fr: "terracotta" };
-  if (teinte < 70) return clarte < 55 ? { en: "brown", fr: "brun" } : chroma < 30 ? { en: "honey beige", fr: "beige miel" } : { en: "orange ochre", fr: "ocre orangé" };
-  if (teinte < 100) return clarte < 55 ? { en: "olive brown", fr: "brun olive" } : { en: "golden yellow", fr: "jaune doré" };
+  if (teinte < 45) return clarte < 50 ? { en: "rust / reddish brown", fr: "rouille" } : { en: "terracotta / salmon", fr: "terracotta" };
+  if (teinte < 70) return clarte < 55 ? { en: "ochre brown", fr: "ocre brun" } : { en: "orange ochre", fr: "ocre orangé" };
+  if (teinte < 100) return clarte < 55 ? { en: "olive brown", fr: "brun olive" } : { en: "golden yellow / mustard", fr: "jaune moutarde" };
   if (teinte < 150) return { en: "olive green", fr: "vert olive" };
   if (teinte < 200) return { en: "green", fr: "vert" };
   if (teinte < 240) return { en: "teal / blue-green", fr: "bleu canard" };
@@ -110,6 +123,11 @@ function nuanceClarte(clarte: number): { en: string; fr: string } {
 export function couleurEnMots(analyse: AnalyseCouleur): { en: string; fr: string } {
   const famille = familleTeinte(analyse.teinte, analyse.chroma, analyse.clarte);
   if (famille.en === "white" || famille.en === "black") return { en: `${famille.en} (about ${analyse.hex})`, fr: `${famille.fr} (${analyse.hex})` };
+  // Les bruns et beiges portent déjà leur clarté dans leur nom : pas de « clair » en plus, sauf l'extrême.
+  if (/brown|beige|sand|greige|off-white|tan|honey|caramel|chestnut|rust/.test(famille.en)) {
+    const tres = analyse.clarte >= 88 ? { en: "very light ", fr: " très clair" } : { en: "", fr: "" };
+    return { en: `${tres.en}${famille.en} (about ${analyse.hex})`, fr: `${famille.fr}${tres.fr} (${analyse.hex})` };
+  }
   const nuance = nuanceClarte(analyse.clarte);
   return { en: `${nuance.en} ${famille.en} (about ${analyse.hex})`, fr: `${famille.fr} ${nuance.fr} (${analyse.hex})` };
 }

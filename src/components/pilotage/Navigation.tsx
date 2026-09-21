@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, Globe, Megaphone, Menu, MessageSquare, PhoneForwarded, Receipt, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
+import { FolderKanban, Globe, Megaphone, Menu, MessageSquare, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -22,6 +22,8 @@ export function rafraichirCompteurs(): void {
 type Entree = {
   href: string;
   libelle: string;
+  /** Libellé court de la barre du bas (téléphone). */
+  court?: string;
   icone: LucideIcon;
   compteur?: keyof Compteurs;
   /** Barre du bas sur téléphone (4 entrées au plus, « Plus » en cinquième). */
@@ -29,13 +31,16 @@ type Entree = {
 };
 
 // Navigation resserrée (21/09/2026) : ce que Lucas utilise, dans l'ordre du travail — un lead
-// devient un dossier, on s'écrit par SMS, le client reste, l'argent rentre.
+// devient un dossier, le client avance dans son espace, on s'écrit par SMS, le client reste,
+// l'argent rentre. Le simulateur prépare les visuels (depuis ici ou depuis un dossier).
 // Retirés du menu, PAS du CRM : Commercial, Prospects, Mails (l'agent continue de trier),
 // À valider, Synthèse (les mois continuent d'être figés), Registre des numéros (il continue de
 // protéger la numérotation), Journal (il continue de tout enregistrer). Leurs adresses répondent toujours.
 const PRINCIPALES: Entree[] = [
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsAAppeler", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
+  { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone, mobile: true },
+  { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
   { href: "/finances", libelle: "Finances", icone: Wallet },
@@ -183,7 +188,7 @@ export function Navigation() {
                   )}
                 >
                   <Icone size={20} aria-hidden />
-                  {entree.libelle}
+                  {entree.court ?? entree.libelle}
                   {entree.compteur ? (
                     <span className="absolute top-1.5 left-1/2 ml-2">
                       <Compteur valeur={compteurs[entree.compteur]} ton={tonDe(entree.compteur)} />

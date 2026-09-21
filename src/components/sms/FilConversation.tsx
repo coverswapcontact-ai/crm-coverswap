@@ -99,7 +99,7 @@ export function FilConversation({
   brouillonInitial: string;
   onRafraichir: () => void;
   /** Après un appel noté ailleurs (écran Commercial) : ce message type est préparé à l'ouverture, à relire avant d'envoyer. */
-  proposerAuChargement?: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | null;
+  proposerAuChargement?: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | "LIEN_ESPACE_RAPPEL" | null;
   onPropose?: () => void;
 }) {
   const [texte, setTexte] = useState(brouillonInitial);
@@ -162,7 +162,7 @@ export function FilConversation({
     window.setTimeout(() => zone.current?.focus(), 50);
   }
 
-  async function lienEspace(modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" = "LIEN_ESPACE") {
+  async function lienEspace(modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | "LIEN_ESPACE_RAPPEL" = "LIEN_ESPACE") {
     setOccupe("espace");
     try {
       const reponse = await envoyerJson<{ texte: string; modele: string }>(`/api/sms/conversations/${conversation.id}/espace`, "POST", { modele });

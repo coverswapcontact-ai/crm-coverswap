@@ -235,14 +235,14 @@ export default function EcranSimulateur({ dossierInitial }: { dossierInitial: st
                           {ZONES[zone].libelle}
                           {!demandee ? <span className="ml-1.5 text-[11px] font-normal text-[#8B919C]">(pas demandé par le client)</span> : null}
                         </p>
-                        <p className="truncate text-[12px] text-[#9CA3AF]">{teinte ? `${teinte.ref} · ${teinte.nom} · ${teinte.resume}` : "Inchangé"}</p>
+                        <p className="line-clamp-2 text-[12px] text-[#9CA3AF]">{teinte ? `${teinte.ref} · ${teinte.nom} · ${teinte.resume}` : "Inchangé"}</p>
                       </div>
                       {teinte ? (
                         <button type="button" aria-label={`Retirer la teinte de ${ZONES[zone].libelle}`} onClick={() => setTeintes((t) => ({ ...t, [zone]: undefined }))} className="flex h-9 w-9 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
                           <X size={15} aria-hidden />
                         </button>
                       ) : null}
-                      <Bouton taille="sm" onClick={() => setZoneOuverte(zone)}>
+                      <Bouton taille="sm" aria-label={`${teinte ? "Changer" : "Choisir"} la teinte : ${ZONES[zone].libelle}`} onClick={() => setZoneOuverte(zone)}>
                         {teinte ? "Changer" : "Choisir"}
                       </Bouton>
                     </li>

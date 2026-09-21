@@ -18,6 +18,7 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/webhook", protection: "formulaires du site : en-tête X-Webhook-Secret vérifié par la route" },
   { chemin: "/api/webhook/meta", protection: "Meta : jeton de vérification, signature X-Hub-Signature-256 si META_APP_SECRET" },
   { chemin: "/api/webhook/zapier", protection: "Zapier : secret partagé vérifié par la route" },
+  { chemin: "/api/espace/", prefixe: true, protection: "espace client : jeton signe (HMAC) dans l'adresse, expirable et revocable ; origine restreinte au site, limite par IP, blocage des essais de liens au hasard" },
   { chemin: "/api/webhook/sms", protection: "SMS entrant pousse par un fournisseur : secret partage verifie par la route, idempotent par identifiant de message" },
   { chemin: "/api/webhook/diagnostic", protection: "diagnostic des alertes depuis un téléphone : secret partagé vérifié par la route, aucune valeur de variable rendue" },
   { chemin: "/api/cron/", prefixe: true, protection: "tâches planifiées : Authorization Bearer CRON_SECRET, refus si absente" },

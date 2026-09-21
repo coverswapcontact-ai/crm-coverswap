@@ -388,6 +388,15 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
 export async function changerStatutSimulation(dossierId: string, simulationId: string, action: "masquer" | "afficher" | "brouillon" | "retirer", motif?: string | null): Promise<SimulationVue | null> {
   const simulation = await simulationDuDossier(dossierId, simulationId);
   const maintenant = new Date();
+  // La simulation que le client a validée ne peut pas disparaître de sa galerie en restant « validée » :
+  // la masquer, la retirer ou la repasser en brouillon dévalide son choix (tracé, et le dossier le sait).
+  if (action !== "afficher" && simulation.choisieLe) {
+    const espace = await prisma.espaceClient.findUnique({ where: { id: simulation.espaceId } });
+    if (espace?.choixLe) {
+      const { devaliderChoix } = await import("@/lib/espace/validations");
+      await devaliderChoix(espace, "LUCAS");
+    }
+  }
   if (action === "retirer") {
     await prisma.simulationEspace.update({ where: { id: simulation.id }, data: { archiveLe: maintenant, archiveMotif: motif?.trim().slice(0, 200) || "Retirée du dossier" } });
     return null;

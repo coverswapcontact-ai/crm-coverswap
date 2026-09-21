@@ -199,11 +199,45 @@ export async function suivreSoldeDossier(
   return null;
 }
 
+export const RAISON_ACOMPTE_ENCAISSE = "acompte encaissé";
+
+/**
+ * L'étape suit l'argent, côté acompte (22/09/2026). Un paiement reçu sur un
+ * dossier dont le devis attend encore (« Devis envoyé », « Relance ») vaut
+ * accord : le dossier passe « Signé », le devis « accepté » — et l'espace du
+ * client le dit aussitôt (il lit les mêmes faits). À l'inverse, si ce paiement
+ * est annulé ou rejeté, qu'il n'en reste aucun et qu'aucun bon pour accord
+ * n'existe, le dossier revient à « Devis envoyé » : il n'avait avancé que pour ça.
+ */
+export async function suivreAcompteDossier(tx: Transaction, dossierId: string, sens: "AVANCE" | "RECUL"): Promise<ChangementEtape | null> {
+  const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+  if (!dossier || !estEtape(dossier.etape)) return null;
+  const valides = await tx.encaissement.count({ where: { dossierId, statut: "VALIDE" } });
+  if (sens === "AVANCE") {
+    if (!["DEVIS_ENVOYE", "RELANCE"].includes(dossier.etape) || valides === 0) return null;
+    const devis = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } });
+    if (!devis) return null;
+    if (devis.statut !== "ACCEPTE") await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
+    return appliquerChangementEtape(tx, { dossierId, de: dossier.etape, vers: "SIGNE", nature: "AUTOMATIQUE", raison: RAISON_ACOMPTE_ENCAISSE, documentId: devis.id });
+  }
+  if (dossier.etape !== "SIGNE" || valides > 0) return null;
+  if ((await tx.accordDevis.count({ where: { dossierId, retireLe: null } })) > 0) return null;
+  const dernier = await tx.dossierEvenement.findFirst({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { metadata: true } });
+  let raison: string | undefined;
+  try {
+    raison = (JSON.parse(dernier?.metadata || "{}") as { raison?: string }).raison;
+  } catch {
+    raison = undefined;
+  }
+  if (raison !== RAISON_ACOMPTE_ENCAISSE) return null;
+  return appliquerChangementEtape(tx, { dossierId, de: "SIGNE", vers: "DEVIS_ENVOYE", nature: "RETOUR", raison: "acompte annulé ou rejeté, plus aucun paiement" });
+}
+
 /** Paiement saisi : imputé, tracé sur le dossier, étape suivie. */
 export async function enregistrerEncaissement(entree: EnregistrementPaiement) {
   const { resultat, changement } = await prisma.$transaction(async (tx) => {
     const resultat = await enregistrerEncaissementDansTransaction(tx, entree);
-    const changement = resultat.dossierId ? await suivreSoldeDossier(tx, resultat.dossierId, "factures réglées") : null;
+    const changement = resultat.dossierId ? ((await suivreSoldeDossier(tx, resultat.dossierId, "factures réglées")) ?? (await suivreAcompteDossier(tx, resultat.dossierId, "AVANCE"))) : null;
     return { resultat, changement };
   });
   if (changement) await effetsDuChangementEtape(changement);
@@ -292,11 +326,13 @@ async function terminerEncaissement(
         },
       });
     }
-    return suivreSoldeDossier(
-      tx,
-      encaissement.dossierId,
-      fin.statut === "REJETE" ? "chèque rejeté, facture à nouveau due" : "paiement annulé, facture à nouveau due",
-      etaitSolde
+    return (
+      (await suivreSoldeDossier(
+        tx,
+        encaissement.dossierId,
+        fin.statut === "REJETE" ? "chèque rejeté, facture à nouveau due" : "paiement annulé, facture à nouveau due",
+        etaitSolde
+      )) ?? (await suivreAcompteDossier(tx, encaissement.dossierId, "RECUL"))
     );
   });
   if (changement) await effetsDuChangementEtape(changement);

@@ -158,6 +158,12 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
       where: { dossierId, type: "DEVIS", statut: "ACCEPTE" },
       data: { statut: "GENERE" },
     });
+    // … et un bon pour accord donné dans l'espace client ne vaut plus : sinon l'espace dirait « signé »
+    // quand le dossier dit « devis envoyé ». La preuve reste, annotée (voir espace/validations.ts).
+    await tx.accordDevis.updateMany({
+      where: { dossierId, retireLe: null },
+      data: { retireLe: new Date(), retirePar: application.raison?.includes("par le client") ? "CLIENT" : "LUCAS", retireMotif: application.raison ?? "Retour du dossier avant « Signé »" },
+    });
   }
 
   const confirmations = CRITERES_DECLARATIFS.filter((critere) => donnees.confirmations?.[critere]);

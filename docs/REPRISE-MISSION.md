@@ -183,3 +183,51 @@ devis prérempli, conversion HEIC. Le Projet perd les goûts et le délai (le pa
   invalide refusé, notes d'appel 401 sans session, page /e/ en v3). Rapport :
   https://claude.ai/artifact/1mjsCAjyWiNHbLxGjNTM54 . Mission 3 terminée.
 
+
+---
+
+# Mission 4 (nuit du 21 au 22/09/2026) — Corrections après premier test réel
+
+Énoncé complet : mémoire privée `project_mission4_nuit_coherence.md` (les dépôts sont publics : pas de nom de vrai
+client ici, initiales seulement). Autonomie complète, Lucas dort : reprendre seul après chaque limite de tokens.
+Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossiers-rattrapage-prod.txt`.
+
+## Causes trouvées à l'inspection
+- « 0 € » (dossier J. R.) : un devis REPRIS n'a pas de lignes (`lignes: "[]"`, montant dans `totalHt`) et l'espace
+  recalculait le total depuis les lignes. Et un devis repris ACCEPTE n'a pas d'`AccordDevis` (signé sur papier) :
+  l'espace ne le croyait pas signé → Paiement verrouillé, acompte invisible.
+- Note de la demande d'autre proposition (F.) : elle ARRIVE dans l'événement du dossier, mais nulle part ailleurs
+  (ni prochaine action, ni panneau Espace, ni Espaces clients) → à stocker sur l'espace et à afficher.
+- 26 dossiers ouverts par le rattrapage en prod (tous : Qualification, « Appeler : simulation faite sur le site »,
+  1 note, 0 document, aucun appel). S. E. et L. P. ont été ouverts par Lucas (leads Meta) : gardés.
+
+## Lots
+- [x] N1 Schéma (sauvegarde avant) : projet validé, message de la demande, accord retirable, photos retirées.
+- [x] N2 Socle unique `src/lib/espace/faits.ts` : montants (devis repris compris), accord, paiements, quota (site compté).
+- [x] N3 Espace serveur : valider / dévalider le projet, retirer une photo, dévalider une simulation, retirer une
+      demande, retirer l'accord ; tout événement porte le contenu entier.
+- [x] N4 Propagation (serveur) Espace → Dossier (étape, prochaine action, retour en arrière tracé) et Dossier → Espace.
+- [ ] N5 CRM : bloc « Espace client » de la fiche dossier (voir ET modifier), onglet Espaces clients au même niveau.
+- [ ] N6 Paiement : devis signé, acompte payé le … par …, solde, « Réglé, merci » ; encaissement annulé → à régler.
+- [ ] N7 Site : Projet (valider / modifier), Simulations en 2 sous-onglets, création express toutes pièces, quota 5
+      (site compté), supprimer une photo, retirer une demande, changer de simulation, retirer l'accord, Paiement.
+- [ ] N8 Ménage : archiver / restaurer un dossier (lead qui revient), migration à liste explicite (26), règle
+      « simulation = lead, pas dossier ».
+- [ ] N9 Cohérence : `docs/COHERENCE.md`, contrôle automatique (démarrage + quotidien), Tâches de fond + corriger.
+- [ ] N10 Essais locaux iPhone (parcours de l'énoncé), tests, builds, déploiement, vérifs prod, rapport.
+
+## Journal
+- 21/09 nuit : inspection faite (causes ci-dessus), plan posé.
+- 22/09 ~01 h : SERVEUR CRM FAIT (commit local « point d'étape 1 », non poussé) : schéma (projetValideLe,
+  propositionMessage, photosRetirees, AccordDevis.retireLe), `espace/faits.ts` (lecture unique : montants des devis
+  repris, accord ESPACE|CRM, paiements détaillés, quota site compté, 5 par défaut), `espace/validations.ts` (valider /
+  dévalider projet, dévalider choix, retirer demande / photo / accord ; auteur CLIENT ou LUCAS ; le dossier avance et
+  recule avec la raison écrite), `espace/vue-crm.ts` (vue complète + gestes de Lucas + réinitialiser une étape),
+  routes espace `projet/validation|devalidation`, `choix/retrait`, `proposition/retrait`, `accord/retrait`,
+  `photos/<id>/retrait` ; toutes les pièces du site dans la création (`piece`), `dossiers/archivage.ts` (archiver /
+  restaurer, le lead revient), règle « simulation = lead » (depuis-lead.ts, webhook, audit), migration à liste
+  explicite `menage-des-dossiers-du-rattrapage-22-09` (26), acompte encaissé → Signé / annulé → recul
+  (`suivreAcompteDossier`), `coherence/controle.ts` (14 contrôles, corriger, quotidien + démarrage), API
+  `/api/coherence`. Tests : `src/lib/coherence/coherence.test.ts` (12) ; suite entière verte (377).
+- RESTE : interfaces CRM (bloc Espace du dossier, Espaces clients, Tâches de fond, archiver/restaurer un dossier),
+  site (N7), `docs/COHERENCE.md`, essais iPhone, déploiement (CRM d'abord), vérifs prod, rapport.

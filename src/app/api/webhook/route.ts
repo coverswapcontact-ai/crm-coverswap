@@ -355,10 +355,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Simulation du site (coordonnées + photo) = dossier : ouvert tout seul, photo avant et rendus rangés ──
-    const ouverture = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0 ? await assurerDossierDeSimulation(lead.id) : null;
+    // ── Simulation du site : elle reste sur la fiche du LEAD (règle du 22/09/2026 : une simulation seule n'ouvre plus
+    //    de dossier). Si le contact a déjà un dossier vivant, photo avant et rendus y sont rangés (et rejoignent son espace). ──
+    const aSimule = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0;
+    const ouverture = aSimule ? await assurerDossierDeSimulation(lead.id) : null;
     // La simulation vient d'être rattachée : la classe (Prioritaire d'office, sauf hors zone) est relue pour le push.
-    const classeFinale = ouverture ? ((await prisma.lead.findUnique({ where: { id: lead.id }, select: { priorite: true, prioriteMotif: true } })) ?? null) : null;
+    const classeFinale = aSimule ? ((await prisma.lead.findUnique({ where: { id: lead.id }, select: { priorite: true, prioriteMotif: true } })) ?? null) : null;
 
     // Accusé de réception au visiteur (site seulement, jamais Meta) : ce que nous
     // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
@@ -448,7 +450,8 @@ export async function POST(request: NextRequest) {
 
     // Push : le téléphone sonne pour une demande du site comme pour un lead Meta (jamais bloquant).
     let notifications: { canal: string; ok: boolean }[] = [];
-    if (isNew || isDevis || ouverture?.cree || ((ouverture?.simulationsRangees ?? 0) > 0 && !avaitUnEspace)) {
+    // … et pour une simulation refaite par un lead déjà connu, même sans dossier (il se décide : c'est le moment d'appeler).
+    if (isNew || isDevis || ouverture?.cree || ((ouverture?.simulationsRangees ?? 0) > 0 && !avaitUnEspace) || (!ouverture && simulationsRattachees.length > 0)) {
       try {
         const resultats = await notifierDemandeDuSite({
           leadId: lead.id,

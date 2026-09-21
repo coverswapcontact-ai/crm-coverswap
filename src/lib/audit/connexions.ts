@@ -101,11 +101,14 @@ function dossiersDepuisLeads() {
 
 /** Simulation du site : le dossier existe, la photo avant et le rendu sont dans ses photos (donc dans Drive). */
 function simulations() {
-  return maillon("simulation-dossier", "Simulation du site → dossier, photos rangées", async (): Promise<Resultat> => {
+  // Règle du 22/09/2026 : une simulation seule n'ouvre plus de dossier (elle reste sur la fiche du lead).
+  // Ce qui est vérifié : celles d'un contact qui A un dossier vivant y sont bien rangées, photos comprises.
+  return maillon("simulation-dossier", "Simulation du site → fiche du lead, ou dossier du contact s'il en a un", async (): Promise<Resultat> => {
     const avecImage = { OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] };
-    const [total, sansDossier, rangees] = await Promise.all([
+    const [total, sansDossier, surLeurLead, rangees] = await Promise.all([
       prisma.simulation.count({ where: { ...avecImage, lead: { archiveLe: null } } }),
-      prisma.simulation.count({ where: { ...avecImage, dossierId: null, lead: { archiveLe: null } } }),
+      prisma.simulation.count({ where: { ...avecImage, dossierId: null, lead: { archiveLe: null, dossiers: { some: { archiveLe: null, etape: { notIn: ["PERDU", "ENCAISSE"] } } } } } }),
+      prisma.simulation.count({ where: { ...avecImage, dossierId: null, lead: { archiveLe: null, dossiers: { none: { archiveLe: null, etape: { notIn: ["PERDU", "ENCAISSE"] } } } } } }),
       prisma.simulation.findMany({ where: { ...avecImage, dossierId: { not: null } }, orderBy: { createdAt: "desc" }, take: 60, select: { id: true, dossierId: true, imageAfterPath: true } }),
     ]);
     if (total === 0) return { etat: "RIEN_A_VERIFIER", constat: "Aucune simulation avec image en base.", chiffres: { simulations: 0 } };
@@ -126,9 +129,9 @@ function simulations() {
     return {
       etat: ok ? "OK" : "ALERTE",
       constat: ok
-        ? `${pluriel(total, "simulation")} avec image : toutes ont leur dossier, leurs photos y sont.${imagesPerdues ? ` (${imagesPerdues} rendu(s) d'origine absents des téléversements : dit sur le dossier.)` : ""}`
-        : `${pluriel(sansDossier, "simulation")} sans dossier (reprises au prochain passage, toutes les 15 min) ; ${photosManquantes} dossier(s) avec moins de photos qu'attendu ; ${fichiersAbsents} fichier(s) absent(s) du disque.`,
-      chiffres: { simulations: total, sansDossier, dossiersVerifies: dossiers.length, photosManquantes, fichiersAbsents, rendusDOrigineAbsents: imagesPerdues },
+        ? `${pluriel(total, "simulation")} avec image : ${surLeurLead} sur la fiche de leur lead (pas de dossier : normal), les autres rangées dans le dossier du contact, photos comprises.${imagesPerdues ? ` (${imagesPerdues} rendu(s) d'origine absents des téléversements : dit sur le dossier.)` : ""}`
+        : `${pluriel(sansDossier, "simulation")} hors du dossier que leur contact a pourtant (reprises au prochain passage, toutes les 15 min) ; ${photosManquantes} dossier(s) avec moins de photos qu'attendu ; ${fichiersAbsents} fichier(s) absent(s) du disque.`,
+      chiffres: { simulations: total, surLaFicheDuLead: surLeurLead, sansDossier, dossiersVerifies: dossiers.length, photosManquantes, fichiersAbsents, rendusDOrigineAbsents: imagesPerdues },
     };
   });
 }
@@ -165,7 +168,7 @@ function espaceClient() {
     const [espaces, depots, accords] = await Promise.all([
       prisma.espaceClient.count(),
       prisma.dossierEvenement.findMany({ where: { type: "ESPACE_PHOTOS" }, select: { dossierId: true, metadata: true } }),
-      prisma.accordDevis.findMany({ select: { dossierId: true, dossier: { select: { etape: true } } } }),
+      prisma.accordDevis.findMany({ where: { retireLe: null }, select: { dossierId: true, dossier: { select: { etape: true } } } }),
     ]);
     if (espaces === 0) return { etat: "RIEN_A_VERIFIER", constat: "Aucun espace client ouvert pour l'instant : la chaîne est couverte par les essais automatiques, elle se vérifiera ici au premier client.", chiffres: { espaces: 0 } };
     const attendues = new Map<string, number>();

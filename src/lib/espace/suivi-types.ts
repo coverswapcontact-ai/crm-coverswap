@@ -28,16 +28,28 @@ export type LigneEspace = {
   faits: {
     photos: number;
     projet: string | null;
+    /** Le client (ou Lucas) a validé le projet : pastille verte. */
+    projetValideLe: string | null;
     simulationsPubliees: number;
     /** Simulations créées par le client dans son espace, et ce qu'il lui en reste. */
     simulationsClient: number;
+    /** Faites sur coverswap.fr : elles comptent dans son quota. */
+    simulationsSite: number;
     simulationsRestantes: number;
     simulationsDemandeesLe: string | null;
     brouillons: number;
     choix: string | null;
+    /** Teintes de la simulation validée, zone par zone. */
+    choixTeintes: string | null;
+    /** Demande d'autre proposition en attente : sa date et son mot, entier. */
+    proposition: { le: string; message: string | null } | null;
     devis: { numero: string; consultations: number; consulteLe: string | null } | null;
     accord: string | null;
+    /** ESPACE : bon pour accord en ligne ; CRM : devis noté accepté dans le CRM (signé sur papier). */
+    accordSource: "ESPACE" | "CRM" | null;
     acompte: { montant: number; recu: number } | null;
+    /** Total du devis, reçu, reste : lus sur les encaissements du dossier. */
+    paiement: { total: number; recu: number; reste: number; regle: boolean } | null;
   };
   /** Qui a la main ; quand c'est Lucas, le geste qui fait avancer (un bouton dans la carte). */
   attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string; geste?: "DEVIS" | "SIMULATEUR" | "PUBLIER" | "APPELER" | "ACCORDER" };

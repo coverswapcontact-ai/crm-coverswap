@@ -1,3 +1,4 @@
+import { devaliderChoix, devaliderProjet, retirerAccord, retirerDemandeProposition, retirerPhoto, validerProjet } from "@/lib/espace/validations";
 import { NextResponse, type NextRequest } from "next/server";
 import type { EspaceClient } from "@prisma/client";
 import { analyser } from "@/lib/commun/api";
@@ -63,6 +64,9 @@ import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogu
  *   POST   /api/espace/<jeton>/devis/<id>/consultation      le devis a été ouvert
  *   POST   /api/espace/<jeton>/accord                       bon pour accord (+ signature)
  *   POST   /api/espace/<jeton>/avis                         après le chantier
+ *   POST   /api/espace/<jeton>/projet/validation | projet/devalidation   pastille verte du projet
+ *   POST   /api/espace/<jeton>/choix/retrait | proposition/retrait | accord/retrait | photos/<id>/retrait
+ *                                                           tout ce que le client fait se défait (rien n'est effacé)
  *
  * Garde-fous : origine restreinte au site, limite par adresse IP, et blocage
  * d'une adresse qui essaie des liens au hasard (20 liens invalides en 10 min).
@@ -196,6 +200,32 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
       if (action.length === 1 && ressource === "accord") {
         const resultat = await accepterDevis(espace, analyser(schemaAccord, corps), { ip: ipDe(requete), navigateur: requete.headers.get("user-agent") });
         return NextResponse.json({ ...resultat, espace: await etatEspace(espace) });
+      }
+      // Valider, dévalider, retirer : tout ce que le client fait se défait (espace/validations.ts).
+      if (action.length === 2 && ressource === "projet" && id === "validation") {
+        await validerProjet(await espaceDuJeton((await contexte.params).jeton), "CLIENT");
+        return relu();
+      }
+      if (action.length === 2 && ressource === "projet" && id === "devalidation") {
+        await devaliderProjet(espace, "CLIENT");
+        return relu();
+      }
+      if (action.length === 2 && ressource === "choix" && id === "retrait") {
+        await devaliderChoix(espace, "CLIENT");
+        return relu();
+      }
+      if (action.length === 2 && ressource === "proposition" && id === "retrait") {
+        await retirerDemandeProposition(espace, "CLIENT");
+        return relu();
+      }
+      if (action.length === 2 && ressource === "accord" && id === "retrait") {
+        const motif = corps && typeof corps === "object" && typeof (corps as { motif?: unknown }).motif === "string" ? (corps as { motif: string }).motif.trim().slice(0, 500) : "";
+        await retirerAccord(espace, "CLIENT", motif);
+        return relu();
+      }
+      if (action.length === 3 && ressource === "photos" && geste === "retrait") {
+        await retirerPhoto(espace, id, "CLIENT");
+        return relu();
       }
       if (action.length === 1 && ressource === "choix") {
         await choisir(espace, analyser(schemaChoixComplet, corps));

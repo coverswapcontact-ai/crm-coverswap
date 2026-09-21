@@ -20,7 +20,15 @@ export type IdZone =
   | "comptoir-habillage"
   | "comptoir-plateau"
   | "mobilier-pro"
-  | "rangements-pro";
+  | "rangements-pro"
+  // Surfaces du simulateur du site que seul l'espace client propose (mode API : la consigne vient du site).
+  | "carrelage-mural"
+  | "tablier-baignoire"
+  | "meuble-complet"
+  | "habillage-mural"
+  | "mur-principal"
+  | "mur-accent"
+  | "plafond";
 
 /** Libellé de la zone (écran, planche des teintes) et sens de pose d'un décor directionnel. */
 export const ZONES: Record<IdZone, { libelle: string; anglais: string; sens: "vertical" | "longueur" | "horizontal" }> = {
@@ -36,13 +44,20 @@ export const ZONES: Record<IdZone, { libelle: string; anglais: string; sens: "ve
   "comptoir-plateau": { libelle: "Plateau du bar", anglais: "bar top", sens: "longueur" },
   "mobilier-pro": { libelle: "Mobilier", anglais: "commercial furniture body panels", sens: "vertical" },
   "rangements-pro": { libelle: "Rangements", anglais: "storage fronts", sens: "vertical" },
+  "carrelage-mural": { libelle: "Murs carrelés", anglais: "tiled walls", sens: "vertical" },
+  "tablier-baignoire": { libelle: "Tablier de baignoire", anglais: "bathtub side panel", sens: "horizontal" },
+  "meuble-complet": { libelle: "Commode, buffet, bureau", anglais: "freestanding furniture", sens: "horizontal" },
+  "habillage-mural": { libelle: "Habillage mural", anglais: "wall cladding", sens: "vertical" },
+  "mur-principal": { libelle: "Mur principal", anglais: "main wall", sens: "vertical" },
+  "mur-accent": { libelle: "Second mur", anglais: "accent wall", sens: "vertical" },
+  plafond: { libelle: "Plafond", anglais: "ceiling", sens: "longueur" },
 };
 
 export type TypeSurface = {
   id: string;
   libelle: string;
   /** Projet du simulateur du site (cuisine, salle-de-bain, meubles, professionnel). */
-  projet: "cuisine" | "salle-de-bain" | "meubles" | "professionnel";
+  projet: "cuisine" | "salle-de-bain" | "meubles" | "professionnel" | "mur-plafond";
   zones: IdZone[];
   aide: string;
 };
@@ -66,17 +81,26 @@ export const TYPES_SURFACE: readonly TypeSurface[] = [
  * liste du simulateur du CRM, qui garde ses dix types.
  */
 export const TYPES_SURFACE_ESPACE: Record<string, TypeSurface> = {
-  CUISINE: { id: "cuisine", libelle: "Cuisine", projet: "cuisine", zones: ["meubles-hauts", "meubles-bas", "plan-de-travail", "credence"], aide: "" },
-  SDB: { id: "plan-vasque", libelle: "Salle de bain", projet: "salle-de-bain", zones: ["meuble-vasque", "plan-vasque"], aide: "" },
-  MEUBLES: { id: "espace-meubles", libelle: "Meubles", projet: "meubles", zones: ["portes-dressing", "meuble-tv"], aide: "" },
-  PRO: { id: "espace-professionnel", libelle: "Local professionnel", projet: "professionnel", zones: ["comptoir-habillage", "comptoir-plateau", "mobilier-pro", "rangements-pro"], aide: "" },
+  CUISINE: { id: "cuisine", libelle: "Cuisine", projet: "cuisine", zones: ["meubles-hauts", "meubles-bas", "plan-de-travail", "credence"], aide: "Façades, plan de travail, crédence" },
+  SDB: { id: "espace-salle-de-bain", libelle: "Salle de bain", projet: "salle-de-bain", zones: ["meuble-vasque", "plan-vasque", "carrelage-mural", "tablier-baignoire"], aide: "Meuble vasque, plan, murs carrelés, baignoire" },
+  MEUBLES: { id: "espace-meubles", libelle: "Meubles, dressing", projet: "meubles", zones: ["portes-dressing", "meuble-tv", "meuble-complet"], aide: "Dressing, placards, meuble TV, commode" },
+  PRO: { id: "espace-professionnel", libelle: "Local professionnel", projet: "professionnel", zones: ["comptoir-habillage", "comptoir-plateau", "mobilier-pro", "rangements-pro", "habillage-mural"], aide: "Bar, comptoir, mobilier, rangements" },
+  MURS: { id: "espace-murs", libelle: "Murs, plafond", projet: "mur-plafond", zones: ["mur-principal", "mur-accent", "plafond"], aide: "Un mur, deux murs, le plafond" },
 };
+
+/** Les pièces que le client peut simuler dans son espace : toutes celles du site. */
+export const PIECES_ESPACE = Object.entries(TYPES_SURFACE_ESPACE).map(([piece, type]) => ({ piece, libelle: type.libelle, aide: type.aide, zones: type.zones }));
 
 export function typeSurface(id: string | null | undefined): TypeSurface | null {
   return TYPES_SURFACE.find((t) => t.id === id) ?? Object.values(TYPES_SURFACE_ESPACE).find((t) => t.id === id) ?? null;
 }
 
 /** Le type des simulations du client, selon son projet (cuisine par défaut). */
+/** La pièce de l'espace (CUISINE, SDB…) d'un type de surface ; null pour un type du simulateur du CRM. */
+export function pieceDuType(id: string | null | undefined): string | null {
+  return Object.entries(TYPES_SURFACE_ESPACE).find(([, t]) => t.id === id)?.[0] ?? (id === "plan-vasque" ? "SDB" : null);
+}
+
 export function typeEspacePourProjet(typeProjet: string | null | undefined): TypeSurface {
   return TYPES_SURFACE_ESPACE[typeProjet ?? "CUISINE"] ?? TYPES_SURFACE_ESPACE.CUISINE;
 }

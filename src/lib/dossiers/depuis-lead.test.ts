@@ -50,37 +50,36 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-describe("simulation du site → dossier", () => {
-  test("une simulation terminée ouvre le dossier, avec la photo avant et le rendu dans ses photos", async () => {
+describe("simulation du site → lead (règle du 22/09/2026 : une simulation seule n'ouvre plus de dossier)", () => {
+  test("une simulation terminée reste sur la fiche du lead : aucun dossier, mais Prioritaire d'office", async () => {
     const contact = await lead({ message: "Cuisine de 2012, façades abîmées", occupation: "PROPRIETAIRE", campagne: "Cuisine septembre" });
     await simulation(contact.id, "after");
-    const ouverture = await depuisLead.assurerDossierDeSimulation(contact.id);
-    assert.ok(ouverture?.cree);
-    const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ouverture!.dossierId } });
-    assert.deepEqual([dossier.leadId, dossier.etape, dossier.source, dossier.clientVille, dossier.clientCp, dossier.montantEstime, dossier.prochaineAction], [contact.id, "QUALIFICATION", "ENTRANT", "Lattes", "34970", 1450, "Appeler : simulation faite sur le site"]);
-    assert.equal((await photosDe(dossier.id)).length, 2, "photo avant + rendu");
-    // Il a vu sa cuisine rénovée : Prioritaire d'office (sauf hors zone).
+    assert.equal(await depuisLead.assurerDossierDeSimulation(contact.id), null);
+    assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 0);
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: contact.id } })).priorite, "PRIORITAIRE");
-    // Ce que la personne a dit suit dans la première note ; la simulation s'écrit dans l'histoire du dossier.
-    const note = await prisma.dossierEvenement.findFirst({ where: { dossierId: dossier.id, type: "NOTE_AJOUTEE" } });
-    assert.match(note?.contenu ?? "", /Cuisine septembre[\s\S]*propriétaire[\s\S]*façades abîmées/);
-    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: dossier.id, type: "SIMULATION_SITE" } }), 1);
-    // Le dossier a sa fiche client, la même que le lead.
-    assert.equal(dossier.clientId, (await prisma.lead.findUniqueOrThrow({ where: { id: contact.id } })).clientId ?? dossier.clientId);
+    // Ses simulations l'attendent sur sa fiche : rien n'est rangé ailleurs.
+    assert.equal(await prisma.simulation.count({ where: { leadId: contact.id, dossierId: null } }), 1);
   });
 
-  test("plusieurs simulations : le même dossier, la photo avant une seule fois, rien n'est recopié deux fois", async () => {
-    const contact = await lead();
+  test("Lucas ouvre le dossier depuis Leads : photo avant et rendu suivent, la photo avant une seule fois, rien n'est recopié deux fois", async () => {
+    const contact = await lead({ message: "Cuisine de 2012, façades abîmées", occupation: "PROPRIETAIRE", campagne: "Cuisine septembre" });
     await simulation(contact.id, "rendu-1", 11);
-    const premiere = await depuisLead.assurerDossierDeSimulation(contact.id);
-    await simulation(contact.id, "rendu-2", 11); // même photo avant, autre finition, une heure plus tard
-    const seconde = await depuisLead.assurerDossierDeSimulation(contact.id);
-    assert.deepEqual([seconde?.dossierId, seconde?.cree], [premiere?.dossierId, false]);
-    assert.equal((await photosDe(premiere!.dossierId)).length, 3, "1 photo avant + 2 rendus");
-    // Rejouer ne change rien.
+    await simulation(contact.id, "rendu-2", 11); // même photo avant, autre finition
+    const ouverture = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    assert.ok(ouverture.cree);
+    const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ouverture.dossierId } });
+    assert.deepEqual([dossier.leadId, dossier.etape, dossier.source, dossier.clientVille, dossier.clientCp, dossier.montantEstime], [contact.id, "QUALIFICATION", "ENTRANT", "Lattes", "34970", 1450]);
+    assert.equal((await photosDe(dossier.id)).length, 3, "1 photo avant + 2 rendus");
+    const note = await prisma.dossierEvenement.findFirst({ where: { dossierId: dossier.id, type: "NOTE_AJOUTEE" } });
+    assert.match(note?.contenu ?? "", /Cuisine septembre[\s\S]*propriétaire[\s\S]*façades abîmées/);
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: dossier.id, type: "SIMULATION_SITE" } }), 2);
+    // Une nouvelle simulation, maintenant qu'il a un dossier : elle s'y range toute seule ; rejouer ne change rien.
+    await simulation(contact.id, "rendu-3", 11);
+    const suite = await depuisLead.assurerDossierDeSimulation(contact.id);
+    assert.deepEqual([suite?.dossierId, suite?.cree, suite?.simulationsRangees], [dossier.id, false, 1]);
     const rejoue = await depuisLead.assurerDossierDeSimulation(contact.id);
     assert.deepEqual([rejoue?.simulationsRangees, rejoue?.photosRangees], [0, 0]);
-    assert.equal((await photosDe(premiere!.dossierId)).length, 3);
+    assert.equal((await photosDe(dossier.id)).length, 4);
     assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 1);
   });
 
@@ -95,45 +94,58 @@ describe("simulation du site → dossier", () => {
     assert.deepEqual([ouverture?.dossierId, ouverture?.cree, ouverture?.simulationsRangees], [existant.dossierId, false, 1]);
   });
 
-  test("génération échouée : la photo du visiteur suffit à ouvrir le dossier ; sans photo ni simulation, rien", async () => {
-    const sansRien = await lead();
-    assert.equal(await depuisLead.assurerDossierDeSimulation(sansRien.id), null);
-    const echec = await lead();
-    await prisma.photoLead.create({ data: { leadId: echec.id, chemin: image(`${echec.id}/photos/cuisine.jpg`, 3) } });
-    const ouverture = await depuisLead.assurerDossierDeSimulation(echec.id);
-    assert.deepEqual([ouverture?.cree, ouverture?.photosRangees], [true, 1]);
-  });
-
-  test("rattrapage des simulations déjà en base : dossiers ouverts, contacts archivés laissés de côté, rejouable", async () => {
-    const ancien = await lead();
-    await simulation(ancien.id, "after");
-    const essai = await lead({ archiveLe: new Date(), archiveMotif: "Lead d'essai" });
-    await simulation(essai.id, "after");
+  test("le filet ne touche que les contacts qui ont un dossier : les autres restent des leads, rejouable", async () => {
+    const sansDossier = await lead();
+    await simulation(sansDossier.id, "after");
+    const avecDossier = await lead();
+    const ouvert = await depuisLead.ouvrirDossierDuLead(avecDossier.id, { motif: "BOUTON" });
+    await simulation(avecDossier.id, "after");
     const bilan = await depuisLead.rattraperSimulationsSansDossier();
-    assert.ok(bilan.dossiersOuverts >= 1 && bilan.echecs === 0, JSON.stringify(bilan));
-    assert.equal(await prisma.dossier.count({ where: { leadId: ancien.id } }), 1);
-    assert.equal(await prisma.dossier.count({ where: { leadId: essai.id } }), 0);
+    assert.deepEqual([bilan.dossiersOuverts, bilan.echecs], [0, 0], JSON.stringify(bilan));
+    assert.ok(bilan.simulationsRangees >= 1);
+    assert.equal(await prisma.dossier.count({ where: { leadId: sansDossier.id } }), 0);
+    assert.equal(await prisma.simulation.count({ where: { leadId: avecDossier.id, dossierId: ouvert.dossierId } }), 1);
     assert.deepEqual(await depuisLead.rattraperSimulationsSansDossier(), { contacts: 0, dossiersOuverts: 0, simulationsRangees: 0, photosRangees: 0, echecs: 0 });
   });
 
-  test("simulation ancienne (rattrapage) : le dossier porte la date réelle de la simulation", async () => {
-    const contact = await lead({ createdAt: new Date("2026-07-02T09:00:00.000Z") });
-    const ancienne = await simulation(contact.id, "after");
-    await prisma.simulation.update({ where: { id: ancienne.id }, data: { createdAt: new Date("2026-07-03T10:00:00.000Z") } });
-    const ouverture = await depuisLead.assurerDossierDeSimulation(contact.id);
-    const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ouverture!.dossierId } });
-    assert.equal(dossier.ouvertLe?.toISOString().slice(0, 10), "2026-07-03");
-  });
-
-  test("image absente du serveur : le dossier s'ouvre quand même, l'événement le dit, et on n'y revient pas", async () => {
+  test("image absente du serveur : le dossier ouvert par Lucas le dit dans son historique, et on n'y revient pas", async () => {
     const contact = await lead();
     await prisma.simulation.create({ data: { leadId: contact.id, imageBeforePath: `${contact.id}/perdue/before.jpg`, imageAfterPath: `${contact.id}/perdue/after.png` } });
-    const ouverture = await depuisLead.assurerDossierDeSimulation(contact.id);
-    assert.ok(ouverture?.cree);
-    assert.equal((await photosDe(ouverture!.dossierId)).length, 0);
-    const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: ouverture!.dossierId, type: "SIMULATION_SITE" } });
+    const ouverture = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    assert.ok(ouverture.cree);
+    assert.equal((await photosDe(ouverture.dossierId)).length, 0);
+    const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: ouverture.dossierId, type: "SIMULATION_SITE" } });
     assert.match(evenement?.contenu ?? "", /introuvables/);
     assert.equal((await depuisLead.rattraperSimulationsSansDossier()).contacts, 0);
+  });
+});
+
+describe("archiver un dossier : son lead revient dans Leads, avec ses simulations", () => {
+  test("archivé puis restauré : rien n'est perdu, jamais de doublon", async () => {
+    const archivage = await import("./archivage");
+    const contact = await lead({ source: "SITE_SIMULATEUR" });
+    await simulation(contact.id, "after");
+    const ouvert = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    assert.equal(await prisma.simulation.count({ where: { leadId: contact.id, dossierId: ouvert.dossierId } }), 1);
+    await archivage.archiverDossier(ouvert.dossierId, "Ouvert par le rattrapage, jamais traité");
+    // Le dossier sort des listes, le lead n'a plus de dossier vivant, ses simulations sont de nouveau les siennes.
+    assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 0);
+    assert.equal(await prisma.simulation.count({ where: { leadId: contact.id, dossierId: null } }), 1);
+    const liste = await entrants.listerLeads({ limite: 500 });
+    assert.ok(JSON.stringify(liste).includes(contact.id), "le lead est revenu dans Leads");
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: ouvert.dossierId, type: "DOSSIER_ARCHIVE" } }), 1);
+    // Restauré : ses simulations lui reviennent, le lead ressort de Leads.
+    await archivage.restaurerDossier(ouvert.dossierId);
+    assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 1);
+    assert.equal(await prisma.simulation.count({ where: { leadId: contact.id, dossierId: ouvert.dossierId } }), 1);
+  });
+
+  test("un dossier qui porte de l'argent ne s'archive pas", async () => {
+    const archivage = await import("./archivage");
+    const contact = await lead();
+    const ouvert = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    await prisma.encaissement.create({ data: { dossierId: ouvert.dossierId, payeur: "Essai", montant: 100, moyen: "VIREMENT", recuLe: new Date() } });
+    await assert.rejects(() => archivage.archiverDossier(ouvert.dossierId, "essai"), /paiement/);
   });
 });
 

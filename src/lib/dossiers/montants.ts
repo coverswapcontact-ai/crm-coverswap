@@ -37,6 +37,19 @@ export function calculerMontants(lignes: LigneDocument[], acomptePct: number | n
   };
 }
 
+/**
+ * Montants d'un document tel qu'il est en base. Un document REPRIS (émis avant le
+ * CRM) n'a pas de lignes : son montant est dans `totalHt`. Lire les lignes seules
+ * donnait « 0 € » au client dans son espace (22/09/2026).
+ */
+export function montantsDocument(document: { lignes: LigneDocument[]; totalHt: number; acomptePct: number | null }): Montants {
+  const depuisLignes = calculerMontants(document.lignes, document.acomptePct);
+  if (depuisLignes.totalHtCentimes > 0 || !(document.totalHt > 0)) return depuisLignes;
+  const totalHtCentimes = versCentimes(document.totalHt);
+  const acompteCentimes = document.acomptePct ? Math.round((totalHtCentimes * document.acomptePct) / 100) : 0;
+  return { totalHtCentimes, totalTtcCentimes: totalHtCentimes, acompteCentimes, soldeCentimes: totalHtCentimes - acompteCentimes };
+}
+
 /** « 3 460,00 € » : espace pour les milliers, virgule décimale, € suffixé. */
 export function formatCentimes(centimes: number): string {
   const signe = centimes < 0 ? "-" : "";

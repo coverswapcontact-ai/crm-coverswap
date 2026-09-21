@@ -17,10 +17,13 @@ import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
  *    source, campagne, réponses au formulaire, message, montant simulé, rappel
  *    prévu, photos jointes et simulations : tout suit. Le lead sort alors de la
  *    liste Leads — il vit dans Dossiers, sans doublon.
- *  - Une simulation faite sur le site (coordonnées + photo = la règle
- *    d'ouverture de Lucas) ouvre le dossier TOUTE SEULE. Plusieurs simulations :
- *    le même dossier. Un dossier vivant existe déjà pour ce client : on range
- *    dedans, on n'en ouvre pas un second.
+ *  - Une simulation faite sur le site N'OUVRE PLUS de dossier (règle du
+ *    22/09/2026) : elle crée un lead, avec ses photos et ses simulations sur sa
+ *    fiche. Le dossier s'ouvre quand Lucas le décide depuis Leads (bouton, ou
+ *    envoi du lien de l'espace client) ; ce que le client fait ensuite dans son
+ *    espace (projet validé, simulation validée) fait avancer ce dossier.
+ *    Si le contact a DÉJÀ un dossier vivant, sa nouvelle simulation y est rangée
+ *    (et apparaît dans son espace) : un seul dossier par projet en cours.
  *
  * La photo avant et chaque rendu rejoignent les photos de chantier du dossier ;
  * le miroir Drive, qui recopie ces photos, n'a rien d'autre à savoir.
@@ -249,7 +252,7 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
   return { dossierId, cree, photosRangees: photos, simulationsRangees: simulations };
 }
 
-/** Coordonnées + photo = dossier : vrai si ce contact a une simulation avec image, ou la photo d'une simulation échouée. */
+/** Ce contact a des images à ranger : une simulation avec image, ou la photo d'une simulation échouée. */
 async function relevDeLaRegle(leadId: string): Promise<boolean> {
   const [simulations, photosSimulateur] = await Promise.all([
     prisma.simulation.count({ where: { leadId, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] } }),
@@ -259,13 +262,20 @@ async function relevDeLaRegle(leadId: string): Promise<boolean> {
 }
 
 /**
- * Après une simulation du site : le dossier existe, ses images y sont. Jamais
- * bloquant pour le webhook — une erreur se journalise, et le rattrapage
- * périodique repasse.
+ * Après une simulation du site : si le contact a déjà un dossier vivant, ses
+ * images y sont rangées (et rejoignent son espace). Sinon RIEN ne s'ouvre : le
+ * contact reste un lead, ses simulations sur sa fiche (null). Jamais bloquant
+ * pour le webhook — une erreur se journalise, et le filet périodique repasse.
  */
 export async function assurerDossierDeSimulation(leadId: string): Promise<OuvertureDepuisLead | null> {
   try {
     if (!(await relevDeLaRegle(leadId))) return null;
+    const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, clientId: true } });
+    // Il a vu sa pièce rénovée : sa classe est relue (Prioritaire d'office, sauf hors zone), dossier ou pas.
+    if (!lead || !(await dossierVivant(lead))) {
+      await classerLeadSansBloquer(leadId);
+      return null;
+    }
     const resultat = await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirDossierDuLead(leadId, { motif: "SIMULATION" }));
     await classerLeadSansBloquer(leadId);
     if (resultat.cree || resultat.simulationsRangees > 0) console.log(`[dossiers] simulation → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${resultat.simulationsRangees} simulation(s), ${resultat.photosRangees} photo(s)`);
@@ -277,13 +287,14 @@ export async function assurerDossierDeSimulation(leadId: string): Promise<Ouvert
 }
 
 /**
- * Rattrapage : toute simulation avec image qui n'a pas encore son dossier —
- * celles d'avant cette règle, et celles qu'une erreur aurait laissées en route.
- * Les contacts archivés (essais, doublons) sont laissés tranquilles.
+ * Filet : les simulations d'un contact qui A un dossier vivant et qu'une erreur
+ * aurait laissées hors de ce dossier. Depuis le 22/09/2026, un contact sans
+ * dossier n'en reçoit plus : ses simulations restent sur sa fiche de lead.
  */
 export async function rattraperSimulationsSansDossier(limite = 200): Promise<{ contacts: number; dossiersOuverts: number; simulationsRangees: number; photosRangees: number; echecs: number }> {
   const leads = await prisma.lead.findMany({
     where: {
+      dossiers: { some: { archiveLe: null, etape: { notIn: ETAPES_CLOSES } } },
       OR: [
         { simulations: { some: { dossierId: null, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] } } },
         { source: "SITE_SIMULATEUR", photos: { some: { dossierId: null } } },

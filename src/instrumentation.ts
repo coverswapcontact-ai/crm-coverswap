@@ -33,6 +33,10 @@ export async function register() {
     setTimeout(() => {
       void import("@/lib/audit/connexions").then(({ journaliserAudit }) => journaliserAudit());
     }, 45_000);
+    // Contrôle de cohérence à chaque démarrage (en plus du passage quotidien) : une ligne dans les journaux, une alerte s'il y a quelque chose à lire.
+    setTimeout(() => {
+      void import("@/lib/coherence/controle").then(({ controleAutomatique }) => controleAutomatique()).catch((erreur) => console.error("[coherence] contrôle au démarrage :", erreur));
+    }, 75_000);
   }
 
   if (process.env.TACHES_DESACTIVEES === "1") {

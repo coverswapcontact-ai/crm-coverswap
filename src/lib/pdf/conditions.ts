@@ -1,4 +1,4 @@
-import { calculerMontants, formatCentimes } from "@/lib/dossiers/montants";
+import { calculerMontants, formatCentimes, type Montants } from "@/lib/dossiers/montants";
 import type { LigneDocument } from "@/lib/dossiers/constants";
 
 /**
@@ -9,8 +9,9 @@ import type { LigneDocument } from "@/lib/dossiers/constants";
 export const MODES_REGLEMENT = "Paiement par virement – chèque ou espèces";
 export const VALIDITE_DEVIS_JOURS = 30;
 
-export function conditionsDuDevis(lignes: LigneDocument[], acomptePct: number | null): string[] {
-  const { totalTtcCentimes, acompteCentimes, soldeCentimes } = calculerMontants(lignes, acomptePct);
+export function conditionsDuDevis(lignes: LigneDocument[], acomptePct: number | null, montants?: Montants): string[] {
+  // `montants` : ceux d'un devis repris (sans lignes), lus sur le document.
+  const { totalTtcCentimes, acompteCentimes, soldeCentimes } = montants ?? calculerMontants(lignes, acomptePct);
   const reglement =
     acompteCentimes > 0
       ? [

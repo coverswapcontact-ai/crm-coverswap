@@ -119,13 +119,15 @@ describe("le projet du client", () => {
     assert.equal(taches.length, 1, "une seule alerte pour toute la saisie");
     assert.ok(taches[0].prochainEssaiLe.getTime() > Date.now() + 120_000, "elle part quelques minutes après");
     assert.deepEqual(await service.alerterProjetPrecise(v3.espace.id), { envoyee: true });
-    // Rien de saisi dans Paramètres : 3 simulations offertes (pas 0) ; et personne ne lui promet une proposition.
-    assert.equal(await service.simulationsGratuites(), 3);
+    // Rien de saisi dans Paramètres : 5 simulations offertes (pas 0) ; et personne ne lui promet une proposition.
+    assert.equal(await service.simulationsGratuites(), 5);
     const etatV3 = await service.etatEspace(await relire(v3.espace.id));
-    assert.deepEqual([etatV3.creation.restantes, etatV3.simulationsEnPreparation], [3, null]);
+    assert.deepEqual([etatV3.creation.restantes, etatV3.simulationsEnPreparation], [5, null]);
     const noteSeule = await dossierAvecEspace("Sacha");
     await service.enregistrerProjetOuSouhaits(noteSeule.espace, { zones: [], metres: null, repere: null, precisions: "Je ne sais pas encore" });
-    assert.equal((await service.etatEspace(await relire(noteSeule.espace.id))).etapes.find((e) => e.cle === "PROJET")?.fait, true, "un mot pour CoverSwap suffit");
+    // Depuis le 22/09 : la pastille verte vient de la VALIDATION du projet, et un mot seul ne suffit pas à le valider.
+    const etatNote = await service.etatEspace(await relire(noteSeule.espace.id));
+    assert.deepEqual([etatNote.etapes.find((e) => e.cle === "PROJET")?.fait, etatNote.projetManque], [false, "Indiquez ce que vous voulez traiter."]);
 
     const ancien = await dossierAvecEspace("Paul");
     await service.enregistrerProjetOuSouhaits(ancien.espace, { teintes: ["Bois clair", "Noir"], style: "Chaleureux", propositions: true, precisions: "" });

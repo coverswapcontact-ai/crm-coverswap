@@ -72,7 +72,7 @@ export async function contexteDeLaConversation(conversation: Pick<ConversationSm
             photos: true,
             documents: { where: { type: "DEVIS", archiveLe: null, statut: { notIn: ["BROUILLON", "REMPLACE", "ANNULEE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, numero: true, totalHt: true, statut: true, createdAt: true } },
             espaces: { where: { archiveLe: null }, take: 1, include: { simulations: { where: { archiveLe: null }, select: { choisieLe: true } } } },
-            accords: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+            accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
           },
         })
       : null,

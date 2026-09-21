@@ -22,7 +22,10 @@ export type EtapeEspace =
 
 export type FaitsEspace = {
   photos: number;
+  /** Il a dit quelque chose de son projet (zones, taille ou note). */
   projet: boolean;
+  /** Il l'a VALIDÉ (pastille verte) ; absent = anciens appelants : on se fie à `projet`. */
+  projetValide?: boolean;
   /** Simulations publiées préparées par Lucas (hors celles faites sur le site ou par le client dans son espace). */
   simulationsCrm: number;
   simulationsSite: number;
@@ -32,8 +35,12 @@ export type FaitsEspace = {
   devis: boolean;
   accord: boolean;
   acompteRecu: boolean;
+  /** Tout est encaissé. */
+  solde?: boolean;
   etapeDossier: string;
 };
+
+const projetFait = (f: FaitsEspace) => f.projetValide ?? f.projet;
 
 /**
  * Espace v3 (21/09/2026, soir) : le client crée lui-même ses simulations ; il
@@ -49,7 +56,7 @@ export function etapeEspace(f: FaitsEspace): EtapeEspace {
   // Une simulation préparée par Lucas l'attend : c'est elle d'abord, même sans ses photos.
   if (f.simulationsCrm > 0) return "SIMULATIONS";
   if (f.photos === 0 && f.simulationsSite === 0) return "PHOTOS";
-  if (!f.projet) return "PROJET";
+  if (!projetFait(f)) return "PROJET";
   return "SIMULATIONS";
 }
 
@@ -73,7 +80,7 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
   const etape = etapeEspace(f);
   const fait: Record<CleProgression, boolean> = {
     PHOTOS: f.photos > 0 || f.simulationsSite > 0,
-    PROJET: f.projet,
+    PROJET: projetFait(f),
     SIMULATIONS: f.choix || f.accord,
     DEVIS: f.accord,
     ACOMPTE: f.acompteRecu || ["PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"].includes(f.etapeDossier),
@@ -98,7 +105,7 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
 
 export const LIBELLES_ETAPE_ESPACE: Record<EtapeEspace, string> = {
   PHOTOS: "Photos attendues",
-  PROJET: "Projet à préciser",
+  PROJET: "Projet à valider",
   SIMULATIONS: "Simulations : à valider",
   ATTENTE_SIMULATION: "Simulation en préparation",
   ATTENTE_DEVIS: "Devis en préparation",

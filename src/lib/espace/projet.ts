@@ -77,6 +77,17 @@ export function projetPrecise(projet: ProjetClient | null): boolean {
   return Boolean(projet && (projet.zones.length > 0 || projet.precisions.trim().length > 0 || projet.propositions || projet.styles.length > 0));
 }
 
+/**
+ * Ce qui manque pour VALIDER le projet (null : il est complet). Ce qu'il veut
+ * traiter, la taille pour une cuisine, et un mot s'il a seulement coché « autre ».
+ */
+export function projetComplet(projet: ProjetClient | null, typeProjet = "CUISINE"): string | null {
+  if (!projet || projet.zones.length === 0) return "Indiquez ce que vous voulez traiter.";
+  if (projet.zones.every((z) => z === "autre") && !projet.precisions.trim()) return "Vous avez choisi « autre chose » : dites-nous quoi, en quelques mots.";
+  if (typeProjet === "CUISINE" && !projet.repere && !projet.metres) return "Indiquez la taille de votre cuisine.";
+  return null;
+}
+
 /** Résumé en une ligne, pour le dossier et le CRM : « Façades hautes, Plan de travail · ≈ 5 m (en L) · « garder les poignées » ». */
 export function resumerProjet(projet: ProjetClient | null, typeProjet = "CUISINE"): string {
   if (!projet) return "";

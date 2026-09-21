@@ -1,7 +1,8 @@
 import prisma from "@/lib/prisma";
-import { calculerMontants } from "@/lib/dossiers/montants";
-import { lireLignes } from "@/lib/dossiers/stockage";
+import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { lireZones } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression } from "./etapes";
+import { composerFaits, dateSignature, lireDevisEtPaiements, restantes as simulationsRestantes } from "./faits";
 import { jetonEspace, lienApercu, lienEspace } from "./liens";
 import { lireProjet, projetPrecise, resumerProjet } from "./projet";
 import { photosDuClient } from "./service";
@@ -21,11 +22,24 @@ import { simulationsGratuites } from "./service";
 const JOUR = 86_400_000;
 const date = (d: Date | null | undefined) => d?.toISOString() ?? null;
 
+/** « Façades hautes : Chêne clair (NE31) · … » : les teintes de la simulation validée (ou du mélange). */
+function teintesDuChoix(choixJson: string | null, simulations: { id: string; zones: string | null }[]): string | null {
+  try {
+    const choix = choixJson ? (JSON.parse(choixJson) as { mode?: string; simulationId?: string; zones?: { libelle?: string; zone?: string; nom?: string; ref?: string }[] }) : null;
+    if (!choix) return null;
+    const zones = choix.mode === "COMPOSITE" ? (choix.zones ?? []) : lireZones(simulations.find((s) => s.id === choix.simulationId)?.zones ?? null);
+    return zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.nom && z.ref ? ` (${z.ref})` : ""}`).join(" · ") || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function listerEspaces(maintenant: Date = new Date()): Promise<LigneEspace[]> {
   const gratuites = await simulationsGratuites();
   const espaces = await prisma.espaceClient.findMany({
     include: {
-      simulations: { where: { archiveLe: null }, select: { statut: true, source: true, publieeLe: true } },
+      // Archives comprises : une simulation retirée par Lucas a coûté, elle reste comptée dans le quota.
+      simulations: { where: { ...AVEC_ARCHIVES }, select: { id: true, statut: true, source: true, publieeLe: true, archiveLe: true, zones: true, choisieLe: true } },
       dossier: {
         select: {
           id: true,
@@ -37,9 +51,10 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
           dateChantier: true,
           archiveLe: true,
           lead: { select: { typeProjet: true } },
-          documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, numero: true, lignes: true, acomptePct: true } },
-          accords: { orderBy: { createdAt: "desc" }, take: 1, select: { documentId: true, createdAt: true, nomSignataire: true } },
-          encaissements: { where: { statut: "VALIDE" }, select: { montant: true } },
+          documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
+          accords: { orderBy: { createdAt: "desc" } },
+          encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
+          evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, createdAt: true, survenuLe: true } },
         },
       },
     },
@@ -61,29 +76,33 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
     const envoi = smsAvecLien.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
     const ancienEnvoi = envoi ? null : (smsAvecLien.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
     const photos = (await photosDuClient(d.id, d.photos)).length;
-    const publiees = espace.simulations.filter((s) => s.statut === "PUBLIEE");
+    const vivantes = espace.simulations.filter((s) => !s.archiveLe);
+    const publiees = vivantes.filter((s) => s.statut === "PUBLIEE");
     const crm = publiees.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length;
     const duClient = publiees.filter((s) => s.source === "CLIENT").length;
-    const restantes = Math.max(0, gratuites + (espace.simulationsAccordees ?? 0) - duClient);
-    const brouillons = espace.simulations.filter((s) => s.statut === "BROUILLON").length;
-    const devis = d.documents[0] ?? null;
-    const accord = devis ? (d.accords.find((a) => a.documentId === devis.id) ?? null) : null;
-    const montants = devis ? calculerMontants(lireLignes(devis.lignes), devis.acomptePct) : null;
-    const recu = d.encaissements.reduce((s, e) => s + e.montant, 0);
-    const acompte = montants && montants.acompteCentimes > 0 ? { montant: montants.acompteCentimes / 100, recu } : null;
+    // Le quota compte tout ce qui a été fait, sur le site comme dans l'espace (même retiré ensuite).
+    const faitesEspace = espace.simulations.filter((s) => s.source === "CLIENT").length;
+    const faitesSite = espace.simulations.filter((s) => s.source === "SITE").length;
+    const restantes = simulationsRestantes({ gratuites, accordees: espace.simulationsAccordees ?? 0, faitesEspace, faitesSite, enCours: 0 });
+    const brouillons = vivantes.filter((s) => s.statut === "BROUILLON").length;
+    // Devis, accord, paiements : la même lecture que l'espace du client (faits.ts).
+    const lecture = lireDevisEtPaiements({ devis: d.documents, accords: d.accords, encaissements: d.encaissements, clientNom: d.clientNom, signeLe: dateSignature(d.evenements) });
+    const devis = lecture.devis;
+    const accord = lecture.accord ? { createdAt: lecture.accord.le, source: lecture.accord.source } : null;
+    const recu = lecture.paiement?.recu ?? 0;
+    const acompte = lecture.paiement?.acompte ? { montant: lecture.paiement.acompte.montant, recu } : null;
     const projet = lireProjet(espace.souhaits);
-    const faits = {
+    const faits = composerFaits({
       photos,
-      projet: projetPrecise(projet),
+      projetPrecise: projetPrecise(projet),
+      projetValide: Boolean(espace.projetValideLe),
       simulationsCrm: crm,
       simulationsSite: publiees.filter((s) => s.source === "SITE").length,
       simulationsClient: duClient,
       choix: Boolean(espace.choixLe),
-      devis: Boolean(devis),
-      accord: Boolean(accord),
-      acompteRecu: Boolean(accord && (!acompte || recu >= acompte.montant - 0.5)),
+      lecture,
       etapeDossier: d.etape,
-    };
+    });
     const etape = etapeEspace(faits);
     const derniereActivite = [espace.dernierAccesLe, activiteParDossier.get(d.id) ?? null].filter((x): x is Date => Boolean(x)).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
     const dernierePublication = publiees.map((s) => s.publieeLe?.getTime() ?? 0).reduce((a, b) => Math.max(a, b), 0);
@@ -147,6 +166,8 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
       faits: {
         photos,
         projet: projetPrecise(projet) ? resumerProjet(projet, d.lead?.typeProjet ?? "CUISINE") : null,
+        projetValideLe: date(espace.projetValideLe),
+        simulationsSite: faitesSite,
         // Publiées par Lucas (celles du site et celles du client ont leur propre compte).
         simulationsPubliees: crm,
         simulationsClient: duClient,
@@ -154,9 +175,13 @@ export async function listerEspaces(maintenant: Date = new Date()): Promise<Lign
         simulationsDemandeesLe: date(espace.simulationsDemandeesLe),
         brouillons,
         choix: espace.choixLe ? espace.choixLe.toISOString() : null,
+        choixTeintes: espace.choixLe ? teintesDuChoix(espace.choix, vivantes) : null,
+        proposition: propositionEnAttente ? { le: espace.propositionDemandeeLe!.toISOString(), message: espace.propositionMessage ?? null } : null,
         devis: devis ? { numero: devis.numero!, consultations, consulteLe: consultations > 0 ? date(espace.devisConsulteLe) : null } : null,
         accord: accord ? accord.createdAt.toISOString() : null,
+        accordSource: accord?.source ?? null,
         acompte,
+        paiement: accord && lecture.paiement ? { total: lecture.paiement.total, recu: lecture.paiement.recu, reste: lecture.paiement.reste, regle: lecture.paiement.regle } : null,
       },
       attente,
       signaux,

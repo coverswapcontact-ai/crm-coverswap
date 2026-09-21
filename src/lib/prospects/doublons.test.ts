@@ -64,14 +64,15 @@ describe("doublon probable", () => {
     const { dossierId, espace } = await liens.ouvrirEspaceDuContact(ancien.id);
     const nouveau = await contact({ prenom: "Jean", nom: "Martin", telephone: "07 34 34 34 34", email: "jmartin@ailleurs.test" });
     await doublons.reperDoublonProbable(nouveau.id);
-    // Sa simulation du site lui a ouvert un dossier d'office.
+    // Sa simulation du site reste sur sa fiche (une simulation seule n'ouvre plus de dossier) ; Lucas lui en avait ouvert un.
     await simulationDuSite(nouveau.id);
-    const auto = await depuisLead.assurerDossierDeSimulation(nouveau.id);
-    assert.ok(auto?.cree);
+    assert.equal(await depuisLead.assurerDossierDeSimulation(nouveau.id), null);
+    const auto = await depuisLead.ouvrirDossierDuLead(nouveau.id, { motif: "BOUTON" });
+    assert.ok(auto.cree);
 
     const bilan = await doublons.fusionnerDoublon(nouveau.id);
     assert.deepEqual([bilan.dossierId, bilan.simulations, bilan.dossiersArchives], [dossierId, 1, 1]);
-    const archive = await prisma.dossier.findFirstOrThrow({ where: { id: auto!.dossierId, archiveLe: undefined } });
+    const archive = await prisma.dossier.findFirstOrThrow({ where: { id: auto.dossierId, archiveLe: undefined } });
     assert.match(archive.archiveMotif ?? "", /Doublon : fusionné dans le dossier de Jean Martin/);
     const leadArchive = await prisma.lead.findFirstOrThrow({ where: { id: nouveau.id, archiveLe: undefined } });
     assert.ok(leadArchive.archiveLe && leadArchive.doublonTraiteLe);

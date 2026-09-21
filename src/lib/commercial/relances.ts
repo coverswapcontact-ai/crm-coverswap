@@ -49,7 +49,7 @@ export async function proposerRelancesSms(maintenant: Date = new Date()): Promis
       // Seules les simulations publiées comptent : un brouillon, le client ne l'a jamais vu.
       espaces: { where: { archiveLe: null, revoqueLe: null }, take: 1, include: { simulations: { where: { archiveLe: null, statut: "PUBLIEE" }, orderBy: { createdAt: "desc" } } } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { createdAt: "desc" }, take: 1 },
-      accords: { take: 1, select: { id: true } },
+      accords: { where: { retireLe: null }, take: 1, select: { id: true } },
     },
   });
 

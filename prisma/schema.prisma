@@ -1274,6 +1274,12 @@ model EspaceClient {
   simulationsAccordees   Int                @default(0) // simulations offertes en plus du nombre gratuit (paramètre)
   simulationsDemandeesLe DateTime? // dernière demande de simulations supplémentaires
   favoris                String? // JSON : références Cover Styl' mises en favori par le client
+  // Mission 4 (22/09/2026) : tout ce que le client valide se dévalide ; ce qu'il écrit reste lisible ici.
+  projetValideLe         DateTime? // le client a validé son projet (pastille verte) ; remis à null s'il le modifie ou le dévalide
+  projetValidePar        String? // CLIENT | LUCAS : qui a validé
+  propositionMessage     String? // le mot du client avec sa demande d'autre proposition (entier)
+  propositionSimulationId String? // la simulation depuis laquelle il a demandé autre chose
+  photosRetirees         String? // JSON [{ id, chemin, archive, le }] : photos retirées par le client (archivées, retrouvables)
   simulations            SimulationEspace[]
   archiveLe              DateTime?
   archiveMotif           String?
@@ -1337,6 +1343,10 @@ model AccordDevis {
   signature     String? // signature tracée au doigt (image, relative au répertoire d'upload), si le client a signé
   ip            String?
   navigateur    String?
+  // Un accord se retire (par le client tant que rien n'est encaissé, ou par Lucas) : la preuve reste, annotée.
+  retireLe      DateTime?
+  retirePar     String? // CLIENT | LUCAS | SYSTEME
+  retireMotif   String?
   ecriture      String?
 
   @@index([dossierId])

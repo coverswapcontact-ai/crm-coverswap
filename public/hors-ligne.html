@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#16181D" />
+    <title>Hors ligne — CoverSwap</title>
+    <style>
+      html, body { height: 100%; margin: 0; background: #16181d; color: #f2f3f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; box-sizing: border-box; }
+      h1 { font-size: 22px; margin: 0 0 10px; font-weight: 600; }
+      p { font-size: 15px; line-height: 1.5; color: #9ca3af; max-width: 320px; margin: 0 0 24px; }
+      button, a { display: block; width: 100%; max-width: 320px; height: 52px; border-radius: 14px; border: 0; font-size: 16px; font-weight: 600; box-sizing: border-box; }
+      button { background: #1d9e75; color: #06140f; }
+      a { margin-top: 10px; line-height: 52px; color: #e5e7eb; border: 1px solid #2a2d34; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Pas de réseau</h1>
+      <p>Le CRM n'est pas joignable pour l'instant. Les messages que vous avez écrits sont gardés sur ce téléphone et partiront dès le retour du réseau.</p>
+      <button type="button" onclick="location.reload()">Réessayer</button>
+      <a href="tel:">Ouvrir le téléphone</a>
+    </main>
+    <script>
+      window.addEventListener("online", function () { location.reload(); });
+    </script>
+  </body>
+</html>

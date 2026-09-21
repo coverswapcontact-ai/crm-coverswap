@@ -104,13 +104,23 @@ export async function envoyerPushWeb(charge: ChargePush, options: { application?
   const preferes = options.application ? abonnes.filter((a) => a.application === options.application) : [];
   const cibles = preferes.length > 0 ? preferes : abonnes;
   const cles = await clesVapid();
+  let badge = charge.badge;
+  if (badge === undefined) {
+    try {
+      badge = (await prisma.conversationSms.aggregate({ _sum: { nonLus: true } }))._sum.nonLus ?? 0;
+    } catch {
+      badge = undefined;
+    }
+  }
+  // Dans « Messages », une conversation s'ouvre dans la messagerie seule, pas dans le CRM complet.
+  const lienPour = (application: string) => (application === "messages" && charge.lien ? charge.lien.replace(/\/sms(\?|$)/, "/messagerie$1") : charge.lien);
   const sujet = process.env.VAPID_SUJET?.trim() || "mailto:contact@coverswap.fr";
   let reussis = 0;
   const echecs: string[] = [];
   await Promise.all(
     cibles.map(async (abonne) => {
       try {
-        await webpush.sendNotification({ endpoint: abonne.endpoint, keys: { p256dh: abonne.p256dh, auth: abonne.auth } }, JSON.stringify(charge), {
+        await webpush.sendNotification({ endpoint: abonne.endpoint, keys: { p256dh: abonne.p256dh, auth: abonne.auth } }, JSON.stringify({ ...charge, lien: lienPour(abonne.application), badge }), {
           vapidDetails: { subject: sujet, publicKey: cles.publique, privateKey: cles.privee },
           TTL: 60 * 60 * 12,
           urgency: "high",

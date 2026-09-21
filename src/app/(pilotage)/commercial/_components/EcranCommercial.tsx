@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheckBig, FolderKanban, MessageSquare, Phone, PhoneCall, RefreshCw, StickyNote, UserRound } from "lucide-react";
+import { CircleCheckBig, FolderKanban, MessageSquare, Phone, PhoneCall, Receipt, RefreshCw, StickyNote, UserRound, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { GROUPES_A_MOI, GROUPES_CLIENT, LIBELLES_GROUPE, type Affaire, type GroupeAffaire, type PilotageCommercial } from "@/lib/commercial/types";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
-import { appelApi, messageErreur } from "@/components/pilotage/client";
+import { ErreurApi, appelApi, messageErreur } from "@/components/pilotage/client";
+import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
+import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, EnTetePage, TRANS } from "@/components/pilotage/ui";
 import { FeuilleAppel, FeuilleNote } from "@/components/sms/FilConversation";
 import { cn } from "@/lib/utils";
@@ -105,12 +107,17 @@ export default function EcranCommercial({ initial }: { initial: PilotageCommerci
   const [feuille, setFeuille] = useState<{ genre: "appel" | "note"; affaire: Affaire } | null>(null);
   const [replies, setReplies] = useState<Set<GroupeAffaire>>(new Set(["PLUS_TARD", "ECARTER"]));
 
+  const [horsLigne, setHorsLigne] = useState(false);
+
   const rafraichir = useCallback(async () => {
     setCharge(true);
     try {
       setDonnees(await appelApi<PilotageCommercial>("/api/commercial/pilotage"));
+      setHorsLigne(vientDuCache());
     } catch (erreur) {
-      toast.error(messageErreur(erreur));
+      // Sans réseau, la dernière version connue reste à l'écran : un bandeau le dit, pas une erreur à chaque essai.
+      if (erreur instanceof ErreurApi) toast.error(messageErreur(erreur));
+      else setHorsLigne(true);
     } finally {
       setCharge(false);
     }
@@ -118,10 +125,17 @@ export default function EcranCommercial({ initial }: { initial: PilotageCommerci
 
   useEffect(() => {
     const surRetour = () => document.visibilityState === "visible" && void rafraichir();
+    // À l'ouverture aussi : sur réseau médiocre, l'application installée affiche d'abord l'écran gardé en mémoire.
+    const premiere = window.setTimeout(surRetour, 0);
+    const oublierLeCache = ecouterLeCache(() => setHorsLigne(true));
     document.addEventListener("visibilitychange", surRetour);
+    window.addEventListener("online", surRetour);
     const minuterie = window.setInterval(surRetour, 120_000);
     return () => {
+      window.clearTimeout(premiere);
+      oublierLeCache();
       document.removeEventListener("visibilitychange", surRetour);
+      window.removeEventListener("online", surRetour);
       window.clearInterval(minuterie);
     };
   }, [rafraichir]);
@@ -164,11 +178,24 @@ export default function EcranCommercial({ initial }: { initial: PilotageCommerci
         titre="Commercial"
         sousTitre="Toutes les affaires vivantes : ce qui attend une action de vous, ce qui attend le client."
         actions={
-          <Bouton icone={<RefreshCw size={15} aria-hidden />} chargement={charge} onClick={() => void rafraichir()}>
-            Rafraîchir
-          </Bouton>
+          <>
+            {/* Trois gestes pour une dépense : ce bouton, le montant, enregistrer (photo du justificatif depuis l'appareil). */}
+            <Link href="/depenses/nouvelle" className={cn("inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3.5 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+              <Receipt size={15} aria-hidden /> Dépense
+            </Link>
+            <Bouton icone={<RefreshCw size={15} aria-hidden />} chargement={charge} onClick={() => void rafraichir()}>
+              Rafraîchir
+            </Bouton>
+          </>
         }
       />
+
+      <NotificationsAppareil application="crm" />
+      {horsLigne ? (
+        <p className="mb-4 flex items-center gap-2 rounded-[12px] border-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 px-3.5 py-2.5 text-[12.5px] text-[#F5B454]">
+          <WifiOff size={14} aria-hidden /> Hors ligne : voici la dernière version connue. Appeler reste possible.
+        </p>
+      ) : null}
 
       {/* Le résumé du matin */}
       <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">

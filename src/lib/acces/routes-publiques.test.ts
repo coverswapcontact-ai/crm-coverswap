@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, test } from "node:test";
 import { ROUTES_PUBLIQUES, estRoutePublique } from "./routes-publiques";
 
 const APP = path.resolve(__dirname, "..", "..", "app");
+const PUBLIC = path.resolve(__dirname, "..", "..", "..", "public");
 
 /** Chemins d'URL de toutes les pages et routes de l'application (groupes « (x) » retirés). */
 function routesDeLApplication(dossier = APP, prefixe = ""): string[] {
@@ -53,6 +54,10 @@ describe("routes publiques", () => {
       "/api/webhook/zapier",
       "/api/cron/relance",
       "/api/simulate",
+      "/manifest-crm.webmanifest",
+      "/manifest-messages.webmanifest",
+      "/sw.js",
+      "/hors-ligne.html",
     ]) {
       assert.equal(estRoutePublique(chemin), true, chemin);
     }
@@ -63,9 +68,11 @@ describe("routes publiques", () => {
     for (const route of ROUTES_PUBLIQUES) {
       assert.ok(route.protection.length > 10, route.chemin);
       if (route.chemin === "/robots.txt") continue;
+      // Un fichier statique de l'application installée (manifeste, service worker) vit dans public/.
+      const fichierStatique = !route.prefixe && existsSync(path.join(PUBLIC, route.chemin));
       const trouvee = route.prefixe
         ? existantes.some((existante) => existante.startsWith(route.chemin))
-        : existantes.includes(route.chemin);
+        : existantes.includes(route.chemin) || fichierStatique;
       assert.ok(trouvee, `entrée publique sans route : ${route.chemin}`);
       if (route.prefixe) assert.ok(route.chemin.endsWith("/"), `préfixe sans « / » final : ${route.chemin}`);
     }

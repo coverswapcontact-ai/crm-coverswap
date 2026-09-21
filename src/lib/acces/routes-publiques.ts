@@ -27,6 +27,10 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/site/publications", protection: "réalisations et avis publiés avec accord : lecture seule, aucun identifiant de client" },
   { chemin: "/api/site/photos/", prefixe: true, protection: "photos des publications publiées seulement, lues par identifiant de publication" },
   { chemin: "/robots.txt", protection: "consigne aux robots, statique" },
+  { chemin: "/manifest-crm.webmanifest", protection: "manifeste de l'application installable : nom, icône, couleurs — rien de privé" },
+  { chemin: "/manifest-messages.webmanifest", protection: "manifeste de l'application « Messages » : nom, icône, couleurs — rien de privé" },
+  { chemin: "/sw.js", protection: "service worker (notifications, hors ligne) : code statique, ne contient aucune donnée" },
+  { chemin: "/hors-ligne.html", protection: "page statique affichée sans réseau" },
 ];
 
 export function estRoutePublique(chemin: string): boolean {

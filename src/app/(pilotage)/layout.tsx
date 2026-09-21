@@ -1,4 +1,10 @@
+import type { Metadata, Viewport } from "next";
 import { Navigation } from "@/components/pilotage/Navigation";
+import { VUE_APPLICATION, metadonneesApplication } from "@/lib/application/installation";
+
+// Application installable « CoverSwap » : manifeste, icône et écrans de démarrage du CRM.
+export const metadata: Metadata = metadonneesApplication("crm");
+export const viewport: Viewport = VUE_APPLICATION;
 
 // Gabarit des écrans de pilotage : charte sombre, barre du
 // haut sur ordinateur, barre du bas au pouce sur téléphone.

@@ -1,0 +1,23 @@
+{
+  "id": "/?application=crm",
+  "name": "CoverSwap",
+  "short_name": "CoverSwap",
+  "description": "Le CRM CoverSwap : commercial, dossiers, clients, finances.",
+  "lang": "fr",
+  "start_url": "/commercial",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16181D",
+  "theme_color": "#16181D",
+  "icons": [
+    { "src": "/icones/crm-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icones/crm-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icones/crm-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Messages", "url": "/sms", "icons": [{ "src": "/icones/messages-192.png", "sizes": "192x192" }] },
+    { "name": "À valider", "url": "/validation" },
+    { "name": "Nouvelle dépense", "url": "/depenses/nouvelle" }
+  ]
+}

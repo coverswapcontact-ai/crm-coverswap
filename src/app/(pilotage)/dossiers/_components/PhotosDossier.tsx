@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { Camera, ExternalLink, ImageOff, Trash2 } from "lucide-react";
+import { Camera, ExternalLink, ImageOff, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail, PhotoVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ export function PhotosDossier({
 }) {
   const entree = useRef<HTMLInputElement>(null);
   const entreeApres = useRef<HTMLInputElement>(null);
+  const entreeAppareil = useRef<HTMLInputElement>(null);
   const [envoi, setEnvoi] = useState<{ apres: boolean; texte: string } | null>(null);
   const [agrandie, setAgrandie] = useState<PhotoVue | null>(null);
   const [confirmation, setConfirmation] = useState(false);
@@ -106,10 +107,30 @@ export function PhotosDossier({
               aria-label="Ajouter des photos"
               onChange={(evenement) => void ajouter(evenement.target.files, false)}
             />
+            {/* Sur le téléphone : l'appareil photo s'ouvre directement, sans passer par la photothèque. */}
+            <input
+              ref={entreeAppareil}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              aria-label="Prendre une photo"
+              onChange={(evenement) => void ajouter(evenement.target.files, false)}
+            />
             <Bouton
               variante="secondaire"
               taille="sm"
+              className="md:hidden"
               icone={<Camera size={13} aria-hidden />}
+              disabled={envoi !== null}
+              onClick={() => entreeAppareil.current?.click()}
+            >
+              Photo
+            </Bouton>
+            <Bouton
+              variante="secondaire"
+              taille="sm"
+              icone={<ImagePlus size={13} aria-hidden />}
               chargement={envoi !== null && !envoi.apres}
               onClick={() => entree.current?.click()}
             >

@@ -8,6 +8,8 @@ import type { ContexteConversation } from "@/lib/sms/contexte";
 import type { EtatFournisseur } from "@/lib/sms/fournisseurs";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
+import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
+import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, Champ, Modale, TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
 import { ContexteDossier } from "./ContexteDossier";
@@ -77,7 +79,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
     try {
       const reponse = await appelApi<Liste>(`/api/sms/conversations?filtre=${f}${q.trim() ? `&q=${encodeURIComponent(q.trim())}` : ""}`);
       setListe(reponse);
-      setHorsLigne(false);
+      setHorsLigne(vientDuCache());
       if ("setAppBadge" in navigator) {
         const total = reponse.compteurs.nonLues;
         void (total > 0 ? (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> }).setAppBadge(total) : (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge()).catch(() => undefined);
@@ -171,11 +173,15 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
         if (idOuvertRef.current === envoi.conversationId) await chargerFil(envoi.conversationId, { silencieux: true });
         void chargerListe();
       } catch (erreur) {
-        if (erreur instanceof ErreurApi) {
+        // Serveur en cours de redémarrage (502-504) ou session à renouveler (401) : le message reste en file, comme sans réseau.
+        const passager = erreur instanceof ErreurApi && ([502, 503, 504].includes(erreur.status) || erreur.status === 401);
+        if (erreur instanceof ErreurApi && !passager) {
           // Le serveur a répondu non (STOP, numéro fixe, message trop long) : inutile d'insister.
           retirerDeLAttente(envoi.cleEnvoi);
           toast.error("Message non envoyé", { description: erreur.message });
           if (idOuvertRef.current === envoi.conversationId) void chargerFil(envoi.conversationId, { silencieux: true });
+        } else if (erreur instanceof ErreurApi && erreur.status === 401) {
+          toast.error("Session expirée", { description: "Reconnectez-vous : le message est gardé et partira ensuite." });
         } else setHorsLigne(true);
       } finally {
         enCours.current.delete(envoi.cleEnvoi);
@@ -269,8 +275,10 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
     window.addEventListener("focus", surRetour);
     const surCoupure = () => setHorsLigne(true);
     window.addEventListener("offline", surCoupure);
+    const oublierLeCache = ecouterLeCache(surCoupure);
     viderLaFile();
     return () => {
+      oublierLeCache();
       source?.close();
       window.clearInterval(releve);
       document.removeEventListener("visibilitychange", surRetour);
@@ -291,6 +299,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
 
   const bandeau = (
     <>
+      <NotificationsAppareil application={application} compact />
       {horsLigne ? (
         <p className="flex items-center gap-2 border-b-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 px-3.5 py-2 text-[12.5px] text-[#F5B454]">
           <WifiOff size={13} aria-hidden /> Hors ligne : vos messages partiront au retour du réseau.

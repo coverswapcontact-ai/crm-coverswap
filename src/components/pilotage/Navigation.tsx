@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, CircleCheckBig, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, MessageSquare, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartColumn, CircleCheckBig, Handshake, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, MessageSquare, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -30,10 +30,11 @@ type Entree = {
 
 // Écrans principaux, dans l'ordre de la journée : les prospects alimentent les dossiers.
 const PRINCIPALES: Entree[] = [
-  { href: "/prospects", libelle: "Prospects", icone: Radar, compteur: "entrantsATraiter", mobile: true },
+  { href: "/commercial", libelle: "Commercial", icone: Handshake, compteur: "entrantsATraiter", mobile: true },
   { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
-  { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
+  { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
+  { href: "/prospects", libelle: "Prospects", icone: Radar },
   { href: "/messages", libelle: "Mails", icone: Mail, compteur: "messagesATrier" },
   { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/finances", libelle: "Finances", icone: Wallet },
@@ -123,7 +124,7 @@ export function Navigation() {
         className="sticky top-0 z-40 hidden border-b-[0.5px] border-[#2A2D34] bg-[#16181D]/95 backdrop-blur md:block"
       >
         <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-4 px-5 lg:gap-6 lg:px-8">
-          <Link href="/dossiers" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
+          <Link href="/commercial" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
             CoverSwap
             <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>
           </Link>

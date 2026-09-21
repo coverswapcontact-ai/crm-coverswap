@@ -68,6 +68,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   const idOuvertRef = useRef<string | null>(null);
   const filtres = useRef({ filtre, recherche });
   const minuterieBrouillon = useRef<number | null>(null);
+  const [aProposer, setAProposer] = useState<{ conversationId: string; modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" } | null>(null);
 
   /* ── Chargements ─────────────────────────────────────────────────── */
 
@@ -132,6 +133,9 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
     if (!initial && cible) {
       envoyerJson<{ conversation: ConversationResume }>("/api/sms/conversations", "POST", cible)
         .then(({ conversation }) => {
+          const modele = adresse.searchParams.get("proposer");
+          if (modele === "LIEN_ESPACE" || modele === "INJOIGNABLE_LIEN") setAProposer({ conversationId: conversation.id, modele });
+          adresse.searchParams.delete("proposer");
           adresse.searchParams.delete("lead");
           adresse.searchParams.delete("dossier");
           window.history.replaceState(null, "", adresse);
@@ -333,6 +337,8 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
             onReessayer={(element) => void reessayer(element)}
             onBrouillon={brouillon}
             brouillonInitial={brouillonInitial}
+            proposerAuChargement={aProposer?.conversationId === idOuvert ? aProposer.modele : null}
+            onPropose={() => setAProposer(null)}
             onRafraichir={() => {
               if (idOuvert) void chargerFil(idOuvert, { silencieux: true });
               void chargerListe();

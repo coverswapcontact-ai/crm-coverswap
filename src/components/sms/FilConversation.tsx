@@ -81,6 +81,8 @@ export function FilConversation({
   onBrouillon,
   brouillonInitial,
   onRafraichir,
+  proposerAuChargement = null,
+  onPropose,
 }: {
   conversation: ConversationResume;
   elements: ElementAffiche[];
@@ -95,6 +97,9 @@ export function FilConversation({
   onBrouillon: (texte: string) => void;
   brouillonInitial: string;
   onRafraichir: () => void;
+  /** Après un appel noté ailleurs (écran Commercial) : ce message type est préparé à l'ouverture, à relire avant d'envoyer. */
+  proposerAuChargement?: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" | null;
+  onPropose?: () => void;
 }) {
   const [texte, setTexte] = useState(brouillonInitial);
   const [origine, setOrigine] = useState<{ modele: string; propose: string } | null>(null);
@@ -169,6 +174,16 @@ export function FilConversation({
       setOccupe(null);
     }
   }
+
+  useEffect(() => {
+    if (!proposerAuChargement || conversation.stop) return;
+    const minuterie = window.setTimeout(() => {
+      onPropose?.();
+      void lienEspace(proposerAuChargement);
+    }, 0);
+    return () => window.clearTimeout(minuterie);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposerAuChargement, conversation.id]);
 
   let jourPrecedent = "";
 
@@ -390,7 +405,7 @@ function FeuilleModeles({ ouverte, conversationId, onFermer, onChoisir, onOuvrir
   );
 }
 
-function FeuilleNote({ ouverte, leadId, dossierId, onFermer, onFait }: { ouverte: boolean; leadId: string | null; dossierId: string | null; onFermer: () => void; onFait: () => void }) {
+export function FeuilleNote({ ouverte, leadId, dossierId, onFermer, onFait }: { ouverte: boolean; leadId: string | null; dossierId: string | null; onFermer: () => void; onFait: () => void }) {
   const [contenu, setContenu] = useState("");
   const [envoi, setEnvoi] = useState(false);
   async function enregistrer() {
@@ -423,7 +438,7 @@ function FeuilleNote({ ouverte, leadId, dossierId, onFermer, onFait }: { ouverte
   );
 }
 
-function FeuilleAppel({ ouverte, leadId, dossierId, onFermer, onFait }: { ouverte: boolean; leadId: string | null; dossierId: string | null; onFermer: () => void; onFait: (suite: SuiteAppel) => void }) {
+export function FeuilleAppel({ ouverte, leadId, dossierId, onFermer, onFait }: { ouverte: boolean; leadId: string | null; dossierId: string | null; onFermer: () => void; onFait: (suite: SuiteAppel) => void }) {
   const [issue, setIssue] = useState<IssueAppel | null>(null);
   const [note, setNote] = useState("");
   const [envoi, setEnvoi] = useState(false);

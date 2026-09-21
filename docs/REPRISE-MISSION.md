@@ -71,7 +71,11 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       injoignable ; plafond 5 SMS / 10 jours ; une proposition en attente par dossier ; STOP ; « perdu — sans
       réponse » PROPOSÉ 5 jours après la dernière relance — étape sensible, donc jamais automatique).
       8 essais (`relances.test.ts`). 301 essais au total.
-- [ ] Lot 6 — Écran de pilotage commercial
+- [x] Lot 6 — Écran `/commercial` (page d'accueil du CRM, première entrée de la navigation) :
+      `src/lib/commercial/pilotage.ts` + `types.ts` (à qui est la main, lue dans les faits : photos reçues,
+      simulation choisie, SMS reçu…), `EcranCommercial.tsx` (compteurs du matin, « À moi » / « Chez le client »,
+      gros boutons Appeler / fin d'appel / SMS, hors zone replié). Fin d'appel → message préparé dans la
+      messagerie (`/sms?lead=…&proposer=LIEN_ESPACE`). 2 essais (`pilotage.test.ts`), 303 au total.
 - [ ] Lot 7 — Application mobile (2 manifestes, 2 icônes, push web, hors ligne, appareil photo)
 - [ ] Lot 8 — Rapport final
 

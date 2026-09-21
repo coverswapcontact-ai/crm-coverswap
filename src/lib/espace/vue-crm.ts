@@ -159,7 +159,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       commentaire: s.commentaireClient,
       le: (s.publieeLe ?? s.createdAt).toISOString(),
       vueLe: iso(s.vueLe),
-      url: `/api/dossiers/${dossierId}/espace/simulations/${s.id}`,
+      url: `/api/dossiers/${dossierId}/simulations/${s.id}/image`,
     })),
     choix: espace.choixLe && choixBrut ? { mode: choixBrut.mode ?? "UNE", le: espace.choixLe.toISOString(), commentaire: choixBrut.commentaire ?? null, zones: zonesDuChoix } : null,
     proposition: espace.propositionDemandeeLe ? { le: espace.propositionDemandeeLe.toISOString(), message: espace.propositionMessage, simulationId: espace.propositionSimulationId } : null,

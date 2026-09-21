@@ -224,13 +224,13 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
 
   const faits: { libelle: string; fait: boolean }[] = [
     { libelle: f.photos ? `${f.photos} photo${f.photos > 1 ? "s" : ""}` : "Photos", fait: f.photos > 0 },
-    { libelle: "Projet", fait: Boolean(f.projet) },
+    { libelle: f.projetValideLe ? "Projet validé" : f.projet ? "Projet saisi, pas validé" : "Projet", fait: Boolean(f.projetValideLe) },
     { libelle: f.simulationsPubliees ? `${f.simulationsPubliees} publiée${f.simulationsPubliees > 1 ? "s" : ""} par moi` : "Rien de publié", fait: f.simulationsPubliees > 0 },
-    { libelle: `${f.simulationsClient} faite${f.simulationsClient > 1 ? "s" : ""} par le client · ${f.simulationsRestantes} restante${f.simulationsRestantes > 1 ? "s" : ""}`, fait: f.simulationsClient > 0 },
+    { libelle: `${f.simulationsClient + f.simulationsSite} faite${f.simulationsClient + f.simulationsSite > 1 ? "s" : ""} par le client${f.simulationsSite ? ` (dont ${f.simulationsSite} sur le site)` : ""} · ${f.simulationsRestantes} restante${f.simulationsRestantes > 1 ? "s" : ""}`, fait: f.simulationsClient + f.simulationsSite > 0 },
     { libelle: f.choix ? "Simulation validée" : "Pas encore validée", fait: Boolean(f.choix) },
     { libelle: !f.devis ? "Devis" : f.devis.consultations > 0 ? `Devis lu ${f.devis.consultations} fois` : "Devis pas encore ouvert", fait: Boolean(f.devis && f.devis.consultations > 0) },
-    { libelle: "Accord", fait: Boolean(f.accord) },
-    { libelle: "Paiement", fait: Boolean(f.acompte && f.acompte.recu >= f.acompte.montant - 0.5) },
+    { libelle: f.accord ? (f.accordSource === "CRM" ? "Signé (hors espace)" : "Bon pour accord") : "Accord", fait: Boolean(f.accord) },
+    { libelle: !f.paiement ? "Paiement" : f.paiement.regle ? "Réglé" : f.paiement.recu > 0 ? `${f.paiement.recu.toLocaleString("fr-FR")} € reçus, reste ${f.paiement.reste.toLocaleString("fr-FR")} €` : "Acompte attendu", fait: Boolean(f.paiement?.regle || (f.acompte && f.acompte.recu >= f.acompte.montant - 0.5)) },
   ];
 
   return (
@@ -270,6 +270,13 @@ function CarteEspace({ ligne, maintenant, onRecharger }: { ligne: LigneEspace; m
       </ul>
 
       {f.projet ? <p className="mt-2 line-clamp-2 text-[12.5px] text-[#9CA3AF]">{f.projet}</p> : null}
+      {f.choixTeintes ? <p className="mt-1 line-clamp-2 text-[12.5px] text-[#5DCAA5]">Validé : {f.choixTeintes}</p> : null}
+      {f.proposition ? (
+        <p className="mt-1.5 rounded-[8px] border-[0.5px] border-[#F5B454]/40 bg-[#F5B454]/10 px-2.5 py-1.5 text-[12.5px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">
+          <span className="font-medium text-[#F5B454]">Il demande autre chose : </span>
+          {f.proposition.message ? `« ${f.proposition.message} »` : "sans message."}
+        </p>
+      ) : null}
 
       {ligne.signaux.length > 0 ? (
         <div className="mt-2.5 flex flex-wrap gap-1.5">

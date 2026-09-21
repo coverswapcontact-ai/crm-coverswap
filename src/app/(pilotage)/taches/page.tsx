@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { auditerConnexions } from "@/lib/audit/connexions";
+import { controlerCoherence } from "@/lib/coherence/controle";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import AuditConnexions from "./_components/AuditConnexions";
+import ControleCoherence from "./_components/ControleCoherence";
 import EtatTaches from "./_components/EtatTaches";
 
 export const metadata: Metadata = {
@@ -12,10 +14,11 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function TachesPage() {
-  const [audit, taches] = await Promise.all([auditerConnexions(), etatDesTaches()]);
+  const [audit, taches, coherence] = await Promise.all([auditerConnexions(), etatDesTaches(), controlerCoherence()]);
   return (
     <>
       <div className="mx-auto w-full max-w-5xl px-5 pt-6 md:px-8 md:pt-8">
+        <ControleCoherence initial={coherence} />
         <AuditConnexions initial={audit} />
       </div>
       <EtatTaches initial={taches} />

@@ -2,49 +2,58 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Eye, FileText, Link2, MessageSquare, RefreshCw, ShieldOff } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, MessageSquare, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
+import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
+import { REPERES_METRES, type ProjetClient } from "@/lib/espace/projet";
+import { ZONES_PROJET_CLIENT } from "@/lib/simulateur/types-surface";
+import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
+import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Pastille } from "@/components/pilotage/ui";
-import { Bouton, TitreSection } from "./ui";
+import { Bouton, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
 
-type EspaceVu = {
-  id: string;
-  lien: string | null;
-  apercu: string | null;
-  expireLe: string;
-  revoqueLe: string | null;
-  premierAccesLe: string | null;
-  dernierAccesLe: string | null;
-  nbAcces: number;
-  projet: { resume: string } | null;
-  choix: { mode: string; simulationId?: string; zones?: { libelle: string; zone: string; nom: string; ref: string }[]; commentaire: string | null; le: string } | null;
-  devis: { consultations: number; consulteLe: string | null; documentId: string | null };
-  propositionDemandeeLe: string | null;
-  avis: { note: number; texte: string } | null;
-  simulations: { id: string; titre: string | null; choisie: boolean }[];
-  accord: { le: string; nom: string; numeroDevis: string | null; total: number } | null;
-  /** Espace v3 : les simulations que le client crée lui-même. */
-  creation?: { faites: number; restantes: number; offertes: number; enCours: number; demandeesLe: string | null };
-};
+const jour = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null);
+const jourHeure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const euros = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
+const moyen = (m: string | null) => (m && m in LIBELLES_MOYEN ? LIBELLES_MOYEN[m as MoyenPaiement].toLowerCase() : null);
 
-const jour = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null);
+const LIBELLES_SOURCE: Record<string, string> = { SITE: "Faite sur le site", CLIENT: "Créée par lui", API: "Préparée par moi", CHATGPT: "Préparée par moi", MANUEL: "Déposée par moi" };
+
+/** Une rubrique du bloc : titre, pastille d'état à droite, contenu. */
+function Rubrique({ titre, etat, children }: { titre: string; etat?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="border-t-[0.5px] border-[#2A2D34] pt-3 first:border-t-0 first:pt-0">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{titre}</h4>
+        {etat}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /**
- * L'espace client vu du dossier : le lien (à copier, à envoyer par SMS, à
- * regarder « comme le client »), et ce que le client y a fait — son projet,
- * son choix, combien de fois il a relu son devis. Les simulations ont leur
- * propre section (brouillons, publication).
+ * L'espace client vu — et piloté — depuis le dossier : où en est le client,
+ * ce qu'il a fait, ÉCRIT (en entier) et validé, ce qu'il lui reste à faire ; et
+ * les gestes que je peux faire à sa place : valider ou dévalider son projet,
+ * le modifier, valider ou dévalider une simulation, retirer une demande ou un
+ * accord, accorder des simulations, remettre une photo, réinitialiser une
+ * étape. Chaque geste est écrit dans l'historique du dossier (« par Lucas »).
+ * Montants, accord et paiements sont lus là où l'espace du client les lit.
  */
 export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: DossierDetail; onRecharger: () => Promise<void>; onFaireDevis?: () => void }) {
-  const [espace, setEspace] = useState<EspaceVu | null | undefined>(undefined);
+  const [espace, setEspace] = useState<VueEspaceCrm | null | undefined>(undefined);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
+  const [edition, setEdition] = useState<ProjetClient | null>(null);
+  const [confirmation, setConfirmation] = useState<{ titre: string; texte: string; bouton: string; geste: GesteEspace; succes: string } | null>(null);
+  const [gestesOuverts, setGestesOuverts] = useState(false);
 
   const charger = useCallback(async () => {
     try {
-      setEspace((await appelApi<{ espace: EspaceVu | null }>(`/api/dossiers/${detail.id}/espace`)).espace);
+      setEspace((await appelApi<{ espace: VueEspaceCrm | null }>(`/api/dossiers/${detail.id}/espace`)).espace);
     } catch {
       setEspace(null);
     }
@@ -53,13 +62,31 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   useEffect(() => {
     const premier = window.setTimeout(() => void charger(), 0);
     return () => window.clearTimeout(premier);
-  }, [charger]);
+  }, [charger, detail.etape, detail.updatedAt]);
 
-  async function agir(action: "ouvrir" | "revoquer" | "renouveler" | "accorder", succes: string) {
-    setOccupe(action);
+  async function envoyer(corps: Record<string, unknown>, cle: string, succes: string): Promise<boolean> {
+    setOccupe(cle);
     try {
-      setEspace((await envoyerJson<{ espace: EspaceVu }>(`/api/dossiers/${detail.id}/espace`, "POST", action === "accorder" ? { action, nombre: 3 } : { action })).espace);
+      setEspace((await envoyerJson<{ espace: VueEspaceCrm }>(`/api/dossiers/${detail.id}/espace`, "POST", corps)).espace);
       toast.success(succes);
+      await onRecharger();
+      return true;
+    } catch (erreur) {
+      toast.error(messageErreur(erreur));
+      return false;
+    } finally {
+      setOccupe(null);
+    }
+  }
+  const lien = (action: "ouvrir" | "revoquer" | "renouveler", succes: string) => envoyer({ action }, action, succes);
+  const geste = (g: GesteEspace, succes: string) => envoyer(g, g.geste + ("simulationId" in g ? g.simulationId : "photoId" in g ? g.photoId : ""), succes);
+
+  async function simulation(id: string, action: "masquer" | "afficher") {
+    setOccupe(action + id);
+    try {
+      await envoyerJson(`/api/dossiers/${detail.id}/simulations/${id}`, "PATCH", { action });
+      toast.success(action === "masquer" ? "Simulation masquée : le client ne la voit plus" : "Simulation publiée : le client la voit");
+      await charger();
       await onRecharger();
     } catch (erreur) {
       toast.error(messageErreur(erreur));
@@ -79,117 +106,414 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
     }
   }
 
-  const choix = espace?.choix
-    ? espace.choix.mode === "COMPOSITE"
-      ? `Mélange : ${(espace.choix.zones ?? []).map((z) => `${z.libelle || z.zone} ${z.nom || z.ref}`).join(" · ")}`
-      : `« ${espace.simulations.find((s) => s.id === espace.choix?.simulationId)?.titre ?? "une simulation"} »`
-    : null;
+  if (espace === undefined) {
+    return (
+      <section>
+        <TitreSection>Espace client</TitreSection>
+        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+      </section>
+    );
+  }
+  if (espace === null) {
+    return (
+      <section>
+        <TitreSection>Espace client</TitreSection>
+        <div className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4">
+          <p className="text-[13px] text-[#9CA3AF]">Pas encore d&apos;espace pour ce dossier. Le client y déposera ses photos, validera son projet, créera ses simulations et donnera son bon pour accord, sans compte ni mot de passe.</p>
+          <Bouton className="mt-3" variante="primaire" icone={<Link2 size={14} aria-hidden />} chargement={occupe === "ouvrir"} onClick={() => void lien("ouvrir", "Espace client ouvert")}>
+            Ouvrir l&apos;espace client
+          </Bouton>
+        </div>
+      </section>
+    );
+  }
+
+  const zonesProjet = ZONES_PROJET_CLIENT[espace.typeProjet] ?? ZONES_PROJET_CLIENT.CUISINE;
+  const aucunDevis = !detail.documents.some((d) => d.type === "DEVIS" && d.numero);
+  const p = espace.paiement;
 
   return (
     <section>
       <TitreSection>Espace client</TitreSection>
-      {espace === undefined ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
-      ) : espace === null ? (
-        <div className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4">
-          <p className="text-[13px] text-[#9CA3AF]">Pas encore d&apos;espace pour ce dossier. Le client y déposera ses photos, précisera son projet, choisira sa simulation et donnera son bon pour accord, sans compte ni mot de passe.</p>
-          <Bouton className="mt-3" variante="primaire" icone={<Link2 size={14} aria-hidden />} chargement={occupe === "ouvrir"} onClick={() => void agir("ouvrir", "Espace client ouvert")}>
-            Ouvrir l&apos;espace client
+      <div className="space-y-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
+        {/* Où il en est : les cinq onglets de son espace, tels qu'il les voit. */}
+        <div>
+          <ol className="grid grid-cols-5 gap-1">
+            {espace.etapes.map((e) => (
+              <li key={e.cle} title={e.raison ?? undefined} className={cn("rounded-[8px] border-[0.5px] px-1.5 py-1.5 text-center", e.courante ? "border-[#1D9E75]/60 bg-[#1D9E75]/10" : "border-[#2A2D34] bg-[#16181D]")}>
+                <span className={cn("mx-auto mb-1 flex h-4 w-4 items-center justify-center rounded-full", e.fait ? "bg-[#1D9E75] text-[#0B1612]" : e.verrouillee ? "text-[#6B7280]" : "border-[0.5px] border-[#3A3E47]")}>
+                  {e.fait ? <Check size={11} strokeWidth={3} aria-hidden /> : e.verrouillee ? <Lock size={11} aria-hidden /> : null}
+                </span>
+                <span className={cn("block truncate text-[10.5px] font-medium", e.courante ? "text-[#5DCAA5]" : e.fait ? "text-[#D1D5DB]" : "text-[#8B919C]")}>{e.libelle}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-2 text-[13px] text-[#F2F3F5]">
+            {espace.etapeLibelle}
+            <span className="text-[#9CA3AF]"> — il lui reste : {espace.resteAFaire.charAt(0).toLowerCase() + espace.resteAFaire.slice(1)}</span>
+          </p>
+        </div>
+
+        {/* Le lien et les visites. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {espace.revoqueLe ? <Pastille ton="rouge">Lien désactivé</Pastille> : <Pastille ton="vert">Lien actif jusqu&apos;au {jour(espace.expireLe)}</Pastille>}
+          {espace.dernierAccesLe ? (
+            <Pastille>
+              {espace.nbAcces} visite{espace.nbAcces > 1 ? "s" : ""} · première le {jour(espace.premierAccesLe)} · dernière le {jour(espace.dernierAccesLe)}
+            </Pastille>
+          ) : (
+            <Pastille ton="ambre">Pas encore ouvert par le client</Pastille>
+          )}
+        </div>
+        {espace.lien ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-[8px] bg-[#16181D] px-2.5 py-2 text-[12px] text-[#D1D5DB]">{espace.lien}</code>
+            <Bouton taille="sm" icone={copie ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />} onClick={() => void copier()}>
+              {copie ? "Copié" : "Copier"}
+            </Bouton>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {espace.apercu ? (
+            <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+              <Eye size={13} aria-hidden /> Voir comme le client
+            </a>
+          ) : null}
+          {espace.lien ? (
+            <Link href={`/sms?dossier=${detail.id}&proposer=${espace.projet || espace.simulations.length || espace.devis || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE"}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+              <MessageSquare size={13} aria-hidden /> Envoyer par SMS
+            </Link>
+          ) : null}
+          {espace.revoqueLe ? null : (
+            <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "revoquer"} onClick={() => void lien("revoquer", "Lien désactivé")}>
+              Désactiver le lien
+            </Bouton>
+          )}
+          <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void lien("renouveler", "Nouveau lien émis : l'ancien ne fonctionne plus")}>
+            Nouveau lien
           </Bouton>
         </div>
-      ) : (
-        <div className="space-y-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {espace.revoqueLe ? <Pastille ton="rouge">Lien désactivé</Pastille> : <Pastille ton="vert">Lien actif jusqu&apos;au {jour(espace.expireLe)}</Pastille>}
-            {espace.dernierAccesLe ? <Pastille>Vu le {jour(espace.dernierAccesLe)} · {espace.nbAcces} visite{espace.nbAcces > 1 ? "s" : ""}</Pastille> : <Pastille ton="ambre">Pas encore ouvert par le client</Pastille>}
-            {espace.devis.consultations > 0 && !espace.accord ? <Pastille ton={espace.devis.consultations >= 3 ? "rouge" : "ambre"}>Devis relu {espace.devis.consultations} fois</Pastille> : null}
-            {espace.accord ? <Pastille ton="vert">Bon pour accord le {jour(espace.accord.le)} — {espace.accord.nom}</Pastille> : null}
-          </div>
 
-          {espace.lien ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-[8px] bg-[#16181D] px-2.5 py-2 text-[12px] text-[#D1D5DB]">{espace.lien}</code>
-              <Bouton taille="sm" icone={copie ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />} onClick={() => void copier()}>
-                {copie ? "Copié" : "Copier"}
-              </Bouton>
+        {/* Photos */}
+        <Rubrique titre="Ses photos" etat={<Pastille ton={espace.photos.length ? "vert" : "neutre"}>{espace.photos.length} déposée{espace.photos.length > 1 ? "s" : ""}</Pastille>}>
+          {espace.photos.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {espace.photos.map((photo) => (
+                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" className="block h-12 w-12 overflow-hidden rounded-[6px] border-[0.5px] border-[#2A2D34]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.url} alt="Photo du client" loading="lazy" className="h-full w-full object-cover" />
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-[#8B919C]">Aucune pour l&apos;instant.</p>
+          )}
+          {espace.photosRetirees.length ? (
+            <div className="mt-2">
+              <p className="mb-1 text-[11.5px] text-[#F5B454]">
+                {espace.photosRetirees.length} photo{espace.photosRetirees.length > 1 ? "s" : ""} retirée{espace.photosRetirees.length > 1 ? "s" : ""} par le client (gardée{espace.photosRetirees.length > 1 ? "s" : ""}) :
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {espace.photosRetirees.map((photo) => (
+                  <div key={photo.id} className="flex items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-1 pr-2">
+                    <a href={photo.url} target="_blank" rel="noopener noreferrer" className="block h-9 w-9 overflow-hidden rounded-[5px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photo.url} alt="Photo retirée" loading="lazy" className="h-full w-full object-cover opacity-70" />
+                    </a>
+                    <span className="text-[11px] text-[#8B919C]">le {jour(photo.le)}</span>
+                    <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "remettre-photo", photoId: photo.id }, "Photo remise dans le dossier et dans son espace")} className={cn("text-[11.5px] font-medium text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
+                      Remettre
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
+        </Rubrique>
 
-          <div className="flex flex-wrap gap-2">
-            {espace.apercu ? (
-              <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
-                <Eye size={13} aria-hidden /> Voir comme le client
-              </a>
-            ) : null}
-            {espace.lien ? (
-              <Link href={`/sms?dossier=${detail.id}&proposer=${espace.projet || espace.simulations.length || espace.devis.documentId || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE"}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
-                <MessageSquare size={13} aria-hidden /> Envoyer par SMS
-              </Link>
-            ) : null}
-            {espace.revoqueLe ? null : (
-              <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "revoquer"} onClick={() => void agir("revoquer", "Lien désactivé")}>
-                Désactiver le lien
+        {/* Projet */}
+        <Rubrique
+          titre="Son projet"
+          etat={
+            espace.projetValide ? (
+              <Pastille ton="vert">
+                <Check size={11} strokeWidth={3} aria-hidden /> Validé le {jour(espace.projetValide.le)}
+                {espace.projetValide.par === "LUCAS" ? " par moi" : ""}
+              </Pastille>
+            ) : (
+              <Pastille ton={espace.projet ? "ambre" : "neutre"}>{espace.projet ? "Pas encore validé" : "Rien de saisi"}</Pastille>
+            )
+          }
+        >
+          {espace.projet ? (
+            <>
+              <p className="text-[13px] text-[#D1D5DB]">{[espace.projet.zones.map((z) => zonesProjet.find((x) => x.id === z)?.libelle ?? z).join(", "), espace.projet.metres ? `≈ ${String(espace.projet.metres).replace(".", ",")} m` : null, REPERES_METRES.find((r) => r.id === espace.projet?.repere)?.libelle].filter(Boolean).join(" · ") || "Aucune zone cochée"}</p>
+              {espace.projet.precisions ? <blockquote className="mt-1.5 border-l-2 border-[#3A3E47] pl-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">« {espace.projet.precisions} »</blockquote> : null}
+            </>
+          ) : (
+            <p className="text-[12.5px] text-[#8B919C]">Il n&apos;a encore rien dit de son projet.</p>
+          )}
+          {!espace.projetValide && espace.projetManque && espace.projet ? <p className="mt-1 text-[11.5px] text-[#F5B454]">Pour valider, il manque : {espace.projetManque.charAt(0).toLowerCase() + espace.projetManque.slice(1)}</p> : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {espace.projetValide ? (
+              <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} chargement={occupe === "devalider-projet"} onClick={() => void geste({ geste: "devalider-projet" }, "Projet dévalidé : le client peut le modifier")}>
+                Dévalider
+              </Bouton>
+            ) : (
+              <Bouton taille="sm" icone={<Check size={13} aria-hidden />} disabled={Boolean(espace.projetManque)} chargement={occupe === "valider-projet"} onClick={() => void geste({ geste: "valider-projet" }, "Projet validé à sa place")}>
+                Valider à sa place
               </Bouton>
             )}
-            <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void agir("renouveler", "Nouveau lien émis : l'ancien ne fonctionne plus")}>
-              Nouveau lien
+            <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => setEdition(espace.projet ? { ...espace.projet } : { zones: [], styles: [], propositions: false, metres: null, repere: null, delai: null, precisions: "" })}>
+              Modifier
             </Bouton>
+            {espace.projet ? (
+              <Bouton taille="sm" variante="fantome" icone={<RotateCcw size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Réinitialiser l'étape « Projet » ?", texte: "Son projet est effacé de son espace (ce qu'il avait saisi reste dans l'historique du dossier) : il le refait depuis le début.", bouton: "Réinitialiser", geste: { geste: "reinitialiser", etape: "PROJET" }, succes: "Étape « Projet » réinitialisée" })}>
+                Réinitialiser
+              </Bouton>
+            ) : null}
           </div>
+        </Rubrique>
 
-          <dl className="space-y-1.5 text-[13px]">
-            <div>
-              <dt className="inline text-[#8B919C]">Son projet : </dt>
-              <dd className="inline text-[#D1D5DB]">{espace.projet?.resume || "pas encore précisé"}</dd>
+        {/* Simulations */}
+        <Rubrique
+          titre="Ses simulations"
+          etat={
+            <Pastille ton={espace.creation.restantes === 0 ? "ambre" : "neutre"}>
+              {espace.creation.faites} faite{espace.creation.faites > 1 ? "s" : ""} sur {espace.creation.offertes}
+              {espace.creation.faitesSite ? ` (dont ${espace.creation.faitesSite} sur le site)` : ""} · {espace.creation.restantes} restante{espace.creation.restantes > 1 ? "s" : ""}
+            </Pastille>
+          }
+        >
+          {espace.proposition ? (
+            <div className="mb-2 rounded-[8px] border-[0.5px] border-[#F5B454]/40 bg-[#F5B454]/10 p-2.5">
+              <p className="text-[12px] font-medium text-[#F5B454]">Il demande une autre proposition — le {jourHeure(espace.proposition.le)}</p>
+              {espace.proposition.message ? <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">« {espace.proposition.message} »</p> : <p className="mt-1 text-[12px] text-[#9CA3AF]">Sans message.</p>}
+              <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "retirer-demande" }, "Demande retirée")} className={cn("mt-1.5 text-[11.5px] font-medium text-[#D1D5DB] underline-offset-2 hover:underline disabled:opacity-50", TRANS)}>
+                Retirer sa demande (traitée autrement)
+              </button>
             </div>
-            {choix ? (
-              <div>
-                <dt className="inline text-[#8B919C]">Son choix : </dt>
-                <dd className="inline text-[#5DCAA5]">
-                  {choix}
-                  {espace.choix?.commentaire ? <span className="text-[#D1D5DB]"> — « {espace.choix.commentaire} »</span> : null}
-                </dd>
-              </div>
-            ) : null}
-            {espace.creation ? (
-              <div>
-                <dt className="inline text-[#8B919C]">Ses simulations : </dt>
-                <dd className="inline text-[#D1D5DB]">
-                  {espace.creation.faites} faite{espace.creation.faites > 1 ? "s" : ""} sur {espace.creation.offertes} · {espace.creation.restantes} restante{espace.creation.restantes > 1 ? "s" : ""}
-                  {espace.creation.enCours ? ` · ${espace.creation.enCours} en cours` : ""}
-                  {espace.creation.demandeesLe ? <span className="text-[#F5B454]"> · en demande d&apos;autres depuis le {jour(espace.creation.demandeesLe)}</span> : null}
-                </dd>
-              </div>
-            ) : null}
-            {espace.propositionDemandeeLe ? (
-              <div>
-                <dt className="inline text-[#8B919C]">Autre proposition demandée : </dt>
-                <dd className="inline text-[#F5B454]">le {jour(espace.propositionDemandeeLe)}</dd>
-              </div>
-            ) : null}
-            {espace.avis ? (
-              <div>
-                <dt className="inline text-[#8B919C]">Son avis : </dt>
-                <dd className="inline text-[#D1D5DB]">
-                  {espace.avis.note}/5{espace.avis.texte ? ` — « ${espace.avis.texte} »` : ""}
-                </dd>
-              </div>
-            ) : null}
-          </dl>
-
-          {espace.creation && (espace.creation.demandeesLe || espace.creation.restantes === 0) && !espace.revoqueLe ? (
-            <Bouton variante={espace.creation.demandeesLe ? "primaire" : "secondaire"} chargement={occupe === "accorder"} onClick={() => void agir("accorder", "3 simulations accordées : le client peut en refaire")}>
+          ) : null}
+          {espace.creation.demandeesLe ? <p className="mb-2 text-[12.5px] text-[#F5B454]">Il demande d&apos;autres simulations depuis le {jour(espace.creation.demandeesLe)}.</p> : null}
+          {espace.simulations.length ? (
+            <ul className="space-y-1.5">
+              {espace.simulations.map((s) => (
+                <li key={s.id} className={cn("flex gap-2.5 rounded-[8px] border-[0.5px] p-1.5", s.choisie ? "border-[#1D9E75]/60 bg-[#1D9E75]/10" : "border-[#2A2D34] bg-[#16181D]")}>
+                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="block h-14 w-20 shrink-0 overflow-hidden rounded-[6px]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={s.url} alt={s.titre ?? "Simulation"} loading="lazy" className={cn("h-full w-full object-cover", s.statut !== "PUBLIEE" && "opacity-50")} />
+                  </a>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[11px] text-[#8B919C]">{LIBELLES_SOURCE[s.source] ?? s.source} · {jour(s.le)}</span>
+                      {s.choisie ? <Pastille ton="vert">Validée</Pastille> : null}
+                      {s.statut === "BROUILLON" ? <Pastille ton="ambre">Brouillon</Pastille> : s.statut === "MASQUEE" ? <Pastille>Masquée</Pastille> : null}
+                    </div>
+                    <p className="truncate text-[12.5px] text-[#D1D5DB]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}`).join(" · ") || s.titre || "Simulation"}</p>
+                    {s.commentaire ? <p className="text-[12px] whitespace-pre-wrap text-[#F2F3F5]">« {s.commentaire} »</p> : null}
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
+                      {s.statut === "PUBLIEE" && !s.choisie ? (
+                        <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "valider-simulation", simulationId: s.id }, "Simulation validée à sa place : le devis est à préparer")} className={cn("text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
+                          Valider à sa place
+                        </button>
+                      ) : null}
+                      {s.choisie ? (
+                        <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "devalider-simulation" }, "Simulation dévalidée")} className={cn("text-[#D1D5DB] hover:underline disabled:opacity-50", TRANS)}>
+                          Dévalider
+                        </button>
+                      ) : null}
+                      {s.statut === "PUBLIEE" ? (
+                        <button type="button" disabled={occupe !== null} onClick={() => void simulation(s.id, "masquer")} className={cn("text-[#8B919C] hover:text-[#D1D5DB] hover:underline disabled:opacity-50", TRANS)}>
+                          Masquer
+                        </button>
+                      ) : (
+                        <button type="button" disabled={occupe !== null} onClick={() => void simulation(s.id, "afficher")} className={cn("text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
+                          {s.statut === "BROUILLON" ? "Publier" : "Republier"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12.5px] text-[#8B919C]">Aucune simulation pour l&apos;instant.</p>
+          )}
+          {espace.choix?.mode === "COMPOSITE" ? <p className="mt-1.5 text-[12.5px] text-[#5DCAA5]">Son mélange validé : {espace.choix.zones.map((z) => `${z.libelle || z.zone} — ${z.nom || z.ref}`).join(" · ")}</p> : null}
+          {espace.choix?.commentaire ? <p className="mt-1 text-[12.5px] text-[#F2F3F5]">Son mot en validant : « {espace.choix.commentaire} »</p> : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Bouton taille="sm" variante={espace.creation.demandeesLe ? "primaire" : "secondaire"} icone={<WandSparkles size={13} aria-hidden />} chargement={occupe === "accorder"} onClick={() => void geste({ geste: "accorder", nombre: 3 }, "3 simulations accordées : le client peut en refaire")}>
               Accorder 3 simulations
             </Bouton>
-          ) : null}
+            {espace.choix || espace.proposition ? (
+              <Bouton taille="sm" variante="fantome" icone={<RotateCcw size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Réinitialiser l'étape « Simulations » ?", texte: "Plus aucune simulation n'est validée et sa demande en attente est retirée. Ses simulations restent dans sa galerie.", bouton: "Réinitialiser", geste: { geste: "reinitialiser", etape: "SIMULATIONS" }, succes: "Étape « Simulations » réinitialisée" })}>
+                Réinitialiser
+              </Bouton>
+            ) : null}
+          </div>
+          {espace.favoris.length ? <p className="mt-1.5 text-[11.5px] text-[#8B919C]">Ses teintes favorites : {espace.favoris.join(", ")}</p> : null}
+        </Rubrique>
 
-          {/* Il a choisi (ou dit ce qu'il veut) et aucun devis n'existe : le devis part de là, prérempli. */}
-          {onFaireDevis && (espace.choix || espace.projet) && !detail.documents.some((d) => d.type === "DEVIS" && d.numero) ? (
-            <Bouton variante={espace.choix ? "primaire" : "secondaire"} icone={<FileText size={14} aria-hidden />} onClick={onFaireDevis}>
-              {espace.choix ? "Faire le devis depuis son choix" : "Faire le devis depuis son projet"}
-            </Bouton>
+        {/* Devis et accord */}
+        <Rubrique
+          titre="Devis et accord"
+          etat={espace.accord ? <Pastille ton="vert"><Check size={11} strokeWidth={3} aria-hidden /> Signé le {jour(espace.accord.le)}</Pastille> : espace.devis ? <Pastille ton="ambre">En attente de son accord</Pastille> : <Pastille>Pas de devis émis</Pastille>}
+        >
+          {espace.devis ? (
+            <p className="text-[13px] text-[#D1D5DB]">
+              Devis {espace.devis.numero} — {euros(espace.devis.total)}
+              {espace.devis.repris ? <span className="text-[#8B919C]"> (repris d&apos;avant le CRM)</span> : null}
+              {espace.devis.consultations > 0 ? <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : "text-[#8B919C]"}> · lu {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})</span> : <span className="text-[#8B919C]"> · pas encore ouvert dans son espace</span>}
+            </p>
+          ) : (
+            <p className="text-[12.5px] text-[#8B919C]">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
+          )}
+          {espace.accord ? (
+            <p className="mt-1 text-[13px] text-[#D1D5DB]">
+              {espace.accord.source === "ESPACE" ? `Bon pour accord donné dans son espace par ${espace.accord.nom}${espace.accord.signature ? ", signé au doigt" : ""}.` : "Devis noté « accepté » dans le CRM (signé hors de l'espace) : son espace le montre signé."}
+            </p>
           ) : null}
-        </div>
-      )}
+          {espace.accordsRetires.map((a) => (
+            <p key={a.retireLe} className="mt-1 text-[12px] text-[#F5B454]">
+              Accord du {jour(a.le)} retiré le {jour(a.retireLe)} {a.par === "CLIENT" ? "par le client" : "par moi"}
+              {a.motif ? ` : « ${a.motif} »` : ""} (preuve gardée).
+            </p>
+          ))}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {onFaireDevis && (espace.choix || espace.projet) && aucunDevis ? (
+              <Bouton taille="sm" variante={espace.choix ? "primaire" : "secondaire"} icone={<FileText size={13} aria-hidden />} onClick={onFaireDevis}>
+                {espace.choix ? "Faire le devis depuis son choix" : "Faire le devis depuis son projet"}
+              </Bouton>
+            ) : null}
+            {espace.accord?.source === "ESPACE" ? (
+              <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Retirer son bon pour accord ?", texte: "L'accord ne vaut plus (sa preuve reste gardée). Si le dossier est en « Signé », il revient à « Devis envoyé » et le devis redevient un devis émis.", bouton: "Retirer l'accord", geste: { geste: "retirer-accord", motif: "" }, succes: "Accord retiré" })}>
+                Retirer son accord
+              </Bouton>
+            ) : null}
+          </div>
+        </Rubrique>
+
+        {/* Paiement : ce que lit le client, à partir des encaissements du dossier. */}
+        {p ? (
+          <Rubrique titre="Paiement (ce qu'il voit)" etat={p.regle ? <Pastille ton="vert">Réglé</Pastille> : <Pastille ton="ambre">Reste {euros(p.reste)}</Pastille>}>
+            <ul className="space-y-0.5 text-[13px] text-[#D1D5DB]">
+              {p.acompte ? (
+                <li>
+                  Acompte {p.acompte.pct ? `(${p.acompte.pct} %) ` : ""}: {euros(p.acompte.montant)} —{" "}
+                  {p.acompte.statut === "PAYE" ? <span className="text-[#5DCAA5]">payé le {jour(p.acompte.payeLe)}{moyen(p.acompte.moyen) ? ` par ${moyen(p.acompte.moyen)}` : ""}</span> : p.acompte.statut === "PARTIEL" ? <span className="text-[#F5B454]">{euros(p.acompte.recu)} reçus</span> : <span className="text-[#F5B454]">à régler</span>}
+                </li>
+              ) : null}
+              <li>
+                Solde : {euros(p.solde.montant)} —{" "}
+                {p.solde.statut === "PAYE" ? <span className="text-[#5DCAA5]">payé le {jour(p.solde.payeLe)}{moyen(p.solde.moyen) ? ` par ${moyen(p.solde.moyen)}` : ""}</span> : p.solde.statut === "PARTIEL" ? <span className="text-[#F5B454]">{euros(p.solde.recu)} reçus</span> : <span className="text-[#8B919C]">dû à la fin des travaux</span>}
+              </li>
+            </ul>
+          </Rubrique>
+        ) : null}
+
+        {espace.avis ? (
+          <Rubrique titre="Son avis" etat={<Pastille ton="vert">{espace.avis.note}/5</Pastille>}>
+            <p className="text-[13px] whitespace-pre-wrap text-[#F2F3F5]">{espace.avis.texte ? `« ${espace.avis.texte} »` : "Note sans commentaire."}</p>
+            {espace.avis.publication ? <p className="mt-0.5 text-[11.5px] text-[#8B919C]">Il accepte la publication sur le site.</p> : null}
+          </Rubrique>
+        ) : null}
+
+        {/* Ce qu'il a fait, geste par geste. */}
+        {espace.gestes.length ? (
+          <div className="border-t-[0.5px] border-[#2A2D34] pt-2">
+            <button type="button" onClick={() => setGestesOuverts((v) => !v)} className={cn("flex w-full items-center justify-between text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase hover:text-[#D1D5DB]", TRANS)} aria-expanded={gestesOuverts}>
+              Ses derniers gestes ({espace.gestes.length})
+              <ChevronDown size={14} aria-hidden className={cn("transition-transform", gestesOuverts && "rotate-180")} />
+            </button>
+            {gestesOuverts ? (
+              <ul className="mt-2 space-y-1.5">
+                {espace.gestes.map((g, i) => (
+                  <li key={`${g.le}-${i}`} className="text-[12.5px] leading-snug text-[#D1D5DB]">
+                    <span className="text-[#8B919C]">{jourHeure(g.le)} · {g.auteur === "LUCAS" ? "moi" : "lui"} — </span>
+                    {g.contenu}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Modifier son projet à sa place. */}
+      <Modale
+        ouverte={edition !== null}
+        onFermer={() => setEdition(null)}
+        titre="Modifier le projet du client"
+        description="Ce que tu changes ici se voit aussitôt dans son espace, et s'écrit dans l'historique du dossier."
+        pied={
+          <div className="flex justify-end gap-2">
+            <Bouton variante="fantome" onClick={() => setEdition(null)}>Annuler</Bouton>
+            <Bouton
+              variante="primaire"
+              chargement={occupe === "modifier-projet"}
+              onClick={async () => {
+                if (edition && (await geste({ geste: "modifier-projet", projet: edition }, "Projet modifié"))) setEdition(null);
+              }}
+            >
+              Enregistrer
+            </Bouton>
+          </div>
+        }
+      >
+        {edition ? (
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">Ce qu&apos;il veut traiter</p>
+              <div className="flex flex-wrap gap-1.5">
+                {zonesProjet.map((z) => {
+                  const coche = edition.zones.includes(z.id);
+                  return (
+                    <button key={z.id} type="button" aria-pressed={coche} onClick={() => setEdition({ ...edition, zones: coche ? edition.zones.filter((x) => x !== z.id) : [...edition.zones, z.id] })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, coche ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
+                      {z.libelle}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {espace.typeProjet === "CUISINE" ? (
+              <div>
+                <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">Taille de la cuisine</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {REPERES_METRES.map((r) => (
+                    <button key={r.id} type="button" aria-pressed={edition.repere === r.id} onClick={() => setEdition({ ...edition, repere: edition.repere === r.id ? null : r.id, metres: edition.repere === r.id ? null : r.metres })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, edition.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
+                      {r.libelle}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <ZoneTexte libelle="Sa note" value={edition.precisions} onChange={(e) => setEdition({ ...edition, precisions: e.target.value })} rows={3} maxLength={1000} />
+          </div>
+        ) : null}
+      </Modale>
+
+      {/* Confirmation courte des gestes qui défont quelque chose. */}
+      <Modale
+        ouverte={confirmation !== null}
+        onFermer={() => setConfirmation(null)}
+        titre={confirmation?.titre ?? ""}
+        pied={
+          <div className="flex justify-end gap-2">
+            <Bouton variante="fantome" onClick={() => setConfirmation(null)}>Annuler</Bouton>
+            <Bouton
+              variante="danger"
+              chargement={occupe !== null}
+              onClick={async () => {
+                if (confirmation && (await geste(confirmation.geste, confirmation.succes))) setConfirmation(null);
+              }}
+            >
+              {confirmation?.bouton}
+            </Bouton>
+          </div>
+        }
+      >
+        <p className="text-[13px] leading-relaxed text-[#D1D5DB]">{confirmation?.texte}</p>
+      </Modale>
     </section>
   );
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
+import { Archive, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
 import { toast } from "sonner";
 import { echeanceDe, estAFaire } from "@/lib/dossiers/pilotage";
 import { estEtapeSortie } from "@/lib/dossiers/regles";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAttente";
+import { DossiersArchives } from "./ArchivageDossier";
 import { CreationDossier } from "./CreationDossier";
 import { Legende } from "./Legende";
 import { PanneauDossier } from "./PanneauDossier";
@@ -97,6 +98,7 @@ export default function DossiersPilotage({
   const masquerInactifs = masquerInactifsChoisi ?? masquerInactifsParDefaut;
   const [filtreAFaire, setFiltreAFaire] = useState(false);
   const [legendeOuverte, setLegendeOuverte] = useState(false);
+  const [archivesOuvertes, setArchivesOuvertes] = useState(false);
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>({ cle: "prochaineAction", sens: "asc" });
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
@@ -346,6 +348,10 @@ export default function DossiersPilotage({
           </button>
         ) : null}
 
+        <Bouton variante="fantome" taille="sm" icone={<Archive size={13} aria-hidden />} onClick={() => setArchivesOuvertes(true)} aria-label="Dossiers archivés" className="h-10 sm:ml-auto sm:h-7">
+          <span className="sr-only sm:not-sr-only">Archivés</span>
+        </Bouton>
+
         <Bouton
           variante="fantome"
           taille="sm"
@@ -354,7 +360,7 @@ export default function DossiersPilotage({
           aria-controls="legende-dossiers"
           onClick={() => setLegendeOuverte((valeur) => !valeur)}
           aria-label="Légende"
-          className="h-10 sm:ml-auto sm:h-7"
+          className="h-10 sm:h-7"
         >
           <span className="sr-only sm:not-sr-only">Légende</span>
         </Bouton>
@@ -416,7 +422,12 @@ export default function DossiersPilotage({
         maintenant={maintenant}
         onFermer={() => setDossierOuvertId(null)}
         onMisAJour={mettreAJour}
+        onArchive={(id) => {
+          setDossiers((liste) => liste.filter((dossier) => dossier.id !== id));
+          setDossierOuvertId(null);
+        }}
       />
+      <DossiersArchives ouverte={archivesOuvertes} onFermer={() => setArchivesOuvertes(false)} onRestaure={() => void rafraichir()} />
 
       <CreationDossier
         key={creation.cle}

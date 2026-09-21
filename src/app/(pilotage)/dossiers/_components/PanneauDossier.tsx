@@ -38,6 +38,7 @@ import { ChangementEtape } from "./ChangementEtape";
 import { CoordonneesClient } from "./CoordonneesClient";
 import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
+import { ArchivageDossier } from "./ArchivageDossier";
 import { EspaceDossier } from "./EspaceDossier";
 import { SimulationsDossier } from "./SimulationsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
@@ -58,11 +59,14 @@ export function PanneauDossier({
   maintenant,
   onFermer,
   onMisAJour,
+  onArchive,
 }: {
   dossierId: string | null;
   maintenant: Date;
   onFermer: () => void;
   onMisAJour: (detail: DossierDetail) => void;
+  /** Le dossier vient d'être archivé : il sort de la liste, le panneau se ferme. */
+  onArchive?: (dossierId: string) => void;
 }) {
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [echec, setEchec] = useState<{ dossierId: string; message: string } | null>(null);
@@ -114,7 +118,7 @@ export function PanneauDossier({
         className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
-          <ContenuPanneau detail={affiche} maintenant={maintenant} onFermer={onFermer} onMisAJour={appliquer} onRecharger={recharger} />
+          <ContenuPanneau detail={affiche} maintenant={maintenant} onFermer={onFermer} onMisAJour={appliquer} onRecharger={recharger} onArchive={onArchive} />
         ) : (
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
@@ -147,12 +151,14 @@ function ContenuPanneau({
   onFermer,
   onMisAJour,
   onRecharger,
+  onArchive,
 }: {
   detail: DossierDetail;
   maintenant: Date;
   onFermer: () => void;
   onMisAJour: (detail: DossierDetail) => void;
   onRecharger: () => Promise<void>;
+  onArchive?: (dossierId: string) => void;
 }) {
   const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue } | null>(null);
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
@@ -266,6 +272,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
+          {onArchive ? <ArchivageDossier detail={detail} onArchive={onArchive} /> : null}
         </div>
       </div>
 

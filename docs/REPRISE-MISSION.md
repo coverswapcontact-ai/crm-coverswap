@@ -76,7 +76,20 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       simulation choisie, SMS reçu…), `EcranCommercial.tsx` (compteurs du matin, « À moi » / « Chez le client »,
       gros boutons Appeler / fin d'appel / SMS, hors zone replié). Fin d'appel → message préparé dans la
       messagerie (`/sms?lead=…&proposer=LIEN_ESPACE`). 2 essais (`pilotage.test.ts`), 303 au total.
-- [ ] Lot 7 — Application mobile (2 manifestes, 2 icônes, push web, hors ligne, appareil photo)
+- [x] Lot 7 — Application mobile (commit `8b9b0cb`) : `public/manifest-{crm,messages}.webmanifest`, `public/sw.js`
+      (v4), `public/hors-ligne.html`, `public/icones/` (script `scripts/generer-icones.mjs`), `/messagerie`
+      (messagerie seule, icône « Messages »), `src/lib/application/installation.ts`, `/api/push/{cle,abonnement,essai}`,
+      `NotificationsAppareil.tsx`, `serviDepuisLeCache.ts`, photo directe dans `PhotosDossier.tsx`.
+      Essayé à 375 px contre le build de production local : coupure du serveur (écran + fil depuis le cache,
+      SMS mis en file puis parti UNE fois au retour), latence 7 s (bulle en 65 ms, écran connu en 2,5 s), 502.
+      Non essayable ici : l'abonnement push lui-même (navigateur d'essai = notifications refusées) → à faire
+      par Lucas sur l'iPhone, l'essai part tout seul à l'activation.
+- [x] Lot 7 bis — Paramètres → Messagerie SMS (`MessagerieSms.tsx` : état du fournisseur et variables à poser,
+      douze messages types modifiables avec compteur de SMS et « simplifier les accents », accusé coupable).
+      Essayé à 375 px : modification, simplification, enregistrement relus en base, puis remis d'origine.
+- [x] Documentation : ARCHITECTURE-PILOTAGE §20, META §6 (passerelle ntfy, push web), `.env.example`.
+      Page de connexion : efface les écrans et lectures gardés par le service worker (v5).
+- [ ] Mémoires (dossier memory) à mettre à jour
 - [ ] Lot 8 — Rapport final
 
 ## Journal (le plus récent en bas)

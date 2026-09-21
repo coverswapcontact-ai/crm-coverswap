@@ -1486,3 +1486,135 @@ manque sans rien écraser (clé : `googlePlaceId`) et reste rejouable.
   notification pointent directement sur `/prospects?lead=<id>`.
 - **Aucune donnée retirée** : leads, prospects, devis, factures, chantiers et
   commandes restent en base et au journal.
+
+## 20. Tunnel commercial : priorité, SMS, espace client, relances, application mobile
+
+Du lead Meta au chantier signé. Un principe traverse tout : **le CRM prépare, la
+personne envoie**. Une seule chose part toute seule — l'accusé de réception dans
+la minute qui suit un lead. Tout le reste est proposé, relu, corrigé, envoyé d'un
+clic ; ce qui est corrigé est gardé à côté de ce qui avait été proposé.
+
+### Priorité d'un lead (`src/lib/prospects/priorite.ts`, `qualification.ts`)
+
+`qualifier()` est pure : à partir des réponses du formulaire (occupation, délai,
+taille de cuisine) et du code postal, elle rend `PRIORITAIRE`, `STANDARD`,
+`SECONDAIRE` ou `A_ECARTER`, avec son motif en clair. La zone d'intervention
+est un paramètre daté (`ZONE_DEPARTEMENTS`, `ZONE_DEPARTEMENTS_PROCHES`), jamais
+une constante : zone vide → « inconnue », pas « hors zone ». Une priorité posée
+à la main (`prioriteManuelle`) n'est plus jamais recalculée. La classe sort dans
+le titre et l'urgence de la notification ; un lead à écarter n'arme pas la
+relance à trente minutes.
+
+### SMS (`src/lib/sms/`)
+
+- **Fournisseurs** (`fournisseurs/`) : une interface, trois réalisations. `ovh`
+  (numéro 09 « Time2Chat » : envoi et réponses, celles-ci par relève toutes les
+  trente secondes — OVH n'a pas de webhook), `brevo` (envoi seul : en France un SMS
+  Brevo ne reçoit pas de réponse), `simulateur` (essais, rien ne part). Choix :
+  `SMS_FOURNISSEUR`, sinon OVH si ses cinq variables sont là, sinon Brevo, sinon
+  aucun — et l'écran le dit (Paramètres → Messagerie SMS, bandeau de la messagerie).
+- **Modèle** : `ConversationSms` (une par numéro, rattachée à un contact, un client,
+  ou à personne : file « à rattacher ») et `Sms`. Pas de surcharge de `Message` (tri
+  des mails, contenu immuable). Chaque SMS écrit aussi un événement `SMS_ENVOYE` /
+  `SMS_RECU` sur le dossier quand il y en a un : appels, notes et SMS se lisent
+  dans le même fil.
+- **Envoi** (`envoi.ts`) : l'écriture en base et l'envoi sont séparés. `envoyerSms`
+  écrit la ligne (`A_ENVOYER`) et met une tâche `SMS_ENVOI` en file ; la tâche parle
+  au fournisseur, avec reprises. `cleEnvoi` (unique) rend l'envoi idempotent : le
+  téléphone peut renvoyer dix fois la même demande, un seul SMS part. Un SMS dont le
+  fournisseur a accusé réception n'est jamais renvoyé, même si l'écriture de son
+  identifiant échoue.
+- **Consentement** : le premier SMS vers un numéro porte la mention STOP
+  (`avecMentionStop`) et dit que c'est un nouveau numéro. Un STOP reçu
+  (`estDemandeArret` : STOP, ARRET, DESABONNER…) pose `stopLe` sur la conversation :
+  tout envoi vers ce numéro est ensuite refusé par le serveur, quel que soit l'écran.
+- **Coût** : `mesurerSms` compte en GSM-7 (160/153) ou en Unicode (70/67) et nomme
+  les caractères fautifs ; `simplifierPourGsm` les remplace. Les douze messages types
+  (`modeles.ts`, table `ModeleSms`, modifiables dans Paramètres) sont écrits en GSM-7.
+- **Accusé de réception** (`accuse.ts`) : seul envoi automatique. Texte de jour entre
+  8 h 30 et 19 h 30 hors dimanche, variante « dès demain matin » sinon. Clé
+  `accuse:<leadId>` : un lead, un accusé. Coupé si le modèle est désactivé, si le
+  numéro n'est pas un mobile français, si le lead est à écarter.
+- **Temps réel** : `/api/sms/flux` (SSE, un seul processus — un `EventEmitter`).
+  L'écran a une relève de secours (dix secondes si le flux est tombé).
+- **Messagerie** (`src/components/sms/`, `/sms` dans le CRM, `/messagerie` seule) :
+  envoi optimiste, file d'attente locale (`fileAttente.ts`, `localStorage`), brouillon
+  gardé par conversation, statut par message et bouton « Réessayer », non-lus fiables
+  (une conversation n'est lue que si elle est réellement à l'écran).
+
+### Espace client (`src/lib/espace/`, site : `/e/<jeton>`)
+
+Un lien signé, sans compte : `https://coverswap.fr/e/<code8>-<signature16>`. La
+signature est un HMAC du code et de sa version ; le jeton n'est jamais stocké. Il
+expire (90 jours), se révoque (`revoqueLe`) et se renouvelle (`version + 1` : l'ancien
+lien meurt). La page du site ne contient rien : le navigateur du client parle à l'API
+publique du CRM, `/api/espace/<jeton>/…` (CORS limité à coverswap.fr, 400 requêtes par
+dix minutes et par adresse, vingt jetons invalides et l'adresse est refusée). Chaque
+lecture passe par l'espace du jeton : un client ne peut pas nommer le dossier d'un autre.
+
+Le client y dépose ses photos (réduites avant l'envoi, rangées dans le dossier et dans
+Drive), dit ce qu'il veut, compare et choisit ses simulations, complète ses
+coordonnées, lit son devis et clique « Bon pour accord ». L'accord écrit un
+`AccordDevis` (nom saisi, mention, montant figé du devis, date, adresse IP, navigateur), fait passer le dossier
+à `SIGNE` — l'accord vaut signature, le paiement vient après — et affiche le RIB pour
+l'acompte. Acteur de toutes ces écritures : `EXTERNE:espace-client`. Chaque geste écrit
+un événement `ESPACE_*` sur le dossier ; les gestes qui comptent (photos, choix, accord)
+sonnent sur le téléphone, les photos regroupées par une tâche différée.
+
+### Relances proposées (`src/lib/commercial/relances.ts`, `src/lib/sms/propositions.ts`)
+
+Un travail périodique (toutes les heures) regarde où en est chaque affaire et
+**propose** : photos attendues depuis deux jours, simulation sans réaction depuis
+trois, devis sans réponse depuis quatre, silence depuis dix. Chaque relance est une
+proposition `ENVOI_SMS` dans la file de validation existante (`contenu` proposé,
+`contenuValide` envoyé, `modifiee`, motif de rejet). Plafond : cinq SMS en dix jours
+vers un même numéro, accusé compris ; au-delà le CRM ne propose plus de message mais
+un changement d'étape vers `PERDU` (motif `SANS_REPONSE`) — proposé, jamais fait seul.
+
+### Pilotage commercial (`src/lib/commercial/pilotage.ts`, `/commercial`)
+
+Une seule liste de toutes les affaires vivantes (leads et dossiers avant chantier),
+rangée par **à qui est la main** : « À moi » (à rappeler, à répondre, simulation à
+faire, devis à faire, à valider) et « Chez le client » (photos, choix, réponse au
+devis, acompte). La main se lit dans les faits — dernier SMS, photos reçues, simulation
+déposée, devis émis — pas dans un champ à tenir à jour. Fin d'appel en deux gestes
+(issue + note) ; « pas de réponse » prépare le SMS avec le lien et pose le rappel du
+lendemain dix heures.
+
+### Application mobile (`public/sw.js`, `public/manifest-*.webmanifest`)
+
+Deux applications installables, une seule base de code : « CoverSwap » (le CRM,
+ouvre `/commercial`) et « Messages CoverSwap » (`/messagerie`, la messagerie seule).
+iOS lit le manifeste et l'icône de la page d'où l'on fait « Sur l'écran d'accueil » :
+ce sont les deux gabarits (`(pilotage)/layout.tsx`, `messagerie/layout.tsx`) qui les
+portent (`src/lib/application/installation.ts`). Icônes et écrans de démarrage :
+`node scripts/generer-icones.mjs`.
+
+Le service worker fait trois choses. **Notifications** : affiche le push, pose le
+badge (somme des SMS non lus), ouvre au tap l'écran concerné — dans « Messages », un
+lien `/sms?c=…` devient `/messagerie?c=…`. **Réseau médiocre** : fichiers de
+l'application en cache ; un écran déjà connu n'attend le réseau que 2,5 s. **Coupure**
+(ou serveur qui redémarre, 502 à 504) : dernière version connue de l'écran et des
+lectures utiles (conversations, fil, pilotage, compteurs), sinon `hors-ligne.html` ;
+l'écran est prévenu (`serviDepuisLeCache.ts`) et affiche un bandeau. Jamais en cache :
+connexion, webhooks, flux, espace client, push, et toute réponse redirigée. Changer
+`VERSION` dans `sw.js` vide les caches au passage suivant.
+
+Le push web (`src/lib/alertes/pushweb.ts`) est un canal d'alerte comme les autres :
+`alerter()` envoie à tous les canaux configurés, toujours ensemble. Clés VAPID en
+variables, sinon générées et gardées dans `CleInterne`. Un abonnement révoqué par le
+navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'application.
+
+### Limites connues
+
+- Aucun fournisseur de SMS réel n'a été essayé : OVH et Brevo sont testés contre de
+  faux serveurs qui imitent leurs API (`fournisseurs.test.ts`). Premier envoi réel à
+  surveiller dans Tâches de fond.
+- OVH ne pousse pas les réponses : elles arrivent à la relève (trente secondes).
+- Le flux temps réel tient dans un seul processus : deux instances du CRM ne se
+  verraient pas.
+- Le service worker garde sur le téléphone des écrans lus avec une session. La page de
+  connexion les efface (arriver là, c'est ne plus avoir de session) ; tant que la session
+  vit, un téléphone perdu les montre encore — hors ligne compris.
+- Paiement par carte de l'acompte : non fait (`paiementCarte` est prêt côté API,
+  `STRIPE_SECRET_KEY` réservée). Aujourd'hui : virement, RIB affiché après l'accord.

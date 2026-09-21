@@ -14,7 +14,7 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;
@@ -27,7 +27,8 @@ const JAMAIS = [/^\/api\/auth\//, /^\/auth\//, /^\/api\/sms\/flux/, /^\/api\/web
 
 self.addEventListener("install", (evenement) => {
   self.skipWaiting();
-  evenement.waitUntil(caches.open(CACHE_ECRANS).then((cache) => cache.add(new Request(HORS_LIGNE, { cache: "reload" }))).catch(() => undefined));
+  // La page « hors ligne » vit avec les fichiers de l'application : la page de connexion efface les écrans et les données, pas elle.
+  evenement.waitUntil(caches.open(CACHE_APPLICATION).then((cache) => cache.add(new Request(HORS_LIGNE, { cache: "reload" }))).catch(() => undefined));
 });
 
 self.addEventListener("activate", (evenement) => {
@@ -110,8 +111,8 @@ self.addEventListener("fetch", (evenement) => {
   if (requete.mode === "navigate") {
     evenement.respondWith(
       reseauPuisCache(evenement, CACHE_ECRANS, { delaiMs: 8000, delaiSiConnueMs: 2500, souple: true }).catch(async () => {
-        const cache = await caches.open(CACHE_ECRANS);
-        return (await cache.match(HORS_LIGNE)) || Response.error();
+        const cache = await caches.open(CACHE_APPLICATION);
+        return (await cache.match(HORS_LIGNE)) || new Response("Pas de réseau.", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
       })
     );
     return;

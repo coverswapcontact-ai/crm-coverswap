@@ -127,6 +127,22 @@ un sujet inventé et difficile à deviner, par exemple
 `coverswap-leads-7f3a9c2e`, et poser ce même sujet dans `NTFY_TOPIC`. Le sujet
 vaut mot de passe : quiconque le connaît peut y publier.
 
+**ntfy depuis Railway : la passerelle.** ntfy.sh laisse sans réponse les serveurs de
+Railway (leur adresse de sortie est filtrée : la connexion ne s'établit jamais, d'où
+`TypeError: fetch failed`). Le CRM essaie donc en direct quatre secondes, puis passe
+par `https://coverswap.fr/api/relais/ntfy` : une route du site (Vercel), qui ne sait
+publier que vers ntfy.sh, et seulement une demande signée il y a moins de cinq minutes
+avec un secret que les deux côtés possèdent déjà (`SIMULATE_TOKEN_SECRET` ou
+`WEBHOOK_SECRET`). Rien à poser. Un échec en direct est retenu une heure : les envois
+suivants vont droit à la passerelle. `https://coverswap.fr/api/health?ntfy=1` dit si le
+site, lui, joint bien ntfy.sh ; `https://crm.coverswap.fr/api/health?reseau=1` dit ce que
+Railway joint ou non (ntfy, Telegram, Brevo, le site).
+
+**Application installée** (push web) : troisième canal poussé, posé depuis le téléphone —
+ouvrir l'application « CoverSwap » ou « Messages » ajoutée à l'écran d'accueil, bandeau
+« Activer ». iOS peut retarder un push web pour économiser la batterie : ntfy et
+Telegram restent en parallèle, toujours.
+
 **Mail** : `LEAD_NOTIFICATION_EMAIL`, avec `RESEND_API_KEY` déjà en place. Le
 mail est un filet, **pas** une notification poussée : il ne fait pas sonner un
 téléphone. Tant qu'aucun des deux canaux ci-dessus n'est posé, le CRM considère

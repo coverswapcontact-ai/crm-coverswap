@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
@@ -13,6 +13,17 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Arriver ici, c'est ne plus avoir de session : les écrans et les lectures que l'application
+  // installée gardait sur ce téléphone (service worker) sont effacés. Les messages écrits hors
+  // ligne, eux, restent en file et partiront après la connexion.
+  useEffect(() => {
+    if (!("caches" in window)) return;
+    void window.caches
+      .keys()
+      .then((noms) => Promise.all(noms.filter((nom) => nom.startsWith("ecrans-") || nom.startsWith("donnees-")).map((nom) => window.caches.delete(nom))))
+      .catch(() => undefined);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

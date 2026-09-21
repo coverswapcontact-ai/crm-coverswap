@@ -307,7 +307,10 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
       ) : null}
       {!fournisseur.nom || !fournisseur.bidirectionnel ? (
         <p className="border-b-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3.5 py-2 text-[12px] leading-snug text-[#9CA3AF]">
-          {fournisseur.remarque} <span className="text-[#6B7280]">Voir Paramètres → Messagerie SMS.</span>
+          {fournisseur.remarque}{" "}
+          <a href="/parametres#sms" className="text-[#5DCAA5] underline-offset-2 hover:underline">
+            Paramètres → Messagerie SMS
+          </a>
         </p>
       ) : null}
     </>

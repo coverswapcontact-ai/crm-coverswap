@@ -26,6 +26,7 @@ export type AuditConnexions = { le: string; dureeMs: number; maillons: Maillon[]
 type Resultat = Omit<Maillon, "cle" | "libelle">;
 
 const JOUR_MS = 86_400_000;
+const DEBUT_DU_PUSH = new Date("2026-09-21T00:00:00.000Z");
 const ETAPES_AVANT_SIGNATURE = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
@@ -40,8 +41,10 @@ async function maillon(cle: string, libelle: string, verifier: () => Promise<Res
 /** Un lead Meta arrive : il a sa pastille, il est dans Leads (ou dans Dossiers), et le téléphone a sonné. */
 function leadsMeta() {
   return maillon("lead-meta", "Lead Meta → Leads, pastille, push", async (): Promise<Resultat> => {
-    const recents = await prisma.metaLead.findMany({ where: { leadId: { not: null } }, orderBy: { createdAt: "desc" }, take: 30, select: { leadId: true, pousseLe: true, notifieLe: true, createdAt: true } });
-    if (recents.length === 0) return { etat: "RIEN_A_VERIFIER", constat: "Aucun lead Meta reçu pour l'instant : la chaîne se vérifiera au premier lead (elle est couverte par les essais automatiques).", chiffres: { leadsMeta: 0 } };
+    // Seuls comptent les leads pour lesquels une notification a été TENTÉE (ou aurait dû l'être : reçus depuis le 21/09/2026).
+    // Les leads historiques repris de Zapier n'ont jamais sonné : ce n'est pas une panne.
+    const recents = await prisma.metaLead.findMany({ where: { leadId: { not: null }, OR: [{ notifications: { not: null } }, { createdAt: { gte: DEBUT_DU_PUSH } }] }, orderBy: { createdAt: "desc" }, take: 30, select: { leadId: true, pousseLe: true, notifieLe: true, createdAt: true } });
+    if (recents.length === 0) return { etat: "RIEN_A_VERIFIER", constat: "Aucun lead Meta reçu depuis la mise en place du push (les leads historiques repris de Zapier ne comptent pas) : la chaîne se vérifiera au premier lead, elle est couverte par les essais automatiques.", chiffres: { leadsMeta: 0 } };
     const leads = await prisma.lead.findMany({ where: { id: { in: recents.map((r) => r.leadId as string) } }, select: { id: true, priorite: true, dossiers: { select: { id: true } } } });
     const dansLeads = new Set((await listerLeads({ limite: 500 })).lignes.map((l) => l.id));
     const sansPastille = leads.filter((l) => !l.priorite).length;

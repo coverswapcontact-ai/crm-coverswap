@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
-import { LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
+import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
 
 /**
  * Section Leads : tout ce qui est entré — Meta, Google Ads, formulaires du
@@ -137,7 +137,8 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     appels: lead.interactions.length,
     dernierAppel: dernier ? { le: dernier.createdAt.toISOString(), contenu: dernier.contenu.slice(0, 200) } : null,
     rappelLe: lead.rappelLe?.toISOString() ?? null,
-    aAppeler: lead.statut !== "PERDU" && (rappelEchu || (jamaisAppele && !lead.rappelLe)),
+    // Un lead jamais appelé reste « à appeler » soixante jours ; au-delà il reste dans la liste, mais la file d'appels ne le propose plus (un rappel posé, lui, vaut toujours).
+    aAppeler: lead.statut !== "PERDU" && lead.priorite !== "A_ECARTER" && (rappelEchu || (jamaisAppele && !lead.rappelLe && maintenant.getTime() - lead.createdAt.getTime() <= JOURS_A_TRAITER * 86_400_000)),
     conversationId: conversation?.id ?? null,
     smsNonLus: conversation?.nonLus ?? 0,
     photos: lead._count.photos,
@@ -162,11 +163,12 @@ function whereRecherche(recherche: string | undefined): Prisma.LeadWhereInput {
 /** À appeler maintenant, traduit pour la base : jamais appelé et sans rappel prévu, ou rappel échu. Les « à écarter » ne comptent pas : on ne les appelle pas. */
 function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
   return {
-    ...whereVue("ACTIFS"),
-    NOT: { priorite: "A_ECARTER" },
+    ...sansDossier,
+    // (une priorité absente n'est pas « à écarter » : en SQL, NOT sur une valeur nulle écarterait ces leads)
+    AND: [{ statut: { not: "PERDU" } }, { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] }],
     OR: [
       { rappelLe: { lte: maintenant } },
-      { rappelLe: null, statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, interactions: { none: { type: "APPEL", archiveLe: null } } },
+      { rappelLe: null, statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, createdAt: { gte: new Date(maintenant.getTime() - JOURS_A_TRAITER * 86_400_000) }, interactions: { none: { type: "APPEL", archiveLe: null } } },
     ],
   };
 }

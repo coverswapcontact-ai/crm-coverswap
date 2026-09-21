@@ -316,7 +316,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
 
   // La file d'appels : les leads à appeler, dans l'ordre de la liste, sans les « à écarter » ni ceux qu'on vient de passer.
   const aAppeler = useMemo(() => donnees.lignes.filter((lead) => lead.aAppeler), [donnees.lignes]);
-  const ecartes = aAppeler.filter((lead) => lead.priorite === "A_ECARTER").length;
+  const ecartes = donnees.lignes.filter((lead) => lead.priorite === "A_ECARTER" && lead.attendDepuis).length;
   const file = useMemo(() => aAppeler.filter((lead) => lead.priorite !== "A_ECARTER" && !passes.has(lead.id)), [aAppeler, passes]);
 
   function demarrerAppels() {

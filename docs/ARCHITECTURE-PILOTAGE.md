@@ -1906,3 +1906,20 @@ ne part, message clair, choix gardés, Lucas prévenu (au plus toutes les 3 h) ;
 pendant la génération : elle continue côté serveur, l'écran le dit et la montre au retour.
 Aperçu : chaque geste affiche « rien n'est enregistré » (plus aucun bouton muet). Feuilles plein
 écran (`Feuille`) : bouton de fermeture en bas, glisser vers le bas, geste retour.
+
+
+## 24. Cohérence entre les sections (22/09/2026)
+
+Matrice complète : `docs/COHERENCE.md`. À retenir pour toute évolution :
+
+- **Une lecture unique des faits d'un espace** : `src/lib/espace/faits.ts` (devis en vigueur et montants — un devis
+  REPRIS n'a pas de lignes, son montant est `totalHt` ; accord `ESPACE` ou `CRM` ; paiements détaillés ; quota, où
+  les simulations du site comptent). Ne jamais recalculer un total ou un « signé » ailleurs.
+- **Tout geste de l'espace se défait** : `src/lib/espace/validations.ts`, auteur `CLIENT` ou `LUCAS`. Le mouvement du
+  dossier porte une `raison` (métadonnée du CHANGEMENT_ETAPE) ; le retour ne défait QUE le mouvement qui porte cette
+  raison. `AccordDevis.retireLe` : tout lecteur d'accords filtre `retireLe: null`.
+- **Vue et gestes du CRM** : `src/lib/espace/vue-crm.ts` (`POST /api/dossiers/[id]/espace { geste }`).
+- **L'étape suit l'argent** : `suivreSoldeDossier` (factures) et `suivreAcompteDossier` (acompte → Signé, et retour).
+- **Simulation du site = lead** (plus de dossier d'office) ; `dossiers/archivage.ts` archive / restaure un dossier et
+  rend ses simulations au lead.
+- **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Tâches de fond, `corrigerIncoherence`).

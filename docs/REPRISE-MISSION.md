@@ -214,7 +214,7 @@ Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossie
 - [x] N8 Ménage : archiver / restaurer un dossier (lead qui revient), migration à liste explicite (26), règle
       « simulation = lead, pas dossier ».
 - [x] N9 Cohérence : `docs/COHERENCE.md`, contrôle automatique (démarrage + quotidien), Tâches de fond + corriger.
-- [ ] N10 Essais locaux iPhone (parcours de l'énoncé), tests, builds, déploiement, vérifs prod, rapport.
+- [x] N10 Essais locaux iPhone (parcours de l'énoncé), tests, builds, déploiement, vérifs prod, rapport.
 
 ## Journal
 - 21/09 nuit : inspection faite (causes ci-dessus), plan posé.
@@ -238,6 +238,14 @@ Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossie
   `docs/COHERENCE.md` écrit. Essais iPhone complets en local (captures : scratchpad `m4/captures/{olga,jerome,nina,crm}`,
   plans `m4/plan-m4.mjs`) : tout l'aller-retour vérifié des deux côtés. Tests 376/376, lint, builds OK, montée de
   schéma simulée sur une copie (rien perdu). Prod : quota jamais saisi → 5 par défaut s'applique.
-- RESTE : commits, push CRM (la migration des 26 dossiers tourne au démarrage, sauvegarde avant), push site,
+- (fait, voir plus bas) commits, push CRM (la migration des 26 dossiers tourne au démarrage, sauvegarde avant), push site,
   vérifs prod (dossier J. R. : 3 460 €, acompte 1 038 € payé le 18/09 par virement ; F. ; S. E. ; liste des archivés),
   rapport avec captures.
+- 22/09 ~00 h 15 : DÉPLOYÉ ET VÉRIFIÉ. CRM d92ce19 → bcd231f → bb7ba60 → 062cce2, site 9fd0e1b. Prod (lecture seule,
+  session Chrome de Lucas) : migration `menage-des-dossiers-du-rattrapage-22-09` = 26 archivés (32 → 6 dossiers), leurs
+  leads revenus dans Leads avec leurs simulations (toutes > 60 jours : aucun dans la file d'appels) ; dossier repris :
+  3 460 €, acompte 1 038 € « payé le 18 septembre par virement », solde 2 422 € (lu dans son espace en aperçu) ; seul
+  dossier repris de la base ; client venu du site : 1 faite sur 5 ; migration `mots-des-demandes…` = son mot recopié ;
+  contrôle de cohérence : 6 dossiers, 0 incohérence. Rapport : https://claude.ai/artifact/Mte6YFG2JJaNGaRHLpnCaj .
+  MISSION 4 TERMINÉE. Fragile : génération réelle jamais faite depuis l'espace ; retrait d'accord par le client
+  (règle : dossier « Signé » et aucun paiement) ; acompte encaissé = Signé automatique.

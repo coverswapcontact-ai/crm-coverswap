@@ -145,7 +145,7 @@ devis prérempli, conversion HEIC. Le Projet perd les goûts et le délai (le pa
       Paramètres : logo au lieu de « ta photo ».
 - [x] M6 CRM : événements et alertes vérifiés, zones + taille dans la fiche, simulations du client dans le
       dossier et Drive, favoris et teintes du client en premier dans le simulateur, Espaces clients à jour.
-- [ ] M7 Essais (Forestier venu du site, client Meta sans photo, 60 ans ; limite, crédit, coupure ; notes
+- [x] M7 Essais (Forestier venu du site, client Meta sans photo, 60 ans ; limite, crédit, coupure ; notes
       d'appel sur mobile ; kanban chargé), déploiement, rapport court.
 
 ## Avancement (serveur CRM fait, non commité)
@@ -178,4 +178,8 @@ devis prérempli, conversion HEIC. Le Projet perd les goûts et le délai (le pa
   Essais : captures scratchpad `m3/crm`. Tests 363/363, lint et builds OK (site + CRM).
 - Reste M7 : commit (chemins explicites, jamais src/proxy.ts), déploiement CRM puis site, contrôle prod
   sans créer de données, rapport court avec captures iPhone + liste de ce qui reste fragile.
+- (21/09 soir, clos) Déployé : CRM 617ff0b + c47bb3e (Espaces clients : un client qui a sa simulation
+  n'attend plus Lucas), site 99ac39a. Contrôles prod sans créer de données (pré-vol CORS 204, lien
+  invalide refusé, notes d'appel 401 sans session, page /e/ en v3). Rapport :
+  https://claude.ai/artifact/1mjsCAjyWiNHbLxGjNTM54 . Mission 3 terminée.
 

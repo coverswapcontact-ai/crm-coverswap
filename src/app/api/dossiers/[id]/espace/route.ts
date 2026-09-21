@@ -3,31 +3,49 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { lienEspace, ouvrirEspace, renouvelerEspace, revoquerEspace } from "@/lib/espace/liens";
+import { lienApercu, lienEspace, ouvrirEspace, renouvelerEspace, revoquerEspace } from "@/lib/espace/liens";
+import { lireProjet, resumerProjet } from "@/lib/espace/projet";
 
 export const dynamic = "force-dynamic";
 
-/** L'espace client vu du CRM : le lien, ce que le client y a fait, les simulations déposées. */
+/** L'espace client vu du CRM : le lien, ce que le client y a fait (projet, choix, devis relu), les simulations. */
 async function vueCrm(dossierId: string) {
   const espace = await prisma.espaceClient.findUnique({ where: { dossierId }, include: { simulations: { where: { archiveLe: null }, orderBy: [{ ordre: "asc" }, { createdAt: "asc" }] } } });
   if (!espace) return null;
-  const accord = await prisma.accordDevis.findFirst({ where: { dossierId }, orderBy: { createdAt: "desc" } });
+  const [accord, dossier] = await Promise.all([
+    prisma.accordDevis.findFirst({ where: { dossierId }, orderBy: { createdAt: "desc" } }),
+    prisma.dossier.findUnique({ where: { id: dossierId }, select: { lead: { select: { typeProjet: true } } } }),
+  ]);
   let souhaits: unknown = null;
   try {
     souhaits = espace.souhaits ? JSON.parse(espace.souhaits) : null;
   } catch {
     souhaits = null;
   }
+  const projet = lireProjet(espace.souhaits);
+  let choix: { mode: string; simulationId?: string; zones?: { libelle: string; zone: string; nom: string; ref: string; simulationId: string }[]; commentaire: string | null; le: string } | null = null;
+  try {
+    choix = espace.choix ? JSON.parse(espace.choix) : null;
+  } catch {
+    choix = null;
+  }
+  const expire = espace.expireLe.getTime() < Date.now();
   return {
     id: espace.id,
     lien: espace.revoqueLe ? null : lienEspace(espace),
+    apercu: espace.revoqueLe || expire ? null : lienApercu(espace),
+    projet: projet ? { resume: resumerProjet(projet, dossier?.lead?.typeProjet ?? "CUISINE"), ...projet } : null,
+    choix,
+    devis: { consultations: espace.devisConsultations, consulteLe: espace.devisConsulteLe?.toISOString() ?? null, documentId: espace.devisConsulteId },
+    propositionDemandeeLe: espace.propositionDemandeeLe?.toISOString() ?? null,
+    avis: espace.avis ? (JSON.parse(espace.avis) as { note: number; texte: string }) : null,
     expireLe: espace.expireLe.toISOString(),
     revoqueLe: espace.revoqueLe?.toISOString() ?? null,
     premierAccesLe: espace.premierAccesLe?.toISOString() ?? null,
     dernierAccesLe: espace.dernierAccesLe?.toISOString() ?? null,
     nbAcces: espace.nbAcces,
     souhaits,
-    simulations: espace.simulations.map((s) => ({
+    simulations: espace.simulations.filter((s) => s.statut === "PUBLIEE").map((s) => ({
       id: s.id,
       titre: s.titre,
       description: s.description,

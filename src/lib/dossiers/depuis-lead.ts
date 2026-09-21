@@ -51,6 +51,8 @@ type Options = {
   /** Ce qui déclenche l'ouverture : change la prochaine action et la note d'ouverture. */
   motif?: "BOUTON" | "SIMULATION" | "ESPACE";
   prochaineAction?: string | null;
+  /** Geste de Lucas (fusion d'un doublon) : pas d'alerte « nouvelle simulation » sur son propre téléphone. */
+  silencieux?: boolean;
 };
 
 function nomComplet(lead: { prenom: string; nom: string }): string {
@@ -65,13 +67,12 @@ function typeMime(chemin: string): string {
   return extension === ".png" ? "image/png" : extension === ".webp" ? "image/webp" : extension === ".heic" ? "image/heic" : "image/jpeg";
 }
 
-/** Recopie un fichier des téléversements (fiche du lead) dans les photos de chantier du dossier. */
-async function recopierDansLeDossier(dossierId: string, cheminRelatif: string, nom: string): Promise<boolean> {
+/** Recopie un fichier des téléversements (fiche du lead) dans les photos de chantier du dossier ; rend l'identifiant de la copie. */
+async function recopierDansLeDossier(dossierId: string, cheminRelatif: string, nom: string): Promise<string | null> {
   const octets = await fs.readFile(path.join(resolveUploadsDir(), cheminRelatif)).catch(() => null);
-  if (!octets || octets.length === 0) return false;
+  if (!octets || octets.length === 0) return null;
   const type = typeMime(cheminRelatif);
-  await ajouterPhoto(dossierId, new File([new Uint8Array(octets)], nom, { type }));
-  return true;
+  return (await ajouterPhoto(dossierId, new File([new Uint8Array(octets)], nom, { type }))).id;
 }
 
 /** Le dossier vivant de ce contact, sinon celui de son client (un seul dossier par projet en cours). */
@@ -110,7 +111,7 @@ function noteDeReprise(lead: {
  * Une image absente du disque n'arrête rien : la suivante est tentée, et la
  * ligne reste « à ranger » pour le passage suivant.
  */
-export async function rangerImagesDuLead(leadId: string, dossierId: string): Promise<{ photos: number; simulations: number }> {
+export async function rangerImagesDuLead(leadId: string, dossierId: string, options: { silencieux?: boolean } = {}): Promise<{ photos: number; simulations: number }> {
   const [photos, simulations] = await Promise.all([
     prisma.photoLead.findMany({ where: { leadId, dossierId: null }, orderBy: { createdAt: "asc" } }),
     prisma.simulation.findMany({ where: { leadId, dossierId: null, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] }, orderBy: { createdAt: "asc" } }),
@@ -144,15 +145,21 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string): Pro
       const avant = simulation.imageOriginalPath ?? simulation.imageBeforePath;
       let rangees = 0;
       let avantOctets = 0;
+      // Identifiants des copies : le rendu n'est pas une photo du client (il ne sert jamais de photo « avant »).
+      const copies: { avant: string | null; rendu: string | null } = { avant: null, rendu: null };
       if (avant) {
         const taille = (await fs.stat(path.join(resolveUploadsDir(), avant)).catch(() => null))?.size ?? 0;
         avantOctets = taille;
         if (taille > 0 && !avantDejaRangees.has(taille)) {
-          if (await recopierDansLeDossier(dossierId, avant, `avant-${simulation.id}${path.extname(avant) || ".jpg"}`)) rangees++;
+          copies.avant = await recopierDansLeDossier(dossierId, avant, `avant-${simulation.id}${path.extname(avant) || ".jpg"}`);
+          if (copies.avant) rangees++;
           avantDejaRangees.add(taille);
         }
       }
-      if (simulation.imageAfterPath && (await recopierDansLeDossier(dossierId, simulation.imageAfterPath, `rendu-${simulation.id}${path.extname(simulation.imageAfterPath) || ".png"}`))) rangees++;
+      if (simulation.imageAfterPath) {
+        copies.rendu = await recopierDansLeDossier(dossierId, simulation.imageAfterPath, `rendu-${simulation.id}${path.extname(simulation.imageAfterPath) || ".png"}`);
+        if (copies.rendu) rangees++;
+      }
       // Rien sur le disque (volume restauré sans les images, purge) : on le dit une fois sur le dossier, et on n'y revient pas.
       const contenu = [
         rangees > 0 ? "Simulation faite sur le site : photo avant et rendu rangés dans les photos du dossier" : "Simulation faite sur le site (images introuvables sur le serveur)",
@@ -161,7 +168,7 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string): Pro
         simulation.prixDevis ? `${Math.round(simulation.prixDevis)} € simulés` : null,
       ].filter(Boolean).join(" — ");
       await prisma.$transaction([
-        prisma.simulation.update({ where: { id: simulation.id }, data: { dossierId, rangeeLe: new Date() } }),
+        prisma.simulation.update({ where: { id: simulation.id }, data: { dossierId, rangeeLe: new Date(), photosDossier: JSON.stringify(copies) } }),
         prisma.dossierEvenement.create({ data: { dossierId, type: "SIMULATION_SITE", direction: "ENTRANT", contenu: contenu.slice(0, 1000), survenuLe: simulation.createdAt, metadata: JSON.stringify({ simulationId: simulation.id, images: rangees, avantOctets }) } }),
       ]);
       if (rangees > 0 || avantOctets > 0) simulationsRangees++;
@@ -170,6 +177,12 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string): Pro
     }
   }
   if (photosRangees + simulationsRangees > 0) await demanderSynchronisation().catch(() => undefined);
+  // Le client a déjà son espace : ses nouvelles simulations du site y apparaissent tout de suite (et Lucas est prévenu).
+  // Import à la demande : simulations/dossier dépend de l'espace, qui dépend de ce fichier.
+  if (simulationsRangees > 0) {
+    const { rangerSimulationsSiteDansLEspace } = await import("@/lib/simulations/dossier");
+    await rangerSimulationsSiteDansLEspace(dossierId, { alerter: !options.silencieux }).catch((erreur) => console.error(`[dossiers] simulations du site non rangées dans l'espace du dossier ${dossierId} :`, erreur));
+  }
   return { photos: photosRangees, simulations: simulationsRangees };
 }
 
@@ -229,7 +242,7 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
     if (lead.rappelLe) await prisma.lead.update({ where: { id: lead.id }, data: { rappelLe: null } });
   }
 
-  const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId);
+  const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId, { silencieux: options.silencieux });
   return { dossierId, cree, photosRangees: photos, simulationsRangees: simulations };
 }
 

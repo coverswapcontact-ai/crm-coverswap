@@ -63,6 +63,8 @@ export type LigneLead = {
   traiteLe: string | null;
   archiveLe: string | null;
   archiveMotif: string | null;
+  /** Doublon probable (même nom, même ville, autre numéro et autre e-mail) : à fusionner d'un clic, ou à écarter. */
+  doublon: { de: string; nom: string; motif: string; dossierId: string | null } | null;
 };
 
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
@@ -208,6 +210,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     traiteLe: lead.traiteLe?.toISOString() ?? null,
     archiveLe: lead.archiveLe?.toISOString() ?? null,
     archiveMotif: lead.archiveMotif,
+    doublon: lead.doublonDe && !lead.doublonTraiteLe ? { de: lead.doublonDe, nom: "", motif: lead.doublonMotif ?? "Doublon probable", dossierId: null } : null,
     dossierId: dossier?.id ?? null,
     simulations: lead.simulations.map((s) => {
       const avant = s.imageOriginalPath ?? s.imageBeforePath;
@@ -266,7 +269,7 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
     prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS", maintenant), _count: { _all: true } }),
   ]);
   return {
-    lignes: leads.map((lead) => versLigne(lead, maintenant)),
+    lignes: await avecDoublons(leads.map((lead) => versLigne(lead, maintenant))),
     compteurs: { actifs, aAppeler, sansSuite, archives },
     sources: sources.sort((a, b) => b._count._all - a._count._all).map((s) => s.source),
   };
@@ -280,5 +283,20 @@ export function compterLeadsAAppeler(maintenant: Date = new Date()): Promise<num
 /** Une seule ligne, rafraîchie après un appel (le mode « enchaîner » n'a pas à recharger toute la liste). */
 export async function chargerLigneLead(id: string, maintenant: Date = new Date()): Promise<LigneLead | null> {
   const lead = await prisma.lead.findFirst({ where: { id }, include: inclusion });
-  return lead ? versLigne(lead, maintenant) : null;
+  return lead ? (await avecDoublons([versLigne(lead, maintenant)]))[0] : null;
+}
+
+/** Le contact que chaque doublon probable semble doubler : son nom et son dossier en cours, pour fusionner en connaissance de cause. */
+async function avecDoublons(lignes: LigneLead[]): Promise<LigneLead[]> {
+  const ids = [...new Set(lignes.flatMap((l) => (l.doublon ? [l.doublon.de] : [])))];
+  if (ids.length === 0) return lignes;
+  const originaux = await prisma.lead.findMany({ where: { id: { in: ids } }, select: { id: true, prenom: true, nom: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true } } } });
+  const parId = new Map(originaux.map((o) => [o.id, o]));
+  return lignes.map((l) => {
+    if (!l.doublon) return l;
+    const original = parId.get(l.doublon.de);
+    // Le contact d'origine a été archivé entre-temps : plus rien à fusionner.
+    if (!original) return { ...l, doublon: null };
+    return { ...l, doublon: { ...l.doublon, nom: `${original.prenom} ${original.nom}`.replace(/Inconnu/g, "").trim() || "Contact sans nom", dossierId: original.dossiers[0]?.id ?? null } };
+  });
 }

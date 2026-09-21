@@ -6,7 +6,7 @@ import { deposerSimulation } from "@/lib/espace/service";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** POST multipart { image, titre?, description? } : dépose une simulation dans l'espace du client (l'ouvre au besoin). */
+/** POST multipart { image, titre?, description? } : dépose une simulation en brouillon dans l'espace du client (ancien écran ; voir /api/dossiers/[id]/simulations). */
 export async function POST(requete: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

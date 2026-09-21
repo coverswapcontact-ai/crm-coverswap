@@ -13,7 +13,7 @@ import {
 
 type Saisie = { valeur: string; valableDu: string; source: string };
 
-const UNITES: Record<string, string> = { euros: "€", pourcentage: "%", jours: "jours", mois: "mois" };
+const UNITES: Record<string, string> = { euros: "€", dollars: "$", pourcentage: "%", jours: "jours", mois: "mois" };
 
 /** Formulaire d'une valeur de paramètre : valeur, date d'effet, source. */
 export function ChampsParametre({

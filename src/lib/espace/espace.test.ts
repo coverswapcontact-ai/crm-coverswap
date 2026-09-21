@@ -125,13 +125,20 @@ describe("ce que le client fait dans son espace", () => {
 });
 
 describe("simulations et bon pour accord", () => {
-  test("Lucas dépose, le client compare, choisit et commente ; une simulation d'un autre espace reste hors d'atteinte", async () => {
+  test("Lucas dépose (brouillon, invisible), publie ; le client compare, choisit et commente ; une simulation d'un autre espace reste hors d'atteinte", async () => {
     const a = await dossierAvecEspace("Julie");
     const b = await dossierAvecEspace("Karim");
     const chene = await service.deposerSimulation(a.dossierId, photo("chene.jpg"), { titre: "Chêne clair" });
-    await service.deposerSimulation(a.dossierId, photo("noir.jpg"), { titre: "Noir mat" });
-    assert.equal((await prisma.dossier.findUnique({ where: { id: a.dossierId } }))?.etape, "SIMULATION", "une simulation déposée sort le dossier de la qualification");
-    assert.equal((await service.etatEspace(a.espace)).avancement, "SIMULATION");
+    const noir = await service.deposerSimulation(a.dossierId, photo("noir.jpg"), { titre: "Noir mat" });
+    // Un brouillon ne se voit pas : ni dans l'état, ni par son image.
+    assert.equal((await service.etatEspace(a.espace)).simulations.length, 0);
+    await assert.rejects(service.imagePourLeClient(a.espace, chene.id, "image"), /introuvable/);
+    assert.equal((await prisma.dossier.findUnique({ where: { id: a.dossierId } }))?.etape, "QUALIFICATION");
+    const { publierSimulations } = await import("@/lib/simulations/dossier");
+    await publierSimulations(a.dossierId, [chene.id, noir.id], { prevenir: false });
+    assert.equal((await prisma.dossier.findUnique({ where: { id: a.dossierId } }))?.etape, "SIMULATION", "une simulation publiée sort le dossier de la qualification");
+    const publie = await service.etatEspace(a.espace);
+    assert.deepEqual([publie.avancement, publie.etape, publie.simulations.every((s) => s.nouvelle)], ["SIMULATION", "SIMULATIONS", true]);
 
     await service.choisirSimulation(a.espace, chene.id, "Parfait, avec les poignées noires");
     const etat = await service.etatEspace(a.espace);

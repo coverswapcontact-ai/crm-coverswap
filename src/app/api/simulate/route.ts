@@ -5,8 +5,8 @@ import { enregistrerSimulationSite, purgerSiNecessaire, rattacherSimulationsSite
 import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
 import prisma from "@/lib/prisma";
 import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
-import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio } from "@/lib/simulations/cadrage";
-import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI } from "@/lib/site/erreurs-generation";
+import { genererRendu } from "@/lib/simulations/generation";
+import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
 
 /**
  * /api/simulate — GÉNÉRATEUR D'IMAGE SANS PLAFOND DE TEMPS.
@@ -17,9 +17,10 @@ import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI } from "@/l
  * Flux : le navigateur appelle d'abord coverswap.fr/api/simulation/prepare
  * (rate-limit + lead + construction du prompt + signature HMAC), puis transmet
  * ici { prompt, swatchUrls, sig, exp, leadId, photo_base64 }. On vérifie la
- * signature (anti-falsification/anti-abus), on télécharge les swatches, on
- * appelle OpenAI, on renvoie l'image — et on la rattache, avec la photo
- * d'origine, à la simulation du lead créé par prepare (le CRM, c'est ici).
+ * signature (anti-falsification/anti-abus), puis le générateur commun
+ * (lib/simulations/generation : le même que le simulateur du CRM) télécharge
+ * les échantillons, appelle OpenAI et compte la consommation ; on renvoie
+ * l'image — et on la rattache, avec la photo d'origine, au lead et à son dossier.
  *
  * Variables d'environnement requises sur Railway :
  *   - OPENAI_API_KEY          (clé OpenAI avec crédits image)
@@ -36,13 +37,6 @@ const ALLOWED_ORIGINS = [
   "https://www.coverswap.fr",
 ];
 
-// Seul l'hôte S3 Cover Styl' est autorisé pour les swatches (anti-SSRF).
-const ALLOWED_SWATCH_HOST = "ssi.s3.fr-par.scw.cloud";
-
-// OpenAI peut être lent (quality high + input_fidelity high = 60-150s).
-// Railway n'a aucun plafond ; on coupe à 180s seulement pour ne pas pendre.
-const OPENAI_TIMEOUT_MS = 180_000;
-
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
@@ -56,43 +50,6 @@ function corsHeaders(origin: string | null): Record<string, string> {
 
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
-}
-
-/* ── Détection dimensions JPEG/PNG depuis un buffer ── */
-function getImageDimensions(buf: Buffer): { width: number; height: number } | null {
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
-    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-  }
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    let offset = 2;
-    while (offset < buf.length - 8) {
-      if (buf[offset] !== 0xff) {
-        offset++;
-        continue;
-      }
-      const marker = buf[offset + 1];
-      if (marker === 0xc0 || marker === 0xc2) {
-        return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
-      }
-      offset += 2 + buf.readUInt16BE(offset + 2);
-    }
-  }
-  return null;
-}
-
-async function downloadSwatch(url: string): Promise<Buffer | null> {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname !== ALLOWED_SWATCH_HOST) {
-      console.error(`[simulate] swatch host refusé: ${parsed.hostname}`);
-      return null;
-    }
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
-  } catch {
-    return null;
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -189,110 +146,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 3) Téléchargement des swatches (tous requis ; échec = on refuse plutôt
-    //    que laisser l'IA inventer une couleur)
-    const swatchBuffers: Buffer[] = [];
-    for (const url of swatchUrls) {
-      const buf = await downloadSwatch(url);
-      if (!buf) {
-        return NextResponse.json(
-          {
-            error: "Impossible de charger les références de texture. Réessayez dans un instant.",
-            reason: "swatch-download-failed",
-          },
-          { status: 502, headers: cors }
-        );
-      }
-      swatchBuffers.push(buf);
-    }
-
-    // 4) Photo client + détection de taille de sortie (match aspect ratio)
+    // 3) Génération : échantillons, cadrage, OpenAI, consommation — le générateur commun.
     const rawBase64 = photo_base64.replace(/^data:image\/\w+;base64,/, "");
-    const photoBuffer = Buffer.from(rawBase64, "base64");
-    // La photo est mise au format du modèle avant l'envoi (lib/simulations/cadrage) : sans cela le
-    // modèle recadre à sa façon et le rendu n'est plus superposable à l'original.
-    const dims = getImageDimensions(photoBuffer);
-    const cadrage = await cadrerPourGeneration(photoBuffer, dims ? tailleSelonRatio(dims.width, dims.height) : "1024x1024");
-    const outputSize = cadrage.taille;
-
-    // 5) Appel OpenAI — réglage COÛT/QUALITÉ optimal :
-    //    - input_fidelity "high" : LE levier qui corrige les 3 symptômes
-    //      (dérive de teinte, application partielle, modifs parasites de la
-    //      cuisine). Préserve l'image d'entrée + respecte les swatches. ON LE GARDE.
-    //    - quality "medium" : suffisant ici. Le passage à "high" triplait le coût
-    //      (~0,20€ vs ~0,07€/simulation) sans gain sur CES problèmes précis, qui
-    //      dépendent de input_fidelity + du prompt, pas du niveau de quality.
-    const formData = new FormData();
-    // Modèle réglable sans redéploiement du code (OPENAI_IMAGE_MODEL), gpt-image-1 par défaut.
-    formData.append("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-1");
-    formData.append("prompt", prompt);
-    formData.append("size", outputSize);
-    formData.append("quality", "medium");
-    formData.append("input_fidelity", "high");
-    formData.append(
-      "image[]",
-      new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }),
-      "kitchen.png"
-    );
-    swatchBuffers.forEach((buf, i) => {
-      formData.append(
-        "image[]",
-        new Blob([new Uint8Array(buf)], { type: "image/jpeg" }),
-        `texture_${i}.jpg`
-      );
-    });
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
-    const startMs = Date.now();
-
-    let imageRes: Response;
-    try {
-      imageRes = await fetch("https://api.openai.com/v1/images/edits", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
-        signal: controller.signal,
-      });
-    } catch (err) {
-      clearTimeout(timeoutId);
-      const isAbort = err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
-      console.error(`[simulate] OpenAI ${isAbort ? "timeout" : "fetch error"} après ${Date.now() - startMs}ms:`, err);
-      return NextResponse.json(
-        {
-          error: isAbort ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge,
-          reason: isAbort ? "delai" : "surcharge",
-        },
-        { status: isAbort ? 504 : 502, headers: cors }
-      );
+    const resultat = await genererRendu({ prompt, swatchUrls, photo: Buffer.from(rawBase64, "base64"), origine: "SITE" });
+    if (!resultat.ok) {
+      // Panne de notre côté (crédit épuisé, clé refusée) : le quota est rendu au visiteur,
+      // qui lit un message clair et peut laisser ses coordonnées ; le gérant est prévenu par mail.
+      if (resultat.raison === "service-indisponible" || resultat.raison === "config") rendreSimulation(ip);
+      const raison = resultat.raison === "config" ? "service-indisponible" : resultat.raison;
+      return NextResponse.json({ error: resultat.message, reason: raison }, { status: resultat.status, headers: cors });
     }
-    clearTimeout(timeoutId);
-
-    if (!imageRes.ok) {
-      const errText = await imageRes.text().catch(() => "");
-      const raison = classerErreurOpenAI(imageRes.status, errText);
-      console.error(`[simulate] OpenAI HTTP ${imageRes.status} (${raison}):`, errText.slice(0, 400));
-      // Panne de notre côté (crédit épuisé, clé refusée) : le visiteur le lit tel quel et peut laisser
-      // ses coordonnées ; le gérant est prévenu par mail, au plus une fois toutes les six heures.
-      if (raison === "service-indisponible") {
-        rendreSimulation(ip);
-        void alerterPanneSimulateur(imageRes.status, errText);
-      }
-      return NextResponse.json({ error: MESSAGES_ECHEC[raison], reason: raison, status: imageRes.status }, { status: raison === "service-indisponible" ? 503 : 502, headers: cors });
-    }
-
-    const data = await imageRes.json();
-    const b64Brut: string | undefined = data.data?.[0]?.b64_json;
-    const b64 = b64Brut ? (await recadrerRendu(Buffer.from(b64Brut, "base64"), cadrage)).toString("base64") : undefined;
-    if (!b64) {
-      console.error("[simulate] réponse OpenAI sans b64_json");
-      return NextResponse.json(
-        { error: "Aucune image générée. Réessayez.", reason: "no-image-data" },
-        { status: 502, headers: cors }
-      );
-    }
-
-    console.log(`[simulate] OK en ${Date.now() - startMs}ms (size ${outputSize}, zone ${cadrage.zone ? `${cadrage.zone.width}x${cadrage.zone.height}` : "entière"}, ${swatchBuffers.length} swatches)`, JSON.stringify(data.usage ?? {}));
+    const b64 = resultat.image.toString("base64");
+    const cadrage = { avant: resultat.avant };
+    const startMs = Date.now() - resultat.dureeMs;
 
     // 6) Photo avant + rendu après : sur la simulation du lead (ancien parcours), ou
     //    gardés avec le parcours en attendant la demande de devis (jamais bloquant).

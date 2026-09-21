@@ -12,6 +12,7 @@ import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations
 import { rattacherSimulationsSite } from "@/lib/site/simulations";
 import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
 import { notifierDemandeDuSite } from "@/lib/prospects/notification";
+import { reperDoublonProbable } from "@/lib/prospects/doublons";
 import type { Priorite } from "@/lib/prospects/priorite";
 
 // Accept both Meta/n8n format AND internal format
@@ -270,6 +271,18 @@ export async function POST(request: NextRequest) {
     // ── Priorité de rappel : classée à l'arrivée, jamais bloquante ──
     const qualification = await classerLeadSansBloquer(lead.id);
 
+    // ── Même nom, même ville, autre numéro et autre e-mail : doublon probable, signalé (jamais fusionné seul) ──
+    let doublon: { doublonDe: string; motif: string } | null = null;
+    if (isNew) {
+      try {
+        doublon = await reperDoublonProbable(lead.id);
+      } catch (erreurDoublon) {
+        console.error("[webhook] recherche de doublon (non bloquant) :", erreurDoublon);
+      }
+    }
+    // Le client avait déjà son espace : ses nouvelles simulations y entrent, et l'alerte dédiée part de là.
+    const avaitUnEspace = !isNew && (await prisma.espaceClient.count({ where: { dossier: { leadId: lead.id, archiveLe: null } } })) > 0;
+
     // ── Accusé de réception par SMS : seul envoi automatique, nouveau contact seulement ──
     if (isNew && qualification?.priorite !== "A_ECARTER") await envoyerAccuseDeReception(lead.id);
 
@@ -435,7 +448,7 @@ export async function POST(request: NextRequest) {
 
     // Push : le téléphone sonne pour une demande du site comme pour un lead Meta (jamais bloquant).
     let notifications: { canal: string; ok: boolean }[] = [];
-    if (isNew || isDevis || ouverture?.cree || (ouverture?.simulationsRangees ?? 0) > 0) {
+    if (isNew || isDevis || ouverture?.cree || ((ouverture?.simulationsRangees ?? 0) > 0 && !avaitUnEspace)) {
       try {
         const resultats = await notifierDemandeDuSite({
           leadId: lead.id,
@@ -452,6 +465,7 @@ export async function POST(request: NextRequest) {
           photos: photosEcrites,
           message: data.message ?? null,
           priorite: classeFinale?.priorite ? { classe: classeFinale.priorite as Priorite, motif: classeFinale.prioriteMotif ?? "" } : qualification ? { classe: qualification.priorite as Priorite, motif: qualification.motif } : null,
+          doublon: doublon?.motif ?? null,
         });
         notifications = resultats.map((r) => ({ canal: r.canal, ok: r.ok }));
       } catch (erreurPush) {

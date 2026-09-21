@@ -33,7 +33,8 @@ export const LIBELLES_MOTIF_SMS: Record<MotifSms, string> = {
 const ETAPES_DU_MOTIF: Partial<Record<MotifSms, readonly EtapeDossier[]>> = {
   RELANCE_PHOTOS: ["QUALIFICATION"],
   RELANCE_SIMULATION: ["SIMULATION"],
-  RELANCE_DEVIS: ["DEVIS_ENVOYE", "RELANCE"],
+  // Un devis généré est visible dans l'espace du client même si le dossier est encore à « Simulation ».
+  RELANCE_DEVIS: ["SIMULATION", "DEVIS_ENVOYE", "RELANCE"],
   RELANCE_DERNIERE: ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"],
 };
 

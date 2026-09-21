@@ -25,6 +25,8 @@ export async function notifierDemandeDuSite(demande: {
   photos: number;
   message?: string | null;
   priorite?: { classe: Priorite; motif: string } | null;
+  /** Doublon probable repéré à l'arrivée (même nom, même ville) : à fusionner d'un clic dans Leads. */
+  doublon?: string | null;
 }): Promise<ResultatCanal[]> {
   const base = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
   const classe = demande.priorite?.classe ?? null;
@@ -41,6 +43,7 @@ export async function notifierDemandeDuSite(demande: {
     demande.campagne ? `Campagne : ${demande.campagne}` : null,
     demande.message ? `« ${demande.message.slice(0, 160)} »` : null,
     demande.nouveau ? null : "Ce contact existait déjà : la demande a été rattachée à sa fiche.",
+    demande.doublon ? `Doublon probable — ${demande.doublon}. À fusionner d'un clic dans Leads.` : null,
   ].filter(Boolean) as string[];
 
   return alerter(

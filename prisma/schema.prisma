@@ -52,6 +52,11 @@ model Lead {
   tailleCuisine    String? // la réponse telle que donnée
   rappelLe         DateTime? // prochain rappel téléphonique prévu (issue d'appel « à rappeler »)
   traiteLe         DateTime? // « marqué comme traité » depuis Leads : hors de la file d'appels, pas archivé ; un rappel posé l'y remet
+  // Doublon probable (même nom, même ville, quelques jours d'écart, autre téléphone et autre e-mail) :
+  // signalé, jamais fusionné seul — Lucas fusionne en un clic ou écarte le signalement.
+  doublonDe        String? // contact déjà connu qui semble être la même personne
+  doublonMotif     String? // pourquoi, en une phrase
+  doublonTraiteLe  DateTime? // fusionné ou écarté
   metaLeads        MetaLead[]
   conversationsSms ConversationSms[]
   interactions     Interaction[]
@@ -223,6 +228,7 @@ model Simulation {
   notes             String?
   dossierId         String? // dossier où la photo avant et le rendu ont été rangés (photos de chantier, donc Drive)
   rangeeLe          DateTime?
+  photosDossier     String? // JSON { avant, rendu } : identifiants des copies dans les photos du dossier (le rendu n'est pas une photo du client)
   archiveLe         DateTime? // archivage : rien ne se supprime
   archiveMotif      String?
   ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -1240,24 +1246,33 @@ model ModeleSms {
 // ─────────────────────────────────────────────
 
 model EspaceClient {
-  id             String             @id @default(cuid())
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  code           String             @unique // court, lisible dans l'adresse
-  version        Int                @default(1)
-  dossierId      String             @unique // un espace par dossier
-  dossier        Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
-  expireLe       DateTime
-  revoqueLe      DateTime?
-  premierAccesLe DateTime?
-  dernierAccesLe DateTime?
-  nbAcces        Int                @default(0)
-  souhaits       String? // JSON : teintes, style, « je veux des propositions », précisions
-  souhaitsLe     DateTime?
-  simulations    SimulationEspace[]
-  archiveLe      DateTime?
-  archiveMotif   String?
-  ecriture       String?
+  id                    String             @id @default(cuid())
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  code                  String             @unique // court, lisible dans l'adresse
+  version               Int                @default(1)
+  dossierId             String             @unique // un espace par dossier
+  dossier               Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  expireLe              DateTime
+  revoqueLe             DateTime?
+  premierAccesLe        DateTime?
+  dernierAccesLe        DateTime?
+  nbAcces               Int                @default(0)
+  souhaits              String? // JSON : le projet du client (zones, styles, mètres, délai, précisions) — ancien format : teintes, style
+  souhaitsLe            DateTime?
+  choix                 String? // JSON : une simulation, ou une teinte par zone piochée dans plusieurs (choix composite)
+  choixLe               DateTime?
+  propositionDemandeeLe DateTime? // dernière demande d'une autre proposition
+  devisConsultations    Int                @default(0) // visites où le client a ouvert son devis en vigueur
+  devisConsulteId       String? // devis auquel se rapporte le compteur
+  devisConsulteLe       DateTime?
+  simulationsVuesLe     DateTime? // dernière ouverture de ses simulations : au-delà, elles sont « nouvelles »
+  avis                  String? // JSON : note, texte, accord de publication (après le chantier)
+  avisLe                DateTime?
+  simulations           SimulationEspace[]
+  archiveLe             DateTime?
+  archiveMotif          String?
+  ecriture              String?
 }
 
 // Simulation déposée par Lucas dans l'espace d'un client : le client les compare,
@@ -1276,12 +1291,29 @@ model SimulationEspace {
   choisieLe         DateTime?
   commentaireClient String?
   commenteeLe       DateTime?
+  // Simulateur (21/09/2026) : toute simulation d'un dossier, d'où qu'elle vienne. Le client ne voit
+  // que les PUBLIEE ; celles du CRM arrivent en BROUILLON, celles qu'il a faites sur le site sont publiées.
+  source            String       @default("MANUEL") // SITE | API | CHATGPT | MANUEL
+  statut            String       @default("PUBLIEE") // BROUILLON | PUBLIEE | MASQUEE
+  photoAvant        String? // photo « avant » utilisée, relative au répertoire d'upload (curseur avant / après)
+  typeSurface       String? // type de surface du simulateur (cuisine, meubles-hauts…) ; pour le site : le projet
+  zones             String? // JSON [{ zone, libelle, ref, nom }] : la teinte posée sur chaque zone
+  promptId          String? // prompt de la bibliothèque (ChatGPT)
+  promptVersion     Int?
+  promptTexte       String? // consigne réellement donnée au modèle
+  preparationId     String?
+  simulationId      String? // Simulation du contact, quand elle a été faite sur le site
+  coutDollars       Float? // génération par l'API
+  publieeLe         DateTime?
+  masqueeLe         DateTime?
+  vueLe             DateTime? // première fois que le client l'a vue
   archiveLe         DateTime?
   archiveMotif      String?
   ecriture          String?
 
   @@index([espaceId])
   @@index([dossierId])
+  @@index([simulationId])
 }
 
 // Bon pour accord donné par le client dans son espace : une ligne, jamais
@@ -1297,6 +1329,7 @@ model AccordDevis {
   acomptePct    Int?
   nomSignataire String
   mention       String // « Bon pour accord »
+  signature     String? // signature tracée au doigt (image, relative au répertoire d'upload), si le client a signé
   ip            String?
   navigateur    String?
   ecriture      String?
@@ -1334,4 +1367,90 @@ model CleInterne {
   valeur    String
   createdAt DateTime @default(now())
   ecriture  String?
+}
+
+// ─────────────────────────────────────────────
+// Simulateur du CRM (src/lib/simulateur) — mission du 21/09/2026
+// Un moteur, trois portes : le client sur le site, Lucas par l'API, Lucas
+// par ChatGPT. Toutes les simulations atterrissent dans le dossier
+// (SimulationEspace), en brouillon tant que Lucas ne les publie pas.
+// ─────────────────────────────────────────────
+
+/// Une simulation préparée depuis le CRM : pour ChatGPT (consigne, planche des
+/// teintes, photo cadrée) ou pour l'API (génération en tâche de fond). L'image
+/// rendue par ChatGPT, déposée ensuite, reprend tout ce qui est noté ici.
+model PreparationSimulation {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  dossierId     String
+  mode          String // CHATGPT | API
+  statut        String    @default("PREPAREE") // PREPAREE | EN_COURS | TERMINEE | ECHEC
+  photoSource   String // photo du dossier choisie (chemin relatif)
+  photoAvant    String? // la même, cadrée au format du modèle (chemin relatif)
+  typeSurface   String
+  zones         String // JSON [{ zone, libelle, ref, nom, description }]
+  promptId      String?
+  promptVersion Int?
+  promptTexte   String?
+  coutEstime    Float? // en dollars
+  erreur        String?
+  resultatId    String? // SimulationEspace produite
+  archiveLe     DateTime?
+  archiveMotif  String?
+  ecriture      String?
+
+  @@index([dossierId, createdAt])
+}
+
+/// Bibliothèque de prompts ChatGPT : un prompt par type de surface. Le texte vit
+/// dans ses versions ; `versionCourante` désigne celle qui sert.
+model PromptSimulation {
+  id              String                    @id @default(cuid())
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  typeSurface     String                    @unique
+  versionCourante Int                       @default(1)
+  versions        PromptSimulationVersion[]
+  archiveLe       DateTime?
+  archiveMotif    String?
+  ecriture        String?
+}
+
+/// Une version de prompt, jamais modifiée : revenir en arrière crée une nouvelle version.
+model PromptSimulationVersion {
+  id        String           @id @default(cuid())
+  createdAt DateTime         @default(now())
+  promptId  String
+  prompt    PromptSimulation @relation(fields: [promptId], references: [id], onDelete: Restrict)
+  numero    Int
+  texte     String
+  note      String? // ce qui a changé, en une phrase
+  auteur    String?
+  ecriture  String?
+
+  @@unique([promptId, numero])
+}
+
+/// Une génération d'image payée à OpenAI (simulateur du site ou du CRM), écrite
+/// une fois : c'est le compteur de consommation.
+model GenerationImage {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  origine       String // SITE | CRM
+  modele        String
+  statut        String // REUSSI | ECHEC
+  erreur        String?
+  dureeMs       Int
+  taille        String?
+  echantillons  Int      @default(0)
+  jetonsTexte   Int      @default(0)
+  jetonsImage   Int      @default(0)
+  jetonsSortie  Int      @default(0)
+  coutDollars   Float?
+  dossierId     String?
+  preparationId String?
+  ecriture      String?
+
+  @@index([createdAt])
 }

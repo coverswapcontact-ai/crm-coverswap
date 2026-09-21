@@ -87,6 +87,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const sms = await client.sms.findMany({ where: { ...AVEC_ARCHIVES, conversationId: { in: conversationsSms.map((conversation) => conversation.id) } } });
   const espaces = await client.espaceClient.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+  const preparations = await client.preparationSimulation.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
 
   const propositions = await client.proposition.findMany({
     where: {
@@ -104,7 +105,8 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...simulationsSite.flatMap((s) => [s.imageBeforePath, s.imageAfterPath]).filter((chemin): chemin is string => Boolean(chemin)),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
-    ...simulationsEspace.map((simulation) => simulation.chemin).filter((chemin) => chemin !== EFFACE),
+    ...simulationsEspace.flatMap((simulation) => [simulation.chemin, simulation.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
+    ...preparations.flatMap((p) => [p.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
   ];
 
   return {
@@ -149,6 +151,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       Sms: sms,
       EspaceClient: espaces,
       SimulationEspace: simulationsEspace,
+      PreparationSimulation: preparations,
       Proposition: propositions,
     } as Record<string, Record<string, unknown>[]>,
   };

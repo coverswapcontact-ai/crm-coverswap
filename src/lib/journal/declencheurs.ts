@@ -111,6 +111,8 @@ export const MODELES_IMMUABLES: ReadonlyMap<string, RegleImmuabilite> = new Map<
     },
   ],
   ["AppelIa", { modifiables: ["ecriture"], message: "Un appel au modèle d'IA est enregistré tel quel : il ne se modifie pas." }],
+  ["GenerationImage", { modifiables: ["ecriture"], message: "Une génération d'image est enregistrée telle quelle : elle ne se modifie pas." }],
+  ["PromptSimulationVersion", { modifiables: ["ecriture"], message: "Une version de prompt ne se modifie pas : enregistrer une nouvelle version (revenir en arrière en crée une aussi)." }],
   [
     "Document",
     {

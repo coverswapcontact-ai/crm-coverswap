@@ -131,9 +131,15 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   },
   Sms: { remplacer: () => ({ texte: EFFACE, textePropose: null, erreur: null }), garde: "sens, dates, statut de remise, origine et message type : la mesure des relances, sans leur contenu" },
   // Espace client : ce que la personne y a écrit et les images qui la concernent.
-  EspaceClient: { remplacer: () => ({ souhaits: null }), garde: "dates de création, d'accès et d'expiration du lien" },
-  SimulationEspace: { remplacer: () => ({ chemin: EFFACE, titre: null, description: null, commentaireClient: null }), garde: "dates de dépôt et de choix (image effacée)" },
-  AccordDevis: { conserve: "preuve du bon pour accord donné sur un devis émis : conservée avec le document, même durée légale" },
+  EspaceClient: { remplacer: () => ({ souhaits: null, choix: null, avis: null }), garde: "dates de création, d'accès et d'expiration du lien, compteurs de visites" },
+  SimulationEspace: {
+    remplacer: () => ({ chemin: EFFACE, photoAvant: null, titre: null, description: null, commentaireClient: null }),
+    garde: "source, statut, teintes, version du prompt, coût et dates (images effacées)",
+  },
+  AccordDevis: { conserve: "preuve du bon pour accord donné sur un devis émis (signature au doigt comprise) : conservée avec le document, même durée légale" },
+  // Simulateur du CRM (21/09/2026).
+  PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null }), garde: "type de surface, teintes, version du prompt, mode et dates (photos effacées)" },
+  GenerationImage: { conserve: "coût d'une génération d'image : jetons, montant et durée, aucune donnée de la personne" },
   Proposition: {
     remplacer: (ligne): Record<string, string | null> =>
       ligne.type === "ANONYMISATION_CLIENT"

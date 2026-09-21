@@ -5,6 +5,7 @@ type Style = Exclude<NonNullable<React.ComponentProps<typeof View>["style"]>, un
 import { PDFDocument } from "pdf-lib";
 import { EMETTEUR, type LigneDocument, type TypeDocument } from "@/lib/dossiers/constants";
 import { dateEnLettres } from "@/lib/dossiers/dates";
+import { MODES_REGLEMENT, conditionsDuDevis } from "./conditions";
 import {
   calculerMontants,
   formatCentimes,
@@ -152,8 +153,8 @@ export type DonneesDocumentPdf = {
 };
 
 function puces(donnees: DonneesDocumentPdf): string[] {
-  const { totalTtcCentimes, acompteCentimes, soldeCentimes } = calculerMontants(donnees.lignes, donnees.acomptePct);
-  const modes = "Paiement par virement – chèque ou espèces";
+  const { totalTtcCentimes } = calculerMontants(donnees.lignes, donnees.acomptePct);
+  const modes = MODES_REGLEMENT;
   if (donnees.type === "AVOIR") {
     return [`Montant de l'avoir : ${formatCentimes(totalTtcCentimes)} TTC`, ...(donnees.mentions ?? [])];
   }
@@ -163,16 +164,7 @@ function puces(donnees: DonneesDocumentPdf): string[] {
     }
     return [`Montant total à régler : ${formatCentimes(totalTtcCentimes)} TTC`, "Paiement à réception de facture", modes];
   }
-  const reglement =
-    acompteCentimes > 0
-      ? [
-          `Acompte de ${donnees.acomptePct}% à la signature du devis, soit ${formatCentimes(acompteCentimes)} TTC`,
-          ...(soldeCentimes > 0
-            ? [`Solde de ${formatCentimes(soldeCentimes)} TTC à régler à la réception des travaux`]
-            : []),
-        ]
-      : [`Montant de ${formatCentimes(totalTtcCentimes)} TTC à régler à la réception des travaux`];
-  return [...reglement, modes, "Devis valable 30 jours à compter de la date d'émission"];
+  return conditionsDuDevis(donnees.lignes, donnees.acomptePct);
 }
 
 function Cellule({

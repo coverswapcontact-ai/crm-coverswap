@@ -3,7 +3,7 @@
 // voie. Chaque paramètre se saisit à sa première utilisation, avec sa date
 // d'effet et sa source ; l'historique reste. Aucune dépendance serveur.
 
-export type NatureParametre = "euros" | "pourcentage" | "jours" | "mois" | "choix" | "texte";
+export type NatureParametre = "euros" | "dollars" | "pourcentage" | "jours" | "mois" | "choix" | "texte";
 
 export type DefinitionParametre = {
   libelle: string;
@@ -22,6 +22,7 @@ export const GROUPES_PARAMETRES = {
   COMMERCIAL: "Suivi commercial",
   RGPD: "Données personnelles (RGPD)",
   AGENT: "Agent mail et IA",
+  SIMULATEUR: "Simulateur",
 } as const;
 export type GroupeParametre = keyof typeof GROUPES_PARAMETRES;
 
@@ -180,6 +181,12 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "euros",
     groupe: "AGENT",
   },
+  SIMULATEUR_CREDIT_OPENAI: {
+    libelle: "Crédit OpenAI (solde relevé)",
+    aide: "Le solde affiché sur platform.openai.com → Billing, en dollars, daté du jour où vous le relevez (après chaque recharge). Le CRM en retire les générations faites depuis cette date pour estimer le solde restant, et vous prévient sous 2 $.",
+    nature: "dollars",
+    groupe: "SIMULATEUR",
+  },
 } as const satisfies Record<string, DefinitionParametre>;
 
 export type CleParametre = keyof typeof DEFINITIONS_PARAMETRES;
@@ -205,6 +212,8 @@ export function formaterValeurParametre(cle: CleParametre, valeur: ValeurParamet
   switch (definition.nature) {
     case "euros":
       return `${Number(valeur).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+    case "dollars":
+      return `${Number(valeur).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} $`;
     case "pourcentage":
       return `${Number(valeur).toLocaleString("fr-FR", { maximumFractionDigits: 3 })} %`;
     case "jours":

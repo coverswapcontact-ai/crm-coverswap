@@ -50,6 +50,30 @@ export function lienEspace(espace: Pick<EspaceClient, "code" | "version">): stri
   return `${adresseDuSite()}/e/${jetonEspace(espace)}`;
 }
 
+/*
+ * Aperçu : Lucas ouvre l'espace tel que le client le voit, depuis le CRM, sans
+ * que sa visite compte et sans pouvoir rien y écrire (pas de faux « devis
+ * consulté », pas d'accord donné par erreur). La marque d'aperçu est signée
+ * avec le même secret et ne vaut que deux jours.
+ */
+function signerApercu(espace: Pick<EspaceClient, "code" | "version">, jour: number): string {
+  return createHmac("sha256", secretEspace()).update(`apercu.${espace.code}.${espace.version}.${jour}`).digest().subarray(0, 12).toString("base64url");
+}
+
+export function lienApercu(espace: Pick<EspaceClient, "code" | "version">, maintenant = Date.now()): string {
+  return `${lienEspace(espace)}?apercu=${signerApercu(espace, Math.floor(maintenant / 86_400_000))}`;
+}
+
+export function apercuValide(espace: Pick<EspaceClient, "code" | "version">, marque: string | null | undefined, maintenant = Date.now()): boolean {
+  if (!marque || !/^[A-Za-z0-9_-]{16}$/.test(marque)) return false;
+  const jour = Math.floor(maintenant / 86_400_000);
+  return [jour, jour - 1].some((j) => {
+    const attendue = Buffer.from(signerApercu(espace, j));
+    const recue = Buffer.from(marque);
+    return attendue.length === recue.length && timingSafeEqual(attendue, recue);
+  });
+}
+
 export class LienEspaceInvalide extends ErreurMetier {
   constructor(message: string, status: number, readonly raison: "inconnu" | "expire" | "revoque") {
     super(message, status, { raison });
@@ -111,6 +135,9 @@ export async function ouvrirEspace(dossierId: string): Promise<EspaceOuvert> {
       if (essai === 4) throw erreur;
     }
   }
+  // Les simulations que le client a déjà faites sur le site l'attendent dans son espace.
+  const { synchroniserSimulationsSite } = await import("@/lib/simulations/dossier");
+  await synchroniserSimulationsSite(dossierId).catch((erreur) => console.error("[espace] simulations du site non rangées à l'ouverture :", erreur));
   return { espace: espace!, lien: lienEspace(espace!), nouveau: true };
 }
 

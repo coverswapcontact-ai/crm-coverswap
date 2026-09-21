@@ -1,148 +1,64 @@
-# Reprise de mission — tunnel de vente, SMS, application mobile
+# Reprise de mission — espace client, onglet Espaces clients, simulateur CRM
 
-> **MISSION TERMINÉE le 21/09/2026.** Tout est livré, testé et déployé (CRM `crm.coverswap.fr`,
-> site `coverswap.fr`). Il n'y a plus rien à reprendre : une reprise automatique qui lit ces
-> lignes supprime sa tâche planifiée et s'arrête.
->
-> Reste à la main de Lucas (rien d'autre ne bloque) :
-> 1. louer le numéro 09 « Time2Chat » chez OVHcloud et poser les cinq variables `OVH_*` sur Railway —
->    tant qu'elles manquent, aucun SMS réel ne part, accusé de réception compris ;
-> 2. créer le bot Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) : second canal poussé ;
-> 3. installer les deux icônes sur l'iPhone (Safari → Partager → « Sur l'écran d'accueil », depuis
->    `/commercial` puis depuis `/messagerie`) et toucher « Activer » dans chacune ;
-> 4. relire les douze messages types (Paramètres → Messagerie SMS) ; ajuster la zone d'intervention
->    (paramètres `ZONE_DEPARTEMENTS`, `ZONE_DEPARTEMENTS_PROCHES`).
->
-> Non fait, dit tel quel : paiement de l'acompte par carte (Stripe) — aujourd'hui virement, RIB affiché
-> après l'accord. Aucun fournisseur de SMS réel n'a été essayé (pas de compte) : premier envoi à surveiller.
+> Fichier de bord tenu par l'agent. À relire EN PREMIER à chaque reprise, puis continuer
+> sans rien demander à Lucas (mandat d'autonomie complète). Aucun secret ici : dépôt public.
+> Journal de la mission précédente (tunnel de vente, terminée le 21/09) : historique git,
+> commit `95bce8e`.
 
-> Fichier de bord tenu par l'agent. À relire EN PREMIER à chaque reprise, puis
-> continuer sans rien demander à Lucas (il dort, il ne relira pas en route).
-> Aucun secret ici : le dépôt est public.
-
-Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
-« Mission autonome — Tunnel de vente, messagerie SMS et application mobile »
-(transcript de la session). Résumé des exigences en bas de ce fichier.
+Mission lancée le 21/09/2026. Énoncé : message de Lucas « Mission autonome — Espace client,
+simulateur CRM et générateur de prompts » (transcript de la session).
 
 ## Règles permanentes (rappel)
 
 - Rien ne se supprime, tout s'archive. Sauvegarde avant migration (automatique au démarrage).
-- Aucun secret en dur ; ne pas lire ni afficher les secrets de `.env.local` ni ceux de Railway.
-- `src/proxy.ts` porte une garde de connexion locale : **ne jamais la commiter** (`git add` par chemins explicites).
-- Aucun envoi automatique hors accusé de réception. Tout le reste passe par validation.
-- Tests sur base d'essai, jamais sur la prod. Ne rien pousser qui ne tourne pas (`npm test`, eslint, build).
-- Commits terminés par `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
-- Vérifier la prod sans session : `/api/health` (commit + canaux), journaux Railway via GraphQL
-  depuis un onglet Chrome connecté (voir mémoire `project_crm_meta_lead_ads_2026-09`).
+- Aucun secret en dur ; ne jamais lire ni afficher `.env.local` ni les variables Railway.
+- `src/proxy.ts` porte une garde de connexion locale : **ne jamais la commiter** (`git add` par chemins).
+- Aucun envoi automatique hors accusé de réception : le SMS « simulations prêtes » part du clic
+  « Publier » de Lucas, texte visible et décochable.
+- Tests sur base d'essai, jamais sur la prod. Rien pousser qui ne tourne pas (tests, eslint, build).
+- Coût des essais OpenAI : ≈ 0,21 $ + 0,066 $ par échantillon ; une simulation API réelle demandée
+  par Lucas (≈ 0,35 $), rien d'autre sans raison.
+- Commits terminés par `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- Ordre de déploiement : CRM d'abord (API de l'espace rétrocompatible), puis site.
 
-## État d'avancement
+## Décisions d'architecture
 
-### Priorité zéro — push en production
-- [x] Diagnostic (sonde `/api/health?reseau=1`) : ntfy.sh (159.203.148.75) laisse SANS RÉPONSE les
-      connexions TCP venant de Railway ; pas d'IPv6 chez Railway. Telegram, Pushover, Brevo,
-      coverswap.fr répondent. Ni DNS, ni URL, ni en-têtes : filtrage côté ntfy.sh de l'adresse partagée.
-- [x] Correction : passerelle `coverswap.fr/api/relais/ntfy` (site Vercel, commit `b7a05ab`), signée HMAC
-      avec `SIMULATE_TOKEN_SECRET` (ou secret webhook) — aucune variable nouvelle. CRM : direct 4 s puis
-      passerelle, chemin en panne mémorisé 1 h. PROUVÉ EN PROD : journaux Railway du 20/09 22:57 UTC
-      « essai au démarrage — ntfy : envoyée ».
-- [x] Bug annexe corrigé : libellé de bouton accentué → HTTP 400 de ntfy (en-têtes ASCII seulement).
-- [x] Réglage global IPv4 d'abord + 2,5 s par adresse (`src/lib/base/reseau-sortant.ts`) : `fetch`
-      échouait par moments vers Telegram (délai de 250 ms de la sélection de famille de Node).
-- [x] Registre `AlerteEnvoi` + essai de push au démarrage tant qu'aucun push n'a réussi.
-- [x] Contact `cmua6do0m00ab7eyqanajfoqc` vérifié (journaux Railway) puis archivé avec `cmu9seh…` :
-      ville 1, source META_ADS 1, client rattaché 1 ; codePostal 0, campagne/ensemble/publicité 0,
-      téléphone = 0 chiffre, pageId/formId/formNom 1, 3 réponses → lead de l'OUTIL DE TEST META
-      (données factices, aucune publicité). La chaîne unifiée l'a bien traité. À dire à Lucas : le
-      prochain vrai lead dira dans les journaux les clés reçues du Zap (`[meta] pont Zapier — clés reçues`).
-- [ ] Telegram en second canal : joignable depuis Railway (vérifié). Marche à suivre pour Lucas
-      dans le rapport final (docs/META.md §6) : BotFather → TELEGRAM_BOT_TOKEN, getUpdates → TELEGRAM_CHAT_ID.
+- **Un moteur** : la consigne du mode API est construite par le SITE (`coverswap/src/lib/simulation-prompt.ts`,
+  source unique) via une nouvelle route signée `POST coverswap.fr/api/simulation/consigne` (HMAC
+  `SIMULATE_TOKEN_SECRET`) ; l'appel OpenAI est celui du CRM, extrait de `/api/simulate` dans
+  `src/lib/simulations/generation.ts` (utilisé par la route ET par le simulateur CRM).
+- **Catalogue** : lu sur le site (`GET coverswap.fr/api/catalogue`), cache mémoire + copie sur le volume.
+- **Bibliothèque ChatGPT** : un prompt par type de surface (10), en base (`PromptSimulation` +
+  `PromptSimulationVersion`), sections `[zone:…]…[/zone]` et variables `{{…}}` ; restaurer = nouvelle
+  version avec l'ancien texte.
+- **Simulations d'un dossier** : `SimulationEspace` étendue (source SITE/API/CHATGPT/MANUEL, statut
+  BROUILLON/PUBLIEE/MASQUEE, photo avant, zones, version du prompt…). Espace créé au 1er brouillon ;
+  les simulations du site rejoignent l'espace (publiées d'office) à son ouverture ou à leur arrivée.
+- **Préparation** (`PreparationSimulation`) : mode CHATGPT (prompt + planche + photo cadrée) ou API
+  (tâche de fond `SIMULATION_API`) ; le dépôt d'une image ChatGPT reprend la dernière préparation.
+- **Consommation OpenAI** : `GenerationImage` (jetons, coût en $), site + CRM ; solde estimé =
+  paramètre daté « crédit OpenAI » − consommation depuis sa date ; clé admin facultative.
+- **Choix composite** : `EspaceClient.choix` (JSON) + `choixLe`.
+- **Aperçu** : lien `?apercu=<signature>` depuis le CRM, lecture seule, visites non comptées.
 
-### Lots de la mission (ordre prévu)
-- [x] Lot 1 — Priorisation des leads + liste « à rappeler » triée (commit `e9ca016`, en prod : 236 contacts classés, zone 34 + 30/11/12/81 posée en paramètres)
-- [x] Lot 2 (serveur) — SMS : `src/lib/sms/` (fournisseurs ovh/brevo/simulateur, envoi par file de tâches,
-      réception idempotente, STOP, accusé automatique, messages types en base, flux SSE, contexte, suggestions),
-      routes `/api/sms/*` et `/api/webhook/sms`, push web (`src/lib/alertes/pushweb.ts`, canal `pushweb`),
-      liens signés de l'espace (`src/lib/espace/liens.ts`). Schéma : ConversationSms, Sms, ModeleSms, EspaceClient,
-      SimulationEspace, AccordDevis, AbonnementPush, CleInterne. 283 essais au vert.
-      RESTE pour le lot 2 : écran Paramètres → Messagerie SMS (état du fournisseur, messages types).
-- [x] Lot 3 — Messagerie `/sms` : `src/components/sms/` (liste, fil en bulles, saisie avec compteur GSM-7 et
-      « simplifier », envoi optimiste + file hors ligne dans le navigateur, flux SSE + relève de secours,
-      brouillons, recherche, non-lus, contexte du dossier, actions rapides : lien espace, message type, fin
-      d'appel, note, devis, étape). `src/lib/commercial/appels.ts` (issue d'appel → suite). ESSAYÉ EN LOCAL au
-      simulateur, vue téléphone 375 px et ordinateur 1440 px : envoi, STOP ajouté, remise, SMS entrant en
-      temps réel, coupure réseau puis reprise, lien d'espace pré-rempli. Captures d'écran impossibles
-      (fenêtre en arrière-plan) : vérifié par lecture du DOM.
-      RESTE : entrée `/messagerie` sans navigation pour l'icône « Messages » (lot 7).
-- [x] Lot 4 — Espace client. CRM : `src/lib/espace/` (liens signés, service, tâche d'alerte photos), API publique
-      `/api/espace/[jeton]/[[...action]]` (CORS coverswap.fr, limites, anti-devinette), routes CRM
-      `/api/dossiers/[id]/espace(/simulations)`, panneau `EspaceDossier.tsx`, bouton « Lien espace client » sur la
-      fiche contact. SITE : `coverswap/src/app/e/[jeton]` + `src/components/espace/EspaceClient.tsx`,
-      `HorsEspaceClient` (ni habillage ni mesure d'audience sur /e/), robots. EN PROD : site `79b272e`.
-      ESSAYÉ EN LOCAL de bout en bout (2 serveurs) : photos réduites puis déposées, envies, simulations déposées
-      par Lucas, choix + commentaire, devis, adresse complétée, bon pour accord → dossier Signé, RIB affiché.
-      RESTE (facultatif) : paiement par carte Stripe (prévu : `paiementCarte` si STRIPE_SECRET_KEY, non construit).
-- [x] Lot 5 — Relances proposées : type de proposition `ENVOI_SMS` (`src/lib/sms/propositions.ts`, sensible, exécution
-      par la file, texte proposé + texte validé recopiés sur le SMS), moteur `src/lib/commercial/relances.ts`
-      (travail périodique horaire `relances-sms` : J+2 photos, J+3 simulation, J+4 devis, J+10 dernière, J+3
-      injoignable ; plafond 5 SMS / 10 jours ; une proposition en attente par dossier ; STOP ; « perdu — sans
-      réponse » PROPOSÉ 5 jours après la dernière relance — étape sensible, donc jamais automatique).
-      8 essais (`relances.test.ts`). 301 essais au total.
-- [x] Lot 6 — Écran `/commercial` (page d'accueil du CRM, première entrée de la navigation) :
-      `src/lib/commercial/pilotage.ts` + `types.ts` (à qui est la main, lue dans les faits : photos reçues,
-      simulation choisie, SMS reçu…), `EcranCommercial.tsx` (compteurs du matin, « À moi » / « Chez le client »,
-      gros boutons Appeler / fin d'appel / SMS, hors zone replié). Fin d'appel → message préparé dans la
-      messagerie (`/sms?lead=…&proposer=LIEN_ESPACE`). 2 essais (`pilotage.test.ts`), 303 au total.
-- [x] Lot 7 — Application mobile (commit `8b9b0cb`) : `public/manifest-{crm,messages}.webmanifest`, `public/sw.js`
-      (v4), `public/hors-ligne.html`, `public/icones/` (script `scripts/generer-icones.mjs`), `/messagerie`
-      (messagerie seule, icône « Messages »), `src/lib/application/installation.ts`, `/api/push/{cle,abonnement,essai}`,
-      `NotificationsAppareil.tsx`, `serviDepuisLeCache.ts`, photo directe dans `PhotosDossier.tsx`.
-      Essayé à 375 px contre le build de production local : coupure du serveur (écran + fil depuis le cache,
-      SMS mis en file puis parti UNE fois au retour), latence 7 s (bulle en 65 ms, écran connu en 2,5 s), 502.
-      Non essayable ici : l'abonnement push lui-même (navigateur d'essai = notifications refusées) → à faire
-      par Lucas sur l'iPhone, l'essai part tout seul à l'activation.
-- [x] Lot 7 bis — Paramètres → Messagerie SMS (`MessagerieSms.tsx` : état du fournisseur et variables à poser,
-      douze messages types modifiables avec compteur de SMS et « simplifier les accents », accusé coupable).
-      Essayé à 375 px : modification, simplification, enregistrement relus en base, puis remis d'origine.
-- [x] Documentation : ARCHITECTURE-PILOTAGE §20, META §6 (passerelle ntfy, push web), `.env.example`.
-      Page de connexion : efface les écrans et lectures gardés par le service worker (v5).
-- [x] Mémoires mises à jour (`project_crm_tunnel_commercial_2026-09`, `reference_ntfy_relais_railway`,
-      `reference_essai_hors_ligne_crm`).
-- [x] Lot 8 — Rapport final remis à Lucas dans la session (21/09/2026).
+## Lots et avancement
 
-## Journal (le plus récent en bas)
+- [ ] A1 Schéma Prisma (colonnes + 4 modèles) et migration de données (anciennes simulations, rendus du site).
+- [ ] A2 Espace v2 côté CRM : état par étape, projet, choix composite, consultations du devis,
+      accord + signature, avis, adresse (BAN via CRM), portrait, aperçu, événements + notifications.
+- [ ] A3 Simulations du dossier : liste, publication (+ SMS), masquer, dépôt, synchro site.
+- [ ] A4 Simulateur : types de surface, catalogue, bibliothèque de prompts (textes soignés), préparation
+      ChatGPT (prompt, planche, photo), mode API (tâche), consommation / crédit.
+- [ ] A5 Suivi des espaces (onglet Espaces clients) : état, signaux, tri, filtres, actions.
+- [ ] A6 Site refait par un client qui a déjà un espace ; doublon probable + fusion en un clic.
+- [ ] A7 Relances : visites, consultations du devis, brouillons exclus.
+- [ ] B  Site : espace client v2 (coverswap/src/components/espace), routes catalogue + consigne,
+      images du guide photo et des styles, préchargement du héros hors espace.
+- [ ] C  CRM : navigation, /espaces, panneau dossier (simulations), /simulateur (+ Prompts), Leads (doublon),
+      Paramètres (portrait, crédit OpenAI).
+- [ ] D  Tests unitaires + parcours réels (iPhone, réseau lent, quitter/revenir, 60 ans ; simulateur
+      ChatGPT de bout en bout ; API ; site avec un client existant).
+- [ ] E  Déploiement (CRM puis site) et vérification en production sans y créer de données.
+- [ ] F  Rapport final avec captures mobiles.
 
-- 21/09 00:45 — Reprise après limite. Rien n'avait encore été modifié. Début de la priorité zéro.
-- 21/09 01:00 — Priorité zéro résolue et prouvée en prod (voir ci-dessus). Commits CRM `aecaaf4`,
-  `a3f0b7d`, `8f70c19`, `7467f18` ; site `b7a05ab`. Tâche planifiée de reprise : CronCreate `fdab723a`
-  (toutes les 20 min, session seulement).
-
-## Décisions prises
-
-1. **Push** : ntfy reste le canal (déjà sur l'iPhone de Lucas), via la passerelle du site. Telegram
-   en second, à poser par Lucas. Le push web (PWA) viendra en troisième au lot 7.
-2. **SMS — fournisseur** : Brevo NE PERMET PAS de recevoir des réponses en France (doc Brevo). Depuis
-   2023-2026 l'ARCEP interdit les 06/07 aux plateformes ; la voie conforme pour du bidirectionnel est
-   un **numéro 09 « Time2Chat »** (OVHcloud : ~10 € HT/mois, 50 crédits inclus, API
-   `/sms/{service}/virtualNumbers/{numero}/jobs|incoming`, réception par relève, pas de webhook).
-   → Couche fournisseur abstraite : `ovh` (envoi + relève des réponses), `brevo` (envoi seul),
-   `simulateur` (essais). Webhook générique `/api/webhook/sms` pour un fournisseur qui pousse.
-3. **Modèle** : conversation par numéro (`ConversationSms`) + messages (`Sms`) dédiés, plutôt que de
-   surcharger `Message` (tri des mails, contenu immuable). Chaque SMS écrit aussi un événement sur le
-   dossier quand il y en a un.
-4. **Ancrage du tunnel** : le dossier (`Dossier`) reste l'objet central ; l'espace client s'y rattache
-   et l'ouvre au besoin (étape QUALIFICATION) à l'envoi du lien.
-5. **Espace client** : page sur coverswap.fr `/e/<code>-<signature>` ; le navigateur parle directement
-   à l'API publique du CRM (`/api/espace/...`, CORS coverswap.fr). Lien = code court + HMAC (secret
-   dérivé de NEXTAUTH_SECRET si `ESPACE_CLIENT_SECRET` absent), expirable, révocable (version).
-6. **Messages proposés** : type de proposition `ENVOI_SMS` dans la file de validation existante
-   (contenu proposé vs contenu validé = trace des corrections, déjà prévue par `Proposition`).
-7. **Push web** : clés VAPID générées au besoin et gardées en base (table hors journal), sauf si
-   posées en variables.
-
-## Testé / pas testé
-
-(à remplir lot par lot)
-
-## Blocages qui exigent Lucas
-
-(aucun encore)
+## Journal

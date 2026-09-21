@@ -75,6 +75,7 @@ export function validerValeur(cle: CleParametre, brute: unknown): ValeurParametr
   const nombre = typeof brute === "number" ? brute : typeof brute === "string" ? Number(brute.replace(/\s/g, "").replace(",", ".")) : NaN;
   switch (definition.nature) {
     case "euros":
+    case "dollars":
       if (!Number.isFinite(nombre) || nombre < 0 || nombre > 100_000_000) throw new ErreurMetier(`${definition.libelle} : montant invalide.`);
       return Math.round(nombre * 100) / 100;
     case "pourcentage":

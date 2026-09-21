@@ -77,6 +77,12 @@ export const MODELES_PAR_DEFAUT: readonly ModeleParDefaut[] = [
     ordre: 31,
   },
   {
+    code: "RELANCE_DEVIS_QUESTIONS",
+    libelle: "Devis relu plusieurs fois, pas encore signé",
+    texte: "Bonjour {prenom}, avez-vous des questions sur votre devis ? Je peux ajuster une finition ou un détail, et je reste joignable au 06 70 35 28 69. Votre espace : {lien} Lucas, CoverSwap",
+    ordre: 33,
+  },
+  {
     code: "RELANCE_DERNIERE",
     libelle: "Dernière relance J+10",
     texte: "Bonjour {prenom}, dernier message de ma part : votre devis reste valable jusqu'au {validite}, ensuite je ne pourrai plus garantir le tarif ni le créneau. Votre espace : {lien} Bonne journée, Lucas",

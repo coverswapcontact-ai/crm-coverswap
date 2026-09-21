@@ -96,6 +96,17 @@ function finitionEn(r: Reference, profil: Profil): string {
   return "matt soft-touch finish, no gloss, no varnish shine";
 }
 
+/**
+ * Le grain d'un bois en mots. La mesure (sur l'échantillon réduit) sous-estime les veines fines :
+ * un décor bois a toujours un fil visible, jamais « presque uni ».
+ */
+function grainDuBois(analyse: AnalyseCouleur): string {
+  if (analyse.contraste < 4) return "fine and discreet but clearly present (a tight straight grain, as on the sample)";
+  if (analyse.contraste < 8) return "soft, low-contrast";
+  if (analyse.contraste < 14) return "clearly visible, medium contrast";
+  return "bold, high-contrast";
+}
+
 /** La teinte en une phrase anglaise, pour une zone donnée (le sens du veinage dépend de la surface). */
 export function decrireTeintePourPrompt(r: Reference, analyse: AnalyseCouleur | null, zone: IdZone | null): string {
   const profil = profilDe(r);
@@ -111,7 +122,7 @@ export function decrireTeintePourPrompt(r: Reference, analyse: AnalyseCouleur | 
     case "uni-raye":
       return `${tete} — solid colour with fine tone-on-tone embossed stripes, a few millimetres apart, running ${sens}: ${avecCouleur("colour")}; ${finitionEn(r, profil)}.`;
     case "bois":
-      return `${tete} — wood-grain decor: ${avecCouleur("base tone")}; grain ${motif ?? "as on the sample"}, running ${sens}, continuous over each panel, true-to-life scale (grain lines millimetres to a few centimetres apart — never enlarged into stripes, never shrunk into noise), no visibly repeated knot; ${finitionEn(r, profil)}.`;
+      return `${tete} — wood-grain decor: ${avecCouleur("base tone")}; grain ${analyse ? grainDuBois(analyse) : "as on the sample"}, running ${sens}, continuous over each panel, true-to-life scale (grain lines millimetres to a few centimetres apart — never enlarged into stripes, never shrunk into noise), no visibly repeated knot; ${finitionEn(r, profil)}.`;
     case "bois-peint":
       return `${tete} — painted-wood decor: opaque ${avecCouleur("colour")} with a faint tone-on-tone wood grain running ${sens}; ${finitionEn(r, profil)}.`;
     case "marbre":

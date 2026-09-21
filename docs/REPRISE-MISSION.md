@@ -1,5 +1,21 @@
 # Reprise de mission — tunnel de vente, SMS, application mobile
 
+> **MISSION TERMINÉE le 21/09/2026.** Tout est livré, testé et déployé (CRM `crm.coverswap.fr`,
+> site `coverswap.fr`). Il n'y a plus rien à reprendre : une reprise automatique qui lit ces
+> lignes supprime sa tâche planifiée et s'arrête.
+>
+> Reste à la main de Lucas (rien d'autre ne bloque) :
+> 1. louer le numéro 09 « Time2Chat » chez OVHcloud et poser les cinq variables `OVH_*` sur Railway —
+>    tant qu'elles manquent, aucun SMS réel ne part, accusé de réception compris ;
+> 2. créer le bot Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`) : second canal poussé ;
+> 3. installer les deux icônes sur l'iPhone (Safari → Partager → « Sur l'écran d'accueil », depuis
+>    `/commercial` puis depuis `/messagerie`) et toucher « Activer » dans chacune ;
+> 4. relire les douze messages types (Paramètres → Messagerie SMS) ; ajuster la zone d'intervention
+>    (paramètres `ZONE_DEPARTEMENTS`, `ZONE_DEPARTEMENTS_PROCHES`).
+>
+> Non fait, dit tel quel : paiement de l'acompte par carte (Stripe) — aujourd'hui virement, RIB affiché
+> après l'accord. Aucun fournisseur de SMS réel n'a été essayé (pas de compte) : premier envoi à surveiller.
+
 > Fichier de bord tenu par l'agent. À relire EN PREMIER à chaque reprise, puis
 > continuer sans rien demander à Lucas (il dort, il ne relira pas en route).
 > Aucun secret ici : le dépôt est public.
@@ -89,8 +105,9 @@ Mission lancée le 20/09/2026 au soir. Énoncé complet : message de Lucas
       Essayé à 375 px : modification, simplification, enregistrement relus en base, puis remis d'origine.
 - [x] Documentation : ARCHITECTURE-PILOTAGE §20, META §6 (passerelle ntfy, push web), `.env.example`.
       Page de connexion : efface les écrans et lectures gardés par le service worker (v5).
-- [ ] Mémoires (dossier memory) à mettre à jour
-- [ ] Lot 8 — Rapport final
+- [x] Mémoires mises à jour (`project_crm_tunnel_commercial_2026-09`, `reference_ntfy_relais_railway`,
+      `reference_essai_hors_ligne_crm`).
+- [x] Lot 8 — Rapport final remis à Lucas dans la session (21/09/2026).
 
 ## Journal (le plus récent en bas)
 

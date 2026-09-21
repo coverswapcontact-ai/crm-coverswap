@@ -50,7 +50,7 @@ describe("texte d'un SMS", () => {
     assert.equal(texte.simplifierPourGsm("Votre simulation est prête — « ça » vous plaît ? 😀"), 'Votre simulation est prete - "ca" vous plait ? ');
   });
 
-  test("les messages types par défaut tiennent dans l'alphabet GSM-7, l'accusé en un seul SMS", () => {
+  test("les messages types par défaut tiennent dans l'alphabet GSM-7, l'accusé en deux SMS au plus", () => {
     for (const modele of modeles.MODELES_PAR_DEFAUT) {
       const mesure = texte.mesurerSms(modele.texte.replace(/\{\w+\}/g, ""));
       assert.deepEqual(mesure.horsGsm, [], `${modele.code} contient des caractères hors GSM-7`);

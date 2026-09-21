@@ -60,8 +60,8 @@ simulateur CRM et générateur de prompts » (transcript de la session).
       Paramètres (portrait, crédit OpenAI).
 - [x] D  Tests unitaires + parcours réels (iPhone, réseau lent, quitter/revenir, 60 ans ; simulateur
       ChatGPT de bout en bout ; API ; site avec un client existant).
-- [ ] E  Déploiement (CRM puis site) et vérification en production sans y créer de données.
-- [ ] F  Rapport final avec captures mobiles.
+- [x] E  Déploiement (CRM puis site) et vérification en production sans y créer de données.
+- [x] F  Rapport final avec captures mobiles.
 
 ## Journal
 - 21/09 : serveur du CRM terminé et testé (lots A1-A7). Reste : interfaces (site B, CRM C), parcours réels (D),
@@ -82,3 +82,7 @@ simulateur CRM et générateur de prompts » (transcript de la session).
   Piège : `.next/dev` corrompu après un arrêt brutal → toutes les routes /api en 404 ; le déplacer (pas supprimer).
   Reste : E (tests complets, lint, builds, commit chemins explicites — jamais src/proxy.ts —, push CRM puis
   site, vérif prod) et F (rapport + captures finales).
+- 21/09 (fin) : MISSION TERMINÉE. En production : CRM b4d43f7 → ecaf00e → 00f832e → 3a8f59e, site 9a771e1
+  (santé ok des deux côtés, routes publiques/protégées vérifiées sans créer de données). 352 tests verts.
+  Rapport : https://claude.ai/artifact/34t7FaQBxNzsKJh8wQ2TJR (privé). Restent chez Lucas : photo (Paramètres),
+  solde OpenAI, 1re simulation API réelle (~0,34 $) et 1re préparation ChatGPT sur iPhone, relecture des prompts.

@@ -1618,3 +1618,72 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
   vit, un téléphone perdu les montre encore — hors ligne compris.
 - Paiement par carte de l'acompte : non fait (`paiementCarte` est prêt côté API,
   `STRIPE_SECRET_KEY` réservée). Aujourd'hui : virement, RIB affiché après l'accord.
+
+## 21. Navigation resserrée, section Leads, simulation → dossier, audit des connexions
+
+Simplification du 21/09/2026. Règle : **retirer un écran du menu ne retire ni donnée ni
+traitement**. Le journal enregistre, le registre des numéros protège la numérotation, la
+synthèse fige ses mois, l'agent mail trie : seuls les onglets ont disparu, leurs adresses
+répondent toujours (`/commercial`, `/prospects`, `/messages`, `/validation`, `/synthese`,
+`/numeros`, `/journal`).
+
+### Navigation (`src/components/pilotage/Navigation.tsx`)
+
+Cinq onglets, dans l'ordre du travail : **Leads, Dossiers, SMS, Clients, Finances**. Les
+petites icônes de droite restent (Site, Publicité, Tâches de fond, Dépenses, Paramètres).
+Accueil, connexion et application installée ouvrent `/leads`.
+
+« À valider » n'étant plus au menu, ce que le CRM propose remonte là où on travaille :
+les **SMS proposés** se relisent dans la conversation (`src/components/sms/RelancesProposees.tsx` :
+envoyer, modifier puis envoyer, écarter avec motif — même file `Proposition`, mêmes
+traces) et sont signalés en tête de la liste des conversations ; les **autres décisions**
+(dossier à classer « perdu — sans réponse », mail préparé par l'agent) apparaissent
+dans l'en-tête de Dossiers (`PropositionsEnAttente.tsx`), seulement quand il y en a.
+
+### Leads (`src/lib/prospects/leads.ts`, `/leads`)
+
+Tout ce qui est entré — Meta, Google Ads à venir, formulaires du site, simulateur,
+saisie à la main — et n'a **pas de dossier**. Un dossier s'ouvre : le lead sort de la
+liste (il vit dans Dossiers, aucun doublon, aucun devis envoyé ici). Ordre chronologique,
+le plus récent en haut ; la priorité se lit sur la pastille et ne change pas l'ordre.
+Chaque ligne : nom, téléphone cliquable, ville, source et campagne, heure d'arrivée,
+réponses au formulaire, et « attend un appel depuis… » (vert jusqu'à cinq minutes, ambre
+jusqu'à une heure, rouge ensuite).
+
+**Appels à la suite** : la file = les leads à appeler (jamais appelés, ou rappel échu),
+dans l'ordre de la liste, sans les « à écarter ». Deux gestes par appel : l'issue, puis
+« Enregistrer · suivant » (note facultative). « Intéressé » ouvre le dossier d'abord —
+l'appel s'écrit dans SON histoire — puis propose le SMS avec le lien de son espace ; « pas
+de réponse » pose le rappel du lendemain et propose le SMS. La messagerie ramène aux
+appels (`/leads?appels=1`).
+
+**Ouvrir un dossier en un bouton** (`src/lib/dossiers/depuis-lead.ts`,
+`POST /api/leads/[id]/dossier`) : coordonnées, projet, source, montant simulé, rappel
+prévu ; une première note reprend la campagne, la publicité, les réponses, le message, le
+classement et les échanges d'avant ; les photos jointes et les simulations rejoignent les
+photos du dossier. L'espace client passe par la même porte (`dossierDuContact`).
+
+### Simulation du site → dossier
+
+Coordonnées + photo = dossier. Une simulation rattachée à un contact (webhook du site,
+`/api/simulate`) ouvre son dossier toute seule (`assurerDossierDeSimulation`), photo avant
+et chaque rendu dans les photos de chantier — donc dans Drive, le miroir les recopie.
+Plusieurs simulations : le même dossier, la photo avant une seule fois. Un dossier vivant
+existe déjà pour ce client (ni perdu ni encaissé) : on range dedans. Génération échouée
+mais photo transmise : le dossier s'ouvre aussi. Idempotent : `Simulation.dossierId` /
+`PhotoLead.dossierId` disent où c'est rangé. Rattrapage : migration
+`simulations-du-site-vers-dossiers` (l'existant, contacts archivés exclus) et travail
+périodique `simulations-dossiers` (quinze minutes). Conséquence : un lead du simulateur
+n'apparaît pas dans Leads, il arrive dans Dossiers avec « Appeler : simulation faite sur
+le site ». Les demandes du site déclenchent désormais un **push** (`notifierDemandeDuSite`),
+comme les leads Meta — avant, seulement un mail.
+
+### Audit des connexions (`src/lib/audit/connexions.ts`, Tâches de fond)
+
+Neuf maillons vérifiés sur les vraies données, en lecture seule (rien n'est créé ni
+envoyé) : lead Meta → pastille et push ; Leads sans doublon ; dossier issu d'un lead ;
+simulation → dossier et photos ; documents et photos → Drive ; espace client → photos,
+Signé, notification ; encaissement → livre des recettes ; canaux de notification ;
+fournisseur de SMS. « Rien à vérifier » = le cas ne s'est pas encore présenté en
+production (il reste couvert par les essais). L'audit s'écrit aussi dans les journaux du
+serveur 45 s après chaque démarrage (`[audit] …`), et se relit par `GET /api/audit/connexions`.

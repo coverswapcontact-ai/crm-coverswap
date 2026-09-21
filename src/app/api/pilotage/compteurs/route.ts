@@ -2,10 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { reponseErreur } from "@/lib/commun/api";
 import { rappelConnexionGoogle } from "@/lib/google/connexion";
-import { compterMessagesATrier } from "@/lib/messages/consultation";
-import { compterEntrantsATraiter } from "@/lib/prospects/entrants";
+import { compterLeadsAAppeler } from "@/lib/prospects/leads";
 import { compterSmsNonLus } from "@/lib/sms/conversations";
-import { compterPropositionsEnAttente } from "@/lib/validation/service";
 
 export const dynamic = "force-dynamic";
 
@@ -15,15 +13,13 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const [entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle, smsNonLus] = await Promise.all([
-      compterEntrantsATraiter(),
-      compterPropositionsEnAttente(),
-      compterMessagesATrier(),
+    const [leadsAAppeler, tachesEnEchec, rappelGoogle, smsNonLus] = await Promise.all([
+      compterLeadsAAppeler(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
       rappelConnexionGoogle(),
       compterSmsNonLus(),
     ]);
-    return NextResponse.json({ entrantsATraiter, aValider, messagesATrier, tachesEnEchec, rappelGoogle, smsNonLus });
+    return NextResponse.json({ leadsAAppeler, tachesEnEchec, rappelGoogle, smsNonLus });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");
   }

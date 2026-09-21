@@ -2,7 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import type { EspaceClient } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { creerDossier } from "@/lib/dossiers/dossiers";
+import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 
 /**
  * Le lien de l'espace client : https://coverswap.fr/e/<code>-<signature>
@@ -77,42 +77,9 @@ export async function espaceDuJeton(jeton: string): Promise<EspaceClient> {
   return espace;
 }
 
-const OBJET_PAR_TYPE_PROJET: Record<string, string> = {
-  CUISINE: "Recouvrement de cuisine",
-  SDB: "Recouvrement de salle de bains",
-  MEUBLES: "Recouvrement de mobilier",
-  PRO: "Recouvrement de local professionnel",
-};
-
-/** Le dossier vivant d'un contact ; ouvert à l'étape Qualification s'il n'en a pas encore. */
+/** Le dossier vivant d'un contact ; ouvert (avec tout ce qu'on sait de lui) s'il n'en a pas encore. */
 export async function dossierDuContact(leadId: string): Promise<string> {
-  const lead = await prisma.lead.findUnique({
-    where: { id: leadId },
-    select: { id: true, prenom: true, nom: true, telephone: true, email: true, ville: true, codePostal: true, typeProjet: true, archiveLe: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true } } },
-  });
-  if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
-  if (lead.dossiers[0]) return lead.dossiers[0].id;
-  if (lead.archiveLe) throw new ErreurMetier("Ce contact est archivé : le restaurer avant de lui ouvrir un espace.", 409);
-  const prenom = lead.prenom.trim();
-  const nom = lead.nom.trim();
-  const clientNom = (!prenom || prenom.toLowerCase() === nom.toLowerCase() ? nom || prenom : `${prenom} ${nom}`).trim() || "Client";
-  return creerDossier(
-    {
-      leadId: lead.id,
-      clientNom,
-      clientAdresse: "",
-      clientCp: lead.codePostal ?? "",
-      clientVille: /^(non renseign|inconnue?$)/i.test(lead.ville.trim()) ? "" : lead.ville.trim(),
-      clientTelephone: lead.telephone,
-      clientEmail: lead.email,
-      objet: OBJET_PAR_TYPE_PROJET[lead.typeProjet] ?? "",
-      source: "ENTRANT",
-      montantEstime: null,
-      prochaineAction: "Attendre les photos du client",
-      prochaineActionDate: null,
-    },
-    []
-  );
+  return (await ouvrirDossierDuLead(leadId, { motif: "ESPACE", prochaineAction: "Attendre les photos du client" })).dossierId;
 }
 
 export type EspaceOuvert = { espace: EspaceClient; lien: string; nouveau: boolean };

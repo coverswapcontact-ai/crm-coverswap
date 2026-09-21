@@ -196,7 +196,7 @@ function ContenuPanneau({
           ) : null}
           {detail.origine ? (
             <Link
-              href={detail.origine.type === "LEAD" ? `/prospects?lead=${detail.origine.id}` : `/prospects?prospect=${detail.origine.id}`}
+              href={detail.origine.type === "LEAD" ? `/leads?lead=${detail.origine.id}` : `/prospects?prospect=${detail.origine.id}`}
               className={CLASSE_PUCE_LIEN}
             >
               <ExternalLink size={12} aria-hidden />

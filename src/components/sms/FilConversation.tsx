@@ -13,6 +13,7 @@ import { mesurerSms, simplifierPourGsm } from "@/lib/sms/texte";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Modale, Puces, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
+import { RelancesProposees } from "./RelancesProposees";
 
 /** Un SMS du fil, avec ce que seul l'écran sait : il n'a pas encore rejoint le serveur. */
 export type ElementAffiche = ElementFil & { local?: "EN_COURS" | "HORS_LIGNE" };
@@ -259,6 +260,9 @@ export function FilConversation({
         })}
         <div ref={bas} />
       </div>
+
+      {/* Messages que le CRM propose pour cette personne : relus et envoyés ici */}
+      {conversation.stop ? null : <RelancesProposees conversationId={conversation.id} version={elements.length} onFait={onRafraichir} />}
 
       {/* Actions rapides : toujours à portée du pouce */}
       <div className="flex gap-1.5 overflow-x-auto border-t-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 pt-2 pb-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

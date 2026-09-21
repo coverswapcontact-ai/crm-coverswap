@@ -14,7 +14,7 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;
@@ -22,7 +22,7 @@ const HORS_LIGNE = "/hors-ligne.html";
 const EN_LOCAL = ["localhost", "127.0.0.1"].includes(self.location.hostname);
 
 // Lectures utiles hors ligne : la liste des conversations, un fil, le pilotage commercial, les compteurs.
-const DONNEES_GARDEES = [/^\/api\/sms\/conversations/, /^\/api\/commercial\/pilotage$/, /^\/api\/pilotage\/compteurs$/];
+const DONNEES_GARDEES = [/^\/api\/sms\/conversations/, /^\/api\/leads$/, /^\/api\/commercial\/pilotage$/, /^\/api\/pilotage\/compteurs$/];
 const JAMAIS = [/^\/api\/auth\//, /^\/auth\//, /^\/api\/sms\/flux/, /^\/api\/webhook/, /^\/api\/espace\//, /^\/api\/cron\//, /^\/_next\/webpack-hmr/, /^\/api\/push\//];
 
 self.addEventListener("install", (evenement) => {

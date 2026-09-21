@@ -1,5 +1,5 @@
 /** Écran d'arrivée par défaut, après connexion ou depuis la racine du site. */
-export const ACCUEIL = "/dossiers";
+export const ACCUEIL = "/leads";
 
 /**
  * Page où revenir après la connexion : le `callbackUrl` posé par le proxy

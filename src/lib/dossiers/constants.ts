@@ -225,6 +225,8 @@ export const TYPES_EVENEMENT = [
   "ENCAISSEMENT_CORRIGE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
+  // Simulation du site rangée dans le dossier (photo avant + rendu)
+  "SIMULATION_SITE",
   // Messagerie SMS et espace client (mission du 20/09/2026)
   "SMS_RECU",
   "SMS_ENVOYE",
@@ -261,6 +263,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ENCAISSEMENT_CORRIGE: "Paiement corrigé",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
+  SIMULATION_SITE: "Simulation faite sur le site",
   SMS_RECU: "SMS reçu",
   SMS_ENVOYE: "SMS envoyé",
   ESPACE_LIEN_CREE: "Espace client ouvert",

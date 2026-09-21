@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -34,6 +35,33 @@ const LIEN_ACTION = cn(
 );
 
 /** Fiche d'un contact entrant, jusqu'à l'ouverture de son dossier. */
+/** Un clic : le dossier s'ouvre avec tout ce qu'on sait du contact (coordonnées, réponses, photos, simulations), et on y arrive. */
+function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: string }) {
+  const routeur = useRouter();
+  const [envoi, setEnvoi] = useState(false);
+  async function ouvrir() {
+    setEnvoi(true);
+    try {
+      const { dossierId, cree } = await envoyerJson<{ dossierId: string; cree: boolean }>(`/api/leads/${leadId}/dossier`, "POST");
+      toast.success(cree ? `Dossier ouvert pour ${nom}` : `${nom} avait déjà un dossier`);
+      routeur.push(`/dossiers?dossier=${dossierId}`);
+    } catch (erreur) {
+      toast.error("Dossier non ouvert", { description: messageErreur(erreur) });
+      setEnvoi(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      disabled={envoi}
+      onClick={() => void ouvrir()}
+      className={cn("inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] disabled:opacity-60 sm:h-8", TRANS)}
+    >
+      <FolderPlus size={14} aria-hidden /> {envoi ? "Ouverture…" : "Ouvrir un dossier"}
+    </button>
+  );
+}
+
 export function PanneauEntrant({ id, onFermer, onModifie }: { id: string | null; onFermer: () => void; onModifie: () => void }) {
   const [detail, setDetail] = useState<EntrantDetail | null>(null);
   const [echec, setEchec] = useState<{ id: string; message: string } | null>(null);
@@ -150,15 +178,7 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
               <FolderPlus size={14} aria-hidden /> Dossier · {LIBELLES_ETAPE[detail.dossier.etape as EtapeDossier] ?? detail.dossier.etape}
             </Link>
           ) : detail.archiveLe ? null : (
-            <Link
-              href={`/dossiers?lead=${detail.id}`}
-              className={cn(
-                "inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8",
-                TRANS,
-              )}
-            >
-              <FolderPlus size={14} aria-hidden /> Ouvrir un dossier
-            </Link>
+            <BoutonOuvrirDossier leadId={detail.id} nom={detail.nom} />
           )}
           {telephone ? (
             <>

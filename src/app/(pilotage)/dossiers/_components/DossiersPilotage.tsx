@@ -7,6 +7,7 @@ import { echeanceDe, estAFaire } from "@/lib/dossiers/pilotage";
 import { estEtapeSortie } from "@/lib/dossiers/regles";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
+import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAttente";
 import { CreationDossier } from "./CreationDossier";
 import { Legende } from "./Legende";
 import { PanneauDossier } from "./PanneauDossier";
@@ -174,9 +175,12 @@ export default function DossiersPilotage({
             ) : null}
           </p>
         </div>
-        <Bouton variante="primaire" icone={<FolderPlus size={15} aria-hidden />} onClick={ouvrirCreation}>
-          Ouvrir un dossier
-        </Bouton>
+        <div className="flex flex-wrap items-center gap-2">
+          <PropositionsEnAttente />
+          <Bouton variante="primaire" icone={<FolderPlus size={15} aria-hidden />} onClick={ouvrirCreation}>
+            Ouvrir un dossier
+          </Bouton>
+        </div>
       </header>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">

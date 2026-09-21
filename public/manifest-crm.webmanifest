@@ -4,7 +4,7 @@
   "short_name": "CoverSwap",
   "description": "Le CRM CoverSwap : commercial, dossiers, clients, finances.",
   "lang": "fr",
-  "start_url": "/commercial",
+  "start_url": "/leads",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

@@ -10,6 +10,9 @@ import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook"
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
 import { rattacherSimulationsSite } from "@/lib/site/simulations";
+import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
+import { notifierDemandeDuSite } from "@/lib/prospects/notification";
+import type { Priorite } from "@/lib/prospects/priorite";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -339,6 +342,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── Simulation du site (coordonnées + photo) = dossier : ouvert tout seul, photo avant et rendus rangés ──
+    const ouverture = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0 ? await assurerDossierDeSimulation(lead.id) : null;
+
     // Accusé de réception au visiteur (site seulement, jamais Meta) : ce que nous
     // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
     // vérifié (EMAIL_FROM) : sans lui, rien ne part et on le journalise.
@@ -417,7 +423,7 @@ export async function POST(request: NextRequest) {
               <tr><td style="padding:4px 12px;font-weight:bold;">Mails commerciaux</td><td>${consentement === "ACCORDE" ? "accord donné" : consentement === "REFUSE" ? "case non cochée" : "non demandé"}</td></tr>
             </table>
             <br/>
-            <a href="${appUrl}/prospects?lead=${lead.id}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+            <a href="${ouverture?.dossierId ? `${appUrl}/dossiers?dossier=${ouverture.dossierId}` : `${appUrl}/leads?lead=${lead.id}`}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
           `,
         });
       } catch (emailErr) {
@@ -425,10 +431,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    revalidatePath("/prospects");
+    // Push : le téléphone sonne pour une demande du site comme pour un lead Meta (jamais bloquant).
+    let notifications: { canal: string; ok: boolean }[] = [];
+    if (isNew || isDevis || ouverture?.cree || (ouverture?.simulationsRangees ?? 0) > 0) {
+      try {
+        const resultats = await notifierDemandeDuSite({
+          leadId: lead.id,
+          dossierId: ouverture?.dossierId ?? null,
+          prenom: data.prenom,
+          nom: data.nom,
+          telephone: data.telephone,
+          ville: data.ville && data.ville !== "Non renseignée" ? data.ville : null,
+          typeProjet: data.typeProjet,
+          source: data.source,
+          campagne: data.campagne ?? null,
+          nouveau: isNew,
+          simulations: simulationsRattachees.length + (hasImages ? 1 : 0),
+          photos: photosEcrites,
+          message: data.message ?? null,
+          priorite: qualification ? { classe: qualification.priorite as Priorite, motif: qualification.motif } : null,
+        });
+        notifications = resultats.map((r) => ({ canal: r.canal, ok: r.ok }));
+      } catch (erreurPush) {
+        console.error("[webhook] push non envoyé (non bloquant) :", erreurPush);
+      }
+    }
+
+    revalidatePath("/leads");
+    revalidatePath("/dossiers");
 
     return NextResponse.json(
-      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites, simulations: simulationsRattachees.length },
+      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites, simulations: simulationsRattachees.length, dossierId: ouverture?.dossierId ?? null, notifications },
       { status: 200 }
     );
   } catch (error) {

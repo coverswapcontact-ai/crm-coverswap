@@ -35,7 +35,7 @@ const TON_PRIORITE: Record<string, string> = {
 const LIBELLES_DERNIER: Record<string, string> = { APPEL: "Appel", SMS: "SMS", EMAIL: "E-mail", NOTE: "Note", SMS_RECU: "SMS reçu", SMS_ENVOYE: "SMS envoyé", NOTE_AJOUTEE: "Note", ESPACE_PHOTOS: "Photos", ESPACE_SIMULATION_CHOISIE: "Choix", ESPACE_COMMENTAIRE: "Commentaire", ESPACE_DEVIS_ACCEPTE: "Accord", DEVIS_GENERE: "Devis", DEVIS_ENVOYE: "Devis", MAIL_ENVOYE: "Mail", MAIL_RECU: "Mail reçu" };
 
 function Carte({ affaire, onFinAppel, onNote }: { affaire: Affaire; onFinAppel: () => void; onNote: () => void }) {
-  const lienFiche = affaire.dossierId ? `/dossiers?dossier=${affaire.dossierId}` : `/prospects?lead=${affaire.leadId}`;
+  const lienFiche = affaire.dossierId ? `/dossiers?dossier=${affaire.dossierId}` : `/leads?lead=${affaire.leadId}`;
   const lienSms = affaire.conversationId ? `/sms?c=${affaire.conversationId}` : affaire.dossierId ? `/sms?dossier=${affaire.dossierId}` : `/sms?lead=${affaire.leadId}`;
   const aMoi = affaire.main === "MOI";
   return (

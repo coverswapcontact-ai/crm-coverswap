@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { rattacherImagesSimulation } from "@/lib/simulations/images";
-import { enregistrerSimulationSite, purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulations";
+import { enregistrerSimulationSite, purgerSiNecessaire, rattacherSimulationsSite, type ReferenceSimulee } from "@/lib/site/simulations";
+import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
+import prisma from "@/lib/prisma";
 import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
 import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio } from "@/lib/simulations/cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI } from "@/lib/site/erreurs-generation";
@@ -312,6 +314,12 @@ export async function POST(req: NextRequest) {
         });
         simulationSiteId = gardee.id;
         console.log(`[simulate] simulation gardée parcours=${parcoursId} id=${gardee.id}`);
+        // La personne a déjà laissé ses coordonnées pendant ce parcours : la nouvelle simulation rejoint sa fiche et son dossier.
+        const connu = await prisma.lead.findFirst({ where: { parcoursId }, orderBy: { createdAt: "desc" }, select: { id: true } });
+        if (connu) {
+          await rattacherSimulationsSite(connu.id, parcoursId, [gardee.id]);
+          await assurerDossierDeSimulation(connu.id);
+        }
       } catch (err) {
         console.error("[simulate] simulation du parcours non gardée (non bloquant) :", err);
       }
@@ -320,6 +328,7 @@ export async function POST(req: NextRequest) {
       try {
         simulationId = await rattacherImagesSimulation(leadId, photo_base64, `data:image/png;base64,${b64}`, referenceChoisie ?? null);
         console.log(`[simulate] images rattachées lead=${leadId} simulation=${simulationId ?? "?"}`);
+        await assurerDossierDeSimulation(leadId);
       } catch (err) {
         console.error("[simulate] rattachement des images impossible (non bloquant) :", err);
       }

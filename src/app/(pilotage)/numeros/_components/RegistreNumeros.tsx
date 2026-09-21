@@ -73,7 +73,7 @@ function LigneNumero({ ligne, onCompleter }: { ligne: LigneRegistre; onCompleter
         </Link>
       ) : null}
       {ligne.leadId ? (
-        <Link href={`/prospects?lead=${ligne.leadId}`} className={cn("shrink-0 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+        <Link href={`/leads?lead=${ligne.leadId}`} className={cn("shrink-0 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
           Contact
         </Link>
       ) : null}

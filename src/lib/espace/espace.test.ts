@@ -57,7 +57,7 @@ describe("lien signé", () => {
     const [codeA, signatureA] = a.jeton.split(/-(.+)/);
     const [codeB] = b.jeton.split(/-(.+)/);
     assert.equal((await liens.espaceDuJeton(a.jeton)).id, a.espace.id);
-    for (const faux of [`${codeB}-${signatureA}`, `${codeA}-${"A".repeat(16)}`, `${codeA}-${signatureA.slice(0, 15)}x`, codeA, "../../etc/passwd", ""]) {
+    for (const faux of [`${codeB}-${signatureA}`, `${codeA}-${"A".repeat(16)}`, `${codeA}-${signatureA.slice(0, 15)}${signatureA.endsWith("x") ? "y" : "x"}`, codeA, "../../etc/passwd", ""]) {
       await assert.rejects(liens.espaceDuJeton(faux), (erreur: Error & { status?: number; raison?: string }) => erreur.status === 404 && erreur.raison === "inconnu", faux);
     }
   });

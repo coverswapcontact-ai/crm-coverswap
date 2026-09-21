@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, CircleCheckBig, Handshake, FolderKanban, Globe, Hash, Mail, Megaphone, Menu, MessageSquare, Radar, Receipt, ScrollText, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
+import { FolderKanban, Globe, Megaphone, Menu, MessageSquare, PhoneForwarded, Receipt, SlidersHorizontal, Users, Wallet, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-export type Compteurs = { entrantsATraiter: number; aValider: number; messagesATrier: number; tachesEnEchec: number; smsNonLus: number };
+export type Compteurs = { leadsAAppeler: number; tachesEnEchec: number; smsNonLus: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
@@ -28,27 +28,25 @@ type Entree = {
   mobile?: boolean;
 };
 
-// Écrans principaux, dans l'ordre de la journée : les prospects alimentent les dossiers.
+// Navigation resserrée (21/09/2026) : ce que Lucas utilise, dans l'ordre du travail — un lead
+// devient un dossier, on s'écrit par SMS, le client reste, l'argent rentre.
+// Retirés du menu, PAS du CRM : Commercial, Prospects, Mails (l'agent continue de trier),
+// À valider, Synthèse (les mois continuent d'être figés), Registre des numéros (il continue de
+// protéger la numérotation), Journal (il continue de tout enregistrer). Leurs adresses répondent toujours.
 const PRINCIPALES: Entree[] = [
-  { href: "/commercial", libelle: "Commercial", icone: Handshake, compteur: "entrantsATraiter", mobile: true },
-  { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
-  { href: "/validation", libelle: "À valider", icone: CircleCheckBig, compteur: "aValider", mobile: true },
+  { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsAAppeler", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
-  { href: "/prospects", libelle: "Prospects", icone: Radar },
-  { href: "/messages", libelle: "Mails", icone: Mail, compteur: "messagesATrier" },
-  { href: "/clients", libelle: "Clients", icone: Users },
+  { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
+  { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
   { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
 
-// Écrans secondaires, dans le menu « Plus ».
+// Écrans secondaires : petites icônes à droite, menu « Plus » sur téléphone.
 const SECONDAIRES: Entree[] = [
-  { href: "/synthese", libelle: "Synthèse", icone: ChartColumn },
   { href: "/site", libelle: "Site", icone: Globe },
   { href: "/publicite", libelle: "Publicité", icone: Megaphone },
   { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
-  { href: "/numeros", libelle: "Registre des numéros", icone: Hash },
-  { href: "/journal", libelle: "Journal", icone: ScrollText },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 
@@ -76,7 +74,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ entrantsATraiter: 0, aValider: 0, messagesATrier: 0, tachesEnEchec: 0, smsNonLus: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsAAppeler: 0, tachesEnEchec: 0, smsNonLus: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 
@@ -124,7 +122,7 @@ export function Navigation() {
         className="sticky top-0 z-40 hidden border-b-[0.5px] border-[#2A2D34] bg-[#16181D]/95 backdrop-blur md:block"
       >
         <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-4 px-5 lg:gap-6 lg:px-8">
-          <Link href="/commercial" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
+          <Link href="/leads" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
             CoverSwap
             <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>
           </Link>

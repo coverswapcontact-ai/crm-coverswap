@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { ContexteDossier } from "./ContexteDossier";
 import { FilConversation, type DemandeEnvoi, type ElementAffiche } from "./FilConversation";
 import { ListeConversations } from "./ListeConversations";
+import { chargerSmsProposes, type SmsPropose } from "./RelancesProposees";
 import { ecrireBrouillonLocal, enAttente, lireBrouillonLocal, mettreEnAttente, nouvelleCleEnvoi, retirerDeLAttente, type EnvoiEnAttente } from "./fileAttente";
 
 type Liste = { conversations: ConversationResume[]; compteurs: { nonLues: number; aRepondre: number; aRattacher: number }; fournisseur: EtatFournisseur };
@@ -70,6 +71,8 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   const idOuvertRef = useRef<string | null>(null);
   const filtres = useRef({ filtre, recherche });
   const minuterieBrouillon = useRef<number | null>(null);
+  const [smsProposes, setSmsProposes] = useState<SmsPropose[]>([]);
+  const [retourAppels, setRetourAppels] = useState(false);
   const [aProposer, setAProposer] = useState<{ conversationId: string; modele: "LIEN_ESPACE" | "INJOIGNABLE_LIEN" } | null>(null);
 
   /* ── Chargements ─────────────────────────────────────────────────── */
@@ -80,6 +83,10 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
       const reponse = await appelApi<Liste>(`/api/sms/conversations?filtre=${f}${q.trim() ? `&q=${encodeURIComponent(q.trim())}` : ""}`);
       setListe(reponse);
       setHorsLigne(vientDuCache());
+      // Les messages que le CRM propose (relances) : signalés en tête de liste, relus dans la conversation.
+      void chargerSmsProposes()
+        .then(setSmsProposes)
+        .catch(() => undefined);
       if ("setAppBadge" in navigator) {
         const total = reponse.compteurs.nonLues;
         void (total > 0 ? (navigator as Navigator & { setAppBadge: (n: number) => Promise<void> }).setAppBadge(total) : (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge()).catch(() => undefined);
@@ -128,6 +135,8 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   useEffect(() => {
     const depuisAdresse = () => new URL(window.location.href).searchParams.get("c");
     const initial = depuisAdresse();
+    // Venu des appels à la suite (section Leads) : un bouton y ramène une fois le SMS envoyé.
+    if (new URL(window.location.href).searchParams.get("retour") === "appels") window.setTimeout(() => setRetourAppels(true), 0);
     if (initial) ouvrir(initial, { historique: false });
     // ?lead=… ou ?dossier=… (lien « Envoyer par SMS » d'une fiche) : la conversation de cette personne s'ouvre, créée au besoin.
     const adresse = new URL(window.location.href);
@@ -300,6 +309,22 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
   const bandeau = (
     <>
       <NotificationsAppareil application={application} compact />
+      {smsProposes.length > 0 ? (
+        <div className="border-b-[0.5px] border-[#1D9E75]/30 bg-[#1D9E75]/[0.07] px-3.5 py-2.5">
+          <p className="text-[12px] font-medium text-[#5DCAA5]">
+            {smsProposes.length} message{smsProposes.length > 1 ? "s" : ""} proposé{smsProposes.length > 1 ? "s" : ""} à relire
+          </p>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {smsProposes.slice(0, 8).map((propose) => (
+              <li key={propose.id}>
+                <button type="button" onClick={() => ouvrir(propose.conversationId)} className="h-8 max-w-[15rem] truncate rounded-full border-[0.5px] border-[#1D9E75]/45 px-3 text-[12.5px] text-[#D1D5DB] hover:bg-[#1D9E75]/15">
+                  {propose.titre}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {horsLigne ? (
         <p className="flex items-center gap-2 border-b-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 px-3.5 py-2 text-[12.5px] text-[#F5B454]">
           <WifiOff size={13} aria-hidden /> Hors ligne : vos messages partiront au retour du réseau.
@@ -318,6 +343,11 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
 
   return (
     <div className={cn("flex w-full overflow-hidden bg-[#16181D]", hauteur)}>
+      {retourAppels ? (
+        <a href="/leads?appels=1" className="fixed top-[calc(0.5rem+env(safe-area-inset-top))] left-1/2 z-[70] flex h-10 -translate-x-1/2 items-center gap-1.5 rounded-full bg-[#1D9E75] px-4 text-[13.5px] font-semibold text-[#06140F] shadow-lg shadow-black/40 hover:bg-[#5DCAA5]">
+          ← Reprendre les appels
+        </a>
+      ) : null}
       {/* Colonne 1 : conversations (plein écran sur téléphone) */}
       <aside className={cn("w-full shrink-0 border-r-[0.5px] border-[#2A2D34] lg:w-[340px]", application === "messages" && "pt-[env(safe-area-inset-top)]", idOuvert ? "hidden lg:block" : "block")}>
         <ListeConversations

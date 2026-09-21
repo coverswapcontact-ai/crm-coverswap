@@ -8,6 +8,7 @@ import { journalEtatInitial } from "./journal-etat-initial";
 import { migrationModelesSms } from "./modeles-sms";
 import { migrationPrioriteLeads } from "./priorite-leads";
 import { migrationRegistreNumeros } from "./registre-numeros";
+import { migrationSimulationsDossiers } from "./simulations-dossiers";
 
 export type MigrationDonnees = {
   /** Identifiant définitif : ne jamais renommer une migration déjà livrée. */
@@ -21,4 +22,4 @@ export type MigrationDonnees = {
 };
 
 /** Dans l'ordre d'exécution. On ajoute à la fin, on ne retire ni ne réordonne jamais. */
-export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms];
+export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers];

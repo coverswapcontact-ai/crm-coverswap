@@ -154,6 +154,8 @@ model PhotoLead {
   lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
   chemin       String // relatif au dossier des téléversements
   origine      String    @default("FORMULAIRE_SITE")
+  dossierId    String? // dossier où cette photo a été recopiée à l'ouverture
+  rangeeLe     DateTime?
   archiveLe    DateTime? // archivage : rien ne se supprime
   archiveMotif String?
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -218,6 +220,8 @@ model Simulation {
   imageAfterPath    String?
   imageOriginalPath String?
   notes             String?
+  dossierId         String? // dossier où la photo avant et le rendu ont été rangés (photos de chantier, donc Drive)
+  rangeeLe          DateTime?
   archiveLe         DateTime? // archivage : rien ne se supprime
   archiveMotif      String?
   ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal

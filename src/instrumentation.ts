@@ -29,6 +29,10 @@ export async function register() {
   if (process.env.NODE_ENV === "production") {
     const { verifierAlertesAuDemarrage } = await import("@/lib/alertes/demarrage");
     void verifierAlertesAuDemarrage();
+    // Audit de connectivité : une ligne par maillon dans les journaux, 45 s après le démarrage.
+    setTimeout(() => {
+      void import("@/lib/audit/connexions").then(({ journaliserAudit }) => journaliserAudit());
+    }, 45_000);
   }
 
   if (process.env.TACHES_DESACTIVEES === "1") {

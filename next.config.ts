@@ -4,10 +4,10 @@ import type { NextConfig } from "next";
 // (mails de notification, favoris, historique) mènent à leur équivalent.
 // Redirections temporaires (307) : rien n'est mis en cache par le navigateur.
 const ANCIENNES_ADRESSES: { source: string; destination: string }[] = [
-  { source: "/leads/kanban", destination: "/prospects" },
-  { source: "/leads/nouveau", destination: "/prospects?nouveau=1" },
-  { source: "/leads/:id", destination: "/prospects?lead=:id" },
-  { source: "/leads", destination: "/prospects" },
+  // « /leads » est redevenu un écran (section Leads, 21/09/2026) : seules ses anciennes sous-adresses redirigent.
+  { source: "/leads/kanban", destination: "/leads" },
+  { source: "/leads/nouveau", destination: "/leads" },
+  { source: "/leads/:id", destination: "/leads?lead=:id" },
   { source: "/prospection", destination: "/prospects?onglet=demarchage" },
   { source: "/dashboard", destination: "/dossiers" },
   { source: "/analytics", destination: "/synthese" },

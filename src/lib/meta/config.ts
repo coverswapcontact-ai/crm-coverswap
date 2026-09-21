@@ -52,5 +52,5 @@ export function etatConfiguration(env: NodeJS.ProcessEnv = process.env): EtatCon
 /** Adresse de la fiche d'un contact dans le CRM, telle qu'elle part dans les notifications. */
 export function lienFiche(leadId: string): string {
   const base = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
-  return `${base}/prospects?lead=${leadId}`;
+  return `${base}/leads?lead=${leadId}`;
 }

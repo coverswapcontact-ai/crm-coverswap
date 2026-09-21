@@ -134,7 +134,7 @@ export function ContexteDossier({
           {!dossier ? <Ligne libelle="Statut">{LIBELLES_STATUT_LEAD[contact.statut as StatutLead] ?? contact.statut}</Ligne> : null}
           <Ligne libelle="Origine">{[libelleSourceLead(contact.source), contact.campagne].filter(Boolean).join(" · ")}</Ligne>
           {contact.rappelLe ? <Ligne libelle="Rappel prévu">{jourLisible(contact.rappelLe)}</Ligne> : null}
-          <Link href={`/prospects?lead=${contact.id}`} className={cn("mt-2 inline-flex items-center gap-1 text-[12.5px] text-[#5DCAA5] hover:underline", TRANS)}>
+          <Link href={`/leads?lead=${contact.id}`} className={cn("mt-2 inline-flex items-center gap-1 text-[12.5px] text-[#5DCAA5] hover:underline", TRANS)}>
             Ouvrir la fiche <ExternalLink size={11} aria-hidden />
           </Link>
         </Bloc>

@@ -101,8 +101,8 @@ Lucas » le recouvre. Les captures de la passe 1 étaient prises à 390 × 844, 
       e-mail facultatif pour signer, doublon de mention sur la page photos.
 - [x] P4 (revu) SMS : pas de raccourcissement (ton dégradé pour un gain d'un SMS) ; à la place, SMS « votre simulation
       vous attend » pour les clients venus du simulateur (LIEN_ESPACE_SIMULATION, migration sms-lien-simulation-21-09).
-- [ ] P5 Rapport : signaler le droit de rétractation (signature à distance) — décision de Lucas, pas de l'agent.
-- [ ] P6 Tests, lint, builds, déploiement CRM puis site, rapport mis à jour.
+- [x] P5 Rapport : droit de rétractation (signature à distance) signalé — décision de Lucas, rien changé au contrat.
+- [x] P6 Tests (356), lint, builds, déploiement CRM `eaddcb8` puis site `b2497f4` + `5062e5d`, rapport v2 au même lien.
 
 Journal passe 2 :
 - Accueil resserré (bouton visible à 390 × 660 et 375 × 560, barre d'appel blanche), carte « essai du site » : image
@@ -115,3 +115,6 @@ Journal passe 2 :
   avis non coché d'office ; e-mail facultatif pour signer ; pied de page sans doublon.
 - Piège : les tests à double montage de React (dev) consomment un paramètre d'adresse lu dans un effet : ne le
   retirer qu'à l'ouverture effective. Données d'essai : Hélène Fabre-Essai a le numéro de Léa → même personne (normal).
+- 21/09 (soir, fin) : PASSE 2 TERMINÉE. En plus du plan : projet en quatre questions, zones du site retrouvées
+  par libellé, guide photo selon la pièce, HEIC converti par l'iPhone. Prod vérifiée (santé, routes fermées,
+  lien invalide). Rapport v2 : https://claude.ai/artifact/34t7FaQBxNzsKJh8wQ2TJR

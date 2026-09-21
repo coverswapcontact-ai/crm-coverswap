@@ -1821,3 +1821,29 @@ Migration `simulateur-espace-21-09` : prompts d'origine, messages types manquant
 (`RELANCE_DEVIS_QUESTIONS`, `LIEN_ESPACE_RAPPEL`), repérage des copies de rendus dans les photos
 du dossier. Essais : `src/lib/espace/espace-v2.test.ts`, `src/lib/simulateur/simulateur.test.ts`,
 `src/lib/prospects/doublons.test.ts`.
+
+### Seconde passe (21/09/2026, soir)
+
+- **Hauteur réelle** : l'accueil de l'espace se mesure à 390 × 660 (iPhone courant dans Safari)
+  et 375 × 560 (SE), pas à la taille de l'écran. Tout le haut (bonjour, qui je suis en une ligne,
+  cinq étapes, carte d'action et son bouton) tient au-dessus de la barre d'appel, claire.
+- **Projet en quatre questions** (`EtapeProjet`) : zones, goûts, taille, délai + un mot ; chaque
+  geste enregistré ; le préremplissage suit la version à jour de l'espace tant que rien n'est touché.
+- **Devis prérempli** (`src/lib/espace/devis-propose.ts`, GET `/api/dossiers/[id]/devis-propose`) :
+  une ligne par groupe de zones (façades hautes et basses ensemble), teintes en sous-désignation,
+  mètres du client sur la première ligne de meubles seulement, prix des tarifs (`PresetTarif`)
+  trouvés par mots-clés ; sans tarif, prix et quantité vides (le générateur refuse d'émettre).
+  Ouvert par « Faire le devis » (panneau Espace du dossier, Espaces clients : `&devis=nouveau`) et
+  par « Générer un devis » quand le dossier n'a aucun devis. « Préparer le devis » (posé au choix)
+  est remplacé à l'émission du devis.
+- **Espaces clients** : `attente.geste` (DEVIS | SIMULATEUR | PUBLIER | APPELER) = bouton vert en
+  tête de carte. Une demande d'autre proposition cesse d'être en attente après un choix ou une
+  signature postérieurs.
+- **Zones retrouvées par libellé** (`surfaceDepuisLibelle`, dans `lireZones`) : une simulation du
+  site rangée sans identifiant (« Façades : K1 (Black mat) ») retrouve ses zones.
+- **SMS** : `LIEN_ESPACE_SIMULATION` remplace `LIEN_ESPACE` quand le dossier a une simulation du site
+  (migration `sms-lien-simulation-21-09`).
+- **Photos** : sélecteurs en `accept="image/*"` (l'iPhone convertit ses HEIC en JPEG) ; photo
+  illisible au recadrage du simulateur = message clair.
+- **Typographie** : insécables avant « : ; ! ? % » et dans les guillemets (échappements dans le
+  source, jamais de caractère invisible) ; e-mail facultatif pour signer ; avis jamais coché d'office.

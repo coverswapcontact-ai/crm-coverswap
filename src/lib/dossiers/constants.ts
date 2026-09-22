@@ -172,6 +172,7 @@ export const SOURCES_DOSSIER = [
   "RECOMMANDATION",
   "SOUS_TRAITANCE",
   "ENTRANT",
+  "ESPACE_CLIENT", // projet ouvert par le client lui-même dans son espace (un client qui revient)
   "AUTRE",
   "INCONNUE", // non renseignée à l'ouverture : signalée, à compléter
 ] as const;
@@ -182,6 +183,7 @@ export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
   RECOMMANDATION: "Recommandation",
   SOUS_TRAITANCE: "Sous-traitance",
   ENTRANT: "Entrant (site, Meta, appel)",
+  ESPACE_CLIENT: "Espace client (client qui revient)",
   AUTRE: "Autre",
   INCONNUE: "Non renseignée",
 };

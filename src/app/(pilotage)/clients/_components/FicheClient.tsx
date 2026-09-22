@@ -55,6 +55,7 @@ import { PastilleEtape } from "../../dossiers/_components/ui";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
 import { AnonymisationClient } from "./AnonymisationClient";
 import { MessagesClient } from "./MessagesClient";
+import { EspaceClientFiche } from "./EspaceClientFiche";
 import { RechercheAnnuaire } from "./RechercheAnnuaire";
 
 function Carte({ titre, action, children }: { titre: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -843,6 +844,8 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               </ul>
             )}
           </Carte>
+
+          <EspaceClientFiche clientId={client.id} />
 
           <Carte
             titre="Passif"

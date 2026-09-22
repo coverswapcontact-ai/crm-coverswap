@@ -5,8 +5,11 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones, libelleZoneClient, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression, type EtapeEspace } from "./etapes";
 import { composerFaits, dateSignature, lireDevisEtPaiements, type PaiementEspace } from "./faits";
-import { lienApercu, lienEspace } from "./liens";
-import { lireProjet, projetComplet, projetPrecise, resumerProjet, schemaProjet, type ProjetClient } from "./projet";
+import { confirmationRequise, lienApercu, lienEspace } from "./liens";
+import { figeDuProjet, LIBELLES_PASTILLE, projetsVisibles } from "./projets";
+import { enregistrerPrestations } from "@/lib/prestations/dossier";
+import { lireSelection } from "@/lib/prestations/prestations";
+import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, type ProjetClient } from "./projet";
 import { accorderSimulations, choisir, photosDuClient, quotaSimulations } from "./service";
 import { devaliderChoix, devaliderProjet, lirePhotosRetirees, remettrePhoto, retirerAccord, retirerDemandeProposition, retirerPhoto, validerProjet } from "./validations";
 
@@ -20,6 +23,7 @@ import { devaliderChoix, devaliderProjet, lirePhotosRetirees, remettrePhoto, ret
 
 export type VueEspaceCrm = {
   id: string;
+  /** Le lien du CLIENT (son espace permanent, tous projets) ; l'aperçu s'ouvre sur ce projet. */
   lien: string | null;
   apercu: string | null;
   expireLe: string;
@@ -27,6 +31,9 @@ export type VueEspaceCrm = {
   premierAccesLe: string | null;
   dernierAccesLe: string | null;
   nbAcces: number;
+  /** L'espace permanent du client : ses visites (toutes), la confirmation du téléphone, ses autres projets. */
+  permanent: { id: string; code: string; dernierAccesLe: string | null; nbAcces: number; lienEmisLe: string; confirmationRequise: boolean; revoqueLe: string | null; projetsAccordes: number; projetDemandeLe: string | null } | null;
+  autresProjets: { dossierId: string; nom: string; etapeDossier: string; fige: string | null }[];
   typeProjet: string;
   etape: EtapeEspace;
   etapeLibelle: string;
@@ -88,6 +95,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       clientNom: true,
       etape: true,
       photos: true,
+      prestations: true,
       lead: { select: { typeProjet: true } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
       accords: { orderBy: { createdAt: "desc" } },
@@ -96,10 +104,11 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
     },
   });
   if (!dossier) return null;
-  const typeProjet = dossier.lead?.typeProjet ?? "CUISINE";
+  const selection = lireSelection(dossier.prestations);
+  const typeProjet = Object.keys(selection)[0] ?? dossier.lead?.typeProjet ?? "AUTRE";
   const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements.filter((e) => e.type === "CHANGEMENT_ETAPE")) });
   const [photos, quota] = await Promise.all([photosDuClient(dossierId, dossier.photos), quotaSimulations(espace)]);
-  const projet = lireProjet(espace.souhaits);
+  const projet = lireProjet(espace.souhaits, selection, dossier.lead?.typeProjet);
   const publiees = espace.simulations.filter((s) => s.statut === "PUBLIEE");
   type ChoixBrut = { mode?: string; simulationId?: string; zones?: ZoneTeinte[]; commentaire?: string | null; le?: string };
   const choixBrut = ((): ChoixBrut | null => {
@@ -121,8 +130,11 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
     etapeDossier: dossier.etape,
   });
   const etape = etapeEspace(faits);
-  const manque = projetComplet(projet, typeProjet);
-  const expire = espace.expireLe.getTime() < Date.now();
+  const manque = projetComplet(projet);
+  const permanent = espace.permanentId ? await prisma.espacePermanent.findUnique({ where: { id: espace.permanentId } }) : null;
+  const expire = !permanent && espace.expireLe.getTime() < Date.now();
+  const revoque = permanent?.revoqueLe ?? espace.revoqueLe;
+  const autres = permanent ? (await projetsVisibles(prisma, permanent.id)).filter((p) => p.dossierId !== dossierId) : [];
   const zonesDuChoix = choixBrut?.mode === "COMPOSITE" ? (choixBrut.zones ?? []) : lireZones(espace.simulations.find((s) => s.id === choixBrut?.simulationId)?.zones ?? null);
   let avis: VueEspaceCrm["avis"] = null;
   try {
@@ -132,13 +144,17 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
   }
   return {
     id: espace.id,
-    lien: espace.revoqueLe ? null : lienEspace(espace),
-    apercu: espace.revoqueLe || expire ? null : lienApercu(espace),
+    lien: revoque ? null : lienEspace(permanent ?? espace),
+    apercu: revoque || expire ? null : lienApercu(permanent ?? espace, Date.now(), permanent ? espace : null),
     expireLe: espace.expireLe.toISOString(),
-    revoqueLe: iso(espace.revoqueLe),
+    revoqueLe: iso(revoque),
     premierAccesLe: iso(espace.premierAccesLe),
     dernierAccesLe: iso(espace.dernierAccesLe),
     nbAcces: espace.nbAcces,
+    permanent: permanent
+      ? { id: permanent.id, code: permanent.code, dernierAccesLe: iso(permanent.dernierAccesLe), nbAcces: permanent.nbAcces, lienEmisLe: permanent.lienEmisLe.toISOString(), confirmationRequise: confirmationRequise(permanent), revoqueLe: iso(permanent.revoqueLe), projetsAccordes: permanent.projetsAccordes, projetDemandeLe: iso(permanent.projetDemandeLe) }
+      : null,
+    autresProjets: autres.map((p) => ({ dossierId: p.dossierId, nom: p.nomProjet ?? p.dossier.objet ?? "Projet", etapeDossier: p.dossier.etape, fige: figeDuProjet(p.dossier.etape) ? LIBELLES_PASTILLE[figeDuProjet(p.dossier.etape) === "TERMINE" ? "TERMINE" : "NON_REALISE"] : null })),
     typeProjet,
     etape,
     etapeLibelle: LIBELLES_ETAPE_ESPACE[etape],
@@ -146,7 +162,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
     resteAFaire: resteAFaire(etape, manque, Boolean(espace.projetValideLe), photos.length),
     photos: photos.map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/photos/${p.id}` })),
     photosRetirees: lirePhotosRetirees(espace.photosRetirees).map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/espace/photos-retirees/${p.id}`, le: p.le, par: p.par })),
-    projet: projet ? { ...projet, resume: resumerProjet(projet, typeProjet) } : null,
+    projet: projet ? { ...projet, resume: resumerProjet(projet) } : null,
     projetValide: espace.projetValideLe ? { le: espace.projetValideLe.toISOString(), par: espace.projetValidePar ?? "CLIENT" } : null,
     projetManque: manque,
     simulations: espace.simulations.map((s) => ({
@@ -166,7 +182,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
     creation: { faites: quota.faites, faitesSite: quota.faitesSite, restantes: quota.restantes, offertes: quota.gratuites + quota.accordees, enCours: quota.enCours.length, demandeesLe: iso(espace.simulationsDemandeesLe) },
     favoris: (() => {
       try {
-        const v: unknown = JSON.parse(espace.favoris ?? "[]");
+        const v: unknown = JSON.parse(permanent?.favoris ?? espace.favoris ?? "[]");
         return Array.isArray(v) ? v.filter((r): r is string => typeof r === "string") : [];
       } catch {
         return [];
@@ -216,12 +232,16 @@ export async function gesteDeLucas(dossierId: string, geste: GesteEspace): Promi
     case "devalider-projet":
       return devaliderProjet(espace, "LUCAS", "depuis le CRM");
     case "modifier-projet": {
-      const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { lead: { select: { typeProjet: true } } } });
-      const typeProjet = dossier?.lead?.typeProjet ?? "CUISINE";
-      await prisma.espaceClient.update({ where: { id: espace.id }, data: { souhaits: JSON.stringify(geste.projet), souhaitsLe: new Date() } });
-      await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_SOUHAITS", direction: "INTERNE", contenu: `Projet modifié par Lucas, à la place du client : ${resumerProjet(geste.projet, typeProjet) || "vidé"}`.slice(0, 1500), metadata: JSON.stringify({ auteur: "LUCAS", avant: lireProjet(espace.souhaits) }) } });
+      const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { prestations: true, lead: { select: { typeProjet: true } } } });
+      const typeProjet = dossier?.lead?.typeProjet ?? null;
+      const avant = lireProjet(espace.souhaits, lireSelection(dossier?.prestations), typeProjet);
+      const { selection, souhaits } = projetDepuisEntree(geste.projet, avant, typeProjet);
+      const apres = lireProjet(JSON.stringify(souhaits), selection, typeProjet);
+      await enregistrerPrestations(dossierId, selection, "LUCAS");
+      await prisma.espaceClient.update({ where: { id: espace.id }, data: { souhaits: JSON.stringify(souhaits), souhaitsLe: new Date() } });
+      await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_SOUHAITS", direction: "INTERNE", contenu: `Projet modifié par Lucas, à la place du client : ${resumerProjet(apres) || "vidé"}`.slice(0, 1500), metadata: JSON.stringify({ auteur: "LUCAS", avant }) } });
       // Un projet validé qui n'est plus complet ne peut pas rester « validé ».
-      if (espace.projetValideLe && projetComplet(geste.projet, typeProjet)) await devaliderProjet(espace, "LUCAS", "il n'est plus complet");
+      if (espace.projetValideLe && projetComplet(apres)) await devaliderProjet(espace, "LUCAS", "il n'est plus complet");
       return;
     }
     case "valider-simulation":
@@ -244,8 +264,10 @@ export async function gesteDeLucas(dossierId: string, geste: GesteEspace): Promi
     case "reinitialiser": {
       if (geste.etape === "PROJET") {
         await devaliderProjet(espace, "LUCAS", "étape réinitialisée");
+        const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { prestations: true } });
         await prisma.espaceClient.update({ where: { id: espace.id }, data: { souhaits: null, souhaitsLe: null } });
-        await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_ETAPE_REINITIALISEE", direction: "INTERNE", contenu: "Étape « Projet » réinitialisée par Lucas : le client la refait (ce qu'il avait saisi est gardé ici)", metadata: JSON.stringify({ etape: "PROJET", avant: lireProjet(espace.souhaits) }) } });
+        await enregistrerPrestations(dossierId, {}, "LUCAS");
+        await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_ETAPE_REINITIALISEE", direction: "INTERNE", contenu: "Étape « Projet » réinitialisée par Lucas : le client la refait (ce qu'il avait saisi est gardé ici)", metadata: JSON.stringify({ etape: "PROJET", avant: lireProjet(espace.souhaits, lireSelection(dossier?.prestations)) }) } });
       } else if (geste.etape === "SIMULATIONS") {
         await devaliderChoix(espace, "LUCAS");
         await retirerDemandeProposition(await espaceDuDossier(dossierId), "LUCAS");

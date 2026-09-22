@@ -132,7 +132,9 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   },
   Sms: { remplacer: () => ({ texte: EFFACE, textePropose: null, erreur: null }), garde: "sens, dates, statut de remise, origine et message type : la mesure des relances, sans leur contenu" },
   // Espace client : ce que la personne y a écrit et les images qui la concernent.
-  EspaceClient: { remplacer: () => ({ souhaits: null, choix: null, avis: null }), garde: "dates de création, d'accès et d'expiration du lien, compteurs de visites" },
+  EspaceClient: { remplacer: () => ({ souhaits: null, choix: null, avis: null, nomProjet: null, propositionMessage: null, photosRetirees: null }), garde: "dates de création, d'accès et d'expiration du lien, compteurs de visites" },
+  // L'espace permanent (mission 5) : ses favoris partent ; le code, les dates et les compteurs restent (sans identité).
+  EspacePermanent: { remplacer: () => ({ favoris: null }), garde: "code du lien, dates d'accès et de confirmation, compteurs de visites et de projets accordés" },
   SimulationEspace: {
     remplacer: () => ({ chemin: EFFACE, photoAvant: null, titre: null, description: null, commentaireClient: null }),
     garde: "source, statut, teintes, version du prompt, coût et dates (images effacées)",

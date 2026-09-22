@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
+import { lireSelection } from "@/lib/prestations/prestations";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import {
@@ -184,6 +185,7 @@ function versResume(
     ouvertLe: (dossier.ouvertLe ?? dossier.createdAt).toISOString(),
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
+    prestations: lireSelection(dossier.prestations),
   };
 }
 

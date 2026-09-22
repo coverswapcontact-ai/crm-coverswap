@@ -147,7 +147,7 @@ export type EntreeQualification = {
   reponses?: readonly ReponseLue[];
   /** Le contact a demandé un devis de lui-même (site) : il est venu chercher Lucas. */
   devisDemande?: boolean;
-  /** Le contact a fait une simulation sur le site : il a déjà vu sa cuisine rénovée. */
+  /** Le contact a fait une simulation sur le site : il a déjà vu sa pièce rénovée. */
   simulation?: boolean;
 };
 
@@ -167,10 +167,10 @@ export function qualifier(entree: EntreeQualification, zoneIntervention: ZoneInt
 
   let priorite: Priorite;
   if (zone === "HORS_ZONE") priorite = "A_ECARTER";
-  // Le lead le plus chaud : il a vu un rendu de SA cuisine. Prioritaire d'office, sauf hors zone (règle de Lucas, 21/09/2026).
+  // Le lead le plus chaud : il a vu un rendu de SA pièce. Prioritaire d'office, sauf hors zone (règle de Lucas, 21/09/2026).
   else if (entree.simulation) {
     priorite = "PRIORITAIRE";
-    faits.unshift("a fait une simulation : il a vu sa cuisine rénovée");
+    faits.unshift("a fait une simulation : il a vu sa pièce rénovée");
   } else if (occupation === "LOCATAIRE" || delai === "LOINTAIN") priorite = "SECONDAIRE";
   else if (occupation === "PROPRIETAIRE" && delai === "COURT") priorite = "PRIORITAIRE";
   else if (entree.devisDemande) {

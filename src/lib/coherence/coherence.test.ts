@@ -126,8 +126,8 @@ describe("quota : 5 offertes, celles du site comptent", () => {
     const etat = await service.etatEspace(espace);
     assert.deepEqual([etat.creation.gratuites, etat.creation.faites, etat.creation.faitesSite, etat.creation.restantes], [5, 2, 2, 3]);
     assert.equal((await suivi.listerEspaces()).find((l) => l.dossierId === c.dossierId)!.faits.simulationsRestantes, 3);
-    // Toutes les pièces du site sont proposées, pas seulement la cuisine.
-    assert.deepEqual(etat.creation.pieces.map((p) => p.piece), ["CUISINE", "SDB", "MEUBLES", "PRO", "MURS"]);
+    // Toutes les familles restent proposées, celle de son projet d'abord (ici devinée de sa simulation du site).
+    assert.deepEqual(etat.creation.pieces.map((p) => [p.piece, p.duProjet]), [["CUISINE", true], ["SDB", false], ["MEUBLES", false], ["PRO", false]]);
     assert.ok(etat.creation.pieces.find((p) => p.piece === "SDB")!.zones.some((z) => z.zone === "carrelage-mural"));
   });
 });

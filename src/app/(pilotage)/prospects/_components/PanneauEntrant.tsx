@@ -332,7 +332,7 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
                 libelle="Ce qui s'est dit"
                 rows={2}
                 maxLength={5000}
-                placeholder="Rappel jeudi, veut un devis pour la cuisine…"
+                placeholder="Rappel jeudi, veut un devis pour sa salle de bain…"
                 value={echange}
                 onChange={(evenement) => setEchange(evenement.target.value)}
               />

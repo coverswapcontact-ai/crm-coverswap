@@ -8,7 +8,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { alerter } from "@/lib/alertes/canaux";
 import { FORMATS_PHOTO, PHOTO_OCTETS_MAX } from "@/lib/dossiers/constants";
 import { changerEtape } from "@/lib/dossiers/transitions";
-import { lienEspace, ouvrirEspace } from "@/lib/espace/liens";
+import { lienPourLeProjet, ouvrirEspace } from "@/lib/espace/liens";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { conversationDuNumero } from "@/lib/sms/conversations";
@@ -214,7 +214,7 @@ function versVue(dossierId: string, s: SimulationEspace): SimulationVue {
 }
 
 export async function listerSimulationsDossier(dossierId: string): Promise<{ espace: { id: string; lien: string | null } | null; simulations: SimulationVue[] }> {
-  const espace = await prisma.espaceClient.findFirst({ where: { dossierId }, select: { id: true, code: true, version: true, revoqueLe: true } });
+  const espace = await prisma.espaceClient.findFirst({ where: { dossierId }, select: { id: true, code: true, version: true, revoqueLe: true, permanentId: true } });
   if (espace) await synchroniserSimulationsSite(dossierId).catch((erreur) => console.error("[simulations] synchronisation du site :", erreur));
   const lignes = espace ? await prisma.simulationEspace.findMany({ where: { espaceId: espace.id }, orderBy: [{ createdAt: "desc" }] }) : [];
   const vues = lignes.map((s) => versVue(dossierId, s));
@@ -244,7 +244,7 @@ export async function listerSimulationsDossier(dossierId: string): Promise<{ esp
       });
     }
   }
-  return { espace: espace ? { id: espace.id, lien: espace.revoqueLe ? null : lienEspace(espace) } : null, simulations: vues };
+  return { espace: espace ? { id: espace.id, lien: await lienPourLeProjet(espace) } : null, simulations: vues };
 }
 
 async function simulationDuDossier(dossierId: string, simulationId: string): Promise<SimulationEspace> {
@@ -342,7 +342,9 @@ export async function texteSmsPublication(dossierId: string): Promise<{ texte: s
   const modele = await lireModele("SIMULATION_PRETE");
   if (!modele?.actif) return { texte: null, raison: "Le message type « Simulation déposée » est désactivé (Paramètres → Messagerie SMS)." };
   const prenom = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
-  const texte = remplirModele(modele.texte, { prenom: /^(inconnu|client)$/i.test(prenom) ? "" : prenom.split(/\s+/)[0], lien: lienEspace(espace) });
+  const lien = await lienPourLeProjet(espace);
+  if (!lien) return { texte: null, raison: "Le lien de l'espace est désactivé : émettez un nouveau lien pour prévenir le client." };
+  const texte = remplirModele(modele.texte, { prenom: /^(inconnu|client)$/i.test(prenom) ? "" : prenom.split(/\s+/)[0], lien });
   // Sans fournisseur, le SMS est écrit mais reste en attente : Lucas le sait avant de cliquer.
   const fournisseur = etatFournisseur();
   return { texte, ...(recent ? { dejaPrevenuLe: recent.createdAt.toISOString() } : {}), ...(fournisseur.nom ? {} : { attente: fournisseur.remarque ?? "Aucun fournisseur de SMS configuré." }) };

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LIBELLES_UNITE, UNITES, type Unite } from "@/lib/dossiers/constants";
 import { formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import type { PresetVue } from "@/lib/dossiers/types";
+import type { LigneTarifPrestation } from "@/lib/prestations/tarifs";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
+import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Bouton, CLASSE_SAISIE } from "./ui";
 
 type SaisiePreset = { designation: string; unite: Unite; prix: string };
@@ -208,6 +209,77 @@ export function GestionTarifs({
           Ajouter
         </Bouton>
       </form>
+      <TarifsParPrestation presets={presets} />
     </div>
+  );
+}
+
+/**
+ * Le tarif de chaque prestation (fichier des prestations) : celui qui chiffre la
+ * sous-partie dans le devis prérempli. « Automatique » : le premier tarif dont la
+ * désignation la nomme ; sinon aucun, et le prix se saisit sur le devis.
+ */
+function TarifsParPrestation({ presets }: { presets: PresetVue[] }) {
+  const [lignes, setLignes] = useState<LigneTarifPrestation[] | null>(null);
+  const [envoi, setEnvoi] = useState<string | null>(null);
+
+  useEffect(() => {
+    let actif = true;
+    appelApi<{ lignes: LigneTarifPrestation[] }>("/api/prestations/tarifs")
+      .then((r) => actif && setLignes(r.lignes))
+      .catch(() => actif && setLignes([]));
+    return () => {
+      actif = false;
+    };
+  }, [presets]);
+
+  async function attribuer(cle: string, presetId: string | null) {
+    setEnvoi(cle);
+    try {
+      setLignes((await envoyerJson<{ lignes: LigneTarifPrestation[] }>("/api/prestations/tarifs", "POST", { cle, presetId })).lignes);
+    } catch (probleme) {
+      toast.error("Tarif non attribué", { description: messageErreur(probleme) });
+    } finally {
+      setEnvoi(null);
+    }
+  }
+
+  if (!lignes || lignes.length === 0) return null;
+  const familles = [...new Set(lignes.map((l) => l.familleLibelle))];
+  return (
+    <section className="mt-6">
+      <h3 className="text-[13px] font-medium text-[#F2F3F5]">Tarif de chaque prestation</h3>
+      <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">Le devis prérempli chiffre chaque partie cochée par le client (ou par toi) avec ce tarif. Sans tarif, le prix se saisit sur le devis.</p>
+      <div className="mt-3 space-y-3">
+        {familles.map((nom) => (
+          <div key={nom}>
+            <p className="mb-1 text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{nom}</p>
+            <ul className="space-y-1">
+              {lignes
+                .filter((l) => l.familleLibelle === nom)
+                .map((l) => (
+                  <li key={l.cle} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-center gap-2">
+                    <span className="truncate text-[13px] text-[#D1D5DB]">{l.libelle}</span>
+                    <select
+                      aria-label={`Tarif : ${l.libelle}`}
+                      value={l.explicite ? (l.presetId ?? "") : ""}
+                      disabled={envoi === l.cle}
+                      onChange={(e) => void attribuer(l.cle, e.target.value || null)}
+                      className={cn(CLASSE_SAISIE, "h-10 px-2 text-[12.5px] sm:h-8", !l.presetId && "text-[#8B919C]")}
+                    >
+                      <option value="">{l.explicite ? "Automatique" : l.presetId ? `Automatique : ${l.designation} (${l.prixUnitaire ?? "?"} €/${l.unite})` : "Automatique : aucun (prix à saisir)"}</option>
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.designation} ({p.prixUnitaire ?? "à saisir"}{p.prixUnitaire !== null ? ` €/${p.unite}` : ""})
+                        </option>
+                      ))}
+                    </select>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

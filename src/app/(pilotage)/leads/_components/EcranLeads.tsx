@@ -295,7 +295,7 @@ function SesSimulations({ simulations, dossierId }: { simulations: SimulationLea
           </div>
           <div className="flex min-h-0 flex-1 items-center justify-center px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
-            <img src={ouverte.simulation[ouverte.vue] ?? ""} alt={ouverte.vue === "avant" ? "Sa cuisine avant" : "Sa cuisine après, simulée"} className="max-h-full max-w-full rounded-[10px] object-contain" />
+            <img src={ouverte.simulation[ouverte.vue] ?? ""} alt={ouverte.vue === "avant" ? "Sa pièce avant" : "Sa pièce après, simulée"} className="max-h-full max-w-full rounded-[10px] object-contain" />
           </div>
           {ouverte.simulation.reference ? <p className="pb-4 text-center text-[13px] text-[#9CA3AF]">Finition {ouverte.simulation.reference}{ouverte.simulation.prix ? ` · ${Math.round(ouverte.simulation.prix)} € simulés` : ""}</p> : null}
         </div>

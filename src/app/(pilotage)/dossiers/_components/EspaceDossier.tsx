@@ -6,8 +6,9 @@ import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, MessageSquare, Pe
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
-import { REPERES_METRES, type ProjetClient } from "@/lib/espace/projet";
-import { ZONES_PROJET_CLIENT } from "@/lib/simulateur/types-surface";
+import type { ProjetClient } from "@/lib/espace/projet";
+import { famille, famillesDe, libelleTaille, resumerSelection, type TaillesProjet } from "@/lib/prestations/prestations";
+import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
@@ -47,7 +48,8 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   const [espace, setEspace] = useState<VueEspaceCrm | null | undefined>(undefined);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
-  const [edition, setEdition] = useState<ProjetClient | null>(null);
+  const [edition, setEdition] = useState<{ tailles: TaillesProjet; precisions: string } | null>(null);
+  const [sms, setSms] = useState<{ texte: string; numero: string | null } | null>(null);
   const [confirmation, setConfirmation] = useState<{ titre: string; texte: string; bouton: string; geste: GesteEspace; succes: string } | null>(null);
   const [gestesOuverts, setGestesOuverts] = useState(false);
 
@@ -57,7 +59,12 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
     } catch {
       setEspace(null);
     }
-  }, [detail.id]);
+    if (detail.client) {
+      appelApi<{ smsNouveauLien: string; numero: string | null }>(`/api/clients/${detail.client.id}/espace`)
+        .then((r) => setSms({ texte: r.smsNouveauLien, numero: r.numero }))
+        .catch(() => undefined);
+    }
+  }, [detail.id, detail.client]);
 
   useEffect(() => {
     const premier = window.setTimeout(() => void charger(), 0);
@@ -128,7 +135,6 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
     );
   }
 
-  const zonesProjet = ZONES_PROJET_CLIENT[espace.typeProjet] ?? ZONES_PROJET_CLIENT.CUISINE;
   const aucunDevis = !detail.documents.some((d) => d.type === "DEVIS" && d.numero);
   const p = espace.paiement;
 
@@ -154,17 +160,36 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
           </p>
         </div>
 
-        {/* Le lien et les visites. */}
+        {/* Le lien et les visites : ceux du CLIENT (son espace permanent, tous ses projets). */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {espace.revoqueLe ? <Pastille ton="rouge">Lien désactivé</Pastille> : <Pastille ton="vert">Lien actif jusqu&apos;au {jour(espace.expireLe)}</Pastille>}
-          {espace.dernierAccesLe ? (
+          {espace.revoqueLe ? <Pastille ton="rouge">Lien désactivé</Pastille> : <Pastille ton="vert">Lien du client actif · sans expiration</Pastille>}
+          {espace.permanent?.dernierAccesLe ? (
             <Pastille>
-              {espace.nbAcces} visite{espace.nbAcces > 1 ? "s" : ""} · première le {jour(espace.premierAccesLe)} · dernière le {jour(espace.dernierAccesLe)}
+              {espace.permanent.nbAcces} visite{espace.permanent.nbAcces > 1 ? "s" : ""} de son espace · dernière le {jour(espace.permanent.dernierAccesLe)}
+            </Pastille>
+          ) : espace.dernierAccesLe ? (
+            <Pastille>
+              {espace.nbAcces} visite{espace.nbAcces > 1 ? "s" : ""} · dernière le {jour(espace.dernierAccesLe)}
             </Pastille>
           ) : (
             <Pastille ton="ambre">Pas encore ouvert par le client</Pastille>
           )}
+          {espace.permanent?.confirmationRequise ? <Pastille titre="Plus de 90 jours sans visite : à la prochaine, il confirme les 4 derniers chiffres de son téléphone.">Téléphone à confirmer à sa prochaine visite</Pastille> : null}
         </div>
+        {espace.autresProjets.length ? (
+          <p className="text-[12.5px] text-[#9CA3AF]">
+            Ses autres projets :{" "}
+            {espace.autresProjets.map((a, i) => (
+              <span key={a.dossierId}>
+                {i ? " · " : ""}
+                <Link href={`/dossiers?dossier=${a.dossierId}`} className="text-[#D1D5DB] underline decoration-[#3A3E47] underline-offset-2 hover:text-[#F2F3F5]">
+                  {a.nom}
+                </Link>
+                {a.fige ? <span className="text-[#6B7280]"> ({a.fige.toLowerCase()})</span> : null}
+              </span>
+            ))}
+          </p>
+        ) : null}
         {espace.lien ? (
           <div className="flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded-[8px] bg-[#16181D] px-2.5 py-2 text-[12px] text-[#D1D5DB]">{espace.lien}</code>
@@ -185,13 +210,17 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
             </Link>
           ) : null}
           {espace.revoqueLe ? null : (
-            <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "revoquer"} onClick={() => void lien("revoquer", "Lien désactivé")}>
+            <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "revoquer"} onClick={() => void lien("revoquer", "Lien désactivé (tous ses projets)")}>
               Désactiver le lien
             </Bouton>
           )}
-          <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void lien("renouveler", "Nouveau lien émis : l'ancien ne fonctionne plus")}>
-            Nouveau lien
-          </Bouton>
+          {espace.permanent && sms ? (
+            <NouveauLien permanentId={espace.permanent.id} texteSms={sms.texte} numero={sms.numero} onFait={async () => { await charger(); await onRecharger(); }} />
+          ) : (
+            <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void lien("renouveler", "Nouveau lien émis : l'ancien ne fonctionne plus")}>
+              Nouveau lien
+            </Bouton>
+          )}
         </div>
 
         {/* Photos */}
@@ -247,7 +276,16 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
         >
           {espace.projet ? (
             <>
-              <p className="text-[13px] text-[#D1D5DB]">{[espace.projet.zones.map((z) => zonesProjet.find((x) => x.id === z)?.libelle ?? z).join(", "), espace.projet.metres ? `≈ ${String(espace.projet.metres).replace(".", ",")} m` : null, REPERES_METRES.find((r) => r.id === espace.projet?.repere)?.libelle].filter(Boolean).join(" · ") || "Aucune zone cochée"}</p>
+              <p className="text-[13px] text-[#D1D5DB]">{resumerSelection(espace.projet.familles) || "Aucune famille cochée"}</p>
+              {famillesDe(espace.projet.familles).some((f) => libelleTaille(f, espace.projet?.tailles[f])) ? (
+                <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+                  Taille :{" "}
+                  {famillesDe(espace.projet.familles)
+                    .map((f) => (libelleTaille(f, espace.projet?.tailles[f]) ? `${famille(f).libelle.toLowerCase()} ${libelleTaille(f, espace.projet?.tailles[f])}` : null))
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              ) : null}
               {espace.projet.precisions ? <blockquote className="mt-1.5 border-l-2 border-[#3A3E47] pl-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">« {espace.projet.precisions} »</blockquote> : null}
             </>
           ) : (
@@ -264,8 +302,8 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
                 Valider à sa place
               </Bouton>
             )}
-            <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => setEdition(espace.projet ? { ...espace.projet } : { zones: [], styles: [], propositions: false, metres: null, repere: null, delai: null, precisions: "" })}>
-              Modifier
+            <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => setEdition({ tailles: { ...(espace.projet?.tailles ?? {}) }, precisions: espace.projet?.precisions ?? "" })}>
+              Modifier taille et note
             </Bouton>
             {espace.projet ? (
               <Bouton taille="sm" variante="fantome" icone={<RotateCcw size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Réinitialiser l'étape « Projet » ?", texte: "Son projet est effacé de son espace (ce qu'il avait saisi reste dans l'historique du dossier) : il le refait depuis le début.", bouton: "Réinitialiser", geste: { geste: "reinitialiser", etape: "PROJET" }, succes: "Étape « Projet » réinitialisée" })}>
@@ -452,7 +490,7 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
               variante="primaire"
               chargement={occupe === "modifier-projet"}
               onClick={async () => {
-                if (edition && (await geste({ geste: "modifier-projet", projet: edition }, "Projet modifié"))) setEdition(null);
+                if (edition && (await geste({ geste: "modifier-projet", projet: { tailles: edition.tailles, precisions: edition.precisions } }, "Projet modifié"))) setEdition(null);
               }}
             >
               Enregistrer
@@ -462,31 +500,30 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
       >
         {edition ? (
           <div className="space-y-4">
-            <div>
-              <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">Ce qu&apos;il veut traiter</p>
-              <div className="flex flex-wrap gap-1.5">
-                {zonesProjet.map((z) => {
-                  const coche = edition.zones.includes(z.id);
-                  return (
-                    <button key={z.id} type="button" aria-pressed={coche} onClick={() => setEdition({ ...edition, zones: coche ? edition.zones.filter((x) => x !== z.id) : [...edition.zones, z.id] })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, coche ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
-                      {z.libelle}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {espace.typeProjet === "CUISINE" ? (
-              <div>
-                <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">Taille de la cuisine</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {REPERES_METRES.map((r) => (
-                    <button key={r.id} type="button" aria-pressed={edition.repere === r.id} onClick={() => setEdition({ ...edition, repere: edition.repere === r.id ? null : r.id, metres: edition.repere === r.id ? null : r.metres })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, edition.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
-                      {r.libelle}
-                    </button>
-                  ))}
+            <p className="text-[12.5px] text-[#9CA3AF]">Les familles et sous-parties se cochent dans « Familles du projet », plus haut.</p>
+            {famillesDe(espace.projet?.familles ?? {}).map((f) => {
+              const q = famille(f).taille;
+              const t = edition.tailles[f] ?? { repere: null, valeur: null };
+              const poser = (suite: { repere: string | null; valeur: number | null }) => setEdition({ ...edition, tailles: { ...edition.tailles, [f]: suite } });
+              return (
+                <div key={f}>
+                  <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">{q.titre}</p>
+                  {q.reperes.length ? (
+                    <div className="mb-1.5 flex flex-wrap gap-1.5">
+                      {q.reperes.map((r) => (
+                        <button key={r.id} type="button" aria-pressed={t.repere === r.id} onClick={() => poser(t.repere === r.id ? { repere: null, valeur: null } : { repere: r.id, valeur: r.valeur })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, t.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
+                          {r.libelle}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <label className="flex items-center gap-2 text-[12.5px] text-[#9CA3AF]">
+                    <input type="number" inputMode="decimal" min={q.min} max={q.max} step={q.pas} value={t.valeur ?? ""} onChange={(e) => poser({ repere: t.repere, valeur: e.target.value === "" ? null : Number(e.target.value) })} className="h-9 w-24 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#F2F3F5]" />
+                    {q.unite === "portes" ? "portes" : "mètres, à peu près"}
+                  </label>
                 </div>
-              </div>
-            ) : null}
+              );
+            })}
             <ZoneTexte libelle="Sa note" value={edition.precisions} onChange={(e) => setEdition({ ...edition, precisions: e.target.value })} rows={3} maxLength={1000} />
           </div>
         ) : null}

@@ -40,6 +40,7 @@ import { DelaisEcarts } from "./DelaisEcarts";
 import { DocumentsDossier } from "./DocumentsDossier";
 import { ArchivageDossier } from "./ArchivageDossier";
 import { EspaceDossier } from "./EspaceDossier";
+import { ChipsFamilles, FamillesDossier } from "./FamillesDossier";
 import { SimulationsDossier } from "./SimulationsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
 import { DepensesDossier } from "./DepensesDossier";
@@ -195,6 +196,7 @@ function ContenuPanneau({
           </Bouton>
         </div>
         <p className={cn("mt-2 truncate text-[13px]", detail.objet ? "text-[#D1D5DB]" : "text-[#6B7280] italic")}>{detail.objet || "Objet du chantier à préciser"}</p>
+        <ChipsFamilles prestations={detail.prestations ?? {}} className="mt-1.5" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PastilleEtape etape={detail.etape} libelle={LIBELLES_ETAPE[detail.etape]} />
           <BadgeMain main={mainDe(detail, maintenant)} long />
@@ -236,6 +238,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <ChangementEtape detail={detail} onMisAJour={onMisAJour} />
+          <FamillesDossier key={`familles-${detail.id}`} detail={detail} onEnregistre={onRecharger} />
           <DelaisEcarts detail={detail} onMisAJour={onMisAJour} />
           <DocumentsDossier
             detail={detail}

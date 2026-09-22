@@ -1,12 +1,20 @@
 import type { EtapeEspace, progression } from "./etapes";
 
 /** Types de l'onglet Espaces clients, partagés par l'écran (sans dépendance serveur). */
-export type CodeSignal = "PHOTOS_SANS_SIMULATION" | "PROPOSITION_DEMANDEE" | "SIMULATIONS_DEMANDEES" | "BROUILLONS" | "HESITE" | "JAMAIS_OUVERT" | "EXPIRE_BIENTOT" | "EXPIRE" | "NON_ENVOYE" | "DATE_A_FIXER";
+export type CodeSignal = "PHOTOS_SANS_SIMULATION" | "PROPOSITION_DEMANDEE" | "SIMULATIONS_DEMANDEES" | "BROUILLONS" | "HESITE" | "JAMAIS_OUVERT" | "EXPIRE_BIENTOT" | "EXPIRE" | "NON_ENVOYE" | "DATE_A_FIXER" | "NOUVEAU_PROJET" | "PROJET_DEMANDE" | "CONFIRMATION_DEMANDEE";
 export type Signal = { code: CodeSignal; libelle: string; ton: "rouge" | "ambre" | "gris" };
 
 export type LigneEspace = {
   espaceId: string;
   dossierId: string;
+  /** Mission 5 : l'espace permanent du client auquel appartient ce projet. */
+  permanentId: string | null;
+  nomProjet: string;
+  familles: { id: string; libelle: string }[];
+  /** Terminé et encaissé, ou non réalisé : figé. */
+  fige: "TERMINE" | "NON_REALISE" | null;
+  /** Ouvert par le client lui-même dans son espace (un client qui revient). */
+  creeParLeClient: boolean;
   clientNom: string;
   ville: string;
   telephone: string;
@@ -54,4 +62,30 @@ export type LigneEspace = {
   /** Qui a la main ; quand c'est Lucas, le geste qui fait avancer (un bouton dans la carte). */
   attente: { qui: "MOI" | "CLIENT" | "PERSONNE"; libelle: string; geste?: "DEVIS" | "SIMULATEUR" | "PUBLIER" | "APPELER" | "ACCORDER" };
   signaux: Signal[];
+};
+
+/** Un client et son espace permanent : son lien, ses visites, ses projets et où il en est dans chacun (mission 5). */
+export type ClientEspace = {
+  permanentId: string;
+  clientId: string;
+  clientNom: string;
+  ville: string;
+  telephone: string;
+  lien: string | null;
+  apercu: string | null;
+  lienEmisLe: string;
+  revoque: boolean;
+  premierAccesLe: string | null;
+  dernierAccesLe: string | null;
+  nbAcces: number;
+  /** Plus de 90 jours sans visite : il devra confirmer son téléphone à la prochaine. */
+  confirmationRequise: boolean;
+  projetsEnCours: number;
+  limite: number;
+  projetDemandeLe: string | null;
+  derniereActivite: string | null;
+  /** Le plus pressé de ses projets donne la main : moi, lui, personne. */
+  attente: LigneEspace["attente"];
+  signaux: Signal[];
+  projets: LigneEspace[];
 };

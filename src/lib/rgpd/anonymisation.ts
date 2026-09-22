@@ -87,6 +87,8 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const conversationsSms = await client.conversationSms.findMany({ where: { ...AVEC_ARCHIVES, OR: [{ clientId: { in: clientIds } }, { leadId: { in: leadIds } }] } });
   const sms = await client.sms.findMany({ where: { ...AVEC_ARCHIVES, conversationId: { in: conversationsSms.map((conversation) => conversation.id) } } });
   const espaces = await client.espaceClient.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+  // Mission 5 : l'espace permanent du client (ses favoris ; le lien reste, il ne mène plus qu'à des projets anonymisés).
+  const espacesPermanents = await client.espacePermanent.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   const preparations = await client.preparationSimulation.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
 
@@ -152,6 +154,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       ConversationSms: conversationsSms,
       Sms: sms,
       EspaceClient: espaces,
+      EspacePermanent: espacesPermanents,
       SimulationEspace: simulationsEspace,
       PreparationSimulation: preparations,
       Proposition: propositions,

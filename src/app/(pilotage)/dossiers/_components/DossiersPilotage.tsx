@@ -56,6 +56,7 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     ouvertLe: detail.ouvertLe,
     createdAt: detail.createdAt,
     updatedAt: detail.updatedAt,
+    prestations: detail.prestations,
   };
 }
 

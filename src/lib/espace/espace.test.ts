@@ -56,25 +56,27 @@ describe("lien signé", () => {
     const b = await dossierAvecEspace("Bruno");
     const [codeA, signatureA] = a.jeton.split(/-(.+)/);
     const [codeB] = b.jeton.split(/-(.+)/);
-    assert.equal((await liens.espaceDuJeton(a.jeton)).id, a.espace.id);
+    // Le premier projet et l'espace permanent du client partagent le code : le lien envoyé EST le lien du client.
+    assert.equal((await liens.accesDuJeton(a.jeton)).permanent.code, a.espace.code);
     for (const faux of [`${codeB}-${signatureA}`, `${codeA}-${"A".repeat(16)}`, `${codeA}-${signatureA.slice(0, 15)}${signatureA.endsWith("x") ? "y" : "x"}`, codeA, "../../etc/passwd", ""]) {
-      await assert.rejects(liens.espaceDuJeton(faux), (erreur: Error & { status?: number; raison?: string }) => erreur.status === 404 && erreur.raison === "inconnu", faux);
+      await assert.rejects(liens.accesDuJeton(faux), (erreur: Error & { status?: number; raison?: string }) => erreur.status === 404 && erreur.raison === "inconnu", faux);
     }
   });
 
-  test("expirable, révocable, renouvelable : l'ancien lien meurt, le nouveau vit", async () => {
+  test("permanent : n'expire plus, se révoque, se régénère — l'ancien lien meurt, le nouveau vit", async () => {
     const { espace, jeton } = await dossierAvecEspace("Denis");
+    // L'ancienne date d'expiration d'un projet ne compte plus : le lien du client ne meurt pas.
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { expireLe: new Date(Date.now() - 1000) } });
-    await assert.rejects(liens.espaceDuJeton(jeton), (e: Error & { status?: number; raison?: string }) => e.status === 410 && e.raison === "expire");
+    const acces = await liens.accesDuJeton(jeton);
+    assert.equal(acces.permanent.id, espace.permanentId);
 
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { expireLe: new Date(Date.now() + 86_400_000) } });
     await liens.revoquerEspace(espace.id);
-    await assert.rejects(liens.espaceDuJeton(jeton), (e: Error & { status?: number; raison?: string }) => e.status === 410 && e.raison === "revoque");
+    await assert.rejects(liens.accesDuJeton(jeton), (e: Error & { status?: number; raison?: string }) => e.status === 410 && e.raison === "revoque");
 
     const renouvele = await liens.renouvelerEspace(espace.id);
     assert.notEqual(renouvele.lien.split("/e/")[1], jeton);
-    await assert.rejects(liens.espaceDuJeton(jeton), /n'est pas valide/, "l'ancien lien ne renaît pas");
-    assert.equal((await liens.espaceDuJeton(renouvele.lien.split("/e/")[1])).id, espace.id);
+    await assert.rejects(liens.accesDuJeton(jeton), /n'est pas valide/, "l'ancien lien ne renaît pas");
+    assert.equal((await liens.accesDuJeton(renouvele.lien.split("/e/")[1])).permanent.id, espace.permanentId);
   });
 });
 

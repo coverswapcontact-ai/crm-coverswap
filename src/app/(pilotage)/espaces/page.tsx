@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { listerEspaces } from "@/lib/espace/suivi";
+import { listerClientsEspaces } from "@/lib/espace/suivi";
 import EcranEspaces from "./_components/EcranEspaces";
 
 export const metadata: Metadata = {
   title: "Espaces clients — CoverSwap",
-  description: "Ce que chaque client fait dans son espace : étape, photos, choix, devis relu, dernière visite, et qui a la main.",
+  description: "Un client, son espace, ses projets : où il en est dans chacun, ce qu'il a fait, dernière visite, et qui a la main.",
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function EspacesPage() {
-  return <EcranEspaces initial={await listerEspaces()} />;
+  return <EcranEspaces initial={await listerClientsEspaces()} />;
 }

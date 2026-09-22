@@ -2,95 +2,87 @@ import type { Unite } from "@/lib/dossiers/constants";
 import { listerPresets } from "@/lib/dossiers/presets";
 import type { PresetVue } from "@/lib/dossiers/types";
 import prisma from "@/lib/prisma";
-import { lireZones, ZONES, ZONES_PROJET_CLIENT, estZone, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { cleSousPartie, famille, famillesDe, lireSelection, resumerSelection, selectionDepuisZones, type IdFamille, type SelectionPrestations, type TaillesProjet } from "@/lib/prestations/prestations";
+import { tarifDeLaSousPartie } from "@/lib/prestations/tarifs";
+import { lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { lireProjet } from "./projet";
 
 /**
- * Le devis qui part du choix du client : ce qu'il a validé dans son espace (une
- * teinte par zone) et ses mètres, posés sur les tarifs de Lucas. Un point de
- * départ, jamais un devis : rien n'est émis sans lui. Aucun prix n'est inventé —
- * une zone sans tarif enregistré garde son prix à saisir, un métré inconnu sa
- * quantité à saisir : le générateur refuse de produire le document tant qu'ils
- * manquent.
+ * Le devis qui part du projet du client : les SOUS-PARTIES cochées (fichier des
+ * prestations, quelle que soit la famille), chacune à SON tarif (celui que
+ * Lucas lui attribue, sinon trouvé par mots-clés), les teintes de la
+ * simulation validée, la taille qu'il a donnée. Un point de départ, jamais un
+ * devis : rien n'est émis sans Lucas. Aucun prix n'est inventé — une
+ * sous-partie sans tarif garde son prix à saisir, une quantité inconnue reste
+ * à saisir : le générateur refuse de produire le document tant qu'ils manquent.
  */
 
 export type LigneProposee = { designation: string; sousDesignation: string; quantite: number | null; unite: Unite; prixUnitaire: number | null };
 export type DevisPropose = { lignes: LigneProposee[]; resume: string };
 
-/** Une zone à chiffrer : sa teinte si le client l'a choisie. */
+/** Une zone à chiffrer : sa teinte si le client l'a choisie (ancien appel, par zones). */
 export type ZoneAChiffrer = { zone: string; libelle: string; ref: string | null; nom: string | null };
 
-const normaliser = (texte: string) =>
-  texte
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
+const teinteDe = (z: { ref: string | null; nom: string | null } | undefined) => (z && (z.nom || z.ref) ? `${z.nom || z.ref}${z.ref && z.nom ? ` (${z.ref})` : ""}` : "");
 
 /**
- * Zones chiffrées sur une même ligne, et les mots qui désignent leur tarif dans
- * la liste de Lucas (essayés dans l'ordre : tous les mots d'une alternative
- * doivent y être). Un tarif de « nouvelle crédence » (Dibond, dépose) n'est pas
- * celui d'une crédence recouverte : seul « revêtement … crédence » compte.
+ * Les lignes : les sous-parties cochées, dans l'ordre du fichier ; celles qui
+ * partagent un tarif (façades hautes et basses au même prix du mètre) tiennent
+ * sur une ligne, qui les nomme. La taille d'une famille (mètres de meubles) va
+ * à sa première ligne « au mètre » de meubles — jamais à un plan de travail ni
+ * à une crédence ; un nombre de portes s'écrit dans le détail (le tarif est au
+ * mètre : la quantité reste à mesurer).
  */
-const GROUPES: { zones: string[]; tarif: string[][]; designation: string; auMetre: boolean }[] = [
-  { zones: ["meubles-hauts", "meubles-bas"], tarif: [["revetement", "facade"], ["revetement", "cuisine"]], designation: "Revêtement adhésif — façades de cuisine", auMetre: true },
-  { zones: ["plan-de-travail"], tarif: [["revetement", "plan de travail"]], designation: "Revêtement adhésif — plan de travail", auMetre: false },
-  { zones: ["credence"], tarif: [["revetement", "credence"]], designation: "Revêtement adhésif — crédence", auMetre: false },
-  { zones: ["meuble-vasque"], tarif: [["revetement", "vasque"], ["revetement", "salle de bain"]], designation: "Revêtement adhésif — meuble vasque", auMetre: true },
-  { zones: ["plan-vasque"], tarif: [["revetement", "plan vasque"]], designation: "Revêtement adhésif — plan vasque", auMetre: false },
-  { zones: ["portes-dressing"], tarif: [["revetement", "dressing"]], designation: "Revêtement adhésif — portes de dressing", auMetre: true },
-  { zones: ["meuble-tv"], tarif: [["revetement", "meuble tv"]], designation: "Revêtement adhésif — meuble TV", auMetre: true },
-  { zones: ["comptoir-habillage", "comptoir-plateau"], tarif: [["revetement", "bar"], ["revetement", "comptoir"]], designation: "Revêtement adhésif — bar / comptoir", auMetre: true },
-  { zones: ["mobilier-pro", "rangements-pro"], tarif: [["revetement", "mobilier"]], designation: "Revêtement adhésif — mobilier", auMetre: true },
-];
-
-function tarifDe(motsPossibles: string[][], presets: PresetVue[]): PresetVue | null {
-  for (const mots of motsPossibles) {
-    const trouve = presets.find((p) => {
-      const designation = normaliser(p.designation);
-      return mots.every((mot) => designation.includes(mot));
-    });
-    if (trouve) return trouve;
+export function proposerLignesPrestations(selection: SelectionPrestations, teintes: Map<string, ZoneAChiffrer>, tailles: TaillesProjet, presets: PresetVue[]): LigneProposee[] {
+  type Groupe = { cle: string; famille: IdFamille; designation: string; unite: Unite; prixUnitaire: number | null; parties: { libelle: string; teinte: string; metrage: boolean }[] };
+  const groupes: Groupe[] = [];
+  for (const familleId of famillesDe(selection)) {
+    const f = famille(familleId);
+    for (const spId of selection[familleId] ?? []) {
+      const sp = f.sousParties.find((s) => s.id === spId);
+      if (!sp) continue;
+      const { preset } = tarifDeLaSousPartie(cleSousPartie(familleId, spId), presets);
+      const cle = preset ? `${familleId}:${preset.id}` : `${familleId}.${spId}`;
+      const teinte = [...new Set(sp.zones.map((z) => teinteDe(teintes.get(z))).filter(Boolean))].join(" / ");
+      let groupe = groupes.find((g) => g.cle === cle);
+      if (!groupe) {
+        groupe = { cle, famille: familleId, designation: preset?.designation ?? sp.tarif.designation, unite: preset?.unite ?? sp.tarif.unite, prixUnitaire: preset?.prixUnitaire ?? null, parties: [] };
+        groupes.push(groupe);
+      }
+      groupe.parties.push({ libelle: sp.libelle, teinte, metrage: Boolean(sp.metrage) });
+    }
   }
-  return null;
+  const metreUtilise = new Set<IdFamille>();
+  return groupes.map((g) => {
+    const t = tailles[g.famille];
+    const q = famille(g.famille).taille;
+    const avecMetre = q.unite === "m" && Boolean(t?.valeur) && !metreUtilise.has(g.famille) && g.unite === "ml" && g.parties.some((p) => p.metrage);
+    if (avecMetre) metreUtilise.add(g.famille);
+    const nommees = g.parties;
+    const detail =
+      nommees.length > 1
+        ? nommees.map((p) => (p.teinte ? `${p.libelle} : ${p.teinte}` : p.libelle)).join(" · ")
+        : // Une seule sous-partie : sa teinte ; son nom aussi quand la désignation du tarif ne le dit pas (« cuisine / façades »).
+          [g.designation.toLowerCase().includes(nommees[0].libelle.toLowerCase()) ? "" : nommees[0].libelle, nommees[0].teinte].filter(Boolean).join(" : ");
+    const portes = q.unite === "portes" && t?.valeur && !metreUtilise.has(g.famille) ? `≈ ${t.valeur} porte${t.valeur > 1 ? "s" : ""} (estimation du client)` : "";
+    if (portes) metreUtilise.add(g.famille);
+    return {
+      designation: g.designation,
+      sousDesignation: [detail, portes].filter(Boolean).join(" — "),
+      quantite: avecMetre ? (t?.valeur ?? null) : null,
+      unite: g.unite,
+      prixUnitaire: g.prixUnitaire,
+    };
+  });
 }
 
-const teinte = (z: ZoneAChiffrer) => (z.nom || z.ref ? `${z.nom || z.ref}${z.ref && z.nom ? ` (${z.ref})` : ""}` : "");
-
-/**
- * Les lignes : une par groupe de zones (les façades hautes et basses ensemble),
- * dans l'ordre des groupes. Le métré du client (des meubles mis bout à bout) va
- * à la première ligne de meubles — les façades d'une cuisine, le meuble seul —
- * si son tarif est au mètre ; jamais à un plan de travail ni à une crédence,
- * qu'il ne mesure pas.
- */
+/** Ancien appel (par zones du moteur) : les zones deviennent des sous-parties, les mètres la taille de leur famille. */
 export function proposerLignes(zones: ZoneAChiffrer[], metres: number | null, presets: PresetVue[]): LigneProposee[] {
-  const lignes: LigneProposee[] = [];
-  const vues = new Set<string>();
-  let metreUtilise = false;
-  for (const groupe of GROUPES) {
-    const presentes = zones.filter((z) => groupe.zones.includes(z.zone) && !vues.has(z.zone));
-    if (presentes.length === 0) continue;
-    presentes.forEach((z) => vues.add(z.zone));
-    const tarif = tarifDe(groupe.tarif, presets);
-    const unite: Unite = tarif?.unite ?? "ml";
-    const avecTeinte = presentes.filter((z) => teinte(z));
-    const sousDesignation = presentes.length > 1 ? avecTeinte.map((z) => `${z.libelle} : ${teinte(z)}`).join(" · ") : avecTeinte.map(teinte).join("");
-    const avecMetre = groupe.auMetre && !metreUtilise && unite === "ml" && metres !== null && metres > 0;
-    if (avecMetre) metreUtilise = true;
-    lignes.push({
-      designation: tarif?.designation ?? groupe.designation,
-      sousDesignation,
-      quantite: avecMetre ? metres : null,
-      unite,
-      prixUnitaire: tarif?.prixUnitaire ?? null,
-    });
-  }
-  // Une zone qu'aucun groupe ne connaît (ancienne simulation, zone libre) : une ligne à elle, à chiffrer.
-  for (const z of zones.filter((z) => !vues.has(z.zone))) {
-    lignes.push({ designation: `Revêtement adhésif — ${(z.libelle || z.zone).toLowerCase()}`, sousDesignation: teinte(z), quantite: null, unite: "ml", prixUnitaire: null });
-  }
-  return lignes;
+  const selection = selectionDepuisZones(zones.map((z) => z.zone));
+  const teintes = new Map(zones.map((z) => [z.zone, z]));
+  const tailles: TaillesProjet = {};
+  if (metres) for (const f of famillesDe(selection)) tailles[f] = { repere: null, valeur: metres };
+  return proposerLignesPrestations(selection, teintes, tailles, presets);
 }
 
 type Choix = { mode: "UNE"; simulationId: string } | { mode: "COMPOSITE"; zones: ZoneTeinte[] };
@@ -105,35 +97,38 @@ function lireChoix(json: string | null): Choix | null {
   }
 }
 
-/** Libellé d'une zone : celui de la simulation, sinon celui du simulateur, sinon celui de l'espace (« Murs carrelés »). */
-const libelleZone = (zone: string, libelle?: string) =>
-  libelle || (estZone(zone) ? ZONES[zone].libelle : (Object.values(ZONES_PROJET_CLIENT).flat().find((z) => z.id === zone)?.libelle ?? zone));
-
-/** La proposition pour un dossier : son choix d'abord, sinon ce qu'il veut traiter ; null s'il n'a rien dit. */
+/**
+ * La proposition pour un dossier : ses familles et sous-parties (le dossier),
+ * les teintes de la simulation validée, la taille qu'il a donnée ; null s'il
+ * n'a rien dit. Sans sous-partie cochée, les surfaces de la simulation validée
+ * disent ce qu'il y a à chiffrer.
+ */
 export async function devisProposeDuDossier(dossierId: string): Promise<DevisPropose | null> {
-  const espace = await prisma.espaceClient.findUnique({
-    where: { dossierId },
-    select: { souhaits: true, choix: true, simulations: { where: { archiveLe: null }, select: { id: true, zones: true } } },
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    select: { clientNom: true, prestations: true, lead: { select: { typeProjet: true } }, espaces: { select: { souhaits: true, choix: true, simulations: { where: { archiveLe: null }, select: { id: true, zones: true } } } } },
   });
-  if (!espace) return null;
-  const projet = lireProjet(espace.souhaits);
-  const choix = lireChoix(espace.choix);
-  let zones: ZoneAChiffrer[] = [];
-  if (choix?.mode === "COMPOSITE") zones = choix.zones.map((z) => ({ zone: z.zone, libelle: libelleZone(z.zone, z.libelle), ref: z.ref || null, nom: z.nom || null }));
-  else if (choix?.mode === "UNE") {
-    const simulation = espace.simulations.find((s) => s.id === choix.simulationId);
-    zones = lireZones(simulation?.zones).map((z) => ({ zone: z.zone, libelle: libelleZone(z.zone, z.libelle), ref: z.ref || null, nom: z.nom || null }));
-  }
-  const depuisChoix = zones.length > 0;
-  // « Autre chose » se dit dans la note du projet : pas de ligne de devis à deviner.
-  if (!depuisChoix && projet) zones = projet.zones.filter((zone) => zone !== "autre").map((zone) => ({ zone, libelle: libelleZone(zone), ref: null, nom: null }));
-  if (zones.length === 0) return null;
-
-  const [presets, dossier] = await Promise.all([listerPresets(), prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true } })]);
-  const metres = projet?.metres ?? null;
-  const lignes = proposerLignes(zones, metres, presets);
-  const qui = dossier?.clientNom.trim().split(/\s+/)[0] || "le client";
-  const quoi = depuisChoix ? `son choix (${zones.map((z) => `${z.libelle} : ${teinte(z) || "?"}`).join(" · ")})` : `ce qu'il veut traiter (${zones.map((z) => z.libelle).join(", ")}), teintes à préciser`;
-  const combien = metres ? ` et ≈ ${String(metres).replace(".", ",")} m de meubles, son estimation` : ", métré inconnu";
-  return { lignes, resume: `D'après l'espace de ${qui} : ${quoi}${combien}.` };
+  if (!dossier) return null;
+  const espace = dossier.espaces[0] ?? null;
+  const projet = lireProjet(espace?.souhaits, lireSelection(dossier.prestations), dossier.lead?.typeProjet);
+  const choix = lireChoix(espace?.choix ?? null);
+  let zonesChoisies: ZoneTeinte[] = [];
+  if (choix?.mode === "COMPOSITE") zonesChoisies = choix.zones;
+  else if (choix?.mode === "UNE") zonesChoisies = lireZones(espace?.simulations.find((s) => s.id === choix.simulationId)?.zones ?? null);
+  const teintes = new Map(zonesChoisies.map((z) => [z.zone, { zone: z.zone, libelle: z.libelle, ref: z.ref || null, nom: z.nom || null }]));
+  let selection = projet?.familles ?? {};
+  // Rien de coché mais une simulation validée : ses surfaces disent ce qu'il y a à chiffrer.
+  if (famillesDe(selection).every((f) => (selection[f] ?? []).length === 0) && zonesChoisies.length > 0) selection = selectionDepuisZones(zonesChoisies.map((z) => z.zone));
+  const lignes = proposerLignesPrestations(selection, teintes, projet?.tailles ?? {}, await listerPresets());
+  if (lignes.length === 0) return null;
+  const qui = dossier.clientNom.trim().split(/\s+/)[0] || "le client";
+  const avecTeintes = zonesChoisies.length > 0 ? `, teintes de sa simulation validée (${zonesChoisies.map((z) => `${z.libelle || z.zone} : ${teinteDe({ ref: z.ref || null, nom: z.nom || null }) || "?"}`).join(" · ")})` : ", teintes à préciser";
+  const tailles = famillesDe(selection)
+    .map((f) => {
+      const t = projet?.tailles[f];
+      if (!t?.valeur) return null;
+      return famille(f).taille.unite === "portes" ? `≈ ${t.valeur} portes (${famille(f).libelle.toLowerCase()})` : `≈ ${String(t.valeur).replace(".", ",")} m (${famille(f).libelle.toLowerCase()})`;
+    })
+    .filter(Boolean);
+  return { lignes, resume: `D'après l'espace de ${qui} : ${resumerSelection(selection)}${avecTeintes}${tailles.length ? ` ; ${tailles.join(", ")}, son estimation` : ", métré inconnu"}.` };
 }

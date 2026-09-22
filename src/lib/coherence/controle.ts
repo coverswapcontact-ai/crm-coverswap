@@ -7,7 +7,9 @@ import { suivreSoldeDossier } from "@/lib/encaissements/service";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
 import { dateSignature, lireDevisEtPaiements } from "@/lib/espace/faits";
 import { lireProjet, projetComplet } from "@/lib/espace/projet";
+import { lireSelection } from "@/lib/prestations/prestations";
 import { devaliderChoix, devaliderProjet, RAISON_PROJET_VALIDE } from "@/lib/espace/validations";
+import { figeDuProjet, LIMITE_PROJETS_EN_COURS, projetsVisibles } from "@/lib/espace/projets";
 
 /**
  * Contrôle de cohérence : chaque section du CRM dit une partie de la vérité sur
@@ -34,7 +36,10 @@ export type CodeIncoherence =
   | "STATUT_DU_LEAD"
   | "LEAD_A_PLUSIEURS_DOSSIERS"
   | "ESPACE_ACTIF_DOSSIER_ARCHIVE"
-  | "SIMULATIONS_HORS_DOSSIER";
+  | "SIMULATIONS_HORS_DOSSIER"
+  // Mission 5 (22/09/2026) : l'espace permanent et ses projets.
+  | "PROJET_FIGE_MODIFIE"
+  | "PROJETS_AU_DELA_DE_LA_LIMITE";
 
 export type Incoherence = {
   /** Stable d'un passage à l'autre : code + dossier (ou lead). */
@@ -72,7 +77,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
   const dossiers = await prisma.dossier.findMany({
     where: { etape: { not: "PERDU" } },
     select: {
-      id: true, clientNom: true, etape: true, prochaineAction: true, leadId: true,
+      id: true, clientNom: true, etape: true, prochaineAction: true, leadId: true, prestations: true,
       lead: { select: { id: true, statut: true, typeProjet: true, archiveLe: true } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
       accords: true,
@@ -117,7 +122,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     // Espace : projet, simulation validée.
     if (espace) {
       if (espace.projetValideLe) {
-        const manque = projetComplet(lireProjet(espace.souhaits), d.lead?.typeProjet ?? "CUISINE");
+        const manque = projetComplet(lireProjet(espace.souhaits, lireSelection(d.prestations), d.lead?.typeProjet));
         if (manque) signaler("PROJET_VALIDE_INCOMPLET", "MOYENNE", `Le projet est marqué « validé » mais il est incomplet (${manque.replace(/\.$/, "").toLowerCase()}).`, "Dévalider le projet (le client le complète et le revalide)");
         else if (d.etape === "QUALIFICATION") signaler("PROJET_VALIDE_SANS_AVANCER", "MOYENNE", "Le client a validé son projet, mais le dossier est resté en « Qualification ».", "Passer le dossier en « Simulation »");
       }
@@ -157,7 +162,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
   }
 
   // Espaces encore actifs de dossiers archivés ; simulations restées hors du dossier que le contact a pourtant.
-  const orphelins = await prisma.espaceClient.findMany({ where: { revoqueLe: null, dossier: { archiveLe: { not: null } } }, select: { id: true, dossierId: true, dossier: { select: { clientNom: true, leadId: true } } } });
+  const orphelins = await prisma.espaceClient.findMany({ where: { revoqueLe: null, permanentId: null, dossier: { archiveLe: { not: null } } }, select: { id: true, dossierId: true, dossier: { select: { clientNom: true, leadId: true } } } });
   for (const e of orphelins) incoherences.push({ cle: `ESPACE_ACTIF_DOSSIER_ARCHIVE:${e.dossierId}`, code: "ESPACE_ACTIF_DOSSIER_ARCHIVE", gravite: "HAUTE", dossierId: e.dossierId, leadId: e.dossier.leadId, client: e.dossier.clientNom, constat: "Le dossier est archivé mais le lien de son espace client fonctionne encore.", correction: "Désactiver le lien" });
   const aRanger = await prisma.lead.findMany({
     where: { dossiers: { some: { archiveLe: null, etape: { notIn: ["PERDU", "ENCAISSE"] } } }, simulations: { some: { dossierId: null, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }] } } },
@@ -165,8 +170,81 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
   });
   for (const l of aRanger) incoherences.push({ cle: `SIMULATIONS_HORS_DOSSIER:${l.id}`, code: "SIMULATIONS_HORS_DOSSIER", gravite: "MOYENNE", dossierId: l.dossiers[0]?.id ?? null, leadId: l.id, client: `${l.prenom} ${l.nom}`.trim(), constat: "Ce contact a un dossier, mais certaines de ses simulations du site n'y sont pas rangées (ni dans son espace).", correction: "Les ranger dans son dossier" });
 
+  // Espace permanent (mission 5) : un projet figé ne bouge plus ; jamais plus de projets en cours que la limite.
+  incoherences.push(...(await projetsFigesModifies()), ...(await projetsAuDelaDeLaLimite()));
+
   incoherences.sort((a, b) => (a.gravite === b.gravite ? a.client.localeCompare(b.client) : a.gravite === "HAUTE" ? -1 : 1));
   return { le: new Date().toISOString(), dureeMs: Date.now() - debut, dossiersControles: dossiers.length, incoherences };
+}
+
+/** Ce qu'un client peut encore faire sur un projet figé : le regarder, le relire, laisser son avis, écrire. */
+const GESTES_PERMIS_SUR_UN_PROJET_FIGE = ["ESPACE_VISITE", "ESPACE_DEVIS_CONSULTE", "ESPACE_AVIS", "ESPACE_MESSAGE", "ESPACE_SIMULATIONS_VUES", "ESPACE_PROJET_DEMANDE", "ESPACE_CONFIRMATION_BLOQUEE"];
+
+/**
+ * Un projet terminé (encaissé) ou non réalisé (perdu) se consulte, il ne se
+ * modifie plus : un geste du client dans son espace APRÈS la date où le projet
+ * s'est figé est une incohérence (l'espace l'aurait refusé ; s'il est passé,
+ * c'est un défaut à regarder). Rien à corriger d'office : Lucas lit ce qui a changé.
+ */
+async function projetsFigesModifies(): Promise<Incoherence[]> {
+  const projets = await prisma.espaceClient.findMany({
+    where: { archiveLe: null, dossier: { archiveLe: null, etape: { in: ["ENCAISSE", "PERDU"] } } },
+    select: { dossierId: true, dossier: { select: { etape: true, clientNom: true, leadId: true } } },
+  });
+  const trouvees: Incoherence[] = [];
+  for (const p of projets) {
+    const fige = figeDuProjet(p.dossier.etape);
+    const passage = await prisma.dossierEvenement.findFirst({ where: { dossierId: p.dossierId, type: "CHANGEMENT_ETAPE", archiveLe: null, metadata: { contains: `"vers":"${p.dossier.etape}"` } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+    if (!passage || !fige) continue;
+    const apres = await prisma.dossierEvenement.findFirst({
+      where: {
+        dossierId: p.dossierId,
+        archiveLe: null,
+        direction: "ENTRANT",
+        createdAt: { gt: passage.createdAt },
+        OR: [{ type: { startsWith: "ESPACE_", notIn: GESTES_PERMIS_SUR_UN_PROJET_FIGE } }, { type: "PRESTATIONS" }],
+      },
+      orderBy: { createdAt: "asc" },
+      select: { contenu: true, createdAt: true },
+    });
+    if (!apres) continue;
+    trouvees.push({
+      cle: `PROJET_FIGE_MODIFIE:${p.dossierId}`,
+      code: "PROJET_FIGE_MODIFIE",
+      gravite: "HAUTE",
+      dossierId: p.dossierId,
+      leadId: p.dossier.leadId,
+      client: p.dossier.clientNom,
+      constat: `Le projet est ${fige === "TERMINE" ? "terminé et encaissé" : "non réalisé"} depuis le ${passage.createdAt.toLocaleDateString("fr-FR")}, mais l'espace du client l'a encore modifié le ${apres.createdAt.toLocaleDateString("fr-FR")} : « ${apres.contenu.slice(0, 140)} ». Un projet figé ne bouge plus.`,
+      correction: null,
+    });
+  }
+  return trouvees;
+}
+
+/** Au plus deux projets en cours par espace, plus ceux que Lucas a accordés : au-delà, une incohérence. */
+async function projetsAuDelaDeLaLimite(): Promise<Incoherence[]> {
+  const permanents = await prisma.espacePermanent.findMany({ where: { archiveLe: null, fusionneDansId: null }, select: { id: true, projetsAccordes: true } });
+  const trouvees: Incoherence[] = [];
+  for (const permanent of permanents) {
+    const projets = await projetsVisibles(prisma, permanent.id);
+    const enCours = projets.filter((p) => !figeDuProjet(p.dossier.etape));
+    const limite = LIMITE_PROJETS_EN_COURS + permanent.projetsAccordes;
+    if (enCours.length <= limite) continue;
+    const dernier = enCours.at(-1)!;
+    const dossier = await prisma.dossier.findUnique({ where: { id: dernier.dossierId }, select: { clientNom: true, leadId: true } });
+    trouvees.push({
+      cle: `PROJETS_AU_DELA_DE_LA_LIMITE:${permanent.id}`,
+      code: "PROJETS_AU_DELA_DE_LA_LIMITE",
+      gravite: "MOYENNE",
+      dossierId: dernier.dossierId,
+      leadId: dossier?.leadId ?? null,
+      client: dossier?.clientNom ?? "Client",
+      constat: `Ce client a ${enCours.length} projets en cours dans son espace, pour une limite de ${limite} (${LIMITE_PROJETS_EN_COURS} + ${permanent.projetsAccordes} accordé${permanent.projetsAccordes > 1 ? "s" : ""}).`,
+      correction: "Accorder ces projets en cours (la limite suit)",
+    });
+  }
+  return trouvees;
 }
 
 /* ── Corriger ──────────────────────────────────────────────────────── */
@@ -246,6 +324,16 @@ export async function corrigerIncoherence(cle: string): Promise<{ corrigee: bool
     case "SIMULATIONS_HORS_DOSSIER": {
       const { assurerDossierDeSimulation } = await import("@/lib/dossiers/depuis-lead");
       await assurerDossierDeSimulation(incoherence.leadId!);
+      break;
+    }
+    case "PROJETS_AU_DELA_DE_LA_LIMITE": {
+      const permanentId = cle.split(":")[1];
+      const projets = await projetsVisibles(prisma, permanentId);
+      const enCours = projets.filter((p) => !figeDuProjet(p.dossier.etape)).length;
+      const { accorderProjets } = await import("@/lib/espace/projets");
+      const permanent = await prisma.espacePermanent.findUniqueOrThrow({ where: { id: permanentId }, select: { projetsAccordes: true } });
+      const manque = enCours - (LIMITE_PROJETS_EN_COURS + permanent.projetsAccordes);
+      if (manque > 0) await accorderProjets(permanentId, Math.min(5, manque));
       break;
     }
     default:

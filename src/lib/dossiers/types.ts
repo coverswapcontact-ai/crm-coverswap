@@ -1,3 +1,4 @@
+import type { SelectionPrestations } from "@/lib/prestations/prestations";
 // Formes sérialisées échangées entre le serveur et l'interface /dossiers
 // (dates en ISO, JSON déjà décodé). Aucune dépendance serveur.
 
@@ -37,6 +38,8 @@ export type DossierResume = {
   ouvertLe: string;
   createdAt: string;
   updatedAt: string;
+  /** Familles et sous-parties du projet (src/lib/prestations) : visibles sur la carte, modifiables dans le dossier. */
+  prestations: SelectionPrestations;
 };
 
 export type PhotoVue = { id: string; url: string; type: string; /** Après chantier (portfolio). */ apres: boolean };
@@ -115,6 +118,8 @@ export type PresetVue = {
   designation: string;
   unite: Unite;
   prixUnitaire: number | null;
+  /** Sous-parties des prestations que ce tarif chiffre (« CUISINE.facades-hautes ») : attribuées par Lucas. */
+  prestations?: string[];
 };
 
 export type PreRemplissageDossier = {

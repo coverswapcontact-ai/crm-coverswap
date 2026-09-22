@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { reponseErreur } from "@/lib/commun/api";
-import { listerEspaces } from "@/lib/espace/suivi";
+import { listerClientsEspaces } from "@/lib/espace/suivi";
 
 export const dynamic = "force-dynamic";
 
-/** GET : tous les espaces clients — étape, ce que le client a fait, dernière visite, qui a la main, signaux. */
+/**
+ * GET : les espaces clients, PAR CLIENT (son lien, ses visites, ses projets et où il en est dans chacun) ; `espaces` :
+ * les mêmes projets à plat (écrans d'avant).
+ */
 export async function GET() {
   try {
-    return NextResponse.json({ espaces: await listerEspaces() });
+    const clients = await listerClientsEspaces();
+    return NextResponse.json({ clients, espaces: clients.flatMap((c) => c.projets) });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/espaces");
   }

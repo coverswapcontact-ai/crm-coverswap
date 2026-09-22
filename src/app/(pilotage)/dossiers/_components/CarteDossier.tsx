@@ -9,6 +9,7 @@ import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { PastilleEtape, TRANS } from "./ui";
+import { ChipsFamilles } from "./FamillesDossier";
 
 /** Pastille rouge : prochaine action dépassée. */
 export function PastilleRetard({ className }: { className?: string }) {
@@ -137,6 +138,7 @@ export function CarteDossier({
       <span className="mt-2 block truncate text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
       <span className="mt-0.5 block truncate text-[12px] text-[#6B7280]">{dossier.clientVille || "Ville à préciser"}</span>
       <span className="mt-2 block truncate text-[13px] text-[#9CA3AF]">{dossier.objet || "Objet à préciser"}</span>
+      <ChipsFamilles prestations={dossier.prestations ?? {}} className="mt-1.5" vide={false} />
       {dossier.aCompleter > 0 ? <PastilleACompleter nombre={dossier.aCompleter} className="mt-2" /> : null}
       <span className="mt-2 flex items-center justify-between gap-2">
         {montant !== null ? (

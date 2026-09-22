@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { lienEspace, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
+import { lienPourLeProjet, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { dossierDeLaConversation } from "./conversations";
 import { listerModeles } from "./modeles";
 import { mesurerSms, remplirModele } from "./texte";
@@ -45,7 +45,7 @@ async function variablesDe(conversationId: string): Promise<{ variables: Record<
     : null;
   const espace = dossier?.espaces[0] ?? null;
   const devis = dossier?.documents[0] ?? null;
-  const lien = espace ? lienEspace(espace) : null;
+  const lien = espace ? await lienPourLeProjet(espace) : null;
   const validite = devis ? new Date((devis.dateEmission ?? devis.createdAt).getTime() + VALIDITE_DEVIS_JOURS * 86_400_000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : null;
   return {
     variables: {

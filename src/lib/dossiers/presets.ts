@@ -5,6 +5,7 @@ import { PRESETS_DEPART, UNITES, type Unite } from "./constants";
 import { ErreurMetier } from "./erreurs";
 import { versCentimes } from "./montants";
 import type { PresetVue } from "./types";
+import { sousPartieDeCle } from "@/lib/prestations/prestations";
 
 // Presets de tarifs du générateur. Les valeurs de départ (PRESETS_DEPART)
 // sont écrites au premier affichage, avec des identifiants fixes : deux
@@ -28,13 +29,24 @@ export const schemaPreset = z.object({
 });
 export type EntreePreset = z.output<typeof schemaPreset>;
 
-function versVue(preset: { id: string; designation: string; unite: string; prixUnitaire: number | null }): PresetVue {
+function versVue(preset: { id: string; designation: string; unite: string; prixUnitaire: number | null; prestations?: string | null }): PresetVue {
   return {
     id: preset.id,
     designation: preset.designation,
     unite: preset.unite as Unite,
     prixUnitaire: preset.prixUnitaire,
+    prestations: lirePrestationsDuTarif(preset.prestations),
   };
+}
+
+/** Les sous-parties attribuées à un tarif (JSON) : seules les clés connues du fichier des prestations. */
+export function lirePrestationsDuTarif(json: string | null | undefined): string[] {
+  try {
+    const valeur: unknown = JSON.parse(json ?? "[]");
+    return Array.isArray(valeur) ? valeur.filter((cle): cle is string => typeof cle === "string" && sousPartieDeCle(cle) !== null) : [];
+  } catch {
+    return [];
+  }
 }
 
 async function amorcerPresets(): Promise<void> {

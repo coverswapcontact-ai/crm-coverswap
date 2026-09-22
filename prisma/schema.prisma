@@ -481,6 +481,11 @@ model Dossier {
   prochaineActionDate    DateTime?
   dateChantier           DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
   photos                 String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
+  // Mission 5 (22/09/2026) : familles et sous-parties du projet (src/lib/prestations), écrites par le client
+  // dans son onglet Projet ou par Lucas ; JSON { CUISINE: ["facades-hautes", …], SDB: [] }.
+  prestations            String?
+  prestationsLe          DateTime?
+  prestationsPar         String? // CLIENT | LUCAS | REPRISE
   notes                  DossierNote[]
   evenements             DossierEvenement[]
   documents              Document[]
@@ -582,6 +587,9 @@ model PresetTarif {
   designation  String
   unite        String // ml | jour | forfait
   prixUnitaire Float? // null = à saisir à chaque devis (carburant, péage, mission)
+  // Sous-parties des prestations (src/lib/prestations) que ce tarif chiffre dans le devis prérempli :
+  // JSON ["CUISINE.facades-hautes", …] ; sans rien, le devis cherche un tarif par mots-clés.
+  prestations  String?
   ordre        Int       @default(0)
   actif        Boolean   @default(true)
   archiveLe    DateTime? // archivage : rien ne se supprime
@@ -757,6 +765,7 @@ model Client {
   messages           Message[]
   documents          Document[]
   encaissements      Encaissement[]
+  espacePermanent    EspacePermanent?
   archiveLe          DateTime? // archivage : rien ne se supprime
   archiveMotif       String?
   ecriture           String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -1246,44 +1255,81 @@ model ModeleSms {
 // incrémenter `version` : tous les anciens liens meurent d'un coup.
 // ─────────────────────────────────────────────
 
+// L'espace PERMANENT d'un client (mission 5, 22/09/2026) : un client = un espace, pour toujours. Son lien
+// (code + version signés, src/lib/espace/liens.ts) ne meurt pas ; il se révoque ou se régénère. Il contient
+// ses projets (EspaceClient, un par dossier), ses favoris, et la confirmation du téléphone demandée après
+// 90 jours sans visite.
+model EspacePermanent {
+  id                  String         @id @default(cuid())
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  code                String         @unique
+  version             Int            @default(1)
+  clientId            String         @unique
+  client              Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  lienEmisLe          DateTime       @default(now()) // dernière émission du lien (création, régénération)
+  revoqueLe           DateTime?
+  premierAccesLe      DateTime?
+  dernierAccesLe      DateTime?
+  nbAcces             Int            @default(0)
+  confirmeLe          DateTime? // dernière confirmation du téléphone (4 derniers chiffres)
+  confirmationEchecs  Int            @default(0) // essais manqués depuis la dernière réussite
+  confirmationEchecLe DateTime?
+  favoris             String? // JSON : références Cover Styl' mises en favori (catalogue de l'espace)
+  projetsAccordes     Int            @default(0) // projets en cours accordés par Lucas au-delà de deux
+  projetDemandeLe     DateTime? // le client a demandé à ouvrir un projet de plus
+  fusionneDansId      String? // clients fusionnés : l'espace conservé, vers lequel ce lien mène
+  projets             EspaceClient[]
+  archiveLe           DateTime?
+  archiveMotif        String?
+  ecriture            String?
+}
+
 model EspaceClient {
-  id                     String             @id @default(cuid())
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
-  code                   String             @unique // court, lisible dans l'adresse
-  version                Int                @default(1)
-  dossierId              String             @unique // un espace par dossier
-  dossier                Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
-  expireLe               DateTime
-  revoqueLe              DateTime?
-  premierAccesLe         DateTime?
-  dernierAccesLe         DateTime?
-  nbAcces                Int                @default(0)
-  souhaits               String? // JSON : le projet du client (zones, styles, mètres, délai, précisions) — ancien format : teintes, style
-  souhaitsLe             DateTime?
-  choix                  String? // JSON : une simulation, ou une teinte par zone piochée dans plusieurs (choix composite)
-  choixLe                DateTime?
-  propositionDemandeeLe  DateTime? // dernière demande d'une autre proposition
-  devisConsultations     Int                @default(0) // visites où le client a ouvert son devis en vigueur
-  devisConsulteId        String? // devis auquel se rapporte le compteur
-  devisConsulteLe        DateTime?
-  simulationsVuesLe      DateTime? // dernière ouverture de ses simulations : au-delà, elles sont « nouvelles »
-  avis                   String? // JSON : note, texte, accord de publication (après le chantier)
-  avisLe                 DateTime?
+  id                      String             @id @default(cuid())
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  code                    String             @unique // court, lisible dans l'adresse
+  version                 Int                @default(1)
+  dossierId               String             @unique // un espace par dossier
+  dossier                 Dossier            @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  expireLe                DateTime
+  revoqueLe               DateTime?
+  premierAccesLe          DateTime?
+  dernierAccesLe          DateTime?
+  nbAcces                 Int                @default(0)
+  souhaits                String? // JSON : le projet du client (zones, styles, mètres, délai, précisions) — ancien format : teintes, style
+  souhaitsLe              DateTime?
+  choix                   String? // JSON : une simulation, ou une teinte par zone piochée dans plusieurs (choix composite)
+  choixLe                 DateTime?
+  propositionDemandeeLe   DateTime? // dernière demande d'une autre proposition
+  devisConsultations      Int                @default(0) // visites où le client a ouvert son devis en vigueur
+  devisConsulteId         String? // devis auquel se rapporte le compteur
+  devisConsulteLe         DateTime?
+  simulationsVuesLe       DateTime? // dernière ouverture de ses simulations : au-delà, elles sont « nouvelles »
+  avis                    String? // JSON : note, texte, accord de publication (après le chantier)
+  avisLe                  DateTime?
   // Espace v3 (21/09/2026) : le client crée ses simulations lui-même, dans une limite.
-  simulationsAccordees   Int                @default(0) // simulations offertes en plus du nombre gratuit (paramètre)
-  simulationsDemandeesLe DateTime? // dernière demande de simulations supplémentaires
-  favoris                String? // JSON : références Cover Styl' mises en favori par le client
+  simulationsAccordees    Int                @default(0) // simulations offertes en plus du nombre gratuit (paramètre)
+  simulationsDemandeesLe  DateTime? // dernière demande de simulations supplémentaires
+  favoris                 String? // JSON : références Cover Styl' mises en favori par le client
   // Mission 4 (22/09/2026) : tout ce que le client valide se dévalide ; ce qu'il écrit reste lisible ici.
-  projetValideLe         DateTime? // le client a validé son projet (pastille verte) ; remis à null s'il le modifie ou le dévalide
-  projetValidePar        String? // CLIENT | LUCAS : qui a validé
-  propositionMessage     String? // le mot du client avec sa demande d'autre proposition (entier)
+  projetValideLe          DateTime? // le client a validé son projet (pastille verte) ; remis à null s'il le modifie ou le dévalide
+  projetValidePar         String? // CLIENT | LUCAS : qui a validé
+  propositionMessage      String? // le mot du client avec sa demande d'autre proposition (entier)
   propositionSimulationId String? // la simulation depuis laquelle il a demandé autre chose
-  photosRetirees         String? // JSON [{ id, chemin, archive, le }] : photos retirées par le client (archivées, retrouvables)
-  simulations            SimulationEspace[]
-  archiveLe              DateTime?
-  archiveMotif           String?
-  ecriture               String?
+  photosRetirees          String? // JSON [{ id, chemin, archive, le }] : photos retirées par le client (archivées, retrouvables)
+  // Mission 5 (22/09/2026) : cet espace est un PROJET de l'espace permanent de son client. Son code reste
+  // un lien valide (alias) : il ouvre l'espace du client sur ce projet.
+  permanentId             String?
+  permanent               EspacePermanent?   @relation(fields: [permanentId], references: [id], onDelete: Restrict)
+  nomProjet               String? // le nom que le client lui a donné (« La salle de bain du haut »)
+  simulations             SimulationEspace[]
+  archiveLe               DateTime?
+  archiveMotif            String?
+  ecriture                String?
+
+  @@index([permanentId])
 }
 
 // Simulation déposée par Lucas dans l'espace d'un client : le client les compare,
@@ -1330,10 +1376,10 @@ model SimulationEspace {
 // Bon pour accord donné par le client dans son espace : une ligne, jamais
 // modifiée. Vaut signature même sans paiement immédiat.
 model AccordDevis {
-  id            String   @id @default(cuid())
-  createdAt     DateTime @default(now())
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
   dossierId     String
-  dossier       Dossier  @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  dossier       Dossier   @relation(fields: [dossierId], references: [id], onDelete: Restrict)
   documentId    String // le devis accepté
   numeroDevis   String?
   totalHt       Float // montant figé au moment de l'accord

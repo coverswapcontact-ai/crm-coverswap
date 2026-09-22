@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { alerter } from "@/lib/alertes/canaux";
 import { lirePhotos } from "@/lib/dossiers/stockage";
-import { lienEspace } from "@/lib/espace/liens";
+import { lienEspace, lienPourLeProjet } from "@/lib/espace/liens";
 import { estHeureOuvree } from "@/lib/sms/accuse";
 import { conversationDuNumero } from "@/lib/sms/conversations";
 import { lireModele } from "@/lib/sms/modeles";
@@ -153,7 +153,7 @@ export async function proposerRelancesSms(maintenant: Date = new Date()): Promis
     const prenom = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
     const texte = remplirModele(modele.texte, {
       prenom: /^(inconnu|client)$/i.test(prenom) ? "" : prenom.split(/\s+/)[0],
-      lien: lienEspace(espace),
+      lien: (await lienPourLeProjet(espace)) ?? lienEspace(espace),
       validite: devisDate ? new Date(devisDate.getTime() + 30 * JOUR_MS).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "la fin du mois",
       montant: devis ? `${devis.totalHt.toLocaleString("fr-FR")} EUR` : null,
     });

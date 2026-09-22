@@ -7,6 +7,7 @@ import { idPhoto, lirePhotos } from "@/lib/dossiers/stockage";
 import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "@/lib/dossiers/transitions";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { lireProjet, projetComplet, resumerProjet } from "./projet";
+import { lireSelection } from "@/lib/prestations/prestations";
 
 /**
  * Valider, dévalider, revalider — et tout ce qui se défait dans l'espace client.
@@ -40,7 +41,7 @@ async function prevenir(dossierId: string, titre: string, texte: string, urgence
 }
 
 async function dossierDe(dossierId: string) {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, etape: true, clientNom: true, clientTelephone: true, prochaineAction: true, photos: true, lead: { select: { typeProjet: true } } } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, etape: true, clientNom: true, clientTelephone: true, prochaineAction: true, photos: true, prestations: true, lead: { select: { typeProjet: true } } } });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
   return dossier;
 }
@@ -76,21 +77,20 @@ async function dernierMouvement(dossierId: string): Promise<{ vers?: string; rai
 
 export async function validerProjet(espace: EspaceClient, auteur: Auteur): Promise<void> {
   const dossier = await dossierDe(espace.dossierId);
-  const typeProjet = dossier.lead?.typeProjet ?? "CUISINE";
-  const projet = lireProjet(espace.souhaits);
-  const manque = projetComplet(projet, typeProjet);
+  const projet = lireProjet(espace.souhaits, lireSelection(dossier.prestations), dossier.lead?.typeProjet);
+  const manque = projetComplet(projet);
   if (manque) throw new ErreurMetier(manque, 400, { raison: "incomplet" });
   if (espace.projetValideLe) return;
   const maintenant = new Date();
   await ecrire(auteur, async () => {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: maintenant, projetValidePar: auteur } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet, typeProjet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
+    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
     if (!dossier.prochaineAction || /attendre (les photos|qu'il|le projet)/i.test(dossier.prochaineAction)) {
       await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Suivre ses simulations, ou lui en préparer une (projet validé)", prochaineActionDate: maintenant } });
     }
   });
   if (dossier.etape === "QUALIFICATION") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "QUALIFICATION", "SIMULATION", "AUTOMATIQUE", RAISON_PROJET_VALIDE));
-  if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet, typeProjet), 3, dossier.clientTelephone);
+  if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet), 3, dossier.clientTelephone);
 }
 
 /** Le projet redevient modifiable : la pastille verte tombe, et le dossier recule s'il n'avait avancé que pour ça. */

@@ -80,7 +80,12 @@ export async function restaurerDossier(dossierId: string): Promise<void> {
   // Seulement ce qui n'a pas été rangé ailleurs entre-temps.
   if (detache.simulations.length) await prisma.simulation.updateMany({ where: { id: { in: detache.simulations }, dossierId: null }, data: { dossierId, rangeeLe: new Date() } });
   if (detache.photos.length) await prisma.photoLead.updateMany({ where: { id: { in: detache.photos }, dossierId: null }, data: { dossierId, rangeeLe: new Date() } });
-  await prisma.dossierEvenement.create({ data: { dossierId, type: "DOSSIER_RESTAURE", direction: "INTERNE", contenu: "Dossier restauré : il revient dans Dossiers, son lead sort de Leads. L'espace client reste désactivé tant qu'un nouveau lien n'est pas émis.", metadata: "{}" } });
+  // Un projet d'un espace permanent (mission 5) réapparaît dans l'espace du client, si son lien est actif ; un ancien espace
+  // (sans espace permanent) reste désactivé tant qu'un nouveau lien n'est pas émis.
+  const projet = await prisma.espaceClient.findUnique({ where: { dossierId }, select: { id: true, revoqueLe: true, permanent: { select: { revoqueLe: true } } } });
+  const reapparait = Boolean(projet?.revoqueLe && projet.permanent && !projet.permanent.revoqueLe);
+  if (reapparait) await prisma.espaceClient.update({ where: { id: projet!.id }, data: { revoqueLe: null } });
+  await prisma.dossierEvenement.create({ data: { dossierId, type: "DOSSIER_RESTAURE", direction: "INTERNE", contenu: `Dossier restauré : il revient dans Dossiers, son lead sort de Leads. ${reapparait ? "Le projet réapparaît dans l'espace du client." : projet ? "L'espace client reste désactivé tant qu'un nouveau lien n'est pas émis." : ""}`.trim(), metadata: "{}" } });
 }
 
 export async function dossiersArchives(): Promise<{ id: string; clientNom: string; objet: string; etape: string; archiveLe: string; archiveMotif: string | null; leadId: string | null }[]> {

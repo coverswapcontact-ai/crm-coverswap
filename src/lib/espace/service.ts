@@ -1,11 +1,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { EspaceClient, SimulationEspace } from "@prisma/client";
+import type { EspaceClient, EspacePermanent, SimulationEspace } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
-import { alerter } from "@/lib/alertes/canaux";
 import { mettreEnFile } from "@/lib/taches/file";
 import { EMETTEUR, FORMATS_PHOTO, PHOTO_OCTETS_MAX, type EtapeDossier } from "@/lib/dossiers/constants";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
@@ -15,12 +14,16 @@ import { changerEtape } from "@/lib/dossiers/transitions";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { resolveUploadsDir } from "@/lib/uploads";
-import { libelleZoneClient, lireZones, PIECES_ESPACE, TYPES_SURFACE_ESPACE, typeEspacePourProjet, ZONES, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { libelleZoneClient, lireZones, TYPES_SURFACE_ESPACE, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
+import { famille as familleDuFichier, famillesDe, IDS_FAMILLE, libellesFamilles, lireSelection, motsDuProjet, zonesPourSimulation, type IdFamille, type SelectionPrestations } from "@/lib/prestations/prestations";
 import { creditDisponible } from "@/lib/simulateur/consommation";
 import { lireParametre } from "@/lib/parametres/service";
 import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
-import { lireProjet, projetComplet, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type ProjetClient } from "./projet";
+import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
+import { ACTEUR, prevenir } from "./alertes";
+import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 
@@ -34,29 +37,12 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
  * compte : première ouverture, photos, projet précisé, simulation choisie ou
  * nouvelle proposition demandée, devis consulté, accord.
  */
-// Le client n'a pas de session : ses écritures sont celles d'un appel externe, nommé (le journal sait que c'est lui).
-const ACTEUR = { acteur: "EXTERNE:espace-client", origine: "espace-client" } as const;
 const PHOTOS_MAX_PAR_DOSSIER = 40;
 export const TACHE_ALERTE_PHOTOS = "ESPACE_PHOTOS_ALERTE";
 /** Le projet s'enregistre à la frappe : Lucas est prévenu une fois, quelques minutes après, avec la version posée. */
 export const TACHE_ALERTE_PROJET = "ESPACE_PROJET_ALERTE";
 /** Délai annoncé au client pour ses premières simulations. */
 export const DELAI_SIMULATION = "sous 24 h";
-
-const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
-const lienDossier = (dossierId: string) => `${appUrl()}/dossiers?dossier=${dossierId}`;
-const CANAUX_POUSSES = ["telegram", "ntfy", "pushweb"] as const;
-
-async function prevenir(dossierId: string, alerte: { titre: string; texte: string; urgence: 1 | 2 | 3 | 4 | 5; telephone?: string | null; etiquette?: string }, origine = "espace-client"): Promise<void> {
-  try {
-    await alerter(
-      { titre: alerte.titre, texte: alerte.texte, lien: lienDossier(dossierId), libelleLien: "Ouvrir le dossier", telephone: alerte.telephone || undefined, urgence: alerte.urgence, etiquette: alerte.etiquette ?? `espace-${dossierId}` },
-      { origine, canaux: [...CANAUX_POUSSES] }
-    );
-  } catch (erreur) {
-    console.error(`[espace] alerte « ${alerte.titre} » non envoyée :`, erreur);
-  }
-}
 
 /* ── Ce que voit le client ─────────────────────────────────────────── */
 
@@ -100,6 +86,18 @@ export type ChoixClient =
 export type EtatEspace = {
   version: 2;
   apercu: boolean;
+  /** Mission 5 : ce projet dans l'espace permanent du client (son code choisit le projet : `?projet=`). */
+  code: string;
+  nomProjet: string;
+  /** Terminé et encaissé, ou non réalisé : il se consulte, il ne se modifie plus. */
+  fige: Fige | null;
+  /** Les familles cochées (le dossier) ; sans elles, celles que laisse deviner sa demande (proposées, jamais écrites). */
+  familles: IdFamille[];
+  famillesSuggerees: IdFamille[];
+  /** Les mots de l'écran : « votre salle de bain » quand la famille est connue, « votre projet » sinon. */
+  mots: { nom: string; votre: string; de: string };
+  /** Le projet (familles, taille, mot) se modifie-t-il encore ? Sinon, pourquoi, dit au client. */
+  projetModifiable: { ok: boolean; raison: string | null };
   prenom: string;
   nom: string;
   ville: string;
@@ -152,7 +150,7 @@ export type EtatEspace = {
     zonesProjet: string[];
     /** Toutes les pièces du simulateur du site, avec leurs zones ; `piece` : celle de son projet (proposée d'abord). */
     piece: string;
-    pieces: { piece: string; libelle: string; aide: string; zones: { zone: string; libelle: string }[] }[];
+    pieces: { piece: string; libelle: string; aide: string; zones: { zone: string; libelle: string }[]; cochees: string[]; duProjet: boolean }[];
   };
   favoris: string[];
   /** Il peut encore changer de simulation validée : aucun devis n'est émis. */
@@ -231,8 +229,24 @@ async function portraitExiste(): Promise<boolean> {
     .catch(() => false);
 }
 
-export async function etatEspace(espace: EspaceClient, options: { apercu?: boolean } = {}): Promise<EtatEspace> {
-  await synchroniserSimulationsSite(espace.dossierId).catch((erreur) => console.error("[espace] synchronisation des simulations du site :", erreur));
+/** Les objets de dossier écrits d'office d'après un type de projet par défaut : ils ne nomment rien pour le client. */
+const OBJET_GENERIQUE = /^(recouvrement( de (cuisine|salle de bains?|mobilier|local professionnel))?|projet à préciser|votre projet( de rénovation)?)?$/i;
+
+/** Le nom d'un projet pour le client : le sien, sinon ses familles, sinon l'objet du dossier s'il dit quelque chose. */
+export function nomDuProjetClient(nomProjet: string | null | undefined, objet: string, familles: IdFamille[]): string {
+  if (nomProjet?.trim()) return nomProjet.trim();
+  if (familles.length) return libellesFamilles(familles);
+  const o = objet.trim();
+  return o && !OBJET_GENERIQUE.test(o) && o.length <= 60 ? o : "Votre projet";
+}
+
+/**
+ * Tout ce qu'il faut pour savoir où en est un projet — son dossier, ses
+ * simulations publiées, ses photos, la lecture unique des devis et paiements
+ * (faits.ts), ses familles —, sans rien écrire. Sert à l'état complet du projet
+ * et aux cartes de l'accueil « Mes projets ».
+ */
+export async function chargerProjet(espace: EspaceClient) {
   const dossier = await prisma.dossier.findUnique({
     where: { id: espace.dossierId },
     select: {
@@ -246,7 +260,8 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       etape: true,
       photos: true,
       dateChantier: true,
-      lead: { select: { prenom: true, typeProjet: true, tailleCuisine: true, delaiProjet: true, delaiProjetTexte: true, occupation: true } },
+      prestations: true,
+      lead: { select: { prenom: true, typeProjet: true, source: true, tailleCuisine: true, delaiProjet: true, delaiProjetTexte: true, occupation: true } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
       accords: { orderBy: { createdAt: "desc" } },
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
@@ -254,45 +269,27 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     },
   });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
-  const [simulations, photosClient, portrait, enPreparationCrm] = await Promise.all([
+  const [simulations, photosClient] = await Promise.all([
     prisma.simulationEspace.findMany({ where: { espaceId: espace.id, statut: "PUBLIEE" }, orderBy: [{ ordre: "asc" }, { createdAt: "asc" }] }),
     photosDuClient(dossier.id, dossier.photos),
-    portraitExiste(),
-    // CoverSwap prépare vraiment quelque chose : un brouillon déposé, ou une préparation du CRM en cours.
-    Promise.all([
-      prisma.simulationEspace.count({ where: { espaceId: espace.id, statut: "BROUILLON" } }),
-      prisma.preparationSimulation.count({ where: { dossierId: espace.dossierId, origine: "CRM", statut: { in: ["PREPAREE", "EN_COURS"] }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
-    ]).then(([brouillons, preparations]) => brouillons + preparations > 0),
   ]);
   // Devis en vigueur (repris compris), accord (en ligne ou constaté dans le CRM), paiements : lecture unique (faits.ts).
   const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements) });
-  const accord = lecture.accord;
-  // Il peut revenir sur son accord tant que rien n'est encaissé et que le chantier n'est pas planifié.
-  const accordRetirable = dossier.etape === "SIGNE" && (lecture.paiement?.recu ?? 0) === 0;
-  const devis = lecture.devis ? devisPourLeClient(lecture.devis, accord, accordRetirable) : null;
-  const recu = lecture.paiement?.recu ?? 0;
-  const monProjet = lireProjet(espace.souhaits);
+  const selection = lireSelection(dossier.prestations);
+  const monProjet = lireProjet(espace.souhaits, selection, dossier.lead?.typeProjet);
   const choix = lireChoix(espace.choix);
-  const simulationsCrm = simulations.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length;
-  const simulationsClient = simulations.filter((s) => s.source === "CLIENT").length;
   const faits: FaitsEspace = composerFaits({
     photos: photosClient.length,
     projetPrecise: projetPrecise(monProjet),
     projetValide: Boolean(espace.projetValideLe),
-    simulationsCrm,
+    simulationsCrm: simulations.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length,
     simulationsSite: simulations.filter((s) => s.source === "SITE").length,
-    simulationsClient,
+    simulationsClient: simulations.filter((s) => s.source === "CLIENT").length,
     choix: Boolean(espace.choixLe && choix),
     lecture,
     etapeDossier: dossier.etape,
   });
-  const etape = etapeEspace(faits);
-  const prenomBrut = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
-  const prenom = CLIENT_INCONNU.test(prenomBrut) ? "" : prenomBrut.split(/\s+/)[0];
-  const typeProjet = dossier.lead?.typeProjet ?? "CUISINE";
-  const vuesLe = espace.simulationsVuesLe?.getTime() ?? 0;
-
-  // Ce qu'il a déjà dit : sur le formulaire (Meta, site) et dans ses simulations du site.
+  // Ce qu'il a déjà dit dans ses simulations du site : proposé en préremplissage, et la famille qu'elles laissent deviner.
   const zonesSite = new Set<string>();
   const refsSite: string[] = [];
   for (const s of simulations.filter((x) => x.source === "SITE")) {
@@ -301,6 +298,34 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       if (!refsSite.includes(z.ref)) refsSite.push(z.ref);
     }
   }
+  const familles = famillesDe(selection);
+  const suggerees = familles.length ? [] : famillesSuggerees({ zonesSite: [...zonesSite], typeProjet: dossier.lead?.typeProjet, sourceLead: dossier.lead?.source });
+  return { dossier, simulations, photosClient, lecture, selection, monProjet, choix, faits, familles, suggerees, zonesSite: [...zonesSite], refsSite, fige: figeDuProjet(dossier.etape) };
+}
+
+export async function etatEspace(espace: EspaceClient, options: { apercu?: boolean; permanent?: Pick<EspacePermanent, "favoris"> | null } = {}): Promise<EtatEspace> {
+  await synchroniserSimulationsSite(espace.dossierId).catch((erreur) => console.error("[espace] synchronisation des simulations du site :", erreur));
+  const { dossier, simulations, photosClient, lecture, selection, monProjet, choix, faits, familles, suggerees, zonesSite, refsSite, fige } = await chargerProjet(espace);
+  const [portrait, enPreparationCrm] = await Promise.all([
+    portraitExiste(),
+    // CoverSwap prépare vraiment quelque chose : un brouillon déposé, ou une préparation du CRM en cours.
+    Promise.all([
+      prisma.simulationEspace.count({ where: { espaceId: espace.id, statut: "BROUILLON" } }),
+      prisma.preparationSimulation.count({ where: { dossierId: espace.dossierId, origine: "CRM", statut: { in: ["PREPAREE", "EN_COURS"] }, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } } }),
+    ]).then(([brouillons, preparations]) => brouillons + preparations > 0),
+  ]);
+  const accord = lecture.accord;
+  // Il peut revenir sur son accord tant que rien n'est encaissé et que le chantier n'est pas planifié.
+  const accordRetirable = dossier.etape === "SIGNE" && (lecture.paiement?.recu ?? 0) === 0;
+  const devis = lecture.devis ? devisPourLeClient(lecture.devis, accord, accordRetirable) : null;
+  const recu = lecture.paiement?.recu ?? 0;
+  const etape = etapeEspace(faits);
+  const prenomBrut = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
+  const prenom = CLIENT_INCONNU.test(prenomBrut) ? "" : prenomBrut.split(/\s+/)[0];
+  // Les mots de l'écran viennent de SA famille (cochée, sinon devinée de sa demande) ; aucune : « votre projet ».
+  const famillesDuTexte = familles.length ? familles : suggerees;
+  const typeProjet = famillesDuTexte[0] ?? "AUTRE";
+  const vuesLe = espace.simulationsVuesLe?.getTime() ?? 0;
   const delaiConnu = dossier.lead?.delaiProjet === "COURT" ? "vite" : dossier.lead?.delaiProjet === "MOYEN" ? "1-3-mois" : dossier.lead?.delaiProjet === "LOINTAIN" ? "plus-tard" : null;
   const ancien = (() => {
     try {
@@ -318,28 +343,43 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       return null;
     }
   })();
+  // Ce qui est signé ne se modifie plus ; ce sur quoi le devis est établi non plus (un appel suffit).
+  const projetModifiable = fige
+    ? { ok: false, raison: MESSAGE_FIGE[fige] }
+    : faits.accord
+      ? { ok: false, raison: "Votre projet est signé : pour y changer quelque chose, appelez CoverSwap." }
+      : devis
+        ? { ok: false, raison: "Votre devis est établi sur ce projet : pour le changer, appelez CoverSwap, nous l'ajustons avec vous." }
+        : { ok: true, raison: null };
 
   return {
     version: 2,
     apercu: Boolean(options.apercu),
+    code: espace.code,
+    nomProjet: nomDuProjetClient(espace.nomProjet, dossier.objet, familles),
+    fige,
+    familles,
+    famillesSuggerees: suggerees,
+    mots: motsDuProjet(famillesDuTexte),
+    projetModifiable,
     prenom,
     nom: dossier.clientNom,
     ville: dossier.clientVille,
     typeProjet,
-    projet: dossier.objet || "Votre projet de rénovation",
+    projet: nomDuProjetClient(espace.nomProjet, dossier.objet, familles),
     etape,
     etapes: progression(faits),
     avancement: faits.accord ? "ACCORD" : ["PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"].includes(dossier.etape) ? "CHANTIER" : devis ? "DEVIS" : simulations.length > 0 ? "SIMULATION" : "PHOTOS",
     photos: photosClient.map((p) => ({ id: p.id, le: null })),
     monProjet,
     projetValide: espace.projetValideLe ? { le: espace.projetValideLe.toISOString(), par: espace.projetValidePar === "LUCAS" ? "LUCAS" : "CLIENT" } : null,
-    projetManque: projetComplet(monProjet, typeProjet),
+    projetManque: projetComplet(monProjet),
     connu: {
       tailleCuisine: dossier.lead?.tailleCuisine ?? null,
       delai: delaiConnu,
       delaiTexte: dossier.lead?.delaiProjetTexte ?? null,
       proprietaire: dossier.lead?.occupation === "PROPRIETAIRE" ? true : dossier.lead?.occupation === "LOCATAIRE" ? false : null,
-      zones: [...zonesSite],
+      zones: zonesSite,
       refsSite,
     },
     souhaits: ancien,
@@ -382,9 +422,9 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       : null,
     contact: { nom: "Lucas Villemin", prenom: "Lucas", role: "Artisan poseur · CoverSwap, Pérols", telephone: EMETTEUR.telephone, telephoneLien: `+33${EMETTEUR.telephone.replace(/\D/g, "").slice(1)}`, portrait },
     marque: { nom: "CoverSwap", telephone: EMETTEUR.telephone, telephoneLien: `+33${EMETTEUR.telephone.replace(/\D/g, "").slice(1)}` },
-    creation: await creationPourLeClient(espace, typeProjet, monProjet, Boolean(options.apercu)),
-    favoris: lireFavoris(espace.favoris),
-    choixModifiable: !devis,
+    creation: await creationPourLeClient(espace, famillesDuTexte, selection, Boolean(options.apercu)),
+    favoris: lireFavoris(options.permanent?.favoris ?? espace.favoris),
+    choixModifiable: !devis && !fige,
     expireLe: espace.expireLe.toISOString(),
   };
 }
@@ -417,11 +457,17 @@ export async function quotaSimulations(espace: Pick<EspaceClient, "id" | "dossie
   return { gratuites, accordees, faites: faitesEspace + faitesSite, faitesSite, enCours: enCours.map((p) => ({ id: p.id, le: p.createdAt.toISOString() })), restantes: restantes({ gratuites, accordees, faitesEspace, faitesSite, enCours: enCours.length }) };
 }
 
-async function creationPourLeClient(espace: EspaceClient, typeProjet: string, projet: ProjetClient | null, apercu = false): Promise<EtatEspace["creation"]> {
+async function creationPourLeClient(espace: EspaceClient, familles: IdFamille[], selection: SelectionPrestations, apercu = false): Promise<EtatEspace["creation"]> {
   const [quota, disponible] = await Promise.all([quotaSimulations(espace), creditDisponible().catch(() => true)]);
   // Un client tombe sur « momentanément indisponible » : Lucas le sait (au plus une alerte toutes les trois heures).
   if (!disponible && !apercu) void alerterCreditEpuise(espace.dossierId).catch(() => undefined);
-  const type = typeEspacePourProjet(typeProjet);
+  // Les pièces : celles de SON projet d'abord (ses familles, sinon celles que laisse deviner sa demande), puis les autres,
+  // que l'écran garde repliées ; les zones : celles de ses sous-parties cochées d'abord (fichier des prestations).
+  const pieces = [...familles, ...IDS_FAMILLE.filter((id) => !familles.includes(id))].map((id) => {
+    const f = familleDuFichier(id);
+    const zones = zonesPourSimulation(id, selection);
+    return { piece: id, libelle: f.libelle, aide: f.aide, zones: zones.map((z) => ({ zone: z.zone, libelle: z.libelle })), cochees: zones.filter((z) => z.cochee).map((z) => z.zone), duProjet: familles.includes(id) };
+  });
   return {
     gratuites: quota.gratuites,
     accordees: quota.accordees,
@@ -431,10 +477,10 @@ async function creationPourLeClient(espace: EspaceClient, typeProjet: string, pr
     enCours: quota.enCours,
     demandeesLe: espace.simulationsDemandeesLe?.toISOString() ?? null,
     disponible,
-    zones: type.zones.map((zone) => ({ zone, libelle: libelleZoneClient(zone, typeProjet) ?? ZONES[zone].libelle })),
-    zonesProjet: (projet?.zones ?? []).filter((zone) => (type.zones as string[]).includes(zone)),
-    piece: typeProjet in TYPES_SURFACE_ESPACE ? typeProjet : "CUISINE",
-    pieces: PIECES_ESPACE.map((p) => ({ piece: p.piece, libelle: p.libelle, aide: p.aide, zones: p.zones.map((zone) => ({ zone, libelle: libelleZoneClient(zone, p.piece) ?? ZONES[zone].libelle })) })),
+    zones: pieces[0].zones,
+    zonesProjet: pieces[0].cochees,
+    piece: pieces[0].piece,
+    pieces,
   };
 }
 
@@ -472,11 +518,13 @@ export async function creerSimulationClient(espace: EspaceClient, entree: z.outp
     await alerterCreditEpuise(espace.dossierId);
     throw new ErreurMetier("La création de simulations est momentanément indisponible. Vos choix sont gardés : réessayez plus tard, CoverSwap est prévenu.", 503, { raison: "credit" });
   }
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, lead: { select: { typeProjet: true } } } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, prestations: true, lead: { select: { typeProjet: true } } } });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
   const photos = await photosDuClient(espace.dossierId, dossier.photos);
   if (!photos.some((p) => p.id === entree.photoId)) throw new ErreurMetier("Cette photo n'est plus dans votre espace : choisissez-en une autre.", 404);
-  const type = entree.piece ? TYPES_SURFACE_ESPACE[entree.piece] : typeEspacePourProjet(dossier.lead?.typeProjet);
+  // La pièce choisie, sinon la première famille de son projet (cuisine s'il n'en a pas encore).
+  const piece = entree.piece ?? famillesDe(lireSelection(dossier.prestations))[0] ?? "CUISINE";
+  const type = TYPES_SURFACE_ESPACE[piece] ?? TYPES_SURFACE_ESPACE.CUISINE;
   const { preparerSimulation } = await import("@/lib/simulateur/preparation");
   const preparation = await avecActeur(ACTEUR, () => preparerSimulation({ dossierId: espace.dossierId, photoId: entree.photoId, typeSurface: type.id, zones: entree.zones, mode: "API" }, { origine: "CLIENT" }));
   return { preparationId: preparation.id, restantes: Math.max(0, quota.restantes - 1) };
@@ -530,8 +578,10 @@ export async function accorderSimulations(espaceId: string, nombre: number): Pro
 export const schemaFavoris = z.object({ refs: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,24}$/)).max(60) });
 
 /** Ses teintes favorites : gardées pour lui, et proposées en premier à Lucas dans le simulateur. */
-export async function enregistrerFavoris(espace: EspaceClient, refs: string[]): Promise<void> {
-  await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { favoris: JSON.stringify([...new Set(refs)]) } }));
+export async function enregistrerFavoris(espace: EspaceClient | null, refs: string[], permanent?: Pick<EspacePermanent, "id"> | null): Promise<void> {
+  const json = JSON.stringify([...new Set(refs)]);
+  if (permanent) await avecActeur(ACTEUR, () => prisma.espacePermanent.update({ where: { id: permanent.id }, data: { favoris: json } }));
+  else if (espace) await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { favoris: json } }));
 }
 
 /** Une visite : comptée, datée ; la première est notée dans le dossier et sonne (Lucas sait que le lien a été ouvert). */
@@ -636,14 +686,14 @@ export const schemaSouhaits = z.object({
 });
 export type Souhaits = z.output<typeof schemaSouhaits>;
 
-async function enregistrerJsonProjet(espace: EspaceClient, json: string, resume: string, typeProjet: string, precise: boolean): Promise<void> {
+async function enregistrerJsonProjet(espace: EspaceClient, json: string, resume: string, precise: boolean): Promise<void> {
   const premier = !espace.souhaitsLe;
   await avecActeur(ACTEUR, async () => {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { souhaits: json, souhaitsLe: new Date() } });
     // Enregistré à la frappe : un événement à la première saisie, puis au plus un par heure (mis à jour entre-temps).
     const recent = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", createdAt: { gte: new Date(Date.now() - 3_600_000) } }, orderBy: { createdAt: "desc" } });
     const contenu = resume ? `Projet précisé par le client : ${resume}` : "Projet effacé par le client";
-    if (premier || !recent) await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ typeProjet }) } });
+    if (premier || !recent) await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SOUHAITS", direction: "ENTRANT", contenu, metadata: "{}" } });
     else await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu } });
     // Une seule alerte par espace, trois minutes après le premier projet exploitable : la version posée, pas la première case cochée.
     if (precise) await mettreEnFile({ type: TACHE_ALERTE_PROJET, cle: `espace-projet:${espace.id}`, charge: { espaceId: espace.id }, apres: new Date(Date.now() + 180_000), priorite: 6 });
@@ -652,34 +702,44 @@ async function enregistrerJsonProjet(espace: EspaceClient, json: string, resume:
 
 /** L'alerte « projet précisé », avec le projet tel qu'il est au moment où elle part. */
 export async function alerterProjetPrecise(espaceId: string): Promise<{ envoyee: boolean }> {
-  const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { dossierId: true, souhaits: true, dossier: { select: { clientNom: true, clientTelephone: true, lead: { select: { typeProjet: true } } } } } });
+  const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { dossierId: true, souhaits: true, dossier: { select: { clientNom: true, clientTelephone: true, prestations: true, lead: { select: { typeProjet: true } } } } } });
   if (!espace) return { envoyee: false };
-  const projet = lireProjet(espace.souhaits);
+  const projet = lireProjet(espace.souhaits, lireSelection(espace.dossier.prestations), espace.dossier.lead?.typeProjet);
   if (!projetPrecise(projet)) return { envoyee: false };
-  await prevenir(espace.dossierId, { titre: `Projet précisé — ${espace.dossier.clientNom}`, texte: resumerProjet(projet, espace.dossier.lead?.typeProjet ?? "CUISINE"), urgence: 3, telephone: espace.dossier.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `Projet précisé — ${espace.dossier.clientNom}`, texte: resumerProjet(projet), urgence: 3, telephone: espace.dossier.clientTelephone });
   return { envoyee: true };
 }
 
-export async function enregistrerProjet(espace: EspaceClient, projet: ProjetClient): Promise<void> {
-  // Modifier un projet validé le dévalide (la pastille verte tombe, le CRM le sait) : il le revalidera.
-  if (espace.projetValideLe && JSON.stringify(lireProjet(espace.souhaits)) !== JSON.stringify(projet)) {
+/**
+ * Le client précise son projet : les familles et sous-parties vont au dossier
+ * (Lucas les voit sur sa carte), la taille et le mot à l'espace. Modifier un
+ * projet validé le dévalide (la pastille verte tombe, le CRM le sait) : il le
+ * revalidera.
+ */
+export async function enregistrerProjet(espace: EspaceClient, entree: EntreeProjet): Promise<void> {
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { prestations: true, lead: { select: { typeProjet: true } } } });
+  const typeProjet = dossier?.lead?.typeProjet ?? null;
+  const avant = lireProjet(espace.souhaits, lireSelection(dossier?.prestations), typeProjet);
+  const { selection, souhaits } = projetDepuisEntree(entree, avant, typeProjet);
+  const apres = lireProjet(JSON.stringify(souhaits), selection, typeProjet);
+  const empreinte = (p: ProjetClient | null) => JSON.stringify(p ? { f: p.familles, t: p.tailles, m: p.precisions } : null);
+  if (espace.projetValideLe && empreinte(avant) !== empreinte(apres)) {
     const { devaliderProjet } = await import("./validations");
     await devaliderProjet(espace, "CLIENT", "il le modifie");
   }
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { lead: { select: { typeProjet: true } } } });
-  const typeProjet = dossier?.lead?.typeProjet ?? "CUISINE";
-  await enregistrerJsonProjet(espace, JSON.stringify(projet), resumerProjet(projet, typeProjet), typeProjet, projetPrecise(projet));
+  await avecActeur(ACTEUR, () => enregistrerPrestations(espace.dossierId, selection, "CLIENT"));
+  await enregistrerJsonProjet(espace, JSON.stringify(souhaits), resumerProjet(apres), projetPrecise(apres));
 }
 
 export async function enregistrerSouhaits(espace: EspaceClient, souhaits: Souhaits): Promise<void> {
   const resume = [souhaits.propositions ? "veut des propositions" : null, souhaits.teintes.length ? `teintes : ${souhaits.teintes.join(", ")}` : null, souhaits.style ? `style : ${souhaits.style}` : null, souhaits.precisions ? `« ${souhaits.precisions} »` : null].filter(Boolean).join(" · ");
-  await enregistrerJsonProjet(espace, JSON.stringify(souhaits), resume, "CUISINE", Boolean(resume));
+  await enregistrerJsonProjet(espace, JSON.stringify(souhaits), resume, Boolean(resume));
 }
 
 /** PUT /souhaits : le nouveau format (zones, styles…) ou l'ancien (teintes, style). */
 export async function enregistrerProjetOuSouhaits(espace: EspaceClient, corps: unknown): Promise<void> {
   const brut = (corps && typeof corps === "object" ? corps : {}) as Record<string, unknown>;
-  if ("zones" in brut || "styles" in brut || "metres" in brut || "repere" in brut || "delai" in brut) {
+  if ("familles" in brut || "tailles" in brut || "zones" in brut || "styles" in brut || "metres" in brut || "repere" in brut || "delai" in brut) {
     const lu = schemaProjet.safeParse(brut);
     if (!lu.success) throw new ErreurMetier(lu.error.issues[0]?.message ?? "Projet invalide.", 400);
     return enregistrerProjet(espace, lu.data);

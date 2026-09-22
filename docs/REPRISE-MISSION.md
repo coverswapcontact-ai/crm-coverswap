@@ -249,3 +249,67 @@ Relevé de prod (lecture seule, session Chrome de Lucas) : scratchpad `m4/dossie
   contrôle de cohérence : 6 dossiers, 0 incohérence. Rapport : https://claude.ai/artifact/Mte6YFG2JJaNGaRHLpnCaj .
   MISSION 4 TERMINÉE. Fragile : génération réelle jamais faite depuis l'espace ; retrait d'accord par le client
   (règle : dossier « Signé » et aucun paiement) ; acompte encaissé = Signé automatique.
+
+# Mission 5 (22/09/2026) — L'espace client devient permanent et multi-projets
+
+Énoncé complet : mémoire privée `project_mission5_espace_permanent.md` (dépôts publics : initiales seulement).
+Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. Rapport court avec captures iPhone.
+
+## Décisions
+- **Source unique des prestations** : CRM `src/lib/prestations/prestations.ts` (données pures : 4 familles CUISINE, SDB,
+  MEUBLES « Mobilier », PRO ; sous-parties ; zones du moteur ; tarif par défaut ; question de taille ; guide photo ;
+  mots « votre cuisine »…). Servie en JSON public `GET /api/prestations` (le site la lit, ISR 1 h) et dans l'état de
+  l'espace. Les ids de famille restent ceux de `Lead.typeProjet` (aucune migration de leads).
+- Zones du moteur : chaque sous-partie pointe des surfaces du PROJET du simulateur du site de sa famille (la route
+  consigne refuse une surface hors projet) : ex. SdB « portes de placard » → meuble-vasque ; Mobilier « bar,
+  bibliothèque, bureau, autre » → meuble-complet ; Pro « façade » → rangements-pro + habillage-mural.
+- **Dossier.prestations** (JSON `{ FAMILLE: [sous-parties] }`) = vérité unique des familles d'un projet, écrite par le
+  client (onglet Projet) ou par Lucas (dossier). Famille « connue » = cochée ; sinon suggestion (simulations du site,
+  formulaire du site) sans l'écrire ; jamais le `typeProjet` par défaut d'un lead Meta.
+- **EspacePermanent** (un par client pérenne, `clientId` unique) : code + version (lien signé, sans expiration),
+  révocable, visites, confirmation du téléphone (90 j sans ouverture → 4 derniers chiffres, 5 essais / 24 h),
+  favoris, projets accordés au-delà de 2. `EspaceClient` = un PROJET (un dossier) rattaché (`permanentId`, `nomProjet`).
+  Migration : le permanent reprend le code et la version de l'espace existant → les liens envoyés restent LE lien ;
+  les codes des autres projets restent des alias. Régénérer = version +1 sur le permanent ET ses projets.
+- API espace rétrocompatible : `GET /api/espace/<jeton>` rend l'état du projet courant + `compte` (projets, documents,
+  favoris) ; `?projet=<code>` choisit le projet ; confirmation requise → seul `compte.confirmation` sort.
+- Projet figé : dossier ENCAISSE (terminé) ou PERDU (non réalisé) → consultation seule (écritures refusées, avis
+  unique permis). Projet signé / devis émis : onglet Projet en lecture.
+- Nouveau projet par le client : dossier Qualification, source ESPACE_CLIENT, client pérenne, coordonnées reprises,
+  sans lead ; événement ESPACE_NOUVEAU_PROJET + alerte distincte ; limite 2 en cours (+ accordés par Lucas).
+
+## Lots
+- [ ] P1 Prestations : fichier unique + helpers + tests ; `/api/prestations` (proxy public).
+- [ ] P2 Schéma (sauvegarde avant) : Dossier.prestations, EspacePermanent, EspaceClient.permanentId/nomProjet ;
+      migration de données (permanents, prestations reprises : J. R. = 3 familles, F. = ses zones).
+- [ ] P3 Liens permanents : jeton → permanent (+ alias), régénérer, révoquer, confirmation 90 j.
+- [ ] P4 Service espace : compte (projets en cartes, documents, favoris, contact/message), projet courant, nouveau
+      projet (dossier auto + alerte), limite 2, projet figé, familles dans Projet / Photos / Simulations.
+- [ ] P5 CRM serveur : devis prérempli par sous-parties + tarifs par sous-partie, simulateur (zones), cohérence
+      (figé, limite), fusion de clients, Espaces clients par client, vue du dossier, SMS de régénération.
+- [ ] P6 CRM écrans : familles du dossier (panneau + carte kanban), fiche client (espace), Espaces clients,
+      tarifs par sous-partie, régénérer + SMS, projet accordé.
+- [ ] P7 Site espace v4 : Mes projets, confirmation, nouveau projet, Projet à deux niveaux, guide photo par famille,
+      projet figé, Catalogue, Mes documents, Contact ; textes sans « cuisine » par défaut.
+- [ ] P8 Site public : formulaire de devis et simulateur sur les 4 familles (lus du CRM), textes.
+- [ ] P9 Essais iPhone locaux (4 parcours), tests, lint, builds, déploiement CRM puis site, vérifs prod, rapport.
+
+## Journal
+- 22/09 : inventaire fait (voir Décisions) ; prod relevée en lecture seule (6 dossiers vivants, tous avec client
+  pérenne ; 2 espaces : J. R. et F.).
+- 22/09 (suite) : SERVEUR CRM ÉCRIT, non commité : `src/lib/prestations/{prestations,dossier,tarifs,deduction}.ts` ;
+  schéma (Dossier.prestations*, PresetTarif.prestations, EspacePermanent, EspaceClient.permanentId/nomProjet) ;
+  `espace/liens.ts` réécrit (accesDuJeton, permanent sans expiration, alias des codes de projet, confirmation
+  90 j, régénérer = versions +1, lienPourLeProjet) ; `espace/projet.ts` v4 (familles au dossier, tailles par
+  famille) ; `espace/projets.ts` (figé, pastilles, limite 2, nouveau projet → dossier ESPACE_CLIENT sans lead,
+  demander / accorder un projet) ; `espace/compte.ts` (cartes, documents tous projets, message, visites) ;
+  `espace/alertes.ts` ; service.ts (chargerProjet + etatEspace : code, nomProjet, fige, familles, mots,
+  projetModifiable ; création : toutes les familles, celles du projet d'abord) ; route `/api/espace/<jeton>` réécrite
+  (compte + projet `?projet=`, confirmation, projets, message, documents, gardes figé / signé) ; devis prérempli par
+  sous-parties et tarifs ; vue CRM, Espaces clients PAR CLIENT (`listerClientsEspaces`), simulateur CRM, SMS
+  (lien permanent), RGPD (EspacePermanent), fusion de clients (espaces fusionnés), archivage (projet qui
+  réapparaît), cohérence (PROJET_FIGE_MODIFIE, PROJETS_AU_DELA_DE_LA_LIMITE), migration
+  `espaces-permanents-22-09` (J. R. = 3 familles « dits par Lucas »). Suite existante 376/376 verte.
+  RESTE côté CRM : routes (fiche client, régénérer + SMS, accorder un projet, familles du dossier, tarifs par
+  sous-partie, `/api/prestations` public + proxy), écrans (EspaceDossier, kanban, fiche client, Espaces clients,
+  tarifs), nouveaux tests.

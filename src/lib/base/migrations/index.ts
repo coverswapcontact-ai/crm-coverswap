@@ -1,6 +1,7 @@
 import type { BaseDonnees } from "@/lib/prisma";
 import { migrationAgentsProspection } from "./agents-prospection";
 import { migrationClients } from "./clients";
+import { migrationEspacesPermanents } from "./espaces-permanents";
 import { migrationArchiverLeadEssaiPont, migrationLeadsMetaPont } from "./leads-meta-pont";
 import { migrationLeadsEssai2109 } from "./leads-essai-21-09";
 import { migrationLeadsEssai2109Detail } from "./leads-essai-21-09-detail";
@@ -28,4 +29,4 @@ export type MigrationDonnees = {
 };
 
 /** Dans l'ordre d'exécution. On ajoute à la fin, on ne retire ni ne réordonne jamais. */
-export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes];
+export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes, migrationEspacesPermanents];

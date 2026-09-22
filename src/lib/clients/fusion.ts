@@ -16,7 +16,8 @@ import { definirProposition } from "@/lib/validation/definitions";
 /** Modèles qui portent un `clientId` : lus dans le schéma, un nouveau modèle est couvert d'office. */
 function modelesRattachesAuClient(): string[] {
   return Prisma.dmmf.datamodel.models
-    .filter((modele) => modele.name !== "Client" && modele.fields.some((champ) => champ.name === "clientId" && champ.kind === "scalar"))
+    // L'espace permanent (un par client) se fusionne à part : voir fusionnerEspacesPermanents.
+    .filter((modele) => modele.name !== "Client" && modele.name !== "EspacePermanent" && modele.fields.some((champ) => champ.name === "clientId" && champ.kind === "scalar"))
     .map((modele) => modele.name);
 }
 
@@ -120,6 +121,8 @@ export async function fusionnerClients(
 
   // 2. Tout ce qui pointe vers la fiche absorbée passe sur la fiche conservée.
   const deplaces: Record<string, number> = {};
+  const espaces = await fusionnerEspacesPermanents(tx, conserveId, absorbeId);
+  if (espaces > 0) deplaces.EspacePermanent = espaces;
   for (const modele of modelesRattachesAuClient()) {
     const donnees: Record<string, unknown> = { clientId: conserveId };
     if (modele === "ClientEmail") donnees.principale = false;
@@ -148,6 +151,47 @@ export async function fusionnerClients(
     },
   });
   return { deplaces };
+}
+
+/**
+ * Un client = un espace (mission 5). Deux fiches fusionnées : les projets de
+ * l'espace absorbé rejoignent l'espace conservé (visites, favoris et projets
+ * accordés suivent) ; l'espace absorbé est archivé mais son lien mène à l'espace
+ * conservé (`fusionneDansId`) — un lien déjà envoyé continue de marcher. Seul
+ * l'absorbé a un espace : il passe tel quel sur la fiche conservée.
+ */
+async function fusionnerEspacesPermanents(tx: Transaction, conserveId: string, absorbeId: string): Promise<number> {
+  const [conserve, absorbe] = await Promise.all([tx.espacePermanent.findUnique({ where: { clientId: conserveId } }), tx.espacePermanent.findUnique({ where: { clientId: absorbeId } })]);
+  if (!absorbe) return 0;
+  if (!conserve) {
+    await tx.espacePermanent.update({ where: { id: absorbe.id }, data: { clientId: conserveId } });
+    return 1;
+  }
+  const favoris = [...new Set([...lireListe(conserve.favoris), ...lireListe(absorbe.favoris)])];
+  const plusTard = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b));
+  const plusTot = (a: Date | null, b: Date | null) => (a && b ? (a < b ? a : b) : (a ?? b));
+  await tx.espaceClient.updateMany({ where: { permanentId: absorbe.id }, data: { permanentId: conserve.id } });
+  await tx.espacePermanent.update({
+    where: { id: conserve.id },
+    data: {
+      nbAcces: conserve.nbAcces + absorbe.nbAcces,
+      premierAccesLe: plusTot(conserve.premierAccesLe, absorbe.premierAccesLe),
+      dernierAccesLe: plusTard(conserve.dernierAccesLe, absorbe.dernierAccesLe),
+      projetsAccordes: conserve.projetsAccordes + absorbe.projetsAccordes,
+      favoris: favoris.length ? JSON.stringify(favoris) : conserve.favoris,
+    },
+  });
+  await tx.espacePermanent.update({ where: { id: absorbe.id }, data: { fusionneDansId: conserve.id, archiveLe: new Date(), archiveMotif: "Fiche client fusionnée : ses projets ont rejoint l'espace conservé" } });
+  return 1;
+}
+
+function lireListe(json: string | null | undefined): string[] {
+  try {
+    const valeur: unknown = JSON.parse(json ?? "[]");
+    return Array.isArray(valeur) ? valeur.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Suivre les fusions : la fiche vivante d'un client éventuellement absorbé. */

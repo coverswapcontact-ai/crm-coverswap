@@ -55,7 +55,7 @@ export type LigneLead = {
   conversationId: string | null;
   smsNonLus: number;
   photos: number;
-  /** A fait une simulation sur le site : il a déjà vu un rendu de sa cuisine. */
+  /** A fait une simulation sur le site : il a déjà vu un rendu de sa pièce. */
   simulation: boolean;
   /** Son dossier, quand il en a déjà un (lead du simulateur pas encore appelé). */
   dossierId: string | null;

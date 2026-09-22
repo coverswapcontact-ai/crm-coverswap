@@ -27,10 +27,10 @@ export function PastillePriorite({ priorite, motif }: { priorite: string | null;
   );
 }
 
-/** Il a fait une simulation sur le site : il a déjà vu un rendu de sa cuisine. */
+/** Il a fait une simulation sur le site : il a déjà vu un rendu de sa pièce. */
 export function PastilleSimulation({ nombre }: { nombre?: number }) {
   return (
-    <Pastille ton="bleu" titre="A fait une simulation sur le site : il a déjà vu un rendu de sa cuisine">
+    <Pastille ton="bleu" titre="A fait une simulation sur le site : il a déjà vu un rendu de sa pièce">
       <Sparkles size={11} aria-hidden /> Simulation{nombre && nombre > 1 ? ` ×${nombre}` : ""}
     </Pastille>
   );

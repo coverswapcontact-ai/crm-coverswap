@@ -399,7 +399,7 @@ export function CreationDossier({
             />
             <Champ libelle="Code postal" inputMode="numeric" maxLength={10} value={champs.clientCp} onChange={modifier("clientCp")} erreur={erreurs.clientCp} aide={avertissements.clientCp} />
             <Champ libelle="Ville" value={champs.clientVille} onChange={modifier("clientVille")} erreur={erreurs.clientVille} />
-            <Champ libelle="Objet du chantier" placeholder="Ex. Recouvrement façades de cuisine" value={champs.objet} onChange={modifier("objet")} erreur={erreurs.objet} classeConteneur="sm:col-span-2" />
+            <Champ libelle="Objet du chantier" placeholder="Ex. Façades de cuisine et portes de dressing" value={champs.objet} onChange={modifier("objet")} erreur={erreurs.objet} classeConteneur="sm:col-span-2" />
             <ListeDeroulante
               libelle="Étape actuelle"
               options={ETAPES.map((etape) => ({ valeur: etape, libelle: LIBELLES_ETAPE[etape] }))}

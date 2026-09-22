@@ -104,7 +104,7 @@ describe("le projet du client", () => {
     assert.deepEqual([avant.connu.delai, avant.connu.proprietaire, avant.connu.tailleCuisine, avant.etape], ["vite", true, "Moyenne", "PHOTOS"], "ce que le formulaire a dit n'est jamais redemandé");
     await service.enregistrerProjetOuSouhaits(espace, { zones: ["meubles-hauts", "plan-de-travail"], styles: ["bois-clair", "blanc"], metres: 5, repere: "en-l", delai: "vite", precisions: "Garder les poignées" });
     const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId, type: "ESPACE_SOUHAITS" } });
-    assert.match(evenement?.contenu ?? "", /Façades hautes, Plan de travail · ≈ 5 m \(en l\) · Bois clair, Blanc · dès que possible · « Garder les poignées »/, "les goûts et le délai d'avant la v3 ne se perdent pas");
+    assert.match(evenement?.contenu ?? "", /Cuisine : façades hautes, plan de travail · ≈ 5 m \(en L\) · Bois clair, Blanc · dès que possible · « Garder les poignées »/, "les goûts et le délai d'avant la v3 ne se perdent pas");
     const etat = await service.etatEspace(await relire(espace.id));
     assert.deepEqual(etat.monProjet?.zones, ["meubles-hauts", "plan-de-travail"]);
     await assert.rejects(service.enregistrerProjetOuSouhaits(espace, { zones: [], metres: 999 }), /60 mètres/);
@@ -114,7 +114,7 @@ describe("le projet du client", () => {
     await service.enregistrerProjetOuSouhaits(v3.espace, { zones: ["meubles-bas"], metres: null, repere: null, precisions: "" });
     await service.enregistrerProjetOuSouhaits(await relire(v3.espace.id), { zones: ["meubles-bas", "autre"], metres: 3, repere: "une-rangee", precisions: "Aussi la porte du cellier" });
     assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: v3.dossierId, type: "ESPACE_SOUHAITS" } }), 1, "un événement, mis à jour");
-    assert.match((await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: v3.dossierId, type: "ESPACE_SOUHAITS" } })).contenu, /Façades basses, Autre chose · ≈ 3 m \(un seul mur\) · « Aussi la porte du cellier »$/);
+    assert.match((await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: v3.dossierId, type: "ESPACE_SOUHAITS" } })).contenu, /Cuisine : façades basses · ≈ 3 m \(un seul mur\) · « Aussi la porte du cellier »$/);
     const taches = await prisma.tache.findMany({ where: { type: service.TACHE_ALERTE_PROJET, cle: `espace-projet:${v3.espace.id}` } });
     assert.equal(taches.length, 1, "une seule alerte pour toute la saisie");
     assert.ok(taches[0].prochainEssaiLe.getTime() > Date.now() + 120_000, "elle part quelques minutes après");
@@ -127,7 +127,7 @@ describe("le projet du client", () => {
     await service.enregistrerProjetOuSouhaits(noteSeule.espace, { zones: [], metres: null, repere: null, precisions: "Je ne sais pas encore" });
     // Depuis le 22/09 : la pastille verte vient de la VALIDATION du projet, et un mot seul ne suffit pas à le valider.
     const etatNote = await service.etatEspace(await relire(noteSeule.espace.id));
-    assert.deepEqual([etatNote.etapes.find((e) => e.cle === "PROJET")?.fait, etatNote.projetManque], [false, "Indiquez ce que vous voulez traiter."]);
+    assert.deepEqual([etatNote.etapes.find((e) => e.cle === "PROJET")?.fait, etatNote.projetManque], [false, "Choisissez d'abord ce que vous voulez rénover."]);
 
     const ancien = await dossierAvecEspace("Paul");
     await service.enregistrerProjetOuSouhaits(ancien.espace, { teintes: ["Bois clair", "Noir"], style: "Chaleureux", propositions: true, precisions: "" });
@@ -286,7 +286,7 @@ describe("le devis part du choix du client", () => {
     assert.deepEqual(
       lignes.map((l) => [l.designation, l.sousDesignation, l.quantite, l.unite, l.prixUnitaire]),
       [
-        ["Revêtement adhésif — cuisine / façades", "Meubles hauts : Ultra White (J3) · Meubles bas : Beige Oak (AA01)", 5, "ml", 110],
+        ["Revêtement adhésif — cuisine / façades", "Façades hautes : Ultra White (J3) · Façades basses : Beige Oak (AA01)", 5, "ml", 110],
         // Pas de tarif « plan de travail » : prix et longueur à saisir, le générateur ne laisse pas passer.
         ["Revêtement adhésif — plan de travail", "Statuary White (NE31)", null, "ml", null],
         // Une nouvelle crédence (Dibond, dépose) n'est pas une crédence recouverte.
@@ -300,7 +300,8 @@ describe("le devis part du choix du client", () => {
     const seul = proposerLignes([{ zone: "plan-de-travail", libelle: "Plan de travail", ref: "NE31", nom: "Statuary White" }], 5, presets);
     assert.equal(seul[0].quantite, null);
     const autre = proposerLignes([{ zone: "carrelage-mural", libelle: "Murs carrelés", ref: null, nom: null }], 4, presets);
-    assert.deepEqual([autre[0].designation, autre[0].sousDesignation, autre[0].prixUnitaire], ["Revêtement adhésif — murs carrelés", "", null]);
+    // Les murs carrelés d'une ancienne simulation : la crédence de la salle de bain (fichier des prestations), sans tarif.
+    assert.deepEqual([autre[0].designation, autre[0].sousDesignation, autre[0].prixUnitaire], ["Revêtement adhésif — crédence de salle de bain", "", null]);
   });
 
   test("d'un espace : la simulation choisie donne les teintes, le projet les mètres", async () => {
@@ -311,13 +312,13 @@ describe("le devis part du choix du client", () => {
     const depuisProjet = await devisProposeDuDossier(dossierId);
     assert.equal(depuisProjet?.lignes.length, 1);
     assert.equal(depuisProjet?.lignes[0].quantite, 6);
-    assert.equal(depuisProjet?.lignes[0].sousDesignation, "", "sans choix, pas de teinte");
+    assert.equal(depuisProjet?.lignes[0].sousDesignation, "Façades hautes · Façades basses", "sans choix, pas de teinte : la ligne nomme ses sous-parties");
     assert.match(depuisProjet?.resume ?? "", /teintes à préciser/);
 
     const blanc = await simulationPubliee(dossierId, [{ zone: "meubles-hauts", libelle: "Meubles hauts", ref: "J3", nom: "Ultra White" }, { zone: "meubles-bas", libelle: "Meubles bas", ref: "K1", nom: "Black Mat" }], "Blanc et noir");
     await service.choisir(await relire(espace.id), { simulationId: blanc, commentaire: "" });
     const depuisChoix = await devisProposeDuDossier(dossierId);
-    assert.equal(depuisChoix?.lignes[0].sousDesignation, "Meubles hauts : Ultra White (J3) · Meubles bas : Black Mat (K1)");
+    assert.equal(depuisChoix?.lignes[0].sousDesignation, "Façades hautes : Ultra White (J3) · Façades basses : Black Mat (K1)");
     assert.equal(depuisChoix?.lignes[0].quantite, 6);
     assert.match(depuisChoix?.resume ?? "", /Yvette.*Ultra White.*≈ 6 m/);
   });

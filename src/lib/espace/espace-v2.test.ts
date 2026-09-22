@@ -333,6 +333,12 @@ describe("Espaces clients (v3)", () => {
     const aSimule = await dossierAvecEspace("Zelie");
     await ajouterPhoto(aSimule.dossierId, photo("vue.jpg"));
     await prisma.simulationEspace.create({ data: { espaceId: aSimule.espace.id, dossierId: aSimule.dossierId, chemin: "x/simulation.png", source: "CLIENT", statut: "PUBLIEE", publieeLe: new Date() } });
+    // Mission 6 : qui a la main suit les gestes (dossiers/main.ts) : ses photos → moi ; sa propre simulation → lui.
+    const { recalculerMain } = await import("@/lib/dossiers/main");
+    await prisma.dossierEvenement.create({ data: { dossierId: seulesPhotos.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu: "1 photo" } });
+    await prisma.dossierEvenement.create({ data: { dossierId: aSimule.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: "Le client a créé une simulation" } });
+    await recalculerMain(seulesPhotos.dossierId);
+    await recalculerMain(aSimule.dossierId);
 
     const lignes = await listerEspaces();
     const yvon = lignes.find((l) => l.dossierId === seulesPhotos.dossierId)!;

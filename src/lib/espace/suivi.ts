@@ -1,4 +1,6 @@
 import prisma from "@/lib/prisma";
+import { mainDe } from "@/lib/dossiers/pilotage";
+import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression } from "./etapes";
@@ -54,6 +56,10 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
           photos: true,
           dateChantier: true,
           archiveLe: true,
+          main: true,
+          mainMotif: true,
+          prochaineAction: true,
+          prochaineActionDate: true,
           objet: true,
           source: true,
           prestations: true,
@@ -142,18 +148,26 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
     if (expire && !revoque) signaux.push({ code: "EXPIRE", libelle: "Lien expiré", ton: "rouge" });
     else if (!espace.permanent && !revoque && espace.expireLe.getTime() - maintenant.getTime() < 10 * JOUR) signaux.push({ code: "EXPIRE_BIENTOT", libelle: `Lien valable jusqu'au ${espace.expireLe.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`, ton: "ambre" });
 
+    // Le geste qui fera avancer, d'après les faits de l'espace : il nomme l'action quand c'est à moi.
+    let geste: { libelle: string; geste?: LigneEspace["attente"]["geste"] } | null = null;
+    if (propositionEnAttente) geste = { libelle: "Préparer une autre proposition", geste: "SIMULATEUR" };
+    else if (espace.simulationsDemandeesLe && !accord) geste = { libelle: "Accorder d'autres simulations", geste: "ACCORDER" };
+    else if (brouillons > 0 && !accord) geste = { libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}`, geste: "PUBLIER" };
+    else if (photos > 0 && aucuneSimulation && !devis) geste = { libelle: "Préparer la simulation", geste: "SIMULATEUR" };
+    else if (etape === "ATTENTE_DEVIS") geste = { libelle: "Faire le devis", geste: "DEVIS" };
+    else if (accord && !d.dateChantier) geste = { libelle: "Appeler : fixer la date du chantier", geste: "APPELER" };
+    else if (etape === "CHANTIER") geste = { libelle: d.dateChantier ? `Chantier le ${d.dateChantier.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}` : "Chantier à planifier" };
+
+    // QUI a la main : la règle unique du dossier (dossiers/main.ts), la même que le kanban et la fiche dossier.
+    const main = mainDe({ etape: d.etape as EtapeDossier, prochaineActionDate: d.prochaineActionDate?.toISOString() ?? null, main: d.main === "MOI" || d.main === "CLIENT" ? d.main : null }, maintenant);
+    const motifLisible = d.mainMotif && !d.mainMotif.startsWith("Étape «") ? d.mainMotif : null;
     let attente: LigneEspace["attente"];
     if (revoque) attente = { qui: "PERSONNE", libelle: "Lien désactivé" };
     else if (figeDuProjet(d.etape) === "NON_REALISE") attente = { qui: "PERSONNE", libelle: "Non réalisé" };
-    else if (etape === "TERMINE") attente = { qui: "PERSONNE", libelle: "Chantier terminé" };
-    else if (propositionEnAttente) attente = { qui: "MOI", libelle: "Préparer une autre proposition", geste: "SIMULATEUR" };
-    else if (espace.simulationsDemandeesLe && !accord) attente = { qui: "MOI", libelle: "Accorder d'autres simulations", geste: "ACCORDER" };
-    else if (brouillons > 0 && !accord) attente = { qui: "MOI", libelle: `Publier ${brouillons > 1 ? "les brouillons" : "le brouillon"}`, geste: "PUBLIER" };
-    else if (photos > 0 && aucuneSimulation && !devis) attente = { qui: "MOI", libelle: "Préparer la simulation", geste: "SIMULATEUR" };
-    else if (etape === "ATTENTE_DEVIS") attente = { qui: "MOI", libelle: "Faire le devis", geste: "DEVIS" };
-    else if (accord && !d.dateChantier) attente = { qui: "MOI", libelle: "Appeler : fixer la date du chantier", geste: "APPELER" };
-    else if (etape === "CHANTIER") attente = { qui: "MOI", libelle: d.dateChantier ? `Chantier le ${d.dateChantier.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}` : "Chantier à planifier" };
-    else attente = { qui: "CLIENT", libelle: LIBELLES_ETAPE_ESPACE[etape] };
+    else if (etape === "TERMINE" || main === "AUCUNE") attente = { qui: "PERSONNE", libelle: "Chantier terminé" };
+    else if (main === "A_RELANCER") attente = { qui: "MOI", libelle: `Relancer : ${d.prochaineAction ?? motifLisible ?? LIBELLES_ETAPE_ESPACE[etape]}`, geste: "APPELER" };
+    else if (main === "MOI") attente = geste ? { qui: "MOI", ...geste } : { qui: "MOI", libelle: motifLisible ?? "À toi de jouer" };
+    else attente = { qui: "CLIENT", libelle: motifLisible ?? LIBELLES_ETAPE_ESPACE[etape] };
 
     const familles = famillesDe(selection);
     lignes.push({

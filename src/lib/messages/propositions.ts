@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { recalculerMain } from "@/lib/dossiers/main";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { analyser } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
@@ -150,7 +151,7 @@ export const propositionRattacherMessage = definirProposition({
     });
     await remettreSiArchive(tx, message);
     if (contenu.dossierId) await tracerDansDossier(tx, message.id, contenu.dossierId, propositionId);
-    return { resultat: { clientId: client.id, dossierId: contenu.dossierId }, apresValidation: () => suitesDuTri(message.id) };
+    return { resultat: { clientId: client.id, dossierId: contenu.dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(contenu.dossierId); } };
   },
 });
 
@@ -332,7 +333,7 @@ export const propositionNouvelleDemande = definirProposition({
       if (dossierId) await archiverFichiersDossier(dossierId, "creation-interrompue").catch(() => {});
       throw erreur;
     }
-    return { resultat: { clientId, dossierId }, apresValidation: () => suitesDuTri(message.id) };
+    return { resultat: { clientId, dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(dossierId); } };
   },
 });
 

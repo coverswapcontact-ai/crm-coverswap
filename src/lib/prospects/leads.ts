@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { mainDe, type Main } from "@/lib/dossiers/pilotage";
+import type { EtapeDossier } from "@/lib/dossiers/constants";
 import prisma from "@/lib/prisma";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
 import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
@@ -59,6 +61,8 @@ export type LigneLead = {
   simulation: boolean;
   /** Son dossier, quand il en a déjà un (lead du simulateur pas encore appelé). */
   dossierId: string | null;
+  /** Qui a la main sur ce dossier (règle unique, dossiers/main.ts), et pourquoi. */
+  dossierMain: { main: Main; motif: string | null } | null;
   /** Les dernières simulations, pour en parler pendant l'appel. */
   simulations: SimulationLead[];
   /** Marqué comme traité depuis Leads : hors de la file d'appels. */
@@ -117,7 +121,7 @@ const inclusion = {
   interactions: { where: { archiveLe: null, type: "APPEL" }, orderBy: { createdAt: "desc" }, select: { contenu: true, createdAt: true } },
   metaLeads: { orderBy: { createdAt: "desc" }, take: 1, select: { reponses: true, campagneNom: true, adNom: true, formNom: true } },
   conversationsSms: { where: { archiveLe: null }, orderBy: { dernierMessageLe: "desc" }, take: 1, select: { id: true, nonLus: true } },
-  dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, _count: { select: { evenements: { where: APPEL } } } } },
+  dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, main: true, mainMotif: true, prochaineActionDate: true, _count: { select: { evenements: { where: APPEL } } } } },
   simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, createdAt: true, referenceChoisie: true, prixDevis: true, imageBeforePath: true, imageOriginalPath: true, imageAfterPath: true } },
   _count: { select: { photos: true, simulations: { where: { archiveLe: null } } } },
   notesAppel: { where: { archiveLe: null }, orderBy: { appelLe: "desc" }, take: 20 },
@@ -217,6 +221,12 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     archiveMotif: lead.archiveMotif,
     doublon: lead.doublonDe && !lead.doublonTraiteLe ? { de: lead.doublonDe, nom: "", motif: lead.doublonMotif ?? "Doublon probable", dossierId: null } : null,
     dossierId: dossier?.id ?? null,
+    dossierMain: dossier
+      ? {
+          main: mainDe({ etape: dossier.etape as EtapeDossier, prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null, main: dossier.main === "MOI" || dossier.main === "CLIENT" ? dossier.main : null }, new Date()),
+          motif: dossier.mainMotif && !dossier.mainMotif.startsWith("Étape «") ? dossier.mainMotif : null,
+        }
+      : null,
     notesAppel: lead.notesAppel.map(versVueNote),
     simulations: lead.simulations.map((s) => {
       const avant = s.imageOriginalPath ?? s.imageBeforePath;

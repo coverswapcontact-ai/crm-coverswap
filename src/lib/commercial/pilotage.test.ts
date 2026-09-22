@@ -12,6 +12,7 @@ let prisma: typeof import("@/lib/prisma").default;
 let pilotage: typeof import("./pilotage");
 let liens: typeof import("@/lib/espace/liens");
 let reception: typeof import("@/lib/sms/reception");
+let recalculerMain: typeof import("@/lib/dossiers/main").recalculerMain;
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
@@ -20,6 +21,7 @@ before(async () => {
   pilotage = await import("./pilotage");
   liens = await import("@/lib/espace/liens");
   reception = await import("@/lib/sms/reception");
+  recalculerMain = (await import("@/lib/dossiers/main")).recalculerMain;
 });
 after(async () => {
   await prisma.$disconnect();
@@ -39,9 +41,14 @@ describe("à qui est la main", () => {
     const attendPhotos = await liens.ouvrirEspaceDuContact((await contact("AttendPhotos")).id);
     const photosRecues = await liens.ouvrirEspaceDuContact((await contact("PhotosRecues")).id);
     await prisma.dossier.update({ where: { id: photosRecues.dossierId }, data: { photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
+    // Mission 6 : qui a la main suit les gestes (dossiers/main.ts) — des photos déposées par le client la lui reprennent.
+    await prisma.dossierEvenement.create({ data: { dossierId: photosRecues.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu: "1 photo" } });
+    await recalculerMain(photosRecues.dossierId);
     const choisie = await liens.ouvrirEspaceDuContact((await contact("SimulationChoisie")).id);
     await prisma.dossier.update({ where: { id: choisie.dossierId }, data: { etape: "SIMULATION" } });
     await prisma.simulationEspace.create({ data: { espaceId: choisie.espace.id, dossierId: choisie.dossierId, chemin: "dossiers/x/simulations/s.jpg", choisieLe: new Date() } });
+    await prisma.dossierEvenement.create({ data: { dossierId: choisie.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: "ENTRANT", contenu: "Simulation validée" } });
+    await recalculerMain(choisie.dossierId);
     const devisEnvoye = await liens.ouvrirEspaceDuContact((await contact("DevisEnvoye")).id);
     await prisma.dossier.update({ where: { id: devisEnvoye.dossierId }, data: { etape: "DEVIS_ENVOYE" } });
     await prisma.document.create({ data: { dossierId: devisEnvoye.dossierId, type: "DEVIS", numero: "D-PIL-0001", dateEmission: new Date(Date.now() - 5 * 86_400_000), objet: "Cuisine", lignes: "[]", totalHt: 1800, statut: "ENVOYE" } });

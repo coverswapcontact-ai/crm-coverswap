@@ -6,7 +6,7 @@ import { ETAPES_ACTIVES, REGLES_ETAPES, type EtapeActive, type EtapeDossier } fr
 import { estAujourdhui, joursDeRetard } from "./dates";
 import { estEtapeActive, rangEtape } from "./regles";
 
-type Datable = { etape: EtapeDossier; prochaineActionDate: string | null };
+type Datable = { etape: EtapeDossier; prochaineActionDate: string | null; main?: "MOI" | "CLIENT" | null };
 
 export type Echeance = "retard" | "aujourdhui" | "avenir" | "aucune";
 
@@ -19,8 +19,9 @@ export function echeanceDe(dossier: Datable, maintenant: Date): Echeance {
 }
 
 /**
- * Qui a la main maintenant.
- * - MOI        : l'étape attend une action de ma part ;
+ * Qui a la main maintenant — lue sur le dossier, où la règle unique la range
+ * après chaque geste (main.ts) ; un dossier jamais recalculé suit son étape.
+ * - MOI        : c'est à moi d'agir ;
  * - CLIENT     : le dossier est entre les mains du client ;
  * - A_RELANCER : l'étape attend le client, mais la prochaine action est
  *                dépassée : c'est à moi de relancer ;
@@ -31,7 +32,7 @@ export type Main = "MOI" | "CLIENT" | "A_RELANCER" | "AUCUNE";
 export function mainDe(dossier: Datable, maintenant: Date): Main {
   const responsable = REGLES_ETAPES[dossier.etape].responsable;
   if (responsable === null) return "AUCUNE";
-  if (responsable === "MOI") return "MOI";
+  if ((dossier.main ?? responsable) === "MOI") return "MOI";
   return echeanceDe(dossier, maintenant) === "retard" ? "A_RELANCER" : "CLIENT";
 }
 

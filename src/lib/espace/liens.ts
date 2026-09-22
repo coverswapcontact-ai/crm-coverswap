@@ -1,4 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { recalculerMain } from "@/lib/dossiers/main";
 import type { EspaceClient, EspacePermanent } from "@prisma/client";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
@@ -284,6 +285,7 @@ export async function ouvrirEspace(dossierId: string): Promise<EspaceOuvert> {
     // Les simulations que le client a déjà faites sur le site l'attendent dans son espace.
     const { synchroniserSimulationsSite } = await import("@/lib/simulations/dossier");
     await synchroniserSimulationsSite(dossierId).catch((erreur) => console.error("[espace] simulations du site non rangées à l'ouverture :", erreur));
+    await recalculerMain(dossierId);
   }
   return { espace, permanent, lien: lienEspace(permanent), nouveau };
 }

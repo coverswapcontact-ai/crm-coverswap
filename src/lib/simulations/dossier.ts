@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { recalculerMain } from "@/lib/dossiers/main";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { SimulationEspace } from "@prisma/client";
@@ -321,6 +322,7 @@ export async function deposerSimulationDossier(dossierId: string, fichier: File,
     });
     return simulation;
   });
+  await recalculerMain(dossierId);
   return versVue(dossierId, creee);
 }
 
@@ -371,6 +373,8 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
     ]);
     const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
     if (dossier?.etape === "QUALIFICATION") await changerEtape(dossierId, { vers: "SIMULATION" }).catch((erreur) => console.error("[simulations] passage en Simulation (non bloquant) :", erreur));
+    // Publiée : la main passe au client, partout (dossiers/main.ts).
+    await recalculerMain(dossierId);
   }
 
   if (!options.prevenir) return { publiees: aPublier.length, sms: { envoye: false, raison: "Client non prévenu (case décochée)." } };

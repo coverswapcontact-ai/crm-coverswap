@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { recalculerMain } from "./main";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { MOTIFS_SANS_ACOMPTE, libelleMotif } from "@/lib/encaissements/constantes";
@@ -325,6 +326,8 @@ const STATUT_LEAD_PAR_ETAPE: Partial<Record<EtapeDossier, string>> = {
  *   l'ancien écran /devis. Sans META_PIXEL_ID ni META_ACCESS_TOKEN, rien ne part.
  */
 export async function effetsDuChangementEtape(changement: ChangementEtape): Promise<void> {
+  // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts).
+  await recalculerMain(changement.dossierId);
   try {
     const dossier = await prisma.dossier.findUnique({
       where: { id: changement.dossierId },

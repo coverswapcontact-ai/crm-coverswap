@@ -66,9 +66,25 @@ export type FaitsCompletude = {
   motifPerte: string | null;
   /** Passages d'étape dont la date réelle n'est pas connue. */
   nbDatesInconnues: number;
+  /** Mission 6 : le client a un espace ouvert sur ce projet, il peut encore fournir ce qui s'y saisit. */
+  espaceActif?: boolean;
+  /** Points que Lucas a masqués pour ce dossier (croix) : jugés inutiles, ils ne s'affichent plus en alerte. */
+  masques?: readonly string[];
 };
 
-export type PointACompleter = { code: CodeCompletude; libelle: string };
+/**
+ * Un point à compléter. `attenteClient` : le client peut encore le fournir
+ * depuis son espace (adresse, téléphone, photos) — affiché en neutre, « en
+ * attente du client », pas en alerte. `masque` : Lucas l'a écarté pour ce
+ * dossier. Un point rempli disparaît de lui-même (il n'est plus produit).
+ */
+export type PointACompleter = { code: CodeCompletude; libelle: string; attenteClient: boolean; masque: boolean };
+
+/** Ce que le client peut fournir lui-même depuis son espace (carte « Vos coordonnées », onglet Photos). */
+export const CODES_FOURNIS_PAR_LE_CLIENT: readonly CodeCompletude[] = ["TELEPHONE", "ADRESSE", "PHOTO"];
+
+/** Les vraies alertes : ni masquées, ni en attente du client. Ce que comptent la carte et la liste. */
+export const alertesACompleter = (points: readonly PointACompleter[]): PointACompleter[] => points.filter((p) => !p.masque && !p.attenteClient);
 
 const formatEuros = (montant: number) =>
   `${new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(montant)} €`;
@@ -77,7 +93,10 @@ const rang = (etape: EtapeActive) => ETAPES_ACTIVES.indexOf(etape);
 
 export function pointsACompleter(faits: FaitsCompletude): PointACompleter[] {
   const points: PointACompleter[] = [];
-  const ajouter = (code: CodeCompletude, libelle: string) => points.push({ code, libelle });
+  // Après le chantier, plus rien n'arrivera de l'espace : ce qui manque redevient une alerte.
+  const clientPeutFournir = Boolean(faits.espaceActif) && !["FACTURE", "ENCAISSE", "PERDU"].includes(faits.etape);
+  const ajouter = (code: CodeCompletude, libelle: string) =>
+    points.push({ code, libelle, attenteClient: clientPeutFournir && CODES_FOURNIS_PAR_LE_CLIENT.includes(code), masque: Boolean(faits.masques?.includes(code)) });
 
   // Un dossier perdu n'a plus rien à compléter, sauf de quoi comprendre la perte.
   if (faits.etape === "PERDU") {
@@ -112,4 +131,17 @@ export function pointsACompleter(faits: FaitsCompletude): PointACompleter[] {
     ajouter("DATES_ETAPES", faits.nbDatesInconnues > 1 ? `${faits.nbDatesInconnues} dates d'étape inconnues` : "Une date d'étape inconnue");
   }
   return points;
+}
+
+/** Points masqués d'un dossier (`Dossier.completudeMasquee`), illisible → aucun. */
+export type PointMasque = { code: CodeCompletude; le: string };
+export function lireMasques(json: string | null | undefined): PointMasque[] {
+  if (!json) return [];
+  try {
+    const valeur: unknown = JSON.parse(json);
+    if (!Array.isArray(valeur)) return [];
+    return valeur.filter((m): m is PointMasque => Boolean(m) && typeof m === "object" && CODES_COMPLETUDE.includes((m as PointMasque).code) && typeof (m as PointMasque).le === "string");
+  } catch {
+    return [];
+  }
 }

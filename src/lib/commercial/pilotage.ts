@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { lirePhotos } from "@/lib/dossiers/stockage";
+import { mainDe } from "@/lib/dossiers/pilotage";
 import { JOURS_A_TRAITER, LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
 import { RANG_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { compterPropositionsEnAttente } from "@/lib/validation/service";
@@ -56,7 +57,7 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
       orderBy: { updatedAt: "desc" },
       take: 300,
       select: {
-        id: true, leadId: true, clientId: true, clientNom: true, clientVille: true, clientTelephone: true, etape: true, photos: true, prochaineAction: true, prochaineActionDate: true, dateChantier: true, montantEstime: true, updatedAt: true, createdAt: true,
+        id: true, leadId: true, clientId: true, clientNom: true, clientVille: true, clientTelephone: true, etape: true, photos: true, prochaineAction: true, prochaineActionDate: true, dateChantier: true, main: true, mainMotif: true, montantEstime: true, updatedAt: true, createdAt: true,
         documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { totalHt: true, numero: true, createdAt: true, dateEmission: true } },
         espaces: { where: { archiveLe: null }, take: 1, select: { createdAt: true, premierAccesLe: true, simulations: { where: { archiveLe: null }, select: { choisieLe: true, createdAt: true } } } },
         evenements: { where: { archiveLe: null, type: { notIn: ["CHANGEMENT_ETAPE", "ESPACE_VISITE", "ESPACE_LIEN_CREE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, contenu: true, createdAt: true } },
@@ -128,7 +129,18 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     else if (etape === "SIMULATION") [groupe, action] = simulations.length === 0 ? ["SIMULATION", "Préparer la simulation"] : choisie && !devis ? ["DEVIS", "Faire le devis (simulation choisie)"] : ["ATTENTE_SIMULATION", "Attend son retour sur la simulation"];
     else [groupe, action] = ["ATTENTE_DEVIS", `Attend sa signature${devis?.numero ? ` (devis ${devis.numero})` : ""}`];
 
-    const main = ["ATTENTE_PHOTOS", "ATTENTE_SIMULATION", "ATTENTE_DEVIS", "PLUS_TARD"].includes(groupe) ? "CLIENT" : "MOI";
+    // Qui a la main : la règle unique du dossier (dossiers/main.ts) tranche entre « à moi » et « attend le client ».
+    const regle = mainDe({ etape, prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null, main: dossier.main === "MOI" || dossier.main === "CLIENT" ? dossier.main : null }, maintenant);
+    const aMoiSelonRegle = regle === "MOI" || regle === "A_RELANCER";
+    const motif = dossier.mainMotif && !dossier.mainMotif.startsWith("Étape «") ? dossier.mainMotif : null;
+    if (!aMoiSelonRegle && ["SIMULATION", "DEVIS", "DECIDER"].includes(groupe)) {
+      groupe = etape === "QUALIFICATION" && nbPhotos === 0 && simulations.length === 0 ? "ATTENTE_PHOTOS" : etape === "QUALIFICATION" || etape === "SIMULATION" ? "ATTENTE_SIMULATION" : "ATTENTE_DEVIS";
+      action = motif ?? action;
+    } else if (aMoiSelonRegle && ["ATTENTE_PHOTOS", "ATTENTE_SIMULATION", "ATTENTE_DEVIS"].includes(groupe)) {
+      if (regle === "A_RELANCER") [groupe, action] = ["RAPPELER", `Relancer : ${dossier.prochaineAction ?? motif ?? action}`];
+      else [groupe, action] = [choisie && !devis ? "DEVIS" : etape === "QUALIFICATION" || etape === "SIMULATION" ? "SIMULATION" : "DECIDER", motif ?? action];
+    }
+    const main = GROUPES_CLIENT.includes(groupe) ? "CLIENT" : "MOI";
     const dernier = dossier.evenements[0] ?? null;
     const reference = main === "CLIENT" ? (groupe === "ATTENTE_DEVIS" ? (devis?.dateEmission ?? devis?.createdAt) : groupe === "ATTENTE_SIMULATION" ? simulations.map((s) => s.createdAt).sort((a, b) => b.getTime() - a.getTime())[0] : espace?.createdAt) : null;
     affaires.push({

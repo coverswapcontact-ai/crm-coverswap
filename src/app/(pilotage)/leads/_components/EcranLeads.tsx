@@ -1,5 +1,6 @@
 "use client";
 
+import { BadgeMain } from "@/app/(pilotage)/dossiers/_components/Indicateurs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -164,6 +165,8 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
             {lead.doublon && !archive ? <span className="rounded-full border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-2 py-0.5 text-[11px] text-[#F5B454]">Doublon ?</span> : null}
             <span className="truncate text-[15px] font-medium text-[#F2F3F5]">{lead.nom}</span>
             {lead.smsNonLus > 0 ? <span className="rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
+            {/* Son dossier : qui a la main, la même règle que le kanban et Espaces clients. */}
+            {lead.dossierMain && !archive ? <BadgeMain main={lead.dossierMain.main} motif={lead.dossierMain.motif} /> : null}
           </p>
           <p className="mt-1 text-[12.5px] leading-snug text-[#8B919C]">
             {[lead.ville, lead.projet].filter(Boolean).join(" · ")}

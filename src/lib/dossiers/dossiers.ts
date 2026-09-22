@@ -36,7 +36,7 @@ import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
 import { CATEGORIES_CLIENT } from "@/lib/clients/constantes";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
-import { pointsACompleter, type PointACompleter } from "./completude";
+import { alertesACompleter, LIBELLES_QUALITE_DOSSIERS, lireMasques, pointsACompleter, type CodeCompletude, type PointACompleter } from "./completude";
 import { delaisCles, ecartsPrix, parcoursEtapes } from "./delais";
 
 /* ── Validation ─────────────────────────────────────────────────── */
@@ -167,7 +167,7 @@ type DossierAvecDernierDevis = Prisma.DossierGetPayload<{
 function versResume(
   dossier: Omit<DossierAvecDernierDevis, "photos">,
   avantSortie: EtapeActive | null,
-  aCompleter: number
+  points: readonly PointACompleter[]
 ): DossierResume {
   return {
     id: dossier.id,
@@ -181,7 +181,11 @@ function versResume(
     prochaineAction: dossier.prochaineAction,
     prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null,
     etapeAvantSortie: avantSortie,
-    aCompleter,
+    aCompleter: alertesACompleter(points).length,
+    attenteClient: points.filter((p) => !p.masque && p.attenteClient).length,
+    main: dossier.main === "MOI" || dossier.main === "CLIENT" ? dossier.main : null,
+    mainLe: dossier.mainLe?.toISOString() ?? null,
+    mainMotif: dossier.mainMotif ?? null,
     ouvertLe: (dossier.ouvertLe ?? dossier.createdAt).toISOString(),
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
@@ -212,6 +216,8 @@ export async function pointsACompleterDossiers(
       photos: true,
       dateChantier: true,
       motifPerte: true,
+      completudeMasquee: true,
+      espaces: { select: { revoqueLe: true, archiveLe: true, permanent: { select: { revoqueLe: true } } } },
       documents: { where: { numero: { not: null }, archiveLe: null }, select: { type: true, statut: true, totalHt: true } },
       encaissements: { where: { statut: "VALIDE" }, select: { montant: true } },
       evenements: {
@@ -250,6 +256,8 @@ export async function pointsACompleterDossiers(
         resteDu: Math.max(0, factureCentimes - recuCentimes) / 100,
         motifPerte: dossier.motifPerte,
         nbDatesInconnues: changements.filter((changement) => changement.dateInconnue).length,
+        espaceActif: dossier.espaces.some((e) => !e.revoqueLe && !e.archiveLe && !e.permanent?.revoqueLe),
+        masques: lireMasques(dossier.completudeMasquee).map((m) => m.code),
       })
     );
   }
@@ -288,7 +296,7 @@ export async function listerDossiers(): Promise<DossierResume[]> {
 
   const completude = await pointsACompleterDossiers(prisma);
   return dossiers.map((dossier) =>
-    versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id)?.length ?? 0)
+    versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id) ?? [])
   );
 }
 
@@ -363,7 +371,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
   }));
 
   return {
-    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }, etapeAvantSortie(changements), completude.length),
+    ...versResume({ ...dossier, documents: dernierDevis ? [dernierDevis] : [] }, etapeAvantSortie(changements), completude),
     completude,
     client: dossier.client,
     clientAdresse: dossier.clientAdresse,
@@ -627,6 +635,34 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
     await tx.dossier.update({ where: { id: dossierId }, data });
     if (ouvertLe || data.clientId) await reculerPremierContact(tx, dossierId);
   });
+}
+
+/* ── Points à compléter masqués ─────────────────────────────────── */
+
+/**
+ * La croix d'un point « à compléter » : Lucas juge qu'il n'est pas nécessaire
+ * pour ce dossier. Le choix est gardé sur le dossier (et tracé dans son
+ * historique) ; réafficher le remet. Un point rempli disparaît de lui-même.
+ */
+export async function masquerPointACompleter(dossierId: string, code: CodeCompletude, masquer: boolean): Promise<void> {
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { completudeMasquee: true } });
+  if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
+  const avant = lireMasques(dossier.completudeMasquee);
+  const deja = avant.some((m) => m.code === code);
+  if (deja === masquer) return;
+  const apres = masquer ? [...avant, { code, le: new Date().toISOString() }] : avant.filter((m) => m.code !== code);
+  await prisma.$transaction([
+    prisma.dossier.update({ where: { id: dossierId }, data: { completudeMasquee: apres.length ? JSON.stringify(apres) : null } }),
+    prisma.dossierEvenement.create({
+      data: {
+        dossierId,
+        type: "NOTE_AJOUTEE",
+        direction: "INTERNE",
+        contenu: masquer ? `Point « à compléter » masqué pour ce dossier : ${LIBELLES_QUALITE_DOSSIERS[code].replace(/^Dossiers? /, "")}` : `Point « à compléter » réaffiché : ${LIBELLES_QUALITE_DOSSIERS[code].replace(/^Dossiers? /, "")}`,
+        metadata: JSON.stringify({ completude: code, masque: masquer }),
+      },
+    }),
+  ]);
 }
 
 /* ── Dates réelles ──────────────────────────────────────────────── */

@@ -33,11 +33,12 @@ const BADGES: Record<Exclude<Main, "AUCUNE">, { court: string; long: string; Ico
 };
 
 /** Qui a la main : plein et clair quand c'est à moi, en contour quand le client a la main. */
-export function BadgeMain({ main, long = false, className }: { main: Main; long?: boolean; className?: string }) {
+export function BadgeMain({ main, long = false, className, motif }: { main: Main; long?: boolean; className?: string; motif?: string | null }) {
   if (main === "AUCUNE") return null;
   const { court, long: libelleLong, Icone, classe } = BADGES[main];
   return (
     <span
+      title={motif ?? undefined}
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-semibold whitespace-nowrap",
         classe,
@@ -52,7 +53,7 @@ export function BadgeMain({ main, long = false, className }: { main: Main; long?
 
 /** Liseré gauche : rouge en retard (prioritaire dans tous les cas), blanc quand j'ai la main. */
 export function couleurLisere(
-  dossier: { etape: EtapeDossier; prochaineActionDate: string | null },
+  dossier: { etape: EtapeDossier; prochaineActionDate: string | null; main?: "MOI" | "CLIENT" | null },
   maintenant: Date
 ): string | null {
   if (echeanceDe(dossier, maintenant) === "retard") return ROUGE_RETARD;

@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { recalculerMain } from "@/lib/dossiers/main";
 import { z } from "zod/v4";
 import type { PreparationSimulation } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -269,6 +270,7 @@ async function publierSimulationDuClient(
       });
       return creee;
     });
+    await recalculerMain(p.dossierId);
     await alerter(
       { titre: `${clientNom} a créé une simulation`, texte: `${type.libelle} : ${zones.map((z) => `${z.libelle} ${z.nom}`).join(", ")}.
 Il se projette : c'est le moment de l'appeler.`, lien: `${appUrl()}/dossiers?dossier=${p.dossierId}`, libelleLien: "Ouvrir le dossier", urgence: 3, etiquette: `simulation-client-${p.dossierId}` },
@@ -333,6 +335,7 @@ export async function executerGenerationApi(preparationId: string): Promise<{ si
       await tx.dossierEvenement.create({ data: { dossierId: p.dossierId, type: "SIMULATION_BROUILLON", direction: "INTERNE", contenu: `Simulation générée par l'API en brouillon : ${creee.titre} (≈ ${resultat.coutDollars.toFixed(2).replace(".", ",")} $)`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) } });
       return creee;
     });
+    await recalculerMain(p.dossierId);
     await alerter(
       { titre: `Simulation prête — ${dossier?.clientNom ?? "dossier"}`, texte: `${simulation.titre}\nEn brouillon : à relire, puis publier dans l'espace du client.`, lien: `${appUrl()}/dossiers?dossier=${p.dossierId}`, libelleLien: "Ouvrir le dossier", urgence: 3, etiquette: `simulation-${p.dossierId}` },
       { origine: "simulateur", canaux: ["telegram", "ntfy", "pushweb"] }

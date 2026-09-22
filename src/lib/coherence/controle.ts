@@ -1,7 +1,8 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
-import { ETAPES, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ETAPES, LIBELLES_ETAPE, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
+import { calculerMain, recalculerMain } from "@/lib/dossiers/main";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
 import { suivreSoldeDossier } from "@/lib/encaissements/service";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
@@ -39,7 +40,9 @@ export type CodeIncoherence =
   | "SIMULATIONS_HORS_DOSSIER"
   // Mission 5 (22/09/2026) : l'espace permanent et ses projets.
   | "PROJET_FIGE_MODIFIE"
-  | "PROJETS_AU_DELA_DE_LA_LIMITE";
+  | "PROJETS_AU_DELA_DE_LA_LIMITE"
+  // Mission 6 (22/09/2026) : qui a la main, une seule règle (dossiers/main.ts).
+  | "MAIN_DECALEE";
 
 export type Incoherence = {
   /** Stable d'un passage à l'autre : code + dossier (ou lead). */
@@ -77,7 +80,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
   const dossiers = await prisma.dossier.findMany({
     where: { etape: { not: "PERDU" } },
     select: {
-      id: true, clientNom: true, etape: true, prochaineAction: true, leadId: true, prestations: true,
+      id: true, clientNom: true, etape: true, prochaineAction: true, leadId: true, prestations: true, main: true, mainMotif: true,
       lead: { select: { id: true, statut: true, typeProjet: true, archiveLe: true } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
       accords: true,
@@ -151,6 +154,14 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     const attendus = STATUT_LEAD_ATTENDU[d.etape as EtapeDossier];
     if (d.lead && !d.lead.archiveLe && attendus && !attendus.includes(d.lead.statut)) {
       signaler("STATUT_DU_LEAD", "MOYENNE", `Le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » mais son lead est resté « ${d.lead.statut} » : la section Leads et la publicité ne racontent pas la même histoire.`, `Aligner le lead sur « ${attendus[0]} »`);
+    }
+    // Qui a la main : ce que le dossier affiche (kanban, fiche, Espaces clients, Leads) ↔ ce que disent ses derniers gestes.
+    const regle = await calculerMain(d.id);
+    const responsable = REGLES_ETAPES[d.etape as EtapeDossier]?.responsable ?? null;
+    const affichee = d.main === "MOI" || d.main === "CLIENT" ? d.main : responsable;
+    if (regle?.qui && affichee && regle.qui !== affichee) {
+      const dire = (qui: string) => (qui === "MOI" ? "à moi" : "chez le client");
+      signaler("MAIN_DECALEE", "MOYENNE", `Le dossier affiche « ${dire(affichee)} » alors que ses derniers gestes le mettent « ${dire(regle.qui)} » (${regle.motif}).`, `Remettre « ${dire(regle.qui)} » partout`);
     }
   }
 
@@ -336,6 +347,9 @@ export async function corrigerIncoherence(cle: string): Promise<{ corrigee: bool
       if (manque > 0) await accorderProjets(permanentId, Math.min(5, manque));
       break;
     }
+    case "MAIN_DECALEE":
+      await recalculerMain(dossierId);
+      break;
     default:
       throw new ErreurMetier("Cette incohérence se règle à la main, depuis le dossier.", 400);
   }

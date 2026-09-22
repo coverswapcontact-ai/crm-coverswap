@@ -1,5 +1,6 @@
 import { devaliderChoix, devaliderProjet, devisEmis, retirerAccord, retirerDemandeProposition, retirerPhoto, validerProjet } from "@/lib/espace/validations";
 import { NextResponse, type NextRequest } from "next/server";
+import { recalculerMain } from "@/lib/dossiers/main";
 import type { EspacePermanent } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { analyser } from "@/lib/commun/api";
@@ -125,6 +126,8 @@ async function traiter(requete: NextRequest, contexte: Contexte, suite: Suite, e
     const code = requete.nextUrl.searchParams.get("projet");
     const projet = aConfirmer ? null : await projetDemande(permanent, code && /^[a-z0-9]{8}$/.test(code) ? code : null, projetDuLien);
     const reponse = await suite({ permanent, projet, apercu, aConfirmer }, action);
+    // Un geste du client : qui a la main se relit sur ses événements (dossiers/main.ts).
+    if (ecriture && projet && reponse.ok) await recalculerMain(projet.dossierId);
     for (const [nom, valeur] of Object.entries(entetes)) if (!reponse.headers.has(nom)) reponse.headers.set(nom, valeur);
     return reponse;
   } catch (erreur) {

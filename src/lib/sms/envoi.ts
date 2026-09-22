@@ -1,5 +1,6 @@
 import type { Sms } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import { recalculerMain } from "@/lib/dossiers/main";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { mettreEnFile } from "@/lib/taches/file";
 import { ErreurDefinitive } from "@/lib/taches/registre";
@@ -178,7 +179,7 @@ export async function executerEnvoiSms(smsId: string, tentative: number): Promis
   }
 
   publierEvenementSms({ genre: "STATUT", conversationId: sms.conversationId, smsId });
-  await tracerDansLHistoire({ dossierId: sms.dossierId, leadId: sms.leadId, sens: "SORTANT", texte: sms.texte, smsId: sms.id, origine: sms.origine });
+  await tracerDansLHistoire({ dossierId: sms.dossierId, leadId: sms.leadId, sens: "SORTANT", texte: sms.texte, smsId: sms.id, origine: sms.origine, modele: sms.modele });
   return { statut: "ENVOYE", fournisseur: fournisseur.nom };
 }
 
@@ -186,7 +187,7 @@ export async function executerEnvoiSms(smsId: string, tentative: number): Promis
  * Chaque SMS écrit un événement dans l'histoire du contact : sur le dossier s'il
  * y en a un, sinon dans les échanges du contact entrant. Jamais bloquant.
  */
-export async function tracerDansLHistoire(trace: { dossierId: string | null; leadId: string | null; sens: "ENTRANT" | "SORTANT"; texte: string; smsId: string; origine?: string }): Promise<void> {
+export async function tracerDansLHistoire(trace: { dossierId: string | null; leadId: string | null; sens: "ENTRANT" | "SORTANT"; texte: string; smsId: string; origine?: string; modele?: string | null }): Promise<void> {
   try {
     if (trace.dossierId) {
       await prisma.dossierEvenement.create({
@@ -195,9 +196,11 @@ export async function tracerDansLHistoire(trace: { dossierId: string | null; lea
           type: trace.sens === "ENTRANT" ? "SMS_RECU" : "SMS_ENVOYE",
           direction: trace.sens,
           contenu: trace.texte.slice(0, 1600),
-          metadata: JSON.stringify({ smsId: trace.smsId, ...(trace.origine ? { origine: trace.origine } : {}) }),
+          metadata: JSON.stringify({ smsId: trace.smsId, ...(trace.origine ? { origine: trace.origine } : {}), ...(trace.modele ? { modele: trace.modele } : {}) }),
         },
       });
+      // Un SMS reçu rend la main ; le lien de l'espace envoyé la passe au client (dossiers/main.ts).
+      await recalculerMain(trace.dossierId);
       return;
     }
     if (trace.leadId) {

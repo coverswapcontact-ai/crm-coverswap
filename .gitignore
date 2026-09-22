@@ -45,6 +45,10 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+# Sauvegardes de la base (compressées depuis le 22/09/2026, copies en cours) : jamais dans le dépôt public
+*.db.gz
+*.partiel
+prisma/sauvegardes/
 .meta-leads-backfill.json
 .meta-leads-import-results.json
 

@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { recalculerMain } from "@/lib/dossiers/main";
 import path from "node:path";
 import type { EspaceClient, EspacePermanent, SimulationEspace } from "@prisma/client";
 import { z } from "zod/v4";
@@ -12,7 +13,6 @@ import { montantsDocument } from "@/lib/dossiers/montants";
 import { idPhoto, lireLignes, lirePhotos, estPhotoApres } from "@/lib/dossiers/stockage";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
-import { normaliserEmail } from "@/lib/clients/normalisation";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { libelleZoneClient, lireZones, TYPES_SURFACE_ESPACE, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
@@ -23,6 +23,7 @@ import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
 import { ACTEUR, prevenir } from "./alertes";
+import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -121,7 +122,8 @@ export type EtatEspace = {
   propositionDemandeeLe: string | null;
   propositionMessage: string | null;
   choix: ChoixClient | null;
-  coordonnees: { nom: string; adresse: string; codePostal: string; ville: string; email: string | null; completes: boolean };
+  /** Carte « Vérifiez vos coordonnées » : prénom, nom, e-mail, téléphone (le client), adresse (le projet). */
+  coordonnees: CoordonneesEspace;
   devis: DevisClient | null;
   acompte: { montant: number; recu: number; complet: boolean } | null;
   /** Onglet Paiement : ce qui est dû, ce qui est payé (date et moyen), à partir des encaissements du dossier. */
@@ -256,12 +258,14 @@ export async function chargerProjet(espace: EspaceClient) {
       clientCp: true,
       clientVille: true,
       clientEmail: true,
+      clientTelephone: true,
       objet: true,
       etape: true,
       photos: true,
       dateChantier: true,
       prestations: true,
-      lead: { select: { prenom: true, typeProjet: true, source: true, tailleCuisine: true, delaiProjet: true, delaiProjetTexte: true, occupation: true } },
+      client: { select: { prenom: true, nomFamille: true, categorie: true } },
+      lead: { select: { prenom: true, nom: true, typeProjet: true, source: true, tailleCuisine: true, delaiProjet: true, delaiProjetTexte: true, occupation: true } },
       documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
       accords: { orderBy: { createdAt: "desc" } },
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
@@ -320,7 +324,9 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
   const devis = lecture.devis ? devisPourLeClient(lecture.devis, accord, accordRetirable) : null;
   const recu = lecture.paiement?.recu ?? 0;
   const etape = etapeEspace(faits);
-  const prenomBrut = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
+  // Le prénom de la fiche client d'abord : un prénom corrigé par le client (carte « coordonnées ») l'emporte sur le formulaire.
+  const coordonnees = lireCoordonnees({ dossier, client: dossier.client, lead: dossier.lead });
+  const prenomBrut = (coordonnees.prenom || dossier.lead?.prenom || dossier.clientNom.split(/\s+/)[0] || "").trim();
   const prenom = CLIENT_INCONNU.test(prenomBrut) ? "" : prenomBrut.split(/\s+/)[0];
   // Les mots de l'écran viennent de SA famille (cochée, sinon devinée de sa demande) ; aucune : « votre projet ».
   const famillesDuTexte = familles.length ? familles : suggerees;
@@ -400,14 +406,7 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     propositionDemandeeLe: espace.propositionDemandeeLe?.toISOString() ?? null,
     propositionMessage: espace.propositionDemandeeLe ? (espace.propositionMessage ?? null) : null,
     choix,
-    coordonnees: {
-      nom: dossier.clientNom,
-      adresse: dossier.clientAdresse,
-      codePostal: dossier.clientCp,
-      ville: dossier.clientVille,
-      email: dossier.clientEmail,
-      completes: Boolean(dossier.clientAdresse.trim() && dossier.clientCp.trim() && dossier.clientVille.trim() && dossier.clientEmail?.trim()),
-    },
+    coordonnees,
     devis,
     acompte: devis && devis.acompte > 0 ? { montant: devis.acompte, recu, complet: recu >= devis.acompte - 0.5 } : null,
     paiement: devis && accord && lecture.paiement ? { ...lecture.paiement, devisNumero: devis.numero, signeLe: accord.le.toISOString() } : null,
@@ -572,6 +571,7 @@ export async function accorderSimulations(espaceId: string, nombre: number): Pro
   if (!espace) throw new ErreurMetier("Espace introuvable.", 404);
   const mis = await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsAccordees: { increment: nombre }, simulationsDemandeesLe: null } });
   await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_ACCORDEES", direction: "SORTANT", contenu: `${nombre} simulation${nombre > 1 ? "s" : ""} de plus accordée${nombre > 1 ? "s" : ""} au client dans son espace.`, metadata: JSON.stringify({ nombre }) } });
+  await recalculerMain(espace.dossierId);
   return { accordees: mis.simulationsAccordees };
 }
 
@@ -751,22 +751,11 @@ export async function enregistrerProjetOuSouhaits(espace: EspaceClient, corps: u
 
 /* ── Coordonnées ───────────────────────────────────────────────────── */
 
-export const schemaCoordonnees = z.object({
-  nom: z.string().trim().min(2, "Indiquez votre nom.").max(120),
-  adresse: z.string().trim().min(3, "Indiquez l'adresse du chantier.").max(200),
-  codePostal: z.string().trim().regex(/^\d{5}$/, "Code postal : cinq chiffres."),
-  ville: z.string().trim().min(1, "Indiquez la ville.").max(80),
-  email: z.string().trim().max(160).refine((v) => v === "" || normaliserEmail(v) !== null, "Adresse e-mail invalide.").default(""),
-});
+export { schemaCoordonnees } from "./coordonnees";
 
-export async function completerCoordonnees(espace: EspaceClient, entree: z.output<typeof schemaCoordonnees>): Promise<void> {
-  await avecActeur(ACTEUR, async () => {
-    await prisma.dossier.update({
-      where: { id: espace.dossierId },
-      data: { clientNom: entree.nom, clientAdresse: entree.adresse, clientCp: entree.codePostal, clientVille: entree.ville, ...(entree.email ? { clientEmail: normaliserEmail(entree.email) } : {}) },
-    });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_COORDONNEES", direction: "ENTRANT", contenu: `Le client a complété ses coordonnées : adresse du chantier${entree.email ? " et e-mail" : ""}`, metadata: "{}" } });
-  });
+/** Le client enregistre ses coordonnées (carte « Vérifiez vos coordonnées », ou au bon pour accord) : coordonnees.ts. */
+export async function completerCoordonnees(espace: Pick<EspaceClient, "dossierId">, entree: EntreeCoordonnees): Promise<void> {
+  await enregistrerCoordonnees(espace, entree);
 }
 
 /** Saisie assistée de l'adresse : la Base adresse nationale, interrogée par le CRM (le client ne parle qu'au CRM). */
@@ -781,6 +770,7 @@ type AdresseProposee = { libelle: string; adresse: string; codePostal: string; v
 export async function proposerAdresses(recherche: string, dossierId?: string): Promise<AdresseProposee[]> {
   const q = recherche.trim().slice(0, 120);
   if (q.length < 4) return [];
+  const numero = /^(\d{1,4}(?:\s?(?:bis|ter|quater|[a-d]))?)\s+\D/i.exec(q)?.[1] ?? null;
   const chercher = async (filtre: string): Promise<AdresseProposee[]> => {
     try {
       const reponse = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(q)}&limit=5&autocomplete=1${filtre}`, { signal: AbortSignal.timeout(4000) });
@@ -789,7 +779,11 @@ export async function proposerAdresses(recherche: string, dossierId?: string): P
       return (donnees.features ?? [])
         .map((f) => f.properties ?? {})
         .filter((p) => p.label && p.postcode && p.city)
-        .map((p) => ({ libelle: p.label!, adresse: p.type === "municipality" ? "" : (p.name ?? ""), codePostal: p.postcode!, ville: p.city! }));
+        .map((p) => {
+          // Une rue sans le numéro tapé (« 12 rue des Lil… » → « Rue des Lilas ») : le numéro du client est gardé.
+          const rue = p.type === "street" && numero ? `${numero} ${p.name ?? ""}`.trim() : null;
+          return { libelle: rue ? `${rue} ${p.postcode} ${p.city}` : p.label!, adresse: p.type === "municipality" ? "" : (rue ?? p.name ?? ""), codePostal: p.postcode!, ville: p.city! };
+        });
     } catch {
       return [];
     }

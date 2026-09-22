@@ -132,7 +132,7 @@ export function CarteDossier({
       <Lisere couleur={couleurLisere(dossier, maintenant)} />
       {/* Qui a la main, en premier : c'est ce qui se lit d'abord. */}
       <span className="flex min-h-5 items-center justify-between gap-2">
-        <BadgeMain main={mainDe(dossier, maintenant)} />
+        <BadgeMain main={mainDe(dossier, maintenant)} motif={dossier.mainMotif} />
         {enRetard ? <PastilleRetard className="mr-1" /> : null}
       </span>
       <span className="mt-2 block truncate text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
@@ -185,7 +185,7 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
         {enRetard ? <PastilleRetard /> : null}
-        {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} className="px-1.5 py-0 text-[10.5px]" /> : null}
+        {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} motif={dossier.mainMotif} className="px-1.5 py-0 text-[10.5px]" /> : null}
       </span>
       <span className={cn("mt-1 flex min-w-0 items-center gap-1.5 text-[12px]", enRetard ? "text-[#F87171]" : echeance === "aujourdhui" ? "text-[#EF9F27]" : "text-[#9CA3AF]")}>
         <CalendarClock size={12} className="shrink-0" aria-hidden />

@@ -356,3 +356,57 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
   Rapport avec captures iPhone : https://claude.ai/artifact/NZAHfhctaybp1mEMsnUCfu
   MISSION 5 TERMINÉE. Reste à Lucas : volume Railway (agrandir = payant), tarifs des sous-parties sans tarif,
   familles des 4 dossiers vivants vides, coup d'œil aux leads Meta entre 10h18 et 10h47.
+
+# Mission 6 (22/09/2026, après-midi) — Coordonnées, « qui a la main », alertes à compléter
+
+Énoncé de Lucas : « Trois ajustements — espace client et Dossiers » (mémoire privée `project_mission6_coordonnees_main`).
+Mêmes règles permanentes. Vérification demandée : sur une copie de la base, prénom corrigé + adresse ajoutée par le
+client → le devis généré les reprend ; simulation publiée → « chez le client » partout ; alerte masquée → ne revient pas.
+iPhone, déploiement CRM puis site, rapport court.
+
+## Décisions
+
+- **Qui a la main = UNE règle** : `src/lib/dossiers/main.ts`. Pure : `mainSelonFaits` lit les derniers événements
+  du dossier (table `EVENEMENTS_MAIN` : type → vers le client / vers moi) et le dernier changement d'étape (défaut
+  = responsable de l'étape) ; le plus récent l'emporte (un passage de main dans la minute qui précède un changement
+  d'étape l'a causé et l'emporte). Stockée sur le dossier (`main`, `mainLe`, `mainMotif`) par `recalculerMain(id)`,
+  appelée après chaque geste (publication, devis, lien, SMS/mail reçus, gestes du client, changement d'étape).
+  `mainDe` (kanban, liste, panneau), Espaces clients (`attente.qui`), /commercial et Leads lisent ce champ.
+  Cohérence : `MAIN_DECALEE` (champ ≠ recalcul) → Corriger = recalculer.
+- **Coordonnées** : au CLIENT prénom, nom, email, téléphone (fiche client : prénom/nomFamille/nom, email et
+  téléphone principaux ajoutés, les anciens gardés) + copiés sur ses dossiers en cours ; au PROJET l'adresse
+  (dossier). Événement avec avant → après. Téléphone changé → alerte forte à Lucas. `PUT coordonnees` accepte
+  l'ancien format (site pas encore redéployé).
+- **Alertes à compléter** : `pointsACompleter` rend chaque point avec `attenteClient` (le client peut le fournir
+  par son espace actif) et `masque` (croix, `Dossier.completudeMasquee` JSON). Comptes et cartes : seulement les
+  vraies alertes.
+
+## Lots
+
+- [x] M1 Schéma (Dossier.main*, completudeMasquee) + `main.ts` + branchements + migration d'initialisation + cohérence.
+- [x] M2 Coordonnées côté CRM (service, route, prénom lu sur la fiche client, alerte téléphone).
+- [x] M3 Alertes à compléter (neutre / masquer / réafficher) : panneau, carte, liste, synthèse.
+- [x] M4 Affichage de la main partout (kanban, panneau, Espaces clients, Leads, /commercial).
+- [ ] M5 Site : carte « Vérifiez vos coordonnées », pastille dans la progression, rappels doux.
+- [ ] M6 Tests + parcours sur copie de base (iPhone), déploiement CRM puis site, rapport.
+
+## Journal
+- 22/09 (après-midi) : CRM ÉCRIT, non commité. `dossiers/main.ts` (règle + recalcul, branché : route de l'espace après
+  chaque geste, SMS tracés, mails rangés, effets de changement d'étape, devis émis, publication, brouillon, simulation du
+  client, espace ouvert, lien régénéré, simulations accordées) ; lu par `mainDe` (kanban/liste/panneau + motif), Espaces
+  clients (`attente.qui` = la règle, le geste nomme l'action), /commercial (groupes réconciliés), Leads (pastille).
+  Cohérence `MAIN_DECALEE`. Migration `main-des-dossiers-22-09`. `espace/coordonnees.ts` (lecture + enregistrement,
+  historique avant → après, alerte téléphone). Complétude : `attenteClient` / `masque` + route `PATCH
+  /api/dossiers/[id]/completude` + bloc du panneau (croix, « en attente du client », réafficher). Décidé en route :
+  « espace ouvert » et « simulation créée par le client » passent la main au client, « brouillon » me la rend.
+  Tests `dossiers/main.test.ts` (11) ; deux anciens essais nourris d'événements réels ; suite 406/406, eslint propre.
+  SUIVANT : site (M5).
+- 22/09 (après-midi) : SITE ÉCRIT (non commité) : `components/espace/Coordonnees.tsx` (écran « Vos coordonnées »,
+  pastille « À compléter » / coche verte dans la barre du projet, rappel doux), carte sur l'accueil du projet, rappels
+  après validation d'une simulation et à l'ouverture du devis. Parcours local (CRM + site d'essai, `prisma/dev.db`
+  sauvegardée dans le bloc-notes `m6/dev-avant-m6.db`, migration main : moi 62 / client 43 / personne 1) : espace
+  ouvert → client ; photos → moi ; publication → CLIENT partout (carte, fiche, Espaces, Leads, /commercial) ; validation
+  → moi partout + rappel ; prénom Jaen → Jean + adresse → dossier, fiche, historique. Corrigé en route : pastille trop
+  large (en-tête sur 2 lignes), numéro de rue perdu sur une rue proposée sans numéro (gardé côté CRM), « ajoutée »,
+  téléphone réécrit en +33 sans changement. Outils : bloc-notes `m6/scenario.mjs`, `m6/plan-corps.mjs`.
+

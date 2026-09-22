@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { recalculerMain } from "./main";
 import prisma, { type Transaction } from "@/lib/prisma";
 import {
   imputerSurFacture,
@@ -312,6 +313,8 @@ async function emettre(emission: Emission) {
       { maxWait: 10_000, timeout: 30_000 }
     );
     for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
+    // Un devis émis passe la main au client, même sans changement d'étape (main.ts).
+    await recalculerMain(emission.dossierId);
     return resultat;
   } catch (erreur) {
     // Transaction annulée : le numéro n'a jamais existé (compteur et registre

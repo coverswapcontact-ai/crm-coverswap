@@ -1,5 +1,6 @@
 "use client";
 
+import { alertesACompleter } from "@/lib/dossiers/completude";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Archive, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -52,7 +53,11 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     prochaineAction: detail.prochaineAction,
     prochaineActionDate: detail.prochaineActionDate,
     etapeAvantSortie: detail.etapeAvantSortie,
-    aCompleter: detail.completude.length,
+    aCompleter: alertesACompleter(detail.completude).length,
+    attenteClient: detail.completude.filter((p) => !p.masque && p.attenteClient).length,
+    main: detail.main,
+    mainLe: detail.mainLe,
+    mainMotif: detail.mainMotif,
     ouvertLe: detail.ouvertLe,
     createdAt: detail.createdAt,
     updatedAt: detail.updatedAt,

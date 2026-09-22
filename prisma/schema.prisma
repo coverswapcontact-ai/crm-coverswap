@@ -486,6 +486,12 @@ model Dossier {
   prestations            String?
   prestationsLe          DateTime?
   prestationsPar         String? // CLIENT | LUCAS | REPRISE
+  // Mission 6 (22/09/2026) : qui a la main, UNE règle (src/lib/dossiers/main.ts), recalculée après chaque geste
+  // (publication, devis, lien, geste du client, changement d'étape) ; null = jamais calculée (règle de l'étape).
+  main                   String? // MOI | CLIENT
+  mainLe                 DateTime? // depuis quand
+  mainMotif              String? // pourquoi, en une phrase (« Simulation publiée : en attente de son retour »)
+  completudeMasquee      String? // JSON [{ code, le }] : points « à compléter » masqués par Lucas pour ce dossier
   notes                  DossierNote[]
   evenements             DossierEvenement[]
   documents              Document[]

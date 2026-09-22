@@ -32,8 +32,14 @@ export type DossierResume = {
   prochaineActionDate: string | null;
   /** Perdu ou en pause : étape active quittée (la progression y reste figée). */
   etapeAvantSortie: EtapeActive | null;
-  /** Nombre de points à compléter (completude.ts). */
+  /** Nombre de vraies alertes à compléter (completude.ts) : ni masquées, ni en attente du client. */
   aCompleter: number;
+  /** Points que le client peut encore fournir depuis son espace (affichés en neutre). */
+  attenteClient: number;
+  /** Qui a la main, telle que la règle unique l'a rangée (main.ts) ; null = jamais calculée : règle de l'étape. */
+  main: "MOI" | "CLIENT" | null;
+  mainLe: string | null;
+  mainMotif: string | null;
   /** Date réelle d'ouverture (reprise d'un dossier commencé avant le CRM), à défaut sa création. */
   ouvertLe: string;
   createdAt: string;

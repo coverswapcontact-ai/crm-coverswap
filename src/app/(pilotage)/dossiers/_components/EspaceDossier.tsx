@@ -6,7 +6,6 @@ import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, MessageSquare, Pe
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
-import type { ProjetClient } from "@/lib/espace/projet";
 import { famille, famillesDe, libelleTaille, resumerSelection, type TaillesProjet } from "@/lib/prestations/prestations";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";

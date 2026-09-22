@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { recalculerMain } from "@/lib/dossiers/main";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { envoyerSms } from "@/lib/sms/envoi";
 import { lienEspace, renouvelerEspace, revoquerEspace } from "./liens";
@@ -66,6 +67,7 @@ export async function regenererLien(permanentId: string, sms: { envoyer: boolean
   }
   if (dossierId) {
     await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_REGENERE", direction: "SORTANT", contenu: `Nouveau lien émis pour l'espace du client : l'ancien ne fonctionne plus${envoye ? " ; SMS envoyé avec le nouveau lien" : " (aucun SMS envoyé)"}.`, metadata: JSON.stringify({ permanentId, version: permanent.version, sms: Boolean(envoye) }) } });
+    await recalculerMain(dossierId);
   }
   return { lien, sms: envoye };
 }

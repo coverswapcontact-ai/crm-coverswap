@@ -36,6 +36,17 @@ describe("Sauvegardes : la place du volume", () => {
     assert.deepEqual(readdirSync(dossier), ["base-avant-x.db.gz"], "aucun fichier provisoire ne reste");
   });
 
+  test("disque plein : l'archive préparée en mémoire remplace l'original, relue à l'octet près", async () => {
+    const { compresserSurPlace } = await charger();
+    const dossier = mkdtempSync(path.join(tmpdir(), "coverswap-plein-"));
+    const original = path.join(dossier, "base-avant-z.db");
+    const contenu = readFileSync(fichierBase);
+    writeFileSync(original, contenu);
+    const archive = compresserSurPlace(original);
+    assert.deepEqual(readdirSync(dossier), ["base-avant-z.db.gz"]);
+    assert.equal(sha(gunzipSync(readFileSync(archive))), sha(contenu));
+  });
+
   test("la place manque : les plus anciennes sont compressées d'abord, et seulement ce qu'il faut", async () => {
     const { assurerPlace } = await charger();
     const dossier = mkdtempSync(path.join(tmpdir(), "coverswap-place-"));

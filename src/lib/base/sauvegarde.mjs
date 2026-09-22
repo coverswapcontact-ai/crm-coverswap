@@ -16,6 +16,8 @@
 // - les sauvegardes plus anciennes que la dernière sont archivées compressées
 //   (.db.gz, gzip) ; l'original n'est retiré qu'une fois l'archive relue et son
 //   empreinte SHA-256 identique à la sienne. Pour restaurer : gunzip -k <fichier>.db.gz ;
+//   disque plein au point de ne pas pouvoir écrire l'archive à côté : elle est
+//   préparée et vérifiée en mémoire, puis écrite à la place de l'original ;
 // - s'il n'y a toujours pas la place d'une copie, arrêt (aucune migration sans sauvegarde).
 //
 // Les commentaires turbopackIgnore empêchent Next de tracer tout le projet : ces
@@ -26,10 +28,10 @@
 
 import { PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { closeSync, createReadStream, createWriteStream, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, statfsSync, statSync } from "node:fs";
+import { closeSync, createReadStream, createWriteStream, existsSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statfsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { createGunzip, createGzip } from "node:zlib";
+import { createGunzip, createGzip, gunzipSync, gzipSync } from "node:zlib";
 
 /** Marge gardée libre en plus de la copie : journaux SQLite, écritures des migrations, dépôts de photos. */
 const MARGE_OCTETS = 16 * 1024 * 1024;
@@ -98,9 +100,43 @@ export async function compresserSauvegarde(chemin) {
     renameSync(/*turbopackIgnore: true*/ provisoire, /*turbopackIgnore: true*/ archive);
   } catch (erreur) {
     rmSync(/*turbopackIgnore: true*/ provisoire, { force: true });
+    if (erreur?.code === "ENOSPC") return compresserSurPlace(chemin);
     throw erreur;
   }
   rmSync(/*turbopackIgnore: true*/ chemin);
+  return archive;
+}
+
+const sha256 = (octets) => createHash("sha256").update(octets).digest("hex");
+
+/**
+ * Disque plein (pas même la place de l'archive à côté de l'original) : l'archive est
+ * préparée et vérifiée en mémoire, l'original retiré, l'archive écrite à sa place,
+ * synchronisée, relue et comparée. Si l'écriture échoue malgré la place libérée,
+ * l'original est réécrit tel quel.
+ */
+export function compresserSurPlace(chemin) {
+  const archive = `${chemin}.gz`;
+  const original = readFileSync(/*turbopackIgnore: true*/ chemin);
+  const attendue = sha256(original);
+  const compresse = gzipSync(original, { level: 6 });
+  if (sha256(gunzipSync(compresse)) !== attendue) throw new Error(`archive de ${path.basename(chemin)} différente de l'original`);
+  rmSync(/*turbopackIgnore: true*/ chemin);
+  try {
+    writeFileSync(/*turbopackIgnore: true*/ archive, compresse);
+    const fd = openSync(/*turbopackIgnore: true*/ archive, "r+");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    if (sha256(gunzipSync(readFileSync(/*turbopackIgnore: true*/ archive))) !== attendue) throw new Error(`archive de ${path.basename(chemin)} relue différente`);
+  } catch (erreur) {
+    rmSync(/*turbopackIgnore: true*/ archive, { force: true });
+    writeFileSync(/*turbopackIgnore: true*/ chemin, original);
+    throw erreur;
+  }
+  console.log(`[sauvegarde] Disque plein : ${path.basename(chemin)} archivée en mémoire puis écrite à sa place (${mo(original.length)} → ${mo(compresse.length)}).`);
   return archive;
 }
 
@@ -128,6 +164,25 @@ async function retirerCopiesInachevees(dossier) {
   if (retirees.length) console.log(`[sauvegarde] Copies inachevées retirées (disque plein, jamais valides) : ${retirees.join(", ")}`);
 }
 
+/** Taille d'un fichier ou d'un dossier (récursive). */
+function taille(chemin) {
+  const s = statSync(/*turbopackIgnore: true*/ chemin);
+  if (!s.isDirectory()) return s.size;
+  return readdirSync(/*turbopackIgnore: true*/ chemin).reduce((t, nom) => t + taille(path.join(/*turbopackIgnore: true*/ chemin, nom)), 0);
+}
+
+/** Ce qui occupe le volume de la base : chaque entrée de son dossier (noms de premier niveau seulement). */
+function bilanDuVolume(dossierBase) {
+  try {
+    const entrees = readdirSync(/*turbopackIgnore: true*/ dossierBase)
+      .map((nom) => ({ nom, octets: taille(path.join(/*turbopackIgnore: true*/ dossierBase, nom)) }))
+      .sort((a, b) => b.octets - a.octets);
+    return `${entrees.map((e) => `${e.nom} ${mo(e.octets)}`).join(", ")} ; ${mo(placeLibre(dossierBase))} libres`;
+  } catch (erreur) {
+    return `illisible (${erreur instanceof Error ? erreur.message : erreur})`;
+  }
+}
+
 /** Une ligne sur l'occupation : base, sauvegardes, place libre. */
 function bilan(dossier, fichier) {
   const noms = readdirSync(/*turbopackIgnore: true*/ dossier);
@@ -144,6 +199,7 @@ function bilan(dossier, fichier) {
 export async function assurerPlace(dossier, besoin, libre = placeLibre) {
   await retirerCopiesInachevees(dossier);
   if (libre(dossier) >= besoin) return;
+  console.log(`[sauvegarde] Place à faire (${mo(besoin)} pour la copie) ; volume : ${bilanDuVolume(path.dirname(/*turbopackIgnore: true*/ dossier))}.`);
   for (const chemin of copiesNonCompressees(dossier)) {
     await compresserSauvegarde(chemin);
     if (libre(dossier) >= besoin) return;

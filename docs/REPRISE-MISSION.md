@@ -292,7 +292,7 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
 - [x] P7 Site espace v4 : Mes projets, confirmation, nouveau projet, Projet à deux niveaux, guide photo par famille,
       projet figé, Catalogue, Mes documents, Contact ; textes sans « cuisine » par défaut.
 - [x] P8 Site public : formulaire de devis et simulateur sur les 4 familles (lus du CRM), textes.
-- [ ] P9 Essais iPhone locaux (4 parcours), tests, lint, builds, déploiement CRM puis site, vérifs prod, rapport.
+- [x] P9 Essais iPhone locaux (4 parcours), tests, lint, builds, déploiement CRM puis site, vérifs prod, rapport.
 
 ## Journal
 - 22/09 : inventaire fait (voir Décisions) ; prod relevée en lecture seule (6 dossiers vivants, tous avec client
@@ -342,3 +342,17 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
   anciennes sauvegardes archivées en .db.gz (empreinte SHA-256 relue avant de retirer l'original : rien de perdu),
   arrêt sans rien toucher s'il n'y a toujours pas la place ; bilan d'occupation dans les journaux. Répété sur une
   copie de la base d'avant mission. Reste à Lucas : agrandir le volume ou changer d'offre (décision payante).
+- 22/09 10h39 : 2e essai (f5e7319) : copies inachevées retirées, mais volume toujours à 0 octet → même la première
+  archive ne s'écrivait pas (ENOSPC). 3e essai (4469ed8) : archive préparée en mémoire puis écrite à la place de
+  l'original. EN LIGNE à 10h47. Journal : volume = uploads 225,7 Mo + sauvegardes 184,9 Mo + base 10,4 Mo, 0 libre ;
+  après : 28 archives (39,4 Mo), ~144 Mo libres. Migration de prod : permanents 2, projets 2, J. R. « dits par
+  Lucas » 1, F. d'après ses zones 1, laissés vides 4. Vérifs prod (lecture) : santé 200 (4469ed8) ; J. R. = CUISINE
+  façades hautes + plan de travail + crédence, SDB plan vasque + crédence, MEUBLES portes de dressing ; devis 2026-037
+  3 460 € signé, acompte 1 038 € payé (18/09, virement), solde 2 422 € à régler ; F. = CUISINE façades hautes +
+  basses ; cohérence 0 incohérence ; /api/site/prestations 4 familles. Aucun mail de secours du site ce jour ; aucun
+  lead depuis la coupure. Site poussé (c404d19).
+- 22/09 10h51 : site en ligne (c404d19) : formulaire de devis et simulateur sur les 4 familles ; espace de J. R. vérifié
+  en production par l'aperçu (même code de lien, 3 familles en lecture seule, devis 2026-037, acompte, solde).
+  Rapport avec captures iPhone : https://claude.ai/artifact/NZAHfhctaybp1mEMsnUCfu
+  MISSION 5 TERMINÉE. Reste à Lucas : volume Railway (agrandir = payant), tarifs des sous-parties sans tarif,
+  familles des 4 dossiers vivants vides, coup d'œil aux leads Meta entre 10h18 et 10h47.

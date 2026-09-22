@@ -8,13 +8,15 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * - HUMAIN    : personne connectée (HUMAIN:email), ou le poste local sans connexion
  * - AGENT     : agent IA (AGENT:mail) ; ses écritures sont des propositions ou des
  *               actions autorisées sans validation (voir docs/ARCHITECTURE-PILOTAGE.md)
+ * - ASSISTANT : Claude, depuis l'application Claude (serveur MCP), sur ordre de
+ *               Lucas ; l'origine porte l'outil et sa commande (mission 8)
  * - SYSTEME   : traitement interne (file de tâches, miroir Drive, relances)
  * - EXTERNE   : appel entrant non authentifié par session (webhooks du site, Meta, Zapier)
  * - SCRIPT    : script lancé à la main (tsx scripts/…)
  * - MIGRATION : migration de données au démarrage
  * - INCONNU   : écriture passée hors de la couche (SQL brut, outil externe) : à surveiller
  */
-export const TYPES_ACTEUR = ["HUMAIN", "AGENT", "SYSTEME", "EXTERNE", "SCRIPT", "MIGRATION", "INCONNU"] as const;
+export const TYPES_ACTEUR = ["HUMAIN", "AGENT", "ASSISTANT", "SYSTEME", "EXTERNE", "SCRIPT", "MIGRATION", "INCONNU"] as const;
 export type TypeActeur = (typeof TYPES_ACTEUR)[number];
 
 export type ContexteEcriture = {

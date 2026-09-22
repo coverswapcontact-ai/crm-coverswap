@@ -25,6 +25,8 @@ export const PORTEES_GOOGLE = {
   DRIVE: "https://www.googleapis.com/auth/drive.file",
   GMAIL_MODIFIER: "https://www.googleapis.com/auth/gmail.modify",
   GMAIL_ENVOYER: "https://www.googleapis.com/auth/gmail.send",
+  /** Mission 8 : l'assistant inscrit les rappels et actions planifiées dans Google Calendar (accordé à la prochaine reconnexion). */
+  AGENDA: "https://www.googleapis.com/auth/calendar.events",
 } as const;
 const PORTEES_DEMANDEES = ["openid", "email", ...Object.values(PORTEES_GOOGLE)];
 

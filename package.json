@@ -23,6 +23,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.17.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@prisma/adapter-libsql": "^7.7.0",
     "@prisma/client": "^5.22.0",
     "@react-pdf/renderer": "^4.3.2",

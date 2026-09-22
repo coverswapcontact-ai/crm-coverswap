@@ -23,6 +23,7 @@ export const GROUPES_PARAMETRES = {
   RGPD: "Données personnelles (RGPD)",
   AGENT: "Agent mail et IA",
   SIMULATEUR: "Simulateur",
+  PUBLICITE: "Campagne publicitaire",
 } as const;
 export type GroupeParametre = keyof typeof GROUPES_PARAMETRES;
 
@@ -206,6 +207,24 @@ export const DEFINITIONS_PARAMETRES = {
     aide: "Plafond en euros par mois civil, pour tout ce que fait l'IA (lecture des mails, brouillons, guide de style). Une fois atteint, elle s'arrête jusqu'au mois suivant ; le tri de la boîte, lui, continue (il n'utilise pas l'IA).",
     nature: "euros",
     groupe: "AGENT",
+  },
+  CAMPAGNE_DEBUT: {
+    libelle: "Début de la campagne en cours",
+    aide: "Jour du lancement de la campagne Meta en cours, au format AAAA-MM-JJ. L'assistant en déduit le jour de campagne (« jour 3 sur 21 ») et la règle du protocole qui s'applique (consignes de l'assistant).",
+    nature: "texte",
+    groupe: "PUBLICITE",
+  },
+  CAMPAGNE_BUDGET: {
+    libelle: "Budget total de la campagne",
+    aide: "En euros, pour toute la durée. Le CRM ne lit pas la dépense réelle chez Meta : la dépense est estimée au prorata des jours écoulés, et dite comme telle.",
+    nature: "euros",
+    groupe: "PUBLICITE",
+  },
+  CAMPAGNE_DUREE_JOURS: {
+    libelle: "Durée de la campagne",
+    aide: "En jours (21 pour le protocole habituel).",
+    nature: "jours",
+    groupe: "PUBLICITE",
   },
   SIMULATEUR_CREDIT_OPENAI: {
     libelle: "Crédit OpenAI (solde relevé)",

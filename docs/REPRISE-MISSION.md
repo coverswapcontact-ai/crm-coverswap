@@ -543,3 +543,76 @@ l'adresse personnelle de Lucas ; tout le reste part au clic de Lucas.
   - `MAIL_RANGEMENT_GMAIL` = ACTIF à 18:06 : rattrapage par paquets de 20 ; boîte de réception Gmail passée de 87 à
     28 mails (les rangés sont sous « CoverSwap/Rangé », lus, hors boîte ; rien supprimé). Cohérence : 0 incohérence.
   - SUIVANT (mission 8, énoncé en mémoire `project_mission8_mcp_directeur_general`) : serveur MCP « directeur général ».
+
+# Mission 8 (22/09/2026, nuit) — Claude, directeur général : serveur MCP « piloter et conseiller »
+
+Énoncé complet : mémoire privée `project_mission8_mcp_directeur_general` (message de Lucas « Mission autonome —
+Claude, directeur général de CoverSwap : piloter et conseiller depuis l'app »). Mêmes règles permanentes. Deux
+usages : PILOTER (dictée dans l'application Claude → actions dans le CRM) et CONSEILLER (données du CRM croisées
+avec le web ; chaque domaine répondu par un « manager » d'analyse en un appel).
+
+## État trouvé (22/09, soir)
+- Chaque action existe déjà en code (`lib/prospects`, `lib/dossiers`, `lib/encaissements`, `lib/espace`, `lib/mail`,
+  `lib/synthese`, `lib/finances`, `lib/meta`…) ; aucune intégration Google Calendar (`Planification` = cron).
+- Doc Anthropic (connecteurs personnalisés, sept. 2026) : Streamable HTTP ; OAuth DCR + CIMD pris en charge ; jeton
+  porteur statique en bêta limitée → OAuth choisi ; 401 doit porter `WWW-Authenticate … resource_metadata=` ;
+  Claude sonde `/.well-known/oauth-protected-resource/api/mcp` puis la racine ; `/token` en form-urlencoded ;
+  résultat d'outil ≤ ~150 k caractères ; appel d'outil ≤ 240 s. SDK `@modelcontextprotocol/sdk` 1.30.0 ajouté.
+
+## Décisions
+- **Couche d'outils indépendante du transport** (`src/lib/assistant/`) : `DefinitionOutil` (nom, titre, description
+  française, niveau, schéma zod, masse, sensible, aperçu, executer) ; `executerOutil` (moteur : validation,
+  confirmation des actions sensibles par jeton 15 min lié à l'empreinte des paramètres, masse > 3, plafond 60
+  écritures/h + alerte, journal `AppelOutil`/`SessionAssistant`, acteur `ASSISTANT:claude` avec la commande dictée).
+  Un outil n'a AUCUNE logique métier : il appelle `src/lib` et met le résultat en mots.
+- **Catalogue** (`catalogue.ts`) : 10 lecture + point du jour + 5 managers + 20 écriture = 36 outils. Sensibles :
+  générer/envoyer un document, lien d'espace, renouveler le lien, publier une simulation, encaissement (saisie et
+  annulation), envoyer un mail ; « signé / facturé / encaissé / perdu » sensibles par l'entrée. « supprimer » = archiver.
+- **Analyses** (`analyses/`) : commercial (cohorte des leads reçus, entonnoir, temps par étape via `parcoursEtapes`,
+  pertes, effet du délai de rappel, devis en attente, panier), finances (`calculerFinances` pur, marge par chantier,
+  projection 30/60/90, seuils via `chargerTableauFinances`, versable = règle du plancher lue dans les consignes),
+  marketing (dépense = dépenses « Publicité » saisies sinon prorata de la campagne ; jamais la dépense réelle Meta,
+  dit dans les définitions ; qualité par source ; géographie par zone d'intervention), clients (état, à réactiver
+  > 180 j, avis, espaces), opérations (charge par semaine vs capacité des consignes, actions, rappels, relances dues,
+  retards, santé). Chaque résultat porte ses définitions et un avertissement « données minces » (< 10).
+- **Consignes** : `ReglageTexte` `CONSIGNES_ASSISTANT` + `POSITIONNEMENT_ASSISTANT` (défauts dans `consignes.ts`,
+  section Conseil avec capacité 8 chantiers/mois, réinvestissement 20 % plafonné 500 €/21 j, plancher 2 000 € —
+  « à ajuster » par Lucas), exposées en ressources MCP `coverswap://consignes` et `coverswap://positionnement`.
+- **Campagne** : paramètres `CAMPAGNE_DEBUT/BUDGET/DUREE_JOURS` (groupe Publicité) ; jour + règle lue dans la section
+  Protocole des consignes (`regleDuJour`).
+- **Google Calendar** : portée `calendar.events` ajoutée à `PORTEES_GOOGLE.AGENDA` (accordée à la prochaine
+  reconnexion) ; sans le droit, l'outil `planifier` écrit dans le CRM et le dit.
+- **OAuth 2.1 auto-hébergé** (`src/lib/oauth/serveur.ts`) : découverte RFC 9728/8414 (routes réelles sous
+  `src/app/.well-known/`), enregistrement dynamique RFC 7591 (`/api/oauth/register`, limité), documents d'identité
+  (client_id https, gardés 24 h), consentement sur `/oauth/autoriser` DERRIÈRE la session du CRM (POST
+  `/api/oauth/autoriser`, origine vérifiée), PKCE S256 obligatoire, codes et jetons hachés SHA-256, accès 12 h,
+  renouvellement 90 j avec rotation et détection de réutilisation (toute la famille tombe), révocation par jeton,
+  par client ou totale (Paramètres). Aucun secret à recopier : la session de Lucas est la clé.
+- **Serveur MCP** (`src/lib/mcp/serveur.ts`, `/api/mcp`) : sans état, un `McpServer` par requête, réponses JSON ;
+  jeton vérifié à chaque requête, 401 + `WWW-Authenticate` sinon ; GET = 405 ; nom du client MCP lu sur la requête
+  `initialize`. Outils = catalogue (description préfixée du niveau, `readOnlyHint`), ressources, prompt
+  `point_du_matin`. Réponse = texte + liens + JSON exact (tronqué à 60 k).
+- **Écrans** : Paramètres → Assistant Claude (adresse, marche à suivre, connexions révocables, consignes et
+  positionnement modifiables, catalogue plié) ; Tâches de fond → Sessions de l'assistant (journal par jour).
+- **RGPD** : `CodeOAuth`/`JetonOAuth` (clientId = application, utilisateur = Lucas) et `AppelOutil` déclarés
+  « conservés » dans la carte.
+
+## Lots
+- [x] A1 Schéma (ClientOAuth, CodeOAuth, JetonOAuth, SessionAssistant, AppelOutil, ConfirmationAssistant),
+      acteur ASSISTANT, paramètres de campagne, portée agenda, routes publiques.
+- [x] A2 Couche d'outils : définition, moteur, recherche tolérante, périodes, consignes, agenda, lecture,
+      point du jour, écriture, 5 managers, catalogue.
+- [x] A3 OAuth (lib + routes + page de consentement) et serveur MCP (`/api/mcp`).
+- [x] A4 Écrans Paramètres et Tâches de fond ; API privées `/api/assistant/{acces,consignes,sessions}`.
+- [x] A5 Tests : `assistant.test.ts` (21 : refus, journal, plafond, dates dictées, calculs purs vs indépendants,
+      managers sur base), `oauth.test.ts` (12), `mcp.test.ts` (7 : client SDK réel sur la route, 401, 5 exemples du
+      mandat). Suite complète 465/465 après mise à jour de `routes-publiques` et de la carte RGPD.
+- [x] A6 Essai HTTP réel sur la copie de base (serveur `crm-essai-m8`, scratchpad `m8/flux-oauth.mjs`) : 401 →
+      découverte → consentement → code → jetons → 36 outils, 2 ressources, managers sur données réelles ; rotation
+      du jeton : l'ancien accès rend 401.
+- [ ] A7 Build, commit (jamais proxy.ts), déploiement Railway, vérifications prod (répond, refuse sans jeton,
+      n'expose rien), rapport (outils + niveaux, connexion, 8 commandes, fragilités).
+
+## Journal
+- 22/09 (nuit) : TOUT ÉCRIT ; 40 tests de la mission verts, suite 465/465, tsc + eslint propres ; essai HTTP de bout en
+  bout réussi en local. Reste : build, commit, déploiement, contrôle prod, rapport.

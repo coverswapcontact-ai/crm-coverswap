@@ -1721,3 +1721,107 @@ model Desinscription {
   source    String // LIEN | LUCAS | REPONSE
   ecriture  String?
 }
+
+// ─────────────────────────────────────────────
+// Mission 8 : l'assistant Claude (serveur MCP). Le CRM est son propre serveur
+// d'autorisation OAuth 2.1 : Claude s'y connecte par le consentement de Lucas
+// (session du CRM), reçoit des jetons opaques (hachés ici), révocables depuis
+// Paramètres. Chaque appel d'outil est journalisé, avec la commande d'origine.
+// ─────────────────────────────────────────────
+
+model ClientOAuth {
+  id           String    @id // client_id : identifiant aléatoire (enregistrement dynamique) ou adresse https du document d'identité (CIMD)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  nom          String // nom affiché au consentement (« Claude »)
+  redirectUris String    @default("[]") // JSON string[] : adresses de retour permises, vérifiées à l'identique
+  secretHash   String? // client confidentiel : empreinte SHA-256 du secret ; null = client public (PKCE)
+  origine      String    @default("DCR") // DCR (enregistrement dynamique) | CIMD (document d'identité) | MANUEL
+  revoqueLe    DateTime?
+  revoqueMotif String?
+  ecriture     String?
+}
+
+model CodeOAuth {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  codeHash      String    @unique // empreinte SHA-256 du code d'autorisation (jamais le code en clair)
+  clientId      String
+  redirectUri   String
+  codeChallenge String // PKCE S256
+  scope         String
+  resource      String? // RFC 8707 : l'adresse du serveur MCP visé
+  utilisateur   String // e-mail de la personne qui a consenti
+  expireLe      DateTime
+  utiliseLe     DateTime? // un code ne s'échange qu'une fois
+  ecriture      String?
+
+  @@index([clientId])
+}
+
+model JetonOAuth {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  jetonHash       String    @unique // empreinte SHA-256 du jeton (jamais le jeton en clair)
+  type            String // ACCES | RENOUVELLEMENT
+  clientId        String
+  utilisateur     String
+  scope           String
+  resource        String?
+  familleId       String // même famille pour un jeton d'accès et son jeton de renouvellement (rotation)
+  expireLe        DateTime
+  revoqueLe       DateTime?
+  revoqueMotif    String?
+  dernierUsageLe  DateTime?
+  clientNom       String? // nom du client MCP tel qu'il s'est présenté (initialize)
+  ecriture        String?
+
+  @@index([clientId, type])
+  @@index([familleId])
+}
+
+model SessionAssistant {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  jour           String // AAAA-MM-JJ (Paris) : une session par jeton et par jour
+  jetonId        String?
+  clientNom      String?
+  dernierAppelLe DateTime?
+  appels         Int       @default(0)
+  ecritures      Int       @default(0)
+  ecriture       String?
+
+  @@unique([jour, jetonId])
+}
+
+model AppelOutil {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  sessionId  String
+  outil      String
+  niveau     String // LECTURE | REVERSIBLE | SENSIBLE
+  parametres String   @default("{}") // JSON, tronqué ; jamais de secret
+  commande   String? // la phrase de Lucas, telle que transmise par Claude
+  statut     String   @default("FAIT") // FAIT | APERCU | REFUSE | ERREUR
+  resume     String? // le résultat, en une ligne
+  erreur     String?
+  dureeMs    Int      @default(0)
+  ecriture   String?
+
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
+}
+
+model ConfirmationAssistant {
+  id        String    @id // le jeton de confirmation remis à Claude
+  createdAt DateTime  @default(now())
+  outil     String
+  empreinte String // SHA-256 de l'outil + des paramètres : le second appel doit être identique
+  apercu    String // ce qui a été annoncé (« je vais archiver 12 leads… »)
+  expireLe  DateTime
+  utiliseLe DateTime?
+  sessionId String?
+  ecriture  String?
+}

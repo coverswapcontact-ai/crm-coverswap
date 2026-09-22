@@ -108,6 +108,11 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     garde: "objet, étapes, montants, dates, code postal et ville, motif de perte (photos effacées)",
   },
   DossierNote: { remplacer: () => ({ contenu: EFFACE }), garde: "étape et date" },
+  // Mission 8 : OAuth de l'assistant. « clientId » y désigne l'application cliente (Claude), jamais une personne ;
+  // « utilisateur » est l'e-mail de Lucas, qui a donné son consentement. Jetons et codes ne sont stockés que hachés.
+  CodeOAuth: { conserve: "code d'autorisation OAuth (haché) : clientId = application cliente, utilisateur = Lucas ; aucune donnée de client du CRM" },
+  JetonOAuth: { conserve: "jeton OAuth (haché) de l'application Claude : clientId = application cliente, utilisateur = Lucas ; révocable depuis Paramètres, aucune donnée de client du CRM" },
+  AppelOutil: { conserve: "journal technique de l'assistant (outil, paramètres tronqués, phrase dictée par Lucas) : conservé pour l'audit, comme le journal des modifications" },
   DossierEvenement: {
     remplacer: (ligne): Record<string, string | null> =>
       ligne.type === "CHANGEMENT_ETAPE"

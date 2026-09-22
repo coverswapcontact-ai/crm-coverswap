@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { parametresPourEcran } from "@/lib/parametres/service";
+import AssistantClaude from "./_components/AssistantClaude";
 import Connexions from "./_components/Connexions";
 import EcranParametres from "./_components/EcranParametres";
 import MessagerieSms from "./_components/MessagerieSms";
@@ -8,7 +9,7 @@ import ReglagesMail from "./_components/ReglagesMail";
 
 export const metadata: Metadata = {
   title: "Paramètres — CoverSwap",
-  description: "Seuils fiscaux, taux et règles datés ; connexions Google et miroir Drive ; mail (guide de style, mails automatiques, expéditeurs) ; messagerie SMS ; photo de l'espace client.",
+  description: "Seuils fiscaux, taux et règles datés ; connexions Google et miroir Drive ; mail (guide de style, mails automatiques, expéditeurs) ; messagerie SMS ; photo de l'espace client ; assistant Claude (serveur MCP, consignes, accès).",
 };
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
         <ReglagesMail />
         <MessagerieSms />
         <MarqueEspace />
+        <AssistantClaude />
       </div>
     </>
   );

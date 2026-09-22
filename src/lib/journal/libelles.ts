@@ -48,11 +48,18 @@ export const LIBELLES_MODELE: Record<string, string> = {
   PieceMessage: "Pièce jointe",
   AnalyseMessage: "Analyse d'un mail",
   AppelIa: "Appel à l'IA",
+  SessionAssistant: "Session de l'assistant",
+  AppelOutil: "Appel d'outil (assistant)",
+  ConfirmationAssistant: "Confirmation demandée à l'assistant",
+  ClientOAuth: "Client OAuth (application Claude)",
+  CodeOAuth: "Code d'autorisation OAuth",
+  JetonOAuth: "Jeton OAuth",
 };
 
 export const FAMILLES_ACTEUR = [
   { valeur: "HUMAIN", libelle: "Personnes" },
   { valeur: "AGENT", libelle: "Agent" },
+  { valeur: "ASSISTANT", libelle: "Assistant (Claude)" },
   { valeur: "SYSTEME", libelle: "Système" },
   { valeur: "EXTERNE", libelle: "Site et webhooks" },
   { valeur: "SCRIPT", libelle: "Scripts" },
@@ -68,6 +75,8 @@ export function libelleActeurJournal(acteur: string): string {
       return nom === "poste-local" ? "Moi (poste local)" : nom;
     case "AGENT":
       return nom === "mail" ? "Agent mail" : `Agent ${nom}`;
+    case "ASSISTANT":
+      return nom === "claude" ? "Claude (assistant)" : `Assistant ${nom}`;
     case "SYSTEME":
       return `Système · ${nom}`;
     case "EXTERNE":

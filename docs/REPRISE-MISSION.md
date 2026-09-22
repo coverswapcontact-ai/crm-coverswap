@@ -258,7 +258,7 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
 ## Décisions
 - **Source unique des prestations** : CRM `src/lib/prestations/prestations.ts` (données pures : 4 familles CUISINE, SDB,
   MEUBLES « Mobilier », PRO ; sous-parties ; zones du moteur ; tarif par défaut ; question de taille ; guide photo ;
-  mots « votre cuisine »…). Servie en JSON public `GET /api/prestations` (le site la lit, ISR 1 h) et dans l'état de
+  mots « votre cuisine »…). Servie en JSON public `GET /api/site/prestations` (liste blanche, sans tarifs ; le site la lit, ISR 1 h) et dans l'état de
   l'espace. Les ids de famille restent ceux de `Lead.typeProjet` (aucune migration de leads).
 - Zones du moteur : chaque sous-partie pointe des surfaces du PROJET du simulateur du site de sa famille (la route
   consigne refuse une surface hors projet) : ex. SdB « portes de placard » → meuble-vasque ; Mobilier « bar,
@@ -279,19 +279,19 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
   sans lead ; événement ESPACE_NOUVEAU_PROJET + alerte distincte ; limite 2 en cours (+ accordés par Lucas).
 
 ## Lots
-- [ ] P1 Prestations : fichier unique + helpers + tests ; `/api/prestations` (proxy public).
-- [ ] P2 Schéma (sauvegarde avant) : Dossier.prestations, EspacePermanent, EspaceClient.permanentId/nomProjet ;
+- [x] P1 Prestations : fichier unique + helpers + tests ; `/api/site/prestations` (route publique).
+- [x] P2 Schéma (sauvegarde avant) : Dossier.prestations, EspacePermanent, EspaceClient.permanentId/nomProjet ;
       migration de données (permanents, prestations reprises : J. R. = 3 familles, F. = ses zones).
-- [ ] P3 Liens permanents : jeton → permanent (+ alias), régénérer, révoquer, confirmation 90 j.
-- [ ] P4 Service espace : compte (projets en cartes, documents, favoris, contact/message), projet courant, nouveau
+- [x] P3 Liens permanents : jeton → permanent (+ alias), régénérer, révoquer, confirmation 90 j.
+- [x] P4 Service espace : compte (projets en cartes, documents, favoris, contact/message), projet courant, nouveau
       projet (dossier auto + alerte), limite 2, projet figé, familles dans Projet / Photos / Simulations.
-- [ ] P5 CRM serveur : devis prérempli par sous-parties + tarifs par sous-partie, simulateur (zones), cohérence
+- [x] P5 CRM serveur : devis prérempli par sous-parties + tarifs par sous-partie, simulateur (zones), cohérence
       (figé, limite), fusion de clients, Espaces clients par client, vue du dossier, SMS de régénération.
-- [ ] P6 CRM écrans : familles du dossier (panneau + carte kanban), fiche client (espace), Espaces clients,
+- [x] P6 CRM écrans : familles du dossier (panneau + carte kanban), fiche client (espace), Espaces clients,
       tarifs par sous-partie, régénérer + SMS, projet accordé.
-- [ ] P7 Site espace v4 : Mes projets, confirmation, nouveau projet, Projet à deux niveaux, guide photo par famille,
+- [x] P7 Site espace v4 : Mes projets, confirmation, nouveau projet, Projet à deux niveaux, guide photo par famille,
       projet figé, Catalogue, Mes documents, Contact ; textes sans « cuisine » par défaut.
-- [ ] P8 Site public : formulaire de devis et simulateur sur les 4 familles (lus du CRM), textes.
+- [x] P8 Site public : formulaire de devis et simulateur sur les 4 familles (lus du CRM), textes.
 - [ ] P9 Essais iPhone locaux (4 parcours), tests, lint, builds, déploiement CRM puis site, vérifs prod, rapport.
 
 ## Journal
@@ -310,6 +310,28 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
   (lien permanent), RGPD (EspacePermanent), fusion de clients (espaces fusionnés), archivage (projet qui
   réapparaît), cohérence (PROJET_FIGE_MODIFIE, PROJETS_AU_DELA_DE_LA_LIMITE), migration
   `espaces-permanents-22-09` (J. R. = 3 familles « dits par Lucas »). Suite existante 376/376 verte.
-  RESTE côté CRM : routes (fiche client, régénérer + SMS, accorder un projet, familles du dossier, tarifs par
-  sous-partie, `/api/prestations` public + proxy), écrans (EspaceDossier, kanban, fiche client, Espaces clients,
-  tarifs), nouveaux tests.
+- 22/09 (suite) : CRM FINI côté serveur et écrans, commit LOCAL `fc725aa` (non poussé) : routes `/api/clients/[id]/espace`,
+  `/api/espaces/[id]` (regenerer + SMS relu, desactiver, accorder-projet), `/api/dossiers/[id]/prestations` (PATCH),
+  `/api/prestations/tarifs`, `/api/site/prestations` (publique, liste blanche) ; écrans : familles du dossier
+  (`FamillesDossier.tsx`, puces sur la carte du kanban), bloc Espace du dossier (lien du client, autres projets, taille
+  et note), fiche client (`EspaceClientFiche.tsx`), Espaces clients PAR CLIENT, tarifs par sous-partie
+  (GestionTarifs), `NouveauLien.tsx` partagé. Tests : `src/lib/espace/permanent.test.ts` (13) ; suite 389/389, eslint OK.
+  SUIVANT : le site (P7, P8).
+- 22/09 (suite) : SITE ÉCRIT (commit local, non poussé) : `components/espace/EspaceClient.tsx` réécrit (compte + projet,
+  `?p=` du lien, Mes projets, barre d'onglets dans un projet, « ‹ Mes projets », confirmation, projet figé),
+  `EspaceCompte.tsx` (confirmation 4 chiffres, Mes projets, Nouveau projet + limite, Mes documents, Contact + message,
+  Catalogue + favoris, ProjetConsultation), `EtapeProjet.tsx` (4 familles dessinées → sous-parties dépliées, taille
+  par famille, note, lecture seule si signé), `EtapePhotos.tsx` (guide par famille, jamais la cuisine par défaut),
+  création (familles du projet d'abord), `Illustrations.tsx` (salle de bain, mobilier, local), files hors ligne par
+  projet ; site public : `lib/prestations.ts` (lu du CRM, repli), formulaire de devis et cartes des simulateurs sur
+  les 4 familles, titre des pages villes. tsc + eslint OK. SUIVANT : essais locaux (P9).
+- 22/09 (suite) : ESSAIS LOCAUX FAITS sur la base d'essai (captures iPhone dans le bloc-notes de la session) : J. R.
+  (3 familles en lecture seule « signé », devis 3 460 €, acompte payé, solde), Meta (première question → salle de
+  bain, guide et textes sans cuisine, projet validé, surfaces de la salle de bain en tête), retour après 100 jours
+  (4 chiffres, factures, projet terminé consultable, nouveau projet → dossier Qualification ESPACE_CLIENT sans lead,
+  alerte), troisième projet → « Demander à CoverSwap ». Corrigé en route : un seul projet terminé ne s'ouvre plus
+  seul (accueil Mes projets), onglets Photos/Projet cochés quand le devis est signé, nom de projet par défaut
+  « Cuisine, salle de bain et mobilier », familles du client d'abord dans l'onglet Projet, « Voir mon devis ».
+  Montée de schéma + migration rejouées sur une copie fraîche de la base d'avant mission : aucune perte, mêmes
+  compteurs. Suite 389/389, eslint + tsc OK (CRM et site), builds de prod OK (CRM construit sans la garde locale).
+  SUIVANT : commit, push CRM, vérifs prod en lecture, push site, rapport.

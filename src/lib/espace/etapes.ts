@@ -79,8 +79,9 @@ export const RAISONS_VERROU: Partial<Record<CleProgression, string>> = {
 export function progression(f: FaitsEspace): { cle: CleProgression; libelle: string; fait: boolean; courante: boolean; verrouillee: boolean; raison: string | null }[] {
   const etape = etapeEspace(f);
   const fait: Record<CleProgression, boolean> = {
-    PHOTOS: f.photos > 0 || f.simulationsSite > 0,
-    PROJET: projetFait(f),
+    // Un devis établi ou signé : les photos et le projet sont derrière lui (Lucas a pu les prendre sur place).
+    PHOTOS: f.photos > 0 || f.simulationsSite > 0 || f.accord,
+    PROJET: projetFait(f) || f.devis || f.accord,
     SIMULATIONS: f.choix || f.accord,
     DEVIS: f.accord,
     ACOMPTE: f.acompteRecu || ["PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"].includes(f.etapeDossier),

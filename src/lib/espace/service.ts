@@ -16,7 +16,7 @@ import { normaliserEmail } from "@/lib/clients/normalisation";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { libelleZoneClient, lireZones, TYPES_SURFACE_ESPACE, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
-import { famille as familleDuFichier, famillesDe, IDS_FAMILLE, libellesFamilles, lireSelection, motsDuProjet, zonesPourSimulation, type IdFamille, type SelectionPrestations } from "@/lib/prestations/prestations";
+import { famille as familleDuFichier, famillesDe, IDS_FAMILLE, lireSelection, motsDuProjet, phraseFamilles, zonesPourSimulation, type IdFamille, type SelectionPrestations } from "@/lib/prestations/prestations";
 import { creditDisponible } from "@/lib/simulateur/consommation";
 import { lireParametre } from "@/lib/parametres/service";
 import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
@@ -235,7 +235,7 @@ const OBJET_GENERIQUE = /^(recouvrement( de (cuisine|salle de bains?|mobilier|lo
 /** Le nom d'un projet pour le client : le sien, sinon ses familles, sinon l'objet du dossier s'il dit quelque chose. */
 export function nomDuProjetClient(nomProjet: string | null | undefined, objet: string, familles: IdFamille[]): string {
   if (nomProjet?.trim()) return nomProjet.trim();
-  if (familles.length) return libellesFamilles(familles);
+  if (familles.length) return phraseFamilles(familles);
   const o = objet.trim();
   return o && !OBJET_GENERIQUE.test(o) && o.length <= 60 ? o : "Votre projet";
 }

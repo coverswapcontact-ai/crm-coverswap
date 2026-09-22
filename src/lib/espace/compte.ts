@@ -82,7 +82,8 @@ async function prenomDuClient(permanent: EspacePermanent): Promise<string> {
 /**
  * Le projet à montrer : celui demandé (`?projet=<code>`), sinon celui du lien
  * (un lien de projet d'avant le 22/09), sinon — s'il n'a qu'un projet en cours —
- * celui-là ; sinon aucun : l'accueil « Mes projets ». Jamais celui d'un autre client.
+ * celui-là ; sinon aucun : l'accueil « Mes projets » (tous ses projets terminés
+ * compris). Jamais celui d'un autre client.
  */
 export type ProjetVisible = Awaited<ReturnType<typeof projetsVisibles>>[number];
 
@@ -98,8 +99,8 @@ export async function projetDemande(permanent: EspacePermanent, code: string | n
     if (trouve) return trouve;
   }
   const enCours = projets.filter((p) => !figeDuProjet(p.dossier.etape));
+  // Un seul projet EN COURS : il s'ouvre directement. Aucun (tout est terminé) ou plusieurs : l'accueil « Mes projets ».
   if (enCours.length === 1) return enCours[0];
-  if (projets.length === 1) return projets[0];
   return null;
 }
 
@@ -154,7 +155,8 @@ export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">):
       montant: montants.totalTtcCentimes / 100,
       statut,
       projet: noms.get(d.dossierId) ?? "Votre projet",
-      pdf: d.pdfPath ? `documents/${d.id}` : null,
+      // Un document du CRM se régénère à l'identique ; un document repris n'a que le PDF importé, s'il y en a un.
+      pdf: d.pdfPath || d.origine !== "REPRISE" ? `documents/${d.id}` : null,
     };
   });
 }

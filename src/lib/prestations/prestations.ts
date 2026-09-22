@@ -319,6 +319,12 @@ export function resumerSelection(s: SelectionPrestations): string {
 /** Les libellés courts des familles : « Cuisine, Salle de bain ». */
 export const libellesFamilles = (ids: IdFamille[]) => ids.map((id) => famille(id).libelle).join(", ");
 
+/** Les familles en une phrase, pour nommer un projet : « Cuisine, salle de bain et mobilier ». */
+export function phraseFamilles(ids: IdFamille[]): string {
+  const mots = ids.map((id, i) => (i === 0 ? famille(id).libelle : famille(id).libelle.toLowerCase()));
+  return mots.length > 1 ? `${mots.slice(0, -1).join(", ")} et ${mots.at(-1)}` : (mots[0] ?? "");
+}
+
 /** Les mots de l'écran pour un projet : ceux de SA famille s'il n'en a qu'une, sinon « votre projet ». */
 export function motsDuProjet(familles: IdFamille[]): { nom: string; votre: string; de: string } {
   if (familles.length === 1) return famille(familles[0]).mots;

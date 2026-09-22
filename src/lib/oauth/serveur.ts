@@ -325,7 +325,10 @@ export function jetonPorteur(requete: Request): string | null {
 export async function noterClientMcp(jetonId: string, nom: string): Promise<void> {
   const propre = nom.trim().slice(0, 80);
   if (!propre) return;
-  await prisma.jetonOAuth.updateMany({ where: { id: jetonId, OR: [{ clientNom: null }, { clientNom: { not: propre } }] }, data: { clientNom: propre } }).catch(() => undefined);
+  // Toute la famille (accès + renouvellement) : le nom survit à la rotation des jetons.
+  const ligne = await prisma.jetonOAuth.findUnique({ where: { id: jetonId }, select: { familleId: true, clientNom: true } });
+  if (!ligne || ligne.clientNom === propre) return;
+  await prisma.jetonOAuth.updateMany({ where: { familleId: ligne.familleId }, data: { clientNom: propre } }).catch(() => undefined);
 }
 
 /* ── Révocation et écran Paramètres ─────────────────────────────────── */

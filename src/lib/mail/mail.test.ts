@@ -92,6 +92,8 @@ describe("le tri de la boîte", () => {
       { de: "noreply@github.com", objet: "[coverswap] Run failed" },
       { de: "notification@facebookmail.com", objet: "Votre publicité a été approuvée" },
       { de: "ads-account-noreply@google.com", objet: "Recommandations pour votre compte Google Ads" },
+      { de: "googlemapsplatform-noreply@google.com", objet: "[Legal Update] Google Maps Platform Terms" },
+      { de: "workspace-noreply@google.com", objet: "Important : votre essai sans frais se termine" },
       { de: "no-reply@zapier.com", objet: "Your Zap has an error" },
       { de: "noreply@tm.openai.com", objet: "Your API usage" },
       { de: "news@magasin-bricolage.fr", objet: "-20 % sur la peinture", entetes: { "list-unsubscribe": "<mailto:stop@magasin-bricolage.fr>" }, libelles: ["INBOX", "CATEGORY_PROMOTIONS"] },
@@ -131,8 +133,9 @@ describe("le tri de la boîte", () => {
     // Le site signale une demande perdue : toujours visible.
     const alerte = tri.trierMail(entree({ de: "alertes@resend.dev", objet: "🚨 CONTACT NON ENREGISTRÉ CRM" }));
     assert.equal(alerte.ranger, false);
-    // Dans le doute, visible.
+    // Dans le doute, visible — y compris une personne qui écrit depuis Google (adresse Gmail ou Workspace).
     assert.equal(tri.trierMail(entree({ de: "jean@exemple.fr", objet: "Bonjour" })).ranger, false);
+    assert.equal(tri.trierMail(entree({ de: "jean.dupont@google.com", objet: "Question" })).ranger, false);
   });
 
   test("un contact connu est dans Clients, même s'il écrit depuis un envoi de masse", () => {

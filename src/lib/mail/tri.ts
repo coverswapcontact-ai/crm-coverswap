@@ -105,8 +105,8 @@ export const DOMAINES_BRUIT = [
   "adobe.com",
 ] as const;
 
-/** Adresses Google qui ne sont que des notifications (Google Ads, sécurité, Workspace…). */
-const LOCALES_GOOGLE_BRUIT = /^(ads-?(account-)?noreply|googleads|adwords|no-?reply|noreply-.*|google-noreply|payments-noreply|workspace-noreply|calendar-notification|drive-shares-dm-noreply|sc-noreply|analytics-noreply|merchants-noreply|business-noreply)([._+-]|$)/i;
+/** Adresses Google qui ne sont que des notifications (Google Ads, Maps Platform, sécurité, Workspace…) : « noreply » où qu'il soit. */
+const LOCALES_GOOGLE_BRUIT = /(^|[._+-])(no-?reply|googleads|adwords|calendar-notification)([._+-]|$)/i;
 
 /** Administration, banques, assurances, fournisseurs et partenaires connus. */
 export const DOMAINES_ADMINISTRATIF = [

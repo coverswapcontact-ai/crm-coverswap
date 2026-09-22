@@ -202,8 +202,9 @@ function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace
             {client.nbAcces > 1 ? ` · ${client.nbAcces} visites` : ""} · {client.projets.length} projet{client.projets.length > 1 ? "s" : ""} ({client.projetsEnCours} en cours sur {client.limite} permis)
           </p>
         </div>
-        <Pastille ton={client.attente.qui === "MOI" ? "vert" : client.attente.qui === "CLIENT" ? "bleu" : "neutre"}>
-          {client.attente.qui === "MOI" ? "À moi" : client.attente.qui === "CLIENT" ? "Client" : "—"} : {client.attente.libelle}
+        {/* Qui a la main : la règle unique du dossier (dossiers/main.ts) ; le motif peut être long, il passe à la ligne. */}
+        <Pastille ton={client.attente.qui === "MOI" ? "vert" : client.attente.qui === "CLIENT" ? "bleu" : "neutre"} className="max-w-full rounded-[10px] leading-snug whitespace-normal">
+          {client.attente.qui === "MOI" ? "À moi" : client.attente.qui === "CLIENT" ? "Chez le client" : "—"} · {client.attente.libelle}
         </Pastille>
       </div>
 

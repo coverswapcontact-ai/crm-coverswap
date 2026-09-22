@@ -387,8 +387,8 @@ iPhone, déploiement CRM puis site, rapport court.
 - [x] M2 Coordonnées côté CRM (service, route, prénom lu sur la fiche client, alerte téléphone).
 - [x] M3 Alertes à compléter (neutre / masquer / réafficher) : panneau, carte, liste, synthèse.
 - [x] M4 Affichage de la main partout (kanban, panneau, Espaces clients, Leads, /commercial).
-- [ ] M5 Site : carte « Vérifiez vos coordonnées », pastille dans la progression, rappels doux.
-- [ ] M6 Tests + parcours sur copie de base (iPhone), déploiement CRM puis site, rapport.
+- [x] M5 Site : carte « Vérifiez vos coordonnées », pastille dans la progression, rappels doux.
+- [x] M6 Tests + parcours sur copie de base (iPhone), déploiement CRM puis site, rapport.
 
 ## Journal
 - 22/09 (après-midi) : CRM ÉCRIT, non commité. `dossiers/main.ts` (règle + recalcul, branché : route de l'espace après
@@ -409,4 +409,12 @@ iPhone, déploiement CRM puis site, rapport court.
   → moi partout + rappel ; prénom Jaen → Jean + adresse → dossier, fiche, historique. Corrigé en route : pastille trop
   large (en-tête sur 2 lignes), numéro de rue perdu sur une rue proposée sans numéro (gardé côté CRM), « ajoutée »,
   téléphone réécrit en +33 sans changement. Outils : bloc-notes `m6/scenario.mjs`, `m6/plan-corps.mjs`.
+- 22/09 15h07 : DÉPLOYÉ. CRM 1a85581 (15h02) puis f991dc0 (pastille d'Espaces clients qui passe à la ligne), site
+  56f9685 (15h05). Démarrage rejoué avant sur une copie de la base d'avant mission (aucune perte : seuls le journal et
+  le registre des migrations grandissent). Prod (journaux Railway) : schéma +4 colonnes, sauvegarde vérifiée,
+  migration main : moi 2 / client 4 / personne 1 ; volume 128 Mo libres. Cohérence en prod : 0. Espace de J. R. en
+  aperçu : pastille « coordonnées complètes ». Devis d'essai 2026-043 (copie locale) au nom de « Jean Petit, 12 Impasse
+  des Lilas ». Trouvé en route : `.gitignore` ne couvrait pas `*.db.gz` (corrigé) ; commit initial e65c219 (15/04)
+  avec `prisma/dev.db` dans l'historique public (63 leads) : purge = décision de Lucas.
+  MISSION 6 TERMINÉE.
 

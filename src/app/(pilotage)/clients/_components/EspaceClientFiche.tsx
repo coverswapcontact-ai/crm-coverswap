@@ -127,7 +127,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
                   <span className="min-w-0">
                     <span className="block truncate text-[13.5px] text-[#F2F3F5]">
                       {p.nomProjet}
-                      {p.creeParLeClient ? <span className="ml-1.5 text-[11.5px] text-[#5DCAA5]">ouvert par lui</span> : null}
+                      {p.creeParLeClient ? <span className="ml-1.5 text-[11.5px] text-[#5DCAA5]">ouvert par le client</span> : null}
                     </span>
                     <span className="text-[12px] text-[#6B7280]">{p.familles.map((f) => f.libelle).join(", ") || "Familles à préciser"}</span>
                   </span>

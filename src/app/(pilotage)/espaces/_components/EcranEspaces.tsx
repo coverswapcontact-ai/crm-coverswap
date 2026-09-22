@@ -325,7 +325,7 @@ function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; pl
         <div className="min-w-0">
           <p className="truncate text-[13.5px] font-medium text-[#F2F3F5]">
             {ligne.nomProjet}
-            {ligne.creeParLeClient ? <span className="ml-1.5 text-[11.5px] font-normal text-[#5DCAA5]">ouvert par lui</span> : null}
+            {ligne.creeParLeClient ? <span className="ml-1.5 text-[11.5px] font-normal text-[#5DCAA5]">ouvert par le client</span> : null}
           </p>
           <p className="text-[12px] text-[#8B919C]">{ligne.familles.map((x) => x.libelle).join(", ") || "Familles à préciser"}</p>
         </div>

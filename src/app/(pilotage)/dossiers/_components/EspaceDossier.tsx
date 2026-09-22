@@ -20,7 +20,7 @@ const jourHeure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: 
 const euros = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
 const moyen = (m: string | null) => (m && m in LIBELLES_MOYEN ? LIBELLES_MOYEN[m as MoyenPaiement].toLowerCase() : null);
 
-const LIBELLES_SOURCE: Record<string, string> = { SITE: "Faite sur le site", CLIENT: "Créée par lui", API: "Préparée par moi", CHATGPT: "Préparée par moi", MANUEL: "Déposée par moi" };
+const LIBELLES_SOURCE: Record<string, string> = { SITE: "Faite sur le site", CLIENT: "Créée par le client", API: "Préparée par moi", CHATGPT: "Préparée par moi", MANUEL: "Déposée par moi" };
 
 /** Une rubrique du bloc : titre, pastille d'état à droite, contenu. */
 function Rubrique({ titre, etat, children }: { titre: string; etat?: React.ReactNode; children: React.ReactNode }) {
@@ -269,6 +269,13 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
                 <Check size={11} strokeWidth={3} aria-hidden /> Validé le {jour(espace.projetValide.le)}
                 {espace.projetValide.par === "LUCAS" ? " par moi" : ""}
               </Pastille>
+            ) : espace.accord ? (
+              // Signé ou établi, le devis fait foi : l'onglet Projet du client est en lecture, il n'a plus rien à valider.
+              <Pastille ton="vert">
+                <Check size={11} strokeWidth={3} aria-hidden /> Devis signé : il fait foi
+              </Pastille>
+            ) : espace.devis ? (
+              <Pastille ton="neutre">Devis établi : il fait foi</Pastille>
             ) : (
               <Pastille ton={espace.projet ? "ambre" : "neutre"}>{espace.projet ? "Pas encore validé" : "Rien de saisi"}</Pastille>
             )
@@ -291,13 +298,13 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
           ) : (
             <p className="text-[12.5px] text-[#8B919C]">Il n&apos;a encore rien dit de son projet.</p>
           )}
-          {!espace.projetValide && espace.projetManque && espace.projet ? <p className="mt-1 text-[11.5px] text-[#F5B454]">Pour valider, il manque : {espace.projetManque.charAt(0).toLowerCase() + espace.projetManque.slice(1)}</p> : null}
+          {!espace.projetValide && !espace.devis && !espace.accord && espace.projetManque && espace.projet ? <p className="mt-1 text-[11.5px] text-[#F5B454]">Pour valider, il manque : {espace.projetManque.charAt(0).toLowerCase() + espace.projetManque.slice(1)}</p> : null}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {espace.projetValide ? (
               <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} chargement={occupe === "devalider-projet"} onClick={() => void geste({ geste: "devalider-projet" }, "Projet dévalidé : le client peut le modifier")}>
                 Dévalider
               </Bouton>
-            ) : (
+            ) : espace.devis || espace.accord ? null : (
               <Bouton taille="sm" icone={<Check size={13} aria-hidden />} disabled={Boolean(espace.projetManque)} chargement={occupe === "valider-projet"} onClick={() => void geste({ geste: "valider-projet" }, "Projet validé à sa place")}>
                 Valider à sa place
               </Bouton>

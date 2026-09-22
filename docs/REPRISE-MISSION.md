@@ -335,3 +335,10 @@ Autonomie complète : reprendre seul après chaque limite, ne jamais attendre. R
   Montée de schéma + migration rejouées sur une copie fraîche de la base d'avant mission : aucune perte, mêmes
   compteurs. Suite 389/389, eslint + tsc OK (CRM et site), builds de prod OK (CRM construit sans la garde locale).
   SUIVANT : commit, push CRM, vérifs prod en lecture, push site, rapport.
+- 22/09 10h18 : INCIDENT au déploiement (907bf80) : le volume Railway (500 Mo) est plein à 99 % — les sauvegardes
+  d'avant migration s'y accumulaient sans fin. La copie d'avant schéma a échoué (« database or disk is full »), le
+  garde-fou a annulé la migration (base intacte) mais le CRM ne démarrait plus (502). Correctif `sauvegarde.mjs` :
+  copie sous nom provisoire retirée si elle échoue, copies inachevées du 22/09 retirées (seulement si non intègres),
+  anciennes sauvegardes archivées en .db.gz (empreinte SHA-256 relue avant de retirer l'original : rien de perdu),
+  arrêt sans rien toucher s'il n'y a toujours pas la place ; bilan d'occupation dans les journaux. Répété sur une
+  copie de la base d'avant mission. Reste à Lucas : agrandir le volume ou changer d'offre (décision payante).

@@ -214,7 +214,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
 /**
  * L'onglet Espaces clients, PAR CLIENT (mission 5) : un client, son lien, ses
  * visites, ses projets et où il en est dans chacun. Le plus pressé de ses projets
- * donne la main ; ses signaux (nouveau projet ouvert par lui, projet de plus
+ * donne la main ; ses signaux (nouveau projet ouvert par le client, projet de plus
  * demandé, téléphone à confirmer) s'ajoutent à ceux de ses projets.
  */
 export async function listerClientsEspaces(maintenant: Date = new Date(), filtre: { permanentId?: string } = {}): Promise<ClientEspace[]> {
@@ -234,7 +234,7 @@ export async function listerClientsEspaces(maintenant: Date = new Date(), filtre
     const enCours = projets.filter((p) => !p.fige).length;
     const signaux: Signal[] = [];
     const nouveaux = projets.filter((p) => p.creeParLeClient && !p.fige && p.etape === "PHOTOS");
-    if (nouveaux.length) signaux.push({ code: "NOUVEAU_PROJET", libelle: `Nouveau projet ouvert par lui : ${nouveaux.map((p) => p.nomProjet).join(", ")}`, ton: "rouge" });
+    if (nouveaux.length) signaux.push({ code: "NOUVEAU_PROJET", libelle: `Nouveau projet ouvert par le client : ${nouveaux.map((p) => p.nomProjet).join(", ")}`, ton: "rouge" });
     if (permanent?.projetDemandeLe) signaux.push({ code: "PROJET_DEMANDE", libelle: "Demande à ouvrir un projet de plus", ton: "rouge" });
     if (permanent && confirmationRequise(permanent, maintenant)) signaux.push({ code: "CONFIRMATION_DEMANDEE", libelle: "Plus de 90 jours sans visite : il confirmera son téléphone", ton: "gris" });
     const activites = projets.map((p) => p.derniereActivite).filter((x): x is string => Boolean(x)).sort();

@@ -50,7 +50,7 @@ export type SimulationClient = {
   id: string;
   titre: string | null;
   description: string | null;
-  /** SITE : son essai sur coverswap.fr ; CLIENT : créée par lui dans son espace ; CRM : préparée et publiée par CoverSwap. */
+  /** SITE : son essai sur coverswap.fr ; CLIENT : créée par le client dans son espace ; CRM : préparée et publiée par CoverSwap. */
   source: "SITE" | "CRM" | "CLIENT";
   zones: ZoneTeinte[];
   avant: boolean;

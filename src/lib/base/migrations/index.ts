@@ -11,6 +11,7 @@ import { migrationMenageLeadsDeTest } from "./menage-leads-de-test";
 import { migrationModelesSms } from "./modeles-sms";
 import { migrationMotsDesDemandes } from "./mots-des-demandes";
 import { migrationMainDesDossiers } from "./main-des-dossiers";
+import { migrationMailRemontesFantomes } from "./mail-remontes-fantomes";
 import { migrationPrioriteLeads } from "./priorite-leads";
 import { migrationPrioriteLeadsSimulation } from "./priorite-leads-simulation";
 import { migrationRegistreNumeros } from "./registre-numeros";
@@ -30,4 +31,4 @@ export type MigrationDonnees = {
 };
 
 /** Dans l'ordre d'exécution. On ajoute à la fin, on ne retire ni ne réordonne jamais. */
-export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes, migrationEspacesPermanents, migrationMainDesDossiers];
+export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes, migrationEspacesPermanents, migrationMainDesDossiers, migrationMailRemontesFantomes];

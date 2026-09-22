@@ -40,11 +40,13 @@ async function lireReponse(reponse: Response, action: string): Promise<Record<st
 }
 
 /** Identifiants des messages qui répondent à la recherche Gmail, du plus récent au plus ancien. */
-export async function listerMessagesGmail(recherche: string, limite: number): Promise<{ id: string; threadId: string | null }[]> {
+export async function listerMessagesGmail(recherche: string, limite: number, libelleId?: string): Promise<{ id: string; threadId: string | null }[]> {
   const resultat: { id: string; threadId: string | null }[] = [];
   let page: string | undefined;
   do {
     const parametres = new URLSearchParams({ q: recherche, maxResults: String(Math.min(100, limite - resultat.length)) });
+    // Un libellé (INBOX, UNREAD, celui du rangement) : une liste par libellé coûte 5 unités de quota, contre 5 PAR message lu un à un.
+    if (libelleId) parametres.set("labelIds", libelleId);
     if (page) parametres.set("pageToken", page);
     const corps = await lireReponse(await appelGoogle(`${API}/messages?${parametres}`, { portee: PORTEES_GOOGLE.GMAIL_MODIFIER, method: "GET" }), "lecture de la boîte");
     for (const message of (corps.messages as { id: string; threadId?: string }[] | undefined) ?? []) {
@@ -101,6 +103,16 @@ export async function lirePieceGmail(messageId: string, partie: string): Promise
 const cacheLibelles = new Map<string, string>();
 
 /** Identifiant du libellé (créé s'il n'existe pas). */
+/** L'identifiant d'un libellé s'il existe déjà dans la boîte ; jamais créé ici. */
+export async function libelleGmailExistant(nom: string): Promise<string | null> {
+  const connu = cacheLibelles.get(nom);
+  if (connu) return connu;
+  const corps = await lireReponse(await appelGoogle(`${API}/labels`, { portee: PORTEES_GOOGLE.GMAIL_MODIFIER, method: "GET" }), "lecture des libellés");
+  const existant = ((corps.labels as { id: string; name: string }[] | undefined) ?? []).find((libelle) => libelle.name === nom);
+  if (existant) cacheLibelles.set(nom, existant.id);
+  return existant?.id ?? null;
+}
+
 export async function libelleGmail(nom: string): Promise<string> {
   const connu = cacheLibelles.get(nom);
   if (connu) return connu;

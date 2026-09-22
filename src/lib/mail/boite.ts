@@ -9,6 +9,7 @@ import {
   LIBELLE_RANGE,
   changementsGmail,
   libelleGmail,
+  libelleGmailExistant,
   libellesDuMessage,
   lireMessageGmail,
   listerMessagesGmail,
@@ -143,11 +144,39 @@ export async function demanderEtatGmail(messageId: string): Promise<void> {
   await mettreEnFile({ type: TYPE_TACHE_ETAT_GMAIL, cle: `mail-gmail:${messageId}`, mode: "RECONCILIATION", charge: { messageId }, priorite: 2 });
 }
 
+export type EtatMessageCrm = { lu: boolean; rangeLe: Date | null; rangePar: string | null; traiteLe: Date | null; remonteLe: Date | null; sens: string };
+
+/**
+ * Ce que Gmail doit montrer pour un mail, d'après l'état du CRM (fonction pure,
+ * testée). `null` : ne rien toucher — un rangement d'office dont l'interrupteur
+ * « Rangement d'office dans Gmail » est coupé reste tel quel dans Gmail (lu ou
+ * non, dans la boîte), le CRM seul le range.
+ */
+export function etatGmailVoulu(message: EtatMessageCrm, actuels: string[], rangeId: string | null, rangementActif: boolean): { ajouter: string[]; retirer: string[] } | null {
+  const rangementPermis = message.rangePar === "LUCAS" || rangementActif;
+  if (message.rangeLe && !rangementPermis) return null;
+  const ajouter = new Set<string>();
+  const retirer = new Set<string>();
+  if (message.rangeLe) {
+    if (rangeId) ajouter.add(rangeId);
+    retirer.add("INBOX");
+    retirer.add("UNREAD");
+  } else {
+    if (rangeId && actuels.includes(rangeId)) retirer.add(rangeId);
+    if (message.remonteLe && !message.traiteLe && message.sens === "ENTRANT") ajouter.add("INBOX");
+    if (message.traiteLe) retirer.add("INBOX");
+    if (message.lu) retirer.add("UNREAD");
+    else ajouter.add("UNREAD");
+  }
+  return { ajouter: [...ajouter].filter((l) => !actuels.includes(l)), retirer: [...retirer].filter((l) => actuels.includes(l)) };
+}
+
 /**
  * Applique à Gmail l'état voulu par le CRM : rangé (libellé, lu, hors de la
  * boîte), archivé (hors de la boîte), lu ou non lu, remonté. Le rangement
- * d'office attend l'interrupteur « Rangement d'office dans Gmail » ; ce que
- * Lucas range lui-même part toujours. Rejouable : ne change que l'écart.
+ * d'office attend l'interrupteur « Rangement d'office dans Gmail » — et
+ * n'appelle alors pas Gmail du tout ; ce que Lucas range lui-même part
+ * toujours. Rejouable : ne change que l'écart.
  */
 export async function appliquerEtatGmail(messageId: string): Promise<string> {
   const message = await prisma.message.findUnique({
@@ -155,29 +184,24 @@ export async function appliquerEtatGmail(messageId: string): Promise<string> {
     select: { identifiantCanal: true, canal: true, lu: true, rangeLe: true, rangePar: true, traiteLe: true, remonteLe: true, sens: true },
   });
   if (!message || message.canal !== "EMAIL") return "rien";
+  const rangementActif = await rangementGmailActif();
+  // Avant tout appel à Gmail : un rangement d'office non permis ne touche à rien.
+  if (etatGmailVoulu(message, [], null, rangementActif) === null) return "rangement dans Gmail inactif (Paramètres) : Gmail n'est pas touché";
   const actuels = await libellesDuMessage(message.identifiantCanal);
   if (!actuels) return "introuvable dans Gmail";
-  const range = await libelleGmail(LIBELLE_RANGE);
-  const ajouter = new Set<string>();
-  const retirer = new Set<string>();
-  const rangementPermis = message.rangePar === "LUCAS" || (await rangementGmailActif());
-  if (message.rangeLe && rangementPermis) {
-    ajouter.add(range);
-    retirer.add("INBOX");
-    retirer.add("UNREAD");
-  } else {
-    if (actuels.includes(range)) retirer.add(range);
-    if (message.remonteLe && !message.traiteLe && message.sens === "ENTRANT") ajouter.add("INBOX");
-    if (message.traiteLe) retirer.add("INBOX");
-    if (message.lu) retirer.add("UNREAD");
-    else ajouter.add("UNREAD");
+  // Le libellé n'est créé que pour y ranger un mail ; sinon on se contente de celui qui existe.
+  const rangeId = message.rangeLe ? await libelleGmail(LIBELLE_RANGE) : await libelleGmailExistant(LIBELLE_RANGE);
+  const voulu = etatGmailVoulu(message, actuels, rangeId, rangementActif);
+  if (!voulu) return "rangement dans Gmail inactif (Paramètres) : Gmail n'est pas touché";
+  if (voulu.ajouter.length === 0 && voulu.retirer.length === 0) return "déjà à jour";
+  const resultat = await modifierLibellesGmail(message.identifiantCanal, { ajouter: voulu.ajouter, retirer: voulu.retirer });
+  if (resultat === "FAIT") {
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { dansBoite: !voulu.retirer.includes("INBOX") && (voulu.ajouter.includes("INBOX") || actuels.includes("INBOX")), ...(voulu.retirer.includes("UNREAD") ? { lu: true } : {}) },
+    });
   }
-  const aAjouter = [...ajouter].filter((l) => !actuels.includes(l));
-  const aRetirer = [...retirer].filter((l) => actuels.includes(l));
-  if (aAjouter.length === 0 && aRetirer.length === 0) return "déjà à jour";
-  const resultat = await modifierLibellesGmail(message.identifiantCanal, { ajouter: aAjouter, retirer: aRetirer });
-  if (resultat === "FAIT") await prisma.message.update({ where: { id: messageId }, data: { dansBoite: !retirer.has("INBOX") && (ajouter.has("INBOX") || actuels.includes("INBOX")), ...(retirer.has("UNREAD") ? { lu: true } : {}) } });
-  return `${resultat.toLowerCase()} (+${aAjouter.join(",") || "∅"} −${aRetirer.join(",") || "∅"})`;
+  return `${resultat.toLowerCase()} (+${voulu.ajouter.join(",") || "∅"} −${voulu.retirer.join(",") || "∅"})`;
 }
 
 /* ── Synchronisation ───────────────────────────────────────────────── */
@@ -203,37 +227,65 @@ async function accueillirMessage(idGmail: string, compte: string): Promise<boole
   return true;
 }
 
-/** Libellés changés dans Gmail (par Lucas sur son téléphone, ou par le CRM) : le CRM les reflète. */
-async function refleterLibelles(idGmail: string, libelles: string[], rangeId: string): Promise<boolean> {
-  const message = await prisma.message.findFirst({ where: { canal: "EMAIL", identifiantCanal: idGmail }, select: { id: true, de: true, lu: true, dansBoite: true, rangeLe: true, traiteLe: true } });
-  if (!message) return false;
+export type MiroirMessage = { lu: boolean; dansBoite: boolean; rangeLe: Date | null; traiteLe: Date | null };
+
+/**
+ * Ce que des libellés Gmail changent dans le CRM (fonction pure, testée).
+ * « Remonté par Lucas » seulement si le CRM avait vraiment sorti ce mail de la
+ * boîte (dansBoite faux) et qu'il y est revenu sans le libellé : un mail rangé
+ * d'office alors que l'interrupteur Gmail est coupé n'a jamais quitté la boîte,
+ * et n'a donc pas été remonté.
+ */
+export function changementsDepuisGmail(message: MiroirMessage, libelles: string[], rangeId: string | null): { data: Record<string, unknown>; remonte: boolean } {
   const lu = !libelles.includes("UNREAD");
   const dansBoite = libelles.includes("INBOX");
   const data: Record<string, unknown> = {};
   if (lu !== message.lu) data.lu = lu;
   if (dansBoite !== message.dansBoite) data.dansBoite = dansBoite;
-  // Remonté dans Gmail (libellé retiré, remis dans la boîte) : son expéditeur ne sera plus jamais rangé.
-  if (message.rangeLe && !libelles.includes(rangeId) && dansBoite) {
-    Object.assign(data, { rangeLe: null, rangePar: null, remonteLe: new Date() });
-    await poserRegle(message.de, "NE_JAMAIS_RANGER", "Remonté dans Gmail par Lucas", "LUCAS:gmail");
-  }
+  const remonte = Boolean(message.rangeLe) && !message.dansBoite && dansBoite && !(rangeId && libelles.includes(rangeId));
+  if (remonte) Object.assign(data, { rangeLe: null, rangePar: null, remonteLe: new Date() });
   // Archivé dans Gmail : traité ; remis dans la boîte : de nouveau à traiter.
   if (!message.rangeLe && message.dansBoite && !dansBoite && !message.traiteLe) data.traiteLe = new Date();
   if (!message.rangeLe && !message.dansBoite && dansBoite && message.traiteLe) data.traiteLe = null;
+  return { data, remonte };
+}
+
+/** Libellés changés dans Gmail (par Lucas sur son téléphone, ou par le CRM) : le CRM les reflète. */
+async function refleterLibelles(idGmail: string, libelles: string[], rangeId: string | null): Promise<boolean> {
+  const message = await prisma.message.findFirst({ where: { canal: "EMAIL", identifiantCanal: idGmail }, select: { id: true, de: true, lu: true, dansBoite: true, rangeLe: true, traiteLe: true } });
+  if (!message) return false;
+  const { data, remonte } = changementsDepuisGmail(message, libelles, rangeId);
+  // Remonté dans Gmail (libellé retiré, remis dans la boîte) : son expéditeur ne sera plus jamais rangé.
+  if (remonte) await poserRegle(message.de, "NE_JAMAIS_RANGER", "Remonté dans Gmail par Lucas", "LUCAS:gmail");
   if (Object.keys(data).length === 0) return false;
   await prisma.message.update({ where: { id: message.id }, data });
   return true;
 }
 
-/** Première synchronisation : les 30 derniers jours relus (nouveaux mails et libellés actuels des connus), puis le point d'historique. */
+/** Le quota Gmail se compte par seconde : une courte pause entre deux lectures de message. */
+const PAUSE_ENTRE_LECTURES_MS = 120;
+const pause = (ms: number) => new Promise<void>((resoudre) => setTimeout(resoudre, ms));
+
+/**
+ * Première synchronisation : les 30 derniers jours relus (nouveaux mails, et
+ * libellés actuels des connus — lus par trois listes, INBOX, UNREAD et le
+ * libellé du rangement, pas message par message : le quota Gmail y passait),
+ * puis le point d'historique.
+ */
 async function releveInitiale(compte: string, signal?: AbortSignal): Promise<{ nouveaux: number; majLibelles: number }> {
   const dernier = await prisma.message.findFirst({ where: { canal: "EMAIL", compte }, orderBy: { recuLe: "desc" }, select: { recuLe: true } });
   const depuis = Math.min(Date.now() - REPRISE_INITIALE_MS, dernier ? dernier.recuLe.getTime() - MARGE_RELEVE_MS : Date.now());
-  const identifiants = await listerMessagesGmail(`after:${Math.floor(depuis / 1000)} -in:spam -in:trash -in:drafts -in:chats`, 800);
+  const recherche = `after:${Math.floor(depuis / 1000)} -in:spam -in:trash -in:drafts -in:chats`;
+  const identifiants = await listerMessagesGmail(recherche, 800);
   const connus = new Map(
     (await prisma.message.findMany({ where: { ...AVEC_ARCHIVES, canal: "EMAIL", identifiantCanal: { in: identifiants.map((e) => e.id) } }, select: { id: true, identifiantCanal: true, classe: true } })).map((m) => [m.identifiantCanal, m])
   );
-  const rangeId = await libelleGmail(LIBELLE_RANGE);
+  const rangeId = await libelleGmailExistant(LIBELLE_RANGE);
+  const [dansBoite, nonLus, ranges] = await Promise.all([
+    listerMessagesGmail(recherche, 800, "INBOX").then((l) => new Set(l.map((e) => e.id))),
+    listerMessagesGmail(recherche, 800, "UNREAD").then((l) => new Set(l.map((e) => e.id))),
+    rangeId ? listerMessagesGmail(recherche, 800, rangeId).then((l) => new Set(l.map((e) => e.id))) : Promise.resolve(new Set<string>()),
+  ]);
   let nouveaux = 0;
   let majLibelles = 0;
   for (const { id } of [...identifiants].reverse()) {
@@ -241,10 +293,11 @@ async function releveInitiale(compte: string, signal?: AbortSignal): Promise<{ n
     const connu = connus.get(id);
     if (!connu) {
       if (await accueillirMessage(id, compte)) nouveaux++;
+      await pause(PAUSE_ENTRE_LECTURES_MS);
       continue;
     }
-    const libelles = await libellesDuMessage(id);
-    if (libelles && (await refleterLibelles(id, libelles, rangeId))) majLibelles++;
+    const libelles = [...(dansBoite.has(id) ? ["INBOX"] : []), ...(nonLus.has(id) ? ["UNREAD"] : []), ...(rangeId && ranges.has(id) ? [rangeId] : [])];
+    if (await refleterLibelles(id, libelles, rangeId)) majLibelles++;
     // Les mails relevés par l'ancienne section Messages reçoivent leur classe, et leurs suites.
     if (!connu.classe) {
       const resultat = await classerMessage(connu.id);
@@ -276,7 +329,7 @@ export async function synchroniserBoite(options: { signal?: AbortSignal } = {}):
       await prisma.etatBoiteMail.update({ where: { compte: connexion.compte }, data: { historyId: null, derniereErreur: "Historique Gmail expiré : relève complète au prochain passage." } });
       return { mode: "HISTORIQUE", nouveaux: 0, majLibelles: 0 };
     }
-    const rangeId = changements.libelles.size > 0 ? await libelleGmail(LIBELLE_RANGE) : "";
+    const rangeId = changements.libelles.size > 0 ? await libelleGmailExistant(LIBELLE_RANGE) : null;
     let nouveaux = 0;
     let majLibelles = 0;
     const connus = new Set(
@@ -286,12 +339,14 @@ export async function synchroniserBoite(options: { signal?: AbortSignal } = {}):
       if (options.signal?.aborted) break;
       if (connus.has(id)) continue;
       if (await accueillirMessage(id, connexion.compte)) nouveaux++;
+      await pause(PAUSE_ENTRE_LECTURES_MS);
     }
     for (const [id, libelles] of changements.libelles) {
       if (changements.ajoutes.includes(id) && !connus.has(id)) continue;
       if (await refleterLibelles(id, libelles, rangeId)) majLibelles++;
     }
     await prisma.etatBoiteMail.update({ where: { compte: connexion.compte }, data: { historyId: changements.historyId, derniereSynchro: new Date(), derniereErreur: null } });
+    await rattraperRangementGmail();
     return { mode: "HISTORIQUE", nouveaux, majLibelles };
   } catch (erreur) {
     await prisma.etatBoiteMail
@@ -303,6 +358,17 @@ export async function synchroniserBoite(options: { signal?: AbortSignal } = {}):
       .catch(() => undefined);
     throw erreur;
   }
+}
+
+/**
+ * L'interrupteur « Rangement d'office dans Gmail » vient de passer à Actif :
+ * les mails rangés d'office qui sont encore dans la boîte Gmail y sont rangés
+ * aussi, par petits paquets à chaque passage (le quota Gmail se compte par seconde).
+ */
+async function rattraperRangementGmail(): Promise<void> {
+  if (!(await rangementGmailActif())) return;
+  const restants = await prisma.message.findMany({ where: { canal: "EMAIL", rangeLe: { not: null }, dansBoite: true, archiveLe: null }, orderBy: { recuLe: "desc" }, take: 20, select: { id: true } });
+  for (const m of restants) await demanderEtatGmail(m.id);
 }
 
 /* ── Règles d'expéditeur ───────────────────────────────────────────── */

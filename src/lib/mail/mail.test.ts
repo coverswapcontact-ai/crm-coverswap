@@ -29,6 +29,7 @@ let sequences: typeof import("./sequences");
 let liens: typeof import("@/lib/espace/liens");
 let main: typeof import("@/lib/dossiers/main");
 let registre: typeof import("@/lib/taches/registre");
+let boite: typeof import("./boite");
 
 const envoyes: MessageSortant[] = [];
 const JOUR = 86_400_000;
@@ -50,6 +51,7 @@ before(async () => {
   liens = await import("@/lib/espace/liens");
   main = await import("@/lib/dossiers/main");
   registre = await import("@/lib/taches/registre");
+  boite = await import("./boite");
   // Une boîte Gmail d'essai : chaque mail « parti » est noté ici, rien ne sort.
   envoi.definirEnvoyeurMailEssai({
     nom: "essai",
@@ -145,6 +147,52 @@ describe("le tri de la boîte", () => {
     assert.equal(remonte.ranger, false);
     assert.equal(tri.trierMail(entree({ sens: "SORTANT", de: "coverswap.contact@gmail.com", a: ["qui@exemple.fr"] })).ranger, false);
     assert.deepEqual(tri.ciblesDe(" Alice@Exemple.fr "), ["alice@exemple.fr", "@exemple.fr"]);
+  });
+});
+
+describe("Gmail suit le CRM, le CRM reflète Gmail (interrupteur coupé ou non)", () => {
+  const range = { lu: true, rangeLe: new Date(), rangePar: "TRI", traiteLe: null, remonteLe: null, sens: "ENTRANT" };
+
+  test("rangement d'office inactif : un mail rangé par le tri ne touche pas à Gmail ; actif : libellé, lu, hors de la boîte", () => {
+    assert.equal(boite.etatGmailVoulu(range, ["INBOX", "UNREAD"], "Label_7", false), null);
+    assert.deepEqual(boite.etatGmailVoulu(range, ["INBOX", "UNREAD"], "Label_7", true), { ajouter: ["Label_7"], retirer: ["INBOX", "UNREAD"] });
+    // Rangé par Lucas lui-même (« ne plus me montrer ») : part toujours.
+    assert.deepEqual(boite.etatGmailVoulu({ ...range, rangePar: "LUCAS" }, ["INBOX"], "Label_7", false), { ajouter: ["Label_7"], retirer: ["INBOX"] });
+    // Un mail ordinaire lu dans le CRM : lu dans Gmail ; archivé : hors de la boîte ; remonté : de retour dans la boîte.
+    assert.deepEqual(boite.etatGmailVoulu({ ...range, rangeLe: null, rangePar: null }, ["INBOX", "UNREAD"], null, false), { ajouter: [], retirer: ["UNREAD"] });
+    assert.deepEqual(boite.etatGmailVoulu({ ...range, rangeLe: null, rangePar: null, traiteLe: new Date() }, ["INBOX"], null, false), { ajouter: [], retirer: ["INBOX"] });
+    assert.deepEqual(boite.etatGmailVoulu({ ...range, rangeLe: null, rangePar: null, remonteLe: new Date() }, ["Label_7"], "Label_7", false), { ajouter: ["INBOX"], retirer: ["Label_7"] });
+  });
+
+  test("« remonté par Lucas » seulement si le CRM avait vraiment sorti le mail de la boîte", () => {
+    // Rangé d'office, interrupteur coupé : toujours dans la boîte Gmail sans libellé — ce n'est PAS un remonté (le bogue du 22/09).
+    const encoreDansLaBoite = boite.changementsDepuisGmail({ lu: true, dansBoite: true, rangeLe: new Date(), traiteLe: null }, ["INBOX", "UNREAD"], "Label_7");
+    assert.equal(encoreDansLaBoite.remonte, false);
+    assert.deepEqual(encoreDansLaBoite.data, { lu: false });
+    // Rangé dans Gmail (sorti de la boîte), puis Lucas le remet dans la boîte et retire le libellé : remonté.
+    const remonte = boite.changementsDepuisGmail({ lu: true, dansBoite: false, rangeLe: new Date(), traiteLe: null }, ["INBOX"], "Label_7");
+    assert.equal(remonte.remonte, true);
+    assert.equal(remonte.data.rangeLe, null);
+    // Remis dans la boîte mais le libellé y est encore : pas remonté.
+    assert.equal(boite.changementsDepuisGmail({ lu: true, dansBoite: false, rangeLe: new Date(), traiteLe: null }, ["INBOX", "Label_7"], "Label_7").remonte, false);
+    // Archivé dans Gmail : traité ; remis dans la boîte : de nouveau à traiter.
+    assert.ok(boite.changementsDepuisGmail({ lu: true, dansBoite: true, rangeLe: null, traiteLe: null }, [], null).data.traiteLe instanceof Date);
+    assert.equal(boite.changementsDepuisGmail({ lu: true, dansBoite: false, rangeLe: null, traiteLe: new Date() }, ["INBOX"], null).data.traiteLe, null);
+  });
+
+  test("migration du 22/09 : les règles « jamais rangé » fantômes sont archivées, les mails rendus au tri et rangés de nouveau", async () => {
+    const { migrationMailRemontesFantomes } = await import("@/lib/base/migrations/mail-remontes-fantomes");
+    await prisma.regleExpediteur.create({ data: { cible: "notifications@railway.app", action: "NE_JAMAIS_RANGER", motif: "Remonté dans Gmail par Lucas", par: "LUCAS:gmail" } });
+    await prisma.regleExpediteur.create({ data: { cible: "pub@exemple.fr", action: "RANGER", motif: "Ne plus me montrer", par: "LUCAS" } });
+    const fantome = await prisma.message.create({
+      data: { canal: "EMAIL", compte: "coverswap.contact@gmail.com", identifiantCanal: "fantome-1", sens: "ENTRANT", de: "notifications@railway.app", objet: "Deploy crashed", recuLe: new Date(), classe: "HUMAIN", classePar: "TRI", remonteLe: new Date(), lu: false },
+    });
+    const bilan = await migrationMailRemontesFantomes.executer(prisma);
+    assert.deepEqual(bilan, { reglesArchivees: 1, mailsRendusAuTri: 1, rangesDeNouveau: 1 });
+    assert.equal((await prisma.regleExpediteur.findFirst({ where: { cible: "pub@exemple.fr" } }))?.archiveLe, null, "la décision de Lucas reste");
+    const apres = await prisma.message.findUniqueOrThrow({ where: { id: fantome.id } });
+    assert.deepEqual([apres.classe, Boolean(apres.rangeLe), apres.remonteLe], ["BRUIT", true, null]);
+    assert.deepEqual(await migrationMailRemontesFantomes.executer(prisma), { reglesArchivees: 0, mailsRendusAuTri: 0, rangesDeNouveau: 0 }, "rejouable sans effet");
   });
 });
 

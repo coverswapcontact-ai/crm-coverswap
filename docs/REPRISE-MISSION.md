@@ -517,3 +517,17 @@ l'adresse personnelle de Lucas ; tout le reste part au clic de Lucas.
   publication depuis le bloc Espace du dossier (PATCH) : événement + main + mail, comme le bouton Publier ; geste retour
   sur le volet Client ne ferme plus le mail ; doublons de la liste « À compléter » ; marges de l'onglet Mail ; « Close »
   → « Fermer » (lecteurs d'écran) ; accords (« Date … absente »). Suite 422/422, tsc, eslint, builds CRM et site OK.
+- 22/09 (nuit) : DÉPLOYÉ ad69153 (CRM) + bff3c58 (site). Premier contrôle prod, lecture seule (`/api/mail/bilan`) :
+  181 mails sur 120 j, 95 dans la boîte (73 non lus) → À traiter 22, Clients 13, Administratif 6, Rangés 52.
+  DEUX BOGUES TROUVÉS ET CORRIGÉS (commit suivant) :
+  1. Interrupteur « rangement Gmail » coupé → les mails rangés d'office restaient dans la boîte Gmail sans libellé, et
+     la synchro y voyait un « remonté par Lucas » : 13 règles « jamais rangé » posées à tort (hubspot, anthropic,
+     resend, tiktok, make…). Correctif : « remonté » seulement si le CRM avait vraiment sorti le mail de la boîte
+     (`dansBoite` faux) ; migration `mail-remontes-fantomes-22-09` archive ces règles (par = LUCAS:gmail) et retrie
+     les mails. Une seule règle visait un humain (le cabinet Bautes) : archivée aussi, sans effet (jamais du bruit).
+  2. La tâche « Gmail suit le CRM » marquait LU dans Gmail un mail rangé d'office alors que l'interrupteur est coupé
+     (30 tâches terminées avant le quota : jusqu'à 30 mails de bruit ont pu être marqués lus dans Gmail ; rien d'autre —
+     ni libellé, ni archivage). Correctif : rangement non permis → aucun appel à Gmail (`etatGmailVoulu`, pur, testé).
+  3. Quota Gmail par seconde dépassé par la relève initiale (une lecture par message connu) : remplacée par trois listes
+     (INBOX, UNREAD, libellé), pause de 120 ms entre deux lectures ; rattrapage par paquets de 20 quand l'interrupteur
+     passe à Actif ; le libellé n'est plus créé pour lire.

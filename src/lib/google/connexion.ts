@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { ErreurDefinitive } from "@/lib/taches/registre";
+import { AttenteExterne, ErreurDefinitive, PREFIXE_ATTENTE } from "@/lib/taches/registre";
 import { chiffrer, dechiffrer, lireCle } from "./chiffrement";
 import { applicationGooglePubliee, echeanceJetonGoogle, type EcheanceGoogle, type RappelGoogle } from "./echeance";
 
@@ -131,6 +131,7 @@ export async function terminerConnexion(entree: { code: string | null; etat: str
     });
   });
   cacheJeton.delete("courant");
+  await reveillerTachesEnAttente();
   return { compte: utilisateur.email };
 }
 
@@ -196,12 +197,57 @@ export async function connexionActive(portee: string): Promise<{ id: string; com
   return connexion && connexion.portees.split(" ").includes(portee) ? { id: connexion.id, compte: connexion.compte } : null;
 }
 
+/**
+ * Google coupé (jamais connecté, déconnecté, jeton expiré, accès à étendre) :
+ * les actions attendent la reconnexion au lieu d'échouer, et Lucas est
+ * prévenu (une alerte par demi-journée au plus).
+ */
+export class GoogleIndisponible extends AttenteExterne {
+  constructor(message: string) {
+    super(`Google : ${message}`);
+    this.name = "GoogleIndisponible";
+  }
+}
+
+async function prevenirGoogleCoupe(raison: string): Promise<void> {
+  try {
+    const recente = await prisma.alerteEnvoi.findFirst({ where: { origine: "google-coupe", createdAt: { gte: new Date(Date.now() - 12 * 3_600_000) } }, select: { id: true } });
+    if (recente) return;
+    const { alerter } = await import("@/lib/alertes/canaux");
+    await alerter(
+      {
+        titre: "Google coupé : les actions mail et Drive attendent",
+        texte: `${raison}\nRien n'est perdu : les rangements, envois et copies attendent la reconnexion (Paramètres → Connexions → Google), puis repartent seuls.`,
+        lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/parametres`,
+        libelleLien: "Reconnecter Google",
+        urgence: 4,
+        etiquette: "google-coupe",
+      },
+      { origine: "google-coupe", canaux: ["telegram", "ntfy", "pushweb", "mail"] }
+    );
+  } catch (erreur) {
+    console.error("[google] alerte de coupure non envoyée :", erreur);
+  }
+}
+
+async function indisponible(raison: string): Promise<never> {
+  await prevenirGoogleCoupe(raison);
+  throw new GoogleIndisponible(raison);
+}
+
+/** Après une reconnexion : les tâches qui attendaient Google repartent tout de suite. */
+async function reveillerTachesEnAttente(): Promise<void> {
+  await prisma.tache
+    .updateMany({ where: { statut: "EN_ATTENTE", derniereErreur: { startsWith: `${PREFIXE_ATTENTE}Google` } }, data: { prochainEssaiLe: new Date() } })
+    .catch((erreur) => console.error("[google] réveil des tâches en attente :", erreur));
+}
+
 async function jetonAcces(portee: string, forcer = false): Promise<string> {
   const configuration = configurationGoogle().configuration;
-  if (!configuration) throw new ErreurDefinitive("Connexion Google non configurée.");
+  if (!configuration) return indisponible("connexion non configurée sur le serveur.");
   const connexion = await prisma.connexionGoogle.findFirst({ where: { deconnecteLe: null }, orderBy: { createdAt: "desc" } });
-  if (!connexion) throw new ErreurDefinitive("Aucun compte Google connecté.");
-  if (!connexion.portees.split(" ").includes(portee)) throw new ErreurDefinitive(`Accès Google insuffisant (${portee}) : reconnecter le compte.`);
+  if (!connexion) return indisponible("aucun compte connecté.");
+  if (!connexion.portees.split(" ").includes(portee)) return indisponible(`accès à étendre (${portee}) : reconnecter le compte dans Paramètres.`);
 
   const enCache = cacheJeton.get("courant");
   if (!forcer && enCache && enCache.connexionId === connexion.id && enCache.expire > Date.now()) return enCache.jeton;
@@ -220,7 +266,7 @@ async function jetonAcces(portee: string, forcer = false): Promise<string> {
   if (!reponse.ok || typeof corps.access_token !== "string") {
     if (corps.error === "invalid_grant") {
       await prisma.connexionGoogle.update({ where: { id: connexion.id }, data: { derniereErreur: "Accès révoqué ou expiré côté Google : reconnecter." } });
-      throw new ErreurDefinitive("Accès Google révoqué ou expiré : reconnecter le compte.");
+      return indisponible("accès révoqué ou expiré (7 jours en mode Test) : reconnecter le compte dans Paramètres.");
     }
     throw new Error(`Renouvellement du jeton Google impossible (${String(corps.error ?? reponse.status)})`);
   }

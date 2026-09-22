@@ -2,14 +2,14 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, FileText, FolderOpen, MessageSquare, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
+import { Check, Copy, Eye, FileText, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
+import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { LIBELLES_ETAPE_ESPACE, type EtapeEspace } from "@/lib/espace/etapes";
 import type { ClientEspace, LigneEspace } from "@/lib/espace/suivi-types";
-import { texteNouveauLien } from "@/lib/espace/textes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -143,7 +143,7 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
 
       {visibles.length === 0 ? (
         <div className="mt-8">
-          <EtatVide icone={<Smartphone size={20} aria-hidden />} titre={clients.length === 0 ? "Aucun espace client pour l'instant" : "Rien ici"} texte={clients.length === 0 ? "Un espace s'ouvre depuis un lead ou un dossier : « Ouvrir l'espace client », puis le lien part par SMS. Un client n'en a qu'un, pour tous ses projets." : "Aucun client ne correspond à ce filtre."} />
+          <EtatVide icone={<Smartphone size={20} aria-hidden />} titre={clients.length === 0 ? "Aucun espace client pour l'instant" : "Rien ici"} texte={clients.length === 0 ? "Un espace s'ouvre depuis un lead ou un dossier : « Ouvrir l'espace client », puis le lien part par mail. Un client n'en a qu'un, pour tous ses projets." : "Aucun client ne correspond à ce filtre."} />
         </div>
       ) : (
         <ul className="mt-5 space-y-3">
@@ -160,7 +160,6 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
 function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace; maintenant: number; onRecharger: () => Promise<void> }) {
   const [copie, setCopie] = useState(false);
   const [occupe, setOccupe] = useState<string | null>(null);
-  const prenom = client.clientNom.trim().split(/\s+/)[0] ?? "";
 
   async function copier() {
     if (!client.lien) return;
@@ -234,7 +233,7 @@ function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace
             {copie ? "Copié" : "Copier son lien"}
           </Bouton>
         ) : null}
-        {lienPermanent ? <NouveauLien permanentId={client.permanentId} texteSms={texteNouveauLien(prenom)} numero={client.telephone || null} onFait={onRecharger} /> : null}
+        {lienPermanent ? <NouveauLien permanentId={client.permanentId} email={client.email} onFait={onRecharger} /> : null}
         {!client.revoque && lienPermanent ? (
           <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "desactiver"} onClick={() => void agir({ action: "desactiver" }, "Lien désactivé (tous ses projets)")}>
             Désactiver
@@ -293,6 +292,7 @@ function GesteDuMoment({ ligne, onAccorder, accordEnCours }: { ligne: LigneEspac
 /** Un projet du client : où il en est, ce qu'il y a fait, ce qu'il attend. */
 function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; plusieurs: boolean; onRecharger: () => Promise<void> }) {
   const [occupe, setOccupe] = useState(false);
+  const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const f = ligne.faits;
 
   async function accorder() {
@@ -395,10 +395,12 @@ function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; pl
           </a>
         ) : null}
         {ligne.lien && !ligne.fige ? (
-          <Link href={`/sms?dossier=${ligne.dossierId}&proposer=${ligne.etape === "PHOTOS" ? "LIEN_ESPACE" : "LIEN_ESPACE_RAPPEL"}`} className={BOUTON_LIEN}>
-            <MessageSquare size={13} aria-hidden /> Relancer par SMS
-          </Link>
+          // Mission 7 : le mail prend le relais du SMS (texte relu, rien ne part sans votre clic).
+          <button type="button" onClick={() => setLienMail({ dossierId: ligne.dossierId, code: ligne.etape === "PHOTOS" ? "LIEN_ESPACE" : "LIEN_ESPACE_RAPPEL" })} className={BOUTON_LIEN}>
+            <Mail size={13} aria-hidden /> Envoyer le lien par mail
+          </button>
         ) : null}
+        <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void onRecharger()} />
         {ligne.attente.geste === "SIMULATEUR" || ligne.fige ? null : (
           <Link href={`/simulateur?dossier=${ligne.dossierId}`} className={BOUTON_LIEN}>
             <WandSparkles size={13} aria-hidden /> Simulateur

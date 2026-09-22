@@ -107,7 +107,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
                 <Eye size={13} aria-hidden /> Voir comme le client
               </a>
             ) : null}
-            <NouveauLien permanentId={e.permanentId} texteSms={donnees.smsNouveauLien} numero={donnees.numero} onFait={charger} />
+            <NouveauLien permanentId={e.permanentId} email={donnees.email} onFait={charger} />
             {e.revoque ? null : (
               <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "desactiver"} onClick={() => void action({ action: "desactiver" }, "Lien désactivé : il ne mène plus à rien")}>
                 Désactiver le lien

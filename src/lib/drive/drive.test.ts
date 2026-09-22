@@ -281,7 +281,7 @@ describe("miroir Drive", () => {
     assert.equal((await prisma.miroirDrive.count({ where: { cle: { startsWith: `photo:${dossierId}:` }, etat: "ARCHIVE" } })), 2);
   });
 
-  test("accès révoqué : arrêt net, dit sur la connexion ; jamais de suppression envoyée à Drive", async () => {
+  test("accès révoqué : la synchronisation attend la reconnexion (rien de perdu), dit sur la connexion ; jamais de suppression envoyée à Drive", async () => {
     jetonRevoque = true;
     await prisma.client.update({ where: { id: clientId }, data: { nom: "Alice Durand" } });
     // Le jeton en cache expirerait tôt ou tard : on force son renouvellement.
@@ -289,7 +289,8 @@ describe("miroir Drive", () => {
       const reponse = await fauxGoogle(url, init);
       return url.includes("/drive/v3/") ? new Response("{}", { status: 401 }) : reponse;
     });
-    await assert.rejects(() => miroir.synchroniserMiroir(), (erreur: unknown) => erreur instanceof Error && erreur.name === "ErreurDefinitive" && /révoqué/.test(erreur.message));
+    // Mission 7 : plus d'échec définitif — la tâche attend (AttenteExterne), elle reprendra à la reconnexion.
+    await assert.rejects(() => miroir.synchroniserMiroir(), (erreur: unknown) => erreur instanceof Error && erreur.name === "GoogleIndisponible" && /révoqué/.test(erreur.message));
     assert.match((await prisma.connexionGoogle.findFirstOrThrow({ where: { deconnecteLe: null } })).derniereErreur ?? "", /reconnecter/);
     const rappel = await google.rappelConnexionGoogle();
     assert.deepEqual([rappel?.niveau, rappel?.coupee], ["EXPIREE", true], "une connexion coupée s'affiche sur tous les écrans");

@@ -52,6 +52,10 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
       return { qui: "CLIENT", motif: "Simulations accordées : à lui de les créer" };
     case "ESPACE_LIEN_REGENERE":
       return lireMetadata(evenement.metadata).sms ? { qui: "CLIENT", motif: "Nouveau lien envoyé : en attente du client" } : null;
+    // Mission 7 : je réponds par mail (onglet Mail, dans le fil) → la main passe au client.
+    // (Les notifications automatiques de l'espace sont des MAIL_NOTIFICATION : elles ne la déplacent pas.)
+    case "MAIL_ENVOYE":
+      return evenement.direction === "SORTANT" ? { qui: "CLIENT", motif: "Mail envoyé : en attente de sa réponse" } : null;
     case "SMS_ENVOYE": {
       const meta = lireMetadata(evenement.metadata);
       const lien = meta.origine === "LIEN_ESPACE" || (typeof meta.modele === "string" && MODELES_LIEN.test(meta.modele));
@@ -114,6 +118,7 @@ export const TYPES_MAIN = [
   "ESPACE_SIMULATIONS_ACCORDEES",
   "ESPACE_LIEN_REGENERE",
   "SMS_ENVOYE",
+  "MAIL_ENVOYE",
   "ESPACE_SIMULATION_DEVALIDEE",
   "ESPACE_PROPOSITION_RETIREE",
   "ESPACE_PROJET_DEVALIDE",

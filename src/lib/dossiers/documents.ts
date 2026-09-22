@@ -315,6 +315,11 @@ async function emettre(emission: Emission) {
     for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
     // Un devis émis passe la main au client, même sans changement d'étape (main.ts).
     await recalculerMain(emission.dossierId);
+    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis).
+    if (emission.type === "DEVIS") {
+      const { notifierClient } = await import("@/lib/mail/notifications");
+      await notifierClient("DEVIS_DISPONIBLE", emission.dossierId, resultat.document.id);
+    }
     return resultat;
   } catch (erreur) {
     // Transaction annulée : le numéro n'a jamais existé (compteur et registre

@@ -241,6 +241,8 @@ export async function enregistrerEncaissement(entree: EnregistrementPaiement) {
     return { resultat, changement };
   });
   if (changement) await effetsDuChangementEtape(changement);
+  // Mission 7 : « paiement bien reçu », par mail, automatiquement (une fois par paiement).
+  if (resultat.dossierId) await (await import("@/lib/mail/notifications")).notifierPaiementsRecents(resultat.dossierId);
   return resultat;
 }
 
@@ -595,5 +597,6 @@ export async function changerEtapeAvecPaiement(
     return change;
   });
   await effetsDuChangementEtape(changement);
+  if (entree.acompte || entree.solde) await (await import("@/lib/mail/notifications")).notifierPaiementsRecents(dossierId);
   return changement;
 }

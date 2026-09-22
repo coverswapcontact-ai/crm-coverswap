@@ -16,9 +16,15 @@ import { PORTEES_GOOGLE, connexionActive } from "@/lib/google/connexion";
 export type PieceJointe = { nom: string; type: string; contenu: Buffer };
 
 export type MessageSortant = {
+  /** Adresse d'expédition (séquences : paramètre MAIL_EXPEDITEUR) ; par défaut la boîte connectée. */
+  de?: string | null;
   a: string;
   objet: string;
   texte: string;
+  /** Mise en page (notifications de l'espace) : envoyée avec le texte. */
+  html?: string | null;
+  /** En-têtes ajoutés (List-Unsubscribe des séquences). */
+  entetes?: Record<string, string>;
   repondreA?: string;
   pieces?: PieceJointe[];
   /** Réponse à un mail reçu : la conversation est conservée. */
@@ -68,8 +74,9 @@ function envoyeurResend(): EnvoyeurMail | null {
         to: message.a,
         subject: message.objet,
         text: message.texte,
+        ...(message.html ? { html: message.html } : {}),
         replyTo: message.repondreA,
-        headers: Object.keys(entetes).length ? entetes : undefined,
+        headers: Object.keys({ ...entetes, ...message.entetes }).length ? { ...entetes, ...message.entetes } : undefined,
         attachments: message.pieces?.map((piece) => ({ filename: piece.nom, content: piece.contenu, contentType: piece.type })),
       });
       if (error) throw new Error(`Envoi refusé par Resend : ${error.message}`);
@@ -85,11 +92,13 @@ function envoyeurGmail(compte: string): EnvoyeurMail {
       // Import à la demande : le client Gmail ne se charge que pour un envoi.
       const [{ construireMime }, { envoyerMessageGmail }] = await Promise.all([import("@/lib/messages/mime"), import("@/lib/messages/gmail")]);
       const mime = construireMime({
-        de: compte,
+        de: message.de?.trim() || compte,
         deNom: "CoverSwap",
         a: message.a,
         objet: message.objet,
         texte: message.texte,
+        html: message.html ?? null,
+        entetesSupplementaires: message.entetes,
         repondreA: message.repondreA,
         enReponseA: message.enReponseA?.messageIdEntete ?? null,
         references: message.enReponseA?.references ?? null,
@@ -101,9 +110,11 @@ function envoyeurGmail(compte: string): EnvoyeurMail {
   };
 }
 
-export async function envoyeurMail(): Promise<EnvoyeurMail | null> {
+export async function envoyeurMail(options: { exigerGmail?: boolean } = {}): Promise<EnvoyeurMail | null> {
   if (globalEssai[CLE] !== undefined) return globalEssai[CLE] ?? null;
   const gmail = await connexionActive(PORTEES_GOOGLE.GMAIL_ENVOYER);
   if (gmail) return envoyeurGmail(gmail.compte);
+  // Les mails aux clients (onglet Mail, notifications) partent de la boîte, dans le fil : sans elle, ils attendent.
+  if (options.exigerGmail) return null;
   return envoyeurResend();
 }

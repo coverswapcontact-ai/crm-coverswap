@@ -280,3 +280,67 @@ export function versMessageRecu(message: MessageGmail, compte: string): MessageR
     pieces: pieces.slice(0, 20),
   };
 }
+
+/* ── Historique incrémental (mission 7) ─────────────────────────────── */
+
+/** Libellé des mails rangés d'office par le CRM (réversible : retirer le libellé les remonte). */
+export const LIBELLE_RANGE = "CoverSwap/Rangé";
+
+/** Le point courant de l'historique de la boîte. */
+export async function profilGmail(): Promise<{ adresse: string; historyId: string }> {
+  const corps = await lireReponse(await appelGoogle(`${API}/profile`, { portee: PORTEES_GOOGLE.GMAIL_MODIFIER, method: "GET" }), "lecture du profil");
+  return { adresse: String(corps.emailAddress ?? ""), historyId: String(corps.historyId ?? "") };
+}
+
+export type ChangementsGmail = {
+  /** Messages apparus (reçus ou envoyés), dans l'ordre. */
+  ajoutes: string[];
+  /** Libellés actuels des messages dont les libellés ont changé (INBOX, UNREAD, CoverSwap/Rangé…). */
+  libelles: Map<string, string[]>;
+  historyId: string;
+};
+
+/**
+ * Ce qui a changé dans la boîte depuis `depuis` (history.list). `null` si ce
+ * point de l'historique n'existe plus chez Gmail (trop ancien) : il faut alors
+ * relire la boîte par recherche.
+ */
+export async function changementsGmail(depuis: string, limite = 2000): Promise<ChangementsGmail | null> {
+  const ajoutes: string[] = [];
+  const libelles = new Map<string, string[]>();
+  let historyId = depuis;
+  let page: string | undefined;
+  let vus = 0;
+  do {
+    const parametres = new URLSearchParams({ startHistoryId: depuis, maxResults: "500" });
+    for (const type of ["messageAdded", "labelAdded", "labelRemoved"]) parametres.append("historyTypes", type);
+    if (page) parametres.set("pageToken", page);
+    const reponse = await appelGoogle(`${API}/history?${parametres}`, { portee: PORTEES_GOOGLE.GMAIL_MODIFIER, method: "GET" });
+    if (reponse.status === 404) return null;
+    const corps = await lireReponse(reponse, "lecture de l'historique");
+    type Element = { message?: { id?: string; labelIds?: string[] } };
+    for (const entree of (corps.history as { messagesAdded?: Element[]; labelsAdded?: Element[]; labelsRemoved?: Element[] }[] | undefined) ?? []) {
+      vus++;
+      for (const ajout of entree.messagesAdded ?? []) {
+        const id = ajout.message?.id;
+        if (id && !ajoutes.includes(id)) ajoutes.push(id);
+        if (id && ajout.message?.labelIds) libelles.set(id, ajout.message.labelIds);
+      }
+      for (const changement of [...(entree.labelsAdded ?? []), ...(entree.labelsRemoved ?? [])]) {
+        const id = changement.message?.id;
+        if (id && changement.message?.labelIds) libelles.set(id, changement.message.labelIds);
+      }
+    }
+    if (typeof corps.historyId === "string") historyId = corps.historyId;
+    page = typeof corps.nextPageToken === "string" ? corps.nextPageToken : undefined;
+  } while (page && vus < limite);
+  return { ajoutes, libelles, historyId };
+}
+
+/** Libellés actuels d'un message (lecture légère) ; null s'il n'existe plus. */
+export async function libellesDuMessage(id: string): Promise<string[] | null> {
+  const reponse = await appelGoogle(`${API}/messages/${encodeURIComponent(id)}?format=minimal`, { portee: PORTEES_GOOGLE.GMAIL_MODIFIER, method: "GET" });
+  if (reponse.status === 404) return null;
+  const corps = await lireReponse(reponse, "lecture des libellés d'un message");
+  return (corps.labelIds as string[] | undefined) ?? [];
+}

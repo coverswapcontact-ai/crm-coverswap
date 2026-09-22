@@ -27,6 +27,7 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/site/publications", protection: "réalisations et avis publiés avec accord : lecture seule, aucun identifiant de client" },
   { chemin: "/api/site/prestations", protection: "fichier des prestations (familles, sous-parties) : lecture seule, aucun tarif ni donnée de client" },
   { chemin: "/api/site/photos/", prefixe: true, protection: "photos des publications publiées seulement, lues par identifiant de publication" },
+  { chemin: "/api/site/desinscription", protection: "désinscription des séquences de mails : jeton HMAC par adresse vérifié par la route ; n'écrit qu'une désinscription (définitive), ne rend rien de privé" },
   { chemin: "/robots.txt", protection: "consigne aux robots, statique" },
   { chemin: "/manifest-crm.webmanifest", protection: "manifeste de l'application installable : nom, icône, couleurs — rien de privé" },
   { chemin: "/manifest-messages.webmanifest", protection: "manifeste de l'application « Messages » : nom, icône, couleurs — rien de privé" },

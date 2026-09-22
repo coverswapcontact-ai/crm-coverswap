@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { PORTEES_GOOGLE, connexionActive } from "@/lib/google/connexion";
 import { mettreEnFile } from "@/lib/taches/file";
-import { ErreurDefinitive, enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
+import { AttenteExterne, ErreurDefinitive, enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { creerDossierDrive, deplacerDrive, envoyerFichierDrive, lireElementDrive, renommerDrive } from "./client";
 import { CLE_ARCHIVES, planMiroir, type ElementPlan } from "./plan";
 
@@ -105,7 +105,7 @@ export async function synchroniserMiroir(options: { verifier?: boolean; signal?:
       await enregistrer(element, { driveId: ligne.driveId, empreinte: element.dossier ? null : element.empreinte });
     } catch (erreur) {
       // Connexion perdue, accès retiré : inutile de continuer, la tâche le dira.
-      if (erreur instanceof ErreurDefinitive) throw erreur;
+      if (erreur instanceof ErreurDefinitive || erreur instanceof AttenteExterne) throw erreur;
       resume.erreurs++;
       await prisma.miroirDrive.upsert({
         where: { cle: element.cle },
@@ -140,7 +140,7 @@ export async function synchroniserMiroir(options: { verifier?: boolean; signal?:
       await prisma.miroirDrive.update({ where: { id: ligne.id }, data: { etat: "ARCHIVE", synchroniseLe: new Date(), derniereErreur: null } });
       resume.archives++;
     } catch (erreur) {
-      if (erreur instanceof ErreurDefinitive) throw erreur;
+      if (erreur instanceof ErreurDefinitive || erreur instanceof AttenteExterne) throw erreur;
       resume.erreurs++;
       await prisma.miroirDrive.update({ where: { id: ligne.id }, data: { derniereErreur: message(erreur) } });
     }

@@ -42,7 +42,9 @@ export type CodeIncoherence =
   | "PROJET_FIGE_MODIFIE"
   | "PROJETS_AU_DELA_DE_LA_LIMITE"
   // Mission 6 (22/09/2026) : qui a la main, une seule règle (dossiers/main.ts).
-  | "MAIN_DECALEE";
+  | "MAIN_DECALEE"
+  // Mission 7 (22/09/2026) : un mail du client resté sans réponse alors que le dossier dit « chez le client ».
+  | "MAIL_SANS_REPONSE";
 
 export type Incoherence = {
   /** Stable d'un passage à l'autre : code + dossier (ou lead). */
@@ -62,6 +64,9 @@ export type RapportCoherence = { le: string; dureeMs: number; dossiersControles:
 const rang = (etape: string) => (ETAPES as readonly string[]).indexOf(etape);
 const ETAPES_ACTIVES: EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE", "SIGNE", "PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"];
 const estActive = (etape: string): etape is EtapeDossier => (ETAPES_ACTIVES as string[]).includes(etape);
+
+/** Au-delà, un mail du client sans réponse sur un dossier « chez le client » est une incohérence. */
+const JOURS_MAIL_SANS_REPONSE = 2;
 
 const STATUT_LEAD_ATTENDU: Partial<Record<EtapeDossier, string[]>> = {
   DEVIS_ENVOYE: ["DEVIS_ENVOYE"],
@@ -162,6 +167,15 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     if (regle?.qui && affichee && regle.qui !== affichee) {
       const dire = (qui: string) => (qui === "MOI" ? "à moi" : "chez le client");
       signaler("MAIN_DECALEE", "MOYENNE", `Le dossier affiche « ${dire(affichee)} » alors que ses derniers gestes le mettent « ${dire(regle.qui)} » (${regle.motif}).`, `Remettre « ${dire(regle.qui)} » partout`);
+    }
+    // Mail du client sans réponse : il a écrit, personne n'a répondu depuis, et le dossier le croit « chez le client ».
+    if ((regle?.qui ?? affichee) === "CLIENT") {
+      const mails = await prisma.dossierEvenement.findMany({ where: { dossierId: d.id, archiveLe: null, type: { in: ["MAIL_RECU", "MAIL_ENVOYE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, createdAt: true, survenuLe: true, contenu: true } });
+      const dernier = mails[0];
+      const depuis = dernier ? Date.now() - (dernier.survenuLe ?? dernier.createdAt).getTime() : 0;
+      if (dernier?.type === "MAIL_RECU" && depuis > JOURS_MAIL_SANS_REPONSE * 86_400_000) {
+        signaler("MAIL_SANS_REPONSE", "HAUTE", `Le client a écrit il y a ${Math.floor(depuis / 86_400_000)} jours (${dernier.contenu.slice(0, 120)}) et n'a pas eu de réponse, alors que le dossier dit « chez le client ». Lui répondre depuis l'onglet Mail.`, null);
+      }
     }
   }
 

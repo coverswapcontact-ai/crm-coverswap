@@ -74,7 +74,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     client.encaissement.findMany({ where: { OR: [{ clientId: { in: clientIds } }, { dossierId: { in: dossierIds } }] } }),
   ]);
 
-  const messages = await client.message.findMany({ where: { ...AVEC_ARCHIVES, OR: [{ clientId: { in: clientIds } }, { dossierId: { in: dossierIds } }] } });
+  const messages = await client.message.findMany({ where: { ...AVEC_ARCHIVES, OR: [{ clientId: { in: clientIds } }, { dossierId: { in: dossierIds } }, { leadId: { in: leadIds } }] } });
   const messageIds = messages.map((message) => message.id);
   const [contenus, pieces, analyses] = await Promise.all([
     client.contenuMessage.findMany({ where: { messageId: { in: messageIds } } }),
@@ -91,6 +91,14 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const espacesPermanents = await client.espacePermanent.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   const preparations = await client.preparationSimulation.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+
+  // Onglet Mail (mission 7) : envois, brouillons de l'IA, inscriptions aux séquences.
+  const parContact = { OR: [{ clientId: { in: clientIds } }, { leadId: { in: leadIds } }, { dossierId: { in: dossierIds } }] };
+  const [envoisMail, brouillonsMail, inscriptionsSequence] = await Promise.all([
+    client.envoiMail.findMany({ where: parContact }),
+    client.brouillonMail.findMany({ where: { OR: [...parContact.OR, { messageId: { in: messageIds } }] } }),
+    client.inscriptionSequence.findMany({ where: parContact }),
+  ]);
 
   const propositions = await client.proposition.findMany({
     where: {
@@ -157,6 +165,9 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       EspacePermanent: espacesPermanents,
       SimulationEspace: simulationsEspace,
       PreparationSimulation: preparations,
+      EnvoiMail: envoisMail,
+      BrouillonMail: brouillonsMail,
+      InscriptionSequence: inscriptionsSequence,
       Proposition: propositions,
     } as Record<string, Record<string, unknown>[]>,
   };
@@ -285,6 +296,9 @@ export async function anonymiserDansTransaction(
         data.anonymiseLe = maintenant;
       }
       if (modele === "PieceMessage") data.statut = "NON_CONSERVEE";
+      // Rien ne part plus vers une personne anonymisée : envoi en attente annulé, séquence arrêtée.
+      if (modele === "EnvoiMail" && ligne.statut === "A_ENVOYER") Object.assign(data, { statut: "ANNULE", erreur: "Client anonymisé (RGPD)" });
+      if (modele === "InscriptionSequence" && (ligne.statut === "EN_COURS" || ligne.statut === "EN_VALIDATION")) Object.assign(data, { statut: "ARRETEE", arretMotif: "Client anonymisé (RGPD)", prochainEnvoiLe: null });
       if (modele === "Fichier") Object.assign(data, { archiveLe: ligne.archiveLe ?? maintenant, archiveMotif: "Effacé (RGPD)" });
       if (modele === "Proposition" && ligne.statut === "EN_ATTENTE") {
         Object.assign(data, { statut: "ANNULEE", decideLe: maintenant, decidePar: options.decidePar, commentaireRejet: "Client anonymisé (RGPD)" });

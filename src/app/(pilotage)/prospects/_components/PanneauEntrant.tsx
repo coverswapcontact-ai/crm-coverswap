@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mail, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -186,9 +186,6 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
               <a href={`tel:${telephone}`} onClick={() => noterDebutAppel(detail.id)} className={LIEN_ACTION}>
                 <Phone size={14} aria-hidden /> {detail.telephone}
               </a>
-              <Link href={`/sms?lead=${detail.id}`} className={LIEN_ACTION}>
-                <MessageSquare size={14} aria-hidden /> SMS
-              </Link>
             </>
           ) : null}
           {detail.archiveLe ? null : (
@@ -214,9 +211,9 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
             </button>
           )}
           {detail.email ? (
-            <a href={`mailto:${detail.email}`} className={LIEN_ACTION}>
-              <Mail size={14} aria-hidden /> E-mail
-            </a>
+            <Link href={`/mail?lead=${detail.id}`} className={LIEN_ACTION}>
+              <Mail size={14} aria-hidden /> Écrire un mail
+            </Link>
           ) : null}
           {detail.client ? (
             <Link href={`/clients/${detail.client.id}`} className={LIEN_ACTION}>

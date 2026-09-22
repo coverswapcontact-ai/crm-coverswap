@@ -14,6 +14,25 @@ export class ErreurDefinitive extends Error {
   }
 }
 
+/**
+ * Une ressource extérieure manque (compte Google coupé, jeton expiré, accès à
+ * redonner) : l'action n'échoue pas, elle ATTEND. La tâche est remise en file
+ * sans compter d'essai, et repart d'elle-même quand la ressource revient
+ * (reconnexion : les tâches en attente sont réveillées). Aucune action perdue.
+ */
+export class AttenteExterne extends Error {
+  constructor(
+    message: string,
+    readonly reprendreDansMs = 15 * 60_000
+  ) {
+    super(message);
+    this.name = "AttenteExterne";
+  }
+}
+
+/** Préfixe des tâches en attente d'une ressource extérieure (réveillées ensemble). */
+export const PREFIXE_ATTENTE = "[en attente] ";
+
 export type ContexteTraitement = {
   tacheId: string;
   tentative: number;

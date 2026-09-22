@@ -52,6 +52,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
           clientNom: true,
           clientVille: true,
           clientTelephone: true,
+          clientEmail: true,
           etape: true,
           photos: true,
           dateChantier: true,
@@ -74,12 +75,15 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
   });
   const vivants = espaces.filter((e) => !e.dossier.archiveLe);
   const dossierIds = vivants.map((e) => e.dossierId);
-  const [activites, smsAvecLien] = await Promise.all([
+  const [activites, smsAvecLien, mailsAvecLien] = await Promise.all([
     dossierIds.length
       ? prisma.dossierEvenement.groupBy({ by: ["dossierId"], where: { dossierId: { in: dossierIds }, direction: "ENTRANT", type: { startsWith: "ESPACE_" } }, _max: { createdAt: true } })
       : Promise.resolve([] as { dossierId: string; _max: { createdAt: Date | null } }[]),
     prisma.sms.findMany({ where: { sens: "SORTANT", texte: { contains: "/e/" }, statut: { not: "ECHEC" } }, orderBy: { createdAt: "asc" }, select: { texte: true, createdAt: true } }),
+    // Mission 7 : le lien part désormais par mail (notifications, nouveau lien, réponses).
+    prisma.envoiMail.findMany({ where: { texte: { contains: "/e/" }, statut: { in: ["A_ENVOYER", "ENVOYE"] } }, orderBy: { createdAt: "asc" }, select: { texte: true, createdAt: true } }),
   ]);
+  const liensEnvoyes = [...smsAvecLien, ...mailsAvecLien].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const activiteParDossier = new Map(activites.map((a) => [a.dossierId, a._max.createdAt]));
 
   const lignes: LigneEspace[] = [];
@@ -88,8 +92,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
     // Le lien envoyé est celui du client (son espace permanent) ; un lien d'avant le 22/09 portait le code du projet.
     const signable = espace.permanent ?? espace;
     const jeton = jetonEspace(signable);
-    const envoi = smsAvecLien.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
-    const ancienEnvoi = envoi ? null : (smsAvecLien.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
+    const envoi = liensEnvoyes.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
+    const ancienEnvoi = envoi ? null : (liensEnvoyes.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
     const photos = (await photosDuClient(d.id, d.photos)).length;
     const vivantes = espace.simulations.filter((s) => !s.archiveLe);
     const publiees = vivantes.filter((s) => s.statut === "PUBLIEE");
@@ -144,7 +148,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
     if (devis && !accord && consultations >= 2) signaux.push({ code: "HESITE", libelle: `Devis relu ${consultations} fois sans signer`, ton: consultations >= 3 ? "rouge" : "ambre" });
     if (accord && !d.dateChantier) signaux.push({ code: "DATE_A_FIXER", libelle: "Accord donné : date du chantier à fixer", ton: "rouge" });
     if (envoi && !espace.premierAccesLe && maintenant.getTime() - envoi.createdAt.getTime() > 2 * JOUR) signaux.push({ code: "JAMAIS_OUVERT", libelle: `Lien jamais ouvert (envoyé il y a ${Math.floor((maintenant.getTime() - envoi.createdAt.getTime()) / JOUR)} j)`, ton: "ambre" });
-    if (!envoi && !espace.premierAccesLe && !revoque) signaux.push({ code: "NON_ENVOYE", libelle: ancienEnvoi ? "Nouveau lien pas encore envoyé" : "Lien pas encore envoyé par SMS", ton: "gris" });
+    if (!envoi && !espace.premierAccesLe && !revoque) signaux.push({ code: "NON_ENVOYE", libelle: ancienEnvoi ? "Nouveau lien pas encore envoyé" : "Lien pas encore envoyé", ton: "gris" });
     if (expire && !revoque) signaux.push({ code: "EXPIRE", libelle: "Lien expiré", ton: "rouge" });
     else if (!espace.permanent && !revoque && espace.expireLe.getTime() - maintenant.getTime() < 10 * JOUR) signaux.push({ code: "EXPIRE_BIENTOT", libelle: `Lien valable jusqu'au ${espace.expireLe.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`, ton: "ambre" });
 
@@ -181,6 +185,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
       clientNom: d.clientNom,
       ville: d.clientVille,
       telephone: d.clientTelephone,
+      email: d.clientEmail || null,
       typeProjet: familles[0] ?? d.lead?.typeProjet ?? "AUTRE",
       lien: revoque ? null : lienEspace(signable),
       apercu: revoque || expire ? null : lienApercu(signable, maintenant.getTime(), espace.permanent ? espace : null),
@@ -258,6 +263,7 @@ export async function listerClientsEspaces(maintenant: Date = new Date(), filtre
       clientNom: tete.clientNom,
       ville: tete.ville,
       telephone: tete.telephone,
+      email: tete.email,
       lien: tete.lien,
       apercu: tete.apercu,
       lienEmisLe: (permanent?.lienEmisLe ?? new Date(tete.creeLe)).toISOString(),

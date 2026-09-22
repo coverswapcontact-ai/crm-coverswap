@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, MessageSquare, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
 import { famille, famillesDe, libelleTaille, resumerSelection, type TaillesProjet } from "@/lib/prestations/prestations";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
+import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "./client";
@@ -48,7 +49,8 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   const [occupe, setOccupe] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
   const [edition, setEdition] = useState<{ tailles: TaillesProjet; precisions: string } | null>(null);
-  const [sms, setSms] = useState<{ texte: string; numero: string | null } | null>(null);
+  const [destinataire, setDestinataire] = useState<{ email: string | null } | null>(null);
+  const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [confirmation, setConfirmation] = useState<{ titre: string; texte: string; bouton: string; geste: GesteEspace; succes: string } | null>(null);
   const [gestesOuverts, setGestesOuverts] = useState(false);
 
@@ -59,8 +61,8 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
       setEspace(null);
     }
     if (detail.client) {
-      appelApi<{ smsNouveauLien: string; numero: string | null }>(`/api/clients/${detail.client.id}/espace`)
-        .then((r) => setSms({ texte: r.smsNouveauLien, numero: r.numero }))
+      appelApi<{ email: string | null }>(`/api/clients/${detail.client.id}/espace`)
+        .then((r) => setDestinataire({ email: r.email }))
         .catch(() => undefined);
     }
   }, [detail.id, detail.client]);
@@ -140,6 +142,7 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   return (
     <section>
       <TitreSection>Espace client</TitreSection>
+      <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void charger()} />
       <div className="space-y-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
         {/* Où il en est : les cinq onglets de son espace, tels qu'il les voit. */}
         <div>
@@ -204,17 +207,22 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
             </a>
           ) : null}
           {espace.lien ? (
-            <Link href={`/sms?dossier=${detail.id}&proposer=${espace.projet || espace.simulations.length || espace.devis || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE"}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
-              <MessageSquare size={13} aria-hidden /> Envoyer par SMS
-            </Link>
+            // Mission 7 : le mail prend le relais du SMS (texte relu, rien ne part sans votre clic).
+            <button
+              type="button"
+              onClick={() => setLienMail({ dossierId: detail.id, code: espace.projet || espace.simulations.length || espace.devis || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE" })}
+              className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
+            >
+              <Mail size={13} aria-hidden /> Envoyer le lien par mail
+            </button>
           ) : null}
           {espace.revoqueLe ? null : (
             <Bouton taille="sm" variante="fantome" icone={<ShieldOff size={13} aria-hidden />} chargement={occupe === "revoquer"} onClick={() => void lien("revoquer", "Lien désactivé (tous ses projets)")}>
               Désactiver le lien
             </Bouton>
           )}
-          {espace.permanent && sms ? (
-            <NouveauLien permanentId={espace.permanent.id} texteSms={sms.texte} numero={sms.numero} onFait={async () => { await charger(); await onRecharger(); }} />
+          {espace.permanent && destinataire ? (
+            <NouveauLien permanentId={espace.permanent.id} email={destinataire.email} onFait={async () => { await charger(); await onRecharger(); }} />
           ) : (
             <Bouton taille="sm" variante="fantome" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "renouveler"} onClick={() => void lien("renouveler", "Nouveau lien émis : l'ancien ne fonctionne plus")}>
               Nouveau lien

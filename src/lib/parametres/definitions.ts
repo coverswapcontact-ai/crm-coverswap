@@ -157,6 +157,32 @@ export const DEFINITIONS_PARAMETRES = {
     ],
     groupe: "AGENT",
   },
+  IA_REDACTION: {
+    libelle: "Rédaction des mails par l'IA",
+    aide: "Active : le bouton « Rédiger avec l'IA » de l'onglet Mail appelle le modèle, à votre demande seulement (coût par brouillon, plafonné par le budget mensuel). Rien n'est rédigé ni dépensé sans votre clic.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIVE", libelle: "Active" },
+      { valeur: "EN_PAUSE", libelle: "En pause" },
+    ],
+    groupe: "AGENT",
+  },
+  MAIL_RANGEMENT_GMAIL: {
+    libelle: "Rangement d'office dans Gmail",
+    aide: "Actif : ce que le tri range (notifications, plateformes, newsletters, promotions) est aussi marqué lu et rangé dans Gmail sous le libellé « CoverSwap/Rangé », hors de la boîte de réception. Réversible : « Remonter » le remet, et son expéditeur n'est plus jamais rangé. Inactif : le tri ne touche pas à Gmail.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIF", libelle: "Actif" },
+      { valeur: "INACTIF", libelle: "Inactif" },
+    ],
+    groupe: "AGENT",
+  },
+  MAIL_EXPEDITEUR: {
+    libelle: "Adresse d'expédition des séquences",
+    aide: "Adresse qui enverra les séquences le jour où elles seront activées (aujourd'hui la boîte Gmail connectée ; demain une adresse de votre domaine, avec un service d'envoi dédié). Vide : la boîte Gmail connectée.",
+    nature: "texte",
+    groupe: "AGENT",
+  },
   IA_MODELE: {
     libelle: "Modèle d'IA",
     aide: "Identifiant exact du modèle chez Anthropic (page « Models » de la documentation Anthropic). En changer impose de saisir ses prix à la même date.",
@@ -177,7 +203,7 @@ export const DEFINITIONS_PARAMETRES = {
   },
   IA_BUDGET_MENSUEL: {
     libelle: "Budget mensuel de l'IA",
-    aide: "Plafond en euros par mois civil. Une fois atteint, l'IA ne lit plus de mail jusqu'au mois suivant ; les règles sûres continuent de trier.",
+    aide: "Plafond en euros par mois civil, pour tout ce que fait l'IA (lecture des mails, brouillons, guide de style). Une fois atteint, elle s'arrête jusqu'au mois suivant ; le tri de la boîte, lui, continue (il n'utilise pas l'IA).",
     nature: "euros",
     groupe: "AGENT",
   },

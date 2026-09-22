@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheckBig, FolderKanban, MessageSquare, Phone, PhoneCall, Receipt, RefreshCw, StickyNote, UserRound, WifiOff } from "lucide-react";
+import { CircleCheckBig, FolderKanban, Phone, PhoneCall, Receipt, RefreshCw, StickyNote, UserRound, WifiOff, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { GROUPES_A_MOI, GROUPES_CLIENT, LIBELLES_GROUPE, type Affaire, type GroupeAffaire, type PilotageCommercial } from "@/lib/commercial/types";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
@@ -12,6 +11,7 @@ import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppare
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, EnTetePage, TRANS } from "@/components/pilotage/ui";
 import { FeuilleAppel, FeuilleNote } from "@/components/sms/FilConversation";
+import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { cn } from "@/lib/utils";
 
 const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €`;
@@ -36,7 +36,8 @@ const LIBELLES_DERNIER: Record<string, string> = { APPEL: "Appel", SMS: "SMS", E
 
 function Carte({ affaire, onFinAppel, onNote }: { affaire: Affaire; onFinAppel: () => void; onNote: () => void }) {
   const lienFiche = affaire.dossierId ? `/dossiers?dossier=${affaire.dossierId}` : `/leads?lead=${affaire.leadId}`;
-  const lienSms = affaire.conversationId ? `/sms?c=${affaire.conversationId}` : affaire.dossierId ? `/sms?dossier=${affaire.dossierId}` : `/sms?lead=${affaire.leadId}`;
+  // Mission 7 : on écrit par mail (le SMS n'est plus dans la navigation).
+  const lienMail = affaire.dossierId ? `/mail?dossier=${affaire.dossierId}` : `/mail?lead=${affaire.leadId}`;
   const aMoi = affaire.main === "MOI";
   return (
     <li className={cn("rounded-[14px] border-[0.5px] bg-[#1C1F25] p-3.5", aMoi ? "border-[#1D9E75]/35" : "border-[#2A2D34]", affaire.enRetard && "border-[#EF4444]/50")}>
@@ -78,8 +79,8 @@ function Carte({ affaire, onFinAppel, onNote }: { affaire: Affaire; onFinAppel: 
         <button type="button" onClick={onFinAppel} aria-label={`Noter l'appel avec ${affaire.nom}`} className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
           <PhoneCall size={17} aria-hidden />
         </button>
-        <Link href={lienSms} aria-label={`Écrire à ${affaire.nom}`} className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
-          <MessageSquare size={17} aria-hidden />
+        <Link href={lienMail} aria-label={`Écrire un mail à ${affaire.nom}`} className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+          <Mail size={17} aria-hidden />
         </Link>
       </div>
       <div className="mt-2 flex items-center justify-between text-[12px]">
@@ -100,7 +101,7 @@ function Carte({ affaire, onFinAppel, onNote }: { affaire: Affaire; onFinAppel: 
  * qui attend une action de moi ; à droite ce qui attend le client.
  */
 export default function EcranCommercial({ initial }: { initial: PilotageCommercial }) {
-  const routeur = useRouter();
+  const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [donnees, setDonnees] = useState(initial);
   const [charge, setCharge] = useState(false);
   const [onglet, setOnglet] = useState<"MOI" | "CLIENT">("MOI");
@@ -258,11 +259,12 @@ export default function EcranCommercial({ initial }: { initial: PilotageCommerci
           onFermer={() => setFeuille(null)}
           onFait={(suite) => {
             void rafraichir();
-            // Intéressé ou pas de réponse : le message suivant est préparé dans la messagerie, à relire avant d'envoyer.
-            if (suite.messagePropose) routeur.push(`/sms?${suite.dossierId ? `dossier=${suite.dossierId}` : `lead=${suite.leadId}`}&proposer=${suite.messagePropose}`);
+            // Intéressé ou pas de réponse : le mail suivant est proposé (lien de son espace), à relire avant d'envoyer.
+            if (suite.messagePropose) setLienMail({ dossierId: suite.dossierId, leadId: suite.dossierId ? null : suite.leadId, code: suite.messagePropose });
           }}
         />
       ) : null}
+      <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void rafraichir()} />
       {feuille?.genre === "note" ? <FeuilleNote ouverte leadId={feuille.affaire.leadId} dossierId={feuille.affaire.dossierId} onFermer={() => setFeuille(null)} onFait={() => void rafraichir()} /> : null}
     </div>
   );

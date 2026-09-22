@@ -328,6 +328,11 @@ const STATUT_LEAD_PAR_ETAPE: Partial<Record<EtapeDossier, string>> = {
 export async function effetsDuChangementEtape(changement: ChangementEtape): Promise<void> {
   // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts).
   await recalculerMain(changement.dossierId);
+  // Mission 7 : chantier terminé (facturé ou encaissé) → merci et invitation à laisser un avis, par mail, une fois.
+  if ((changement.vers === "FACTURE" || changement.vers === "ENCAISSE") && changement.nature !== "RETOUR" && changement.nature !== "REPRISE") {
+    const { notifierClient } = await import("@/lib/mail/notifications");
+    await notifierClient("PROJET_TERMINE", changement.dossierId, changement.dossierId);
+  }
   try {
     const dossier = await prisma.dossier.findUnique({
       where: { id: changement.dossierId },

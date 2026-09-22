@@ -8,15 +8,14 @@ import type { DossierDetail } from "@/lib/dossiers/types";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Pastille } from "@/components/pilotage/ui";
 import { Bouton, Champ, Modale, TitreSection } from "./ui";
-import { mesurerSms } from "@/lib/sms/texte";
 import { cn } from "@/lib/utils";
 
 /**
  * Les simulations du dossier, d'où qu'elles viennent (site, API, ChatGPT,
  * dépôt). Tout ce qui vient du CRM arrive en BROUILLON : Lucas choisit ce qu'il
- * publie dans l'espace du client — qui ne voit jamais un rendu raté — et
- * prévient le client par SMS dans le même geste (texte sous les yeux,
- * décochable). Une image rendue par ChatGPT se dépose ici : elle reprend la
+ * publie dans l'espace du client — qui ne voit jamais un rendu raté ; le
+ * client est prévenu par mail, automatiquement (mission 7 : le mail remplace
+ * le SMS). Une image rendue par ChatGPT se dépose ici : elle reprend la
  * préparation (photo avant, teintes, version du prompt).
  */
 
@@ -98,17 +97,17 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
 
   function ouvrirPublication(ids: string[]) {
     setSelection(new Set(ids));
-    const sms = donnees?.sms;
-    setPublication({ prevenir: Boolean(sms?.texte) && !sms?.dejaPrevenuLe, texte: sms?.texte ?? "" });
+    // Mission 7 : plus de SMS proposé ; le client est prévenu par mail, automatiquement.
+    setPublication({ prevenir: false, texte: "" });
   }
 
   async function publier() {
     if (!publication) return;
     setOccupe("publier");
     try {
-      const resultat = await envoyerJson<{ publiees: number; sms: { envoye: boolean; raison?: string } }>(`/api/dossiers/${detail.id}/simulations/publier`, "POST", { ids: [...selection], prevenir: publication.prevenir, texte: publication.texte });
+      const resultat = await envoyerJson<{ publiees: number; mail?: { programme: boolean; raison?: string } }>(`/api/dossiers/${detail.id}/simulations/publier`, "POST", { ids: [...selection], prevenir: false });
       toast.success(`${resultat.publiees > 1 ? `${resultat.publiees} simulations publiées` : "Simulation publiée"} dans l'espace du client`, {
-        description: publication.prevenir ? (resultat.sms.envoye ? "SMS « simulations prêtes » envoyé." : `SMS non parti : ${resultat.sms.raison ?? "raison inconnue"}`) : "Client non prévenu par SMS.",
+        description: resultat.mail?.programme ? "Le mail « Votre simulation est prête » part tout seul vers le client." : `Pas de mail : ${resultat.mail?.raison ?? "rien de nouveau publié"}`,
       });
       setPublication(null);
       setSelection(new Set());
@@ -276,31 +275,15 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
         description="Le client la verra dans son espace, avant / après sur sa photo."
         pied={
           <Bouton variante="primaire" className="h-12 w-full text-[15px] sm:h-9 sm:text-[13px]" chargement={occupe === "publier"} onClick={() => void publier()}>
-            {publication?.prevenir ? "Publier et envoyer le SMS" : "Publier sans prévenir"}
+            Publier
+
           </Bouton>
         }
       >
         {publication ? (
-          <div className="space-y-3">
-            {donnees?.sms.texte ? (
-              <>
-                <label className="flex items-start gap-2.5 text-[13px] text-[#D1D5DB]">
-                  <input type="checkbox" checked={publication.prevenir} onChange={(e) => setPublication({ ...publication, prevenir: e.target.checked })} className="mt-0.5 h-4 w-4 accent-[#1D9E75]" />
-                  Prévenir le client par SMS
-                </label>
-                {publication.prevenir ? (
-                  <>
-                    <textarea value={publication.texte} onChange={(e) => setPublication({ ...publication, texte: e.target.value })} rows={7} className="w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-2.5 text-[14px] leading-relaxed text-[#F2F3F5] sm:text-[13px]" aria-label="Texte du SMS" />
-                    <p className="text-right text-[12px] text-[#8B919C]">{mesureSms(publication.texte)}</p>
-                  </>
-                ) : null}
-                {donnees.sms.dejaPrevenuLe ? <p className="text-[12px] text-[#F5B454]">Déjà prévenu le {heure(donnees.sms.dejaPrevenuLe)} : un second SMS n&apos;est peut-être pas utile.</p> : null}
-                {donnees.sms.attente ? <p className="text-[12px] text-[#F5B454]">{donnees.sms.attente}</p> : null}
-              </>
-            ) : (
-              <p className="text-[13px] text-[#F5B454]">{donnees?.sms.raison ?? "Pas de SMS possible pour ce client."}</p>
-            )}
-          </div>
+          <p className="text-[13px] leading-relaxed text-[#D1D5DB]">
+            Le client est prévenu par mail, automatiquement : « Votre simulation est prête », avec un bouton vers son espace. Un seul mail par publication, et seulement s&apos;il a une adresse e-mail valide.
+          </p>
         ) : null}
       </Modale>
 
@@ -393,8 +376,3 @@ function Vignette({ s, selection, onSelection, occupe, children }: { s: Simulati
   );
 }
 
-/** « 212 caractères · 2 SMS » — un message long est facturé par parties. */
-function mesureSms(texte: string): string {
-  const { longueur, segments, gsm } = mesurerSms(texte);
-  return `${longueur} caractères · ${segments} SMS${gsm ? "" : " (accents spéciaux : 70 caractères par SMS)"}`;
-}

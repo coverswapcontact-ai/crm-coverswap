@@ -15,6 +15,10 @@ export type MailMime = {
   a: string;
   objet: string;
   texte: string;
+  /** Version mise en page (notifications de l'espace) : envoyée avec le texte, en « multipart/alternative ». */
+  html?: string | null;
+  /** En-têtes ajoutés tels quels (désinscription d'une séquence : List-Unsubscribe). */
+  entetesSupplementaires?: Record<string, string>;
   repondreA?: string | null;
   enReponseA?: string | null;
   references?: string | null;
@@ -73,7 +77,16 @@ export function construireMime(mail: MailMime): Buffer {
     entetes.push(`References: ${sansRetour([mail.references, mail.enReponseA].filter(Boolean).join(" "))}`);
   }
 
-  const texte = `Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64EnLignes(Buffer.from(mail.texte.replace(/\r?\n/g, "\r\n"), "utf8"))}`;
+  for (const [nom, valeur] of Object.entries(mail.entetesSupplementaires ?? {})) {
+    if (/^[A-Za-z][A-Za-z0-9-]*$/.test(nom)) entetes.push(`${nom}: ${sansRetour(valeur)}`);
+  }
+
+  const brut = `Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64EnLignes(Buffer.from(mail.texte.replace(/\r?\n/g, "\r\n"), "utf8"))}`;
+  // Texte + HTML : le lecteur choisit (« multipart/alternative »), le texte reste lisible partout.
+  const alternative = `coverswap-alt-${randomBytes(12).toString("hex")}`;
+  const texte = mail.html
+    ? `Content-Type: multipart/alternative; boundary="${alternative}"\r\n\r\n--${alternative}\r\n${brut}\r\n--${alternative}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64EnLignes(Buffer.from(mail.html, "utf8"))}\r\n--${alternative}--`
+    : brut;
   if (!mail.pieces?.length) return Buffer.from(`${entetes.join("\r\n")}\r\n${texte}\r\n`, "utf8");
 
   const separateur = `coverswap-${randomBytes(12).toString("hex")}`;

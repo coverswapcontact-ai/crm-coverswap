@@ -191,6 +191,8 @@ export function sourceDepuisLead(source: string): { source: SourceClient; source
       return { source: "RESEAUX_SOCIAUX", sourceDetail: "Instagram" };
     case "ORGANIQUE":
       return { source: "ORGANIQUE" };
+    case "MAIL":
+      return { source: "ORGANIQUE", sourceDetail: "Demande reçue par mail" };
     case "REFERENCE":
       return { source: "RECOMMANDATION" };
     case "AUTRE":

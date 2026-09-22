@@ -20,6 +20,15 @@ import type { CleParametre } from "@/lib/parametres/definitions";
 
 export const CLES_PARAMETRES_IA = ["IA_AGENT_MAIL", "IA_MODELE", "IA_PRIX_ENTREE", "IA_PRIX_SORTIE", "IA_BUDGET_MENSUEL"] as const satisfies readonly CleParametre[];
 
+/**
+ * Chaque usage a son interrupteur : la lecture des mails par l'agent (IA_AGENT_MAIL, ancienne section Messages)
+ * et la rédaction à la demande de Lucas (IA_REDACTION : brouillons de mails, guide de style).
+ * Le modèle, ses prix et le budget mensuel sont communs.
+ */
+export type InterrupteurIa = "IA_AGENT_MAIL" | "IA_REDACTION";
+const USAGES_REDACTION = ["REDACTION_MAIL", "GUIDE_STYLE"];
+export const interrupteurDe = (usage: string): InterrupteurIa => (USAGES_REDACTION.includes(usage) ? "IA_REDACTION" : "IA_AGENT_MAIL");
+
 export type DemandeModele = {
   modele: string;
   systeme: string;
@@ -91,18 +100,19 @@ async function consommationDuMois(maintenant: Date): Promise<{ depense: number; 
 
 type Reglages = { modele: string; prixEntree: number; prixSortie: number; budget: number };
 
-async function lireReglages(maintenant: Date): Promise<{ etat: EtatIa; reglages: Reglages | null }> {
-  const valeurs = await lireParametres(CLES_PARAMETRES_IA, maintenant);
-  const manquants = CLES_PARAMETRES_IA.filter((cle) => valeurs[cle] === undefined);
+async function lireReglages(maintenant: Date, interrupteur: InterrupteurIa = "IA_AGENT_MAIL"): Promise<{ etat: EtatIa; reglages: Reglages | null }> {
+  const cles = [interrupteur, "IA_MODELE", "IA_PRIX_ENTREE", "IA_PRIX_SORTIE", "IA_BUDGET_MENSUEL"] as const satisfies readonly CleParametre[];
+  const valeurs = await lireParametres(cles, maintenant);
+  const manquants = cles.filter((cle) => valeurs[cle] === undefined);
   const cleApi = Boolean(process.env.ANTHROPIC_API_KEY);
-  const pause = valeurs.IA_AGENT_MAIL !== undefined && valeurs.IA_AGENT_MAIL !== "ACTIVE";
+  const pause = valeurs[interrupteur] !== undefined && valeurs[interrupteur] !== "ACTIVE";
   const { depense, appels } = await consommationDuMois(maintenant);
   const budget = typeof valeurs.IA_BUDGET_MENSUEL === "number" ? valeurs.IA_BUDGET_MENSUEL : null;
 
   let raison: string | null = null;
   if (!cleApi) raison = "Clé ANTHROPIC_API_KEY absente des variables d'environnement du serveur.";
   else if (manquants.length > 0) raison = "Réglages à renseigner dans Paramètres (modèle, prix, budget, interrupteur).";
-  else if (pause) raison = "En pause (Paramètres → Agent mail et IA).";
+  else if (pause) raison = interrupteur === "IA_REDACTION" ? "Rédaction par l'IA en pause (Paramètres → Agent mail et IA)." : "En pause (Paramètres → Agent mail et IA).";
   else if (budget !== null && depense >= budget) raison = `Budget du mois atteint (${depense.toFixed(2).replace(".", ",")} € sur ${budget.toFixed(2).replace(".", ",")} €).`;
 
   const etat: EtatIa = {
@@ -123,8 +133,8 @@ async function lireReglages(maintenant: Date): Promise<{ etat: EtatIa; reglages:
   return { etat, reglages };
 }
 
-export async function etatIa(maintenant: Date = new Date()): Promise<EtatIa> {
-  return (await lireReglages(maintenant)).etat;
+export async function etatIa(maintenant: Date = new Date(), interrupteur: InterrupteurIa = "IA_AGENT_MAIL"): Promise<EtatIa> {
+  return (await lireReglages(maintenant, interrupteur)).etat;
 }
 
 export class IaIndisponible extends Error {
@@ -146,7 +156,7 @@ export function estimerJetons(texte: string): number {
  * est inactive ou si l'appel pourrait dépasser le budget du mois.
  */
 export async function appelerModele(appel: AppelModele, maintenant: Date = new Date()): Promise<{ donnees: unknown; appelId: string; coutEuros: number }> {
-  const { etat, reglages } = await lireReglages(maintenant);
+  const { etat, reglages } = await lireReglages(maintenant, interrupteurDe(appel.usage));
   if (!reglages) throw new IaIndisponible(etat.raison ?? "IA inactive.");
 
   const estimation =

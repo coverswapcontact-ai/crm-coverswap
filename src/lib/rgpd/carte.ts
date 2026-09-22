@@ -131,6 +131,13 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     garde: "dates, compteurs et date d'un éventuel STOP",
   },
   Sms: { remplacer: () => ({ texte: EFFACE, textePropose: null, erreur: null }), garde: "sens, dates, statut de remise, origine et message type : la mesure des relances, sans leur contenu" },
+  // Onglet Mail (mission 7) : le contenu part, la mesure des envois et de l'aide à la rédaction reste.
+  EnvoiMail: { remplacer: () => ({ a: "anonymise", objet: EFFACE, texte: EFFACE, html: null, entetes: null, erreur: null }), garde: "nature, modèle, statut et dates : la mesure des envois, sans leur contenu" },
+  BrouillonMail: {
+    remplacer: () => ({ a: null, consigne: null, objetIa: null, texteIa: null, manques: "[]", corrections: "[]", contexte: "{}", objetEnvoye: null, texteEnvoye: null }),
+    garde: "statut, coût et dates : la mesure de l'aide à la rédaction, sans aucun texte",
+  },
+  InscriptionSequence: { remplacer: (ligne) => ({ adresse: `anonymise-${String(ligne.id)}`, arretMotif: null }), garde: "séquence, étape atteinte, statut et dates (une inscription en cours est arrêtée)" },
   // Espace client : ce que la personne y a écrit et les images qui la concernent.
   EspaceClient: { remplacer: () => ({ souhaits: null, choix: null, avis: null, nomProjet: null, propositionMessage: null, photosRetirees: null }), garde: "dates de création, d'accès et d'expiration du lien, compteurs de visites" },
   // L'espace permanent (mission 5) : ses favoris partent ; le code, les dates et les compteurs restent (sans identité).

@@ -28,7 +28,7 @@ export const STATUTS_LEAD_APRES_DEVIS = ["DEVIS_ENVOYE", "SIGNE", "CHANTIER_PLAN
 export const STATUTS_LEAD_MANUELS = ["NOUVEAU", "DEVIS_DEMANDE", "CONTACTE", "PERDU"] as const satisfies readonly StatutLead[];
 export type StatutLeadManuel = (typeof STATUTS_LEAD_MANUELS)[number];
 
-export const SOURCES_LEAD = ["SITE_DEVIS", "SITE_SIMULATEUR", "SITE_CONTACT", "META_ADS", "INSTAGRAM", "TIKTOK", "ORGANIQUE", "REFERENCE", "AUTRE"] as const;
+export const SOURCES_LEAD = ["SITE_DEVIS", "SITE_SIMULATEUR", "SITE_CONTACT", "META_ADS", "INSTAGRAM", "TIKTOK", "ORGANIQUE", "REFERENCE", "MAIL", "AUTRE"] as const;
 export type SourceLead = (typeof SOURCES_LEAD)[number];
 
 export const LIBELLES_SOURCE_LEAD: Record<string, string> = {
@@ -40,6 +40,7 @@ export const LIBELLES_SOURCE_LEAD: Record<string, string> = {
   TIKTOK: "TikTok",
   ORGANIQUE: "Organique",
   REFERENCE: "Recommandation",
+  MAIL: "Mail (demande reçue dans la boîte)",
   AUTRE: "Autre",
 };
 

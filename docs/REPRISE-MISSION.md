@@ -418,3 +418,102 @@ iPhone, déploiement CRM puis site, rapport court.
   avec `prisma/dev.db` dans l'historique public (63 leads) : purge = décision de Lucas.
   MISSION 6 TERMINÉE.
 
+
+# Mission 7 (22/09/2026, soir) — Onglet Mail, SMS retiré, notifications par mail, séquences
+
+> **Changement de périmètre (Lucas, en cours de mission) : la section 7, le RÉCAP AUDIO, est ABANDONNÉE.** Ni synthèse
+> vocale, ni bouton Récap, ni historique audio. Ce qui avait été commencé (modèles `Recap` et `CampagnePublicitaire`,
+> recherche web dans `ia/modele.ts`) a été retiré avant tout commit. Le reste de la mission ne change pas.
+
+Énoncé complet : mémoire privée `project_mission7_mail_recap` (message de Lucas « Mission autonome — L'onglet Mail
+et le récap audio »). Mêmes règles permanentes. Envoi automatique permis SEULEMENT pour les 4 notifications de
+l'espace (simulation publiée, devis disponible, paiement reçu, projet terminé + avis) et UN mail de test à
+l'adresse personnelle de Lucas ; tout le reste part au clic de Lucas.
+
+## État trouvé (22/09, soir)
+- Prod : Google connecté le 22/09 12:20 UTC (gmail.modify + gmail.send + drive.file ; expire le 29/09, mode Test).
+  Agent mail actif (relevé toutes les 5 min, `messages/taches.ts`), 48 « à trier », 90 reçus en 7 jours.
+  **ANTHROPIC_API_KEY présente sur Railway** (etatIa.cleApi = vrai) ; réglages IA vides (modèle, prix, budget,
+  interrupteur : Paramètres → Agent mail et IA).
+- Existant réutilisé : `google/connexion.ts` (OAuth, `appelGoogle`), `messages/gmail.ts` (lister, lire, libellés,
+  envoyer), `messages/mime.ts` (MIME + fil), `messages/stockage.ts` (enregistrer, pièces), `mail/envoi.ts`
+  (envoyeur isolé Gmail/Resend), `ia/modele.ts` (seul point d'appel Anthropic, budget, registre `AppelIa`),
+  file de tâches (`taches/`), `dossiers/main.ts` (MAIL_RECU → moi).
+- Échecs de l'ancienne section Messages : tri trop prudent (tout inconnu « à trier » → bruit visible), actions en
+  propositions à valider. Jeton Google expiré = tâches en ÉCHEC DÉFINITIF (actions perdues).
+- Pas de dépense publicitaire dans le CRM (Meta : leads + conversions seulement). Campagne connue : 500 € / 21 j.
+
+## Décisions
+- **Relevé** : synchro incrémentale par l'historique Gmail (`history.list`) toutes les 60 s (+ à l'ouverture de
+  l'onglet) ; repli sur le relevé par recherche si l'historique a expiré. Push Pub/Sub : non (demande une config
+  GCP) ; possible plus tard.
+- **Tri** (`mail/tri.ts`, pur) : règles d'expéditeur (Lucas) > contact connu (client, lead, prospect, fil d'un client)
+  > administratif (domaines + mots) > bruit (domaines techniques/plateformes, listes, noreply, catégories Gmail) >
+  humain inconnu (reste visible ; demande de devis → lead source MAIL). Dans le doute : visible.
+- **États** sur Message : classe (CLIENT | ADMINISTRATIF | HUMAIN | BRUIT), rangeLe/rangeMotif, traiteLe (archivé),
+  lu, dansBoite, reponduLe. Vues calculées : À traiter / Clients / Administratif ; Rangé replié.
+- **Gmail** : rangé = libellé `CoverSwap/Rangé` + lu + hors boîte ; archivé = hors boîte ; lu/non lu = UNREAD ;
+  remonter = boîte + retrait du libellé + expéditeur « jamais rangé ». Une tâche « synchro boîte » applique l'état
+  voulu (rejouable). Google coupé → la tâche ATTEND (pas d'échec) + alerte (`AttenteConnexion`).
+- **IA** : `appelerModele` (budget, registre) ; rédaction par outil structuré + garde déterministe (tout montant,
+  date, délai du brouillon doit venir du contexte, sinon `[à compléter]`). Guide de style tiré des mails envoyés,
+  modifiable (Paramètres). Brouillon IA + version envoyée + contexte gardés (`BrouillonMail`).
+- **Notifications** (`mail/notifications.ts`) : table `EnvoiMail` à clé unique (jamais deux fois), HTML sobre + texte,
+  modèles modifiables, événement MAIL_NOTIFICATION dans le dossier (ne change pas la main).
+- **Séquences** : modèles + moteur + écran, tout INACTIF ; désinscription définitive (`Desinscription`).
+- ~~Récap audio~~ : abandonné (décision de Lucas).
+
+## Lots
+- [x] R1 Schéma (Message + classe/lu/dansBoite/rangé/traité/répondu, RegleExpediteur, EnvoiMail, BrouillonMail,
+      ReglageTexte, EtatBoiteMail, Sequence*, Desinscription ; source de lead MAIL).
+- [x] R2 Attente de connexion Google (exécuteur : `AttenteExterne`, sans perdre d'essai) + alerte + réveil à la reconnexion.
+- [x] R3 Synchro Gmail par l'historique + tri + actions Gmail + vues + actions (lu, archiver, ne plus montrer,
+      tout nettoyer, remonter) + sans réponse 5 j.
+- [x] R4 Rattachement (auto + manuel en 2 gestes), lead depuis un mail, pièces jointes → dossier + Drive,
+      événements dossier + main (MAIL_ENVOYE → client), cohérence MAIL_SANS_REPONSE.
+- [x] R5 Rédaction IA (contexte, garde, guide de style, apprentissage, envoi dans le fil).
+- [x] R6 Notifications automatiques (4 événements), modèles, SMS remplacés par le mail.
+- [x] R7 Séquences (inactives) + désinscription.
+- ~~R8 Récap audio~~ : abandonné.
+- [x] R9 Écrans : onglet Mail (mobile d'abord), Paramètres, navigation sans SMS.
+- [x] R10 Site : politique de confidentialité (Anthropic) + page de désinscription.
+- [ ] R11 Tests, essais iPhone sur copie, vérifs prod (boîte en lecture, brouillon réel, mail de test aller-retour),
+      déploiement, rapport.
+
+## Journal
+- 22/09 (soir) : SERVEUR ÉCRIT en partie (non commité) : `mail/tri.ts` (pur), `mail/boite.ts` (synchro historique Gmail,
+  classement, état Gmail, gestes), `mail/vues.ts` (À traiter / Clients / Administratif / Rangé, Tout nettoyer, bilan),
+  `mail/rattachement.ts` (dossier + main, lead source MAIL, pièces → dossier/Drive, rattachement à la main),
+  `mail/envoi-crm.ts` (EnvoiMail à clé unique, Gmail exigé, trace), `mail/notifications.ts` (4 événements, branchés :
+  publication, devis émis, paiements, FACTURE/ENCAISSE), `mail/sequences.ts` (inactives, désinscription HMAC),
+  `mail/contexte.ts`, `mail/taches.ts` (synchro 60 s ; ancien relevé 5 min retiré). main.ts : MAIL_ENVOYE → client ;
+  cohérence MAIL_SANS_REPONSE. ia/modele.ts : interrupteur IA_REDACTION. SUIVANT : mail/redaction.ts (IA + garde +
+  guide de style), routes API, écrans, migration de données, tests.
+- 22/09 (nuit) : TOUT ÉCRIT, NON COMMITÉ, suite verte (422/422), tsc + eslint propres (CRM et site).
+  - Rédaction IA (`mail/redaction.ts`) : faits du CRM seulement, garde déterministe (montants, %, dates, jours, délais,
+    heures, LIENS) → `[à compléter]` ; guide de style (Paramètres → Mail) ; brouillon + version envoyée + contexte.
+  - Écrans : onglet Mail (`/mail`, `?client=|lead=|dossier=` ouvre un nouveau mail, `?consigne=` proposée à l'IA sans
+    l'appeler), écran Séquences (`/mail/sequences` : activer avec confirmation, mode, plafond, textes, aperçu avec un
+    vrai client, « À valider » → Relire → Envoyer), Paramètres → Mail (guide, 4 mails automatiques, décisions sur les
+    expéditeurs).
+  - SMS → mail partout : « Nouveau lien » (mail relu), lien de l'espace par mail (`LienParMail`, `/api/mail/lien-espace` :
+    ouvre l'espace si besoin, relu, un clic) après un appel (Leads, Commercial), depuis Espaces clients et le dossier ;
+    boutons « écrire » des cartes → onglet Mail. Liens envoyés par mail comptés comme « lien envoyé » (suivi espaces).
+  - Séquences : REACTIVATION seulement avec l'accord aux e-mails commerciaux ; désinscription → `ConsentementMail`
+    RETIRE sur la fiche (une fois) ; une étape en attente de validation s'arrête aussi si le client répond.
+  - Tri : `icloud.com` retiré des plateformes (adresses de particuliers !) ; confirmation automatique sans facture →
+    rangée ; demande envoyée par une adresse noreply → visible, sans lead d'office ; facture de plateforme → Administratif.
+  - RGPD : EnvoiMail, BrouillonMail, InscriptionSequence dans la carte + le périmètre d'anonymisation (Message par lead aussi).
+  - Site : `/desinscription` (un clic, jamais à l'ouverture ; hors mesure d'audience comme /e/), politique de
+    confidentialité (Anthropic, Google Gmail/Drive, section « Nos échanges par e-mail »), textes de l'espace SMS → e-mail.
+  - SUIVANT : essai de bout en bout sur une copie de dev.db (iPhone), builds, commit (jamais proxy.ts), déploiement
+    CRM puis site, réglages IA en prod, vérifs prod (bilan du tri en lecture, brouillon réel, mail de test aller-retour).
+- 22/09 (nuit, suite) : ESSAI DE BOUT EN BOUT sur une copie de dev.db (Google coupé, faux Anthropic local, iPhone 390 × 844) :
+  boîte synthétique passée par le vrai tri → À traiter 5 / Clients 5 / Administratif 2 / Rangés 5 ; lead « mail » créé ;
+  main revenue chez moi au mail du client ; brouillon IA : prix et date inventés → `[à compléter]`, Envoyer grisé ;
+  notification : 2 publications → 1 seul mail (tâche en attente tant que Google est coupé, puis envoyée) ; lien de
+  l'espace par mail ; séquences (aperçu avec un vrai contact, activation confirmée) ; désinscription site → CRM.
+  CORRIGÉ grâce à l'essai : `orange.fr` / `free.fr` / `sfr.fr` retirés de l'administratif (adresses de particuliers !) ;
+  publication depuis le bloc Espace du dossier (PATCH) : événement + main + mail, comme le bouton Publier ; geste retour
+  sur le volet Client ne ferme plus le mail ; doublons de la liste « À compléter » ; marges de l'onglet Mail ; « Close »
+  → « Fermer » (lecteurs d'écran) ; accords (« Date … absente »). Suite 422/422, tsc, eslint, builds CRM et site OK.

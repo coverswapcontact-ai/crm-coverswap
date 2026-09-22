@@ -4,10 +4,11 @@ import Connexions from "./_components/Connexions";
 import EcranParametres from "./_components/EcranParametres";
 import MessagerieSms from "./_components/MessagerieSms";
 import MarqueEspace from "./_components/MarqueEspace";
+import ReglagesMail from "./_components/ReglagesMail";
 
 export const metadata: Metadata = {
   title: "Paramètres — CoverSwap",
-  description: "Seuils fiscaux, taux et règles datés ; connexions Google et miroir Drive ; messagerie SMS et messages types ; photo de l'espace client.",
+  description: "Seuils fiscaux, taux et règles datés ; connexions Google et miroir Drive ; mail (guide de style, mails automatiques, expéditeurs) ; messagerie SMS ; photo de l'espace client.",
 };
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
       <EcranParametres initiaux={await parametresPourEcran()} />
       <div className="mx-auto w-full max-w-3xl px-5 pb-10 md:px-8">
         <Connexions retour={{ google: texte("google"), compte: texte("compte"), message: texte("message") }} />
+        <ReglagesMail />
         <MessagerieSms />
         <MarqueEspace />
       </div>

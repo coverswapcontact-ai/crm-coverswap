@@ -4,7 +4,7 @@ import { BadgeMain } from "@/app/(pilotage)/dossiers/_components/Indicateurs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, GitMerge, MessageSquare, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, GitMerge, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
@@ -18,6 +18,7 @@ import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppare
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, TRANS } from "@/components/pilotage/ui";
 import { FeuilleAppel } from "@/components/sms/FilConversation";
+import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "../../prospects/_components/NouveauContact";
 import { PanneauEntrant } from "../../prospects/_components/PanneauEntrant";
@@ -209,8 +210,8 @@ function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, o
         <button type="button" onClick={onAppelNote} aria-label={`Noter l'appel avec ${lead.nom}`} title="Noter l'appel" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
           <PhoneCall size={16} aria-hidden />
         </button>
-        <Link href={lead.conversationId ? `/sms?c=${lead.conversationId}` : `/sms?lead=${lead.id}`} aria-label={`Écrire à ${lead.nom}`} title="SMS" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
-          <MessageSquare size={16} aria-hidden />
+        <Link href={`/mail?lead=${lead.id}`} aria-label={`Écrire un mail à ${lead.nom}`} title="Mail" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
+          <Mail size={16} aria-hidden />
         </Link>
         {lead.dossierId ? (
           <Link href={`/dossiers?dossier=${lead.dossierId}`} aria-label={`Voir le dossier de ${lead.nom}`} title="Voir le dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 sm:h-10", TRANS)}>
@@ -406,17 +407,17 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
                   </button>
                 ))}
               </div>
-              {issue === "INTERESSE" && lead.dossierId ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Son dossier est déjà ouvert : l&apos;appel s&apos;y écrit, puis le SMS avec le lien de son espace vous sera proposé.</p> : null}
+              {issue === "INTERESSE" && lead.dossierId ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Son dossier est déjà ouvert : l&apos;appel s&apos;y écrit, puis le mail avec le lien de son espace vous sera proposé.</p> : null}
               {issue === "INTERESSE" && !lead.dossierId ? (
                 <label className="mt-3 flex items-start gap-2.5 text-[13.5px] leading-snug text-[#D1D5DB]">
                   <input type="checkbox" checked={avecDossier} onChange={(evenement) => setAvecDossier(evenement.target.checked)} className="mt-0.5 h-5 w-5 accent-[#1D9E75]" />
                   <span>
                     Ouvrir son dossier tout de suite
-                    <span className="block text-[12px] text-[#8B919C]">Tout est repris ; il sort de Leads. Le SMS avec le lien de son espace sera proposé ensuite.</span>
+                    <span className="block text-[12px] text-[#8B919C]">Tout est repris ; il sort de Leads. Le mail avec le lien de son espace sera proposé ensuite.</span>
                   </span>
                 </label>
               ) : null}
-              {issue === "PAS_DE_REPONSE" ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Rappel posé à demain 10 h ; le SMS « j&apos;ai essayé de vous joindre » vous sera proposé.</p> : null}
+              {issue === "PAS_DE_REPONSE" ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Rappel posé à demain 10 h ; le mail « j&apos;ai essayé de vous joindre » vous sera proposé.</p> : null}
               {issue === "A_RAPPELER" ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Rappel posé à demain 10 h (modifiable depuis sa fiche).</p> : null}
             </div>
           </div>
@@ -467,6 +468,8 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
   const [ouverture, setOuverture] = useState<string | null>(null);
   const [suite, setSuite] = useState<{ lead: LigneLead; suite: SuiteAppel; dossierId: string | null } | null>(null);
+  // Mission 7 : le mail prend le relais du SMS après un appel (lien de son espace, « j'ai essayé de vous joindre »).
+  const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [totalAppels, setTotalAppels] = useState(() => initial.lignes.filter((lead) => lead.aAppeler && lead.priorite !== "A_ECARTER").length);
   const filtres = useRef({ vue, source, recherche });
 
@@ -611,8 +614,8 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
       if (avecDossier && !dossierId) return;
       const { suite: resultat } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", { ...(dossierId ? { dossierId } : { leadId: lead.id }), issue, note });
       await rafraichir();
-      // Un message est prêt à relire (lien de son espace, « j'ai essayé de vous joindre ») : on le propose avant de passer au suivant.
-      if (resultat.messagePropose && lead.telephoneLien) setSuite({ lead, suite: resultat, dossierId });
+      // Un mail est prêt à relire (lien de son espace, « j'ai essayé de vous joindre ») : on le propose avant de passer au suivant.
+      if (resultat.messagePropose) setSuite({ lead, suite: resultat, dossierId });
       else toast.success(resultat.resume);
     } catch (erreur) {
       toast.error("Appel non enregistré", { description: messageErreur(erreur) });
@@ -620,7 +623,6 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
   }
 
   useRetourFerme(Boolean(suite), () => setSuite(null));
-  const lienMessage = suite ? `/sms?${suite.dossierId ? `dossier=${suite.dossierId}` : `lead=${suite.lead.id}`}&proposer=${suite.suite.messagePropose}&retour=appels` : "#";
 
   return (
     <div className={cn("mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8", selection.size > 0 && "pb-40 md:pb-28")}>
@@ -743,6 +745,8 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
 
       <PanneauEntrant id={ouvert} onFermer={() => setOuvert(null)} onModifie={() => void rafraichir()} />
 
+      <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void rafraichir()} />
+
       <FeuilleAppel
         ouverte={feuilleAppel !== null}
         leadId={feuilleAppel?.id ?? null}
@@ -750,7 +754,7 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
         onFermer={() => setFeuilleAppel(null)}
         onFait={(resultat) => {
           void rafraichir();
-          if (resultat.messagePropose && feuilleAppel) routeur.push(`/sms?lead=${feuilleAppel.id}&proposer=${resultat.messagePropose}`);
+          if (resultat.messagePropose && feuilleAppel) setLienMail({ dossierId: resultat.dossierId, leadId: resultat.dossierId ? null : feuilleAppel.id, code: resultat.messagePropose });
         }}
       />
 
@@ -784,12 +788,20 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
           <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-5">
             <p className="text-[16px] font-medium text-[#F2F3F5]">Appel noté</p>
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#9CA3AF]">
-              {suite.suite.messagePropose === "LIEN_ESPACE" ? `Un SMS avec le lien de son espace est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.` : `Le SMS « j'ai essayé de vous joindre » est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.`}
+              {suite.suite.messagePropose === "LIEN_ESPACE" ? `Un mail avec le lien de son espace est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.` : `Le mail « j'ai essayé de vous joindre » est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.`}
             </p>
             <div className="mt-4 grid gap-2">
-              <Link href={lienMessage} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}>
-                <MessageSquare size={16} aria-hidden /> Relire le SMS
-              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  const { suite: resultat, lead } = suite;
+                  setSuite(null);
+                  if (resultat.messagePropose) setLienMail({ dossierId: resultat.dossierId, leadId: resultat.dossierId ? null : lead.id, code: resultat.messagePropose });
+                }}
+                className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}
+              >
+                <Mail size={16} aria-hidden /> Relire le mail
+              </button>
               <button type="button" onClick={() => setSuite(null)} className={cn("h-12 rounded-[12px] border-[0.5px] border-[#2A2D34] text-[15px] text-[#E5E7EB] hover:border-[#3A3E47]", TRANS)}>
                 Plus tard · lead suivant
               </button>

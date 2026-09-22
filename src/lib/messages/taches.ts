@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { mettreEnFile } from "@/lib/taches/file";
-import { ErreurDefinitive, enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
+import { ErreurDefinitive, enregistrerTraitement } from "@/lib/taches/registre";
 import { ACTEUR_AGENT_MAIL, analyserMessage } from "./analyse";
 import { agentMailActif } from "./consultation";
 import { lireMessageGmail, listerMessagesGmail, versMessageRecu } from "./gmail";
@@ -101,14 +101,7 @@ export function enregistrerTachesMessages(): void {
     delaiMaxMs: 10 * 60_000,
     executer: (_charge, contexte) => releverBoite({ signal: contexte.signal }),
   });
-  enregistrerTravailPeriodique({
-    nom: "releve-boite-mail",
-    libelle: "Relevé de la boîte mail par l'agent",
-    acteur: ACTEUR_AGENT_MAIL,
-    intervalleMs: 5 * 60_000,
-    estActif: async () => (await agentMailActif()) !== null,
-    executer: async (signal) => {
-      await releverBoite({ signal });
-    },
-  });
+  // Mission 7 (22/09/2026) : le relevé périodique de l'agent (toutes les 5 min, puis analyse et propositions) est
+  // remplacé par la synchronisation de l'onglet Mail (src/lib/mail/taches.ts : historique Gmail chaque minute, tri
+  // d'office). Les traitements ci-dessus restent enregistrés : les tâches déjà en file vont au bout.
 }

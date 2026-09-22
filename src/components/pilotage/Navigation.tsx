@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, Globe, Megaphone, Menu, MessageSquare, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { FolderKanban, Globe, Mail, Megaphone, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-export type Compteurs = { leadsAAppeler: number; tachesEnEchec: number; smsNonLus: number };
+export type Compteurs = { leadsAAppeler: number; tachesEnEchec: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 /** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
@@ -41,7 +41,9 @@ const PRINCIPALES: Entree[] = [
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone, mobile: true },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
-  { href: "/sms", libelle: "SMS", icone: MessageSquare, compteur: "smsNonLus", mobile: true },
+  // Mission 7 (22/09/2026) : SMS retiré du menu (pas de numéro professionnel) — l'écran et ses données restent, /sms répond
+  // toujours. Le mail prend le relais : l'onglet Mail, trié d'office.
+  { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
   { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
@@ -79,7 +81,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsAAppeler: 0, tachesEnEchec: 0, smsNonLus: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsAAppeler: 0, tachesEnEchec: 0, mailATraiter: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 

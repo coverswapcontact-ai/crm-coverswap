@@ -61,6 +61,7 @@ model Lead {
   conversationsSms ConversationSms[]
   interactions     Interaction[]
   notesAppel       NoteAppel[]
+  messages         Message[]
   devis            Devis[]
   chantier         Chantier?
   simulations      Simulation[]
@@ -1057,6 +1058,21 @@ model Message {
   triePar          String? // acteur de cette décision (personne, ou agent pour une action autorisée)
   boiteArchiveLe   DateTime? // retiré de la boîte de réception chez le fournisseur (jamais supprimé)
   bruitAnnuleLe    DateTime? // « ce n'est pas du bruit » : tri corrigé, remis dans la boîte
+  // Mission 7 (22/09/2026) : l'onglet Mail (src/lib/mail). Le tri classe, Gmail suit (libellés), rien ne s'efface.
+  classe           String? // CLIENT | ADMINISTRATIF | HUMAIN | BRUIT (mail/tri.ts, ou Lucas)
+  classeMotif      String? // pourquoi, en une phrase
+  classePar        String? // TRI | LUCAS | REGLE
+  leadId           String? // contact connu sans fiche client (lead)
+  lead             Lead?            @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  lu               Boolean          @default(false) // miroir de Gmail (libellé UNREAD absent)
+  dansBoite        Boolean          @default(true) // miroir de Gmail (libellé INBOX)
+  rangeLe          DateTime? // rangé : libellé CoverSwap/Rangé, lu, hors de la boîte de réception ; réversible
+  rangeMotif       String?
+  rangePar         String? // TRI (d'office) | LUCAS (« ne plus me montrer », « tout nettoyer »)
+  traiteLe         DateTime? // archivé par Lucas : sort d'« À traiter » (et de la boîte de réception Gmail)
+  reponduLe        DateTime? // une réponse de la boîte est partie plus tard dans le même fil
+  remonteLe        DateTime? // remonté à la main après un rangement : son expéditeur n'est plus jamais rangé
+  automatique      Boolean          @default(false) // envoyé par le CRM sans clic (notification de l'espace)
   contenu          ContenuMessage?
   pieces           PieceMessage[]
   analyses         AnalyseMessage[]
@@ -1066,6 +1082,8 @@ model Message {
 
   @@unique([canal, identifiantCanal])
   @@index([statut, recuLe])
+  @@index([classe, recuLe])
+  @@index([leadId])
   @@index([clientId])
   @@index([dossierId])
   @@index([filCanal])
@@ -1543,4 +1561,163 @@ model NoteAppel {
   ecriture           String?
 
   @@index([leadId, appelLe])
+}
+
+// ─────────────────────────────────────────────
+// Onglet Mail (mission 7, 22/09/2026) : src/lib/mail
+// ─────────────────────────────────────────────
+
+// Ce que Lucas a décidé pour un expéditeur (adresse exacte, ou domaine « @exemple.fr ») : « ne plus me montrer »
+// (RANGER, pour toujours), « remonté à tort » (NE_JAMAIS_RANGER), ou « administratif ». Les règles passent avant le tri.
+model RegleExpediteur {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  cible        String // adresse exacte en minuscules, ou domaine « @exemple.fr »
+  action       String // RANGER | NE_JAMAIS_RANGER | ADMINISTRATIF
+  motif        String?
+  par          String?
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+
+  @@index([cible])
+}
+
+// Où en est la synchronisation d'une boîte Gmail (historique incrémental).
+model EtatBoiteMail {
+  compte          String    @id
+  updatedAt       DateTime  @updatedAt
+  historyId       String? // dernier point de l'historique Gmail lu
+  derniereSynchro DateTime?
+  derniereErreur  String?
+  ecriture        String?
+}
+
+// Tout mail qui part du CRM : notification automatique, réponse ou nouveau mail validé par Lucas, étape de
+// séquence, essai. La clé est unique : un même envoi ne part jamais deux fois.
+model EnvoiMail {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  cle              String    @unique // notif:SIMULATION_PUBLIEE:<id>, reponse:<brouillon>, sequence:<inscription>:<étape>…
+  nature           String // NOTIFICATION | REPONSE | NOUVEAU | SEQUENCE | ESSAI
+  modele           String? // code du modèle (notifications, séquences)
+  statut           String    @default("A_ENVOYER") // A_ENVOYER | ENVOYE | ECHEC | ANNULE
+  a                String
+  objet            String
+  texte            String
+  html             String?
+  entetes          String? // JSON : en-têtes ajoutés (List-Unsubscribe des séquences)
+  enReponseA       String? // Message (reçu) auquel on répond : même fil
+  dossierId        String?
+  clientId         String?
+  leadId           String?
+  brouillonId      String?
+  messageId        String? // le Message enregistré à l'envoi
+  identifiantCanal String?
+  envoyeLe         DateTime?
+  erreur           String?
+  ecriture         String?
+
+  @@index([dossierId])
+  @@index([statut, createdAt])
+}
+
+// Brouillon rédigé par l'IA, à la demande de Lucas : ce qu'elle savait (contexte), ce qu'elle a écrit, ce que
+// Lucas a envoyé. La matière pour améliorer l'IA plus tard ; rien ne part sans son clic.
+model BrouillonMail {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messageId   String? // mail auquel il répond
+  clientId    String?
+  dossierId   String?
+  leadId      String?
+  a           String?
+  consigne    String?
+  objetIa     String?
+  texteIa     String?
+  manques     String    @default("[]") // JSON : ce que l'IA n'a pas trouvé dans le CRM ([à compléter])
+  corrections String    @default("[]") // JSON : montants, dates ou délais retirés par la garde (absents du CRM)
+  contexte    String // JSON : les faits envoyés au modèle
+  appelIaId   String?
+  coutEuros   Float?
+  objetEnvoye String?
+  texteEnvoye String?
+  modifie     Boolean? // la version envoyée diffère de celle de l'IA
+  statut      String    @default("BROUILLON") // BROUILLON | ENVOYE | ABANDONNE
+  envoiId     String?
+  envoyeLe    DateTime?
+  ecriture    String?
+
+  @@index([messageId])
+  @@index([clientId])
+}
+
+// Textes réglables sans déploiement : guide de style des mails, modèles des notifications (Paramètres).
+model ReglageTexte {
+  cle       String   @id // GUIDE_STYLE | NOTIF_SIMULATION_PUBLIEE | NOTIF_DEVIS_DISPONIBLE | …
+  updatedAt DateTime @updatedAt
+  valeur    String // JSON ou texte selon la clé
+  par       String?
+  ecriture  String?
+}
+
+// Séquences de mails (déclencheur, étapes espacées, arrêt) : construites, JAMAIS activées sans Lucas.
+model SequenceMail {
+  id           String                @id @default(cuid())
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  code         String                @unique // INJOIGNABLE | DEVIS_NON_SIGNE | AVIS | REACTIVATION
+  nom          String
+  declencheur  String
+  description  String?
+  mode         String                @default("VALIDATION") // VALIDATION | AUTOMATIQUE
+  active       Boolean               @default(false)
+  plafondJour  Int                   @default(10)
+  etapes       EtapeSequence[]
+  inscriptions InscriptionSequence[]
+  ecriture     String?
+}
+
+model EtapeSequence {
+  id         String       @id @default(cuid())
+  updatedAt  DateTime     @updatedAt
+  sequenceId String
+  sequence   SequenceMail @relation(fields: [sequenceId], references: [id], onDelete: Restrict)
+  rang       Int
+  delaiJours Int // après l'entrée (étape 1) ou après l'étape précédente
+  objet      String
+  texte      String // variables : {prenom}, {lien}, {devis}, {montant}…
+  ecriture   String?
+
+  @@unique([sequenceId, rang])
+}
+
+model InscriptionSequence {
+  id              String       @id @default(cuid())
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  sequenceId      String
+  sequence        SequenceMail @relation(fields: [sequenceId], references: [id], onDelete: Restrict)
+  cle             String       @unique // séquence + dossier ou lead : une seule inscription
+  adresse         String
+  dossierId       String?
+  leadId          String?
+  clientId        String?
+  etapeFaite      Int          @default(0)
+  statut          String       @default("EN_COURS") // EN_COURS | EN_VALIDATION | ARRETEE | TERMINEE
+  arretMotif      String?
+  prochainEnvoiLe DateTime?
+  ecriture        String?
+
+  @@index([statut, prochainEnvoiLe])
+}
+
+// Désinscription des séquences : définitive, jamais retirée.
+model Desinscription {
+  adresse   String   @id
+  createdAt DateTime @default(now())
+  source    String // LIEN | LUCAS | REPONSE
+  ecriture  String?
 }

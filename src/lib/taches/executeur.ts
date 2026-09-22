@@ -2,7 +2,7 @@ import type { Tache } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { avecActeur } from "@/lib/journal/contexte";
 import { surNouvelleTache } from "./file";
-import { ErreurDefinitive, traitementDe, travauxPeriodiques, type TravailPeriodique } from "./registre";
+import { AttenteExterne, ErreurDefinitive, PREFIXE_ATTENTE, traitementDe, travauxPeriodiques, type TravailPeriodique } from "./registre";
 
 const DELAI_MAX_DEFAUT_MS = 5 * 60_000;
 const MARGE_BAIL_MS = 60_000;
@@ -104,6 +104,21 @@ async function executerTache(tache: Tache, maintenant: Date): Promise<void> {
           },
     });
   } catch (erreur) {
+    // Une ressource extérieure manque (Google coupé…) : la tâche attend, sans perdre d'essai.
+    if (erreur instanceof AttenteExterne) {
+      console.warn(`[taches] ${tache.type} ${tache.id} en attente : ${erreur.message}`);
+      await prisma.tache.update({
+        where: { id: tache.id },
+        data: {
+          statut: "EN_ATTENTE",
+          tentatives: Math.max(0, tentative - 1),
+          derniereErreur: `${PREFIXE_ATTENTE}${erreur.message}`.slice(0, 2000),
+          verrouJusqua: null,
+          prochainEssaiLe: new Date(Date.now() + erreur.reprendreDansMs),
+        },
+      });
+      return;
+    }
     const definitive = erreur instanceof ErreurDefinitive || tentative >= tentativesMax;
     console.error(`[taches] ${tache.type} ${tache.id}, tentative ${tentative} :`, messageDe(erreur));
     await prisma.tache.update({

@@ -328,7 +328,7 @@ export async function deposerSimulationDossier(dossierId: string, fichier: File,
 
 /* ── Publier, masquer, retirer ────────────────────────────────────── */
 
-export type ResultatPublication = { publiees: number; sms: { envoye: boolean; raison?: string; texte?: string } };
+export type ResultatPublication = { publiees: number; sms: { envoye: boolean; raison?: string; texte?: string }; mail?: { programme: boolean; raison?: string } };
 
 /** Texte du SMS « simulations prêtes », tel que Lucas le verra avant de publier. */
 export async function texteSmsPublication(dossierId: string): Promise<{ texte: string | null; raison?: string; dejaPrevenuLe?: string; attente?: string }> {
@@ -357,6 +357,7 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
   if (lignes.length === 0) throw new ErreurMetier("Aucune simulation à publier.", 404);
   const maintenant = new Date();
   const aPublier = lignes.filter((s) => s.statut !== "PUBLIEE");
+  let mail: ResultatPublication["mail"];
   if (aPublier.length > 0) {
     await prisma.$transaction([
       ...aPublier.map((s) => prisma.simulationEspace.update({ where: { id: s.id }, data: { statut: "PUBLIEE", publieeLe: s.publieeLe ?? maintenant, masqueeLe: null } })),
@@ -375,9 +376,12 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
     if (dossier?.etape === "QUALIFICATION") await changerEtape(dossierId, { vers: "SIMULATION" }).catch((erreur) => console.error("[simulations] passage en Simulation (non bloquant) :", erreur));
     // Publiée : la main passe au client, partout (dossiers/main.ts).
     await recalculerMain(dossierId);
+    // Mission 7 : le client est prévenu par mail, automatiquement (une fois par publication).
+    const { notifierClient } = await import("@/lib/mail/notifications");
+    mail = await notifierClient("SIMULATION_PUBLIEE", dossierId, aPublier.map((s) => s.id).sort().join("+"));
   }
 
-  if (!options.prevenir) return { publiees: aPublier.length, sms: { envoye: false, raison: "Client non prévenu (case décochée)." } };
+  if (!options.prevenir) return { publiees: aPublier.length, sms: { envoye: false, raison: "Client non prévenu par SMS." }, mail };
   const propose = await texteSmsPublication(dossierId);
   if (!propose.texte) return { publiees: aPublier.length, sms: { envoye: false, raison: propose.raison } };
   const texte = options.texte?.trim() || propose.texte;
@@ -416,6 +420,24 @@ export async function changerStatutSimulation(dossierId: string, simulationId: s
   const modifiee = await prisma.simulationEspace.update({ where: { id: simulation.id }, data });
   if (action === "masquer" && simulation.statut === "PUBLIEE") {
     await prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Simulation masquée au client${simulation.titre ? ` : ${simulation.titre}` : ""}`, metadata: JSON.stringify({ simulationId }) } });
+  }
+  // Publiée d'ici (bloc « Espace client » du dossier) : même suite que par le bouton « Publier » — l'événement,
+  // la main qui passe au client, et le mail automatique (même clé : jamais deux mails pour la même simulation).
+  if (action === "afficher" && simulation.statut !== "PUBLIEE") {
+    if (!simulation.publieeLe) {
+      await prisma.dossierEvenement.create({
+        data: {
+          dossierId,
+          type: "ESPACE_SIMULATION_DEPOSEE",
+          direction: "SORTANT",
+          contenu: `Simulation publiée dans l'espace du client${simulation.titre ? ` : ${simulation.titre}` : ""}`,
+          metadata: JSON.stringify({ simulations: [simulation.id] }),
+        },
+      });
+      await recalculerMain(dossierId);
+    }
+    const { notifierClient } = await import("@/lib/mail/notifications");
+    await notifierClient("SIMULATION_PUBLIEE", dossierId, simulation.id);
   }
   return versVue(dossierId, modifiee);
 }

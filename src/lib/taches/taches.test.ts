@@ -13,6 +13,7 @@ let registre: typeof import("@/lib/taches/registre");
 const HUMAIN = { acteur: "HUMAIN:essai@coverswap.fr" };
 let appels: { type: string; charge: unknown }[] = [];
 let echecsRestants = 0;
+let ressourceCoupee = false;
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
@@ -52,6 +53,15 @@ before(async () => {
       throw new registre.ErreurDefinitive("Accès révoqué");
     },
   });
+  registre.enregistrerTraitement("ESSAI_ATTENTE", {
+    libelle: "Essai qui attend une ressource extérieure",
+    acteur: "SYSTEME:essai",
+    tentativesMax: 2,
+    executer: async () => {
+      if (ressourceCoupee) throw new registre.AttenteExterne("Google coupé : reconnecter le compte dans Paramètres", 60_000);
+      return "repris";
+    },
+  });
   registre.enregistrerTraitement("ESSAI_LENT", {
     libelle: "Essai trop lent",
     acteur: "SYSTEME:essai",
@@ -67,6 +77,7 @@ before(async () => {
 beforeEach(() => {
   appels = [];
   echecsRestants = 0;
+  ressourceCoupee = false;
 });
 
 after(async () => {
@@ -182,6 +193,25 @@ describe("exécution", () => {
     await file.annulerTache(echouee.id);
     assert.equal((await tache("definitif-1")).statut, "ANNULEE");
     await assert.rejects(() => file.annulerTache(echouee.id), /Seule une tâche/);
+  });
+
+  test("ressource extérieure coupée (Google, mission 7) : la tâche attend sans perdre d'essai, puis reprend", async () => {
+    ressourceCoupee = true;
+    await file.mettreEnFile({ type: "ESSAI_ATTENTE", cle: "attente-1" });
+    for (let i = 0; i < 5; i++) {
+      await avancerHorloge("attente-1");
+      await executeur.executerTour();
+    }
+    const enAttente = await tache("attente-1");
+    assert.equal(enAttente.statut, "EN_ATTENTE", "jamais abandonnée, même au-delà du nombre maximal de tentatives");
+    assert.equal(enAttente.tentatives, 0);
+    assert.match(enAttente.derniereErreur ?? "", /^\[en attente\] Google coupé/);
+    assert.ok(enAttente.prochainEssaiLe.getTime() > Date.now() + 50_000);
+
+    ressourceCoupee = false;
+    await avancerHorloge("attente-1");
+    await executeur.executerTour();
+    assert.equal((await tache("attente-1")).statut, "TERMINEE");
   });
 
   test("délai dépassé : la tentative est abandonnée et reprogrammée", async () => {

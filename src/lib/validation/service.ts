@@ -5,7 +5,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { resoudreContexte } from "@/lib/journal/acteur";
 import { avecActeur, typeActeur } from "@/lib/journal/contexte";
 import { mettreEnFile, relancerTache } from "@/lib/taches/file";
-import { ErreurDefinitive, type ContexteTraitement } from "@/lib/taches/registre";
+import { AttenteExterne, ErreurDefinitive, type ContexteTraitement } from "@/lib/taches/registre";
 import { definitionDe } from "./catalogue";
 import { champsDe, estSensible, type DefinitionProposition, type ResultatExecution } from "./definitions";
 import {
@@ -410,7 +410,7 @@ export async function executerPropositionValidee(charge: unknown, contexte: Cont
     }
     return sortie?.resultat;
   } catch (erreur) {
-    const derniere = erreur instanceof ErreurDefinitive || contexte.tentative >= TENTATIVES_EXECUTION;
+    const derniere = !(erreur instanceof AttenteExterne) && (erreur instanceof ErreurDefinitive || contexte.tentative >= TENTATIVES_EXECUTION);
     await prisma.proposition.update({
       where: { id: propositionId },
       data: derniere ? { statut: "ECHEC", erreurExecution: messageDe(erreur) } : { erreurExecution: messageDe(erreur) },

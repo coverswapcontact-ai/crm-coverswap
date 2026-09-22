@@ -18,6 +18,8 @@ export type LigneEspace = {
   clientNom: string;
   ville: string;
   telephone: string;
+  /** Mission 7 : l'adresse du client (le nouveau lien part par mail). */
+  email: string | null;
   typeProjet: string;
   lien: string | null;
   apercu: string | null;
@@ -71,6 +73,8 @@ export type ClientEspace = {
   clientNom: string;
   ville: string;
   telephone: string;
+  /** Mission 7 : l'adresse du client (le nouveau lien part par mail). */
+  email: string | null;
   lien: string | null;
   apercu: string | null;
   lienEmisLe: string;

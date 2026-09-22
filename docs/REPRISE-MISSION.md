@@ -477,7 +477,7 @@ l'adresse personnelle de Lucas ; tout le reste part au clic de Lucas.
 - ~~R8 Récap audio~~ : abandonné.
 - [x] R9 Écrans : onglet Mail (mobile d'abord), Paramètres, navigation sans SMS.
 - [x] R10 Site : politique de confidentialité (Anthropic) + page de désinscription.
-- [ ] R11 Tests, essais iPhone sur copie, vérifs prod (boîte en lecture, brouillon réel, mail de test aller-retour),
+- [x] R11 Tests, essais iPhone sur copie, vérifs prod (boîte en lecture, brouillon réel, mail de test aller-retour),
       déploiement, rapport.
 
 ## Journal
@@ -531,3 +531,15 @@ l'adresse personnelle de Lucas ; tout le reste part au clic de Lucas.
   3. Quota Gmail par seconde dépassé par la relève initiale (une lecture par message connu) : remplacée par trois listes
      (INBOX, UNREAD, libellé), pause de 120 ms entre deux lectures ; rattrapage par paquets de 20 quand l'interrupteur
      passe à Actif ; le libellé n'est plus créé pour lire.
+- 22/09 (nuit, fin) : CORRECTIF DÉPLOYÉ (d411534 puis b1bf665 : toute adresse « noreply » de Google = notification).
+  MISSION 7 TERMINÉE. Vérifications prod, après correctif :
+  - synchro : SUCCÈS, mode historique, plus aucune erreur de quota ; migration passée (0 règle fantôme restante) ;
+    bilan : 184 mails / 120 j, 128 conversations → À traiter 29, Clients 18, Administratif 8, Rangés 84.
+  - réglages IA posés (Sonnet 5, 1,9 / 9,5 €/MTok, 10 €/mois, rédaction ACTIVE, lecture IA EN_PAUSE) ;
+    brouillon réel sur un vrai dossier : Anthropic répond `401 invalid x-api-key` → la clé Railway est INVALIDE
+    (rien dépensé) : à régénérer par Lucas. Le circuit est vérifié en local avec le faux modèle (garde OK).
+  - mail de test unique (fiche « Lucas », adresse personnelle) parti de Gmail ; réponse depuis cette adresse revenue
+    en 3 s dans la même conversation, sur la même fiche, « attend votre réponse » ✓.
+  - `MAIL_RANGEMENT_GMAIL` = ACTIF à 18:06 : rattrapage par paquets de 20 ; boîte de réception Gmail passée de 87 à
+    28 mails (les rangés sont sous « CoverSwap/Rangé », lus, hors boîte ; rien supprimé). Cohérence : 0 incohérence.
+  - SUIVANT (mission 8, énoncé en mémoire `project_mission8_mcp_directeur_general`) : serveur MCP « directeur général ».

@@ -106,7 +106,7 @@ function CarteConnexion({ acces, onMaj }: { acces: Acces; onMaj: (a: Acces) => v
       </div>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-[12.5px] leading-relaxed text-[#9CA3AF]">
         <li>Dans l&apos;application Claude (iPhone ou claude.ai) : Personnaliser → Connecteurs → Ajouter un connecteur personnalisé. Nom : « CoverSwap », adresse : celle ci-dessus. Laisse les champs de client OAuth vides.</li>
-        <li>Claude ouvre la page d&apos;autorisation du CRM : connecte-toi (mot de passe du site puis du CRM) et appuie sur « Autoriser l&apos;accès ». Aucun secret à recopier : ta session du CRM est la clé.</li>
+        <li>Claude ouvre la page d&apos;autorisation du CRM : connecte-toi au CRM si besoin et appuie sur « Autoriser l&apos;accès ». Aucun secret à recopier : ta session du CRM est la clé.</li>
         <li>Vérifie : « Fais-moi le point du matin ». La connexion apparaît ci-dessous ; l&apos;accès dure 12 heures et se renouvelle seul pendant 90 jours.</li>
       </ol>
       <div className="mt-4 flex items-center justify-between gap-3">

@@ -610,9 +610,17 @@ avec le web ; chaque domaine répondu par un « manager » d'analyse en un appel
 - [x] A6 Essai HTTP réel sur la copie de base (serveur `crm-essai-m8`, scratchpad `m8/flux-oauth.mjs`) : 401 →
       découverte → consentement → code → jetons → 36 outils, 2 ressources, managers sur données réelles ; rotation
       du jeton : l'ancien accès rend 401.
-- [ ] A7 Build, commit (jamais proxy.ts), déploiement Railway, vérifications prod (répond, refuse sans jeton,
-      n'expose rien), rapport (outils + niveaux, connexion, 8 commandes, fragilités).
+- [x] A7 Build, commit `90a8659` (+ `d1f817b` nom du client MCP après rotation, + docs), déploiement Railway,
+      vérifications prod en lecture seule (découverte 200, `/api/mcp` 401 + `WWW-Authenticate` sans jeton et avec un
+      faux jeton, `/oauth/autoriser` renvoyé vers la connexion, API privées 401, `/register` vide → 400 sans création),
+      rapport publié (artefact « Directeur général Claude »).
 
 ## Journal
 - 22/09 (nuit) : TOUT ÉCRIT ; 40 tests de la mission verts, suite 465/465, tsc + eslint propres ; essai HTTP de bout en
-  bout réussi en local. Reste : build, commit, déploiement, contrôle prod, rapport.
+  bout réussi en local.
+- 22/09 (nuit, fin) : DÉPLOYÉ `90a8659` puis `d1f817b`. Contrôle prod (lecture seule, aucune donnée créée) : OK sur
+  tous les points. MISSION 8 TERMINÉE côté code. Reste pour Lucas : ajouter le connecteur dans l'application Claude
+  (Paramètres → Assistant Claude explique) ; reconnexion Google avant le 29/09 (donne aussi le droit agenda) ;
+  clé Anthropic et jeton Meta toujours invalides sur Railway ; ajuster les consignes (capacité, plancher de réserve,
+  protocole de campagne) et poser les paramètres de campagne (Paramètres → Campagne publicitaire) et les dépenses
+  « Publicité » pour que le manager marketing ait une dépense réelle.

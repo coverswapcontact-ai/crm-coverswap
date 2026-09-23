@@ -795,8 +795,17 @@ lecture / réversible / sensible avec aperçu et jeton, journal avec la phrase, 
       45 Ko, messages repris, modification annulée, paquet ChatGPT, consignes v2, réponse à Olga sans e-mail → dit) ;
       écrans : `/simulateur?preparation=` rouvre le paquet, Paramètres → historique (2), Tâches de fond → purge
       journalisée (bilan lisible) + travail quotidien OK, panneau du dossier → rubrique Messages.
-- [ ] C7 Build, commit, déploiement CRM puis site, contrôle prod en lecture seule, rapport, mémoire.
+- [x] C7 Build OK (CRM et site, proxy local restauré), commit CRM `7d9a464`, site `b3f1f0f`, tous deux déployés (health
+      CRM = 7d9a464, site = b3f1f0f) ; contrôle prod en lecture seule (`scratchpad/m10/controle-prod.sh`) : découverte
+      OAuth 200, `/api/mcp` 401 + WWW-Authenticate, consignes GET/PATCH et geste d'espace 401 sans session, jeton
+      d'espace invalide 404 sans écriture, écrans 307 vers la connexion ; aucune donnée créée ; rapport publié
+      (artefact « Les actions qui manquaient ») ; mémoire à jour.
 
 ## Journal
 - 23/09 : inventaire fait, décisions posées ; C1 à C5 écrits ; tsc et eslint propres (CRM et site) ; tests de la mission
   verts en isolation (mcp-v2 15/15, rétention 5/5) ; suite complète lancée.
+- 23/09 (fin de matinée) : suite complète 509/509 (carte RGPD complétée), essai HTTP et écrans sur la copie, builds OK,
+  DÉPLOYÉ (CRM `7d9a464`, site `b3f1f0f`), contrôle prod OK. MISSION 10 TERMINÉE côté code. Reste pour Lucas : agrandir
+  le volume Railway (500 Mo → 5 Go, ≈ 0,25 $/Go/mois, engage de l'argent : non fait) ; les réponses d'espace ne
+  préviennent que par mail (sans adresse, SMS ou appel à la main) ; ajouter « regarde ses photos » avant de demander
+  une teinte à Claude.

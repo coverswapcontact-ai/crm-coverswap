@@ -235,15 +235,15 @@ export const outilEspacesClients = definirOutil({
 export const outilMailsATraiter = definirOutil({
   nom: "mails_a_traiter",
   titre: "Les mails à traiter",
-  description: "Les conversations de la boîte qui attendent une réponse ou une action (onglet Mail, vue « À traiter ») : qui, objet, pourquoi (attend ta réponse, sans réponse depuis N jours, nouvelle demande, à lire), contact rattaché. Rend l'identifiant du mail pour « rediger_mail » et « envoyer_mail ».",
+  description: "Les conversations de la boîte qui attendent une réponse ou une action (onglet Mail, vue « À traiter »), dans l'ordre de priorité calculé par le CRM (revenus, réclamations, devis en attente par montant, dossiers en cours, leads, échéances, le reste) : qui, objet, pourquoi (attend ta réponse, sans réponse depuis N jours, nouvelle demande, à lire, revenu), intention et ce qui est attendu, cartes en attente, brouillon prêt, contact rattaché. Rend l'identifiant du mail pour « lire_mail », « deposer_brouillon », « envoyer_mail ». Réponse à « qu'est-ce que j'ai à traiter ? » : lis-la dans cet ordre.",
   niveau: "LECTURE",
   schema: z.object({ vue: z.enum(["A_TRAITER", "CLIENTS", "ADMINISTRATIF"]).optional(), limite: z.number().int().min(1).max(50).optional() }),
   executer: async ({ vue, limite }) => {
     const liste = await listerVue(vue ?? "A_TRAITER", { limite: limite ?? 20 });
     const texte = liste.lignes.length
-      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif. ${liste.lignes.map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join(" · ")}`
+      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif.\n${liste.lignes.map((m, i) => `${i + 1}. ${m.priorite.libelle ? `[${m.priorite.libelle}${m.priorite.montant !== null ? ` ${format.euros(m.priorite.montant)}` : ""}] ` : ""}${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.intention ? ` · ${m.intention.toLowerCase()}${m.attendu ? ` : ${m.attendu}` : ""}` : " · non classé"}${m.propositionsEnAttente ? ` · ${m.propositionsEnAttente} carte(s) à valider` : ""}${m.brouillonPret ? " · brouillon prêt" : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join("\n")}`
       : "Rien à traiter dans la boîte.";
-    return { texte, donnees: { compteurs: liste.compteurs, mails: liste.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant, objet: m.objet, extrait: m.extrait, recuLe: m.recuLe, mention: m.mention, classe: m.classe, contact: m.contact, nonLu: m.nonLu })) }, liens: [lien("Mail", "/mail")] };
+    return { texte, donnees: { compteurs: liste.compteurs, mails: liste.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant, objet: m.objet, extrait: m.extrait, recuLe: m.recuLe, mention: m.mention, classe: m.classe, contact: m.contact, nonLu: m.nonLu, priorite: m.priorite, intention: m.intention, attendu: m.attendu, propositionsEnAttente: m.propositionsEnAttente, brouillonPret: m.brouillonPret, revenu: m.revenu, snoozeJusqua: m.snoozeJusqua })) }, liens: [lien("Mail", "/mail")] };
   },
 });
 

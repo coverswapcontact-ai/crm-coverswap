@@ -41,10 +41,10 @@ export async function creerEvenementAgenda(evenement: EvenementAgenda): Promise<
  * dicte, en heure de Paris. Rend null si l'on ne comprend pas — l'outil
  * demande alors une date en clair plutôt que de deviner.
  */
-export function lireDateDictee(texte: string, maintenant: Date = new Date()): Date | null {
+export function lireDateDictee(texte: string, maintenant: Date = new Date(), heureDefaut = 10): Date | null {
   const brut = texte.trim().toLowerCase();
   const heure = /(\d{1,2})\s*(?:h|:)\s*(\d{2})?/i.exec(brut);
-  const h = heure ? Number(heure[1]) : 10;
+  const h = heure ? Number(heure[1]) : heureDefaut;
   const m = heure?.[2] ? Number(heure[2]) : 0;
   if (h > 23 || m > 59) return null;
   const decalage = (jour: string) => {
@@ -66,6 +66,11 @@ export function lireDateDictee(texte: string, maintenant: Date = new Date()): Da
   }
   const aujourdhui = jourParisDe(maintenant);
   const plusJours = (n: number) => jourParisDe(new Date(maintenant.getTime() + n * 86_400_000));
+  const dans = /dans\s+(une|un|\d+)\s*(jour|semaine|mois)/.exec(brut);
+  if (dans) {
+    const n = dans[1] === "une" || dans[1] === "un" ? 1 : Number(dans[1]);
+    return aParis(plusJours(dans[2] === "semaine" ? 7 * n : dans[2] === "mois" ? 30 * n : n));
+  }
   if (/aujourd/.test(brut)) return aParis(aujourdhui);
   if (/apr[eè]s[- ]demain/.test(brut)) return aParis(plusJours(2));
   if (/demain/.test(brut)) return aParis(plusJours(1));

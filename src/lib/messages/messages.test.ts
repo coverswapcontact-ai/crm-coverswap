@@ -207,7 +207,7 @@ const sortieVide = {
   reponse: null,
 };
 
-async function reglerIa(valeurs: Partial<Record<"IA_AGENT_MAIL" | "IA_MODELE" | "IA_PRIX_ENTREE" | "IA_PRIX_SORTIE" | "IA_BUDGET_MENSUEL", string | number>>) {
+async function reglerIa(valeurs: Partial<Record<"IA_CRM_ACTIVE" | "IA_AGENT_MAIL" | "IA_MODELE" | "IA_PRIX_ENTREE" | "IA_PRIX_SORTIE" | "IA_BUDGET_MENSUEL", string | number>>) {
   for (const [cle, valeur] of Object.entries(valeurs)) {
     await avecActeur(LUCAS, () => parametres.enregistrerParametre({ cle, valeur, valableDu: new Date(Date.now() - 1000), source: "essai" }));
   }
@@ -230,6 +230,8 @@ before(async () => {
   envoi = await import("@/lib/mail/envoi");
   parametres = await import("@/lib/parametres/service");
   await (await import("@/lib/base/preparation")).preparerBase();
+  // Mission 9 : l'IA du CRM est en pause par défaut ; ces essais couvrent l'ancien chemin, donc l'interrupteur général est levé.
+  await reglerIa({ IA_CRM_ACTIVE: "ACTIVE" });
   (await import("@/lib/validation/taches")).enregistrerTachesValidation();
   (await import("./taches")).enregistrerTachesMessages();
   google.definirTransportGoogleEssai(fausseGoogle);

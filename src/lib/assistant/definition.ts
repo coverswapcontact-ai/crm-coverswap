@@ -57,8 +57,8 @@ export type DefinitionOutil<E = Record<string, unknown>> = {
   schema: z.ZodType<E>;
   /** Nombre d'éléments touchés : au-delà de trois, l'action devient sensible (aperçu, puis confirmation). */
   masse?: (entree: E) => number;
-  /** Sensible selon l'entrée (passer un dossier à « Signé », « Facturé », « Encaissé » ou « Perdu »). */
-  sensible?: (entree: E) => boolean;
+  /** Sensible selon l'entrée (passer un dossier à « Signé », « Facturé », « Encaissé » ou « Perdu » ; valider une proposition qui touche un montant). */
+  sensible?: (entree: E) => boolean | Promise<boolean>;
   /** Action sensible : la phrase exacte de ce qui va être fait, rendue avant toute exécution. */
   apercu?: (entree: E, contexte: ContexteOutil) => Promise<string>;
   executer: (entree: E, contexte: ContexteOutil) => Promise<ResultatOutil>;

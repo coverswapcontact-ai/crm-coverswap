@@ -148,6 +148,16 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "mois",
     groupe: "RGPD",
   },
+  IA_CRM_ACTIVE: {
+    libelle: "IA appelée par le CRM lui-même",
+    aide: "En pause (par défaut) : le CRM n'appelle aucun modèle d'IA, ni pour lire les mails ni pour rédiger — c'est l'assistant Claude, connecté par le MCP avec votre abonnement, qui lit, classe, résume et dépose les brouillons ; le bouton « Rédiger » de l'onglet Mail affiche « via l'assistant Claude ». Active : l'ancien chemin (clé ANTHROPIC_API_KEY du serveur, coût par appel) est de nouveau permis, selon les interrupteurs ci-dessous.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIVE", libelle: "Active" },
+      { valeur: "EN_PAUSE", libelle: "En pause" },
+    ],
+    groupe: "AGENT",
+  },
   IA_AGENT_MAIL: {
     libelle: "Lecture des mails par l'IA",
     aide: "Active : l'agent fait lire chaque mail utile à un modèle d'IA pour proposer un rattachement, une note, une réponse (coût par mail, plafonné par le budget mensuel). En pause : seules les règles sûres trient. L'IA ne décide jamais : tout passe par « À valider ».",

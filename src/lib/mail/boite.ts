@@ -153,7 +153,7 @@ export type EtatMessageCrm = { lu: boolean; rangeLe: Date | null; rangePar: stri
  * non, dans la boîte), le CRM seul le range.
  */
 export function etatGmailVoulu(message: EtatMessageCrm, actuels: string[], rangeId: string | null, rangementActif: boolean): { ajouter: string[]; retirer: string[] } | null {
-  const rangementPermis = message.rangePar === "LUCAS" || rangementActif;
+  const rangementPermis = message.rangePar === "LUCAS" || message.rangePar === "ASSISTANT" || rangementActif;
   if (message.rangeLe && !rangementPermis) return null;
   const ajouter = new Set<string>();
   const retirer = new Set<string>();
@@ -447,4 +447,9 @@ export async function classerALaMain(messageId: string, classe: "ADMINISTRATIF" 
   if (!message) throw new ErreurMetier("Mail introuvable.", 404);
   await prisma.message.update({ where: { id: messageId }, data: { classe, classeMotif: "Classé à la main par Lucas.", classePar: "LUCAS" } });
   if (pourLExpediteur && classe === "ADMINISTRATIF" && message.sens === "ENTRANT") await poserRegle(message.de, "ADMINISTRATIF", "Classé en administratif par Lucas", "LUCAS");
+  // Mission 9 : trois classements identiques de la même adresse → règle proposée (jamais posée seule).
+  if (message.sens === "ENTRANT" && !pourLExpediteur) {
+    const { detecterRegleApprise } = await import("./regles-apprises");
+    await detecterRegleApprise(message.de).catch((erreur) => console.error("[mail] règle apprise :", erreur));
+  }
 }

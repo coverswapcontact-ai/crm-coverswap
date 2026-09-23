@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { lireListe } from "@/lib/messages/stockage";
 import { demanderEtatGmail } from "./boite";
+import { comparerPriorite, estReclamation, lireDatesExtraites, prioriteDe, type Priorite } from "./priorite";
+import { TYPE_MAJ_DEPUIS_MAIL } from "./propositions-maj";
 
 /**
  * Les trois vues de l'onglet Mail, par conversation (fil) : À traiter, Clients,
@@ -39,7 +41,20 @@ export type LigneMail = {
   traite: boolean;
   aTraiter: boolean;
   automatique: boolean;
+  /** Mission 9 : ce que Claude a écrit sur le dernier mail reçu, et ce que le CRM en déduit. */
+  intention: string | null;
+  attendu: string | null;
+  priorite: Priorite;
+  snoozeJusqua: string | null;
+  revenu: boolean;
+  propositionsEnAttente: number;
+  brouillonPret: boolean;
+  dates: number;
 };
+
+const DEVIS_EN_ATTENTE = { where: { type: "DEVIS", numero: { not: null }, archiveLe: null, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { createdAt: "desc" as const }, take: 1, select: { totalHt: true } };
+const DOSSIERS_DU_CONTACT = { where: { archiveLe: null }, select: { etape: true, documents: DEVIS_EN_ATTENTE } };
+type Extras = { propositions: Map<string, number>; brouillons: Set<string> };
 
 export type CompteursMail = Record<VueMail, number> & { nonLusATraiter: number };
 
@@ -68,8 +83,12 @@ function chargerMessages(depuis: Date) {
       automatique: true,
       clientId: true,
       leadId: true,
-      client: { select: { nom: true } },
-      lead: { select: { prenom: true, nom: true } },
+      intention: true,
+      intentionAttendu: true,
+      datesExtraites: true,
+      snoozeJusqua: true,
+      client: { select: { nom: true, dossiers: DOSSIERS_DU_CONTACT } },
+      lead: { select: { prenom: true, nom: true, dossiers: DOSSIERS_DU_CONTACT } },
       _count: { select: { pieces: true } },
     },
   });
@@ -77,7 +96,7 @@ function chargerMessages(depuis: Date) {
 
 const PRIORITE_CLASSE: Record<string, number> = { CLIENT: 4, ADMINISTRATIF: 3, HUMAIN: 2, BRUIT: 1 };
 
-function ligneDuFil(fil: MessageLu[], maintenant: Date): LigneMail {
+function ligneDuFil(fil: MessageLu[], maintenant: Date, extras: Extras = { propositions: new Map(), brouillons: new Set() }): LigneMail {
   const dernier = fil[fil.length - 1];
   const entrants = fil.filter((m) => m.sens === "ENTRANT");
   const sortants = fil.filter((m) => m.sens === "SORTANT" && !m.automatique);
@@ -99,10 +118,30 @@ function ligneDuFil(fil: MessageLu[], maintenant: Date): LigneMail {
   const joursSansReponse = dernierSortant && (!dernierEntrant || dernierEntrant.recuLe < dernierSortant.recuLe) ? Math.floor((maintenant.getTime() - dernierSortant.recuLe.getTime()) / JOUR) : 0;
   const sansReponse = humain && joursSansReponse >= JOURS_SANS_REPONSE;
   const administratifNonLu = classe === "ADMINISTRATIF" && nonLu;
-  const aTraiter = !range && !traite && (attendReponse || sansReponse || administratifNonLu);
+  // Mission 9 : remis à plus tard → hors d'« À traiter » jusqu'à la date, puis « Revenu » en tête.
+  const snoozes = fil.map((m) => m.snoozeJusqua).filter((d): d is Date => d instanceof Date);
+  const snoozeJusqua = snoozes.length ? new Date(Math.max(...snoozes.map((d) => d.getTime()))) : null;
+  const enAttente = snoozeJusqua !== null && snoozeJusqua > maintenant;
+  const revenu = snoozeJusqua !== null && snoozeJusqua <= maintenant && !traite && !range;
+  const aTraiter = (!range && !traite && (attendReponse || sansReponse || administratifNonLu) && !enAttente) || revenu;
+  const reference = dernierEntrant ?? dernier;
+  const dates = lireDatesExtraites(reference.datesExtraites);
+  const dossiersContact = [...(avecContact?.client?.dossiers ?? []), ...(avecContact?.lead?.dossiers ?? [])];
+  const devis = dossiersContact.filter((d) => d.etape === "DEVIS_ENVOYE" || d.etape === "RELANCE").flatMap((d) => d.documents.map((x) => x.totalHt));
+  const priorite = prioriteDe({
+    revenu,
+    reclamation: humain && estReclamation([dernier.objet, reference.extrait, reference.intentionAttendu]),
+    devisEnAttente: devis.length ? Math.max(...devis) : null,
+    dossierActif: dossiersContact.some((d) => d.etape !== "PERDU" && d.etape !== "ENCAISSE"),
+    lead: contact?.type === "LEAD" || fil.some((m) => m.categorie === "NOUVELLE_DEMANDE"),
+    administratifEcheance: classe === "ADMINISTRATIF" && dates.some((d) => d.nature === "ECHEANCE"),
+  });
+  const cleFil = dernier.filCanal ?? dernier.id;
   const mention = !aTraiter
     ? null
-    : sansReponse
+    : revenu
+      ? "Revenu"
+      : sansReponse
       ? `Sans réponse depuis ${joursSansReponse} jours`
       : dernierEntrant && fil.some((m) => m.categorie === "NOUVELLE_DEMANDE")
         ? "Nouvelle demande"
@@ -129,7 +168,37 @@ function ligneDuFil(fil: MessageLu[], maintenant: Date): LigneMail {
     traite,
     aTraiter,
     automatique: fil.every((m) => m.automatique),
+    intention: reference.intention,
+    attendu: reference.intentionAttendu,
+    priorite,
+    snoozeJusqua: snoozeJusqua?.toISOString() ?? null,
+    revenu,
+    propositionsEnAttente: extras.propositions.get(cleFil) ?? 0,
+    brouillonPret: extras.brouillons.has(cleFil),
+    dates: dates.length,
   };
+}
+
+/** Cartes en attente et brouillons déposés par l'assistant, par fil (mission 9). */
+async function extrasDesFils(messages: MessageLu[]): Promise<Extras> {
+  const filDe = new Map(messages.map((m) => [m.id, m.filCanal ?? m.id]));
+  const ids = [...filDe.keys()];
+  const propositions = new Map<string, number>();
+  const brouillons = new Set<string>();
+  if (ids.length === 0) return { propositions, brouillons };
+  const [cartes, deposes] = await Promise.all([
+    prisma.proposition.findMany({ where: { statut: "EN_ATTENTE", type: TYPE_MAJ_DEPUIS_MAIL, messageId: { in: ids } }, select: { messageId: true } }),
+    prisma.brouillonMail.findMany({ where: { statut: "BROUILLON", source: "ASSISTANT", messageId: { in: ids } }, select: { messageId: true } }),
+  ]);
+  for (const c of cartes) {
+    const fil = filDe.get(c.messageId ?? "");
+    if (fil) propositions.set(fil, (propositions.get(fil) ?? 0) + 1);
+  }
+  for (const b of deposes) {
+    const fil = filDe.get(b.messageId ?? "");
+    if (fil) brouillons.add(fil);
+  }
+  return { propositions, brouillons };
 }
 
 /** Toutes les conversations récentes, calculées une fois. */
@@ -140,13 +209,15 @@ export async function conversations(maintenant: Date = new Date()): Promise<Lign
     const cle = m.filCanal ?? m.id;
     fils.set(cle, [...(fils.get(cle) ?? []), m]);
   }
-  return [...fils.values()].map((fil) => ligneDuFil(fil, maintenant)).sort((a, b) => b.recuLe.localeCompare(a.recuLe));
+  const extras = await extrasDesFils(messages);
+  return [...fils.values()].map((fil) => ligneDuFil(fil, maintenant, extras)).sort((a, b) => b.recuLe.localeCompare(a.recuLe));
 }
 
 export function filtrerVue(lignes: LigneMail[], vue: VueMail): LigneMail[] {
   switch (vue) {
     case "A_TRAITER":
-      return lignes.filter((l) => l.aTraiter);
+      // Par valeur (mission 9) : revenus, réclamations, devis en attente par montant, dossiers, leads, échéances, le reste.
+      return lignes.filter((l) => l.aTraiter).sort(comparerPriorite);
     case "CLIENTS":
       return lignes.filter((l) => !l.range && l.classe === "CLIENT");
     case "ADMINISTRATIF":

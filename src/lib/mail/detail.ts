@@ -3,7 +3,13 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { etatIa } from "@/lib/ia/modele";
 import { lireListe } from "@/lib/messages/stockage";
 import { objetSansPrefixes, retirerCitations } from "@/lib/messages/texte";
+import { chronologieDuContact, type EntreeChronologie } from "@/lib/chronologie/chronologie";
+import { vueProposition } from "@/lib/validation/service";
+import type { PropositionVue } from "@/lib/validation/types";
 import { contexteDuMail, type ContexteClient } from "./contexte";
+import { lireDatesExtraites, type DateExtraite } from "./priorite";
+import { TYPE_MAJ_DEPUIS_MAIL } from "./propositions-maj";
+import { resumeDuFil, type ResumeVue } from "./v2";
 
 /**
  * Un mail ouvert dans l'onglet Mail (mission 7) : toute la conversation, les
@@ -42,9 +48,19 @@ export type DetailMail = {
   /** Le mail à qui répondre (dernier reçu du fil). */
   enReponseA: string | null;
   lienGmail: string | null;
-  brouillons: { id: string; createdAt: string; statut: string; objet: string | null; texte: string | null; consigne: string | null; manques: string[]; corrections: string[]; coutEuros: number | null }[];
+  brouillons: { id: string; createdAt: string; statut: string; source: string; objet: string | null; texte: string | null; consigne: string | null; manques: string[]; corrections: string[]; coutEuros: number | null }[];
   envois: { id: string; statut: string; nature: string; objet: string; a: string; envoyeLe: string | null; erreur: string | null }[];
   ia: { active: boolean; raison: string | null };
+  /** Mission 9 : ce que Claude a écrit, ce qui attend Lucas. */
+  intention: string | null;
+  attendu: string | null;
+  intentionPar: string | null;
+  intentionLe: string | null;
+  datesExtraites: DateExtraite[];
+  snoozeJusqua: string | null;
+  resume: ResumeVue | null;
+  propositions: PropositionVue[];
+  chronologie: EntreeChronologie[];
 };
 
 const lireJson = (json: string | null): string[] => {
@@ -68,12 +84,16 @@ export async function detailMail(messageId: string): Promise<DetailMail> {
   const entrants = fil.filter((m) => m.sens === "ENTRANT");
   const dernierEntrant = entrants.at(-1) ?? null;
   const ids = fil.map((m) => m.id);
-  const [contexte, brouillons, envois, ia] = await Promise.all([
+  const [contexte, brouillons, envois, ia, resume, cartes] = await Promise.all([
     contexteDuMail(dernier.id),
     prisma.brouillonMail.findMany({ where: { messageId: { in: ids } }, orderBy: { createdAt: "desc" }, take: 5 }),
     prisma.envoiMail.findMany({ where: { OR: [{ enReponseA: { in: ids } }, { messageId: { in: ids } }] }, orderBy: { createdAt: "desc" }, take: 10 }),
     etatIa(new Date(), "IA_REDACTION"),
+    resumeDuFil(dernier.canal, dernier.filCanal ?? dernier.id, fil.length),
+    prisma.proposition.findMany({ where: { statut: "EN_ATTENTE", type: TYPE_MAJ_DEPUIS_MAIL, messageId: { in: ids } }, orderBy: { createdAt: "asc" } }),
   ]);
+  const reference = dernierEntrant ?? dernier;
+  const chronologie = contexte || dernier.dossierId ? (await chronologieDuContact({ clientId: contexte?.contact.clientId ?? null, leadId: contexte?.contact.leadId ?? null, dossierId: dernier.dossierId }, { limite: 30 })).entrees : [];
   const autre = dernierEntrant ? { adresse: dernierEntrant.de, nom: dernierEntrant.deNom } : { adresse: lireListe(dernier.a)[0] ?? "", nom: contexte?.contact.nom ?? null };
   return {
     messageId: dernier.id,
@@ -102,9 +122,18 @@ export async function detailMail(messageId: string): Promise<DetailMail> {
     contexte,
     enReponseA: dernierEntrant?.id ?? null,
     lienGmail: dernier.filCanal ? `https://mail.google.com/mail/u/0/#all/${dernier.filCanal}` : null,
-    brouillons: brouillons.map((b) => ({ id: b.id, createdAt: b.createdAt.toISOString(), statut: b.statut, objet: b.objetIa, texte: b.texteIa, consigne: b.consigne, manques: lireJson(b.manques), corrections: lireJson(b.corrections), coutEuros: b.coutEuros })),
+    brouillons: brouillons.map((b) => ({ id: b.id, createdAt: b.createdAt.toISOString(), statut: b.statut, source: b.source, objet: b.objetIa, texte: b.texteIa, consigne: b.consigne, manques: lireJson(b.manques), corrections: lireJson(b.corrections), coutEuros: b.coutEuros })),
     envois: envois.map((e) => ({ id: e.id, statut: e.statut, nature: e.nature, objet: e.objet, a: e.a, envoyeLe: e.envoyeLe?.toISOString() ?? null, erreur: e.statut === "ECHEC" ? e.erreur : null })),
     ia: { active: ia.active, raison: ia.raison },
+    intention: reference.intention,
+    attendu: reference.intentionAttendu,
+    intentionPar: reference.intentionPar,
+    intentionLe: reference.intentionLe?.toISOString() ?? null,
+    datesExtraites: lireDatesExtraites(reference.datesExtraites),
+    snoozeJusqua: fil.map((m) => m.snoozeJusqua).filter((d): d is Date => d instanceof Date).sort((a, b) => b.getTime() - a.getTime())[0]?.toISOString() ?? null,
+    resume,
+    propositions: cartes.map(vueProposition),
+    chronologie,
   };
 }
 

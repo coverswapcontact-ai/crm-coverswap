@@ -47,6 +47,7 @@ import { GenerateurDocument } from "./GenerateurDocument";
 import { DepensesDossier } from "./DepensesDossier";
 import { PaiementsDossier } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
+import { Chronologie } from "@/components/pilotage/Chronologie";
 import { TimelineEtapes } from "./TimelineEtapes";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Bouton, CLASSE_SAISIE, PastilleEtape, TRANS, TitreSection } from "./ui";
@@ -282,6 +283,7 @@ function ContenuPanneau({
             onMisAJour={onMisAJour}
           />
           <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
+          <Chronologie cible={{ dossier: detail.id, client: detail.client?.id ?? null }} titre="Chronologie du client" compact />
           {onArchive ? <ArchivageDossier detail={detail} onArchive={onArchive} /> : null}
         </div>
       </div>

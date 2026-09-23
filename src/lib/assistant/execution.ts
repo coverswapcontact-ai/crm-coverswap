@@ -102,7 +102,7 @@ export async function executerOutil<E extends Record<string, unknown>>(definitio
 
   try {
     const masse = definition.masse?.(entree) ?? 0;
-    const sensible = definition.niveau === "SENSIBLE" || masse > SEUIL_MASSE || Boolean(definition.sensible?.(entree));
+    const sensible = definition.niveau === "SENSIBLE" || masse > SEUIL_MASSE || Boolean(await definition.sensible?.(entree));
     if (sensible && !confirmation) {
       const apercu = definition.apercu ? await definition.apercu(entree, contexte) : `Je vais exécuter « ${definition.titre} » avec ces paramètres : ${JSON.stringify(entree)}.`;
       const jeton = randomBytes(9).toString("base64url");

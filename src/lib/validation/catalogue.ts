@@ -5,6 +5,7 @@ import {
 } from "@/lib/dossiers/propositions";
 import { propositionFusionClients } from "@/lib/clients/fusion";
 import { propositionEnvoiMail } from "@/lib/mail/propositions";
+import { propositionMajDepuisMail, propositionRegleTri } from "@/lib/mail/propositions-maj";
 import {
   propositionArchiverMessage,
   propositionClasserMessage,
@@ -26,6 +27,8 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionChangementEtape,
   propositionFusionClients,
   propositionEnvoiMail,
+  propositionMajDepuisMail,
+  propositionRegleTri,
   propositionEnvoiSms,
   propositionRattacherMessage,
   propositionNouvelleDemande,

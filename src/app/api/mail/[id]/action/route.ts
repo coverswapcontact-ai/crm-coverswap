@@ -2,11 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { archiverFil, classerALaMain, marquerLu, nePlusMontrer, remonter } from "@/lib/mail/boite";
+import { derangerMail, rangerMail } from "@/lib/mail/v2";
 
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  action: z.enum(["LU", "NON_LU", "ARCHIVER", "DESARCHIVER", "REMONTER", "NE_PLUS_MONTRER", "CLASSER"], "Geste inconnu."),
+  action: z.enum(["LU", "NON_LU", "ARCHIVER", "DESARCHIVER", "REMONTER", "NE_PLUS_MONTRER", "CLASSER", "RANGER", "DERANGER"], "Geste inconnu."),
   classe: z.enum(["ADMINISTRATIF", "HUMAIN", "CLIENT"]).optional(),
   pourLExpediteur: z.boolean().optional(),
 });
@@ -33,6 +34,10 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
       case "CLASSER":
         await classerALaMain(id, classe ?? "HUMAIN", pourLExpediteur === true);
         return NextResponse.json({ ok: true });
+      case "RANGER":
+        return NextResponse.json(await rangerMail(id));
+      case "DERANGER":
+        return NextResponse.json(await derangerMail(id));
     }
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/mail/[id]/action");

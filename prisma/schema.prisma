@@ -1073,6 +1073,15 @@ model Message {
   reponduLe        DateTime? // une réponse de la boîte est partie plus tard dans le même fil
   remonteLe        DateTime? // remonté à la main après un rangement : son expéditeur n'est plus jamais rangé
   automatique      Boolean          @default(false) // envoyé par le CRM sans clic (notification de l'espace)
+  // Mission 9 (23/09/2026) : ce que Claude (par le MCP) écrit sur un mail, et que Lucas corrige. Le CRM ne lit rien seul.
+  intention        String? // REPONSE | ACTION | INFORMATION ; null = non classé
+  intentionAttendu String? // « ce qui est attendu » : « Il demande le délai de pose », « Facture à régler avant le 30 »
+  intentionPar     String? // acteur qui a classé (ASSISTANT:claude, HUMAIN:…)
+  intentionLe      DateTime?
+  datesExtraites   String           @default("[]") // JSON [{ date, heure?, nature: DISPONIBILITE | ECHEANCE, passage }]
+  snoozeJusqua     DateTime? // remis à plus tard : hors d'« À traiter » jusque-là, puis « Revenu » en tête
+  snoozeLe         DateTime?
+  snoozePar        String?
   contenu          ContenuMessage?
   pieces           PieceMessage[]
   analyses         AnalyseMessage[]
@@ -1088,6 +1097,23 @@ model Message {
   @@index([dossierId])
   @@index([filCanal])
   @@index([de])
+  @@index([snoozeJusqua])
+}
+
+// Mission 9 : le résumé d'un fil (3 lignes) et ses points en suspens, écrits par Claude, corrigés par Lucas.
+model ResumeFil {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  canal           String
+  filCanal        String
+  resume          String
+  pointsEnSuspens String   @default("[]") // JSON [{ texte, date? }] : question sans réponse, engagement pris
+  messages        Int      @default(0) // nombre de messages du fil au moment du résumé
+  par             String? // acteur
+  ecriture        String?
+
+  @@unique([canal, filCanal])
 }
 
 // Contenu reçu, écrit une fois (hors journal : le journal en dupliquerait chaque
@@ -1635,6 +1661,7 @@ model BrouillonMail {
   leadId      String?
   a           String?
   consigne    String?
+  source      String    @default("IA_CRM") // IA_CRM (modèle appelé par le CRM) | ASSISTANT (déposé par Claude via le MCP, mission 9)
   objetIa     String?
   texteIa     String?
   manques     String    @default("[]") // JSON : ce que l'IA n'a pas trouvé dans le CRM ([à compléter])

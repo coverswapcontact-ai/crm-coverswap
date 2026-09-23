@@ -12,6 +12,7 @@ import type { ContexteClient as Contexte } from "@/lib/mail/contexte";
 import type { DetailMail } from "@/lib/mail/detail";
 import { cn } from "@/lib/utils";
 import { ContexteClient } from "./ContexteClient";
+import { BlocIntention, BlocResume, BoutonSnooze, BrouillonsDeposes, CartesPropositions, DatesExtraites, type BrouillonRepris } from "./MailV2";
 
 const LIBELLES_CLASSE: Record<string, string> = { CLIENT: "Client", ADMINISTRATIF: "Administratif", HUMAIN: "À lire", BRUIT: "Rangé" };
 
@@ -30,6 +31,7 @@ function Redaction({
   cible,
   ia,
   consigneInitiale = null,
+  brouillonInitial = null,
   onEnvoye,
 }: {
   destinataire: string;
@@ -39,16 +41,20 @@ function Redaction({
   ia: { active: boolean; raison: string | null };
   /** Consigne proposée par l'écran d'origine (appel sans réponse…) : l'IA n'écrit qu'au clic. */
   consigneInitiale?: string | null;
+  /** Mission 9 : un brouillon déposé par Claude, repris dans la réponse (envoyé avec son identifiant). */
+  brouillonInitial?: BrouillonRepris | null;
   onEnvoye: () => void;
 }) {
-  const [a, setA] = useState(destinataire);
-  const [objet, setObjet] = useState(objetInitial);
-  const [texte, setTexte] = useState("");
+  const [a, setA] = useState(brouillonInitial?.a || destinataire);
+  const [objet, setObjet] = useState(brouillonInitial?.objet || objetInitial);
+  const [texte, setTexte] = useState(brouillonInitial?.texte ?? "");
   const [consigne, setConsigne] = useState(consigneInitiale ?? "");
   const [avecIa, setAvecIa] = useState(Boolean(consigneInitiale) && ia.active);
   const [redaction, setRedaction] = useState(false);
   const [envoi, setEnvoi] = useState(false);
-  const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
+  const [brouillon, setBrouillon] = useState<Brouillon | null>(brouillonInitial ? { id: brouillonInitial.id, a: brouillonInitial.a, objet: brouillonInitial.objet, texte: brouillonInitial.texte, manques: [], corrections: [], coutEuros: 0, enReponseA, dossierId: null } : null);
+  // IA du CRM en pause (IA_CRM_ACTIVE) : c'est Claude, par le MCP, qui rédige et dépose.
+  const viaAssistant = !ia.active && Boolean(ia.raison?.startsWith("via l'assistant"));
   const aCompleter = texte.includes("[à compléter]");
 
   async function rediger() {
@@ -109,10 +115,10 @@ function Redaction({
         </div>
       ) : (
         <Bouton variante="secondaire" onClick={() => setAvecIa(true)} disabled={!ia.active} title={ia.raison ?? undefined} icone={<Sparkles size={14} aria-hidden />}>
-          Rédiger avec l&apos;IA
+          {viaAssistant ? "Rédiger : via l'assistant Claude" : "Rédiger avec l'IA"}
         </Bouton>
       )}
-      {!ia.active && ia.raison ? <p className="text-[12px] text-[#8B919C]">IA indisponible : {ia.raison}</p> : null}
+      {viaAssistant ? <p className="text-[12px] text-[#8B919C]">Dites-le à Claude (« réponds à … que … ») : il dépose le brouillon ici, vous l&apos;envoyez.</p> : !ia.active && ia.raison ? <p className="text-[12px] text-[#8B919C]">IA indisponible : {ia.raison}</p> : null}
 
       <textarea value={texte} onChange={(e) => setTexte(e.target.value)} rows={10} className={cn(CLASSE_SAISIE, "min-h-[220px] resize-y py-2.5 leading-relaxed")} aria-label="Votre message" placeholder="Votre message…" />
 
@@ -232,6 +238,7 @@ export function PanneauMail({
   const [contexteNouveau, setContexteNouveau] = useState<Contexte | null>(null);
   const [volet, setVolet] = useState(false);
   const [occupe, setOccupe] = useState(false);
+  const [reprise, setReprise] = useState<BrouillonRepris | null>(null);
   useRetourFerme(ouvert, onFermer);
   // Le volet du client (téléphone) se ferme seul au geste retour, avant le mail.
   useRetourFerme(ouvert && volet, () => setVolet(false));
@@ -256,6 +263,7 @@ export function PanneauMail({
   useEffect(() => {
     setDetail(null);
     setVolet(false);
+    setReprise(null);
     void charger();
   }, [charger]);
 
@@ -273,11 +281,12 @@ export function PanneauMail({
       .catch((erreur) => toast.error(messageErreur(erreur)));
   }, [nouveauPour]);
 
-  async function geste(action: "LU" | "NON_LU" | "ARCHIVER" | "DESARCHIVER" | "REMONTER" | "NE_PLUS_MONTRER") {
+  async function geste(action: "LU" | "NON_LU" | "ARCHIVER" | "DESARCHIVER" | "REMONTER" | "NE_PLUS_MONTRER" | "RANGER" | "DERANGER") {
     if (!detail) return;
     setOccupe(true);
     try {
       await envoyerJson(`/api/mail/${detail.messageId}/action`, "POST", { action });
+      if (action === "RANGER") toast.success("Rangé", { description: "Lu, sous le libellé CoverSwap/Rangé. Réversible : « Ranger » se défait ici." });
       if (action === "ARCHIVER" || action === "NE_PLUS_MONTRER") {
         toast.success(action === "ARCHIVER" ? "Archivé" : "Expéditeur masqué pour toujours");
         onFermer();
@@ -327,6 +336,23 @@ export function PanneauMail({
                     {detail.classe ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[#B4BAC4]">{LIBELLES_CLASSE[detail.classe] ?? detail.classe}</span> : null}
                     {detail.motif ? <span className="text-[#8B919C]">Pourquoi ici : {detail.motif}</span> : null}
                   </div>
+                  <BlocIntention
+                    key={`${detail.messageId}:${detail.intentionLe ?? ""}`}
+                    detail={detail}
+                    onChange={() => {
+                      void charger();
+                      onChange();
+                    }}
+                  />
+                  {detail.resume ? <BlocResume resume={detail.resume} /> : null}
+                  <CartesPropositions
+                    propositions={detail.propositions}
+                    onChange={() => {
+                      void charger();
+                      onChange();
+                    }}
+                  />
+                  <DatesExtraites messageId={detail.messageId} dates={detail.datesExtraites} onChange={() => void charger()} />
                   <div className="flex flex-wrap gap-1">
                     {detail.range ? (
                       <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />}>
@@ -340,6 +366,19 @@ export function PanneauMail({
                         <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste(detail.nonLu ? "LU" : "NON_LU")} icone={detail.nonLu ? <MailOpen size={14} aria-hidden /> : <Mail size={14} aria-hidden />}>
                           {detail.nonLu ? "Lu" : "Non lu"}
                         </Bouton>
+                        <BoutonSnooze
+                          messageId={detail.messageId}
+                          snoozeJusqua={detail.snoozeJusqua}
+                          onChange={() => {
+                            void charger();
+                            onChange();
+                          }}
+                        />
+                        {detail.fil.some((m) => m.sens === "ENTRANT") ? (
+                          <Bouton taille="sm" variante="fantome" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("RANGER")} icone={<Archive size={14} aria-hidden />}>
+                            Ranger
+                          </Bouton>
+                        ) : null}
                         {detail.contexte?.contact.type !== "CLIENT" && detail.fil.some((m) => m.sens === "ENTRANT") ? (
                           <Bouton taille="sm" variante="fantome" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />}>
                             Ne plus me montrer cet expéditeur
@@ -406,13 +445,16 @@ export function PanneauMail({
                     </ul>
                   ) : null}
 
+                  <BrouillonsDeposes brouillons={detail.brouillons} onReprendre={(b) => setReprise(b)} />
+
                   <Redaction
-                    key={detail.messageId}
+                    key={`${detail.messageId}:${reprise?.id ?? ""}`}
                     destinataire={detail.fil.some((m) => m.sens === "ENTRANT") ? detail.correspondant.adresse : (detail.fil.at(-1)?.a[0] ?? "")}
                     objetInitial={`Re: ${detail.objet}`}
                     enReponseA={detail.enReponseA}
                     cible={{ messageId: detail.messageId }}
                     ia={detail.ia}
+                    brouillonInitial={reprise}
                     onEnvoye={() => {
                       void charger();
                       onChange();

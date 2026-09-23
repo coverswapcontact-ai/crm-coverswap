@@ -94,10 +94,15 @@ async function charger(id: string): Promise<Proposition> {
   return proposition;
 }
 
-/** Seule une personne décide : un agent, un script ou une tâche ne valide ni ne rejette jamais. */
+/**
+ * Seule une personne décide : un agent, un script ou une tâche ne valide ni ne
+ * rejette jamais. L'assistant Claude (mission 9) décide au nom de Lucas, sur
+ * sa phrase dictée, journalisée ; ce qui est sensible lui est confirmé avant.
+ */
 async function decideur(): Promise<string> {
   const { acteur } = await resoudreContexte();
-  if (typeActeur(acteur) !== "HUMAIN") {
+  const type = typeActeur(acteur);
+  if (type !== "HUMAIN" && type !== "ASSISTANT") {
     throw new ErreurMetier("Seule une personne connectée peut décider d'une proposition.", 403);
   }
   return acteur;

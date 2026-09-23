@@ -54,6 +54,7 @@ import { cn } from "@/lib/utils";
 import { PastilleEtape } from "../../dossiers/_components/ui";
 import { ChoixRecommandeur, type Recommandeur } from "./ChoixRecommandeur";
 import { AnonymisationClient } from "./AnonymisationClient";
+import { Chronologie } from "@/components/pilotage/Chronologie";
 import { MessagesClient } from "./MessagesClient";
 import { EspaceClientFiche } from "./EspaceClientFiche";
 import { RechercheAnnuaire } from "./RechercheAnnuaire";
@@ -884,6 +885,8 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               </ul>
             </Carte>
           ) : null}
+
+          <Chronologie cible={{ client: client.id }} titre="Chronologie" compact />
 
           <MessagesClient clientId={client.id} />
 

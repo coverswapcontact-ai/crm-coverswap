@@ -7,6 +7,7 @@ import { ISSUES_APPEL } from "@/lib/commercial/constantes";
 import { creerNoteAppel } from "@/lib/commercial/notes-appel";
 import { ETIQUETTES_APPEL } from "@/lib/commercial/notes-constantes";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { etatIa } from "@/lib/ia/modele";
 import { CATEGORIES_DEPENSE, MOYENS_DEPENSE } from "@/lib/depenses/constantes";
 import { creerDepense } from "@/lib/depenses/service";
 import { archiverDossier, restaurerDossier } from "@/lib/dossiers/archivage";
@@ -29,7 +30,8 @@ import { appliquerActionLeads } from "@/lib/prospects/menage";
 import { MOTIFS_ARCHIVAGE } from "@/lib/prospects/menage-constantes";
 import { changerStatutSimulation, listerSimulationsDossier, publierSimulations } from "@/lib/simulations/dossier";
 import { validerProposition } from "@/lib/validation/service";
-import { creerEvenementAgenda, lireDateDictee } from "../agenda";
+import { planifierAction } from "@/lib/agenda/planification";
+import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
 import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture";
 
@@ -167,23 +169,11 @@ export const outilPlanifier = definirOutil({
     if (r.ambigu) return r.ambigu;
     const debut = lireDateDictee(e.quand, contexte.maintenant);
     if (!debut) throw new ErreurMetier(`Je n'ai pas compris « ${e.quand} » : donne un jour et une heure.`, 400);
-    const fin = new Date(debut.getTime() + (e.duree_minutes ?? 30) * 60_000);
-    if (r.ids.dossierId) await modifierDossier(r.ids.dossierId, { prochaineAction: e.action.slice(0, 120), prochaineActionDate: jourParis(debut) } as Parameters<typeof modifierDossier>[1]);
-    else if (r.ids.leadId) await modifierEntrant(r.ids.leadId, { rappelLe: debut.toISOString() } as Parameters<typeof modifierEntrant>[1]);
-    else throw new ErreurMetier("Ni dossier ni lead : rien où planifier.", 400);
-    let agenda: { id: string; lien: string | null } | null = null;
-    let agendaErreur: string | null = null;
-    try {
-      agenda = await creerEvenementAgenda({ titre: `${e.action} — ${r.ids.nom}`, description: `Planifié depuis l'application Claude${contexte.commande ? ` : « ${contexte.commande} »` : ""}.`, debut, fin });
-    } catch (erreur) {
-      agendaErreur = erreur instanceof Error ? erreur.message : String(erreur);
-    }
-    await noterRapidement({ ...(r.ids.dossierId ? { dossierId: r.ids.dossierId } : { leadId: r.ids.leadId ?? undefined }), contenu: `Planifié : ${e.action} le ${format.jour(debut)} à ${debut.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}${agenda ? " (inscrit dans Google Calendar)" : ""}.` }).catch(() => undefined);
-    const quand = `${format.jour(debut)} à ${debut.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}`;
+    const p = await planifierAction({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, nom: r.ids.nom, action: e.action, debut, dureeMinutes: e.duree_minutes, origine: contexte.commande ? `« ${contexte.commande} » (application Claude)` : "application Claude" });
     return {
-      texte: `Planifié : ${e.action} pour ${r.ids.nom}, ${quand}. ${agenda ? "Inscrit dans Google Calendar." : agendaErreur ? `Google Calendar a refusé (${agendaErreur}) ; l'action est dans le CRM.` : "Pas inscrit dans Google Calendar : le droit « agenda » sera demandé à la prochaine reconnexion Google (Paramètres) ; l'action est dans le CRM."}`,
-      donnees: { debut: debut.toISOString(), fin: fin.toISOString(), agenda },
-      liens: [...(agenda?.lien ? [{ libelle: "Événement Google Calendar", href: agenda.lien }] : []), r.ids.dossierId ? lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`) : lien("Lead", `/leads?lead=${r.ids.leadId}`)],
+      texte: p.texte,
+      donnees: { debut: p.debut, fin: p.fin, agenda: p.agenda },
+      liens: [...(p.agenda?.lien ? [{ libelle: "Événement Google Calendar", href: p.agenda.lien }] : []), r.ids.dossierId ? lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`) : lien("Lead", `/leads?lead=${r.ids.leadId}`)],
     };
   },
 });
@@ -518,6 +508,8 @@ export const outilRedigerMail = definirOutil({
       leadId = r.ids.leadId;
       dossierId = r.ids.dossierId;
     }
+    const ia = await etatIa(new Date(), "IA_REDACTION");
+    if (!ia.active) throw new ErreurMetier(`L'IA du CRM n'écrit pas : ${ia.raison ?? "en pause"} Rédige le brouillon toi-même et dépose-le avec « deposer_brouillon ».`, 409);
     const b = await redigerBrouillon({ messageId: e.messageId ?? null, clientId, leadId, dossierId, consigne: e.consigne ?? null });
     return { texte: `Brouillon (≈ ${b.coutEuros.toFixed(3).replace(".", ",")} €) à ${b.a ?? "(destinataire à préciser)"}, objet « ${b.objet} » :\n${b.texte}${b.manques.length ? `\n\nÀ compléter avant d'envoyer : ${b.manques.join(", ")}.` : ""}\nPour envoyer : « envoyer_mail » avec brouillonId ${b.id}${b.enReponseA ? `, en_reponse_a ${b.enReponseA}` : ""}.`, donnees: b };
   },

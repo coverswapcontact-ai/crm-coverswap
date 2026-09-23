@@ -73,6 +73,9 @@ async function fournisseurAnthropic(demande: DemandeModele): Promise<ReponseMode
   };
 }
 
+/** Ce que disent les écrans quand l'IA du CRM est en pause (IA_CRM_ACTIVE) : c'est Claude, par le MCP, qui s'en charge. */
+export const RAISON_VIA_ASSISTANT = "via l'assistant Claude (le CRM n'appelle plus de modèle : dictez-le à Claude, connecté par le MCP).";
+
 export type EtatIa = {
   active: boolean;
   /** Pourquoi l'IA ne lit pas les mails (null si active). */
@@ -102,15 +105,18 @@ type Reglages = { modele: string; prixEntree: number; prixSortie: number; budget
 
 async function lireReglages(maintenant: Date, interrupteur: InterrupteurIa = "IA_AGENT_MAIL"): Promise<{ etat: EtatIa; reglages: Reglages | null }> {
   const cles = [interrupteur, "IA_MODELE", "IA_PRIX_ENTREE", "IA_PRIX_SORTIE", "IA_BUDGET_MENSUEL"] as const satisfies readonly CleParametre[];
-  const valeurs = await lireParametres(cles, maintenant);
+  const valeurs = await lireParametres([...cles, "IA_CRM_ACTIVE"], maintenant);
   const manquants = cles.filter((cle) => valeurs[cle] === undefined);
   const cleApi = Boolean(process.env.ANTHROPIC_API_KEY);
-  const pause = valeurs[interrupteur] !== undefined && valeurs[interrupteur] !== "ACTIVE";
+  // Mission 9 : interrupteur général, en pause par défaut. Le CRM n'appelle aucun modèle : l'assistant Claude (MCP) s'en charge.
+  const crmActif = valeurs.IA_CRM_ACTIVE === "ACTIVE";
+  const pause = !crmActif || (valeurs[interrupteur] !== undefined && valeurs[interrupteur] !== "ACTIVE");
   const { depense, appels } = await consommationDuMois(maintenant);
   const budget = typeof valeurs.IA_BUDGET_MENSUEL === "number" ? valeurs.IA_BUDGET_MENSUEL : null;
 
   let raison: string | null = null;
-  if (!cleApi) raison = "Clé ANTHROPIC_API_KEY absente des variables d'environnement du serveur.";
+  if (!crmActif) raison = RAISON_VIA_ASSISTANT;
+  else if (!cleApi) raison = "Clé ANTHROPIC_API_KEY absente des variables d'environnement du serveur.";
   else if (manquants.length > 0) raison = "Réglages à renseigner dans Paramètres (modèle, prix, budget, interrupteur).";
   else if (pause) raison = interrupteur === "IA_REDACTION" ? "Rédaction par l'IA en pause (Paramètres → Agent mail et IA)." : "En pause (Paramètres → Agent mail et IA).";
   else if (budget !== null && depense >= budget) raison = `Budget du mois atteint (${depense.toFixed(2).replace(".", ",")} € sur ${budget.toFixed(2).replace(".", ",")} €).`;

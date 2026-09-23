@@ -21,7 +21,7 @@ import { PanneauMail } from "./PanneauMail";
 type Liste = { lignes: LigneMail[]; compteurs: CompteursMail };
 
 const VUES: { vue: Exclude<VueMail, "RANGES">; libelle: string; aide: string }[] = [
-  { vue: "A_TRAITER", libelle: "À traiter", aide: "Ce qui attend une réponse ou une action de votre part." },
+  { vue: "A_TRAITER", libelle: "À traiter", aide: "Ce qui attend une réponse ou une action de votre part, par valeur : réclamations, devis en attente, dossiers, leads, échéances. Un mail remis à plus tard revient en tête, marqué « Revenu »." },
   { vue: "CLIENTS", libelle: "Clients", aide: "Tous les échanges avec un client, un lead ou un prospect connu." },
   { vue: "ADMINISTRATIF", libelle: "Administratif", aide: "URSSAF, impôts, banque, assurance, fournisseurs, partenaires." },
 ];
@@ -38,11 +38,33 @@ function quand(iso: string): string {
 
 function Mention({ ligne }: { ligne: LigneMail }) {
   if (!ligne.mention) return null;
-  const ton = ligne.mention.startsWith("Sans réponse") ? "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]" : ligne.mention === "Nouvelle demande" ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]";
+  const ton = ligne.mention.startsWith("Sans réponse") ? "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]" : ligne.mention === "Nouvelle demande" || ligne.mention === "Revenu" ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]";
   return <span className={cn("inline-flex items-center rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)}>{ligne.mention}</span>;
 }
 
-function LigneConversation({ ligne, occupe, onOuvrir, onGeste }: { ligne: LigneMail; occupe: boolean; onOuvrir: () => void; onGeste: (geste: "LU" | "NON_LU" | "ARCHIVER" | "DESARCHIVER" | "REMONTER" | "NE_PLUS_MONTRER") => void }) {
+const PILL = "inline-flex items-center rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap";
+const LIBELLE_INTENTION: Record<string, string> = { REPONSE: "Réponse attendue", ACTION: "Action", INFORMATION: "Info" };
+
+/** Mission 9 : la priorité (CRM), l'intention (Claude), les cartes et le brouillon prêts. */
+function MarquesV2({ ligne, vue }: { ligne: LigneMail; vue: VueMail }) {
+  const priorite = vue === "A_TRAITER" && ligne.priorite.rang >= 1 && ligne.priorite.rang <= 5;
+  return (
+    <>
+      {priorite ? (
+        <span className={cn(PILL, ligne.priorite.rang === 1 ? "border-[#EF4444]/40 bg-[#EF4444]/10 text-[#F87171]" : "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]")}>
+          {ligne.priorite.libelle}
+          {ligne.priorite.montant !== null ? ` · ${Math.round(ligne.priorite.montant).toLocaleString("fr-FR")} €` : ""}
+        </span>
+      ) : null}
+      {ligne.intention ? <span className={cn(PILL, ligne.intention === "REPONSE" ? "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]" : ligne.intention === "ACTION" ? "border-[#60A5FA]/40 bg-[#60A5FA]/10 text-[#93C5FD]" : "border-[#2A2D34] bg-[#1C1F25] text-[#8B919C]")}>{LIBELLE_INTENTION[ligne.intention] ?? ligne.intention}</span> : null}
+      {ligne.propositionsEnAttente > 0 ? <span className={cn(PILL, "border-[#F472B6]/40 bg-[#F472B6]/10 text-[#F9A8D4]")}>{ligne.propositionsEnAttente} carte{ligne.propositionsEnAttente > 1 ? "s" : ""} à valider</span> : null}
+      {ligne.brouillonPret ? <span className={cn(PILL, "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]")}>Brouillon prêt</span> : null}
+      {ligne.snoozeJusqua && !ligne.revenu ? <span className={cn(PILL, "border-[#2A2D34] bg-[#1C1F25] text-[#8B919C]")}>Remis au {new Date(ligne.snoozeJusqua).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span> : null}
+    </>
+  );
+}
+
+function LigneConversation({ ligne, vue, occupe, onOuvrir, onGeste }: { ligne: LigneMail; vue: VueMail; occupe: boolean; onOuvrir: () => void; onGeste: (geste: "LU" | "NON_LU" | "ARCHIVER" | "DESARCHIVER" | "REMONTER" | "NE_PLUS_MONTRER") => void }) {
   const [plus, setPlus] = useState(false);
   const nom = ligne.correspondant.nom || ligne.correspondant.adresse;
   return (
@@ -60,11 +82,13 @@ function LigneConversation({ ligne, occupe, onOuvrir, onGeste }: { ligne: LigneM
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           <Mention ligne={ligne} />
+          <MarquesV2 ligne={ligne} vue={vue} />
           {ligne.contact ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#9CA3AF]">{ligne.contact.type === "CLIENT" ? "Client" : "Lead"} · {ligne.contact.nom}</span> : null}
           {ligne.automatique ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#8B919C]">Automatique</span> : null}
         </span>
         <span className={cn("mt-1.5 block truncate text-[13.5px]", ligne.nonLu ? "text-[#E5E7EB]" : "text-[#B4BAC4]")}>{ligne.objet || "(sans objet)"}</span>
-        {ligne.extrait ? <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-[#8B919C]">{ligne.extrait}</span> : null}
+        {ligne.attendu ? <span className="mt-0.5 block text-[12.5px] leading-snug text-[#D1D5DB]">→ {ligne.attendu}</span> : null}
+        {ligne.extrait && !ligne.attendu ? <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-[#8B919C]">{ligne.extrait}</span> : null}
         {ligne.range && ligne.motif ? <span className="mt-1 block text-[12px] text-[#6B7280]">Rangé : {ligne.motif}</span> : null}
       </button>
       {/* Les gestes, au pouce : sans ouvrir le mail. */}
@@ -241,7 +265,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
       ) : (
         <ul className="space-y-2">
           {liste.lignes.map((ligne) => (
-            <LigneConversation key={ligne.fil} ligne={ligne} occupe={occupe === ligne.messageId} onOuvrir={() => setOuvert(ligne.messageId)} onGeste={(action) => void geste(ligne, action)} />
+            <LigneConversation key={ligne.fil} ligne={ligne} vue={vue} occupe={occupe === ligne.messageId} onOuvrir={() => setOuvert(ligne.messageId)} onGeste={(action) => void geste(ligne, action)} />
           ))}
         </ul>
       )}

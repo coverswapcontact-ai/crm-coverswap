@@ -6,6 +6,7 @@ import { ArrowRight, Mail, RotateCcw, Save, Undo2, WandSparkles } from "lucide-r
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Champ, CLASSE_SAISIE, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
+import type { PropositionVue } from "@/lib/validation/types";
 import type { EvenementNotifie, ModeleNotification } from "@/lib/mail/notifications";
 import type { GuideStyle } from "@/lib/mail/redaction";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,7 @@ const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
 type Modele = ModeleNotification & { evenement: EvenementNotifie; libelle: string };
 type Regle = { id: string; cible: string; action: string; motif: string | null; createdAt: string };
-type Reglages = { guide: GuideStyle; modeles: Modele[]; regles: Regle[] };
+type Reglages = { guide: GuideStyle; modeles: Modele[]; regles: Regle[]; proposees: PropositionVue[] };
 
 const ACTIONS_REGLE: Record<string, { libelle: string; ton: "neutre" | "vert" | "bleu" }> = {
   RANGER: { libelle: "Toujours rangé", ton: "neutre" },
@@ -67,7 +68,7 @@ export default function ReglagesMail() {
         {reglages.modeles.map((modele) => (
           <CarteModele key={modele.evenement} modele={modele} onMaj={setReglages} />
         ))}
-        <CarteRegles regles={reglages.regles} onMaj={setReglages} />
+        <CarteRegles regles={reglages.regles} proposees={reglages.proposees ?? []} onMaj={setReglages} />
       </div>
     </section>
   );
@@ -202,10 +203,38 @@ function CarteModele({ modele, onMaj }: { modele: Modele; onMaj: (r: Reglages) =
   );
 }
 
-function CarteRegles({ regles, onMaj }: { regles: Regle[]; onMaj: (r: Reglages) => void }) {
+function CarteRegles({ regles, proposees, onMaj }: { regles: Regle[]; proposees: PropositionVue[]; onMaj: (r: Reglages) => void }) {
   const [occupe, setOccupe] = useState<string | null>(null);
   const [tout, setTout] = useState(false);
+  const [cible, setCible] = useState("");
+  const [action, setAction] = useState<"RANGER" | "NE_JAMAIS_RANGER" | "ADMINISTRATIF">("RANGER");
   const visibles = tout ? regles : regles.slice(0, 8);
+
+  async function decider(p: PropositionVue, decision: "valider" | "ignorer") {
+    setOccupe(p.id);
+    try {
+      await envoyerJson(`/api/mail/propositions/${p.id}`, "POST", decision === "valider" ? { action: "valider" } : { action: "ignorer", motif: "PAS_DE_REGLE" });
+      onMaj(await appelApi<Reglages>("/api/mail/reglages"));
+      toast.success(decision === "valider" ? "Règle posée" : "Proposition écartée");
+    } catch (erreur) {
+      toast.error("Non appliqué", { description: messageErreur(erreur) });
+    } finally {
+      setOccupe(null);
+    }
+  }
+
+  async function ajouter() {
+    setOccupe("ajouter");
+    try {
+      onMaj(await envoyerJson<Reglages>("/api/mail/reglages", "PATCH", { regle: { cible: cible.trim(), action } }));
+      setCible("");
+      toast.success("Règle posée");
+    } catch (erreur) {
+      toast.error("Règle non posée", { description: messageErreur(erreur) });
+    } finally {
+      setOccupe(null);
+    }
+  }
 
   async function retirer(regle: Regle) {
     setOccupe(regle.id);
@@ -222,7 +251,38 @@ function CarteRegles({ regles, onMaj }: { regles: Regle[]; onMaj: (r: Reglages) 
   return (
     <div className={cn(CARTE, "mt-3 p-4")}>
       <p className="text-[14px] font-medium text-[#F2F3F5]">Vos décisions sur les expéditeurs</p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">« Ne plus me montrer cet expéditeur » le range pour toujours ; un mail remonté à la main ne sera plus jamais rangé. Retirer une décision rend l&apos;expéditeur au tri ordinaire.</p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">« Ne plus me montrer cet expéditeur » le range pour toujours ; un mail remonté à la main ne sera plus jamais rangé. Retirer une décision rend l&apos;expéditeur au tri ordinaire. Trois gestes identiques sur une même adresse : le CRM propose la règle ci-dessous, il ne la pose jamais seul.</p>
+      {proposees.length ? (
+        <ul className="mt-3 space-y-2">
+          {proposees.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border-[0.5px] border-[#F472B6]/35 bg-[#F472B6]/[0.06] px-3 py-2">
+              <span className="min-w-0">
+                <span className="block text-[13px] text-[#F2F3F5]">{p.titre}</span>
+                {p.resume ? <span className="block text-[11.5px] text-[#8B919C]">{p.resume}</span> : null}
+              </span>
+              <span className="flex gap-1">
+                <Bouton taille="sm" variante="primaire" chargement={occupe === p.id} onClick={() => void decider(p, "valider")}>
+                  Valider
+                </Bouton>
+                <Bouton taille="sm" variante="fantome" disabled={occupe === p.id} onClick={() => void decider(p, "ignorer")}>
+                  Ignorer
+                </Bouton>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input value={cible} onChange={(e) => setCible(e.target.value)} placeholder="adresse@exemple.fr ou @exemple.fr" className={cn(CLASSE_SAISIE, "min-w-[200px] flex-1")} aria-label="Adresse ou domaine" />
+        <select value={action} onChange={(e) => setAction(e.target.value as typeof action)} className={cn(CLASSE_SAISIE, "w-auto")} aria-label="Décision">
+          <option value="RANGER">Toujours ranger</option>
+          <option value="ADMINISTRATIF">Toujours en administratif</option>
+          <option value="NE_JAMAIS_RANGER">Ne jamais ranger</option>
+        </select>
+        <Bouton taille="sm" variante="secondaire" chargement={occupe === "ajouter"} disabled={!cible.includes("@")} onClick={() => void ajouter()}>
+          Ajouter la règle
+        </Bouton>
+      </div>
       {regles.length === 0 ? (
         <p className="mt-3 text-[12.5px] text-[#6B7280]">Aucune décision pour l&apos;instant.</p>
       ) : (

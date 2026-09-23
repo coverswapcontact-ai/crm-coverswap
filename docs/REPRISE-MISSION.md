@@ -624,3 +624,79 @@ avec le web ; chaque domaine répondu par un « manager » d'analyse en un appel
   clé Anthropic et jeton Meta toujours invalides sur Railway ; ajuster les consignes (capacité, plancher de réserve,
   protocole de campagne) et poser les paramètres de campagne (Paramètres → Campagne publicitaire) et les dépenses
   « Publicité » pour que le manager marketing ait une dépense réelle.
+
+# Mission 9 (23/09/2026) — Mail v2 : le mail piloté depuis l'assistant Claude (MCP)
+
+Énoncé complet : mémoire privée `project_mission9_mail_v2_mcp` (message de Lucas « Mission autonome — Mail v2 : le
+mail piloté depuis l'assistant Claude (MCP) »). Mêmes règles permanentes. PRINCIPE : aucune clé API Anthropic ; le
+CRM stocke, structure, affiche, expose des outils ; Claude (app, abonnement de Lucas) lit, réfléchit, écrit par le
+MCP ; Lucas valide. Le CRM garde seul : rangement du bruit par règles, notifications de l'espace, relances sans
+réponse. L'ancien chemin API reste derrière `IA_CRM_ACTIVE` (en pause par défaut → « via l'assistant Claude »).
+
+## État trouvé (23/09)
+- Onglet Mail (mission 7) : `mail/vues.ts` (À traiter / Clients / Administratif / Rangés, par fil, 120 j),
+  `mail/detail.ts` (fil, contexte, brouillons, envois, `envoyerDepuisLOnglet` bloque « [à compléter] »),
+  `mail/boite.ts` (tri, règles `RegleExpediteur`, gestes lu/archiver/remonter/ne plus montrer/classer, état Gmail),
+  `mail/rattachement.ts` (`rattacherALaMain`, `creerLeadDepuisMail`), `mail/redaction.ts` (IA du CRM),
+  `messages/analyse.ts` (ancienne lecture IA, tâche ANALYSE_MESSAGE, gardée par `etatIa`).
+- Propositions (`validation/`) : `Proposition` + catalogue de types (`definirProposition` : schéma, sensible, champs
+  corrigeables, exécution IMMEDIATE/FILE, `pertinente`), `validerProposition`/`rejeterProposition`, écran « À valider ».
+- MCP (mission 8) : 36 outils, `executerOutil` (confirmation, masse > 3, plafond), `lireDateDictee`.
+- Seuls appelants du modèle : `mail/redaction.ts` (bouton Rédiger, `rediger_mail`) et `messages/analyse.ts`
+  (tâche de fond), tous deux via `ia/modele.ts` → `etatIa`.
+
+## Décisions
+- **`IA_CRM_ACTIVE`** (paramètre, groupe Agent, EN_PAUSE par défaut = absent) : lu dans `lireReglages` ; en pause,
+  `etatIa` est inactif pour TOUS les usages avec la raison `RAISON_VIA_ASSISTANT` → aucun appel modèle possible
+  côté serveur (bouton Rédiger désactivé « via l'assistant Claude », `rediger_mail` refuse, tâche ANALYSE sautée).
+- **Modèle** : sur `Message` → `intention` (REPONSE|ACTION|INFORMATION|null), `intentionAttendu`, `intentionPar/Le`,
+  `datesExtraites` (JSON, chaque date avec son passage), `snoozeJusqua/Le/Par`. Nouveau `ResumeFil` (par fil :
+  résumé, points en suspens JSON, par). `BrouillonMail.source` (IA_CRM | ASSISTANT). Propositions de mise à jour =
+  type `MAJ_DEPUIS_MAIL` du système de validation existant (une carte = une proposition : cible, champ, valeur,
+  passage cité ; sensible si montant / adresse / date de chantier ; exécution = `modifierDossier`, `modifierClient`,
+  `enregistrerPrestations`, `enregistrerProjet` (espace), `modifierEntrant` — mêmes règles que la fiche/l'espace).
+  Règles proposées = type `REGLE_TRI` (→ `poserRegle`). Traçabilité = journal existant (acteur + origine avec la
+  commande) + colonnes `…Par/…Le`.
+- **Priorité** (CRM, `mail/priorite.ts`, pur) : 0 snoozé revenu « Revenu » ; 1 réclamation (mots-clés) ; 2 devis en
+  attente (par montant) ; 3 dossier actif ; 4 lead ; 5 administratif avec échéance ; 6 reste. Tri d'« À traiter ».
+- **Règles apprises** (`mail/regles-apprises.ts`) : après un geste à la main, 3 gestes identiques sur la même adresse
+  (rangé / classé) → proposition `REGLE_TRI` (clé d'unicité par cible+action). Rattacher : l'adresse va sur la
+  fiche → reconnue seule, pas de règle. Paramètres → Mail : règles proposées (valider/ignorer), règles à la main.
+- **Chronologie** (`chronologie/`) : une lecture par contact (mails, notes d'appel, événements du dossier dont
+  espace, notes, propositions validées), filtrable ; rendue par `lire_mail`, la fiche client et le panneau dossier.
+- **Outils** (`assistant/outils/mail.ts`) : lecture `lire_mail`, `mails_non_classes`, `rechercher_mails`
+  (+ `mails_a_traiter` enrichi) ; réversibles `classer_mail` (masse), `resumer_fil`, `proposer_mise_a_jour`,
+  `valider_proposition` (sensible selon le contenu, `sensible` async), `ignorer_proposition`, `deposer_brouillon`,
+  `snoozer_mail`, `rattacher_mail`, `ranger_mail`, `proposer_regle` ; `envoyer_mail` inchangé (bloque « [à
+  compléter] »). `planifier` extrait dans `agenda/planification.ts` (partagé avec le bouton Planifier du mail).
+- **Consignes** : section « ## Mail » ajoutée aux consignes par défaut, et jointe à la lecture si un texte de Lucas
+  ne la contient pas.
+
+## Lots
+- [x] B1 Schéma, `IA_CRM_ACTIVE`, `lireDateDictee` (heure par défaut, « dans une semaine »), `sensible` async.
+- [x] B2 Lib mail v2 (`mail/v2.ts`, `mail/priorite.ts`, `mail/regles-apprises.ts`, `mail/propositions-maj.ts`,
+      `mail/appliquer.ts`, `chronologie/chronologie.ts`, `agenda/planification.ts`) ; `validation/decideur` admet
+      l'acteur ASSISTANT ; les cartes s'exécutent en FILE puis tout de suite (`appliquerProposition`) car le code de la
+      fiche ouvre ses propres transactions.
+- [x] B3 13 outils MCP (`assistant/outils/mail.ts`, famille MAIL), consignes : `SECTION_MAIL` jointe à la lecture,
+      `mails_a_traiter` enrichi (priorité, intention, attendu, cartes, brouillon prêt, revenu), `rediger_mail` refuse
+      quand l'IA du CRM est en pause.
+- [x] B4 Écrans : liste (pastilles priorité / intention / cartes / brouillon prêt / remis, ligne « → attendu »),
+      panneau (`MailV2.tsx` : intention corrigeable, résumé, cartes valider/ignorer, dates → Planifier, Plus tard,
+      Ranger, brouillon déposé → Reprendre → Envoyer, bouton « Rédiger : via l'assistant Claude »), Paramètres → Mail
+      (règles proposées valider/ignorer, règle à la main), `Chronologie.tsx` (fiche client, panneau dossier) ; API
+      `/api/chronologie`, `/api/mail/[id]/{intention,snooze,planifier}`, `/api/mail/propositions/[id]`, action RANGER.
+- [x] B5 Tests : `mail/mail-v2.test.ts` (12 : IA du CRM inactive même avec clé + réglages, priorité, règles apprises,
+      classement, résumé, snooze lundi 9 h, ranger réversible + règle au 3e geste, recherche, cartes valider/ignorer/
+      sensible/sans espace, brouillon bloqué) ; `mcp/mcp-mail.test.ts` (12 : les dix phrases par le client SDK,
+      journal, fetch surveillé : 0 appel Anthropic). Suite complète 489/489 (`messages.test.ts` lève l'interrupteur
+      général pour couvrir l'ancien chemin). Essai HTTP réel sur la copie (`m8/flux-mail.mjs` : 49 outils, classement,
+      résumé, brouillon, snooze, À traiter par priorité) et onglet Mail contrôlé à 375 × 812 (liste, panneau : intention,
+      résumé, date → Planifier, Plus tard, Ranger, brouillon déposé → Reprendre, « Rédiger : via l'assistant Claude »).
+- [ ] B6 Build, commit (jamais proxy.ts), déploiement, contrôle prod en lecture seule, rapport.
+
+## Journal
+- 23/09 : inventaire fait, décisions posées ; B1 à B5 écrits, tsc + eslint propres, 24 tests de la mission verts.
+- 23/09 (suite) : suite complète verte, essai iPhone fait ; constantes des écrans sorties des modules serveur
+  (`mail/intentions.ts`, `chronologie/familles.ts` : un import serveur dans un composant client casse le bundle).
+  SUIVANT : build, commit (jamais proxy.ts), déploiement, contrôle prod en lecture seule, rapport.

@@ -27,6 +27,7 @@ const TON_NIVEAU: Record<OutilVue["niveau"], "neutre" | "vert" | "ambre"> = { LE
 const FAMILLES: { cle: OutilVue["famille"]; libelle: string }[] = [
   { cle: "LECTURE", libelle: "Lecture" },
   { cle: "ANALYSE", libelle: "Managers d'analyse" },
+  { cle: "MAIL", libelle: "Mail (lecture et écriture)" },
   { cle: "ECRITURE", libelle: "Écriture" },
 ];
 

@@ -91,7 +91,22 @@ async function enregistrerTexte(cle: string, texte: string, par: string): Promis
   await prisma.reglageTexte.upsert({ where: { cle }, create: { cle, valeur, par }, update: { valeur, par } });
 }
 
-export const lireConsignes = () => lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
+/** Section Mail (mission 9) : lue à chaque session ; ajoutée aux consignes de Lucas si elles ne l'ont pas. */
+export const SECTION_MAIL = `## Mail (piloté depuis l'assistant, mission 9)
+- Le CRM ne lit pas les mails seul : c'est toi. « Classe mes mails » = « mails_non_classes », lecture, puis « classer_mail » en lot (plus de trois → confirmation de Lucas).
+- Trois intentions : « reponse » (on attend une réponse de Lucas : question, demande, relance), « action » (quelque chose à faire sans répondre : payer, planifier, rappeler, ranger une pièce), « information » (rien à faire : confirmation, notification utile, accusé). Dans le doute, « reponse » plutôt qu'« information ». Toujours une ligne « ce qui est attendu », concrète : « Il demande le délai de pose », « Facture à régler avant le 30 ».
+- Une proposition de mise à jour (« proposer_mise_a_jour ») cite TOUJOURS le passage du mail qui la justifie. Sans passage clair, pas de proposition. Ne jamais déduire un prix, ni compléter une adresse que le mail ne donne pas.
+- Ce que tu sais extraire : zones et teintes (styles), dimensions et mètres, dates et créneaux (disponibilités, échéances — chacune avec son passage, dans « classer_mail »), adresse, budget évoqué, coordonnées, décision (valide / abandonne / reporte), questions posées, pièces jointes utiles (photos → carte « photos »).
+- Selon la nature du mail : client → cartes sur le projet (PROJET : teintes, précisions, délai, mètres) et sur le dossier ou la fiche ; fournisseur avec facture → « rattacher_depense » proposé à Lucas ; inconnu avec une demande → lead (« rattacher_mail » ou « ouvrir_dossier » après accord) ; administratif avec échéance → « planifier » proposé.
+- Un brouillon (« deposer_brouillon ») prend la voix de Lucas : court, direct, vouvoiement, pas de formule creuse ; les exemples sont dans la chronologie (« lire_mail »). Un fait que le CRM ne donne pas (prix, date, délai) s'écrit « [à compléter] » : l'envoi est bloqué tant qu'il en reste.
+- Un fil de plus de deux messages mérite « resumer_fil » : trois lignes, puis les points en suspens (question sans réponse, engagement pris, avec sa date).
+- Rien ne s'envoie, rien ne se modifie sans validation : « envoyer_mail » et « valider_proposition » (montant, adresse, date de chantier) passent par l'aperçu puis la confirmation de Lucas ; « ignorer_proposition », « snoozer_mail », « ranger_mail » se défont.
+- La priorité d'« À traiter » est calculée par le CRM (réclamations, devis en attente par montant, dossiers, leads, échéances) : lis-la dans cet ordre, sans la refaire.`;
+
+export const lireConsignes = async (): Promise<TexteReglable> => {
+  const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
+  return /^## Mail/m.test(t.texte) ? t : { ...t, texte: `${t.texte.trim()}\n\n${SECTION_MAIL}` };
+};
 export const enregistrerConsignes = (texte: string, par: string) => enregistrerTexte(CLE_CONSIGNES, texte, par);
 export const lirePositionnement = () => lireTexte(CLE_POSITIONNEMENT, POSITIONNEMENT_DEFAUT);
 export const enregistrerPositionnement = (texte: string, par: string) => enregistrerTexte(CLE_POSITIONNEMENT, texte, par);

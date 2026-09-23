@@ -693,10 +693,14 @@ réponse. L'ancien chemin API reste derrière `IA_CRM_ACTIVE` (en pause par déf
       général pour couvrir l'ancien chemin). Essai HTTP réel sur la copie (`m8/flux-mail.mjs` : 49 outils, classement,
       résumé, brouillon, snooze, À traiter par priorité) et onglet Mail contrôlé à 375 × 812 (liste, panneau : intention,
       résumé, date → Planifier, Plus tard, Ranger, brouillon déposé → Reprendre, « Rédiger : via l'assistant Claude »).
-- [ ] B6 Build, commit (jamais proxy.ts), déploiement, contrôle prod en lecture seule, rapport.
+- [x] B6 Build OK, commit `0342388`, déployé (health = 0342388), contrôle prod en lecture seule : découverte OAuth 200,
+      `/api/mcp` sans jeton 401 + `WWW-Authenticate`, routes mail privées (307 vers la connexion / 401), aucune
+      donnée créée ; rapport publié (artefact « Mail piloté par Claude »).
 
 ## Journal
 - 23/09 : inventaire fait, décisions posées ; B1 à B5 écrits, tsc + eslint propres, 24 tests de la mission verts.
 - 23/09 (suite) : suite complète verte, essai iPhone fait ; constantes des écrans sorties des modules serveur
   (`mail/intentions.ts`, `chronologie/familles.ts` : un import serveur dans un composant client casse le bundle).
-  SUIVANT : build, commit (jamais proxy.ts), déploiement, contrôle prod en lecture seule, rapport.
+- 23/09 (fin) : DÉPLOYÉ `0342388`, contrôle prod OK. MISSION 9 TERMINÉE côté code. Reste pour Lucas : la clé
+  ANTHROPIC_API_KEY de Railway peut être retirée (plus aucun appel serveur tant que `IA_CRM_ACTIVE` est en pause) ;
+  reconnexion Google avant le 29/09 (rangement Gmail, agenda) ; jeton Meta ; dire à Claude « classe mes mails ».

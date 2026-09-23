@@ -133,6 +133,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
                   >
                     {cochee ? <Check size={12} aria-hidden /> : null}
                     {sp.libelle}
+                    {cochee && detail.teintes?.[`${id}.${sp.id}`] ? <span className="text-[11px] text-[#9FD9C2]/80">· {detail.teintes[`${id}.${sp.id}`]}</span> : null}
                   </button>
                 );
               })}

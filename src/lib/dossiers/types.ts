@@ -46,6 +46,8 @@ export type DossierResume = {
   updatedAt: string;
   /** Familles et sous-parties du projet (src/lib/prestations) : visibles sur la carte, modifiables dans le dossier. */
   prestations: SelectionPrestations;
+  /** Mission 10 : la teinte retenue par sous-partie (« CUISINE.ilot » → « chêne »), dite à l'assistant ou saisie. */
+  teintes: Record<string, string>;
 };
 
 export type PhotoVue = { id: string; url: string; type: string; /** Après chantier (portfolio). */ apres: boolean };
@@ -111,6 +113,9 @@ export type DossierDetail = DossierResume & {
   delais: DelaisCles;
   ecarts: EcartsPrix;
   dateChantier: string | null;
+  /** Mission 10 : date souhaitée par le client et fin du chantier (modifiables par l'assistant). */
+  dateSouhaitee: string | null;
+  dateFinChantier: string | null;
   origine: { type: "LEAD" | "PROSPECT"; id: string; nom: string } | null;
   photos: PhotoVue[];
   notes: NoteVue[];

@@ -15,7 +15,6 @@ import { ETAPES, LIBELLES_ETAPE, MOTIFS_PERTE, UNITES, type EtapeDossier } from 
 import { jourParis } from "@/lib/dossiers/dates";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { genererDocument } from "@/lib/dossiers/documents";
-import { modifierDossier } from "@/lib/dossiers/dossiers";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { MOTIFS_ANNULATION, MOYENS_PAIEMENT } from "@/lib/encaissements/constantes";
 import { annulerEncaissement, enregistrerEncaissement } from "@/lib/encaissements/service";
@@ -25,7 +24,6 @@ import { envoyerDepuisLOnglet } from "@/lib/mail/detail";
 import { CODES_LIEN_MAIL, envoyerLienParMail, proposerLienParMail } from "@/lib/mail/lien-espace";
 import { redigerBrouillon } from "@/lib/mail/redaction";
 import { brouillonEnvoiDocument, envoyerDocumentParMail } from "@/lib/mail/service";
-import { modifierEntrant } from "@/lib/prospects/entrants";
 import { appliquerActionLeads } from "@/lib/prospects/menage";
 import { MOTIFS_ARCHIVAGE } from "@/lib/prospects/menage-constantes";
 import { changerStatutSimulation, listerSimulationsDossier, publierSimulations } from "@/lib/simulations/dossier";
@@ -33,7 +31,8 @@ import { validerProposition } from "@/lib/validation/service";
 import { planifierAction } from "@/lib/agenda/planification";
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
-import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture";
+import { cibler } from "./cible";
+import { schemaCible } from "./lecture";
 
 /**
  * Les outils d'écriture (mission 8). Chacun appelle le code du CRM, rien de
@@ -44,19 +43,6 @@ import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture
 
 const ETAPES_SENSIBLES: EtapeDossier[] = ["SIGNE", "FACTURE", "ENCAISSE", "PERDU"];
 const ETAPES_FACTURABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"];
-
-type Ids = Awaited<ReturnType<typeof resoudreCible>>;
-type Ciblage = { ids: Ids; ambigu?: undefined } | { ids?: undefined; ambigu: ResultatOutil };
-
-/** Résout la cible ou rend le texte d'ambiguïté (jamais un choix à la place de Lucas). */
-async function cibler(cible: z.output<typeof schemaCible>, type?: "CLIENT" | "LEAD" | "DOSSIER"): Promise<Ciblage> {
-  try {
-    return { ids: await resoudreCible(cible, type) };
-  } catch (e) {
-    if (e instanceof CibleAmbigue) return { ambigu: { texte: texteAmbigu(e), donnees: e.candidats } };
-    throw e;
-  }
-}
 
 const exigerDossier = (ids: { dossierId: string | null; nom: string }) => {
   if (!ids.dossierId) throw new ErreurMetier(`${ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (outil « ouvrir_dossier »).`, 409);

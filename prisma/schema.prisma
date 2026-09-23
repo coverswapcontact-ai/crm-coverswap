@@ -481,6 +481,12 @@ model Dossier {
   prochaineAction        String?
   prochaineActionDate    DateTime?
   dateChantier           DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
+  // Mission 10 (23/09/2026) : ce que l'assistant modifie à la voix, tracé champ par champ (ModificationDossier).
+  dateSouhaitee          DateTime? // date de chantier souhaitée par le client
+  dateFinChantier        DateTime? // fin du chantier, quand il dure plusieurs jours
+  teintes                String? // JSON { "CUISINE.ilot": "chêne" } : la teinte retenue par sous-partie, en mots (Familles du projet)
+  modifications          ModificationDossier[]
+  messagesEspace         MessageEspace[]
   photos                 String             @default("[]") // JSON string[] : chemins relatifs au répertoire d'upload
   // Mission 5 (22/09/2026) : familles et sous-parties du projet (src/lib/prestations), écrites par le client
   // dans son onglet Projet ou par Lucas ; JSON { CUISINE: ["facades-hautes", …], SDB: [] }.
@@ -1851,4 +1857,67 @@ model ConfirmationAssistant {
   utiliseLe DateTime?
   sessionId String?
   ecriture  String?
+}
+
+// ─────────────────────────────────────────────
+// Mission 10 (23/09/2026) : les actions de l'assistant qui manquaient.
+// ─────────────────────────────────────────────
+
+// Une modification de dossier faite par l'assistant (ou par un écran demain) : chaque champ avec sa valeur
+// d'avant et d'après, la phrase de Lucas, et l'annulation si elle a eu lieu. « annuler_modification » relit
+// `champs` et remet chaque valeur d'avant par le même chemin.
+model ModificationDossier {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now())
+  dossierId  String
+  dossier    Dossier   @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  champs     String // JSON [{ champ, libelle, avant, apres }]
+  par        String // acteur (ASSISTANT:claude, HUMAIN:…)
+  commande   String? // la phrase de Lucas, telle que transmise
+  annuleeLe  DateTime?
+  annuleePar String?
+  ecriture   String?
+
+  @@index([dossierId, createdAt])
+}
+
+// Les messages échangés dans l'espace client : ce que le client écrit (« Écrire à CoverSwap », commentaire
+// d'une simulation, demande d'autre proposition) et ce que Lucas lui répond depuis l'assistant ou le CRM.
+// Le client lit les réponses dans l'onglet Contact de son espace ; Lucas lit les messages non lus par
+// « messages_espace ». Rien ne se supprime.
+model MessageEspace {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  dossierId    String
+  dossier      Dossier   @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  espaceId     String? // le projet (EspaceClient) concerné, s'il est connu
+  auteur       String // CLIENT | LUCAS
+  source       String // MESSAGE | COMMENTAIRE | PROPOSITION | REPONSE
+  texte        String
+  simulationId String? // commentaire ou demande faits depuis une simulation
+  luLe         DateTime? // message du client lu par Lucas ; réponse de Lucas vue par le client
+  notifieLe    DateTime? // réponse : notification programmée au client
+  par          String? // acteur qui a écrit la réponse (ASSISTANT:claude, HUMAIN:…)
+  evenementId  String? // l'événement du dossier d'origine (reprise des messages d'avant la mission 10)
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+
+  @@index([dossierId, createdAt])
+  @@index([auteur, luLe])
+}
+
+// Les versions d'un texte réglable (consignes, positionnement) : chaque enregistrement en crée une ; on
+// restaure en écrivant une nouvelle version égale à l'ancienne. Rien ne s'écrase.
+model VersionTexte {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  cle       String // CONSIGNES_ASSISTANT | POSITIONNEMENT_ASSISTANT
+  numero    Int
+  texte     String
+  par       String? // qui a écrit (LUCAS, ASSISTANT:claude)
+  commande  String? // la phrase de Lucas, quand la version vient de l'assistant
+  ecriture  String?
+
+  @@unique([cle, numero])
 }

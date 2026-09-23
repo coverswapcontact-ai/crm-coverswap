@@ -252,6 +252,11 @@ export const TYPES_EVENEMENT = [
   "ESPACE_SIMULATIONS_ACCORDEES",
   // Notes prises pendant un appel au contact, reprises à leur date (NoteAppel)
   "NOTE_APPEL",
+  // Mission 10 (23/09/2026) : l'assistant modifie le dossier (trace lisible, annulable), répond dans l'espace,
+  // communique le lien de l'espace par SMS (texte rendu, rien d'envoyé par le CRM)
+  "DOSSIER_MODIFIE",
+  "ESPACE_REPONSE",
+  "ESPACE_LIEN_COMMUNIQUE",
 ] as const;
 export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
 
@@ -297,6 +302,9 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ESPACE_SIMULATIONS_DEMANDEES: "Simulations supplémentaires demandées",
   ESPACE_SIMULATIONS_ACCORDEES: "Simulations supplémentaires accordées",
   NOTE_APPEL: "Note d'appel",
+  DOSSIER_MODIFIE: "Dossier modifié",
+  ESPACE_REPONSE: "Réponse envoyée dans l'espace",
+  ESPACE_LIEN_COMMUNIQUE: "Lien de l'espace communiqué",
 };
 // Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
 

@@ -52,6 +52,7 @@ function LigneTache({ tache, onChange }: { tache: TacheVue; onChange: () => void
         </div>
         <Pastille ton={TON_STATUT[tache.statut]}>{LIBELLES_STATUT_TACHE[tache.statut]}</Pastille>
       </div>
+      {tache.resume && tache.statut === "TERMINEE" ? <p className="mt-1.5 text-[12px] leading-snug break-words text-[#9CA3AF]">{tache.resume}</p> : null}
       {tache.derniereErreur ? (
         <p className="mt-2 flex items-start gap-2 rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[12px] break-words text-[#F87171]">
           <AlertTriangle size={13} aria-hidden className="mt-px shrink-0" />

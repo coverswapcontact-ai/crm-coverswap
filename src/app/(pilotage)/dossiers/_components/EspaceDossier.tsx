@@ -53,6 +53,7 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [confirmation, setConfirmation] = useState<{ titre: string; texte: string; bouton: string; geste: GesteEspace; succes: string } | null>(null);
   const [gestesOuverts, setGestesOuverts] = useState(false);
+  const [reponse, setReponse] = useState("");
 
   const charger = useCallback(async () => {
     try {
@@ -469,6 +470,34 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
             {espace.avis.publication ? <p className="mt-0.5 text-[11.5px] text-[#8B919C]">Il accepte la publication sur le site.</p> : null}
           </Rubrique>
         ) : null}
+
+        {/* Mission 10 : ses messages, et ma réponse dans son espace (onglet Contact du client, notification par mail). */}
+        <Rubrique titre="Messages" etat={espace.messagesNonLus ? <Pastille ton="ambre">{espace.messagesNonLus} non lu{espace.messagesNonLus > 1 ? "s" : ""}</Pastille> : espace.messages.length ? <Pastille ton="neutre">{espace.messages.length}</Pastille> : undefined}>
+          {espace.messages.length ? (
+            <ul className="space-y-1.5">
+              {espace.messages.slice(0, 12).map((m) => (
+                <li key={m.id} className={cn("rounded-[8px] border-[0.5px] px-2.5 py-1.5 text-[12.5px] leading-snug", m.auteur === "LUCAS" ? "border-[#2F3B36] bg-[#15201C] text-[#D1D5DB]" : "border-[#2A2D34] bg-[#16181D] text-[#E5E7EB]")}>
+                  <span className="text-[11px] text-[#8B919C]">
+                    {jourHeure(m.le)} · {m.auteur === "LUCAS" ? `moi${m.par?.startsWith("ASSISTANT") ? " (via Claude)" : ""}${m.luLe ? ", vue par le client" : ", pas encore vue"}` : `lui${m.source === "COMMENTAIRE" ? " (commentaire)" : m.source === "PROPOSITION" ? " (autre proposition)" : ""}${m.luLe ? "" : " · non lu"}`}
+                  </span>
+                  <p className="mt-0.5 whitespace-pre-line">{m.texte}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12.5px] text-[#8B919C]">Aucun message échangé dans son espace.</p>
+          )}
+          {espace.lien ? (
+            <div className="mt-2">
+              <ZoneTexte libelle="" value={reponse} onChange={(e) => setReponse(e.target.value)} rows={2} placeholder="Lui répondre dans son espace (il est prévenu par mail)…" maxLength={2000} />
+              <div className="mt-1.5 flex justify-end">
+                <Bouton taille="sm" variante="primaire" disabled={reponse.trim().length < 2 || occupe !== null} chargement={occupe === "repondre"} onClick={() => void geste({ geste: "repondre", texte: reponse.trim() }, "Réponse envoyée dans son espace").then((ok) => ok && setReponse(""))}>
+                  Répondre dans son espace
+                </Bouton>
+              </div>
+            </div>
+          ) : null}
+        </Rubrique>
 
         {/* Ce qu'il a fait, geste par geste. */}
         {espace.gestes.length ? (

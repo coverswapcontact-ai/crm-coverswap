@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
-import { lireSelection } from "@/lib/prestations/prestations";
+import { lireSelection, lireTeintes } from "@/lib/prestations/prestations";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import {
@@ -133,6 +133,8 @@ export type EntreeCreation = z.output<typeof schemaCreation>;
 export const schemaModification = champsDossier
   .extend({
     dateChantier: jourOuNull("Date de chantier invalide."),
+    dateSouhaitee: jourOuNull("Date souhaitée invalide."),
+    dateFinChantier: jourOuNull("Date de fin de chantier invalide."),
     /** Fiche client rattachée : ses documents et paiements la suivent. */
     clientId: z.string("Fiche client invalide.").min(1, "Fiche client invalide.").max(40, "Fiche client invalide."),
     /** Date réelle d'ouverture (dossier commencé avant le CRM). */
@@ -190,6 +192,7 @@ function versResume(
     createdAt: dossier.createdAt.toISOString(),
     updatedAt: dossier.updatedAt.toISOString(),
     prestations: lireSelection(dossier.prestations),
+    teintes: lireTeintes(dossier.teintes),
   };
 }
 
@@ -394,6 +397,8 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
     delais: delaisCles(parcours),
     ecarts: ecartsPrix(dossier.documents, dossier.montantEstime),
     dateChantier: dossier.dateChantier?.toISOString() ?? null,
+    dateSouhaitee: dossier.dateSouhaitee?.toISOString() ?? null,
+    dateFinChantier: dossier.dateFinChantier?.toISOString() ?? null,
     origine: dossier.lead
       ? {
           type: "LEAD",
@@ -599,8 +604,10 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
-  const { prochaineActionDate, dateChantier, clientId, ouvertLe, ...champs } = entree;
+  const { prochaineActionDate, dateChantier, dateSouhaitee, dateFinChantier, clientId, ouvertLe, ...champs } = entree;
   const data: Prisma.DossierUncheckedUpdateInput = { ...champs };
+  if (dateSouhaitee !== undefined) data.dateSouhaitee = dateSouhaitee ? dateDepuisJour(dateSouhaitee) : null;
+  if (dateFinChantier !== undefined) data.dateFinChantier = dateFinChantier ? dateDepuisJour(dateFinChantier) : null;
   if (prochaineActionDate !== undefined) {
     data.prochaineActionDate = prochaineActionDate ? dateDepuisJour(prochaineActionDate) : null;
   }

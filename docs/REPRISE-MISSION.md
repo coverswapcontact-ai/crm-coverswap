@@ -704,3 +704,99 @@ réponse. L'ancien chemin API reste derrière `IA_CRM_ACTIVE` (en pause par déf
 - 23/09 (fin) : DÉPLOYÉ `0342388`, contrôle prod OK. MISSION 9 TERMINÉE côté code. Reste pour Lucas : la clé
   ANTHROPIC_API_KEY de Railway peut être retirée (plus aucun appel serveur tant que `IA_CRM_ACTIVE` est en pause) ;
   reconnexion Google avant le 29/09 (rangement Gmail, agenda) ; jeton Meta ; dire à Claude « classe mes mails ».
+
+---
+
+# Mission 10 — MCP v2 : les actions qui manquent à l'assistant (23/09/2026)
+
+Énoncé complet : mémoire privée `project_mission10_mcp_v2_actions` (message de Lucas « Mission autonome — MCP v2 : les
+actions qui manquent à l'assistant »). Mêmes règles permanentes, même architecture que les missions 8 et 9 (niveaux
+lecture / réversible / sensible avec aperçu et jeton, journal avec la phrase, plafond d'écritures, aucune clé Anthropic).
+
+## État trouvé (23/09, après la mission 9)
+- 49 outils au catalogue ; `ResultatOutil` = texte + données + liens + jeton (pas d'image) ; le serveur MCP ne rend que
+  du texte. `modifierDossier` (champs du dossier, sans trace « avant/après » lisible hors journal), `enregistrerPrestations`
+  (familles/sous-parties, événement PRESTATIONS), `enregistrerProjet` (espace : tailles, précisions, acteur CLIENT).
+- Photos : `Dossier.photos` (chemins, id = base36 de l'horodatage), `PhotoLead` (origine), rendus du site dans les photos
+  (`Simulation.photosDossier`), `photosDuClient` ; `sharp` déjà installé (simulateur). Simulations : `listerSimulationsDossier`,
+  `imageSimulationDossier`.
+- Espace : le client écrit (`envoyerMessage` → événement ESPACE_MESSAGE + alerte ; `commenterSimulation` ; `demanderProposition`)
+  mais AUCUNE réponse de Lucas dans l'espace n'existe ; notifications automatiques (`mail/notifications.ts`, 4 événements).
+- Simulateur : `preparerSimulation` (mode CHATGPT : prompt + planche + photo cadrée), page `/simulateur?dossier=` sans
+  paramètre de préparation ; catalogue des teintes (`catalogue()`, `correspondRecherche`).
+- Consignes : `ReglageTexte` (une valeur, écrasée), pas d'historique. Tarifs : `tarifsDesPrestations`, `attribuerTarif`,
+  `modifierPreset`. Dépenses : `listerDepenses(annee)`. Lien d'espace : `proposerLienParMail` (phrases non exportées).
+- Sauvegardes : au démarrage, avant migration, à la main ; jamais périodiques, jamais purgées (compressées seulement) ;
+  disque : un seul seuil (« < 100 Mo ») dans `sante_systeme`.
+
+## Décisions
+- **Schéma** : `Dossier.dateSouhaitee`, `Dossier.dateFinChantier`, `Dossier.teintes` (JSON `{ "CUISINE.ilot": "chêne" }`,
+  une teinte par sous-partie, affichée dans Familles du projet) ; `ModificationDossier` (champs JSON avant/après, par,
+  commande, annuleeLe) ; `MessageEspace` (auteur CLIENT | LUCAS, source MESSAGE | COMMENTAIRE | PROPOSITION | REPONSE,
+  luLe, notifieLe) ; `VersionTexte` (cle, numero, texte, par, commande).
+- **`modifier_dossier`** (réversible ; sensible si montant, date de chantier/fin, adresse) : `dossiers/modification-assistant.ts`
+  = une entrée par champ (objet, montant_estime, date_souhaitee, date_chantier, date_fin_chantier, adresse, email,
+  telephone, prochaine_action(+date), familles, teintes, dimensions, notes_projet), lecture de l'avant, application par le
+  code existant (`modifierDossier`, `enregistrerPrestations` auteur LUCAS, souhaits de l'espace), trace `ModificationDossier`
+  + événement DOSSIER_MODIFIE, `recalculerMain`, devis émis signalé (« le devis 2026-037 ne correspond plus »).
+  `annuler_modification` remet chaque champ à sa valeur d'avant (même chemin), marque `annuleeLe`.
+- **Images MCP** : `ResultatOutil.images` (base64 JPEG ≤ 1024 px, qualité 72, via sharp) → blocs `image` du serveur MCP.
+  `voir_photos` (dossier ou lead : 6 dernières par défaut, `nombre`/`decalage`, origine : client/site/simulateur/CRM,
+  date de l'id) ; `voir_simulations` (avant/après, teintes, statut, vue par le client).
+- **Espace** : `messages_espace` (non lus, par client) ; `repondre_espace` (sensible : « [à compléter] » bloque ; message
+  LUCAS + événement ESPACE_REPONSE (SORTANT → main au client) + notification MESSAGE_LUCAS (mécanique existante,
+  `{message}`) + messages du client marqués lus) ; migration de reprise des ESPACE_MESSAGE / COMMENTAIRE / PROPOSITION
+  passés en `MessageEspace` ; site : fil « Vos échanges » dans Contact (`Compte.messages`), réponses marquées lues à la
+  visite.
+- **`preparer_simulation`** (réversible) : teintes par nom (catalogue, ambiguïté → candidats), zone par id ou libellé,
+  photo = dernière du client à défaut, `preparerSimulation` mode CHATGPT ; lien `/simulateur?dossier=…&preparation=…`
+  (l'écran recharge la préparation). Rien généré, rien publié.
+- **`modifier_consignes`** (sensible, diff par section, versions) + `restaurer_consignes` (réversible) ; Paramètres →
+  Assistant Claude : historique des versions avec « Restaurer ». **`modifier_tarifs`** (sensible) : tarif d'une
+  sous-partie (preset explicite modifié, sinon créé et attribué) ; les devis émis ne bougent pas (figés).
+- **`depenses`** (lecture : période, catégorie, rattachement) ; **`lien_espace`** (réversible : ouvre l'espace et le dossier,
+  rend lien + SMS prêt à copier, événement ESPACE_LIEN_COMMUNIQUE → main au client, aucun envoi).
+- **Sauvegardes** : `selectionnerAGarder` (pur : 7 quotidiennes + 4 hebdomadaires, tout le reste purgé), travail
+  périodique « sauvegarde quotidienne » (une copie par jour civil, puis tâche PURGE_SAUVEGARDES journalisée dans Tâches
+  de fond) ; `capaciteVolume` → `sante_systeme.disque { libreMo, totalMo, pourcent }` ; alertes ATTENTION ≥ 70 %,
+  URGENT ≥ 85 % (`calculerAlertes`).
+- **Compléments** : `ce_qui_m_attend` et `point_du_jour` comptent les messages d'espace non lus et les propositions en
+  attente ; `chercher` accepte une adresse et un numéro de devis/facture ; section « ## Dossiers, photos, espace »
+  jointe aux consignes à la lecture.
+
+## Lots
+- [x] C1 Schéma (`ModificationDossier`, `MessageEspace`, `VersionTexte`, `Dossier.dateSouhaitee/dateFinChantier/teintes`),
+      `ResultatOutil.images` → blocs image MCP (`assistant/images.ts`, sharp ≤ 1024 px JPEG 72), `assistant/photos.ts`
+      (inventaire : origine, date de l'id), `dossiers/modification-assistant.ts` (valeurs avant/après, application par le
+      code existant, trace, devis signalé, annulation), `prestations/reperage.ts` (famille / sous-partie en mots),
+      outils `modifier_dossier`, `annuler_modification`, `voir_photos`, `voir_simulations` ; teintes dans Familles du
+      projet, dates dans le formulaire du dossier et `lire_fiche`.
+- [x] C2 `espace/messages.ts` (messages client rangés depuis `envoyerMessage` / `commenterSimulation` /
+      `demanderProposition`, `repondreDansLEspace` : message LUCAS + ESPACE_REPONSE + notification MESSAGE_LUCAS +
+      lus + main au client), migration `2026-09-23-messages-espace` (reprise, marqués lus), `Compte.messages` +
+      `POST /messages/vus` (site : fil « Vos échanges » dans Contact, « N réponses à lire » sur l'accueil), rubrique
+      Messages + réponse dans le panneau du dossier, outils `messages_espace`, `marquer_messages_lus`, `repondre_espace`.
+- [x] C3 `simulateur/preparation-assistant.ts` + `preparer_simulation` (zones et teintes en mots, candidats, conflit de
+      zone bloquant, `?preparation=` rouvre la page), consignes versionnées (`VersionTexte`, v1 = état d'avant, sections,
+      diff, `SECTION_ACTIONS`) + `modifier_consignes` / `versions_consignes` / `restaurer_consignes` + historique dans
+      Paramètres → Assistant Claude, `prestations/tarifs.ts › modifierTarifSousPartie` + `tarifs` / `modifier_tarifs`,
+      `depenses`, `mail/lien-espace.ts › proposerLienParSms` + `lien_espace` (ESPACE_LIEN_COMMUNIQUE → main au client).
+- [x] C4 `sauvegarde.mjs` : `capaciteVolume`, `dateDuNom`, `selectionnerAGarder` (7 quotidiennes + 4 hebdomadaires des
+      semaines d'avant), `purgerSauvegardes`, `sauvegardeDuJourExiste` ; `base/taches.ts` : travail « sauvegarde-quotidienne »
+      (une copie par jour, puis tâche PURGE_SAUVEGARDES journalisée avec son bilan, visible dans Tâches de fond) ;
+      `sante_systeme.disque` (pour cent, niveau 70 / 85), alertes DISQUE_70 / DISQUE_PLEIN dans `calculerAlertes`.
+- [x] C5 `ce_qui_m_attend` et `point_du_jour` (messages d'espace non lus, propositions en attente, derniers messages) ;
+      `chercher` par adresse (numéro compris) et numéro de devis / facture ; `lireDateDictee` comprend « 12 octobre » ;
+      catalogue : 64 outils.
+- [x] C6 Tests : `mcp/mcp-v2.test.ts` (15, client SDK : toutes les phrases du mandat, fetch surveillé : 0 appel Anthropic,
+      0 réseau), `base/retention.test.ts` (5 : 15 copies fictives → 7 + 4 gardées, purge par la tâche journalisée) ;
+      `rgpd/carte.ts` complété (ModificationDossier, MessageEspace) ; suite complète 509/509 ; tsc + eslint propres
+      (CRM et site) ; essai HTTP réel sur la copie (`m8/flux-v2.mjs`, `m8/prep-v2.mjs` : 64 outils, photos en images
+      45 Ko, messages repris, modification annulée, paquet ChatGPT, consignes v2, réponse à Olga sans e-mail → dit) ;
+      écrans : `/simulateur?preparation=` rouvre le paquet, Paramètres → historique (2), Tâches de fond → purge
+      journalisée (bilan lisible) + travail quotidien OK, panneau du dossier → rubrique Messages.
+- [ ] C7 Build, commit, déploiement CRM puis site, contrôle prod en lecture seule, rapport, mémoire.
+
+## Journal
+- 23/09 : inventaire fait, décisions posées ; C1 à C5 écrits ; tsc et eslint propres (CRM et site) ; tests de la mission
+  verts en isolation (mcp-v2 15/15, rétention 5/5) ; suite complète lancée.

@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { pilotageCommercial } from "@/lib/commercial/pilotage";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
+import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
 import { libelleSourceLead } from "@/lib/prospects/constantes";
 import { definirOutil, format, lien } from "../definition";
@@ -37,7 +38,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
   const debutJour = new Date(`${aujourdhui}T00:00:00+02:00`);
   const finJour = new Date(debutJour.getTime() + JOUR);
 
-  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante] = await Promise.all([
+  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents] = await Promise.all([
     prisma.lead.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true, priorite: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.simulationEspace.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, source: true, statut: true, createdAt: true, dossierId: true }, take: 50 }),
     prisma.simulationSite.count({ where: { createdAt: { gte: depuis } } }),
@@ -52,6 +53,9 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     prisma.dossier.findMany({ where: { prochaineActionDate: { gte: debutJour, lt: finJour }, archiveLe: null }, select: { id: true, clientNom: true, prochaineAction: true, prochaineActionDate: true }, orderBy: { prochaineActionDate: "asc" }, take: 50 }),
     etatCampagne(maintenant),
     santeSysteme(maintenant),
+    compterMessagesNonLus(),
+    prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
+    prisma.messageEspace.findMany({ where: { createdAt: { gte: depuis }, auteur: "CLIENT", archiveLe: null }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, texte: true, source: true, createdAt: true, luLe: true, dossier: { select: { id: true, clientNom: true } } } }),
   ]);
 
   const nomsDossiers = new Map((await prisma.dossier.findMany({ where: { id: { in: simulationsEspace.map((s) => s.dossierId) } }, select: { id: true, clientNom: true } })).map((d) => [d.id, d.clientNom]));
@@ -68,6 +72,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       paiements: paiements.map((p) => ({ dossierId: p.dossier?.id ?? null, client: p.dossier?.clientNom ?? p.payeur, montant: p.montant, moyen: p.moyen, le: p.recuLe.toISOString() })),
       projetsClients: projetsClients.map((d) => ({ dossierId: d.id, client: d.clientNom, objet: d.objet, le: d.createdAt.toISOString() })),
       changementsEtape: changements.map((c) => ({ dossierId: c.dossierId, client: c.dossier.clientNom, contenu: c.contenu, le: c.createdAt.toISOString() })),
+      messagesEspace: messagesRecents.map((m) => ({ id: m.id, dossierId: m.dossier.id, client: m.dossier.clientNom, source: m.source, texte: m.texte.slice(0, 200), le: m.createdAt.toISOString(), lu: Boolean(m.luLe) })),
     },
     aujourdhui: {
       rappels: rappels.map((r) => ({ leadId: r.id, nom: `${r.prenom} ${r.nom}`.trim(), a: r.rappelLe?.toISOString() ?? null, telephone: r.telephone })),
@@ -75,9 +80,11 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       attendentMoi: attendentMoi.map((a) => ({ nom: a.nom, etape: a.etape, action: a.action, enRetard: a.enRetard, depuisJours: a.depuisJours, dossierId: a.dossierId, leadId: a.leadId })),
       chezLeClient: pilotage.compteurs.chezLeClient,
       mailsATraiter: mails.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant.nom ?? m.correspondant.adresse, objet: m.objet, mention: m.mention, contact: m.contact?.nom ?? null })),
+      messagesEspaceNonLus: messagesNonLus,
+      propositionsEnAttente,
     },
     campagne: { enCours: campagne.enCours, jour: campagne.jour, duree: campagne.duree, depenseEstimee: campagne.depenseEstimee, leads: campagne.leads, coutParLead: campagne.coutParLead, regle: campagne.regle },
-    alertes: { taches: sante.taches, google: sante.google, meta: sante.meta, ia: sante.ia, disqueLibreMo: sante.disqueLibreMo, coherence: sante.coherence, autres: sante.alertes },
+    alertes: { taches: sante.taches, google: sante.google, meta: sante.meta, ia: sante.ia, disqueLibreMo: sante.disqueLibreMo, disque: sante.disque, coherence: sante.coherence, autres: sante.alertes },
   };
   if (options.memoriser !== false) await noterPoint(maintenant);
   return point;
@@ -96,10 +103,10 @@ export const outilPointDuJour = definirOutil({
     const a = point.aujourdhui;
     const texte = [
       `Point du ${format.jour(contexte.maintenant)}, depuis ${point.premierPoint ? "hier (premier point)" : format.jourCourt(point.depuis) + " " + new Date(point.depuis).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}.`,
-      `Nouveau : ${n.leads.length} lead(s)${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${n.simulations.site} simulation(s) sur le site, ${n.simulations.espace.length} dans les espaces ; ${n.demandesDevis} demande(s) de devis ; ${n.devisSignes.length} devis signé(s)${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} ${format.euros(d.montant)}`).join(", ")})` : ""} ; ${n.paiements.length} paiement(s)${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${n.projetsClients.length} projet(s) ouvert(s) par des clients ; ${n.changementsEtape.length} changement(s) d'étape.`,
-      `Aujourd'hui : ${a.rappels.length} rappel(s)${a.rappels.length ? ` (${a.rappels.map((r) => `${r.nom} à ${r.a ? new Date(r.a).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "?"}`).join(", ")})` : ""}, ${a.actionsDossiers.length} action(s) planifiée(s)${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${a.attendentMoi.length} dossier(s) qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${a.mailsATraiter.length} mail(s) à traiter.`,
+      `Nouveau : ${n.leads.length} lead(s)${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${n.simulations.site} simulation(s) sur le site, ${n.simulations.espace.length} dans les espaces ; ${n.demandesDevis} demande(s) de devis ; ${n.devisSignes.length} devis signé(s)${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} ${format.euros(d.montant)}`).join(", ")})` : ""} ; ${n.paiements.length} paiement(s)${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${n.projetsClients.length} projet(s) ouvert(s) par des clients ; ${n.changementsEtape.length} changement(s) d'étape ; ${n.messagesEspace.length} message(s) de clients dans leur espace${n.messagesEspace.length ? ` (${n.messagesEspace.slice(0, 4).map((m) => `${m.client} : « ${m.texte.slice(0, 80)} »`).join(" ; ")})` : ""}.`,
+      `Aujourd'hui : ${a.rappels.length} rappel(s)${a.rappels.length ? ` (${a.rappels.map((r) => `${r.nom} à ${r.a ? new Date(r.a).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "?"}`).join(", ")})` : ""}, ${a.actionsDossiers.length} action(s) planifiée(s)${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${a.attendentMoi.length} dossier(s) qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${a.mailsATraiter.length} mail(s) à traiter, ${a.messagesEspaceNonLus} message(s) d'espace non lu(s), ${a.propositionsEnAttente} proposition(s) à valider.`,
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${point.campagne.leads} lead(s)${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
-      `Alertes : ${[point.alertes.taches.enEchec.length ? `${point.alertes.taches.enEchec.length} tâche(s) en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "sain" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disqueLibreMo !== null && point.alertes.disqueLibreMo < 100 ? `disque : ${point.alertes.disqueLibreMo} Mo` : null, point.alertes.coherence?.incoherences.length ? `${point.alertes.coherence.incoherences.length} incohérence(s)` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
+      `Alertes : ${[point.alertes.taches.enEchec.length ? `${point.alertes.taches.enEchec.length} tâche(s) en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "sain" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${point.alertes.coherence.incoherences.length} incohérence(s)` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");
     return { texte, donnees: point, liens: [lien("Commercial", "/commercial"), lien("Mail", "/mail")] };
   },

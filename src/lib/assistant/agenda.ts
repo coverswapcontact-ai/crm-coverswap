@@ -65,6 +65,16 @@ export function lireDateDictee(texte: string, maintenant: Date = new Date(), heu
     return aParis(`${annee}-${fr[2].padStart(2, "0")}-${fr[1].padStart(2, "0")}`);
   }
   const aujourdhui = jourParisDe(maintenant);
+  // « 12 octobre », « 1er novembre 2026 » (mission 10) : sans année, la prochaine occurrence (l'année suivante si le jour est passé de plus d'un mois).
+  const mois = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+  const enMots = /(\d{1,2})(?:er)?\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?:\s+(\d{4}))?/.exec(brut);
+  if (enMots) {
+    const numeroMois = mois.indexOf(enMots[2].normalize("NFD").replace(/\p{M}/gu, "")) + 1;
+    const anneeCourante = Number(aujourdhui.slice(0, 4));
+    const jourDe = (annee: number) => `${annee}-${String(numeroMois).padStart(2, "0")}-${enMots[1].padStart(2, "0")}`;
+    const annee = enMots[3] ? Number(enMots[3]) : new Date(`${jourDe(anneeCourante)}T12:00:00Z`).getTime() < maintenant.getTime() - 31 * 86_400_000 ? anneeCourante + 1 : anneeCourante;
+    return aParis(jourDe(annee));
+  }
   const plusJours = (n: number) => jourParisDe(new Date(maintenant.getTime() + n * 86_400_000));
   const dans = /dans\s+(une|un|\d+)\s*(jour|semaine|mois)/.exec(brut);
   if (dans) {

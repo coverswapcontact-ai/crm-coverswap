@@ -49,6 +49,7 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     etape: detail.etape,
     source: detail.source,
     montantEstime: detail.montantEstime,
+    teintes: detail.teintes,
     montantDernierDevis: detail.montantDernierDevis,
     prochaineAction: detail.prochaineAction,
     prochaineActionDate: detail.prochaineActionDate,

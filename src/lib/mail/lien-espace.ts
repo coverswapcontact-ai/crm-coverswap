@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
+import { recalculerMain } from "@/lib/dossiers/main";
 import { lienPourLeProjet, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { programmerEnvoi } from "./envoi-crm";
 import { mailNotification } from "./notifications";
@@ -33,6 +34,9 @@ const PROPOSITIONS: Record<CodeLienMail, { objet: string; phrase: string; bouton
     bouton: "Ouvrir mon espace",
   },
 };
+
+/** Les mêmes phrases, lisibles par l'assistant (« lien_espace », mission 10). */
+export const PHRASES_LIEN = PROPOSITIONS;
 
 /** Il a déjà fait une simulation sur le site : le mail le lui dit — c'est ce qui fait ouvrir. */
 const PHRASE_AVEC_SIMULATION = "Comme convenu, votre simulation vous attend dans votre espace personnel. Ajoutez-y 2 ou 3 photos de la pièce : je vous prépare mes propositions.";
@@ -99,4 +103,35 @@ export async function envoyerLienParMail(entree: { dossierId: string; code: Code
     leadId,
   });
   return { envoiId: id, deja };
+}
+
+export type PropositionLienSms = { dossierId: string; code: CodeLienMail; prenom: string; telephone: string | null; lien: string; sms: string; nouveau: boolean; email: string | null };
+
+/**
+ * Mission 10 (« lien_espace ») : les leads Meta n'ont souvent pas d'e-mail.
+ * L'espace s'ouvre (et le dossier avec) ; le CRM n'envoie rien : il rend le
+ * lien et le texte du SMS, que Lucas copie dans son téléphone. Tracé dans le
+ * dossier (« lien communiqué par SMS ») : la main passe au client.
+ */
+export async function proposerLienParSms(entree: { leadId?: string | null; dossierId?: string | null; code: CodeLienMail }): Promise<PropositionLienSms> {
+  let dossierId = entree.dossierId ?? null;
+  let nouveau = false;
+  if (dossierId) nouveau = (await ouvrirEspace(dossierId)).nouveau;
+  else if (entree.leadId) {
+    const ouvert = await ouvrirEspaceDuContact(entree.leadId);
+    dossierId = ouvert.dossierId;
+    nouveau = ouvert.nouveau;
+  } else throw new ErreurMetier("Indique le contact ou le dossier.", 400);
+  const espace = await prisma.espaceClient.findUnique({ where: { dossierId } });
+  const lien = espace && !espace.archiveLe ? await lienPourLeProjet(espace) : null;
+  if (!lien) throw new ErreurMetier("L'espace de ce projet est fermé ou son lien désactivé.", 409);
+  const { a, prenom } = await destinataireDuDossier(dossierId);
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientTelephone: true } });
+  const base = PROPOSITIONS[entree.code];
+  const avecSimulation = entree.code === "LIEN_ESPACE" && (await prisma.simulation.count({ where: { dossierId, archiveLe: null, imageAfterPath: { not: null } } })) > 0;
+  const phrase = avecSimulation ? PHRASE_AVEC_SIMULATION : base.phrase;
+  const sms = `Bonjour${prenom ? ` ${prenom}` : ""}, ${phrase.charAt(0).toLowerCase()}${phrase.slice(1)} ${lien}\nLucas, CoverSwap`;
+  await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_COMMUNIQUE", direction: "SORTANT", contenu: `Lien de l'espace communiqué par SMS (texte rendu à Lucas, à copier) : « ${sms.replace(/\n/g, " ")} »`.slice(0, 1500), metadata: JSON.stringify({ code: entree.code, canal: "SMS" }) } });
+  await recalculerMain(dossierId);
+  return { dossierId, code: entree.code, prenom, telephone: dossier?.clientTelephone ?? null, lien, sms, nouveau, email: a };
 }

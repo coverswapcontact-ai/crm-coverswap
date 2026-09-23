@@ -14,6 +14,8 @@ export type TacheVue = {
   termineLe: string | null;
   derniereErreur: string | null;
   demandeePar: string;
+  /** Mission 10 : le bilan lisible rendu par le traitement (`resultat.resume`), quand il y en a un. */
+  resume: string | null;
 };
 
 export type PlanificationVue = {
@@ -33,6 +35,16 @@ export type EtatTaches = {
   taches: TacheVue[];
   planifications: PlanificationVue[];
 };
+
+function resumeDe(resultat: string | null): string | null {
+  if (!resultat) return null;
+  try {
+    const v = JSON.parse(resultat) as { resume?: unknown };
+    return typeof v?.resume === "string" ? v.resume : null;
+  } catch {
+    return null;
+  }
+}
 
 function statutLu(statut: string): StatutTache {
   return (STATUTS_TACHE as readonly string[]).includes(statut) ? (statut as StatutTache) : "EN_ATTENTE";
@@ -73,6 +85,7 @@ export async function etatDesTaches(): Promise<EtatTaches> {
         termineLe: tache.termineLe?.toISOString() ?? null,
         derniereErreur: tache.derniereErreur,
         demandeePar: tache.demandeePar,
+        resume: resumeDe(tache.resultat),
       })
     )
     .sort((a, b) => ordre[a.statut] - ordre[b.statut]);

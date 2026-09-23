@@ -29,11 +29,16 @@ export const LIBELLES_NIVEAU: Record<NiveauOutil, string> = {
 
 export type LienOutil = { libelle: string; href: string };
 
+/** Une image jointe au résultat (mission 10) : rendue à Claude comme un bloc image MCP, jamais seulement un lien. */
+export type ImageOutil = { libelle: string; mimeType: string; base64: string; octets: number };
+
 /** Ce qu'un outil rend : lisible d'abord (Claude le lit à voix haute), les données à côté. */
 export type ResultatOutil = {
   texte: string;
   donnees?: unknown;
   liens?: LienOutil[];
+  /** Images à montrer à Claude (photos, simulations), déjà compressées (assistant/images.ts). */
+  images?: ImageOutil[];
   /** Action sensible : l'aperçu a été rendu, rien n'a été fait ; ce jeton confirme au second appel. */
   confirmation?: { jeton: string; expireLe: string };
 };

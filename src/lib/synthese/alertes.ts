@@ -22,6 +22,9 @@ export const SEUILS_ALERTE = {
   baisseActivitePct: 50,
   baisseAcceptationPoints: 20,
   decisionsMinimum: 5,
+  /** Mission 10 : part du volume de la base utilisée. */
+  disqueAttentionPct: 70,
+  disqueUrgentPct: 85,
 } as const;
 
 export async function calculerAlertes(maintenant: Date = new Date(), options: { anonyme?: boolean } = {}): Promise<Alerte[]> {
@@ -126,6 +129,19 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
   const echecs = await prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } });
   if (echecs > 0) {
     alertes.push({ code: "TACHES_EN_ECHEC", gravite: "ATTENTION", titre: `${echecs} tâche${echecs > 1 ? "s" : ""} de fond en échec`, detail: "Un envoi, une synchronisation ou une reprise n'a pas abouti.", lien: "/taches" });
+  }
+
+  // Disque du volume de la base (mission 10) : 70 % avertit, 85 % alerte.
+  try {
+    const { fichierDeLaBase, capaciteVolume } = await import("@/lib/base/sauvegarde.mjs");
+    const fichier = fichierDeLaBase();
+    if (fichier) {
+      const c = capaciteVolume(fichier.replace(/[\\/][^\\/]+$/, ""));
+      if (c.pourcentUtilise >= SEUILS_ALERTE.disqueUrgentPct) alertes.push({ code: "DISQUE_PLEIN", gravite: "URGENT", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : agrandir le volume ou faire de la place (photos, sauvegardes).`, lien: "/taches" });
+      else if (c.pourcentUtilise >= SEUILS_ALERTE.disqueAttentionPct) alertes.push({ code: "DISQUE_70", gravite: "ATTENTION", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : à surveiller.`, lien: "/taches" });
+    }
+  } catch {
+    // volume illisible (base distante) : pas d'alerte disque
   }
 
   const ordre = { URGENT: 0, ATTENTION: 1, INFO: 2 };

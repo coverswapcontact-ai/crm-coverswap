@@ -12,5 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function SimulateurPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parametres = await searchParams;
   const dossier = typeof parametres.dossier === "string" && /^[a-z0-9]{10,40}$/i.test(parametres.dossier) ? parametres.dossier : null;
-  return <EcranSimulateur dossierInitial={dossier} />;
+  // ?preparation=<id> : une préparation faite par l'assistant (mission 10), rouverte prête à copier.
+  const preparation = typeof parametres.preparation === "string" && /^[a-z0-9]{10,40}$/i.test(parametres.preparation) ? parametres.preparation : null;
+  return <EcranSimulateur dossierInitial={dossier} preparationInitiale={preparation} />;
 }

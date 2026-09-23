@@ -4,9 +4,15 @@ import { outilManagerFinances } from "./analyses/finances";
 import { outilManagerMarketing } from "./analyses/marketing";
 import { outilManagerOperations } from "./analyses/operations";
 import { LIBELLES_NIVEAU, type DefinitionOutil, type NiveauOutil } from "./definition";
+import { OUTILS_ACTIONS } from "./outils/actions";
+import { OUTILS_DEPENSES } from "./outils/depenses";
 import { OUTILS_ECRITURE } from "./outils/ecriture";
+import { OUTILS_ESPACE_ECRITURE, OUTILS_ESPACE_LECTURE } from "./outils/espace";
+import { OUTILS_IMAGES } from "./outils/images";
 import { OUTILS_LECTURE } from "./outils/lecture";
 import { OUTILS_MAIL } from "./outils/mail";
+import { OUTILS_REGLAGES_ECRITURE, OUTILS_REGLAGES_LECTURE } from "./outils/reglages";
+import { OUTILS_SIMULATION } from "./outils/simulation";
 import { outilPointDuJour } from "./outils/point-du-jour";
 
 /**
@@ -21,7 +27,7 @@ export type OutilQuelconque = DefinitionOutil<any>;
 
 export const OUTILS_ANALYSE: OutilQuelconque[] = [outilManagerCommercial, outilManagerFinances, outilManagerMarketing, outilManagerClients, outilManagerOperations];
 
-export const CATALOGUE: OutilQuelconque[] = [...OUTILS_LECTURE, outilPointDuJour, ...OUTILS_ANALYSE, ...OUTILS_MAIL, ...OUTILS_ECRITURE];
+export const CATALOGUE: OutilQuelconque[] = [...OUTILS_LECTURE, ...OUTILS_IMAGES, ...OUTILS_ESPACE_LECTURE, ...OUTILS_DEPENSES, ...OUTILS_REGLAGES_LECTURE, outilPointDuJour, ...OUTILS_ANALYSE, ...OUTILS_MAIL, ...OUTILS_ECRITURE, ...OUTILS_ACTIONS, ...OUTILS_ESPACE_ECRITURE, ...OUTILS_SIMULATION, ...OUTILS_REGLAGES_ECRITURE];
 
 const doublons = CATALOGUE.map((o) => o.nom).filter((nom, i, liste) => liste.indexOf(nom) !== i);
 if (doublons.length) throw new Error(`Catalogue de l'assistant : noms d'outils en double (${doublons.join(", ")}).`);

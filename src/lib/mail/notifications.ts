@@ -16,7 +16,7 @@ import { programmerEnvoi } from "./envoi-crm";
  * l'historique du dossier et dans l'onglet Mail. Rien d'autre ne part seul.
  */
 
-export const EVENEMENTS_NOTIFIES = ["SIMULATION_PUBLIEE", "DEVIS_DISPONIBLE", "PAIEMENT_RECU", "PROJET_TERMINE"] as const;
+export const EVENEMENTS_NOTIFIES = ["SIMULATION_PUBLIEE", "DEVIS_DISPONIBLE", "PAIEMENT_RECU", "PROJET_TERMINE", "MESSAGE_LUCAS"] as const;
 export type EvenementNotifie = (typeof EVENEMENTS_NOTIFIES)[number];
 
 export type ModeleNotification = { objet: string; phrase: string; bouton: string; actif: boolean };
@@ -26,17 +26,19 @@ export const LIBELLES_NOTIFICATION: Record<EvenementNotifie, string> = {
   DEVIS_DISPONIBLE: "Devis disponible",
   PAIEMENT_RECU: "Paiement reçu",
   PROJET_TERMINE: "Projet terminé (invitation à laisser un avis)",
+  MESSAGE_LUCAS: "Réponse de CoverSwap dans l'espace (mission 10)",
 };
 
-/** Les textes par défaut ; modifiables dans Paramètres (variables : {prenom}, {montant}). */
+/** Les textes par défaut ; modifiables dans Paramètres (variables : {prenom}, {montant}, {message}). */
 export const MODELES_PAR_DEFAUT: Record<EvenementNotifie, ModeleNotification> = {
   SIMULATION_PUBLIEE: { objet: "Votre simulation est prête", phrase: "Votre simulation est prête : découvrez votre pièce rénovée dans votre espace CoverSwap.", bouton: "Voir ma simulation", actif: true },
   DEVIS_DISPONIBLE: { objet: "Votre devis est disponible", phrase: "Votre devis est disponible dans votre espace : lisez-le à votre rythme, et donnez votre accord en ligne quand vous êtes prêt.", bouton: "Voir mon devis", actif: true },
   PAIEMENT_RECU: { objet: "Paiement bien reçu, merci", phrase: "Nous avons bien reçu votre paiement de {montant} : merci ! Le détail est dans votre espace.", bouton: "Voir mon espace", actif: true },
   PROJET_TERMINE: { objet: "Votre chantier est terminé : merci !", phrase: "Votre chantier est terminé : merci pour votre confiance. Si le résultat vous plaît, votre avis nous aide beaucoup — il se donne en un clic depuis votre espace.", bouton: "Donner mon avis", actif: true },
+  MESSAGE_LUCAS: { objet: "CoverSwap vous a répondu", phrase: "CoverSwap vous a répondu dans votre espace : « {message} »", bouton: "Lire la réponse", actif: true },
 };
 
-const ANCRES: Record<EvenementNotifie, string> = { SIMULATION_PUBLIEE: "#simulations", DEVIS_DISPONIBLE: "#devis", PAIEMENT_RECU: "#paiement", PROJET_TERMINE: "#apres" };
+const ANCRES: Record<EvenementNotifie, string> = { SIMULATION_PUBLIEE: "#simulations", DEVIS_DISPONIBLE: "#devis", PAIEMENT_RECU: "#paiement", PROJET_TERMINE: "#apres", MESSAGE_LUCAS: "#contact" };
 
 export async function modeleNotification(evenement: EvenementNotifie): Promise<ModeleNotification> {
   const ligne = await prisma.reglageTexte.findUnique({ where: { cle: `NOTIF_${evenement}` } });
@@ -56,8 +58,8 @@ export async function enregistrerModeleNotification(evenement: EvenementNotifie,
 const echapper = (texte: string) => texte.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /** Le mail aux couleurs de CoverSwap : le mot, la phrase, le bouton. Texte brut à côté, pour tous les lecteurs. */
-export function mailNotification(modele: ModeleNotification, valeurs: { prenom: string; montant?: string | null; lien: string }): { objet: string; texte: string; html: string } {
-  const remplir = (texte: string) => texte.replace(/\{prenom\}/g, valeurs.prenom).replace(/\{montant\}/g, valeurs.montant ?? "");
+export function mailNotification(modele: ModeleNotification, valeurs: { prenom: string; montant?: string | null; message?: string | null; lien: string }): { objet: string; texte: string; html: string } {
+  const remplir = (texte: string) => texte.replace(/\{prenom\}/g, valeurs.prenom).replace(/\{montant\}/g, valeurs.montant ?? "").replace(/\{message\}/g, valeurs.message ?? "");
   const bonjour = valeurs.prenom ? `Bonjour ${valeurs.prenom},` : "Bonjour,";
   const phrase = remplir(modele.phrase);
   const signature = `Lucas · CoverSwap · ${EMETTEUR.telephone}`;
@@ -80,7 +82,7 @@ export function mailNotification(modele: ModeleNotification, valeurs: { prenom: 
  * `cle`). Rend pourquoi rien n'est parti, le cas échéant (jamais d'erreur :
  * une notification manquée ne bloque pas le geste de Lucas).
  */
-export async function notifierClient(evenement: EvenementNotifie, dossierId: string, cle: string, valeurs: { montant?: string | null } = {}): Promise<{ programme: boolean; raison?: string }> {
+export async function notifierClient(evenement: EvenementNotifie, dossierId: string, cle: string, valeurs: { montant?: string | null; message?: string | null } = {}): Promise<{ programme: boolean; raison?: string }> {
   try {
     const modele = await modeleNotification(evenement);
     if (!modele.actif) return { programme: false, raison: "Modèle désactivé dans Paramètres." };
@@ -96,7 +98,7 @@ export async function notifierClient(evenement: EvenementNotifie, dossierId: str
     if (!lien) return { programme: false, raison: "Espace client fermé ou lien désactivé." };
     const prenomBrut = (dossier.client?.prenom || dossier.lead?.prenom || dossier.clientNom.split(" ")[0] || "").trim();
     const prenom = /^(inconnu|client)$/i.test(prenomBrut) ? "" : prenomBrut.split(/\s+/)[0];
-    const mail = mailNotification(modele, { prenom, montant: valeurs.montant, lien: `${lien}${ANCRES[evenement]}` });
+    const mail = mailNotification(modele, { prenom, montant: valeurs.montant, message: valeurs.message, lien: `${lien}${ANCRES[evenement]}` });
     const { deja } = await programmerEnvoi({ cle: `notif:${evenement}:${cle}`, nature: "NOTIFICATION", modele: evenement, a: adresse, objet: mail.objet, texte: mail.texte, html: mail.html, dossierId, clientId: dossier.clientId, leadId: dossier.leadId });
     return deja ? { programme: false, raison: "Déjà envoyé pour cet événement." } : { programme: true };
   } catch (erreur) {

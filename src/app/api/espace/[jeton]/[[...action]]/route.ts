@@ -8,7 +8,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { ipDepasseLaLimite } from "@/lib/acces/limite-site";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { accesDuJeton, apercuValide, confirmationRequise, confirmerTelephone } from "@/lib/espace/liens";
-import { alerterConfirmationBloquee, compteEspace, envoyerMessage, noterVisitePermanent, pdfPourLeClient, projetDemande, schemaMessage, type ProjetVisible } from "@/lib/espace/compte";
+import { alerterConfirmationBloquee, compteEspace, envoyerMessage, noterReponsesVues, noterVisitePermanent, pdfPourLeClient, projetDemande, schemaMessage, type ProjetVisible } from "@/lib/espace/compte";
 import { creerProjetClient, demanderProjetDePlus, figeDuProjet, MESSAGE_FIGE, schemaNouveauProjet } from "@/lib/espace/projets";
 import {
   accepterDevis,
@@ -55,6 +55,7 @@ import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogu
  *   POST   /api/espace/<jeton>/confirmation                 les 4 derniers chiffres du téléphone (après 90 jours sans visite)
  *   POST   /api/espace/<jeton>/projets | projets/demande    nouveau projet ; demander un projet de plus (au-delà de deux)
  *   POST   /api/espace/<jeton>/message                      « Écrire à CoverSwap »
+ *   POST   /api/espace/<jeton>/messages/vus                 il a ouvert l'onglet Contact : les réponses de CoverSwap sont vues
  *   GET    /api/espace/<jeton>/documents/<id>               le PDF d'un de ses devis ou factures (tous projets)
  *   PUT    /api/espace/<jeton>/favoris                      ses teintes favorites (catalogue de l'espace)
  *   — et, pour le projet choisi —
@@ -260,6 +261,10 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
       }
       if (action.length === 1 && ressource === "message") {
         await envoyerMessage(permanent, acces.projet, analyser(schemaMessage, await requete.json().catch(() => ({}))).texte);
+        return NextResponse.json({ ok: true });
+      }
+      if (action.length === 2 && ressource === "messages" && id === "vus") {
+        await noterReponsesVues(permanent);
         return NextResponse.json({ ok: true });
       }
       if (action.length === 1 && ressource === "photos") {

@@ -12,6 +12,7 @@ import { ACTEUR, prevenir } from "./alertes";
 import { confirmationRequise } from "./liens";
 import { etapeEspace } from "./etapes";
 import { figeDuProjet, LIBELLES_PASTILLE, pastilleDuProjet, peutOuvrirUnProjet, projetsVisibles, type Fige, type PastilleProjet } from "./projets";
+import { enregistrerMessageClient, marquerReponsesVues, type MessageEspaceVue } from "./messages";
 import { chargerProjet, nomDuProjetClient } from "./service";
 
 /**
@@ -46,6 +47,8 @@ export type DocumentClient = {
   pdf: string | null;
 };
 
+export type MessageClient = { id: string; le: string; auteur: "CLIENT" | "COVERSWAP"; texte: string; projet: string | null; vue: boolean };
+
 export type CompteEspace = {
   version: 3;
   prenom: string;
@@ -57,6 +60,9 @@ export type CompteEspace = {
   nouveauProjet: { possible: boolean; enCours: number; limite: number; demandeLe: string | null };
   documents: DocumentClient[];
   favoris: string[];
+  /** Mission 10 : ses échanges avec CoverSwap (tous projets), du plus ancien au plus récent ; `nonVues` : réponses pas encore ouvertes. */
+  messages: MessageClient[];
+  reponsesNonVues: number;
   prestations: PrestationsPubliques;
   marque: { nom: string; telephone: string; telephoneLien: string; email: string | null };
 };
@@ -174,7 +180,7 @@ export async function compteEspace(permanent: EspacePermanent, options: { apercu
   const prenom = await prenomDuClient(permanent);
   const requise = !options.apercu && confirmationRequise(permanent);
   const base = { version: 3 as const, prenom, prestations: prestationsPubliques(), marque: marque() };
-  if (requise) return { ...base, confirmation: { requise: true }, projets: [], projetCourant: null, nouveauProjet: { possible: false, enCours: 0, limite: 0, demandeLe: null }, documents: [], favoris: [] };
+  if (requise) return { ...base, confirmation: { requise: true }, projets: [], projetCourant: null, nouveauProjet: { possible: false, enCours: 0, limite: 0, demandeLe: null }, documents: [], favoris: [], messages: [], reponsesNonVues: 0 };
   const projets = await projetsVisibles(prisma, permanent.id);
   const cartes = await Promise.all(projets.map((p) => carteDuProjet(p)));
   // En cours d'abord (ce qui l'attend en tête), puis les projets passés, du plus récent au plus ancien.
@@ -189,8 +195,26 @@ export async function compteEspace(permanent: EspacePermanent, options: { apercu
     nouveauProjet: { ...place, demandeLe: permanent.projetDemandeLe?.toISOString() ?? null },
     documents: await documentsDuClient(permanent),
     favoris: lireFavoris(permanent.favoris),
+    ...(await messagesDuClient(projets)),
   };
 }
+
+/** Ses échanges avec CoverSwap, tous projets (40 derniers), du plus ancien au plus récent ; jamais ceux d'un autre client. */
+async function messagesDuClient(projets: ProjetVisible[]): Promise<{ messages: MessageClient[]; reponsesNonVues: number }> {
+  if (projets.length === 0) return { messages: [], reponsesNonVues: 0 };
+  const noms = new Map(projets.map((p) => [p.dossierId, nomDuProjetClient(p.nomProjet, p.dossier.objet, famillesDe(lireSelection(p.dossier.prestations)))]));
+  const lignes = await prisma.messageEspace.findMany({ where: { dossierId: { in: projets.map((p) => p.dossierId) }, archiveLe: null }, orderBy: { createdAt: "desc" }, take: 40 });
+  const messages = lignes.reverse().map((m): MessageClient => ({ id: m.id, le: m.createdAt.toISOString(), auteur: m.auteur === "LUCAS" ? "COVERSWAP" : "CLIENT", texte: m.texte, projet: projets.length > 1 ? (noms.get(m.dossierId) ?? null) : null, vue: m.auteur !== "LUCAS" || Boolean(m.luLe) }));
+  return { messages, reponsesNonVues: messages.filter((m) => m.auteur === "COVERSWAP" && !m.vue).length };
+}
+
+/** Le client ouvre l'onglet Contact : les réponses de CoverSwap sont vues (jamais en aperçu). */
+export async function noterReponsesVues(permanent: Pick<EspacePermanent, "id">): Promise<number> {
+  const projets = await projetsVisibles(prisma, permanent.id);
+  return marquerReponsesVues(projets.map((p) => p.dossierId));
+}
+
+export type { MessageEspaceVue };
 
 /** Une visite de l'espace : comptée (dix minutes font une visite), datée — c'est elle qui fait courir les 90 jours. */
 export async function noterVisitePermanent(permanent: EspacePermanent): Promise<void> {
@@ -222,6 +246,7 @@ export async function envoyerMessage(permanent: EspacePermanent, projet: EspaceC
   const dossierId = projet?.dossierId ?? projets.at(-1)?.dossierId;
   if (!dossierId) throw new ErreurMetier("Votre espace n'a pas encore de projet : appelez CoverSwap.", 409);
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true } });
-  await avecActeur(ACTEUR, () => prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_MESSAGE", direction: "ENTRANT", contenu: `Message du client depuis son espace : « ${texte} »`.slice(0, 2100), metadata: JSON.stringify({ permanentId: permanent.id }) } }));
+  const evenement = await avecActeur(ACTEUR, () => prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_MESSAGE", direction: "ENTRANT", contenu: `Message du client depuis son espace : « ${texte} »`.slice(0, 2100), metadata: JSON.stringify({ permanentId: permanent.id }) } }));
+  await avecActeur(ACTEUR, () => enregistrerMessageClient({ dossierId, espaceId: projet?.id ?? projets.at(-1)?.id ?? null, source: "MESSAGE", texte, evenementId: evenement.id }));
   await prevenir(dossierId, { titre: `Message — ${dossier?.clientNom ?? "client"}`, texte: `« ${texte.slice(0, 600)} »\nÀ vous : lui répondre (appel ou SMS).`, urgence: 4, telephone: dossier?.clientTelephone, etiquette: `message-${dossierId}` });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BookText, ChevronRight, Coins, Search, Sparkles, WandSparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -41,8 +41,9 @@ type Consommation = {
 
 const dollars = (n: number) => `${n.toFixed(2).replace(".", ",")} $`;
 
-export default function EcranSimulateur({ dossierInitial }: { dossierInitial: string | null }) {
+export default function EcranSimulateur({ dossierInitial, preparationInitiale = null }: { dossierInitial: string | null; preparationInitiale?: string | null }) {
   const [dossierId, setDossierId] = useState<string | null>(dossierInitial);
+  const preparationChargee = useRef(false);
   const [contexte, setContexte] = useState<Contexte | null>(null);
   const [photoId, setPhotoId] = useState<string | null>(null);
   const [type, setType] = useState<string>("cuisine");
@@ -77,6 +78,20 @@ export default function EcranSimulateur({ dossierInitial }: { dossierInitial: st
         const url = new URL(window.location.href);
         url.searchParams.set("dossier", c.dossier.id);
         window.history.replaceState(null, "", url);
+        // Une préparation faite par l'assistant (mission 10) : la photo, le type, les teintes et le résultat, prêts à copier.
+        if (preparationInitiale && !preparationChargee.current) {
+          preparationChargee.current = true;
+          appelApi<{ preparation: Preparation }>(`/api/simulateur/preparations/${preparationInitiale}`)
+            .then(({ preparation: p }) => {
+              if (!actif || p.dossierId !== c.dossier.id) return;
+              if (p.photoId) setPhotoId(p.photoId);
+              if (p.typeSurface && typeSurface(p.typeSurface)) setType(p.typeSurface);
+              setTeintes(Object.fromEntries(p.zones.map((z) => [z.zone, { ref: z.ref, nom: z.nom, famille: "", profil: "", resume: z.resume, hex: z.hex, couleur: null, image: `/api/simulateur/echantillons/${encodeURIComponent(z.ref)}`, styles: [] }])));
+              setPreparation(p);
+              window.setTimeout(() => document.getElementById("resultat")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+            })
+            .catch((erreur) => toast.error(messageErreur(erreur)));
+        }
       })
       .catch((erreur) => {
         toast.error(messageErreur(erreur));
@@ -85,7 +100,7 @@ export default function EcranSimulateur({ dossierInitial }: { dossierInitial: st
     return () => {
       actif = false;
     };
-  }, [dossierId]);
+  }, [dossierId, preparationInitiale]);
 
   const styles = useMemo(() => (contexte?.projet?.styles ?? []).filter((s): s is StyleClient => s in LIBELLES_STYLE), [contexte]);
 

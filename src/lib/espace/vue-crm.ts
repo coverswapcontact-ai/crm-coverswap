@@ -12,6 +12,7 @@ import { lireSelection } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, type ProjetClient } from "./projet";
 import { accorderSimulations, choisir, photosDuClient, quotaSimulations } from "./service";
 import { devaliderChoix, devaliderProjet, lirePhotosRetirees, remettrePhoto, retirerAccord, retirerDemandeProposition, retirerPhoto, validerProjet } from "./validations";
+import { messagesEspace, repondreDansLEspace, type MessageEspaceVue } from "./messages";
 
 /**
  * L'espace d'un client vu — et piloté — depuis le CRM : tout ce qu'il a fait,
@@ -59,6 +60,9 @@ export type VueEspaceCrm = {
   gestes: { le: string; type: string; contenu: string; auteur: "CLIENT" | "LUCAS" }[];
   /** Ancien nom (écran du 21/09), gardé pour les écrans qui le lisent encore. */
   propositionDemandeeLe: string | null;
+  /** Mission 10 : ses messages et les réponses de Lucas, du plus récent au plus ancien ; `messagesNonLus` : à lui de répondre. */
+  messages: MessageEspaceVue[];
+  messagesNonLus: number;
 };
 
 const iso = (d: Date | null | undefined) => d?.toISOString() ?? null;
@@ -135,6 +139,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
   const expire = !permanent && espace.expireLe.getTime() < Date.now();
   const revoque = permanent?.revoqueLe ?? espace.revoqueLe;
   const autres = permanent ? (await projetsVisibles(prisma, permanent.id)).filter((p) => p.dossierId !== dossierId) : [];
+  const messages = await messagesEspace({ dossierId, limite: 40 });
   const zonesDuChoix = choixBrut?.mode === "COMPOSITE" ? (choixBrut.zones ?? []) : lireZones(espace.simulations.find((s) => s.id === choixBrut?.simulationId)?.zones ?? null);
   let avis: VueEspaceCrm["avis"] = null;
   try {
@@ -198,6 +203,8 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       .slice(0, 40)
       .map((e) => ({ le: (e.survenuLe ?? e.createdAt).toISOString(), type: e.type, contenu: e.contenu, auteur: e.direction === "ENTRANT" ? ("CLIENT" as const) : ("LUCAS" as const) })),
     propositionDemandeeLe: iso(espace.propositionDemandeeLe),
+    messages,
+    messagesNonLus: messages.filter((m) => m.auteur === "CLIENT" && !m.luLe).length,
   };
 }
 
@@ -215,6 +222,7 @@ export const schemaGesteEspace = z.discriminatedUnion("geste", [
   z.object({ geste: z.literal("retirer-photo"), photoId: z.string().min(1).max(80) }),
   z.object({ geste: z.literal("remettre-photo"), photoId: z.string().min(1).max(80) }),
   z.object({ geste: z.literal("reinitialiser"), etape: z.enum(["PROJET", "SIMULATIONS", "DEVIS"]) }),
+  z.object({ geste: z.literal("repondre"), texte: z.string().trim().min(2).max(2000) }),
 ]);
 export type GesteEspace = z.output<typeof schemaGesteEspace>;
 
@@ -261,6 +269,9 @@ export async function gesteDeLucas(dossierId: string, geste: GesteEspace): Promi
       return retirerPhoto(espace, geste.photoId, "LUCAS");
     case "remettre-photo":
       return remettrePhoto(espace.id, geste.photoId);
+    case "repondre":
+      await repondreDansLEspace(dossierId, geste.texte);
+      return;
     case "reinitialiser": {
       if (geste.etape === "PROJET") {
         await devaliderProjet(espace, "LUCAS", "étape réinitialisée");

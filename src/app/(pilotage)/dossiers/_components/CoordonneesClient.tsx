@@ -14,7 +14,7 @@ import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "./ui";
 import { avertissementsCoordonnees, validerCoordonnees, type ChampsCoordonnees, type ErreursCoordonnees } from "./validation";
 
-type Saisie = ChampsCoordonnees & { dateChantier: string };
+type Saisie = ChampsCoordonnees & { dateChantier: string; dateSouhaitee: string; dateFinChantier: string };
 
 function saisieDepuis(detail: DossierDetail): Saisie {
   return {
@@ -28,6 +28,8 @@ function saisieDepuis(detail: DossierDetail): Saisie {
     source: detail.source === "INCONNUE" ? "" : detail.source,
     montantEstime: detail.montantEstime === null ? "" : formatQuantite(detail.montantEstime),
     dateChantier: detail.dateChantier ? jourParis(detail.dateChantier) : "",
+    dateSouhaitee: detail.dateSouhaitee ? jourParis(detail.dateSouhaitee) : "",
+    dateFinChantier: detail.dateFinChantier ? jourParis(detail.dateFinChantier) : "",
   };
 }
 
@@ -153,6 +155,8 @@ export function CoordonneesClient({
         source: saisie.source || null,
         montantEstime: saisie.montantEstime.trim() ? lireNombre(saisie.montantEstime) : null,
         ...(saisie.dateChantier !== initiale.dateChantier ? { dateChantier: saisie.dateChantier || null } : {}),
+        ...(saisie.dateSouhaitee !== initiale.dateSouhaitee ? { dateSouhaitee: saisie.dateSouhaitee || null } : {}),
+        ...(saisie.dateFinChantier !== initiale.dateFinChantier ? { dateFinChantier: saisie.dateFinChantier || null } : {}),
       });
       onMisAJour(nouveau);
       toast.success("Dossier enregistré");
@@ -201,6 +205,8 @@ export function CoordonneesClient({
         />
         <Champ libelle="Montant estimé (€)" inputMode="decimal" placeholder="Ex. 2 500" {...champ("montantEstime")} />
         <Champ libelle="Date du chantier" type="date" {...champ("dateChantier")} />
+        <Champ libelle="Date souhaitée par le client" type="date" {...champ("dateSouhaitee")} />
+        <Champ libelle="Fin du chantier" type="date" {...champ("dateFinChantier")} />
         <div className="flex items-end justify-end sm:col-span-2">
           <Bouton type="submit" variante={modifiee ? "primaire" : "secondaire"} disabled={!modifiee} chargement={envoi}>
             Enregistrer

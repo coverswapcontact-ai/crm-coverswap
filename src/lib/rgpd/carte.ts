@@ -152,6 +152,9 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     garde: "source, statut, teintes, version du prompt, coût et dates (images effacées)",
   },
   AccordDevis: { conserve: "preuve du bon pour accord donné sur un devis émis (signature au doigt comprise) : conservée avec le document, même durée légale" },
+  // Mission 10 (23/09/2026) : ce que l'assistant a modifié (valeurs d'avant et d'après, phrase de Lucas) et les messages de l'espace.
+  ModificationDossier: { remplacer: () => ({ champs: "[]", commande: null }), garde: "dates, acteur et annulation : la trace qu'une modification a eu lieu, sans ses valeurs" },
+  MessageEspace: { remplacer: () => ({ texte: EFFACE }), garde: "auteur, source, dates (lu, notifié) : la mesure des échanges, sans leur contenu" },
   // Simulateur du CRM (21/09/2026).
   PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null }), garde: "type de surface, teintes, version du prompt, mode et dates (photos effacées)" },
   GenerationImage: { conserve: "coût d'une génération d'image : jetons, montant et durée, aucune donnée de la personne" },

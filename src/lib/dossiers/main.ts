@@ -56,6 +56,11 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     // (Les notifications automatiques de l'espace sont des MAIL_NOTIFICATION : elles ne la déplacent pas.)
     case "MAIL_ENVOYE":
       return evenement.direction === "SORTANT" ? { qui: "CLIENT", motif: "Mail envoyé : en attente de sa réponse" } : null;
+    // Mission 10 : je réponds dans son espace, ou je lui communique le lien par SMS (texte rendu par l'assistant).
+    case "ESPACE_REPONSE":
+      return evenement.direction === "SORTANT" ? { qui: "CLIENT", motif: "Réponse envoyée dans son espace : en attente de son retour" } : null;
+    case "ESPACE_LIEN_COMMUNIQUE":
+      return { qui: "CLIENT", motif: "Lien de son espace communiqué : en attente de ses photos" };
     case "SMS_ENVOYE": {
       const meta = lireMetadata(evenement.metadata);
       const lien = meta.origine === "LIEN_ESPACE" || (typeof meta.modele === "string" && MODELES_LIEN.test(meta.modele));
@@ -135,6 +140,8 @@ export const TYPES_MAIN = [
   "SMS_RECU",
   "MAIL_RECU",
   "WHATSAPP_RECU",
+  "ESPACE_REPONSE",
+  "ESPACE_LIEN_COMMUNIQUE",
 ];
 
 const MINUTE = 60_000;

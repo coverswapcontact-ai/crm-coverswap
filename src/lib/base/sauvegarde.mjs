@@ -23,6 +23,13 @@
 // Les commentaires turbopackIgnore empêchent Next de tracer tout le projet : ces
 // chemins ne sont connus qu'à l'exécution.
 //
+// Mission 10 (23/09/2026) : le volume passe à 5 Go et les sauvegardes ont une
+// rétention — une copie par jour civil (travail périodique), on GARDE les 7
+// dernières quotidiennes et les 4 dernières hebdomadaires (la plus récente de
+// chaque semaine), le reste est purgé (`purgerSauvegardes`), chaque purge
+// journalisée dans Tâches de fond. Une copie dont le nom ne porte pas de date
+// n'est jamais purgée. Seuils du disque : 70 % avertit, 85 % alerte.
+//
 // Variables : DATABASE_URL (file:…), SAUVEGARDES_DIR (optionnel),
 //             TURSO_DATABASE_URL (si présente : base distante, pas de copie locale).
 
@@ -57,6 +64,104 @@ const mo = (octets) => `${(octets / 1024 / 1024).toFixed(1).replace(".", ",")} M
 export function placeLibre(dossier) {
   const s = statfsSync(/*turbopackIgnore: true*/ dossier);
   return Number(s.bavail) * Number(s.bsize);
+}
+
+/** Capacité du volume du dossier : libre et total, en octets ; part utilisée en pour cent. */
+export function capaciteVolume(dossier) {
+  const s = statfsSync(/*turbopackIgnore: true*/ dossier);
+  const total = Number(s.blocks) * Number(s.bsize);
+  const libre = Number(s.bavail) * Number(s.bsize);
+  return { libre, total, pourcentUtilise: total > 0 ? Math.round(((total - libre) / total) * 100) : 0 };
+}
+
+/** Le dossier des sauvegardes d'une base (SAUVEGARDES_DIR, sinon <dossier de la base>/sauvegardes). */
+export function dossierSauvegardes(url = process.env.DATABASE_URL) {
+  const fichier = fichierDeLaBase(url);
+  if (!fichier) return null;
+  return process.env.SAUVEGARDES_DIR ?? path.join(/*turbopackIgnore: true*/ path.dirname(/*turbopackIgnore: true*/ fichier), "sauvegardes");
+}
+
+/* ── Rétention (mission 10) ─────────────────────────────────────────── */
+
+export const RETENTION = { quotidiennes: 7, hebdomadaires: 4 };
+
+/** La date portée par le nom d'une sauvegarde (« …-2026-09-23T03-15-00-000Z.db[.gz] »), ou null. */
+export function dateDuNom(nom) {
+  const m = /-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.db(?:\.gz)?$/.exec(nom);
+  if (!m) return null;
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]), Number(m[7])));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+const jourDe = (date) => date.toISOString().slice(0, 10);
+/** Semaine ISO (année-semaine) d'une date, en UTC. */
+function semaineDe(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const jour = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - jour);
+  const debutAnnee = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const semaine = Math.ceil(((d - debutAnnee) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-S${String(semaine).padStart(2, "0")}`;
+}
+
+/**
+ * Pur : parmi des noms de sauvegardes, ceux à garder et ceux à purger.
+ * Gardés : 7 quotidiennes — la copie la plus récente de chacun des 7 derniers
+ * jours qui en ont une —, 4 hebdomadaires — la plus récente de chacune des 4
+ * dernières semaines (ISO) d'AVANT la fenêtre quotidienne —, et toute copie
+ * sans date dans son nom (on ne devine pas). Le reste est purgé.
+ */
+export function selectionnerAGarder(noms, options = {}) {
+  const quotidiennes = options.quotidiennes ?? RETENTION.quotidiennes;
+  const hebdomadaires = options.hebdomadaires ?? RETENTION.hebdomadaires;
+  const datees = noms.map((nom) => ({ nom, date: dateDuNom(nom) }));
+  const garder = new Set(datees.filter((d) => d.date === null).map((d) => d.nom));
+  const triees = datees.filter((d) => d.date !== null).sort((a, b) => b.date - a.date);
+  const derniereParCle = (liste, cle) => {
+    const vues = new Map();
+    for (const d of liste) {
+      const k = cle(d.date);
+      if (!vues.has(k)) vues.set(k, d);
+    }
+    return [...vues.values()];
+  };
+  const parJour = derniereParCle(triees, jourDe).slice(0, quotidiennes);
+  for (const d of parJour) garder.add(d.nom);
+  const semainePlancher = parJour.length ? semaineDe(parJour[parJour.length - 1].date) : null;
+  const anciennes = triees.filter((d) => semainePlancher === null || semaineDe(d.date) < semainePlancher);
+  for (const d of derniereParCle(anciennes, semaineDe).slice(0, hebdomadaires)) garder.add(d.nom);
+  return { garder: noms.filter((n) => garder.has(n)), purger: noms.filter((n) => !garder.has(n)) };
+}
+
+/**
+ * Purge les sauvegardes du dossier au-delà de la rétention (7 quotidiennes,
+ * 4 hebdomadaires) ; rend le bilan que la tâche journalise. Rien d'autre que des
+ * copies datées de la base n'est touché.
+ */
+export function purgerSauvegardes(dossier, options = {}) {
+  if (!existsSync(/*turbopackIgnore: true*/ dossier)) return { gardees: [], purgees: [], octetsLiberes: 0 };
+  const noms = readdirSync(/*turbopackIgnore: true*/ dossier).filter((nom) => (nom.endsWith(".db") || nom.endsWith(".db.gz")) && !nom.endsWith(PARTIEL));
+  const { garder, purger } = selectionnerAGarder(noms, options);
+  let octetsLiberes = 0;
+  const purgees = [];
+  for (const nom of purger) {
+    const chemin = path.join(/*turbopackIgnore: true*/ dossier, nom);
+    try {
+      octetsLiberes += statSync(/*turbopackIgnore: true*/ chemin).size;
+      rmSync(/*turbopackIgnore: true*/ chemin, { force: true });
+      purgees.push(nom);
+    } catch (erreur) {
+      console.warn(`[sauvegarde] ${nom} non purgée : ${erreur instanceof Error ? erreur.message : erreur}`);
+    }
+  }
+  if (purgees.length) console.log(`[sauvegarde] Purge : ${purgees.length} sauvegarde(s) retirée(s) (${mo(octetsLiberes)}), ${garder.length} gardée(s).`);
+  return { gardees: garder, purgees, octetsLiberes };
+}
+
+/** Une sauvegarde de ce motif existe-t-elle déjà pour ce jour (AAAA-MM-JJ, UTC) ? */
+export function sauvegardeDuJourExiste(dossier, motif, jour) {
+  if (!existsSync(/*turbopackIgnore: true*/ dossier)) return false;
+  return readdirSync(/*turbopackIgnore: true*/ dossier).some((nom) => nom.includes(`-${motif}-`) && dateDuNom(nom) !== null && jourDe(dateDuNom(nom)) === jour);
 }
 
 /** Empreinte SHA-256 d'un fichier (de son contenu décompressé si `gz`). */

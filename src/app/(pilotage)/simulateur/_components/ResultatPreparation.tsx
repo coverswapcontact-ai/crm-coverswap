@@ -22,7 +22,9 @@ export type Preparation = {
   dossierId: string;
   mode: "CHATGPT" | "API";
   statut: string;
+  typeSurface?: string;
   typeLibelle: string;
+  photoId?: string;
   zones: { zone: string; libelle: string; etiquette: string; ref: string; nom: string; resume: string; hex: string | null }[];
   prompt: string | null;
   promptVersion: number | null;

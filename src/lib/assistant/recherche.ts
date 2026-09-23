@@ -20,7 +20,7 @@ export type Candidat = {
   ville: string | null;
   /** Étape du dossier, statut du lead, ou ce que la fiche client porte (nombre de dossiers). */
   etat: string;
-  /** Pourquoi il correspond (« nom proche », « téléphone », « e-mail »). */
+  /** Pourquoi il correspond (« nom proche », « téléphone », « e-mail », « adresse », « numéro de devis »). */
   motif: string;
   /** 1 = exact, 0,5 = approché. */
   score: number;
@@ -78,8 +78,11 @@ export async function chercherContacts(texte: string, options: { limite?: number
       select: { id: true, prenom: true, nom: true, ville: true, email: true, telephone: true, statut: true, clientId: true, dossiers: { where: { archiveLe: null }, select: { id: true }, take: 1 } },
       take: 3000,
     }),
-    prisma.dossier.findMany({ where: { archiveLe: null }, select: { id: true, clientNom: true, clientVille: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true }, take: 3000 }),
+    prisma.dossier.findMany({ where: { archiveLe: null }, select: { id: true, clientNom: true, clientVille: true, clientAdresse: true, clientCp: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true }, take: 3000 }),
   ]);
+  // Un numéro de devis ou de facture (« 2026-037 », « F-2026-012 ») : le dossier du document (mission 10).
+  const numero = /^[A-Z]{0,3}-?\d{4}-\d{2,6}$/i.test(brut) ? brut.toUpperCase() : null;
+  const documents = numero ? await prisma.document.findMany({ where: { numero: { contains: numero.replace(/^[A-Z]+-/, "") }, archiveLe: null }, select: { id: true, type: true, numero: true, dossier: { select: { id: true, clientNom: true, clientVille: true, objet: true, etape: true, clientId: true, leadId: true } } }, take: 5 }) : [];
 
   const candidats: Candidat[] = [];
   const ajouter = (c: Candidat) => {
@@ -111,6 +114,13 @@ export async function chercherContacts(texte: string, options: { limite?: number
       if (s) ajouter({ ...base, ...s });
     }
   }
+  for (const doc of documents) {
+    const d = doc.dossier;
+    ajouter({ type: "DOSSIER", id: d.id, nom: `${d.clientNom} — ${d.objet}`, ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape} · ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "avoir"} ${doc.numero}`, motif: `numéro de ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "document"}`, score: 1, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
+  }
+  // Une adresse (« 30 boulevard Joliot-Curie ») : tous les mots cherchés dans l'adresse du dossier (numéro compris).
+  const motsAdresse = sansAccents(brut).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((m) => (m.length >= 2 || /^\d+$/.test(m)) && !MOTS_VIDES.has(m));
+  const ressembleAUneAdresse = motsAdresse.length >= 2 && /\d/.test(brut) && !telephone;
   for (const d of dossiers) {
     const base = { type: "DOSSIER" as const, id: d.id, nom: `${d.clientNom} — ${d.objet}`, ville: d.clientVille || null, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
     if (memeTelephone(d.clientTelephone)) ajouter({ ...base, score: 1, motif: "téléphone" });
@@ -118,6 +128,11 @@ export async function chercherContacts(texte: string, options: { limite?: number
     else {
       const s = scoreNom(recherche, d.clientNom) ?? scoreNom(recherche, d.objet);
       if (s) ajouter({ ...base, ...s });
+      else if (ressembleAUneAdresse) {
+        const adresse = sansAccents(`${d.clientAdresse} ${d.clientCp} ${d.clientVille}`).replace(/[^a-z0-9]+/g, " ");
+        const motsTrouves = motsAdresse.filter((m) => adresse.split(" ").some((x) => x === m || (m.length >= 4 && !/^\d+$/.test(m) && x.startsWith(m))));
+        if (motsTrouves.length === motsAdresse.length) ajouter({ ...base, score: 0.9, motif: "adresse" });
+      }
     }
   }
   // Une ville seule (« Montpellier ») : tout ce qui s'y trouve, si rien d'autre ne correspond.

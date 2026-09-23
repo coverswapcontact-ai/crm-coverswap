@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Copy, RotateCcw, Save, ShieldOff } from "lucide-react";
+import { Bot, Copy, History, RotateCcw, Save, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Pastille, TitreSection, ZoneTexte } from "@/components/pilotage/ui";
+import { Bouton, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import type { OutilVue } from "@/lib/assistant/catalogue";
-import type { TexteReglable } from "@/lib/assistant/consignes";
+import type { TexteReglable, VersionVue } from "@/lib/assistant/consignes";
 import type { AccesVue } from "@/lib/oauth/serveur";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 type Acces = { adresseMcp: string; acces: AccesVue; outils: OutilVue[] };
-type Consignes = { consignes: TexteReglable; positionnement: TexteReglable; defauts: { consignes: string; positionnement: string } };
+type Consignes = { consignes: TexteReglable; positionnement: TexteReglable; defauts: { consignes: string; positionnement: string }; versions: { consignes: VersionVue[]; positionnement: VersionVue[] } };
 
 const TON_NIVEAU: Record<OutilVue["niveau"], "neutre" | "vert" | "ambre"> = { LECTURE: "neutre", REVERSIBLE: "vert", SENSIBLE: "ambre" };
 const FAMILLES: { cle: OutilVue["famille"]; libelle: string }[] = [
@@ -57,8 +57,8 @@ export default function AssistantClaude() {
       <TitreSection>Assistant Claude</TitreSection>
       <div className="space-y-3">
         <CarteConnexion acces={acces} onMaj={setAcces} />
-        {consignes ? <CarteTexte cle="consignes" titre="Consignes" aide="Ce que Claude lit à chaque session : tarifs, prestations, conditions, protocole de campagne, principes de décision, format du point du jour. Écris-les comme tu les dirais à un directeur général." texte={consignes.consignes} defaut={consignes.defauts.consignes} onMaj={setConsignes} /> : null}
-        {consignes ? <CarteTexte cle="positionnement" titre="Positionnement (contexte marché)" aide="Le cadre des recherches web de Claude : ce que vend CoverSwap, à qui, contre qui, à quels prix." texte={consignes.positionnement} defaut={consignes.defauts.positionnement} onMaj={setConsignes} /> : null}
+        {consignes ? <CarteTexte cle="consignes" titre="Consignes" aide="Ce que Claude lit à chaque session : tarifs, prestations, conditions, protocole de campagne, principes de décision, format du point du jour. Écris-les comme tu les dirais à un directeur général. Claude peut les modifier à ta demande (« modifier_consignes », avec ta confirmation) : chaque enregistrement garde une version." texte={consignes.consignes} defaut={consignes.defauts.consignes} versions={consignes.versions?.consignes ?? []} onMaj={setConsignes} /> : null}
+        {consignes ? <CarteTexte cle="positionnement" titre="Positionnement (contexte marché)" aide="Le cadre des recherches web de Claude : ce que vend CoverSwap, à qui, contre qui, à quels prix." texte={consignes.positionnement} defaut={consignes.defauts.positionnement} versions={consignes.versions?.positionnement ?? []} onMaj={setConsignes} /> : null}
         <CarteOutils outils={acces.outils} />
       </div>
     </section>
@@ -162,10 +162,26 @@ function CarteConnexion({ acces, onMaj }: { acces: Acces; onMaj: (a: Acces) => v
   );
 }
 
-function CarteTexte({ cle, titre, aide, texte, defaut, onMaj }: { cle: "consignes" | "positionnement"; titre: string; aide: string; texte: TexteReglable; defaut: string; onMaj: (c: Consignes) => void }) {
+function CarteTexte({ cle, titre, aide, texte, defaut, versions, onMaj }: { cle: "consignes" | "positionnement"; titre: string; aide: string; texte: TexteReglable; defaut: string; versions: VersionVue[]; onMaj: (c: Consignes) => void }) {
   const [valeur, setValeur] = useState(texte.texte);
   const [occupe, setOccupe] = useState(false);
+  const [historique, setHistorique] = useState(false);
   const modifie = valeur.trim() !== texte.texte.trim();
+
+  async function restaurer(numero: number) {
+    if (!window.confirm(`Restaurer la version ${numero} ? Le texte actuel reste dans l'historique.`)) return;
+    setOccupe(true);
+    try {
+      const r = await envoyerJson<Consignes>("/api/assistant/consignes", "PATCH", { restaurer: { texte: cle, numero } });
+      onMaj(r);
+      setValeur(r[cle].texte);
+      toast.success(`Version ${numero} restaurée.`);
+    } catch (erreur) {
+      toast.error("Restauration impossible", { description: messageErreur(erreur) });
+    } finally {
+      setOccupe(false);
+    }
+  }
 
   async function enregistrer(contenu: string) {
     setOccupe(true);
@@ -200,6 +216,31 @@ function CarteTexte({ cle, titre, aide, texte, defaut, onMaj }: { cle: "consigne
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">{aide}</p>
       <ZoneTexte libelle="" value={valeur} onChange={(e) => setValeur(e.target.value)} rows={14} className="mt-2 font-mono text-[12px]" classeConteneur="mt-2" />
+      {versions.length ? (
+        <div className="mt-2">
+          <button type="button" onClick={() => setHistorique((v) => !v)} className={cn("inline-flex items-center gap-1.5 text-[12px] text-[#5DCAA5] hover:underline", TRANS)} aria-expanded={historique}>
+            <History size={13} aria-hidden /> {historique ? "Masquer l'historique" : `Historique des versions (${versions.length})`}
+          </button>
+          {historique ? (
+            <ul className="mt-2 divide-y-[0.5px] divide-[#2A2D34] rounded-[9px] border-[0.5px] border-[#2A2D34]">
+              {versions.map((v) => (
+                <li key={v.numero} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[12.5px]">
+                  <span className="min-w-0 text-[#D1D5DB]">
+                    v{v.numero} · {quand(v.le)} · {v.par?.startsWith("ASSISTANT") ? "Claude" : v.par === "LUCAS" ? "toi" : (v.par ?? "?")}
+                    {v.commande ? <span className="text-[#8B919C]"> · « {v.commande} »</span> : null}
+                    <span className="text-[#6B7280]"> · {v.caracteres} car.</span>
+                  </span>
+                  {v.courante ? <Pastille ton="vert">Courante</Pastille> : (
+                    <button type="button" disabled={occupe} onClick={() => void restaurer(v.numero)} className={cn("text-[12px] font-medium text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
+                      Restaurer
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

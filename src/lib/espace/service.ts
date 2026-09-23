@@ -23,6 +23,7 @@ import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
 import { ACTEUR, prevenir } from "./alertes";
+import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
@@ -905,10 +906,11 @@ export async function commenterSimulation(espace: EspaceClient, simulationId: st
   const simulation = await simulationPubliee(espace, simulationId);
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   await avecActeur(ACTEUR, async () => {
-    await prisma.$transaction([
+    const [, evenement] = await prisma.$transaction([
       prisma.simulationEspace.update({ where: { id: simulationId }, data: { commentaireClient: commentaire, commenteeLe: new Date() } }),
       prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_COMMENTAIRE", direction: "ENTRANT", contenu: `Commentaire du client${simulation.titre ? ` sur « ${simulation.titre} »` : ""} : « ${commentaire} »`, metadata: JSON.stringify({ simulationId }) } }),
     ]);
+    await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "COMMENTAIRE", texte: commentaire, simulationId, evenementId: evenement.id });
   });
   await prevenir(espace.dossierId, { titre: `Commentaire — ${dossier?.clientNom ?? "client"}`, texte: `« ${commentaire} »`, urgence: 4, telephone: dossier?.clientTelephone });
 }
@@ -925,13 +927,14 @@ export async function demanderProposition(espace: EspaceClient, entree: z.output
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   const texte = `Le client demande une autre proposition${simulation?.titre ? ` (après « ${simulation.titre} »)` : ""}${entree.commentaire ? ` : « ${entree.commentaire} »` : ""}`;
   await avecActeur(ACTEUR, async () => {
-    await prisma.$transaction([
+    const [, evenement] = await prisma.$transaction([
       // Son mot est gardé entier sur l'espace : il s'affiche dans le dossier et dans Espaces clients, pas seulement dans l'historique.
       prisma.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: maintenant, propositionMessage: entree.commentaire || null, propositionSimulationId: simulation?.id ?? null } }),
       prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_NOUVELLE_PROPOSITION", direction: "ENTRANT", contenu: texte.slice(0, 1500), metadata: JSON.stringify({ simulationId: simulation?.id ?? null }) } }),
       prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: `Préparer une autre proposition${entree.commentaire ? ` — « ${entree.commentaire.slice(0, 120)} »` : " (demande du client)"}`, prochaineActionDate: maintenant } }),
       ...(simulation && entree.commentaire ? [prisma.simulationEspace.update({ where: { id: simulation.id }, data: { commentaireClient: entree.commentaire, commenteeLe: maintenant } })] : []),
     ]);
+    await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "PROPOSITION", texte: entree.commentaire || texte, simulationId: simulation?.id ?? null, evenementId: evenement.id });
   });
   await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone });
 }

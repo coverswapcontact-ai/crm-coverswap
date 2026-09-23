@@ -258,6 +258,18 @@ export function famille(id: IdFamille): Famille {
 /** Les familles et sous-parties d'un projet : `{ CUISINE: ["facades-hautes", …], SDB: [] }`. Une famille cochée sans sous-partie est permise. */
 export type SelectionPrestations = Partial<Record<IdFamille, string[]>>;
 
+/** Mission 10 : `Dossier.teintes` → la teinte retenue par sous-partie (« CUISINE.ilot » → « chêne »), en mots. */
+export function lireTeintes(json: string | null | undefined): Record<string, string> {
+  if (!json) return {};
+  try {
+    const valeur: unknown = JSON.parse(json);
+    if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) return {};
+    return Object.fromEntries(Object.entries(valeur as Record<string, unknown>).filter(([cle, v]) => typeof v === "string" && v.trim() && sousPartieDeCle(cle)).map(([cle, v]) => [cle, (v as string).trim()]));
+  } catch {
+    return {};
+  }
+}
+
 /** Clé d'une sous-partie, unique dans tout le fichier : « CUISINE.credence ». */
 export const cleSousPartie = (familleId: IdFamille, sousPartieId: string) => `${familleId}.${sousPartieId}`;
 

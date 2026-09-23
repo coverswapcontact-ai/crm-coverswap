@@ -1,8 +1,10 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { lirePrestationsDuTarif, listerPresets } from "@/lib/dossiers/presets";
+import type { Unite } from "@/lib/dossiers/constants";
+import { creerPreset, lirePrestationsDuTarif, listerPresets, modifierPreset } from "@/lib/dossiers/presets";
 import type { PresetVue } from "@/lib/dossiers/types";
 import { cleSousPartie, FAMILLES, sousPartieDeCle, type IdFamille } from "./prestations";
+import { libelleReperee, repererSousPartie } from "./reperage";
 
 /**
  * Le tarif de chaque sous-partie : celui que Lucas lui a attribué dans ses tarifs
@@ -78,4 +80,36 @@ export async function attribuerTarif(cle: string, presetId: string | null): Prom
       })
       .filter((op): op is NonNullable<typeof op> => op !== null)
   );
+}
+
+export type ModificationTarif = { avant: LigneTarifPrestation; apres: LigneTarifPrestation; preset: PresetVue; cree: boolean; partagees: string[] };
+
+/**
+ * Mission 10 (« modifier_tarifs ») : le prix d'une sous-partie dite en mots
+ * (« ilot », « SDB.plan-vasque »). Son tarif attribué est modifié ; un tarif
+ * trouvé par mots-clés est modifié puis attribué ; sans tarif, un tarif est créé
+ * et attribué. Les devis déjà émis ne bougent pas (un document émis est figé).
+ */
+export async function modifierTarifSousPartie(sousPartie: string, entree: { prixUnitaire: number; unite?: Unite; designation?: string }): Promise<ModificationTarif> {
+  const r = repererSousPartie(sousPartie);
+  if ("candidats" in r) throw new ErreurMetier(`« ${sousPartie} » existe dans plusieurs familles : précise laquelle (${r.candidats.map(libelleReperee).join(" ; ")}).`, 400);
+  if ("aucune" in r) throw new ErreurMetier(`« ${sousPartie} » n'est pas une sous-partie connue. Possibles : ${r.proposees.map((p) => `${p.famille.libelle} › ${p.sousPartie.libelle}`).join(", ")}.`, 400);
+  const cle = r.trouvee.cle;
+  const avant = (await tarifsDesPrestations()).find((l) => l.cle === cle);
+  if (!avant) throw new ErreurMetier("Sous-partie sans ligne de tarif.", 500);
+  const prixUnitaire = Math.round(entree.prixUnitaire * 100) / 100;
+  let preset: PresetVue;
+  let cree = false;
+  if (avant.presetId) {
+    preset = await modifierPreset(avant.presetId, { prixUnitaire, ...(entree.unite ? { unite: entree.unite } : {}), ...(entree.designation ? { designation: entree.designation } : {}) });
+    if (!avant.explicite) await attribuerTarif(cle, avant.presetId);
+  } else {
+    preset = await creerPreset({ designation: entree.designation ?? `Revêtement adhésif — ${r.trouvee.sousPartie.libelle.toLowerCase()}`, unite: entree.unite ?? "ml", prixUnitaire });
+    await attribuerTarif(cle, preset.id);
+    cree = true;
+  }
+  const lignes = await tarifsDesPrestations();
+  const apres = lignes.find((l) => l.cle === cle)!;
+  const partagees = lignes.filter((l) => l.presetId === preset.id && l.cle !== cle).map((l) => `${l.familleLibelle} › ${l.libelle}`);
+  return { avant, apres, preset, cree, partagees };
 }

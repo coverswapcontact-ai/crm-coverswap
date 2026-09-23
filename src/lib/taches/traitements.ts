@@ -1,3 +1,4 @@
+import { enregistrerTachesSauvegardes } from "@/lib/base/taches";
 import { enregistrerTachesClients } from "@/lib/clients/taches";
 import { enregistrerTachesCoherence } from "@/lib/coherence/taches";
 import { enregistrerTachesCommerciales } from "@/lib/commercial/relances";
@@ -38,4 +39,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesDossiers();
   enregistrerTachesSimulateur();
   enregistrerTachesCoherence();
+  enregistrerTachesSauvegardes();
 }

@@ -6,7 +6,9 @@ import { pilotageCommercial } from "@/lib/commercial/pilotage";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
+import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
@@ -37,7 +39,7 @@ export const outilChercher = definirOutil({
   nom: "chercher",
   titre: "Chercher un client, un lead ou un dossier",
   description:
-    "Cherche par nom (même mal orthographié), téléphone, e-mail ou ville. Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir.",
+    "Cherche par nom (même mal orthographié), téléphone, e-mail, ville, adresse (« 30 boulevard Joliot-Curie ») ou numéro de devis / facture (« 2026-037 »). Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir.",
   niveau: "LECTURE",
   schema: z.object({ texte: z.string().min(1).max(120).describe("Ce que Lucas a dit : « Rousse », « le dossier Forestier », « 06 12 34 56 78 », « Montpellier »."), limite: z.number().int().min(1).max(20).optional() }),
   executer: async ({ texte, limite }) => {
@@ -124,7 +126,9 @@ export const outilLireFiche = definirOutil({
       parties.push(
         `Dossier ${d.clientNom} — ${d.objet} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${d.main === "CLIENT" ? "chez le client" : "à toi"}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
         d.prochaineAction ? `Prochaine action : ${d.prochaineAction}${d.prochaineActionDate ? ` le ${format.jour(d.prochaineActionDate)}` : ""}.` : "Pas de prochaine action notée.",
-        d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}.` : "",
+        d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
+        d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
+        Object.keys(d.prestations).length ? `Projet : ${resumerSelection(d.prestations)}${Object.keys(d.teintes).length ? ` ; teintes : ${Object.entries(d.teintes).map(([cle, t]) => `${sousPartieDeCle(cle)?.sousPartie.libelle ?? cle} ${t}`).join(", ")}` : ""}.` : "",
         devis.length ? `Devis : ${devis.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "Aucun devis.",
         factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "",
         `Paiements : ${d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length} encaissement(s), reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
@@ -134,7 +138,7 @@ export const outilLireFiche = definirOutil({
         d.notes.length ? `Dernière note (${format.jourCourt(d.notes[0].createdAt)}) : ${d.notes[0].contenu.slice(0, 200)}` : "",
         `Derniers événements : ${d.evenements.slice(0, 5).map((e) => `${format.jourCourt(e.date)} ${e.contenu.slice(0, 90)}`).join(" · ")}`
       );
-      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
+      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
       liens.push(lien("Ouvrir le dossier", `/dossiers?dossier=${d.id}`));
     }
     if (ids.clientId) {
@@ -203,17 +207,17 @@ export const outilCeQuiMAttend = definirOutil({
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async () => {
-    const [pilotage, mails] = await Promise.all([pilotageCommercial(), listerVue("A_TRAITER", { limite: 50 })]);
+    const [pilotage, mails, messagesNonLus, propositionsEnAttente] = await Promise.all([pilotageCommercial(), listerVue("A_TRAITER", { limite: 50 }), compterMessagesNonLus(), prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } })]);
     const aMoi = pilotage.affaires.filter((a) => a.main === "MOI");
     const enRetard = aMoi.filter((a) => a.enRetard);
     const parGroupe = new Map<string, typeof aMoi>();
     for (const a of aMoi) parGroupe.set(a.groupe, [...(parGroupe.get(a.groupe) ?? []), a]);
     const texte = [
-      `${aMoi.length} affaire(s) attendent une action de toi (${enRetard.length} en retard), ${pilotage.compteurs.chezLeClient} chez le client, ${mails.compteurs.A_TRAITER} mail(s) à traiter, ${pilotage.compteurs.relancesAValider} proposition(s) à valider.`,
+      `${aMoi.length} affaire(s) attendent une action de toi (${enRetard.length} en retard), ${pilotage.compteurs.chezLeClient} chez le client, ${mails.compteurs.A_TRAITER} mail(s) à traiter, ${propositionsEnAttente} proposition(s) à valider (cartes de mise à jour, relances, règles), ${messagesNonLus} message(s) d'espace non lu(s)${messagesNonLus ? " (« messages_espace »)" : ""}.`,
       ...[...parGroupe.entries()].map(([groupe, liste]) => `${groupe} : ${liste.map((a) => `${a.nom}${a.ville ? ` (${a.ville})` : ""} — ${a.action}${a.enRetard ? " (en retard)" : ""}${a.echeance ? ` · ${format.jourCourt(a.echeance)}` : ""} [${a.dossierId ? `dossier:${a.dossierId}` : `lead:${a.leadId}`}]`).join(" · ")}`),
       mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { affaires: aMoi, compteurs: pilotage.compteurs, mails: mails.lignes.slice(0, 20) }, liens: [lien("Commercial", "/commercial"), lien("Mail", "/mail")] };
+    return { texte, donnees: { affaires: aMoi, compteurs: { ...pilotage.compteurs, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente }, mails: mails.lignes.slice(0, 20) }, liens: [lien("Commercial", "/commercial"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])] };
   },
 });
 
@@ -302,14 +306,23 @@ export const outilCampagne = definirOutil({
   },
 });
 
+/** Seuils du disque (mission 10) : avertir à 70 %, alerter à 85 %. */
+export const SEUILS_DISQUE = { attention: 70, urgent: 85 } as const;
+export const niveauDisque = (pourcent: number): "OK" | "ATTENTION" | "URGENT" => (pourcent >= SEUILS_DISQUE.urgent ? "URGENT" : pourcent >= SEUILS_DISQUE.attention ? "ATTENTION" : "OK");
+
 /** L'état de santé du système : tâches, connexions, jetons, crédits, disque, cohérence, alertes. */
 export async function santeSysteme(maintenant: Date = new Date()) {
   const [taches, google, meta, ia, alertes, coherence] = await Promise.all([etatDesTaches(), rappelConnexionGoogle(maintenant).catch(() => null), verifierJeton().catch(() => null), etatIa(maintenant, "IA_REDACTION").catch(() => null), calculerAlertes(maintenant).catch(() => []), controlerCoherence().catch(() => null)]);
   let disqueLibreMo: number | null = null;
+  let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
   try {
-    const { fichierDeLaBase, placeLibre } = await import("@/lib/base/sauvegarde.mjs");
+    const { fichierDeLaBase, capaciteVolume } = await import("@/lib/base/sauvegarde.mjs");
     const fichier = fichierDeLaBase();
-    if (fichier) disqueLibreMo = Math.round(placeLibre(fichier.replace(/[\\/][^\\/]+$/, "")) / 1_048_576);
+    if (fichier) {
+      const c = capaciteVolume(fichier.replace(/[\\/][^\\/]+$/, ""));
+      disqueLibreMo = Math.round(c.libre / 1_048_576);
+      disque = { libreMo: disqueLibreMo, totalMo: Math.round(c.total / 1_048_576), pourcentUtilise: c.pourcentUtilise, niveau: niveauDisque(c.pourcentUtilise) };
+    }
   } catch {
     disqueLibreMo = null;
   }
@@ -321,6 +334,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     meta: meta ? { etat: meta.etat, message: meta.message, echeance: meta.echeance } : null,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
+    disque,
     coherence: coherence ? { dossiersControles: coherence.dossiersControles, incoherences: coherence.incoherences.map((i) => ({ code: i.code, gravite: i.gravite, client: i.client, message: i.constat })) } : null,
     alertes: alertes.map((a) => ({ gravite: a.gravite, titre: a.titre, detail: a.detail, lien: a.lien })),
   };
@@ -340,7 +354,7 @@ export const outilSanteSysteme = definirOutil({
       s.google ? `Google : ${s.google.coupee ? "COUPÉ, reconnecter dans Paramètres" : `jeton ${s.google.niveau.toLowerCase()}`}${s.google.compte ? ` (${s.google.compte})` : ""}.` : "Google : rien à signaler.",
       s.meta ? `Meta : ${s.meta.message}` : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
-      s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres${s.disqueLibreMo < 100 ? " — ATTENTION, volume presque plein" : ""}.` : "",
+      s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${s.coherence.incoherences.length} incohérence(s) sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
       s.alertes.length ? `Alertes : ${s.alertes.map((a) => `[${a.gravite}] ${a.titre} — ${a.detail}`).join(" · ")}` : "Aucune alerte.",
     ].filter(Boolean).join("\n");

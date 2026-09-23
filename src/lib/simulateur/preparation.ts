@@ -52,6 +52,8 @@ export type PreparationVue = {
   statut: string;
   typeSurface: string;
   typeLibelle: string;
+  /** La photo du dossier choisie (identifiant public), pour rouvrir la préparation dans l'écran. */
+  photoId: string;
   zones: ZonePreparee[];
   prompt: string | null;
   promptVersion: number | null;
@@ -80,6 +82,7 @@ function versVue(p: PreparationSimulation): PreparationVue {
     statut: p.statut,
     typeSurface: p.typeSurface,
     typeLibelle: typeSurface(p.typeSurface)?.libelle ?? p.typeSurface,
+    photoId: idPhoto(p.photoSource),
     zones,
     prompt: p.mode === "CHATGPT" ? p.promptTexte : null,
     promptVersion: p.promptVersion,

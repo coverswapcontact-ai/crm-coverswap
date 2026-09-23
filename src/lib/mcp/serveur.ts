@@ -27,6 +27,7 @@ export function texteDuResultat(resultat: ResultatOutil): string {
   const parties = [resultat.texte];
   if (resultat.liens?.length) parties.push(`Liens : ${resultat.liens.map((l) => `${l.libelle} — ${l.href}`).join(" · ")}`);
   if (resultat.confirmation) parties.push(`Jeton de confirmation : ${resultat.confirmation.jeton} (valable jusqu'à ${resultat.confirmation.expireLe}).`);
+  if (resultat.images?.length) parties.push(`Images jointes (dans l'ordre) : ${resultat.images.map((i, n) => `${n + 1}. ${i.libelle}`).join(" · ")}`);
   if (resultat.donnees !== undefined) {
     let json = JSON.stringify(resultat.donnees);
     if (json.length > DONNEES_MAX) json = `${json.slice(0, DONNEES_MAX)}… [données tronquées : ${json.length} caractères]`;
@@ -51,7 +52,9 @@ export function construireServeur(session: Session) {
       },
       async (args: Record<string, unknown>) => {
         const resultat = await executerOutil(outil, args, session, new Date());
-        return { content: [{ type: "text" as const, text: texteDuResultat(resultat) }] };
+        // Mission 10 : les photos et simulations arrivent en blocs image, après le texte qui les décrit.
+        const images = (resultat.images ?? []).map((i) => ({ type: "image" as const, data: i.base64, mimeType: i.mimeType }));
+        return { content: [{ type: "text" as const, text: texteDuResultat(resultat) }, ...images] };
       }
     );
   }

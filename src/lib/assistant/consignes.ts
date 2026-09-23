@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { ErreurMetier } from "@/lib/commun/erreurs";
 import { EMETTEUR } from "@/lib/dossiers/constants";
 
 /**
@@ -86,9 +87,127 @@ async function lireTexte(cle: string, defaut: string): Promise<TexteReglable> {
   return { texte: ligne.valeur, source: "LUCAS", majLe: ligne.updatedAt.toISOString() };
 }
 
-async function enregistrerTexte(cle: string, texte: string, par: string): Promise<void> {
+export type CleTexte = "consignes" | "positionnement";
+export const CLES_TEXTE: Record<CleTexte, string> = { consignes: CLE_CONSIGNES, positionnement: CLE_POSITIONNEMENT };
+
+/** Une version d'un texte réglable (mission 10) : chaque enregistrement en crée une, rien ne s'écrase. */
+export type VersionVue = { numero: number; le: string; par: string | null; commande: string | null; caracteres: number; courante: boolean };
+
+const DEFAUTS_PAR_CLE: Record<string, string> = { [CLE_CONSIGNES]: CONSIGNES_DEFAUT, [CLE_POSITIONNEMENT]: POSITIONNEMENT_DEFAUT };
+
+async function enregistrerTexte(cle: string, texte: string, par: string, commande?: string | null): Promise<VersionVue> {
   const valeur = texte.trim().slice(0, 20_000);
-  await prisma.reglageTexte.upsert({ where: { cle }, create: { cle, valeur, par }, update: { valeur, par } });
+  return prisma.$transaction(async (tx) => {
+    const courant = await tx.reglageTexte.findUnique({ where: { cle } });
+    const derniere = await tx.versionTexte.findFirst({ where: { cle }, orderBy: { numero: "desc" }, select: { numero: true } });
+    let numero = (derniere?.numero ?? 0) + 1;
+    // Première version : l'état d'avant (le texte de Lucas, ou le texte par défaut) est gardé, restaurable.
+    if (!derniere) {
+      const avant = (courant?.valeur.trim() || DEFAUTS_PAR_CLE[cle] || "").trim();
+      if (avant && avant !== valeur) {
+        await tx.versionTexte.create({ data: { cle, numero, texte: avant, par: courant?.par ?? "DEFAUT", commande: "État d'avant la première modification" } });
+        numero++;
+      }
+    }
+    await tx.reglageTexte.upsert({ where: { cle }, create: { cle, valeur, par }, update: { valeur, par } });
+    const v = await tx.versionTexte.create({ data: { cle, numero, texte: valeur, par, commande: commande?.slice(0, 500) ?? null } });
+    return { numero: v.numero, le: v.createdAt.toISOString(), par: v.par, commande: v.commande, caracteres: valeur.length, courante: true };
+  });
+}
+
+export async function listerVersions(cle: string, limite = 20): Promise<VersionVue[]> {
+  const [lignes, courant] = await Promise.all([prisma.versionTexte.findMany({ where: { cle }, orderBy: { numero: "desc" }, take: limite, select: { numero: true, createdAt: true, par: true, commande: true, texte: true } }), prisma.reglageTexte.findUnique({ where: { cle } })]);
+  return lignes.map((v) => ({ numero: v.numero, le: v.createdAt.toISOString(), par: v.par, commande: v.commande, caracteres: v.texte.length, courante: (courant?.valeur ?? "").trim() === v.texte.trim() }));
+}
+
+export async function texteDeLaVersion(cle: string, numero: number): Promise<string> {
+  const v = await prisma.versionTexte.findUnique({ where: { cle_numero: { cle, numero } } });
+  if (!v) throw new ErreurMetier(`Version ${numero} introuvable.`, 404);
+  return v.texte;
+}
+
+/** Restaurer = enregistrer de nouveau l'ancien texte : une version de plus, rien de perdu. */
+export async function restaurerVersion(cle: string, numero: number, par: string, commande?: string | null): Promise<VersionVue> {
+  const texte = await texteDeLaVersion(cle, numero);
+  return enregistrerTexte(cle, texte, par, commande ?? `Restauration de la version ${numero}`);
+}
+
+/* ── Sections et diff (mission 10 : « modifier_consignes ») ───────────── */
+
+const normaliserTitre = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+type Section = { titre: string; debut: number; fin: number };
+
+function sectionsDe(lignes: string[]): Section[] {
+  const sections: Section[] = [];
+  lignes.forEach((l, i) => {
+    if (/^## /.test(l)) sections.push({ titre: l.replace(/^## /, "").trim(), debut: i, fin: lignes.length });
+  });
+  sections.forEach((s, i) => {
+    if (sections[i + 1]) s.fin = sections[i + 1].debut;
+  });
+  return sections;
+}
+
+export function titresDesSections(texte: string): string[] {
+  return sectionsDe(texte.split("\n")).map((s) => s.titre);
+}
+
+/** La section dont le titre est celui-là, ou le contient (accents et casse ignorés) ; null si aucune ou plusieurs. */
+function trouverSection(sections: Section[], recherche: string): Section | null {
+  const n = normaliserTitre(recherche);
+  if (!n) return null;
+  const exacte = sections.find((s) => normaliserTitre(s.titre) === n);
+  if (exacte) return exacte;
+  const proches = sections.filter((s) => normaliserTitre(s.titre).includes(n) || n.includes(normaliserTitre(s.titre)));
+  return proches.length === 1 ? proches[0] : null;
+}
+
+export const MODES_MODIFICATION = ["remplacer_section", "completer_section", "ajouter_section", "remplacer_tout"] as const;
+export type ModeModification = (typeof MODES_MODIFICATION)[number];
+
+/** Le texte après la modification demandée ; une section inconnue ou ambiguë refuse, avec les titres existants. */
+export function appliquerModification(texte: string, e: { mode: ModeModification; section?: string | null; contenu: string }): string {
+  const contenu = e.contenu.replace(/\r\n/g, "\n").trim();
+  if (e.mode === "remplacer_tout") return contenu;
+  const lignes = texte.replace(/\r\n/g, "\n").split("\n");
+  const sections = sectionsDe(lignes);
+  if (e.mode === "ajouter_section") {
+    const titre = (e.section ?? "").replace(/^#+\s*/, "").trim();
+    if (!titre) throw new ErreurMetier("Donne le titre de la nouvelle section (paramètre « section »).", 400);
+    if (trouverSection(sections, titre)) throw new ErreurMetier(`La section « ${titre} » existe déjà : utilise « completer_section » ou « remplacer_section ».`, 409);
+    return `${lignes.join("\n").trimEnd()}\n\n## ${titre}\n${contenu}\n`;
+  }
+  if (!e.section) throw new ErreurMetier(`Indique la section (« section »). Sections : ${sections.map((s) => s.titre).join(" · ") || "aucune"}.`, 400);
+  const section = trouverSection(sections, e.section);
+  if (!section) throw new ErreurMetier(`Section « ${e.section} » introuvable ou ambiguë. Sections : ${sections.map((s) => s.titre).join(" · ") || "aucune"}.`, 404);
+  const avant = lignes.slice(0, section.debut + 1);
+  const corps = lignes.slice(section.debut + 1, section.fin);
+  const apres = lignes.slice(section.fin);
+  const nouveauCorps = e.mode === "remplacer_section" ? contenu.split("\n") : [...corps.join("\n").trimEnd().split("\n"), ...contenu.split("\n")];
+  return [...avant, ...nouveauCorps, ...(apres.length ? ["", ...apres] : [])].join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+/** Les lignes retirées et ajoutées (multi-ensemble des lignes non vides) : l'aperçu que Lucas lit avant de confirmer. */
+export function diffLignes(avant: string, apres: string): { retirees: string[]; ajoutees: string[] } {
+  const compter = (t: string) => {
+    const m = new Map<string, number>();
+    for (const l of t.replace(/\r\n/g, "\n").split("\n").map((x) => x.trim()).filter(Boolean)) m.set(l, (m.get(l) ?? 0) + 1);
+    return m;
+  };
+  const a = compter(avant);
+  const b = compter(apres);
+  const retirees: string[] = [];
+  const ajoutees: string[] = [];
+  for (const [l, n] of a) for (let i = 0; i < n - (b.get(l) ?? 0); i++) retirees.push(l);
+  for (const [l, n] of b) for (let i = 0; i < n - (a.get(l) ?? 0); i++) ajoutees.push(l);
+  return { retirees, ajoutees };
 }
 
 /** Section Mail (mission 9) : lue à chaque session ; ajoutée aux consignes de Lucas si elles ne l'ont pas. */
@@ -103,13 +222,25 @@ export const SECTION_MAIL = `## Mail (piloté depuis l'assistant, mission 9)
 - Rien ne s'envoie, rien ne se modifie sans validation : « envoyer_mail » et « valider_proposition » (montant, adresse, date de chantier) passent par l'aperçu puis la confirmation de Lucas ; « ignorer_proposition », « snoozer_mail », « ranger_mail » se défont.
 - La priorité d'« À traiter » est calculée par le CRM (réclamations, devis en attente par montant, dossiers, leads, échéances) : lis-la dans cet ordre, sans la refaire.`;
 
+/** Section « Dossiers, photos, espace » (mission 10) : les actions qui manquaient ; jointe aux consignes de Lucas si elles ne l'ont pas. */
+export const SECTION_ACTIONS = `## Dossiers, photos, espace (mission 10)
+- Une modification de dossier (« modifier_dossier ») cite la phrase de Lucas dans « commande », jamais une déduction : « Mets l'îlot en chêne » → teintes { "CUISINE.ilot": "chêne" } ; « décale la pose au 12 octobre » → date_chantier ; « budget annoncé 2 200 € » → montant_estime ; « son adresse c'est … » → adresse ; « passe la salle de bain en sous-partie … » → ajouter_sous_parties. Un montant, une date de chantier ou l'adresse passent par l'aperçu et la confirmation ; « annuler_modification » remet l'ancienne valeur. Un devis émis que ça rend faux est signalé, jamais modifié.
+- Doute sur le dossier visé (deux Rousse, deux projets d'un même client) : demande lequel avant d'agir, ne choisis jamais.
+- Avant de conseiller une teinte ou de préparer une simulation, regarde les photos (« voir_photos ») et les simulations déjà faites (« voir_simulations ») : tu parles de ce que tu as vu, tu dis ce que tu n'as pas pu voir.
+- Une réponse dans l'espace (« repondre_espace ») est courte, vouvoie, ne promet ni prix ni date absents du CRM ; ce qui manque s'écrit « [à compléter] », et l'envoi est alors bloqué. Elle est sensible : aperçu, confirmation de Lucas.
+- « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM) ; « modifier_consignes » et « modifier_tarifs » montrent l'aperçu avant et gardent l'historique ; « depenses » répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
+- Toute action en lot (plus de trois éléments) reste sensible : aperçu puis confirmation.`;
+
 export const lireConsignes = async (): Promise<TexteReglable> => {
   const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
-  return /^## Mail/m.test(t.texte) ? t : { ...t, texte: `${t.texte.trim()}\n\n${SECTION_MAIL}` };
+  let texte = t.texte.trim();
+  if (!/^## Mail/m.test(texte)) texte = `${texte}\n\n${SECTION_MAIL}`;
+  if (!/^## Dossiers, photos, espace/m.test(texte)) texte = `${texte}\n\n${SECTION_ACTIONS}`;
+  return texte === t.texte.trim() ? t : { ...t, texte };
 };
-export const enregistrerConsignes = (texte: string, par: string) => enregistrerTexte(CLE_CONSIGNES, texte, par);
+export const enregistrerConsignes = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_CONSIGNES, texte, par, commande);
 export const lirePositionnement = () => lireTexte(CLE_POSITIONNEMENT, POSITIONNEMENT_DEFAUT);
-export const enregistrerPositionnement = (texte: string, par: string) => enregistrerTexte(CLE_POSITIONNEMENT, texte, par);
+export const enregistrerPositionnement = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_POSITIONNEMENT, texte, par, commande);
 
 /** Le protocole de campagne tel qu'écrit dans les consignes (section « Protocole »), pour l'outil « campagne ». */
 export function sectionProtocole(consignes: string): string {

@@ -27,7 +27,7 @@ let prisma: typeof import("@/lib/prisma").default;
 let route: typeof import("@/app/api/mcp/route");
 let NextRequest: typeof import("next/server").NextRequest;
 let compte: typeof import("@/lib/espace/compte");
-let sharp: typeof import("sharp").default;
+let sharp: typeof import("sharp");
 let client: Client;
 const appelsAnthropic: string[] = [];
 const appelsReseau: string[] = [];

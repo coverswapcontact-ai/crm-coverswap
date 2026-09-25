@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourParis } from "@/lib/dossiers/dates";
 import { annulerModification, calculerChangements, CHAMPS_SENSIBLES, derniereModification, devisImpacte, lireValeurs, listerModifications, modifierDossierAssistant, schemaModificationAssistant, type Changement, type EntreeModificationAssistant } from "@/lib/dossiers/modification-assistant";
+import { libelleReperee, repererSousPartie } from "@/lib/prestations/reperage";
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
@@ -99,4 +100,32 @@ export const outilAnnulerModification = definirOutil({
   },
 });
 
-export const OUTILS_ACTIONS = [outilModifierDossier, outilAnnulerModification];
+/** Mission 11 : une teinte par meuble, autant de teintes que de meubles — pas une seule simulation validée par dossier. */
+export const outilChangerTeinte = definirOutil({
+  nom: "changer_teinte",
+  titre: "Changer la teinte d'un meuble (une teinte par meuble)",
+  description:
+    "Pose ou change la teinte retenue d'UN meuble (sous-partie) du projet, en mots : « îlot » → « chêne clair ». Un projet porte autant de teintes que de meubles ; il n'y a pas une seule simulation validée par dossier. Le meuble est reconnu dans les familles du dossier (« ilot », « meubles hauts », « SDB.plan-vasque ») ; en cas de doute, les candidats sont rendus, sans choisir. teinte: null retire la teinte. Tracé comme une modification de dossier (« annuler_modification » la défait) ; un devis émis que ça rend faux est signalé, jamais modifié.",
+  niveau: "REVERSIBLE",
+  schema: schemaCible.extend({ meuble: z.string().min(1).max(80).describe("Le meuble, en mots ou par sa clé (« ilot », « plan de travail », « SDB.plan-vasque »)."), teinte: z.string().trim().max(80).nullable().describe("La teinte en mots (« chêne clair », « café latte ») ; null retire.") }),
+  executer: async (e, contexte) => {
+    const r = await cibler(e, "DOSSIER");
+    if (r.ambigu) return r.ambigu;
+    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (« ouvrir_dossier »).`, 409);
+    const lecture = await lireValeurs(r.ids.dossierId);
+    const reperage = repererSousPartie(e.meuble, { selection: lecture.valeurs.familles });
+    if ("candidats" in reperage) return { texte: `Plusieurs meubles peuvent être « ${e.meuble} » chez ${r.ids.nom} : ${reperage.candidats.map(libelleReperee).join(" ; ")}. Demande à Lucas lequel, puis redonne sa clé.`, donnees: { candidats: reperage.candidats.map((c) => ({ cle: c.cle, libelle: libelleReperee(c) })) } };
+    if ("aucune" in reperage) return { texte: `Aucun meuble « ${e.meuble} » dans le projet de ${r.ids.nom}.${reperage.proposees.length ? ` Les sous-parties du fichier qui s'en approchent : ${reperage.proposees.map(libelleReperee).join(" ; ")} — l'ajouter d'abord au projet (« modifier_dossier », ajouter_sous_parties).` : ""}`, donnees: { proposees: reperage.proposees.map((c) => ({ cle: c.cle, libelle: libelleReperee(c) })) } };
+    const cle = reperage.trouvee.cle;
+    const resultat = await modifierDossierAssistant(r.ids.dossierId, { teintes: { [cle]: e.teinte } } as EntreeModificationAssistant, { commande: contexte.commande });
+    const teintes = (await lireValeurs(r.ids.dossierId)).valeurs.teintes;
+    const toutes = Object.entries(teintes).map(([k, v]) => `${k} : ${v}`).join(", ");
+    return {
+      texte: `${libelleReperee(reperage.trouvee)} → ${e.teinte ?? "(teinte retirée)"} chez ${r.ids.nom}.${resultat.changements.length ? "" : " (déjà cette teinte : rien n'a changé.)"}${resultat.devis ? ` ${resultat.devis.message}` : ""} Teintes du projet : ${toutes || "aucune"}.`,
+      donnees: { dossierId: r.ids.dossierId, cle, teinte: e.teinte, teintes, modification: resultat.modification, devis: resultat.devis },
+      liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)],
+    };
+  },
+});
+
+export const OUTILS_ACTIONS = [outilModifierDossier, outilAnnulerModification, outilChangerTeinte];

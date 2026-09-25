@@ -227,6 +227,8 @@ export const TYPES_EVENEMENT = [
   "ENCAISSEMENT_CORRIGE",
   "CHANGEMENT_ETAPE",
   "NOTE_AJOUTEE",
+  // Mission 11 : PDF fait ailleurs (BAT fournisseur, plan…) déposé sur le dossier
+  "DOCUMENT_DEPOSE",
   // Simulation du site rangée dans le dossier (photo avant + rendu)
   "SIMULATION_SITE",
   // Messagerie SMS et espace client (mission du 20/09/2026)
@@ -281,6 +283,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ENCAISSEMENT_CORRIGE: "Paiement corrigé",
   CHANGEMENT_ETAPE: "Changement d'étape",
   NOTE_AJOUTEE: "Note ajoutée",
+  DOCUMENT_DEPOSE: "Document déposé",
   SIMULATION_SITE: "Simulation faite sur le site",
   SMS_RECU: "SMS reçu",
   SMS_ENVOYE: "SMS envoyé",
@@ -321,7 +324,7 @@ export const LIBELLES_TYPE_DOCUMENT: Record<TypeDocument, string> = {
   AVOIR: "Avoir",
 };
 
-export const STATUTS_DOCUMENT = ["BROUILLON", "GENERE", "ENVOYE", "ACCEPTE", "REFUSE", "REMPLACE", "ANNULEE"] as const;
+export const STATUTS_DOCUMENT = ["BROUILLON", "GENERE", "ENVOYE", "ACCEPTE", "REFUSE", "REMPLACE", "ANNULEE", "NON_RETENU"] as const;
 export type StatutDocument = (typeof STATUTS_DOCUMENT)[number];
 
 export const LIBELLES_STATUT_DOCUMENT: Record<StatutDocument, string> = {
@@ -331,7 +334,9 @@ export const LIBELLES_STATUT_DOCUMENT: Record<StatutDocument, string> = {
   ACCEPTE: "Accepté",
   REFUSE: "Refusé",
   REMPLACE: "Remplacé",
-  ANNULEE: "Annulée par avoir",
+  ANNULEE: "Annulé",
+  // Mission 11 : le client a choisi un autre devis parmi ceux proposés ; celui-ci reste en historique.
+  NON_RETENU: "Non retenu",
 };
 
 export const MOTIFS_AVOIR = [

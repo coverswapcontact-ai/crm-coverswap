@@ -162,7 +162,8 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
   };
 
   const { webhook, configuration, jeton, notifications, conversions, echecs } = sante;
-  const recoit = configuration.signature && configuration.verification && (webhook.abonnement?.abonne ?? webhook.actif);
+  // Mission 11 : le voyant dit ce qui s'est réellement passé (des leads entrent), pas seulement ce que répond la vérification de l'abonnement.
+  const recoit = webhook.recoit === "OUI";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-6 md:px-8">
@@ -204,8 +205,9 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         <section className={cn(CARTE, "p-4")}>
           <TitreSection>
             Réception{" "}
-            <Pastille ton={recoit ? "vert" : "rouge"}>{recoit ? "webhook connecté" : "non connecté"}</Pastille>
+            <Pastille ton={recoit ? "vert" : webhook.recoit === "PRET" ? "ambre" : "rouge"}>{recoit ? "reçoit des leads" : webhook.recoit === "PRET" ? "prêt, aucun lead sur 7 jours" : "ne reçoit pas"}</Pastille>
           </TitreSection>
+          <Ligne libelle="Diagnostic" valeur={webhook.recoitDetail} />
           <Ligne libelle="Dernier lead reçu" valeur={`${quand(webhook.dernierLeadLe)}${webhook.dernierLeadNom ? ` · ${webhook.dernierLeadNom}` : ""}`} />
           <Ligne libelle="Sur 24 heures" valeur={webhook.surVingtQuatreHeures} />
           <Ligne libelle="Sur 7 jours" valeur={webhook.surSeptJours} />

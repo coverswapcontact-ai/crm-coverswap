@@ -1,6 +1,9 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { devisProposes } from "@/lib/espace/faits";
+import { montantsDocument } from "@/lib/dossiers/montants";
+import { lireLignes } from "@/lib/dossiers/stockage";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones, libelleZoneClient, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression, type EtapeEspace } from "./etapes";
@@ -52,6 +55,8 @@ export type VueEspaceCrm = {
   creation: { faites: number; faitesSite: number; restantes: number; offertes: number; enCours: number; demandeesLe: string | null };
   favoris: string[];
   devis: { id: string; numero: string; total: number; repris: boolean; statut: string; consultations: number; consulteLe: string | null } | null;
+  /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent, avec libellé et visibilité. */
+  devisProposes: { id: string; numero: string; libelle: string | null; total: number; statut: string; visibleEspace: boolean; repris: boolean }[];
   accord: { le: string; nom: string; source: "ESPACE" | "CRM"; signature: boolean } | null;
   accordsRetires: { le: string; retireLe: string; par: string | null; motif: string | null; nom: string }[];
   paiement: PaiementEspace | null;
@@ -101,7 +106,8 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       photos: true,
       prestations: true,
       lead: { select: { typeProjet: true } },
-      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
+      // Mission 11 : les devis non retenus restent visibles ici (historique), jamais chez le client.
+      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE", "NON_RETENU"] } }, orderBy: { createdAt: "desc" } },
       accords: { orderBy: { createdAt: "desc" } },
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
       evenements: { where: { archiveLe: null, OR: [{ type: "CHANGEMENT_ETAPE" }, { type: { startsWith: "ESPACE_" } }] }, orderBy: { createdAt: "desc" }, take: 200, select: { type: true, contenu: true, metadata: true, createdAt: true, survenuLe: true, direction: true } },
@@ -194,6 +200,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       }
     })(),
     devis: lecture.devis && lecture.montants ? { id: lecture.devis.id, numero: lecture.devis.numero!, total: lecture.montants.totalTtcCentimes / 100, repris: lecture.devis.origine === "REPRISE", statut: lecture.devis.statut, consultations: espace.devisConsulteId === lecture.devis.id ? espace.devisConsultations : 0, consulteLe: espace.devisConsulteId === lecture.devis.id ? iso(espace.devisConsulteLe) : null } : null,
+    devisProposes: devisProposes(dossier.documents, { avecNonRetenus: true }).map((d) => ({ id: d.id, numero: d.numero!, libelle: d.libelleVariante ?? null, total: montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes / 100, statut: d.statut, visibleEspace: d.visibleEspace !== false, repris: d.origine === "REPRISE" })),
     accord: lecture.accord ? { le: lecture.accord.le.toISOString(), nom: lecture.accord.nom, source: lecture.accord.source, signature: lecture.accord.signature } : null,
     accordsRetires: dossier.accords.filter((a) => a.retireLe).map((a) => ({ le: a.createdAt.toISOString(), retireLe: a.retireLe!.toISOString(), par: a.retirePar, motif: a.retireMotif, nom: a.nomSignataire })),
     paiement: lecture.accord ? lecture.paiement : null,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, Eye, FileText, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, FilePlus2, FileText, FileUp, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
@@ -44,7 +44,20 @@ function Rubrique({ titre, etat, children }: { titre: string; etat?: React.React
  * étape. Chaque geste est écrit dans l'historique du dossier (« par Lucas »).
  * Montants, accord et paiements sont lus là où l'espace du client les lit.
  */
-export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: DossierDetail; onRecharger: () => Promise<void>; onFaireDevis?: () => void }) {
+export function EspaceDossier({
+  detail,
+  onRecharger,
+  onFaireDevis,
+  onAjouterDevis,
+  onDeposerPdf,
+}: {
+  detail: DossierDetail;
+  onRecharger: () => Promise<void>;
+  onFaireDevis?: () => void;
+  /** Mission 11 : un devis de plus (lignes + libellé) ; un devis PDF déjà fait (numéro + libellé). */
+  onAjouterDevis?: () => void;
+  onDeposerPdf?: () => void;
+}) {
   const [espace, setEspace] = useState<VueEspaceCrm | null | undefined>(undefined);
   const [occupe, setOccupe] = useState<string | null>(null);
   const [copie, setCopie] = useState(false);
@@ -104,6 +117,21 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
     }
   }
 
+  /** Mission 11 : chaque devis proposé a son interrupteur « visible dans l'espace client ». */
+  async function visibilite(documentId: string, visibleEspace: boolean) {
+    setOccupe("visible" + documentId);
+    try {
+      await envoyerJson(`/api/dossiers/${detail.id}/documents/${documentId}`, "PATCH", { visibleEspace });
+      toast.success(visibleEspace ? "Devis visible dans son espace" : "Devis masqué dans son espace");
+      await charger();
+      await onRecharger();
+    } catch (erreur) {
+      toast.error(messageErreur(erreur));
+    } finally {
+      setOccupe(null);
+    }
+  }
+
   async function copier() {
     if (!espace?.lien) return;
     try {
@@ -138,6 +166,7 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
   }
 
   const aucunDevis = !detail.documents.some((d) => d.type === "DEVIS" && d.numero);
+  const visibles = espace.devisProposes.filter((d) => d.visibleEspace || d.statut === "ACCEPTE");
   const p = espace.paiement;
 
   return (
@@ -410,17 +439,53 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
         {/* Devis et accord */}
         <Rubrique
           titre="Devis et accord"
-          etat={espace.accord ? <Pastille ton="vert"><Check size={11} strokeWidth={3} aria-hidden /> Signé le {jour(espace.accord.le)}</Pastille> : espace.devis ? <Pastille ton="ambre">En attente de son accord</Pastille> : <Pastille>Pas de devis émis</Pastille>}
+          etat={
+            espace.accord ? (
+              <Pastille ton="vert"><Check size={11} strokeWidth={3} aria-hidden /> Signé le {jour(espace.accord.le)}</Pastille>
+            ) : visibles.length > 1 ? (
+              <Pastille ton="ambre">{visibles.length} devis proposés : il en choisit un</Pastille>
+            ) : espace.devis && visibles.length === 0 ? (
+              <Pastille ton="ambre">Devis masqué : il ne voit rien</Pastille>
+            ) : espace.devis ? (
+              <Pastille ton="ambre">En attente de son accord</Pastille>
+            ) : (
+              <Pastille>Pas de devis émis</Pastille>
+            )
+          }
         >
-          {espace.devis ? (
-            <p className="text-[13px] text-[#D1D5DB]">
-              Devis {espace.devis.numero} — {euros(espace.devis.total)}
-              {espace.devis.repris ? <span className="text-[#8B919C]"> (repris d&apos;avant le CRM)</span> : null}
-              {espace.devis.consultations > 0 ? <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : "text-[#8B919C]"}> · lu {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})</span> : <span className="text-[#8B919C]"> · pas encore ouvert dans son espace</span>}
-            </p>
+          {espace.devisProposes.length ? (
+            <ul className="space-y-1">
+              {espace.devisProposes.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-[#D1D5DB]">
+                  <span>
+                    Devis {d.numero}
+                    {d.libelle ? <span className="text-[#8B919C]"> « {d.libelle} »</span> : null} — {euros(d.total)}
+                    {d.repris ? <span className="text-[#8B919C]"> (repris)</span> : null}
+                    {d.statut === "ACCEPTE" ? <span className="text-[#5DCAA5]"> · signé</span> : d.statut === "NON_RETENU" ? <span className="text-[#8B919C]"> · non retenu</span> : null}
+                  </span>
+                  {espace.accord ? null : (
+                    <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
+                      <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
+                      {d.visibleEspace ? "visible dans son espace" : "masqué dans son espace"}
+                    </label>
+                  )}
+                </li>
+              ))}
+            </ul>
           ) : (
             <p className="text-[12.5px] text-[#8B919C]">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
           )}
+          {espace.devis ? (
+            <p className="mt-1 text-[12px] text-[#8B919C]">
+              {espace.devis.consultations > 0 ? (
+                <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : undefined}>
+                  {visibles.length > 1 ? "Devis ouverts" : "Devis ouvert"} {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})
+                </span>
+              ) : (
+                "Pas encore ouvert dans son espace"
+              )}
+            </p>
+          ) : null}
           {espace.accord ? (
             <p className="mt-1 text-[13px] text-[#D1D5DB]">
               {espace.accord.source === "ESPACE" ? `Bon pour accord donné dans son espace par ${espace.accord.nom}${espace.accord.signature ? ", signé au doigt" : ""}.` : "Devis noté « accepté » dans le CRM (signé hors de l'espace) : son espace le montre signé."}
@@ -438,8 +503,18 @@ export function EspaceDossier({ detail, onRecharger, onFaireDevis }: { detail: D
                 {espace.choix ? "Faire le devis depuis son choix" : "Faire le devis depuis son projet"}
               </Bouton>
             ) : null}
+            {onAjouterDevis && !aucunDevis && !espace.accord ? (
+              <Bouton taille="sm" variante="secondaire" icone={<FilePlus2 size={13} aria-hidden />} onClick={onAjouterDevis}>
+                Ajouter un devis
+              </Bouton>
+            ) : null}
+            {onDeposerPdf && (espace.choix || espace.projet || !aucunDevis) && !espace.accord ? (
+              <Bouton taille="sm" variante="fantome" icone={<FileUp size={13} aria-hidden />} onClick={onDeposerPdf}>
+                Déposer un devis PDF
+              </Bouton>
+            ) : null}
             {espace.accord?.source === "ESPACE" ? (
-              <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Retirer son bon pour accord ?", texte: "L'accord ne vaut plus (sa preuve reste gardée). Si le dossier est en « Signé », il revient à « Devis envoyé » et le devis redevient un devis émis.", bouton: "Retirer l'accord", geste: { geste: "retirer-accord", motif: "" }, succes: "Accord retiré" })}>
+              <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Retirer son bon pour accord ?", texte: "L'accord ne vaut plus (sa preuve reste gardée). Si le dossier est en « Signé », il revient à « Devis envoyé », le devis redevient un devis émis et les autres devis proposés redeviennent au choix.", bouton: "Retirer l'accord", geste: { geste: "retirer-accord", motif: "" }, succes: "Accord retiré" })}>
                 Retirer son accord
               </Bouton>
             ) : null}

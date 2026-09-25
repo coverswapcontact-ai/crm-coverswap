@@ -159,6 +159,8 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
       where: { dossierId, type: "DEVIS", statut: "ACCEPTE" },
       data: { statut: "GENERE" },
     });
+    // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
+    await tx.document.updateMany({ where: { dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
     // … et un bon pour accord donné dans l'espace client ne vaut plus : sinon l'espace dirait « signé »
     // quand le dossier dit « devis envoyé ». La preuve reste, annotée (voir espace/validations.ts).
     await tx.accordDevis.updateMany({
@@ -273,7 +275,7 @@ export async function changerEtapeDansTransaction(
   const franchitSignature =
     estEtapeActive(entree.vers) && rangEtape(entree.vers) >= rangEtape("SIGNE") && (reference === null || rangEtape(reference) < rangEtape("SIGNE"));
   if (franchitSignature) {
-    const devis = dossier.documents.filter((document) => document.type === "DEVIS" && document.statut !== "REMPLACE");
+    const devis = dossier.documents.filter((document) => document.type === "DEVIS" && !["REMPLACE", "NON_RETENU", "ANNULEE"].includes(document.statut));
     const signe = entree.devisAccepteId
       ? devis.find((document) => document.id === entree.devisAccepteId)
       : (devis.find((document) => document.statut === "ACCEPTE") ?? devis[0]);

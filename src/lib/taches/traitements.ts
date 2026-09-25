@@ -9,6 +9,7 @@ import { enregistrerTachesEspace } from "@/lib/espace/taches";
 import { enregistrerTachesMail } from "@/lib/mail/taches";
 import { enregistrerTachesMessages } from "@/lib/messages/taches";
 import { enregistrerTachesMeta } from "@/lib/meta/taches";
+import { enregistrerTachesCorbeille } from "@/lib/prospects/corbeille";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
 import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
 import { enregistrerTachesSimulateur } from "@/lib/simulateur/taches";
@@ -40,4 +41,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesSimulateur();
   enregistrerTachesCoherence();
   enregistrerTachesSauvegardes();
+  enregistrerTachesCorbeille();
 }

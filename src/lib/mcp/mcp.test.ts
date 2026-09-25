@@ -186,10 +186,10 @@ describe("serveur MCP", () => {
     assert.equal(await prisma.appelOutil.count({ where: { outil: "envoyer_document", statut: "FAIT" } }), 0);
   });
 
-  test("« supprimer » via MCP archive, et le journal des sessions le montre", async () => {
+  test("« supprimer » via MCP met à la corbeille (rien n'est effacé), et le journal des sessions le montre", async () => {
     const l = await lead();
     const r = await appeler("supprimer", { leads: [l.id], motif: "test", commande: "Supprime ce lead de test" });
-    assert.match(r, /^Rien ne se supprime/);
+    assert.match(r, /^1 lead\(s\) à la corbeille/);
     assert.ok((await prisma.lead.findUniqueOrThrow({ where: { id: l.id } })).archiveLe);
     const { sessionsRecentes } = await import("@/lib/assistant/execution");
     const sessions = await sessionsRecentes(5);

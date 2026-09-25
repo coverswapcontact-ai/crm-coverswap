@@ -29,7 +29,50 @@ const TON_STATUT: Partial<Record<DocumentVue["statut"], string>> = {
   ANNULEE: "bg-[#EF4444]/10 text-[#F87171]",
   REMPLACE: "bg-[#22262D] text-[#6B7280] line-through",
   REFUSE: "bg-[#EF4444]/10 text-[#F87171]",
+  NON_RETENU: "bg-[#22262D] text-[#6B7280]",
 };
+
+/** Mission 11 : un devis émis qui ne sera pas signé — annulé, gardé en historique (jamais un devis accepté). */
+function ModaleAnnulationDevis({ detail, devis, onFermer, onFait }: { detail: DossierDetail; devis: DocumentVue; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
+  const [motif, setMotif] = useState("");
+  const [envoi, setEnvoi] = useState(false);
+
+  async function annuler() {
+    setEnvoi(true);
+    try {
+      const reponse = await envoyerJson<{ dossier: DossierDetail }>(`/api/dossiers/${detail.id}/documents/${devis.id}/annulation`, "POST", { motif: motif.trim() });
+      onFait(reponse.dossier);
+      toast.success(`Devis ${devis.numero} annulé`, { description: "Il reste dans l'historique du dossier ; le client ne le voit plus." });
+      onFermer();
+    } catch (erreur) {
+      toast.error("Annulation impossible", { description: messageErreur(erreur) });
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  return (
+    <Modale
+      ouverte
+      onFermer={onFermer}
+      largeur="sm"
+      titre={`Annuler le devis ${devis.numero}`}
+      description="Un devis émis ne s'efface pas : il passe « Annulé » et reste dans l'historique. Son numéro n'est jamais réutilisé."
+      pied={
+        <div className="flex justify-end gap-2">
+          <Bouton variante="fantome" onClick={onFermer}>
+            Retour
+          </Bouton>
+          <Bouton variante="danger" icone={<Undo2 size={14} aria-hidden />} chargement={envoi} onClick={() => void annuler()}>
+            Annuler le devis
+          </Bouton>
+        </div>
+      }
+    >
+      <Champ libelle="Motif (facultatif)" maxLength={300} placeholder="Ex. le client a choisi une autre formule" value={motif} onChange={(evenement) => setMotif(evenement.target.value)} />
+    </Modale>
+  );
+}
 
 function ModaleAvoir({
   detail,
@@ -199,6 +242,7 @@ export function DocumentsDossier({
   onMisAJour: (detail: DossierDetail) => void;
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
+  const [devisAAnnuler, setDevisAAnnuler] = useState<DocumentVue | null>(null);
   const [aEnvoyer, setAEnvoyer] = useState<DocumentVue | null>(null);
   // Document émis avant le CRM : nouveau rattachement (null) ou correction d'un document repris.
   const [existant, setExistant] = useState<{ document?: DocumentVue } | null>(null);
@@ -234,10 +278,11 @@ export function DocumentsDossier({
           {documents.map((document) => {
             const avoir = document.documentsLies.find((lie) => lie.type === "AVOIR");
             const remplacant = document.documentsLies.find((lie) => lie.type === "DEVIS");
-            const peutRefaire = document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE"].includes(document.statut);
+            const peutRefaire = document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE", "NON_RETENU"].includes(document.statut);
             const peutAnnuler = document.type === "FACTURE" && document.statut !== "ANNULEE";
+            const peutAnnulerDevis = document.type === "DEVIS" && ["GENERE", "ENVOYE", "REFUSE", "NON_RETENU"].includes(document.statut);
             const peutEnvoyer =
-              (document.type === "DEVIS" || document.type === "FACTURE") && document.statut !== "REMPLACE" && document.statut !== "ANNULEE" && document.pdfUrl !== null;
+              (document.type === "DEVIS" || document.type === "FACTURE") && !["REMPLACE", "ANNULEE", "NON_RETENU"].includes(document.statut) && document.pdfUrl !== null;
             const repris = document.origine === "REPRISE";
             return (
               <li key={document.id} className="border-t-[0.5px] border-[#2A2D34] px-3 py-2.5 first:border-t-0">
@@ -247,11 +292,13 @@ export function DocumentsDossier({
                       <span className="font-medium">
                         {LIBELLES_TYPE_DOCUMENT[document.type]} {document.numero}
                       </span>
+                      {document.libelleVariante ? <span className="text-[#9CA3AF]">« {document.libelleVariante} »</span> : null}
                       <span className={cn("rounded-full px-1.5 py-px text-[10px]", TON_STATUT[document.statut] ?? "bg-[#22262D] text-[#9CA3AF]")}>
                         {/* Une facture reprise n'a pas été générée ici : elle a été émise avant le CRM. */}
                         {repris && document.statut === "GENERE" ? "Émise" : LIBELLES_STATUT_DOCUMENT[document.statut]}
                       </span>
                       {repris ? <Pastille titre="Émis avant le CRM, rattaché avec son numéro du registre">Repris</Pastille> : null}
+                      {document.type === "DEVIS" && !document.visibleEspace && !["REMPLACE", "ANNULEE", "NON_RETENU"].includes(document.statut) ? <Pastille ton="ambre" titre="Le client ne le voit pas dans son espace">Masqué dans l&apos;espace</Pastille> : null}
                     </p>
                     <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
                       {document.dateEmission ? formatDateCourte(document.dateEmission) : null} · {document.objet}
@@ -299,7 +346,7 @@ export function DocumentsDossier({
                 {avoir ? <p className="mt-1 text-[12px] text-[#F87171]">Annulée par l&apos;avoir {avoir.numero}</p> : null}
                 {remplacant ? <p className="mt-1 text-[12px] text-[#6B7280]">Remplacé par le devis {remplacant.numero}</p> : null}
                 {repris && !document.pdfUrl ? <p className="mt-1 text-[12px] text-[#9CA3AF]">PDF non importé.</p> : null}
-                {peutRefaire || peutAnnuler || peutEnvoyer || repris ? (
+                {peutRefaire || peutAnnuler || peutAnnulerDevis || peutEnvoyer || repris ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {repris ? (
                       <Bouton taille="sm" variante="fantome" icone={document.pdfUrl ? <Pencil size={13} aria-hidden /> : <FileUp size={13} aria-hidden />} onClick={() => setExistant({ document })}>
@@ -321,6 +368,11 @@ export function DocumentsDossier({
                         Annuler par un avoir
                       </Bouton>
                     ) : null}
+                    {peutAnnulerDevis ? (
+                      <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => setDevisAAnnuler(document)}>
+                        Annuler ce devis
+                      </Bouton>
+                    ) : null}
                   </div>
                 ) : null}
               </li>
@@ -335,6 +387,7 @@ export function DocumentsDossier({
       {aAnnuler ? (
         <ModaleAvoir detail={detail} facture={aAnnuler} onFermer={() => setAAnnuler(null)} onFait={onMisAJour} />
       ) : null}
+      {devisAAnnuler ? <ModaleAnnulationDevis key={devisAAnnuler.id} detail={detail} devis={devisAAnnuler} onFermer={() => setDevisAAnnuler(null)} onFait={onMisAJour} /> : null}
     </section>
   );
 }

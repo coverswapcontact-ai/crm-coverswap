@@ -65,6 +65,8 @@ export type SimulationClient = {
 export type DevisClient = {
   id: string;
   numero: string;
+  /** Mission 11 : le libellé de la variante (« façades seules »), quand il y en a un. */
+  libelle: string | null;
   objet: string;
   lignes: ({ type: "SECTION"; libelle: string } | { type: "PRESTATION"; designation: string; detail: string | null; quantite: number; unite: string; prixUnitaire: number; total: number })[];
   total: number;
@@ -126,6 +128,8 @@ export type EtatEspace = {
   /** Carte « Vérifiez vos coordonnées » : prénom, nom, e-mail, téléphone (le client), adresse (le projet). */
   coordonnees: CoordonneesEspace;
   devis: DevisClient | null;
+  /** Mission 11 : les devis proposés visibles, du plus ancien au plus récent ; plusieurs → le client en choisit un ; l'accepté y est toujours. */
+  devisProposes: DevisClient[];
   acompte: { montant: number; recu: number; complet: boolean } | null;
   /** Onglet Paiement : ce qui est dû, ce qui est payé (date et moyen), à partir des encaissements du dossier. */
   paiement: (PaiementEspace & { devisNumero: string; signeLe: string | null }) | null;
@@ -204,6 +208,7 @@ function devisPourLeClient(devis: DevisLu, accord: AccordEffectif | null, retira
   return {
     id: devis.id,
     numero: devis.numero!,
+    libelle: devis.libelleVariante ?? null,
     objet: devis.objet,
     lignes: lignes.map((l) =>
       l.type === "SECTION"
@@ -409,6 +414,9 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     choix,
     coordonnees,
     devis,
+    devisProposes: lecture.proposes
+      .filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE")
+      .map((d) => (d.id === lecture.devis?.id ? devis! : devisPourLeClient(d, null, false))),
     acompte: devis && devis.acompte > 0 ? { montant: devis.acompte, recu, complet: recu >= devis.acompte - 0.5 } : null,
     paiement: devis && accord && lecture.paiement ? { ...lecture.paiement, devisNumero: devis.numero, signeLe: accord.le.toISOString() } : null,
     virement: (() => {
@@ -1019,7 +1027,8 @@ async function enregistrerSignature(dossierId: string, dataUrl: string | undefin
 export async function accepterDevis(espace: EspaceClient, entree: z.output<typeof schemaAccord>, origine: { ip: string | null; navigateur: string | null }): Promise<{ dejaAccepte: boolean }> {
   const devis = await prisma.document.findFirst({ where: { id: entree.documentId, dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
   if (!devis) throw new ErreurMetier("Devis introuvable.", 404);
-  if (["REMPLACE", "ANNULEE", "REFUSE"].includes(devis.statut)) throw new ErreurMetier("Ce devis n'est plus en vigueur : un nouveau devis vous sera proposé.", 409);
+  if (["REMPLACE", "ANNULEE", "REFUSE", "NON_RETENU"].includes(devis.statut)) throw new ErreurMetier("Ce devis n'est plus en vigueur : un nouveau devis vous sera proposé.", 409);
+  if (devis.visibleEspace === false && devis.statut !== "ACCEPTE") throw new ErreurMetier("Ce devis n'est pas proposé dans votre espace.", 409);
   // Un accord retiré ne vaut plus : le client peut en redonner un (nouvelle ligne, nouvelle preuve).
   const existant = await prisma.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null } });
   if (existant) return { dejaAccepte: true };
@@ -1027,13 +1036,18 @@ export async function accepterDevis(espace: EspaceClient, entree: z.output<typeo
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true, etape: true } });
   const signature = await enregistrerSignature(espace.dossierId, entree.signature).catch(() => null);
+  // Mission 11 : il n'en signe qu'un ; les autres devis proposés passent « non retenu » (gardés en historique).
+  const autres = await prisma.document.findMany({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, id: { not: devis.id }, statut: { in: ["GENERE", "ENVOYE"] } }, select: { id: true, numero: true, libelleVariante: true } });
+  const libelle = devis.libelleVariante ? ` (${devis.libelleVariante})` : "";
+  const nonRetenus = autres.map((a) => `${a.numero}${a.libelleVariante ? ` (${a.libelleVariante})` : ""}`);
   await avecActeur(ACTEUR, async () => {
     await prisma.$transaction([
       prisma.accordDevis.create({
         data: { dossierId: espace.dossierId, documentId: devis.id, numeroDevis: devis.numero, totalHt: montants.totalHtCentimes / 100, acomptePct: devis.acomptePct, nomSignataire: entree.nom, mention: "Bon pour accord", ip: origine.ip, navigateur: origine.navigateur?.slice(0, 300) ?? null, signature },
       }),
+      ...(autres.length ? [prisma.document.updateMany({ where: { id: { in: autres.map((a) => a.id) } }, data: { statut: "NON_RETENU" } })] : []),
       prisma.dossierEvenement.create({
-        data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_ACCEPTE", direction: "ENTRANT", contenu: `Bon pour accord donné par ${entree.nom} sur le devis ${devis.numero} (${(montants.totalTtcCentimes / 100).toLocaleString("fr-FR")} €)${signature ? ", signé au doigt" : ""}`, metadata: JSON.stringify({ documentId: devis.id, signature: Boolean(signature) }) },
+        data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_ACCEPTE", direction: "ENTRANT", contenu: `Bon pour accord donné par ${entree.nom} sur le devis ${devis.numero}${libelle} (${(montants.totalTtcCentimes / 100).toLocaleString("fr-FR")} €)${signature ? ", signé au doigt" : ""}${nonRetenus.length ? ` ; non retenu${nonRetenus.length > 1 ? "s" : ""} : ${nonRetenus.join(", ")}` : ""}`, metadata: JSON.stringify({ documentId: devis.id, numero: devis.numero, libelle: devis.libelleVariante ?? null, signature: Boolean(signature), nonRetenus: autres.map((a) => ({ id: a.id, numero: a.numero, libelle: a.libelleVariante ?? null })) }) },
       }),
     ]);
     // Le dossier passe « Signé » : c'est le client qui signe, pas un agent. L'acompte reste à enregistrer par Lucas.

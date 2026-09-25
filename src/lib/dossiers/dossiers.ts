@@ -445,6 +445,8 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       documentOrigine: document.documentOrigine,
       documentsLies: document.documentsLies.map((lie) => ({ ...lie, type: lie.type as TypeDocument })),
       motifAvoir: document.motifAvoir,
+      libelleVariante: document.libelleVariante,
+      visibleEspace: document.visibleEspace,
     })),
     paiements,
   };

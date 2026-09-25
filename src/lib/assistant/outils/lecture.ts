@@ -5,7 +5,7 @@ import { notesDuLead } from "@/lib/commercial/notes-appel";
 import { pilotageCommercial } from "@/lib/commercial/pilotage";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
-import { ETAPES, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } from "@/lib/dossiers/constants";
 import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
@@ -129,7 +129,7 @@ export const outilLireFiche = definirOutil({
         d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
         d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
         Object.keys(d.prestations).length ? `Projet : ${resumerSelection(d.prestations)}${Object.keys(d.teintes).length ? ` ; teintes : ${Object.entries(d.teintes).map(([cle, t]) => `${sousPartieDeCle(cle)?.sousPartie.libelle ?? cle} ${t}`).join(", ")}` : ""}.` : "",
-        devis.length ? `Devis : ${devis.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "Aucun devis.",
+        devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})`).join(", ")}.` : "Aucun devis.",
         factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "",
         `Paiements : ${d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length} encaissement(s), reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
         simulations.simulations.length ? `Simulations : ${simulations.simulations.length} (${simulations.simulations.filter((s) => s.statut === "PUBLIEE").length} publiée(s)${simulations.simulations.some((s) => s.choisie) ? ", une choisie par le client" : ""}).` : "Aucune simulation.",
@@ -138,7 +138,7 @@ export const outilLireFiche = definirOutil({
         d.notes.length ? `Dernière note (${format.jourCourt(d.notes[0].createdAt)}) : ${d.notes[0].contenu.slice(0, 200)}` : "",
         `Derniers événements : ${d.evenements.slice(0, 5).map((e) => `${format.jourCourt(e.date)} ${e.contenu.slice(0, 90)}`).join(" · ")}`
       );
-      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
+      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, libelle: x.libelleVariante, visibleEspace: x.visibleEspace, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
       liens.push(lien("Ouvrir le dossier", `/dossiers?dossier=${d.id}`));
     }
     if (ids.clientId) {
@@ -156,6 +156,7 @@ export const outilLireFiche = definirOutil({
         parties.push(
           `Lead ${l.nom}${l.ville ? ` (${l.ville})` : ""} reçu le ${format.jourCourt(l.recuLe)} par ${l.source} : ${l.typeProjet.toLowerCase()}, statut ${l.statut.toLowerCase()}${l.priorite ? `, priorité ${l.priorite.toLowerCase()}` : ""}${l.rappelLe ? `, rappel prévu le ${format.jour(l.rappelLe)}` : ""}.`,
           l.message ? `Son message : « ${l.message.slice(0, 300)} »` : "",
+          [l.occupation ? `Occupation : ${l.occupation.toLowerCase()}` : null, l.delaiProjet ? `Délai du projet : ${l.delaiProjet.toLowerCase()}` : null].filter(Boolean).join(" · "),
           notes.length ? `Notes d'appel : ${notes.slice(0, 3).map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 120)}`).join(" · ")}` : "Aucune note d'appel."
         );
         donnees.lead = { id: l.id, nom: l.nom, telephone: l.telephone, email: l.email, ville: l.ville, source: l.source, statut: l.statut, priorite: l.priorite, rappelLe: l.rappelLe, message: l.message, occupation: l.occupation, delaiProjet: l.delaiProjet, echanges: l.echanges.slice(0, 8), notesAppel: notes.slice(0, 8), dossiers: l.dossiers };

@@ -5,6 +5,13 @@ import { outilManagerMarketing } from "./analyses/marketing";
 import { outilManagerOperations } from "./analyses/operations";
 import { LIBELLES_NIVEAU, type DefinitionOutil, type NiveauOutil } from "./definition";
 import { OUTILS_ACTIONS } from "./outils/actions";
+import { OUTILS_CATALOGUE } from "./outils/catalogue-outils";
+import { OUTILS_CONTACTS } from "./outils/contacts";
+import { OUTILS_DOCUMENTS } from "./outils/documents";
+import { OUTILS_PARAMETRES_ECRITURE, OUTILS_PARAMETRES_LECTURE } from "./outils/parametres";
+import { OUTILS_PUBLICITE } from "./outils/publicite";
+import { OUTILS_RELANCES_ECRITURE, OUTILS_RELANCES_LECTURE } from "./outils/relances";
+import { OUTILS_SITE } from "./outils/site";
 import { OUTILS_DEPENSES } from "./outils/depenses";
 import { OUTILS_ECRITURE } from "./outils/ecriture";
 import { OUTILS_ESPACE_ECRITURE, OUTILS_ESPACE_LECTURE } from "./outils/espace";
@@ -27,7 +34,30 @@ export type OutilQuelconque = DefinitionOutil<any>;
 
 export const OUTILS_ANALYSE: OutilQuelconque[] = [outilManagerCommercial, outilManagerFinances, outilManagerMarketing, outilManagerClients, outilManagerOperations];
 
-export const CATALOGUE: OutilQuelconque[] = [...OUTILS_LECTURE, ...OUTILS_IMAGES, ...OUTILS_ESPACE_LECTURE, ...OUTILS_DEPENSES, ...OUTILS_REGLAGES_LECTURE, outilPointDuJour, ...OUTILS_ANALYSE, ...OUTILS_MAIL, ...OUTILS_ECRITURE, ...OUTILS_ACTIONS, ...OUTILS_ESPACE_ECRITURE, ...OUTILS_SIMULATION, ...OUTILS_REGLAGES_ECRITURE];
+export const CATALOGUE: OutilQuelconque[] = [
+  ...OUTILS_LECTURE,
+  ...OUTILS_IMAGES,
+  ...OUTILS_SITE,
+  ...OUTILS_ESPACE_LECTURE,
+  ...OUTILS_DEPENSES,
+  ...OUTILS_REGLAGES_LECTURE,
+  ...OUTILS_PARAMETRES_LECTURE,
+  ...OUTILS_RELANCES_LECTURE,
+  ...OUTILS_PUBLICITE,
+  ...OUTILS_CATALOGUE,
+  outilPointDuJour,
+  ...OUTILS_ANALYSE,
+  ...OUTILS_MAIL,
+  ...OUTILS_ECRITURE,
+  ...OUTILS_DOCUMENTS,
+  ...OUTILS_CONTACTS,
+  ...OUTILS_ACTIONS,
+  ...OUTILS_ESPACE_ECRITURE,
+  ...OUTILS_SIMULATION,
+  ...OUTILS_REGLAGES_ECRITURE,
+  ...OUTILS_PARAMETRES_ECRITURE,
+  ...OUTILS_RELANCES_ECRITURE,
+];
 
 const doublons = CATALOGUE.map((o) => o.nom).filter((nom, i, liste) => liste.indexOf(nom) !== i);
 if (doublons.length) throw new Error(`Catalogue de l'assistant : noms d'outils en double (${doublons.join(", ")}).`);

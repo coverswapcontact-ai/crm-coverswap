@@ -231,11 +231,22 @@ export const SECTION_ACTIONS = `## Dossiers, photos, espace (mission 10)
 - « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM) ; « modifier_consignes » et « modifier_tarifs » montrent l'aperçu avant et gardent l'historique ; « depenses » répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
 - Toute action en lot (plus de trois éléments) reste sensible : aperçu puis confirmation.`;
 
+/** Section « Devis multiples, contacts, réglages » (mission 11), jointe aux consignes si elles ne l'ont pas. */
+export const SECTION_MISSION11 = `## Devis multiples, contacts, réglages (mission 11)
+- Un dossier porte autant de devis que nécessaire, chacun avec son libellé de variante (« façades seules », « façades + plan de travail ») : « generer_document » avec libelle_variante AJOUTE un devis (rien n'est remplacé sans « remplace ») ; notifier: false évite le mail « votre devis est disponible » ; « deposer_document » rattache un PDF fait ailleurs (devis, facture, BAT). Le client en valide un seul dans son espace : les autres passent « non retenu » (gardés). « lire_fiche » les liste tous avec leur statut ; le point du jour dit « le client a choisi le devis X (libellé) ».
+- « annuler_document » : un devis qui ne sera pas signé passe « Annulé » (gardé) ; une facture s'annule par un avoir (motif). Une remise = une ligne « Remise … » à prix négatif (ou « remise » en euros) ; un avenant = avenant_de ; une facture depuis un devis = depuis_devis.
+- « creer_contact » cherche d'abord un doublon (numéro, e-mail, nom + ville) : s'il en trouve, rien n'est créé — dis-le à Lucas, agis sur la fiche existante, ou forcer: true s'il confirme que c'est une autre personne.
+- « supprimer » = corbeille 30 jours (« restaurer » remet) ; definitif: true efface tout de suite (anonymisation, irréversible) et exige une confirmation explicite de Lucas après lui avoir dit ce que ça implique. Rien n'est jamais effacé autrement.
+- « changer_teinte » : une teinte par meuble, autant de teintes que de meubles ; « simulations_site » montre ce que les visiteurs du site ont essayé ; « voir_publicite » dit honnêtement si les leads entrent.
+- « voir_parametres » / « modifier_parametres » : campagne, capacité (réserve de trésorerie, chantiers par mois), délais, solde OpenAI, et les interrupteurs des automatismes (mails de l'espace, SMS d'accusé, séquences, IA du CRM) — toute modification sous confirmation ; jamais un secret. « voir_relances » / « relancer » / « annuler_relance » pour les relances de devis.
+- Un outil que « lister_outils » rend mais que l'application dit « not registered » : demande à Lucas de reconnecter le connecteur (Paramètres → Connecteurs → CRM CoverSwap), puis réessaie.`;
+
 export const lireConsignes = async (): Promise<TexteReglable> => {
   const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
   let texte = t.texte.trim();
   if (!/^## Mail/m.test(texte)) texte = `${texte}\n\n${SECTION_MAIL}`;
   if (!/^## Dossiers, photos, espace/m.test(texte)) texte = `${texte}\n\n${SECTION_ACTIONS}`;
+  if (!/^## Devis multiples, contacts, réglages/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION11}`;
   return texte === t.texte.trim() ? t : { ...t, texte };
 };
 export const enregistrerConsignes = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_CONSIGNES, texte, par, commande);

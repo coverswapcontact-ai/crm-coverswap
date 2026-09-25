@@ -16,6 +16,11 @@ export async function GET(requete: NextRequest) {
   // ?reseau=1 : ce que le serveur arrive à joindre (ntfy, Telegram, Brevo…), avec
   // la cause exacte d'un échec. Résultat gardé une minute ; aucun secret n'y figure.
   const reseau = new URL(requete.url).searchParams.get("reseau") === "1" ? await (await import("@/lib/alertes/reseau")).sonderReseau() : undefined;
+  // Mission 11 : le registre des outils MCP (nombre, empreinte), pour vérifier un déploiement d'un coup d'œil.
+  const outils = await import("@/lib/assistant/couverture").then(({ registreOutils }) => {
+    const r = registreOutils();
+    return { nombre: r.nombre, empreinte: r.empreinte };
+  }).catch(() => null);
   return NextResponse.json({
     status: "ok",
     timestamp: Date.now(),
@@ -24,6 +29,7 @@ export async function GET(requete: NextRequest) {
       canaux: Object.fromEntries(CANAUX.map((canal) => [canal, canalConfigure(canal)])),
       push: pushDisponible(),
     },
+    outils,
     ...(reseau ? { reseau } : {}),
   });
 }

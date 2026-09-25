@@ -564,6 +564,9 @@ model Document {
   pdfPath           String?
   statut            String     @default("BROUILLON") // StatutDocument : BROUILLON | GENERE | ENVOYE | ACCEPTE | REFUSE | REMPLACE | ANNULEE
   origine           String     @default("CRM") // CRM : généré ici, figé à l'émission | REPRISE : émis avant le CRM, rattaché avec son numéro du registre
+  // Mission 11 (25/09/2026) : plusieurs devis par dossier — un libellé de variante libre, une visibilité dans l'espace client.
+  libelleVariante   String? // « façades seules », « façades + plan de travail »
+  visibleEspace     Boolean    @default(true) // le client le voit dans son espace (un devis non retenu reste en historique)
   // Figé à l'émission : un document émis ne se modifie plus (la base le refuse).
   clientId          String? // client pérenne (suit les fusions)
   client            Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)

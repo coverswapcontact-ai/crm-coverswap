@@ -77,6 +77,9 @@ export type SanteMeta = {
     surVingtQuatreHeures: number;
     total: number;
     abonnement: { abonne: boolean; champs: string[]; erreur?: string } | null;
+    /** Mission 11 : le voyant honnête — OUI : des leads entrent (quoi que dise la vérification de l'abonnement) ; PRET : configuration complète, aucun lead sur 7 jours ; NON : il manque quelque chose. */
+    recoit: "OUI" | "PRET" | "NON";
+    recoitDetail: string;
   };
   echecs: { nombre: number; leads: LeadEnEchec[] };
   enAttente: number;
@@ -260,6 +263,19 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   if (jeton.etat === "proche" || jeton.etat === "expire" || jeton.etat === "invalide") alertes.push(jeton.message);
   if (echecs.length > 0) alertes.push(`${echecs.length} lead(s) reçus mais pas encore dans le CRM.`);
 
+  // Le voyant dit ce qui s'est réellement passé : des leads reçus ces 7 jours = le webhook reçoit, même si la
+  // vérification de l'abonnement de la page échoue (jeton, droits) ; sans lead, il dit si la chaîne est prête.
+  const manques = [!configuration.signature ? "META_APP_SECRET absente" : null, !configuration.verification ? "META_VERIFY_TOKEN absente" : null].filter((m): m is string => m !== null);
+  const recoit: "OUI" | "PRET" | "NON" = surSeptJours > 0 ? "OUI" : manques.length === 0 && (abonnement === null || abonnement.abonne) ? "PRET" : "NON";
+  const recoitDetail =
+    recoit === "OUI"
+      ? `${surSeptJours} lead(s) reçus sur 7 jours, dernier ${dernier ? `le ${dernier.recuLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}` : "—"}${abonnement && !abonnement.abonne ? " ; la vérification de l'abonnement dit « non abonnée » alors que les leads entrent : c'est la vérification qui se trompe (jeton ou droits), pas le webhook" : ""}.`
+      : recoit === "PRET"
+        ? `Configuration complète${abonnement ? ", page abonnée" : ""} ; aucun lead reçu sur 7 jours${dernier ? ` (dernier le ${dernier.recuLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})` : " (jamais)"}.`
+        : manques.length
+          ? `Il manque : ${manques.join(", ")} — le webhook refuse ou ne peut pas être validé.`
+          : `La page n'est pas abonnée au champ « leadgen »${abonnement?.erreur ? ` (${abonnement.erreur})` : ""} et aucun lead n'est entré sur 7 jours.`;
+
   return {
     configuration,
     notifications,
@@ -271,6 +287,8 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
       surVingtQuatreHeures,
       total,
       abonnement,
+      recoit,
+      recoitDetail,
     },
     echecs: {
       nombre: echecs.length,

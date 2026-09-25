@@ -130,7 +130,7 @@ async function carteDuProjet(projet: EspaceClient): Promise<ProjetCarte> {
   };
 }
 
-const STATUTS_DEVIS: Record<string, string> = { GENERE: "À signer", ENVOYE: "À signer", ACCEPTE: "Signé", REFUSE: "Refusé", REMPLACE: "Remplacé", ANNULEE: "Annulé" };
+const STATUTS_DEVIS: Record<string, string> = { GENERE: "À signer", ENVOYE: "À signer", ACCEPTE: "Signé", REFUSE: "Refusé", REMPLACE: "Remplacé", ANNULEE: "Annulé", NON_RETENU: "Non retenu" };
 
 /** Tous ses devis et factures, tous projets confondus, du plus récent au plus ancien. */
 export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">): Promise<DocumentClient[]> {

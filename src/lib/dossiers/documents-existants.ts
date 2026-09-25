@@ -48,6 +48,9 @@ export const schemaDocumentExistant = z.object({
   ...champsDocument,
   /** Numéro absent du registre : l'y inscrire (émis hors du CRM), sur demande explicite seulement. */
   inscrireAuRegistre: z.boolean().optional(),
+  /** Mission 11 : libellé de variante et visibilité dans l'espace client. */
+  libelleVariante: z.string("Libellé invalide.").trim().max(80, "Libellé trop long : 80 caractères maximum.").nullable().optional(),
+  visibleEspace: z.boolean("Visibilité invalide.").optional(),
 });
 export type EntreeDocumentExistant = z.output<typeof schemaDocumentExistant>;
 
@@ -58,6 +61,8 @@ export const schemaModificationDocumentExistant = z
     objet: champsDocument.objet,
     statut: champsDocument.statut,
     acomptePct: champsDocument.acomptePct,
+    libelleVariante: z.string("Libellé invalide.").trim().max(80, "Libellé trop long : 80 caractères maximum.").nullable().optional(),
+    visibleEspace: z.boolean("Visibilité invalide.").optional(),
   })
   .refine((entree) => Object.values(entree).some((valeur) => valeur !== undefined), { message: "Rien à modifier." });
 
@@ -148,6 +153,8 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
         origine: "REPRISE",
         destinataire: JSON.stringify(destinataire),
         categorieClient: categorie,
+        libelleVariante: entree.libelleVariante || null,
+        visibleEspace: entree.visibleEspace ?? true,
       },
     });
   } catch (erreur) {
@@ -180,7 +187,7 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
       dossierId,
       type: "DOCUMENT_REPRIS",
       direction: "INTERNE",
-      contenu: `${LIBELLES_TYPE_DOCUMENT[entree.type]} ${ligne.numero} du ${formatDateCourte(dateEmission)} rattaché (émis avant le CRM) : ${formatCentimes(versCentimes(document.totalHt))}`,
+      contenu: `${LIBELLES_TYPE_DOCUMENT[entree.type]} ${ligne.numero}${entree.libelleVariante ? ` « ${entree.libelleVariante} »` : ""} du ${formatDateCourte(dateEmission)} rattaché (émis avant le CRM) : ${formatCentimes(versCentimes(document.totalHt))}`,
       metadata: JSON.stringify({ documentId: document.id, numero: ligne.numero, totalHt: document.totalHt, origine: "REPRISE" }),
       survenuLe: dateEmission,
     },
@@ -216,6 +223,8 @@ export async function modifierDocumentExistant(dossierId: string, documentId: st
         ...(entree.objet !== undefined ? { objet: (entree.objet || document.objet).slice(0, 160) } : {}),
         ...(entree.statut !== undefined ? { statut: statutDe(document.type as TypeDocument, entree.statut) } : {}),
         ...(entree.acomptePct !== undefined && document.type === "DEVIS" ? { acomptePct: entree.acomptePct } : {}),
+        ...(entree.libelleVariante !== undefined ? { libelleVariante: entree.libelleVariante || null } : {}),
+        ...(entree.visibleEspace !== undefined ? { visibleEspace: entree.visibleEspace } : {}),
       },
     });
     if (totalHt !== undefined) {

@@ -88,6 +88,9 @@ export type DocumentVue = {
   /** Facture annulée : son avoir ; devis remplacé : le nouveau devis. */
   documentsLies: { id: string; type: TypeDocument; numero: string | null }[];
   motifAvoir: string | null;
+  /** Mission 11 : libellé de variante et visibilité dans l'espace client (devis). */
+  libelleVariante: string | null;
+  visibleEspace: boolean;
 };
 
 export type DossierDetail = DossierResume & {

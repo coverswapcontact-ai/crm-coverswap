@@ -92,8 +92,14 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
       return client ? { qui: "MOI", motif: "Il demande d'autres simulations" } : null;
     case "ESPACE_COMMENTAIRE":
       return client ? { qui: "MOI", motif: "Il a commenté une simulation" } : null;
-    case "ESPACE_DEVIS_ACCEPTE":
-      return client ? { qui: "MOI", motif: "Bon pour accord reçu : fixer la date du chantier" } : null;
+    case "ESPACE_DEVIS_ACCEPTE": {
+      if (!client) return null;
+      // Mission 11 : plusieurs devis proposés → le motif nomme celui qu'il a choisi.
+      const meta = lireMetadata(evenement.metadata);
+      const numero = typeof meta.numero === "string" ? meta.numero : null;
+      const libelle = typeof meta.libelle === "string" && meta.libelle ? ` (${meta.libelle})` : "";
+      return { qui: "MOI", motif: numero ? `Il a choisi le devis ${numero}${libelle} : fixer la date du chantier` : "Bon pour accord reçu : fixer la date du chantier" };
+    }
     case "ESPACE_ACCORD_RETIRE":
       return client ? { qui: "MOI", motif: "Il a retiré son bon pour accord : l'appeler" } : null;
     case "ESPACE_MESSAGE":

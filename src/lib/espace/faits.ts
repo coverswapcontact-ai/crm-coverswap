@@ -25,6 +25,9 @@ export type DevisLu = {
   dateEmission: Date | null;
   createdAt: Date;
   pdfPath: string | null;
+  /** Mission 11 : libellé de variante et visibilité dans l'espace (absents sur d'anciens lecteurs). */
+  libelleVariante?: string | null;
+  visibleEspace?: boolean;
 };
 
 export type AccordLu = { id: string; documentId: string; createdAt: Date; nomSignataire: string; signature: string | null; retireLe: Date | null };
@@ -36,6 +39,15 @@ export const STATUTS_DEVIS_EN_VIGUEUR = ["GENERE", "ENVOYE", "ACCEPTE"] as const
 export function devisEnVigueur<T extends Pick<DevisLu, "statut" | "createdAt" | "numero">>(devis: T[]): T | null {
   const vivants = devis.filter((d) => d.numero && (STATUTS_DEVIS_EN_VIGUEUR as readonly string[]).includes(d.statut)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return vivants.find((d) => d.statut === "ACCEPTE") ?? vivants[0] ?? null;
+}
+
+/**
+ * Mission 11 : tous les devis proposés au client (en vigueur), du plus ancien au plus récent — il n'en signera qu'un.
+ * `avecNonRetenus` : aussi ceux qu'il n'a pas retenus (pour Lucas : l'historique ; jamais pour le client).
+ */
+export function devisProposes<T extends Pick<DevisLu, "statut" | "createdAt" | "numero">>(devis: T[], options: { avecNonRetenus?: boolean } = {}): T[] {
+  const statuts: readonly string[] = options.avecNonRetenus ? [...STATUTS_DEVIS_EN_VIGUEUR, "NON_RETENU"] : STATUTS_DEVIS_EN_VIGUEUR;
+  return devis.filter((d) => d.numero && statuts.includes(d.statut)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
 export type AccordEffectif = {
@@ -121,6 +133,8 @@ export function paiementEspace(montants: { totalTtcCentimes: number; acompteCent
 
 export type LectureDevis = {
   devis: DevisLu | null;
+  /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent. */
+  proposes: DevisLu[];
   montants: ReturnType<typeof montantsDocument> | null;
   accord: AccordEffectif | null;
   paiement: PaiementEspace | null;
@@ -130,11 +144,12 @@ export type LectureDevis = {
 /** Devis en vigueur, accord et paiements d'un dossier, d'un seul geste. */
 export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null }): LectureDevis {
   const devis = devisEnVigueur(entree.devis);
-  if (!devis) return { devis: null, montants: null, accord: null, paiement: null, acompteRecu: false };
+  const proposes = devisProposes(entree.devis);
+  if (!devis) return { devis: null, proposes, montants: null, accord: null, paiement: null, acompteRecu: false };
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
   const accord = accordEffectif(devis, entree.accords, { nom: entree.clientNom, signeLe: entree.signeLe ?? devis.dateEmission ?? devis.createdAt });
   const paiement = paiementEspace(montants, devis.acomptePct, entree.encaissements);
-  return { devis, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
+  return { devis, proposes, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
 }
 
 /** Date du passage en « Signé » lue dans les changements d'étape (date réelle si elle a été saisie). */

@@ -54,6 +54,8 @@ export type LigneEspace = {
     /** Demande d'autre proposition en attente : sa date et son mot, entier. */
     proposition: { le: string; message: string | null } | null;
     devis: { numero: string; consultations: number; consulteLe: string | null } | null;
+    /** Mission 11 : devis proposés visibles dans son espace (plusieurs → il en choisit un). */
+    devisProposes: number;
     accord: string | null;
     /** ESPACE : bon pour accord en ligne ; CRM : devis noté accepté dans le CRM (signé sur papier). */
     accordSource: "ESPACE" | "CRM" | null;

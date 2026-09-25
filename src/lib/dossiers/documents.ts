@@ -50,10 +50,11 @@ const schemaPrestation = z.object({
   unite: z.enum(UNITES, "Unité invalide."),
   prixUnitaire: z
     .number("Prix unitaire invalide.")
-    .min(0, "Un prix unitaire ne peut pas être négatif.")
+    .min(-1_000_000, "Prix unitaire invalide.")
     .max(1_000_000, "Prix unitaire invalide.")
     .transform(arrondiCentieme),
-});
+  // Mission 11 : une remise est une ligne « Remise … » à prix négatif ; ailleurs un prix négatif reste refusé (le calcul ne change pas).
+}).refine((ligne) => ligne.prixUnitaire >= 0 || /^remise/i.test(ligne.designation), { message: "Un prix négatif n'est permis que sur une ligne « Remise … ».", path: ["prixUnitaire"] });
 
 const schemaSection = z.object({
   type: z.literal("SECTION"),
@@ -83,8 +84,17 @@ export const schemaGeneration = z
       .min(0, "Le pourcentage d'acompte doit être compris entre 0 et 100.")
       .max(100, "Le pourcentage d'acompte doit être compris entre 0 et 100.")
       .nullable(),
-    /** Devis refait : le devis qu'il remplace (marqué « Remplacé » à la génération). */
+    /** Devis refait : le devis qu'il remplace (marqué « Remplacé » à la génération). Sans lui, un nouveau devis s'ajoute aux devis proposés (mission 11). */
     remplaceDocumentId: z.string().max(40).nullable().optional(),
+    /** Mission 11 : libellé de la variante (« façades seules »), visible par le client. */
+    libelleVariante: z
+      .string("Libellé invalide.")
+      .trim()
+      .max(80, "Libellé trop long : 80 caractères maximum.")
+      .nullable()
+      .optional(),
+    /** Faux : pas de mail « votre devis est disponible » (vrai par défaut). */
+    notifier: z.boolean().optional(),
   })
   .refine((entree) => entree.lignes.some((ligne) => ligne.type === "PRESTATION"), {
     message: "Ajoute au moins une prestation.",
@@ -192,6 +202,9 @@ type Emission = {
   documentOrigineId?: string | null;
   motifAvoir?: string | null;
   factureOrigine?: { numero: string; dateEmission: Date } | null;
+  libelleVariante?: string | null;
+  /** Faux : pas de notification « votre devis est disponible ». */
+  notifier?: boolean;
   /** Écritures propres au type, dans la transaction de l'émission (devis remplacé, facture annulée). */
   pendant?: (tx: Transaction, document: { id: string; numero: string }) => Promise<void>;
 };
@@ -265,6 +278,7 @@ async function emettre(emission: Emission) {
             echeanceLe,
             documentOrigineId: emission.documentOrigineId ?? null,
             motifAvoir: emission.motifAvoir ?? null,
+            libelleVariante: emission.libelleVariante ?? null,
           },
         });
         await tx.numeroDocument.update({
@@ -281,7 +295,7 @@ async function emettre(emission: Emission) {
             dossierId: emission.dossierId,
             type: EVENEMENT_GENERE[emission.type],
             direction: "INTERNE",
-            contenu: `${LIBELLE_GENERE[emission.type](numero)} : ${formatCentimes(totalHtCentimes)}`,
+            contenu: `${LIBELLE_GENERE[emission.type](numero)}${emission.libelleVariante ? ` « ${emission.libelleVariante} »` : ""} : ${formatCentimes(totalHtCentimes)}`,
             metadata: JSON.stringify({ documentId: document.id, numero, totalHt: document.totalHt, client: destinataire }),
           },
         });
@@ -315,8 +329,8 @@ async function emettre(emission: Emission) {
     for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
     // Un devis émis passe la main au client, même sans changement d'étape (main.ts).
     await recalculerMain(emission.dossierId);
-    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis).
-    if (emission.type === "DEVIS") {
+    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 : `notifier: false`).
+    if (emission.type === "DEVIS" && emission.notifier !== false) {
       const { notifierClient } = await import("@/lib/mail/notifications");
       await notifierClient("DEVIS_DISPONIBLE", emission.dossierId, resultat.document.id);
     }
@@ -364,6 +378,8 @@ export async function genererDocument(dossierId: string, entree: EntreeGeneratio
     acomptePct: entree.type === "DEVIS" ? (entree.acomptePct ?? ACOMPTE_PCT_DEFAUT) : null,
     noteMl: entree.noteMl,
     etape,
+    libelleVariante: entree.libelleVariante || null,
+    notifier: entree.notifier,
     documentOrigineId: aRemplacer?.id ?? null,
     pendant: aRemplacer
       ? async (tx) => {
@@ -543,4 +559,44 @@ export async function lirePdfDocument(dossierId: string, documentId: string) {
   await prisma.document.update({ where: { id: document.id }, data: { pdfPath: chemin } });
   console.warn(`[dossiers] PDF ${type} ${document.numero} absent du volume : reconstitué`);
   return { contenu: rendu.contenu, nomFichier };
+}
+
+/* ── Mission 11 : plusieurs devis par dossier ─────────────────────── */
+
+export const schemaPresentationDevis = z
+  .object({
+    visibleEspace: z.boolean("Visibilité invalide.").optional(),
+    libelleVariante: z.string("Libellé invalide.").trim().max(80, "Libellé trop long : 80 caractères maximum.").nullable().optional(),
+  })
+  .refine((entree) => entree.visibleEspace !== undefined || entree.libelleVariante !== undefined, { message: "Rien à modifier." });
+
+/** Libellé de variante et visibilité dans l'espace d'un devis émis (généré ou repris) : la présentation, jamais le contenu. */
+export async function modifierPresentationDevis(dossierId: string, documentId: string, entree: z.output<typeof schemaPresentationDevis>): Promise<{ id: string; numero: string; libelleVariante: string | null; visibleEspace: boolean }> {
+  const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
+  if (!devis?.numero) throw new ErreurMetier("Devis introuvable dans ce dossier.", 404);
+  const maj = await prisma.document.update({
+    where: { id: devis.id },
+    data: { ...(entree.visibleEspace !== undefined ? { visibleEspace: entree.visibleEspace } : {}), ...(entree.libelleVariante !== undefined ? { libelleVariante: entree.libelleVariante || null } : {}) },
+  });
+  const changements = [
+    entree.visibleEspace !== undefined && entree.visibleEspace !== devis.visibleEspace ? (entree.visibleEspace ? "visible dans l'espace client" : "masqué dans l'espace client") : null,
+    entree.libelleVariante !== undefined && (entree.libelleVariante || null) !== devis.libelleVariante ? `libellé « ${entree.libelleVariante || "—"} »` : null,
+  ].filter(Boolean);
+  if (changements.length) {
+    await prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero} : ${changements.join(", ")}`, metadata: JSON.stringify({ documentId: devis.id, presentation: true }) } });
+  }
+  return { id: maj.id, numero: devis.numero, libelleVariante: maj.libelleVariante, visibleEspace: maj.visibleEspace };
+}
+
+/** Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté. */
+export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string }> {
+  const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
+  if (!devis?.numero) throw new ErreurMetier("Devis introuvable dans ce dossier.", 404);
+  if (devis.statut === "ACCEPTE") throw new ErreurMetier("Ce devis est accepté : il ne s'annule pas (retirer l'accord d'abord).", 409);
+  if (devis.statut === "ANNULEE") throw new ErreurMetier("Ce devis est déjà annulé.", 409);
+  await prisma.$transaction([
+    prisma.document.update({ where: { id: devis.id }, data: { statut: "ANNULEE" } }),
+    prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } }),
+  ]);
+  return { id: devis.id, numero: devis.numero };
 }

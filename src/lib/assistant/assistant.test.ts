@@ -143,11 +143,12 @@ describe("recherche, ambiguïté, refus", () => {
     assert.ok(note?.ecriture?.includes("ASSISTANT:claude"), `acteur ASSISTANT attendu dans ${note?.ecriture}`);
   });
 
-  test("« supprimer » archive (rien n'est effacé) ; « restaurer » remet", async () => {
+  test("« supprimer » met à la corbeille (rien n'est effacé) ; « restaurer » remet", async () => {
     const r = await appeler("supprimer", { leads: [stella.id], motif: "test", commande: "Supprime Stella Estelle" });
-    assert.match(r.texte, /^Rien ne se supprime/);
+    assert.match(r.texte, /^1 lead\(s\) à la corbeille \(motif : test\) : effacement le .* sauf « restaurer »/);
     const apres = await prisma.lead.findUniqueOrThrow({ where: { id: stella.id } });
     assert.ok(apres.archiveLe, "archivé");
+    assert.match(apres.archiveMotif ?? "", /^Corbeille \(effacement le/);
     await appeler("restaurer", { leads: [stella.id] });
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: stella.id } })).archiveLe, null);
   });

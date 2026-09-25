@@ -274,7 +274,7 @@ function FenetreEtape({
 }) {
   const criteres = criteresAVerifier(detail.etape, transition.vers, detail.etapeAvantSortie);
   const devis = detail.documents.filter(
-    (document) => document.type === "DEVIS" && document.numero && document.statut !== "BROUILLON" && document.statut !== "REMPLACE"
+    (document) => document.type === "DEVIS" && document.numero && !["BROUILLON", "REMPLACE", "NON_RETENU", "ANNULEE"].includes(document.statut)
   );
   const [motif, setMotif] = useState<MotifPerte | null>(null);
   const [concurrent, setConcurrent] = useState("");

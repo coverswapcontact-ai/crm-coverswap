@@ -216,6 +216,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
         choixTeintes: espace.choixLe ? teintesDuChoix(espace.choix, vivantes) : null,
         proposition: propositionEnAttente ? { le: espace.propositionDemandeeLe!.toISOString(), message: espace.propositionMessage ?? null } : null,
         devis: devis ? { numero: devis.numero!, consultations, consulteLe: consultations > 0 ? date(espace.devisConsulteLe) : null } : null,
+        devisProposes: lecture.proposes.filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE").length,
         accord: accord ? accord.createdAt.toISOString() : null,
         accordSource: accord?.source ?? null,
         acompte,

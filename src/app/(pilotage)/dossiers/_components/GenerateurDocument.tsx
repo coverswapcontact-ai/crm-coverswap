@@ -97,6 +97,7 @@ export function GenerateurDocument({
   detail,
   typeInitial,
   remplace = null,
+  variante = false,
   onFermer,
   onGenere,
 }: {
@@ -104,6 +105,8 @@ export function GenerateurDocument({
   typeInitial: TypeDocument;
   /** Devis refait : ses lignes servent de départ, il sera marqué « Remplacé ». */
   remplace?: DocumentVue | null;
+  /** Mission 11 : « Ajouter un devis » — un devis de plus, à côté de ceux déjà proposés (aucun n'est remplacé). */
+  variante?: boolean;
   onFermer: () => void;
   onGenere: (detail: DossierDetail) => void;
 }) {
@@ -114,6 +117,10 @@ export function GenerateurDocument({
   const [lignes, setLignes] = useState<LigneSaisie[]>(() => (depart ? saisieDepuis(depart.lignes) : [prestationVide()]));
   const [noteMl, setNoteMl] = useState(depart?.noteMl ?? true);
   const [acompte, setAcompte] = useState(String(depart?.acomptePct ?? ACOMPTE_PCT_DEFAUT));
+  // Mission 11 : libellé de la variante (« façades seules ») et mail « votre devis est disponible » débrayable.
+  const [libelle, setLibelle] = useState("");
+  const [notifier, setNotifier] = useState(true);
+  const dejaProposes = detail.documents.filter((d) => d.type === "DEVIS" && d.numero && ["GENERE", "ENVOYE", "ACCEPTE"].includes(d.statut) && d.id !== remplace?.id);
   const [presets, setPresets] = useState<PresetVue[]>([]);
   const [gestionTarifs, setGestionTarifs] = useState(false);
   const [numero, setNumero] = useState<{ type: TypeDocument; valeur: string } | null>(null);
@@ -287,6 +294,8 @@ export function GenerateurDocument({
           noteMl,
           acomptePct: type === "DEVIS" ? lireAcompte(acompte) : null,
           remplaceDocumentId: type === "DEVIS" && remplace ? remplace.id : null,
+          libelleVariante: type === "DEVIS" ? libelle.trim() || null : null,
+          notifier: type === "DEVIS" ? notifier : undefined,
         });
         onGenere(reponse.dossier);
         setResultat({
@@ -309,7 +318,9 @@ export function GenerateurDocument({
     : type === "DEVIS"
       ? remplace
         ? `Refaire le devis ${remplace.numero}`
-        : "Nouveau devis"
+        : variante || dejaProposes.length
+          ? "Ajouter un devis"
+          : "Nouveau devis"
       : "Nouvelle facture";
 
   return (
@@ -618,14 +629,34 @@ export function GenerateurDocument({
                 onChange={setNoteMl}
               />
               {type === "DEVIS" ? (
-                <Champ
-                  libelle="Acompte à la signature (%)"
-                  inputMode="numeric"
-                  value={acompte}
-                  onChange={(evenement) => setAcompte(evenement.target.value)}
-                  erreur={erreurs.acompte}
-                  classeConteneur="max-w-[220px]"
-                />
+                <>
+                  <Champ
+                    libelle="Libellé de la variante"
+                    maxLength={80}
+                    placeholder="Ex. façades seules, façades + plan de travail"
+                    value={libelle}
+                    onChange={(evenement) => setLibelle(evenement.target.value)}
+                    aide={
+                      dejaProposes.length && !remplace
+                        ? `Ce devis s'ajoute ${dejaProposes.length > 1 ? `aux ${dejaProposes.length} devis déjà proposés` : `au devis ${dejaProposes[0].numero ?? ""} déjà proposé`} : le client en choisira un dans son espace.`
+                        : "Facultatif : le client le voit dans son espace, à côté du montant."
+                    }
+                  />
+                  <CaseACocher
+                    libelle="Prévenir le client par mail"
+                    description="« Votre devis est disponible », s'il a un e-mail. À décocher pour le présenter d'abord de vive voix."
+                    checked={notifier}
+                    onChange={setNotifier}
+                  />
+                  <Champ
+                    libelle="Acompte à la signature (%)"
+                    inputMode="numeric"
+                    value={acompte}
+                    onChange={(evenement) => setAcompte(evenement.target.value)}
+                    erreur={erreurs.acompte}
+                    classeConteneur="max-w-[220px]"
+                  />
+                </>
               ) : null}
             </div>
 

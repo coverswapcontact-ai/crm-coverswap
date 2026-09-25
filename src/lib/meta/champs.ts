@@ -36,7 +36,18 @@ export type LeadMetaNormalise = {
   reponses: ReponseFormulaire[];
   /** Les réponses qui ne sont pas déjà dans un champ propre, prêtes à lire dans la fiche. */
   reponsesLibres: ReponseFormulaire[];
+  /** Mission 11 : ce que la personne a écrit en champ libre (message, commentaire, précisions), tel quel. */
+  message: string | null;
 };
+
+const QUESTION_MESSAGE = /message|commentaire|pr[eé]cision|d[eé]tail|d[eé]cri|expliqu|remarque|question|besoin|souhait|projet/i;
+const REPONSE_COURTE = /^(oui|non|propri[eé]taire|locataire|cuisine|salle de bain|sdb|meubles?|pro(fessionnel)?|autre|moins de \d+ mois|plus de \d+ mois|\d+ ?(à|-) ?\d+ mois|d[eè]s que possible|je ne sais pas( encore)?)$/i;
+
+/** Le message libre du formulaire : une réponse en phrase (pas un choix) à une question qui invite à écrire. */
+export function messageDesReponses(reponses: ReponseFormulaire[]): string | null {
+  const textes = reponses.filter((r) => QUESTION_MESSAGE.test(`${r.cle} ${r.question}`) && r.reponse.trim().length >= 12 && !REPONSE_COURTE.test(r.reponse.trim())).map((r) => r.reponse.trim());
+  return textes.length ? [...new Set(textes)].join("\n").slice(0, 2000) : null;
+}
 
 type Nature = "prenom" | "nom" | "nomComplet" | "telephone" | "email" | "ville" | "codePostal" | "projet";
 
@@ -187,6 +198,7 @@ export function normaliserLeadMeta(champs: ChampMeta[]): LeadMetaNormalise {
     typeProjet: TYPES_PROJET.includes(typeProjet) ? typeProjet : "CUISINE",
     reponses,
     reponsesLibres: reponses.filter((r) => !reconnues.has(r.cle)),
+    message: messageDesReponses(reponses.filter((r) => !reconnues.has(r.cle))),
   };
 }
 

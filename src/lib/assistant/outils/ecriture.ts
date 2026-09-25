@@ -15,6 +15,8 @@ import { ETAPES, LIBELLES_ETAPE, MOTIFS_PERTE, UNITES, type EtapeDossier } from 
 import { jourParis } from "@/lib/dossiers/dates";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { genererDocument } from "@/lib/dossiers/documents";
+import { lireLignes } from "@/lib/dossiers/stockage";
+import { effacerDeLaCorbeille, mettreALaCorbeille } from "@/lib/prospects/corbeille";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { MOTIFS_ANNULATION, MOYENS_PAIEMENT } from "@/lib/encaissements/constantes";
 import { annulerEncaissement, enregistrerEncaissement } from "@/lib/encaissements/service";
@@ -169,45 +171,98 @@ const schemaLigne = z.object({
   sous_designation: z.string().max(200).optional(),
   quantite: z.number().positive(),
   unite: z.enum(UNITES).describe("ml (mètre linéaire), jour ou forfait."),
-  prix_unitaire: z.number().min(0).describe("En euros, tel que dit par Lucas ou lu dans le CRM (jamais inventé)."),
-});
+  prix_unitaire: z.number().min(-1_000_000).max(1_000_000).describe("En euros, tel que dit par Lucas ou lu dans le CRM (jamais inventé). Négatif seulement sur une ligne « Remise … »."),
+}).refine((l) => l.prix_unitaire >= 0 || /^remise/i.test(l.designation), { message: "Un prix négatif n'est permis que sur une ligne « Remise … ».", path: ["prix_unitaire"] });
+
+type LignePrestation = { type: "PRESTATION"; designation: string; sousDesignation: string | undefined; quantite: number; unite: (typeof UNITES)[number]; prixUnitaire: number };
+type LigneDocument = LignePrestation | { type: "SECTION"; libelle: string };
+type EntreeGeneration = { type: "DEVIS" | "FACTURE"; objet: string; lignes?: z.output<typeof schemaLigne>[]; remise?: number; depuis_devis?: string; avenant_de?: string; remplace?: string };
+
+/**
+ * Mission 11 : les lignes du document à émettre — celles dictées, ou celles du devis
+ * d'origine (facture depuis un devis, avenant), plus la remise ; l'objet, préfixé pour un avenant.
+ */
+async function composerGeneration(dossierId: string, e: EntreeGeneration): Promise<{ type: "DEVIS" | "FACTURE"; objet: string; lignes: LigneDocument[]; origine: { id: string; numero: string } | null; remplace: { id: string; numero: string } | null }> {
+  const origineId = e.depuis_devis ?? e.avenant_de ?? null;
+  let origine: { id: string; numero: string; lignes: LigneDocument[]; objet: string } | null = null;
+  if (origineId) {
+    const d = await prisma.document.findFirst({ where: { id: origineId, dossierId, archiveLe: null, numero: { not: null } } });
+    if (!d?.numero) throw new ErreurMetier(`Document ${origineId} introuvable dans ce dossier (identifiant rendu par « lire_fiche »).`, 404);
+    if (e.depuis_devis && d.type !== "DEVIS") throw new ErreurMetier("depuis_devis attend un devis.", 400);
+    origine = { id: d.id, numero: d.numero, objet: d.objet, lignes: lireLignes(d.lignes) as LigneDocument[] };
+  }
+  let remplace: { id: string; numero: string } | null = null;
+  if (e.remplace) {
+    const d = await prisma.document.findFirst({ where: { id: e.remplace, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } }, select: { id: true, numero: true, statut: true } });
+    if (!d?.numero) throw new ErreurMetier(`Devis ${e.remplace} introuvable dans ce dossier.`, 404);
+    if (d.statut === "ACCEPTE") throw new ErreurMetier(`Le devis ${d.numero} est accepté : il ne se remplace pas (retirer l'accord d'abord).`, 409);
+    remplace = { id: d.id, numero: d.numero };
+  }
+  const dictees: LigneDocument[] = (e.lignes ?? []).map((l) => ({ type: "PRESTATION" as const, designation: l.designation, sousDesignation: l.sous_designation, quantite: l.quantite, unite: l.unite, prixUnitaire: l.prix_unitaire }));
+  const lignes: LigneDocument[] = dictees.length ? dictees : origine ? origine.lignes.map((l) => (l.type === "PRESTATION" ? { ...l, sousDesignation: l.sousDesignation ?? undefined } : l)) : [];
+  if (e.remise && e.remise > 0) lignes.push({ type: "PRESTATION", designation: "Remise commerciale", sousDesignation: undefined, quantite: 1, unite: "forfait", prixUnitaire: -e.remise });
+  if (!lignes.some((l) => l.type === "PRESTATION")) throw new ErreurMetier("Aucune ligne : donne les lignes, ou depuis_devis / avenant_de pour reprendre celles d'un devis.", 400);
+  const type = e.depuis_devis ? "FACTURE" : e.type;
+  const objet = e.avenant_de && origine ? `Avenant au devis ${origine.numero} — ${e.objet || origine.objet}`.slice(0, 160) : e.objet || origine?.objet || "";
+  if (!objet) throw new ErreurMetier("L'objet du document manque.", 400);
+  return { type, objet, lignes, origine: origine ? { id: origine.id, numero: origine.numero } : null, remplace };
+}
+
+const totalDe = (lignes: LigneDocument[]) => lignes.reduce((t, l) => (l.type === "PRESTATION" ? t + l.quantite * l.prixUnitaire : t), 0);
+const ligneEnMots = (l: LigneDocument) => (l.type === "PRESTATION" ? `${l.designation} ${l.quantite} ${l.unite} × ${format.euros(l.prixUnitaire)}` : `[${l.libelle}]`);
 
 export const outilGenererDocument = definirOutil({
   nom: "generer_document",
   titre: "Générer un devis ou une facture",
   description:
-    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire), sur un dossier existant. Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier et visible dans l'espace du client ; un devis déclenche le mail automatique « votre devis est disponible ». Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
+    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire ; une ligne « Remise … » peut avoir un prix négatif, ou donne « remise » en euros), sur un dossier existant. Un dossier porte autant de devis que nécessaire : un nouveau devis S'AJOUTE aux devis proposés (libelle_variante : « façades seules », « façades + plan de travail » ; le client en choisira un dans son espace) — il ne remplace un devis existant que si « remplace » (identifiant) le dit. notifier: false évite le mail automatique « votre devis est disponible » (vrai par défaut). depuis_devis (identifiant) fait la facture à partir des lignes du devis (lignes facultatives) ; avenant_de (identifiant) émet un avenant (objet préfixé, lignes du devis reprises ou dictées). Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier. Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
   niveau: "SENSIBLE",
   schema: schemaCible.extend({
     type: z.enum(["DEVIS", "FACTURE"]),
-    objet: z.string().min(1).max(160),
-    lignes: z.array(schemaLigne).min(1).max(40),
+    objet: z.string().max(160).optional().describe("Obligatoire, sauf depuis_devis / avenant_de (repris du devis)."),
+    lignes: z.array(schemaLigne).max(40).optional().describe("Obligatoires, sauf depuis_devis / avenant_de (les lignes du devis sont reprises)."),
     acompte_pct: z.number().int().min(0).max(100).optional().describe("Devis : pourcentage d'acompte (30 par défaut)."),
     note_ml: z.boolean().optional().describe("Mention « mètre linéaire » sur le document (vrai par défaut)."),
+    libelle_variante: z.string().trim().max(80).optional().describe("Devis : le libellé de la variante, visible par le client (« façades seules »)."),
+    notifier: z.boolean().optional().describe("Devis : faux = pas de mail « votre devis est disponible » (vrai par défaut)."),
+    remplace: z.string().max(40).optional().describe("Devis : identifiant du devis remplacé (il passe « Remplacé »). Sans lui, le nouveau devis s'ajoute."),
+    depuis_devis: z.string().max(40).optional().describe("Facture depuis ce devis : ses lignes sont reprises."),
+    avenant_de: z.string().max(40).optional().describe("Avenant à ce devis : objet préfixé « Avenant au devis N° », lignes reprises sauf lignes dictées."),
+    remise: z.number().positive().max(1_000_000).optional().describe("Remise en euros HT : ajoute une ligne « Remise commerciale » négative."),
   }),
   apercu: async (e) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu.texte;
-    const total = e.lignes.reduce((t, l) => t + l.quantite * l.prix_unitaire, 0);
-    return `Je vais émettre ${e.type === "DEVIS" ? "un devis" : "une facture"} « ${e.objet} » pour ${r.ids.nom} : ${e.lignes.map((l) => `${l.designation} ${l.quantite} ${l.unite} × ${format.euros(l.prix_unitaire)}`).join(" ; ")} — total ${format.euros(total)}${e.type === "DEVIS" ? `, acompte ${e.acompte_pct ?? 30} %` : ""}. Le document sera numéroté et figé${e.type === "DEVIS" ? ", et le client recevra le mail « votre devis est disponible »" : ""}.`;
+    const dossierId = exigerDossier(r.ids);
+    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace });
+    const proposes = c.type === "DEVIS" && !c.remplace ? await prisma.document.findMany({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { numero: true, libelleVariante: true } }) : [];
+    return `Je vais émettre ${c.type === "DEVIS" ? "un devis" : "une facture"} « ${c.objet} »${e.libelle_variante ? ` (variante « ${e.libelle_variante} »)` : ""} pour ${r.ids.nom} : ${c.lignes.map(ligneEnMots).join(" ; ")} — total ${format.euros(totalDe(c.lignes))}${c.type === "DEVIS" ? `, acompte ${e.acompte_pct ?? 30} %` : ""}.${c.remplace ? ` Il remplace le devis ${c.remplace.numero} (qui passe « Remplacé »).` : ""}${c.origine ? ` ${e.depuis_devis ? "Fait d'après" : "Avenant au"} devis ${c.origine.numero}.` : ""}${proposes.length ? ` Il s'ajoute ${proposes.length > 1 ? `aux ${proposes.length} devis déjà proposés` : `au devis ${proposes[0].numero} déjà proposé`} : le client en choisira un.` : ""} Le document sera numéroté et figé${c.type === "DEVIS" ? (e.notifier === false ? " ; aucun mail ne partira (notifier: false)" : ", et le client recevra le mail « votre devis est disponible » s'il a une adresse") : ""}.`;
   },
   executer: async (e) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu;
     const dossierId = exigerDossier(r.ids);
-    if (e.type === "FACTURE") {
+    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace });
+    if (c.type === "FACTURE") {
       const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId }, select: { etape: true } });
       if (!ETAPES_FACTURABLES.includes(dossier.etape as EtapeDossier)) throw new ErreurMetier(`Une facture ne se génère que sur un dossier signé ; celui de ${r.ids.nom} est à « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier] ?? dossier.etape} ».`, 409);
     }
     const resultat = await genererDocument(dossierId, {
-      type: e.type,
-      objet: e.objet,
-      lignes: e.lignes.map((l) => ({ type: "PRESTATION" as const, designation: l.designation, sousDesignation: l.sous_designation, quantite: l.quantite, unite: l.unite, prixUnitaire: l.prix_unitaire })),
+      type: c.type,
+      objet: c.objet,
+      lignes: c.lignes,
       noteMl: e.note_ml ?? true,
-      acomptePct: e.type === "DEVIS" ? (e.acompte_pct ?? 30) : null,
+      acomptePct: c.type === "DEVIS" ? (e.acompte_pct ?? 30) : null,
+      remplaceDocumentId: c.type === "DEVIS" && c.remplace ? c.remplace.id : null,
+      libelleVariante: c.type === "DEVIS" ? e.libelle_variante || null : null,
+      notifier: e.notifier,
     });
     const document = (resultat as { document: { id: string; numero: string | null; totalHt: number } }).document;
-    return { texte: `${e.type === "DEVIS" ? "Devis" : "Facture"} ${document.numero ?? ""} émis${e.type === "FACTURE" ? "e" : ""} pour ${r.ids.nom} : ${format.euros(document.totalHt)}. Rangé${e.type === "FACTURE" ? "e" : ""} dans le dossier et visible dans son espace.`, donnees: { documentId: document.id, numero: document.numero, totalHt: document.totalHt, dossierId }, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
+    return {
+      texte: `${c.type === "DEVIS" ? "Devis" : "Facture"} ${document.numero ?? ""}${e.libelle_variante ? ` « ${e.libelle_variante} »` : ""} émis${c.type === "FACTURE" ? "e" : ""} pour ${r.ids.nom} : ${format.euros(document.totalHt)}.${c.remplace ? ` Remplace le devis ${c.remplace.numero}.` : ""}${c.origine ? ` ${e.depuis_devis ? "D'après le" : "Avenant au"} devis ${c.origine.numero}.` : ""} Rangé${c.type === "FACTURE" ? "e" : ""} dans le dossier${c.type === "DEVIS" ? `, proposé dans son espace${e.notifier === false ? ", sans mail" : ""}` : ""}.`,
+      donnees: { documentId: document.id, numero: document.numero, totalHt: document.totalHt, dossierId, libelleVariante: e.libelle_variante ?? null, remplace: c.remplace, origine: c.origine },
+      liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)],
+    };
   },
 });
 
@@ -427,24 +482,49 @@ export const outilArchiver = definirOutil({
   executer: archiver,
 });
 
+const schemaSuppression = z.object({
+  leads: z.array(z.string().max(40)).max(200).optional(),
+  dossiers: z.array(z.string().max(40)).max(50).optional(),
+  motif: z.string().trim().min(1).max(200),
+  definitif: z.boolean().optional().describe("Vrai : effacement immédiat (anonymisation, irréversible) au lieu de la corbeille ; toujours sous confirmation, après avoir dit à Lucas ce que ça implique."),
+});
+
+/** Mission 11 : « supprimer » = corbeille 30 jours (réversible), ou effacement définitif (anonymisation) sous confirmation. */
 export const outilSupprimer = definirOutil({
   nom: "supprimer",
-  titre: "Supprimer (= archiver)",
-  description: "Rien ne se supprime dans le CRM : une demande de suppression devient un archivage, réversible par « restaurer ». Mêmes paramètres qu'« archiver ».",
+  titre: "Supprimer : corbeille 30 jours, ou effacement définitif",
+  description:
+    "Met des leads ou des dossiers à la corbeille : ils sortent de la file et des écrans, « restaurer » les remet pendant 30 jours ; passé ce délai, la purge quotidienne les efface — une anonymisation (RGPD) : les lignes restent, sans rien de personnel ; une facture ou un paiement empêchent l'effacement et la fiche reste à la corbeille, dite comme telle. definitif: true efface tout de suite, sous confirmation, après avoir dit à Lucas que c'est irréversible. Au-delà de trois éléments, ou définitif : aperçu puis confirmation.",
   niveau: "REVERSIBLE",
-  schema: schemaArchivage,
+  schema: schemaSuppression,
   masse: (e) => (e.leads?.length ?? 0) + (e.dossiers?.length ?? 0),
-  apercu: async (e) => `Rien ne se supprime : ce sera un archivage, réversible. ${await apercuArchivage(e)}`,
+  sensible: (e) => Boolean(e.definitif),
+  apercu: async (e) => {
+    const noms = await nomsDe([...new Set(e.leads ?? [])], [...new Set(e.dossiers ?? [])]);
+    const quoi = `${noms.leads.length} lead(s)${noms.leads.length ? ` : ${noms.leads.join(", ")}` : ""}${noms.dossiers.length ? ` et ${noms.dossiers.length} dossier(s) : ${noms.dossiers.join(", ")}` : ""}`;
+    return e.definitif
+      ? `Je vais EFFACER définitivement ${quoi} — motif « ${e.motif} ». Anonymisation irréversible : les lignes restent sans rien de personnel ; ce que la loi fait conserver (factures, paiements) bloque et reste à la corbeille.`
+      : `Je vais mettre à la corbeille ${quoi} — motif « ${e.motif} ». Effacés (anonymisés) dans 30 jours sauf « restaurer » d'ici là.`;
+  },
   executer: async (e) => {
-    const r = await archiver(e);
-    return { ...r, texte: `Rien ne se supprime : archivé à la place. ${r.texte}` };
+    const leads = [...new Set(e.leads ?? [])];
+    const dossiers = [...new Set(e.dossiers ?? [])];
+    if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à supprimer : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler »).", 400);
+    const noms = await nomsDe(leads, dossiers);
+    if (noms.inconnus) throw new ErreurMetier(`${noms.inconnus} identifiant(s) inconnu(s) : rien n'a été fait.`, 404);
+    const mise = await mettreALaCorbeille({ leads, dossiers, motif: e.motif });
+    if (e.definitif) {
+      const bilan = await effacerDeLaCorbeille({ leads, dossiers }, new Date(), "ASSISTANT:claude");
+      return { texte: `${bilan.effaces.length} élément(s) effacé(s) (anonymisés, irréversible)${bilan.conserves.length ? ` ; ${bilan.conserves.length} conservé(s) à la corbeille : ${bilan.conserves.map((c) => `${c.type.toLowerCase()} ${c.id} — ${c.raison}`).join(" ; ")}` : ""}.`, donnees: bilan, liens: [lien("Leads", "/leads")] };
+    }
+    return { texte: `${[leads.length ? `${leads.length} lead(s)` : "", dossiers.length ? `${dossiers.length} dossier(s)` : ""].filter(Boolean).join(" et ")} à la corbeille (motif : ${e.motif}) : effacement le ${format.jourCourt(mise.effacementLe)} sauf « restaurer » d'ici là.`, donnees: { leads: mise.leads, dossiers: mise.dossiers, effacementLe: mise.effacementLe.toISOString() }, liens: [lien("Leads", "/leads")] };
   },
 });
 
 export const outilRestaurer = definirOutil({
   nom: "restaurer",
   titre: "Restaurer des leads ou des dossiers archivés",
-  description: "Remet des leads ou des dossiers archivés à leur place (inverse d'« archiver »).",
+  description: "Remet des leads ou des dossiers archivés ou mis à la corbeille à leur place (inverse d'« archiver » et de « supprimer », tant que l'effacement n'a pas eu lieu).",
   niveau: "REVERSIBLE",
   schema: z.object({ leads: z.array(z.string().max(40)).max(200).optional(), dossiers: z.array(z.string().max(40)).max(50).optional() }),
   masse: (e) => (e.leads?.length ?? 0) + (e.dossiers?.length ?? 0),

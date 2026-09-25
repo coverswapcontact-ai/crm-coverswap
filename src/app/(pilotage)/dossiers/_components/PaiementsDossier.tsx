@@ -22,7 +22,7 @@ function montantAttendu(detail: DossierDetail): number | null {
   const { paiements } = detail;
   if (paiements.resteDu > 0) return paiements.resteDu;
   if (paiements.pieces.some((piece) => piece.type === "FACTURE" && piece.active)) return null;
-  const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.numero && document.statut !== "REMPLACE");
+  const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.numero && !["REMPLACE", "NON_RETENU", "ANNULEE"].includes(document.statut));
   const enVigueur = devis.find((document) => document.statut === "ACCEPTE") ?? devis[0];
   if (!enVigueur || paiements.acompteEnregistre) return null;
   return enVigueur.acomptePct ? Math.round(enVigueur.totalHt * enVigueur.acomptePct) / 100 : null;

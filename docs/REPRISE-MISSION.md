@@ -809,3 +809,104 @@ lecture / réversible / sensible avec aperçu et jeton, journal avec la phrase, 
   le volume Railway (500 Mo → 5 Go, ≈ 0,25 $/Go/mois, engage de l'argent : non fait) ; les réponses d'espace ne
   préviennent que par mail (sans adresse, SMS ou appel à la main) ; ajouter « regarde ses photos » avant de demander
   une teinte à Claude.
+
+---
+
+# Mission 11 — Devis multiples dans l'espace client + libérer le MCP (25/09/2026)
+
+Énoncé de Lucas (25/09/2026, collé dans la conversation) : « Devis multiples dans l'espace client + libérer le MCP ».
+Mails et SMS automatiques : n'en ajouter aucun, rendre débrayables ceux qui existent. Ne pas toucher au calcul des
+montants ni à la trame PDF. Tests exigés : deux devis visibles, validation de l'un, l'autre passe en non retenu ;
+`creer_contact` refuse un doublon ; `tools/list` expose tous les outils. Mettre ce journal à jour à la fin.
+
+## État trouvé (25/09)
+- Cas réel Fawzi Fares (`cmugt1jhf07u2zd4dy3ldogaa`, lu en prod en lecture seule) : devis 2026-041 (1 725 €) et 2026-042
+  (2 415 €), tous deux REPRIS (PDF déposés) et ENVOYE ; l'espace ne montre que le dernier (`devisEnVigueur` = accepté,
+  sinon le plus récent) ; un seul `EtatEspace.devis`, un seul accord possible. Aucun libellé de variante, pas
+  d'interrupteur de visibilité ; `Document` figé à l'émission (statut et pdfPath modifiables).
+- Génération : `remplaceDocumentId` explicite (l'outil MCP ne remplaçait jamais, mais le nouveau devis cachait l'ancien) ;
+  `emettre` envoie toujours la notification DEVIS_DISPONIBLE (débrayable seulement par le modèle dans Paramètres → Mail).
+- « tool not registered » : les 13 outils mail répondent en prod depuis le connecteur de cette session (tools/list = 64) ;
+  le défaut est la liste d'outils mise en cache par l'app Claude (connecteur ajouté à la mission 8). Les schémas JSON
+  des outils mail n'ont rien de particulier (`anyOf` comme les outils d'écriture).
+- Automatismes qui envoient au client : notifications de l'espace (modèle `actif` par événement), accusé de réception
+  SMS d'un lead Meta (modèle SMS `actif`), séquences (inactives par défaut). Le reste est à la main ou proposé.
+- Lead Meta : `normaliserLeadMeta` reconnaît nom, tél, mail, ville, CP, projet ; `qualification` déduit occupation et
+  délai (écrits sur le lead) ; le « message » libre reste dans `notes`/réponses. Écran Publicité : « non connecté » si
+  la config (signature, vérification) ou l'abonnement manque, même quand les leads arrivent.
+
+## Décisions
+- **Devis multiples** : `Document.libelleVariante`, `Document.visibleEspace` (défaut vrai) ; statut `NON_RETENU`.
+  `faits.ts › devisProposes` (tous les devis en vigueur, du plus ancien au plus récent) ; `devisEnVigueur` inchangé
+  (accepté, sinon le dernier : compatibilité). `EtatEspace.devisProposes` (visibles seulement) ; le site montre un
+  choix côte à côte quand il y en a plusieurs, l'accord porte le devis choisi ; `accepterDevis` passe les autres en
+  NON_RETENU (événement avec numéros et libellés) ; `retirerAccord` les rend (ENVOYE). Panneau du dossier (rubrique
+  « Devis et accord ») : liste, interrupteur de visibilité, « Ajouter un devis » (générateur, libellé, sans
+  remplacement), « Déposer un PDF » (document existant + libellé + visibilité) ; onglet Espaces : lien « Ajouter un
+  devis ». `generer_document` : `libelle_variante`, `notifier` (défaut vrai), `remplace` explicite seulement,
+  `avenant_de`, `depuis_devis` (facture depuis les lignes d'un devis), ligne de remise (prix négatif permis sur une
+  ligne « Remise … » seulement : validation, pas calcul) ; `annuler_document` (devis → ANNULE, facture → avoir).
+- **MCP** : `lister_outils` + `assistant/couverture.ts` (registre : actions de l'interface → outil) + test SDK
+  `tools/list` = catalogue ; `/api/health` expose `outils { nombre, empreinte }` pour vérifier le déploiement sans
+  jeton ; consigne : si l'app dit « tool not registered », reconnecter le connecteur (liste en cache).
+- **Nouveaux outils** : `creer_contact` (lead + fiche client, refus si même tél/mail ; même nom + ville → refus sauf
+  `forcer`), `deposer_document` (PDF externe : pièce de mail conservée ou base64 ; devis/facture = document repris,
+  autre = pièce jointe du dossier), `simulations_site` (avec images), `voir_parametres` / `modifier_parametres`
+  (paramètres + automatismes débrayables ; nouveaux paramètres CAPACITE_CHANTIERS_MOIS, TRESORERIE_RESERVE),
+  `voir_relances` / `relancer` / `annuler_relance` (propositions ENVOI_MAIL motif RELANCE_DEVIS), `supprimer` =
+  corbeille 30 jours (archivage motif CORBEILLE, purge quotidienne = anonymisation RGPD) et `definitif: true` (sensible
+  : anonymisation immédiate), `changer_teinte` (une teinte par sous-partie, tracée), `voir_publicite` (voyant honnête :
+  leads reçus / lecture des formulaires / notifications) + extraction du message libre Meta dans `Lead.message`.
+
+## Lots
+- [x] F1 Devis multiples : `Document.libelleVariante` / `visibleEspace`, statut `NON_RETENU` (ANNULEE → « Annulé »),
+      déclencheurs (présentation modifiable), `faits.ts › devisProposes` + `LectureDevis.proposes`, espace
+      (`EtatEspace.devisProposes` visibles, `accepterDevis` → les autres NON_RETENU avec événement nommé, refus d'un devis
+      masqué, `retirerAccord` et retour d'étape les rendent ENVOYE), `documents.ts` (`libelleVariante`, `notifier`,
+      remise = ligne « Remise … » négative par `refine`, `modifierPresentationDevis`, `annulerDevis`),
+      `documents-existants.ts` (libellé, visibilité), `vue-crm.ts › devisProposes` (non retenus compris),
+      PATCH `{visibleEspace, libelleVariante}` = présentation, route `POST …/documents/[documentId]/annulation`,
+      `main.ts` (« Il a choisi le devis X (libellé) : fixer la date du chantier »), `lire_fiche`, `point_du_jour`,
+      `suivi.ts › devisProposes` ; CRM : rubrique « Devis et accord » (liste, interrupteur, « Ajouter un devis »,
+      « Déposer un devis PDF »), générateur (libellé, mail débrayable, « Ajouter un devis »), document existant
+      (libellé, visibilité, dépôt), liste des documents (libellé, masqué, non retenu, « Annuler ce devis »), onglet
+      Espaces (liens `devis=variante` / `devis=pdf`) ; site : `Devis` + `devisProposes`, choix côte à côte dans
+      `EtapeDevis`, phrase d'accueil, carte « Mes projets ».
+- [x] F2 `generer_document` étendu (`libelle_variante`, `notifier`, `remplace`, `depuis_devis`, `avenant_de`, `remise`,
+      lignes reprises), `annuler_document` (devis → Annulé, facture → avoir), `deposer_document`
+      (`dossiers/depot-document.ts` : pièce de mail conservée / fichier conservé / base64 ; devis-facture = document
+      repris + PDF ; AUTRE = `Fichier` + événement DOCUMENT_DEPOSE + `GET /api/fichiers/[id]`), `creer_contact`
+      (`prospects/creation-assistant.ts` : doublons par coordonnées, par nom + ville sur les leads ET les fiches
+      client, `forcer`, `ouvrir_dossier`), `simulations_site` (`SimulationSite` avec images), `changer_teinte`
+      (`repererSousPartie` + `modifierDossierAssistant`, candidats en cas de doute).
+- [x] F3 `automatismes/interrupteurs.ts` (notifications de l'espace ×5, SMS d'accusé, séquences ×4, IA_CRM,
+      rangement Gmail) + `voir_parametres` / `modifier_parametres` (groupe PILOTAGE : `TRESORERIE_RESERVE`,
+      `CAPACITE_CHANTIERS_MOIS` ; solde OpenAI relevé/estimé ; jamais de secret), `relances/service.ts` refondu
+      (`listerRelances`, `relancerDevis` partagé avec la passe périodique) + `voir_relances` / `relancer` /
+      `annuler_relance`, `prospects/corbeille.ts` (`supprimer` = corbeille 30 j, motif « Corbeille (effacement le …) »,
+      `definitif` sensible, purge quotidienne = anonymisation, jamais un DELETE ; factures et paiements bloquent),
+      `voir_publicite` + `SanteMeta.webhook.recoit` (OUI / PRET / NON) repris par l'écran Publicité,
+      `Lead.message` depuis le formulaire Meta (`messageDesReponses`), `assistant/couverture.ts` (registre dérivé du
+      catalogue, empreinte) + `lister_outils` + `/api/health › outils`, consignes `SECTION_MISSION11`.
+- [ ] F4 Tests : `espace/devis-multiples.test.ts` (5), `mcp/mcp-v3.test.ts` (10, client SDK : tools/list = catalogue,
+      doublon refusé, devis multiples sans mail, dépôt PDF, teintes, paramètres, relances, corbeille + purge, journal),
+      suite complète 524/524, tsc et eslint OK (CRM et site), essai local sur la copie (`m8/flux-v3.mjs`, `m8/point-v3.mjs`
+      : 76 outils, deux devis proposés à Olga, accord donné depuis le site → l'autre non retenu, panneau et outils
+      cohérents). Reste : build, commit, déploiement CRM puis site, vérification Railway (health `outils`), rapport,
+      journal.
+
+## Pièges rencontrés
+- Une séquence unicode échappée (antislash-u) tapée dans une commande arrive décodée : construire l'échappement avec
+  `chr(92)` ; et dans un attribut JSX (`phrase="…"`) elle n'est PAS un échappement : passer par `{"…"}`.
+- Le client Prisma cache les lignes archivées par défaut (`count` d'un lead à la corbeille = 0) : `findUnique` pour les
+  relire, `AVEC_ARCHIVES` ailleurs.
+- `rejeterProposition` exige un motif du catalogue de la proposition : « annuler une relance » = `annulerProposition`.
+- L'exécution d'une proposition validée passe par la file des tâches : dans les tests (file coupée), le mail est
+  programmé ou son exécution attend en file.
+- Le panneau du dossier ne se rafraîchit pas seul après un geste du client dans son espace (recharger).
+- Le volet navigateur de l'app est petit : les clics `computer` sur un viewport émulé manquent leur cible ; les
+  interactions ont été jouées par `javascript_tool` (clics dispatchés, valeurs posées par le setter natif).
+
+## Journal
+- 25/09 : inventaire fait (prod en lecture seule), décisions posées ; F1, F2, F3 livrés ; tests et essai local OK ;
+  builds en cours.

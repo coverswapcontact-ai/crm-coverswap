@@ -25,12 +25,15 @@ const STATUTS_DEVIS = ["ENVOYE", "ACCEPTE", "REFUSE"] as const;
 export function ModaleDocumentExistant({
   detail,
   document,
+  depotDevis = false,
   onFermer,
   onMisAJour,
 }: {
   detail: DossierDetail;
   /** Document repris à corriger ; absent : nouveau rattachement. */
   document?: DocumentVue;
+  /** Mission 11 : « Déposer un devis PDF » — un devis fait ailleurs, proposé au client à côté des autres. */
+  depotDevis?: boolean;
   onFermer: () => void;
   onMisAJour: (detail: DossierDetail) => void;
 }) {
@@ -43,6 +46,8 @@ export function ModaleDocumentExistant({
   const [statut, setStatut] = useState<string>(document?.statut && document.statut !== "GENERE" ? document.statut : "ENVOYE");
   const [objet, setObjet] = useState(document?.objet ?? detail.objet);
   const [acompte, setAcompte] = useState(document?.acomptePct != null ? String(document.acomptePct) : "");
+  const [libelle, setLibelle] = useState(document?.libelleVariante ?? "");
+  const [visible, setVisible] = useState(document?.visibleEspace ?? true);
   const [pdf, setPdf] = useState<File | null>(null);
   const [libres, setLibres] = useState<NumeroLibre[]>([]);
   const [absent, setAbsent] = useState(false);
@@ -98,7 +103,7 @@ export function ModaleDocumentExistant({
         dateEmission,
         montant: montantLu!,
         objet: objet.trim() || null,
-        ...(type === "DEVIS" ? { statut, acomptePct: acompteLu } : {}),
+        ...(type === "DEVIS" ? { statut, acomptePct: acompteLu, libelleVariante: libelle.trim() || null, visibleEspace: visible } : {}),
       };
       let avertissements: string[];
       let nouveau: DossierDetail;
@@ -135,11 +140,13 @@ export function ModaleDocumentExistant({
     <Modale
       ouverte
       onFermer={onFermer}
-      titre={document ? `Corriger ${document.type === "DEVIS" ? "le devis" : "la facture"} ${document.numero}` : "Enregistrer un document existant"}
+      titre={document ? `Corriger ${document.type === "DEVIS" ? "le devis" : "la facture"} ${document.numero}` : depotDevis ? "Déposer un devis déjà fait" : "Enregistrer un document existant"}
       description={
         document
           ? "Document émis avant le CRM : tout se corrige sauf son numéro. L'ancienne valeur reste au journal."
-          : "Un devis ou une facture déjà émis à la main : il garde son numéro du registre, rien n'est généré et le compteur ne bouge pas."
+          : depotDevis
+            ? "Un devis fait ailleurs (PDF) : son numéro, son libellé, son montant. Il est proposé au client dans son espace, à côté des autres devis du dossier."
+            : "Un devis ou une facture déjà émis à la main : il garde son numéro du registre, rien n'est généré et le compteur ne bouge pas."
       }
       pied={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -207,6 +214,15 @@ export function ModaleDocumentExistant({
         </div>
         {type === "DEVIS" ? (
           <Puces libelle="Où en est ce devis" options={STATUTS_DEVIS.map((valeur) => ({ valeur, libelle: LIBELLES_STATUT_DOCUMENT[valeur] }))} valeur={statut} onChange={setStatut} />
+        ) : null}
+        {type === "DEVIS" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Champ libelle="Libellé de la variante" maxLength={80} placeholder="Ex. façades + plan de travail" value={libelle} onChange={(evenement) => setLibelle(evenement.target.value)} aide="Facultatif : le client le voit dans son espace, à côté du montant." />
+            <label className="flex items-center gap-2 self-start pt-7 text-[13px] text-[#D1D5DB]">
+              <input type="checkbox" className="accent-[#1D9E75]" checked={visible} onChange={(evenement) => setVisible(evenement.target.checked)} />
+              Visible dans l&apos;espace client
+            </label>
+          </div>
         ) : null}
         <Champ libelle="Objet" maxLength={160} value={objet} onChange={(evenement) => setObjet(evenement.target.value)} />
         <div>

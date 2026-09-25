@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, FileText, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
+import { Check, Copy, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
@@ -314,7 +314,16 @@ function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; pl
     { libelle: f.simulationsPubliees ? `${f.simulationsPubliees} publiée${f.simulationsPubliees > 1 ? "s" : ""} par moi` : "Rien de publié", fait: f.simulationsPubliees > 0 },
     { libelle: `${f.simulationsClient + f.simulationsSite} faite${f.simulationsClient + f.simulationsSite > 1 ? "s" : ""} par le client${f.simulationsSite ? ` (dont ${f.simulationsSite} sur le site)` : ""} · ${f.simulationsRestantes} restante${f.simulationsRestantes > 1 ? "s" : ""}`, fait: f.simulationsClient + f.simulationsSite > 0 },
     { libelle: f.choix ? "Simulation validée" : "Pas encore validée", fait: Boolean(f.choix) },
-    { libelle: !f.devis ? "Devis" : f.devis.consultations > 0 ? `Devis lu ${f.devis.consultations} fois` : "Devis pas encore ouvert", fait: Boolean(f.devis && f.devis.consultations > 0) },
+    {
+      libelle: !f.devis
+        ? "Devis"
+        : f.devisProposes > 1 && !f.accord
+          ? `${f.devisProposes} devis proposés, il en choisit un${f.devis.consultations > 0 ? ` · lus ${f.devis.consultations} fois` : ""}`
+          : f.devis.consultations > 0
+            ? `Devis lu ${f.devis.consultations} fois`
+            : "Devis pas encore ouvert",
+      fait: Boolean(f.devis && f.devis.consultations > 0),
+    },
     { libelle: f.accord ? (f.accordSource === "CRM" ? "Signé (hors espace)" : "Bon pour accord") : "Accord", fait: Boolean(f.accord) },
     { libelle: !f.paiement ? "Paiement" : f.paiement.regle ? "Réglé" : f.paiement.recu > 0 ? `${f.paiement.recu.toLocaleString("fr-FR")} € reçus, reste ${f.paiement.reste.toLocaleString("fr-FR")} €` : "Acompte attendu", fait: Boolean(f.paiement?.regle || (f.acompte && f.acompte.recu >= f.acompte.montant - 0.5)) },
   ];
@@ -389,6 +398,17 @@ function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; pl
         <Link href={`/dossiers?dossier=${ligne.dossierId}`} className={BOUTON_LIEN}>
           <FolderOpen size={13} aria-hidden /> Dossier
         </Link>
+        {/* Mission 11 : un devis de plus (lignes + libellé) ou un PDF déjà fait, proposés côte à côte dans son espace. */}
+        {(f.devis || f.choix) && !f.accord && !ligne.fige && !ligne.revoque ? (
+          <>
+            <Link href={`/dossiers?dossier=${ligne.dossierId}&devis=variante`} className={BOUTON_LIEN}>
+              <FilePlus2 size={13} aria-hidden /> Ajouter un devis
+            </Link>
+            <Link href={`/dossiers?dossier=${ligne.dossierId}&devis=pdf`} className={BOUTON_LIEN}>
+              <FileUp size={13} aria-hidden /> Déposer un devis PDF
+            </Link>
+          </>
+        ) : null}
         {ligne.apercu && plusieurs ? (
           <a href={ligne.apercu} target="_blank" rel="noopener noreferrer" className={BOUTON_LIEN}>
             <Eye size={13} aria-hidden /> Ce projet, comme lui

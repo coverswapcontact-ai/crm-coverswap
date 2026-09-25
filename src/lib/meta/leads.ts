@@ -246,6 +246,8 @@ export async function traiterLeadMeta(
         formulaire: graph.formNom,
         metaLeadgenId: leadgenId,
         notes,
+        // Mission 11 : le message libre du formulaire, dans son champ (occupation et délai : par la qualification).
+        message: normalise.message,
       },
       select: { id: true },
     });

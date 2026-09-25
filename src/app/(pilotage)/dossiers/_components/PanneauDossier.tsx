@@ -44,6 +44,7 @@ import { EspaceDossier } from "./EspaceDossier";
 import { ChipsFamilles, FamillesDossier } from "./FamillesDossier";
 import { SimulationsDossier } from "./SimulationsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
+import { ModaleDocumentExistant } from "./DocumentExistant";
 import { DepensesDossier } from "./DepensesDossier";
 import { PaiementsDossier } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
@@ -163,15 +164,21 @@ function ContenuPanneau({
   onRecharger: () => Promise<void>;
   onArchive?: (dossierId: string) => void;
 }) {
-  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue } | null>(null);
+  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(null);
+  // Mission 11 : dépôt d'un devis PDF déjà fait (numéro + libellé), proposé au client à côté des autres.
+  const [depotPdf, setDepotPdf] = useState(0);
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
-  // « Faire le devis » depuis l'onglet Espaces clients : le dossier s'ouvre sur le générateur, une fois.
+  const ajouterDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, variante: true }));
+  const deposerPdf = () => setDepotPdf((n) => n + 1);
+  // « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » depuis l'onglet Espaces clients : le dossier s'ouvre dessus, une fois.
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("devis") !== "nouveau") return;
+    const demande = url.searchParams.get("devis");
+    if (demande !== "nouveau" && demande !== "variante" && demande !== "pdf") return;
     // Le paramètre n'est consommé qu'à l'ouverture effective (un montage annulé ne le perd pas).
     const premier = window.setTimeout(() => {
-      setGenerateur((actuel) => actuel ?? { type: "DEVIS", cle: 1 });
+      if (demande === "pdf") setDepotPdf((n) => n || 1);
+      else setGenerateur((actuel) => actuel ?? { type: "DEVIS", cle: 1, variante: demande === "variante" });
       url.searchParams.delete("devis");
       window.history.replaceState(window.history.state, "", url.toString());
     }, 0);
@@ -254,7 +261,7 @@ function ContenuPanneau({
             onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
             onMisAJour={onMisAJour}
           />
-          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} onFaireDevis={faireDevis} />
+          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} onFaireDevis={faireDevis} onAjouterDevis={ajouterDevis} onDeposerPdf={deposerPdf} />
           <SimulationsDossier key={`simulations-${detail.id}`} detail={detail} onRecharger={onRecharger} />
           <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
           <DepensesDossier detail={detail} />
@@ -294,10 +301,12 @@ function ContenuPanneau({
           detail={detail}
           typeInitial={generateur.type}
           remplace={generateur.remplace ?? null}
+          variante={generateur.variante ?? false}
           onFermer={() => setGenerateur(null)}
           onGenere={onMisAJour}
         />
       ) : null}
+      {depotPdf ? <ModaleDocumentExistant key={`depot-${depotPdf}`} detail={detail} depotDevis onFermer={() => setDepotPdf(0)} onMisAJour={onMisAJour} /> : null}
     </div>
   );
 }

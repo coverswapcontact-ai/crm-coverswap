@@ -878,7 +878,8 @@ montants ni à la trame PDF. Tests exigés : deux devis visibles, validation de 
       repris + PDF ; AUTRE = `Fichier` + événement DOCUMENT_DEPOSE + `GET /api/fichiers/[id]`), `creer_contact`
       (`prospects/creation-assistant.ts` : doublons par coordonnées, par nom + ville sur les leads ET les fiches
       client, `forcer`, `ouvrir_dossier`), `simulations_site` (`SimulationSite` avec images), `changer_teinte`
-      (`repererSousPartie` + `modifierDossierAssistant`, candidats en cas de doute).
+      (`repererSousPartie` + `modifierDossierAssistant`, candidats en cas de doute), `presenter_devis` (libellé et
+      visibilité d'un devis émis = l'interrupteur du panneau) et `retirer_accord` (le geste du panneau, sensible).
 - [x] F3 `automatismes/interrupteurs.ts` (notifications de l'espace ×5, SMS d'accusé, séquences ×4, IA_CRM,
       rangement Gmail) + `voir_parametres` / `modifier_parametres` (groupe PILOTAGE : `TRESORERIE_RESERVE`,
       `CAPACITE_CHANTIERS_MOIS` ; solde OpenAI relevé/estimé ; jamais de secret), `relances/service.ts` refondu
@@ -909,4 +910,13 @@ montants ni à la trame PDF. Tests exigés : deux devis visibles, validation de 
 
 ## Journal
 - 25/09 : inventaire fait (prod en lecture seule), décisions posées ; F1, F2, F3 livrés ; tests et essai local OK ;
-  builds en cours.
+  builds OK ; commit CRM `573b20d` (76 outils) déployé (health = 573b20d), site `3847330` déployé (health = 3847330).
+  Puis `presenter_devis` et `retirer_accord` (78 outils, `mcp-v3.test.ts` = 11) : commit `1028cb1`, déployé (health =
+  1028cb1, `outils { nombre: 78, empreinte: b815b91b76be }`). Contrôle prod en lecture seule (`scratchpad/m11/controle-prod.sh`)
+  : routes nouvelles 401 sans session, MCP 401 + WWW-Authenticate, découverte OAuth 200, espace invalide 404, site
+  3847330 ; `lire_fiche` de Fawzi Fares : ses deux devis proposés, sans libellé (rien écrit en prod). Rapport :
+  artefact « Plusieurs devis, un seul signé », https://claude.ai/artifact/H56RJenVEMrpQknUuPtbfP. Reste à Lucas :
+  reconnecter le connecteur (liste d'outils en cache), libellés des devis de Fawzi (`presenter_devis`), paramètres
+  PILOTAGE et DELAI_RELANCE_DEVIS, jeton Meta de page à renouveler (conversions refusées, code 190). Volume Railway :
+  agrandi (4,4 Go).
+- [x] F4 (fin) : déploiement CRM puis site vérifiés, rapport publié, journal et mémoire à jour.

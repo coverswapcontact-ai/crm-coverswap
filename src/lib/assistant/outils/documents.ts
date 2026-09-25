@@ -3,7 +3,8 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { LIBELLES_STATUT_DOCUMENT, MOTIFS_AVOIR } from "@/lib/dossiers/constants";
 import { deposerDocument, schemaDepotDocument } from "@/lib/dossiers/depot-document";
-import { annulerDevis, genererAvoir } from "@/lib/dossiers/documents";
+import { annulerDevis, genererAvoir, modifierPresentationDevis } from "@/lib/dossiers/documents";
+import { retirerAccord } from "@/lib/espace/validations";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
@@ -99,4 +100,51 @@ export const outilDeposerDocument = definirOutil({
   },
 });
 
-export const OUTILS_DOCUMENTS = [outilAnnulerDocument, outilDeposerDocument];
+/** Mission 11 : l'interrupteur « visible dans l'espace » et le libellé d'un devis émis, comme dans le panneau du dossier. */
+export const outilPresenterDevis = definirOutil({
+  nom: "presenter_devis",
+  titre: "Libellé et visibilité d'un devis émis",
+  description:
+    "Change la présentation d'un devis déjà émis (généré ou repris), jamais son contenu : son libellé de variante (« façades seules ») et sa visibilité dans l'espace client (masqué : le client ne le voit plus, il reste dans le dossier). C'est l'interrupteur du panneau « Devis et accord ». Réversible (remettre l'ancienne valeur).",
+  niveau: "REVERSIBLE",
+  schema: z.object({
+    dossierId: z.string().max(40),
+    documentId: z.string().max(40),
+    libelle_variante: z.string().trim().max(80).nullable().optional().describe("Nouveau libellé ; null l'efface."),
+    visible_espace: z.boolean().optional(),
+  }),
+  executer: async (e) => {
+    if (e.libelle_variante === undefined && e.visible_espace === undefined) throw new ErreurMetier("Rien à changer : donne libelle_variante et/ou visible_espace.", 400);
+    const r = await modifierPresentationDevis(e.dossierId, e.documentId, { libelleVariante: e.libelle_variante, visibleEspace: e.visible_espace });
+    return { texte: `Devis ${r.numero} : libellé ${r.libelleVariante ? `« ${r.libelleVariante} »` : "aucun"}, ${r.visibleEspace ? "visible dans l'espace client" : "masqué dans l'espace client"}.`, donnees: r, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
+  },
+});
+
+/** Mission 11 : retirer un bon pour accord à la place du client (le geste du panneau) ; les autres devis proposés redeviennent au choix. */
+export const outilRetirerAccord = definirOutil({
+  nom: "retirer_accord",
+  titre: "Retirer le bon pour accord d'un dossier",
+  description:
+    "Retire l'accord donné sur le devis d'un dossier (le client a changé d'avis, erreur) : la preuve reste gardée, le dossier revient à « Devis envoyé », le devis redevient un devis émis et les autres devis proposés redeviennent au choix dans l'espace. Refusé si un paiement est déjà engagé. Sensible : aperçu puis confirmation.",
+  niveau: "SENSIBLE",
+  schema: schemaCible.extend({ motif: z.string().trim().max(500).optional() }),
+  apercu: async (e) => {
+    const r = await cibler(e, "DOSSIER");
+    if (r.ambigu) return r.ambigu.texte;
+    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
+    const accord = await prisma.accordDevis.findFirst({ where: { dossierId: r.ids.dossierId, retireLe: null }, orderBy: { createdAt: "desc" } });
+    if (!accord) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${r.ids.nom}.`, 409);
+    return `Je vais retirer le bon pour accord de ${r.ids.nom} sur le devis ${accord.numeroDevis ?? ""} (donné le ${format.jourCourt(accord.createdAt)} par ${accord.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; le dossier revient à « Devis envoyé » ; les autres devis proposés redeviennent au choix.`;
+  },
+  executer: async (e) => {
+    const r = await cibler(e, "DOSSIER");
+    if (r.ambigu) return r.ambigu;
+    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
+    const espace = await prisma.espaceClient.findFirst({ where: { dossierId: r.ids.dossierId, archiveLe: null }, orderBy: { createdAt: "desc" } });
+    if (!espace) throw new ErreurMetier(`${r.ids.nom} n'a pas d'espace client : l'accord ne vient pas de l'espace.`, 409);
+    await retirerAccord(espace, "LUCAS", e.motif ?? "");
+    return { texte: `Bon pour accord retiré chez ${r.ids.nom} : preuve gardée, dossier revenu à « Devis envoyé », devis proposés de nouveau au choix.`, donnees: { dossierId: r.ids.dossierId }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
+  },
+});
+
+export const OUTILS_DOCUMENTS = [outilAnnulerDocument, outilDeposerDocument, outilPresenterDevis, outilRetirerAccord];

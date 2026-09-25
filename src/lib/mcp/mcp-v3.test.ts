@@ -113,7 +113,7 @@ describe("Mission 11 : libérer le MCP", () => {
     const ecart = ecartAvecLeServeur(outils.tools.map((t) => t.name));
     assert.deepEqual(ecart, { manquants: [], enTrop: [] }, `outils manquants ou en trop : ${JSON.stringify(ecart)}`);
     assert.equal(outils.tools.length, CATALOGUE.length);
-    for (const nom of ["creer_contact", "deposer_document", "annuler_document", "simulations_site", "voir_parametres", "modifier_parametres", "voir_relances", "relancer", "annuler_relance", "changer_teinte", "voir_publicite", "lister_outils", "supprimer", "classer_mail", "rediger_mail"]) {
+    for (const nom of ["creer_contact", "deposer_document", "annuler_document", "presenter_devis", "retirer_accord", "simulations_site", "voir_parametres", "modifier_parametres", "voir_relances", "relancer", "annuler_relance", "changer_teinte", "voir_publicite", "lister_outils", "supprimer", "classer_mail", "rediger_mail"]) {
       assert.ok(outils.tools.some((t) => t.name === nom), `outil absent de tools/list : ${nom}`);
     }
     const registre = registreOutils();
@@ -188,6 +188,19 @@ describe("Mission 11 : libérer le MCP", () => {
     const service = await import("@/lib/espace/service");
     const etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
     assert.deepEqual(etat.devisProposes.map((d) => [d.libelle, d.repris ?? false]), [["façades + plan de travail", false], ["devis papier", true]]);
+  });
+
+  test("« presenter_devis » : libellé et visibilité d'un devis émis ; « retirer_accord » refuse sans accord", async () => {
+    const service = await import("@/lib/espace/service");
+    const masque = await appeler("presenter_devis", { dossierId: ids.dossierFares, documentId: ids.devisB, visible_espace: false, libelle_variante: "façades + plan (masqué)" });
+    assert.match(masque, /Devis \d{4}-\d{3} : libellé « façades \+ plan \(masqué\) », masqué dans l'espace client/);
+    let etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
+    assert.ok(!etat.devisProposes.some((d) => d.id === ids.devisB), "masqué : le client ne le voit plus");
+    await appeler("presenter_devis", { dossierId: ids.dossierFares, documentId: ids.devisB, visible_espace: true, libelle_variante: "façades + plan de travail" });
+    etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
+    assert.ok(etat.devisProposes.some((d) => d.id === ids.devisB && d.libelle === "façades + plan de travail"));
+    const refus = await appeler("retirer_accord", { dossierId: ids.dossierFares });
+    assert.match(refus, /Aucun bon pour accord en vigueur/);
   });
 
   test("« changer_teinte » : une teinte par meuble, plusieurs teintes par projet, candidats en cas de doute", async () => {

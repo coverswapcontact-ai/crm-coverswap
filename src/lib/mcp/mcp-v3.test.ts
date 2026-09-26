@@ -250,8 +250,9 @@ describe("Mission 11 : libérer le MCP", () => {
 
   test("« voir_relances » / « relancer » / « annuler_relance » : l'état des relances, une relance envoyée sous confirmation, une proposée annulée", async () => {
     const vue = await appeler("voir_relances", {});
-    assert.match(vue, /1 devis en attente de réponse \(délai de relance non renseigné/);
-    assert.match(vue, /Fawzia Fares : devis \d{4}-\d{3} de .* 0 relance\(s\) faite\(s\) — relance proposable/);
+    // Mission 13 (B16) : le délai a une valeur (paramètre posé à 5 jours par la migration, sinon 5 par défaut) : la relance devient proposable à date.
+    assert.match(vue, /1 devis en attente de réponse \(délai de relance : 5 jours\)/);
+    assert.match(vue, /Fawzia Fares : devis \d{4}-\d{3} de .* 0 relance\(s\) faite\(s\) — prochaine relance proposable le \d{2}\/\d{2}\/\d{4}/);
     const apercu = await appeler("relancer", { dossierId: ids.dossierFares });
     assert.match(apercu, /Je vais envoyer à fares@exemple.fr la relance n° 1 du devis \d{4}-\d{3} de Fawzia Fares :\nObjet : Votre devis n° \d{4}-\d{3} — CoverSwap/);
     assert.equal(await prisma.proposition.count({ where: { type: "ENVOI_MAIL", contenu: { contains: "RELANCE_DEVIS" } } }), 0, "l'aperçu ne crée rien");

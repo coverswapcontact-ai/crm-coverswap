@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
-import { ETAPES, LIBELLES_ETAPE, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ETAPES, LIBELLES_ETAPE, PROCHAINE_ACTION_APRES_DEVIS, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
 import { calculerMain, recalculerMain } from "@/lib/dossiers/main";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
 import { suivreSoldeDossier } from "@/lib/encaissements/service";
@@ -151,7 +151,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     const action = d.prochaineAction ?? "";
     // (seulement pour un dossier qui a un espace : sans espace, c'est Lucas qui a écrit cette action, elle lui appartient)
     if (espace && /préparer le devis \(simulation/i.test(action) && (lecture.devis || !espace.choixLe)) {
-      signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors que ${lecture.devis ? "le devis est déjà émis" : "plus aucune simulation n'est validée"}.`, "Effacer cette prochaine action");
+      signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors que ${lecture.devis ? "le devis est déjà émis" : "plus aucune simulation n'est validée"}.`, lecture.devis ? `Remplacer par « ${PROCHAINE_ACTION_APRES_DEVIS} »` : "Effacer cette prochaine action");
     } else if (espace && /autre proposition/i.test(action) && !espace.propositionDemandeeLe) {
       signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors qu'aucune demande n'est en attente dans l'espace du client.`, "Effacer cette prochaine action");
     }
@@ -334,9 +334,15 @@ export async function corrigerIncoherence(cle: string): Promise<{ corrigee: bool
       if (espace) await devaliderChoix(espace, "LUCAS");
       break;
     }
-    case "PROCHAINE_ACTION_PERIMEE":
-      await prisma.dossier.update({ where: { id: dossierId! }, data: { prochaineAction: null, prochaineActionDate: null } });
+    case "PROCHAINE_ACTION_PERIMEE": {
+      // Mission 13 (B1) : un devis en vigueur → « Attendre l'accord du client sur le devis » ; sinon l'action s'efface.
+      const devis = await prisma.document.findFirst({ where: { dossierId: dossierId!, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { id: true } });
+      const actuelle = (await prisma.dossier.findUnique({ where: { id: dossierId! }, select: { prochaineAction: true } }))?.prochaineAction ?? "";
+      const suite = devis && /préparer le devis/i.test(actuelle) ? PROCHAINE_ACTION_APRES_DEVIS : null;
+      await prisma.dossier.update({ where: { id: dossierId! }, data: { prochaineAction: suite, prochaineActionDate: null } });
+      await prisma.dossierEvenement.create({ data: { dossierId: dossierId!, type: "COHERENCE_CORRIGEE", direction: "INTERNE", contenu: suite ? `Contrôle de cohérence : prochaine action « ${actuelle} » remplacée par « ${suite} » (le devis est rattaché)` : `Contrôle de cohérence : prochaine action « ${actuelle} » effacée (plus aucune simulation validée)`, metadata: JSON.stringify({ code: incoherence.code }) } });
       break;
+    }
     case "STATUT_DU_LEAD": {
       const dossier = await prisma.dossier.findUnique({ where: { id: dossierId! }, select: { etape: true, leadId: true } });
       const statut = dossier ? STATUT_LEAD_ATTENDU[dossier.etape as EtapeDossier]?.[0] : null;

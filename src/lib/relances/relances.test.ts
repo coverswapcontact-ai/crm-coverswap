@@ -88,7 +88,7 @@ describe("relances de devis", () => {
   let dossierId: string;
   let devisId: string;
 
-  test("sans délai paramétré, rien n'est proposé ; ensuite, une proposition par devis dû", async () => {
+  test("sans délai paramétré, 5 jours s'appliquent (mission 13) ; le paramètre prend le relais ; une proposition par devis dû", async () => {
     const { dossier, devis } = await dossierAvecDevis({ clientNom: "Alice Durand", email: "alice@example.test", ilYaJours: 10 });
     dossierId = dossier.id;
     devisId = devis.id;
@@ -96,10 +96,13 @@ describe("relances de devis", () => {
     await dossierAvecDevis({ clientNom: "Chantal Vidal", email: "chantal@example.test", ilYaJours: 10, consentement: "RETIRE" });
     await dossierAvecDevis({ clientNom: "Denis Roux", email: "denis@example.test", ilYaJours: 2 });
 
-    assert.deepEqual(await relances.proposerRelances(), { proposees: 0, dejaProposees: 0, parametreManquant: true, sansAdresse: 0, refusMail: 0 });
-
-    await parametres.enregistrerParametre({ cle: "DELAI_RELANCE_DEVIS", valeur: 7, valableDu: new Date("2026-01-01T00:00:00Z") });
+    // Mission 13 (B16) : sans paramètre, le délai par défaut (5 jours) suit déjà les devis — Alice (10 jours) est proposée, Denis (2 jours) non.
+    assert.deepEqual(await relances.lireDelaiRelance(new Date("2026-09-25T12:00:00Z")), { jours: 5, parametre: false });
     assert.deepEqual(await relances.proposerRelances(), { proposees: 1, dejaProposees: 0, parametreManquant: false, sansAdresse: 1, refusMail: 1 });
+
+    await parametres.enregistrerParametre({ cle: "DELAI_RELANCE_DEVIS", valeur: 7, valableDu: new Date() });
+    assert.deepEqual(await relances.lireDelaiRelance(), { jours: 7, parametre: true });
+    assert.deepEqual(await relances.proposerRelances(), { proposees: 0, dejaProposees: 1, parametreManquant: false, sansAdresse: 1, refusMail: 1 });
     assert.equal((await relances.proposerRelances()).dejaProposees, 1);
 
     const proposition = await prisma.proposition.findFirstOrThrow({ where: { type: "ENVOI_MAIL", dossierId } });

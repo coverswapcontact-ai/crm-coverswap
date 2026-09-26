@@ -64,13 +64,13 @@ describe("motif de perte obligatoire", () => {
 
   test("note d'appel « pas intéressé » : le lead passe perdu avec un motif (projet abandonné)", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Pas", nom: "Intéressé", telephone: "0600000012", ville: "Lattes", source: "AUTRE" } });
-    await avecActeur(LUCAS, () => appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", contenu: "Ne veut plus de travaux" } as Parameters<typeof appels.noterAppel>[0]));
+    await avecActeur(LUCAS, () => appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", contenu: "Ne veut plus de travaux" } as unknown as Parameters<typeof appels.noterAppel>[0]));
     const l = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
     assert.deepEqual([l.statut, l.motifPerte, l.perteCommentaire], ["PERDU", "PROJET_ABANDONNE", "Pas intéressé (appel)"]);
   });
 
   test("manager_commercial : les motifs des dossiers et des leads perdus se cumulent", async () => {
-    const analyse = await commercial.analyseCommerciale({ periode: "30j" } as Parameters<typeof commercial.analyseCommerciale>[0]);
+    const analyse = await commercial.analyseCommerciale({ periode: "30_jours" } as Parameters<typeof commercial.analyseCommerciale>[0]);
     const pertes = analyse.pertes as { dossiersPerdus: number; leadsPerdus: number; parMotif: { cle: string; valeur: number }[] };
     assert.ok(pertes.dossiersPerdus >= 1 && pertes.leadsPerdus >= 1, JSON.stringify(pertes));
     const motif = (cle: string) => pertes.parMotif.find((m) => m.cle === cle)?.valeur ?? 0;

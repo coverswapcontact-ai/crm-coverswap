@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { imputerSurFacture, planImputationFacture } from "@/lib/encaissements/service";
-import { LIBELLES_TYPE_DOCUMENT, type TypeDocument } from "./constants";
+import { LIBELLES_TYPE_DOCUMENT, PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS, type TypeDocument } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import type { CategorieDestinataire } from "./mentions";
@@ -180,6 +180,15 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
     const totalCentimes = versCentimes(document.totalHt);
     const plan = await planImputationFacture(tx, dossierId, totalCentimes);
     await imputerSurFacture(tx, { dossierId, registreId: ligne.id, numero: ligne.numero, totalCentimes }, plan);
+  }
+
+  // Mission 13 (B1) : comme à la génération (documents.ts › emettre), « Préparer le devis », posé par l'espace quand le
+  // client a choisi, est fait dès qu'un devis est rattaché — généré ou déposé. Une action écrite par Lucas reste.
+  if (entree.type === "DEVIS") {
+    await tx.dossier.updateMany({
+      where: { id: dossierId, prochaineAction: { startsWith: PROCHAINE_ACTION_PREPARER_DEVIS } },
+      data: { prochaineAction: PROCHAINE_ACTION_APRES_DEVIS, prochaineActionDate: null },
+    });
   }
 
   await tx.dossierEvenement.create({

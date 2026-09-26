@@ -1,8 +1,8 @@
 import prisma from "@/lib/prisma";
+import { lireDelaiRelance } from "@/lib/relances/service";
 import { jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
-import { lireParametre } from "@/lib/parametres/service";
 import type { Alerte } from "./types";
 
 /**
@@ -31,11 +31,10 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
   const alertes: Alerte[] = [];
 
   // Devis sans réponse
-  const delai = await lireParametre("DELAI_RELANCE_DEVIS", maintenant);
-  if (delai === null) {
-    alertes.push({ code: "PARAMETRE_RELANCE", gravite: "INFO", titre: "Délai de relance non renseigné", detail: "Les devis sans réponse ne sont ni suivis ni proposés à la relance.", lien: "/parametres" });
-  } else {
-    const limite = new Date(maintenant.getTime() - Number(delai) * SEUILS_ALERTE.multipleDelaiRelance * JOUR_MS);
+  // Mission 13 (B16) : le délai a une valeur par défaut (5 jours) ; plus d'alerte « non renseigné ».
+  const { jours: delai } = await lireDelaiRelance(maintenant);
+  {
+    const limite = new Date(maintenant.getTime() - delai * SEUILS_ALERTE.multipleDelaiRelance * JOUR_MS);
     const enAttente = await prisma.dossier.findMany({
       where: { etape: { in: ["DEVIS_ENVOYE", "RELANCE"] }, documents: { some: { type: "DEVIS", statut: { in: ["GENERE", "ENVOYE"] }, dateEmission: { lt: limite } } } },
       select: { clientNom: true },

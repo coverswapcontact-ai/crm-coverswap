@@ -1,4 +1,5 @@
 import { promises as fs } from "fs";
+import { OBJET_PAR_FAMILLE } from "./objet";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
@@ -32,12 +33,8 @@ import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
  * où elle l'a été (`dossierId`, `rangeeLe`) et n'est jamais recopiée.
  */
 
-const OBJET_PAR_TYPE_PROJET: Record<string, string> = {
-  CUISINE: "Recouvrement de cuisine",
-  SDB: "Recouvrement de salle de bains",
-  MEUBLES: "Recouvrement de mobilier",
-  PRO: "Recouvrement de local professionnel",
-};
+// Mission 13 : une seule table (dossiers/objet.ts), partagée avec la validation du projet dans l'espace.
+const OBJET_PAR_TYPE_PROJET: Record<string, string> = OBJET_PAR_FAMILLE;
 
 /** Un dossier fini (encaissé) ou perdu ne reçoit pas un nouveau projet : on en ouvre un autre. */
 const ETAPES_CLOSES = ["PERDU", "ENCAISSE"];

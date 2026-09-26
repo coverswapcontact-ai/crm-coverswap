@@ -19,6 +19,15 @@ const JOUR_MS = 24 * 60 * 60_000;
 
 export type ResumeRelances = { proposees: number; dejaProposees: number; parametreManquant: boolean; sansAdresse: number; refusMail: number };
 
+/** Mission 13 (B16) : sans DELAI_RELANCE_DEVIS renseigné, 5 jours — le système n'attend pas un réglage pour suivre les devis. */
+export const DELAI_RELANCE_DEFAUT_JOURS = 5;
+
+/** Le délai de relance en vigueur : le paramètre daté, sinon la valeur par défaut. `parametre` : vrai quand il est renseigné. */
+export async function lireDelaiRelance(maintenant: Date = new Date()): Promise<{ jours: number; parametre: boolean }> {
+  const valeur = await lireParametre("DELAI_RELANCE_DEVIS", maintenant);
+  return valeur === null ? { jours: DELAI_RELANCE_DEFAUT_JOURS, parametre: false } : { jours: Number(valeur), parametre: true };
+}
+
 function texteRelance(entree: { prenom: string | null; numero: string; emisLe: Date; rang: number }): { objet: string; texte: string } {
   const bonjour = entree.prenom ? `Bonjour ${entree.prenom},` : "Bonjour,";
   const corps =
@@ -74,8 +83,8 @@ export type DevisARelancer = {
 };
 
 /** Mission 11 : l'état des relances, devis par devis — pour « voir_relances ». Rien n'est écrit. */
-export async function listerRelances(maintenant: Date = new Date()): Promise<{ delai: number | null; devis: DevisARelancer[] }> {
-  const delai = await lireParametre("DELAI_RELANCE_DEVIS", maintenant);
+export async function listerRelances(maintenant: Date = new Date()): Promise<{ delai: number; delaiParDefaut: boolean; devis: DevisARelancer[] }> {
+  const { jours: delai, parametre } = await lireDelaiRelance(maintenant);
   const enAttente = await prisma.proposition.findMany({ where: { type: "ENVOI_MAIL", statut: "EN_ATTENTE", contenu: { contains: "RELANCE_DEVIS" } }, select: { id: true, contenu: true, expireLe: true } });
   const liste: DevisARelancer[] = [];
   for (const dossier of await chargerDossiersARelancer()) {
@@ -96,13 +105,13 @@ export async function listerRelances(maintenant: Date = new Date()): Promise<{ d
       joursDepuisEmission: Math.floor((maintenant.getTime() - devis.dateEmission.getTime()) / JOUR_MS),
       relancesFaites: relances.length,
       derniereRelanceLe: relances[0]?.createdAt.toISOString() ?? null,
-      prochaineProposableLe: delai !== null && relances.length < RELANCES_MAX_PAR_DEVIS ? new Date(reference.getTime() + Number(delai) * JOUR_MS).toISOString() : null,
+      prochaineProposableLe: relances.length < RELANCES_MAX_PAR_DEVIS ? new Date(reference.getTime() + delai * JOUR_MS).toISOString() : null,
       adresse,
       refusMail: consentement === "REFUSE" || consentement === "RETIRE",
       propositionEnAttente: proposition ? { id: proposition.id, expireLe: proposition.expireLe?.toISOString() ?? null } : null,
     });
   }
-  return { delai: delai === null ? null : Number(delai), devis: liste.sort((a, b) => b.joursDepuisEmission - a.joursDepuisEmission) };
+  return { delai, delaiParDefaut: !parametre, devis: liste.sort((a, b) => b.joursDepuisEmission - a.joursDepuisEmission) };
 }
 
 export type RelanceProposee = { propositionId: string; creee: boolean; rang: number; numero: string; documentId: string; a: string; objet: string; texte: string };
@@ -123,12 +132,9 @@ export async function relancerDevis(dossierId: string, options: { maintenant?: D
   if (!adresse) throw new ErreurMetier(`Aucune adresse e-mail pour ${dossier.clientNom} : relancer par téléphone ou SMS.`, 409);
   const relances = await relancesFaites(dossier.id, devis.id);
   if (relances.length >= RELANCES_MAX_PAR_DEVIS) throw new ErreurMetier(`Déjà ${RELANCES_MAX_PAR_DEVIS} relances envoyées pour le devis ${devis.numero} : plus de relance par mail.`, 409);
-  const delai = options.delai === undefined ? await lireParametre("DELAI_RELANCE_DEVIS", maintenant) : options.delai;
+  const delai = options.delai === undefined || options.delai === null ? (await lireDelaiRelance(maintenant)).jours : options.delai;
   const reference = relances[0]?.createdAt ?? devis.dateEmission;
-  if (!options.forcer) {
-    if (delai === null) throw new ErreurMetier("Délai de relance non renseigné (DELAI_RELANCE_DEVIS).", 409);
-    if (maintenant.getTime() - reference.getTime() < Number(delai) * JOUR_MS) throw new ErreurMetier("Délai de relance pas encore écoulé.", 409);
-  }
+  if (!options.forcer && maintenant.getTime() - reference.getTime() < delai * JOUR_MS) throw new ErreurMetier("Délai de relance pas encore écoulé.", 409);
   const rang = relances.length + 1;
   const jours = Math.floor((maintenant.getTime() - devis.dateEmission.getTime()) / JOUR_MS);
   const { objet, texte } = texteRelance({ prenom: dossier.client?.prenom ?? null, numero: devis.numero, emisLe: devis.dateEmission, rang });
@@ -139,7 +145,7 @@ export async function relancerDevis(dossierId: string, options: { maintenant?: D
     resume: `Devis envoyé il y a ${jours} jours, sans réponse enregistrée. Relance n° ${rang} sur ${RELANCES_MAX_PAR_DEVIS}.${options.forcer ? " Demandée par Lucas (sans attendre le délai)." : ""}`,
     raisonnement: `Dossier à l'étape « ${dossier.etape === "RELANCE" ? "Relance" : "Devis envoyé"} » ; ${
       relances.length ? `dernière relance le ${dateEnLettres(relances[0].createdAt)}` : `devis émis le ${dateEnLettres(devis.dateEmission)}`
-    }${delai !== null ? ` ; délai de relance paramétré : ${delai} jours` : ""}.`,
+    } ; délai de relance : ${delai} jours.`,
     contenu: { motif: "RELANCE_DEVIS", dossierId: dossier.id, clientId: dossier.clientId, a: adresse, objet, texte, documentIds: [devis.id] },
     cleUnicite: `relance:${devis.id}:${rang}`,
     dossierId: dossier.id,
@@ -151,8 +157,7 @@ export async function relancerDevis(dossierId: string, options: { maintenant?: D
 
 export async function proposerRelances(maintenant: Date = new Date()): Promise<ResumeRelances> {
   const resume: ResumeRelances = { proposees: 0, dejaProposees: 0, parametreManquant: false, sansAdresse: 0, refusMail: 0 };
-  const delai = await lireParametre("DELAI_RELANCE_DEVIS", maintenant);
-  if (delai === null) return { ...resume, parametreManquant: true };
+  const { jours: delai } = await lireDelaiRelance(maintenant);
 
   for (const dossier of await chargerDossiersARelancer()) {
     const devis = dossier.documents[0];
@@ -170,8 +175,8 @@ export async function proposerRelances(maintenant: Date = new Date()): Promise<R
     const relances = await relancesFaites(dossier.id, devis.id);
     if (relances.length >= RELANCES_MAX_PAR_DEVIS) continue;
     const reference = relances[0]?.createdAt ?? devis.dateEmission;
-    if (maintenant.getTime() - reference.getTime() < Number(delai) * JOUR_MS) continue;
-    const { creee } = await relancerDevis(dossier.id, { maintenant, delai: Number(delai) });
+    if (maintenant.getTime() - reference.getTime() < delai * JOUR_MS) continue;
+    const { creee } = await relancerDevis(dossier.id, { maintenant, delai });
     if (creee) resume.proposees++;
     else resume.dejaProposees++;
   }

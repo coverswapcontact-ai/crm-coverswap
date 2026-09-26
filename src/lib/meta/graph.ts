@@ -26,10 +26,13 @@ export class ErreurGraph extends Error {
   }
 }
 
+/** Codes Meta d'un jeton refusé ou d'une permission absente (190 : session invalide ; 10, 200 : permission ; 102, 3). */
+export const CODES_DROITS: readonly number[] = [10, 200, 190, 102, 3];
+
 /** Permission absente ou jeton refusé : c'est à Lucas d'agir côté Meta, pas au serveur de réessayer. */
 export function estProblemeDeDroits(erreur: unknown): boolean {
   if (!(erreur instanceof ErreurGraph)) return false;
-  return [10, 200, 190, 102, 3].includes(erreur.code ?? -1) || erreur.statut === 401 || erreur.statut === 403;
+  return CODES_DROITS.includes(erreur.code ?? -1) || erreur.statut === 401 || erreur.statut === 403;
 }
 
 type ReponseErreur = { error?: { message?: string; code?: number; error_subcode?: number; type?: string } };

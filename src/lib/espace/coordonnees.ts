@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
+import { completerCoordonnees } from "@/lib/clients/identification";
 import { formaterTelephone, nomAffichage, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
 import { ACTEUR, prevenir } from "./alertes";
 
@@ -157,7 +158,15 @@ export async function enregistrerCoordonnees(espace: Pick<EspaceClient, "dossier
   noter("adresse", "adresse du chantier", dossier.clientAdresse, apres.adresse);
   noter("codePostal", "code postal", dossier.clientCp, apres.codePostal);
   noter("ville", "ville", dossier.clientVille, apres.ville);
-  if (changements.length === 0) return { changements };
+  // Mission 13 (B2) : la fiche du client reçoit l'e-mail et le téléphone du dossier, même quand le client ne change rien
+  // (le cas vécu : coordonnées connues du dossier, fiche « sans e-mail, sans téléphone »). Rien n'est retiré.
+  const completerFiche = async () => {
+    if (dossier.client) await avecActeur(ACTEUR, () => completerCoordonnees(prisma, dossier.client!.id, { emails: [apres.email], telephones: [apres.numero] }));
+  };
+  if (changements.length === 0) {
+    await completerFiche();
+    return { changements };
+  }
 
   const nomComplet = nomAffichage({ prenom: apres.prenom, nomFamille: apres.nomFamille }) ?? dossier.clientNom;
   const telephoneChange = changements.some((c) => c.champ === "telephone");
@@ -209,6 +218,8 @@ export async function enregistrerCoordonnees(espace: Pick<EspaceClient, "dossier
       });
     })
   );
+
+  await completerFiche();
 
   if (telephoneChange) {
     const c = changements.find((x) => x.champ === "telephone")!;

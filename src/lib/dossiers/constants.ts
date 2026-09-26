@@ -188,6 +188,11 @@ export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
   INCONNUE: "Non renseignée",
 };
 
+// Mission 13 (26/09/2026) : les deux prochaines actions que le système pose lui-même autour du devis.
+// « Préparer le devis … » vient de l'espace (le client a choisi une simulation) ; un devis généré OU déposé la remplace.
+export const PROCHAINE_ACTION_PREPARER_DEVIS = "Préparer le devis";
+export const PROCHAINE_ACTION_APRES_DEVIS = "Attendre l'accord du client sur le devis";
+
 // Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [
   "PRIX",

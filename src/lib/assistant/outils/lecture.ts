@@ -14,7 +14,7 @@ import { rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
 import { listerVue } from "@/lib/mail/vues";
 import { resultatsMeta } from "@/lib/meta/sante";
-import { verifierJeton } from "@/lib/meta/taches";
+import { resumeChaineMeta } from "@/lib/meta/sante";
 import { lireParametres } from "@/lib/parametres/service";
 import { chargerEntrant } from "@/lib/prospects/entrants";
 import { listerLeads } from "@/lib/prospects/leads";
@@ -313,7 +313,7 @@ export const niveauDisque = (pourcent: number): "OK" | "ATTENTION" | "URGENT" =>
 
 /** L'état de santé du système : tâches, connexions, jetons, crédits, disque, cohérence, alertes. */
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, meta, ia, alertes, coherence] = await Promise.all([etatDesTaches(), rappelConnexionGoogle(maintenant).catch(() => null), verifierJeton().catch(() => null), etatIa(maintenant, "IA_REDACTION").catch(() => null), calculerAlertes(maintenant).catch(() => []), controlerCoherence().catch(() => null)]);
+  const [taches, google, meta, ia, alertes, coherence] = await Promise.all([etatDesTaches(), rappelConnexionGoogle(maintenant).catch(() => null), resumeChaineMeta(maintenant).catch(() => null), etatIa(maintenant, "IA_REDACTION").catch(() => null), calculerAlertes(maintenant).catch(() => []), controlerCoherence().catch(() => null)]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
   try {
@@ -332,7 +332,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
   return {
     taches: { enEchec: echecs.map((t) => ({ type: t.type, libelle: t.libelle, erreur: t.derniereErreur })), enAttente: taches.compteurs.EN_ATTENTE, travauxEnEchec: travauxEnEchec.map((p) => ({ nom: p.nom, erreur: p.derniereErreur })) },
     google: google ? { niveau: google.niveau, coupee: google.coupee, compte: google.compte } : null,
-    meta: meta ? { etat: meta.etat, message: meta.message, echeance: meta.echeance } : null,
+    meta: meta ? { etat: meta.chaine.code, message: meta.chaine.libelle, jeton: meta.jeton.message, echeance: meta.jeton.echeance } : null,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
     disque,
@@ -344,7 +344,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
 export const outilSanteSysteme = definirOutil({
   nom: "sante_systeme",
   titre: "Santé du système et alertes",
-  description: "Tâches de fond en échec, connexion Google (jeton qui expire), jeton Meta, IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
+  description: "Tâches de fond en échec, connexion Google (jeton qui expire), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {

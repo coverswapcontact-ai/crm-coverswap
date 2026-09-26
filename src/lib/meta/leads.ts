@@ -5,7 +5,7 @@ import { rattacherLead } from "@/lib/clients/identification";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { mettreEnFile } from "@/lib/taches/file";
 import { texteDesReponses, type LeadMetaNormalise } from "./champs";
-import { lireLeadMeta, type LeadGraph } from "./graph";
+import { ErreurGraph, estProblemeDeDroits, lireLeadMeta, type LeadGraph } from "./graph";
 import { leadDepuisChargePlate } from "./pont";
 import { lienFiche } from "./config";
 import { communeDuCodePostal } from "./communes";
@@ -199,7 +199,8 @@ export async function traiterLeadMeta(
   try {
     graph = await lecteur(leadgenId);
   } catch (erreur) {
-    const message = (erreur as Error).message.slice(0, 500);
+    // Mission 13 (B4) : un jeton refusé se lit en clair (écran Tâches, santé du système), pas seulement dans le JSON de Meta.
+    const message = `${estProblemeDeDroits(erreur) ? `Jeton Meta refusé (code ${erreur instanceof ErreurGraph ? (erreur.code ?? erreur.statut ?? "?") : "?"}) : ` : ""}${(erreur as Error).message}`.slice(0, 500);
     await prisma.metaLead.update({
       where: { leadgenId },
       data: { statut: "ECHEC", erreur: message, tentatives: { increment: 1 } },

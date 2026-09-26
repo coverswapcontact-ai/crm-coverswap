@@ -21,12 +21,12 @@ export const outilVoirRelances = definirOutil({
   schema: z.object({}),
   executer: async ({}, contexte) => {
     const r = await listerRelances(contexte.maintenant);
-    if (r.devis.length === 0) return { texte: `Aucun devis en attente de réponse.${r.delai === null ? " Le délai de relance (DELAI_RELANCE_DEVIS) n'est pas renseigné : aucune relance ne sera proposée." : ""}`, donnees: r, liens: [lien("À valider", "/validation")] };
+    if (r.devis.length === 0) return { texte: `Aucun devis en attente de réponse (délai de relance : ${r.delai} jours${r.delaiParDefaut ? ", valeur par défaut" : ""}).`, donnees: r, liens: [lien("À valider", "/validation")] };
     const lignes = r.devis.map((d) => {
       const etat = d.propositionEnAttente ? `relance n° ${d.relancesFaites + 1} PROPOSÉE, à valider [proposition:${d.propositionEnAttente.id}]` : d.refusMail ? "pas de mail (le client a refusé les mails) : relancer par téléphone" : !d.adresse ? "pas d'adresse e-mail : relancer par téléphone ou SMS" : d.relancesFaites >= 2 ? "2 relances faites : plus de relance par mail" : d.prochaineProposableLe && new Date(d.prochaineProposableLe) > contexte.maintenant ? `prochaine relance proposable le ${format.jourCourt(new Date(d.prochaineProposableLe))}` : "relance proposable (à la prochaine passe, ou tout de suite par « relancer »)";
       return `- ${d.clientNom} : devis ${d.numero} de ${format.euros(d.totalHt)}, envoyé il y a ${d.joursDepuisEmission} jour(s), ${d.relancesFaites} relance(s) faite(s)${d.derniereRelanceLe ? ` (dernière le ${format.jourCourt(new Date(d.derniereRelanceLe))})` : ""} — ${etat} [dossier:${d.dossierId}]`;
     });
-    return { texte: [`${r.devis.length} devis en attente de réponse${r.delai !== null ? ` (délai de relance : ${r.delai} jours)` : " (délai de relance non renseigné : rien n'est proposé automatiquement)"} :`, ...lignes].join("\n"), donnees: r, liens: [lien("À valider", "/validation"), lien("Dossiers", "/dossiers")] };
+    return { texte: [`${r.devis.length} devis en attente de réponse (délai de relance : ${r.delai} jours${r.delaiParDefaut ? ", valeur par défaut tant que DELAI_RELANCE_DEVIS n'est pas renseigné" : ""}) :`, ...lignes].join("\n"), donnees: r, liens: [lien("À valider", "/validation"), lien("Dossiers", "/dossiers")] };
   },
 });
 

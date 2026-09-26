@@ -3,7 +3,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { CANAUX, CANAUX_PUSH, canalConfigure, canauxConfigures, variablesManquantes, type Canal, type ResultatCanal } from "@/lib/alertes/canaux";
 import { abonnementPage, lireEtatJeton } from "./graph";
 import { etatConfiguration, type EtatConfiguration } from "./config";
-import { TACHE_CONVERSION, verdictJeton, type VerdictJeton } from "./taches";
+import { TACHE_CONVERSION, faitsJeton, verdictJeton, type FaitsJeton, type VerdictJeton } from "./taches";
 import { TACHE_LEAD } from "./leads";
 
 /**
@@ -65,7 +65,58 @@ export type NotificationsMeta = {
   leadsSansPush: { leadgenId: string; quand: string; nom: string | null; detail: string }[];
 };
 
+/**
+ * Mission 13 (B5) : l'état de la chaîne Meta en UNE phrase, la même partout
+ * (Publicité, `sante_systeme`, `voir_publicite`), d'après les faits — ce qui est
+ * entré, ce que Meta a refusé, ce qui manque — et non d'après ce que répond la
+ * vérification du jeton (impossible sans META_APP_ID et META_APP_SECRET).
+ */
+export type EtatChaineMeta = {
+  code: "COMPLETE" | "PARTIELLE" | "SILENCIEUSE" | "COUPEE";
+  libelle: string;
+  lectureImpossible: boolean;
+  conversionsImpossibles: boolean;
+  jetonARenouveler: boolean;
+};
+
+export function etatChaine(e: {
+  recoit: "OUI" | "PRET" | "NON";
+  recoitDetail: string;
+  configuration: Pick<EtatConfiguration, "lecture" | "conversions">;
+  jeton: Pick<VerdictJeton, "etat">;
+  faits: Pick<FaitsJeton, "conversionsRefusees" | "leadsIllisibles">;
+}): EtatChaineMeta {
+  const jetonKO = e.jeton.etat === "invalide" || e.jeton.etat === "expire";
+  const refus = e.faits.conversionsRefusees > 0 || e.faits.leadsIllisibles > 0;
+  const lectureImpossible = !e.configuration.lecture || jetonKO || e.faits.leadsIllisibles > 0;
+  const conversionsImpossibles = !e.configuration.conversions || jetonKO || e.faits.conversionsRefusees > 0;
+  const jetonARenouveler = jetonKO || refus || e.jeton.etat === "proche";
+  const cause = jetonARenouveler
+    ? "jeton à renouveler"
+    : [!e.configuration.lecture ? "META_PAGE_ACCESS_TOKEN absente" : null, !e.configuration.conversions ? "META_PIXEL_ID ou jeton de conversions absent" : null].filter(Boolean).join(", ");
+  const manque = lectureImpossible && conversionsImpossibles ? `lecture des formulaires et conversions impossibles (${cause})` : lectureImpossible ? `lecture des formulaires impossible (${cause})` : conversionsImpossibles ? `conversions impossibles (${cause})` : "";
+  const commun = { lectureImpossible, conversionsImpossibles, jetonARenouveler };
+  if (e.recoit === "NON") return { code: "COUPEE", libelle: `Coupée : ${e.recoitDetail}`, ...commun };
+  if (e.recoit === "PRET") return { code: "SILENCIEUSE", libelle: `Prête, silencieuse : configuration complète, aucun lead reçu sur 7 jours${manque ? ` ; ${manque}` : ""}.`, ...commun };
+  if (!manque) return { code: "COMPLETE", libelle: "Complète : leads reçus par le webhook, formulaires lus, conversions renvoyées.", ...commun };
+  return { code: "PARTIELLE", libelle: `Leads reçus par le webhook ; ${manque}.`, ...commun };
+}
+
+/** L'état de la chaîne et du jeton d'après la base seulement (aucun appel à Meta) : pour la santé du système. */
+export async function resumeChaineMeta(maintenant: Date = new Date()): Promise<{ chaine: EtatChaineMeta; jeton: VerdictJeton; surSeptJours: number }> {
+  const configuration = etatConfiguration();
+  const septJours = new Date(maintenant.getTime() - 7 * JOUR_MS);
+  const [surSeptJours, faits] = await Promise.all([prisma.metaLead.count({ where: { ...AVEC_ARCHIVES, recuLe: { gte: septJours } } }), faitsJeton(maintenant)]);
+  const jeton = verdictJeton(null, maintenant, faits);
+  const manques = [!configuration.signature ? "META_APP_SECRET absente" : null, !configuration.verification ? "META_VERIFY_TOKEN absente" : null].filter((m): m is string => m !== null);
+  const recoit: "OUI" | "PRET" | "NON" = surSeptJours > 0 ? "OUI" : manques.length === 0 ? "PRET" : "NON";
+  const recoitDetail = recoit === "OUI" ? `${surSeptJours} lead(s) reçus sur 7 jours.` : recoit === "PRET" ? "Configuration complète ; aucun lead reçu sur 7 jours." : `Il manque : ${manques.join(", ")} — le webhook refuse ou ne peut pas être validé.`;
+  return { chaine: etatChaine({ recoit, recoitDetail, configuration, jeton, faits }), jeton, surSeptJours };
+}
+
 export type SanteMeta = {
+  /** Mission 13 : l'état en une phrase, le même partout. */
+  chaine: EtatChaineMeta;
   configuration: EtatConfiguration;
   notifications: NotificationsMeta;
   webhook: {
@@ -232,7 +283,8 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   ]);
 
   const [abonnement, jetonBrut] = interroger && configuration.lecture ? await Promise.all([abonnementPage(), lireEtatJeton()]) : [null, null];
-  const jeton = verdictJeton(jetonBrut);
+  const faits = await faitsJeton(new Date(maintenant));
+  const jeton = verdictJeton(jetonBrut, new Date(maintenant), faits);
   const notifications = await etatNotifications();
   const canaux = notifications.canaux;
 
@@ -260,7 +312,6 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
     alertes.push(`${notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : personne n'a été prévenu sur son téléphone.`);
   }
   if (abonnement && !abonnement.abonne) alertes.push("La page n'est pas abonnée au champ « leadgen » : Meta n'enverra rien.");
-  if (jeton.etat === "proche" || jeton.etat === "expire" || jeton.etat === "invalide") alertes.push(jeton.message);
   if (echecs.length > 0) alertes.push(`${echecs.length} lead(s) reçus mais pas encore dans le CRM.`);
 
   // Le voyant dit ce qui s'est réellement passé : des leads reçus ces 7 jours = le webhook reçoit, même si la
@@ -276,7 +327,12 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
           ? `Il manque : ${manques.join(", ")} — le webhook refuse ou ne peut pas être validé.`
           : `La page n'est pas abonnée au champ « leadgen »${abonnement?.erreur ? ` (${abonnement.erreur})` : ""} et aucun lead n'est entré sur 7 jours.`;
 
+  const chaine = etatChaine({ recoit, recoitDetail, configuration, jeton, faits });
+  // Mission 13 (B5) : une seule ligne sur le jeton, cohérente avec l'état de la chaîne.
+  if (chaine.jetonARenouveler) alertes.push(`Jeton Meta à renouveler : ${jeton.message}`);
+
   return {
+    chaine,
     configuration,
     notifications,
     webhook: {

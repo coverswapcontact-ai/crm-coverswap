@@ -10,6 +10,8 @@ import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
 import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type ActionLeads, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead, ListeLeads, SimulationLead, VueLeads } from "@/lib/prospects/leads";
+import type { SimulationsSiteRecentes } from "@/lib/simulations/site";
+import { SurLeSite } from "./SurLeSite";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { NotesAppel, finAppel, noterDebutAppel, type NotesAppelRef } from "@/components/pilotage/NotesAppel";
@@ -449,7 +451,7 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
 
 /* ── L'écran ───────────────────────────────────────────────────────── */
 
-export default function EcranLeads({ initial, leadInitial, appelsInitial }: { initial: ListeLeads; leadInitial: string | null; appelsInitial: boolean }) {
+export default function EcranLeads({ initial, siteInitial, leadInitial, appelsInitial }: { initial: ListeLeads; siteInitial: SimulationsSiteRecentes; leadInitial: string | null; appelsInitial: boolean }) {
   const routeur = useRouter();
   const [donnees, setDonnees] = useState(initial);
   const [vue, setVue] = useState<VueLeads>("ACTIFS");
@@ -680,6 +682,9 @@ export default function EcranLeads({ initial, leadInitial, appelsInitial }: { in
           <input value={recherche} onChange={(evenement) => setRecherche(evenement.target.value)} placeholder="Nom, téléphone, ville, campagne" aria-label="Rechercher un lead" className={cn(CLASSE_SAISIE, "h-9 rounded-full pl-8 text-[13px]")} />
         </label>
       </div>
+
+      {/* Mission 13 (B19) : ce qui s'est passé sur le site cette semaine, à côté des leads qui en viennent. */}
+      {modeAppels ? null : <SurLeSite resume={siteInitial} onOuvrirLead={(id) => setOuvert(id)} />}
 
       {/* Le mode appels couvre tout l'écran : la liste se retire (une seule note par contact à l'écran). */}
       {modeAppels ? null : donnees.lignes.length === 0 ? (

@@ -18,6 +18,8 @@ import {
   type EtapeDossier,
   type LigneDocument,
   type TypeDocument,
+  PROCHAINE_ACTION_APRES_DEVIS,
+  PROCHAINE_ACTION_PREPARER_DEVIS,
 } from "./constants";
 import { ErreurMetier } from "./erreurs";
 import { mentionsLegales, type CategorieDestinataire } from "./mentions";
@@ -318,8 +320,8 @@ async function emettre(emission: Emission) {
         // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste.
         if (emission.type === "DEVIS") {
           await tx.dossier.updateMany({
-            where: { id: emission.dossierId, prochaineAction: { startsWith: "Préparer le devis" } },
-            data: { prochaineAction: "Attendre l'accord du client sur le devis", prochaineActionDate: null },
+            where: { id: emission.dossierId, prochaineAction: { startsWith: PROCHAINE_ACTION_PREPARER_DEVIS } },
+            data: { prochaineAction: PROCHAINE_ACTION_APRES_DEVIS, prochaineActionDate: null },
           });
         }
         return { document, changements };

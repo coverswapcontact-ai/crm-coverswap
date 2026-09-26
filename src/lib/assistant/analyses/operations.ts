@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { lireDelaiRelance } from "@/lib/relances/service";
 import prisma from "@/lib/prisma";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
@@ -52,7 +53,7 @@ export async function analyseOperations(maintenant: Date = new Date()) {
     prisma.lead.findMany({ where: { archiveLe: null, rappelLe: { not: null } }, select: { id: true, prenom: true, nom: true, rappelLe: true }, orderBy: { rappelLe: "asc" } }),
     prisma.inscriptionSequence.findMany({ where: { statut: { in: ["EN_COURS", "EN_VALIDATION"] } }, select: { statut: true, prochainEnvoiLe: true, sequence: { select: { nom: true, mode: true } } } }),
     prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["DEVIS_ENVOYE", "RELANCE"] } }, select: { id: true, clientNom: true, etape: true, documents: { where: { type: "DEVIS", numero: { not: null }, archiveLe: null, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { dateEmission: "desc" }, take: 1, select: { numero: true, dateEmission: true, totalHt: true } } } }),
-    lireParametre("DELAI_RELANCE_DEVIS", maintenant),
+    lireDelaiRelance(maintenant),
     lireConsignes(),
     santeSysteme(maintenant),
   ]);
@@ -64,10 +65,10 @@ export async function analyseOperations(maintenant: Date = new Date()) {
   const datePassee = chantiers.filter((c) => c.dateChantier < debutJour && c.etape === "PLANIFIE");
   const enRetardActions = actions.filter((a) => a.prochaineActionDate && a.prochaineActionDate < debutJour);
   const rappelsEnRetard = rappels.filter((r) => r.rappelLe! < debutJour);
-  const delai = typeof delaiRelance === "number" ? delaiRelance : null;
+  const delai = delaiRelance;
   const devisDus = devisARelancer
     .map((d) => ({ dossierId: d.id, client: d.clientNom, etape: LIBELLES_ETAPE[d.etape as EtapeDossier], numero: d.documents[0]?.numero ?? null, montant: d.documents[0]?.totalHt ?? null, emisLe: d.documents[0]?.dateEmission ?? null, joursDepuis: d.documents[0]?.dateEmission ? Math.floor(joursEntre(d.documents[0].dateEmission, maintenant)) : null }))
-    .filter((d) => delai === null || d.joursDepuis === null || d.joursDepuis >= delai)
+    .filter((d) => d.joursDepuis === null || d.joursDepuis >= delai.jours)
     .sort((a, b) => (b.joursDepuis ?? 0) - (a.joursDepuis ?? 0));
   const chantiersSur30Jours = aVenir.filter((c) => c.dateChantier < dans30).length;
   return {
@@ -75,7 +76,7 @@ export async function analyseOperations(maintenant: Date = new Date()) {
     definitions: {
       capacite: capacite !== null ? `Capacité (${Number.isFinite(capaciteParametre) && capaciteParametre > 0 ? "Paramètres → Pilotage de l'activité" : "consignes"}) : ${capacite} chantiers par mois (≈ ${Math.round((capacite * 12) / 52)} par semaine).` : "Aucune capacité posée (Paramètres → Pilotage de l'activité, CAPACITE_CHANTIERS_MOIS).",
       charge: "Dossiers « planifié » ou « chantier » avec une date, par semaine (du lundi).",
-      relances: `Devis émis, sans accord, sur un dossier « devis envoyé » ou « relance », depuis au moins ${delai ?? "?"} jours (paramètre DELAI_RELANCE_DEVIS) ; plus les séquences mail en cours.`,
+      relances: `Devis émis, sans accord, sur un dossier « devis envoyé » ou « relance », depuis au moins ${delai.jours} jours (paramètre DELAI_RELANCE_DEVIS${delai.parametre ? "" : ", non renseigné : 5 jours par défaut"}) ; plus les séquences mail en cours.`,
       retards: "Actions planifiées dont la date est passée, rappels de leads passés, chantiers « planifié » dont la date est passée, dossiers signés sans date de chantier.",
     },
     capacite: { mensuelle: capacite, chantiersSur30Jours, resteSur30Jours: capacite !== null ? capacite - chantiersSur30Jours : null },

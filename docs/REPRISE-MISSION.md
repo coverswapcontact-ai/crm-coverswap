@@ -987,3 +987,48 @@ Puis retirer `WEBHOOK_SECRET_PRECEDENT` sur Railway.
   passée), routes nouvelles 401 sans session, `sante_systeme` : les 2 tâches Meta en échec ont moins de 7 jours
   (jeton de page expiré, code 190 : à renouveler par Lucas), 2 incohérences « prochaine action périmée » (Beites,
   Fares) relevées pour l'audit. Rapport de phase 1 dans la conversation ; puis phase 2 : `docs/AUDIT-2026-09.md`.
+
+# Mission 13 (26/09/2026) — Exécution de l'audit du 26 septembre
+
+Énoncé de Lucas (26/09/2026, collé dans la conversation) : « Mission 13 — Exécution de l'audit du 26 septembre ».
+Sept lots, dans l'ordre ; chaque lot est commité, testé et déployé avant le suivant, « pour que je puisse arrêter à
+tout moment avec un CRM cohérent ». Aucune question : les décisions sont dans l'énoncé (lot 7 : retirer /commercial,
+/prospects, /journal, /numeros, /sms, /messagerie, /mail/sequences, l'agent mail v1, `IA_CRM_ACTIVE`,
+`/api/cron/relance`, `prospects/demarchage`, `lib/agents` ; garder /synthese et /validation dans Plus). Contraintes :
+tests, lint, build, déploiement vérifié et section ici à chaque lot ; rien de supprimé dans les données ; sauvegarde
+avant chaque migration (automatique au démarrage) ; aucun mail ni SMS automatique ajouté. Le passage des dépôts en
+privé et la rotation du secret des webhooks restent à Lucas (rappel à chaque rapport).
+
+## Lot 1 — Bugs métier (26/09)
+- **B1 prochaine action après un devis déposé** : constantes `PROCHAINE_ACTION_PREPARER_DEVIS` /
+  `PROCHAINE_ACTION_APRES_DEVIS` (dossiers/constants.ts) ; `documents-existants.ts › rattacherDocumentExistant`
+  (donc `enregistrerDocumentExistant` et l'outil `deposer_document`) fait comme `emettre` ; le contrôle de cohérence
+  propose « Remplacer par « Attendre l'accord … » » quand le devis existe (sinon « Effacer ») et écrit un événement
+  COHERENCE_CORRIGEE ; migration `prochaine-action-devis-depose-13-1` (Beites, Fares en prod).
+- **B2 coordonnées de l'espace → fiche client** : `espace/coordonnees.ts › enregistrerCoordonnees` appelle
+  `completerCoordonnees` (clients/identification.ts) même quand le client ne change rien (le cas vécu : fiche « sans
+  e-mail, sans téléphone ») ; migration `coordonnees-dossier-vers-fiche-13-1` (dossiers en cours → fiche, rien retiré).
+- **B3 dossier ouvert depuis l'espace** : `dossiers/objet.ts` (une table d'objets par famille, partagée avec
+  `depuis-lead.ts`) ; `validations.ts › validerProjet` pose l'objet d'après la famille validée et la source
+  « ESPACE_CLIENT » quand ils manquent (`complementDuDossier`, pure) ; migration `objet-et-source-depuis-projet-valide-13-1`.
+- **B16 délai de relance** : `relances/service.ts › lireDelaiRelance` (paramètre, sinon 5 jours,
+  `DELAI_RELANCE_DEFAUT_JOURS`) ; plus d'alerte « non renseigné » (synthese/alertes.ts) ; `voir_relances`, manager
+  opérations et définition du paramètre disent le défaut ; migration `delai-relance-5-jours-13-1` pose 5 en prod.
+- **B4/B5 jeton Meta** : `conversions.ts` nomme un refus de jeton (`jetonRefuse`, `codeMeta`, message lisible) ;
+  la tâche META_CONVERSION est définitive dès la première tentative et `alerterJetonARenouveler` (taches.ts) prévient
+  UNE fois par jour toutes origines confondues ; `faitsJeton` lit la base (conversions refusées, leads illisibles sur
+  7 jours) et `verdictJeton(…, faits)` tranche sans appeler Meta (nouvel état `non_verifie`) ; `sante.ts › etatChaine`
+  (pure) + `SanteMeta.chaine` : UNE phrase, la même dans Publicité, `sante_systeme` (`resumeChaineMeta`, sans réseau)
+  et `voir_publicite` — en prod : « Leads reçus par le webhook ; lecture des formulaires et conversions impossibles
+  (jeton à renouveler). » ; `leads.ts` préfixe « Jeton Meta refusé (code N) » sur un lead illisible.
+- **B19 simulations du site** : `simulations/site.ts` (`simulationsSiteRecentes`, `imageSimulationSite`), route
+  `GET /api/simulations-site/[id]/image|avant` (derrière la session), rubrique repliée « Sur le site cette semaine »
+  dans Leads (`leads/_components/SurLeSite.tsx`) : nombres, puis une ligne par simulation (vignette → visionneuse,
+  projet, teintes, quand, lead → fiche ou « anonyme », campagne).
+- Migrations : `base/migrations/mission-13-lot-1.ts` (4), enregistrées après celles de la mission 12. Tests :
+  `base/migrations/mission-13.test.ts` (13), `conversions.test.ts` (+1, réponse exacte de Meta code 190/467) ;
+  `relances.test.ts`, `synthese.test.ts`, `mcp-v3.test.ts` adaptés au délai par défaut.
+- Pièges : l'onglet du navigateur d'essai sert l'ANCIENNE version d'un écran depuis le cache du service worker
+  (caches `application-v8`, `ecrans-v8`, `donnees-v8`) : désinscrire le SW et vider `caches` avant de juger un
+  écran. Sous charge (suite complète + eslint + serveur dev en même temps), `encaissements.test.ts` dépasse le délai
+  de 30 s de la transaction d'émission : rejouer le fichier seul (10/10).

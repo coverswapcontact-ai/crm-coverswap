@@ -217,7 +217,8 @@ describe("synthèse d'une période", () => {
   test("alertes : ce qui manque est dit, les plus graves d'abord", async () => {
     const liste = await alertes.calculerAlertes(le("2026-04-02"));
     const codes = liste.map((alerte) => alerte.code);
-    assert.ok(codes.includes("PARAMETRE_RELANCE"));
+    // Mission 13 (B16) : le délai de relance a une valeur par défaut, l'alerte « non renseigné » n'existe plus.
+    assert.ok(!codes.includes("PARAMETRE_RELANCE"));
     assert.ok(codes.includes("PARAMETRES_SEUILS"));
     const rangs = liste.map((alerte) => ({ URGENT: 0, ATTENTION: 1, INFO: 2 })[alerte.gravite]);
     assert.deepEqual(rangs, [...rangs].sort((a, b) => a - b));

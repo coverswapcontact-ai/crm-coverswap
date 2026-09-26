@@ -20,7 +20,14 @@ before(async () => {
       let corps = "";
       requete.on("data", (morceau) => (corps += morceau));
       requete.on("end", () => {
-        recues.push({ chemin: requete.url ?? "", corps: JSON.parse(corps) });
+        const lu = JSON.parse(corps) as Record<string, unknown>;
+        recues.push({ chemin: requete.url ?? "", corps: lu });
+        // Un jeton mort : la réponse exacte de Meta (HTTP 400, code 190, sous-code 467), telle que vue en production le 26/09/2026.
+        if (lu.access_token === "jeton-mort") {
+          reponse.writeHead(400, { "Content-Type": "application/json" });
+          reponse.end(JSON.stringify({ error: { message: "Error validating access token: The session is invalid because the user logged out.", type: "OAuthException", code: 190, error_subcode: 467, fbtrace_id: "essai" } }));
+          return;
+        }
         reponse.writeHead(200, { "Content-Type": "application/json" });
         reponse.end(JSON.stringify({ events_received: 1, messages: [], fbtrace_id: "essai" }));
       });
@@ -100,6 +107,19 @@ describe("conversions envoyées à Meta", () => {
     assert.equal(evenement.event_name, "Disqualified Lead");
     // Pas de montant sur un lead perdu.
     assert.equal((evenement.custom_data as Record<string, unknown>).value, undefined);
+  });
+
+  test("mission 13 : un jeton refusé (code 190) est dit en clair, nommé comme tel, et ne se réessaie pas", async () => {
+    recues = [];
+    process.env.META_CONVERSIONS_TOKEN = "jeton-mort";
+    try {
+      const resultat = await conversions.envoyerConversion({ etape: "SIGNE", leadgenId: "123456789012345", valeur: 500, evenementId: "dossier-mno-SIGNE" });
+      assert.deepEqual([resultat.ok, resultat.jetonRefuse, resultat.codeMeta], [false, true, 190]);
+      assert.match(resultat.detail ?? "", /^Jeton Meta refusé par Meta \(code 190\/467 : Error validating access token: The session is invalid because the user logged out\.\)\. À renouveler sur Railway/);
+      assert.equal(recues.length, 1, "un seul appel : pas de réessai");
+    } finally {
+      process.env.META_CONVERSIONS_TOKEN = "jeton-essai";
+    }
   });
 
   test("le code d'essai accompagne l'événement quand il est posé", async () => {

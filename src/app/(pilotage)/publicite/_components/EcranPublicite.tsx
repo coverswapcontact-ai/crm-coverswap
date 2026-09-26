@@ -161,7 +161,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
     }
   };
 
-  const { webhook, configuration, jeton, notifications, conversions, echecs } = sante;
+  const { chaine, webhook, configuration, jeton, notifications, conversions, echecs } = sante;
   // Mission 11 : le voyant dit ce qui s'est réellement passé (des leads entrent), pas seulement ce que répond la vérification de l'abonnement.
   const recoit = webhook.recoit === "OUI";
 
@@ -182,24 +182,20 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         }
       />
 
-      {sante.alertes.length > 0 ? (
-        <section className={cn(CARTE, "border-[#EF9F27]/40 bg-[#EF9F27]/5 p-4")}>
-          <h2 className="mb-2 flex items-center gap-2 text-[13px] font-medium text-[#F5B454]">
-            <AlertTriangle size={15} aria-hidden /> À régler avant de lancer la campagne
-          </h2>
-          <ul className="space-y-1 text-[13px] text-[#D1D5DB]">
+      {/* Mission 13 (B5) : UN état de la chaîne, le même que dans « sante_systeme » et « voir_publicite » ; les alertes en dessous. */}
+      <section className={cn(CARTE, "p-4", chaine.code === "COMPLETE" ? "border-[#1D9E75]/40 bg-[#112B22]" : chaine.code === "COUPEE" ? "border-[#F87171]/40 bg-[#F87171]/5" : "border-[#EF9F27]/40 bg-[#EF9F27]/5")}>
+        <p className={cn("flex items-start gap-2 text-[13.5px] leading-relaxed", chaine.code === "COMPLETE" ? "text-[#5DCAA5]" : chaine.code === "COUPEE" ? "text-[#F87171]" : "text-[#F5B454]")}>
+          {chaine.code === "COMPLETE" ? <CheckCircle2 size={15} aria-hidden className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} aria-hidden className="mt-0.5 shrink-0" />}
+          <span>{chaine.libelle}</span>
+        </p>
+        {sante.alertes.length > 0 ? (
+          <ul className="mt-2.5 space-y-1 border-t-[0.5px] border-[#2A2D34] pt-2.5 text-[13px] text-[#D1D5DB]">
             {sante.alertes.map((alerte) => (
               <li key={alerte}>• {alerte}</li>
             ))}
           </ul>
-        </section>
-      ) : (
-        <section className={cn(CARTE, "border-[#1D9E75]/40 bg-[#112B22] p-4")}>
-          <p className="flex items-center gap-2 text-[13px] text-[#5DCAA5]">
-            <CheckCircle2 size={15} aria-hidden /> Tout est en place : réception, lecture des leads, notification et renvoi des conversions.
-          </p>
-        </section>
-      )}
+        ) : null}
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className={cn(CARTE, "p-4")}>
@@ -223,14 +219,14 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         <section className={cn(CARTE, "p-4")}>
           <TitreSection>Accès et notifications</TitreSection>
           <Ligne libelle="Signature des appels" valeur={configuration.signature ? "vérifiée" : "META_APP_SECRET absente"} ton={configuration.signature ? "vert" : "rouge"} />
-          <Ligne libelle="Lecture des formulaires" valeur={configuration.lecture ? "jeton présent" : "jeton absent"} ton={configuration.lecture ? "vert" : "rouge"} />
-          <Ligne libelle="Jeton Meta" valeur={jeton.message} ton={jeton.etat === "sain" ? "vert" : jeton.etat === "proche" ? "ambre" : jeton.etat === "absent" ? "neutre" : "rouge"} />
+          <Ligne libelle="Lecture des formulaires" valeur={!configuration.lecture ? "jeton absent" : chaine.lectureImpossible ? "impossible (jeton refusé)" : "possible"} ton={configuration.lecture && !chaine.lectureImpossible ? "vert" : "rouge"} />
+          <Ligne libelle="Jeton Meta" valeur={jeton.message} ton={jeton.etat === "sain" ? "vert" : jeton.etat === "proche" ? "ambre" : jeton.etat === "absent" || jeton.etat === "non_verifie" ? "neutre" : "rouge"} />
           <Ligne
             libelle="Le téléphone sonne"
             valeur={notifications.push ? "oui" : "NON — seul le mail part"}
             ton={notifications.push ? (notifications.suffisant ? "vert" : "ambre") : "rouge"}
           />
-          <Ligne libelle="Conversions renvoyées (7 j)" valeur={configuration.conversions ? `${conversions.envoyees7j}${conversions.enEchec ? ` · ${conversions.enEchec} en échec` : ""}` : "non configuré"} ton={configuration.conversions ? "vert" : "ambre"} />
+          <Ligne libelle="Conversions renvoyées (7 j)" valeur={!configuration.conversions ? "non configuré" : chaine.conversionsImpossibles ? `impossibles (jeton) · ${conversions.enEchec} en échec` : `${conversions.envoyees7j}${conversions.enEchec ? ` · ${conversions.enEchec} en échec` : ""}`} ton={!configuration.conversions ? "ambre" : chaine.conversionsImpossibles ? "rouge" : "vert"} />
           <Ligne libelle="Version de l'API" valeur={configuration.version} />
         </section>
       </div>

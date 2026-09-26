@@ -22,6 +22,7 @@ export const outilVoirPublicite = definirOutil({
     const w = sante.webhook;
     const voyant = w.recoit === "OUI" ? `REÇOIT : ${w.surVingtQuatreHeures} lead(s) sur 24 h, ${w.surSeptJours} sur 7 jours, dernier ${w.dernierLeadLe ? `le ${format.jourCourt(new Date(w.dernierLeadLe))}` : "—"}${w.dernierLeadNom ? ` (${w.dernierLeadNom})` : ""}${w.abonnement && !w.abonnement.abonne ? " — la vérification de l'abonnement dit « non abonnée », mais les leads entrent : c'est la vérification qui se trompe, pas le webhook" : ""}.` : w.recoit === "PRET" ? `PRÊT MAIS SILENCIEUX : configuration complète, aucun lead reçu sur 7 jours (dernier ${w.dernierLeadLe ? `le ${format.jourCourt(new Date(w.dernierLeadLe))}` : "jamais"}). ${campagne.enCours ? "La campagne tourne : à surveiller." : "Aucune campagne en cours : normal."}` : `NE REÇOIT PAS : ${w.recoitDetail}`;
     const lignes = [
+      `Chaîne Meta — ${sante.chaine.libelle}`,
       `Réception des leads Meta — ${voyant}`,
       `Total reçus depuis le début : ${w.total}. ${sante.echecs.nombre ? `${sante.echecs.nombre} lead(s) reçus mais pas dans le CRM (à rejouer depuis Publicité).` : "Aucun lead en échec."}${sante.enAttente ? ` ${sante.enAttente} en cours de traitement.` : ""}`,
       `Notifications : ${sante.notifications.canaux.length ? sante.notifications.canaux.join(", ") : "aucun canal"}${sante.notifications.push ? " — le téléphone sonne" : " — AUCUNE notification poussée : le téléphone ne sonne pas"}${sante.notifications.leadsSansPush.length ? ` ; ${sante.notifications.leadsSansPush.length} lead(s) récents sans notification poussée` : ""}.`,
@@ -31,7 +32,7 @@ export const outilVoirPublicite = definirOutil({
       sante.resultats.parPublicite?.length ? `Par publicité (${sante.resultats.jours ?? e.jours ?? 21} jours) : ${sante.resultats.parPublicite.map((p) => `${p.nom} ${p.leads} lead(s)${p.devis !== undefined ? `, ${p.devis} devis` : ""}${p.signes !== undefined ? `, ${p.signes} signé(s)` : ""}`).join(" · ")}.` : "",
       sante.alertes.length ? `Alertes :\n${sante.alertes.map((a) => `- ${a}`).join("\n")}` : "Aucune alerte.",
     ].filter(Boolean);
-    return { texte: lignes.join("\n"), donnees: { voyant: w.recoit, detail: w.recoitDetail, webhook: w, echecs: sante.echecs, notifications: sante.notifications, jeton: sante.jeton, conversions: sante.conversions, resultats: sante.resultats, campagne, alertes: sante.alertes }, liens: [lien("Publicité", "/publicite"), lien("Paramètres", "/parametres")] };
+    return { texte: lignes.join("\n"), donnees: { chaine: sante.chaine, voyant: w.recoit, detail: w.recoitDetail, webhook: w, echecs: sante.echecs, notifications: sante.notifications, jeton: sante.jeton, conversions: sante.conversions, resultats: sante.resultats, campagne, alertes: sante.alertes }, liens: [lien("Publicité", "/publicite"), lien("Paramètres", "/parametres")] };
   },
 });
 

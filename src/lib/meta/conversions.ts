@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { CODES_DROITS } from "./graph";
 import { GRAPH, jetonConversions, pixelId } from "./config";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 
@@ -49,6 +50,9 @@ export type ResultatConversion = {
   inactif?: boolean;
   recus?: number;
   detail?: string;
+  /** Mission 13 (B4) : Meta a refusé le jeton (code 190, 10, 200…) — définitif, c'est à Lucas de le renouveler. */
+  jetonRefuse?: boolean;
+  codeMeta?: number | null;
   /** Ce qui a été envoyé, sans donnée personnelle en clair : gardé dans la tâche. */
   trace: { evenement: string; evenementId: string; rattachement: "lead_id" | "contact" | "aucun"; valeur?: number; test: boolean };
 };
@@ -137,9 +141,20 @@ export async function envoyerConversion(demande: DemandeConversion): Promise<Res
   });
   const texte = await rep.text();
   if (!rep.ok) {
-    const message = `Conversion refusée (HTTP ${rep.status}) : ${texte.slice(0, 300)}`;
-    // 4xx hors 429 : la charge est en cause, réessayer ne changera rien.
-    if (rep.status >= 400 && rep.status < 500 && rep.status !== 429) return { ok: false, detail: message, trace };
+    let err: { message?: string; code?: number; error_subcode?: number } = {};
+    try {
+      err = (JSON.parse(texte) as { error?: typeof err }).error ?? {};
+    } catch {
+      /* réponse non JSON */
+    }
+    const code = err.code ?? null;
+    // Mission 13 (B4) : un jeton refusé (code 190 « session invalide »…) est dit en clair, une fois, et ne se réessaie pas.
+    const jetonRefuse = CODES_DROITS.includes(code ?? -1) || rep.status === 401 || rep.status === 403;
+    const message = jetonRefuse
+      ? `Jeton Meta refusé par Meta (code ${code ?? rep.status}${err.error_subcode ? `/${err.error_subcode}` : ""} : ${err.message ?? texte.slice(0, 200)}). À renouveler sur Railway : META_CONVERSIONS_TOKEN s'il est distinct, sinon META_PAGE_ACCESS_TOKEN. Aucune conversion ne repartira avant.`
+      : `Conversion refusée par Meta (HTTP ${rep.status}${code !== null ? `, code ${code}` : ""}) : ${err.message ?? texte.slice(0, 300)}`;
+    // 4xx hors 429 : la charge ou le jeton sont en cause, réessayer ne changera rien.
+    if (rep.status >= 400 && rep.status < 500 && rep.status !== 429) return { ok: false, detail: message, trace, jetonRefuse, codeMeta: code };
     throw new Error(message);
   }
   let recus: number | undefined;

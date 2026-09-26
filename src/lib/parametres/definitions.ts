@@ -121,7 +121,7 @@ export const DEFINITIONS_PARAMETRES = {
   },
   DELAI_RELANCE_DEVIS: {
     libelle: "Délai avant de proposer une relance de devis",
-    aide: "Nombre de jours sans réponse après l'envoi d'un devis avant que le système propose une relance (jamais envoyée sans validation).",
+    aide: "Nombre de jours sans réponse après l'envoi d'un devis avant que le système propose une relance (jamais envoyée sans validation). Sans valeur : 5 jours.",
     nature: "jours",
     groupe: "COMMERCIAL",
   },

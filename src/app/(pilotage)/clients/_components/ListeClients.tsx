@@ -257,28 +257,27 @@ export default function ListeClients({
                   href={`/clients/${client.id}`}
                   className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-[#22262D]", TRANS)}
                 >
+                  {/* Mission 13 (lot 3) : rien de tronqué — nom · ville · dossiers, puis l'e-mail (ou le téléphone) en ligne entière. */}
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="truncate text-[14px] font-medium text-[#F2F3F5]">{client.nom}</span>
+                      <span className="text-[14px] font-medium break-words text-[#F2F3F5]">{client.nom}</span>
                       {client.categorie !== "PARTICULIER" ? <Pastille>{LIBELLES_CATEGORIE_CLIENT[client.categorie]}</Pastille> : null}
                       {client.archiveLe ? <Pastille ton="ambre">Archivée</Pastille> : null}
                     </p>
-                    <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
-                      {[client.ville, LIBELLES_SOURCE_CLIENT[client.source], client.telephone ? formaterTelephone(client.telephone) : client.email]
-                        .filter(Boolean)
-                        .join(" · ")}
+                    <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+                      {[client.ville, `${client.nbDossiers} dossier${client.nbDossiers > 1 ? "s" : ""}${client.nbDossiersEnCours > 0 ? ` (${client.nbDossiersEnCours} en cours)` : ""}`].filter(Boolean).join(" · ")}
                     </p>
-                    {client.recommandePar ? (
-                      <p className="mt-0.5 truncate text-[12px] text-[#9CA3AF]">Recommandé par {client.recommandePar.nom}</p>
+                    {client.email || client.telephone ? (
+                      <p className="mt-0.5 text-[12px] break-all text-[#8B919C]">{client.email ?? (client.telephone ? formaterTelephone(client.telephone) : null)}</p>
                     ) : null}
+                    {client.recommandePar ? <p className="mt-0.5 text-[12px] break-words text-[#9CA3AF]">Recommandé par {client.recommandePar.nom}</p> : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
                     <span className="text-[13px] font-medium text-[#F2F3F5] tabular-nums">
                       {client.montantSigne > 0 ? formatMontant(client.montantSigne) : "—"}
                     </span>
                     <span className="text-[12px] text-[#6B7280]">
-                      {client.nbDossiers} dossier{client.nbDossiers > 1 ? "s" : ""}
-                      {client.nbDossiersEnCours > 0 ? ` · ${client.nbDossiersEnCours} en cours` : ""} · {formatDateCourte(client.derniereActiviteLe)}
+                      {LIBELLES_SOURCE_CLIENT[client.source]} · {formatDateCourte(client.derniereActiviteLe)}
                     </span>
                   </div>
                 </Link>

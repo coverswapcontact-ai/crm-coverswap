@@ -16,6 +16,8 @@ export type TacheVue = {
   demandeePar: string;
   /** Mission 10 : le bilan lisible rendu par le traitement (`resultat.resume`), quand il y en a un. */
   resume: string | null;
+  /** Mission 13 : annulée par le ménage (« Abandonnée le … ») — la raison est en tête de `derniereErreur`. */
+  abandonnee: boolean;
 };
 
 export type PlanificationVue = {
@@ -63,7 +65,7 @@ export async function etatDesTaches(): Promise<EtatTaches> {
     prisma.tache.findMany({
       where: { statut: { in: ["TERMINEE", "ANNULEE"] } },
       orderBy: { updatedAt: "desc" },
-      take: 30,
+      take: 200,
     }),
     prisma.planification.findMany(),
   ]);
@@ -86,6 +88,7 @@ export async function etatDesTaches(): Promise<EtatTaches> {
         derniereErreur: tache.derniereErreur,
         demandeePar: tache.demandeePar,
         resume: resumeDe(tache.resultat),
+        abandonnee: tache.statut === "ANNULEE" && /^Abandonnée/.test(tache.derniereErreur ?? ""),
       })
     )
     .sort((a, b) => ordre[a.statut] - ordre[b.statut]);

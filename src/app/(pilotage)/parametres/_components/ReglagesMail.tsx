@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, Mail, RotateCcw, Save, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Champ, CLASSE_SAISIE, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
+import type { ReglagesMailVue } from "@/lib/mail/reglages-vue";
 import type { PropositionVue } from "@/lib/validation/types";
-import type { EvenementNotifie, ModeleNotification } from "@/lib/mail/notifications";
 import type { GuideStyle } from "@/lib/mail/redaction";
 import { cn } from "@/lib/utils";
 
@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
-type Modele = ModeleNotification & { evenement: EvenementNotifie; libelle: string };
-type Regle = { id: string; cible: string; action: string; motif: string | null; createdAt: string };
-type Reglages = { guide: GuideStyle; modeles: Modele[]; regles: Regle[]; proposees: PropositionVue[] };
+type Reglages = ReglagesMailVue;
+type Modele = Reglages["modeles"][number];
+type Regle = Reglages["regles"][number];
 
 const ACTIONS_REGLE: Record<string, { libelle: string; ton: "neutre" | "vert" | "bleu" }> = {
   RANGER: { libelle: "Toujours rangé", ton: "neutre" },
@@ -33,20 +33,9 @@ const ACTIONS_REGLE: Record<string, { libelle: string; ton: "neutre" | "vert" | 
 
 const SOURCES_GUIDE: Record<GuideStyle["source"], string> = { DEFAUT: "Guide par défaut", MAILS: "Tiré de vos mails envoyés", LUCAS: "Écrit par vous" };
 
-export default function ReglagesMail() {
-  const [reglages, setReglages] = useState<Reglages | null>(null);
-
-  useEffect(() => {
-    let actif = true;
-    appelApi<Reglages>("/api/mail/reglages")
-      .then((reponse) => actif && setReglages(reponse))
-      .catch((erreur) => toast.error("Réglages du mail indisponibles", { description: messageErreur(erreur) }));
-    return () => {
-      actif = false;
-    };
-  }, []);
-
-  if (!reglages) return null;
+export default function ReglagesMail({ initial }: { initial: Reglages }) {
+  // Mission 13 (lot 3) : les réglages arrivent du serveur avec la page.
+  const [reglages, setReglages] = useState<Reglages>(initial);
 
   return (
     <section className="mt-10" id="mail">

@@ -15,25 +15,20 @@ import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
-type Etat = { google: EtatConnexionGoogle; drive: EtatMiroir; agent: EtatAgentMail };
+export type EtatConnexions = { google: EtatConnexionGoogle; drive: EtatMiroir; agent: EtatAgentMail };
+type Etat = EtatConnexions;
 
 const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 /** Connexion Google (Drive, Gmail), miroir Drive et agent mail : état, connexion, actions à la demande. */
-export default function Connexions({ retour }: { retour: { google: string | null; compte: string | null; message: string | null } }) {
-  const [etat, setEtat] = useState<Etat | null>(null);
+export default function Connexions({ retour, initial }: { retour: { google: string | null; compte: string | null; message: string | null }; initial: EtatConnexions }) {
+  // Mission 13 (lot 3) : l'état arrive du serveur avec la page ; plus de « Chargement des connexions… ».
+  const [etat, setEtat] = useState<Etat>(initial);
   const [envoi, setEnvoi] = useState<string | null>(null);
 
   useEffect(() => {
     if (retour.google === "connecte") toast.success("Compte Google connecté", { description: retour.compte ?? undefined });
     if (retour.google === "erreur") toast.error("Connexion Google impossible", { description: retour.message ?? undefined });
-    let actif = true;
-    appelApi<Etat>("/api/connexions")
-      .then((reponse) => actif && setEtat(reponse))
-      .catch((erreur) => toast.error("État des connexions indisponible", { description: messageErreur(erreur) }));
-    return () => {
-      actif = false;
-    };
   }, [retour.google, retour.compte, retour.message]);
 
   async function recharger() {
@@ -53,7 +48,6 @@ export default function Connexions({ retour }: { retour: { google: string | null
     }
   }
 
-  if (!etat) return <p className="mt-6 text-[13px] text-[#6B7280]">Chargement des connexions…</p>;
   const { google, drive, agent } = etat;
 
   return (

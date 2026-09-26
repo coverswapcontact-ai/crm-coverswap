@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Bot, Copy, History, RotateCcw, Save, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
-import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import type { OutilVue } from "@/lib/assistant/catalogue";
 import type { TexteReglable, VersionVue } from "@/lib/assistant/consignes";
-import type { AccesVue } from "@/lib/oauth/serveur";
+import type { VueAccesAssistant, VueConsignesAssistant } from "@/lib/assistant/vues-parametres";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,8 +20,8 @@ import { cn } from "@/lib/utils";
  */
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
-type Acces = { adresseMcp: string; acces: AccesVue; outils: OutilVue[] };
-type Consignes = { consignes: TexteReglable; positionnement: TexteReglable; defauts: { consignes: string; positionnement: string }; versions: { consignes: VersionVue[]; positionnement: VersionVue[] } };
+type Acces = VueAccesAssistant;
+type Consignes = VueConsignesAssistant;
 
 const TON_NIVEAU: Record<OutilVue["niveau"], "neutre" | "vert" | "ambre"> = { LECTURE: "neutre", REVERSIBLE: "vert", SENSIBLE: "ambre" };
 const FAMILLES: { cle: OutilVue["famille"]; libelle: string }[] = [
@@ -33,24 +33,10 @@ const FAMILLES: { cle: OutilVue["famille"]; libelle: string }[] = [
 
 const quand = (iso: string | null) => (iso ? new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "jamais");
 
-export default function AssistantClaude() {
-  const [acces, setAcces] = useState<Acces | null>(null);
-  const [consignes, setConsignes] = useState<Consignes | null>(null);
-
-  useEffect(() => {
-    let actif = true;
-    appelApi<Acces>("/api/assistant/acces")
-      .then((r) => actif && setAcces(r))
-      .catch((erreur) => toast.error("Assistant : accès indisponibles", { description: messageErreur(erreur) }));
-    appelApi<Consignes>("/api/assistant/consignes")
-      .then((r) => actif && setConsignes(r))
-      .catch((erreur) => toast.error("Assistant : consignes indisponibles", { description: messageErreur(erreur) }));
-    return () => {
-      actif = false;
-    };
-  }, []);
-
-  if (!acces) return null;
+export default function AssistantClaude({ initialAcces, initialConsignes }: { initialAcces: Acces; initialConsignes: Consignes }) {
+  // Mission 13 (lot 3) : accès et consignes arrivent du serveur avec la page.
+  const [acces, setAcces] = useState<Acces>(initialAcces);
+  const [consignes, setConsignes] = useState<Consignes | null>(initialConsignes);
 
   return (
     <section className="mt-10" id="assistant">

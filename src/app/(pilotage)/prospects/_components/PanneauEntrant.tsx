@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ExternalLink, FileText, FolderPlus, Link2, Mail, Pencil, Phone, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCheck, ExternalLink, FileText, FolderPlus, Link2, Mail, Pencil, Phone, Undo2, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -26,6 +26,9 @@ import {
   type TypeEchange,
 } from "@/lib/prospects/constantes";
 import type { EntrantDetail } from "@/lib/prospects/types";
+import type { LigneLead } from "@/lib/prospects/leads";
+import type { ActionLeads, MotifArchivage } from "@/lib/prospects/menage-constantes";
+import { SignalDoublon } from "../../leads/_components/SignalDoublon";
 import { cn } from "@/lib/utils";
 import { PastilleIntention, PastillePriorite } from "./pastilles";
 import { LIBELLES_PRIORITE, PRIORITES, type Priorite } from "@/lib/prospects/priorite";
@@ -64,7 +67,7 @@ function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: string }) {
   );
 }
 
-export function PanneauEntrant({ id, onFermer, onModifie }: { id: string | null; onFermer: () => void; onModifie: () => void }) {
+export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onAction, onRecharger }: { id: string | null; onFermer: () => void; onModifie: () => void; ligne?: LigneLead | null; onAction?: (action: ActionLeads, motif?: MotifArchivage) => void; onRecharger?: () => Promise<void> }) {
   const [detail, setDetail] = useState<EntrantDetail | null>(null);
   const [echec, setEchec] = useState<{ id: string; message: string } | null>(null);
 
@@ -98,7 +101,7 @@ export function PanneauEntrant({ id, onFermer, onModifie }: { id: string | null;
         className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
-          <Contenu detail={affiche} onFermer={onFermer} onMisAJour={appliquer} />
+          <Contenu detail={affiche} ligne={ligne && ligne.id === affiche.id ? ligne : null} onAction={onAction} onRecharger={onRecharger} onFermer={onFermer} onMisAJour={appliquer} />
         ) : (
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
@@ -115,7 +118,7 @@ export function PanneauEntrant({ id, onFermer, onModifie }: { id: string | null;
   );
 }
 
-function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFermer: () => void; onMisAJour: (detail: EntrantDetail) => void }) {
+function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }: { detail: EntrantDetail; ligne: LigneLead | null; onAction?: (action: ActionLeads, motif?: MotifArchivage) => void; onRecharger?: () => Promise<void>; onFermer: () => void; onMisAJour: (detail: EntrantDetail) => void }) {
   const [envoi, setEnvoi] = useState<string | null>(null);
   const [typeEchange, setTypeEchange] = useState<TypeEchange>("APPEL");
   const [echange, setEchange] = useState("");
@@ -177,6 +180,7 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        {ligne?.doublon && onRecharger && !detail.archiveLe ? <SignalDoublon lead={ligne} onRecharger={onRecharger} /> : null}
         <div className="flex flex-wrap gap-2">
           {detail.dossier ? (
             <Link href={`/dossiers?dossier=${detail.dossier.id}`} className={cn(LIEN_ACTION, "border-[#1D9E75]/50 text-[#5DCAA5]")}>
@@ -191,6 +195,12 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
                 <Phone size={14} aria-hidden /> {detail.telephone}
               </a>
             </>
+          ) : null}
+          {/* Mission 13 (lot 3) : « traité / reprendre » vit ici (« Écrire un mail » existe déjà plus bas). */}
+          {ligne && onAction && !detail.archiveLe ? (
+            <button type="button" className={LIEN_ACTION} onClick={() => onAction(ligne.traiteLe ? "REPRENDRE" : "TRAITER")} title={ligne.traiteLe ? "Le remettre dans la file d'appels" : "Le sortir de la file d'appels, sans l'archiver"}>
+              {ligne.traiteLe ? <Undo2 size={14} aria-hidden /> : <CheckCheck size={14} aria-hidden />} {ligne.traiteLe ? "Reprendre" : "Traité"}
+            </button>
           ) : null}
           {detail.archiveLe ? null : (
             <button

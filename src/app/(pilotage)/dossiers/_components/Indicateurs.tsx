@@ -65,40 +65,28 @@ export function Lisere({ couleur }: { couleur: string | null }) {
   return <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: couleur }} />;
 }
 
-function distanceRestante(etape: EtapeDossier, numero: number, arrete: boolean, avantFacturation: number): string {
-  if (arrete) {
-    const quittee = LIBELLES_ETAPE[ETAPES_ACTIVES[numero - 1]];
-    return etape === "PERDU" ? `perdu à « ${quittee} »` : `en pause à « ${quittee} »`;
-  }
-  if (etape === "ENCAISSE") return "encaissé : objectif atteint";
-  if (avantFacturation === 0) return "facturé : reste l'encaissement";
-  return `${avantFacturation} étape${avantFacturation > 1 ? "s" : ""} avant facturation`;
-}
-
 /**
  * Progression vers l'encaissement : 9 segments aux couleurs des étapes, un
- * léger écart avant « Facturé » pour repérer la facturation, et « étape n sur 9 ».
+ * léger écart avant « Facturé » pour repérer la facturation.
  * Perdu ou en pause : segments gris, figés à l'étape quittée.
  */
 export function BarreProgression({
   etape,
   etapeAvantSortie,
-  texte = true,
   className,
 }: {
   etape: EtapeDossier;
   etapeAvantSortie: EtapeActive | null;
-  texte?: boolean;
   className?: string;
 }) {
   const progression = progressionDe(etape, etapeAvantSortie);
   if (!progression) return null;
-  const { numero, total, arrete, etapesAvantFacturation } = progression;
-  const distance = distanceRestante(etape, numero, arrete, etapesAvantFacturation);
+  const { numero, arrete } = progression;
 
+  // Mission 13 (lot 3) : la barre seule. « Étape N sur 9 » et « N étapes avant facturation » ne décidaient rien.
   return (
     <span className={cn("block", className)}>
-      <span role="img" aria-label={`Étape ${numero} sur ${total}, ${distance}`} className="flex items-center gap-[3px]">
+      <span role="img" aria-label={`Progression : ${LIBELLES_ETAPE[etape]}`} className="flex items-center gap-[3px]">
         {ETAPES_ACTIVES.map((etapeSegment, index) => (
           <span
             key={etapeSegment}
@@ -110,14 +98,6 @@ export function BarreProgression({
           />
         ))}
       </span>
-      {texte ? (
-        <span className="mt-1.5 flex items-baseline justify-between gap-2 text-[11px] leading-4">
-          <span className="shrink-0 font-medium text-[#D1D5DB] tabular-nums">
-            Étape {numero} sur {total}
-          </span>
-          <span className="truncate text-right text-[#6B7280]">{distance}</span>
-        </span>
-      ) : null}
     </span>
   );
 }

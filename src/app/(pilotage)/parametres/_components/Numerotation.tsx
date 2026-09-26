@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Hash, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Champ, Pastille, TitreSection } from "@/components/pilotage/ui";
 import type { CompteurVue } from "@/lib/dossiers/compteurs";
 
@@ -13,20 +13,11 @@ import type { CompteurVue } from "@/lib/dossiers/compteurs";
  * numéro plus grand fait avancer le compteur tout seul ; ici, Lucas peut le
  * faire repartir plus loin (jamais derrière un numéro qui existe).
  */
-export default function Numerotation() {
-  const [compteurs, setCompteurs] = useState<CompteurVue[] | null>(null);
+export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
+  // Mission 13 (lot 3) : les compteurs arrivent du serveur avec la page.
+  const [compteurs, setCompteurs] = useState<CompteurVue[]>(initial);
   const [edition, setEdition] = useState<{ serie: CompteurVue["serie"]; valeur: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
-
-  useEffect(() => {
-    let actif = true;
-    appelApi<{ compteurs: CompteurVue[] }>("/api/numeros/compteurs")
-      .then((reponse) => actif && setCompteurs(reponse.compteurs))
-      .catch((erreur) => toast.error("Numérotation illisible", { description: messageErreur(erreur) }));
-    return () => {
-      actif = false;
-    };
-  }, []);
 
   async function enregistrer() {
     if (!edition) return;
@@ -49,9 +40,7 @@ export default function Numerotation() {
       <p className="mb-3 text-[12.5px] text-[#8B919C]">
         Le prochain numéro de chaque série. Un devis fait ailleurs et enregistré avec un numéro plus grand fait avancer le compteur ; un numéro déjà inscrit au registre n&apos;est jamais réattribué.
       </p>
-      {compteurs === null ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
-      ) : (
+      {(
         <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           {compteurs.map((c) => (
             <li key={c.serie} className="border-t-[0.5px] border-[#2A2D34] px-3 py-3 first:border-t-0">

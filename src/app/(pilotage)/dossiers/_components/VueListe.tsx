@@ -5,10 +5,10 @@ import { formatDistanceStrict } from "date-fns";
 import { fr } from "date-fns/locale";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { formatMontant } from "@/lib/dossiers/montants";
-import { echeanceDe, mainDe, progressionDe } from "@/lib/dossiers/pilotage";
+import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { CarteDossier, PastilleACompleter, PastilleRetard, ProchaineActionResume } from "./CarteDossier";
+import { LigneDossierCompacte, PastilleACompleter, PastilleRetard, ProchaineActionResume } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { comparerParEcheance } from "./VueKanban";
 import { PastilleEtape, TRANS } from "./ui";
@@ -78,12 +78,12 @@ export function VueListe({
 
   return (
     <>
-      {/* Mobile : cartes empilées */}
-      <div className="flex flex-col gap-2 md:hidden">
+      {/* Mobile (mission 13, lot 3) : une ligne par dossier — nom · ville, étape · montant, un signal, chevron ; le détail au toucher. */}
+      <ul className="overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:hidden">
         {tries.map((dossier) => (
-          <CarteDossier key={dossier.id} dossier={dossier} maintenant={maintenant} onOuvrir={() => onOuvrir(dossier.id)} afficherEtape />
+          <LigneDossierCompacte key={dossier.id} dossier={dossier} maintenant={maintenant} onOuvrir={() => onOuvrir(dossier.id)} />
         ))}
-      </div>
+      </ul>
 
       {/* Bureau : tableau triable */}
       <div className="hidden overflow-x-auto rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:block">
@@ -102,7 +102,6 @@ export function VueListe({
           <tbody>
             {tries.map((dossier) => {
               const montant = montantAffiche(dossier);
-              const progression = progressionDe(dossier.etape, dossier.etapeAvantSortie);
               return (
                 <tr
                   key={dossier.id}
@@ -135,19 +134,7 @@ export function VueListe({
                   </td>
                   <td className="px-3 py-2">
                     <PastilleEtape etape={dossier.etape} libelle={LIBELLES_ETAPE[dossier.etape]} />
-                    {progression ? (
-                      <span className="mt-1.5 flex items-center gap-2">
-                        <BarreProgression
-                          etape={dossier.etape}
-                          etapeAvantSortie={dossier.etapeAvantSortie}
-                          texte={false}
-                          className="flex-1"
-                        />
-                        <span className="text-[11px] text-[#9CA3AF] tabular-nums">
-                          {progression.numero}/{progression.total}
-                        </span>
-                      </span>
-                    ) : null}
+                    <BarreProgression etape={dossier.etape} etapeAvantSortie={dossier.etapeAvantSortie} className="mt-1.5" />
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap text-[#F2F3F5] tabular-nums">
                     {montant !== null ? formatMontant(montant) : <span className="text-[#6B7280]">—</span>}

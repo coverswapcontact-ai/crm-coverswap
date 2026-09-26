@@ -1,13 +1,12 @@
 "use client";
 
-import { BadgeMain } from "@/app/(pilotage)/dossiers/_components/Indicateurs";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, GitMerge, Undo2, Phone, PhoneCall, PhoneForwarded, Plus, RefreshCw, Search, SkipForward, WifiOff, X, Mail } from "lucide-react";
+import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, Phone, PhoneForwarded, PhoneOff, Plus, RefreshCw, Search, SkipForward, Sparkles, WifiOff, X, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
+import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type ActionLeads, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead, ListeLeads, SimulationLead, VueLeads } from "@/lib/prospects/leads";
 import type { SimulationsSiteRecentes } from "@/lib/simulations/site";
@@ -19,7 +18,6 @@ import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/ferm
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, TRANS } from "@/components/pilotage/ui";
-import { FeuilleAppel } from "@/components/sms/FilConversation";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "../../prospects/_components/NouveauContact";
@@ -108,147 +106,48 @@ function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif: Motif
   );
 }
 
-/** Doublon probable : la même personne, revenue avec un autre numéro et un autre e-mail. Fusion en un clic, ou « ce n'est pas elle ». */
-function SignalDoublon({ lead, onRecharger }: { lead: LigneLead; onRecharger: () => Promise<void> }) {
-  const [occupe, setOccupe] = useState<"fusionner" | "ecarter" | null>(null);
-  if (!lead.doublon) return null;
-  async function agir(action: "fusionner" | "ecarter") {
-    setOccupe(action);
-    try {
-      const resultat = await envoyerJson<{ dossierId?: string | null; simulations?: number }>(`/api/leads/${lead.id}/doublon`, "POST", { action });
-      toast.success(action === "fusionner" ? `Fusionné avec ${lead.doublon!.nom}` : "Signalement écarté", {
-        description: action === "fusionner" ? `${resultat.simulations ? `${resultat.simulations} simulation(s) rangée(s) dans son dossier. ` : ""}Le contact en double est archivé ; rien n'est effacé.` : undefined,
-      });
-      await onRecharger();
-    } catch (erreur) {
-      toast.error(messageErreur(erreur));
-    } finally {
-      setOccupe(null);
-    }
-  }
-  return (
-    <div className="mt-3 rounded-[10px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/[0.08] p-2.5">
-      <p className="flex items-start gap-1.5 text-[12.5px] leading-snug text-[#FCD9A0]">
-        <GitMerge size={14} className="mt-px shrink-0" aria-hidden />
-        <span>
-          Doublon probable — {lead.doublon.motif}.
-          {lead.doublon.dossierId ? (
-            <Link href={`/dossiers?dossier=${lead.doublon.dossierId}`} className="ml-1 text-[#F5B454] underline underline-offset-2">
-              Voir son dossier
-            </Link>
-          ) : null}
-        </span>
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <Bouton taille="sm" variante="primaire" chargement={occupe === "fusionner"} disabled={occupe !== null} onClick={() => void agir("fusionner")}>
-          Fusionner avec {lead.doublon.nom}
-        </Bouton>
-        <Bouton taille="sm" variante="fantome" chargement={occupe === "ecarter"} disabled={occupe !== null} onClick={() => void agir("ecarter")}>
-          Ce n&apos;est pas la même personne
-        </Bouton>
-      </div>
-    </div>
-  );
-}
-
-function Ligne({ lead, maintenant, occupe, selectionne, onSelection, onAction, onOuvrir, onAppelNote, onDossier, onRecharger }: { lead: LigneLead; maintenant: number; occupe: boolean; selectionne: boolean; onSelection: () => void; onAction: (action: ActionLeads, motif?: MotifArchivage) => void; onOuvrir: () => void; onAppelNote: () => void; onDossier: () => void; onRecharger: () => Promise<void> }) {
-  const [motifOuvert, setMotifOuvert] = useState(false);
+/**
+ * Mission 13 (lot 3) — une ligne par lead : pastille de priorité, nom · ville ·
+ * source, le délai, UN bouton « Appeler » (44 px), chevron. Noter, écrire,
+ * ouvrir le dossier, archiver, fusionner un doublon : dans le panneau, au toucher.
+ */
+function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir }: { lead: LigneLead; maintenant: number; selection: boolean; selectionne: boolean; onSelection: () => void; onOuvrir: () => void }) {
   const archive = Boolean(lead.archiveLe);
+  const priorite = lead.priorite && lead.priorite in LIBELLES_PRIORITE ? (lead.priorite as Priorite) : null;
+  const couleur = priorite === "PRIORITAIRE" ? "bg-[#EF4444]" : priorite === "STANDARD" ? "bg-[#1D9E75]" : priorite === "A_ECARTER" ? "bg-[#EF9F27]" : priorite === "SECONDAIRE" ? "bg-[#6B7280]" : "bg-[#2A2D34]";
   return (
-    <li className={cn("rounded-[14px] border-[0.5px] bg-[#1C1F25] p-3.5", selectionne ? "border-[#5DCAA5]/70 bg-[#1D9E75]/[0.06]" : lead.aAppeler ? "border-[#1D9E75]/35" : "border-[#2A2D34]")}>
-      <div className="flex items-start gap-3">
-        <label className="-m-1.5 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] hover:bg-[#22262D]">
+    <li className={cn("flex items-center border-t-[0.5px] border-[#2A2D34] first:border-t-0", selectionne && "bg-[#1D9E75]/[0.06]")}>
+      {selection ? (
+        <label className="flex h-14 w-11 shrink-0 cursor-pointer items-center justify-center">
           <input type="checkbox" checked={selectionne} onChange={onSelection} aria-label={`Sélectionner ${lead.nom}`} className="h-[18px] w-[18px] accent-[#1D9E75]" />
         </label>
-        <button type="button" onClick={onOuvrir} className="min-w-0 flex-1 text-left">
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <PastillePriorite priorite={lead.priorite} motif={lead.prioriteMotif} />
-            {lead.simulation ? <PastilleSimulation nombre={lead.simulations.length} /> : null}
-            {lead.traiteLe && !archive ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#9CA3AF]">Traité</span> : null}
-            {lead.doublon && !archive ? <span className="rounded-full border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-2 py-0.5 text-[11px] text-[#F5B454]">Doublon ?</span> : null}
-            <span className="truncate text-[15px] font-medium text-[#F2F3F5]">{lead.nom}</span>
-            {lead.smsNonLus > 0 ? <span className="rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
-            {/* Son dossier : qui a la main, la même règle que le kanban et Espaces clients. */}
-            {lead.dossierMain && !archive ? <BadgeMain main={lead.dossierMain.main} motif={lead.dossierMain.motif} /> : null}
-          </p>
-          <p className="mt-1 text-[12.5px] leading-snug text-[#8B919C]">
-            {[lead.ville, lead.projet].filter(Boolean).join(" · ")}
-            {lead.ville || lead.projet ? " · " : ""}
-            <Provenance lead={lead} />
-          </p>
-          <p className="mt-1 text-[12.5px] leading-snug">
-            <span className="text-[#8B919C]">Arrivé {heureArrivee(lead.recuLe)}</span>
-            {lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <span className="text-[#4B5563]"> · </span> : null}
-            <Attente lead={lead} maintenant={maintenant} />
-          </p>
-          {archive ? (
-            <p className="mt-1 text-[12.5px] text-[#F5B454]">
-              Archivé le {new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
-              {lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}
-            </p>
-          ) : (
-            <Reponses lead={lead} />
-          )}
-        </button>
-        <ChevronRight size={16} aria-hidden className="mt-1 hidden shrink-0 text-[#4B5563] sm:block" />
-      </div>
-      {archive ? (
-        <div className="mt-3">
-          <button type="button" disabled={occupe} onClick={() => onAction("RESTAURER")} className={cn("flex h-11 items-center gap-2 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-4 text-[14px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 disabled:opacity-50 sm:h-9 sm:text-[13px]", TRANS)}>
-            <ArchiveRestore size={16} aria-hidden /> Restaurer
-          </button>
-        </div>
+      ) : null}
+      <button type="button" onClick={onOuvrir} className={cn("flex min-h-[60px] min-w-0 flex-1 items-center gap-3 py-2 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", selection ? "pl-1" : "pl-3.5", TRANS)}>
+        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", couleur)} title={priorite ? `${LIBELLES_PRIORITE[priorite]}${lead.prioriteMotif ? ` — ${lead.prioriteMotif}` : ""}` : undefined} />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-[14.5px] font-medium text-[#F2F3F5]">{lead.nom}</span>
+            {lead.simulation ? <Sparkles size={13} aria-label="Simulation faite sur le site" className="shrink-0 text-[#93C5FD]" /> : null}
+            {lead.smsNonLus > 0 ? <span className="shrink-0 rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
+            {lead.doublon && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-[#EF9F27]/40 px-1.5 text-[10.5px] leading-[17px] text-[#F5B454]">Doublon ?</span> : null}
+            {lead.traiteLe && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-[#2A2D34] px-1.5 text-[10.5px] leading-[17px] text-[#9CA3AF]">Traité</span> : null}
+          </span>
+          <span className="block truncate text-[12.5px] text-[#8B919C]">{[lead.ville, `${lead.libelleSource}${lead.campagne ? ` · ${lead.campagne}` : ""}`].filter(Boolean).join(" · ")}</span>
+          <span className="block truncate text-[12.5px] text-[#8B919C]">
+            {archive ? `Archivé le ${new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}` : lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <Attente lead={lead} maintenant={maintenant} /> : `Arrivé ${heureArrivee(lead.recuLe)}`}
+          </span>
+        </span>
+      </button>
+      {archive ? null : lead.telephoneLien ? (
+        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
+          <Phone size={18} aria-hidden />
+        </a>
       ) : (
-      <>
-      <SignalDoublon lead={lead} onRecharger={onRecharger} />
-      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_3rem_3rem_3rem] gap-2 sm:grid-cols-[minmax(0,15rem)_auto_auto_auto] sm:justify-start">
-        {lead.telephoneLien ? (
-          <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] px-3 text-[14.5px] font-semibold tabular-nums sm:h-10 sm:text-[13.5px]", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
-            <Phone size={16} aria-hidden /> {lead.telephone}
-          </a>
-        ) : (
-          <span className="flex h-12 items-center justify-center rounded-[12px] bg-[#22262D] px-3 text-[12.5px] text-[#6B7280] sm:h-10">{lead.telephone ? `${lead.telephone} (illisible)` : "Pas de numéro"}</span>
-        )}
-        <button type="button" onClick={onAppelNote} aria-label={`Noter l'appel avec ${lead.nom}`} title="Noter l'appel" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
-          <PhoneCall size={16} aria-hidden />
-        </button>
-        <Link href={`/mail?lead=${lead.id}`} aria-label={`Écrire un mail à ${lead.nom}`} title="Mail" className={cn("flex h-12 items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] px-3 text-[#D1D5DB] hover:border-[#3A3E47] sm:h-10", TRANS)}>
-          <Mail size={16} aria-hidden />
-        </Link>
-        {lead.dossierId ? (
-          <Link href={`/dossiers?dossier=${lead.dossierId}`} aria-label={`Voir le dossier de ${lead.nom}`} title="Voir le dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 sm:h-10", TRANS)}>
-            <FolderOpen size={16} aria-hidden /> <span className="hidden sm:inline">Voir le dossier</span>
-          </Link>
-        ) : (
-          <button type="button" disabled={occupe} onClick={onDossier} aria-label={`Ouvrir le dossier de ${lead.nom}`} title="Ouvrir un dossier" className={cn("flex h-12 items-center justify-center gap-1.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 disabled:opacity-50 sm:h-10", TRANS)}>
-            <FolderPlus size={16} aria-hidden /> <span className="hidden sm:inline">{occupe ? "Ouverture…" : "Ouvrir un dossier"}</span>
-          </button>
-        )}
-      </div>
-      <NotesAppel leadId={lead.id} notes={lead.notesAppel} />
-      <div className="mt-1 flex min-h-9 flex-wrap items-center justify-end gap-1.5">
-        {motifOuvert ? (
-          <ChoixMotif
-            occupe={occupe}
-            onAnnuler={() => setMotifOuvert(false)}
-            onChoisir={(motif) => {
-              setMotifOuvert(false);
-              onAction("ARCHIVER", motif);
-            }}
-          />
-        ) : (
-          <>
-            <button type="button" disabled={occupe} onClick={() => onAction(lead.traiteLe ? "REPRENDRE" : "TRAITER")} title={lead.traiteLe ? "Le remettre dans la file d'appels" : "Le sortir de la file d'appels, sans l'archiver"} className={cn("flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] disabled:opacity-50", TRANS)}>
-              {lead.traiteLe ? <Undo2 size={14} aria-hidden /> : <CheckCheck size={14} aria-hidden />} {lead.traiteLe ? "Reprendre" : "Traité"}
-            </button>
-            <button type="button" disabled={occupe} onClick={() => setMotifOuvert(true)} className={cn("flex h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F5B454] disabled:opacity-50", TRANS)}>
-              <Archive size={14} aria-hidden /> Archiver
-            </button>
-          </>
-        )}
-      </div>
-      </>
+        <span className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center text-[#4B5563]" title="Pas de numéro">
+          <PhoneOff size={16} aria-hidden />
+        </span>
       )}
+      <ChevronRight size={16} aria-hidden className="mr-3 shrink-0 text-[#4B5563]" />
     </li>
   );
 }
@@ -461,7 +360,8 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   const [horsLigne, setHorsLigne] = useState(false);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   const [ouvert, setOuvert] = useState<string | null>(leadInitial);
-  const [feuilleAppel, setFeuilleAppel] = useState<LigneLead | null>(null);
+  // Mission 13 (lot 3) : les cases à cocher n'apparaissent qu'en mode sélection (archiver ou traiter plusieurs leads).
+  const [modeSelection, setModeSelection] = useState(false);
   const [nouveau, setNouveau] = useState(false);
   const [modeAppels, setModeAppels] = useState(appelsInitial);
   const [passes, setPasses] = useState<Set<string>>(new Set());
@@ -677,6 +577,17 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
             ))}
           </select>
         ) : null}
+        <button
+          type="button"
+          aria-pressed={modeSelection}
+          onClick={() => {
+            setModeSelection((mode) => !mode);
+            setSelection(new Set());
+          }}
+          className={cn("h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", modeSelection ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+        >
+          {modeSelection ? "Fin de sélection" : "Sélectionner"}
+        </button>
         <label className="relative ml-auto w-full sm:w-64">
           <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
           <input value={recherche} onChange={(evenement) => setRecherche(evenement.target.value)} placeholder="Nom, téléphone, ville, campagne" aria-label="Rechercher un lead" className={cn(CLASSE_SAISIE, "h-9 rounded-full pl-8 text-[13px]")} />
@@ -692,17 +603,9 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
           <EtatVide titre={recherche || source ? "Aucun lead ne correspond" : vue === "ACTIFS" ? "Aucun lead en attente" : vue === "ARCHIVES" ? "Aucun lead archivé" : "Aucun lead sans suite"} texte={vue === "ACTIFS" && !recherche && !source ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici. Ceux qui ont un dossier sont dans Dossiers." : undefined} />
         </div>
       ) : (
-        <ul className="mt-4 space-y-2.5">
+        <ul className="mt-4 overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           {donnees.lignes.map((lead) => (
-            <Ligne
-              key={lead.id}
-              lead={lead}
-              maintenant={maintenant}
-              occupe={ouverture === lead.id || enCours.has(lead.id)}
-              selectionne={selection.has(lead.id)}
-              onSelection={() => basculer(lead.id)}
-              onAction={(action, motif) => void agir(action, [lead.id], motif, lead.archiveMotif ? (Object.entries(LIBELLES_MOTIF_ARCHIVAGE).find(([, libelle]) => libelle === lead.archiveMotif)?.[0] as MotifArchivage | undefined) : undefined)}
-              onOuvrir={() => setOuvert(lead.id)} onAppelNote={() => setFeuilleAppel(lead)} onDossier={() => void ouvrirDossier(lead)} onRecharger={rafraichir} />
+            <Ligne key={lead.id} lead={lead} maintenant={maintenant} selection={modeSelection} selectionne={selection.has(lead.id)} onSelection={() => basculer(lead.id)} onOuvrir={() => setOuvert(lead.id)} />
           ))}
         </ul>
       )}
@@ -748,20 +651,19 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
         </div>
       ) : null}
 
-      <PanneauEntrant id={ouvert} onFermer={() => setOuvert(null)} onModifie={() => void rafraichir()} />
+      <PanneauEntrant
+        id={ouvert}
+        ligne={donnees.lignes.find((l) => l.id === ouvert) ?? null}
+        onAction={(action, motif) => {
+          const cible = donnees.lignes.find((l) => l.id === ouvert);
+          if (cible) void agir(action, [cible.id], motif, cible.archiveMotif ? (Object.entries(LIBELLES_MOTIF_ARCHIVAGE).find(([, libelle]) => libelle === cible.archiveMotif)?.[0] as MotifArchivage | undefined) : undefined);
+        }}
+        onRecharger={rafraichir}
+        onFermer={() => setOuvert(null)}
+        onModifie={() => void rafraichir()}
+      />
 
       <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void rafraichir()} />
-
-      <FeuilleAppel
-        ouverte={feuilleAppel !== null}
-        leadId={feuilleAppel?.id ?? null}
-        dossierId={null}
-        onFermer={() => setFeuilleAppel(null)}
-        onFait={(resultat) => {
-          void rafraichir();
-          if (resultat.messagePropose && feuilleAppel) setLienMail({ dossierId: resultat.dossierId, leadId: resultat.dossierId ? null : feuilleAppel.id, code: resultat.messagePropose });
-        }}
-      />
 
       {nouveau ? (
         <NouveauContact

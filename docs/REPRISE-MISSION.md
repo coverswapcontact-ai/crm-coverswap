@@ -1065,3 +1065,36 @@ privé et la rotation du secret des webhooks restent à Lucas (rappel à chaque 
 - Reste à Lucas : passer les dépôts en privé, poser le nouveau secret (Railway, Vercel, n8n, Zapier — en en-tête),
   renouveler le jeton Meta ; la première sauvegarde Drive partira d'elle-même dans les 6 h suivant le déploiement si la
   connexion Google (Drive) est active.
+
+## Lot 3 — Listes compactes (26/09)
+Mesures à 390 × 660 sur la copie d'essai (100 dossiers « Kanban-Essai » de plus qu'en prod) : Leads 1 677 px
+(8 872 avant), Espaces 2 378 px (14 518 avant), Dossiers 6 855 px pour 109 dossiers en lignes de 58 px (32 461 avant),
+aucun débordement horizontal (390 px partout).
+- **Espaces** (`EcranEspaces.tsx › LigneClientEspace`, `groupesDe`) : groupes « À toi », « Chez le client », « Rien en
+  attente » (« Désactivés » à part) ; une ligne de 56 px — pastille rouge/ambre si signal, nom · ville, phrase d'état
+  (`attente.libelle`), chevron ; le toucher ouvre la carte complète d'avant (`CarteClient`, désormais un `article`).
+- **Dossiers** (`CarteDossier.tsx › LigneDossierCompacte`, `VueListe.tsx`) : sur téléphone la liste est une ligne par
+  dossier — nom · ville, étape · montant, UN signal (retard N j / aujourd'hui / à moi / à relancer / N à compléter),
+  chevron ; le kanban reste (ordinateur, ou choisi). `Indicateurs.tsx › BarreProgression` : la barre seule, plus de
+  « Étape N sur 9 » ni « N étapes avant facturation » (aussi retirés du tableau bureau).
+- **Leads** (`EcranLeads.tsx › Ligne`) : une ligne de 76 px — pastille de priorité (rouge/vert/gris/ambre), nom · ville ·
+  source, le délai (attente / rappel / dernier appel), un seul bouton « Appeler » rond de 44 px, chevron. Cases à cocher
+  seulement en mode « Sélectionner » (bouton à côté des filtres). Tout le reste dans `PanneauEntrant` : « Écrire un
+  mail », « Traité / Reprendre » (props `ligne`, `onAction`), doublon probable (`leads/_components/SignalDoublon.tsx`,
+  prop `onRecharger`), noter un échange, ouvrir le dossier, archiver. `FeuilleAppel` retirée de l'écran Leads.
+- **Clients** (`ListeClients.tsx`) : nom (pastilles) · ville · N dossiers (N en cours) ; l'e-mail (ou le téléphone) en
+  ligne entière (`break-all`) ; « Recommandé par » entier ; source et date à droite. Plus aucun `truncate`.
+- **Tâches de fond** (`taches/page.tsx`, `EtatTaches.tsx`, `taches/lecture.ts`) : l'en-tête en haut ; « À voir »
+  (échec, en cours, attente) d'abord, 50 par page ; « Travaux périodiques » et « Terminées et annulées » repliés
+  (ouvert d'office si un travail est en échec), 50 par page, 200 finies chargées ; `TacheVue.abandonnee` → pastille
+  « Abandonnée », raison en première ligne. Cohérence, audit des connexions et sessions à la suite (enfants).
+- **Paramètres** (`parametres/page.tsx`, `OngletsParametres.tsx`, `EcranParametres.tsx` → `GroupesParametres`) :
+  cinq onglets — Activité (pilotage, suivi commercial, campagne, simulateur, RGPD, connexions, marque), Facturation
+  (encaissements, factures, numérotation, puis « Avancé : seuils fiscaux et cotisations » replié), Mail, SMS, Assistant
+  (accès, consignes, réglages IA). Tout est lu par le serveur avec la page (`mail/reglages-vue.ts › reglagesMail`,
+  `assistant/vues-parametres.ts › vueAcces / vueConsignes`, `lireCompteurs`, connexions, modèles SMS) : plus de
+  « Chargement… ». Les ancres `#mail`, `#sms`, `#assistant` ouvrent l'onglet ; l'onglet choisi est mémorisé
+  (`localStorage parametres-onglet`) ; le compteur « à renseigner » ne compte plus les seuils avancés ni l'IA.
+- Pièges : un onglet lu au chargement passe par `useSyncExternalStore` (instantané serveur = « activite ») pour ne pas
+  casser l'hydratation ; `.next/dev/types` (générés par `next dev`) sont inclus par tsconfig et gardent les routes
+  retirées : les effacer avant un `next build` qui suit un retrait de route.

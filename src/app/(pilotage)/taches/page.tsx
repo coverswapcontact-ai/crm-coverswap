@@ -10,21 +10,21 @@ import SessionsAssistant from "./_components/SessionsAssistant";
 
 export const metadata: Metadata = {
   title: "Tâches de fond — CoverSwap",
-  description: "Connexions du CRM vérifiées sur les vraies données ; file des envois, du miroir Drive et de la relève des mails ; sessions de l'assistant Claude.",
+  description: "File des envois, du miroir Drive, des sauvegardes et de la relève des mails ; contrôle de cohérence ; connexions vérifiées ; sessions de l'assistant Claude.",
 };
 
 export const dynamic = "force-dynamic";
 
+// Mission 13 (lot 3) : l'en-tête en haut, les tâches à voir d'abord ; cohérence, audit et sessions à la suite.
 export default async function TachesPage() {
   const [audit, taches, coherence, sessions] = await Promise.all([auditerConnexions(), etatDesTaches(), controlerCoherence(), sessionsRecentes(10)]);
   return (
-    <>
-      <div className="mx-auto w-full max-w-5xl px-5 pt-6 md:px-8 md:pt-8">
+    <EtatTaches initial={taches}>
+      <div className="mt-8">
         <ControleCoherence initial={coherence} />
         <AuditConnexions initial={audit} />
         <SessionsAssistant initial={sessions} />
       </div>
-      <EtatTaches initial={taches} />
-    </>
+    </EtatTaches>
   );
 }

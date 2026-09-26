@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MessageSquare, RotateCcw, Save, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, CLASSE_SAISIE, Pastille, TitreSection } from "@/components/pilotage/ui";
 import type { EtatFournisseur } from "@/lib/sms/fournisseurs";
 import type { ModeleVue } from "@/lib/sms/modeles";
@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
-type Reponse = { modeles: ModeleVue[]; fournisseur: EtatFournisseur };
+export type ReponseSms = { modeles: ModeleVue[]; fournisseur: EtatFournisseur };
+type Reponse = ReponseSms;
 
 const NOMS_FOURNISSEUR: Record<string, string> = { ovh: "OVHcloud — numéro 09 (envoi et réponses)", brevo: "Brevo (envoi seul)", simulateur: "Simulateur (aucun SMS réel)" };
 
@@ -22,20 +23,9 @@ const NOMS_FOURNISSEUR: Record<string, string> = { ovh: "OVHcloud — numéro 09
  * il est proposé, Lucas le relit, le corrige, l'envoie. Le corriger ici change
  * ce qui sera proposé la prochaine fois.
  */
-export default function MessagerieSms() {
-  const [donnees, setDonnees] = useState<Reponse | null>(null);
-
-  useEffect(() => {
-    let actif = true;
-    appelApi<Reponse>("/api/sms/modeles")
-      .then((reponse) => actif && setDonnees(reponse))
-      .catch((erreur) => toast.error("Messagerie SMS indisponible", { description: messageErreur(erreur) }));
-    return () => {
-      actif = false;
-    };
-  }, []);
-
-  if (!donnees) return null;
+export default function MessagerieSms({ initial }: { initial: Reponse }) {
+  // Mission 13 (lot 3) : les modèles arrivent du serveur avec la page.
+  const [donnees, setDonnees] = useState<Reponse>(initial);
   const { fournisseur, modeles } = donnees;
 
   const remplacer = (modele: ModeleVue) => setDonnees((actuel) => (actuel ? { ...actuel, modeles: actuel.modeles.map((m) => (m.id === modele.id ? modele : m)) } : actuel));

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
@@ -54,6 +54,15 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
   const [tri, setTri] = useState<Tri>("MAIN");
   const [charge, setCharge] = useState(false);
   const [maintenant, setMaintenant] = useState(() => Date.now());
+  // Mission 13 (lot 3) : une ligne par client ; la carte complète s'ouvre au toucher.
+  const [ouverts, setOuverts] = useState<Set<string>>(new Set());
+  const basculer = (id: string) =>
+    setOuverts((actuels) => {
+      const suivants = new Set(actuels);
+      if (suivants.has(id)) suivants.delete(id);
+      else suivants.add(id);
+      return suivants;
+    });
 
   const rafraichir = useCallback(async () => {
     setCharge(true);
@@ -146,13 +155,66 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
           <EtatVide icone={<Smartphone size={20} aria-hidden />} titre={clients.length === 0 ? "Aucun espace client pour l'instant" : "Rien ici"} texte={clients.length === 0 ? "Un espace s'ouvre depuis un lead ou un dossier : « Ouvrir l'espace client », puis le lien part par mail. Un client n'en a qu'un, pour tous ses projets." : "Aucun client ne correspond à ce filtre."} />
         </div>
       ) : (
-        <ul className="mt-5 space-y-3">
-          {visibles.map((client) => (
-            <CarteClient key={client.permanentId} client={client} maintenant={maintenant} onRecharger={rafraichir} />
+        <div className="mt-5 space-y-5">
+          {groupesDe(visibles, filtre).map((groupe) => (
+            <section key={groupe.titre}>
+              <h2 className="mb-1.5 px-1 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+                {groupe.titre} <span className="tabular-nums">· {groupe.clients.length}</span>
+              </h2>
+              <ul className="overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+                {groupe.clients.map((client) => (
+                  <LigneClientEspace key={client.permanentId} client={client} maintenant={maintenant} ouvert={ouverts.has(client.permanentId)} onBasculer={() => basculer(client.permanentId)} onRecharger={rafraichir} />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </div>
+  );
+}
+
+const GROUPES: { qui: ClientEspace["attente"]["qui"]; titre: string }[] = [
+  { qui: "MOI", titre: "À toi" },
+  { qui: "CLIENT", titre: "Chez le client" },
+  { qui: "PERSONNE", titre: "Rien en attente" },
+];
+
+/** « À toi » d'abord, puis « Chez le client » ; les désactivés à part. */
+function groupesDe(clients: ClientEspace[], filtre: Filtre): { titre: string; clients: ClientEspace[] }[] {
+  if (filtre === "DESACTIVES") return [{ titre: "Désactivés", clients }];
+  return GROUPES.map((g) => ({ titre: g.titre, clients: clients.filter((c) => c.attente.qui === g.qui) })).filter((g) => g.clients.length > 0);
+}
+
+/**
+ * Mission 13 (lot 3) — une ligne : nom · ville, la phrase d'état (qui attend
+ * quoi), une pastille rouge ou ambre si un signal, un chevron. Le toucher ouvre
+ * la carte complète (lien, visites, projets, gestes), telle qu'elle était.
+ */
+function LigneClientEspace({ client, maintenant, ouvert, onBasculer, onRecharger }: { client: ClientEspace; maintenant: number; ouvert: boolean; onBasculer: () => void; onRecharger: () => Promise<void> }) {
+  const signal = client.signaux.find((s) => s.ton === "rouge") ?? client.signaux.find((s) => s.ton === "ambre") ?? null;
+  return (
+    <li className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+      <button type="button" aria-expanded={ouvert} onClick={onBasculer} className={cn("flex min-h-[56px] w-full items-center gap-3 px-3.5 py-2 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", TRANS)}>
+        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", signal?.ton === "rouge" ? "bg-[#EF4444]" : signal?.ton === "ambre" ? "bg-[#EF9F27]" : "bg-transparent")} title={signal?.libelle} aria-hidden={!signal} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-medium text-[#F2F3F5]">
+            {client.clientNom}
+            {client.ville ? <span className="font-normal text-[#9CA3AF]"> · {client.ville}</span> : null}
+          </span>
+          <span className={cn("block truncate text-[12.5px]", client.attente.qui === "MOI" ? "text-[#5DCAA5]" : "text-[#9CA3AF]")}>
+            {client.attente.libelle}
+            {signal ? <span className="text-[#F5B454]"> · {signal.libelle}</span> : null}
+          </span>
+        </span>
+        <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
+      </button>
+      {ouvert ? (
+        <div className="border-t-[0.5px] border-[#2A2D34] bg-[#16181D] p-2">
+          <CarteClient client={client} maintenant={maintenant} onRecharger={onRecharger} />
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -189,7 +251,7 @@ function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace
   const lienPermanent = !client.permanentId.startsWith("projet:");
 
   return (
-    <li className={cn("rounded-[14px] border-[0.5px] bg-[#1C1F25] p-3.5 sm:p-4", client.attente.qui === "MOI" ? "border-[#1D9E75]/40" : "border-[#2A2D34]", client.revoque && "opacity-70")}>
+    <article className={cn("rounded-[12px] border-[0.5px] bg-[#1C1F25] p-3.5 sm:p-4", client.attente.qui === "MOI" ? "border-[#1D9E75]/40" : "border-[#2A2D34]", client.revoque && "opacity-70")}>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
         <div className="min-w-0">
           <p className="truncate text-[15px] font-medium text-[#F2F3F5]">
@@ -246,7 +308,7 @@ function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace
           <CarteProjet key={projet.espaceId} ligne={projet} plusieurs={client.projets.length > 1} onRecharger={onRecharger} />
         ))}
       </ul>
-    </li>
+    </article>
   );
 }
 

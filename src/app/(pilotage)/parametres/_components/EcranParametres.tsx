@@ -5,15 +5,9 @@ import { History, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { ChampsParametre, saisieVide, versCorps } from "@/components/pilotage/SaisieParametres";
-import { Bouton, EnTetePage, Modale, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, Modale, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
 import { formatDateCourte } from "@/lib/dossiers/dates";
-import {
-  GROUPES_PARAMETRES,
-  formaterValeurParametre,
-  type CleParametre,
-  type GroupeParametre,
-  type ParametreVue,
-} from "@/lib/parametres/definitions";
+import { GROUPES_PARAMETRES, formaterValeurParametre, type CleParametre, type GroupeParametre, type ParametreVue } from "@/lib/parametres/definitions";
 import { cn } from "@/lib/utils";
 
 function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; onModifier: () => void }) {
@@ -38,9 +32,7 @@ function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; on
           )}
           {futures.length > 0 ? (
             <p className="mt-0.5 text-[12px] text-[#93C5FD]">
-              {futures.length === 1
-                ? `Nouvelle valeur au ${formatDateCourte(futures[0].valableDu)} : ${formaterValeurParametre(parametre.cle, futures[0].valeur)}`
-                : `${futures.length} valeurs à venir`}
+              {futures.length === 1 ? `Nouvelle valeur au ${formatDateCourte(futures[0].valableDu)} : ${formaterValeurParametre(parametre.cle, futures[0].valeur)}` : `${futures.length} valeurs à venir`}
             </p>
           ) : null}
         </div>
@@ -69,13 +61,15 @@ function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; on
   );
 }
 
-export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[] }) {
-  const [parametres, setParametres] = useState(initiaux);
+/**
+ * Mission 13 (lot 3) — les groupes de paramètres d'un onglet (l'en-tête et les
+ * onglets sont dans OngletsParametres). La liste complète des paramètres est
+ * tenue par le parent : une valeur enregistrée ici est vue par tous les onglets.
+ */
+export default function GroupesParametres({ parametres, groupes, onMisAJour }: { parametres: ParametreVue[]; groupes: readonly GroupeParametre[]; onMisAJour: (parametres: ParametreVue[]) => void }) {
   const [enModification, setEnModification] = useState<CleParametre | null>(null);
   const [saisie, setSaisie] = useState(saisieVide());
   const [envoi, setEnvoi] = useState(false);
-  // Les réglages de l'IA sont facultatifs : sans eux, elle reste simplement désactivée.
-  const aRenseigner = parametres.filter((parametre) => !parametre.courante && parametre.groupe !== "AGENT").length;
 
   function ouvrir(cle: CleParametre) {
     setSaisie({ ...saisieVide(), valableDu: new Date().toISOString().slice(0, 10) });
@@ -89,7 +83,7 @@ export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[]
       const { parametres: misAJour } = await envoyerJson<{ parametres: ParametreVue[] }>("/api/parametres", "POST", {
         saisies: [versCorps(enModification, saisie)],
       });
-      setParametres(misAJour);
+      onMisAJour(misAJour);
       setEnModification(null);
       toast.success("Valeur enregistrée", { description: "L'ancienne valeur reste appliquée à sa période." });
     } catch (erreur) {
@@ -100,24 +94,8 @@ export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[]
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-8">
-      <EnTetePage
-        titre="Paramètres"
-        sousTitre={
-          aRenseigner > 0 ? (
-            <span className="text-[#F5B454]">
-              {aRenseigner} à renseigner : ils seront demandés à leur première utilisation.
-            </span>
-          ) : (
-            "Seuils, taux et règles datés. Une nouvelle valeur ne réécrit jamais le passé."
-          )
-        }
-      />
-      <p className="mt-3 text-[12.5px] leading-relaxed text-[#6B7280]">
-        Aucune valeur n&apos;est fournie par défaut : chacune se lit à la source indiquée et se fait confirmer par le
-        comptable au besoin.
-      </p>
-      {(Object.keys(GROUPES_PARAMETRES) as GroupeParametre[]).map((groupe) => {
+    <>
+      {groupes.map((groupe) => {
         const liste = parametres.filter((parametre) => parametre.groupe === groupe);
         if (liste.length === 0) return null;
         return (
@@ -155,6 +133,6 @@ export default function EcranParametres({ initiaux }: { initiaux: ParametreVue[]
       >
         {enModification ? <ChampsParametre cle={enModification} saisie={saisie} onChange={setSaisie} /> : null}
       </Modale>
-    </div>
+    </>
   );
 }

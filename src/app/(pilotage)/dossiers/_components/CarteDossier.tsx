@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CalendarClock } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronRight } from "lucide-react";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
@@ -193,5 +193,48 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
         {quand ? <span className="shrink-0 font-medium tabular-nums">· {quand}</span> : null}
       </span>
     </button>
+  );
+}
+
+/**
+ * Mission 13 (lot 3) — la ligne compacte de la liste sur téléphone : nom · ville,
+ * étape · montant, UN signal (retard, à compléter, à moi), chevron. Tout le
+ * reste est dans le panneau, au toucher.
+ */
+export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossier: DossierResume; maintenant: Date; onOuvrir: () => void }) {
+  const montant = montantAffiche(dossier);
+  const echeance = echeanceDe(dossier, maintenant);
+  const main = mainDe(dossier, maintenant);
+  const signal =
+    echeance === "retard"
+      ? { texte: dossier.prochaineActionDate ? `retard ${joursDeRetard(dossier.prochaineActionDate, maintenant)} j` : "en retard", ton: "text-[#F87171]" }
+      : echeance === "aujourdhui"
+        ? { texte: "aujourd'hui", ton: "text-[#F5B454]" }
+        : main === "MOI" || main === "A_RELANCER"
+          ? { texte: main === "A_RELANCER" ? "à relancer" : "à moi", ton: "text-[#5DCAA5]" }
+          : dossier.aCompleter > 0
+            ? { texte: `${dossier.aCompleter} à compléter`, ton: "text-[#F5B454]" }
+            : null;
+  return (
+    <li className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+      <button type="button" onClick={onOuvrir} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", TRANS)}>
+        <Lisere couleur={couleurLisere(dossier, maintenant)} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-medium text-[#F2F3F5]">
+            {dossier.clientNom}
+            {dossier.clientVille ? <span className="font-normal text-[#9CA3AF]"> · {dossier.clientVille}</span> : null}
+          </span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[#9CA3AF]">
+            <span className="truncate">
+              {LIBELLES_ETAPE[dossier.etape]}
+              {montant !== null ? <span className="text-[#D1D5DB] tabular-nums"> · {formatMontant(montant)}</span> : null}
+            </span>
+            {signal ? <span className={cn("shrink-0 font-medium", signal.ton)}>· {signal.texte}</span> : null}
+          </span>
+        </span>
+        {echeance === "retard" ? <PastilleRetard /> : null}
+        <ChevronRight size={16} aria-hidden className="shrink-0 text-[#4B5563]" />
+      </button>
+    </li>
   );
 }

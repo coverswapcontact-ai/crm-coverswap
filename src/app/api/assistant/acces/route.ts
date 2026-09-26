@@ -1,19 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
-import { catalogueVue } from "@/lib/assistant/catalogue";
+import { vueAcces } from "@/lib/assistant/vues-parametres";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
-import { adresseMcp, listerAcces, revoquerClient, revoquerJeton, revoquerTout } from "@/lib/oauth/serveur";
+import { revoquerClient, revoquerJeton, revoquerTout } from "@/lib/oauth/serveur";
 
 export const dynamic = "force-dynamic";
-
-async function vue() {
-  return { adresseMcp: adresseMcp(), acces: await listerAcces(), outils: catalogueVue() };
-}
 
 /** GET : adresse du serveur, applications connectées et leurs jetons (jamais leur valeur), catalogue des outils. */
 export async function GET() {
   try {
-    return NextResponse.json(await vue());
+    return NextResponse.json(await vueAcces());
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/assistant/acces");
   }
@@ -29,7 +25,7 @@ export async function DELETE(requete: NextRequest) {
     if ("clientId" in entree) await revoquerClient(entree.clientId, motif);
     else if ("jetonId" in entree) await revoquerJeton(entree.jetonId, motif);
     else await revoquerTout(motif);
-    return NextResponse.json(await vue());
+    return NextResponse.json(await vueAcces());
   } catch (erreur) {
     return reponseErreur(erreur, "DELETE /api/assistant/acces");
   }

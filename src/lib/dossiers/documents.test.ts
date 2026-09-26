@@ -69,7 +69,8 @@ after(async () => {
 describe("registre des numéros", () => {
   test("la numérotation manuelle 2026 est inscrite : 030 et 032 factures, 031 et 033 à 037 devis", async () => {
     const manuels = await prisma.numeroDocument.findMany({ where: { famille: "", annee: 2026 }, orderBy: { rang: "asc" } });
-    assert.equal(manuels.length, 37);
+    // 37 numéros de la reprise manuelle + 2026-040, 041, 042 (devis faits hors CRM, inscrits par la migration du 26/09/2026).
+    assert.equal(manuels.length, 40);
     assert.ok(manuels.every((ligne) => ligne.origine === "MANUEL"));
     const nature = (rang: number) => manuels.find((ligne) => ligne.rang === rang)?.type;
     assert.equal(nature(30), "FACTURE");
@@ -82,10 +83,11 @@ describe("registre des numéros", () => {
     const attribuer = (type: "DEVIS" | "FACTURE" | "AVOIR", date: string) =>
       prisma.$transaction((tx) => numerotation.attribuerNumero(tx, type, jour(date)));
 
-    assert.equal((await attribuer("DEVIS", "2026-01-15")).numero, "2026-038");
+    // Mission 12 : le compteur des devis 2026 repart à 2026-043 (040 à 042 faits hors CRM).
+    assert.equal((await attribuer("DEVIS", "2026-01-15")).numero, "2026-043");
     await registre.declarerNumero({ numero: "2026-039", type: "DEVIS", emisLe: "2026-01-16", destinataire: "Devis papier" });
-    assert.equal(await numerotation.prochainNumero("DEVIS", jour("2026-01-17")), "2026-040");
-    assert.equal((await attribuer("DEVIS", "2026-01-17")).numero, "2026-040");
+    assert.equal(await numerotation.prochainNumero("DEVIS", jour("2026-01-17")), "2026-044");
+    assert.equal((await attribuer("DEVIS", "2026-01-17")).numero, "2026-044");
 
     await assert.rejects(
       prisma.$transaction(async (tx) => {
@@ -94,8 +96,8 @@ describe("registre des numéros", () => {
       }),
       /génération interrompue/
     );
-    assert.equal(await prisma.numeroDocument.count({ where: { cle: ":2026:41" } }), 0);
-    assert.equal((await attribuer("DEVIS", "2026-01-18")).numero, "2026-041");
+    assert.equal(await prisma.numeroDocument.count({ where: { cle: ":2026:45" } }), 0);
+    assert.equal((await attribuer("DEVIS", "2026-01-18")).numero, "2026-045");
 
     await assert.rejects(() => registre.declarerNumero({ numero: "2026-040", type: "DEVIS" }), /déjà inscrit/);
   });

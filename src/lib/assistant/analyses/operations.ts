@@ -56,7 +56,9 @@ export async function analyseOperations(maintenant: Date = new Date()) {
     lireConsignes(),
     santeSysteme(maintenant),
   ]);
-  const capacite = lireCapaciteMensuelle(consignes.texte);
+  // Mission 12 : la capacité est un paramètre (Pilotage de l'activité) ; la ligne des consignes ne sert plus que de repli.
+  const capaciteParametre = Number(await lireParametre("CAPACITE_CHANTIERS_MOIS", maintenant));
+  const capacite = Number.isFinite(capaciteParametre) && capaciteParametre > 0 ? capaciteParametre : lireCapaciteMensuelle(consignes.texte);
   const chantiers = planifies.map((d) => ({ id: d.id, client: d.clientNom, ville: d.clientVille, etape: d.etape, dateChantier: d.dateChantier!, objet: d.objet }));
   const aVenir = chantiers.filter((c) => c.dateChantier >= debutJour);
   const datePassee = chantiers.filter((c) => c.dateChantier < debutJour && c.etape === "PLANIFIE");
@@ -71,7 +73,7 @@ export async function analyseOperations(maintenant: Date = new Date()) {
   return {
     calculeLe: maintenant.toISOString(),
     definitions: {
-      capacite: capacite !== null ? `Capacité lue dans les consignes : ${capacite} chantiers par mois (≈ ${Math.round((capacite * 12) / 52)} par semaine).` : "Aucune capacité trouvée dans les consignes (« Capacité : environ N chantiers par mois »).",
+      capacite: capacite !== null ? `Capacité (${Number.isFinite(capaciteParametre) && capaciteParametre > 0 ? "Paramètres → Pilotage de l'activité" : "consignes"}) : ${capacite} chantiers par mois (≈ ${Math.round((capacite * 12) / 52)} par semaine).` : "Aucune capacité posée (Paramètres → Pilotage de l'activité, CAPACITE_CHANTIERS_MOIS).",
       charge: "Dossiers « planifié » ou « chantier » avec une date, par semaine (du lundi).",
       relances: `Devis émis, sans accord, sur un dossier « devis envoyé » ou « relance », depuis au moins ${delai ?? "?"} jours (paramètre DELAI_RELANCE_DEVIS) ; plus les séquences mail en cours.`,
       retards: "Actions planifiées dont la date est passée, rappels de leads passés, chantiers « planifié » dont la date est passée, dossiers signés sans date de chantier.",

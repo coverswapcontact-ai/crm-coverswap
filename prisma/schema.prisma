@@ -49,6 +49,10 @@ model Lead {
   occupation       String? // PROPRIETAIRE | LOCATAIRE, d'après le formulaire
   delaiProjet      String? // COURT | MOYEN | LOINTAIN | INDETERMINE
   delaiProjetTexte String? // la réponse telle que donnée
+  // Mission 12 (26/09/2026) : perte structurée, comme sur le dossier (motif obligatoire pour « sans suite »)
+  motifPerte       String? // MotifPerte (src/lib/dossiers/constants.ts) quand le statut est PERDU
+  perteLe          DateTime?
+  perteCommentaire String?
   tailleCuisine    String? // la réponse telle que donnée
   rappelLe         DateTime? // prochain rappel téléphonique prévu (issue d'appel « à rappeler »)
   traiteLe         DateTime? // « marqué comme traité » depuis Leads : hors de la file d'appels, pas archivé ; un rappel posé l'y remet

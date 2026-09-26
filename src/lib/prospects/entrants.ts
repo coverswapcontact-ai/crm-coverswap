@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { completerCoordonnees, rattacherLead } from "@/lib/clients/identification";
 import { formaterTelephone, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
+import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import {
   GROUPES_ENTRANTS,
@@ -238,6 +239,8 @@ export const schemaModificationEntrant = z
     notes: texte(5000, "Notes trop longues.").nullable(),
     statut: z.enum(STATUTS_LEAD_MANUELS, "Statut invalide."),
     motif: texte(300, "Motif trop long.").nullable(),
+    /** Mission 12 : motif structuré de la perte, obligatoire pour « sans suite » (précision obligatoire si AUTRE). */
+    motifPerte: z.enum(MOTIFS_PERTE, "Motif de perte invalide.").nullable(),
     /** Classe de rappel décidée à la main ; « AUTO » rend la main au calcul. */
     priorite: z.enum([...PRIORITES, "AUTO"], "Priorité invalide."),
     /** Prochain rappel prévu (ISO), ou null pour l'effacer. */
@@ -250,7 +253,7 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   const lead = await prisma.lead.findUnique({ where: { id }, include: { dossiers: { where: { archiveLe: null }, select: { id: true } } } });
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
   const avertissements: string[] = [];
-  const { nomFamille, motif, email, priorite, rappelLe, ...champs } = entree;
+  const { nomFamille, motif, motifPerte, email, priorite, rappelLe, ...champs } = entree;
   if (entree.statut && entree.statut !== lead.statut && lead.dossiers.length > 0) {
     throw new ErreurMetier("Ce contact a un dossier : son statut suit le dossier, c'est le dossier qu'il faut faire avancer.", 409);
   }
@@ -263,8 +266,14 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   const nomFinal = (nomFamille ?? lead.nom).trim();
   if (!prenomFinal && !nomFinal) throw new ErreurMetier("Indique au moins un prénom ou un nom.", 400);
 
+  const passeEnPerdu = entree.statut === "PERDU" && entree.statut !== lead.statut;
+  if (passeEnPerdu) {
+    if (!motifPerte) throw new ErreurMetier("Motif obligatoire pour classer sans suite : trop cher, concurrent, plus de réponse, projet abandonné, hors zone, ou autre (précisé).", 400);
+    if (motifPerte === "AUTRE" && (motif?.trim().length ?? 0) < 3) throw new ErreurMetier("Précise le motif « autre » en quelques mots.", 400);
+  }
   const data: Prisma.LeadUpdateInput = {
     ...champs,
+    ...(passeEnPerdu ? { motifPerte, perteLe: new Date(), perteCommentaire: motif?.trim() || null } : entree.statut && entree.statut !== "PERDU" && lead.statut === "PERDU" ? { motifPerte: null, perteLe: null, perteCommentaire: null } : {}),
     ...(nomFamille !== undefined ? { nom: nomFamille } : {}),
     ...(email !== undefined ? { email: email ? normaliserEmail(email) : null } : {}),
     ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null, ...(rappelLe ? { traiteLe: null } : {}) } : {}),
@@ -280,7 +289,7 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
         data: {
           leadId: id,
           type: "NOTE",
-          contenu: `Statut : ${LIBELLES_STATUT_LEAD[entree.statut]}${entree.statut === "PERDU" && motif ? ` (${motif})` : ""}`,
+          contenu: `Statut : ${LIBELLES_STATUT_LEAD[entree.statut]}${entree.statut === "PERDU" ? ` (${motifPerte ? LIBELLES_MOTIF_PERTE[motifPerte] : "motif non renseigné"}${motif ? ` — ${motif}` : ""})` : ""}`,
         },
       });
     }

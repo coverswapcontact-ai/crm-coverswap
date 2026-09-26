@@ -140,15 +140,19 @@ async function tempsParEtape(periode: Periode, maintenant: Date) {
 }
 
 async function motifsDePerte(periode: Periode) {
-  const [notes, perdus] = await Promise.all([
+  const [notes, perdus, leadsPerdus] = await Promise.all([
     prisma.noteAppel.findMany({ where: { archiveLe: null, appelLe: { gte: periode.debut, lt: periode.fin } }, select: { etiquettes: true } }),
     prisma.dossier.findMany({ where: { etape: "PERDU", perteLe: { gte: periode.debut, lt: periode.fin } }, select: { motifPerte: true, perteEtape: true, perteConcurrent: true } }),
+    // Mission 12 : les leads classés « sans suite » portent aussi leur motif.
+    prisma.lead.findMany({ where: { statut: "PERDU", perteLe: { gte: periode.debut, lt: periode.fin } }, select: { motifPerte: true } }),
   ]);
   const etiquettes = notes.flatMap((n) => lireEtiquettes(n.etiquettes));
+  const pertes = [...perdus.map((d) => ({ motif: d.motifPerte })), ...leadsPerdus.map((l) => ({ motif: l.motifPerte }))];
   return {
     etiquettesAppel: repartir(etiquettes, (e) => e, (c) => LIBELLES_ETIQUETTE_APPEL[c as EtiquetteAppel] ?? c),
     dossiersPerdus: perdus.length,
-    parMotif: repartir(perdus, (d) => d.motifPerte ?? "NON_RENSEIGNE", (c) => LIBELLES_MOTIF_PERTE[c as MotifPerte] ?? (c === "NON_RENSEIGNE" ? "Motif non renseigné" : c)),
+    leadsPerdus: leadsPerdus.length,
+    parMotif: repartir(pertes, (p) => p.motif ?? "NON_RENSEIGNE", (c) => LIBELLES_MOTIF_PERTE[c as MotifPerte] ?? (c === "NON_RENSEIGNE" ? "Motif non renseigné" : c)),
     parEtape: repartir(perdus, (d) => d.perteEtape ?? "—", (c) => LIBELLES_ETAPE[c as EtapeDossier] ?? c),
     concurrents: repartir(perdus.filter((d) => d.perteConcurrent), (d) => d.perteConcurrent),
   };
@@ -235,7 +239,7 @@ export const outilManagerCommercial = definirOutil({
       `Entonnoir : ${e.recus} leads reçus (${a.entonnoir.precedent.recus} avant) → ${e.appeles} appelés (${format.pourcent(t.appel)}) → ${e.joignables} joignables → ${e.photos} avec photos → ${e.simulations} avec simulation → ${e.devis} devis → ${e.signes} signés (${format.pourcent(t.signature)} des devis, ${format.pourcent(t.signatureSurLeads)} des leads ; ${a.entonnoir.precedent.signes} avant) → ${e.encaisses} encaissés.`,
       a.parSource.length ? `Par source : ${a.parSource.map((s) => `${s.libelle} ${s.recus} leads, ${s.devis} devis, ${s.signes} signés`).join(" · ")}.` : "",
       a.tempsParEtape.length ? `Temps par étape (jours, médiane) : ${a.tempsParEtape.map((x) => `${x.libelle} ${x.joursMedians}`).join(", ")}.` : "",
-      `Pertes : ${a.pertes.dossiersPerdus} dossier(s) perdu(s)${a.pertes.parMotif.length ? ` (${a.pertes.parMotif.map((m) => `${m.libelle} ${m.valeur}`).join(", ")})` : ""} ; étiquettes d'appel : ${a.pertes.etiquettesAppel.map((m) => `${m.libelle} ${m.valeur}`).join(", ") || "aucune"}.`,
+      `Pertes : ${a.pertes.dossiersPerdus} dossier(s) et ${a.pertes.leadsPerdus} lead(s) perdu(s)${a.pertes.parMotif.length ? ` (${a.pertes.parMotif.map((m) => `${m.libelle} ${m.valeur}`).join(", ")})` : ""} ; étiquettes d'appel : ${a.pertes.etiquettesAppel.map((m) => `${m.libelle} ${m.valeur}`).join(", ") || "aucune"}.`,
       `Délai de premier rappel : médiane ${a.delaiRappel.delaiMedianHeures ?? "—"} h ; ${a.delaiRappel.tranches.map((x) => `${x.libelle} : ${x.leads} leads, ${format.pourcent(x.tauxSignature)} signés`).join(" · ")}.`,
       `Devis en attente aujourd'hui : ${a.devisEnAttente.nombre} pour ${format.euros(a.devisEnAttente.montantTotal)}, ancienneté moyenne ${a.devisEnAttente.ancienneteMoyenneJours ?? "—"} jours, ${a.devisEnAttente.relusSansSignature} relu(s) sans signature.`,
       `Panier moyen signé : ${a.panierMoyen.global !== null ? format.euros(a.panierMoyen.global) : "—"} sur ${a.panierMoyen.signes} signature(s)${a.panierMoyen.parFamille.length ? ` (${a.panierMoyen.parFamille.map((f) => `${f.libelle} ${f.panier !== null ? format.euros(f.panier) : "—"}`).join(", ")})` : ""}.`,

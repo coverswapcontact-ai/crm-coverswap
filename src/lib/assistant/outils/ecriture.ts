@@ -71,7 +71,7 @@ export const outilChangerEtape = definirOutil({
   nom: "changer_etape",
   titre: "Changer l'étape d'un dossier",
   description:
-    "Passe un dossier à une autre étape (qualification, simulation, devis envoyé, relance, signé, planifié, chantier, facturé, encaissé, perdu, en pause). Le CRM vérifie les conditions et refuse avec la raison (devis manquant, accord manquant…). Passer à « signé », « facturé », « encaissé » ou « perdu » demande une confirmation. « Perdu » demande un motif.",
+    "Passe un dossier à une autre étape (qualification, simulation, devis envoyé, relance, signé, planifié, chantier, facturé, encaissé, perdu, en pause). Le CRM vérifie les conditions et refuse avec la raison (devis manquant, accord manquant…). Passer à « signé », « facturé », « encaissé » ou « perdu » demande une confirmation. « Perdu » exige un motif (motif_perte : PRIX = trop cher, CONCURRENT, SANS_REPONSE = plus de réponse, PROJET_ABANDONNE, HORS_ZONE, DELAI, AUTRE + commentaire) ; il remonte dans manager_commercial.",
   niveau: "REVERSIBLE",
   sensible: (e) => ETAPES_SENSIBLES.includes(e.vers),
   schema: schemaCible.extend({
@@ -90,6 +90,7 @@ export const outilChangerEtape = definirOutil({
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu;
     const dossierId = exigerDossier(r.ids);
+    if (e.vers === "PERDU" && !e.motif_perte) throw new ErreurMetier("« Perdu » exige un motif (motif_perte) : PRIX (trop cher), CONCURRENT, SANS_REPONSE (plus de réponse), PROJET_ABANDONNE, HORS_ZONE, DELAI, ou AUTRE avec un commentaire. Demande-le à Lucas.", 400);
     const changement = await changerEtape(dossierId, {
       vers: e.vers,
       ...(e.motif_perte ? { motifPerte: e.motif_perte } : {}),

@@ -125,7 +125,7 @@ describe("synthèse d'une période", () => {
     assert.deepEqual(commercial.activite, { devisEmis: 3, montantDevis: 2900, signatures: 1, montantSigne: 900, facturesEmises: 0, montantFacture: 0, avoirs: 0, montantAvoirs: 0, pertes: 1 });
     assert.equal(commercial.delais.find((delai) => delai.cle === "DEVIS_SIGNATURE")?.medianeJours, 7);
     assert.equal(commercial.ecartPrixMoyenPct, -10);
-    assert.deepEqual(commercial.pertes.parMotif, [{ cle: "PRIX", libelle: "Prix", valeur: 1 }]);
+    assert.deepEqual(commercial.pertes.parMotif, [{ cle: "PRIX", libelle: "Trop cher", valeur: 1 }]);
     assert.deepEqual(commercial.pertes.concurrents, [{ nom: "Cuisines Martin", nombre: 1, ecartMoyenPct: -20 }]);
   });
 

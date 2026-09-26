@@ -266,6 +266,11 @@ export async function changerEtapeDansTransaction(
   entree: EntreeChangementEtape
 ): Promise<ChangementEtape> {
   const { dossier, faits, avantSortie } = await chargerEtatEtape(tx, dossierId);
+  // Mission 12 : « perdu » exige un motif (et une précision pour « autre »), depuis l'écran comme depuis l'assistant.
+  if (entree.vers === "PERDU") {
+    if (!entree.motifPerte) throw new ErreurMetier("Motif de perte obligatoire : trop cher, concurrent, plus de réponse, projet abandonné, hors zone, ou autre (précisé).", 400);
+    if (entree.motifPerte === "AUTRE" && (entree.perteCommentaire?.trim().length ?? 0) < 3) throw new ErreurMetier("Précise le motif « autre » en quelques mots.", 400);
+  }
   const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
   if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
 

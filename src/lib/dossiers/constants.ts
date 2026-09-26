@@ -188,23 +188,26 @@ export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
   INCONNUE: "Non renseignée",
 };
 
+// Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [
   "PRIX",
-  "DELAI",
+  "CONCURRENT",
   "SANS_REPONSE",
   "PROJET_ABANDONNE",
-  "CONCURRENT",
+  "HORS_ZONE",
+  "DELAI",
   "AUTRE",
 ] as const;
 export type MotifPerte = (typeof MOTIFS_PERTE)[number];
 
 export const LIBELLES_MOTIF_PERTE: Record<MotifPerte, string> = {
-  PRIX: "Prix",
-  DELAI: "Délai",
-  SANS_REPONSE: "Sans réponse",
+  PRIX: "Trop cher",
+  CONCURRENT: "A choisi un concurrent",
+  SANS_REPONSE: "Plus de réponse",
   PROJET_ABANDONNE: "Projet abandonné",
-  CONCURRENT: "Concurrent",
-  AUTRE: "Autre",
+  HORS_ZONE: "Hors zone",
+  DELAI: "Délai trop long",
+  AUTRE: "Autre (préciser)",
 };
 
 /* ── Événements (socle des futurs agents mail / WhatsApp) ─────── */
@@ -458,7 +461,7 @@ export const EMETTEUR = {
   email: "coverswap.contact@gmail.com",
   telephone: "06 70 35 28 69",
   ligneSiret:
-    "SIRET de l'établissement : 94518036200010 00010 / Code APE de l'établissement : 4334Z",
+    "SIRET de l'établissement : 945 180 362 00010 / Code APE de l'établissement : 4334Z",
   ligneRib: "RIB : FR76 1610 6700 2096 0145 0427 085 – Code BIC – Code SWIFT : AGRIFRPP861",
   piedSiret: "SIRET de l'établissement : 94518036200010",
   piedApe: "Code APE de l'établissement : 4334Z",

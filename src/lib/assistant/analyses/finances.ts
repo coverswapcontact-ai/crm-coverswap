@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
-import { lireParametres } from "@/lib/parametres/service";
+import { lireParametre, lireParametres } from "@/lib/parametres/service";
 import { lireConsignes } from "../consignes";
 import { definirOutil, format, lien } from "../definition";
 import { resoudrePeriode, schemaPeriode, type Periode } from "../periodes";
@@ -99,7 +99,9 @@ export async function analyseFinanciere(entree: z.output<typeof schemaPeriode>, 
   const enc30 = somme(encaissements.filter((e) => e.recuLe >= new Date(maintenant.getTime() - 30 * 86_400_000) && e.recuLe <= maintenant).map((e) => e.montant));
   const dep30 = somme(depenses.filter((d) => d.payeeLe >= new Date(maintenant.getTime() - 30 * 86_400_000) && d.payeeLe <= maintenant).map((d) => d.montant));
   const provision30 = tauxCotisations !== null ? arrondi(enc30 * ((tauxCotisations + tauxCfp) / 100)) : null;
-  const plancher = lirePlancherReserve(consignes.texte);
+  // Mission 12 : la réserve est un paramètre (Pilotage de l'activité) ; la ligne des consignes ne sert plus que de repli.
+  const reserveParametre = await lireParametre("TRESORERIE_RESERVE", maintenant);
+  const plancher = typeof reserveParametre === "number" ? reserveParametre : lirePlancherReserve(consignes.texte);
   const versable = provision30 !== null && plancher !== null ? arrondi(enc30 - dep30 - provision30 - chargesFixesMensuelles - plancher) : null;
 
   return {
@@ -121,7 +123,7 @@ export async function analyseFinanciere(entree: z.output<typeof schemaPeriode>, 
     tresorerie: { encaissePeriode: actuel.encaisse, aEncaisserSurSignes: somme(resteAEncaisser.map((r) => r.montant)), detailAEncaisser: resteAEncaisser.slice(0, 20), depensesEngageesPeriode: actuel.depenses, chargesFixesMensuelles, urssafProvision: urssafEnCours ? { periode: urssafEnCours.periode.libelle, total: urssafEnCours.total, echeance: urssafEnCours.periode.echeanceDeclaration } : null, projection },
     seuils: seuils.map((s) => ({ cle: s.cle, libelle: s.libelle, seuil: s.seuil, chiffreAffaires: s.chiffreAffaires, pourcentage: s.pourcentage, projection: s.projection })),
     parametresManquants,
-    versable: { sur30Jours: { encaisse: enc30, depenses: dep30, provisionUrssaf: provision30, chargesFixes: chargesFixesMensuelles, plancherReserve: plancher }, estimation: versable, regle: plancher === null ? "Aucun plancher de réserve trouvé dans les consignes (« Plancher de réserve : garder X € »)." : `Plancher de réserve des consignes : ${format.euros(plancher)}.` },
+    versable: { sur30Jours: { encaisse: enc30, depenses: dep30, provisionUrssaf: provision30, chargesFixes: chargesFixesMensuelles, plancherReserve: plancher }, estimation: versable, regle: plancher === null ? "Aucune réserve de trésorerie posée (Paramètres → Pilotage de l'activité, TRESORERIE_RESERVE) ni de plancher dans les consignes." : `Réserve de trésorerie à garder (${typeof reserveParametre === "number" ? "Paramètres → Pilotage de l'activité" : "consignes"}) : ${format.euros(plancher)}.` },
   };
 }
 

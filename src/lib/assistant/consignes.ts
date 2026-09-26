@@ -53,10 +53,10 @@ Tu parles à Lucas Villemin, fondateur de CoverSwap (rénovation par revêtement
 - Panier moyen : lis-le dans les données (manager_commercial) ; ordre de grandeur attendu 1 500 à 2 500 € par chantier.
 - Marge : matière ≈ 25 à 35 % du prix de vente (films Cover Styl' + supplément), pas de salarié, déplacements en plus ; à confirmer par manager_finances (dépenses rattachées).
 - Coût d'acquisition : à lire dans manager_marketing (dépense estimée / chantiers signés).
-- Capacité : environ 8 chantiers par mois au maximum (un artisan, un chantier par jour, préparation comprise). À ajuster.
+- Capacité : 15 chantiers par mois au maximum (valeur tenue dans Paramètres → Pilotage de l'activité, CAPACITE_CHANTIERS_MOIS : c'est là que l'assistant la lit, pas ici).
 - Objectif : passer d'une signature sur 12 leads à une sur 8 ; deux chantiers signés par semaine.
 - Règle de réinvestissement de la pub : réinvestir au plus 20 % du chiffre d'affaires encaissé du mois précédent, plafonné à 500 € par campagne de 21 jours, seulement si le coût par chantier signé reste sous 300 €.
-- Plancher de réserve : garder 2 000 € de trésorerie après provision URSSAF et charges à venir ; en dessous, aucune dépense non indispensable. À ajuster par Lucas.
+- Plancher de réserve : garder 3 000 € de trésorerie après provision URSSAF et charges à venir ; en dessous, aucune dépense non indispensable (valeur tenue dans Paramètres → Pilotage de l'activité, TRESORERIE_RESERVE).
 - Saisonnalité : creux en août et fin décembre ; pics en janvier-mars et septembre-octobre (rentrée, avant les fêtes).
 - Principes de décision : une décision par semaine, mesurée sur 21 jours ; on coupe ce qui ne convertit pas en devis ; on protège la trésorerie avant la croissance.
 

@@ -3,6 +3,7 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import { NUMEROTATION } from "./constants";
 import { dateDepuisJour, estJourValide } from "./dates";
 import { ErreurMetier } from "./erreurs";
+import { avancerCompteur } from "./compteurs";
 import { cleNumero, lireNumero } from "./numerotation";
 
 export const TYPES_NUMERO = ["DEVIS", "FACTURE", "AVOIR", "INCONNU"] as const;
@@ -140,7 +141,7 @@ export async function inscrireNumeroManuel(lecteur: Transaction, entree: z.outpu
     }
   }
 
-  return lecteur.numeroDocument.create({
+  const inscrit = await lecteur.numeroDocument.create({
     data: {
       cle,
       numero: entree.numero,
@@ -155,6 +156,9 @@ export async function inscrireNumeroManuel(lecteur: Transaction, entree: z.outpu
       note: entree.note || null,
     },
   });
+  // Mission 12 : un numéro externe plus grand que le compteur de sa série le fait avancer.
+  await avancerCompteur(lecteur, entree.type, lu);
+  return inscrit;
 }
 
 export type NumeroLibre = { id: string; numero: string; type: LigneRegistre["type"]; emisLe: string | null; destinataire: string | null; montant: number | null };

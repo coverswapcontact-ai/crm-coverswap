@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Pastille } from "@/components/pilotage/ui";
+import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
 import { Bouton, Champ, Modale, TitreSection } from "./ui";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,21 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
   const [depot, setDepot] = useState<{ fichier: File; apercu: string } | null>(null);
   const [depotInfos, setDepotInfos] = useState({ titre: "", description: "", preparation: "auto" });
   const [occupe, setOccupe] = useState<string | null>(null);
+  // Mission 12 : une simulation s'ouvre dans la visionneuse (après, puis avant), plus dans un nouvel onglet.
+  const [visionneuse, setVisionneuse] = useState<{ images: ImageVisionneuse[]; index: number } | null>(null);
+  function ouvrirImage(liste: Simulation[], s: Simulation, quoi: "image" | "avant") {
+    const images: ImageVisionneuse[] = [];
+    let index = 0;
+    for (const x of liste) {
+      if (x.id === s.id && quoi === "image") index = images.length;
+      images.push({ id: `${x.id}-apres`, url: x.image, legende: `${x.titre ?? "Simulation"} — après` });
+      if (x.avant) {
+        if (x.id === s.id && quoi === "avant") index = images.length;
+        images.push({ id: `${x.id}-avant`, url: x.avant, legende: `${x.titre ?? "Simulation"} — avant (photo d'origine)` });
+      }
+    }
+    setVisionneuse({ images, index });
+  }
   const entree = useRef<HTMLInputElement>(null);
 
   const charger = useCallback(async () => {
@@ -214,6 +230,8 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
             <p className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4 text-[13px] text-[#9CA3AF]">Aucune simulation. Préparez-en une dans le simulateur (API ou ChatGPT), ou déposez une image.</p>
           ) : null}
 
+          {visionneuse ? <Visionneuse images={visionneuse.images} index={visionneuse.index} onIndex={(index) => setVisionneuse((v) => (v ? { ...v, index } : v))} onFermer={() => setVisionneuse(null)} /> : null}
+
           {brouillons.length > 0 ? (
             <Groupe
               titre={`Brouillons · ${brouillons.length}`}
@@ -225,7 +243,7 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
               }
             >
               {brouillons.map((s) => (
-                <Vignette key={s.id} s={s} selection={selection.has(s.id)} onSelection={() => basculer(s.id)} occupe={occupe}>
+                <Vignette key={s.id} s={s} selection={selection.has(s.id)} onSelection={() => basculer(s.id)} occupe={occupe} onOuvrir={(quoi) => ouvrirImage(brouillons, s, quoi)}>
                   <Bouton taille="sm" variante="primaire" onClick={() => ouvrirPublication([s.id])}>
                     Publier
                   </Bouton>
@@ -240,7 +258,7 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
           {publiees.length > 0 ? (
             <Groupe titre={`Dans l'espace du client · ${publiees.length}`} aide={donnees.espace ? "Visibles par le client." : "Elles y seront dès l'ouverture de son espace."}>
               {publiees.map((s) => (
-                <Vignette key={s.id} s={s} occupe={occupe}>
+                <Vignette key={s.id} s={s} occupe={occupe} onOuvrir={(quoi) => ouvrirImage(publiees, s, quoi)}>
                   {!s.horsEspace ? (
                     <Bouton taille="sm" variante="fantome" icone={<EyeOff size={12} aria-hidden />} chargement={occupe === `masquer-${s.id}`} onClick={() => void changer(s.id, "masquer")}>
                       Masquer
@@ -254,7 +272,7 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
           {masquees.length > 0 ? (
             <Groupe titre={`Masquées · ${masquees.length}`} aide="Retirées de la vue du client ; rien n'est effacé.">
               {masquees.map((s) => (
-                <Vignette key={s.id} s={s} occupe={occupe}>
+                <Vignette key={s.id} s={s} occupe={occupe} onOuvrir={(quoi) => ouvrirImage(masquees, s, quoi)}>
                   <Bouton taille="sm" variante="fantome" icone={<Eye size={12} aria-hidden />} chargement={occupe === `afficher-${s.id}`} onClick={() => void changer(s.id, "afficher")}>
                     Afficher
                   </Bouton>
@@ -339,24 +357,24 @@ function Groupe({ titre, aide, action, children }: { titre: string; aide: string
   );
 }
 
-function Vignette({ s, selection, onSelection, occupe, children }: { s: Simulation; selection?: boolean; onSelection?: () => void; occupe: string | null; children?: React.ReactNode }) {
+function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s: Simulation; selection?: boolean; onSelection?: () => void; occupe: string | null; onOuvrir: (quoi: "image" | "avant") => void; children?: React.ReactNode }) {
   const source = SOURCES[s.source];
   return (
     <li className={cn("overflow-hidden rounded-[10px] border-[0.5px] bg-[#1C1F25]", s.choisie ? "border-[#1D9E75]" : selection ? "border-[#5DCAA5]/70" : "border-[#2A2D34]", occupe?.endsWith(s.id) && "opacity-70")}>
       <div className="relative">
-        <a href={s.image} target="_blank" rel="noopener noreferrer" className="block aspect-[3/2] bg-[#16181D]">
+        <button type="button" onClick={() => onOuvrir("image")} className="block aspect-[3/2] w-full bg-[#16181D]" aria-label="Agrandir la simulation">
           {/* eslint-disable-next-line @next/next/no-img-element -- image privée, servie derrière la session */}
           <img src={s.image} alt={s.titre ?? "Simulation"} className="h-full w-full object-cover" loading="lazy" />
-        </a>
+        </button>
         {onSelection ? (
           <label className="absolute top-2 left-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55">
             <input type="checkbox" checked={Boolean(selection)} onChange={onSelection} className="h-4 w-4 accent-[#1D9E75]" aria-label="Choisir pour publier" />
           </label>
         ) : null}
         {s.avant ? (
-          <a href={s.avant} target="_blank" rel="noopener noreferrer" className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
+          <button type="button" onClick={() => onOuvrir("avant")} className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">
             Avant
-          </a>
+          </button>
         ) : null}
       </div>
       <div className="space-y-1.5 p-2.5">

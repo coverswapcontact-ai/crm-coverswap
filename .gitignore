@@ -54,3 +54,9 @@ prisma/sauvegardes/
 
 # uploads locaux (photos de clients, PDF) : jamais dans le dépôt
 /.uploads/
+
+# bases et exports : jamais dans le dépôt (historique purgé le 26/09/2026)
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+/exports/

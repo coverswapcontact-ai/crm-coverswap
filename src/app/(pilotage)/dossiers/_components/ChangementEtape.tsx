@@ -306,6 +306,7 @@ function FenetreEtape({
   const prixConcurrentInvalide = prixConcurrent.trim() !== "" && (prixConcurrentLu === null || prixConcurrentLu < 0);
   // Seule une saisie commencée et illisible retient la confirmation ; ce qui manque est signalé.
   const saisieInvalide =
+    (demandeMotif && (motif === null || (motif === "AUTRE" && commentairePerte.trim().length < 3))) ||
     prixConcurrentInvalide ||
     (demandeAcompte && modeAcompte === "RECU" && acompteLu === null) ||
     (demandeAcompte && modeAcompte === "SANS" && (motifSansAcompte === null || (motifSansAcompte === "AUTRE" && precisionSansAcompte.trim().length < 3))) ||
@@ -383,7 +384,7 @@ function FenetreEtape({
 
         {demandeMotif ? (
           <fieldset>
-            <legend className="mb-2 text-[12px] font-medium text-[#9CA3AF]">Motif de perte</legend>
+            <legend className="mb-2 text-[12px] font-medium text-[#9CA3AF]">Motif de perte (obligatoire{motif === "AUTRE" ? ", avec une précision" : ""})</legend>
             <div className="grid grid-cols-2 gap-2">
               {MOTIFS_PERTE.map((valeur) => (
                 <button

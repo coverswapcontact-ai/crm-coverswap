@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { listerAutomatismes, reglerAutomatisme } from "@/lib/automatismes/interrupteurs";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { lireCompteurs, poserCompteur, type Serie } from "@/lib/dossiers/compteurs";
 import { jourParis } from "@/lib/dossiers/dates";
 import { CLES_PARAMETRES, DEFINITIONS_PARAMETRES, formaterValeurParametre, GROUPES_PARAMETRES, type CleParametre, type GroupeParametre } from "@/lib/parametres/definitions";
 import { enregistrerParametre, estCleParametre, parametresPourEcran, validerValeur } from "@/lib/parametres/service";
@@ -25,7 +26,7 @@ export const outilVoirParametres = definirOutil({
   nom: "voir_parametres",
   titre: "Les paramètres et les automatismes",
   description:
-    "Rend les paramètres du CRM par groupe (campagne : début, budget, durée ; pilotage : réserve de trésorerie, chantiers par mois ; commercial : délai de relance, zone ; RGPD ; facturation ; simulateur : solde OpenAI relevé et estimé) avec la valeur en vigueur et depuis quand, et les interrupteurs des automatismes (mails automatiques de l'espace client, SMS d'accusé de réception, séquences de mails, IA appelée par le CRM, rangement Gmail) avec leur état. Jamais de secret (clés, jetons). « groupe » pour n'en lire qu'un ; « automatismes: true » pour les seuls interrupteurs.",
+    "Rend les paramètres du CRM par groupe (campagne : début, budget, durée ; pilotage : réserve de trésorerie, chantiers par mois ; commercial : délai de relance, zone ; RGPD ; facturation ; simulateur : solde OpenAI relevé et estimé) avec la valeur en vigueur et depuis quand, la numérotation (prochain numéro de devis et de facture), et les interrupteurs des automatismes (mails automatiques de l'espace client, SMS d'accusé de réception, séquences de mails, IA appelée par le CRM, rangement Gmail) avec leur état. Jamais de secret (clés, jetons). « groupe » pour n'en lire qu'un ; « automatismes: true » pour les seuls interrupteurs.",
   niveau: "LECTURE",
   schema: z.object({
     groupe: z.enum(GROUPES as [GroupeParametre, ...GroupeParametre[]]).optional(),
@@ -38,6 +39,7 @@ export const outilVoirParametres = definirOutil({
     const tous = await parametresPourEcran(contexte.maintenant);
     const parametres = e.groupe ? tous.filter((p) => p.groupe === e.groupe) : tous;
     const credit = await consommation(contexte.maintenant).catch(() => null);
+    const compteurs = await lireCompteurs(contexte.maintenant);
     const parGroupe = GROUPES.filter((g) => parametres.some((p) => p.groupe === g)).map((g) => ({
       groupe: g,
       libelle: GROUPES_PARAMETRES[g],
@@ -47,10 +49,11 @@ export const outilVoirParametres = definirOutil({
     const texte = [
       ...parGroupe.map((g) => `${g.libelle} :\n${g.parametres.map((l) => `- ${l}`).join("\n")}`),
       ...(!e.groupe || e.groupe === "SIMULATEUR" ? [solde] : []),
+      ...(!e.groupe ? [`Numérotation (Paramètres → Numérotation des documents) : ${compteurs.map((c) => `${c.libelle} ${c.annee} : prochain ${c.prochain}${c.valeur !== null ? ` (dernier attribué ${c.valeur})` : ""}, plus haut inscrit ${c.plusHautRegistre}`).join(" ; ")}. Un devis externe inscrit avec un numéro plus grand fait avancer le compteur ; « modifier_parametres » avec cle COMPTEUR_DEVIS ou COMPTEUR_FACTURE et valeur « 2026-043 » le fait repartir.`] : []),
       ...(!e.groupe ? [`Automatismes (${automatismes.filter((a) => a.actif).length} actif(s) sur ${automatismes.length}) :\n${automatismes.map((a) => `- ${ligneAuto(a)}`).join("\n")}`] : []),
       "Aucun secret n'est lu ni rendu : les clés et jetons sont des variables d'environnement.",
     ].join("\n\n");
-    return { texte, donnees: { parametres: parametres.map((p) => ({ cle: p.cle, libelle: p.libelle, groupe: p.groupe, nature: p.nature, options: p.options, courante: p.courante, historique: p.historique.slice(0, 5) })), solde: credit?.solde ?? null, creditEpuise: credit?.creditEpuise ?? null, automatismes: e.groupe ? undefined : automatismes }, liens: [lien("Paramètres", "/parametres")] };
+    return { texte, donnees: { parametres: parametres.map((p) => ({ cle: p.cle, libelle: p.libelle, groupe: p.groupe, nature: p.nature, options: p.options, courante: p.courante, historique: p.historique.slice(0, 5) })), compteurs, solde: credit?.solde ?? null, creditEpuise: credit?.creditEpuise ?? null, automatismes: e.groupe ? undefined : automatismes }, liens: [lien("Paramètres", "/parametres")] };
   },
 });
 
@@ -58,7 +61,7 @@ export const outilModifierParametres = definirOutil({
   nom: "modifier_parametres",
   titre: "Modifier un paramètre ou un automatisme",
   description:
-    "Change UNE valeur de paramètre (cle + valeur : nombre, montant, date AAAA-MM-JJ pour CAMPAGNE_DEBUT, ou un choix parmi les options) avec sa date d'effet (aujourd'hui par défaut) et sa source (« dit par Lucas le … »), l'ancienne valeur restant dans l'historique ; ou règle UN interrupteur d'automatisme (automatisme + actif : NOTIF_…, SMS_ACCUSE_RECEPTION, SEQUENCE_…, IA_CRM, MAIL_RANGEMENT_GMAIL — codes rendus par « voir_parametres »). Sensible : aperçu (valeur d'avant → d'après) puis confirmation. Jamais un secret.",
+    "Change UNE valeur de paramètre (cle + valeur : nombre, montant, date AAAA-MM-JJ pour CAMPAGNE_DEBUT, ou un choix parmi les options) avec sa date d'effet (aujourd'hui par défaut) et sa source (« dit par Lucas le … »), l'ancienne valeur restant dans l'historique ; ou fait repartir la numérotation (cle COMPTEUR_DEVIS ou COMPTEUR_FACTURE, valeur = le prochain numéro, « 2026-043 » ; jamais derrière un numéro inscrit) ; ou règle UN interrupteur d'automatisme (automatisme + actif : NOTIF_…, SMS_ACCUSE_RECEPTION, SEQUENCE_…, IA_CRM, MAIL_RANGEMENT_GMAIL — codes rendus par « voir_parametres »). Sensible : aperçu (valeur d'avant → d'après) puis confirmation. Jamais un secret.",
   niveau: "SENSIBLE",
   schema: z
     .object({
@@ -71,6 +74,11 @@ export const outilModifierParametres = definirOutil({
     })
     .refine((e) => (e.cle !== undefined && e.valeur !== undefined) !== (e.automatisme !== undefined && e.actif !== undefined), { message: "Donne soit cle + valeur, soit automatisme + actif." }),
   apercu: async (e, contexte) => {
+    const serie = serieDeCompteur(e.cle);
+    if (serie) {
+      const courant = (await lireCompteurs(contexte.maintenant)).find((c) => c.serie === serie)!;
+      return `Je vais faire repartir la numérotation des ${courant.libelle.toLowerCase()} : prochain numéro ${courant.prochain} → ${String(e.valeur)}. Refusé si ce numéro ne dépasse pas le plus haut inscrit au registre (${courant.plusHautRegistre}).`;
+    }
     if (e.automatisme !== undefined) {
       const a = (await listerAutomatismes()).find((x) => x.code === e.automatisme);
       if (!a) throw new ErreurMetier(`Automatisme inconnu : « ${e.automatisme} » (codes : ${(await listerAutomatismes()).map((x) => x.code).join(", ")}).`, 404);
@@ -85,6 +93,11 @@ export const outilModifierParametres = definirOutil({
     return `Je vais poser ${definition.libelle} (${cle}) : ${courante ? formaterValeurParametre(cle as CleParametre, courante.valeur) : "non renseigné"} → ${formaterValeurParametre(cle as CleParametre, valeur)}, valable du ${format.jourCourt(du)}${e.source ? `, source « ${e.source} »` : ""}. L'ancienne valeur reste dans l'historique.`;
   },
   executer: async (e, contexte) => {
+    const serie = serieDeCompteur(e.cle);
+    if (serie) {
+      const c = await poserCompteur({ serie, prochain: typeof e.valeur === "number" ? e.valeur : String(e.valeur) });
+      return { texte: `Numérotation des ${c.libelle.toLowerCase()} ${c.annee} : prochain numéro ${c.prochain} (dernier attribué ${c.valeur ?? "—"}, plus haut inscrit ${c.plusHautRegistre}).`, donnees: c, liens: [lien("Paramètres → Numérotation", "/parametres")] };
+    }
     if (e.automatisme !== undefined) {
       const r = await reglerAutomatisme(e.automatisme, Boolean(e.actif), `assistant Claude (${contexte.utilisateur})`);
       return { texte: `« ${r.apres.libelle} » : ${r.avant.actif ? "actif" : "inactif"} → ${r.apres.actif ? "actif" : "inactif"}.`, donnees: r, liens: [lien("Paramètres", "/parametres")] };
@@ -97,6 +110,12 @@ export const outilModifierParametres = definirOutil({
     return { texte: `${DEFINITIONS_PARAMETRES[cle as CleParametre].libelle} : ${formaterValeurParametre(cle as CleParametre, validerValeur(cle as CleParametre, e.valeur))} à partir du ${format.jourCourt(du)}${apres?.courante && apres.courante.valableDu !== jourParis(du) ? ` (valeur en vigueur aujourd'hui : ${formaterValeurParametre(cle as CleParametre, apres.courante.valeur)})` : ""}. L'historique est gardé.`, donnees: { cle, valeur: e.valeur, valableDu: jourParis(du), parametre: apres }, liens: [lien("Paramètres", "/parametres")] };
   },
 });
+
+/** « COMPTEUR_DEVIS » / « COMPTEUR_FACTURE » : la numérotation, pas un paramètre daté. */
+function serieDeCompteur(cle: string | undefined): Serie | null {
+  const c = cle?.trim().toUpperCase();
+  return c === "COMPTEUR_DEVIS" ? "DEVIS" : c === "COMPTEUR_FACTURE" ? "FACTURE" : null;
+}
 
 function dateEffet(texte: string | undefined, maintenant: Date): Date {
   if (!texte?.trim()) return maintenant;

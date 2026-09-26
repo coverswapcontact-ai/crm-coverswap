@@ -9,7 +9,8 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { NotesAppelDuLead, noterDebutAppel } from "@/components/pilotage/NotesAppel";
 import { Bouton, Champ, ListeDeroulante, Modale, Pastille, Puces, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
-import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type EtapeDossier, type MotifPerte } from "@/lib/dossiers/constants";
+import { Visionneuse } from "@/components/pilotage/Visionneuse";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import {
@@ -120,6 +121,9 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
   const [echange, setEchange] = useState("");
   const [sansSuite, setSansSuite] = useState(false);
   const [motif, setMotif] = useState("");
+  // Mission 12 : motif structuré obligatoire pour « sans suite » ; photos dans la visionneuse.
+  const [motifPerte, setMotifPerte] = useState<MotifPerte | null>(null);
+  const [photoOuverte, setPhotoOuverte] = useState<number | null>(null);
   const [notes, setNotes] = useState(detail.notes ?? "");
   const [edition, setEdition] = useState(false);
   const [archivage, setArchivage] = useState(false);
@@ -276,10 +280,13 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
             )}
             {sansSuite && detail.statut !== "PERDU" ? (
               <div className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="basis-full">
+                  <Puces libelle="Pourquoi sans suite ?" obligatoire options={MOTIFS_PERTE.map((valeur) => ({ valeur, libelle: LIBELLES_MOTIF_PERTE[valeur] }))} valeur={motifPerte} onChange={setMotifPerte} />
+                </div>
                 <Champ
                   classeConteneur="min-w-[220px] flex-1"
-                  libelle="Pourquoi sans suite ?"
-                  placeholder="Trop cher, injoignable, projet abandonné…"
+                  libelle={motifPerte === "AUTRE" ? "Précision (obligatoire)" : "Précision (facultative)"}
+                  placeholder="Un mot sur la raison…"
                   maxLength={300}
                   value={motif}
                   onChange={(evenement) => setMotif(evenement.target.value)}
@@ -287,12 +294,13 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
                 <Bouton
                   variante="danger"
                   chargement={envoi === "perdu"}
+                  disabled={!motifPerte || (motifPerte === "AUTRE" && motif.trim().length < 3)}
                   onClick={() =>
                     void appeler(
                       "perdu",
                       `/api/prospects/entrants/${detail.id}`,
                       "PATCH",
-                      { statut: "PERDU", motif: motif.trim() || null },
+                      { statut: "PERDU", motifPerte, motif: motif.trim() || null },
                       "Contact classé sans suite",
                     ).then((ok) => ok && setSansSuite(false))
                   }
@@ -390,12 +398,13 @@ function Contenu({ detail, onFermer, onMisAJour }: { detail: EntrantDetail; onFe
         {detail.photos.length > 0 ? (
           <section>
             <TitreSection>Photos jointes · {detail.photos.length}</TitreSection>
+            {photoOuverte !== null ? <Visionneuse images={detail.photos.map((photo, index) => ({ id: photo.id, url: photo.url, legende: `Photo ${index + 1} · ${detail.nom}` }))} index={photoOuverte} onIndex={setPhotoOuverte} onFermer={() => setPhotoOuverte(null)} /> : null}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {detail.photos.map((photo, index) => (
-                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
+                <button key={photo.id} type="button" onClick={() => setPhotoOuverte(index)} className="block w-full" aria-label={`Agrandir la photo ${index + 1}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={photo.url} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" />
-                </a>
+                </button>
               ))}
             </div>
           </section>

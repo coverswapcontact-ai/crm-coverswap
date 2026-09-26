@@ -221,13 +221,16 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.match(site, /cuisine — Meubles hauts : Statuary White \(NE31\) — anonyme .* page \/simulateur — source meta — campagne Cuisine septembre/);
     const pub = await appeler("voir_publicite", {});
     assert.match(pub, /Réception des leads Meta — NE REÇOIT PAS : Il manque : META_APP_SECRET absente, META_VERIFY_TOKEN absente/);
-    assert.match(pub, /Campagne : aucune renseignée/);
+    assert.match(pub, /Campagne : commencée le 22\/09\/2026, jour \d+ sur 21, budget 378 €/);
     assert.equal(appelsReseau.length, 0, "aucun appel réseau");
   });
 
   test("« voir_parametres » / « modifier_parametres » : capacité, campagne, interrupteur d'un automatisme (sous confirmation), jamais de secret", async () => {
     const avant = await appeler("voir_parametres", {});
-    assert.match(avant, /Pilotage de l'activité :\n- TRESORERIE_RESERVE — Réserve de trésorerie à garder : non renseigné\n- CAPACITE_CHANTIERS_MOIS — Capacité : chantiers par mois : non renseigné/);
+    // Mission 12 : la migration « valeurs-lucas-26-09 » pose 3 000 € et 15 chantiers ; l'outil les rend avec leur source.
+    assert.match(avant, /Pilotage de l'activité :\n- TRESORERIE_RESERVE — Réserve de trésorerie à garder : 3.000(,00)? € \(depuis le 01\/09\/2026, source : Lucas, mission du 26\/09\/2026/);
+    assert.match(avant, /- CAPACITE_CHANTIERS_MOIS — Capacité : chantiers par mois : 15 \(depuis le 01\/09\/2026/);
+    assert.match(avant, /Numérotation \(Paramètres → Numérotation des documents\) : Devis 2026 : prochain 2026-\d{3}/);
     assert.match(avant, /NOTIF_DEVIS_DISPONIBLE — Mail au client : .* : ACTIF/);
     assert.match(avant, /Aucun secret n'est lu ni rendu/);
     assert.doesNotMatch(avant, /secret-de-session|cle-factice/);

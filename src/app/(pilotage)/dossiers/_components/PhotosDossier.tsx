@@ -2,12 +2,13 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { Camera, ExternalLink, ImageOff, ImagePlus, Trash2 } from "lucide-react";
+import { Camera, ImageOff, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail, PhotoVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur, photoTropLourde, preparerPhoto } from "./client";
-import { Bouton, Modale, TitreSection, TRANS } from "./ui";
+import { Visionneuse } from "@/components/pilotage/Visionneuse";
+import { Bouton, TitreSection, TRANS } from "./ui";
 
 // Les photos passent par une route qui exige la session : pas d'optimisation
 // Next (elle chargerait l'image sans cookie).
@@ -50,6 +51,8 @@ export function PhotosDossier({
   const [suppression, setSuppression] = useState(false);
   const avant = detail.photos.filter((photo) => !photo.apres);
   const apres = detail.photos.filter((photo) => photo.apres);
+  // Mission 12 : la visionneuse parcourt toutes les photos du dossier (avant, puis après).
+  const toutes = [...avant, ...apres];
 
   async function ajouter(fichiers: FileList | null, apres: boolean) {
     const liste = Array.from(fichiers ?? []);
@@ -208,43 +211,34 @@ export function PhotosDossier({
       )}
 
       {agrandie ? (
-        <Modale
-          ouverte
-          onFermer={() => setAgrandie(null)}
-          largeur="lg"
-          titre={agrandie.apres ? "Photo après chantier" : "Photo du chantier"}
-          pied={
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <a
-                href={agrandie.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]"
-              >
-                <ExternalLink size={13} aria-hidden />
-                Ouvrir l&apos;original
-              </a>
-              {confirmation ? (
-                  <div className="flex gap-2">
-                    <Bouton variante="fantome" onClick={() => setConfirmation(false)}>
-                      Annuler
-                    </Bouton>
-                    <Bouton variante="danger" chargement={suppression} onClick={() => void supprimer(agrandie)}>
-                      Retirer (reste aux archives)
-                    </Bouton>
-                  </div>
-                ) : (
-                  <Bouton variante="danger" icone={<Trash2 size={14} aria-hidden />} onClick={() => setConfirmation(true)}>
-                    Retirer
-                  </Bouton>
-                )}
-            </div>
+        <Visionneuse
+          images={toutes.map((photo) => ({ id: photo.id, url: photo.url, legende: photo.apres ? "Photo après chantier" : "Photo du chantier" }))}
+          index={Math.max(0, toutes.findIndex((photo) => photo.id === agrandie.id))}
+          onIndex={(index) => {
+            setConfirmation(false);
+            setAgrandie(toutes[index] ?? null);
+          }}
+          onFermer={() => {
+            setConfirmation(false);
+            setAgrandie(null);
+          }}
+          actions={() =>
+            confirmation ? (
+              <div className="flex gap-2">
+                <Bouton variante="fantome" onClick={() => setConfirmation(false)}>
+                  Annuler
+                </Bouton>
+                <Bouton variante="danger" chargement={suppression} onClick={() => void supprimer(agrandie)}>
+                  Retirer (reste aux archives)
+                </Bouton>
+              </div>
+            ) : (
+              <Bouton variante="danger" icone={<Trash2 size={14} aria-hidden />} onClick={() => setConfirmation(true)}>
+                Retirer
+              </Bouton>
+            )
           }
-        >
-          <div className="relative h-[65dvh] w-full">
-            <Vignette photo={agrandie} taille="(max-width: 896px) 100vw, 896px" className="object-contain" />
-          </div>
-        </Modale>
+        />
       ) : null}
     </section>
   );

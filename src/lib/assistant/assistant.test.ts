@@ -174,12 +174,9 @@ describe("recherche, ambiguïté, refus", () => {
     const sans = await appeler("changer_etape", { dossierId: dossierForestier, vers: "PERDU" });
     assert.ok(sans.confirmation, "aperçu attendu");
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossierForestier } })).etape, "QUALIFICATION", "rien de fait avant confirmation");
-    const perdu = await appeler("changer_etape", { dossierId: dossierForestier, vers: "PERDU", confirmation: sans.confirmation!.jeton, commande: "Passe Forestier en perdu" });
-    assert.match(perdu.texte, /passé de « Qualification » à « Perdu »/);
-    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossierForestier } })).etape, "PERDU");
-    // Sans motif, le CRM le signale « à compléter » ; on reprend (réversible, pas sensible) puis on reperd avec un motif.
-    const reprise = await appeler("changer_etape", { dossierId: dossierForestier, vers: "QUALIFICATION" });
-    assert.equal(reprise.confirmation, undefined);
+    // Mission 12 : sans motif, la confirmation est refusée et rien ne bouge.
+    const refus = await appeler("changer_etape", { dossierId: dossierForestier, vers: "PERDU", confirmation: sans.confirmation!.jeton, commande: "Passe Forestier en perdu" }).catch((erreur: Error) => ({ texte: erreur.message, confirmation: undefined }));
+    assert.match(refus.texte, /exige un motif/);
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossierForestier } })).etape, "QUALIFICATION");
     const { MOTIFS_PERTE } = await import("@/lib/dossiers/constants");
     const avec = await appeler("changer_etape", { dossierId: dossierForestier, vers: "PERDU", motif_perte: MOTIFS_PERTE[0] });
@@ -256,7 +253,7 @@ describe("facture et encaissement", () => {
     const independant = await prisma.encaissement.aggregate({ _sum: { montant: true }, where: { statut: "VALIDE", recuLe: { gte: periode.debut, lt: periode.fin } } });
     assert.equal(a.ca.actuel, Math.round((independant._sum.montant ?? 0) * 100) / 100);
     assert.ok(a.ca.actuel >= 440);
-    assert.equal(a.versable.sur30Jours.plancherReserve, 2000);
+    assert.equal(a.versable.sur30Jours.plancherReserve, 3000);
   });
 });
 
@@ -306,7 +303,7 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
     assert.equal(f.marges.tauxMoyen, 0.8);
     const p = finances.projeterTresorerie({ resteAEncaisser: [{ montant: 1000, attenduLe: new Date("2026-10-10T00:00:00Z") }, { montant: 700, attenduLe: null }], urssafProvision: 300, urssafEcheance: new Date("2026-10-31T00:00:00Z"), chargesFixesMensuelles: 60 }, new Date("2026-09-22T10:00:00Z"));
     assert.deepEqual(p.map((x) => [x.jours, x.entreesAttendues, x.sortiesConnues, x.solde]), [[30, 1700, 60, 1640], [60, 1700, 420, 1280], [90, 1700, 480, 1220]]);
-    assert.equal(finances.lirePlancherReserve(consignes.CONSIGNES_DEFAUT), 2000);
+    assert.equal(finances.lirePlancherReserve(consignes.CONSIGNES_DEFAUT), 3000);
     assert.equal(finances.lirePlancherReserve("rien"), null);
   });
 
@@ -343,7 +340,7 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
   });
 
   test("opérations : capacité des consignes, charge par semaine", () => {
-    assert.equal(operations.lireCapaciteMensuelle(consignes.CONSIGNES_DEFAUT), 8);
+    assert.equal(operations.lireCapaciteMensuelle(consignes.CONSIGNES_DEFAUT), 15);
     assert.equal(operations.lundiDe("2026-09-22"), "2026-09-21");
     assert.equal(operations.lundiDe("2026-09-27"), "2026-09-21");
     const charge = operations.chargeParSemaine([{ dateChantier: new Date("2026-09-23T08:00:00Z"), client: "A", etape: "PLANIFIE" }, { dateChantier: new Date("2026-09-30T08:00:00Z"), client: "B", etape: "PLANIFIE" }, { dateChantier: new Date("2026-10-01T08:00:00Z"), client: "C", etape: "CHANTIER" }], new Date("2026-09-22T10:00:00Z"), 8, 3);
@@ -369,7 +366,7 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
       assert.doesNotMatch(r.texte, /a échoué|^Refusé|Paramètres invalides/, `${nom} : ${r.texte.slice(0, 200)}`);
     }
     const ops = await operations.analyseOperations();
-    assert.equal(ops.capacite.mensuelle, 8);
+    assert.equal(ops.capacite.mensuelle, 15);
     const cl = await clientsAnalyse.analyseClients();
     assert.equal(cl.total, await prisma.client.count({ where: { archiveLe: null, fusionneDansId: null, anonymiseLe: null } }));
     const m = await marketing.analyseMarketing({ periode: "7_jours" });

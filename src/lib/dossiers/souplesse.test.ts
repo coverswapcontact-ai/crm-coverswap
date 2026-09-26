@@ -202,10 +202,12 @@ describe("dossiers souples", () => {
     assert.match(passage.contenu, /^Qualification → Facturé\. Passé en connaissance de cause : aucun devis n'a été généré ni enregistré/);
     assert.equal(JSON.parse(passage.metadata).avertissements.length, 4);
 
-    await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "PERDU" }));
+    // Mission 12 : la perte exige un motif ; sans lui, rien ne bouge.
+    await assert.rejects(avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "PERDU" })), /Motif de perte obligatoire/);
+    await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "PERDU", motifPerte: "SANS_REPONSE" }));
     const perdu = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } });
-    assert.equal(perdu.motifPerte, null, "la perte passe sans motif");
-    assert.deepEqual((await dossiers.chargerDetail(dossierId)).completude.map((point) => point.code), ["MOTIF_PERTE"]);
+    assert.equal(perdu.motifPerte, "SANS_REPONSE");
+    assert.deepEqual((await dossiers.chargerDetail(dossierId)).completude.map((point) => point.code), []);
 
     const reprise = await avecActeur(LUCAS, () => transitions.changerEtape(dossierId, { vers: "ENCAISSE" }));
     assert.equal(reprise.nature, "REPRISE");

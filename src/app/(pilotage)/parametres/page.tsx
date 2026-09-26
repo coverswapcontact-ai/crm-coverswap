@@ -4,6 +4,7 @@ import AssistantClaude from "./_components/AssistantClaude";
 import Connexions from "./_components/Connexions";
 import EcranParametres from "./_components/EcranParametres";
 import MessagerieSms from "./_components/MessagerieSms";
+import Numerotation from "./_components/Numerotation";
 import MarqueEspace from "./_components/MarqueEspace";
 import ReglagesMail from "./_components/ReglagesMail";
 
@@ -21,6 +22,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
     <>
       <EcranParametres initiaux={await parametresPourEcran()} />
       <div className="mx-auto w-full max-w-3xl px-5 pb-10 md:px-8">
+        <Numerotation />
         <Connexions retour={{ google: texte("google"), compte: texte("compte"), message: texte("message") }} />
         <ReglagesMail />
         <MessagerieSms />

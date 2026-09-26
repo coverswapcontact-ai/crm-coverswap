@@ -79,8 +79,10 @@ describe("contacts entrants", () => {
     assert.equal(detail.echanges[0].contenu, "Rappel demain pour la visite");
     assert.equal(detail.simulations[0].avant, "/api/uploads/simulations/x/before.jpg");
 
-    assert.deepEqual(await avecActeur(LUCAS, () => entrants.modifierEntrant(recent.id, { statut: "PERDU", motif: "Trop cher" })), []);
-    assert.equal((await entrants.chargerEntrant(recent.id)).echanges[0].contenu, "Statut : Sans suite (Trop cher)");
+    // Mission 12 : « sans suite » exige un motif structuré ; la précision reste libre.
+    await assert.rejects(avecActeur(LUCAS, () => entrants.modifierEntrant(recent.id, { statut: "PERDU", motif: "Trop cher" })), /Motif obligatoire pour classer sans suite/);
+    assert.deepEqual(await avecActeur(LUCAS, () => entrants.modifierEntrant(recent.id, { statut: "PERDU", motifPerte: "PRIX", motif: "trouve ça cher" })), []);
+    assert.equal((await entrants.chargerEntrant(recent.id)).echanges[0].contenu, "Statut : Sans suite (Trop cher — trouve ça cher)");
     await assert.rejects(avecActeur(LUCAS, () => entrants.modifierEntrant(avecDossier.id, { statut: "PERDU" })), /suit le dossier/, "le statut d'un contact passé en dossier suit le dossier");
     await assert.rejects(avecActeur(LUCAS, () => entrants.ajouterEchange(avecDossier.id, { type: "APPEL", contenu: "Rappel" })), /sur le dossier/, "le suivi se note sur le dossier");
     await assert.rejects(avecActeur(LUCAS, () => entrants.modifierEntrant(perdu.id, { prenom: "", nomFamille: "" })), /prénom ou un nom/);

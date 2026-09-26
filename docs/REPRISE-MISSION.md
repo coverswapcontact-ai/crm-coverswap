@@ -920,3 +920,63 @@ montants ni à la trame PDF. Tests exigés : deux devis visibles, validation de 
   PILOTAGE et DELAI_RELANCE_DEVIS, jeton Meta de page à renouveler (conversions refusées, code 190). Volume Railway :
   agrandi (4,4 Go).
 - [x] F4 (fin) : déploiement CRM puis site vérifiés, rapport publié, journal et mémoire à jour.
+
+# Mission 12 (26/09/2026) — Corrections autonomes, puis audit général
+
+Énoncé de Lucas (26/09/2026) : « Corrections autonomes, puis audit général du CRM ». Phase 1 : corriger sans rien
+demander (sécurité des dépôts, numérotation, valeurs déjà données, visionneuse d'images, motif de perte obligatoire,
+ménage) ; phase 2 : auditer sans rien modifier (`docs/AUDIT-2026-09.md`).
+
+## Phase 1 — fait
+- **Historique git purgé** : `prisma/dev.db` et `dev.db` retirés de tout l'historique du CRM (`git filter-repo`,
+  copie miroir de sauvegarde dans le scratchpad, force-push le 26/09). Les hachages ont changé : mission 11 =
+  `17cc9ce` (ex `573b20d`), `09e7f35` (ex `1028cb1`), `9feaf2d` (ex `75e0a0f`). Le site n'avait aucune base dans
+  son historique. `.gitignore` élargis (CRM : `*.sqlite*`, `/exports/` ; site : `*.db`, `*.db.gz`, `*.sqlite*`,
+  `.env*` sauf `.env.example`, `/exports/`). **Dépôts toujours publics** : `gh` n'est pas installé ni authentifié
+  sur le poste (« Si gh n'est pas authentifié, fais tout sauf le passage en privé »). GitHub garde les anciens
+  commits joignables par leur hachage jusqu'à son ramassage : le passage en privé, puis une demande de purge du
+  cache à GitHub, restent à faire par Lucas.
+- **Secret des webhooks** : nouveau secret généré (32 octets hex) dans un fichier LOCAL ignoré par git,
+  `crm-coverswap/.env.rotation-webhook.local` — pas dans ce journal tant que le dépôt est public. Railway : la CLI
+  est installée mais non connectée (« Unauthorized ») : rien posé. Voir « À coller côté Vercel, n8n, Zapier ».
+- **Numérotation** : les devis 2026-040 (Beites), 2026-041 et 2026-042 (Fares) étaient déjà rattachés en prod
+  (documents repris, statut envoyé, 25/09) ; la migration `numerotation-devis-externes-26-09` les inscrit au registre
+  s'ils manquent et pose le compteur des devis 2026 à 42 → prochain devis **2026-043**. `dossiers/compteurs.ts` :
+  compteur lisible et modifiable (Paramètres → Numérotation des documents ; `GET/PATCH /api/numeros/compteurs` ;
+  `voir_parametres` / `modifier_parametres` avec `COMPTEUR_DEVIS` / `COMPTEUR_FACTURE`), jamais derrière un numéro
+  inscrit ; un devis externe inscrit avec un numéro plus grand fait avancer le compteur (`registre.ts ›
+  inscrireNumeroManuel` → `avancerCompteur`).
+- **Valeurs** : migration `valeurs-lucas-26-09` : TRESORERIE_RESERVE 3 000 €, CAPACITE_CHANTIERS_MOIS 15,
+  CAMPAGNE_DEBUT 2026-09-22, CAMPAGNE_BUDGET 378 € (18 €/jour × 21 jours), CAMPAGNE_DUREE_JOURS 21 ; les deux
+  lignes des consignes (« environ 8 chantiers », « garder 2 000 € ») réécrites (nouvelle version) ; les managers
+  finances et opérations lisent d'abord les paramètres, les consignes en repli. Coordonnées : identiques partout
+  (06 70 35 28 69, 73 rue Simone Veil 34470 Pérols, SIRET 94518036200010, APE 4334Z) sauf l'en-tête du devis PDF qui
+  répétait le NIC (« 94518036200010 00010 ») : corrigé en « 945 180 362 00010 ». Mails : contact@coverswap.fr
+  côté site, coverswap.contact@gmail.com côté devis (deux adresses réelles, pas une erreur).
+- **Visionneuse** (`components/pilotage/Visionneuse.tsx`) : croix, Échap, toucher hors de l'image, geste retour
+  (entrée d'historique), flèches / balayage / ← → entre les images du même ensemble, pincement et double toucher,
+  lien « Ouvrir l'original » à part. Posée sur les photos du dossier (avec « Retirer »), les simulations du dossier
+  (après puis avant), les photos vues depuis l'espace client (déposées, retirées), les photos jointes d'un lead. Plus
+  aucun `target="_blank"` sur une image.
+- **Motif de perte obligatoire** : liste courte (trop cher, a choisi un concurrent, plus de réponse, projet abandonné,
+  hors zone, délai trop long, autre + précision) ; refusé sans motif dans `changerEtapeDansTransaction` (écran,
+  assistant, code), dans `modifierEntrant` (lead « sans suite », `Lead.motifPerte / perteLe / perteCommentaire`),
+  posé par la note d'appel « pas intéressé » (projet abandonné) ; `manager_commercial` cumule dossiers et leads.
+- **Ménage** : migration `menage-archives-et-taches-26-09` : « motif à renseigner » sur les dossiers et leads
+  archivés sans motif ; tâches en échec définitif depuis plus de 7 jours passées « Annulée » avec la raison en tête
+  de la dernière erreur (« Abandonnée le … : … ne se relancera pas seule »).
+- Tests : `base/migrations/mission-12.test.ts` (5), `dossiers/perte-motif.test.ts` (4) ; tests existants adaptés
+  (perte sans motif refusée, libellé « Trop cher »).
+
+## À coller côté Vercel, n8n, Zapier (rotation du secret des webhooks)
+La valeur est dans `crm-coverswap/.env.rotation-webhook.local` (fichier local, jamais commité : le dépôt est public).
+1. **Railway (service CRM)** : `WEBHOOK_SECRET` = la nouvelle valeur ; `WEBHOOK_SECRET_PRECEDENT` = l'ancienne
+   (`coverswap-webhook-secret`) le temps de reporter partout ; la retirer ensuite (aucune coupure entre-temps :
+   les deux sont acceptées).
+2. **Vercel (coverswap.fr)** : `CRM_WEBHOOK_SECRET` = la nouvelle valeur, sans retour à la ligne, puis redéployer.
+3. **n8n** : l'URL du webhook du CRM, paramètre `?secret=` = la nouvelle valeur.
+4. **Zapier** : `https://crm.coverswap.fr/api/webhook/zapier?secret=` = la nouvelle valeur.
+Puis retirer `WEBHOOK_SECRET_PRECEDENT` sur Railway.
+
+## Journal
+- 26/09 : purge de l'historique, poussée ; phase 1 codée et testée ; essai local ; puis phase 2 (audit).

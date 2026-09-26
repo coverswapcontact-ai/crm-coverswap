@@ -979,4 +979,11 @@ La valeur est dans `crm-coverswap/.env.rotation-webhook.local` (fichier local, j
 Puis retirer `WEBHOOK_SECRET_PRECEDENT` sur Railway.
 
 ## Journal
-- 26/09 : purge de l'historique, poussée ; phase 1 codée et testée ; essai local ; puis phase 2 (audit).
+- 26/09 : purge de l'historique, poussée ; phase 1 codée (visionneuse, compteurs, motif de perte, migrations), suite
+  complète 534/534, tsc, eslint, build OK ; essai local sur la copie (Paramètres → Numérotation et Pilotage,
+  visionneuse photos et simulations : ouverture, Échap, geste retour, croix ; lead « sans suite » : motifs
+  obligatoires). Commit CRM `7121b48` déployé (health = 7121b48, 78 outils) ; site `b1a5f8e` (.gitignore).
+  Vérifié en prod (lecture seule) : `campagne` = « commencée le 22/09/2026, jour 5 sur 21, budget 378 € » (migration
+  passée), routes nouvelles 401 sans session, `sante_systeme` : les 2 tâches Meta en échec ont moins de 7 jours
+  (jeton de page expiré, code 190 : à renouveler par Lucas), 2 incohérences « prochaine action périmée » (Beites,
+  Fares) relevées pour l'audit. Rapport de phase 1 dans la conversation ; puis phase 2 : `docs/AUDIT-2026-09.md`.

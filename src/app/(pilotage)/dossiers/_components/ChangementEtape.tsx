@@ -92,12 +92,15 @@ function ListeAvertissements({ avertissements, className }: { avertissements: Av
 export function ChangementEtape({
   detail,
   onMisAJour,
+  demandeInitiale = null,
 }: {
   detail: DossierDetail;
   onMisAJour: (detail: DossierDetail) => void;
+  /** Mission 13 (lot 4) : l'étape demandée par un raccourci (« → Signé » sur la ligne) : sa fenêtre s'ouvre, avec ses garde-fous. */
+  demandeInitiale?: EtapeDossier | null;
 }) {
   const [enCours, setEnCours] = useState<EtapeDossier | null>(null);
-  const [fenetre, setFenetre] = useState<TransitionPossible | null>(null);
+  const [fenetre, setFenetre] = useState<TransitionPossible | null>(() => (demandeInitiale ? (transitionsPossibles(detail.etape, detail.etapeAvantSortie).find((t) => t.vers === demandeInitiale) ?? null) : null));
 
   const faits = faitsDepuisDetail(detail);
   const transitions = transitionsPossibles(detail.etape, detail.etapeAvantSortie);

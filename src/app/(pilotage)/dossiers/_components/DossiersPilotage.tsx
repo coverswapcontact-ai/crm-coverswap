@@ -12,8 +12,9 @@ import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAtten
 import { DossiersArchives } from "./ArchivageDossier";
 import { CreationDossier } from "./CreationDossier";
 import { Legende } from "./Legende";
-import { PanneauDossier } from "./PanneauDossier";
+import { PanneauDossier, type DemandeOuverture } from "./PanneauDossier";
 import { VueKanban } from "./VueKanban";
+import { type DemandeRaccourci } from "./CarteDossier";
 import { LIBELLES_TRI, SENS_PAR_DEFAUT, VueListe, type CleTri, type Tri } from "./VueListe";
 import { appelApi, messageErreur } from "./client";
 import { Bouton, EtatVide, TRANS } from "./ui";
@@ -89,10 +90,13 @@ export default function DossiersPilotage({
   dossiersInitiaux,
   leadInitial,
   dossierInitialId,
+  demandeInitiale = null,
 }: {
   dossiersInitiaux: DossierResume[];
   leadInitial: LeadTrouve | null;
   dossierInitialId: string | null;
+  /** Mission 13 (lot 4) : ?rubrique= dans l'adresse (notification, Espaces clients) — la rubrique du panneau à ouvrir. */
+  demandeInitiale?: DemandeOuverture | null;
 }) {
   const [dossiers, setDossiers] = useState(dossiersInitiaux);
   const vueParDefaut = useSyncExternalStore(sansAbonnement, lireVueParDefaut, () => "kanban" as const);
@@ -109,6 +113,12 @@ export default function DossiersPilotage({
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>({ cle: "prochaineAction", sens: "asc" });
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
+  // Mission 13 (lot 4) : la rubrique demandée par un raccourci (ligne, Espaces clients, notification), une fois.
+  const [demande, setDemande] = useState<{ dossierId: string; demande: DemandeOuverture } | null>(dossierInitialId && demandeInitiale ? { dossierId: dossierInitialId, demande: demandeInitiale } : null);
+  const ouvrirDossier = useCallback((id: string, raccourci?: DemandeRaccourci) => {
+    setDossierOuvertId(id);
+    setDemande((actuelle) => (raccourci ? { dossierId: id, demande: { ...raccourci, cle: (actuelle?.demande.cle ?? 0) + 1 } } : null));
+  }, []);
   const [creation, setCreation] = useState({ ouverte: leadInitial !== null, lead: leadInitial, cle: 0 });
   const [maintenant, setMaintenant] = useState(() => new Date());
 
@@ -417,15 +427,16 @@ export default function DossiersPilotage({
             afficherSorties={afficherSorties}
             masquerColonnesVides={filtreAFaire}
             maintenant={maintenant}
-            onOuvrir={setDossierOuvertId}
+            onOuvrir={ouvrirDossier}
           />
         ) : (
-          <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={setDossierOuvertId} />
+          <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
         )}
       </main>
 
       <PanneauDossier
         dossierId={dossierOuvertId}
+        demande={demande && demande.dossierId === dossierOuvertId ? demande.demande : null}
         maintenant={maintenant}
         onFermer={() => setDossierOuvertId(null)}
         onMisAJour={mettreAJour}

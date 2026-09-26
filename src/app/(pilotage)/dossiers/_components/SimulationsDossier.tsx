@@ -52,7 +52,7 @@ const SOURCES: Record<Simulation["source"], { libelle: string; ton: "bleu" | "ve
 
 const heure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDetail; onRecharger: () => Promise<void> }) {
+export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: { detail: DossierDetail; onRecharger: () => Promise<void>; sansTitre?: boolean }) {
   const [donnees, setDonnees] = useState<Donnees | null>(null);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [publication, setPublication] = useState<{ prevenir: boolean; texte: string } | null>(null);
@@ -171,22 +171,20 @@ export function SimulationsDossier({ detail, onRecharger }: { detail: DossierDet
     }
   }
 
+  const actions = (
+    <div className="flex gap-1.5">
+      <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+        <WandSparkles size={13} aria-hidden /> Simulateur
+      </Link>
+      <Bouton taille="sm" icone={<ImagePlus size={13} aria-hidden />} onClick={() => entree.current?.click()}>
+        Déposer
+      </Bouton>
+    </div>
+  );
+
   return (
     <section>
-      <TitreSection
-        action={
-          <div className="flex gap-1.5">
-            <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
-              <WandSparkles size={13} aria-hidden /> Simulateur
-            </Link>
-            <Bouton taille="sm" icone={<ImagePlus size={13} aria-hidden />} onClick={() => entree.current?.click()}>
-              Déposer
-            </Bouton>
-          </div>
-        }
-      >
-        Simulations
-      </TitreSection>
+      {sansTitre ? <div className="mb-3 flex justify-end">{actions}</div> : <TitreSection action={actions}>Simulations</TitreSection>}
       <input
         ref={entree}
         type="file"

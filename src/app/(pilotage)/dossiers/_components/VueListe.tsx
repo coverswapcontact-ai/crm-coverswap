@@ -8,7 +8,7 @@ import { formatMontant } from "@/lib/dossiers/montants";
 import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { LigneDossierCompacte, PastilleACompleter, PastilleRetard, ProchaineActionResume } from "./CarteDossier";
+import { LigneDossierCompacte, PastilleACompleter, PastilleRetard, ProchaineActionResume, type DemandeRaccourci } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { comparerParEcheance } from "./VueKanban";
 import { PastilleEtape, TRANS } from "./ui";
@@ -72,7 +72,7 @@ export function VueListe({
   tri: Tri;
   onTrier: (cle: CleTri) => void;
   maintenant: Date;
-  onOuvrir: (id: string) => void;
+  onOuvrir: (id: string, demande?: DemandeRaccourci) => void;
 }) {
   const tries = trierDossiers(dossiers, tri);
 
@@ -81,7 +81,7 @@ export function VueListe({
       {/* Mobile (mission 13, lot 3) : une ligne par dossier — nom · ville, étape · montant, un signal, chevron ; le détail au toucher. */}
       <ul className="overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:hidden">
         {tries.map((dossier) => (
-          <LigneDossierCompacte key={dossier.id} dossier={dossier} maintenant={maintenant} onOuvrir={() => onOuvrir(dossier.id)} />
+          <LigneDossierCompacte key={dossier.id} dossier={dossier} maintenant={maintenant} onOuvrir={(demande) => onOuvrir(dossier.id, demande)} />
         ))}
       </ul>
 

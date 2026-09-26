@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -26,9 +26,13 @@ import {
   LIBELLES_ETAPE,
   LIBELLES_SOURCE,
   LIBELLES_TYPE_EVENEMENT,
+  type EtapeDossier,
+  type RubriqueDossier,
   type TypeDocument,
   type TypeEvenement,
 } from "@/lib/dossiers/constants";
+import { formatMontant } from "@/lib/dossiers/montants";
+import { noterDebutAppel } from "@/components/pilotage/NotesAppel";
 import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
 import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import type { DocumentVue, DossierDetail, EvenementVue } from "@/lib/dossiers/types";
@@ -46,7 +50,7 @@ import { SimulationsDossier } from "./SimulationsDossier";
 import { GenerateurDocument } from "./GenerateurDocument";
 import { ModaleDocumentExistant } from "./DocumentExistant";
 import { DepensesDossier } from "./DepensesDossier";
-import { PaiementsDossier } from "./PaiementsDossier";
+import { ModalePaiement, PaiementsDossier, montantAttendu } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
 import { Chronologie } from "@/components/pilotage/Chronologie";
 import { TimelineEtapes } from "./TimelineEtapes";
@@ -58,12 +62,16 @@ const CLASSE_PUCE_LIEN = cn(
   TRANS
 );
 
+/** Mission 13 (lot 4) : ce qu'un raccourci demande en ouvrant le panneau — une rubrique, ou une étape à passer. */
+export type DemandeOuverture = { rubrique: RubriqueDossier; etape?: EtapeDossier | null; cle: number };
+
 export function PanneauDossier({
   dossierId,
   maintenant,
   onFermer,
   onMisAJour,
   onArchive,
+  demande = null,
 }: {
   dossierId: string | null;
   maintenant: Date;
@@ -71,6 +79,7 @@ export function PanneauDossier({
   onMisAJour: (detail: DossierDetail) => void;
   /** Le dossier vient d'être archivé : il sort de la liste, le panneau se ferme. */
   onArchive?: (dossierId: string) => void;
+  demande?: DemandeOuverture | null;
 }) {
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [echec, setEchec] = useState<{ dossierId: string; message: string } | null>(null);
@@ -122,7 +131,7 @@ export function PanneauDossier({
         className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
-          <ContenuPanneau detail={affiche} maintenant={maintenant} onFermer={onFermer} onMisAJour={appliquer} onRecharger={recharger} onArchive={onArchive} />
+          <ContenuPanneau key={`${affiche.id}:${demande?.cle ?? 0}`} detail={affiche} maintenant={maintenant} onFermer={onFermer} onMisAJour={appliquer} onRecharger={recharger} onArchive={onArchive} demande={demande} />
         ) : (
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
@@ -149,6 +158,45 @@ export function PanneauDossier({
   );
 }
 
+/** Étapes où un paiement est attendu : l'acompte après la signature, le solde après la facture. */
+const ETAPES_ENCAISSABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"];
+
+/** Une section du panneau, repliable : un bouton de 44 px, un résumé quand elle est fermée, le contenu au toucher. */
+function SectionRepliable({ id, titre, resume, ouvert, onBasculer, children }: { id: string; titre: string; resume?: ReactNode; ouvert: boolean; onBasculer: () => void; children: ReactNode }) {
+  return (
+    <section id={id}>
+      <button type="button" aria-expanded={ouvert} onClick={onBasculer} className={cn("-mx-1 flex min-h-[44px] w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-1 text-left hover:bg-[#1C1F25]", TRANS)}>
+        <span className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">{titre}</span>
+        {!ouvert && resume ? <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B7280]">{resume}</span> : <span className="flex-1" />}
+        <ChevronDown size={15} aria-hidden className={cn("shrink-0 text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
+      </button>
+      {ouvert ? <div className="mt-2">{children}</div> : null}
+    </section>
+  );
+}
+
+type Sections = "photos" | "historique" | "espace" | "documents" | "paiements" | "simulations" | "reste";
+
+/** Ce qui s'ouvre d'office : ce qui attend un geste. Le reste se replie. */
+function sectionsOuvertes(detail: DossierDetail, demande: DemandeOuverture | null): Record<Sections, boolean> {
+  const avantSignature = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"].includes(detail.etape);
+  const aUnDevis = detail.documents.some((d) => d.type === "DEVIS" && d.numero);
+  const aUneFacture = detail.documents.some((d) => d.type === "FACTURE" && d.numero);
+  const ouvertes: Record<Sections, boolean> = {
+    photos: true,
+    historique: true,
+    espace: avantSignature,
+    documents: (avantSignature && !aUnDevis) || (["SIGNE", "PLANIFIE", "CHANTIER"].includes(detail.etape) && !aUneFacture),
+    paiements: ETAPES_ENCAISSABLES.includes(detail.etape) && (montantAttendu(detail) ?? 0) > 0,
+    simulations: detail.etape === "SIMULATION",
+    reste: false,
+  };
+  if (demande?.rubrique === "messages") ouvertes.espace = true;
+  if (demande?.rubrique === "devis") ouvertes.documents = true;
+  if (demande?.rubrique === "encaisser") ouvertes.paiements = true;
+  return ouvertes;
+}
+
 function ContenuPanneau({
   detail,
   maintenant,
@@ -156,6 +204,7 @@ function ContenuPanneau({
   onMisAJour,
   onRecharger,
   onArchive,
+  demande,
 }: {
   detail: DossierDetail;
   maintenant: Date;
@@ -163,8 +212,23 @@ function ContenuPanneau({
   onMisAJour: (detail: DossierDetail) => void;
   onRecharger: () => Promise<void>;
   onArchive?: (dossierId: string) => void;
+  demande: DemandeOuverture | null;
 }) {
   const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(null);
+  // Mission 13 (lot 4) : les sections ouvertes (ce qui attend un geste d'office), et « Encaisser l'acompte » en un geste.
+  const [ouvertes, setOuvertes] = useState(() => sectionsOuvertes(detail, demande));
+  const basculer = (section: Sections) => setOuvertes((o) => ({ ...o, [section]: !o[section] }));
+  const [encaisser, setEncaisser] = useState(() => demande?.rubrique === "encaisser");
+  const attendu = ETAPES_ENCAISSABLES.includes(detail.etape) ? montantAttendu(detail) : null;
+  useEffect(() => {
+    if (!demande) return;
+    const cible = demande.rubrique === "messages" ? ["rubrique-messages", "rubrique-espace"] : demande.rubrique === "encaisser" ? ["rubrique-paiements"] : [`rubrique-${demande.rubrique}`];
+    const minuterie = window.setTimeout(() => {
+      const element = cible.map((id) => document.getElementById(id)).find((e) => e !== null);
+      element?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 350);
+    return () => window.clearTimeout(minuterie);
+  }, [demande]);
   // Mission 11 : dépôt d'un devis PDF déjà fait (numéro + libellé), proposé au client à côté des autres.
   const [depotPdf, setDepotPdf] = useState(0);
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
@@ -220,7 +284,7 @@ function ContenuPanneau({
         <BarreProgression etape={detail.etape} etapeAvantSortie={detail.etapeAvantSortie} className="mt-3 max-w-[420px]" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {telephone ? (
-            <a href={`tel:${telephone}`} className={CLASSE_PUCE_LIEN}>
+            <a href={`tel:${telephone}`} onClick={() => noterDebutAppel(detail.origine?.type === "LEAD" ? detail.origine.id : `dossier:${detail.id}`, { nom: detail.clientNom, dossierId: detail.id })} className={CLASSE_PUCE_LIEN}>
               <Phone size={12} aria-hidden />
               {detail.clientTelephone}
             </a>
@@ -244,7 +308,8 @@ function ContenuPanneau({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="space-y-8 px-5 py-5">
+        <div className="space-y-6 px-5 py-5">
+          {/* 1. Ce qui attend un geste : à compléter, prochaine action, encaisser, l'étape. */}
           {detail.completude.length > 0 ? <ACompleter detail={detail} onMisAJour={onMisAJour} /> : null}
           <ProchaineActionEditeur
             key={`${detail.id}:${detail.prochaineAction}:${detail.prochaineActionDate}`}
@@ -252,48 +317,89 @@ function ContenuPanneau({
             maintenant={maintenant}
             onMisAJour={onMisAJour}
           />
-          <ChangementEtape detail={detail} onMisAJour={onMisAJour} />
-          <FamillesDossier key={`familles-${detail.id}`} detail={detail} onEnregistre={onRecharger} />
-          <DelaisEcarts detail={detail} onMisAJour={onMisAJour} />
-          <DocumentsDossier
-            detail={detail}
-            onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
-            onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
-            onMisAJour={onMisAJour}
-          />
-          <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} onFaireDevis={faireDevis} onAjouterDevis={ajouterDevis} onDeposerPdf={deposerPdf} />
-          <SimulationsDossier key={`simulations-${detail.id}`} detail={detail} onRecharger={onRecharger} />
-          <PaiementsDossier detail={detail} onMisAJour={onMisAJour} />
-          <DepensesDossier detail={detail} />
-          <section>
-            <TitreSection>Étapes et notes</TitreSection>
-            <TimelineEtapes detail={detail} onNoteAjoutee={onRecharger} />
-          </section>
-          <PhotosDossier detail={detail} onRecharger={onRecharger} />
-          {/* Remonté quand les valeurs enregistrées changent, pas à chaque mise à
-              jour du dossier : une saisie en cours survit à un changement d'étape. */}
-          <CoordonneesClient
-            key={[
-              detail.id,
-              detail.clientNom,
-              detail.clientTelephone,
-              detail.clientEmail,
-              detail.clientAdresse,
-              detail.clientCp,
-              detail.clientVille,
-              detail.objet,
-              detail.source,
-              detail.montantEstime,
-              detail.dateChantier,
-            ].join("|")}
-            detail={detail}
-            onMisAJour={onMisAJour}
-          />
-          <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
-          <Chronologie cible={{ dossier: detail.id, client: detail.client?.id ?? null }} titre="Chronologie du client" compact />
-          {onArchive ? <ArchivageDossier detail={detail} onArchive={onArchive} /> : null}
+          {attendu !== null && attendu > 0 ? (
+            <section id="rubrique-encaisser" className="rounded-[11px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 p-3.5">
+              <p className="text-[12.5px] text-[#9CA3AF]">{detail.paiements.resteDu > 0 ? "Reste à recevoir sur les factures" : "Acompte prévu au devis, pas encore reçu"}</p>
+              <Bouton variante="primaire" className="mt-2 min-h-[44px]" icone={<Euro size={15} aria-hidden />} onClick={() => setEncaisser(true)}>
+                Encaisser {detail.paiements.resteDu > 0 ? "le solde" : "l'acompte"} {formatMontant(attendu)}
+              </Bouton>
+            </section>
+          ) : null}
+          <div id="rubrique-etape">
+            <ChangementEtape detail={detail} onMisAJour={onMisAJour} demandeInitiale={demande?.rubrique === "etape" ? (demande.etape ?? null) : null} />
+          </div>
+
+          {/* 2. Photos, 3. Historique : ce qu'on regarde le plus. */}
+          <SectionRepliable id="rubrique-photos" titre={`Photos du chantier (${detail.photos.length})`} ouvert={ouvertes.photos} onBasculer={() => basculer("photos")}>
+            <PhotosDossier detail={detail} onRecharger={onRecharger} sansTitre />
+          </SectionRepliable>
+          <SectionRepliable id="rubrique-historique" titre={`Historique (${detail.evenements.length})`} resume={detail.evenements[0]?.contenu} ouvert={ouvertes.historique} onBasculer={() => basculer("historique")}>
+            <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
+          </SectionRepliable>
+
+          {/* 4. Les rubriques qui portent des gestes : ouvertes quand elles attendent quelque chose, repliées sinon. */}
+          <SectionRepliable id="rubrique-espace" titre="Espace client" ouvert={ouvertes.espace} onBasculer={() => basculer("espace")}>
+            <EspaceDossier key={detail.id} detail={detail} onRecharger={onRecharger} onFaireDevis={faireDevis} onAjouterDevis={ajouterDevis} onDeposerPdf={deposerPdf} sansTitre />
+          </SectionRepliable>
+          <SectionRepliable
+            id="rubrique-devis"
+            titre="Devis et factures"
+            resume={`${detail.documents.filter((d) => d.type === "DEVIS" && d.numero).length} devis · ${detail.documents.filter((d) => d.type === "FACTURE" && d.numero).length} facture(s)`.replace("facture(s)", detail.documents.filter((d) => d.type === "FACTURE" && d.numero).length > 1 ? "factures" : "facture")}
+            ouvert={ouvertes.documents}
+            onBasculer={() => basculer("documents")}
+          >
+            <DocumentsDossier
+              detail={detail}
+              onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
+              onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
+              onMisAJour={onMisAJour}
+              sansTitre
+            />
+          </SectionRepliable>
+          <SectionRepliable id="rubrique-paiements" titre="Paiements" resume={detail.paiements.resteDu > 0 ? `reste dû ${formatMontant(detail.paiements.resteDu)}` : detail.paiements.acompteEnregistre ? "acompte reçu" : "aucun paiement"} ouvert={ouvertes.paiements} onBasculer={() => basculer("paiements")}>
+            <PaiementsDossier detail={detail} onMisAJour={onMisAJour} sansTitre />
+          </SectionRepliable>
+          <SectionRepliable id="rubrique-simulations" titre="Simulations" ouvert={ouvertes.simulations} onBasculer={() => basculer("simulations")}>
+            <SimulationsDossier key={`simulations-${detail.id}`} detail={detail} onRecharger={onRecharger} sansTitre />
+          </SectionRepliable>
+
+          {/* 5. Le reste du dossier, replié. */}
+          <SectionRepliable id="rubrique-reste" titre="Le reste du dossier" resume="familles, délais et prix, dépenses, étapes et notes, coordonnées, chronologie, archivage" ouvert={ouvertes.reste} onBasculer={() => basculer("reste")}>
+            <div className="space-y-8 pt-2">
+              <FamillesDossier key={`familles-${detail.id}`} detail={detail} onEnregistre={onRecharger} />
+              <DelaisEcarts detail={detail} onMisAJour={onMisAJour} />
+              <DepensesDossier detail={detail} />
+              <section>
+                <TitreSection>Étapes et notes</TitreSection>
+                <TimelineEtapes detail={detail} onNoteAjoutee={onRecharger} />
+              </section>
+              {/* Remonté quand les valeurs enregistrées changent, pas à chaque mise à
+                  jour du dossier : une saisie en cours survit à un changement d'étape. */}
+              <CoordonneesClient
+                key={[
+                  detail.id,
+                  detail.clientNom,
+                  detail.clientTelephone,
+                  detail.clientEmail,
+                  detail.clientAdresse,
+                  detail.clientCp,
+                  detail.clientVille,
+                  detail.objet,
+                  detail.source,
+                  detail.montantEstime,
+                  detail.dateChantier,
+                ].join("|")}
+                detail={detail}
+                onMisAJour={onMisAJour}
+              />
+              <Chronologie cible={{ dossier: detail.id, client: detail.client?.id ?? null }} titre="Chronologie du client" compact />
+              {onArchive ? <ArchivageDossier detail={detail} onArchive={onArchive} /> : null}
+            </div>
+          </SectionRepliable>
         </div>
       </div>
+
+      {encaisser ? <ModalePaiement detail={detail} moyenParDefaut="VIREMENT" titre={detail.paiements.resteDu > 0 ? "Encaisser le solde" : "Encaisser l'acompte"} onFermer={() => setEncaisser(false)} onFait={onMisAJour} /> : null}
 
       {generateur ? (
         <GenerateurDocument
@@ -509,30 +615,17 @@ const ICONES_EVENEMENT: Partial<Record<TypeEvenement, typeof FileText>> = {
 };
 
 function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierId: string; evenements: EvenementVue[]; onRecharger: () => Promise<void> }) {
-  const [ouvert, setOuvert] = useState(false);
   const [tout, setTout] = useState(false);
   const [mail, setMail] = useState<string | null>(null);
   const liste = tout ? evenements : evenements.slice(0, 20);
 
   return (
-    <section>
-      <button
-        type="button"
-        aria-expanded={ouvert}
-        onClick={() => setOuvert((valeur) => !valeur)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
-          Historique ({evenements.length})
-        </span>
-        <ChevronDown size={15} aria-hidden className={cn("text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
-      </button>
-      {ouvert ? (
-        <Link href={`/journal?dossierId=${dossierId}`} className={cn("mt-2 inline-flex min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
-          Journal détaillé : chaque modification, par qui et quand
-        </Link>
-      ) : null}
-      {ouvert ? (
+    <div>
+      <Link href={`/journal?dossierId=${dossierId}`} className={cn("inline-flex min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+        Journal détaillé : chaque modification, par qui et quand
+      </Link>
+      {evenements.length === 0 ? <p className="mt-2 text-[12.5px] text-[#6B7280]">Rien encore.</p> : null}
+      {evenements.length > 0 ? (
         <ol className="mt-3 space-y-3">
           {liste.map((evenement) => {
             const Icone = ICONES_EVENEMENT[evenement.type] ?? MessageSquare;
@@ -569,6 +662,6 @@ function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierI
         </ol>
       ) : null}
       {mail ? <LecteurMessage key={mail} messageId={mail} onFermer={() => setMail(null)} onModifie={() => void onRecharger()} /> : null}
-    </section>
+    </div>
   );
 }

@@ -31,23 +31,36 @@ const cleLocale = (leadId: string) => `note-appel:${leadId}`;
 const CLE_APPEL_EN_COURS = "appel-en-cours";
 const DUREE_APPEL_EN_COURS_MS = 2 * 3_600_000;
 
+/** Mission 13 (lot 4) : l'appel retenu porte aussi le nom, le dossier (quand on appelle depuis lui) et si « Comment ça s'est passé ? » a déjà été proposé. */
+export type AppelEnCours = { leadId: string; le: string; nom?: string; dossierId?: string | null; proposeLe?: string };
+
 /** Appui sur le numéro d'un contact : on retient qui l'on appelle, et depuis quand. */
-export function noterDebutAppel(leadId: string): void {
+export function noterDebutAppel(leadId: string, infos: { nom?: string; dossierId?: string | null } = {}): void {
   try {
-    localStorage.setItem(CLE_APPEL_EN_COURS, JSON.stringify({ leadId, le: new Date().toISOString() }));
+    localStorage.setItem(CLE_APPEL_EN_COURS, JSON.stringify({ leadId, le: new Date().toISOString(), ...infos }));
   } catch {
     // stockage indisponible : le retour d'appel ne ramènera simplement pas sur la note
   }
 }
 
-function appelEnCours(): { leadId: string; le: string } | null {
+export function appelEnCours(): AppelEnCours | null {
   try {
     const brut = localStorage.getItem(CLE_APPEL_EN_COURS);
     if (!brut) return null;
-    const appel = JSON.parse(brut) as { leadId: string; le: string };
+    const appel = JSON.parse(brut) as AppelEnCours;
     return Date.now() - new Date(appel.le).getTime() < DUREE_APPEL_EN_COURS_MS ? appel : null;
   } catch {
     return null;
+  }
+}
+
+/** « Plus tard » : la question ne revient pas pour cet appel (la note du contact reste ouverte). */
+export function marquerAppelPropose(): void {
+  try {
+    const appel = appelEnCours();
+    if (appel) localStorage.setItem(CLE_APPEL_EN_COURS, JSON.stringify({ ...appel, proposeLe: new Date().toISOString() }));
+  } catch {
+    // rien
   }
 }
 

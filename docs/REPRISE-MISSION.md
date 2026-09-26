@@ -1098,3 +1098,31 @@ aucun débordement horizontal (390 px partout).
 - Pièges : un onglet lu au chargement passe par `useSyncExternalStore` (instantané serveur = « activite ») pour ne pas
   casser l'hydratation ; `.next/dev/types` (générés par `next dev`) sont inclus par tsconfig et gardent les routes
   retirées : les effacer avant un `next build` qui suit un retrait de route.
+
+## Lot 4 — Raccourcis d'action (26/09)
+- **Rubriques ciblées** : `dossiers/constants.ts › RUBRIQUES_DOSSIER` (photos, messages, devis, encaisser, historique,
+  etape) ; `?dossier=<id>&rubrique=<x>` ouvre le panneau dessus (`dossiers/page.tsx` → `DossiersPilotage` →
+  `PanneauDossier { demande }`) ; les notifications de l'espace y mènent (`espace/alertes.ts › lienDossier(id, rubrique)`,
+  `prevenir({ rubrique })` : message, commentaire, autre proposition → « messages » ; photos → « photos »).
+- **Panneau du dossier** (`PanneauDossier.tsx`) : 1. ce qui attend (à compléter, prochaine action, « Encaisser l'acompte
+  X € » quand un paiement est attendu, l'étape avec ses boutons) ; 2. Photos ; 3. Historique (déplié, plus de repli
+  interne) ; puis Espace client, Devis et factures, Paiements, Simulations en `SectionRepliable` (ouvertes d'office quand
+  elles attendent un geste : espace avant signature, devis à faire ou facture à faire, paiement attendu, simulation en
+  cours ; résumé quand elles sont fermées) ; « Le reste du dossier » replié (familles, délais et prix, dépenses, étapes et
+  notes, coordonnées, chronologie, archivage). Les sections repliées reçoivent `sansTitre` (Photos, Espace, Documents,
+  Paiements, Simulations) : leurs boutons restent, leur titre est celui de la section.
+- **Encaisser en 3 gestes** : ligne → « Encaisser » (ou le bouton en tête du panneau) → `ModalePaiement` préremplie
+  (acompte du devis en vigueur ou reste des factures, virement, aujourd'hui, `moyenParDefaut`) → Enregistrer.
+- **Étape suivante en un bouton** : `CarteDossier.tsx › RaccourcisDossier` (Photos, Message, Devis, Encaisser quand
+  signé/planifié/chantier/facturé, « → Étape suivante ») sous chaque ligne compacte ; l'étape ouvre la fenêtre de
+  `ChangementEtape` (`demandeInitiale`) avec ses garde-fous (accord, acompte, motif de perte…). Espaces :
+  `RaccourcisEspace` (liens `?rubrique=`) sous chaque ligne, sur le projet le plus pressé.
+- **Note d'appel automatique** : `components/pilotage/RetourAppel.tsx` (monté dans le layout) — au retour dans l'app
+  (visibilitychange, pageshow, focus) après un « Appeler » d'au moins 15 s, une feuille « Comment ça s'est passé ? » :
+  4 issues, précision, Enregistrer (`POST /api/commercial/appels`, dossier si connu sinon lead) ou « Plus tard »
+  (`marquerAppelPropose`). `noterDebutAppel(id, { nom, dossierId })` porte le nom et le dossier (Leads, panneau du lead,
+  panneau du dossier).
+- **Messages d'espace dans Mail** : `mail/vues.ts › listerVue` rend `messagesEspace` (non lus) pour « À traiter » ;
+  `EcranMail` les affiche en tête (→ « Répondre dans son dossier », rubrique messages) ; le badge Mail de la navigation
+  les compte (`/api/pilotage/compteurs`). Aucun mail ni SMS automatique ajouté.
+- Tests : `base/mission-13-lot-4.test.ts` (2 : rubriques et liens ; message d'espace dans la boîte, lu il en sort).

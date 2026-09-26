@@ -674,6 +674,7 @@ export async function alerterPhotosDeposees(dossierId: string): Promise<{ photos
     texte: `${nombre} photo${nombre > 1 ? "s" : ""} déposée${nombre > 1 ? "s" : ""} dans son espace (${lirePhotos(dossier.photos).length} au total).\nÀ vous : préparer la simulation (annoncée ${DELAI_SIMULATION}).`,
     urgence: 4,
     telephone: dossier.clientTelephone,
+    rubrique: "photos",
   });
   return { photos: nombre };
 }
@@ -920,7 +921,7 @@ export async function commenterSimulation(espace: EspaceClient, simulationId: st
     ]);
     await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "COMMENTAIRE", texte: commentaire, simulationId, evenementId: evenement.id });
   });
-  await prevenir(espace.dossierId, { titre: `Commentaire — ${dossier?.clientNom ?? "client"}`, texte: `« ${commentaire} »`, urgence: 4, telephone: dossier?.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `Commentaire — ${dossier?.clientNom ?? "client"}`, texte: `« ${commentaire} »`, urgence: 4, telephone: dossier?.clientTelephone, rubrique: "messages" });
 }
 
 export const schemaProposition = z.object({
@@ -944,7 +945,7 @@ export async function demanderProposition(espace: EspaceClient, entree: z.output
     ]);
     await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "PROPOSITION", texte: entree.commentaire || texte, simulationId: simulation?.id ?? null, evenementId: evenement.id });
   });
-  await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone, rubrique: "messages" });
 }
 
 /* ── Devis : consultation, bon pour accord ─────────────────────────── */

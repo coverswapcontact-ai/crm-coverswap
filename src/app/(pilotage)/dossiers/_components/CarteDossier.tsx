@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, CalendarClock, ChevronRight } from "lucide-react";
-import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
+import { AlertTriangle, ArrowRight, CalendarClock, Camera, ChevronRight, Euro, FileText, MessageSquare } from "lucide-react";
+import { LIBELLES_ETAPE, type EtapeDossier, type RubriqueDossier } from "@/lib/dossiers/constants";
+import { transitionsPossibles } from "@/lib/dossiers/regles";
 import { formatJourCourt, joursDeRetard } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
@@ -201,7 +202,40 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
  * étape · montant, UN signal (retard, à compléter, à moi), chevron. Tout le
  * reste est dans le panneau, au toucher.
  */
-export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossier: DossierResume; maintenant: Date; onOuvrir: () => void }) {
+export type DemandeRaccourci = { rubrique: RubriqueDossier; etape?: EtapeDossier | null };
+const ETAPES_ENCAISSABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"];
+const CLASSE_RACCOURCI = cn("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5]", TRANS);
+
+/** Mission 13 (lot 4) : les raccourcis d'une ligne — photos, message, devis, encaisser, étape suivante — ouvrent la bonne rubrique du panneau. */
+export function RaccourcisDossier({ dossier, onOuvrir }: { dossier: Pick<DossierResume, "etape" | "etapeAvantSortie">; onOuvrir: (demande: DemandeRaccourci) => void }) {
+  const suivante = transitionsPossibles(dossier.etape, dossier.etapeAvantSortie).find((t) => t.suggeree && (t.nature === "SUIVANTE" || t.nature === "REPRISE"));
+  const encaissable = ETAPES_ENCAISSABLES.includes(dossier.etape);
+  return (
+    <div className="flex flex-wrap gap-1.5 px-4 pb-2.5 pl-4">
+      <button type="button" onClick={() => onOuvrir({ rubrique: "photos" })} aria-label="Photos" title="Photos" className={CLASSE_RACCOURCI}>
+        <Camera size={16} aria-hidden />
+      </button>
+      <button type="button" onClick={() => onOuvrir({ rubrique: "messages" })} aria-label="Messages de l'espace" title="Messages" className={CLASSE_RACCOURCI}>
+        <MessageSquare size={16} aria-hidden />
+      </button>
+      <button type="button" onClick={() => onOuvrir({ rubrique: "devis" })} aria-label="Devis et factures" title="Devis" className={CLASSE_RACCOURCI}>
+        <FileText size={16} aria-hidden />
+      </button>
+      {encaissable ? (
+        <button type="button" onClick={() => onOuvrir({ rubrique: "encaisser" })} aria-label="Encaisser" title="Encaisser" className={cn(CLASSE_RACCOURCI, "border-[#1D9E75]/45 text-[#5DCAA5]")}>
+          <Euro size={16} aria-hidden />
+        </button>
+      ) : null}
+      {suivante ? (
+        <button type="button" onClick={() => onOuvrir({ rubrique: "etape", etape: suivante.vers })} className={cn(CLASSE_RACCOURCI, "ml-auto")}>
+          <ArrowRight size={14} aria-hidden /> {LIBELLES_ETAPE[suivante.vers]}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossier: DossierResume; maintenant: Date; onOuvrir: (demande?: DemandeRaccourci) => void }) {
   const montant = montantAffiche(dossier);
   const echeance = echeanceDe(dossier, maintenant);
   const main = mainDe(dossier, maintenant);
@@ -217,7 +251,7 @@ export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
             : null;
   return (
     <li className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
-      <button type="button" onClick={onOuvrir} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", TRANS)}>
+      <button type="button" onClick={() => onOuvrir()} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", TRANS)}>
         <Lisere couleur={couleurLisere(dossier, maintenant)} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-medium text-[#F2F3F5]">
@@ -235,6 +269,7 @@ export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
         {echeance === "retard" ? <PastilleRetard /> : null}
         <ChevronRight size={16} aria-hidden className="shrink-0 text-[#4B5563]" />
       </button>
+      <RaccourcisDossier dossier={dossier} onOuvrir={onOuvrir} />
     </li>
   );
 }

@@ -18,7 +18,7 @@ import { Bouton, CLASSE_SAISIE, Modale, TitreSection } from "./ui";
 const AUTOMATIQUE = "";
 
 /** Montant attendu : reste des factures, sinon l'acompte prévu au devis en vigueur. */
-function montantAttendu(detail: DossierDetail): number | null {
+export function montantAttendu(detail: DossierDetail): number | null {
   const { paiements } = detail;
   if (paiements.resteDu > 0) return paiements.resteDu;
   if (paiements.pieces.some((piece) => piece.type === "FACTURE" && piece.active)) return null;
@@ -33,13 +33,13 @@ function libellePiece(piece: PieceVue): string {
   return `Facture ${piece.numero}${piece.reste !== null ? ` · reste ${formatMontant(piece.reste)}` : ""}`;
 }
 
-function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; onFermer: () => void; onFait: (detail: DossierDetail) => void }) {
+export function ModalePaiement({ detail, onFermer, onFait, moyenParDefaut = null, titre }: { detail: DossierDetail; onFermer: () => void; onFait: (detail: DossierDetail) => void; moyenParDefaut?: SaisiePaiement["moyen"]; titre?: string }) {
   // Une facture en cours : le paiement la règle ; sinon, c'est un acompte sur un devis.
   const factureActive = detail.paiements.pieces.some((piece) => piece.type === "FACTURE" && piece.active);
   const pieces = detail.paiements.pieces.filter((piece) =>
     factureActive ? piece.type === "FACTURE" && piece.active && (piece.reste ?? 0) > 0 : piece.type === "DEVIS" && piece.active
   );
-  const [saisie, setSaisie] = useState<SaisiePaiement>(() => saisiePaiement(montantAttendu(detail)));
+  const [saisie, setSaisie] = useState<SaisiePaiement>(() => ({ ...saisiePaiement(montantAttendu(detail)), moyen: moyenParDefaut }));
   const [piece, setPiece] = useState(AUTOMATIQUE);
   const [envoi, setEnvoi] = useState(false);
   const { paiement } = lirePaiement(saisie);
@@ -69,7 +69,7 @@ function ModalePaiement({ detail, onFermer, onFait }: { detail: DossierDetail; o
       ouverte
       onFermer={onFermer}
       largeur="sm"
-      titre="Enregistrer un paiement reçu"
+      titre={titre ?? "Enregistrer un paiement reçu"}
       description="À la date où il a été reçu, même avant l'ouverture du dossier. Sans devis ni facture, il reste non imputé : il ira sur la facture."
       pied={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -250,7 +250,7 @@ function LigneEncaissement({
   );
 }
 
-export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
+export function PaiementsDossier({ detail, onMisAJour, sansTitre = false }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void; sansTitre?: boolean }) {
   const [saisie, setSaisie] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
   const [correction, setCorrection] = useState<EncaissementVue | null>(null);
@@ -260,17 +260,15 @@ export function PaiementsDossier({ detail, onMisAJour }: { detail: DossierDetail
   const recu = paiements.encaissements.filter((encaissement) => encaissement.statut === "VALIDE").reduce((somme, encaissement) => somme + encaissement.montant, 0);
   const aDocuments = paiements.pieces.length > 0;
 
+  const actions = (
+    <Bouton taille="sm" variante="secondaire" icone={<Plus size={13} aria-hidden />} onClick={() => setSaisie(true)}>
+      Paiement reçu
+    </Bouton>
+  );
+
   return (
     <section>
-      <TitreSection
-        action={
-          <Bouton taille="sm" variante="secondaire" icone={<Plus size={13} aria-hidden />} onClick={() => setSaisie(true)}>
-            Paiement reçu
-          </Bouton>
-        }
-      >
-        Paiements
-      </TitreSection>
+      {sansTitre ? <div className="mb-3 flex justify-end">{actions}</div> : <TitreSection action={actions}>Paiements</TitreSection>}
 
       {!aDocuments && paiements.encaissements.length === 0 ? (
         <p className="text-[12.5px] text-[#6B7280]">Aucun paiement enregistré.</p>

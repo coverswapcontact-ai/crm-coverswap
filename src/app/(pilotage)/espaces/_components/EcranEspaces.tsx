@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, ChevronDown, Copy, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
+import { Camera, Check, ChevronDown, Copy, Euro, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, MessageSquare, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
@@ -209,12 +209,38 @@ function LigneClientEspace({ client, maintenant, ouvert, onBasculer, onRecharger
         </span>
         <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
       </button>
+      {/* Mission 13 (lot 4) : les raccourcis du projet le plus pressé — photos, messages, devis, encaisser — ouvrent la rubrique du dossier. */}
+      {client.projets[0] ? <RaccourcisEspace dossierId={client.projets[0].dossierId} encaissable={Boolean(client.projets[0].faits.accord) && !client.projets[0].faits.paiement?.regle} /> : null}
       {ouvert ? (
         <div className="border-t-[0.5px] border-[#2A2D34] bg-[#16181D] p-2">
           <CarteClient client={client} maintenant={maintenant} onRecharger={onRecharger} />
         </div>
       ) : null}
     </li>
+  );
+}
+
+const CLASSE_RACCOURCI = cn("flex h-11 min-w-11 items-center justify-center rounded-[10px] border-[0.5px] border-[#2A2D34] px-2.5 text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5]", TRANS);
+
+function RaccourcisEspace({ dossierId, encaissable }: { dossierId: string; encaissable: boolean }) {
+  const vers = (rubrique: string) => `/dossiers?dossier=${dossierId}&rubrique=${rubrique}`;
+  return (
+    <div className="flex gap-1.5 px-3.5 pb-2.5">
+      <Link href={vers("photos")} aria-label="Photos" title="Photos" className={CLASSE_RACCOURCI}>
+        <Camera size={16} aria-hidden />
+      </Link>
+      <Link href={vers("messages")} aria-label="Messages de l'espace" title="Messages" className={CLASSE_RACCOURCI}>
+        <MessageSquare size={16} aria-hidden />
+      </Link>
+      <Link href={vers("devis")} aria-label="Devis" title="Devis" className={CLASSE_RACCOURCI}>
+        <FileText size={16} aria-hidden />
+      </Link>
+      {encaissable ? (
+        <Link href={vers("encaisser")} aria-label="Encaisser" title="Encaisser" className={cn(CLASSE_RACCOURCI, "border-[#1D9E75]/45 text-[#5DCAA5]")}>
+          <Euro size={16} aria-hidden />
+        </Link>
+      ) : null}
+    </div>
   );
 }
 

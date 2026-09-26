@@ -24,9 +24,9 @@ const moyen = (m: string | null) => (m && m in LIBELLES_MOYEN ? LIBELLES_MOYEN[m
 const LIBELLES_SOURCE: Record<string, string> = { SITE: "Faite sur le site", CLIENT: "Créée par le client", API: "Préparée par moi", CHATGPT: "Préparée par moi", MANUEL: "Déposée par moi" };
 
 /** Une rubrique du bloc : titre, pastille d'état à droite, contenu. */
-function Rubrique({ titre, etat, children }: { titre: string; etat?: React.ReactNode; children: React.ReactNode }) {
+function Rubrique({ titre, etat, id, children }: { titre: string; etat?: React.ReactNode; id?: string; children: React.ReactNode }) {
   return (
-    <div className="border-t-[0.5px] border-[#2A2D34] pt-3 first:border-t-0 first:pt-0">
+    <div id={id} className="border-t-[0.5px] border-[#2A2D34] pt-3 first:border-t-0 first:pt-0">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{titre}</h4>
         {etat}
@@ -51,6 +51,7 @@ export function EspaceDossier({
   onFaireDevis,
   onAjouterDevis,
   onDeposerPdf,
+  sansTitre = false,
 }: {
   detail: DossierDetail;
   onRecharger: () => Promise<void>;
@@ -58,6 +59,8 @@ export function EspaceDossier({
   /** Mission 11 : un devis de plus (lignes + libellé) ; un devis PDF déjà fait (numéro + libellé). */
   onAjouterDevis?: () => void;
   onDeposerPdf?: () => void;
+  /** Mission 13 (lot 4) : le panneau porte déjà le titre (section repliable). */
+  sansTitre?: boolean;
 }) {
   const [espace, setEspace] = useState<VueEspaceCrm | null | undefined>(undefined);
   const [occupe, setOccupe] = useState<string | null>(null);
@@ -149,7 +152,7 @@ export function EspaceDossier({
   if (espace === undefined) {
     return (
       <section>
-        <TitreSection>Espace client</TitreSection>
+        {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
         <p className="text-[13px] text-[#6B7280]">Chargement…</p>
       </section>
     );
@@ -157,7 +160,7 @@ export function EspaceDossier({
   if (espace === null) {
     return (
       <section>
-        <TitreSection>Espace client</TitreSection>
+        {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
         <div className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4">
           <p className="text-[13px] text-[#9CA3AF]">Pas encore d&apos;espace pour ce dossier. Le client y déposera ses photos, validera son projet, créera ses simulations et donnera son bon pour accord, sans compte ni mot de passe.</p>
           <Bouton className="mt-3" variante="primaire" icone={<Link2 size={14} aria-hidden />} chargement={occupe === "ouvrir"} onClick={() => void lien("ouvrir", "Espace client ouvert")}>
@@ -178,7 +181,7 @@ export function EspaceDossier({
 
   return (
     <section>
-      <TitreSection>Espace client</TitreSection>
+      {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
       <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void charger()} />
       <div className="space-y-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
         {/* Où il en est : les cinq onglets de son espace, tels qu'il les voit. */}
@@ -555,7 +558,7 @@ export function EspaceDossier({
         ) : null}
 
         {/* Mission 10 : ses messages, et ma réponse dans son espace (onglet Contact du client, notification par mail). */}
-        <Rubrique titre="Messages" etat={espace.messagesNonLus ? <Pastille ton="ambre">{espace.messagesNonLus} non lu{espace.messagesNonLus > 1 ? "s" : ""}</Pastille> : espace.messages.length ? <Pastille ton="neutre">{espace.messages.length}</Pastille> : undefined}>
+        <Rubrique id="rubrique-messages" titre="Messages" etat={espace.messagesNonLus ? <Pastille ton="ambre">{espace.messagesNonLus} non lu{espace.messagesNonLus > 1 ? "s" : ""}</Pastille> : espace.messages.length ? <Pastille ton="neutre">{espace.messages.length}</Pastille> : undefined}>
           {espace.messages.length ? (
             <ul className="space-y-1.5">
               {espace.messages.slice(0, 12).map((m) => (

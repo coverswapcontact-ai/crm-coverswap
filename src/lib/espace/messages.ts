@@ -16,9 +16,9 @@ import { lienPourLeProjet } from "./liens";
  * passe la main au client. Rien ne se supprime.
  */
 
-export const SOURCES_MESSAGE_ESPACE = ["MESSAGE", "COMMENTAIRE", "PROPOSITION", "REPONSE"] as const;
-export type SourceMessageEspace = (typeof SOURCES_MESSAGE_ESPACE)[number];
-export const LIBELLES_SOURCE_MESSAGE: Record<SourceMessageEspace, string> = { MESSAGE: "message", COMMENTAIRE: "commentaire sur une simulation", PROPOSITION: "demande d'autre proposition", REPONSE: "réponse de CoverSwap" };
+// Mission 13 (lot 4) : les constantes vivent dans messages-constantes.ts (importable par les écrans, sans dépendance serveur).
+import { LIBELLES_SOURCE_MESSAGE, SOURCES_MESSAGE_ESPACE, type SourceMessageEspace } from "./messages-constantes";
+export { LIBELLES_SOURCE_MESSAGE, SOURCES_MESSAGE_ESPACE, type SourceMessageEspace };
 
 /** Un fait que le CRM ne donne pas s'écrit ainsi dans un brouillon : la réponse ne part pas tant qu'il en reste. */
 export const A_COMPLETER = /\[\s*à\s+compl[ée]ter\s*\]/i;

@@ -139,7 +139,7 @@ function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir
         </span>
       </button>
       {archive ? null : lead.telephoneLien ? (
-        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
+        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
           <Phone size={18} aria-hidden />
         </a>
       ) : (
@@ -291,7 +291,7 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
               {lead.simulations.length > 0 ? <SesSimulations simulations={lead.simulations} dossierId={lead.dossierId} /> : null}
 
               {lead.telephoneLien ? (
-                <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id)} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
+                <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
                   <Phone size={22} aria-hidden /> {lead.telephone}
                 </a>
               ) : (

@@ -188,6 +188,11 @@ export const LIBELLES_SOURCE: Record<SourceDossier, string> = {
   INCONNUE: "Non renseignée",
 };
 
+// Mission 13 (lot 4) : les rubriques du panneau d'un dossier qu'un raccourci peut ouvrir directement (?rubrique= dans l'adresse).
+export const RUBRIQUES_DOSSIER = ["photos", "messages", "devis", "encaisser", "historique", "etape"] as const;
+export type RubriqueDossier = (typeof RUBRIQUES_DOSSIER)[number];
+export const estRubriqueDossier = (valeur: string | null | undefined): valeur is RubriqueDossier => (RUBRIQUES_DOSSIER as readonly string[]).includes(valeur ?? "");
+
 // Mission 13 (26/09/2026) : les deux prochaines actions que le système pose lui-même autour du devis.
 // « Préparer le devis … » vient de l'espace (le client a choisi une simulation) ; un devis généré OU déposé la remplace.
 export const PROCHAINE_ACTION_PREPARER_DEVIS = "Préparer le devis";

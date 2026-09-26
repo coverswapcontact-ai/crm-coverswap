@@ -9,13 +9,14 @@ import { alerter } from "@/lib/alertes/canaux";
 export const ACTEUR = { acteur: "EXTERNE:espace-client", origine: "espace-client" } as const;
 
 const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
-export const lienDossier = (dossierId: string) => `${appUrl()}/dossiers?dossier=${dossierId}`;
+/** Mission 13 (lot 4) : `rubrique` (photos, messages, devis, encaisser, historique, etape) ouvre le panneau dessus. */
+export const lienDossier = (dossierId: string, rubrique?: string | null) => `${appUrl()}/dossiers?dossier=${dossierId}${rubrique ? `&rubrique=${rubrique}` : ""}`;
 const CANAUX_POUSSES = ["telegram", "ntfy", "pushweb"] as const;
 
-export async function prevenir(dossierId: string, alerte: { titre: string; texte: string; urgence: 1 | 2 | 3 | 4 | 5; telephone?: string | null; etiquette?: string }, origine = "espace-client"): Promise<void> {
+export async function prevenir(dossierId: string, alerte: { titre: string; texte: string; urgence: 1 | 2 | 3 | 4 | 5; telephone?: string | null; etiquette?: string; rubrique?: string | null }, origine = "espace-client"): Promise<void> {
   try {
     await alerter(
-      { titre: alerte.titre, texte: alerte.texte, lien: lienDossier(dossierId), libelleLien: "Ouvrir le dossier", telephone: alerte.telephone || undefined, urgence: alerte.urgence, etiquette: alerte.etiquette ?? `espace-${dossierId}` },
+      { titre: alerte.titre, texte: alerte.texte, lien: lienDossier(dossierId, alerte.rubrique), libelleLien: "Ouvrir le dossier", telephone: alerte.telephone || undefined, urgence: alerte.urgence, etiquette: alerte.etiquette ?? `espace-${dossierId}` },
       { origine, canaux: [...CANAUX_POUSSES] }
     );
   } catch (erreur) {

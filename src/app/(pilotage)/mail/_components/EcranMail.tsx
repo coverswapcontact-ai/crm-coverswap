@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, Modale, TRANS } from "@/components/pilotage/ui";
-import type { CompteursMail, LigneMail, VueMail } from "@/lib/mail/vues";
+import type { ListeMail, LigneMail, VueMail } from "@/lib/mail/vues";
+import { LIBELLES_SOURCE_MESSAGE } from "@/lib/espace/messages-constantes";
 import { cn } from "@/lib/utils";
 import { PanneauMail } from "./PanneauMail";
 
@@ -18,7 +19,7 @@ import { PanneauMail } from "./PanneauMail";
  * archiver, ne plus voir cet expéditeur.
  */
 
-type Liste = { lignes: LigneMail[]; compteurs: CompteursMail };
+type Liste = ListeMail;
 
 const VUES: { vue: Exclude<VueMail, "RANGES">; libelle: string; aide: string }[] = [
   { vue: "A_TRAITER", libelle: "À traiter", aide: "Ce qui attend une réponse ou une action de votre part, par valeur : réclamations, devis en attente, dossiers, leads, échéances. Un mail remis à plus tard revient en tête, marqué « Revenu »." },
@@ -257,12 +258,38 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
 
       {aide ? <p className="text-[12.5px] text-[#8B919C]">{aide}</p> : null}
 
-      {liste.lignes.length === 0 ? (
+      {/* Mission 13 (lot 4) : une seule boîte — les messages écrits dans l'espace client sont ici aussi, à traiter. */}
+      {vue === "A_TRAITER" && liste.messagesEspace?.length ? (
+        <section className="rounded-[12px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/50 p-3.5">
+          <h2 className="text-[12px] font-medium tracking-wide text-[#5DCAA5] uppercase">
+            Messages de l&apos;espace client · {liste.messagesEspace.length}
+          </h2>
+          <ul className="mt-2 space-y-1.5">
+            {liste.messagesEspace.map((m) => (
+              <li key={m.id}>
+                <Link href={`/dossiers?dossier=${m.dossierId}&rubrique=messages`} className={cn("block min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2 hover:border-[#3A3E47]", TRANS)}>
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#F2F3F5]">{m.clientNom}</span>
+                    <span className="shrink-0 text-[12px] text-[#8B919C]">{quand(m.le)}</span>
+                  </span>
+                  <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-[#D1D5DB]">
+                    {m.source !== "MESSAGE" ? <span className="text-[#8B919C]">{LIBELLES_SOURCE_MESSAGE[m.source]} · </span> : null}
+                    {m.texte}
+                  </span>
+                  <span className="mt-1 block text-[12px] text-[#5DCAA5]">Répondre dans son dossier →</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {liste.lignes.length === 0 && !(vue === "A_TRAITER" && liste.messagesEspace?.length) ? (
         <EtatVide
           titre={vue === "A_TRAITER" ? "Rien à traiter" : vue === "RANGES" ? "Rien de rangé" : "Aucun mail ici"}
           texte={vue === "A_TRAITER" ? "Tout ce qui attendait une réponse est traité. Les nouveaux mails arrivent ici dans la minute." : undefined}
         />
-      ) : (
+      ) : liste.lignes.length === 0 ? null : (
         <ul className="space-y-2">
           {liste.lignes.map((ligne) => (
             <LigneConversation key={ligne.fil} ligne={ligne} vue={vue} occupe={occupe === ligne.messageId} onOuvrir={() => setOuvert(ligne.messageId)} onGeste={(action) => void geste(ligne, action)} />

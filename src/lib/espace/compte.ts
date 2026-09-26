@@ -248,5 +248,5 @@ export async function envoyerMessage(permanent: EspacePermanent, projet: EspaceC
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true } });
   const evenement = await avecActeur(ACTEUR, () => prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_MESSAGE", direction: "ENTRANT", contenu: `Message du client depuis son espace : « ${texte} »`.slice(0, 2100), metadata: JSON.stringify({ permanentId: permanent.id }) } }));
   await avecActeur(ACTEUR, () => enregistrerMessageClient({ dossierId, espaceId: projet?.id ?? projets.at(-1)?.id ?? null, source: "MESSAGE", texte, evenementId: evenement.id }));
-  await prevenir(dossierId, { titre: `Message — ${dossier?.clientNom ?? "client"}`, texte: `« ${texte.slice(0, 600)} »\nÀ vous : lui répondre (appel ou SMS).`, urgence: 4, telephone: dossier?.clientTelephone, etiquette: `message-${dossierId}` });
+  await prevenir(dossierId, { titre: `Message — ${dossier?.clientNom ?? "client"}`, texte: `« ${texte.slice(0, 600)} »\nÀ vous : lui répondre (appel ou SMS).`, urgence: 4, telephone: dossier?.clientTelephone, etiquette: `message-${dossierId}`, rubrique: "messages" });
 }

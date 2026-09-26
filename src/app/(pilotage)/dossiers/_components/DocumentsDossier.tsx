@@ -235,11 +235,13 @@ export function DocumentsDossier({
   onGenerer,
   onRefaire,
   onMisAJour,
+  sansTitre = false,
 }: {
   detail: DossierDetail;
   onGenerer: (type: TypeDocument) => void;
   onRefaire: (devis: DocumentVue) => void;
   onMisAJour: (detail: DossierDetail) => void;
+  sansTitre?: boolean;
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
   const [devisAAnnuler, setDevisAAnnuler] = useState<DocumentVue | null>(null);
@@ -257,7 +259,7 @@ export function DocumentsDossier({
 
   return (
     <section>
-      <TitreSection>Documents</TitreSection>
+      {sansTitre ? null : <TitreSection>Documents</TitreSection>}
       <div className="flex flex-wrap gap-2">
         <Bouton variante="primaire" icone={<FilePlus2 size={14} aria-hidden />} onClick={() => onGenerer("DEVIS")}>
           Générer un devis

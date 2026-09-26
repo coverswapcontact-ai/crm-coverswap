@@ -4,6 +4,7 @@ import { reponseErreur } from "@/lib/commun/api";
 import { rappelConnexionGoogle } from "@/lib/google/connexion";
 import { compterLeadsAAppeler } from "@/lib/prospects/leads";
 import { conversations, filtrerVue } from "@/lib/mail/vues";
+import { compterMessagesNonLus } from "@/lib/espace/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,15 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const [leadsAAppeler, tachesEnEchec, rappelGoogle, lignesMail] = await Promise.all([
+    const [leadsAAppeler, tachesEnEchec, rappelGoogle, lignesMail, messagesEspace] = await Promise.all([
       compterLeadsAAppeler(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
       rappelConnexionGoogle(),
       conversations(),
+      compterMessagesNonLus(),
     ]);
-    // Onglet Mail : les conversations « À traiter » (mission 7 ; le compteur SMS a quitté le menu avec l'onglet).
-    const mailATraiter = filtrerVue(lignesMail, "A_TRAITER").length;
+    // Onglet Mail : les conversations « À traiter » (mission 7) et, depuis la mission 13, les messages non lus de l'espace client.
+    const mailATraiter = filtrerVue(lignesMail, "A_TRAITER").length + messagesEspace;
     return NextResponse.json({ leadsAAppeler, tachesEnEchec, rappelGoogle, mailATraiter });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");

@@ -191,7 +191,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
           )}
           {telephone ? (
             <>
-              <a href={`tel:${telephone}`} onClick={() => noterDebutAppel(detail.id)} className={LIEN_ACTION}>
+              <a href={`tel:${telephone}`} onClick={() => noterDebutAppel(detail.id, { nom: detail.nom, dossierId: detail.dossier?.id ?? null })} className={LIEN_ACTION}>
                 <Phone size={14} aria-hidden /> {detail.telephone}
               </a>
             </>

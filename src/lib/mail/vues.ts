@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { messagesEspace, type MessageEspaceVue } from "@/lib/espace/messages";
 import { lireListe } from "@/lib/messages/stockage";
 import { demanderEtatGmail } from "./boite";
 import { comparerPriorite, estReclamation, lireDatesExtraites, prioriteDe, type Priorite } from "./priorite";
@@ -237,13 +238,16 @@ export function compter(lignes: LigneMail[]): CompteursMail {
   };
 }
 
-export async function listerVue(vue: VueMail, options: { recherche?: string; limite?: number } = {}): Promise<{ lignes: LigneMail[]; compteurs: CompteursMail }> {
-  const toutes = await conversations();
+export type ListeMail = { lignes: LigneMail[]; compteurs: CompteursMail; /** Mission 13 (lot 4) : les messages non lus de l'espace client, dans la même boîte « À traiter ». */ messagesEspace: MessageEspaceVue[] };
+
+export async function listerVue(vue: VueMail, options: { recherche?: string; limite?: number } = {}): Promise<ListeMail> {
+  const [toutes, messages] = await Promise.all([conversations(), vue === "A_TRAITER" ? messagesEspace({ nonLus: true, limite: 30 }) : Promise.resolve([])]);
   const recherche = options.recherche?.trim().toLowerCase();
   const filtrees = filtrerVue(toutes, vue).filter(
     (l) => !recherche || [l.correspondant.adresse, l.correspondant.nom, l.objet, l.extrait, l.contact?.nom].some((champ) => champ?.toLowerCase().includes(recherche))
   );
-  return { lignes: filtrees.slice(0, options.limite ?? 200), compteurs: compter(toutes) };
+  const messagesEspaceVus = messages.filter((m) => !recherche || [m.clientNom, m.texte].some((champ) => champ.toLowerCase().includes(recherche)));
+  return { lignes: filtrees.slice(0, options.limite ?? 200), compteurs: compter(toutes), messagesEspace: messagesEspaceVus };
 }
 
 /**

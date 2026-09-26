@@ -38,9 +38,11 @@ function Vignette({ photo, taille, className }: { photo: PhotoVue; taille: strin
 export function PhotosDossier({
   detail,
   onRecharger,
+  sansTitre = false,
 }: {
   detail: DossierDetail;
   onRecharger: () => Promise<void>;
+  sansTitre?: boolean;
 }) {
   const entree = useRef<HTMLInputElement>(null);
   const entreeApres = useRef<HTMLInputElement>(null);
@@ -96,10 +98,7 @@ export function PhotosDossier({
     }
   }
 
-  return (
-    <section>
-      <TitreSection
-        action={
+  const actions = (
           <>
             <input
               ref={entree}
@@ -140,10 +139,11 @@ export function PhotosDossier({
               {envoi && !envoi.apres ? envoi.texte : "Ajouter"}
             </Bouton>
           </>
-        }
-      >
-        Photos du chantier ({avant.length})
-      </TitreSection>
+  );
+
+  return (
+    <section>
+      {sansTitre ? <div className="mb-3 flex flex-wrap items-center justify-end gap-2">{actions}</div> : <TitreSection action={actions}>Photos du chantier ({avant.length})</TitreSection>}
 
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {avant.map((photo) => (

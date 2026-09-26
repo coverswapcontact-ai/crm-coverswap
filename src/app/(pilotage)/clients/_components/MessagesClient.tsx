@@ -39,7 +39,7 @@ export function MessagesClient({ clientId }: { clientId: string }) {
               <button
                 type="button"
                 onClick={() => setOuvert(message.id)}
-                className={cn("flex min-h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] hover:bg-[#22262D]", TRANS)}
+                className={cn("flex min-h-11 sm:min-h-10 w-full items-center gap-2 rounded-[8px] px-2 text-left text-[13px] hover:bg-[#22262D]", TRANS)}
               >
                 {message.sens === "SORTANT" ? <ArrowUpRight size={13} aria-hidden className="shrink-0 text-[#93C5FD]" /> : null}
                 <span className="min-w-0 flex-1 truncate text-[#D1D5DB]">{message.objet ?? "(sans objet)"}</span>

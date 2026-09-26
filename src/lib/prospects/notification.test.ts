@@ -50,7 +50,7 @@ describe("push des demandes du site", () => {
     assert.equal(recues.length, 1);
     assert.match(recues[0].titre ?? "", /PRIORITAIRE/);
     assert.match(recues[0].titre ?? "", /Simulation sur le site/);
-    assert.match(recues[0].corps, /2 simulation\(s\) — dossier ouvert, photos rangées/);
+    assert.match(recues[0].corps, /2 simulations — dossier ouvert, photos rangées/);
     assert.match(recues[0].actions ?? "", /\/dossiers\?dossier=dossier123/);
     assert.match(recues[0].actions ?? "", /tel:\+33612345678/);
     assert.equal(recues[0].priorite, "5");

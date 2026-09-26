@@ -67,7 +67,7 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
   };
 }
 
-const CLASSE_ONGLET = "flex h-9 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7";
+const CLASSE_ONGLET = "flex h-11 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7";
 
 const CLE_INACTIFS = "dossiers:masquer-inactifs";
 const JOURS_INACTIF = 30;
@@ -320,7 +320,7 @@ export default function DossiersPilotage({
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Client, ville, objet…"
             className={cn(
-              "h-10 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
               "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
               TRANS
             )}
@@ -333,7 +333,7 @@ export default function DossiersPilotage({
             aria-pressed={afficherSorties}
             onClick={() => setAfficherSorties((valeur) => !valeur)}
             className={cn(
-              "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
+              "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
               afficherSorties
                 ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
                 : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
@@ -352,7 +352,7 @@ export default function DossiersPilotage({
             onClick={basculerInactifs}
             title="Dossiers sans activité depuis 30 jours, où le client a la main"
             className={cn(
-              "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
+              "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
               masquerInactifs
                 ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
                 : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
@@ -365,7 +365,7 @@ export default function DossiersPilotage({
           </button>
         ) : null}
 
-        <Bouton variante="fantome" taille="sm" icone={<Archive size={13} aria-hidden />} onClick={() => setArchivesOuvertes(true)} aria-label="Dossiers archivés" className="h-10 sm:ml-auto sm:h-7">
+        <Bouton variante="fantome" taille="sm" icone={<Archive size={13} aria-hidden />} onClick={() => setArchivesOuvertes(true)} aria-label="Dossiers archivés" className="h-11 sm:ml-auto sm:h-7">
           <span className="sr-only sm:not-sr-only">Archivés</span>
         </Bouton>
 
@@ -377,7 +377,7 @@ export default function DossiersPilotage({
           aria-controls="legende-dossiers"
           onClick={() => setLegendeOuverte((valeur) => !valeur)}
           aria-label="Légende"
-          className="h-10 sm:h-7"
+          className="h-11 sm:h-7"
         >
           <span className="sr-only sm:not-sr-only">Légende</span>
         </Bouton>
@@ -388,7 +388,7 @@ export default function DossiersPilotage({
             <select
               value={tri.cle}
               onChange={(evenement) => trier(evenement.target.value as CleTri)}
-              className="h-10 min-w-0 flex-1 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 text-[16px] text-[#F2F3F5] [color-scheme:dark]"
+              className="h-11 sm:h-10 min-w-0 flex-1 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 text-[16px] text-[#F2F3F5] [color-scheme:dark]"
             >
               {(Object.keys(LIBELLES_TRI) as CleTri[]).map((cle) => (
                 <option key={cle} value={cle}>

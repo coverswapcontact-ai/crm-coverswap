@@ -5,6 +5,7 @@ import { CODES_LIEN_MAIL, proposerLienParSms } from "@/lib/mail/lien-espace";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
+import { accord, pluriel } from "@/lib/commun/format";
 
 /**
  * L'espace client depuis l'assistant (mission 10) : lire ce que les clients
@@ -32,12 +33,12 @@ export const outilMessagesEspace = definirOutil({
       const liste = await messagesEspace({ dossierId: r.ids.dossierId, limite: e.limite ?? 30 });
       if (liste.length === 0) return { texte: `Aucun message échangé avec ${r.ids.nom} dans son espace.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
       const nonLus = liste.filter((m) => m.auteur === "CLIENT" && !m.luLe).length;
-      return { texte: `${liste.length} message(s) avec ${r.ids.nom}${nonLus ? `, ${nonLus} non lu(s)` : ""} (du plus récent au plus ancien) :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus, messages: liste }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
+      return { texte: `${pluriel(liste.length, "message")} avec ${r.ids.nom}${nonLus ? `, ${pluriel(nonLus, "non lu")}` : ""} (du plus récent au plus ancien) :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus, messages: liste }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
     }
     const liste = await messagesEspace({ nonLus: !e.tout, limite: e.limite ?? 30 });
     const total = await compterMessagesNonLus();
     if (liste.length === 0) return { texte: e.tout ? "Aucun message d'espace récent." : "Aucun message d'espace non lu.", donnees: { nonLus: total, messages: [] } };
-    return { texte: `${e.tout ? `${liste.length} message(s) récent(s), ${total} non lu(s)` : `${total} message(s) non lu(s)`} :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus: total, messages: liste }, liens: [lien("Espaces clients", "/espaces")] };
+    return { texte: `${e.tout ? `${pluriel(liste.length, "message récent", "messages récents")}, ${pluriel(total, "non lu")}` : `${pluriel(total, "message non lu", "messages non lus")}`} :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus: total, messages: liste }, liens: [lien("Espaces clients", "/espaces")] };
   },
 });
 
@@ -52,7 +53,7 @@ export const outilMarquerMessagesLus = definirOutil({
     if (r.ambigu) return r.ambigu;
     if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
     const n = await marquerMessagesLus(r.ids.dossierId);
-    return { texte: n ? `${n} message(s) de ${r.ids.nom} marqué(s) lu(s).` : `Aucun message non lu chez ${r.ids.nom}.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
+    return { texte: n ? `${pluriel(n, "message")} de ${r.ids.nom} ${accord(n, "marqué lu", "marqués lus")}.` : `Aucun message non lu chez ${r.ids.nom}.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
   },
 });
 
@@ -76,7 +77,7 @@ export const outilRepondreEspace = definirOutil({
     if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ni d'espace : ouvre-les d'abord (« ouvrir_dossier », « lien_espace »).`, 409);
     const envoi = await repondreDansLEspace(r.ids.dossierId, e.texte, { commande: contexte.commande });
     return {
-      texte: `Réponse envoyée dans l'espace de ${envoi.clientNom} : « ${envoi.message.texte} ». ${envoi.notification.programme ? "Notification par mail programmée." : `Pas de notification par mail : ${envoi.notification.raison ?? "raison inconnue"} — dis-le à Lucas (un SMS ou un appel peut prendre le relais).`}${envoi.messagesLus ? ` ${envoi.messagesLus} message(s) du client marqué(s) lu(s).` : ""}`,
+      texte: `Réponse envoyée dans l'espace de ${envoi.clientNom} : « ${envoi.message.texte} ». ${envoi.notification.programme ? "Notification par mail programmée." : `Pas de notification par mail : ${envoi.notification.raison ?? "raison inconnue"} — dis-le à Lucas (un SMS ou un appel peut prendre le relais).`}${envoi.messagesLus ? ` ${pluriel(envoi.messagesLus, "message du client marqué lu", "messages du client marqués lus")}.` : ""}`,
       donnees: { message: envoi.message, notification: envoi.notification, lien: envoi.lien },
       liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)],
     };

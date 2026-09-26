@@ -147,7 +147,7 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
         titre="Simulateur"
         sousTitre="Une photo du client, une teinte par zone : par l'API, ou préparé pour ChatGPT."
         actions={
-          <Link href="/simulateur/prompts" className={cn("inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+          <Link href="/simulateur/prompts" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
             <BookText size={14} aria-hidden /> Prompts
           </Link>
         }
@@ -171,7 +171,7 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
               </div>
               {contexte.projet?.resume ? <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#9CA3AF]">Son projet : {contexte.projet.resume}</p> : null}
               <div className="mt-2 flex gap-1.5">
-                <Link href={`/dossiers?dossier=${contexte.dossier.id}`} className="inline-flex h-8 items-center rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:underline">
+                <Link href={`/dossiers?dossier=${contexte.dossier.id}`} className="inline-flex h-11 sm:h-8 items-center rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:underline">
                   Dossier
                 </Link>
                 <Bouton taille="sm" variante="fantome" onClick={() => { setDossierId(null); setContexte(null); }}>
@@ -217,7 +217,7 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                       setType(t.id);
                       setPreparation(null);
                     }}
-                    className={cn("min-h-9 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-8", type === t.id ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+                    className={cn("min-h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-8", type === t.id ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
                   >
                     {t.libelle}
                     {contexte.typeSuggere === t.id ? <span className="ml-1 text-[11px] opacity-70">· suggéré</span> : null}
@@ -254,7 +254,7 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                         <p className="line-clamp-2 text-[12px] text-[#9CA3AF]">{teinte ? `${teinte.ref} · ${teinte.nom} · ${teinte.resume}` : "Inchangé"}</p>
                       </div>
                       {teinte ? (
-                        <button type="button" aria-label={`Retirer la teinte de ${ZONES[zone].libelle}`} onClick={() => setTeintes((t) => ({ ...t, [zone]: undefined }))} className="flex h-9 w-9 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
+                        <button type="button" aria-label={`Retirer la teinte de ${ZONES[zone].libelle}`} onClick={() => setTeintes((t) => ({ ...t, [zone]: undefined }))} className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
                           <X size={15} aria-hidden />
                         </button>
                       ) : null}

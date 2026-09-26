@@ -126,10 +126,10 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
               </Bouton>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <a href={`${preparation.photo}?telecharger=1`} download className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+              <a href={`${preparation.photo}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
                 <Download size={13} aria-hidden /> Photo avant
               </a>
-              <a href={`${preparation.planche}?telecharger=1`} download className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+              <a href={`${preparation.planche}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
                 <Download size={13} aria-hidden /> Planche des teintes
               </a>
             </div>

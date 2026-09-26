@@ -7,6 +7,7 @@ import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les actions qui manquaient à l'assistant (mission 10) : modifier un dossier
@@ -90,7 +91,7 @@ export const outilAnnulerModification = definirOutil({
       const derniere = await derniereModification(r.ids.dossierId);
       if (!derniere) {
         const passees = await listerModifications(r.ids.dossierId, 3);
-        return { texte: passees.length ? `Aucune modification à annuler chez ${r.ids.nom} : les ${passees.length} dernière(s) sont déjà annulées.` : `Aucune modification enregistrée par l'assistant sur le dossier de ${r.ids.nom}.` };
+        return { texte: passees.length ? `Aucune modification à annuler chez ${r.ids.nom} : les ${pluriel(passees.length, "dernière")} sont déjà annulées.` : `Aucune modification enregistrée par l'assistant sur le dossier de ${r.ids.nom}.` };
       }
       modificationId = derniere.id;
     }

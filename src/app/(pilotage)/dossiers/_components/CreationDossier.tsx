@@ -257,7 +257,7 @@ export function CreationDossier({
           aria-selected={mode === valeur}
           onClick={() => changerMode(valeur)}
           className={cn(
-            "h-9 flex-1 rounded-[7px] px-3.5 text-[13px] font-medium whitespace-nowrap sm:h-7 sm:flex-none",
+            "h-11 flex-1 rounded-[7px] px-3.5 text-[13px] font-medium whitespace-nowrap sm:h-7 sm:flex-none",
             mode === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
             TRANS
           )}
@@ -304,7 +304,7 @@ export function CreationDossier({
               value={recherche}
               onChange={(evenement) => setRecherche(evenement.target.value)}
               placeholder="Nom, téléphone, e-mail, ville…"
-              className={cn(CLASSE_SAISIE, "h-10 pl-8 sm:h-9")}
+              className={cn(CLASSE_SAISIE, "h-11 pl-8 sm:h-9")}
             />
             {rechercheEnCours ? (
               <Loader2 size={14} aria-hidden className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-[#6B7280]" />
@@ -453,7 +453,7 @@ export function CreationDossier({
                     type="button"
                     onClick={() => retirerPhoto(photo.cle)}
                     aria-label="Retirer la photo"
-                    className="absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 sm:h-6 sm:w-6"
+                    className="absolute top-1 right-1 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 sm:h-6 sm:w-6"
                   >
                     <X size={13} aria-hidden />
                   </button>

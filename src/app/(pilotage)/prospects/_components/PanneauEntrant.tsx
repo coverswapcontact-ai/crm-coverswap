@@ -10,7 +10,7 @@ import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/clie
 import { NotesAppelDuLead, noterDebutAppel } from "@/components/pilotage/NotesAppel";
 import { Bouton, Champ, ListeDeroulante, Modale, Pastille, Puces, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type EtapeDossier, type MotifPerte } from "@/lib/dossiers/constants";
-import { Visionneuse } from "@/components/pilotage/Visionneuse";
+import { Visionneuse, imagesDesSimulations, indexDeVue } from "@/components/pilotage/Visionneuse";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import {
@@ -35,7 +35,7 @@ import { LIBELLES_PRIORITE, PRIORITES, type Priorite } from "@/lib/prospects/pri
 
 const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5";
 const LIEN_ACTION = cn(
-  "inline-flex h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[13px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-8",
+  "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[13px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-8",
   TRANS,
 );
 
@@ -60,7 +60,7 @@ function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: string }) {
       type="button"
       disabled={envoi}
       onClick={() => void ouvrir()}
-      className={cn("inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] disabled:opacity-60 sm:h-8", TRANS)}
+      className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] disabled:opacity-60 sm:h-8", TRANS)}
     >
       <FolderPlus size={14} aria-hidden /> {envoi ? "Ouverture…" : "Ouvrir un dossier"}
     </button>
@@ -127,6 +127,8 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
   // Mission 12 : motif structuré obligatoire pour « sans suite » ; photos dans la visionneuse.
   const [motifPerte, setMotifPerte] = useState<MotifPerte | null>(null);
   const [photoOuverte, setPhotoOuverte] = useState<number | null>(null);
+  // Mission 13 (lot 5) : avant / après des simulations dans la visionneuse commune, plus dans un nouvel onglet.
+  const [imageOuverte, setImageOuverte] = useState<number | null>(null);
   const [notes, setNotes] = useState(detail.notes ?? "");
   const [edition, setEdition] = useState(false);
   const [archivage, setArchivage] = useState(false);
@@ -423,6 +425,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
         {detail.simulations.length > 0 ? (
           <section>
             <TitreSection>Simulations · {detail.simulations.length}</TitreSection>
+            {imageOuverte !== null ? <Visionneuse images={imagesDesSimulations(detail.simulations)} index={imageOuverte} onIndex={setImageOuverte} onFermer={() => setImageOuverte(null)} /> : null}
             <div className="space-y-3">
               {detail.simulations.map((simulation) => (
                 <div key={simulation.id} className={CARTE}>
@@ -451,7 +454,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
                         { src: simulation.apres, libelle: "Après" },
                       ].map(({ src, libelle }) =>
                         src ? (
-                          <a key={libelle} href={src} target="_blank" rel="noopener noreferrer" className="block">
+                          <button key={libelle} type="button" onClick={() => setImageOuverte(indexDeVue(detail.simulations, simulation.id, libelle === "Avant" ? "avant" : "apres"))} className="block w-full text-left" aria-label={`Agrandir : ${libelle}`}>
                             <span className="mb-1 block text-[11.5px] text-[#6B7280]">{libelle}</span>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
@@ -460,7 +463,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
                               loading="lazy"
                               className="h-32 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover"
                             />
-                          </a>
+                          </button>
                         ) : (
                           <span key={libelle} />
                         ),

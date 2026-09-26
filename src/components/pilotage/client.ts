@@ -1,5 +1,7 @@
 // Appels API côté navigateur : erreurs en français, session expirée signalée.
 
+import { rafraichirCompteurs } from "./evenements";
+
 /** Erreur d'une route : message en français, statut HTTP et corps (détails éventuels). */
 export class ErreurApi extends Error {
   readonly status: number;
@@ -32,6 +34,8 @@ export async function appelApi<T>(url: string, init?: RequestInit): Promise<T> {
     const message = (corps as { error?: unknown } | null)?.error;
     throw new ErreurApi(typeof message === "string" ? message : `Erreur ${reponse.status}.`, reponse.status, corps);
   }
+  // Mission 13 (lot 5, B9) : chaque écriture réussie rafraîchit les badges de la navigation.
+  if (init?.method && init.method.toUpperCase() !== "GET") rafraichirCompteurs();
   return corps as T;
 }
 

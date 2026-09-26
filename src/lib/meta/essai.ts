@@ -6,6 +6,7 @@ import type { LeadGraph } from "./graph";
 import { accuserReceptionLeadgen, evenementsDeLaCharge, traiterLeadMeta } from "./leads";
 import { signerCommeMeta, verifierSignatureMeta } from "./signature";
 import { canauxConfigures } from "@/lib/alertes/canaux";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Mode d'essai : prouve que la chaîne complète marche, sans dépendre de Meta.
@@ -104,7 +105,7 @@ export async function lancerEssaiMeta(options: { notifier?: boolean; base?: stri
 
   // 2. Le webhook lit bien l'événement dans la charge de Meta.
   const evenements = evenementsDeLaCharge(charge);
-  ajouter("Lecture de l'événement", evenements.length === 1 && evenements[0].leadgenId === leadgenId, evenements.length === 1 ? `leadgen_id ${leadgenId} reconnu.` : `${evenements.length} événement(s) reconnu(s), 1 attendu.`);
+  ajouter("Lecture de l'événement", evenements.length === 1 && evenements[0].leadgenId === leadgenId, evenements.length === 1 ? `leadgen_id ${leadgenId} reconnu.` : `${pluriel(evenements.length, "événement reconnu", "événements reconnus")}, 1 attendu.`);
   if (evenements.length !== 1) return { ok: false, leadgenId, leadId: null, etapes, contact: null };
 
   // 3. Accusé de réception, puis rejeu : deux fois le même événement ne doivent faire qu'une ligne.

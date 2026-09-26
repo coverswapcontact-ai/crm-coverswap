@@ -9,6 +9,7 @@ import type { EtatCanal, ResultatParAxe, SanteMeta } from "@/lib/meta/sante";
 import type { RapportEssai } from "@/lib/meta/essai";
 import type { ResultatCanal } from "@/lib/alertes/canaux";
 import { cn } from "@/lib/utils";
+import { pluriel } from "@/lib/commun/format";
 
 const CARTE = "rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]";
 
@@ -121,7 +122,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
     setOccupe(leadgenId ?? "rejouer");
     try {
       const { rejoues } = await envoyerJson<{ rejoues: number }>("/api/meta/rejouer", "POST", leadgenId ? { leadgenId } : {});
-      toast.success(rejoues > 0 ? `${rejoues} lead(s) remis en file.` : "Aucun lead à rejouer.");
+      toast.success(rejoues > 0 ? `${pluriel(rejoues, "lead")} remis en file.` : "Aucun lead à rejouer.");
       await rafraichir();
     } catch (erreur) {
       toast.error(messageErreur(erreur));
@@ -171,14 +172,10 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         titre="Publicité"
         sousTitre="Les leads Meta arrivent ici en direct, sans intermédiaire. Cet écran dit si la chaîne fonctionne."
         actions={
-          <>
-            <Bouton icone={<RefreshCw size={15} aria-hidden />} chargement={occupe === "rafraichir"} onClick={() => void rafraichir()}>
-              Rafraîchir
-            </Bouton>
-            <Bouton variante="primaire" icone={<TestTube size={15} aria-hidden />} chargement={occupe === "essai"} onClick={() => void essayer(true)}>
-              Lancer un essai
-            </Bouton>
-          </>
+          // Mission 13 (lot 5) : un seul bouton d'en-tête (les deux passaient à la ligne à 390 px) ; l'essai complet vit dans « Réception ».
+          <Bouton variante="primaire" icone={<RefreshCw size={15} aria-hidden />} chargement={occupe === "rafraichir"} onClick={() => void rafraichir()}>
+            Vérifier
+          </Bouton>
         }
       />
 
@@ -199,7 +196,13 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className={cn(CARTE, "p-4")}>
-          <TitreSection>
+          <TitreSection
+            action={
+              <Bouton taille="sm" icone={<TestTube size={14} aria-hidden />} chargement={occupe === "essai"} onClick={() => void essayer(true)}>
+                Lancer un essai
+              </Bouton>
+            }
+          >
             Réception{" "}
             <Pastille ton={recoit ? "vert" : webhook.recoit === "PRET" ? "ambre" : "rouge"}>{recoit ? "reçoit des leads" : webhook.recoit === "PRET" ? "prêt, aucun lead sur 7 jours" : "ne reçoit pas"}</Pastille>
           </TitreSection>
@@ -249,7 +252,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         {notifications.leadsSansPush.length > 0 ? (
           <div className="mt-3 rounded-[10px] border-[0.5px] border-[#F87171]/40 bg-[#F87171]/5 p-3">
             <p className="text-[13px] text-[#F87171]">
-              {notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : le téléphone n&apos;a pas sonné.
+              {pluriel(notifications.leadsSansPush.length, "lead")} reçus sans notification poussée : le téléphone n&apos;a pas sonné.
             </p>
             <ul className="mt-1 space-y-0.5 text-[12px] text-[#9CA3AF]">
               {notifications.leadsSansPush.slice(0, 5).map((lead) => (
@@ -274,7 +277,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
             </div>
           }
         >
-          Résultats par campagne et par publicité · {sante.resultats.leads} lead(s) sur {sante.resultats.jours} jours
+          Résultats par campagne et par publicité · {pluriel(sante.resultats.leads, "lead")} sur {sante.resultats.jours} jours
         </TitreSection>
         {sante.resultats.leads === 0 ? (
           <EtatVide icone={<Megaphone size={22} aria-hidden />} titre="Aucun lead sur la période" texte="Les leads apparaîtront ici dès que la campagne tournera, avec leur campagne et leur publicité d'origine." />
@@ -310,7 +313,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
                     {lead.campagne ? ` · ${lead.campagne}` : ""}
                   </p>
                   <p className="text-[12px] text-[#9CA3AF]">
-                    leadgen_id {lead.leadgenId} · {lead.tentatives} tentative(s){lead.erreur ? ` · ${lead.erreur}` : ""}
+                    leadgen_id {lead.leadgenId} · {pluriel(lead.tentatives, "tentative")}{lead.erreur ? ` · ${lead.erreur}` : ""}
                   </p>
                 </div>
                 <Bouton taille="sm" chargement={occupe === lead.leadgenId} onClick={() => void rejouer(lead.leadgenId)}>

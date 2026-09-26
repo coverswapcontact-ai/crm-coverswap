@@ -35,6 +35,8 @@ import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
+import { titreDossier } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils d'écriture (mission 8). Chacun appelle le code du CRM, rien de
@@ -63,7 +65,7 @@ export const outilOuvrirDossier = definirOutil({
     if (!r.ids.leadId) throw new ErreurMetier("Ce contact n'est pas un lead : un dossier s'ouvre depuis un lead.", 400);
     if (r.ids.dossierId) return { texte: `${r.ids.nom} a déjà un dossier ouvert.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
     const ouverture = await ouvrirDossierDuLead(r.ids.leadId, { motif: "BOUTON" });
-    return { texte: `Dossier ${ouverture.cree ? "ouvert" : "retrouvé"} pour ${r.ids.nom}${ouverture.photosRangees ? `, ${ouverture.photosRangees} photo(s) rangée(s)` : ""}${ouverture.simulationsRangees ? `, ${ouverture.simulationsRangees} simulation(s) rangée(s)` : ""}.`, donnees: { dossierId: ouverture.dossierId, cree: ouverture.cree }, liens: [lien("Ouvrir le dossier", `/dossiers?dossier=${ouverture.dossierId}`)] };
+    return { texte: `Dossier ${ouverture.cree ? "ouvert" : "retrouvé"} pour ${r.ids.nom}${ouverture.photosRangees ? `, ${pluriel(ouverture.photosRangees, "photo rangée", "photos rangées")}` : ""}${ouverture.simulationsRangees ? `, ${pluriel(ouverture.simulationsRangees, "simulation rangée", "simulations rangées")}` : ""}.`, donnees: { dossierId: ouverture.dossierId, cree: ouverture.cree }, liens: [lien("Ouvrir le dossier", `/dossiers?dossier=${ouverture.dossierId}`)] };
   },
 });
 
@@ -300,7 +302,7 @@ export const outilPublierSimulation = definirOutil({
     if (r.ambigu) return r.ambigu.texte;
     const { simulations } = await listerSimulationsDossier(exigerDossier(r.ids));
     const cibles = simulations.filter((s) => s.statut !== "PUBLIEE" && (!e.simulationIds || e.simulationIds.includes(s.id)));
-    return cibles.length ? `Je vais publier ${cibles.length} simulation(s) pour ${r.ids.nom} (${cibles.map((s) => s.titre ?? s.id).join(", ")}) ; le client recevra le mail « votre simulation est prête ».` : `Aucune simulation à publier pour ${r.ids.nom}.`;
+    return cibles.length ? `Je vais publier ${pluriel(cibles.length, "simulation")} pour ${r.ids.nom} (${cibles.map((s) => s.titre ?? s.id).join(", ")}) ; le client recevra le mail « votre simulation est prête ».` : `Aucune simulation à publier pour ${r.ids.nom}.`;
   },
   executer: async (e) => {
     const r = await cibler(e, "DOSSIER");
@@ -310,7 +312,7 @@ export const outilPublierSimulation = definirOutil({
     const ids = simulations.filter((s) => s.statut !== "PUBLIEE" && (!e.simulationIds || e.simulationIds.includes(s.id))).map((s) => s.id);
     if (ids.length === 0) return { texte: `Aucune simulation à publier pour ${r.ids.nom}.` };
     const resultat = await publierSimulations(dossierId, ids, { prevenir: false });
-    return { texte: `${resultat.publiees} simulation(s) publiée(s) pour ${r.ids.nom}. ${resultat.mail?.programme ? "Le mail « votre simulation est prête » part." : `Pas de mail : ${resultat.mail?.raison ?? "rien de nouveau"}.`}`, donnees: resultat, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
+    return { texte: `${pluriel(resultat.publiees, "simulation publiée", "simulations publiées")} pour ${r.ids.nom}. ${resultat.mail?.programme ? "Le mail « votre simulation est prête » part." : `Pas de mail : ${resultat.mail?.raison ?? "rien de nouveau"}.`}`, donnees: resultat, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
   },
 });
 
@@ -448,7 +450,7 @@ async function nomsDe(leads: string[], dossiers: string[]) {
     prisma.lead.findMany({ where: { id: { in: leads } }, select: { id: true, prenom: true, nom: true, ville: true } }),
     prisma.dossier.findMany({ where: { id: { in: dossiers } }, select: { id: true, clientNom: true, objet: true } }),
   ]);
-  return { leads: l.map((x) => `${x.prenom} ${x.nom}`.trim() + (x.ville ? ` (${x.ville})` : "")), dossiers: d.map((x) => `${x.clientNom} — ${x.objet}`), inconnus: leads.length + dossiers.length - l.length - d.length };
+  return { leads: l.map((x) => `${x.prenom} ${x.nom}`.trim() + (x.ville ? ` (${x.ville})` : "")), dossiers: d.map((x) => titreDossier(x)), inconnus: leads.length + dossiers.length - l.length - d.length };
 }
 
 async function archiver(e: z.output<typeof schemaArchivage>): Promise<ResultatOutil> {
@@ -456,20 +458,20 @@ async function archiver(e: z.output<typeof schemaArchivage>): Promise<ResultatOu
   const dossiers = [...new Set(e.dossiers ?? [])];
   if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à archiver : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler »).", 400);
   const noms = await nomsDe(leads, dossiers);
-  if (noms.inconnus) throw new ErreurMetier(`${noms.inconnus} identifiant(s) inconnu(s) : rien n'a été fait.`, 404);
+  if (noms.inconnus) throw new ErreurMetier(`${pluriel(noms.inconnus, "identifiant inconnu", "identifiants inconnus")} : rien n'a été fait.`, 404);
   const faits: string[] = [];
   if (leads.length) {
     const { ids } = await appliquerActionLeads({ action: "ARCHIVER", ids: leads, motif: motifLead(e.motif) });
-    faits.push(`${ids.length} lead(s) archivé(s)`);
+    faits.push(`${pluriel(ids.length, "lead archivé", "leads archivés")}`);
   }
   for (const id of dossiers) await archiverDossier(id, e.motif);
-  if (dossiers.length) faits.push(`${dossiers.length} dossier(s) archivé(s)`);
+  if (dossiers.length) faits.push(`${pluriel(dossiers.length, "dossier archivé", "dossiers archivés")}`);
   return { texte: `${faits.join(" et ")} (motif : ${e.motif}). Rien n'est supprimé : « restaurer » les remet.`, donnees: { leads, dossiers }, liens: [lien("Leads", "/leads")] };
 }
 
 const apercuArchivage = async (e: z.output<typeof schemaArchivage>) => {
   const noms = await nomsDe([...new Set(e.leads ?? [])], [...new Set(e.dossiers ?? [])]);
-  return `Je vais archiver ${noms.leads.length} lead(s)${noms.leads.length ? ` : ${noms.leads.join(", ")}` : ""}${noms.dossiers.length ? ` et ${noms.dossiers.length} dossier(s) : ${noms.dossiers.join(", ")}` : ""} — motif « ${e.motif} ». Réversible.`;
+  return `Je vais archiver ${pluriel(noms.leads.length, "lead")}${noms.leads.length ? ` : ${noms.leads.join(", ")}` : ""}${noms.dossiers.length ? ` et ${pluriel(noms.dossiers.length, "dossier")} : ${noms.dossiers.join(", ")}` : ""} — motif « ${e.motif} ». Réversible.`;
 };
 
 export const outilArchiver = definirOutil({
@@ -502,7 +504,7 @@ export const outilSupprimer = definirOutil({
   sensible: (e) => Boolean(e.definitif),
   apercu: async (e) => {
     const noms = await nomsDe([...new Set(e.leads ?? [])], [...new Set(e.dossiers ?? [])]);
-    const quoi = `${noms.leads.length} lead(s)${noms.leads.length ? ` : ${noms.leads.join(", ")}` : ""}${noms.dossiers.length ? ` et ${noms.dossiers.length} dossier(s) : ${noms.dossiers.join(", ")}` : ""}`;
+    const quoi = `${pluriel(noms.leads.length, "lead")}${noms.leads.length ? ` : ${noms.leads.join(", ")}` : ""}${noms.dossiers.length ? ` et ${pluriel(noms.dossiers.length, "dossier")} : ${noms.dossiers.join(", ")}` : ""}`;
     return e.definitif
       ? `Je vais EFFACER définitivement ${quoi} — motif « ${e.motif} ». Anonymisation irréversible : les lignes restent sans rien de personnel ; ce que la loi fait conserver (factures, paiements) bloque et reste à la corbeille.`
       : `Je vais mettre à la corbeille ${quoi} — motif « ${e.motif} ». Effacés (anonymisés) dans 30 jours sauf « restaurer » d'ici là.`;
@@ -512,13 +514,13 @@ export const outilSupprimer = definirOutil({
     const dossiers = [...new Set(e.dossiers ?? [])];
     if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à supprimer : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler »).", 400);
     const noms = await nomsDe(leads, dossiers);
-    if (noms.inconnus) throw new ErreurMetier(`${noms.inconnus} identifiant(s) inconnu(s) : rien n'a été fait.`, 404);
+    if (noms.inconnus) throw new ErreurMetier(`${pluriel(noms.inconnus, "identifiant inconnu", "identifiants inconnus")} : rien n'a été fait.`, 404);
     const mise = await mettreALaCorbeille({ leads, dossiers, motif: e.motif });
     if (e.definitif) {
       const bilan = await effacerDeLaCorbeille({ leads, dossiers }, new Date(), "ASSISTANT:claude");
-      return { texte: `${bilan.effaces.length} élément(s) effacé(s) (anonymisés, irréversible)${bilan.conserves.length ? ` ; ${bilan.conserves.length} conservé(s) à la corbeille : ${bilan.conserves.map((c) => `${c.type.toLowerCase()} ${c.id} — ${c.raison}`).join(" ; ")}` : ""}.`, donnees: bilan, liens: [lien("Leads", "/leads")] };
+      return { texte: `${pluriel(bilan.effaces.length, "élément effacé", "éléments effacés")} (anonymisés, irréversible)${bilan.conserves.length ? ` ; ${pluriel(bilan.conserves.length, "conservé")} à la corbeille : ${bilan.conserves.map((c) => `${c.type.toLowerCase()} ${c.id} — ${c.raison}`).join(" ; ")}` : ""}.`, donnees: bilan, liens: [lien("Leads", "/leads")] };
     }
-    return { texte: `${[leads.length ? `${leads.length} lead(s)` : "", dossiers.length ? `${dossiers.length} dossier(s)` : ""].filter(Boolean).join(" et ")} à la corbeille (motif : ${e.motif}) : effacement le ${format.jourCourt(mise.effacementLe)} sauf « restaurer » d'ici là.`, donnees: { leads: mise.leads, dossiers: mise.dossiers, effacementLe: mise.effacementLe.toISOString() }, liens: [lien("Leads", "/leads")] };
+    return { texte: `${[leads.length ? `${pluriel(leads.length, "lead")}` : "", dossiers.length ? `${pluriel(dossiers.length, "dossier")}` : ""].filter(Boolean).join(" et ")} à la corbeille (motif : ${e.motif}) : effacement le ${format.jourCourt(mise.effacementLe)} sauf « restaurer » d'ici là.`, donnees: { leads: mise.leads, dossiers: mise.dossiers, effacementLe: mise.effacementLe.toISOString() }, liens: [lien("Leads", "/leads")] };
   },
 });
 
@@ -534,9 +536,9 @@ export const outilRestaurer = definirOutil({
     const dossiers = [...new Set(e.dossiers ?? [])];
     if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à restaurer.", 400);
     const faits: string[] = [];
-    if (leads.length) faits.push(`${(await appliquerActionLeads({ action: "RESTAURER", ids: leads })).ids.length} lead(s) restauré(s)`);
+    if (leads.length) faits.push(`${pluriel((await appliquerActionLeads({ action: "RESTAURER", ids: leads })).ids.length, "lead restauré", "leads restaurés")}`);
     for (const id of dossiers) await restaurerDossier(id);
-    if (dossiers.length) faits.push(`${dossiers.length} dossier(s) restauré(s)`);
+    if (dossiers.length) faits.push(`${pluriel(dossiers.length, "dossier restauré", "dossiers restaurés")}`);
     return { texte: faits.join(" et ") + ".", liens: [lien("Leads", "/leads")] };
   },
 });
@@ -562,7 +564,7 @@ export const outilAccorderSimulations = definirOutil({
     const espace = await prisma.espaceClient.findUnique({ where: { dossierId }, select: { id: true } });
     if (!espace) throw new ErreurMetier(`${r.ids.nom} n'a pas encore d'espace ouvert.`, 409);
     const resultat = await accorderSimulations(espace.id, e.nombre ?? 3);
-    return { texte: `${e.nombre ?? 3} simulation(s) accordée(s) à ${r.ids.nom} (${resultat.accordees} en tout).`, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
+    return { texte: `${pluriel(e.nombre ?? 3, "simulation accordée", "simulations accordées")} à ${r.ids.nom} (${resultat.accordees} en tout).`, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
   },
 });
 

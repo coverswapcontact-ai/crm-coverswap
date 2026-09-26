@@ -3,6 +3,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { fusionnerClients } from "@/lib/clients/fusion";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Le même client revenu avec un autre numéro ET une autre adresse e-mail : le
@@ -129,7 +130,7 @@ export async function fusionnerDoublon(leadId: string): Promise<ResultatFusion> 
         dossierId,
         type: "NOTE_AJOUTEE",
         direction: "INTERNE",
-        contenu: `Contact en double fusionné : ${nomNouveau}${nouveau.telephone ? `, ${nouveau.telephone}` : ""}${nouveau.email ? `, ${nouveau.email}` : ""} (arrivé le ${nouveau.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})${bilan.simulations ? ` — ${bilan.simulations} simulation(s) rejoignent ce dossier` : ""}.${nouveau.message?.trim() ? `\nSon message : « ${nouveau.message.trim().slice(0, 600)} »` : ""}`,
+        contenu: `Contact en double fusionné : ${nomNouveau}${nouveau.telephone ? `, ${nouveau.telephone}` : ""}${nouveau.email ? `, ${nouveau.email}` : ""} (arrivé le ${nouveau.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})${bilan.simulations ? ` — ${pluriel(bilan.simulations, "simulation")} rejoignent ce dossier` : ""}.${nouveau.message?.trim() ? `\nSon message : « ${nouveau.message.trim().slice(0, 600)} »` : ""}`,
         metadata: JSON.stringify({ leadFusionne: nouveau.id }),
       },
     });

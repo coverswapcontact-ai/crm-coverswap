@@ -370,7 +370,7 @@ export function GenerateurDocument({
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "inline-flex h-10 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-4 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]",
+                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-4 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]",
                 TRANS
               )}
             >
@@ -380,7 +380,7 @@ export function GenerateurDocument({
             <a
               href={`${resultat.pdfUrl}?telecharger=1`}
               className={cn(
-                "inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-4 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] hover:bg-[#22262D]",
+                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-4 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] hover:bg-[#22262D]",
                 TRANS
               )}
             >
@@ -408,7 +408,7 @@ export function GenerateurDocument({
                   aria-selected={type === valeur}
                   onClick={() => setType(valeur)}
                   className={cn(
-                    "h-9 rounded-[7px] px-4 text-[13px] font-medium sm:h-7",
+                    "h-11 rounded-[7px] px-4 text-[13px] font-medium sm:h-7",
                     type === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
                     TRANS
                   )}
@@ -461,7 +461,7 @@ export function GenerateurDocument({
                         onChange={(evenement) => modifier(ligne.cle, { libelle: evenement.target.value })}
                         placeholder="Section (ex. CUISINE, DRESSING N°1 — CHAMBRE)"
                         aria-invalid={erreurs[`${ligne.cle}:libelle`] ? true : undefined}
-                        className={cn(CLASSE_SAISIE, "h-10 font-medium sm:h-8")}
+                        className={cn(CLASSE_SAISIE, "h-11 font-medium sm:h-8")}
                       />
                       <ActionsLigne
                         premiere={index === 0}
@@ -486,7 +486,7 @@ export function GenerateurDocument({
                             onChange={(evenement) => modifier(ligne.cle, { designation: evenement.target.value })}
                             placeholder="Désignation"
                             aria-invalid={erreurs[`${ligne.cle}:designation`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-10 sm:h-8")}
+                            className={cn(CLASSE_SAISIE, "h-11 sm:h-8")}
                           />
                           <input
                             aria-label="Sous-désignation"
@@ -494,7 +494,7 @@ export function GenerateurDocument({
                             maxLength={200}
                             onChange={(evenement) => modifier(ligne.cle, { sousDesignation: evenement.target.value })}
                             placeholder="Sous-désignation (facultative)"
-                            className={cn(CLASSE_SAISIE, "h-10 font-semibold italic sm:h-8")}
+                            className={cn(CLASSE_SAISIE, "h-11 font-semibold italic sm:h-8")}
                           />
                         </div>
                         <div className="grid grid-cols-3 gap-2 sm:contents">
@@ -504,13 +504,13 @@ export function GenerateurDocument({
                             value={ligne.quantite}
                             onChange={(evenement) => modifier(ligne.cle, { quantite: evenement.target.value })}
                             aria-invalid={erreurs[`${ligne.cle}:quantite`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-10 text-center sm:h-8")}
+                            className={cn(CLASSE_SAISIE, "h-11 text-center sm:h-8")}
                           />
                           <select
                             aria-label="Unité"
                             value={ligne.unite}
                             onChange={(evenement) => modifier(ligne.cle, { unite: evenement.target.value })}
-                            className={cn(CLASSE_SAISIE, "h-10 px-2 sm:h-8")}
+                            className={cn(CLASSE_SAISIE, "h-11 px-2 sm:h-8")}
                           >
                             {UNITES.map((unite) => (
                               <option key={unite} value={unite}>
@@ -525,7 +525,7 @@ export function GenerateurDocument({
                             onChange={(evenement) => modifier(ligne.cle, { prixUnitaire: evenement.target.value })}
                             placeholder="PU HT"
                             aria-invalid={erreurs[`${ligne.cle}:prixUnitaire`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-10 text-right sm:h-8")}
+                            className={cn(CLASSE_SAISIE, "h-11 text-right sm:h-8")}
                           />
                         </div>
                         <div className="flex items-center justify-between gap-2 sm:contents">
@@ -593,7 +593,7 @@ export function GenerateurDocument({
                   const preset = presets.find((p) => p.id === evenement.target.value);
                   if (preset) ajouterPreset(preset);
                 }}
-                className={cn(CLASSE_SAISIE, "h-10 w-auto max-w-full min-w-0 flex-1 sm:h-7 sm:max-w-[280px] sm:text-[12px]")}
+                className={cn(CLASSE_SAISIE, "h-11 w-auto max-w-full min-w-0 flex-1 sm:h-7 sm:max-w-[280px] sm:text-[12px]")}
               >
                 <option value="">Ajouter depuis un tarif…</option>
                 {presets.map((preset) => (

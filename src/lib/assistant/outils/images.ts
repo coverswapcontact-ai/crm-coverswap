@@ -5,6 +5,7 @@ import { definirOutil, format, lien, type ImageOutil } from "../definition";
 import { IMAGES_MAX_PAR_RESULTAT, imagePourResultat, ko } from "../images";
 import { octetsDeLaPhoto, photosDuContact } from "../photos";
 import { cibler } from "./cible";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Voir (mission 10) : les photos d'un dossier ou d'un lead, et les simulations
@@ -41,7 +42,7 @@ export const outilVoirPhotos = definirOutil({
     const decalage = e.decalage ?? 0;
     const choisies = eligibles.slice(decalage, decalage + (e.nombre ?? 6));
     if (toutes.length === 0) return { texte: `${r.ids.nom} n'a aucune photo${r.ids.dossierId ? " dans son dossier" : ""}${r.ids.leadId ? " ni sur sa demande" : ""}.`, donnees: { total: 0 } };
-    if (choisies.length === 0) return { texte: `${r.ids.nom} a ${eligibles.length} photo(s) ; rien au-delà du décalage ${decalage}.`, donnees: { total: eligibles.length } };
+    if (choisies.length === 0) return { texte: `${r.ids.nom} a ${pluriel(eligibles.length, "photo")} ; rien au-delà du décalage ${decalage}.`, donnees: { total: eligibles.length } };
     const images: ImageOutil[] = [];
     const lignes: string[] = [];
     const illisibles: string[] = [];
@@ -55,7 +56,7 @@ export const outilVoirPhotos = definirOutil({
       } else illisibles.push(libelle);
     }
     const texte = [
-      `${r.ids.nom} : ${eligibles.length} photo(s)${e.apres ? "" : " avant chantier"}${toutes.length !== eligibles.length ? ` (${toutes.length} en tout)` : ""} ; ${images.length} jointe(s) ci-dessous${eligibles.length > decalage + choisies.length ? `, ${eligibles.length - decalage - choisies.length} de plus avec decalage=${decalage + choisies.length}` : ""}.`,
+      `${r.ids.nom} : ${pluriel(eligibles.length, "photo")}${e.apres ? "" : " avant chantier"}${toutes.length !== eligibles.length ? ` (${toutes.length} en tout)` : ""} ; ${pluriel(images.length, "jointe")} ci-dessous${eligibles.length > decalage + choisies.length ? `, ${eligibles.length - decalage - choisies.length} de plus avec decalage=${decalage + choisies.length}` : ""}.`,
       ...lignes,
       illisibles.length ? `Illisibles ici (format HEIC d'iPhone sans doute) : ${illisibles.join(" ; ")}` : "",
     ].filter(Boolean).join("\n");
@@ -102,7 +103,7 @@ export const outilVoirSimulations = definirOutil({
         if (avant) images.push(avant);
       }
     }
-    const texte = [`${r.ids.nom} : ${liste.length} simulation(s)${espace ? "" : " (pas d'espace client ouvert)"} ; ${choisies.length} décrite(s), ${images.length} image(s) jointe(s) (après, puis avant quand elle existe).`, ...lignes].join("\n");
+    const texte = [`${r.ids.nom} : ${pluriel(liste.length, "simulation")}${espace ? "" : " (pas d'espace client ouvert)"} ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")} (après, puis avant quand elle existe).`, ...lignes].join("\n");
     return { texte, images, donnees: { total: liste.length, simulations: choisies.map((s) => ({ id: s.id, titre: s.titre, source: s.source, statut: s.statut, type: s.typeSurface, zones: s.zones, le: s.le, publieeLe: s.publieeLe, vueLe: s.vueLe, choisie: s.choisie, commentaire: s.commentaire, avant: Boolean(s.avant) })) }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`), lien("Simulateur", `/simulateur?dossier=${r.ids.dossierId}`)] };
   },
 });

@@ -78,7 +78,7 @@ export default function SignInPage() {
               {error}
             </p>
           ) : null}
-          <Bouton type="submit" variante="primaire" chargement={loading} icone={<LogIn size={15} aria-hidden />} className="h-10 w-full">
+          <Bouton type="submit" variante="primaire" chargement={loading} icone={<LogIn size={15} aria-hidden />} className="h-11 sm:h-10 w-full">
             Se connecter
           </Bouton>
         </form>

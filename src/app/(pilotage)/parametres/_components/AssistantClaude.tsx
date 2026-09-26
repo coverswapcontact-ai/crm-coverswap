@@ -132,7 +132,7 @@ function CarteConnexion({ acces, onMaj }: { acces: Acces; onMaj: (a: Acces) => v
                         {j.clientNom ?? "Client MCP"} · {j.utilisateur} · ouverte le {quand(j.creeLe)} · dernier usage {quand(j.dernierUsageLe)} · {j.active ? `expire le ${quand(j.expireLe)}` : j.revoqueLe ? "révoquée" : "expirée"}
                       </span>
                       {j.active ? (
-                        <button type="button" className="text-[12px] text-[#F87171] hover:underline" disabled={occupe === j.id} onClick={() => void revoquer({ jetonId: j.id }, j.id)}>
+                        <button type="button" className="inline-flex min-h-11 items-center text-[12px] text-[#F87171] hover:underline sm:min-h-0" disabled={occupe === j.id} onClick={() => void revoquer({ jetonId: j.id }, j.id)}>
                           Révoquer
                         </button>
                       ) : null}
@@ -235,7 +235,7 @@ function CarteOutils({ outils }: { outils: OutilVue[] }) {
   const [ouvert, setOuvert] = useState(false);
   return (
     <div className={cn(CARTE, "p-4")}>
-      <button type="button" className="flex w-full items-center justify-between gap-2 text-left" onClick={() => setOuvert((o) => !o)}>
+      <button type="button" className="flex min-h-11 w-full items-center justify-between gap-2 text-left" onClick={() => setOuvert((o) => !o)}>
         <p className="text-[13.5px] font-medium text-[#F2F3F5]">
           {outils.length} outils exposés à Claude <span className="ml-1 text-[11.5px] font-normal text-[#6B7280]">{outils.filter((o) => o.niveau === "LECTURE").length} lecture · {outils.filter((o) => o.niveau === "REVERSIBLE").length} réversibles · {outils.filter((o) => o.niveau === "SENSIBLE").length} sensibles</span>
         </p>

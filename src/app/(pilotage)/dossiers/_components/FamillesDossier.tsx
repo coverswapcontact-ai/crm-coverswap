@@ -105,7 +105,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
               type="button"
               aria-pressed={cochee}
               onClick={() => basculerFamille(f.id)}
-              className={cn("flex min-h-10 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] px-2 text-[13px] font-medium", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+              className={cn("flex min-h-11 sm:min-h-10 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] px-2 text-[13px] font-medium", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
             >
               {cochee ? <Check size={13} aria-hidden /> : null}
               {f.libelle}
@@ -129,7 +129,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
                     aria-checked={cochee}
                     title={sp.aide}
                     onClick={() => basculerPartie(id, sp.id)}
-                    className={cn("inline-flex min-h-8 items-center gap-1.5 rounded-full border-[0.5px] px-2.5 text-[12.5px]", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+                    className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1.5 rounded-full border-[0.5px] px-2.5 text-[12.5px]", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
                   >
                     {cochee ? <Check size={12} aria-hidden /> : null}
                     {sp.libelle}

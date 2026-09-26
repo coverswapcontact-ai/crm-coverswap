@@ -26,6 +26,8 @@ import { lireConsignes, regleDuJour, sectionProtocole } from "../consignes";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
+import { titreDossier } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils de lecture (mission 8) : trouver, lire, lister ce qui attend,
@@ -124,15 +126,15 @@ export const outilLireFiche = definirOutil({
       const devis = d.documents.filter((x) => x.type === "DEVIS");
       const factures = d.documents.filter((x) => x.type === "FACTURE");
       parties.push(
-        `Dossier ${d.clientNom} — ${d.objet} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${d.main === "CLIENT" ? "chez le client" : "à toi"}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
+        `Dossier ${titreDossier(d)} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${d.main === "CLIENT" ? "chez le client" : "à toi"}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
         d.prochaineAction ? `Prochaine action : ${d.prochaineAction}${d.prochaineActionDate ? ` le ${format.jour(d.prochaineActionDate)}` : ""}.` : "Pas de prochaine action notée.",
         d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
         d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
         Object.keys(d.prestations).length ? `Projet : ${resumerSelection(d.prestations)}${Object.keys(d.teintes).length ? ` ; teintes : ${Object.entries(d.teintes).map(([cle, t]) => `${sousPartieDeCle(cle)?.sousPartie.libelle ?? cle} ${t}`).join(", ")}` : ""}.` : "",
         devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})`).join(", ")}.` : "Aucun devis.",
         factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "",
-        `Paiements : ${d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length} encaissement(s), reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
-        simulations.simulations.length ? `Simulations : ${simulations.simulations.length} (${simulations.simulations.filter((s) => s.statut === "PUBLIEE").length} publiée(s)${simulations.simulations.some((s) => s.choisie) ? ", une choisie par le client" : ""}).` : "Aucune simulation.",
+        `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
+        simulations.simulations.length ? `Simulations : ${simulations.simulations.length} (${pluriel(simulations.simulations.filter((s) => s.statut === "PUBLIEE").length, "publiée")}${simulations.simulations.some((s) => s.choisie) ? ", une choisie par le client" : ""}).` : "Aucune simulation.",
         depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} (${depenses.depenses.length}).` : "",
         d.completude.length ? `À compléter : ${d.completude.map((p) => p.libelle).join(", ")}.` : "",
         d.notes.length ? `Dernière note (${format.jourCourt(d.notes[0].createdAt)}) : ${d.notes[0].contenu.slice(0, 200)}` : "",
@@ -144,7 +146,7 @@ export const outilLireFiche = definirOutil({
     if (ids.clientId) {
       const c = await chargerFiche(ids.clientId).catch(() => null);
       if (c) {
-        parties.push(`Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${c.nbDossiers} dossier(s), ${format.euros(c.montantSigne)} signés ; source ${c.source}.`);
+        parties.push(`Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${pluriel(c.nbDossiers, "dossier")}, ${format.euros(c.montantSigne)} signés ; source ${c.source}.`);
         donnees.client = { id: c.id, nom: c.nom, emails: c.emails.map((e) => e.valeur), telephones: c.telephones.map((t) => t.valeur), dossiers: c.dossiers, leads: c.leads, propositionsEnAttente: c.propositionsEnAttente };
         liens.push(lien("Fiche client", `/clients/${c.id}`));
       }
@@ -177,7 +179,7 @@ export const outilLeadsAAppeler = definirOutil({
     const liste = await listerLeads({ vue: "ACTIFS", limite: 300 });
     const lignes = (toute_la_file ? liste.lignes : liste.lignes.filter((l) => l.aAppeler)).slice(0, limite ?? 20);
     const texte = lignes.length
-      ? `${liste.compteurs.aAppeler} lead(s) à appeler maintenant (${liste.compteurs.actifs} actifs). ${lignes.map((l) => `${l.prenom} ${l.nom}`.trim() + `${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}${l.attendDepuis ? `, attend depuis ${format.jourCourt(l.attendDepuis)}` : l.rappelLe ? `, rappel ${format.jourCourt(l.rappelLe)}` : ""} [lead:${l.id}]`).join(" · ")}`
+      ? `${pluriel(liste.compteurs.aAppeler, "lead")} à appeler maintenant (${liste.compteurs.actifs} actifs). ${lignes.map((l) => `${l.prenom} ${l.nom}`.trim() + `${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}${l.attendDepuis ? `, attend depuis ${format.jourCourt(l.attendDepuis)}` : l.rappelLe ? `, rappel ${format.jourCourt(l.rappelLe)}` : ""} [lead:${l.id}]`).join(" · ")}`
       : "Personne à appeler maintenant.";
     return { texte, donnees: lignes.map((l) => ({ id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, source: l.source, projet: l.projet, priorite: l.priorite, telephone: l.telephone, recuLe: l.recuLe, appels: l.appels, rappelLe: l.rappelLe, aAppeler: l.aAppeler })), liens: [lien("Leads", "/leads")] };
   },
@@ -195,7 +197,7 @@ export const outilDossiersParEtape = definirOutil({
     for (const d of dossiers) groupes.set(d.etape, [...(groupes.get(d.etape) ?? []), d]);
     const texte = [...groupes.entries()]
       .sort((a, b) => ETAPES.indexOf(a[0] as EtapeDossier) - ETAPES.indexOf(b[0] as EtapeDossier))
-      .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${d.clientNom} — ${d.objet}${d.main === "CLIENT" ? " (chez le client)" : " (à toi)"}${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
+      .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${titreDossier(d)}${d.main === "CLIENT" ? " (chez le client)" : " (à toi)"}${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
       .join("\n");
     return { texte: texte || "Aucun dossier.", donnees: dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime })), liens: [lien("Dossiers", "/dossiers")] };
   },
@@ -214,7 +216,7 @@ export const outilCeQuiMAttend = definirOutil({
     const parGroupe = new Map<string, typeof aMoi>();
     for (const a of aMoi) parGroupe.set(a.groupe, [...(parGroupe.get(a.groupe) ?? []), a]);
     const texte = [
-      `${aMoi.length} affaire(s) attendent une action de toi (${enRetard.length} en retard), ${pilotage.compteurs.chezLeClient} chez le client, ${mails.compteurs.A_TRAITER} mail(s) à traiter, ${propositionsEnAttente} proposition(s) à valider (cartes de mise à jour, relances, règles), ${messagesNonLus} message(s) d'espace non lu(s)${messagesNonLus ? " (« messages_espace »)" : ""}.`,
+      `${pluriel(aMoi.length, "affaire")} attendent une action de toi (${enRetard.length} en retard), ${pilotage.compteurs.chezLeClient} chez le client, ${pluriel(mails.compteurs.A_TRAITER, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
       ...[...parGroupe.entries()].map(([groupe, liste]) => `${groupe} : ${liste.map((a) => `${a.nom}${a.ville ? ` (${a.ville})` : ""} — ${a.action}${a.enRetard ? " (en retard)" : ""}${a.echeance ? ` · ${format.jourCourt(a.echeance)}` : ""} [${a.dossierId ? `dossier:${a.dossierId}` : `lead:${a.leadId}`}]`).join(" · ")}`),
       mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
@@ -231,7 +233,7 @@ export const outilEspacesClients = definirOutil({
   executer: async ({ limite }) => {
     const clients = (await listerClientsEspaces()).slice(0, limite ?? 30);
     const texte = clients.length
-      ? clients.map((c) => `${c.clientNom}${c.ville ? ` (${c.ville})` : ""} : ${c.revoque ? "lien désactivé" : c.premierAccesLe ? `vu ${c.nbAcces} fois, dernière visite ${format.jourCourt(c.dernierAccesLe)}` : "jamais ouvert"} ; ${c.projetsEnCours} projet(s) en cours ; ${c.attente.qui === "MOI" ? "attend Lucas" : c.attente.qui === "CLIENT" ? "attend le client" : "rien en attente"} — ${c.attente.libelle}${c.signaux.length ? ` ; signaux : ${c.signaux.map((s) => s.libelle).join(", ")}` : ""} [client:${c.clientId}]`).join("\n")
+      ? clients.map((c) => `${c.clientNom}${c.ville ? ` (${c.ville})` : ""} : ${c.revoque ? "lien désactivé" : c.premierAccesLe ? `vu ${c.nbAcces} fois, dernière visite ${format.jourCourt(c.dernierAccesLe)}` : "jamais ouvert"} ; ${pluriel(c.projetsEnCours, "projet")} en cours ; ${c.attente.qui === "MOI" ? "attend Lucas" : c.attente.qui === "CLIENT" ? "attend le client" : "rien en attente"} — ${c.attente.libelle}${c.signaux.length ? ` ; signaux : ${c.signaux.map((s) => s.libelle).join(", ")}` : ""} [client:${c.clientId}]`).join("\n")
       : "Aucun espace client ouvert.";
     return { texte, donnees: clients.map((c) => ({ clientId: c.clientId, nom: c.clientNom, ville: c.ville, lien: c.lien, revoque: c.revoque, nbAcces: c.nbAcces, dernierAccesLe: c.dernierAccesLe, attente: c.attente, signaux: c.signaux, projets: c.projets.map((p) => ({ dossierId: p.dossierId, nom: p.nomProjet, etape: p.etape, fige: p.fige })) })), liens: [lien("Espaces clients", "/espaces")] };
   },
@@ -246,7 +248,7 @@ export const outilMailsATraiter = definirOutil({
   executer: async ({ vue, limite }) => {
     const liste = await listerVue(vue ?? "A_TRAITER", { limite: limite ?? 20 });
     const texte = liste.lignes.length
-      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif.\n${liste.lignes.map((m, i) => `${i + 1}. ${m.priorite.libelle ? `[${m.priorite.libelle}${m.priorite.montant !== null ? ` ${format.euros(m.priorite.montant)}` : ""}] ` : ""}${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.intention ? ` · ${m.intention.toLowerCase()}${m.attendu ? ` : ${m.attendu}` : ""}` : " · non classé"}${m.propositionsEnAttente ? ` · ${m.propositionsEnAttente} carte(s) à valider` : ""}${m.brouillonPret ? " · brouillon prêt" : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join("\n")}`
+      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif.\n${liste.lignes.map((m, i) => `${i + 1}. ${m.priorite.libelle ? `[${m.priorite.libelle}${m.priorite.montant !== null ? ` ${format.euros(m.priorite.montant)}` : ""}] ` : ""}${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.intention ? ` · ${m.intention.toLowerCase()}${m.attendu ? ` : ${m.attendu}` : ""}` : " · non classé"}${m.propositionsEnAttente ? ` · ${pluriel(m.propositionsEnAttente, "carte")} à valider` : ""}${m.brouillonPret ? " · brouillon prêt" : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join("\n")}`
       : "Rien à traiter dans la boîte.";
     return { texte, donnees: { compteurs: liste.compteurs, mails: liste.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant, objet: m.objet, extrait: m.extrait, recuLe: m.recuLe, mention: m.mention, classe: m.classe, contact: m.contact, nonLu: m.nonLu, priorite: m.priorite, intention: m.intention, attendu: m.attendu, propositionsEnAttente: m.propositionsEnAttente, brouillonPret: m.brouillonPret, revenu: m.revenu, snoozeJusqua: m.snoozeJusqua })) }, liens: [lien("Mail", "/mail")] };
   },
@@ -264,9 +266,9 @@ export const outilSynthese = definirOutil({
     const c = s.commercial;
     const texte = [
       `Synthèse ${periode.libelle} (${periode.du} → ${periode.au}) :`,
-      c.entrants ? `${c.entrants.recus} lead(s) reçus (${c.entrants.parSource.map((p) => `${p.libelle} ${p.recus}`).join(", ")}), ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} avec dossier, ${c.entrants.signes} signés.` : "",
-      `${c.cohorte.ouverts} dossier(s) ouverts sur la période : ${c.cohorte.devisEnvoyes} devis envoyés, ${c.cohorte.signes} signés, ${c.cohorte.encaisses} encaissés, ${c.cohorte.perdus} perdus (taux de signature ${format.pourcent(c.cohorte.tauxSignatureDevis)}).`,
-      `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${c.activite.signatures} signature(s) (${format.euros(c.activite.montantSigne)}), ${c.activite.facturesEmises} facture(s) (${format.euros(c.activite.montantFacture)}), ${c.activite.pertes} perte(s).`,
+      c.entrants ? `${pluriel(c.entrants.recus, "lead")} reçus (${c.entrants.parSource.map((p) => `${p.libelle} ${p.recus}`).join(", ")}), ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} avec dossier, ${c.entrants.signes} signés.` : "",
+      `${pluriel(c.cohorte.ouverts, "dossier ouvert", "dossiers ouverts")} sur la période : ${c.cohorte.devisEnvoyes} devis envoyés, ${c.cohorte.signes} signés, ${c.cohorte.encaisses} encaissés, ${c.cohorte.perdus} perdus (taux de signature ${format.pourcent(c.cohorte.tauxSignatureDevis)}).`,
+      `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${pluriel(c.activite.signatures, "signature")} (${format.euros(c.activite.montantSigne)}), ${pluriel(c.activite.facturesEmises, "facture")} (${format.euros(c.activite.montantFacture)}), ${pluriel(c.activite.pertes, "perte")}.`,
       s.finances.encaisse === null ? `Encaissé : paramètres manquants (${s.finances.parametresManquants.join(", ")}).` : `Encaissé ${format.euros(s.finances.encaisse)}, dépenses ${format.euros(s.finances.depenses)}${s.finances.margeBrute !== null ? `, marge brute ${format.euros(s.finances.margeBrute)}` : ""}${s.finances.panierMoyenSigne !== null ? `, panier moyen signé ${format.euros(s.finances.panierMoyenSigne)}` : ""}. En cours de règlement : ${format.euros(s.finances.encours.total)}.`,
       c.pertes.parMotif.length ? `Pertes par motif : ${c.pertes.parMotif.map((p) => `${p.libelle} ${p.valeur}`).join(", ")}.` : "",
     ].filter(Boolean).join("\n");
@@ -301,8 +303,8 @@ export const outilCampagne = definirOutil({
   executer: async ({}, contexte) => {
     const e = await etatCampagne(contexte.maintenant);
     const texte = e.debut
-      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}${e.depenseEstimee !== null ? `, dépense estimée ${format.euros(e.depenseEstimee)} (prorata, pas la dépense réelle Meta)` : ""}. ${e.leads} lead(s) Meta sur ${e.fenetreJours} jour(s)${e.coutParLead !== null ? `, soit ≈ ${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${e.parPublicite.map((p) => `${p.nom} ${p.leads} lead(s), ${p.devis} devis, ${p.signes} signé(s)`).join(" · ")}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
-      : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${e.leads} lead(s) Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
+      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}${e.depenseEstimee !== null ? `, dépense estimée ${format.euros(e.depenseEstimee)} (prorata, pas la dépense réelle Meta)` : ""}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ≈ ${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${e.parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}, ${p.devis} devis, ${pluriel(p.signes, "signé")}`).join(" · ")}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
+      : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
     return { texte, donnees: e, liens: [lien("Publicité", "/publicite"), lien("Paramètres", "/parametres")] };
   },
 });
@@ -350,13 +352,13 @@ export const outilSanteSysteme = definirOutil({
   executer: async ({}, contexte) => {
     const s = await santeSysteme(contexte.maintenant);
     const texte = [
-      s.taches.enEchec.length ? `${s.taches.enEchec.length} tâche(s) en échec : ${s.taches.enEchec.map((t) => `${t.libelle}${t.erreur ? ` (${t.erreur.slice(0, 80)})` : ""}`).join(" · ")}.` : "Aucune tâche en échec.",
+      s.taches.enEchec.length ? `${pluriel(s.taches.enEchec.length, "tâche")} en échec : ${s.taches.enEchec.map((t) => `${t.libelle}${t.erreur ? ` (${t.erreur.slice(0, 80)})` : ""}`).join(" · ")}.` : "Aucune tâche en échec.",
       s.taches.travauxEnEchec.length ? `Travaux périodiques en échec : ${s.taches.travauxEnEchec.map((p) => p.nom).join(", ")}.` : "",
       s.google ? `Google : ${s.google.coupee ? "COUPÉ, reconnecter dans Paramètres" : `jeton ${s.google.niveau.toLowerCase()}`}${s.google.compte ? ` (${s.google.compte})` : ""}.` : "Google : rien à signaler.",
       s.meta ? `Meta : ${s.meta.message}` : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
-      s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${s.coherence.incoherences.length} incohérence(s) sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
+      s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
       s.alertes.length ? `Alertes : ${s.alertes.map((a) => `[${a.gravite}] ${a.titre} — ${a.detail}`).join(" · ")}` : "Aucune alerte.",
     ].filter(Boolean).join("\n");
     return { texte, donnees: s, liens: [lien("Tâches de fond", "/taches"), lien("Paramètres", "/parametres")] };

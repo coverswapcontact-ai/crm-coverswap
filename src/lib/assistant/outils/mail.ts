@@ -11,6 +11,7 @@ import { proposer, rejeterProposition, vueProposition } from "@/lib/validation/s
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
 import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture";
+import { accord, pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils du mail (mission 9) : le CRM ne lit pas les mails, c'est Claude,
@@ -88,7 +89,7 @@ export const outilMailsNonClasses = definirOutil({
     const mails = await mailsNonClasses({ limite: limite ?? 15 });
     if (!mails.length) return { texte: "Aucun mail à classer : tout ce qui est conservé porte une intention." };
     return {
-      texte: `${mails.length} mail(s) à classer :\n${mails.map((m) => `[mail:${m.messageId}] ${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.classe ? ` · ${LIBELLE_CLASSE[m.classe] ?? m.classe}` : ""}${m.contact ? ` · ${m.contact.nom}` : ""}${m.messagesDuFil > 1 ? ` · fil de ${m.messagesDuFil}` : ""}${m.pieces ? ` · ${m.pieces} pièce(s)` : ""}\n${court(m.texte.replace(/\s+/g, " "), 400)}`).join("\n\n")}`,
+      texte: `${pluriel(mails.length, "mail")} à classer :\n${mails.map((m) => `[mail:${m.messageId}] ${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.classe ? ` · ${LIBELLE_CLASSE[m.classe] ?? m.classe}` : ""}${m.contact ? ` · ${m.contact.nom}` : ""}${m.messagesDuFil > 1 ? ` · fil de ${m.messagesDuFil}` : ""}${m.pieces ? ` · ${pluriel(m.pieces, "pièce")}` : ""}\n${court(m.texte.replace(/\s+/g, " "), 400)}`).join("\n\n")}`,
       donnees: mails,
       liens: [lien("Mail", "/mail")],
     };
@@ -105,7 +106,7 @@ export const outilRechercherMails = definirOutil({
     const trouves = await rechercherMails({ texte: e.texte, du: e.du, au: e.au, limite: e.limite ?? 10 });
     if (!trouves.length) return { texte: `Rien pour « ${e.texte} »${e.du || e.au ? " sur cette période" : ""}. Essaie avec un seul mot, ou une autre orthographe.` };
     return {
-      texte: `${trouves.length} mail(s) pour « ${e.texte} » :\n${trouves.map((m) => `[mail:${m.messageId}] ${m.sens === "ENTRANT" ? `de ${m.deNom ?? m.de}` : `à ${m.a[0] ?? "?"}`} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.contact ? ` · ${m.contact.type === "CLIENT" ? "client" : "lead"} ${m.contact.nom} [${m.contact.type.toLowerCase()}:${m.contact.id}]` : ""}${m.passage ? ` — ${m.passage}` : ""}`).join("\n")}`,
+      texte: `${pluriel(trouves.length, "mail")} pour « ${e.texte} » :\n${trouves.map((m) => `[mail:${m.messageId}] ${m.sens === "ENTRANT" ? `de ${m.deNom ?? m.de}` : `à ${m.a[0] ?? "?"}`} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.contact ? ` · ${m.contact.type === "CLIENT" ? "client" : "lead"} ${m.contact.nom} [${m.contact.type.toLowerCase()}:${m.contact.id}]` : ""}${m.passage ? ` — ${m.passage}` : ""}`).join("\n")}`,
       donnees: trouves,
       liens: trouves.slice(0, 3).map((m) => lien(m.objet ?? m.messageId, `/mail?mail=${m.messageId}`)),
     };
@@ -135,7 +136,7 @@ export const outilClasserMail = definirOutil({
   },
   executer: async (e) => {
     const r = await classerIntention(e.mails.map((m) => ({ messageId: m.messageId, intention: m.intention === "NON_CLASSE" ? null : m.intention, attendu: m.attendu ?? null, dates: m.dates ?? null })));
-    return { texte: `${r.classes} mail(s) classé(s)${r.inconnus.length ? ` ; ${r.inconnus.length} identifiant(s) inconnu(s) : ${r.inconnus.join(", ")}` : ""}.`, donnees: r, liens: [lien("Mail", "/mail")] };
+    return { texte: `${pluriel(r.classes, "mail classé", "mails classés")}${r.inconnus.length ? ` ; ${pluriel(r.inconnus.length, "identifiant inconnu", "identifiants inconnus")} : ${r.inconnus.join(", ")}` : ""}.`, donnees: r, liens: [lien("Mail", "/mail")] };
   },
 });
 
@@ -147,7 +148,7 @@ export const outilResumerFil = definirOutil({
   schema: z.object({ messageId: z.string().max(40), resume: z.string().min(5).max(600), points_en_suspens: z.array(z.object({ texte: z.string().min(2).max(200), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })).max(10).optional() }),
   executer: async (e) => {
     const r = await resumerFil(e.messageId, { resume: e.resume, pointsEnSuspens: (e.points_en_suspens ?? []).map((p) => ({ texte: p.texte, date: p.date ?? null })) });
-    return { texte: `Résumé posé sur le fil (${r.messages} messages)${e.points_en_suspens?.length ? `, ${e.points_en_suspens.length} point(s) en suspens` : ""}.`, donnees: r, liens: [lien("Ouvrir le mail", `/mail?mail=${e.messageId}`)] };
+    return { texte: `Résumé posé sur le fil (${r.messages} messages)${e.points_en_suspens?.length ? `, ${pluriel(e.points_en_suspens.length, "point")} en suspens` : ""}.`, donnees: r, liens: [lien("Ouvrir le mail", `/mail?mail=${e.messageId}`)] };
   },
 });
 
@@ -199,7 +200,7 @@ export const outilProposerMiseAJour = definirOutil({
       else deja.push(titre);
     }
     const texte = [
-      creees.length ? `${creees.length} carte(s) déposée(s), rien n'est modifié : ${creees.map((c) => `[proposition:${c.id}] ${c.titre}${c.sensible ? " (sensible)" : ""}`).join(" · ")}. Lucas valide dans le mail, ou dis « valider_proposition » avec les identifiants quand il l'a dit.` : "Aucune carte déposée.",
+      creees.length ? `${pluriel(creees.length, "carte déposée", "cartes déposées")}, rien n'est modifié : ${creees.map((c) => `[proposition:${c.id}] ${c.titre}${c.sensible ? " (sensible)" : ""}`).join(" · ")}. Lucas valide dans le mail, ou dis « valider_proposition » avec les identifiants quand il l'a dit.` : "Aucune carte déposée.",
       deja.length ? `Déjà proposé (ou déjà écarté) : ${deja.join(" · ")}.` : "",
       refusees.length ? `Refusé : ${refusees.join(" · ")}.` : "",
     ].filter(Boolean).join("\n");
@@ -230,7 +231,7 @@ export const outilValiderProposition = definirOutil({
   },
   apercu: async (e) => {
     const cartes = await chargerCartes(e.propositionIds);
-    return `Je vais appliquer ${cartes.length} carte(s) :\n${cartes.map((c) => `- ${c.titre}${c.sensible ? " (sensible)" : ""}${c.statut !== "EN_ATTENTE" ? ` — déjà ${c.statut.toLowerCase()}` : ""}`).join("\n")}${e.corrections?.valeur ? `\nValeur corrigée : ${e.corrections.valeur}` : ""}`;
+    return `Je vais appliquer ${pluriel(cartes.length, "carte")} :\n${cartes.map((c) => `- ${c.titre}${c.sensible ? " (sensible)" : ""}${c.statut !== "EN_ATTENTE" ? ` — déjà ${c.statut.toLowerCase()}` : ""}`).join("\n")}${e.corrections?.valeur ? `\nValeur corrigée : ${e.corrections.valeur}` : ""}`;
   },
   executer: async (e) => {
     const resultats: { id: string; titre: string; statut: string; erreur: string | null }[] = [];
@@ -339,7 +340,7 @@ export const outilRattacherMail = definirOutil({
       if (!message) throw new ErreurMetier("Mail introuvable.", 404);
       const fil = message.filCanal ? { canal: message.canal, filCanal: message.filCanal } : { id: message.id };
       const { count } = await prisma.message.updateMany({ where: fil, data: { leadId: r.ids.leadId, classe: "CLIENT", classeMotif: "Rattaché au lead à la main.", classePar: "LUCAS", statut: "A_TRIER", rangeLe: null, rangePar: null } });
-      return { texte: `${count} message(s) rattaché(s) au lead ${r.ids.nom}.`, donnees: { leadId: r.ids.leadId }, liens: [lien("Lead", `/leads?lead=${r.ids.leadId}`)] };
+      return { texte: `${pluriel(count, "message rattaché", "messages rattachés")} au lead ${r.ids.nom}.`, donnees: { leadId: r.ids.leadId }, liens: [lien("Lead", `/leads?lead=${r.ids.leadId}`)] };
     }
     throw new ErreurMetier(`${r.ids.nom} n'a ni fiche client ni lead.`, 409);
   },
@@ -355,14 +356,14 @@ export const outilRangerMail = definirOutil({
   sensible: (e) => Boolean(e.expediteur),
   apercu: async (e) => {
     const cibles = await ciblesRangement(e);
-    return cibles.length ? `Je vais ${e.annuler ? "remettre" : "ranger"} ${cibles.length} fil(s) : ${cibles.slice(0, 15).map((m) => `${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} »`).join(" · ")}${cibles.length > 15 ? " …" : ""}. ${e.annuler ? "" : "Réversible ; rien n'est supprimé."}` : "Rien à ranger avec ces critères.";
+    return cibles.length ? `Je vais ${e.annuler ? "remettre" : "ranger"} ${pluriel(cibles.length, "fil")} : ${cibles.slice(0, 15).map((m) => `${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} »`).join(" · ")}${cibles.length > 15 ? " …" : ""}. ${e.annuler ? "" : "Réversible ; rien n'est supprimé."}` : "Rien à ranger avec ces critères.";
   },
   executer: async (e) => {
     const cibles = await ciblesRangement(e);
     if (!cibles.length) return { texte: "Rien à ranger : aucun mail ne correspond (ou déjà rangés)." };
     let total = 0;
     for (const m of cibles) total += e.annuler ? (await derangerMail(m.id)).remis : (await rangerMail(m.id, e.motif ?? (e.expediteur ? `Rangé à la main : ${e.expediteur}` : "Rangé à la main"))).ranges;
-    return { texte: `${total} mail(s) ${e.annuler ? "remis dans la boîte" : "rangé(s) (lus, libellé CoverSwap/Rangé)"} sur ${cibles.length} fil(s). ${e.annuler ? "" : "Réversible : « ranger_mail » avec annuler = true."}`, donnees: { fils: cibles.map((m) => m.id), messages: total }, liens: [lien("Mail", "/mail")] };
+    return { texte: `${pluriel(total, "mail")} ${e.annuler ? "remis dans la boîte" : `${accord(total, "rangé")} (lus, libellé CoverSwap/Rangé)`} sur ${pluriel(cibles.length, "fil")}. ${e.annuler ? "" : "Réversible : « ranger_mail » avec annuler = true."}`, donnees: { fils: cibles.map((m) => m.id), messages: total }, liens: [lien("Mail", "/mail")] };
   },
 });
 

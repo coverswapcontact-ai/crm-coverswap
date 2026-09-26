@@ -92,7 +92,7 @@ export function ModalePaiement({ detail, onFermer, onFait, moyenParDefaut = null
             <label htmlFor="piece-reglee" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
               Ce paiement règle
             </label>
-            <select id="piece-reglee" value={piece} onChange={(evenement) => setPiece(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}>
+            <select id="piece-reglee" value={piece} onChange={(evenement) => setPiece(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}>
               <option value={AUTOMATIQUE}>
                 {factureActive ? "Automatique : factures non réglées, la plus ancienne d'abord" : "Automatique : acompte sur le devis en vigueur"}
               </option>

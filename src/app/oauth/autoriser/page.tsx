@@ -72,10 +72,10 @@ export default async function AutoriserPage({ searchParams }: { searchParams: Pr
                 const valeur = Array.isArray(v) ? v[0] : v;
                 return typeof valeur === "string" ? <input key={cle} type="hidden" name={cle} value={valeur} /> : null;
               })}
-              <button type="submit" name="decision" value="refuser" className="inline-flex h-10 items-center justify-center rounded-[9px] border-[0.5px] border-[#2A2D34] px-4 text-[13px] text-[#D1D5DB] hover:bg-[#23262D]">
+              <button type="submit" name="decision" value="refuser" className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] border-[0.5px] border-[#2A2D34] px-4 text-[13px] text-[#D1D5DB] hover:bg-[#23262D]">
                 Refuser
               </button>
-              <button type="submit" name="decision" value="accorder" disabled={!utilisateur} className="inline-flex h-10 items-center justify-center rounded-[9px] bg-[#5DCAA5] px-4 text-[13px] font-medium text-[#0F1A16] hover:bg-[#6FD6B3] disabled:opacity-50">
+              <button type="submit" name="decision" value="accorder" disabled={!utilisateur} className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] bg-[#5DCAA5] px-4 text-[13px] font-medium text-[#0F1A16] hover:bg-[#6FD6B3] disabled:opacity-50">
                 Autoriser l&apos;accès
               </button>
             </form>

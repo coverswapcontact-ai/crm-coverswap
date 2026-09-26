@@ -41,7 +41,7 @@ export default function ReglagesMail({ initial }: { initial: Reglages }) {
     <section className="mt-10" id="mail">
       <TitreSection
         action={
-          <Link href="/mail/sequences" className={cn("inline-flex h-8 items-center gap-1 text-[12.5px] text-[#5DCAA5] hover:underline", TRANS)}>
+          <Link href="/mail/sequences" className={cn("inline-flex h-11 sm:h-8 items-center gap-1 text-[12.5px] text-[#5DCAA5] hover:underline", TRANS)}>
             Séquences <ArrowRight size={13} aria-hidden />
           </Link>
         }

@@ -11,6 +11,7 @@ import type { ListeMail, LigneMail, VueMail } from "@/lib/mail/vues";
 import { LIBELLES_SOURCE_MESSAGE } from "@/lib/espace/messages-constantes";
 import { cn } from "@/lib/utils";
 import { PanneauMail } from "./PanneauMail";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * L'onglet Mail (mission 7), pensé pour le pouce : trois vues — À traiter,
@@ -95,24 +96,24 @@ function LigneConversation({ ligne, vue, occupe, onOuvrir, onGeste }: { ligne: L
       {/* Les gestes, au pouce : sans ouvrir le mail. */}
       <div className="flex items-center gap-1 border-t-[0.5px] border-[#2A2D34] px-1.5 py-1">
         {ligne.range ? (
-          <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />} className="h-10 sm:h-8">
+          <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />} className="h-11 sm:h-8">
             Remonter
           </Bouton>
         ) : (
           <>
-            <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste(ligne.nonLu ? "LU" : "NON_LU")} icone={ligne.nonLu ? <MailOpen size={14} aria-hidden /> : <Mail size={14} aria-hidden />} className="h-10 sm:h-8" aria-label={ligne.nonLu ? "Marquer comme lu" : "Marquer comme non lu"}>
+            <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste(ligne.nonLu ? "LU" : "NON_LU")} icone={ligne.nonLu ? <MailOpen size={14} aria-hidden /> : <Mail size={14} aria-hidden />} className="h-11 sm:h-8" aria-label={ligne.nonLu ? "Marquer comme lu" : "Marquer comme non lu"}>
               {ligne.nonLu ? "Lu" : "Non lu"}
             </Bouton>
-            <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste(ligne.traite ? "DESARCHIVER" : "ARCHIVER")} icone={ligne.traite ? <ArchiveRestore size={14} aria-hidden /> : <Archive size={14} aria-hidden />} className="h-10 sm:h-8">
+            <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste(ligne.traite ? "DESARCHIVER" : "ARCHIVER")} icone={ligne.traite ? <ArchiveRestore size={14} aria-hidden /> : <Archive size={14} aria-hidden />} className="h-11 sm:h-8">
               {ligne.traite ? "Désarchiver" : "Archiver"}
             </Bouton>
             {ligne.sens === "ENTRANT" && ligne.contact?.type !== "CLIENT" ? (
               plus ? (
-                <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />} className="ml-auto h-10 text-[#F5B454] sm:h-8">
+                <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />} className="ml-auto h-11 text-[#F5B454] sm:h-8">
                   Ne plus me montrer cet expéditeur
                 </Bouton>
               ) : (
-                <Bouton taille="sm" variante="fantome" onClick={() => setPlus(true)} className="ml-auto h-10 sm:h-8" aria-label="Plus de gestes">
+                <Bouton taille="sm" variante="fantome" onClick={() => setPlus(true)} className="ml-auto h-11 sm:h-8" aria-label="Plus de gestes">
                   ···
                 </Bouton>
               )
@@ -185,7 +186,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
     setOccupe(ligne.messageId);
     try {
       const resultat = await envoyerJson<{ ranges?: number }>(`/api/mail/${ligne.messageId}/action`, "POST", { action });
-      if (action === "NE_PLUS_MONTRER") toast.success("Expéditeur masqué pour toujours", { description: `${resultat.ranges ?? 0} mail(s) rangé(s), dans Gmail aussi. Réversible depuis Rangés ou Paramètres.` });
+      if (action === "NE_PLUS_MONTRER") toast.success("Expéditeur masqué pour toujours", { description: `${pluriel(resultat.ranges ?? 0, "mail rangé", "mails rangés")}, dans Gmail aussi. Réversible depuis Rangés ou Paramètres.` });
       if (action === "REMONTER") toast.success("Remonté", { description: "Cet expéditeur ne sera plus jamais rangé." });
       if (action === "ARCHIVER") toast.success("Archivé", { description: "Sorti de la boîte de réception, dans Gmail aussi. Rien n'est supprimé." });
       await charger(vue, recherche);
@@ -202,7 +203,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
     setChargement(true);
     try {
       const { archives } = await envoyerJson<{ archives: number }>("/api/mail/nettoyer", "POST");
-      toast.success(archives ? `${archives} conversation(s) rangée(s)` : "Rien à nettoyer", { description: archives ? "Archivées et marquées lues, dans Gmail aussi. Rien n'est supprimé ; ce qui est à traiter n'a pas bougé." : undefined });
+      toast.success(archives ? `${pluriel(archives, "conversation rangée", "conversations rangées")}` : "Rien à nettoyer", { description: archives ? "Archivées et marquées lues, dans Gmail aussi. Rien n'est supprimé ; ce qui est à traiter n'a pas bougé." : undefined });
       await charger(vue, recherche);
       rafraichirCompteurs();
     } catch (erreur) {
@@ -225,7 +226,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
             <Bouton taille="md" variante="fantome" onClick={() => void synchroniser()} chargement={chargement} icone={<RefreshCw size={14} aria-hidden />} aria-label="Relire la boîte">
               <span className="hidden sm:inline">Relire</span>
             </Bouton>
-            <Link href="/mail/sequences" className={cn("inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+            <Link href="/mail/sequences" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] hover:border-[#3A3E47] sm:h-8", TRANS)}>
               <Workflow size={14} aria-hidden /> Séquences
             </Link>
             <Bouton taille="md" variante="secondaire" onClick={() => setNettoyage(true)} icone={<Sparkles size={14} aria-hidden />}>
@@ -253,7 +254,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
 
       <label className="relative block">
         <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" aria-hidden />
-        <input value={recherche} onChange={(e) => chercher(e.target.value)} placeholder="Nom, adresse, objet…" aria-label="Rechercher dans la boîte" className={cn(CLASSE_SAISIE, "pl-9")} />
+        <input value={recherche} onChange={(e) => chercher(e.target.value)} placeholder="Nom, adresse, objet…" aria-label="Rechercher dans la boîte" className={cn(CLASSE_SAISIE, "h-11 pl-9 sm:h-9")} />
       </label>
 
       {aide ? <p className="text-[12.5px] text-[#8B919C]">{aide}</p> : null}

@@ -290,7 +290,7 @@ export function RepriseDossier({
                   if (evenement.target.value.trim().length < 2) setClients(null);
                 }}
                 placeholder="Client déjà connu ? Nom, téléphone, e-mail…"
-                className={cn(CLASSE_SAISIE, "h-10 pl-8 sm:h-9")}
+                className={cn(CLASSE_SAISIE, "h-11 pl-8 sm:h-9")}
               />
               {clients && recherche.trim().length >= 2 ? (
                 <ul className="mt-2 overflow-hidden rounded-[9px] border-[0.5px] border-[#2A2D34]">
@@ -416,7 +416,7 @@ export function RepriseDossier({
                 <li key={ligne.cle} className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <Pastille ton={ligne.type === "DEVIS" ? "neutre" : "bleu"}>{ligne.type === "DEVIS" ? "Devis" : "Facture"}</Pastille>
-                    <Bouton variante="fantome" taille="icone" className="h-8 w-8 sm:h-7 sm:w-7" aria-label="Retirer ce document" onClick={() => setDocuments((actuels) => actuels.filter((autre) => autre.cle !== ligne.cle))}>
+                    <Bouton variante="fantome" taille="icone" className="h-11 w-11 sm:h-7 sm:w-7" aria-label="Retirer ce document" onClick={() => setDocuments((actuels) => actuels.filter((autre) => autre.cle !== ligne.cle))}>
                       <X size={13} aria-hidden />
                     </Bouton>
                   </div>

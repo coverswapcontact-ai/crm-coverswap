@@ -11,6 +11,7 @@ import { notifierDemandeDuSite } from "@/lib/prospects/notification";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { mettreEnFile } from "@/lib/taches/file";
 import { brancherSuitesDuTri, classerMessage } from "./boite";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Ce que le tri déclenche (mission 7) : le mail rangé dans le dossier de son
@@ -145,7 +146,7 @@ export async function creerLeadDepuisMail(messageId: string, options: { notifier
 /** Photos et plans d'un client connu : conservés, puis les photos rangées dans son dossier (donc dans Drive). */
 export async function rangerPiecesDansDossier(messageId: string): Promise<{ photos: number; documents: number }> {
   const bilan = await conserverPieces(messageId);
-  if (bilan.erreurs > 0) throw new Error(`${bilan.erreurs} pièce(s) jointe(s) en échec : nouvel essai plus tard`);
+  if (bilan.erreurs > 0) throw new Error(`${pluriel(bilan.erreurs, "pièce jointe", "pièces jointes")} en échec : nouvel essai plus tard`);
   const message = await prisma.message.findUnique({ where: { id: messageId }, select: { dossierId: true, pieces: { where: { statut: "CONSERVEE" }, include: { fichier: true } } } });
   if (!message?.dossierId) return { photos: 0, documents: 0 };
   let photos = 0;

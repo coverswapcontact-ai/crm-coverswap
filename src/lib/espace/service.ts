@@ -28,6 +28,7 @@ import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type E
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -570,7 +571,7 @@ export async function demanderSimulations(espace: EspaceClient): Promise<void> {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsDemandeesLe: new Date() } });
     await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_DEMANDEES", direction: "ENTRANT", contenu: `Le client demande d'autres simulations (${quota.faites} faite${quota.faites > 1 ? "s" : ""} sur ${quota.gratuites + quota.accordees}).`, metadata: "{}" } });
   });
-  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${quota.faites} simulation(s) faite(s) (site et espace). Accordez-en d'autres en un clic depuis Espaces clients.`, urgence: 3, telephone: dossier?.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${pluriel(quota.faites, "simulation faite", "simulations faites")} (site et espace). Accordez-en d'autres en un clic depuis Espaces clients.`, urgence: 3, telephone: dossier?.clientTelephone });
 }
 
 /** Lucas accorde des simulations de plus (Espaces clients, dossier) : la demande est close. */
@@ -960,24 +961,21 @@ export async function noterConsultationDevis(espace: EspaceClient, documentId: s
   if (!devis) throw new ErreurMetier("Devis introuvable.", 404);
   const maintenant = new Date();
   const seuil = new Date(maintenant.getTime() - 30 * 60_000);
+  // Mission 13 (lot 5, B6) : le compteur vit sur le devis lui-même (plusieurs devis proposés : chacun a le sien).
   // Mise à jour conditionnelle, atomique : deux requêtes simultanées (double appui, page + PDF)
   // ne comptent qu'une consultation et ne préviennent qu'une fois.
   let pris = { count: 0 };
   await avecActeur(ACTEUR, async () => {
-    pris = await prisma.espaceClient.updateMany({
-      where: { id: espace.id, devisConsulteId: devis.id, OR: [{ devisConsulteLe: null }, { devisConsulteLe: { lt: seuil } }] },
-      data: { devisConsultations: { increment: 1 }, devisConsulteLe: maintenant },
+    pris = await prisma.document.updateMany({
+      where: { id: devis.id, OR: [{ consulteLe: null }, { consulteLe: { lt: seuil } }] },
+      data: { consultations: { increment: 1 }, consulteLe: maintenant },
     });
-    if (pris.count === 0) {
-      pris = await prisma.espaceClient.updateMany({
-        where: { id: espace.id, OR: [{ devisConsulteId: null }, { devisConsulteId: { not: devis.id } }] },
-        data: { devisConsultations: 1, devisConsulteId: devis.id, devisConsulteLe: maintenant },
-      });
-    }
   });
-  const apres = await prisma.espaceClient.findUnique({ where: { id: espace.id }, select: { devisConsultations: true } });
-  const consultations = apres?.devisConsultations ?? 1;
+  const apres = await prisma.document.findUnique({ where: { id: devis.id }, select: { consultations: true } });
+  const consultations = apres?.consultations ?? 1;
   if (pris.count === 0) return { consultations };
+  // L'espace garde la trace du dernier devis lu (anciens lecteurs de ces champs).
+  await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsulteId: devis.id, devisConsulteLe: maintenant, devisConsultations: consultations } }));
   const accord = await prisma.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null }, select: { id: true } });
   const contenu = `Le client a consulté son devis ${devis.numero} ${consultations === 1 ? "pour la première fois" : `— ${consultations} fois (dernière le ${maintenant.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" })} à ${maintenant.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" })})`}`;
   await avecActeur(ACTEUR, async () => {

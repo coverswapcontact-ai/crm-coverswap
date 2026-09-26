@@ -3,6 +3,7 @@
 
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { Alerte, References, Synthese } from "./types";
+import { pluriel } from "@/lib/commun/format";
 
 const pct = (valeur: number | null) => (valeur === null ? "—" : `${String(valeur).replace(".", ",")} %`);
 /** Écart signé : « +12 % », « −8 % ». */
@@ -20,7 +21,6 @@ export function libelleAuteur(auteur: string): string {
   return auteur;
 }
 const jours = (valeur: number | null) => (valeur === null ? "—" : `${String(valeur).replace(".", ",")} j`);
-const pluriel = (nombre: number, singulier: string, plurielForme = `${singulier}s`) => `${nombre} ${nombre > 1 ? plurielForme : singulier}`;
 const nomClient = (references: References, id: string | null) => (id ? (references.clients[id] ?? "Client inconnu") : "Sans client");
 
 export function redigerSynthese(synthese: Synthese, references: References, alertes: Alerte[] = []): string {

@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import type { ResultatCanal } from "./configuration";
 import { decrireErreur } from "./reseau";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Notifications poussées du navigateur (application installée sur le téléphone).
@@ -140,6 +141,6 @@ export async function envoyerPushWeb(charge: ChargePush, options: { application?
       }
     })
   );
-  if (reussis > 0) return { canal: "pushweb", ok: true, configure: true, detail: `${reussis} appareil(s)${echecs.length ? ` ; ${echecs.length} en échec` : ""}` };
+  if (reussis > 0) return { canal: "pushweb", ok: true, configure: true, detail: `${pluriel(reussis, "appareil")}${echecs.length ? ` ; ${echecs.length} en échec` : ""}` };
   return { canal: "pushweb", ok: false, configure: true, detail: echecs.join(" ; ").slice(0, 400) || "aucun appareil joint" };
 }

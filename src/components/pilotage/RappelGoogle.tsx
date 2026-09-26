@@ -43,7 +43,7 @@ export function BandeauRappelGoogle({ rappel }: { rappel: RappelGoogle }) {
         <a
           href="/api/google/connexion"
           className={cn(
-            "ml-[25px] inline-flex h-9 shrink-0 items-center self-start rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:ml-0 sm:h-8 sm:self-auto",
+            "ml-[25px] inline-flex h-11 shrink-0 items-center self-start rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:ml-0 sm:h-8 sm:self-auto",
             TRANS
           )}
         >

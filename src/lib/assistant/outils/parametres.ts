@@ -8,6 +8,7 @@ import { enregistrerParametre, estCleParametre, parametresPourEcran, validerVale
 import { consommation } from "@/lib/simulateur/consommation";
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien } from "../definition";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les réglages (mission 11) : « voir_parametres » rend tout ce qui se règle
@@ -35,7 +36,7 @@ export const outilVoirParametres = definirOutil({
   executer: async (e, contexte) => {
     const automatismes = await listerAutomatismes();
     const ligneAuto = (a: (typeof automatismes)[number]) => `${a.code} — ${a.libelle} : ${a.actif ? "ACTIF" : "inactif"}`;
-    if (e.automatismes) return { texte: `Automatismes (${automatismes.filter((a) => a.actif).length} actif(s) sur ${automatismes.length}) :\n${automatismes.map(ligneAuto).join("\n")}`, donnees: { automatismes }, liens: [lien("Paramètres", "/parametres")] };
+    if (e.automatismes) return { texte: `Automatismes (${pluriel(automatismes.filter((a) => a.actif).length, "actif")} sur ${automatismes.length}) :\n${automatismes.map(ligneAuto).join("\n")}`, donnees: { automatismes }, liens: [lien("Paramètres", "/parametres")] };
     const tous = await parametresPourEcran(contexte.maintenant);
     const parametres = e.groupe ? tous.filter((p) => p.groupe === e.groupe) : tous;
     const credit = await consommation(contexte.maintenant).catch(() => null);
@@ -50,7 +51,7 @@ export const outilVoirParametres = definirOutil({
       ...parGroupe.map((g) => `${g.libelle} :\n${g.parametres.map((l) => `- ${l}`).join("\n")}`),
       ...(!e.groupe || e.groupe === "SIMULATEUR" ? [solde] : []),
       ...(!e.groupe ? [`Numérotation (Paramètres → Numérotation des documents) : ${compteurs.map((c) => `${c.libelle} ${c.annee} : prochain ${c.prochain}${c.valeur !== null ? ` (dernier attribué ${c.valeur})` : ""}, plus haut inscrit ${c.plusHautRegistre}`).join(" ; ")}. Un devis externe inscrit avec un numéro plus grand fait avancer le compteur ; « modifier_parametres » avec cle COMPTEUR_DEVIS ou COMPTEUR_FACTURE et valeur « 2026-043 » le fait repartir.`] : []),
-      ...(!e.groupe ? [`Automatismes (${automatismes.filter((a) => a.actif).length} actif(s) sur ${automatismes.length}) :\n${automatismes.map((a) => `- ${ligneAuto(a)}`).join("\n")}`] : []),
+      ...(!e.groupe ? [`Automatismes (${pluriel(automatismes.filter((a) => a.actif).length, "actif")} sur ${automatismes.length}) :\n${automatismes.map((a) => `- ${ligneAuto(a)}`).join("\n")}`] : []),
       "Aucun secret n'est lu ni rendu : les clés et jetons sont des variables d'environnement.",
     ].join("\n\n");
     return { texte, donnees: { parametres: parametres.map((p) => ({ cle: p.cle, libelle: p.libelle, groupe: p.groupe, nature: p.nature, options: p.options, courante: p.courante, historique: p.historique.slice(0, 5) })), compteurs, solde: credit?.solde ?? null, creditEpuise: credit?.creditEpuise ?? null, automatismes: e.groupe ? undefined : automatismes }, liens: [lien("Paramètres", "/parametres")] };

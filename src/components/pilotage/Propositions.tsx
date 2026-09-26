@@ -114,7 +114,7 @@ export function CarteProposition({
             type="button"
             aria-expanded={pourquoiOuvert}
             onClick={() => setPourquoiOuvert((ouvert) => !ouvert)}
-            className={cn("inline-flex min-h-8 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
           >
             Pourquoi ?
             <ChevronDown size={13} aria-hidden className={cn("transition-transform", pourquoiOuvert && "rotate-180")} />

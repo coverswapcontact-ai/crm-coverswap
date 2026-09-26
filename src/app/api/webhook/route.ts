@@ -14,6 +14,7 @@ import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
 import { notifierDemandeDuSite } from "@/lib/prospects/notification";
 import { reperDoublonProbable } from "@/lib/prospects/doublons";
 import type { Priorite } from "@/lib/prospects/priorite";
+import { pluriel } from "@/lib/commun/format";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -305,7 +306,7 @@ export async function POST(request: NextRequest) {
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `${isNew ? "Lead reçu via le simulateur" : "Nouvelle demande via le simulateur"} (${data.source}) — ${simulationsRattachees.length} simulation(s) rattachée(s)${data.message ? ` — Message : ${data.message}` : ""}`,
+          contenu: `${isNew ? "Lead reçu via le simulateur" : "Nouvelle demande via le simulateur"} (${data.source}) — ${pluriel(simulationsRattachees.length, "simulation rattachée", "simulations rattachées")}${data.message ? ` — Message : ${data.message}` : ""}`,
           leadId: lead.id,
         },
       });
@@ -343,7 +344,7 @@ export async function POST(request: NextRequest) {
       });
     } else {
       const prefix = isNew ? "Lead reçu via webhook" : "Nouveau contact du client";
-      const details = [data.notes, data.message ? `Message : ${data.message}` : null, data.styleSouhaite ? `Style : ${data.styleSouhaite}` : null, photosEcrites ? `${photosEcrites} photo(s) jointe(s)` : null]
+      const details = [data.notes, data.message ? `Message : ${data.message}` : null, data.styleSouhaite ? `Style : ${data.styleSouhaite}` : null, photosEcrites ? `${pluriel(photosEcrites, "photo jointe", "photos jointes")}` : null]
         .filter(Boolean)
         .join(" — ");
       await prisma.interaction.create({
@@ -376,8 +377,8 @@ export async function POST(request: NextRequest) {
             data.typeProjet ? `Projet : ${LIBELLES_PROJET_ACCUSE[data.typeProjet] ?? data.typeProjet}` : null,
             data.ville && data.ville !== "Non renseignée" ? `Ville : ${data.ville}${data.codePostal ? ` (${data.codePostal})` : ""}` : null,
             data.referenceChoisie ? `Finition retenue : ${data.referenceChoisie}` : null,
-            photosEcrites ? `${photosEcrites} photo(s) jointe(s)` : null,
-            simulationsRattachees.length ? `${simulationsRattachees.length} simulation(s) sur votre photo` : null,
+            photosEcrites ? `${pluriel(photosEcrites, "photo jointe", "photos jointes")}` : null,
+            simulationsRattachees.length ? `${pluriel(simulationsRattachees.length, "simulation")} sur votre photo` : null,
           ].filter(Boolean);
           await resend.emails.send({
             from: process.env.EMAIL_FROM,
@@ -436,7 +437,7 @@ export async function POST(request: NextRequest) {
               <tr><td style="padding:4px 12px;font-weight:bold;">Projet</td><td>${data.typeProjet}</td></tr>
               ${data.referenceChoisie ? `<tr><td style="padding:4px 12px;font-weight:bold;">Référence</td><td>${data.referenceChoisie}</td></tr>` : ""}
               ${data.message ? `<tr><td style="padding:4px 12px;font-weight:bold;">Message</td><td>${data.message.replace(/[<>]/g, "")}</td></tr>` : ""}
-              ${photosEcrites ? `<tr><td style="padding:4px 12px;font-weight:bold;">Photos</td><td>${photosEcrites} jointe(s)</td></tr>` : ""}
+              ${photosEcrites ? `<tr><td style="padding:4px 12px;font-weight:bold;">Photos</td><td>${pluriel(photosEcrites, "jointe")}</td></tr>` : ""}
               <tr><td style="padding:4px 12px;font-weight:bold;">Mails commerciaux</td><td>${consentement === "ACCORDE" ? "accord donné" : consentement === "REFUSE" ? "case non cochée" : "non demandé"}</td></tr>
             </table>
             <br/>

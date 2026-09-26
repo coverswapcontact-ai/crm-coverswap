@@ -9,6 +9,7 @@ import { CarteProposition, ModaleCorrection, ModaleRejet } from "@/components/pi
 import { Bouton, EnTetePage, EtatVide, Modale, TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
 import type { PropositionVue, StatutProposition } from "@/lib/validation/types";
+import { pluriel } from "@/lib/commun/format";
 
 type Onglet = "attente" | "echec" | "historique";
 
@@ -138,7 +139,7 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
       setPropositions((actuelles) => actuelles.filter((proposition) => !bilan.validees.includes(proposition.id)));
       setTotal((actuel) => Math.max(0, actuel - bilan.validees.length));
       toast.success(`${bilan.validees.length} proposition${bilan.validees.length > 1 ? "s" : ""} validée${bilan.validees.length > 1 ? "s" : ""}`, {
-        description: bilan.ignorees.length > 0 ? `${bilan.ignorees.length} laissée(s) de côté : ${bilan.ignorees[0].raison}` : undefined,
+        description: bilan.ignorees.length > 0 ? `${pluriel(bilan.ignorees.length, "laissée")} de côté : ${bilan.ignorees[0].raison}` : undefined,
       });
       rafraichirCompteurs();
     } catch (erreur) {
@@ -189,7 +190,7 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
             aria-selected={onglet === valeur}
             onClick={() => changerOnglet(valeur)}
             className={cn(
-              "flex h-9 items-center rounded-[7px] px-3 text-[13px] font-medium sm:h-7",
+              "flex h-11 items-center rounded-[7px] px-3 text-[13px] font-medium sm:h-7",
               onglet === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
               TRANS
             )}

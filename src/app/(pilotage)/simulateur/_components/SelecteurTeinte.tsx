@@ -70,7 +70,7 @@ export function SelecteurTeinte({
           <p className="text-[15px] font-medium text-[#F2F3F5]">
             Teinte · <span className="text-[#5DCAA5]">{zone}</span>
           </p>
-          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex h-10 w-10 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
+          <button type="button" onClick={onFermer} aria-label="Fermer" className="flex h-11 sm:h-10 w-11 sm:w-10 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
             <X size={18} aria-hidden />
           </button>
         </div>
@@ -80,22 +80,22 @@ export function SelecteurTeinte({
         </div>
         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
           {refsClient.length ? (
-            <button type="button" onClick={() => { setGout("client"); setFamille(""); setRecherche(""); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === "client" && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
+            <button type="button" onClick={() => { setGout("client"); setFamille(""); setRecherche(""); }} className={cn("h-11 sm:h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === "client" && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
               ♥ Ses favoris ({refsClient.length})
             </button>
           ) : null}
           {styles.map((s) => (
-            <button key={s} type="button" onClick={() => { setGout(s); setFamille(""); setRecherche(""); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === s && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
+            <button key={s} type="button" onClick={() => { setGout(s); setFamille(""); setRecherche(""); }} className={cn("h-11 sm:h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === s && !famille && !recherche ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
               ♥ {LIBELLES_STYLE[s]}
             </button>
           ))}
           {refsSite.length ? (
-            <button type="button" onClick={() => { setGout("site"); setFamille(""); setRecherche(""); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === "site" && !famille && !recherche ? "border-[#60A5FA]/60 bg-[#60A5FA]/10 text-[#93C5FD]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
+            <button type="button" onClick={() => { setGout("site"); setFamille(""); setRecherche(""); }} className={cn("h-11 sm:h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", gout === "site" && !famille && !recherche ? "border-[#60A5FA]/60 bg-[#60A5FA]/10 text-[#93C5FD]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
               Essayées sur le site
             </button>
           ) : null}
           {FAMILLES.map((f) => (
-            <button key={f.id || "tout"} type="button" onClick={() => { setFamille(f.id); if (!f.id) setGout(null); }} className={cn("h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", famille === f.id && (f.id || !gout) ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
+            <button key={f.id || "tout"} type="button" onClick={() => { setFamille(f.id); if (!f.id) setGout(null); }} className={cn("h-11 sm:h-8 shrink-0 rounded-full border-[0.5px] px-3 text-[12.5px]", famille === f.id && (f.id || !gout) ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB]", TRANS)}>
               {f.libelle}
             </button>
           ))}

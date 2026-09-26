@@ -172,7 +172,7 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
         {detail.parcours.length > 0 ? (
           <ol aria-label="Dates des étapes" className="border-t-[0.5px] border-[#2A2D34] pt-2">
             {detail.parcours.map((passage, index) => (
-              <li key={passage.evenementId ?? `${passage.etape}-${index}`} className="flex min-h-8 items-center justify-between gap-3 text-[13px]">
+              <li key={passage.evenementId ?? `${passage.etape}-${index}`} className="flex min-h-11 sm:min-h-8 items-center justify-between gap-3 text-[13px]">
                 <span className="min-w-0 truncate text-[#9CA3AF]">{libellePassage(passage)}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
                   {passage.dateInconnue ? (
@@ -183,7 +183,7 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
                     </span>
                   )}
                   {passage.evenementId ? (
-                    <Bouton variante="fantome" taille="icone" className="h-8 w-8 sm:h-7 sm:w-7" aria-label={`Corriger la date : ${libellePassage(passage)}`} onClick={() => setEnCorrection(index)}>
+                    <Bouton variante="fantome" taille="icone" className="h-11 w-11 sm:h-7 sm:w-7" aria-label={`Corriger la date : ${libellePassage(passage)}`} onClick={() => setEnCorrection(index)}>
                       <Pencil size={12} aria-hidden />
                     </Bouton>
                   ) : null}

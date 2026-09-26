@@ -6,6 +6,8 @@ import { pseudonyme } from "@/lib/synthese/references";
 import { anonymiserClient } from "@/lib/rgpd/conservation";
 import { mettreEnFile } from "@/lib/taches/file";
 import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
+import { titreDossier } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * La corbeille (mission 11) : « supprimer » met un lead ou un dossier à la
@@ -37,7 +39,7 @@ export async function listerCorbeille(): Promise<ElementCorbeille[]> {
   const element = (type: "LEAD" | "DOSSIER", id: string, nom: string, le: Date, motif: string | null, clientId: string | null): ElementCorbeille => ({ type, id, nom, miseLe: le.toISOString(), effacementLe: dateEffacement(le).toISOString(), motif: (motif ?? "").replace(/^Corbeille \([^)]*\) : /, ""), clientId });
   return [
     ...leads.map((l) => element("LEAD", l.id, `${l.prenom} ${l.nom}`.trim() + (l.ville ? ` (${l.ville})` : ""), l.archiveLe!, l.archiveMotif, l.clientId)),
-    ...dossiers.map((d) => element("DOSSIER", d.id, `${d.clientNom} — ${d.objet}`, d.archiveLe!, d.archiveMotif, d.clientId)),
+    ...dossiers.map((d) => element("DOSSIER", d.id, titreDossier(d), d.archiveLe!, d.archiveMotif, d.clientId)),
   ].sort((a, b) => a.miseLe.localeCompare(b.miseLe));
 }
 
@@ -72,8 +74,8 @@ async function bloquantsDossier(dossierId: string): Promise<string | null> {
     prisma.document.count({ where: { dossierId, type: { in: ["FACTURE", "AVOIR"] }, numero: { not: null } } }),
     prisma.encaissement.count({ where: { dossierId } }),
   ]);
-  if (factures) return `${factures} facture(s) ou avoir(s) émis : conservation légale de 10 ans.`;
-  if (encaissements) return `${encaissements} paiement(s) enregistré(s) : conservation comptable.`;
+  if (factures) return `${pluriel(factures, "facture ou avoir émis", "factures ou avoirs émis")} : conservation légale de 10 ans.`;
+  if (encaissements) return `${pluriel(encaissements, "paiement enregistré", "paiements enregistrés")} : conservation comptable.`;
   return null;
 }
 
@@ -143,7 +145,7 @@ export async function purgerCorbeille(maintenant: Date = new Date()): Promise<Bi
   const limite = new Date(maintenant.getTime() - DELAI_CORBEILLE_JOURS * JOUR_MS);
   const echus = (await listerCorbeille()).filter((e) => new Date(e.miseLe) <= limite && !e.motif.startsWith("— effacé"));
   const bilan = await effacerDeLaCorbeille({ leads: echus.filter((e) => e.type === "LEAD").map((e) => e.id), dossiers: echus.filter((e) => e.type === "DOSSIER").map((e) => e.id) }, maintenant);
-  const resume = echus.length === 0 ? "Corbeille : rien à effacer aujourd'hui." : `Corbeille : ${bilan.effaces.length} élément(s) effacé(s) (anonymisés), ${bilan.conserves.length} conservé(s)${bilan.conserves.length ? ` — ${bilan.conserves.map((c) => `${c.type.toLowerCase()} ${c.id} : ${c.raison}`).join(" ; ")}` : ""}.`;
+  const resume = echus.length === 0 ? "Corbeille : rien à effacer aujourd'hui." : `Corbeille : ${pluriel(bilan.effaces.length, "élément effacé", "éléments effacés")} (anonymisés), ${pluriel(bilan.conserves.length, "conservé")}${bilan.conserves.length ? ` — ${bilan.conserves.map((c) => `${c.type.toLowerCase()} ${c.id} : ${c.raison}`).join(" ; ")}` : ""}.`;
   return { ...bilan, resume };
 }
 

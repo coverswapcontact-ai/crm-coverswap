@@ -123,7 +123,7 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
               aria-selected={filtre === f.valeur}
               onClick={() => setFiltre(f.valeur)}
               className={cn(
-                "h-9 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8 sm:text-[12.5px]",
+                "h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8 sm:text-[12.5px]",
                 filtre === f.valeur ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
                 TRANS
               )}
@@ -134,7 +134,7 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
           ))}
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          <select aria-label="Étape" value={etape} onChange={(e) => setEtape(e.target.value as EtapeEspace | "TOUTES")} className="h-9 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8">
+          <select aria-label="Étape" value={etape} onChange={(e) => setEtape(e.target.value as EtapeEspace | "TOUTES")} className="h-11 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8">
             <option value="TOUTES">Toutes les étapes</option>
             {ETAPES.map((e) => (
               <option key={e} value={e}>
@@ -142,7 +142,7 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
               </option>
             ))}
           </select>
-          <select aria-label="Tri" value={tri} onChange={(e) => setTri(e.target.value as Tri)} className="h-9 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8">
+          <select aria-label="Tri" value={tri} onChange={(e) => setTri(e.target.value as Tri)} className="h-11 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8">
             <option value="MAIN">À moi d&apos;abord</option>
             <option value="ACTIVITE">Dernière activité</option>
             <option value="CREATION">Lien le plus récent</option>
@@ -340,7 +340,7 @@ function CarteClient({ client, maintenant, onRecharger }: { client: ClientEspace
 
 /** Le geste qui fait avancer ce projet, quand c'est à Lucas de jouer : un bouton, pas un détour. */
 function GesteDuMoment({ ligne, onAccorder, accordEnCours }: { ligne: LigneEspace; onAccorder: () => void; accordEnCours: boolean }) {
-  const classe = cn("inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-2.5 text-[12px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-7", TRANS);
+  const classe = cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-7 sm:px-2.5 sm:text-[12px]", TRANS);
   switch (ligne.attente.geste) {
     case "ACCORDER":
       return (

@@ -325,7 +325,7 @@ export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId:
           {brouillon.noteId && brouillon.appelLe ? `Note de l'appel · ${dateAppel(brouillon.appelLe)}` : "Note d'appel"}
         </label>
         {brouillon.noteId ? (
-          <button type="button" onClick={nouvelAppel} className="flex h-8 items-center gap-1 rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:bg-[#1D9E75]/10">
+          <button type="button" onClick={nouvelAppel} className="flex h-11 sm:h-8 items-center gap-1 rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:bg-[#1D9E75]/10">
             <Plus size={13} aria-hidden /> Nouvel appel
           </button>
         ) : null}
@@ -402,7 +402,7 @@ export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId:
             ))}
           </ol>
           {precedentes.length > visibles.length || toutes ? (
-            <button type="button" onClick={() => setToutes((t) => !t)} className="mt-1.5 h-8 text-[12px] text-[#5DCAA5] hover:underline">
+            <button type="button" onClick={() => setToutes((t) => !t)} className="mt-1.5 h-11 sm:h-8 text-[12px] text-[#5DCAA5] hover:underline">
               {toutes ? "Réduire" : `Voir ${precedentes.length - visibles.length === 1 ? "l'autre appel" : `les ${precedentes.length - visibles.length} autres appels`}`}
             </button>
           ) : null}

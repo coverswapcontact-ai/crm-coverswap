@@ -308,7 +308,7 @@ export function PanneauMail({
   return (
     <Sheet open={ouvert} onOpenChange={(o) => (o ? undefined : volet ? setVolet(false) : onFermer())}>
       <SheetContent side="right" showCloseButton={false} style={glisser.style} className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[1080px]">
-        <div className="flex h-full min-h-0 flex-col pt-[env(safe-area-inset-top)]">
+        <div className="flex h-full min-h-0 flex-col">
           <header {...glisser.gestionnaires} className="flex items-start justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-4 py-3">
             <div className="min-w-0">
               <SheetTitle className="truncate text-[15.5px] font-medium text-[#F2F3F5]">{detail ? detail.objet : nouveauPour ? "Nouveau mail" : "Chargement…"}</SheetTitle>
@@ -318,7 +318,7 @@ export function PanneauMail({
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {contexte ? (
-                <Bouton variante="fantome" taille="sm" className="h-10 lg:hidden" onClick={() => setVolet(true)} icone={<UserRound size={14} aria-hidden />}>
+                <Bouton variante="fantome" taille="sm" className="h-11 sm:h-10 lg:hidden" onClick={() => setVolet(true)} icone={<UserRound size={14} aria-hidden />}>
                   Client
                 </Bouton>
               ) : null}
@@ -355,15 +355,15 @@ export function PanneauMail({
                   <DatesExtraites messageId={detail.messageId} dates={detail.datesExtraites} onChange={() => void charger()} />
                   <div className="flex flex-wrap gap-1">
                     {detail.range ? (
-                      <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />}>
+                      <Bouton taille="sm" variante="secondaire" className="h-11 sm:h-8" disabled={occupe} onClick={() => void geste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />}>
                         Remonter (ne plus jamais ranger cet expéditeur)
                       </Bouton>
                     ) : (
                       <>
-                        <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste(detail.traite ? "DESARCHIVER" : "ARCHIVER")} icone={detail.traite ? <ArchiveRestore size={14} aria-hidden /> : <Archive size={14} aria-hidden />}>
+                        <Bouton taille="sm" variante="secondaire" className="h-11 sm:h-8" disabled={occupe} onClick={() => void geste(detail.traite ? "DESARCHIVER" : "ARCHIVER")} icone={detail.traite ? <ArchiveRestore size={14} aria-hidden /> : <Archive size={14} aria-hidden />}>
                           {detail.traite ? "Désarchiver" : "Archiver"}
                         </Bouton>
-                        <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste(detail.nonLu ? "LU" : "NON_LU")} icone={detail.nonLu ? <MailOpen size={14} aria-hidden /> : <Mail size={14} aria-hidden />}>
+                        <Bouton taille="sm" variante="secondaire" className="h-11 sm:h-8" disabled={occupe} onClick={() => void geste(detail.nonLu ? "LU" : "NON_LU")} icone={detail.nonLu ? <MailOpen size={14} aria-hidden /> : <Mail size={14} aria-hidden />}>
                           {detail.nonLu ? "Lu" : "Non lu"}
                         </Bouton>
                         <BoutonSnooze
@@ -375,19 +375,19 @@ export function PanneauMail({
                           }}
                         />
                         {detail.fil.some((m) => m.sens === "ENTRANT") ? (
-                          <Bouton taille="sm" variante="fantome" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("RANGER")} icone={<Archive size={14} aria-hidden />}>
+                          <Bouton taille="sm" variante="fantome" className="h-11 sm:h-8" disabled={occupe} onClick={() => void geste("RANGER")} icone={<Archive size={14} aria-hidden />}>
                             Ranger
                           </Bouton>
                         ) : null}
                         {detail.contexte?.contact.type !== "CLIENT" && detail.fil.some((m) => m.sens === "ENTRANT") ? (
-                          <Bouton taille="sm" variante="fantome" className="h-10 sm:h-8" disabled={occupe} onClick={() => void geste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />}>
+                          <Bouton taille="sm" variante="fantome" className="h-11 sm:h-8" disabled={occupe} onClick={() => void geste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />}>
                             Ne plus me montrer cet expéditeur
                           </Bouton>
                         ) : null}
                       </>
                     )}
                     {detail.lienGmail ? (
-                      <a href={detail.lienGmail} target="_blank" rel="noopener" className="inline-flex h-10 items-center gap-1.5 rounded-[8px] px-2.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8">
+                      <a href={detail.lienGmail} target="_blank" rel="noopener" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] px-2.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8">
                         <ExternalLink size={13} aria-hidden /> Gmail
                       </a>
                     ) : null}
@@ -423,7 +423,7 @@ export function PanneauMail({
                                 </li>
                               ) : (
                                 <li key={p.id}>
-                                  <a href={p.url ?? detail.lienGmail ?? "#"} target="_blank" rel="noopener" className="inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+                                  <a href={p.url ?? detail.lienGmail ?? "#"} target="_blank" rel="noopener" className="inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
                                     <Paperclip size={13} aria-hidden /> {p.nom}
                                   </a>
                                 </li>

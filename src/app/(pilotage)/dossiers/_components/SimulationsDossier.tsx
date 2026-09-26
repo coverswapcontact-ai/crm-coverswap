@@ -173,7 +173,7 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
 
   const actions = (
     <div className="flex gap-1.5">
-      <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+      <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
         <WandSparkles size={13} aria-hidden /> Simulateur
       </Link>
       <Bouton taille="sm" icone={<ImagePlus size={13} aria-hidden />} onClick={() => entree.current?.click()}>
@@ -320,7 +320,7 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
             <img src={depot.apercu} alt="" className="max-h-56 w-full rounded-[10px] object-contain" />
             <label className="block text-[12px] font-medium text-[#9CA3AF]">
               D&apos;où vient cette image ?
-              <select value={depotInfos.preparation} onChange={(e) => setDepotInfos({ ...depotInfos, preparation: e.target.value })} className="mt-1.5 h-10 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]">
+              <select value={depotInfos.preparation} onChange={(e) => setDepotInfos({ ...depotInfos, preparation: e.target.value })} className="mt-1.5 h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]">
                 <option value="auto">{chatgptEnAttente ? `ChatGPT — préparation du ${heure(chatgptEnAttente.le)} (${chatgptEnAttente.typeLibelle})` : "La dernière préparation ChatGPT (s'il y en a une)"}</option>
                 {donnees?.preparations
                   .filter((p) => p.mode === "CHATGPT" && p.id !== chatgptEnAttente?.id)

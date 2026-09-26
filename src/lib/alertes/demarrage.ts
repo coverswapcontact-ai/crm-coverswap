@@ -2,6 +2,7 @@ import { pushDisponible } from "./configuration";
 import { alerter, resumerEnvoi } from "./canaux";
 import { derniereAlerte } from "./registre";
 import { sonderReseau } from "./reseau";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Au démarrage du serveur, hors du chemin critique : dire dans les journaux ce
@@ -25,7 +26,7 @@ export async function verifierAlertesAuDemarrage(): Promise<void> {
 
   try {
     const { compterAbonnes } = await import("./pushweb");
-    console.log(`[alertes] push web : ${await compterAbonnes()} appareil(s) abonné(s).`);
+    console.log(`[alertes] push web : ${pluriel(await compterAbonnes(), "appareil abonné", "appareils abonnés")}.`);
   } catch (erreur) {
     console.error("[alertes] abonnements au push web illisibles :", erreur);
   }

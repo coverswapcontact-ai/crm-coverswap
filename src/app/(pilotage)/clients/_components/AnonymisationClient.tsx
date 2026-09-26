@@ -8,6 +8,7 @@ import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { Bouton, CaseACocher, Modale, Puces, ZoneTexte } from "@/components/pilotage/ui";
 import type { ClientDetail } from "@/lib/clients/types";
 import type { ApercuAnonymisation } from "@/lib/rgpd/anonymisation";
+import { pluriel } from "@/lib/commun/format";
 
 const MOTIFS = [
   { valeur: "DEMANDE_PERSONNE", libelle: "Demande de la personne (droit à l'effacement)" },
@@ -16,7 +17,6 @@ const MOTIFS = [
 ] as const;
 type Motif = (typeof MOTIFS)[number]["valeur"];
 
-const pluriel = (nombre: number, mot: string) => `${nombre} ${mot}${nombre > 1 ? "s" : ""}`;
 
 /** Anonymisation RGPD d'une fiche : ce qui part, ce qui reste, ce qui est à faire à la main ; définitive. */
 export function AnonymisationClient({ client, onAnonymise }: { client: ClientDetail; onAnonymise: (client: ClientDetail) => void }) {

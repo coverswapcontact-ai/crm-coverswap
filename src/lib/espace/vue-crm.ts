@@ -56,7 +56,7 @@ export type VueEspaceCrm = {
   favoris: string[];
   devis: { id: string; numero: string; total: number; repris: boolean; statut: string; consultations: number; consulteLe: string | null } | null;
   /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent, avec libellé et visibilité. */
-  devisProposes: { id: string; numero: string; libelle: string | null; total: number; statut: string; visibleEspace: boolean; repris: boolean }[];
+  devisProposes: { id: string; numero: string; libelle: string | null; total: number; statut: string; visibleEspace: boolean; repris: boolean; consultations: number; consulteLe: string | null }[];
   accord: { le: string; nom: string; source: "ESPACE" | "CRM"; signature: boolean } | null;
   accordsRetires: { le: string; retireLe: string; par: string | null; motif: string | null; nom: string }[];
   paiement: PaiementEspace | null;
@@ -199,8 +199,8 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
         return [];
       }
     })(),
-    devis: lecture.devis && lecture.montants ? { id: lecture.devis.id, numero: lecture.devis.numero!, total: lecture.montants.totalTtcCentimes / 100, repris: lecture.devis.origine === "REPRISE", statut: lecture.devis.statut, consultations: espace.devisConsulteId === lecture.devis.id ? espace.devisConsultations : 0, consulteLe: espace.devisConsulteId === lecture.devis.id ? iso(espace.devisConsulteLe) : null } : null,
-    devisProposes: devisProposes(dossier.documents, { avecNonRetenus: true }).map((d) => ({ id: d.id, numero: d.numero!, libelle: d.libelleVariante ?? null, total: montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes / 100, statut: d.statut, visibleEspace: d.visibleEspace !== false, repris: d.origine === "REPRISE" })),
+    devis: lecture.devis && lecture.montants ? { id: lecture.devis.id, numero: lecture.devis.numero!, total: lecture.montants.totalTtcCentimes / 100, repris: lecture.devis.origine === "REPRISE", statut: lecture.devis.statut, consultations: lecture.devis.consultations ?? 0, consulteLe: iso(lecture.devis.consulteLe) } : null,
+    devisProposes: devisProposes(dossier.documents, { avecNonRetenus: true }).map((d) => ({ id: d.id, numero: d.numero!, libelle: d.libelleVariante ?? null, total: montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes / 100, statut: d.statut, visibleEspace: d.visibleEspace !== false, repris: d.origine === "REPRISE", consultations: d.consultations, consulteLe: iso(d.consulteLe) })),
     accord: lecture.accord ? { le: lecture.accord.le.toISOString(), nom: lecture.accord.nom, source: lecture.accord.source, signature: lecture.accord.signature } : null,
     accordsRetires: dossier.accords.filter((a) => a.retireLe).map((a) => ({ le: a.createdAt.toISOString(), retireLe: a.retireLe!.toISOString(), par: a.retirePar, motif: a.retireMotif, nom: a.nomSignataire })),
     paiement: lecture.accord ? lecture.paiement : null,

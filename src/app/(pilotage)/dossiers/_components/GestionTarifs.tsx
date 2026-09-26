@@ -38,13 +38,13 @@ function ChampsPreset({
         value={saisie.designation}
         onChange={(e) => onChange({ ...saisie, designation: e.target.value })}
         placeholder="Désignation"
-        className={cn(CLASSE_SAISIE, "h-10 sm:h-8")}
+        className={cn(CLASSE_SAISIE, "h-11 sm:h-8")}
       />
       <select
         aria-label="Unité"
         value={saisie.unite}
         onChange={(e) => onChange({ ...saisie, unite: e.target.value as Unite })}
-        className={cn(CLASSE_SAISIE, "h-10 px-2 sm:h-8")}
+        className={cn(CLASSE_SAISIE, "h-11 px-2 sm:h-8")}
       >
         {UNITES.map((unite) => (
           <option key={unite} value={unite}>
@@ -59,7 +59,7 @@ function ChampsPreset({
         onChange={(e) => onChange({ ...saisie, prix: e.target.value })}
         placeholder="À saisir"
         aria-invalid={invalide || undefined}
-        className={cn(CLASSE_SAISIE, "h-10 text-right sm:h-8")}
+        className={cn(CLASSE_SAISIE, "h-11 text-right sm:h-8")}
       />
     </>
   );
@@ -265,7 +265,7 @@ function TarifsParPrestation({ presets }: { presets: PresetVue[] }) {
                       value={l.explicite ? (l.presetId ?? "") : ""}
                       disabled={envoi === l.cle}
                       onChange={(e) => void attribuer(l.cle, e.target.value || null)}
-                      className={cn(CLASSE_SAISIE, "h-10 px-2 text-[12.5px] sm:h-8", !l.presetId && "text-[#8B919C]")}
+                      className={cn(CLASSE_SAISIE, "h-11 px-2 text-[12.5px] sm:h-8", !l.presetId && "text-[#8B919C]")}
                     >
                       <option value="">{l.explicite ? "Automatique" : l.presetId ? `Automatique : ${l.designation} (${l.prixUnitaire ?? "?"} €/${l.unite})` : "Automatique : aucun (prix à saisir)"}</option>
                       {presets.map((p) => (

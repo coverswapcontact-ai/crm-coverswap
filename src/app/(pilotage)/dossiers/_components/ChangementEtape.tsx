@@ -209,7 +209,7 @@ export function ChangementEtape({
                 if (transition) setFenetre(transition);
               }}
               className={cn(
-                "h-9 max-w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-transparent px-2 text-[16px] text-[#9CA3AF] hover:border-[#3A3E47] sm:h-7 sm:text-[12px] [color-scheme:dark]",
+                "h-11 max-w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-transparent px-2 text-[16px] text-[#9CA3AF] hover:border-[#3A3E47] sm:h-7 sm:text-[12px] [color-scheme:dark]",
                 TRANS
               )}
             >
@@ -396,7 +396,7 @@ function FenetreEtape({
                   aria-pressed={motif === valeur}
                   onClick={() => setMotif((actuel) => (actuel === valeur ? null : valeur))}
                   className={cn(
-                    "h-10 rounded-[8px] border-[0.5px] px-3 text-left text-[13px] sm:h-9",
+                    "h-11 rounded-[8px] border-[0.5px] px-3 text-left text-[13px] sm:h-9",
                     motif === valeur
                       ? "border-[#EF4444]/50 bg-[#EF4444]/10 text-[#FCA5A5]"
                       : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
@@ -459,7 +459,7 @@ function FenetreEtape({
                 }
                 setDevisId(evenement.target.value);
               }}
-              className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}
+              className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}
             >
               {devis.map((document) => (
                 <option key={document.id} value={document.id}>

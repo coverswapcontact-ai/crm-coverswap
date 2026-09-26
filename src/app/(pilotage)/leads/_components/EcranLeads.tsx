@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, CheckCheck, ChevronRight, FolderOpen, FolderPlus, Phone, PhoneForwarded, PhoneOff, Plus, RefreshCw, Search, SkipForward, Sparkles, WifiOff, X, Mail } from "lucide-react";
@@ -16,6 +17,7 @@ import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { NotesAppel, finAppel, noterDebutAppel, type NotesAppelRef } from "@/components/pilotage/NotesAppel";
 import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/fermeture-mobile";
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
+import { Visionneuse, imagesDesSimulations, indexDeVue } from "@/components/pilotage/Visionneuse";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, TRANS } from "@/components/pilotage/ui";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { NouveauContact } from "../../prospects/_components/NouveauContact";
 import { PanneauEntrant } from "../../prospects/_components/PanneauEntrant";
 import { PastillePriorite, PastilleSimulation } from "../../prospects/_components/pastilles";
+import { pluriel } from "@/lib/commun/format";
 
 /* ── Temps ─────────────────────────────────────────────────────────── */
 
@@ -95,11 +98,11 @@ function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif: Motif
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Motif de l'archivage">
       <span className="mr-0.5 text-[12px] text-[#8B919C]">Archiver :</span>
       {MOTIFS_ARCHIVAGE.map((motif) => (
-        <button key={motif} type="button" disabled={occupe} onClick={() => onChoisir(motif)} className={cn("h-9 rounded-full border-[0.5px] border-[#EF9F27]/45 px-3 text-[13px] text-[#F5B454] hover:bg-[#EF9F27]/15 disabled:opacity-50", TRANS)}>
+        <button key={motif} type="button" disabled={occupe} onClick={() => onChoisir(motif)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] border-[#EF9F27]/45 px-3 text-[13px] text-[#F5B454] hover:bg-[#EF9F27]/15 disabled:opacity-50", TRANS)}>
           {LIBELLES_MOTIF_ARCHIVAGE[motif]}
         </button>
       ))}
-      <button type="button" onClick={onAnnuler} aria-label="Ne pas archiver" className="flex h-9 w-9 items-center justify-center rounded-full text-[#8B919C] hover:bg-[#22262D]">
+      <button type="button" onClick={onAnnuler} aria-label="Ne pas archiver" className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-full text-[#8B919C] hover:bg-[#22262D]">
         <X size={14} aria-hidden />
       </button>
     </div>
@@ -154,57 +157,39 @@ function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir
 
 /* ── Ses simulations, pour en parler pendant l'appel ─────────────────── */
 
+/** Mission 13 (lot 5, B8) : la visionneuse commune (après puis avant, balayage), un lien ordinaire vers le dossier. */
 function SesSimulations({ simulations, dossierId }: { simulations: SimulationLead[]; dossierId: string | null }) {
-  const [ouverte, setOuverte] = useState<{ simulation: SimulationLead; vue: "apres" | "avant" } | null>(null);
-  useRetourFerme(Boolean(ouverte), () => setOuverte(null));
+  const [ouverte, setOuverte] = useState<number | null>(null);
+  const images = imagesDesSimulations(simulations);
   return (
     <div className="mt-4">
       <p className="mb-2 flex items-center justify-between text-[12px] font-medium text-[#9CA3AF]">
         Ce qu&apos;il a vu
         {dossierId ? (
-          <a href={`/dossiers?dossier=${dossierId}`} target="_blank" rel="noopener" className="font-normal text-[#5DCAA5] hover:underline">
+          <Link href={`/dossiers?dossier=${dossierId}&rubrique=photos`} className="inline-flex min-h-11 items-center font-normal text-[#5DCAA5] hover:underline">
             Toutes les photos du dossier
-          </a>
+          </Link>
         ) : null}
       </p>
       <ul className="grid grid-cols-3 gap-2">
-        {simulations.map((simulation) => (
-          <li key={simulation.id}>
-            <button type="button" disabled={!simulation.apres && !simulation.avant} onClick={() => setOuverte({ simulation, vue: simulation.apres ? "apres" : "avant" })} className="block w-full text-left disabled:opacity-60">
-              <span className="block aspect-[4/3] overflow-hidden rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#22262D]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
-                {simulation.apres || simulation.avant ? <img src={simulation.apres ?? simulation.avant ?? ""} alt="Rendu de la simulation" loading="lazy" className="h-full w-full object-cover" /> : null}
-              </span>
-              <span className="mt-1 block truncate text-[11.5px] text-[#8B919C]">
-                {[simulation.reference, simulation.prix ? `${Math.round(simulation.prix)} €` : null].filter(Boolean).join(" · ") || new Date(simulation.le).toLocaleDateString("fr-FR")}
-              </span>
-            </button>
-          </li>
-        ))}
+        {simulations.map((simulation) => {
+          const index = indexDeVue(simulations, simulation.id, simulation.apres ? "apres" : "avant");
+          return (
+            <li key={simulation.id}>
+              <button type="button" disabled={index < 0} onClick={() => setOuverte(index)} className="block w-full text-left disabled:opacity-60" aria-label={`Agrandir la simulation${simulation.reference ? ` ${simulation.reference}` : ""}`}>
+                <span className="block aspect-[4/3] overflow-hidden rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#22262D]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
+                  {simulation.apres || simulation.avant ? <img src={simulation.apres ?? simulation.avant ?? ""} alt="Rendu de la simulation" loading="lazy" className="h-full w-full object-cover" /> : null}
+                </span>
+                <span className="mt-1 block truncate text-[11.5px] text-[#8B919C]">
+                  {[simulation.reference, simulation.prix ? `${Math.round(simulation.prix)} €` : null].filter(Boolean).join(" · ") || new Date(simulation.le).toLocaleDateString("fr-FR")}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {ouverte ? (
-        <div className="fixed inset-0 z-[70] flex flex-col bg-black/95" onClick={() => setOuverte(null)}>
-          <div className="flex items-center justify-between gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2" onClick={(evenement) => evenement.stopPropagation()}>
-            <div className="flex gap-1.5">
-              {(["avant", "apres"] as const).map((vue) =>
-                ouverte.simulation[vue] ? (
-                  <button key={vue} type="button" aria-pressed={ouverte.vue === vue} onClick={() => setOuverte({ ...ouverte, vue })} className={cn("h-10 rounded-full px-4 text-[14px]", ouverte.vue === vue ? "bg-[#F2F3F5] text-[#16181D]" : "bg-white/10 text-[#E5E7EB]")}>
-                    {vue === "avant" ? "Avant" : "Après"}
-                  </button>
-                ) : null
-              )}
-            </div>
-            <button type="button" onClick={() => setOuverte(null)} aria-label="Fermer" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-[#E5E7EB]">
-              <X size={18} aria-hidden />
-            </button>
-          </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- image protégée par la session, servie telle quelle */}
-            <img src={ouverte.simulation[ouverte.vue] ?? ""} alt={ouverte.vue === "avant" ? "Sa pièce avant" : "Sa pièce après, simulée"} className="max-h-full max-w-full rounded-[10px] object-contain" />
-          </div>
-          {ouverte.simulation.reference ? <p className="pb-4 text-center text-[13px] text-[#9CA3AF]">Finition {ouverte.simulation.reference}{ouverte.simulation.prix ? ` · ${Math.round(ouverte.simulation.prix)} € simulés` : ""}</p> : null}
-        </div>
-      ) : null}
+      {ouverte !== null && images[ouverte] ? <Visionneuse images={images} index={ouverte} onIndex={setOuverte} onFermer={() => setOuverte(null)} /> : null}
     </div>
   );
 }
@@ -332,10 +317,10 @@ function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onN
               </button>
             </div>
             {lead.dossierId ? (
-              // Nouvel onglet : la file d'appels reste où elle en est.
-              <a href={`/dossiers?dossier=${lead.dossierId}`} target="_blank" rel="noopener" className="mx-auto mt-2 flex w-fit items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline">
+              // Mission 13 (lot 5) : même onglet — l'application installée ne s'ouvre plus dans Safari ; la file d'appels se retrouve depuis Leads.
+              <Link href={`/dossiers?dossier=${lead.dossierId}`} className="mx-auto mt-2 flex min-h-11 w-fit items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline">
                 <FolderOpen size={13} aria-hidden /> Voir le dossier
-              </a>
+              </Link>
             ) : (
               <button type="button" onClick={() => onDossier(lead)} disabled={occupe} className="mx-auto mt-2 flex items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline disabled:opacity-50">
                 <FolderPlus size={13} aria-hidden /> Ouvrir son dossier sans noter d&apos;appel
@@ -497,7 +482,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
     try {
       const resultat = await envoyerJson<{ dossierId: string; cree: boolean; photosRangees: number; simulationsRangees: number }>(`/api/leads/${lead.id}/dossier`, "POST");
       const rangees = resultat.photosRangees + resultat.simulationsRangees;
-      toast.success(resultat.cree ? `Dossier ouvert pour ${lead.nom}` : `${lead.nom} avait déjà un dossier`, { description: rangees > 0 ? `${rangees} image(s) rangée(s) dans ses photos.` : "Coordonnées, projet et réponses repris." });
+      toast.success(resultat.cree ? `Dossier ouvert pour ${lead.nom}` : `${lead.nom} avait déjà un dossier`, { description: rangees > 0 ? `${pluriel(rangees, "image rangée", "images rangées")} dans ses photos.` : "Coordonnées, projet et réponses repris." });
       if (options.rester) await rafraichir();
       else routeur.push(`/dossiers?dossier=${resultat.dossierId}`);
       return resultat.dossierId;
@@ -563,12 +548,12 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
           ["SANS_SUITE", `Sans suite · ${donnees.compteurs.sansSuite}`],
           ["ARCHIVES", `Archivés · ${donnees.compteurs.archives}`],
         ] as const).map(([valeur, libelle]) => (
-          <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+          <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
             {libelle}
           </button>
         ))}
         {donnees.sources.length > 1 ? (
-          <select value={source ?? ""} onChange={(evenement) => setSource(evenement.target.value || null)} aria-label="Source" className={cn(CLASSE_SAISIE, "h-9 w-auto max-w-[14rem] rounded-full py-0 text-[13px]")}>
+          <select value={source ?? ""} onChange={(evenement) => setSource(evenement.target.value || null)} aria-label="Source" className={cn(CLASSE_SAISIE, "h-11 sm:h-9 w-auto max-w-[14rem] rounded-full py-0 text-[13px]")}>
             <option value="">Toutes les sources</option>
             {donnees.sources.map((valeur) => (
               <option key={valeur} value={valeur}>
@@ -584,13 +569,13 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
             setModeSelection((mode) => !mode);
             setSelection(new Set());
           }}
-          className={cn("h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", modeSelection ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+          className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", modeSelection ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
         >
           {modeSelection ? "Fin de sélection" : "Sélectionner"}
         </button>
         <label className="relative ml-auto w-full sm:w-64">
           <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
-          <input value={recherche} onChange={(evenement) => setRecherche(evenement.target.value)} placeholder="Nom, téléphone, ville, campagne" aria-label="Rechercher un lead" className={cn(CLASSE_SAISIE, "h-9 rounded-full pl-8 text-[13px]")} />
+          <input value={recherche} onChange={(evenement) => setRecherche(evenement.target.value)} placeholder="Nom, téléphone, ville, campagne" aria-label="Rechercher un lead" className={cn(CLASSE_SAISIE, "h-11 sm:h-9 rounded-full pl-8 text-[13px]")} />
         </label>
       </div>
 
@@ -616,7 +601,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
             <p className="px-1.5 text-[13.5px] font-medium text-[#F2F3F5]">
               {selection.size} sélectionné{selection.size > 1 ? "s" : ""}
             </p>
-            <button type="button" onClick={() => setSelection(new Set(donnees.lignes.map((l) => l.id)))} className="h-9 rounded-[10px] px-2.5 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5]">
+            <button type="button" onClick={() => setSelection(new Set(donnees.lignes.map((l) => l.id)))} className="h-11 sm:h-9 rounded-[10px] px-2.5 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5]">
               Tout ({donnees.lignes.length})
             </button>
             <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -643,7 +628,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
                   </Bouton>
                 </>
               )}
-              <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-9 w-9 items-center justify-center rounded-[10px] text-[#9CA3AF] hover:bg-[#2A2F37]">
+              <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-[10px] text-[#9CA3AF] hover:bg-[#2A2F37]">
                 <X size={16} aria-hidden />
               </button>
             </div>

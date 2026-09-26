@@ -106,7 +106,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
         titre="Prompts ChatGPT"
         sousTitre="Un prompt par type de surface. Chaque modification est une nouvelle version : on revient en arrière d'un clic."
         actions={
-          <Link href="/simulateur" className={cn("inline-flex h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+          <Link href="/simulateur" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
             <ArrowLeft size={14} aria-hidden /> Simulateur
           </Link>
         }
@@ -114,7 +114,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
 
       <div className="mt-5 flex gap-1.5 overflow-x-auto pb-1">
         {prompts.map((p) => (
-          <button key={p.typeSurface} type="button" onClick={() => choisir(p.typeSurface)} aria-pressed={actif === p.typeSurface} className={cn("h-9 shrink-0 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8", actif === p.typeSurface ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+          <button key={p.typeSurface} type="button" onClick={() => choisir(p.typeSurface)} aria-pressed={actif === p.typeSurface} className={cn("h-11 shrink-0 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8", actif === p.typeSurface ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
             {p.libelle} <span className="text-[11px] opacity-70">v{p.versionCourante}</span>
           </button>
         ))}
@@ -166,7 +166,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
             </div>
           ) : (
             <>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Ce qui change, en une phrase (ex. « plus strict sur les poignées »)" className="h-10 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 text-[14px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]" aria-label="Note de version" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Ce qui change, en une phrase (ex. « plus strict sur les poignées »)" className="h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 text-[14px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]" aria-label="Note de version" />
               <div className="flex flex-wrap gap-2">
                 <Bouton icone={<ShieldCheck size={14} aria-hidden />} chargement={occupe === "verifier"} onClick={() => void verifier()}>
                   Vérifier et voir le rendu

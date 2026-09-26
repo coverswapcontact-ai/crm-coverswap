@@ -29,6 +29,7 @@ import { NouveauContact } from "./NouveauContact";
 import { PanneauEntrant } from "./PanneauEntrant";
 import { PanneauProspect } from "./PanneauProspect";
 import { PastilleIntention, PastillePriorite, PastilleScore } from "./pastilles";
+import { pluriel } from "@/lib/commun/format";
 
 type Onglet = "entrants" | "demarchage";
 type EtatDemarchage = ListeProspects & { agents: EtatAgent[]; sourcingDisponible: boolean };
@@ -251,7 +252,7 @@ export default function ProspectsPilotage({
     try {
       const resultat = await envoyerJson<{ nouveaux: number; dejaConnus: number; rejetes: number; erreurs: string[] }>("/api/prospects/demarchage/sourcer", "POST", { agent: slug });
       toast.success(`${resultat.nouveaux} nouveau${resultat.nouveaux > 1 ? "x" : ""} prospect${resultat.nouveaux > 1 ? "s" : ""}`, {
-        description: `${resultat.dejaConnus} déjà connus, ${resultat.rejetes} hors critères. À scorer ensuite.${resultat.erreurs.length ? ` ${resultat.erreurs.length} erreur(s) Google.` : ""}`,
+        description: `${resultat.dejaConnus} déjà connus, ${resultat.rejetes} hors critères. À scorer ensuite.${resultat.erreurs.length ? ` ${pluriel(resultat.erreurs.length, "erreur")} Google.` : ""}`,
       });
       setGroupeDemarchage("A_SCORER");
       await chargerDemarchage();

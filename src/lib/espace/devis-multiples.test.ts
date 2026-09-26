@@ -144,7 +144,7 @@ describe("deux devis proposés, le client en choisit un", () => {
     etat = await service.etatEspace(await espaceDe(c.espaceId));
     assert.deepEqual(etat.devisProposes.map((d) => d.id), [a.id, b.id]);
     const retire = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: c.dossierId, type: "ESPACE_ACCORD_RETIRE" } });
-    assert.match(retire.contenu, /1 autre\(s\) devis proposé\(s\) redeviennent au choix/);
+    assert.match(retire.contenu, /L'autre devis proposé redevient au choix/);
   });
 
   test("« votre devis est disponible » se débraye : notifier: false ne programme rien, sinon un mail est programmé ; une remise est une ligne « Remise … » à prix négatif, un prix négatif ailleurs est refusé", async () => {

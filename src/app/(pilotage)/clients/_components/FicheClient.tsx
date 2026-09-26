@@ -123,7 +123,7 @@ function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onMiseAJou
           <li key={coordonnee.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
             <a
               href={nature === "email" ? `mailto:${coordonnee.valeur}` : `tel:${coordonnee.valeur}`}
-              className={cn("flex min-h-9 min-w-0 items-center gap-2 text-[13.5px] text-[#F2F3F5] hover:text-[#5DCAA5]", TRANS)}
+              className={cn("flex min-h-11 sm:min-h-9 min-w-0 items-center gap-2 text-[13.5px] text-[#F2F3F5] hover:text-[#5DCAA5]", TRANS)}
             >
               {nature === "email" ? <Mail size={14} className="shrink-0 text-[#6B7280]" aria-hidden /> : <Phone size={14} className="shrink-0 text-[#6B7280]" aria-hidden />}
               <span className="truncate">{nature === "email" ? coordonnee.valeur : formaterTelephone(coordonnee.valeur)}</span>
@@ -677,7 +677,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
-      <Link href="/clients" className={cn("inline-flex min-h-8 items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}>
+      <Link href="/clients" className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1 text-[12px] text-[#6B7280] hover:text-[#F2F3F5]", TRANS)}>
         <ArrowLeft size={13} aria-hidden />
         Clients
       </Link>
@@ -727,7 +727,7 @@ export default function FicheClient({ initial }: { initial: ClientDetail }) {
               <Link
                 href={`/dossiers?client=${client.id}`}
                 className={cn(
-                  "inline-flex h-10 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8",
+                  "inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8",
                   TRANS
                 )}
               >

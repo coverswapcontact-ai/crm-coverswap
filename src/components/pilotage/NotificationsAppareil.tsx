@@ -111,11 +111,11 @@ export function NotificationsAppareil({ application = "crm", compact = false }: 
       <span className="shrink-0 text-[#5DCAA5]">{contenu.icone}</span>
       <p className="min-w-0 flex-1">{contenu.texte}</p>
       {contenu.bouton ? (
-        <button type="button" disabled={occupe} onClick={() => void activer()} className={cn("h-10 shrink-0 rounded-[10px] bg-[#1D9E75] px-3.5 text-[13px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-60", TRANS)}>
+        <button type="button" disabled={occupe} onClick={() => void activer()} className={cn("h-11 sm:h-10 shrink-0 rounded-[10px] bg-[#1D9E75] px-3.5 text-[13px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-60", TRANS)}>
           {occupe ? "…" : contenu.bouton}
         </button>
       ) : (
-        <button type="button" onClick={masquer} aria-label="Masquer" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] text-[#9CA3AF] hover:bg-[#22262D]">
+        <button type="button" onClick={masquer} aria-label="Masquer" className="flex h-11 sm:h-9 w-11 sm:w-9 shrink-0 items-center justify-center rounded-[8px] text-[#9CA3AF] hover:bg-[#22262D]">
           <X size={15} aria-hidden />
         </button>
       )}

@@ -2,6 +2,7 @@ import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/tache
 import { analyserCatalogueParLots } from "./catalogue";
 import { surveillerCredit } from "./consommation";
 import { TACHE_SIMULATION_API, executerGenerationApi } from "./preparation";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Simulateur du CRM en arrière-plan :
@@ -28,7 +29,7 @@ export function enregistrerTachesSimulateur(): void {
     intervalleMs: 60 * 60_000,
     executer: async (signal) => {
       const { analysees, restantes } = await analyserCatalogueParLots(60, signal);
-      if (analysees > 0) console.log(`[simulateur] ${analysees} échantillon(s) mesuré(s), ${restantes} restant(s)`);
+      if (analysees > 0) console.log(`[simulateur] ${pluriel(analysees, "échantillon mesuré", "échantillons mesurés")}, ${pluriel(restantes, "restant")}`);
     },
   });
   enregistrerTravailPeriodique({

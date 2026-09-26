@@ -103,7 +103,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
           ) : null}
           <div className="flex flex-wrap gap-2">
             {e.apercu ? (
-              <a href={e.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+              <a href={e.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
                 <Eye size={13} aria-hidden /> Voir comme le client
               </a>
             ) : null}

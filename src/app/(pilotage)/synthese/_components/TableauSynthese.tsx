@@ -168,7 +168,7 @@ export default function TableauSynthese({
             type="button"
             onClick={() => void charger(periode.du, periode.au, anonyme)}
             className={cn(
-              "h-9 rounded-full border-[0.5px] px-3 text-[13px] first-letter:uppercase sm:h-8 sm:text-[12.5px]",
+              "h-11 rounded-full border-[0.5px] px-3 text-[13px] first-letter:uppercase sm:h-8 sm:text-[12.5px]",
               !instantane && du === periode.du && au === periode.au ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
               TRANS
             )}

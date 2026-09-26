@@ -37,7 +37,7 @@ export function DepensesDossier({ detail }: { detail: DossierDetail }) {
         action={
           <Link
             href={`/depenses/nouvelle?dossier=${detail.id}`}
-            className={cn("flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}
+            className={cn("flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}
           >
             <Plus size={13} aria-hidden /> Dépense
           </Link>

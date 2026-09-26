@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Hash, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, Pastille, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, CLASSE_SAISIE, Pastille, TitreSection } from "@/components/pilotage/ui";
+import { cn } from "@/lib/utils";
 import type { CompteurVue } from "@/lib/dossiers/compteurs";
 
 /**
@@ -16,14 +17,15 @@ import type { CompteurVue } from "@/lib/dossiers/compteurs";
 export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
   // Mission 13 (lot 3) : les compteurs arrivent du serveur avec la page.
   const [compteurs, setCompteurs] = useState<CompteurVue[]>(initial);
-  const [edition, setEdition] = useState<{ serie: CompteurVue["serie"]; valeur: string } | null>(null);
+  // Mission 13 (lot 5) : le préfixe et l'année sont figés à l'écran (masque 2026-000), seul le rang se tape.
+  const [edition, setEdition] = useState<{ serie: CompteurVue["serie"]; prefixe: string; annee: number; valeur: string } | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
   async function enregistrer() {
     if (!edition) return;
     setEnvoi(true);
     try {
-      const reponse = await envoyerJson<{ compteur: CompteurVue; compteurs: CompteurVue[] }>("/api/numeros/compteurs", "PATCH", { serie: edition.serie, prochain: edition.valeur.trim() });
+      const reponse = await envoyerJson<{ compteur: CompteurVue; compteurs: CompteurVue[] }>("/api/numeros/compteurs", "PATCH", { serie: edition.serie, prochain: `${edition.prefixe}${edition.annee}-${edition.valeur.padStart(3, "0")}` });
       setCompteurs(reponse.compteurs);
       setEdition(null);
       toast.success(`${reponse.compteur.libelle} : prochain numéro ${reponse.compteur.prochain}`);
@@ -56,22 +58,37 @@ export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
                   </p>
                 </div>
                 {edition?.serie === c.serie ? null : (
-                  <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => setEdition({ serie: c.serie, valeur: c.prochain })}>
+                  <Bouton taille="sm" variante="fantome" icone={<Pencil size={13} aria-hidden />} onClick={() => setEdition({ serie: c.serie, prefixe: c.prefixe, annee: c.annee, valeur: c.prochain.replace(/^.*-/, "") })}>
                     Faire repartir à…
                   </Bouton>
                 )}
               </div>
               {edition?.serie === c.serie ? (
                 <div className="mt-3 flex flex-wrap items-end gap-2">
-                  <Champ
-                    classeConteneur="w-[170px]"
-                    libelle="Prochain numéro"
-                    value={edition.valeur}
-                    onChange={(evenement) => setEdition({ serie: c.serie, valeur: evenement.target.value })}
-                    placeholder={c.prochain}
-                    aide={`Au plus tôt ${c.prefixe}${c.annee}-${String(c.plusHautRegistre + 1).padStart(3, "0")}.`}
-                  />
-                  <Bouton variante="primaire" chargement={envoi} disabled={!edition.valeur.trim()} onClick={() => void enregistrer()}>
+                  <div className="w-[190px]">
+                    <label htmlFor={`prochain-${c.serie}`} className="mb-1 block text-[12px] text-[#9CA3AF]">
+                      Prochain numéro
+                    </label>
+                    <div className={cn(CLASSE_SAISIE, "flex h-11 items-center gap-0.5 sm:h-9")}>
+                      <span className="shrink-0 text-[#8B919C] tabular-nums" aria-hidden>
+                        {c.prefixe}
+                        {c.annee}-
+                      </span>
+                      <input
+                        id={`prochain-${c.serie}`}
+                        value={edition.valeur}
+                        onChange={(evenement) => setEdition({ ...edition, valeur: evenement.target.value.replace(/\D/g, "").slice(0, 5) })}
+                        onBlur={() => setEdition((e) => (e && e.valeur ? { ...e, valeur: e.valeur.padStart(3, "0") } : e))}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="000"
+                        aria-label={`Prochain numéro : rang après ${c.prefixe}${c.annee}-`}
+                        className="w-full min-w-0 bg-transparent tabular-nums outline-none placeholder:text-[#4B5563]"
+                      />
+                    </div>
+                    <p className="mt-1 text-[12px] text-[#6B7280]">Au plus tôt {c.prefixe}{c.annee}-{String(c.plusHautRegistre + 1).padStart(3, "0")}.</p>
+                  </div>
+                  <Bouton variante="primaire" chargement={envoi} disabled={!edition.valeur} onClick={() => void enregistrer()}>
                     Enregistrer
                   </Bouton>
                   <Bouton variante="fantome" onClick={() => setEdition(null)}>

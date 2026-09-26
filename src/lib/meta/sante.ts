@@ -5,6 +5,7 @@ import { abonnementPage, lireEtatJeton } from "./graph";
 import { etatConfiguration, type EtatConfiguration } from "./config";
 import { TACHE_CONVERSION, faitsJeton, verdictJeton, type FaitsJeton, type VerdictJeton } from "./taches";
 import { TACHE_LEAD } from "./leads";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * L'état de l'intégration Meta en un coup d'œil : le webhook reçoit-il, quand
@@ -110,7 +111,7 @@ export async function resumeChaineMeta(maintenant: Date = new Date()): Promise<{
   const jeton = verdictJeton(null, maintenant, faits);
   const manques = [!configuration.signature ? "META_APP_SECRET absente" : null, !configuration.verification ? "META_VERIFY_TOKEN absente" : null].filter((m): m is string => m !== null);
   const recoit: "OUI" | "PRET" | "NON" = surSeptJours > 0 ? "OUI" : manques.length === 0 ? "PRET" : "NON";
-  const recoitDetail = recoit === "OUI" ? `${surSeptJours} lead(s) reçus sur 7 jours.` : recoit === "PRET" ? "Configuration complète ; aucun lead reçu sur 7 jours." : `Il manque : ${manques.join(", ")} — le webhook refuse ou ne peut pas être validé.`;
+  const recoitDetail = recoit === "OUI" ? `${pluriel(surSeptJours, "lead")} reçus sur 7 jours.` : recoit === "PRET" ? "Configuration complète ; aucun lead reçu sur 7 jours." : `Il manque : ${manques.join(", ")} — le webhook refuse ou ne peut pas être validé.`;
   return { chaine: etatChaine({ recoit, recoitDetail, configuration, jeton, faits }), jeton, surSeptJours };
 }
 
@@ -306,13 +307,13 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   // (ou le lead vient de l'outil de test de Meta). Sans elle, impossible de juger une publicité.
   const sansAttribution = await prisma.metaLead.count({ where: { recuLe: { gte: septJours }, statut: "TRAITE", organique: false, campagneId: null, campagneNom: null, adId: null, adNom: null } });
   if (sansAttribution > 0) {
-    alertes.push(`${sansAttribution} lead(s) reçus sur 7 jours sans campagne ni publicité : vérifier dans le Zap les champs campaign_name, adset_name et ad_name (un lead de l'outil de test Meta n'en porte pas).`);
+    alertes.push(`${pluriel(sansAttribution, "lead")} reçus sur 7 jours sans campagne ni publicité : vérifier dans le Zap les champs campaign_name, adset_name et ad_name (un lead de l'outil de test Meta n'en porte pas).`);
   }
   if (notifications.leadsSansPush.length > 0) {
-    alertes.push(`${notifications.leadsSansPush.length} lead(s) reçus sans notification poussée : personne n'a été prévenu sur son téléphone.`);
+    alertes.push(`${pluriel(notifications.leadsSansPush.length, "lead")} reçus sans notification poussée : personne n'a été prévenu sur son téléphone.`);
   }
   if (abonnement && !abonnement.abonne) alertes.push("La page n'est pas abonnée au champ « leadgen » : Meta n'enverra rien.");
-  if (echecs.length > 0) alertes.push(`${echecs.length} lead(s) reçus mais pas encore dans le CRM.`);
+  if (echecs.length > 0) alertes.push(`${pluriel(echecs.length, "lead")} reçus mais pas encore dans le CRM.`);
 
   // Le voyant dit ce qui s'est réellement passé : des leads reçus ces 7 jours = le webhook reçoit, même si la
   // vérification de l'abonnement de la page échoue (jeton, droits) ; sans lead, il dit si la chaîne est prête.
@@ -320,7 +321,7 @@ export async function santeMeta(options: { interrogerMeta?: boolean; jours?: num
   const recoit: "OUI" | "PRET" | "NON" = surSeptJours > 0 ? "OUI" : manques.length === 0 && (abonnement === null || abonnement.abonne) ? "PRET" : "NON";
   const recoitDetail =
     recoit === "OUI"
-      ? `${surSeptJours} lead(s) reçus sur 7 jours, dernier ${dernier ? `le ${dernier.recuLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}` : "—"}${abonnement && !abonnement.abonne ? " ; la vérification de l'abonnement dit « non abonnée » alors que les leads entrent : c'est la vérification qui se trompe (jeton ou droits), pas le webhook" : ""}.`
+      ? `${pluriel(surSeptJours, "lead")} reçus sur 7 jours, dernier ${dernier ? `le ${dernier.recuLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}` : "—"}${abonnement && !abonnement.abonne ? " ; la vérification de l'abonnement dit « non abonnée » alors que les leads entrent : c'est la vérification qui se trompe (jeton ou droits), pas le webhook" : ""}.`
       : recoit === "PRET"
         ? `Configuration complète${abonnement ? ", page abonnée" : ""} ; aucun lead reçu sur 7 jours${dernier ? ` (dernier le ${dernier.recuLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })})` : " (jamais)"}.`
         : manques.length

@@ -35,12 +35,12 @@ export function ContexteClient({ contexte, className }: { contexte: Contexte; cl
         <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">{[contact.ville, contact.source].filter(Boolean).join(" · ") || "—"}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {contact.telephone ? (
-            <a href={`tel:${contact.telephone.replace(/\s/g, "")}`} className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] px-3 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+            <a href={`tel:${contact.telephone.replace(/\s/g, "")}`} className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] px-3 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
               <Phone size={12} aria-hidden /> {contact.telephone}
             </a>
           ) : null}
           {lienFiche ? (
-            <Link href={lienFiche} className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] px-3 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+            <Link href={lienFiche} className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] px-3 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
               <ExternalLink size={12} aria-hidden /> Fiche
             </Link>
           ) : null}
@@ -82,7 +82,7 @@ export function ContexteClient({ contexte, className }: { contexte: Contexte; cl
             <Ligne libelle="Espace">pas encore ouvert</Ligne>
           )}
           {p.dateChantier ? <Ligne libelle="Chantier">{jour(p.dateChantier)}</Ligne> : null}
-          <Link href={`/dossiers?dossier=${p.dossierId}`} className="mt-1 inline-flex h-9 items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline">
+          <Link href={`/dossiers?dossier=${p.dossierId}`} className="mt-1 inline-flex h-11 sm:h-9 items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline">
             <FolderOpen size={13} aria-hidden /> Ouvrir le dossier
           </Link>
         </div>

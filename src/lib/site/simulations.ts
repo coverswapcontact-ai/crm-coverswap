@@ -3,6 +3,7 @@ import path from "path";
 import prisma from "@/lib/prisma";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { enregistrerImageBase64 } from "@/lib/simulations/images";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Simulations faites sur le site avant toute coordonnée.
@@ -126,7 +127,7 @@ export async function purgerSiNecessaire(): Promise<void> {
   dernierePurge = Date.now();
   try {
     const n = await purgerSimulationsSite();
-    if (n > 0) console.log(`[site] ${n} simulation(s) sans demande purgée(s)`);
+    if (n > 0) console.log(`[site] ${pluriel(n, "simulation sans demande purgée", "simulations sans demande purgées")}`);
   } catch (err) {
     console.error("[site] purge impossible :", err);
   }

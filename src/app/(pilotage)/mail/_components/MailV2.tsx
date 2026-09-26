@@ -65,7 +65,7 @@ export function BlocIntention({ detail, onChange }: { detail: DetailMail; onChan
       {detail.intention ? <Pastille ton={TON_INTENTION[detail.intention] ?? "neutre"}>{LIBELLES_INTENTION[detail.intention as keyof typeof LIBELLES_INTENTION] ?? detail.intention}</Pastille> : <Pastille ton="neutre">Non classé</Pastille>}
       {detail.attendu ? <span className="text-[#E5E7EB]">{detail.attendu}</span> : detail.intention ? null : <span className="text-[#8B919C]">Dites à Claude « classe mes mails », ou classez-le ici.</span>}
       {detail.intentionPar ? <span className="text-[11px] text-[#6B7280]">{detail.intentionPar.startsWith("ASSISTANT") ? "par Claude" : "par vous"}</span> : null}
-      <button type="button" onClick={() => setEdition(true)} className={cn("inline-flex h-7 items-center gap-1 rounded-[7px] px-1.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+      <button type="button" onClick={() => setEdition(true)} className={cn("inline-flex h-11 sm:h-7 items-center gap-1 rounded-[7px] px-1.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
         <Pencil size={12} aria-hidden /> {detail.intention ? "Corriger" : "Classer"}
       </button>
     </div>
@@ -126,10 +126,10 @@ export function CartesPropositions({ propositions, onChange }: { propositions: D
           {p.resume ? <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">{p.resume}</p> : null}
           {p.erreurExecution ? <p className="mt-1 text-[12px] text-[#F87171]">{p.erreurExecution}</p> : null}
           <div className="mt-2 flex gap-1.5">
-            <Bouton taille="sm" variante="primaire" className="h-10 sm:h-8" chargement={occupe === p.id} onClick={() => void decider(p.id, "valider", p.sensible, p.titre)} icone={<Check size={13} aria-hidden />}>
+            <Bouton taille="sm" variante="primaire" className="h-11 sm:h-8" chargement={occupe === p.id} onClick={() => void decider(p.id, "valider", p.sensible, p.titre)} icone={<Check size={13} aria-hidden />}>
               Valider
             </Bouton>
-            <Bouton taille="sm" variante="fantome" className="h-10 sm:h-8" disabled={occupe === p.id} onClick={() => void decider(p.id, "ignorer", false, p.titre)} icone={<X size={13} aria-hidden />}>
+            <Bouton taille="sm" variante="fantome" className="h-11 sm:h-8" disabled={occupe === p.id} onClick={() => void decider(p.id, "ignorer", false, p.titre)} icone={<X size={13} aria-hidden />}>
               Ignorer
             </Bouton>
           </div>
@@ -170,7 +170,7 @@ export function DatesExtraites({ messageId, dates, onChange }: { messageId: stri
             </span>
             <span className="ml-2 text-[#8B919C]">{d.nature === "ECHEANCE" ? "échéance" : "disponibilité"} · « {d.passage} »</span>
           </span>
-          <Bouton taille="sm" variante="secondaire" className="h-10 sm:h-8" chargement={occupe === i} onClick={() => void planifier(i)} icone={<CalendarPlus size={13} aria-hidden />}>
+          <Bouton taille="sm" variante="secondaire" className="h-11 sm:h-8" chargement={occupe === i} onClick={() => void planifier(i)} icone={<CalendarPlus size={13} aria-hidden />}>
             Planifier
           </Bouton>
         </li>
@@ -206,7 +206,7 @@ export function BoutonSnooze({ messageId, snoozeJusqua, onChange }: { messageId:
   const actif = snoozeJusqua && new Date(snoozeJusqua) > new Date();
   return (
     <span className="relative">
-      <Bouton taille="sm" variante={actif ? "primaire" : "secondaire"} className="h-10 sm:h-8" disabled={occupe} onClick={() => (actif ? void envoyer({ annuler: true }) : setOuvert((o) => !o))} icone={<AlarmClock size={14} aria-hidden />}>
+      <Bouton taille="sm" variante={actif ? "primaire" : "secondaire"} className="h-11 sm:h-8" disabled={occupe} onClick={() => (actif ? void envoyer({ annuler: true }) : setOuvert((o) => !o))} icone={<AlarmClock size={14} aria-hidden />}>
         {actif ? `Remis au ${quand(snoozeJusqua)} · annuler` : "Plus tard"}
       </Bouton>
       {ouvert && !actif ? (
@@ -247,7 +247,7 @@ export function BrouillonsDeposes({ brouillons, onReprendre }: { brouillons: Det
           </p>
           {b.objet ? <p className="mt-1 text-[13px] font-medium text-[#F2F3F5]">{b.objet}</p> : null}
           <p className="mt-1 line-clamp-6 text-[13px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{b.texte}</p>
-          <Bouton taille="sm" variante="primaire" className="mt-2 h-10 sm:h-8" onClick={() => onReprendre({ id: b.id, a: null, objet: b.objet ?? "", texte: b.texte ?? "" })}>
+          <Bouton taille="sm" variante="primaire" className="mt-2 h-11 sm:h-8" onClick={() => onReprendre({ id: b.id, a: null, objet: b.objet ?? "", texte: b.texte ?? "" })}>
             Reprendre dans la réponse
           </Bouton>
         </div>

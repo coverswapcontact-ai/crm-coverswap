@@ -8,6 +8,7 @@ import { lireConsignes } from "../consignes";
 import { definirOutil, format, lien } from "../definition";
 import { santeSysteme } from "../outils/lecture";
 import { joursEntre } from "./commun";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Manager opérations (mission 8) : chantiers planifiés et charge des
@@ -100,12 +101,12 @@ export const outilManagerOperations = definirOutil({
     const a = await analyseOperations(contexte.maintenant);
     const texte = [
       `Opérations au ${format.jourCourt(a.calculeLe.slice(0, 10))}. ${a.definitions.capacite}`,
-      `Chantiers à venir : ${a.chantiers.total} (${a.capacite.chantiersSur30Jours} sur 30 jours${a.capacite.resteSur30Jours !== null ? `, reste ${a.capacite.resteSur30Jours} place(s)` : ""}). Par semaine : ${a.chantiers.parSemaine.map((s) => `${format.jourCourt(s.semaineDu)} : ${s.chantiers}${s.capacite !== null ? `/${s.capacite}` : ""}`).join(" · ")}.${a.chantiers.aVenir.length ? ` Prochains : ${a.chantiers.aVenir.slice(0, 5).map((c) => `${c.client} le ${format.jourCourt(c.dateChantier)}`).join(", ")}.` : ""}`,
+      `Chantiers à venir : ${a.chantiers.total} (${a.capacite.chantiersSur30Jours} sur 30 jours${a.capacite.resteSur30Jours !== null ? `, reste ${pluriel(a.capacite.resteSur30Jours, "place")}` : ""}). Par semaine : ${a.chantiers.parSemaine.map((s) => `${format.jourCourt(s.semaineDu)} : ${s.chantiers}${s.capacite !== null ? `/${s.capacite}` : ""}`).join(" · ")}.${a.chantiers.aVenir.length ? ` Prochains : ${a.chantiers.aVenir.slice(0, 5).map((c) => `${c.client} le ${format.jourCourt(c.dateChantier)}`).join(", ")}.` : ""}`,
       `Actions planifiées : ${a.actions.total}, dont ${a.actions.enRetard} en retard${a.actions.planifiees.filter((x) => x.enRetard).length ? ` (${a.actions.planifiees.filter((x) => x.enRetard).slice(0, 5).map((x) => `${x.client} : ${x.action}`).join(" · ")})` : ""}.`,
       `Rappels de leads : ${a.rappels.aVenir.length} à venir, ${a.rappels.enRetard.length} en retard${a.rappels.enRetard.length ? ` (${a.rappels.enRetard.slice(0, 5).map((r) => `${r.nom}, ${r.joursDeRetard} j`).join(" · ")})` : ""}.`,
-      `Relances dues : ${a.relances.nombreDevisDus} devis sans réponse${a.relances.devisDus.length ? ` (${a.relances.devisDus.slice(0, 5).map((d) => `${d.client}${d.montant !== null ? ` ${format.euros(d.montant)}` : ""}, ${d.joursDepuis ?? "?"} j`).join(" · ")})` : ""} ; ${a.relances.sequencesEnCours} séquence(s) mail en cours${a.relances.sequencesEnValidation ? `, ${a.relances.sequencesEnValidation} à valider` : ""}.`,
+      `Relances dues : ${a.relances.nombreDevisDus} devis sans réponse${a.relances.devisDus.length ? ` (${a.relances.devisDus.slice(0, 5).map((d) => `${d.client}${d.montant !== null ? ` ${format.euros(d.montant)}` : ""}, ${d.joursDepuis ?? "?"} j`).join(" · ")})` : ""} ; ${pluriel(a.relances.sequencesEnCours, "séquence")} mail en cours${a.relances.sequencesEnValidation ? `, ${a.relances.sequencesEnValidation} à valider` : ""}.`,
       `Retards : ${a.retards.total} (${a.retards.actions} actions, ${a.retards.rappels} rappels, ${a.retards.chantiersDatePassee} chantiers à date passée, ${a.retards.signesSansDate} signés sans date${a.chantiers.sansDate.length ? ` : ${a.chantiers.sansDate.slice(0, 4).map((d) => d.client).join(", ")}` : ""}).`,
-      `Santé : ${a.sante.taches.enEchec.length} tâche(s) en échec, ${a.sante.alertes.length} alerte(s)${a.sante.google?.coupee ? ", Google COUPÉ" : ""}${a.sante.ia && !a.sante.ia.cleApi ? ", clé Anthropic absente" : ""}.`,
+      `Santé : ${pluriel(a.sante.taches.enEchec.length, "tâche")} en échec, ${pluriel(a.sante.alertes.length, "alerte")}${a.sante.google?.coupee ? ", Google COUPÉ" : ""}${a.sante.ia && !a.sante.ia.cleApi ? ", clé Anthropic absente" : ""}.`,
     ].join("\n");
     return { texte, donnees: a, liens: [lien("Dossiers", "/dossiers"), lien("Leads", "/leads"), lien("Tâches de fond", "/taches")] };
   },

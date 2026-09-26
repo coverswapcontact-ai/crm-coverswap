@@ -10,6 +10,7 @@ import { ajouterPhoto, creerDossier, ecrireNote, modifierDossier } from "./dossi
 import type { EtapeDossier } from "./constants";
 import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Du contact entrant au dossier, sans ressaisie.
@@ -275,7 +276,7 @@ export async function assurerDossierDeSimulation(leadId: string): Promise<Ouvert
     }
     const resultat = await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirDossierDuLead(leadId, { motif: "SIMULATION" }));
     await classerLeadSansBloquer(leadId);
-    if (resultat.cree || resultat.simulationsRangees > 0) console.log(`[dossiers] simulation → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${resultat.simulationsRangees} simulation(s), ${resultat.photosRangees} photo(s)`);
+    if (resultat.cree || resultat.simulationsRangees > 0) console.log(`[dossiers] simulation → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${pluriel(resultat.simulationsRangees, "simulation")}, ${pluriel(resultat.photosRangees, "photo")}`);
     return resultat;
   } catch (erreur) {
     console.error(`[dossiers] simulation du contact ${leadId} non rangée (sera reprise) :`, erreur);

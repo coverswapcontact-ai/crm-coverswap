@@ -224,7 +224,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
   test("« voir_photos » : de vraies images MCP, compressées, avec date et origine", async () => {
     const r = await appelerBrut("voir_photos", { nom: "Thimalu" });
     const t = texte(r);
-    assert.match(t, /Anaïs Thimalu(?: — [^:]+?)? : 2 photo\(s\) avant chantier ; 2 jointe\(s\)/);
+    assert.match(t, /Anaïs Thimalu(?: — [^:]+?)? : 2 photos avant chantier ; 2 jointes/);
     assert.match(t, /déposée dans le CRM/);
     assert.match(t, new RegExp(`\\[photo:${ids.photo2}\\]`));
     const blocs = images(r);
@@ -244,7 +244,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
   test("« voir_simulations » : l'après en image, les teintes, le statut, vue ou non par le client", async () => {
     const r = await appelerBrut("voir_simulations", { nom: "Thimalu" });
     const t = texte(r);
-    assert.match(t, /1 simulation\(s\)/);
+    assert.match(t, /1 simulation ;/);
     assert.match(t, /« Chêne clair »/);
     assert.match(t, /déposée dans le CRM/);
     assert.match(t, /publiée \(visible par le client\)|brouillon/);
@@ -256,7 +256,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
   test("« messages_espace » puis « repondre_espace » : « [à compléter] » bloque ; sinon aperçu, confirmation, message dans l'espace, notification, lu", async () => {
     await compte.envoyerMessage(permanentThimalu, projetThimalu, "Bonjour, est-ce que le chêne va avec un plan noir ?");
     const nonLus = await appeler("messages_espace", {});
-    assert.match(nonLus, /1 message\(s\) non lu\(s\)/);
+    assert.match(nonLus, /1 message non lu/);
     assert.match(nonLus, /Anaïs Thimalu \(message, NON LU\) : « Bonjour, est-ce que le chêne va avec un plan noir \? »/);
     const bloque = await appeler("repondre_espace", { nom: "Thimalu", texte: "Bonjour, oui, le chêne clair se marie bien avec un plan noir. Comptez [à compléter] € pour l'îlot.", commande: "Réponds-lui que oui" });
     assert.match(bloque, /contient « \[à compléter\] » : elle ne partira pas/);
@@ -272,7 +272,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
     const fait = await appeler("repondre_espace", { nom: "Thimalu", texte: reponse, confirmation: jetonDe(apercu), commande: "Réponds-lui que oui, le chêne va avec un plan noir" });
     assert.match(fait, /^Réponse envoyée dans l'espace de Anaïs Thimalu/);
     assert.match(fait, /Notification par mail programmée/);
-    assert.match(fait, /1 message\(s\) du client marqué\(s\) lu\(s\)/);
+    assert.match(fait, /1 message du client marqué lu/);
     const message = await prisma.messageEspace.findFirstOrThrow({ where: { auteur: "LUCAS" } });
     assert.equal(message.texte, reponse);
     assert.equal(message.par, "ASSISTANT:claude");
@@ -290,7 +290,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.equal(vueClient.reponsesNonVues, 1);
     assert.equal(await compte.noterReponsesVues(permanentThimalu), 1);
     assert.equal((await compte.compteEspace(await prisma.espacePermanent.findUniqueOrThrow({ where: { id: permanentThimalu.id } }))).reponsesNonVues, 0);
-    assert.match(await appeler("messages_espace", { nom: "Thimalu" }), /2 message\(s\) avec Anaïs Thimalu/);
+    assert.match(await appeler("messages_espace", { nom: "Thimalu" }), /2 messages avec Anaïs Thimalu/);
     assert.match(await appeler("messages_espace", {}), /Aucun message d'espace non lu/);
   });
 
@@ -356,14 +356,14 @@ describe("Mission 10 : les actions qui manquaient", () => {
 
   test("« Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie, rattaché ou non", async () => {
     const pub = await appeler("depenses", { periode: "mois_en_cours", categorie: "PUBLICITE" });
-    assert.match(pub, /Dépenses le mois en cours, publicité : 87,5 € en 1 dépense\(s\)\./);
+    assert.match(pub, /Dépenses le mois en cours, publicité : 87,5 € en 1 dépense\./);
     assert.match(pub, /hors chantier : 87,5 € \(1\)/);
     const tout = await appeler("depenses", {});
-    assert.match(tout, /: 222,5 € en 3 dépense\(s\)/);
+    assert.match(tout, /: 222,5 € en 3 dépenses/);
     assert.match(tout, /Rattachées à un chantier : 120 € \(1\) ; hors chantier : 87,5 € \(1\) ; pas encore rattachées : 15 € \(1\)/);
     assert.match(tout, /À rattacher \(ou à marquer hors chantier\) : .*Leroy Merlin.*NON RATTACHÉE/);
     const non = await appeler("depenses", { rattachement: "non_rattachees" });
-    assert.match(non, /15 € en 1 dépense\(s\)/);
+    assert.match(non, /15 € en 1 dépense/);
   });
 
   test("« modifier_tarifs » : aperçu avec l'ancien prix et les sous-parties qui partagent le tarif, confirmation ; les devis émis ne bougent pas", async () => {
@@ -401,12 +401,12 @@ describe("Mission 10 : les actions qui manquaient", () => {
   test("« ce_qui_m_attend » et « point_du_jour » comptent les messages d'espace non lus et les propositions en attente", async () => {
     await compte.envoyerMessage(permanentThimalu, projetThimalu, "Et pour la crédence, vous conseillez quoi ?");
     const attend = await appeler("ce_qui_m_attend", {});
-    assert.match(attend, /1 message\(s\) d'espace non lu\(s\) \(« messages_espace »\)/);
-    assert.match(attend, /\d+ proposition\(s\) à valider \(cartes de mise à jour, relances, règles\)/);
+    assert.match(attend, /1 message d'espace non lu \(« messages_espace »\)/);
+    assert.match(attend, /\d+ propositions? à valider \(cartes de mise à jour, relances, règles\)/);
     const point = await appeler("point_du_jour", {});
-    assert.match(point, /2 message\(s\) de clients dans leur espace \(Anaïs Thimalu : « Et pour la crédence/);
-    assert.match(point, /1 message\(s\) d'espace non lu\(s\), \d+ proposition\(s\) à valider\./);
-    assert.match(await appeler("marquer_messages_lus", { nom: "Thimalu", commande: "C'est lu, je l'appelle" }), /1 message\(s\) de Anaïs Thimalu(?: — [^:]+?)? marqué\(s\) lu\(s\)/);
+    assert.match(point, /2 messages de clients dans leur espace \(Anaïs Thimalu : « Et pour la crédence/);
+    assert.match(point, /1 message d'espace non lu, \d+ propositions? à valider\./);
+    assert.match(await appeler("marquer_messages_lus", { nom: "Thimalu", commande: "C'est lu, je l'appelle" }), /1 message de Anaïs Thimalu(?: — [^:]+?)? marqué lu/);
   });
 
   test("journal : chaque écriture porte la phrase de Lucas ; aucun appel Anthropic, aucun réseau sorti", async () => {

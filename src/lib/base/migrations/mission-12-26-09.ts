@@ -4,6 +4,7 @@ import { jourParis } from "@/lib/dossiers/dates";
 import type { CleParametre } from "@/lib/parametres/definitions";
 import { lireParametre, validerValeur } from "@/lib/parametres/service";
 import type { MigrationDonnees } from "./index";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Mission 12 (26/09/2026), phase 1 — corrections demandées par Lucas, jouées
@@ -103,7 +104,7 @@ export const migrationMenage2609: MigrationDonnees = {
     const taches = await client.tache.findMany({ where: { statut: "ECHEC_DEFINITIF", updatedAt: { lt: limite } }, select: { id: true, type: true, tentatives: true, tentativesMax: true, updatedAt: true, derniereErreur: true } });
     const parType: Record<string, number> = {};
     for (const tache of taches) {
-      const raison = tache.tentatives >= tache.tentativesMax ? `${tache.tentatives} tentative(s) sur ${tache.tentativesMax}, toutes en échec` : `${tache.tentatives} tentative(s), erreur définitive`;
+      const raison = tache.tentatives >= tache.tentativesMax ? `${pluriel(tache.tentatives, "tentative")} sur ${tache.tentativesMax}, toutes en échec` : `${pluriel(tache.tentatives, "tentative")}, erreur définitive`;
       await client.tache.update({
         where: { id: tache.id },
         data: {

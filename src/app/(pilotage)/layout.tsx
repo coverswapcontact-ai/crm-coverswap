@@ -15,7 +15,8 @@ export default function PilotageLayout({ children }: { children: React.ReactNode
       <Navigation />
       {/* Mission 13 (lot 4) : au retour d'un appel, « Comment ça s'est passé ? » sans passer par le panneau. */}
       <RetourAppel />
-      <main className="pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
+      {/* Mission 13 (lot 5) : la zone sûre du haut (barre d'état de l'iPhone) dès le gabarit, plus de rustine par écran. */}
+      <main className="pt-[env(safe-area-inset-top)] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
     </div>
   );
 }

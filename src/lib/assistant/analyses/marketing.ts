@@ -7,6 +7,7 @@ import { definirOutil, format, lien } from "../definition";
 import { etatCampagne } from "../outils/lecture";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { arrondi, avertissementMinces, evolution, grouper, repartir, somme, taux } from "./commun";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Manager marketing (mission 8) : par campagne et par publicité, la dépense,
@@ -174,7 +175,7 @@ export const outilManagerMarketing = definirOutil({
     const texte = [
       `Marketing, ${a.periode.libelle} (${a.periode.du} → ${a.periode.au}).${a.avertissement ? ` ${a.avertissement}` : ""}`,
       `Dépense retenue : ${a.depense.retenue !== null ? format.euros(a.depense.retenue) : "inconnue"} (${a.depense.origine === "DEPENSES_SAISIES" ? "dépenses « Publicité » saisies" : a.depense.origine === "PRORATA_CAMPAGNE" ? "prorata du budget de campagne, pas la dépense réelle Meta" : "ni dépense saisie ni campagne en cours"}).`,
-      `Meta : ${m.leads} leads (${a.global.metaPrecedent.leads} avant), ${m.devis} devis, ${m.signes} chantier(s) signé(s), ${format.euros(m.encaisse)} encaissés. Coût par lead ${m.coutParLead !== null ? format.euros(m.coutParLead) : "—"}, par devis ${m.coutParDevis !== null ? format.euros(m.coutParDevis) : "—"}, par chantier ${m.coutParChantier !== null ? format.euros(m.coutParChantier) : "—"}, retour sur dépense ${m.retourSurDepense !== null ? `×${m.retourSurDepense}` : "—"}.`,
+      `Meta : ${m.leads} leads (${a.global.metaPrecedent.leads} avant), ${m.devis} devis, ${pluriel(m.signes, "chantier signé", "chantiers signés")}, ${format.euros(m.encaisse)} encaissés. Coût par lead ${m.coutParLead !== null ? format.euros(m.coutParLead) : "—"}, par devis ${m.coutParDevis !== null ? format.euros(m.coutParDevis) : "—"}, par chantier ${m.coutParChantier !== null ? format.euros(m.coutParChantier) : "—"}, retour sur dépense ${m.retourSurDepense !== null ? `×${m.retourSurDepense}` : "—"}.`,
       a.parPublicite.length ? `Par publicité : ${a.parPublicite.map((p) => `${p.nom} ${p.leads} leads, ${p.devis} devis, ${p.signes} signés${p.coutParLead !== null ? `, ≈ ${format.euros(p.coutParLead)}/lead` : ""}`).join(" · ")}.` : "Aucun lead Meta rattaché à une publicité sur la période.",
       `Campagne : ${a.campagne.debut ? (a.campagne.enCours ? `jour ${a.campagne.jour} sur ${a.campagne.duree}` : `commencée le ${format.jourCourt(a.campagne.debut)}, ${a.campagne.jour !== null && a.campagne.jour > a.campagne.duree ? "terminée" : "à venir"}`) : "non renseignée"}${a.campagne.regleDuJour ? ` — règle du jour : ${a.campagne.regleDuJour}` : ""}.`,
       `Qualité par source : ${a.qualiteParSource.map((s) => `${s.libelle} ${s.leads} leads (${s.joignables}/${s.appeles} joignables, ${s.horsZone} hors zone, ${s.locataires} locataires, ${s.doublons} doublons, ${s.archives} archivés)`).join(" · ") || "—"}.`,

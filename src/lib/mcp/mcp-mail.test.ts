@@ -144,7 +144,7 @@ describe("les dix phrases du mandat", () => {
     assert.ok(jeton, apercu);
     assert.equal(await prisma.message.count({ where: { id: { in: aClasser }, intention: { not: null } } }), 0, "rien avant confirmation");
     const fait = await appeler("classer_mail", { mails, confirmation: jeton, commande: "Classe mes mails" });
-    assert.match(fait, new RegExp(`${aClasser.length} mail\\(s\\) classé\\(s\\)`));
+    assert.match(fait, new RegExp(`${aClasser.length} mails classés`));
     assert.equal(await prisma.message.count({ where: { id: { in: aClasser }, intention: { not: null }, intentionPar: "ASSISTANT:claude" } }), aClasser.length);
     assert.equal((await prisma.appelOutil.count({ where: { outil: "classer_mail", statut: "FAIT" } })), 1, "un lot = une écriture");
     assert.equal(await appeler("mails_non_classes", {}).then((t) => /Aucun mail à classer/.test(t)), true);
@@ -182,7 +182,7 @@ describe("les dix phrases du mandat", () => {
       ],
       commande: "Qu'est-ce que le mail de Thimalu change dans son dossier ?",
     });
-    assert.match(depot, /3 carte\(s\) déposée\(s\), rien n'est modifié/);
+    assert.match(depot, /3 cartes déposées, rien n'est modifié/);
     const cartes = idsDe(depot, "proposition");
     assert.equal(cartes.length, 3);
     const avant = await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierThimalu } });
@@ -275,10 +275,10 @@ describe("les dix phrases du mandat", () => {
 
   test("10. « Range tout ce qui vient de TikTok pour toujours » : rangement par expéditeur (aperçu, confirmation), règle proposée puis validée", async () => {
     const apercu = await appeler("ranger_mail", { expediteur: "@tiktok-mails.com", commande: "Range tout ce qui vient de TikTok pour toujours" });
-    assert.match(apercu, /Je vais ranger 3 fil\(s\)/);
+    assert.match(apercu, /Je vais ranger 3 fils/);
     assert.equal(await prisma.message.count({ where: { de: "promo@tiktok-mails.com", rangeLe: { not: null } } }), 0, "rien avant confirmation");
     const fait = await appeler("ranger_mail", { expediteur: "@tiktok-mails.com", confirmation: jetonDe(apercu), commande: "Range tout ce qui vient de TikTok pour toujours" });
-    assert.match(fait, /3 mail\(s\) rangé\(s\)/);
+    assert.match(fait, /3 mails rangés/);
     assert.equal(await prisma.message.count({ where: { de: "promo@tiktok-mails.com", rangeLe: { not: null }, rangePar: "ASSISTANT", lu: true } }), 3);
     // Trois rangements de la même adresse : le CRM a déjà proposé la règle sur l'adresse ; Claude propose le domaine.
     const regle = await appeler("proposer_regle", { cible: "@tiktok-mails.com", action: "RANGER", motif: "Lucas ne veut plus voir TikTok", commande: "Range tout ce qui vient de TikTok pour toujours" });

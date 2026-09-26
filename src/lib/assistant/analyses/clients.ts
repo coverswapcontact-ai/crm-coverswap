@@ -4,6 +4,7 @@ import { LIBELLES_SOURCE_CLIENT, type SourceClient } from "@/lib/clients/constan
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { definirOutil, format, lien } from "../definition";
 import { avertissementMinces, familleDuDossier, joursEntre, libelleFamille, repartir, somme } from "./commun";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Manager clients (mission 8) : la base clients par état (prospect, en cours,
@@ -131,8 +132,8 @@ export const outilManagerClients = definirOutil({
     const texte = [
       `Clients au ${format.jourCourt(a.calculeLe.slice(0, 10))} : ${a.total} (${a.parEtat.map((e) => `${e.libelle} ${e.valeur}`).join(", ") || "—"}), ${a.nouveaux30Jours} nouveaux sur 30 jours.${a.avertissement ? ` ${a.avertissement}` : ""}`,
       `Sources : ${a.parSource.slice(0, 5).map((s) => `${s.libelle} ${s.valeur}`).join(", ") || "—"}. Familles : ${a.parFamille.map((f) => `${f.libelle} ${f.valeur}`).join(", ") || "—"}.`,
-      `À réactiver : ${a.aReactiver.nombre} client(s) terminés depuis plus de ${JOURS_REACTIVATION} jours${a.aReactiver.clients.length ? ` (${a.aReactiver.clients.slice(0, 5).map((c) => `${c.nom}, ${c.joursDepuis} j`).join(" · ")})` : ""}.`,
-      `Avis : ${a.avis.recus} reçu(s)${a.avis.noteMoyenne !== null ? `, note moyenne ${a.avis.noteMoyenne}/5` : ""} ; ${a.avis.aDemander} à demander${a.avis.listeADemander.length ? ` (${a.avis.listeADemander.slice(0, 5).map((c) => c.nom).join(", ")})` : ""}.`,
+      `À réactiver : ${pluriel(a.aReactiver.nombre, "client terminé", "clients terminés")} depuis plus de ${JOURS_REACTIVATION} jours${a.aReactiver.clients.length ? ` (${a.aReactiver.clients.slice(0, 5).map((c) => `${c.nom}, ${c.joursDepuis} j`).join(" · ")})` : ""}.`,
+      `Avis : ${pluriel(a.avis.recus, "reçu")}${a.avis.noteMoyenne !== null ? `, note moyenne ${a.avis.noteMoyenne}/5` : ""} ; ${a.avis.aDemander} à demander${a.avis.listeADemander.length ? ` (${a.avis.listeADemander.slice(0, 5).map((c) => c.nom).join(", ")})` : ""}.`,
       `Espaces : ${a.espaces.ouverts} ouverts, ${a.espaces.jamaisOuverts} jamais ouverts, ${a.espaces.actifsSemaine} actifs cette semaine, ${a.espaces.sansEspace} clients sans espace.`,
       a.recommandeurs.length ? `Recommandent : ${a.recommandeurs.map((r) => `${r.nom} (${r.recommandations})`).join(", ")}.` : "",
     ].filter(Boolean).join("\n");

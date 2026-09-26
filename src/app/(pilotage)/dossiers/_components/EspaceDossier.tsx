@@ -73,6 +73,8 @@ export function EspaceDossier({
   const [reponse, setReponse] = useState("");
   // Mission 12 : ses photos s'ouvrent dans la visionneuse (déposées, puis retirées), plus dans un nouvel onglet.
   const [photoOuverte, setPhotoOuverte] = useState<number | null>(null);
+  // Mission 13 (lot 5) : ses simulations aussi, plus de nouvel onglet.
+  const [simulationOuverte, setSimulationOuverte] = useState<number | null>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -90,7 +92,8 @@ export function EspaceDossier({
   useEffect(() => {
     const premier = window.setTimeout(() => void charger(), 0);
     return () => window.clearTimeout(premier);
-  }, [charger, detail.etape, detail.updatedAt]);
+    // Mission 13 (lot 5, B7) : à chaque rechargement du panneau (30 s, retour sur l'onglet), la rubrique suit.
+  }, [charger, detail]);
 
   async function envoyer(corps: Record<string, unknown>, cle: string, succes: string): Promise<boolean> {
     setOccupe(cle);
@@ -242,7 +245,7 @@ export function EspaceDossier({
         ) : null}
         <div className="flex flex-wrap gap-2">
           {espace.apercu ? (
-            <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+            <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
               <Eye size={13} aria-hidden /> Voir comme le client
             </a>
           ) : null}
@@ -251,7 +254,7 @@ export function EspaceDossier({
             <button
               type="button"
               onClick={() => setLienMail({ dossierId: detail.id, code: espace.projet || espace.simulations.length || espace.devis || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE" })}
-              className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
+              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
             >
               <Mail size={13} aria-hidden /> Envoyer le lien par mail
             </button>
@@ -293,7 +296,7 @@ export function EspaceDossier({
               <div className="flex flex-wrap gap-2">
                 {espace.photosRetirees.map((photo, i) => (
                   <div key={photo.id} className="flex items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-1 pr-2">
-                    <button type="button" onClick={() => setPhotoOuverte(espace.photos.length + i)} className="block h-9 w-9 overflow-hidden rounded-[5px]" aria-label="Agrandir la photo retirée">
+                    <button type="button" onClick={() => setPhotoOuverte(espace.photos.length + i)} className="block h-11 sm:h-9 w-11 sm:w-9 overflow-hidden rounded-[5px]" aria-label="Agrandir la photo retirée">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={photo.url} alt="Photo retirée" loading="lazy" className="h-full w-full object-cover opacity-70" />
                     </button>
@@ -388,14 +391,15 @@ export function EspaceDossier({
             </div>
           ) : null}
           {espace.creation.demandeesLe ? <p className="mb-2 text-[12.5px] text-[#F5B454]">Il demande d&apos;autres simulations depuis le {jour(espace.creation.demandeesLe)}.</p> : null}
+          {simulationOuverte !== null && espace.simulations[simulationOuverte] ? <Visionneuse images={espace.simulations.map((s) => ({ id: s.id, url: s.url, legende: [s.titre, LIBELLES_SOURCE[s.source] ?? s.source, jour(s.le)].filter(Boolean).join(" · ") }))} index={simulationOuverte} onIndex={setSimulationOuverte} onFermer={() => setSimulationOuverte(null)} /> : null}
           {espace.simulations.length ? (
             <ul className="space-y-1.5">
-              {espace.simulations.map((s) => (
+              {espace.simulations.map((s, index) => (
                 <li key={s.id} className={cn("flex gap-2.5 rounded-[8px] border-[0.5px] p-1.5", s.choisie ? "border-[#1D9E75]/60 bg-[#1D9E75]/10" : "border-[#2A2D34] bg-[#16181D]")}>
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="block h-14 w-20 shrink-0 overflow-hidden rounded-[6px]">
+                  <button type="button" onClick={() => setSimulationOuverte(index)} aria-label={`Agrandir ${s.titre ?? "la simulation"}`} className="block h-14 w-20 shrink-0 overflow-hidden rounded-[6px]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={s.url} alt={s.titre ?? "Simulation"} loading="lazy" className={cn("h-full w-full object-cover", s.statut !== "PUBLIEE" && "opacity-50")} />
-                  </a>
+                  </button>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1">
                       <span className="text-[11px] text-[#8B919C]">{LIBELLES_SOURCE[s.source] ?? s.source} · {jour(s.le)}</span>
@@ -474,6 +478,12 @@ export function EspaceDossier({
                     {d.repris ? <span className="text-[#8B919C]"> (repris)</span> : null}
                     {d.statut === "ACCEPTE" ? <span className="text-[#5DCAA5]"> · signé</span> : d.statut === "NON_RETENU" ? <span className="text-[#8B919C]"> · non retenu</span> : null}
                   </span>
+                  {espace.devisProposes.length > 1 ? (
+                    // Mission 13 (lot 5, B6) : chaque devis compte ses propres lectures.
+                    <span className={cn("text-[12px]", d.consultations >= 3 && !espace.accord ? "text-[#F87171]" : "text-[#8B919C]")}>
+                      {d.consultations > 0 ? `lu ${d.consultations} fois${d.consulteLe ? ` · dernière le ${jour(d.consulteLe)}` : ""}` : "pas encore ouvert"}
+                    </span>
+                  ) : null}
                   {espace.accord ? null : (
                     <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
                       <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
@@ -486,11 +496,11 @@ export function EspaceDossier({
           ) : (
             <p className="text-[12.5px] text-[#8B919C]">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
           )}
-          {espace.devis ? (
+          {espace.devis && espace.devisProposes.length <= 1 ? (
             <p className="mt-1 text-[12px] text-[#8B919C]">
               {espace.devis.consultations > 0 ? (
                 <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : undefined}>
-                  {visibles.length > 1 ? "Devis ouverts" : "Devis ouvert"} {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})
+                  Devis ouvert {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})
                 </span>
               ) : (
                 "Pas encore ouvert dans son espace"
@@ -640,14 +650,14 @@ export function EspaceDossier({
                   {q.reperes.length ? (
                     <div className="mb-1.5 flex flex-wrap gap-1.5">
                       {q.reperes.map((r) => (
-                        <button key={r.id} type="button" aria-pressed={t.repere === r.id} onClick={() => poser(t.repere === r.id ? { repere: null, valeur: null } : { repere: r.id, valeur: r.valeur })} className={cn("h-10 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, t.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
+                        <button key={r.id} type="button" aria-pressed={t.repere === r.id} onClick={() => poser(t.repere === r.id ? { repere: null, valeur: null } : { repere: r.id, valeur: r.valeur })} className={cn("h-11 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, t.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
                           {r.libelle}
                         </button>
                       ))}
                     </div>
                   ) : null}
                   <label className="flex items-center gap-2 text-[12.5px] text-[#9CA3AF]">
-                    <input type="number" inputMode="decimal" min={q.min} max={q.max} step={q.pas} value={t.valeur ?? ""} onChange={(e) => poser({ repere: t.repere, valeur: e.target.value === "" ? null : Number(e.target.value) })} className="h-9 w-24 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#F2F3F5]" />
+                    <input type="number" inputMode="decimal" min={q.min} max={q.max} step={q.pas} value={t.valeur ?? ""} onChange={(e) => poser({ repere: t.repere, valeur: e.target.value === "" ? null : Number(e.target.value) })} className="h-11 sm:h-9 w-24 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#F2F3F5]" />
                     {q.unite === "portes" ? "portes" : "mètres, à peu près"}
                   </label>
                 </div>

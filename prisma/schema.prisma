@@ -571,6 +571,9 @@ model Document {
   // Mission 11 (25/09/2026) : plusieurs devis par dossier — un libellé de variante libre, une visibilité dans l'espace client.
   libelleVariante   String? // « façades seules », « façades + plan de travail »
   visibleEspace     Boolean    @default(true) // le client le voit dans son espace (un devis non retenu reste en historique)
+  // Mission 13 (lot 5, B6) : lectures du devis dans l'espace client, comptées par devis (une par demi-heure).
+  consultations     Int        @default(0)
+  consulteLe        DateTime?
   // Figé à l'émission : un document émis ne se modifie plus (la base le refuse).
   clientId          String? // client pérenne (suit les fusions)
   client            Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)

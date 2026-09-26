@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton } from "@/components/pilotage/ui";
 import type { LigneLead } from "@/lib/prospects/leads";
+import { pluriel } from "@/lib/commun/format";
 
 /** Doublon probable : la même personne, revenue avec un autre numéro et un autre e-mail. Fusion en un clic, ou « ce n'est pas elle ». */
 export function SignalDoublon({ lead, onRecharger }: { lead: LigneLead; onRecharger: () => Promise<void> }) {
@@ -17,7 +18,7 @@ export function SignalDoublon({ lead, onRecharger }: { lead: LigneLead; onRechar
     try {
       const resultat = await envoyerJson<{ dossierId?: string | null; simulations?: number }>(`/api/leads/${lead.id}/doublon`, "POST", { action });
       toast.success(action === "fusionner" ? `Fusionné avec ${lead.doublon!.nom}` : "Signalement écarté", {
-        description: action === "fusionner" ? `${resultat.simulations ? `${resultat.simulations} simulation(s) rangée(s) dans son dossier. ` : ""}Le contact en double est archivé ; rien n'est effacé.` : undefined,
+        description: action === "fusionner" ? `${resultat.simulations ? `${pluriel(resultat.simulations, "simulation rangée", "simulations rangées")} dans son dossier. ` : ""}Le contact en double est archivé ; rien n'est effacé.` : undefined,
       });
       await onRecharger();
     } catch (erreur) {

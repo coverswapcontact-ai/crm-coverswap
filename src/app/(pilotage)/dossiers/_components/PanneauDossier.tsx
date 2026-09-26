@@ -56,9 +56,10 @@ import { Chronologie } from "@/components/pilotage/Chronologie";
 import { TimelineEtapes } from "./TimelineEtapes";
 import { appelApi, envoyerJson, messageErreur } from "./client";
 import { Bouton, CLASSE_SAISIE, PastilleEtape, TRANS, TitreSection } from "./ui";
+import { pluriel } from "@/lib/commun/format";
 
 const CLASSE_PUCE_LIEN = cn(
-  "inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-7",
+  "inline-flex h-11 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-7",
   TRANS
 );
 
@@ -118,6 +119,33 @@ export function PanneauDossier({
     } catch (probleme) {
       toast.error("Dossier non rechargé", { description: messageErreur(probleme) });
     }
+  }, [dossierId, appliquer]);
+
+  // Mission 13 (lot 5, B7) : tant qu'il est ouvert, le panneau se relit toutes les 30 s et au retour sur l'onglet
+  // (le client signe, dépose, choisit : ça se voit sans fermer). En silence : une panne réseau n'affiche rien.
+  useEffect(() => {
+    if (!dossierId) return;
+    let actif = true;
+    const relire = () => {
+      if (document.visibilityState !== "visible") return;
+      appelApi<DossierDetail>(`/api/dossiers/${dossierId}`)
+        .then((charge) => {
+          if (actif) appliquer(charge);
+        })
+        .catch(() => {
+          // le prochain passage réessaiera
+        });
+    };
+    const minuterie = window.setInterval(relire, 30_000);
+    const surVisibilite = () => {
+      if (document.visibilityState === "visible") relire();
+    };
+    document.addEventListener("visibilitychange", surVisibilite);
+    return () => {
+      actif = false;
+      window.clearInterval(minuterie);
+      document.removeEventListener("visibilitychange", surVisibilite);
+    };
   }, [dossierId, appliquer]);
 
   // Pendant l'animation de fermeture, le dernier dossier reste affiché.
@@ -344,7 +372,7 @@ function ContenuPanneau({
           <SectionRepliable
             id="rubrique-devis"
             titre="Devis et factures"
-            resume={`${detail.documents.filter((d) => d.type === "DEVIS" && d.numero).length} devis · ${detail.documents.filter((d) => d.type === "FACTURE" && d.numero).length} facture(s)`.replace("facture(s)", detail.documents.filter((d) => d.type === "FACTURE" && d.numero).length > 1 ? "factures" : "facture")}
+            resume={`${detail.documents.filter((d) => d.type === "DEVIS" && d.numero).length} devis · ${pluriel(detail.documents.filter((d) => d.type === "FACTURE" && d.numero).length, "facture")}`}
             ouvert={ouvertes.documents}
             onBasculer={() => basculer("documents")}
           >
@@ -461,7 +489,7 @@ function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour:
         onClick={() => basculer(point.code, true)}
         aria-label={`Masquer « ${point.libelle} » pour ce dossier`}
         title="Pas nécessaire pour ce dossier : masquer"
-        className={cn("flex h-7 w-7 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-40 sm:h-5 sm:w-5", ton === "alerte" ? "text-[#F5B454]" : "text-[#8B919C]")}
+        className={cn("flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-40 sm:h-5 sm:w-5", ton === "alerte" ? "text-[#F5B454]" : "text-[#8B919C]")}
       >
         <X size={12} aria-hidden />
       </button>
@@ -564,14 +592,14 @@ function ProchaineActionEditeur({
           maxLength={140}
           onChange={(e) => setAction(e.target.value)}
           placeholder="Ex. Relancer par téléphone"
-          className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}
+          className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}
         />
         <input
           type="date"
           aria-label="Date de la prochaine action"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}
+          className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}
         />
         <Bouton type="submit" variante={modifie ? "primaire" : "secondaire"} disabled={!modifie} chargement={envoi}>
           Enregistrer
@@ -584,7 +612,7 @@ function ProchaineActionEditeur({
             type="button"
             onClick={() => setDate(jourParis(new Date(Date.now() + raccourci.jours * 86_400_000)))}
             className={cn(
-              "h-8 rounded-full border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-6 sm:text-[11px]",
+              "h-11 rounded-full border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-6 sm:text-[11px]",
               TRANS
             )}
           >
@@ -621,7 +649,7 @@ function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierI
 
   return (
     <div>
-      <Link href={`/journal?dossierId=${dossierId}`} className={cn("inline-flex min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+      <Link href={`/journal?dossierId=${dossierId}`} className={cn("inline-flex min-h-11 sm:min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
         Journal détaillé : chaque modification, par qui et quand
       </Link>
       {evenements.length === 0 ? <p className="mt-2 text-[12.5px] text-[#6B7280]">Rien encore.</p> : null}

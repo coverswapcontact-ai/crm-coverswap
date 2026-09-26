@@ -1,6 +1,7 @@
 import { alerter, type ResultatCanal } from "@/lib/alertes/canaux";
 import { LIBELLES_PRIORITE, type Priorite } from "./priorite";
 import { LIBELLES_TYPE_PROJET, libelleSourceLead } from "./constantes";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Push d'une demande venue du site (simulateur, devis, contact) : même promesse
@@ -38,8 +39,8 @@ export async function notifierDemandeDuSite(demande: {
     demande.telephone ? `📞 ${demande.telephone}` : "Téléphone non communiqué",
     `Projet : ${LIBELLES_TYPE_PROJET[demande.typeProjet] ?? demande.typeProjet}${demande.ville ? ` · ${demande.ville}` : ""}`,
     demande.priorite ? `${LIBELLES_PRIORITE[demande.priorite.classe].toUpperCase()} — ${demande.priorite.motif}` : null,
-    demande.simulations > 0 ? `${demande.simulations} simulation(s) — ${demande.dossierId ? "dossier ouvert, photos rangées" : "à retrouver sur sa fiche"}` : null,
-    demande.photos > 0 ? `${demande.photos} photo(s) jointe(s)` : null,
+    demande.simulations > 0 ? `${pluriel(demande.simulations, "simulation")} — ${demande.dossierId ? "dossier ouvert, photos rangées" : "à retrouver sur sa fiche"}` : null,
+    demande.photos > 0 ? `${pluriel(demande.photos, "photo jointe", "photos jointes")}` : null,
     demande.campagne ? `Campagne : ${demande.campagne}` : null,
     demande.message ? `« ${demande.message.slice(0, 160)} »` : null,
     demande.nouveau ? null : "Ce contact existait déjà : la demande a été rattachée à sa fiche.",

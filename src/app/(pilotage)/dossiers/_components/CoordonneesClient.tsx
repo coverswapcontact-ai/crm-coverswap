@@ -77,7 +77,7 @@ function ChoixFicheClient({ detail, onFermer, onMisAJour }: { detail: DossierDet
           value={recherche}
           onChange={(evenement) => setRecherche(evenement.target.value)}
           placeholder="Nom, téléphone, e-mail, ville…"
-          className={cn(CLASSE_SAISIE, "h-10 pl-8 sm:h-9")}
+          className={cn(CLASSE_SAISIE, "h-11 pl-8 sm:h-9")}
         />
       </label>
       {resultats === null ? null : resultats.length === 0 ? (

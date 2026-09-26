@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { CODES_CATEGORIE, libelleCategorie } from "@/lib/depenses/constantes";
 import { definirOutil, format, lien } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » (mission 10) : les
@@ -39,7 +40,7 @@ export const outilDepenses = definirOutil({
     const sansJustificatif = liste.filter((d) => !d.justificatifId).length;
     const ligne = (d: (typeof depenses)[number]) => `${format.jourCourt(d.payeeLe)} ${format.euros(d.montant)} ${d.fournisseur}${d.libelle ? ` — ${d.libelle}` : ""} (${libelleCategorie(d.categorie).toLowerCase()}) ${d.dossier ? `→ chantier ${d.dossier.clientNom}` : d.horsChantier ? "· hors chantier" : "· NON RATTACHÉE"}${d.justificatifId ? "" : " · sans justificatif"} [depense:${d.id}]`;
     const texte = [
-      `Dépenses ${periode.libelle}${e.categorie ? `, ${libelleCategorie(e.categorie).toLowerCase()}` : ""}${e.rattachement && e.rattachement !== "toutes" ? ` (${e.rattachement.replace(/_/g, " ")})` : ""} : ${format.euros(total)} en ${liste.length} dépense(s).`,
+      `Dépenses ${periode.libelle}${e.categorie ? `, ${libelleCategorie(e.categorie).toLowerCase()}` : ""}${e.rattachement && e.rattachement !== "toutes" ? ` (${e.rattachement.replace(/_/g, " ")})` : ""} : ${format.euros(total)} en ${pluriel(liste.length, "dépense")}.`,
       parCategorie.length > 1 ? `Par catégorie : ${parCategorie.map((c) => `${c.libelle} ${format.euros(c.total)} (${c.nombre})`).join(" · ")}.` : "",
       `Rattachées à un chantier : ${format.euros(centimes(rattachees))} (${rattachees.length}) ; hors chantier : ${format.euros(centimes(horsChantier))} (${horsChantier.length}) ; pas encore rattachées : ${format.euros(centimes(nonRattachees))} (${nonRattachees.length})${sansJustificatif ? ` ; ${sansJustificatif} sans justificatif` : ""}.`,
       nonRattachees.length ? `À rattacher (ou à marquer hors chantier) : ${nonRattachees.slice(0, 10).map(ligne).join(" · ")}` : "",

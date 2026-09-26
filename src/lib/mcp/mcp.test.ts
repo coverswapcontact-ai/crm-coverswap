@@ -139,7 +139,7 @@ describe("serveur MCP", () => {
     assert.match(apercu, /Rien n'a été fait/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 0);
     const fait = await appeler("archiver", { leads: ids, motif: "nettoyage de la file", confirmation: jeton, commande: "Archive tous les leads de la file sauf Stella Estelle" });
-    assert.match(fait, /4 lead\(s\) archivé\(s\)/);
+    assert.match(fait, /4 leads archivés/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 4);
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: stella.id } })).archiveLe, null);
     const journal = await prisma.appelOutil.findMany({ where: { outil: "archiver" }, orderBy: { createdAt: "asc" } });
@@ -189,7 +189,7 @@ describe("serveur MCP", () => {
   test("« supprimer » via MCP met à la corbeille (rien n'est effacé), et le journal des sessions le montre", async () => {
     const l = await lead();
     const r = await appeler("supprimer", { leads: [l.id], motif: "test", commande: "Supprime ce lead de test" });
-    assert.match(r, /^1 lead\(s\) à la corbeille/);
+    assert.match(r, /^1 lead à la corbeille/);
     assert.ok((await prisma.lead.findUniqueOrThrow({ where: { id: l.id } })).archiveLe);
     const { sessionsRecentes } = await import("@/lib/assistant/execution");
     const sessions = await sessionsRecentes(5);

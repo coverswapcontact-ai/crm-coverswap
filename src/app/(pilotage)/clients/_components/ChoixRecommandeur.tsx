@@ -6,6 +6,7 @@ import { appelApi } from "@/components/pilotage/client";
 import { Champ, TRANS } from "@/components/pilotage/ui";
 import type { ClientResume } from "@/lib/clients/types";
 import { cn } from "@/lib/utils";
+import { pluriel } from "@/lib/commun/format";
 
 export type Recommandeur = { id: string | null; nom: string | null; texte: string | null };
 
@@ -53,7 +54,7 @@ export function ChoixRecommandeur({
             type="button"
             aria-label="Retirer le recommandeur"
             onClick={() => onChange({ id: null, nom: null, texte: null })}
-            className={cn("flex h-8 w-8 items-center justify-center rounded-[6px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("flex h-11 sm:h-8 w-11 sm:w-8 items-center justify-center rounded-[6px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
           >
             <X size={14} />
           </button>
@@ -79,7 +80,7 @@ export function ChoixRecommandeur({
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Chercher sa fiche…"
             className={cn(
-              "h-10 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]",
               "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
               TRANS
             )}
@@ -95,10 +96,10 @@ export function ChoixRecommandeur({
                     onChange({ id: client.id, nom: client.nom, texte: null });
                     setRecherche("");
                   }}
-                  className={cn("flex min-h-10 w-full flex-col items-start px-3 py-1.5 text-left hover:bg-[#22262D]", TRANS)}
+                  className={cn("flex min-h-11 sm:min-h-10 w-full flex-col items-start px-3 py-1.5 text-left hover:bg-[#22262D]", TRANS)}
                 >
                   <span className="text-[13px] text-[#F2F3F5]">{client.nom}</span>
-                  <span className="text-[11.5px] text-[#6B7280]">{[client.ville, `${client.nbDossiers} dossier(s)`].filter(Boolean).join(" · ")}</span>
+                  <span className="text-[11.5px] text-[#6B7280]">{[client.ville, `${pluriel(client.nbDossiers, "dossier")}`].filter(Boolean).join(" · ")}</span>
                 </button>
               </li>
             ))}

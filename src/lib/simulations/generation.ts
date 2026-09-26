@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio, type TailleSortie } from "./cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI, type RaisonEchec } from "@/lib/site/erreurs-generation";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * LE générateur d'images des simulations — un seul, pour toutes les portes :
@@ -201,7 +202,7 @@ export async function genererRendu(entree: {
   };
   const coutDollars = coutEnDollars(usage);
   const dureeMs = Date.now() - debut;
-  console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${echantillons.length} échantillon(s), ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
+  console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${pluriel(echantillons.length, "échantillon")}, ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
   const generationId = await noter({ origine: entree.origine, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: echantillons.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
   return { ok: true, image, avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId };
 }

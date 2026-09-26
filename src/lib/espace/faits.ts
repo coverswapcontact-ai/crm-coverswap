@@ -28,6 +28,9 @@ export type DevisLu = {
   /** Mission 11 : libellé de variante et visibilité dans l'espace (absents sur d'anciens lecteurs). */
   libelleVariante?: string | null;
   visibleEspace?: boolean;
+  /** Mission 13 (lot 5, B6) : lectures dans l'espace client, comptées par devis. */
+  consultations?: number;
+  consulteLe?: Date | null;
 };
 
 export type AccordLu = { id: string; documentId: string; createdAt: Date; nomSignataire: string; signature: string | null; retireLe: Date | null };

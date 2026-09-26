@@ -8,6 +8,7 @@ import { chargerLivre } from "@/lib/finances/livre";
 import { listerLeads } from "@/lib/prospects/leads";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { resolveUploadsDir } from "@/lib/uploads";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Audit de connectivité : chaque maillon du CRM, vérifié sur les VRAIES données,
@@ -28,7 +29,6 @@ type Resultat = Omit<Maillon, "cle" | "libelle">;
 const JOUR_MS = 86_400_000;
 const DEBUT_DU_PUSH = new Date("2026-09-21T00:00:00.000Z");
 const ETAPES_AVANT_SIGNATURE = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
-const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
 async function maillon(cle: string, libelle: string, verifier: () => Promise<Resultat>): Promise<Maillon> {
   try {
@@ -93,7 +93,7 @@ function dossiersDepuisLeads() {
     const ok = sansClient + autreClient + sansTelephone === 0;
     return {
       etat: ok ? "OK" : "ALERTE",
-      constat: ok ? `${pluriel(dossiers.length, "dossier")} issus d'un lead : fiche client commune, coordonnées reprises.` : `${sansClient} sans fiche client, ${autreClient} rattachés à une autre fiche que leur lead, ${sansTelephone} sans le téléphone du lead.`,
+      constat: ok ? `${pluriel(dossiers.length, "dossier issu", "dossiers issus")} d'un lead : fiche client commune, coordonnées reprises.` : `${sansClient} sans fiche client, ${autreClient} rattachés à une autre fiche que leur lead, ${sansTelephone} sans le téléphone du lead.`,
       chiffres: { dossiers: dossiers.length, sansClient, autreClient, sansTelephone },
     };
   });
@@ -129,8 +129,8 @@ function simulations() {
     return {
       etat: ok ? "OK" : "ALERTE",
       constat: ok
-        ? `${pluriel(total, "simulation")} avec image : ${surLeurLead} sur la fiche de leur lead (pas de dossier : normal), les autres rangées dans le dossier du contact, photos comprises.${imagesPerdues ? ` (${imagesPerdues} rendu(s) d'origine absents des téléversements : dit sur le dossier.)` : ""}`
-        : `${pluriel(sansDossier, "simulation")} hors du dossier que leur contact a pourtant (reprises au prochain passage, toutes les 15 min) ; ${photosManquantes} dossier(s) avec moins de photos qu'attendu ; ${fichiersAbsents} fichier(s) absent(s) du disque.`,
+        ? `${pluriel(total, "simulation")} avec image : ${surLeurLead} sur la fiche de leur lead (pas de dossier : normal), les autres rangées dans le dossier du contact, photos comprises.${imagesPerdues ? ` (${pluriel(imagesPerdues, "rendu")} d'origine absents des téléversements : dit sur le dossier.)` : ""}`
+        : `${pluriel(sansDossier, "simulation")} hors du dossier que leur contact a pourtant (reprises au prochain passage, toutes les 15 min) ; ${pluriel(photosManquantes, "dossier")} avec moins de photos qu'attendu ; ${pluriel(fichiersAbsents, "fichier absent", "fichiers absents")} du disque.`,
       chiffres: { simulations: total, surLaFicheDuLead: surLeurLead, sansDossier, dossiersVerifies: dossiers.length, photosManquantes, fichiersAbsents, rendusDOrigineAbsents: imagesPerdues },
     };
   });
@@ -154,8 +154,8 @@ function drive() {
     return {
       etat: ok ? "OK" : "ALERTE",
       constat: ok
-        ? `${documentsAJour} document(s) sur ${documents} et ${photosAJour} photo(s) sur ${photos} dans Drive${retard > 0 ? ` ; ${retard} en attente du prochain passage` : ""}. Dernier passage il y a ${ageHeures ?? "?"} h.`
-        : `${etat.enErreur.length} élément(s) en erreur${ageHeures !== null && ageHeures > 26 ? `, dernier passage il y a ${ageHeures} h` : ""}. ${etat.enErreur[0] ? `Exemple : ${etat.enErreur[0].nom} — ${etat.enErreur[0].erreur}` : ""}`.slice(0, 400),
+        ? `${pluriel(documentsAJour, "document")} sur ${documents} et ${pluriel(photosAJour, "photo")} sur ${photos} dans Drive${retard > 0 ? ` ; ${retard} en attente du prochain passage` : ""}. Dernier passage il y a ${ageHeures ?? "?"} h.`
+        : `${pluriel(etat.enErreur.length, "élément")} en erreur${ageHeures !== null && ageHeures > 26 ? `, dernier passage il y a ${ageHeures} h` : ""}. ${etat.enErreur[0] ? `Exemple : ${etat.enErreur[0].nom} — ${etat.enErreur[0].erreur}` : ""}`.slice(0, 400),
       chiffres: { documents, documentsDansDrive: documentsAJour, photos, photosDansDrive: photosAJour, enErreur: etat.enErreur.length, heuresDepuisDernierPassage: ageHeures ?? -1 },
       aFaire: ok ? undefined : "Paramètres → Connexions → « Synchroniser maintenant », puis relire ce maillon.",
     };
@@ -183,8 +183,8 @@ function espaceClient() {
     return {
       etat: ok ? "OK" : "ALERTE",
       constat: ok
-        ? `${pluriel(espaces, "espace")} ouvert${espaces > 1 ? "s" : ""}, ${pluriel(depots.length, "dépôt")} de photos rangé${depots.length > 1 ? "s" : ""} dans leur dossier, ${pluriel(accords.length, "bon")} pour accord : tous les dossiers concernés sont signés. ${alertes.length} notification(s) parties, toutes abouties.`
-        : `${photosManquantes} dossier(s) avec moins de photos que déposé ; ${accordsNonSignes} accord(s) sans passage en Signé ; ${pushRates} notification(s) sans push abouti${gestes > 0 && alertes.length === 0 ? " ; aucun envoi de notification enregistré" : ""}.`,
+        ? `${pluriel(espaces, "espace ouvert", "espaces ouverts")}, ${pluriel(depots.length, "dépôt de photos rangé", "dépôts de photos rangés")} dans leur dossier, ${pluriel(accords.length, "bon")} pour accord : tous les dossiers concernés sont signés. ${pluriel(alertes.length, "notification partie", "notifications parties")}, toutes abouties.`
+        : `${pluriel(photosManquantes, "dossier")} avec moins de photos que déposé ; ${pluriel(accordsNonSignes, "accord")} sans passage en Signé ; ${pluriel(pushRates, "notification")} sans push abouti${gestes > 0 && alertes.length === 0 ? " ; aucun envoi de notification enregistré" : ""}.`,
       chiffres: { espaces, depotsDePhotos: depots.length, photosManquantes, accords: accords.length, accordsNonSignes, notifications: alertes.length, notificationsSansPush: pushRates },
     };
   });
@@ -221,7 +221,7 @@ function notifications() {
     const ok = pushDisponible() && sansPush === 0;
     return {
       etat: ok ? "OK" : "ALERTE",
-      constat: `Canaux poussés actifs : ${pousses.join(", ") || "aucun"}. ${envois.length} alerte(s) en 14 jours, ${sansPush} sans push abouti.${dernierPush ? ` Dernier push : ${dernierPush.createdAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} (${dernierPush.origine}).` : " Aucun push abouti enregistré."}`,
+      constat: `Canaux poussés actifs : ${pousses.join(", ") || "aucun"}. ${pluriel(envois.length, "alerte")} en 14 jours, ${sansPush} sans push abouti.${dernierPush ? ` Dernier push : ${dernierPush.createdAt.toLocaleString("fr-FR", { timeZone: "Europe/Paris" })} (${dernierPush.origine}).` : " Aucun push abouti enregistré."}`,
       chiffres: { canauxPousses: pousses.length, alertes14Jours: envois.length, sansPush },
       aFaire: pousses.length < 2 ? "Un seul canal poussé : poser Telegram (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID) et activer les notifications de l'application installée." : undefined,
     };

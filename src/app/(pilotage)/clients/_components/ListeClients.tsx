@@ -56,7 +56,7 @@ function Acquisition({ lignes }: { lignes: LigneAcquisition[] }) {
           <button
             type="button"
             onClick={() => setDetail((ouvert) => !ouvert)}
-            className={cn("min-h-8 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("min-h-11 sm:min-h-8 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
           >
             {detail ? "Par famille" : "Détail par source"}
           </button>
@@ -205,7 +205,7 @@ export default function ListeClients({
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Nom, ville, e-mail, téléphone…"
             className={cn(
-              "h-10 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
               "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
               TRANS
             )}
@@ -220,7 +220,7 @@ export default function ListeClients({
               aria-selected={categorie === filtre.valeur}
               onClick={() => setCategorie(filtre.valeur)}
               className={cn(
-                "flex h-9 shrink-0 items-center rounded-[7px] px-3 text-[13px] font-medium whitespace-nowrap sm:h-7",
+                "flex h-11 shrink-0 items-center rounded-[7px] px-3 text-[13px] font-medium whitespace-nowrap sm:h-7",
                 categorie === filtre.valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
                 TRANS
               )}
@@ -236,7 +236,7 @@ export default function ListeClients({
           onChange={(evenement) => setSource(evenement.target.value)}
           options={[{ valeur: "", libelle: "Toutes les sources" }, ...SOURCES_CLIENT.map((valeur) => ({ valeur, libelle: LIBELLES_SOURCE_CLIENT[valeur] }))]}
         />
-        <label className="flex min-h-10 items-center gap-2 text-[13px] text-[#9CA3AF] sm:min-h-8">
+        <label className="flex min-h-11 items-center gap-2 text-[13px] text-[#9CA3AF] sm:min-h-8">
           <input type="checkbox" checked={archives} onChange={(evenement) => setArchives(evenement.target.checked)} className="h-4 w-4 accent-[#1D9E75]" />
           Fiches archivées
         </label>

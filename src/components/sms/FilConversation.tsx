@@ -191,7 +191,7 @@ export function FilConversation({
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#16181D]">
       {/* En-tête : retour, nom, appel d'un tap, contexte */}
-      <header className="flex items-center gap-1.5 border-b-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:pt-2">
+      <header className="flex items-center gap-1.5 border-b-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 py-2">
         <button type="button" onClick={onRetour} aria-label="Retour aux conversations" className={cn("flex h-11 w-10 items-center justify-center rounded-[10px] text-[#D1D5DB] hover:bg-[#22262D] lg:hidden", TRANS)}>
           <ArrowLeft size={20} aria-hidden />
         </button>

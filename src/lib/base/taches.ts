@@ -3,6 +3,7 @@ import { mettreEnFile } from "@/lib/taches/file";
 import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { dossierSauvegardes, purgerSauvegardes, RETENTION, sauvegardeDuJourExiste, sauvegarderBase } from "./sauvegarde.mjs";
 import { enregistrerTachesSauvegardeDrive } from "./sauvegarde-drive";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Sauvegardes en arrière-plan (mission 10) : une copie vérifiée de la base par
@@ -39,8 +40,8 @@ export function purgeJournalisee(): BilanPurge {
   if (!dossier) return { gardees: 0, purgees: [], octetsLiberes: 0, resume: "Base non locale : rien à purger." };
   const bilan = purgerSauvegardes(dossier);
   const resume = bilan.purgees.length
-    ? `${bilan.purgees.length} sauvegarde(s) purgée(s) (${mo(bilan.octetsLiberes)} libérés) ; ${bilan.gardees.length} gardée(s) : ${RETENTION.quotidiennes} quotidiennes + ${RETENTION.hebdomadaires} hebdomadaires au plus.`
-    : `Rien à purger : ${bilan.gardees.length} sauvegarde(s) dans la rétention (${RETENTION.quotidiennes} quotidiennes + ${RETENTION.hebdomadaires} hebdomadaires).`;
+    ? `${pluriel(bilan.purgees.length, "sauvegarde purgée", "sauvegardes purgées")} (${mo(bilan.octetsLiberes)} libérés) ; ${pluriel(bilan.gardees.length, "gardée")} : ${RETENTION.quotidiennes} quotidiennes + ${RETENTION.hebdomadaires} hebdomadaires au plus.`
+    : `Rien à purger : ${pluriel(bilan.gardees.length, "sauvegarde")} dans la rétention (${RETENTION.quotidiennes} quotidiennes + ${RETENTION.hebdomadaires} hebdomadaires).`;
   return { gardees: bilan.gardees.length, purgees: bilan.purgees, octetsLiberes: bilan.octetsLiberes, resume };
 }
 

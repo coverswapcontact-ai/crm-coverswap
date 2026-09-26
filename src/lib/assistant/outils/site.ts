@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { lireImage } from "@/lib/simulations/dossier";
 import { imagePourResultat, IMAGES_MAX_PAR_RESULTAT } from "../images";
 import { definirOutil, format, lien, type ImageOutil } from "../definition";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * « simulations_site » (mission 11) : les simulations faites sur coverswap.fr,
@@ -62,7 +63,7 @@ export const outilSimulationsSite = definirOutil({
       }
     }
     const anonymes = lignes.filter((s) => !s.leadId).length;
-    const texte = total === 0 ? `Aucune simulation faite sur le site sur ${e.jours ?? 7} jour(s)${e.lead_id ? " pour ce lead" : ""}.` : [`${total} simulation(s) sur le site sur ${e.jours ?? 7} jour(s) : ${anonymes} anonyme(s), ${total - anonymes} rattachée(s) à un lead ; ${choisies.length} décrite(s), ${images.length} image(s) jointe(s).`, ...textes].join("\n");
+    const texte = total === 0 ? `Aucune simulation faite sur le site sur ${pluriel(e.jours ?? 7, "jour")}${e.lead_id ? " pour ce lead" : ""}.` : [`${pluriel(total, "simulation")} sur le site sur ${pluriel(e.jours ?? 7, "jour")} : ${pluriel(anonymes, "anonyme")}, ${pluriel(total - anonymes, "rattachée")} à un lead ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")}.`, ...textes].join("\n");
     return { texte, images, donnees: { total, anonymes, simulations: choisies.map((s) => ({ id: s.id, le: s.createdAt.toISOString(), projet: s.projet, references: lireReferences(s.references), referenceChoisie: s.referenceChoisie, page: s.page, source: s.source, campagne: s.campagne, leadId: s.leadId, rattacheeLe: s.rattacheeLe?.toISOString() ?? null, purgee: Boolean(s.archiveLe) })) }, liens: [lien("Synthèse", "/synthese")] };
   },
 });

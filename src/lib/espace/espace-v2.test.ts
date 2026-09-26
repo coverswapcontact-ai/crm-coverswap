@@ -217,9 +217,9 @@ describe("le devis dans l'espace", () => {
     const { espace, dossierId, devis } = await avecDevis("Ugo");
     assert.deepEqual(await service.noterConsultationDevis(espace, devis.id), { consultations: 1 });
     assert.deepEqual(await service.noterConsultationDevis(await relire(espace.id), devis.id), { consultations: 1 }, "même visite : pas de double compte");
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsulteLe: new Date(Date.now() - 3_600_000) } });
+    await prisma.document.update({ where: { id: devis.id }, data: { consulteLe: new Date(Date.now() - 3_600_000) } });
     assert.deepEqual(await service.noterConsultationDevis(await relire(espace.id), devis.id), { consultations: 2 });
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsulteLe: new Date(Date.now() - 3_600_000) } });
+    await prisma.document.update({ where: { id: devis.id }, data: { consulteLe: new Date(Date.now() - 3_600_000) } });
     assert.deepEqual(await service.noterConsultationDevis(await relire(espace.id), devis.id), { consultations: 3 });
     const evenements = await prisma.dossierEvenement.findMany({ where: { dossierId, type: "ESPACE_DEVIS_CONSULTE" } });
     assert.equal(evenements.length, 1, "un seul événement, mis à jour");

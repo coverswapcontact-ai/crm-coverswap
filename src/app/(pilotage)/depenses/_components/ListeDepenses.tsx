@@ -143,7 +143,7 @@ function ModaleDepense({
             <label htmlFor="rattachement" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
               Chantier
             </label>
-            <select id="rattachement" value={rattachement} onChange={(evenement) => setRattachement(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-10 sm:h-9")}>
+            <select id="rattachement" value={rattachement} onChange={(evenement) => setRattachement(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}>
               <option value="">À rattacher</option>
               <option value="HORS">Hors chantier (frais généraux)</option>
               {options.map((chantier) => (
@@ -237,7 +237,7 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
             <Link href={`/depenses?annee=${annee + 1}`} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
               <ChevronRight size={16} aria-hidden />
             </Link>
-            <Link href="/depenses/nouvelle" className={cn("ml-1 flex h-10 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8", TRANS)}>
+            <Link href="/depenses/nouvelle" className={cn("ml-1 flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8", TRANS)}>
               <Plus size={15} aria-hidden /> Nouvelle dépense
             </Link>
           </div>

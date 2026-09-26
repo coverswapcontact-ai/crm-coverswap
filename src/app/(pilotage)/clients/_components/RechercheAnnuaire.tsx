@@ -79,7 +79,7 @@ export function RechercheAnnuaire({ onChoisir }: { onChoisir: (entreprise: Entre
           maxLength={120}
           placeholder="Nom de l'entreprise, SIREN ou SIRET"
           onChange={(evenement) => saisir(evenement.target.value)}
-          className={cn(CLASSE_SAISIE, "h-10 pr-9 pl-8 sm:h-9")}
+          className={cn(CLASSE_SAISIE, "h-11 pr-9 pl-8 sm:h-9")}
         />
         {enCours ? <Loader2 size={14} aria-label="Recherche en cours" className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-[#6B7280]" /> : null}
       </div>

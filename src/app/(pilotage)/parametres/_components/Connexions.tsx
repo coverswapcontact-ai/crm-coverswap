@@ -88,7 +88,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
               ) : null}
               {google.connexion.derniereErreur ? <p className="mt-1 text-[#F87171]">{google.connexion.derniereErreur}</p> : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                <a href="/api/google/connexion" className="inline-flex h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">
+                <a href="/api/google/connexion" className="inline-flex h-11 sm:h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">
                   Reconnecter
                 </a>
                 <Bouton
@@ -106,7 +106,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
             <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
               <Pastille ton="ambre">Pas connecté</Pastille>
               <p className="mt-2">Autorise le CRM à écrire dans Drive (ses propres fichiers seulement) et à lire, ranger et envoyer les mails de la boîte.</p>
-              <a href="/api/google/connexion" className="mt-3 inline-flex h-9 items-center rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]">
+              <a href="/api/google/connexion" className="mt-3 inline-flex h-11 sm:h-9 items-center rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]">
                 Connecter le compte Google
               </a>
             </div>

@@ -23,9 +23,10 @@ const VARIANTES = {
 } as const;
 
 const TAILLES = {
-  sm: "h-8 px-2.5 text-[12px] sm:h-7",
-  md: "h-10 px-3.5 text-[13px] sm:h-8",
-  icone: "h-10 w-10 sm:h-8 sm:w-8",
+  // Mission 13 (lot 5) : 44 px au doigt sur téléphone, compact sur ordinateur.
+  sm: "h-11 px-3 text-[13px] sm:h-7 sm:px-2.5 sm:text-[12px]",
+  md: "h-11 px-3.5 text-[13px] sm:h-8",
+  icone: "h-11 w-11 sm:h-8 sm:w-8",
 } as const;
 
 export function Bouton({
@@ -116,7 +117,7 @@ export function Champ({
       <input
         id={idChamp}
         aria-invalid={erreur ? true : undefined}
-        className={cn(CLASSE_SAISIE, "h-10 sm:h-9", className)}
+        className={cn(CLASSE_SAISIE, "h-11 sm:h-9", className)}
         {...props}
       />
       <Aide erreur={erreur} aide={aide} />
@@ -170,7 +171,7 @@ export function ListeDeroulante({
       <select
         id={idChamp}
         aria-invalid={erreur ? true : undefined}
-        className={cn(CLASSE_SAISIE, "h-10 pr-8 sm:h-9", className)}
+        className={cn(CLASSE_SAISIE, "h-11 pr-8 sm:h-9", className)}
         {...props}
       >
         {options.map((option) => (
@@ -342,7 +343,7 @@ export function Puces<V extends string>({
               aria-checked={choisie}
               onClick={() => onChange(option.valeur)}
               className={cn(
-                "min-h-9 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-7 sm:text-[12px]",
+                "min-h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-7 sm:text-[12px]",
                 choisie
                   ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]"
                   : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5]",

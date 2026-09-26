@@ -52,7 +52,7 @@ export default function SessionsAssistant({ initial }: { initial: SessionVue[] }
         <ul className="divide-y-[0.5px] divide-[#2A2D34] rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           {sessions.map((s) => (
             <li key={s.id}>
-              <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setOuverte((o) => (o === s.id ? null : s.id))}>
+              <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setOuverte((o) => (o === s.id ? null : s.id))}>
                 <span className="flex min-w-0 items-center gap-2">
                   <Bot size={15} aria-hidden className="shrink-0 text-[#5DCAA5]" />
                   <span className="text-[13.5px] font-medium text-[#F2F3F5]">{new Date(`${s.jour}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}</span>

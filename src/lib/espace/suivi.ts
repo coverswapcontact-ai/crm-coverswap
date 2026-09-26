@@ -133,7 +133,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
         !(espace.choixLe && espace.choixLe.getTime() > espace.propositionDemandeeLe.getTime()) &&
         !(accord && accord.createdAt.getTime() > espace.propositionDemandeeLe.getTime())
     );
-    const consultations = devis && espace.devisConsulteId === devis.id ? espace.devisConsultations : 0;
+    // Mission 13 (lot 5, B6) : les lectures sont comptées sur le devis lui-même.
+    const consultations = devis?.consultations ?? 0;
     // Un projet d'un espace permanent n'expire plus (le lien du client ne meurt pas).
     const expire = !espace.permanent && espace.expireLe.getTime() < maintenant.getTime();
     const revoque = Boolean(espace.permanent?.revoqueLe ?? espace.revoqueLe);
@@ -215,7 +216,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
         choix: espace.choixLe ? espace.choixLe.toISOString() : null,
         choixTeintes: espace.choixLe ? teintesDuChoix(espace.choix, vivantes) : null,
         proposition: propositionEnAttente ? { le: espace.propositionDemandeeLe!.toISOString(), message: espace.propositionMessage ?? null } : null,
-        devis: devis ? { numero: devis.numero!, consultations, consulteLe: consultations > 0 ? date(espace.devisConsulteLe) : null } : null,
+        devis: devis ? { numero: devis.numero!, consultations, consulteLe: consultations > 0 ? date(devis.consulteLe ?? null) : null } : null,
         devisProposes: lecture.proposes.filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE").length,
         accord: accord ? accord.createdAt.toISOString() : null,
         accordSource: accord?.source ?? null,

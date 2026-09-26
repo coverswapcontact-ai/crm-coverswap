@@ -6,6 +6,7 @@ import type { SimulationSiteLigne, SimulationsSiteRecentes } from "@/lib/simulat
 import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Mission 13 (B19) — « Sur le site cette semaine » : les simulations faites sur
@@ -15,7 +16,6 @@ import { cn } from "@/lib/utils";
  * le lead rattaché (ouvre sa fiche) ou « anonyme ».
  */
 
-const pluriel = (n: number, un: string, plusieurs = `${un}s`) => `${n} ${n > 1 ? plusieurs : un}`;
 
 function quand(iso: string, maintenant: number): string {
   const jours = Math.floor((maintenant - new Date(iso).getTime()) / 86_400_000);

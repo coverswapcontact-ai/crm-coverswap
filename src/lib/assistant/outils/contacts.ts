@@ -1,5 +1,6 @@
 import { creerContactAssistant, schemaCreationContact } from "@/lib/prospects/creation-assistant";
 import { definirOutil, lien } from "../definition";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * « creer_contact » (mission 11) : un lead ou un client de zéro, depuis un
@@ -28,7 +29,7 @@ export const outilCreerContact = definirOutil({
     }
     const c = r.cree;
     return {
-      texte: `Contact créé : ${c.nom || "sans nom"}${e.ville ? ` (${e.ville})` : ""}, source ${e.source ?? "AUTRE"}, projet ${e.type_projet ?? "CUISINE"}${c.dossierId ? ", dossier ouvert" : ""}. Il est dans la file des leads à appeler.${r.doublons.length ? ` Créé malgré ${r.doublons.length} doublon(s) probable(s), sur ta demande.` : ""}`,
+      texte: `Contact créé : ${c.nom || "sans nom"}${e.ville ? ` (${e.ville})` : ""}, source ${e.source ?? "AUTRE"}, projet ${e.type_projet ?? "CUISINE"}${c.dossierId ? ", dossier ouvert" : ""}. Il est dans la file des leads à appeler.${r.doublons.length ? ` Créé malgré ${pluriel(r.doublons.length, "doublon probable", "doublons probables")}, sur ta demande.` : ""}`,
       donnees: { cree: true, leadId: c.leadId, clientId: c.clientId, dossierId: c.dossierId, doublonsIgnores: r.doublons },
       liens: [lien("Fiche du lead", `/leads?lead=${c.leadId}`), ...(c.dossierId ? [lien("Dossier", `/dossiers?dossier=${c.dossierId}`)] : [])],
     };

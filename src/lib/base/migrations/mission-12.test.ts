@@ -116,7 +116,7 @@ describe("ménage : archives sans motif, tâches abandonnées", () => {
     assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } }))?.archiveMotif, migrations.MOTIF_A_RENSEIGNER);
     const abandonnee = await prisma.tache.findUniqueOrThrow({ where: { id: vieille.id } });
     assert.equal(abandonnee.statut, "ANNULEE");
-    assert.match(abandonnee.derniereErreur ?? "", /^Abandonnée le .*8 tentative\(s\) sur 8.*Dernière erreur : Conversion refusée \(HTTP 400\) : jeton invalide/);
+    assert.match(abandonnee.derniereErreur ?? "", /^Abandonnée le .*8 tentatives sur 8.*Dernière erreur : Conversion refusée \(HTTP 400\) : jeton invalide/);
     assert.equal((await prisma.tache.findUniqueOrThrow({ where: { id: recente.id } })).statut, "ECHEC_DEFINITIF", "trop récente : elle reste visible en échec");
     const bis = await avecActeur(LUCAS, () => migrations.migrationMenage2609.executer(prisma));
     assert.deepEqual([bis.dossiersSansMotif, bis.leadsSansMotif, bis.tachesAbandonnees], [0, 0, 0]);

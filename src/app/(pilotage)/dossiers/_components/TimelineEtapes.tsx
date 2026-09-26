@@ -181,7 +181,7 @@ function AjoutNote({
             void ajouter();
           }
         }}
-        className={cn(CLASSE_SAISIE, "field-sizing-content max-h-40 min-h-10 resize-none py-2 leading-relaxed sm:min-h-9")}
+        className={cn(CLASSE_SAISIE, "field-sizing-content max-h-40 min-h-11 resize-none py-2 leading-relaxed sm:min-h-9")}
       />
       <Bouton variante="secondaire" disabled={!contenu.trim()} chargement={envoi} onClick={() => void ajouter()}>
         Ajouter

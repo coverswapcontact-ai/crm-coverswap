@@ -20,7 +20,7 @@ import { Bouton, Champ, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
 import { Pastille, Puces } from "@/components/pilotage/ui";
 
 const CLASSE_LIEN_ICONE = cn(
-  "inline-flex h-10 w-10 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34] text-[#9CA3AF] hover:border-[#3A3E47] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8 sm:w-8",
+  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34] text-[#9CA3AF] hover:border-[#3A3E47] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8 sm:w-8",
   TRANS
 );
 

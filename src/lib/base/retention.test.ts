@@ -90,7 +90,7 @@ describe("Rétention des sauvegardes (7 quotidiennes + 4 hebdomadaires)", () => 
     const fictives = new Set(QUINZE.map(sansGz));
     assert.deepEqual(bilan.purgees.map(sansGz).filter((n) => fictives.has(n)).sort(), [...DE_TROP, nom("2026-09-16")].map(sansGz).sort());
     assert.equal(bilan.gardees, 11);
-    assert.match(bilan.resume, /\d sauvegarde\(s\) purgée\(s\)/);
+    assert.match(bilan.resume, /\d sauvegardes purgées/);
     for (const n of bilan.purgees) assert.equal(existsSync(path.join(dossier, n)), false, n);
     for (const n of HEBDOMADAIRES) assert.equal(existsSync(path.join(dossier, n)), true, n);
     // Le bilan se lit dans Tâches de fond (résumé de la tâche terminée).

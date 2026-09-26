@@ -145,7 +145,7 @@ describe("recherche, ambiguïté, refus", () => {
 
   test("« supprimer » met à la corbeille (rien n'est effacé) ; « restaurer » remet", async () => {
     const r = await appeler("supprimer", { leads: [stella.id], motif: "test", commande: "Supprime Stella Estelle" });
-    assert.match(r.texte, /^1 lead\(s\) à la corbeille \(motif : test\) : effacement le .* sauf « restaurer »/);
+    assert.match(r.texte, /^1 lead à la corbeille \(motif : test\) : effacement le .* sauf « restaurer »/);
     const apres = await prisma.lead.findUniqueOrThrow({ where: { id: stella.id } });
     assert.ok(apres.archiveLe, "archivé");
     assert.match(apres.archiveMotif ?? "", /^Corbeille \(effacement le/);
@@ -160,7 +160,7 @@ describe("recherche, ambiguïté, refus", () => {
     assert.match(apercu.texte, /Rien n'a été fait/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 0);
     const fait = await appeler("archiver", { leads: ids, motif: "doublon", confirmation: apercu.confirmation!.jeton, commande: "Archive tous ces leads" });
-    assert.match(fait.texte, /5 lead\(s\) archivé\(s\)/);
+    assert.match(fait.texte, /5 leads archivés/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 5);
     const rejoue = await appeler("archiver", { leads: ids, motif: "doublon", confirmation: apercu.confirmation!.jeton });
     assert.match(rejoue.texte, /^Refusé : Ce jeton de confirmation a déjà servi/);

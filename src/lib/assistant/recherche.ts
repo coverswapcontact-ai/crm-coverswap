@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { cleNom, distanceEdition, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
+import { titreDossier } from "@/lib/commun/format";
 
 /**
  * Chercher un client, un lead ou un dossier comme on le dirait à voix haute :
@@ -116,13 +117,13 @@ export async function chercherContacts(texte: string, options: { limite?: number
   }
   for (const doc of documents) {
     const d = doc.dossier;
-    ajouter({ type: "DOSSIER", id: d.id, nom: `${d.clientNom} — ${d.objet}`, ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape} · ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "avoir"} ${doc.numero}`, motif: `numéro de ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "document"}`, score: 1, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
+    ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape} · ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "avoir"} ${doc.numero}`, motif: `numéro de ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "document"}`, score: 1, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
   }
   // Une adresse (« 30 boulevard Joliot-Curie ») : tous les mots cherchés dans l'adresse du dossier (numéro compris).
   const motsAdresse = sansAccents(brut).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((m) => (m.length >= 2 || /^\d+$/.test(m)) && !MOTS_VIDES.has(m));
   const ressembleAUneAdresse = motsAdresse.length >= 2 && /\d/.test(brut) && !telephone;
   for (const d of dossiers) {
-    const base = { type: "DOSSIER" as const, id: d.id, nom: `${d.clientNom} — ${d.objet}`, ville: d.clientVille || null, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
+    const base = { type: "DOSSIER" as const, id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
     if (memeTelephone(d.clientTelephone)) ajouter({ ...base, score: 1, motif: "téléphone" });
     else if (memeEmail(d.clientEmail)) ajouter({ ...base, score: 1, motif: "e-mail" });
     else {
@@ -138,7 +139,7 @@ export async function chercherContacts(texte: string, options: { limite?: number
   // Une ville seule (« Montpellier ») : tout ce qui s'y trouve, si rien d'autre ne correspond.
   if (candidats.length === 0 && recherche.length === 1) {
     const ville = recherche[0];
-    for (const d of dossiers) if (d.clientVille && sansAccents(d.clientVille).includes(ville)) ajouter({ type: "DOSSIER", id: d.id, nom: `${d.clientNom} — ${d.objet}`, ville: d.clientVille, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, motif: "ville", score: 0.6, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
+    for (const d of dossiers) if (d.clientVille && sansAccents(d.clientVille).includes(ville)) ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, motif: "ville", score: 0.6, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
     for (const l of leads) if (l.ville && sansAccents(l.ville).includes(ville)) ajouter({ type: "LEAD", id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, etat: `lead ${(LIBELLES_STATUT_LEAD[l.statut as StatutLead] ?? l.statut).toLowerCase()}`, motif: "ville", score: 0.6, clientId: l.clientId, leadId: l.id, dossierId: l.dossiers[0]?.id ?? null, chemin: `/leads?lead=${l.id}` });
   }
   const ordre: Record<TypeContact, number> = { DOSSIER: 0, CLIENT: 1, LEAD: 2 };

@@ -1126,3 +1126,45 @@ aucun débordement horizontal (390 px partout).
   `EcranMail` les affiche en tête (→ « Répondre dans son dossier », rubrique messages) ; le badge Mail de la navigation
   les compte (`/api/pilotage/compteurs`). Aucun mail ni SMS automatique ajouté.
 - Tests : `base/mission-13-lot-4.test.ts` (2 : rubriques et liens ; message d'espace dans la boîte, lu il en sort).
+
+## Lot 5 — Finition mobile (26/09)
+
+Commit « Mission 13, lot 5 : finition mobile ». Mesuré à 390 × 660 sur la copie d'essai (m8), au DOM : Leads,
+Dossiers, Espaces, Mail, Publicité n'ont plus aucun bouton, lien ou champ sous 44 px (Clients : une case à cocher
+native de 16 px dans un libellé de 44 px) ; aucune page plus large que 390 px (Espaces : 390, était 401) ; plus aucun
+`target="_blank"` dans Leads ; le panneau du dossier se relit au retour sur l'onglet (deux GET `/api/dossiers/<id>`).
+
+- **Zone sûre du haut** : `pt-[env(safe-area-inset-top)]` sur le `<main>` de `(pilotage)/layout.tsx` ; rustines
+  retirées de PanneauMail (doublon avec la `Sheet`), FilConversation et Messagerie (SMS). Les surcouches fixes
+  (mode appels, visionneuse, fenêtres) gardent la leur : elles vivent hors du `<main>`.
+- **44 px partout** : `TAILLES` de `components/pilotage/ui.tsx` (`sm` 44 px sur téléphone / 28 sur ordinateur,
+  `md` 44/32, `icone` 44/32), `Champ` et `Selection` 44/36, puces 44/28, onglets (`CLASSE_ONGLET`), liens d'action,
+  `ui/button.tsx` ; puis une passe sur ~130 boutons, liens, chips et champs bruts : hauteur mobile 44 px, hauteur
+  ordinateur inchangée (`h-11 sm:h-<ancien>`). Scripts hors dépôt (`scratchpad/m13/patch-lot5-cibles*.py`).
+- **Badges** (B9) : `components/pilotage/evenements.ts` porte `EVENEMENT_COMPTEURS` et `rafraichirCompteurs`
+  (réexportés par `Navigation`) ; `appelApi` l'émet après chaque écriture réussie (POST, PATCH, DELETE) ; la
+  navigation recharge aussi au `visibilitychange`. Plus besoin qu'un écran y pense.
+- **Leads** (B8) : « Toutes les photos du dossier » et « Voir le dossier » (mode appels) sont des `Link` ordinaires
+  (rubrique photos) ; `SesSimulations` passe par la `Visionneuse` commune. `Visionneuse.tsx` exporte
+  `imagesDesSimulations` (l'après puis l'avant de chaque simulation, légende explicite) et `indexDeVue` ; le panneau
+  du lead (`PanneauEntrant`) et la rubrique Espace du dossier (`EspaceDossier`) ouvrent leurs simulations dedans.
+  Le lien du bas dit « Ouvrir l'original (dans Safari) » sur un iPhone installé, « (nouvel onglet) » ailleurs.
+- **Textes** (B18) : `lib/commun/format.ts` — `pluriel(n, singulier, plurielForme?)`, `accord`, `titreDossier`
+  (le nom seul quand l'objet est vide : plus de « Beites Marie —  »). Environ 240 « (s) » remplacés dans 50 fichiers
+  (écrans et outils MCP), quatre aides `pluriel` locales supprimées, les tests MCP qui lisaient « lead(s) »
+  alignés. Il ne reste aucun « (s) » dans les modules gardés (ceux retirés au lot 7 n'ont pas été touchés).
+- **Panneau du dossier** (B7) : relu toutes les 30 s tant qu'il est ouvert et visible, et au retour sur l'onglet,
+  en silence ; la rubrique Espace suit chaque rechargement (`EspaceDossier` dépend de `detail`).
+- **Publicité** : un seul bouton d'en-tête, « Vérifier » ; « Lancer un essai » est l'action de la carte Réception.
+- **Numérotation** : masque `2026-000` (préfixe et année figés à l'écran, rang à trois chiffres, clavier numérique,
+  complété au blur) ; le serveur reçoit toujours un numéro complet (`poserCompteur` inchangé).
+- **B6, un compteur par devis** : `Document.consultations` / `consulteLe` (schéma, `prisma db push` au démarrage ;
+  colonnes ajoutées aux `modifiables` du déclencheur `immuable_Document` — sans cela la base refuse l'écriture sur
+  un devis émis). `noterConsultationDevis` incrémente le devis lu (une lecture par demi-heure, mise à jour
+  conditionnelle atomique) et garde sur l'espace la trace du dernier devis lu ; `vueEspaceCrm.devisProposes[]`
+  et `suivi.ts` lisent le compteur du devis ; l'écran montre « lu N fois · dernière le … » par devis quand
+  plusieurs sont proposés. Migration `consultations-par-devis-13-5` : recopie l'ancien compteur de l'espace sur
+  le devis qu'il désignait, jamais écrasé (idempotente).
+- Tests : `base/mission-13-lot-5.test.ts` (4 : formats ; deux devis comptés séparément et vue CRM ; migration
+  rejouable) ; suite complète 560/560 après alignement des attentes.
+- Aucun mail ni SMS automatique ajouté ; aucune donnée supprimée ; sauvegarde automatique avant la migration.

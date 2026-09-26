@@ -351,7 +351,7 @@ export function Messagerie({ initiale, application = "crm" }: { initiale: Liste;
         </a>
       ) : null}
       {/* Colonne 1 : conversations (plein écran sur téléphone) */}
-      <aside className={cn("w-full shrink-0 border-r-[0.5px] border-[#2A2D34] lg:w-[340px]", application === "messages" && "pt-[env(safe-area-inset-top)]", idOuvert ? "hidden lg:block" : "block")}>
+      <aside className={cn("w-full shrink-0 border-r-[0.5px] border-[#2A2D34] lg:w-[340px]", idOuvert ? "hidden lg:block" : "block")}>
         <ListeConversations
           conversations={liste.conversations}
           compteurs={liste.compteurs}

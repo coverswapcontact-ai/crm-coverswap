@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { definirOutil, lien } from "../definition";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * « lister_outils » (mission 11) : la liste des outils que CE serveur expose,
@@ -25,7 +26,7 @@ export const outilListerOutils = definirOutil({
     const outils = e.famille ? registre.outils.filter((o) => o.famille === e.famille) : registre.outils;
     const parFamille = FAMILLES.map((f) => ({ famille: f, outils: outils.filter((o) => o.famille === f) })).filter((g) => g.outils.length);
     const texte = [
-      `${registre.nombre} outil(s) exposés par ce serveur (empreinte ${registre.empreinte})${e.famille ? ` ; ${outils.length} dans la famille ${e.famille}` : ""}. Un outil de cette liste que l'application dit « not registered » : reconnecter le connecteur.`,
+      `${pluriel(registre.nombre, "outil exposé", "outils exposés")} par ce serveur (empreinte ${registre.empreinte})${e.famille ? ` ; ${outils.length} dans la famille ${e.famille}` : ""}. Un outil de cette liste que l'application dit « not registered » : reconnecter le connecteur.`,
       ...parFamille.map((g) => `${g.famille} (${g.outils.length}) : ${g.outils.map((o) => `${o.nom} [${o.libelleNiveau.toLowerCase()}]${o.parametres.length ? ` (${o.parametres.join(", ")})` : ""}`).join(" ; ")}`),
     ].join("\n");
     return { texte, donnees: { nombre: registre.nombre, empreinte: registre.empreinte, outils }, liens: [lien("Paramètres → Assistant Claude", "/parametres")] };

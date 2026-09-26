@@ -7,17 +7,15 @@ import { FolderKanban, Globe, Mail, Megaphone, Menu, PhoneForwarded, Receipt, Sl
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
+import { EVENEMENT_COMPTEURS } from "./evenements";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
 export type Compteurs = { leadsAAppeler: number; tachesEnEchec: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
-/** À déclencher après une action qui change un compteur (validation, relance d'une tâche). */
-export const EVENEMENT_COMPTEURS = "pilotage:compteurs";
-export function rafraichirCompteurs(): void {
-  window.dispatchEvent(new Event(EVENEMENT_COMPTEURS));
-}
+// Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
+export { EVENEMENT_COMPTEURS, rafraichirCompteurs } from "./evenements";
 
 type Entree = {
   href: string;
@@ -99,12 +97,18 @@ export function Navigation() {
   useEffect(() => {
     charger();
     const minuterie = window.setInterval(charger, 60_000);
+    // Mission 13 (lot 5, B9) : au retour sur l'onglet aussi (le téléphone revient d'un appel ou d'une autre application).
+    const surVisibilite = () => {
+      if (document.visibilityState === "visible") charger();
+    };
     window.addEventListener("focus", charger);
     window.addEventListener(EVENEMENT_COMPTEURS, charger);
+    document.addEventListener("visibilitychange", surVisibilite);
     return () => {
       window.clearInterval(minuterie);
       window.removeEventListener("focus", charger);
       window.removeEventListener(EVENEMENT_COMPTEURS, charger);
+      document.removeEventListener("visibilitychange", surVisibilite);
     };
   }, [charger]);
 
@@ -148,7 +152,7 @@ export function Navigation() {
                     aria-label={entree.libelle}
                     title={entree.libelle}
                     className={cn(
-                      "flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap",
+                      "flex h-11 sm:h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap",
                       active ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:bg-[#1C1F25] hover:text-[#F2F3F5]",
                       TRANS
                     )}

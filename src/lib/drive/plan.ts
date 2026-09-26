@@ -9,6 +9,7 @@ import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constant
 import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import { chargerLivre, livreEnCsv } from "@/lib/finances/livre";
 import { pseudonyme } from "@/lib/synthese/references";
+import { titreDossier } from "@/lib/commun/format";
 
 /**
  * Ce que le miroir Drive doit contenir, calculé depuis la base (la seule
@@ -57,7 +58,7 @@ function ficheDossier(dossier: {
   documents: { type: string; numero: string | null; statut: string; totalHt: number; dateEmission: Date | null }[];
 }, paiements: Awaited<ReturnType<typeof chargerPaiementsDossier>>): string {
   const lignes = [
-    `${dossier.clientNom} — ${dossier.objet}`,
+    titreDossier(dossier),
     "",
     `Adresse du chantier : ${dossier.clientAdresse}, ${dossier.clientCp} ${dossier.clientVille}`,
     `Téléphone : ${dossier.clientTelephone}${dossier.clientEmail ? ` · E-mail : ${dossier.clientEmail}` : ""}`,

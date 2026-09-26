@@ -4,6 +4,7 @@ import { avecActeur } from "@/lib/journal/contexte";
 import { PREFIXES_DECLENCHEURS, ident, nomTable, texte, tousLesDeclencheurs, type ModeleSql } from "@/lib/journal/declencheurs";
 import { MIGRATIONS_DONNEES } from "./migrations";
 import { sauvegarderBase } from "./sauvegarde.mjs";
+import { pluriel } from "@/lib/commun/format";
 
 const MODELES: readonly ModeleSql[] = Prisma.dmmf.datamodel.models;
 
@@ -108,6 +109,6 @@ export async function preparerBase(client: BaseDonnees = prisma): Promise<void> 
   const migrations = await executerMigrationsDonnees(client);
   console.log(
     `[base] Prête en ${Date.now() - debut} ms : ${declencheurs} déclencheurs du journal, ` +
-      `${migrations.length} migration(s) de données exécutée(s).`
+      `${pluriel(migrations.length, "migration de données exécutée", "migrations de données exécutées")}.`
   );
 }

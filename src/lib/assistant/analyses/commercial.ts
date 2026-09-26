@@ -9,6 +9,7 @@ import { libelleSourceLead } from "@/lib/prospects/constantes";
 import { definirOutil, format, lien } from "../definition";
 import { resoudrePeriode, schemaPeriode, type Periode } from "../periodes";
 import { arrondi, avertissementMinces, evolution, familleDuDossier, heuresEntre, libelleFamille, mediane, moyenne, repartir, somme, taux } from "./commun";
+import { accord, pluriel } from "@/lib/commun/format";
 
 /**
  * Manager commercial (mission 8) : l'entonnoir, les taux et temps par étape,
@@ -239,10 +240,10 @@ export const outilManagerCommercial = definirOutil({
       `Entonnoir : ${e.recus} leads reçus (${a.entonnoir.precedent.recus} avant) → ${e.appeles} appelés (${format.pourcent(t.appel)}) → ${e.joignables} joignables → ${e.photos} avec photos → ${e.simulations} avec simulation → ${e.devis} devis → ${e.signes} signés (${format.pourcent(t.signature)} des devis, ${format.pourcent(t.signatureSurLeads)} des leads ; ${a.entonnoir.precedent.signes} avant) → ${e.encaisses} encaissés.`,
       a.parSource.length ? `Par source : ${a.parSource.map((s) => `${s.libelle} ${s.recus} leads, ${s.devis} devis, ${s.signes} signés`).join(" · ")}.` : "",
       a.tempsParEtape.length ? `Temps par étape (jours, médiane) : ${a.tempsParEtape.map((x) => `${x.libelle} ${x.joursMedians}`).join(", ")}.` : "",
-      `Pertes : ${a.pertes.dossiersPerdus} dossier(s) et ${a.pertes.leadsPerdus} lead(s) perdu(s)${a.pertes.parMotif.length ? ` (${a.pertes.parMotif.map((m) => `${m.libelle} ${m.valeur}`).join(", ")})` : ""} ; étiquettes d'appel : ${a.pertes.etiquettesAppel.map((m) => `${m.libelle} ${m.valeur}`).join(", ") || "aucune"}.`,
+      `Pertes : ${pluriel(a.pertes.dossiersPerdus, "dossier")} et ${pluriel(a.pertes.leadsPerdus, "lead perdu", "leads perdus")}${a.pertes.parMotif.length ? ` (${a.pertes.parMotif.map((m) => `${m.libelle} ${m.valeur}`).join(", ")})` : ""} ; étiquettes d'appel : ${a.pertes.etiquettesAppel.map((m) => `${m.libelle} ${m.valeur}`).join(", ") || "aucune"}.`,
       `Délai de premier rappel : médiane ${a.delaiRappel.delaiMedianHeures ?? "—"} h ; ${a.delaiRappel.tranches.map((x) => `${x.libelle} : ${x.leads} leads, ${format.pourcent(x.tauxSignature)} signés`).join(" · ")}.`,
-      `Devis en attente aujourd'hui : ${a.devisEnAttente.nombre} pour ${format.euros(a.devisEnAttente.montantTotal)}, ancienneté moyenne ${a.devisEnAttente.ancienneteMoyenneJours ?? "—"} jours, ${a.devisEnAttente.relusSansSignature} relu(s) sans signature.`,
-      `Panier moyen signé : ${a.panierMoyen.global !== null ? format.euros(a.panierMoyen.global) : "—"} sur ${a.panierMoyen.signes} signature(s)${a.panierMoyen.parFamille.length ? ` (${a.panierMoyen.parFamille.map((f) => `${f.libelle} ${f.panier !== null ? format.euros(f.panier) : "—"}`).join(", ")})` : ""}.`,
+      `Devis en attente aujourd'hui : ${a.devisEnAttente.nombre} pour ${format.euros(a.devisEnAttente.montantTotal)}, ancienneté moyenne ${a.devisEnAttente.ancienneteMoyenneJours ?? "—"} jours, ${a.devisEnAttente.relusSansSignature} ${accord(a.devisEnAttente.relusSansSignature, "relu")} sans signature.`,
+      `Panier moyen signé : ${a.panierMoyen.global !== null ? format.euros(a.panierMoyen.global) : "—"} sur ${pluriel(a.panierMoyen.signes, "signature")}${a.panierMoyen.parFamille.length ? ` (${a.panierMoyen.parFamille.map((f) => `${f.libelle} ${f.panier !== null ? format.euros(f.panier) : "—"}`).join(", ")})` : ""}.`,
     ].filter(Boolean).join("\n");
     return { texte, donnees: a, liens: [lien("Synthèse", `/synthese?du=${a.periode.du}&au=${a.periode.au}`), lien("Commercial", "/commercial")] };
   },

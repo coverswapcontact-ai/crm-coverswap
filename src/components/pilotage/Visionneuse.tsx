@@ -30,6 +30,8 @@ const ECHELLE_MAX = 5;
 const BOUTON = "inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm hover:bg-black/75 focus-visible:outline-2 focus-visible:outline-white";
 
 export function Visionneuse({ images, index, onFermer, onIndex, actions }: Props) {
+  // Mission 13 (lot 5) : sur un iPhone installé, « ouvrir l'original » part dans Safari — autant le dire.
+  const [dansSafari] = useState(estIphoneInstalle);
   const image = images[index] ?? images[0];
   const [transformation, setTransformation] = useState<Transformation>(REPOS);
   const [chargee, setChargee] = useState(false);
@@ -248,7 +250,7 @@ export function Visionneuse({ images, index, onFermer, onIndex, actions }: Props
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" onClick={(evenement) => evenement.target === evenement.currentTarget && fermer()}>
         <a href={image.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1.5 text-[12.5px] text-white/70 hover:text-white">
           <ExternalLink size={13} aria-hidden />
-          Ouvrir l&apos;original
+          Ouvrir l&apos;original ({dansSafari ? "dans Safari" : "nouvel onglet"})
         </a>
         <div className="flex items-center gap-2">
           {images.length > 1 ? (
@@ -259,4 +261,32 @@ export function Visionneuse({ images, index, onFermer, onIndex, actions }: Props
       </div>
     </div>
   );
+}
+
+/** iPhone en application installée (écran d'accueil) : un lien externe quitte l'application pour Safari. */
+function estIphoneInstalle(): boolean {
+  if (typeof navigator === "undefined" || typeof window === "undefined") return false;
+  const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const installe = (navigator as { standalone?: boolean }).standalone === true || (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches);
+  return iphone && installe;
+}
+
+/* ── Simulations (avant / après) dans la visionneuse — mission 13, lot 5 ── */
+
+export type SimulationAvecVues = { id: string; reference?: string | null; prix?: number | null; avant: string | null; apres: string | null };
+
+/** Une image par vue, l'après d'abord puis l'avant, pour chaque simulation : la légende dit laquelle. */
+export function imagesDesSimulations(simulations: readonly SimulationAvecVues[]): ImageVisionneuse[] {
+  const images: ImageVisionneuse[] = [];
+  for (const simulation of simulations) {
+    const finition = [simulation.reference ? `Finition ${simulation.reference}` : null, simulation.prix ? `${Math.round(simulation.prix)} € simulés` : null].filter(Boolean).join(" · ");
+    if (simulation.apres) images.push({ id: `${simulation.id}:apres`, url: simulation.apres, legende: ["Après, simulé", finition].filter(Boolean).join(" · ") });
+    if (simulation.avant) images.push({ id: `${simulation.id}:avant`, url: simulation.avant, legende: ["Sa pièce avant", finition].filter(Boolean).join(" · ") });
+  }
+  return images;
+}
+
+/** L'index, dans `imagesDesSimulations`, de la vue demandée d'une simulation (-1 si elle n'a pas cette image). */
+export function indexDeVue(simulations: readonly SimulationAvecVues[], simulationId: string, vue: "avant" | "apres"): number {
+  return imagesDesSimulations(simulations).findIndex((image) => image.id === `${simulationId}:${vue}`);
 }

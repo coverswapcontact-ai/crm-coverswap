@@ -11,6 +11,7 @@ import { lireProjet, projetComplet } from "@/lib/espace/projet";
 import { lireSelection } from "@/lib/prestations/prestations";
 import { devaliderChoix, devaliderProjet, RAISON_PROJET_VALIDE } from "@/lib/espace/validations";
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS, projetsVisibles } from "@/lib/espace/projets";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Contrôle de cohérence : chaque section du CRM dit une partie de la vérité sur
@@ -379,12 +380,12 @@ export async function corrigerIncoherence(cle: string): Promise<{ corrigee: bool
 /** Passage automatique (démarrage, puis chaque jour) : le téléphone sonne seulement s'il y a quelque chose à lire. */
 export async function controleAutomatique(): Promise<RapportCoherence> {
   const rapport = await controlerCoherence();
-  console.log(`[coherence] ${rapport.dossiersControles} dossier(s) contrôlé(s) en ${rapport.dureeMs} ms : ${rapport.incoherences.length} incohérence(s)${rapport.incoherences.length ? ` — ${rapport.incoherences.map((i) => `${i.code}:${i.dossierId ?? i.leadId}`).join(", ")}` : ""}`);
+  console.log(`[coherence] ${pluriel(rapport.dossiersControles, "dossier contrôlé", "dossiers contrôlés")} en ${rapport.dureeMs} ms : ${pluriel(rapport.incoherences.length, "incohérence")}${rapport.incoherences.length ? ` — ${rapport.incoherences.map((i) => `${i.code}:${i.dossierId ?? i.leadId}`).join(", ")}` : ""}`);
   if (rapport.incoherences.length > 0) {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
     const hautes = rapport.incoherences.filter((i) => i.gravite === "HAUTE").length;
     await alerter(
-      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${rapport.incoherences.length - 4} autre(s).` : ""}`, lien: `${appUrl}/taches`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
+      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${pluriel(rapport.incoherences.length - 4, "autre")}.` : ""}`, lien: `${appUrl}/taches`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
       { origine: "coherence", canaux: ["telegram", "ntfy", "pushweb"] }
     ).catch(() => undefined);
   }

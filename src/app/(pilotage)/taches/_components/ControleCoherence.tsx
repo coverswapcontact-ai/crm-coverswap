@@ -88,7 +88,7 @@ export default function ControleCoherence({ initial }: { initial: RapportCoheren
                   Corriger
                 </Bouton>
               ) : i.dossierId ? (
-                <Link href={`/dossiers?dossier=${i.dossierId}`} className="inline-flex h-8 items-center self-start rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+                <Link href={`/dossiers?dossier=${i.dossierId}`} className="inline-flex h-11 items-center self-start rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
                   Ouvrir le dossier
                 </Link>
               ) : null}

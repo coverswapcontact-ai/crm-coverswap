@@ -118,7 +118,7 @@ describe("Mission 11 : libérer le MCP", () => {
     }
     const registre = registreOutils();
     const liste = await appeler("lister_outils", {});
-    assert.match(liste, new RegExp(`${registre.nombre} outil\\(s\\) exposés .* \\(empreinte ${registre.empreinte}\\)`));
+    assert.match(liste, new RegExp(`${registre.nombre} outils exposés .* \\(empreinte ${registre.empreinte}\\)`));
     assert.match(liste, /reconnecter le connecteur/);
     const sante = await (await import("@/app/api/health/route")).GET(new NextRequest(new Request("http://localhost:3001/api/health")));
     const corps = (await sante.json()) as { outils: { nombre: number; empreinte: string } };
@@ -217,7 +217,7 @@ describe("Mission 11 : libérer le MCP", () => {
 
   test("« simulations_site » liste les simulations du site (anonymes ou rattachées) ; « voir_publicite » dit honnêtement l'état de la réception", async () => {
     const site = await appeler("simulations_site", { jours: 30 });
-    assert.match(site, /1 simulation\(s\) sur le site sur 30 jour\(s\) : 1 anonyme\(s\)/);
+    assert.match(site, /1 simulation sur le site sur 30 jours : 1 anonyme/);
     assert.match(site, /cuisine — Meubles hauts : Statuary White \(NE31\) — anonyme .* page \/simulateur — source meta — campagne Cuisine septembre/);
     const pub = await appeler("voir_publicite", {});
     assert.match(pub, /Réception des leads Meta — NE REÇOIT PAS : Il manque : META_APP_SECRET absente, META_VERIFY_TOKEN absente/);
@@ -252,7 +252,7 @@ describe("Mission 11 : libérer le MCP", () => {
     const vue = await appeler("voir_relances", {});
     // Mission 13 (B16) : le délai a une valeur (paramètre posé à 5 jours par la migration, sinon 5 par défaut) : la relance devient proposable à date.
     assert.match(vue, /1 devis en attente de réponse \(délai de relance : 5 jours\)/);
-    assert.match(vue, /Fawzia Fares : devis \d{4}-\d{3} de .* 0 relance\(s\) faite\(s\) — prochaine relance proposable le \d{2}\/\d{2}\/\d{4}/);
+    assert.match(vue, /Fawzia Fares : devis \d{4}-\d{3} de .* 0 relance faite — prochaine relance proposable le \d{2}\/\d{2}\/\d{4}/);
     const apercu = await appeler("relancer", { dossierId: ids.dossierFares });
     assert.match(apercu, /Je vais envoyer à fares@exemple.fr la relance n° 1 du devis \d{4}-\d{3} de Fawzia Fares :\nObjet : Votre devis n° \d{4}-\d{3} — CoverSwap/);
     assert.equal(await prisma.proposition.count({ where: { type: "ENVOI_MAIL", contenu: { contains: "RELANCE_DEVIS" } } }), 0, "l'aperçu ne crée rien");
@@ -279,7 +279,7 @@ describe("Mission 11 : libérer le MCP", () => {
 
   test("« supprimer » : corbeille 30 jours, « restaurer » remet ; definitif efface (anonymise) sous confirmation ; la purge quotidienne efface ce qui a plus de 30 jours", async () => {
     const corbeille = await appeler("supprimer", { leads: [ids.leadNadiaBis], motif: "doublon créé par erreur" });
-    assert.match(corbeille, /1 lead\(s\) à la corbeille \(motif : doublon créé par erreur\) : effacement le/);
+    assert.match(corbeille, /1 lead à la corbeille \(motif : doublon créé par erreur\) : effacement le/);
     let lead = await prisma.lead.findUniqueOrThrow({ where: { id: ids.leadNadiaBis } });
     assert.ok(lead.archiveLe && lead.archiveMotif?.startsWith("Corbeille (effacement le"), lead.archiveMotif ?? "");
     await appeler("restaurer", { leads: [ids.leadNadiaBis] });
@@ -287,10 +287,10 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.equal(lead.archiveLe, null);
 
     const apercu = await appeler("supprimer", { leads: [ids.leadNadiaBis], motif: "doublon", definitif: true });
-    assert.match(apercu, /Je vais EFFACER définitivement 1 lead\(s\) : Nadia Essai \(Pérols\)[\s\S]*Anonymisation irréversible/);
+    assert.match(apercu, /Je vais EFFACER définitivement 1 lead : Nadia Essai \(Pérols\)[\s\S]*Anonymisation irréversible/);
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: ids.leadNadiaBis } })).prenom, "Nadia", "l'aperçu ne fait rien");
     const efface = await appeler("supprimer", { leads: [ids.leadNadiaBis], motif: "doublon", definitif: true, confirmation: jetonDe(apercu) });
-    assert.match(efface, /1 élément\(s\) effacé\(s\) \(anonymisés, irréversible\)/);
+    assert.match(efface, /1 élément effacé \(anonymisés, irréversible\)/);
     lead = await prisma.lead.findUniqueOrThrow({ where: { id: ids.leadNadiaBis } });
     assert.notEqual(lead.prenom, "Nadia");
     assert.equal(lead.telephone, "");
@@ -302,7 +302,7 @@ describe("Mission 11 : libérer le MCP", () => {
     const vieux = await prisma.lead.create({ data: { prenom: "Vieux", nom: "Corbeille", telephone: "0600000099", ville: "Lattes", source: "AUTRE", archiveLe: new Date(Date.now() - 31 * 24 * 3_600_000), archiveMotif: motifCorbeille("test", new Date(Date.now() - 31 * 24 * 3_600_000)) } });
     const recent = await prisma.lead.create({ data: { prenom: "Récent", nom: "Corbeille", telephone: "0600000098", ville: "Lattes", source: "AUTRE", archiveLe: new Date(Date.now() - 2 * 24 * 3_600_000), archiveMotif: motifCorbeille("test", new Date(Date.now() - 2 * 24 * 3_600_000)) } });
     const bilan = await purgerCorbeille();
-    assert.match(bilan.resume, /1 élément\(s\) effacé\(s\)/);
+    assert.match(bilan.resume, /1 élément effacé/);
     assert.notEqual((await prisma.lead.findUniqueOrThrow({ where: { id: vieux.id } })).prenom, "Vieux");
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: recent.id } })).prenom, "Récent");
   });

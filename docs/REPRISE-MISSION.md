@@ -974,8 +974,10 @@ La valeur est dans `crm-coverswap/.env.rotation-webhook.local` (fichier local, j
    (`coverswap-webhook-secret`) le temps de reporter partout ; la retirer ensuite (aucune coupure entre-temps :
    les deux sont acceptées).
 2. **Vercel (coverswap.fr)** : `CRM_WEBHOOK_SECRET` = la nouvelle valeur, sans retour à la ligne, puis redéployer.
-3. **n8n** : l'URL du webhook du CRM, paramètre `?secret=` = la nouvelle valeur.
-4. **Zapier** : `https://crm.coverswap.fr/api/webhook/zapier?secret=` = la nouvelle valeur.
+3. **n8n** : l'URL du webhook du CRM, avec l'en-tête `X-Webhook-Secret` = la nouvelle valeur (mission 13 : le
+   paramètre `?secret=` reste accepté jusqu'au 26/10/2026, plus après).
+4. **Zapier** : `https://crm.coverswap.fr/api/webhook/zapier` avec l'en-tête `X-Webhook-Secret` = la nouvelle valeur
+   (idem : `?secret=` toléré jusqu'au 26/10/2026).
 Puis retirer `WEBHOOK_SECRET_PRECEDENT` sur Railway.
 
 ## Journal
@@ -1032,3 +1034,34 @@ privé et la rotation du secret des webhooks restent à Lucas (rappel à chaque 
   (caches `application-v8`, `ecrans-v8`, `donnees-v8`) : désinscrire le SW et vider `caches` avant de juger un
   écran. Sous charge (suite complète + eslint + serveur dev en même temps), `encaissements.test.ts` dépasse le délai
   de 30 s de la transaction d'émission : rejouer le fichier seul (10/10).
+
+## Lot 2 — Sécurité (26/09)
+- **Secrets hors adresse** : `acces/secret-webhook.ts › secretDeLaRequete / secretRequeteValide` — l'en-tête
+  `X-Webhook-Secret` d'abord ; `?secret=` accepté jusqu'au 26/10/2026 (`FIN_TOLERANCE_SECRET_ADRESSE`) avec un
+  avertissement `[webhook] … toléré jusqu'au 26/10/2026` dans les journaux, refusé ensuite. Routes : diagnostic, zapier
+  (POST et GET), sms ; `routes-publiques.ts` le dit. `/api/admin/backfill-meta-dates` retiré (secret dans l'adresse,
+  usage unique du 17/09). Section « À coller » mise à jour (n8n, Zapier : en-tête).
+- **Niveaux** : `accorder_simulations` devient sensible au-delà de 3 (`sensible`, `apercu` avec le coût ≈ 0,20 $ par
+  image) ; `changer_etape` vers « signé » l'était déjà (`ETAPES_SENSIBLES` = signé, facturé, encaissé, perdu : l'audit se
+  trompait sur ce point, rien à changer).
+- **Plafond d'écritures** : `synthese/alertes.ts` : alerte `PLAFOND_ASSISTANT` (ATTENTION) quand un appel a été refusé
+  « Plafond … » dans l'heure ; elle remonte dans Synthèse, `sante_systeme` et `point_du_jour` comme les autres alertes.
+- **Révocation automatique** : `espace/revocation.ts` — un espace dont tous les projets sont clos, avec au moins un
+  chantier encaissé depuis plus de 90 jours (passage à « Encaissé » dans l'historique, sinon dernière modification), a
+  son lien désactivé (`gestion.ts › desactiverLien(permanentId, motif)` : événement ESPACE_LIEN_DESACTIVE avec le motif,
+  rien d'effacé, un nouveau lien le rouvre). Travail périodique `revocation-espaces-termines` (toutes les 6 h) → une tâche
+  `REVOCATION_ESPACES` par jour, journalisée avec la liste des espaces désactivés.
+- **Sauvegarde hebdomadaire chiffrée vers Drive** : `base/chiffrement-sauvegarde.mjs` (AES-256-GCM, clé dérivée par
+  HKDF de `SAUVEGARDE_CLE`, à défaut de `GOOGLE_TOKEN_KEY` : aucune variable nouvelle indispensable ; format « CSWB1 » +
+  IV + étiquette + contenu) ; `base/sauvegarde-drive.ts › sauvegardeVersDrive` : copie vérifiée (`sauvegarderBase`,
+  raison « drive »), gzip, chiffrement, envoi dans le dossier Drive « CoverSwap CRM — sauvegardes chiffrées » (identifiant
+  gardé dans `ReglageTexte.SAUVEGARDE_DRIVE_DOSSIER_ID`, recréé s'il a disparu) ; la copie locale intermédiaire est
+  retirée (les quotidiennes restent) ; rien n'est retiré de Drive. Travail `sauvegarde-drive-hebdomadaire` (actif si base
+  locale + clé + Drive connecté) → une tâche `SAUVEGARDE_DRIVE` par semaine ISO (`sauvegarde-drive:2026-S39`), qui
+  attend (AttenteExterne) si Google est coupé. Restaurer : `GOOGLE_TOKEN_KEY=… node scripts/dechiffrer-sauvegarde.mjs
+  <fichier.db.gz.chiffre> [sortie.db]`.
+- Tests : `base/mission-13-lot-2.test.ts` (7 : secret en-tête/adresse/date, alerte plafond, révocation 100 j / 10 j /
+  signé / rejouée, format chiffré, sauvegarde vers un faux Drive relue et déchiffrée, semaine ISO).
+- Reste à Lucas : passer les dépôts en privé, poser le nouveau secret (Railway, Vercel, n8n, Zapier — en en-tête),
+  renouveler le jeton Meta ; la première sauvegarde Drive partira d'elle-même dans les 6 h suivant le déploiement si la
+  connexion Google (Drive) est active.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
+import { secretRequeteValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { recevoirLeadDuPont } from "@/lib/meta/leads";
 import { CANAUX_PUSH } from "@/lib/alertes/canaux";
 
@@ -18,7 +18,7 @@ import { CANAUX_PUSH } from "@/lib/alertes/canaux";
  * Publicité. Avant, cette route écrivait un contact à part, sans rien de tout ça.
  *
  * Config Zapier (action « Webhooks by Zapier » → POST) :
- *   URL    : https://crm.coverswap.fr/api/webhook/zapier?secret=<WEBHOOK_SECRET>
+ *   URL    : https://crm.coverswap.fr/api/webhook/zapier  avec l'en-tête X-Webhook-Secret: <WEBHOOK_SECRET>  (« ?secret= » toléré jusqu'au 26/10/2026)
  *   Data   : full_name (ou first_name + last_name), phone_number, email, city,
  *            post_code, form_name, form_id, page_id, leadgen_id, created_time,
  *            campaign_id, campaign_name, adset_id, adset_name, ad_id, ad_name.
@@ -28,8 +28,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
+  // Mission 13 : secret dans l'en-tête X-Webhook-Secret ; « ?secret= » toléré jusqu'au 26/10/2026 (secret-webhook.ts).
+  if (!secretRequeteValide(request, "/api/webhook/zapier", secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 
@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
 
 /** GET = point de santé, utilisé par Zapier pendant la configuration (« Test Request »). */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
+  // Mission 13 : secret dans l'en-tête X-Webhook-Secret ; « ?secret= » toléré jusqu'au 26/10/2026 (secret-webhook.ts).
+  if (!secretRequeteValide(request, "/api/webhook/zapier", secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
   return NextResponse.json({ ok: true, endpoint: "zapier-webhook", message: "Prêt à recevoir des leads depuis Zapier" });

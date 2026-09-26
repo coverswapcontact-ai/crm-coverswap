@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
+import { secretRequeteValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { enregistrerSmsEntrant } from "@/lib/sms/reception";
 
 /**
@@ -11,7 +11,7 @@ import { enregistrerSmsEntrant } from "@/lib/sms/reception";
  *   { "de": "+33612345678", "texte": "Bonjour", "id": "abc", "date": "2026-09-21T10:00:00Z" }
  *   (alias : from/sender/msisdn · text/message/content/body · messageId/message_id · date/timestamp/receivedAt)
  *
- *   URL : https://crm.coverswap.fr/api/webhook/sms?secret=<WEBHOOK_SECRET>&fournisseur=<nom>
+ *   URL : https://crm.coverswap.fr/api/webhook/sms?fournisseur=<nom>  avec l'en-tête X-Webhook-Secret: <WEBHOOK_SECRET>  (« ?secret= » toléré jusqu'au 26/10/2026)
  *
  * Idempotent par l'identifiant du message ; sans identifiant, une empreinte du
  * contenu et de la minute en tient lieu. Protection : le secret partagé des
@@ -30,7 +30,8 @@ const premier = (objet: Record<string, unknown>, cles: string[]): string | null 
 
 export async function POST(requete: NextRequest) {
   const parametres = new URL(requete.url).searchParams;
-  if (!secretWebhookValide(parametres.get("secret"), secretsWebhook())) return NextResponse.json({ error: "Non autorise" }, { status: 403 });
+  // Mission 13 : secret dans l'en-tête X-Webhook-Secret ; « ?secret= » toléré jusqu'au 26/10/2026 (secret-webhook.ts).
+  if (!secretRequeteValide(requete, "POST /api/webhook/sms", secretsWebhook())) return NextResponse.json({ error: "Non autorise" }, { status: 403 });
 
   let corps: Record<string, unknown>;
   try {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { CANAUX_PUSH, alerter, type ResultatCanal } from "@/lib/alertes/canaux";
-import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
+import { secretRequeteValide, secretsWebhook } from "@/lib/acces/secret-webhook";
 import { etatNotifications } from "@/lib/meta/sante";
 import { lienFiche } from "@/lib/meta/config";
 
@@ -17,7 +17,7 @@ import { lienFiche } from "@/lib/meta/config";
  * Et, sur demande, elle envoie une VRAIE notification d'essai pour le vérifier
  * de bout en bout.
  *
- *   GET /api/webhook/diagnostic?secret=<WEBHOOK_SECRET>
+ *   GET /api/webhook/diagnostic  avec l'en-tête X-Webhook-Secret: <WEBHOOK_SECRET>  (« ?secret= » toléré jusqu'au 26/10/2026)
  *   GET /api/webhook/diagnostic?secret=…&notifier=1     → envoie une alerte d'essai
  *   GET /api/webhook/diagnostic?secret=…&lead=<id>      → résumé d'un contact
  *
@@ -136,7 +136,8 @@ async function resumerContact(id: string) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  if (!secretWebhookValide(searchParams.get("secret"), secretsWebhook(process.env.META_VERIFY_TOKEN))) {
+  // Mission 13 : secret dans l'en-tête X-Webhook-Secret ; « ?secret= » toléré jusqu'au 26/10/2026 (secret-webhook.ts).
+  if (!secretRequeteValide(request, "GET /api/webhook/diagnostic", secretsWebhook(process.env.META_VERIFY_TOKEN))) {
     return NextResponse.json({ error: "Non autorise" }, { status: 403 });
   }
 

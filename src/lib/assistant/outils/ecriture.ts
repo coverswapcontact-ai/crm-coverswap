@@ -544,9 +544,17 @@ export const outilRestaurer = definirOutil({
 export const outilAccorderSimulations = definirOutil({
   nom: "accorder_simulations",
   titre: "Accorder des simulations supplémentaires",
-  description: "Offre au client des simulations de plus dans son espace (au-delà du nombre gratuit). Réversible en pratique (quota).",
+  description: "Offre au client des simulations de plus dans son espace (au-delà du nombre gratuit). Chaque simulation faite coûte ≈ 0,20 $ d'images : au-delà de 3 d'un coup, aperçu puis confirmation. Réversible en pratique (quota).",
   niveau: "REVERSIBLE",
+  // Mission 13 (lot 2) : au-delà de 3, ça engage de l'argent (images OpenAI) → sensible.
+  sensible: (e) => (e.nombre ?? 3) > 3,
   schema: schemaCible.extend({ nombre: z.number().int().min(1).max(20).optional() }),
+  apercu: async (e) => {
+    const r = await cibler(e, "DOSSIER");
+    if (r.ambigu) return r.ambigu.texte;
+    const nombre = e.nombre ?? 3;
+    return `Je vais accorder ${nombre} simulations de plus à ${r.ids.nom} (≈ ${(nombre * 0.2).toFixed(2).replace(".", ",")} $ d'images si elles sont toutes faites).`;
+  },
   executer: async (e) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu;

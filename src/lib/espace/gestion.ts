@@ -98,10 +98,10 @@ export async function regenererLien(
   return { lien, sms, mail };
 }
 
-export async function desactiverLien(permanentId: string): Promise<void> {
+export async function desactiverLien(permanentId: string, motif?: string): Promise<void> {
   await revoquerEspace(permanentId);
   const dossierId = await dossierDeReference(permanentId);
-  if (dossierId) await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_DESACTIVE", direction: "INTERNE", contenu: "Lien de l'espace du client désactivé : il lit « lien désactivé » (rien n'est effacé ; un nouveau lien le rouvre).", metadata: JSON.stringify({ permanentId }) } });
+  if (dossierId) await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_DESACTIVE", direction: "INTERNE", contenu: `Lien de l'espace du client désactivé${motif ? ` (${motif})` : ""} : il lit « lien désactivé » (rien n'est effacé ; un nouveau lien le rouvre).`, metadata: JSON.stringify({ permanentId, ...(motif ? { motif } : {}) }) } });
 }
 
 export { accorderProjets };

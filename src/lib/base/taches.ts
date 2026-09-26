@@ -2,6 +2,7 @@ import { jourParis } from "@/lib/dossiers/dates";
 import { mettreEnFile } from "@/lib/taches/file";
 import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { dossierSauvegardes, purgerSauvegardes, RETENTION, sauvegardeDuJourExiste, sauvegarderBase } from "./sauvegarde.mjs";
+import { enregistrerTachesSauvegardeDrive } from "./sauvegarde-drive";
 
 /**
  * Sauvegardes en arrière-plan (mission 10) : une copie vérifiée de la base par
@@ -64,4 +65,6 @@ export function enregistrerTachesSauvegardes(): void {
       await mettreEnFile({ type: TYPE_PURGE_SAUVEGARDES, cle: `purge-sauvegardes:${jourParis(maintenant)}`, charge: { jour: jourParis(maintenant) }, priorite: -1 });
     },
   });
+  // Mission 13 (lot 2) : une copie chiffrée hors de l'hébergeur, chaque semaine (Google Drive).
+  enregistrerTachesSauvegardeDrive();
 }

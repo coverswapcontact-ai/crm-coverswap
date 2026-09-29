@@ -8,11 +8,17 @@ import { preparerBaseEssai } from "@/test/base-essai";
 preparerBaseEssai();
 process.env.UPLOADS_DIR = mkdtempSync(path.join(tmpdir(), "coverswap-relances-"));
 
+/**
+ * Mission 14 (partie 6) : l'ancien circuit de relances par SMS (`commercial/relances.ts`, travail « relances-sms » :
+ * SMS proposés puis envoyés par le fournisseur après validation) est retiré — les relances sont des SMS à copier
+ * (`relances/proposables.ts`, testées dans `base/mission-14-partie-6.test.ts`). Restent ici : les propositions
+ * « Envoyer un SMS » déjà en base, toujours validables jusqu'à leur expiration, et la fin d'appel.
+ */
+
 let prisma: typeof import("@/lib/prisma").default;
-let relances: typeof import("./relances");
 let appels: typeof import("./appels");
 let liens: typeof import("@/lib/espace/liens");
-let envoi: typeof import("@/lib/sms/envoi");
+let conversations: typeof import("@/lib/sms/conversations");
 let reception: typeof import("@/lib/sms/reception");
 let validation: typeof import("@/lib/validation/service");
 let avecActeur: typeof import("@/lib/journal/contexte").avecActeur;
@@ -34,18 +40,31 @@ async function dossierOuvert(prenom: string, jours: number) {
   const { espace, dossierId } = await liens.ouvrirEspaceDuContact(lead.id);
   const quand = new Date(Date.now() - jours * JOUR);
   await prisma.espaceClient.update({ where: { id: espace.id }, data: { createdAt: quand } });
-  return { leadId: lead.id, dossierId, espaceId: espace.id };
+  return { leadId: lead.id, dossierId, espaceId: espace.id, telephone: lead.telephone };
 }
 
-const propositionsDe = (dossierId: string, type = "ENVOI_SMS") => prisma.proposition.findMany({ where: { dossierId, type }, orderBy: { createdAt: "asc" } });
+/** Une proposition « Envoyer un SMS » de l'ancien circuit, telle qu'il en reste en base. */
+async function ancienneProposition(contact: { dossierId: string; leadId: string; telephone: string }, motif: string, texte: string) {
+  const { dossierId } = contact;
+  const conversation = await conversations.conversationDuNumero(contact.telephone, { leadId: contact.leadId });
+  return avecActeur({ acteur: "SYSTEME:relances" }, () =>
+    validation.proposer({
+      type: "ENVOI_SMS",
+      titre: `Relance (ancien circuit) : ${motif}`,
+      contenu: { motif, conversationId: conversation.id, dossierId, modele: motif, texte, proposeLe: new Date().toISOString() },
+      cleUnicite: `relance-sms:${dossierId}:${motif}`,
+      dossierId,
+      expireLe: new Date(Date.now() + 7 * JOUR),
+    })
+  );
+}
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
   reglerEnvironnement();
-  relances = await import("./relances");
   appels = await import("./appels");
   liens = await import("@/lib/espace/liens");
-  envoi = await import("@/lib/sms/envoi");
+  conversations = await import("@/lib/sms/conversations");
   reception = await import("@/lib/sms/reception");
   validation = await import("@/lib/validation/service");
   avecActeur = (await import("@/lib/journal/contexte")).avecActeur;
@@ -55,100 +74,38 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-describe("relances proposées, jamais envoyées seules", () => {
-  test("photos non déposées à J+2 : un message pré-rédigé avec le lien, proposé une seule fois", async () => {
-    const recent = await dossierOuvert("Trop", 1);
-    const mur = await dossierOuvert("Camille", 3);
-    const resume = await relances.proposerRelancesSms();
-    assert.ok(resume.proposees >= 1);
-    assert.equal((await propositionsDe(recent.dossierId)).length, 0, "un jour seulement : trop tôt");
-    const [proposition] = await propositionsDe(mur.dossierId);
-    assert.equal(proposition.statut, "EN_ATTENTE");
-    const contenu = JSON.parse(proposition.contenu) as { motif: string; texte: string };
-    assert.equal(contenu.motif, "RELANCE_PHOTOS");
-    assert.match(contenu.texte, /^Bonjour Camille, Lucas de CoverSwap\. Avez-vous pu prendre 2 ou 3 photos \? .*https:\/\/coverswap\.fr\/e\//);
-    assert.equal(await prisma.sms.count({ where: { dossierId: mur.dossierId } }), 0, "rien n'est parti");
+describe("l'ancien circuit : ses propositions restent validables, rien ne part seul", () => {
+  test("Lucas corrige puis valide une proposition restée en base : le SMS part avec SON texte, et les deux versions sont gardées", async () => {
+    const contact = await dossierOuvert("Élise", 3);
+    const { dossierId } = contact;
+    const propose = "Bonjour Élise, Lucas de CoverSwap. Avez-vous pu prendre 2 ou 3 photos ?";
+    const { id } = await ancienneProposition(contact, "RELANCE_PHOTOS", propose);
+    const corrige = "Bonjour Élise, c'est Lucas. Vous avez pu faire les photos de la cuisine ?";
 
-    await relances.proposerRelancesSms();
-    assert.equal((await propositionsDe(mur.dossierId)).length, 1, "proposée une seule fois");
-  });
-
-  test("Lucas corrige puis valide : le SMS part avec SON texte, et les deux versions sont gardées", async () => {
-    const { dossierId } = await dossierOuvert("Élise", 3);
-    await relances.proposerRelancesSms();
-    const [proposition] = await propositionsDe(dossierId);
-    const propose = (JSON.parse(proposition.contenu) as { texte: string }).texte;
-    const corrige = "Bonjour Élise, c'est Lucas. Vous avez pu faire les photos de la cuisine ? Je vous prépare la simulation dès que je les ai.";
-
-    await assert.rejects(avecActeur({ acteur: "SYSTEME:relances" }, () => validation.validerProposition(proposition.id)), /Seule une personne/, "rien ne part sans une décision humaine");
-    await avecActeur(LUCAS, () => validation.validerProposition(proposition.id, { texte: corrige }));
-    await validation.executerPropositionValidee({ propositionId: proposition.id }, contexte);
-    await validation.executerPropositionValidee({ propositionId: proposition.id }, contexte); // tâche rejouée
+    await assert.rejects(avecActeur({ acteur: "SYSTEME:relances" }, () => validation.validerProposition(id)), /Seule une personne/, "rien ne part sans une décision humaine");
+    await avecActeur(LUCAS, () => validation.validerProposition(id, { texte: corrige }));
+    await validation.executerPropositionValidee({ propositionId: id }, contexte);
+    await validation.executerPropositionValidee({ propositionId: id }, contexte); // tâche rejouée
 
     const envoyes = await prisma.sms.findMany({ where: { dossierId, sens: "SORTANT" } });
     assert.equal(envoyes.length, 1, "un seul SMS, même si la tâche est rejouée");
     assert.ok(envoyes[0].texte.startsWith(corrige));
     assert.deepEqual([envoyes[0].textePropose, envoyes[0].origine, envoyes[0].modele, envoyes[0].contexteEtape], [propose, "RELANCE", "RELANCE_PHOTOS", "QUALIFICATION"]);
-    const relue = await prisma.proposition.findUnique({ where: { id: proposition.id } });
+    const relue = await prisma.proposition.findUnique({ where: { id } });
     assert.equal(relue?.modifiee, true, "la correction est mesurée");
   });
 
-  test("le client vient de répondre, a dit STOP, ou a déjà reçu cinq SMS : aucune relance", async () => {
-    const repondu = await dossierOuvert("Repond", 5);
-    const lead = await prisma.lead.findUnique({ where: { id: repondu.leadId } });
-    await reception.enregistrerSmsEntrant({ identifiant: "r-1", numero: lead!.telephone, texte: "Je vous envoie ça demain", recuLe: new Date() }, "essai");
-
-    const stop = await dossierOuvert("Stop", 5);
-    const leadStop = await prisma.lead.findUnique({ where: { id: stop.leadId } });
-    await reception.enregistrerSmsEntrant({ identifiant: "r-2", numero: leadStop!.telephone, texte: "STOP", recuLe: new Date() }, "essai");
-
-    const sature = await dossierOuvert("Sature", 9);
-    const leadSature = await prisma.lead.findUnique({ where: { id: sature.leadId } });
-    for (let i = 0; i < 5; i++) {
-      const sms = await envoi.envoyerSms({ numero: leadSature!.telephone, rattachement: { leadId: sature.leadId }, texte: `Message ${i + 1}` });
-      await prisma.sms.update({ where: { id: sms.id }, data: { createdAt: new Date(Date.now() - (8 - i) * JOUR) } });
-    }
-
-    const resume = await relances.proposerRelancesSms();
-    assert.equal((await propositionsDe(repondu.dossierId)).length, 0, "il a répondu hier : on le laisse tranquille");
-    assert.equal((await propositionsDe(stop.dossierId)).length, 0);
-    assert.equal((await propositionsDe(sature.dossierId)).length, 0);
-    assert.ok(resume.plafond >= 1, "le plafond de cinq messages en dix jours est compté");
-    assert.ok(resume.stop >= 1);
-  });
-
-  test("devis non signé à J+4 ; et si le client répond avant la validation, la proposition devient sans objet", async () => {
-    const { dossierId, leadId } = await dossierOuvert("Hugo", 8);
-    await prisma.dossier.update({ where: { id: dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
-    // Émis et remis au client il y a cinq jours (mission 14 : le délai court depuis le plus tardif des deux).
-    await prisma.document.create({ data: { dossierId, type: "DEVIS", numero: "D-REL-0001", dateEmission: new Date(Date.now() - 5 * JOUR), createdAt: new Date(Date.now() - 5 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE" } });
-    await relances.proposerRelancesSms();
-    const [proposition] = await propositionsDe(dossierId);
-    const contenu = JSON.parse(proposition.contenu) as { motif: string; texte: string };
-    assert.equal(contenu.motif, "RELANCE_DEVIS");
-    assert.match(contenu.texte, /je bloque mes prochains chantiers/);
-
-    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
-    await reception.enregistrerSmsEntrant({ identifiant: "r-3", numero: lead!.telephone, texte: "C'est bon pour moi, je signe ce soir", recuLe: new Date() }, "essai");
-    await assert.rejects(avecActeur(LUCAS, () => validation.validerProposition(proposition.id)), /sans objet|répondu/i);
+  test("le client répond avant la validation : la proposition restée en base devient sans objet", async () => {
+    const contact = await dossierOuvert("Hugo", 8);
+    const { dossierId, telephone } = contact;
+    await prisma.dossier.update({ where: { id: dossierId }, data: { etape: "DEVIS_ENVOYE" } });
+    const { id } = await ancienneProposition(contact, "RELANCE_DEVIS", "Bonjour Hugo, avez-vous pu regarder le devis ?");
+    await reception.enregistrerSmsEntrant({ identifiant: "r-3", numero: telephone, texte: "C'est bon pour moi, je signe ce soir", recuLe: new Date(Date.now() + 1000) }, "essai");
+    await assert.rejects(avecActeur(LUCAS, () => validation.validerProposition(id)), /sans objet|répondu/i);
     assert.equal(await prisma.sms.count({ where: { dossierId, sens: "SORTANT" } }), 0);
   });
 
-  test("mission 14 : un devis déposé aujourd'hui mais daté de six jours plus tôt n'est pas encore relancé ; un devis masqué jamais", async () => {
-    const { dossierId } = await dossierOuvert("Paulin", 8);
-    await prisma.dossier.update({ where: { id: dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
-    await prisma.document.create({ data: { dossierId, type: "DEVIS", numero: "D-REL-0002", dateEmission: new Date(Date.now() - 6 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE", origine: "REPRISE" } });
-    await relances.proposerRelancesSms();
-    assert.equal((await propositionsDe(dossierId)).length, 0, "le délai court depuis le dépôt");
-
-    const masque = await dossierOuvert("Masque", 8);
-    await prisma.dossier.update({ where: { id: masque.dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
-    await prisma.document.create({ data: { dossierId: masque.dossierId, type: "DEVIS", numero: "D-REL-0003", dateEmission: new Date(Date.now() - 6 * JOUR), createdAt: new Date(Date.now() - 6 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE", visibleEspace: false } });
-    await relances.proposerRelancesSms();
-    assert.ok(!(await propositionsDe(masque.dossierId)).some((p) => (JSON.parse(p.contenu) as { motif: string }).motif === "RELANCE_DEVIS"), "masqué : le client ne le voit pas");
-  });
-
-  test("appel sans réponse : rappel posé au lendemain, second SMS proposé à J+3", async () => {
+  test("appel sans réponse : rappel posé, le SMS à copier est proposé (plus de second SMS du fournisseur à J+3)", async () => {
     const { dossierId } = await dossierOuvert("Injoignable", 4);
     const suite = await appels.noterAppel({ dossierId, issue: "PAS_DE_REPONSE", note: "" });
     // Mission 14 (partie 4) : le SMS « j'ai essayé de vous joindre » est proposé à l'écran (plus de mail).
@@ -156,31 +113,10 @@ describe("relances proposées, jamais envoyées seules", () => {
     const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
     assert.match(dossier?.prochaineAction ?? "", /Rappeler/);
     assert.ok(dossier?.prochaineActionDate && dossier.prochaineActionDate > new Date());
-
-    await prisma.dossierEvenement.updateMany({ where: { dossierId, type: "APPEL" }, data: { createdAt: new Date(Date.now() - 3.2 * JOUR) } });
-    await relances.proposerRelancesSms();
-    const [proposition] = await propositionsDe(dossierId);
-    assert.equal((JSON.parse(proposition.contenu) as { motif: string }).motif, "INJOIGNABLE_J3");
-  });
-
-  test("silence de dix jours : dernière relance ; restée sans réponse, le dossier est proposé « perdu — sans réponse »", async () => {
-    const { dossierId, leadId } = await dossierOuvert("Silence", 12);
-    await relances.proposerRelancesSms();
-    const [derniere] = await propositionsDe(dossierId);
-    assert.equal((JSON.parse(derniere.contenu) as { motif: string }).motif, "RELANCE_DERNIERE");
-    await avecActeur(LUCAS, () => validation.validerProposition(derniere.id));
-    await validation.executerPropositionValidee({ propositionId: derniere.id }, contexte);
-    const sms = await prisma.sms.findFirst({ where: { dossierId, modele: "RELANCE_DERNIERE" } });
-    assert.ok(sms, "la dernière relance est partie");
-
-    // Six jours plus tard, toujours rien.
-    await prisma.sms.update({ where: { id: sms!.id }, data: { createdAt: new Date(Date.now() - 6 * JOUR) } });
-    const resume = await relances.proposerRelancesSms();
-    assert.ok(resume.perdusProposes >= 1);
-    const [perdu] = await propositionsDe(dossierId, "CHANGEMENT_ETAPE");
-    assert.deepEqual([(JSON.parse(perdu.contenu) as { vers: string; motifPerte: string }).vers, (JSON.parse(perdu.contenu) as { motifPerte: string }).motifPerte], ["PERDU", "SANS_REPONSE"]);
-    assert.equal((await propositionsDe(dossierId)).length, 1, "plus aucun SMS n'est proposé après la dernière relance");
-    assert.ok(leadId);
+    // Partie 6 : plus aucune proposition « Envoyer un SMS » n'est créée — le 2ᵉ appel sans réponse propose le SMS D à copier.
+    const deuxieme = await appels.noterAppel({ dossierId, issue: "PAS_DE_REPONSE", note: "" });
+    assert.equal(deuxieme.sms?.code, "PAS_DE_REPONSE_2");
+    assert.equal(await prisma.proposition.count({ where: { dossierId, type: "ENVOI_SMS" } }), 0);
   });
 });
 

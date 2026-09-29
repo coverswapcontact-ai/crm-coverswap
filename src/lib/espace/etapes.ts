@@ -125,3 +125,28 @@ export const LIBELLES_ETAPE_ESPACE: Record<EtapeEspace, string> = {
   CHANTIER: "Chantier",
   TERMINE: "Terminé",
 };
+
+/**
+ * Mission 14 (partie 6) : ce que le client a vraiment à faire quand la main lui est passée par un lien (espace
+ * ouvert, lien envoyé) — d'après l'étape de son espace, la source unique. Une simulation du site publiée dans son
+ * espace le fait sortir de PHOTOS ; une simulation qu'il a faite sans qu'elle soit publiée chez lui (rendu absent,
+ * pas encore rangée, brouillon…) le laisse à l'étape PHOTOS, mais `simulation` (la règle partagée avec la relance
+ * photos, `espace/simulations-faites.ts`) fait dire « en attente de son projet » : il n'est jamais « en attente de
+ * ses photos » s'il en a fait une.
+ */
+export function attenteDuClient(etape: EtapeEspace, faits: { simulation?: boolean } = {}): string {
+  switch (etape) {
+    case "PHOTOS":
+      return faits.simulation ? "Espace ouvert : en attente de son projet" : "Espace ouvert : en attente de ses photos";
+    case "PROJET":
+      return "Espace ouvert : en attente de son projet";
+    case "SIMULATIONS":
+      return "Espace ouvert : en attente de son choix de simulation";
+    case "DEVIS":
+      return "Devis envoyé : en attente de sa réponse";
+    case "ACOMPTE":
+      return "Accord donné : en attente de son paiement";
+    default:
+      return LIBELLES_ETAPE_ESPACE[etape];
+  }
+}

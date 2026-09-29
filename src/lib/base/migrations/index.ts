@@ -21,6 +21,7 @@ import { migrationQuiALaMain14 } from "./mission-14-partie-1";
 import { migrationLeadsARappeler14 } from "./mission-14-partie-2";
 import { migrationAppelsDesLeads14 } from "./mission-14-partie-3";
 import { migrationCatalogueSms14 } from "./mission-14-partie-5";
+import { migrationRelancesUnCircuit14 } from "./mission-14-partie-6";
 import { migrationPrioriteLeads } from "./priorite-leads";
 import { migrationPrioriteLeadsSimulation } from "./priorite-leads-simulation";
 import { migrationRegistreNumeros } from "./registre-numeros";
@@ -40,4 +41,4 @@ export type MigrationDonnees = {
 };
 
 /** Dans l'ordre d'exécution. On ajoute à la fin, on ne retire ni ne réordonne jamais. */
-export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes, migrationEspacesPermanents, migrationMainDesDossiers, migrationMailRemontesFantomes, migrationMessagesEspace, migrationNumerotation2609, migrationValeursLucas2609, migrationMenage2609, migrationProchaineActionDevis13, migrationCoordonneesVersFiche13, migrationObjetDepuisProjet13, migrationDelaiRelance13, migrationConsultationsParDevis13, migrationPhotosRedimensionnees13, migrationQuiALaMain14, migrationLeadsARappeler14, migrationAppelsDesLeads14, migrationCatalogueSms14];
+export const MIGRATIONS_DONNEES: readonly MigrationDonnees[] = [journalEtatInitial, migrationClients, migrationRegistreNumeros, migrationAgentsProspection, migrationLeadsMetaPont, migrationArchiverLeadEssaiPont, migrationLeadsEssai2109, migrationLeadsEssai2109Detail, migrationPrioriteLeads, migrationModelesSms, migrationSimulationsDossiers, migrationPrioriteLeadsSimulation, migrationMenageLeadsDeTest, migrationSimulateurEspace, migrationSmsLienSimulation, migrationMenageDossiersRattrapage, migrationMotsDesDemandes, migrationEspacesPermanents, migrationMainDesDossiers, migrationMailRemontesFantomes, migrationMessagesEspace, migrationNumerotation2609, migrationValeursLucas2609, migrationMenage2609, migrationProchaineActionDevis13, migrationCoordonneesVersFiche13, migrationObjetDepuisProjet13, migrationDelaiRelance13, migrationConsultationsParDevis13, migrationPhotosRedimensionnees13, migrationQuiALaMain14, migrationLeadsARappeler14, migrationAppelsDesLeads14, migrationCatalogueSms14, migrationRelancesUnCircuit14];

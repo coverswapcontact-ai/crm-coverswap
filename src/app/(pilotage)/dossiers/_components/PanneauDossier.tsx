@@ -28,6 +28,7 @@ import { DepensesDossier } from "./DepensesDossier";
 import { ModalePaiement, PaiementsDossier, montantAttendu } from "./PaiementsDossier";
 import { PhotosDossier } from "./PhotosDossier";
 import { Chronologie } from "@/components/pilotage/Chronologie";
+import { RelancesDuDossier } from "@/components/pilotage/relances/FeuilleRelances";
 import { TimelineEtapes } from "./TimelineEtapes";
 import { pluriel } from "@/lib/commun/format";
 import { Bouton, PastilleEtape, TRANS, TitreSection } from "@/components/pilotage/ui";
@@ -322,6 +323,13 @@ function ContenuPanneau({
             detail={detail}
             maintenant={maintenant}
             onMisAJour={onMisAJour}
+          />
+          {/* Mission 14 (partie 6) : la relance proposable de ce dossier (SMS à copier, mail à relire) ; relue quand le
+              dossier bouge (étape, nouvel événement), et le panneau relu après une copie. */}
+          <RelancesDuDossier
+            dossierId={detail.id}
+            cle={`${detail.etape}:${detail.evenements.reduce((dernier, e) => (e.createdAt > dernier ? e.createdAt : dernier), "")}`}
+            onCopie={() => void onRecharger()}
           />
           {attendu !== null && attendu > 0 ? (
             <section id="rubrique-encaisser" className="rounded-[11px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 p-3.5">

@@ -1856,3 +1856,165 @@ l'imposer. Après la puce : l'écran SMS, puis le lead suivant. » Livrée aprè
   modifiable → Enregistrer → toast « Appel noté. Rappel demain à 18:00. » → écran SMS avec le texte A variante simulation
   (« … je vous rappelle demain vers 18 h … », 168 caractères, « Vise 160 ») → Passer → carte « Suivant : … — Rappel en
   retard » avec Appeler / Plus tard. Le retour réel depuis l'appli Téléphone de l'iPhone reste à vivre par Lucas.
+
+## Partie 6 — Relances : un seul circuit (29/09)
+Énoncé : « Devis : quand une relance devient proposable, elle propose le mail existant (s'il y a une adresse) et le
+SMS à copier (toujours). La copie compte comme une relance, 2 au plus par devis. […] Photos : un espace ouvert sans
+photo ni simulation depuis 3 jours (DELAI_RELANCE_PHOTOS) fait proposer LIEN_ESPACE_RAPPEL. Une simulation faite sur
+le site compte […]. Tout est proposé, rien n'est envoyé. » Principe : un seul circuit ; les textes SMS n'existent qu'à
+un seul endroit.
+- **Compte unique des relances de devis** (`relances/service.ts › relancesDuDevis`, pur) : MAIL_ENVOYE dont la
+  metadata porte RELANCE_DEVIS et le devis (le mail parti) + SMS_COPIE dont `metadata.relance.documentId` = le devis
+  (le SMS copié). Deux au plus, tous canaux confondus ; la référence du délai est la dernière relance (mail ou SMS),
+  sinon `referenceDuDevis` (partie 1). Une requête pour tous les dossiers (`tracesDeRelance`). Servi à
+  `listerRelances`, `relancerDevis` (rang du mail, message de plafond « Déjà 2 relances faites … (mail ou SMS) ») et
+  `proposerRelances` (inchangé pour le mail ; `ResumeRelances` inchangé, `sansAdresse`/`refusMail` toujours comptés
+  mais ces clients ne sont plus oubliés : leur SMS est dans la liste calculée, rien de créé en base).
+- **`DevisARelancer`** gagne `rang` (relances faites + 1), `proposable` (moins de 2 relances et délai écoulé), `sms`
+  (la `PropositionSms` complète de `proposerSms({ action: "RELANCE_DEVIS", relance: { documentId, rang } })`, code
+  RELANCE_DEVIS_1/_2, texte du catalogue, téléphone, relance — seulement si proposable ; une erreur de préparation
+  rend `null`, journalisée) et `mail` (`{ propositionId, a, expireLe }` : la proposition ENVOI_MAIL de relance en
+  attente, sinon null) ; **`propositionEnAttente` est remplacé par `mail`** (seul lecteur : `voir_relances`).
+  `listerRelances(maintenant, { dossierId? })` filtre un dossier (fiche). Rien n'est écrit. Après relecture :
+  `mailTraite` (`{ propositionId, statut }`) = la proposition de CE rang (clé `relance:<devis>:<rang>`, `cleRelance`
+  de `relances/etape.ts`) déjà décidée : VALIDEE (validée, en file d'exécution : **la relance est faite, plus
+  proposable**, plus de SMS), ECHEC (proposable, le SMS l'annule), REJETEE / ANNULEE / EXPIREE (jamais reproposée : le
+  SMS seul) ; `stop` (le numéro du lead ou du dossier a répondu STOP : `sms` nul). L'adresse du mail ne lit que les
+  adresses non archivées (`emails: { where: { archiveLe: null }, take: 1 }` : l'extension ne filtre pas les include).
+- **La copie d'un SMS de relance** (`sms/copie.ts`, `relance: { documentId, rang }`) : trace SMS_COPIE (compte la
+  relance), puis `relances/etape.ts › relanceDevisFaiteParSms` : le dossier passe de « Devis envoyé » à « Relance »
+  par `passerEnRelance` (LA fonction, nature AUTOMATIQUE, raison « relance envoyée par SMS » ; le mail de relance
+  l'utilise aussi, `mail/propositions.ts`, raison « relance envoyée par mail »), effets du changement, et la
+  proposition ENVOI_MAIL EN_ATTENTE de clé `relance:<devis>:<rang>` passe ANNULEE, commentaire « Relance faite par
+  SMS » (écriture d'`annulerProposition` recopiée : l'importer bouclerait validation/service → catalogue → mail/
+  propositions → relances/etape). Main : `passageDeMain(SMS_COPIE)` avec `relance.documentId` → CLIENT « Relance
+  envoyée : en attente de sa réponse » (`MOTIF_RELANCE_ENVOYEE`, avant la règle du lien). Un mail parti fait tomber
+  le SMS du même rang par le compte. Double toucher (10 min) : une trace, aucun effet rejoué. Après relecture : la
+  copie est REFUSÉE (409, rien d'écrit) si le mail du même rang est VALIDEE (« … validé et part : la relance est
+  faite, pas de SMS en plus ») ou EXECUTEE (« … déjà parti ») — `verifierRelanceParSms` ; un mail du même rang en
+  ECHEC est annulé comme celui en attente (il ne peut plus être réessayé).
+- **Relance photos** (`relances/photos.ts`) : `DELAI_RELANCE_PHOTOS` (definitions.ts, COMMERCIAL, jours, « Délai
+  avant de relancer un espace sans photo ») ; défaut `DELAI_RELANCE_PHOTOS_DEFAUT_JOURS = 3`,
+  `lireDelaiRelancePhotos`. `relancesPhotosProposables(maintenant, { dossierId? })` : espace non archivé ni désactivé
+  (projet ou lien du client), dossier non archivé en Qualification/Simulation, sans accord ; aucune photo
+  (`photosDuClient`) ; AUCUNE simulation : SimulationEspace non archivée de toute source, `Simulation` rangée dans le
+  dossier ou portée par le lead du dossier ou un lead de son client, `SimulationSite` rattachée à l'un de ces leads ;
+  référence = la plus récente de la création de l'espace, du dernier lien communiqué (`liensEnvoyes` : SMS parti,
+  mail, SMS_COPIE, ESPACE_LIEN_COMMUNIQUE contenant `/e/<code du client>-` ou `/e/<code du projet>-`) et de la
+  dernière relance photos ; 2 au plus (SMS_COPIE avec `metadata.relance.type === "PHOTOS"`). SMS : `proposerSms({
+  action: "RELANCE_PHOTOS", relance: { type: "PHOTOS", rang } })`, qui suit désormais la règle de « SMS avec le
+  lien » : LIEN_ESPACE_RAPPEL si le lien actuel a été communiqué ou l'espace ouvert, **LIEN_ESPACE si aucun lien n'a
+  jamais été communiqué** (décision de l'orchestrateur : « à nouveau » serait faux), LIEN_ESPACE_NOUVEAU s'il n'a reçu
+  qu'un lien d'avant « Nouveau lien ». `RelanceSms` devient `{ documentId, rang } | { type: "PHOTOS", rang }`
+  (`estRelancePhotos`, `schemaRelanceSms` partagé par `/api/sms/copie` et `/api/sms/proposition`) ; une relance
+  photos exige un dossier.
+- **Source unique** : `relances/proposables.ts › relancesProposables(maintenant, { dossierId? })` → `{ devis (les
+  proposables), photos, total }` ; `GET /api/relances[?dossierId=]` la rend (derrière la session). À brancher par la
+  partie 7 (point du jour, ligne « N relances proposables »).
+- **Outil MCP `voir_relances`** : devis proposable → « relance n° R proposable. SMS (RELANCE_DEVIS_1) : « … ». Mail :
+  relance n° R PROPOSÉE, à valider [proposition:…] » ou « Pas de mail : pas d'adresse e-mail, le SMS suffit » (refus
+  des mails idem) ou « Mail : proposé à la prochaine passe (ou tout de suite par « relancer ») » ; non proposable :
+  « prochaine relance proposable le JJ/MM/AAAA » (+ « (par SMS : pas d'adresse e-mail) ») ou la proposition de mail
+  forcée en attente ; « 2 relances faites : plus de relance ». Puis « N relances photos proposables : » avec le SMS du
+  lien (« (lien jamais envoyé) »). `donnees` = liste des devis + `photos`. Après relecture : « mail de relance n° R
+  validé, en cours d'envoi [proposition:…] : la relance est faite » ; « Mail de relance en échec [proposition:…] : le
+  réessayer depuis « À valider », ou copier le SMS (qui l'annule) » ; « Mail de ce rang déjà annulé|rejeté|expiré :
+  pas de nouveau mail, le SMS suffit » (plus de renvoi trompeur à « relancer ») ; STOP : « Pas de SMS : il a répondu
+  STOP » (+ « relancer par téléphone » sans mail). `relancer` refuse dans l'aperçu, clairement, un rang dont le mail
+  est déjà décidé (`mailDejaTraite`) ; la passe périodique, elle, reste silencieuse (`dejaProposees`). Titre de
+  `voir_relances` : « Les relances : devis (proposées, faites, à venir) et espaces sans photo ». Descriptions de
+  `voir_relances`, `relancer` et `annuler_relance` (« le mail de ce rang ne sera pas reproposé, mais le SMS de relance
+  reste proposé tant que la relance n'est pas faite ») mises à jour : l'empreinte du catalogue (noms, niveaux,
+  paramètres) ne change pas, mais reconnecter le connecteur pour relire les textes.
+- **Libellé de l'espace (cas L.)** : motifs de main génériques — ESPACE_LIEN_CREE « Espace ouvert : en attente du
+  client », ESPACE_LIEN_COMMUNIQUE « Lien de son espace envoyé : en attente du client » (comme les SMS du lien).
+  `dossiers/main.ts › estMotifDeLien` reconnaît ces motifs, « Nouveau lien envoyé : … » et les deux anciens.
+  `espace/etapes.ts › attenteDuClient(etape)` : PHOTOS « Espace ouvert : en attente de ses photos », PROJET « … de son
+  projet », SIMULATIONS « … de son choix de simulation », DEVIS « Devis envoyé : en attente de sa réponse », ACOMPTE
+  « Accord donné : en attente de son paiement », sinon le libellé de l'étape. `espace/suivi.ts` : un motif de lien est
+  remplacé par `attenteDuClient(etape de l'espace)` (branches client et « Relancer : … »). Vérifié : un lead du
+  simulateur dont la simulation est rangée (SimulationEspace SITE publiée) est en PROJET, jamais « en attente de ses
+  photos », même après l'envoi du lien. Après relecture — **une seule règle « a fait une simulation »** :
+  `espace/simulations-faites.ts › dossiersAvecSimulation(dossiers)` (SimulationEspace non archivée de toute source,
+  `Simulation` rangée dans le dossier ou portée par un lead du dossier/client même sans rendu, `SimulationSite`
+  rattachée ; quatre lectures en tout), utilisée par la relance photos ET par `listerEspaces` :
+  `attenteDuClient(etape, { simulation })` dit « Espace ouvert : en attente de son projet » à l'étape PHOTOS quand il
+  en a fait une. L'étape de l'espace (`etapeEspace`) ne change pas : elle reste « Photos » tant que rien n'est publié
+  chez lui (ce que le client voit dans son espace), seul le libellé d'attente du CRM suit la règle partagée.
+- **Un seul circuit** : `commercial/relances.ts` (proposerRelancesSms, travail « relances-sms », alerte « N relances
+  à valider ») supprimé, retiré de `taches/traitements.ts`. La ligne `Planification` « relances-sms » reste en base
+  sans gêne : l'exécuteur et l'écran des tâches ne lisent que les travaux enregistrés (vérifié, pas de migration).
+  Catalogue : le groupe ANCIEN et ses six codes quittent `CATALOGUE_SMS` (`aUnInterrupteur` = accusés seuls ;
+  `verifierTexteSms` sans exception) ; Paramètres → SMS n'a plus le repli « Ancien circuit ». `sms/propositions.ts`
+  garde l'exécution des propositions ENVOI_SMS déjà en base (validables jusqu'à expiration). `PropositionsEnAttente`
+  compte aussi les ENVOI_SMS.
+- **Migration `relances-un-circuit-14-6`** (`base/migrations/mission-14-partie-6.ts › unSeulCircuit`, fin de
+  `MIGRATIONS_DONNEES`) : archive les ModeleSms INJOIGNABLE_J3, RELANCE_PHOTOS, RELANCE_SIMULATION, RELANCE_DEVIS,
+  RELANCE_DEVIS_QUESTIONS, RELANCE_DERNIERE (« Mission 14 : remplacé par les SMS à copier ») ; pose
+  DELAI_RELANCE_PHOTOS = 3 (valable du 29/09/2026, source « Mission 14 : valeur de départ ») si la clé n'a aucune
+  ligne ; relit la main des dossiers dont `mainMotif` est un ancien motif de lien (ajout : sans lui, le kanban et la
+  fiche gardaient « … en attente de ses photos et de son projet » jusqu'au prochain geste). Ne touche pas aux
+  propositions ENVOI_SMS. Compteurs `modelesArchives`, `delaiPose`, `mainsRelues` + une ligne `[migration …]`.
+  Rejouable.
+- **Écrans** (`components/pilotage/relances/FeuilleRelances.tsx`) : `FeuilleRelances` (Modale plein écran sur
+  téléphone) : une ligne par relance — « {nom} — devis {numéro} de {montant HT}, relance {rang}/2, envoyé il y a N
+  jours » (+ « Pas d'adresse e-mail : le SMS seul. ») ou « {nom} — espace ouvert il y a N jours, ni photo ni
+  simulation » ; « SMS » (écran SMS avec le texte et la relance ; s'il n'a pu être préparé, redemandé au serveur) et
+  « Relire le mail » (la relecture existante : `ModaleCorrection` de la proposition, lue par `GET /api/validation`,
+  validée par `POST /api/validation/<id>/valider`). Après une copie ou une validation : rechargement, la ligne
+  disparaît. L'écran SMS et la relecture s'ouvrent DANS la feuille (fenêtres imbriquées, pas par `ouvrirEcranSms`),
+  pour ne pas fermer la feuille. `LigneRelances` : écran Leads, sous les puces, « Relances proposables · N » (44 px,
+  ambre, masquée si 0, cachée en mode appels). `RelancesDuDossier` : fiche du dossier, sous la prochaine action,
+  « Relance proposable : devis {numéro} ({rang}/2) » avec « SMS » / « Relire le mail » — et aussi la relance photos
+  du dossier (« Relance proposable : espace ouvert il y a N jours, ni photo ni simulation (r/2) »), ajout simple.
+- Tests : `base/mission-14-partie-6.test.ts` (15 après relecture) : devis sans e-mail (6 j, délai 5) → SMS RELANCE_DEVIS_1 exact, pas
+  de mail ; copie → 1, « Relance » AUTOMATIQUE, main « Relance envoyée… » ; +6 j → RELANCE_DEVIS_2 ; copie → plus
+  rien à +30 j ; devis avec e-mail : mail de la passe + SMS, copie → mail n° 1 ANNULEE « Relance faite par SMS », mail
+  n° 2 et SMS n° 2 six jours plus tard ; mail parti → SMS n° 1 tombé, n° 2 à +6 j ; `voir_relances` (sans e-mail
+  proposable avec SMS, 2 jours avec la date, relance photos avec LIEN_ESPACE) ; `GET /api/relances` (tout, un
+  dossier) ; photos : 4 j → proposée LIEN_ESPACE, 2 j → pas encore, lien copié il y a 4 j → LIEN_ESPACE_RAPPEL exact,
+  1 j → pas encore, copie comptée (`relance.type` PHOTOS), 2 au plus, sans dossier refusée ; écartée par simulation du
+  site rangée, simulation du lead non rangée, SimulationSite rattachée, simulation dans l'espace, photo, espace
+  désactivé, dossier en « Devis envoyé » ; motifs (`passageDeMain`, `estMotifDeLien`, `attenteDuClient`), espace nu
+  « en attente de ses photos », lead du simulateur « en attente de son projet » avant et après le lien, ancien motif
+  lu de même ; migration (modèles archivés, délai posé par le démarrage, main relue, proposition SMS intacte,
+  catalogue sans l'ancien circuit, rejouable, après catalogue-sms-14-5), défaut 3 j sans valeur en vigueur, travail
+  « relances-sms » absent. Ajoutés après relecture : mail validé (en file) → ligne sortie, `mailTraite` VALIDEE,
+  voir_relances « validé, en cours d'envoi », copie du SMS refusée sans trace ; mail en ECHEC → SMS proposé, copie →
+  mail ANNULEE, une seule relance comptée ; mail parti (EXECUTEE) → la copie du SMS n° 1 resté ouvert refusée ; mail
+  annulé → SMS gardé, voir_relances « déjà annulé : pas de nouveau mail », `relancer` refusé clairement, la passe ne
+  le recrée pas ; seule adresse archivée → `adresse` nulle, aucun mail proposé ; STOP → `stop`, pas de SMS, absent de
+  la feuille sans mail, « le mail seul » avec mail, voir_relances, pas de relance photos ; manager_operations = les
+  comptes de `relancesProposables`, un devis relancé par SMS n'est plus dû ; Gaspard, Honorine et une simulation
+  rangée sans rendu → étape PHOTOS mais « Espace ouvert : en attente de son projet ». Adaptés : `commercial/relances.test.ts` (partie retirée : une proposition ENVOI_SMS restée
+  en base se corrige, se valide, part une fois ; devient sans objet si le client répond ; plus aucune ENVOI_SMS créée,
+  2ᵉ appel sans réponse → SMS D ; fin d'appel inchangée), `mission-14-partie-5.test.ts` (groupes sans ANCIEN, codes
+  retirés, interrupteurs = accusés, modifierModele sans l'ancien circuit, migration 14-5 avec les lignes de l'ancien
+  circuit créées comme en prod, place « après » au lieu de « la dernière »), `sms/sms.test.ts` (GSM-7 : accusés,
+  nouveau lien, simulation en ligne). Inchangés et verts : `relances/relances.test.ts`, `mcp-v3.test.ts`,
+  `main.test.ts`, `mission-14-partie-1.test.ts` (« pas d'adresse e-mail » toujours lu dans la ligne).
+- Reste / à savoir : rien essayé dans un navigateur ni sur iPhone (feuille, écran SMS et relecture imbriqués dans la
+  Modale ou la Sheet du dossier ; focus, geste retour). `GET /api/relances` recalcule tout à chaque appel (SMS
+  préparés, trois lectures globales de `liensEnvoyes` par relance photos) : chargé à l'ouverture de Leads et de la
+  fiche seulement, pas à chaque minute. Préparer le SMS d'une relance photos passe par `ouvrirEspace` (sans écriture
+  pour un espace déjà rattaché au lien du client). Une simulation faite mais pas publiée dans l'espace (sans rendu,
+  pas encore rangée, brouillon…) écarte la relance photos et fait dire « en attente de son projet » au CRM, mais
+  l'espace du client reste à l'étape « Photos » (règle `etapeEspace` inchangée, voulue). `commercial/pilotage.ts ›
+  relancesAValider` et le point du jour : partie 7. `manager_operations` (« Relances dues ») lit désormais
+  `relancesProposables` (devis dus avec leur rang, `photosDues` / `nombrePhotosDues` en plus ; le champ `etape` des
+  devis dus est remplacé par `rang`). Un client en STOP sans adresse n'apparaît dans la feuille ni dans le compte
+  (rien à copier ni à valider) : seul `voir_relances` le montre (« relancer par téléphone »). Docs (`ARCHITECTURE-PILOTAGE.md`
+  § Relances proposées, qui décrit encore `commercial/relances.ts`) : partie 9. Les textes RELANCE_DEVIS_1/_2 disent
+  « Bonjour, » sans prénom (textes de Lucas, partie 5, non touchés).
+- **Relecture (3 relecteurs, 12 constats, tous vérifiés réels)** : corrigés — mail validé/en échec (VALIDEE en file =
+  relance faite ; copie refusée si le mail du rang est validé ou parti ; ECHEC annulé par la copie) ; adresse
+  archivée ; règle unique « a fait une simulation » (constat soulevé deux fois) ; manager_operations sur la source
+  unique ; mail du rang déjà traité dit tel quel dans voir_relances (constat soulevé deux fois) + `relancer` et
+  `annuler_relance` ; STOP (`sms/conversations.ts › lecteurDuStop`, une lecture sans créer de conversation, archivées
+  comprises ; pas de SMS de relance de devis ni de relance photos) ; titre de voir_relances ; usages LIEN_ESPACE /
+  LIEN_ESPACE_RAPPEL dans Paramètres → SMS ; rubrique de la fiche relue quand le dossier bouge (`cle` = étape + dernier
+  événement ; `onCopie` relit le panneau) ; compteurs de navigation plus rafraîchis deux fois (`appelApi` suffit ;
+  appel explicite gardé quand le mail n'attendait plus, sans écriture).
+- Vérifié : tsc, eslint, suite complète 646/646, build ; à l'écran (390 × 660, m8) : ligne « Relances proposables · 9 »
+  sous les puces de Leads → feuille (devis avec « SMS » et « Relire le mail », « A refusé les mails : le SMS seul »,
+  espaces sans photo ni simulation) → « SMS » → RELANCE_DEVIS_1 prérempli → « Copier » → toast, la ligne disparaît (8).

@@ -48,6 +48,17 @@ const MODELES_LIEN = /^(LIEN_ESPACE|INJOIGNABLE_LIEN|RELANCE_PHOTOS|SIMULATION_P
 
 const MOTIF_DEVIS_ENVOYE = "Devis envoyé : en attente de sa réponse";
 const MOTIF_LIEN_ENVOYE = "Lien de son espace envoyé : en attente du client";
+const MOTIF_ESPACE_OUVERT = "Espace ouvert : en attente du client";
+/** Mission 14 (partie 6) : une relance de devis copiée (SMS) ; le mail de relance garde « Mail envoyé : … ». */
+export const MOTIF_RELANCE_ENVOYEE = "Relance envoyée : en attente de sa réponse";
+
+/**
+ * Mission 14 (partie 6) : les motifs des événements de lien (espace ouvert, lien communiqué, SMS du lien, nouveau
+ * lien) ne supposent plus ce qui manque au client — l'espace le dit (`espace/suivi.ts`, d'après son étape : photos,
+ * projet, choix de simulation…). Reconnaît aussi les motifs d'avant, rangés sur les dossiers jusqu'à leur recalcul.
+ */
+export const estMotifDeLien = (motif: string | null | undefined): boolean =>
+  /^(Espace ouvert|Lien de son espace (envoyé|communiqué)|Nouveau lien envoyé) : en attente /.test(motif ?? "");
 
 /** Les étapes où un devis déposé passe la main au client : avant la signature. Après, l'étape (déclarée à la reprise) décide. */
 const ETAPES_DEPOT_DEVIS: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
@@ -91,8 +102,9 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     // Mission 14 : un devis déposé (fait ailleurs), visible et en attente de réponse, vaut un devis émis.
     case "DOCUMENT_REPRIS":
       return devisDeposeVisible(evenement) ? { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE } : null;
+    // Mission 14 (partie 6) : motif générique ; ce qu'il a à faire se lit sur l'étape de son espace (espace/suivi.ts).
     case "ESPACE_LIEN_CREE":
-      return { qui: "CLIENT", motif: "Espace ouvert : en attente de ses photos et de son projet" };
+      return { qui: "CLIENT", motif: MOTIF_ESPACE_OUVERT };
     case "ESPACE_SIMULATIONS_ACCORDEES":
       return { qui: "CLIENT", motif: "Simulations accordées : à lui de les créer" };
     case "ESPACE_LIEN_REGENERE":
@@ -105,7 +117,7 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     case "ESPACE_REPONSE":
       return evenement.direction === "SORTANT" ? { qui: "CLIENT", motif: "Réponse envoyée dans son espace : en attente de son retour" } : null;
     case "ESPACE_LIEN_COMMUNIQUE":
-      return { qui: "CLIENT", motif: "Lien de son espace communiqué : en attente de ses photos" };
+      return { qui: "CLIENT", motif: MOTIF_LIEN_ENVOYE };
     case "SMS_ENVOYE": {
       const meta = lireMetadata(evenement.metadata);
       const lien = meta.origine === "LIEN_ESPACE" || (typeof meta.modele === "string" && MODELES_LIEN.test(meta.modele));
@@ -113,9 +125,12 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     }
     // Mission 14 (partie 5) : un SMS copié par Lucas (copier vaut envoi) dont le texte porte le lien de son espace,
     // quel que soit son code (texte libre compris) — la règle de « Lien pas encore envoyé » (`porteLienEspace`).
+    // Partie 6 : une relance de devis copiée passe la main au client comme le mail de relance, lien ou non.
     case "SMS_COPIE": {
-      const texte = lireMetadata(evenement.metadata).texte;
-      return porteLienEspace(typeof texte === "string" ? texte : evenement.contenu) ? { qui: "CLIENT", motif: MOTIF_LIEN_ENVOYE } : null;
+      const meta = lireMetadata(evenement.metadata);
+      const relance = meta.relance && typeof meta.relance === "object" ? (meta.relance as Record<string, unknown>) : null;
+      if (relance && typeof relance.documentId === "string") return { qui: "CLIENT", motif: MOTIF_RELANCE_ENVOYEE };
+      return porteLienEspace(typeof meta.texte === "string" ? meta.texte : evenement.contenu) ? { qui: "CLIENT", motif: MOTIF_LIEN_ENVOYE } : null;
     }
     // Le client revient sur ce qu'il avait fait : c'est de nouveau à lui.
     case "ESPACE_SIMULATION_DEVALIDEE":

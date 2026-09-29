@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { ACTIONS_SMS } from "@/lib/sms/catalogue";
+import { schemaRelanceSms } from "@/lib/sms/copie";
 import { proposerSms } from "@/lib/sms/proposition";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ const schema = z
     leadId: z.string().max(40).nullish(),
     dossierId: z.string().max(40).nullish(),
     rappelLe: z.iso.datetime("Date de rappel invalide.").nullish(),
-    relance: z.object({ documentId: z.string().min(1).max(40), rang: z.number().int().min(1).max(2) }).nullish(),
+    relance: schemaRelanceSms.nullish(),
   })
   .refine((v) => v.leadId || v.dossierId || v.relance, "Indique le contact ou le dossier concerné.");
 

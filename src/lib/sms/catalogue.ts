@@ -11,9 +11,14 @@
  * pas de la pièce ; ne jamais promettre de simulation ; court et naturel ; le lien
  * toujours en fin de message. Rien ne part tout seul, sauf les deux accusés de
  * réception ; les autres SMS sont copiés par Lucas, et copier vaut envoi.
+ *
+ * Partie 6 : l'ancien circuit de relances (SMS proposés puis envoyés par le
+ * fournisseur : INJOIGNABLE_J3, RELANCE_PHOTOS, RELANCE_SIMULATION, RELANCE_DEVIS,
+ * RELANCE_DEVIS_QUESTIONS, RELANCE_DERNIERE) est retiré : ses modèles sont archivés
+ * (migration `relances-un-circuit-14-6`), les relances sont des SMS à copier.
  */
 
-export const GROUPES_SMS = ["AUTOMATIQUES", "APRES_APPEL", "ESPACE", "RELANCES", "ANCIEN"] as const;
+export const GROUPES_SMS = ["AUTOMATIQUES", "APRES_APPEL", "ESPACE", "RELANCES"] as const;
 export type GroupeSms = (typeof GROUPES_SMS)[number];
 
 export const LIBELLES_GROUPE_SMS: Record<GroupeSms, string> = {
@@ -21,7 +26,6 @@ export const LIBELLES_GROUPE_SMS: Record<GroupeSms, string> = {
   APRES_APPEL: "Après un appel",
   ESPACE: "Espace client",
   RELANCES: "Relances",
-  ANCIEN: "Ancien circuit (relances proposées par le CRM)",
 };
 
 export type VariableSms = "prenom" | "quand" | "lien" | "validite" | "montant";
@@ -43,21 +47,18 @@ export type DefinitionSms = {
   usage: string;
   /** Les seules variables permises dans son texte. */
   variables: readonly VariableSms[];
-  /** Le texte porte le lien de l'espace : il doit finir par {lien} (l'ancien circuit garde ses textes tels quels). */
+  /** Le texte porte le lien de l'espace : il doit finir par {lien}. */
   lien: boolean;
   /** Part tout seul (les deux accusés de réception, et eux seuls). */
   automatique: boolean;
   /**
-   * Peut partir par le fournisseur, facturé au SMS (accusés, ancien circuit, nouveau lien, simulation en ligne) :
+   * Peut partir par le fournisseur, facturé au SMS (accusés, nouveau lien, simulation en ligne) :
    * le texte doit rester en GSM-7, un accent hors GSM triple le coût. Les autres sont copiés par Lucas.
    */
   fournisseur: boolean;
   /** Le texte de départ. */
   defaut: string;
 };
-
-const ANCIEN_USAGE = "Proposé par l'ancien circuit de relances, puis envoyé par le fournisseur après ta validation. Ce circuit sera bientôt retiré.";
-const VARIABLES_ANCIEN: readonly VariableSms[] = ["prenom", "lien", "validite", "montant"];
 
 export const CATALOGUE_SMS = [
   // ── Automatiques : textes inchangés (écrits en GSM-7, envoyés par le fournisseur).
@@ -133,7 +134,7 @@ export const CATALOGUE_SMS = [
     code: "LIEN_ESPACE",
     libelle: "Lien de l'espace (premier envoi)",
     groupe: "ESPACE",
-    usage: "Après un appel « intéressé », ou le premier lien envoyé depuis sa fiche.",
+    usage: "Après un appel « intéressé », le premier lien envoyé depuis sa fiche, ou la relance photos d'un client qui n'a encore jamais reçu son lien.",
     variables: ["prenom", "lien"],
     lien: true,
     automatique: false,
@@ -166,7 +167,7 @@ export const CATALOGUE_SMS = [
     code: "LIEN_ESPACE_RAPPEL",
     libelle: "Renvoyer le lien de l'espace",
     groupe: "ESPACE",
-    usage: "Il a déjà reçu son lien (ou ouvert son espace) : le lui redonner, pour un projet en cours ou une relance photos.",
+    usage: "Il a déjà reçu son lien (ou ouvert son espace) : le lui redonner, pour un projet en cours, ou pour la relance photos d'un client qui l'a déjà reçu.",
     variables: ["prenom", "lien"],
     lien: true,
     automatique: false,
@@ -218,73 +219,6 @@ export const CATALOGUE_SMS = [
     fournisseur: false,
     defaut: "Bonjour, c'est Lucas de CoverSwap. Je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.",
   },
-  // ── Ancien circuit : lus par `commercial/relances.ts` (validation puis envoi par le fournisseur), tels quels jusqu'à son retrait.
-  {
-    code: "INJOIGNABLE_J3",
-    libelle: "Pas de réponse : second SMS à J+3",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, Lucas de CoverSwap. Je n'ai pas réussi à vous joindre. Dites-moi quand vous rappeler, ou déposez vos photos ici et je vous envoie une simulation : {lien}",
-  },
-  {
-    code: "RELANCE_PHOTOS",
-    libelle: "Relance J+2 : photos non déposées",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, Lucas de CoverSwap. Avez-vous pu prendre 2 ou 3 photos ? Vous pouvez les déposer ici en une minute : {lien} Je vous prépare la simulation dans la foulée.",
-  },
-  {
-    code: "RELANCE_SIMULATION",
-    libelle: "Relance J+3 : simulation vue, pas de retour",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, qu'avez-vous pensé de la simulation ? Si une teinte ou un détail vous fait hésiter, dites-le moi, je vous en prépare une autre. {lien} Lucas, CoverSwap",
-  },
-  {
-    code: "RELANCE_DEVIS",
-    libelle: "Relance J+4 : devis non signé",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, je bloque mes prochains chantiers cette semaine. Pour vous garder un créneau, il me faut votre accord sur le devis : {lien} Une question ? Appelez-moi. Lucas, CoverSwap",
-  },
-  {
-    code: "RELANCE_DEVIS_QUESTIONS",
-    libelle: "Devis relu plusieurs fois, pas encore signé",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, avez-vous des questions sur votre devis ? Je peux ajuster une finition ou un détail, et je reste joignable au 06 70 35 28 69. Votre espace : {lien} Lucas, CoverSwap",
-  },
-  {
-    code: "RELANCE_DERNIERE",
-    libelle: "Dernière relance J+10",
-    groupe: "ANCIEN",
-    usage: ANCIEN_USAGE,
-    variables: VARIABLES_ANCIEN,
-    lien: true,
-    automatique: false,
-    fournisseur: true,
-    defaut: "Bonjour {prenom}, dernier message de ma part : votre devis reste valable jusqu'au {validite}, ensuite je ne pourrai plus garantir le tarif ni le créneau. Votre espace : {lien} Bonne journée, Lucas",
-  },
 ] as const satisfies readonly DefinitionSms[];
 
 export type CodeSms = (typeof CATALOGUE_SMS)[number]["code"];
@@ -311,11 +245,11 @@ export function porteLienEspace(texte: string | null | undefined): boolean {
 }
 
 /**
- * Le message a un interrupteur (« Couper » / « Réactiver ») : les deux accusés et l'ancien circuit, lus par
- * `lireModele`. Les autres codes n'en ont pas : ils ne partent que si Lucas les copie (ou les envoie) lui-même.
+ * Le message a un interrupteur (« Couper » / « Réactiver ») : les deux accusés, lus par `lireModele`. Les autres
+ * codes n'en ont pas : ils ne partent que si Lucas les copie (ou les envoie) lui-même.
  */
-export function aUnInterrupteur(definition: Pick<DefinitionSms, "automatique" | "groupe">): boolean {
-  return definition.automatique || definition.groupe === "ANCIEN";
+export function aUnInterrupteur(definition: Pick<DefinitionSms, "automatique">): boolean {
+  return definition.automatique;
 }
 
 /** Un SMS sans lien vise un seul SMS (160 caractères) ; avec le lien, il peut en faire deux. */
@@ -324,9 +258,8 @@ export const LONGUEUR_VISEE = 160;
 /**
  * Le texte d'un code respecte-t-il ses règles ? Toute accolade doit être une variable du code, écrite exactement
  * (`{prénom}` est refusé : il partirait tel quel) ; `{lien}` une seule fois et à la toute fin pour un code à lien,
- * absent sinon. L'ancien circuit garde ses textes tels quels jusqu'à son retrait (lien au milieu) : seules ses
- * variables y sont contrôlées. Rend le message d'erreur (tutoiement : c'est Lucas qui écrit), ou null. Partagé par
- * l'écran et le serveur.
+ * absent sinon. Rend le message d'erreur (tutoiement : c'est Lucas qui écrit), ou null. Partagé par l'écran et le
+ * serveur.
  */
 export function verifierTexteSms(code: string, texte: string): string | null {
   const definition = definitionSms(code);
@@ -334,13 +267,11 @@ export function verifierTexteSms(code: string, texte: string): string | null {
   const propre = texte.trim();
   const variables = [...propre.matchAll(/\{([^{}]*)\}/g)].map((m) => m[1]);
   const permises = definition.variables as readonly string[];
-  if (definition.groupe !== "ANCIEN") {
-    if (definition.lien) {
-      if (!propre.endsWith("{lien}")) return "Le lien doit rester à la fin du message.";
-      if (variables.filter((v) => v === "lien").length > 1) return "Le lien ne doit apparaître qu'une fois, à la fin du message.";
-    } else if (variables.includes("lien")) {
-      return "Ce message ne porte pas le lien de l'espace : retire {lien}.";
-    }
+  if (definition.lien) {
+    if (!propre.endsWith("{lien}")) return "Le lien doit rester à la fin du message.";
+    if (variables.filter((v) => v === "lien").length > 1) return "Le lien ne doit apparaître qu'une fois, à la fin du message.";
+  } else if (variables.includes("lien")) {
+    return "Ce message ne porte pas le lien de l'espace : retire {lien}.";
   }
   const inconnue = variables.find((v) => !permises.includes(v));
   if (inconnue !== undefined) return `Variable non permise : {${inconnue}}. Celles de ce message : ${permises.map((v) => `{${v}}`).join(", ")}.`;
@@ -353,8 +284,18 @@ export function verifierTexteSms(code: string, texte: string): string | null {
 export const ACTIONS_SMS = ["PAS_DE_REPONSE", "A_RAPPELER", "INTERESSE", "LIEN_ESPACE", "ENVOYER_LIEN", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL", "RELANCE_DEVIS", "RELANCE_PHOTOS"] as const;
 export type ActionSms = (typeof ACTIONS_SMS)[number];
 
-/** Une relance de devis : le devis et le rang de la relance (1 ou 2). La copie la range dans la trace. */
-export type RelanceSms = { documentId: string; rang: number };
+/**
+ * Une relance : de devis (le devis et le rang, 1 ou 2), ou photos (mission 14, partie 6 : `type: "PHOTOS"` et le rang,
+ * pour un espace ouvert sans photo ni simulation). La copie la range dans la trace (`metadata.relance`) : c'est elle
+ * qui compte les relances faites, deux au plus.
+ */
+export type RelanceDevisSms = { documentId: string; rang: number };
+export type RelancePhotosSms = { type: "PHOTOS"; rang: number };
+export type RelanceSms = RelanceDevisSms | RelancePhotosSms;
+
+export function estRelancePhotos(relance: RelanceSms | null | undefined): relance is RelancePhotosSms {
+  return Boolean(relance && "type" in relance && relance.type === "PHOTOS");
+}
 
 /** Le SMS prérempli rendu à l'écran (et à l'assistant) : rien n'est écrit tant qu'il n'est pas copié. */
 export type PropositionSms = {

@@ -77,6 +77,21 @@ export async function conversationDuNumero(saisie: string, rattachement: Rattach
   }
 }
 
+/**
+ * Mission 14 (partie 6) : les numéros qui ont répondu STOP, parmi ceux donnés (tels que saisis) — une lecture, sans
+ * jamais créer de conversation (à la différence de `conversationDuNumero`), archivées comprises. Rend un test sur une
+ * liste de numéros saisis : vrai si l'un d'eux est en STOP.
+ */
+export async function lecteurDuStop(saisies: readonly (string | null | undefined)[]): Promise<(numeros: readonly (string | null | undefined)[]) => boolean> {
+  const numeros = [...new Set(saisies.map((s) => normaliserTelephone(s)).filter((n): n is string => Boolean(n)))];
+  const enStop = numeros.length ? await prisma.conversationSms.findMany({ where: { ...AVEC_ARCHIVES, numero: { in: numeros }, stopLe: { not: null } }, select: { numero: true } }) : [];
+  const stop = new Set(enStop.map((c) => c.numero));
+  return (liste) => liste.some((s) => {
+    const numero = normaliserTelephone(s);
+    return numero !== null && stop.has(numero);
+  });
+}
+
 export async function rattacherConversation(id: string, rattachement: Rattachement): Promise<ConversationSms> {
   const lead = rattachement.leadId ? await prisma.lead.findUnique({ where: { id: rattachement.leadId }, select: { id: true, prenom: true, nom: true, clientId: true } }) : null;
   if (rattachement.leadId && !lead) throw new ErreurMetier("Contact introuvable.", 404);

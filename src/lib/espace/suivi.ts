@@ -1,11 +1,12 @@
 import prisma from "@/lib/prisma";
 import { tranche } from "@/lib/commun/pagination";
-import { estMotifRepondre } from "@/lib/dossiers/main";
+import { estMotifDeLien, estMotifRepondre } from "@/lib/dossiers/main";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones } from "@/lib/simulateur/types-surface";
-import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression } from "./etapes";
+import { attenteDuClient, etapeEspace, LIBELLES_ETAPE_ESPACE, progression } from "./etapes";
+import { dossiersAvecSimulation } from "./simulations-faites";
 import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, restantes as simulationsRestantes } from "./faits";
 import { confirmationRequise, jetonEspace, lienApercu, lienEspace } from "./liens";
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS } from "./projets";
@@ -77,6 +78,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
       dossier: {
         select: {
           id: true,
+          clientId: true,
+          leadId: true,
           clientNom: true,
           clientVille: true,
           clientTelephone: true,
@@ -104,11 +107,13 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
   });
   const vivants = espaces.filter((e) => !e.dossier.archiveLe);
   const dossierIds = vivants.map((e) => e.dossierId);
-  const [activites, envoisDuLien] = await Promise.all([
+  const [activites, envoisDuLien, avecSimulation] = await Promise.all([
     dossierIds.length
       ? prisma.dossierEvenement.groupBy({ by: ["dossierId"], where: { dossierId: { in: dossierIds }, direction: "ENTRANT", type: { startsWith: "ESPACE_" } }, _max: { createdAt: true } })
       : Promise.resolve([] as { dossierId: string; _max: { createdAt: Date | null } }[]),
     liensEnvoyes(),
+    // La règle de la relance photos : un client qui a fait une simulation n'est jamais « en attente de ses photos ».
+    dossiersAvecSimulation(vivants.map((e) => e.dossier)),
   ]);
   const activiteParDossier = new Map(activites.map((a) => [a.dossierId, a._max.createdAt]));
 
@@ -191,7 +196,9 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
 
     // QUI a la main : la règle unique du dossier (dossiers/main.ts), la même que le kanban et la fiche dossier.
     const main = mainDe({ etape: d.etape as EtapeDossier, prochaineActionDate: d.prochaineActionDate?.toISOString() ?? null, main: d.main === "MOI" || d.main === "CLIENT" ? d.main : null }, maintenant);
-    const motifLisible = d.mainMotif && !d.mainMotif.startsWith("Étape «") ? d.mainMotif : null;
+    // Mission 14 (partie 6) : un motif de lien (espace ouvert, lien envoyé) ne suppose pas ce qui manque ; ce que le
+    // client a vraiment à faire se lit sur l'étape de son espace (photos, projet, choix de simulation, devis…).
+    const motifLisible = d.mainMotif && !d.mainMotif.startsWith("Étape «") ? (estMotifDeLien(d.mainMotif) ? attenteDuClient(etape, { simulation: avecSimulation.has(d.id) }) : d.mainMotif) : null;
     let attente: LigneEspace["attente"];
     if (revoque) attente = { qui: "PERSONNE", libelle: "Lien désactivé" };
     else if (figeDuProjet(d.etape) === "NON_REALISE") attente = { qui: "PERSONNE", libelle: "Non réalisé" };

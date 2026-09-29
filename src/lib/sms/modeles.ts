@@ -7,7 +7,7 @@ import { remplirModele } from "./texte";
  * Les textes du catalogue SMS (`./catalogue`), tels que Lucas les a écrits.
  *
  * Chaque code du catalogue a une ligne en base (ModeleSms) : son texte, modifiable
- * dans Paramètres → SMS, et son interrupteur (les accusés et l'ancien circuit). Toute
+ * dans Paramètres → SMS, et son interrupteur (les deux accusés). Toute
  * lecture d'un texte passe par `texteDuCatalogue`. Seuls les deux accusés de
  * réception partent sans validation ; les autres SMS sont copiés par Lucas.
  */
@@ -36,8 +36,8 @@ export async function lireModele(code: string): Promise<ModeleVue | null> {
 
 /**
  * Le texte d'un code, rempli : la ligne en base (non archivée), sinon le texte de départ du catalogue.
- * L'interrupteur `actif` n'entre pas en compte : il ne concerne que les accusés et l'ancien circuit, dont
- * l'envoi se décide par `lireModele` ; ici, on veut toujours le texte que Lucas a écrit.
+ * L'interrupteur `actif` n'entre pas en compte : il ne concerne que les accusés, dont l'envoi se décide par
+ * `lireModele` ; ici, on veut toujours le texte que Lucas a écrit.
  * `remplirModele` retire proprement une variable vide : « Bonjour {prenom}, » sans prénom devient « Bonjour, ».
  */
 export async function texteDuCatalogue(code: string, variables: Record<string, string | null | undefined> = {}): Promise<string> {

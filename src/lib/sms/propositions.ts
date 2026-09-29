@@ -15,6 +15,11 @@ import { publierEvenementSms } from "./flux";
  * Le texte proposé reste sur la proposition (`contenu`), le texte validé aussi
  * (`contenuValide`), et tous deux sont recopiés sur le SMS envoyé : dans un
  * mois, on saura quelles formulations Lucas garde et lesquelles il réécrit.
+ *
+ * Mission 14 (partie 6) : plus rien ne crée de proposition « Envoyer un SMS »
+ * (l'ancien circuit de relances est retiré : les relances sont des SMS à copier).
+ * Celles déjà en base restent validables dans « À valider » jusqu'à leur
+ * expiration : leur exécution est gardée ici, telle quelle.
  */
 export const MOTIFS_SMS = ["INJOIGNABLE_LIEN", "INJOIGNABLE_J3", "RELANCE_PHOTOS", "RELANCE_SIMULATION", "RELANCE_DEVIS", "RELANCE_DERNIERE", "AUTRE"] as const;
 export type MotifSms = (typeof MOTIFS_SMS)[number];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, MessageSquare, RotateCcw, Save, Undo2, Zap } from "lucide-react";
+import { MessageSquare, RotateCcw, Save, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, CLASSE_SAISIE, Pastille, TitreSection, CARTE } from "@/components/pilotage/ui";
@@ -69,7 +69,8 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
         <p>Règles d&apos;écriture : parler du projet, pas de la pièce ; ne jamais promettre de simulation ; court et naturel (160 caractères, un SMS, quand il n&apos;y a pas de lien) ; le lien toujours à la fin.</p>
       </div>
 
-      {GROUPES_SMS.filter((groupe) => groupe !== "ANCIEN").map((groupe) =>
+      {/* Mission 14 (partie 6) : l'ancien circuit de relances est retiré, ses modèles archivés ; les relances sont des SMS à copier. */}
+      {GROUPES_SMS.map((groupe) =>
         duGroupe(groupe).length ? (
           <div key={groupe} className="mt-6">
             <h3 className="mb-2 text-[12px] font-medium tracking-wide text-[#8B919C] uppercase">{LIBELLES_GROUPE_SMS[groupe]}</h3>
@@ -81,21 +82,6 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
           </div>
         ) : null
       )}
-
-      {duGroupe("ANCIEN").length ? (
-        <details className="group mt-8">
-          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 text-[12px] font-medium tracking-wide text-[#8B919C] uppercase [&::-webkit-details-marker]:hidden">
-            <ChevronDown size={14} aria-hidden className="transition-transform group-open:rotate-180" />
-            {LIBELLES_GROUPE_SMS.ANCIEN}
-          </summary>
-          <p className="mb-3 text-[12.5px] leading-relaxed text-[#9CA3AF]">Encore lus par l&apos;ancien circuit de relances (tu valides, le fournisseur envoie), tels quels jusqu&apos;à son retrait.</p>
-          <div className="space-y-3">
-            {duGroupe("ANCIEN").map((modele) => (
-              <CarteModele key={modele.code} modele={modele} onChange={remplacer} />
-            ))}
-          </div>
-        </details>
-      ) : null}
     </section>
   );
 }
@@ -107,7 +93,7 @@ function CarteModele({ modele, onChange }: { modele: ModeleCatalogue; onChange: 
   const mesure = mesurerSms(exemple);
   const modifie = texte.trim() !== modele.texte;
   const refus = texte.trim() ? verifierTexteSms(modele.code, texte) : "Le texte du message est vide.";
-  // Ce qui peut partir par le fournisseur (facturé au SMS) : les accents à simplifier. Seuls les accusés et l'ancien circuit ont un interrupteur.
+  // Ce qui peut partir par le fournisseur (facturé au SMS) : les accents à simplifier. Seuls les accusés ont un interrupteur.
   const parLeFournisseur = modele.fournisseur;
   const interrupteur = aUnInterrupteur(modele);
   const coupe = interrupteur && !modele.actif;

@@ -2,7 +2,8 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { recalculerMain } from "@/lib/dossiers/main";
-import { CODES_SMS, porteLienEspace, type CodeSms, type RelanceSms } from "./catalogue";
+import { relanceDevisFaiteParSms, verifierRelanceParSms } from "@/lib/relances/etape";
+import { CODES_SMS, estRelancePhotos, porteLienEspace, type CodeSms, type RelanceSms } from "./catalogue";
 import { LONGUEUR_MAX_SMS } from "./envoi";
 
 /**
@@ -14,7 +15,12 @@ import { LONGUEUR_MAX_SMS } from "./envoi";
  *    soit son code) passe la main au client (dossiers/main.ts) et fait tomber
  *    « Lien pas encore envoyé » (espace/suivi.ts) : la même règle, lue sur le texte ;
  *  - une relance de devis garde `relance: { documentId, rang }` dans la trace,
- *    pour un devis que le client attend dans son espace (`devisARelancer`) ;
+ *    pour un devis que le client attend dans son espace (`devisARelancer`) :
+ *    elle compte (2 au plus, mail et SMS confondus), passe le dossier de « Devis
+ *    envoyé » à « Relance » comme le mail, et annule le mail de relance du même
+ *    rang qui attendait ou avait échoué (partie 6) — refusée si ce mail est
+ *    validé ou parti ; une relance photos garde `relance: { type: "PHOTOS",
+ *    rang }` (partie 6) ;
  *  - un SMS copié répond au message du client qui attendait (règle R2).
  * Un double toucher ne trace qu'une fois : même cible, même code, même texte en
  * moins de 10 minutes rend la trace existante. Rien n'est envoyé par le CRM.
@@ -23,13 +29,19 @@ import { LONGUEUR_MAX_SMS } from "./envoi";
 export const CODE_LIBRE = "LIBRE";
 const FENETRE_DOUBLON_MS = 10 * 60_000;
 
+/** Une relance (de devis, ou photos) : la forme partagée par la copie et la proposition du SMS. */
+export const schemaRelanceSms = z.union([
+  z.object({ type: z.literal("PHOTOS"), rang: z.number().int().min(1).max(2) }),
+  z.object({ documentId: z.string().min(1).max(40), rang: z.number().int().min(1).max(2) }),
+]);
+
 export const schemaCopie = z
   .object({
     code: z.enum([...CODES_SMS, CODE_LIBRE], "Code SMS inconnu."),
     texte: z.string("Le SMS est vide.").trim().min(1, "Le SMS est vide.").max(LONGUEUR_MAX_SMS, `SMS trop long (${LONGUEUR_MAX_SMS} caractères au plus).`),
     leadId: z.string().max(40).nullish(),
     dossierId: z.string().max(40).nullish(),
-    relance: z.object({ documentId: z.string().min(1).max(40), rang: z.number().int().min(1).max(2) }).nullish(),
+    relance: schemaRelanceSms.nullish(),
   })
   .refine((v) => v.leadId || v.dossierId, "Indique le contact ou le dossier concerné.");
 
@@ -96,10 +108,15 @@ export async function noterSmsCopie(entree: EntreeCopie, maintenant: Date = new 
   if (!texte) throw new ErreurMetier("Le SMS est vide.", 400);
   if (texte.length > LONGUEUR_MAX_SMS) throw new ErreurMetier(`SMS trop long (${LONGUEUR_MAX_SMS} caractères au plus).`, 400);
   const { dossierId, leadId } = await cibleDe(entree);
-  // Une relance se compte sur le dossier du devis : sans dossier, ou pour un autre dossier, elle est refusée.
-  if (entree.relance) {
-    if (!dossierId) throw new ErreurMetier("Une relance de devis se note sur son dossier : ce contact n'en a pas.", 409);
-    await devisARelancer(entree.relance.documentId, dossierId);
+  // Une relance se compte sur le dossier du devis (ou de l'espace) : sans dossier, ou pour un autre dossier, elle est refusée.
+  const relance = entree.relance ?? null;
+  if (relance) {
+    if (!dossierId) throw new ErreurMetier(`Une relance ${estRelancePhotos(relance) ? "photos" : "de devis"} se note sur son dossier : ce contact n'en a pas.`, 409);
+    if (!estRelancePhotos(relance)) {
+      await devisARelancer(relance.documentId, dossierId);
+      // Le mail du même rang validé (il part) ou parti : la relance est faite, le SMS en ferait une seconde.
+      await verifierRelanceParSms(relance);
+    }
   }
   const contenu = contenuCopie(entree.code, texte);
   const depuis = new Date(maintenant.getTime() - FENETRE_DOUBLON_MS);
@@ -113,8 +130,11 @@ export async function noterSmsCopie(entree: EntreeCopie, maintenant: Date = new 
 
   const deja = await prisma.dossierEvenement.findFirst({ where: { dossierId, type: "SMS_COPIE", contenu, createdAt: { gte: depuis } }, orderBy: { createdAt: "desc" }, select: { id: true } });
   if (deja) return { cible: "DOSSIER", dossierId, leadId, id: deja.id, deja: true, lien };
-  const metadata = { code: entree.code, texte, canal: "SMS", origine: entree.origine, ...(entree.relance ? { relance: { documentId: entree.relance.documentId, rang: entree.relance.rang } } : {}) };
+  const trace = relance ? (estRelancePhotos(relance) ? { type: "PHOTOS", rang: relance.rang } : { documentId: relance.documentId, rang: relance.rang }) : null;
+  const metadata = { code: entree.code, texte, canal: "SMS", origine: entree.origine, ...(trace ? { relance: trace } : {}) };
   const evenement = await prisma.dossierEvenement.create({ data: { dossierId, type: "SMS_COPIE", direction: "SORTANT", contenu, metadata: JSON.stringify(metadata) }, select: { id: true } });
+  // Partie 6 : la relance de devis faite par SMS — le dossier passe en « Relance », le mail du même rang ne partira pas.
+  if (relance && !estRelancePhotos(relance)) await relanceDevisFaiteParSms({ dossierId, documentId: relance.documentId, rang: relance.rang });
   // Un SMS avec le lien passe la main au client ; tout SMS copié répond au message du client qui attendait (R2).
   await recalculerMain(dossierId);
   return { cible: "DOSSIER", dossierId, leadId, id: evenement.id, deja: false, lien };

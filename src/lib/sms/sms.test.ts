@@ -53,15 +53,15 @@ describe("texte d'un SMS", () => {
   });
 
   // Mission 14 (partie 5) : l'exigence GSM-7 ne vaut que pour ce que le fournisseur peut envoyer (facturé au SMS) —
-  // drapeau `fournisseur` : les accusés, l'ancien circuit, le nouveau lien et la simulation en ligne. Les SMS copiés
-  // partent du téléphone de Lucas : le texte B dit « À très vite ».
+  // drapeau `fournisseur` : les accusés, le nouveau lien et la simulation en ligne (l'ancien circuit de relances est
+  // retiré à la partie 6). Les SMS copiés partent du téléphone de Lucas : le texte B dit « À très vite ».
   test("les messages envoyés par le fournisseur tiennent dans l'alphabet GSM-7, l'accusé en deux SMS au plus", () => {
     const parLeFournisseur = catalogue.CATALOGUE_SMS.filter((modele) => modele.fournisseur);
     assert.deepEqual(
       parLeFournisseur.map((modele) => modele.code),
-      ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES", "LIEN_ESPACE_NOUVEAU", "SIMULATION_PRETE", "INJOIGNABLE_J3", "RELANCE_PHOTOS", "RELANCE_SIMULATION", "RELANCE_DEVIS", "RELANCE_DEVIS_QUESTIONS", "RELANCE_DERNIERE"]
+      ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES", "LIEN_ESPACE_NOUVEAU", "SIMULATION_PRETE"]
     );
-    assert.ok(catalogue.CATALOGUE_SMS.filter((modele) => modele.automatique || modele.groupe === "ANCIEN").every((modele) => modele.fournisseur));
+    assert.ok(catalogue.CATALOGUE_SMS.filter((modele) => modele.automatique).every((modele) => modele.fournisseur));
     for (const modele of parLeFournisseur) {
       const mesure = texte.mesurerSms(modele.defaut.replace(/\{\w+\}/g, ""));
       assert.deepEqual(mesure.horsGsm, [], `${modele.code} contient des caractères hors GSM-7`);

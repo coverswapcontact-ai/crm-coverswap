@@ -10,8 +10,9 @@ import { EVENEMENT_COMPTEURS } from "./Navigation";
  * « À valider » n'est plus dans le menu, mais ce que le CRM propose continue
  * d'attendre une décision (dossier à classer « perdu — sans réponse », mail
  * préparé par l'agent…). Ce rappel n'apparaît que s'il y a quelque chose : il
- * mène à la file de validation, qui existe toujours. Les SMS proposés, eux, se
- * relisent directement dans la conversation (écran SMS) et ne sont pas comptés ici.
+ * mène à la file de validation, qui existe toujours. Mission 14 (partie 6) : les
+ * SMS proposés par l'ancien circuit (encore en base jusqu'à leur expiration) sont
+ * comptés aussi — l'écran SMS où ils se relisaient n'existe plus.
  */
 export function PropositionsEnAttente() {
   const [nombre, setNombre] = useState(0);
@@ -20,7 +21,7 @@ export function PropositionsEnAttente() {
     let actif = true;
     const charger = () =>
       appelApi<{ propositions: { type: string }[] }>("/api/validation?statut=EN_ATTENTE&limite=200")
-        .then(({ propositions }) => actif && setNombre(propositions.filter((p) => p.type !== "ENVOI_SMS").length))
+        .then(({ propositions }) => actif && setNombre(propositions.length))
         .catch(() => undefined);
     const minuterie = window.setTimeout(charger, 0);
     window.addEventListener(EVENEMENT_COMPTEURS, charger);

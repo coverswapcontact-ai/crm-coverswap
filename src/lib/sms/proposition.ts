@@ -6,7 +6,7 @@ import { issueDesMetadonnees, tentativesALaFin } from "@/lib/commercial/sans-rep
 import { jetonEspace, lienPourLeProjet, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { liensEnvoyes } from "@/lib/espace/suivi";
 import { estIssuDuSimulateur } from "@/lib/prospects/qualification";
-import type { ActionSms, CodeSms, PropositionSms, RelanceSms } from "./catalogue";
+import { estRelancePhotos, type ActionSms, type CodeSms, type PropositionSms, type RelanceSms } from "./catalogue";
 import { devisARelancer } from "./copie";
 import { texteDuCatalogue } from "./modeles";
 import { prenomDuContact } from "./texte";
@@ -26,7 +26,7 @@ export type DemandeSms = {
   dossierId?: string | null;
   /** Le rappel posé (PAS_DE_REPONSE : demain 18 h à défaut ; A_RAPPELER : « prochainement » sans date). */
   rappelLe?: Date | string | null;
-  /** RELANCE_DEVIS : le devis et le rang de la relance. */
+  /** RELANCE_DEVIS : le devis et le rang de la relance ; RELANCE_PHOTOS : `{ type: "PHOTOS", rang }` (partie 6). */
   relance?: RelanceSms | null;
   /** PAS_DE_REPONSE : les appels sans réponse d'affilée, cet appel compris (sinon lus sur le lead ou le dossier). */
   tentatives?: number | null;
@@ -153,7 +153,11 @@ async function espaceEtLien(contact: Contact): Promise<{ dossierId: string; lien
  *  - ENVOYER_LIEN (« SMS avec le lien ») → le premier lien comme ci-dessus s'il n'a jamais reçu de lien ni ouvert
  *    son espace ; LIEN_ESPACE_NOUVEAU s'il n'a reçu (ou ouvert) qu'un lien d'avant « Nouveau lien » ; sinon
  *    LIEN_ESPACE_RAPPEL ;
- *  - INJOIGNABLE_LIEN → INJOIGNABLE_LIEN ; LIEN_ESPACE_RAPPEL, RELANCE_PHOTOS → LIEN_ESPACE_RAPPEL ;
+ *  - INJOIGNABLE_LIEN → INJOIGNABLE_LIEN ; LIEN_ESPACE_RAPPEL → LIEN_ESPACE_RAPPEL ;
+ *  - RELANCE_PHOTOS (partie 6 : espace ouvert sans photo ni simulation) → comme ENVOYER_LIEN : LIEN_ESPACE_RAPPEL
+ *    si son lien lui a été communiqué (ou qu'il a ouvert son espace), LIEN_ESPACE s'il ne l'a jamais reçu (« à
+ *    nouveau » serait faux), LIEN_ESPACE_NOUVEAU s'il n'a reçu qu'un lien d'avant « Nouveau lien » ; la relance
+ *    `{ type: "PHOTOS", rang }` donnée suit jusqu'à la copie, qui la compte ;
  *  - RELANCE_DEVIS { documentId, rang } → RELANCE_DEVIS_1 ou RELANCE_DEVIS_2, pour un devis que le client attend
  *    dans son espace (`devisARelancer`), du dossier visé.
  * LIEN_ESPACE_SIMULATION suppose une simulation du site déjà dans l'espace (`simulationDansLEspace`).
@@ -161,9 +165,10 @@ async function espaceEtLien(contact: Contact): Promise<{ dossierId: string; lien
  */
 export async function proposerSms(entree: DemandeSms, maintenant: Date = new Date()): Promise<PropositionSms> {
   let dossierIdDemande = entree.dossierId ?? null;
+  const relance = entree.relance ?? null;
   if (entree.action === "RELANCE_DEVIS") {
-    if (!entree.relance) throw new ErreurMetier("Indique le devis à relancer et le rang de la relance.", 400);
-    dossierIdDemande = (await devisARelancer(entree.relance.documentId, dossierIdDemande)).dossierId;
+    if (!relance || estRelancePhotos(relance)) throw new ErreurMetier("Indique le devis à relancer et le rang de la relance.", 400);
+    dossierIdDemande = (await devisARelancer(relance.documentId, dossierIdDemande)).dossierId;
   }
   const contact = await contactDe({ leadId: entree.leadId, dossierId: dossierIdDemande });
   const rappel = entree.rappelLe ? new Date(entree.rappelLe) : null;
@@ -184,7 +189,7 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
       variables.quand = quandLisible(rappel, maintenant);
       break;
     case "RELANCE_DEVIS":
-      code = (entree.relance?.rang ?? 1) >= 2 ? "RELANCE_DEVIS_2" : "RELANCE_DEVIS_1";
+      code = (relance?.rang ?? 1) >= 2 ? "RELANCE_DEVIS_2" : "RELANCE_DEVIS_1";
       break;
     default: {
       const espace = await espaceEtLien(contact);
@@ -192,7 +197,7 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
       lien = espace.lien;
       const premier = async (): Promise<CodeSms> => ((await simulationDansLEspace(dossierId)) ? "LIEN_ESPACE_SIMULATION" : "LIEN_ESPACE");
       if (entree.action === "INTERESSE" || entree.action === "LIEN_ESPACE") code = await premier();
-      else if (entree.action === "ENVOYER_LIEN") code = espace.etat === "RAPPEL" ? "LIEN_ESPACE_RAPPEL" : espace.etat === "NOUVEAU" ? "LIEN_ESPACE_NOUVEAU" : await premier();
+      else if (entree.action === "ENVOYER_LIEN" || entree.action === "RELANCE_PHOTOS") code = espace.etat === "RAPPEL" ? "LIEN_ESPACE_RAPPEL" : espace.etat === "NOUVEAU" ? "LIEN_ESPACE_NOUVEAU" : await premier();
       else if (entree.action === "INJOIGNABLE_LIEN") code = "INJOIGNABLE_LIEN";
       else code = "LIEN_ESPACE_RAPPEL";
       variables.lien = lien;
@@ -208,6 +213,7 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
     leadId: contact.leadId,
     dossierId,
     ...(lien ? { lien } : {}),
-    ...(entree.action === "RELANCE_DEVIS" && entree.relance ? { relance: { documentId: entree.relance.documentId, rang: entree.relance.rang } } : {}),
+    ...(entree.action === "RELANCE_DEVIS" && relance && !estRelancePhotos(relance) ? { relance: { documentId: relance.documentId, rang: relance.rang } } : {}),
+    ...(entree.action === "RELANCE_PHOTOS" && estRelancePhotos(relance) ? { relance: { type: "PHOTOS" as const, rang: relance.rang } } : {}),
   };
 }

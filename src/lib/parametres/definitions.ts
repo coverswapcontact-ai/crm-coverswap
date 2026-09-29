@@ -121,7 +121,13 @@ export const DEFINITIONS_PARAMETRES = {
   },
   DELAI_RELANCE_DEVIS: {
     libelle: "Délai avant de proposer une relance de devis",
-    aide: "Nombre de jours sans réponse après l'envoi d'un devis avant que le système propose une relance (jamais envoyée sans validation). Sans valeur : 5 jours.",
+    aide: "Nombre de jours sans réponse après l'envoi d'un devis (ou la dernière relance) avant que le CRM propose de le relancer : le SMS à copier, et le mail à valider s'il a une adresse. Rien ne part tout seul ; deux relances au plus par devis. Sans valeur : 5 jours.",
+    nature: "jours",
+    groupe: "COMMERCIAL",
+  },
+  DELAI_RELANCE_PHOTOS: {
+    libelle: "Délai avant de relancer un espace sans photo",
+    aide: "Nombre de jours après l'ouverture de son espace (ou le dernier lien envoyé) sans aucune photo ni simulation avant que le CRM propose le SMS avec le lien de son espace, à copier. Rien ne part tout seul ; deux relances au plus par projet. Sans valeur : 3 jours.",
     nature: "jours",
     groupe: "COMMERCIAL",
   },

@@ -103,15 +103,16 @@ describe("le catalogue : un seul endroit pour les textes", () => {
     assert.equal(catalogue.definitionSms("DEVIS_PRET"), null, "archivé, hors du catalogue");
     assert.equal(catalogue.definitionSms("MERCI_ACCORD"), null);
     const groupes = catalogue.CATALOGUE_SMS.map((d) => d.groupe).filter((g, i, tous) => tous.indexOf(g) === i);
-    assert.deepEqual(groupes, ["AUTOMATIQUES", "APRES_APPEL", "ESPACE", "RELANCES", "ANCIEN"]);
+    // Mission 14 (partie 6) : l'ancien circuit de relances est retiré du catalogue (modèles archivés).
+    assert.deepEqual(groupes, ["AUTOMATIQUES", "APRES_APPEL", "ESPACE", "RELANCES"]);
+    for (const code of ["INJOIGNABLE_J3", "RELANCE_PHOTOS", "RELANCE_SIMULATION", "RELANCE_DEVIS", "RELANCE_DEVIS_QUESTIONS", "RELANCE_DERNIERE"]) assert.equal(catalogue.definitionSms(code), null, code);
     assert.deepEqual(catalogue.CATALOGUE_SMS.filter((d) => d.automatique).map((d) => d.code), ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES"]);
   });
 
-  test("règles d'écriture : le lien en fin de message, jamais de simulation promise ni de « pièce » (ancien circuit à part)", () => {
+  test("règles d'écriture : le lien en fin de message, jamais de simulation promise ni de « pièce »", () => {
     for (const d of catalogue.CATALOGUE_SMS) {
-      // Chaque texte de départ passe sa propre validation, ancien circuit compris : « Revenir au texte de départ » s'enregistre.
+      // Chaque texte de départ passe sa propre validation : « Revenir au texte de départ » s'enregistre.
       assert.equal(catalogue.verifierTexteSms(d.code, d.defaut), null, `${d.code} respecte ses propres règles`);
-      if (d.groupe === "ANCIEN") continue;
       if (d.lien) assert.ok(d.defaut.endsWith("{lien}"), `${d.code} finit par {lien}`);
       else assert.doesNotMatch(d.defaut, /\{lien\}/, `${d.code} n'a pas de lien`);
       assert.doesNotMatch(d.defaut, /je vous prépare|je vous envoie une simulation/i, `${d.code} ne promet pas de simulation`);
@@ -123,14 +124,10 @@ describe("le catalogue : un seul endroit pour les textes", () => {
     // Toute accolade doit être une variable exacte du code : « {prénom} » partirait tel quel chez le client.
     assert.equal(catalogue.verifierTexteSms("PAS_DE_REPONSE", "Bonjour {prénom}, je vous rappelle {quand}."), "Variable non permise : {prénom}. Celles de ce message : {prenom}, {quand}.");
     assert.match(catalogue.verifierTexteSms("LIEN_ESPACE", "Bonjour { prenom }, votre espace : {lien}") ?? "", /Variable non permise : \{ prenom \}/);
-    // L'ancien circuit garde son lien au milieu ; ses variables restent contrôlées.
-    assert.equal(catalogue.verifierTexteSms("RELANCE_PHOTOS", "Bonjour {prenom}, vos photos ici : {lien} Merci !"), null);
-    assert.match(catalogue.verifierTexteSms("RELANCE_PHOTOS", "Bonjour {prenom}, je vous rappelle {quand} : {lien}") ?? "", /Variable non permise : \{quand\}/);
-
-    // Le lien se lit sur le texte ; seuls les accusés et l'ancien circuit ont un interrupteur.
+    // Le lien se lit sur le texte ; seuls les accusés ont un interrupteur (l'ancien circuit est retiré, partie 6).
     assert.equal(catalogue.porteLienEspace("Votre espace : https://coverswap.fr/e/AB12CD-xyz"), true);
     assert.equal(catalogue.porteLienEspace("Je vous rappelle demain vers 18 h."), false);
-    assert.deepEqual(catalogue.CATALOGUE_SMS.filter((d) => catalogue.aUnInterrupteur(d)).map((d) => d.code), ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES", "INJOIGNABLE_J3", "RELANCE_PHOTOS", "RELANCE_SIMULATION", "RELANCE_DEVIS", "RELANCE_DEVIS_QUESTIONS", "RELANCE_DERNIERE"]);
+    assert.deepEqual(catalogue.CATALOGUE_SMS.filter((d) => catalogue.aUnInterrupteur(d)).map((d) => d.code), ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES"]);
   });
 
   test("texteDuCatalogue : le texte de départ sans ligne, le texte modifié en base, « Bonjour, » sans prénom", async () => {
@@ -164,14 +161,10 @@ describe("le catalogue : un seul endroit pour les textes", () => {
     await assert.rejects(modeles.modifierModele(pasDeReponse.id, { texte: "Je vous rappelle {quand} : {lien}" }), /ne porte pas le lien de l'espace : retire \{lien\}/);
     await assert.rejects(modeles.modifierModele(pasDeReponse.id, { texte: "Je vous rappelle {quand}, devis de {montant}." }), /Variable non permise : \{montant\}\. Celles de ce message : \{prenom\}, \{quand\}\./);
     await assert.rejects(modeles.modifierModele(pasDeReponse.id, { texte: "Bonjour {prénom}, je vous rappelle {quand}." }), /Variable non permise : \{prénom\}/);
-    // L'ancien circuit, tel quel jusqu'à son retrait : son texte de départ (lien au milieu) s'enregistre.
-    const ancien = await modele("RELANCE_PHOTOS");
-    const retouche = "Bonjour {prenom}, Lucas de CoverSwap. Avez-vous pu prendre 2 ou 3 photos ? Deposez-les ici : {lien} Merci !";
-    assert.equal((await modeles.modifierModele(ancien.id, { texte: retouche })).texte, retouche);
-    assert.equal((await modeles.modifierModele(ancien.id, { texte: catalogue.definitionSms("RELANCE_PHOTOS")!.defaut })).texte, catalogue.definitionSms("RELANCE_PHOTOS")!.defaut);
-    // L'interrupteur seul (accusés, ancien circuit) ne passe pas par la règle du texte.
-    assert.equal((await modeles.modifierModele(ancien.id, { actif: false })).actif, false);
-    assert.equal((await modeles.modifierModele(ancien.id, { actif: true })).actif, true);
+    // L'interrupteur seul (les accusés) ne passe pas par la règle du texte (l'ancien circuit est retiré, partie 6).
+    const accuse = await modele("ACCUSE_RECEPTION_HORS_HORAIRES");
+    assert.equal((await modeles.modifierModele(accuse.id, { actif: false })).actif, false);
+    assert.equal((await modeles.modifierModele(accuse.id, { actif: true })).actif, true);
   });
 
   test("listerCatalogue : l'ordre du catalogue, le texte en base, sans les codes archivés", async () => {
@@ -472,7 +465,9 @@ describe("migration catalogue-sms-14-5", () => {
   test("textes de l'espace réécrits (le journal garde l'ancien), code manquant posé, coupures sans interrupteur levées, DEVIS_PRET et MERCI_ACCORD archivés, rejouable", async () => {
     const ancien = "Bonjour {prenom}, c'est Lucas de CoverSwap. Comme convenu, voici votre espace personnel pour déposer 2 ou 3 photos : {lien} Je vous prépare une simulation dès que je les ai.";
     for (const code of ["LIEN_ESPACE", "LIEN_ESPACE_SIMULATION", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL", "SIMULATION_PRETE"]) await prisma.modeleSms.update({ where: { code }, data: { texte: code === "LIEN_ESPACE" ? ancien : `Ancien texte de ${code} : {lien} Lucas, CoverSwap` } });
-    await prisma.modeleSms.update({ where: { code: "RELANCE_PHOTOS" }, data: { texte: "Texte retouché par Lucas : {lien}" } });
+    // L'ancien circuit (retiré du catalogue à la partie 6) tel qu'il était en base : cette migration n'y touche pas.
+    await prisma.modeleSms.create({ data: { code: "RELANCE_PHOTOS", libelle: "Relance J+2 : photos non déposées", texte: "Texte retouché par Lucas : {lien}", ordre: 30 } });
+    await prisma.modeleSms.create({ data: { code: "RELANCE_DERNIERE", libelle: "Dernière relance J+10", texte: "Bonjour {prenom}, dernier message : {lien}", ordre: 31 } });
     // Coupés par l'écran d'avant : un code sans interrupteur est remis actif, l'ancien circuit garde sa coupure.
     for (const code of ["LIEN_ESPACE_NOUVEAU", "PAS_DE_REPONSE", "RELANCE_DERNIERE"]) await prisma.modeleSms.update({ where: { code }, data: { actif: false } });
     for (const [code, texte] of [["DEVIS_PRET", "Bonjour {prenom}, votre devis est dans votre espace : {lien}"], ["MERCI_ACCORD", "Merci {prenom}, votre accord est bien enregistré !"]]) {
@@ -508,7 +503,8 @@ describe("migration catalogue-sms-14-5", () => {
     assert.deepEqual(await executerMigrationsDonnees(), []);
     assert.equal((await modele("LIEN_ESPACE")).texte, "Bonjour {prenom}, voici votre espace : {lien}");
     const noms = (await import("@/lib/base/migrations")).MIGRATIONS_DONNEES.map((m) => m.nom);
-    assert.equal(noms.at(-1), "catalogue-sms-14-5");
+    // Partie 6 : la migration « relances-un-circuit-14-6 » vient après elle.
+    assert.ok(noms.indexOf("relances-un-circuit-14-6") > noms.indexOf("catalogue-sms-14-5"), noms.join(", "));
     assert.ok(noms.indexOf("catalogue-sms-14-5") > noms.indexOf("appels-des-leads-14-3") && noms.includes("appels-des-leads-14-3"), noms.join(", "));
   });
 });

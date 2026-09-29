@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { EMETTEUR, LIBELLES_ETAPE } from "@/lib/dossiers/constants";
-import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
+import { effetsDuChangementEtape } from "@/lib/dossiers/transitions";
+import { passerEnRelance } from "@/lib/relances/etape";
 import { ErreurDefinitive } from "@/lib/taches/registre";
 import { definirProposition } from "@/lib/validation/definitions";
 import { lireEntetes } from "@/lib/messages/stockage";
@@ -169,11 +170,8 @@ export const propositionEnvoiMail = definirProposition({
         if (contenu.documentIds.length > 0) {
           await tx.document.updateMany({ where: { id: { in: contenu.documentIds }, statut: "GENERE" }, data: { statut: "ENVOYE" } });
         }
-        if (contenu.motif !== "RELANCE_DEVIS") return null;
-        const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
-        return dossier?.etape === "DEVIS_ENVOYE"
-          ? appliquerChangementEtape(tx, { dossierId, de: "DEVIS_ENVOYE", vers: "RELANCE", nature: "AUTOMATIQUE", raison: "relance envoyée par mail" })
-          : null;
+        // Mission 14 (partie 6) : la même fonction que la relance copiée par SMS.
+        return contenu.motif === "RELANCE_DEVIS" ? passerEnRelance(tx, dossierId, "relance envoyée par mail") : null;
       });
       if (changement) await effetsDuChangementEtape(changement);
     }

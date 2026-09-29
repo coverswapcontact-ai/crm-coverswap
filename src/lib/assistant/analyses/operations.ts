@@ -1,4 +1,6 @@
 import { z } from "zod/v4";
+import { lireDelaiRelancePhotos } from "@/lib/relances/photos";
+import { relancesProposables } from "@/lib/relances/proposables";
 import { lireDelaiRelance } from "@/lib/relances/service";
 import prisma from "@/lib/prisma";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
@@ -48,15 +50,17 @@ export async function analyseOperations(maintenant: Date = new Date()) {
   const aujourdhui = jourParis(maintenant);
   const debutJour = new Date(`${aujourdhui}T00:00:00+02:00`);
   const dans30 = new Date(maintenant.getTime() + 30 * 86_400_000);
-  const [planifies, sansDate, actions, rappels, relancesSequences, devisARelancer, delaiRelance, consignes, sante] = await Promise.all([
+  const [planifies, sansDate, actions, rappels, relancesSequences, relances, delaiRelance, delaiPhotos, consignes, sante] = await Promise.all([
     prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["PLANIFIE", "CHANTIER"] }, dateChantier: { not: null } }, select: { id: true, clientNom: true, clientVille: true, etape: true, dateChantier: true, objet: true }, orderBy: { dateChantier: "asc" } }),
     prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["SIGNE", "PLANIFIE"] }, dateChantier: null }, select: { id: true, clientNom: true, etape: true, updatedAt: true } }),
     prisma.dossier.findMany({ where: { archiveLe: null, prochaineAction: { not: null }, etape: { notIn: ["ENCAISSE", "PERDU"] } }, select: { id: true, clientNom: true, etape: true, prochaineAction: true, prochaineActionDate: true }, orderBy: { prochaineActionDate: "asc" } }),
     // Mission 14 : les rappels de l'onglet Leads (ni perdus, ni avec un dossier), en retard dès l'heure passée.
     rappelsDesLeads(maintenant),
     prisma.inscriptionSequence.findMany({ where: { statut: { in: ["EN_COURS", "EN_VALIDATION"] } }, select: { statut: true, prochainEnvoiLe: true, sequence: { select: { nom: true, mode: true } } } }),
-    prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["DEVIS_ENVOYE", "RELANCE"] } }, select: { id: true, clientNom: true, etape: true, documents: { where: { type: "DEVIS", numero: { not: null }, archiveLe: null, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { dateEmission: "desc" }, take: 1, select: { numero: true, dateEmission: true, totalHt: true } } } }),
+    // Mission 14 (partie 6) : LA liste des relances proposables (feuille « Relances », voir_relances), pas une seconde règle.
+    relancesProposables(maintenant),
     lireDelaiRelance(maintenant),
+    lireDelaiRelancePhotos(maintenant),
     lireConsignes(),
     santeSysteme(maintenant),
   ]);
@@ -69,24 +73,22 @@ export async function analyseOperations(maintenant: Date = new Date()) {
   const enRetardActions = actions.filter((a) => a.prochaineActionDate && a.prochaineActionDate < debutJour);
   const rappelsEnRetard = rappels.filter((r) => r.enRetard);
   const delai = delaiRelance;
-  const devisDus = devisARelancer
-    .map((d) => ({ dossierId: d.id, client: d.clientNom, etape: LIBELLES_ETAPE[d.etape as EtapeDossier], numero: d.documents[0]?.numero ?? null, montant: d.documents[0]?.totalHt ?? null, emisLe: d.documents[0]?.dateEmission ?? null, joursDepuis: d.documents[0]?.dateEmission ? Math.floor(joursEntre(d.documents[0].dateEmission, maintenant)) : null }))
-    .filter((d) => d.joursDepuis === null || d.joursDepuis >= delai.jours)
-    .sort((a, b) => (b.joursDepuis ?? 0) - (a.joursDepuis ?? 0));
+  const devisDus = relances.devis.map((d) => ({ dossierId: d.dossierId, client: d.clientNom, numero: d.numero, montant: d.totalHt, emisLe: d.emisLe, joursDepuis: d.joursDepuisEmission, rang: d.rang }));
+  const photosDues = relances.photos.map((p) => ({ dossierId: p.dossierId, client: p.clientNom, joursDepuisOuverture: p.joursDepuisOuverture, rang: p.rang }));
   const chantiersSur30Jours = aVenir.filter((c) => c.dateChantier < dans30).length;
   return {
     calculeLe: maintenant.toISOString(),
     definitions: {
       capacite: capacite !== null ? `Capacité (${Number.isFinite(capaciteParametre) && capaciteParametre > 0 ? "Paramètres → Pilotage de l'activité" : "consignes"}) : ${capacite} chantiers par mois (≈ ${Math.round((capacite * 12) / 52)} par semaine).` : "Aucune capacité posée (Paramètres → Pilotage de l'activité, CAPACITE_CHANTIERS_MOIS).",
       charge: "Dossiers « planifié » ou « chantier » avec une date, par semaine (du lundi).",
-      relances: `Devis émis, sans accord, sur un dossier « devis envoyé » ou « relance », depuis au moins ${delai.jours} jours (paramètre DELAI_RELANCE_DEVIS${delai.parametre ? "" : ", non renseigné : 5 jours par défaut"}) ; plus les séquences mail en cours.`,
+      relances: `Les relances proposables (celles de la feuille « Relances » et de voir_relances) : devis sans réponse sur un dossier « devis envoyé » ou « relance », ${delai.jours} jours après le devis ou la dernière relance (paramètre DELAI_RELANCE_DEVIS${delai.parametre ? "" : ", non renseigné : 5 jours par défaut"}), mail ou SMS, deux au plus ; espaces ouverts sans photo ni simulation depuis ${delaiPhotos.jours} jours (DELAI_RELANCE_PHOTOS) ; plus les séquences mail en cours.`,
       retards: "Actions planifiées dont la date est passée, rappels de leads passés (ceux de l'onglet Leads, en retard dès l'heure passée ; un lead perdu ou avec un dossier n'en a pas : le rappel vit sur le dossier), chantiers « planifié » dont la date est passée, dossiers signés sans date de chantier.",
     },
     capacite: { mensuelle: capacite, chantiersSur30Jours, resteSur30Jours: capacite !== null ? capacite - chantiersSur30Jours : null },
     chantiers: { aVenir: aVenir.slice(0, 20).map((c) => ({ ...c, dateChantier: c.dateChantier.toISOString().slice(0, 10) })), total: aVenir.length, parSemaine: chargeParSemaine(chantiers, maintenant, capacite), datePassee: datePassee.map((c) => ({ dossierId: c.id, client: c.client, dateChantier: c.dateChantier.toISOString().slice(0, 10) })), sansDate: sansDate.map((d) => ({ dossierId: d.id, client: d.clientNom, etape: LIBELLES_ETAPE[d.etape as EtapeDossier], depuisJours: Math.floor(joursEntre(d.updatedAt, maintenant)) })) },
     actions: { planifiees: actions.slice(0, 30).map((a) => ({ dossierId: a.id, client: a.clientNom, etape: LIBELLES_ETAPE[a.etape as EtapeDossier], action: a.prochaineAction, le: a.prochaineActionDate?.toISOString().slice(0, 10) ?? null, enRetard: Boolean(a.prochaineActionDate && a.prochaineActionDate < debutJour) })), total: actions.length, enRetard: enRetardActions.length },
     rappels: { aVenir: rappels.filter((r) => !r.enRetard).slice(0, 20).map((r) => ({ leadId: r.leadId, nom: r.nom, le: r.le.toISOString() })), enRetard: rappelsEnRetard.map((r) => ({ leadId: r.leadId, nom: r.nom, le: r.le.toISOString(), joursDeRetard: Math.floor(joursEntre(r.le, maintenant)) })) },
-    relances: { devisDus: devisDus.slice(0, 20), nombreDevisDus: devisDus.length, sequencesEnCours: relancesSequences.length, sequencesEnValidation: relancesSequences.filter((s) => s.statut === "EN_VALIDATION").length, prochainEnvoiSequence: relancesSequences.map((s) => s.prochainEnvoiLe).filter((d): d is Date => Boolean(d)).sort((a, b) => a.getTime() - b.getTime())[0]?.toISOString() ?? null },
+    relances: { devisDus: devisDus.slice(0, 20), nombreDevisDus: devisDus.length, photosDues: photosDues.slice(0, 20), nombrePhotosDues: photosDues.length, sequencesEnCours: relancesSequences.length, sequencesEnValidation: relancesSequences.filter((s) => s.statut === "EN_VALIDATION").length, prochainEnvoiSequence: relancesSequences.map((s) => s.prochainEnvoiLe).filter((d): d is Date => Boolean(d)).sort((a, b) => a.getTime() - b.getTime())[0]?.toISOString() ?? null },
     retards: { actions: enRetardActions.length, rappels: rappelsEnRetard.length, chantiersDatePassee: datePassee.length, signesSansDate: sansDate.length, total: enRetardActions.length + rappelsEnRetard.length + datePassee.length + sansDate.length },
     sante,
   };
@@ -96,7 +98,7 @@ export const outilManagerOperations = definirOutil({
   nom: "manager_operations",
   titre: "Manager opérations : chantiers, charge, actions, relances, retards, santé",
   description:
-    "État du jour des opérations : chantiers planifiés (liste et charge par semaine sur 6 semaines face à la capacité des consignes, reste disponible sur 30 jours), actions planifiées sur les dossiers, rappels de leads à venir et en retard, relances dues (devis sans réponse depuis le délai paramétré, séquences mail en cours), retards (actions et rappels passés, chantiers « planifié » à date passée, dossiers signés sans date), santé du système. Sert à « qu'est-ce que je dois faire en priorité cette semaine ? ».",
+    "État du jour des opérations : chantiers planifiés (liste et charge par semaine sur 6 semaines face à la capacité des consignes, reste disponible sur 30 jours), actions planifiées sur les dossiers, rappels de leads à venir et en retard, relances dues (les relances proposables : devis sans réponse depuis le délai paramétré, mail ou SMS, deux au plus ; espaces sans photo ni simulation ; séquences mail en cours), retards (actions et rappels passés, chantiers « planifié » à date passée, dossiers signés sans date), santé du système. Sert à « qu'est-ce que je dois faire en priorité cette semaine ? ».",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {
@@ -106,7 +108,7 @@ export const outilManagerOperations = definirOutil({
       `Chantiers à venir : ${a.chantiers.total} (${a.capacite.chantiersSur30Jours} sur 30 jours${a.capacite.resteSur30Jours !== null ? `, reste ${pluriel(a.capacite.resteSur30Jours, "place")}` : ""}). Par semaine : ${a.chantiers.parSemaine.map((s) => `${format.jourCourt(s.semaineDu)} : ${s.chantiers}${s.capacite !== null ? `/${s.capacite}` : ""}`).join(" · ")}.${a.chantiers.aVenir.length ? ` Prochains : ${a.chantiers.aVenir.slice(0, 5).map((c) => `${c.client} le ${format.jourCourt(c.dateChantier)}`).join(", ")}.` : ""}`,
       `Actions planifiées : ${a.actions.total}, dont ${a.actions.enRetard} en retard${a.actions.planifiees.filter((x) => x.enRetard).length ? ` (${a.actions.planifiees.filter((x) => x.enRetard).slice(0, 5).map((x) => `${x.client} : ${x.action}`).join(" · ")})` : ""}.`,
       `Rappels de leads : ${a.rappels.aVenir.length} à venir, ${a.rappels.enRetard.length} en retard${a.rappels.enRetard.length ? ` (${a.rappels.enRetard.slice(0, 5).map((r) => `${r.nom}, ${r.joursDeRetard ? `${r.joursDeRetard} j` : "aujourd'hui"}`).join(" · ")})` : ""}.`,
-      `Relances dues : ${a.relances.nombreDevisDus} devis sans réponse${a.relances.devisDus.length ? ` (${a.relances.devisDus.slice(0, 5).map((d) => `${d.client}${d.montant !== null ? ` ${format.euros(d.montant)}` : ""}, ${d.joursDepuis ?? "?"} j`).join(" · ")})` : ""} ; ${pluriel(a.relances.sequencesEnCours, "séquence")} mail en cours${a.relances.sequencesEnValidation ? `, ${a.relances.sequencesEnValidation} à valider` : ""}.`,
+      `Relances dues : ${a.relances.nombreDevisDus} devis sans réponse${a.relances.devisDus.length ? ` (${a.relances.devisDus.slice(0, 5).map((d) => `${d.client} ${format.euros(d.montant)}, ${d.joursDepuis} j, relance ${d.rang}/2`).join(" · ")})` : ""} ; ${pluriel(a.relances.nombrePhotosDues, "espace")} sans photo ni simulation${a.relances.photosDues.length ? ` (${a.relances.photosDues.slice(0, 5).map((p) => `${p.client}, ${p.joursDepuisOuverture} j`).join(" · ")})` : ""} ; ${pluriel(a.relances.sequencesEnCours, "séquence")} mail en cours${a.relances.sequencesEnValidation ? `, ${a.relances.sequencesEnValidation} à valider` : ""}.`,
       `Retards : ${a.retards.total} (${a.retards.actions} actions, ${a.retards.rappels} rappels, ${a.retards.chantiersDatePassee} chantiers à date passée, ${a.retards.signesSansDate} signés sans date${a.chantiers.sansDate.length ? ` : ${a.chantiers.sansDate.slice(0, 4).map((d) => d.client).join(", ")}` : ""}).`,
       `Santé : ${pluriel(a.sante.taches.enEchec.length, "tâche")} en échec, ${pluriel(a.sante.alertes.length, "alerte")}${a.sante.google?.coupee ? ", Google COUPÉ" : ""}${a.sante.ia && !a.sante.ia.cleApi ? ", clé Anthropic absente" : ""}.`,
     ].join("\n");

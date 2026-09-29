@@ -166,7 +166,8 @@ describe("B3 — dossier ouvert depuis l'espace : objet et source", () => {
     await service.enregistrerProjet(await espaceDe(c.espaceId), PROJET_CUISINE);
     await validations.validerProjet(await espaceDe(c.espaceId), "CLIENT");
     const d = await dossierDe(c.dossierId);
-    assert.deepEqual([d.objet, d.source], ["Recouvrement de cuisine", "ESPACE_CLIENT"]);
+    // Mission 14 (R3) : une famille, une prestation choisie : l'objet la nomme.
+    assert.deepEqual([d.objet, d.source], ["Recouvrement de cuisine : façades hautes", "ESPACE_CLIENT"]);
   });
 
   test("la migration pose objet et source sur les projets déjà validés, une fois", async () => {

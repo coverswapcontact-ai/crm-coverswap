@@ -2,7 +2,7 @@
 
 /** Ce qu'une affaire attend, et de qui. */
 export type GroupeAffaire =
-  | "REPONDRE" // un SMS du client attend une réponse
+  | "REPONDRE" // un SMS, un mail ou un message d'espace du client attend une réponse
   | "RAPPELER" // nouveau contact, rappel dû, appel resté sans réponse
   | "SIMULATION" // photos reçues : à moi de préparer la simulation
   | "DEVIS" // simulation choisie : à moi de faire le devis

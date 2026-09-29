@@ -6,7 +6,7 @@ import { alerter } from "@/lib/alertes/canaux";
 import { idPhoto, lirePhotos } from "@/lib/dossiers/stockage";
 import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "@/lib/dossiers/transitions";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
-import { objetDepuisFamilles } from "@/lib/dossiers/objet";
+import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, resumerProjet, type ProjetClient } from "./projet";
 import { lireSelection } from "@/lib/prestations/prestations";
@@ -43,7 +43,7 @@ async function prevenir(dossierId: string, titre: string, texte: string, urgence
 }
 
 async function dossierDe(dossierId: string) {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, etape: true, clientNom: true, clientTelephone: true, prochaineAction: true, photos: true, prestations: true, objet: true, source: true, lead: { select: { typeProjet: true } } } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, etape: true, clientNom: true, clientTelephone: true, prochaineAction: true, photos: true, prestations: true, objet: true, objetManuelLe: true, source: true, lead: { select: { typeProjet: true } } } });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
   return dossier;
 }
@@ -91,12 +91,20 @@ export async function validerProjet(espace: EspaceClient, auteur: Auteur): Promi
       await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Suivre ses simulations, ou lui en préparer une (projet validé)", prochaineActionDate: maintenant } });
     }
     // Mission 13 (B3) : un dossier ouvert sans objet ni source le reçoit du projet validé — ce que le client veut rénover,
-    // venu de son espace. Un objet ou une source déjà écrits ne bougent pas.
-    const complement = complementDuDossier(dossier, projet);
-    if (complement) await prisma.dossier.update({ where: { id: espace.dossierId }, data: complement });
+    // venu de son espace. Une source déjà écrite ne bouge pas.
+    // Mission 14 (R3) : l'objet suit la famille validée (même s'il venait du lead), sauf si Lucas l'a écrit à la main.
+    const complement = { ...complementDuDossier(dossier, projet), ...objetSuivi(dossier, projet) };
+    if (Object.keys(complement).length) await prisma.dossier.update({ where: { id: espace.dossierId }, data: complement });
   });
   if (dossier.etape === "QUALIFICATION") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "QUALIFICATION", "SIMULATION", "AUTOMATIQUE", RAISON_PROJET_VALIDE));
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet), 3, dossier.clientTelephone);
+}
+
+/** Mission 14 (R3) : l'objet d'après le projet validé, s'il change et que personne ne l'a écrit à la main. Pure. */
+export function objetSuivi(dossier: { objet: string; objetManuelLe: Date | null }, projet: Pick<ProjetClient, "familles"> | null): { objet?: string } {
+  if (dossier.objetManuelLe) return {};
+  const objet = objetDepuisProjet(projet);
+  return objet && objet !== dossier.objet ? { objet } : {};
 }
 
 /** Objet et source qui manquent au dossier, d'après le projet validé (mission 13, B3). Pure. */

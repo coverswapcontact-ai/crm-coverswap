@@ -26,7 +26,7 @@ import { ACTEUR, prevenir } from "./alertes";
 import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
-import { composerFaits, dateSignature, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
+import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { pluriel } from "@/lib/commun/format";
 
@@ -273,7 +273,8 @@ export async function chargerProjet(espace: EspaceClient) {
       prestations: true,
       client: { select: { prenom: true, nomFamille: true, categorie: true } },
       lead: { select: { prenom: true, nom: true, typeProjet: true, source: true, tailleCuisine: true, delaiProjet: true, delaiProjetTexte: true, occupation: true } },
-      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
+      // Mission 14 (R4) : les mêmes colonnes que les autres lecteurs de l'espace (faits.ts).
+      documents: lectureDesDevis(),
       accords: { orderBy: { createdAt: "desc" } },
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
       evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, createdAt: true, survenuLe: true } },

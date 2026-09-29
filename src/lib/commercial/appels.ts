@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { ecrireNote } from "@/lib/dossiers/dossiers";
+import { recalculerMain } from "@/lib/dossiers/main";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type SuiteAppel } from "./constantes";
 import { noterIssueSurNote } from "./notes-appel";
@@ -72,6 +73,8 @@ export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<
     if (entree.issue === "PAS_INTERESSE" && dossier && dossier.etape !== "PERDU") {
       await changerEtape(dossierId, { vers: "PERDU", motifPerte: "PROJET_ABANDONNE", perteCommentaire: entree.note || "Pas intéressé (dit au téléphone)" });
     }
+    // Mission 14 (R2) : un appel abouti répond au message du client qui attendait (la main n'y est plus épinglée).
+    await recalculerMain(dossierId);
   } else if (leadId) {
     await prisma.$transaction(async (tx) => {
       await tx.interaction.create({ data: { leadId: leadId!, type: "APPEL", contenu } });

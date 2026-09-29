@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
 import { lireLignes } from "@/lib/dossiers/stockage";
 import type { FaitsEspace } from "./etapes";
@@ -38,9 +39,50 @@ export type EncaissementLu = { montant: number; moyen: string | null; recuLe: Da
 
 export const STATUTS_DEVIS_EN_VIGUEUR = ["GENERE", "ENVOYE", "ACCEPTE"] as const;
 
-/** Le devis que voit le client : le devis accepté s'il y en a un, sinon le dernier émis encore en vigueur. */
-export function devisEnVigueur<T extends Pick<DevisLu, "statut" | "createdAt" | "numero">>(devis: T[]): T | null {
-  const vivants = devis.filter((d) => d.numero && (STATUTS_DEVIS_EN_VIGUEUR as readonly string[]).includes(d.statut)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+/**
+ * Mission 14 (R4) : les colonnes d'un devis que lisent l'espace du client, ses cartes « Mes projets », le bloc
+ * « Espace client » du dossier, l'onglet Espaces clients et le contrôle de cohérence — les mêmes partout
+ * (dont `visibleEspace`, sans laquelle un devis masqué passerait pour « le devis »).
+ */
+export const SELECT_DEVIS_LU = {
+  id: true,
+  numero: true,
+  objet: true,
+  lignes: true,
+  totalHt: true,
+  acomptePct: true,
+  statut: true,
+  origine: true,
+  dateEmission: true,
+  createdAt: true,
+  pdfPath: true,
+  libelleVariante: true,
+  visibleEspace: true,
+  consultations: true,
+  consulteLe: true,
+} as const satisfies Prisma.DocumentSelect;
+
+/**
+ * Mission 14 : ce que le client voit de ses documents (« Mes documents », les PDF de son espace) — un devis masqué
+ * seulement s'il est accepté, la règle de « proposé » (`service.ts`) et de « le devis » (`devisEnVigueur`).
+ */
+export const VISIBLE_DU_CLIENT: Prisma.DocumentWhereInput = { OR: [{ type: { not: "DEVIS" } }, { visibleEspace: true }, { statut: "ACCEPTE" }] };
+
+/** La lecture des devis d'un dossier pour l'espace (`include`/`select` Prisma) ; `avecNonRetenus` : l'historique, pour Lucas. */
+export function lectureDesDevis(options: { avecNonRetenus?: boolean } = {}) {
+  const statuts: string[] = options.avecNonRetenus ? [...STATUTS_DEVIS_EN_VIGUEUR, "NON_RETENU"] : [...STATUTS_DEVIS_EN_VIGUEUR];
+  return { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: statuts } }, orderBy: { createdAt: "desc" as const }, select: SELECT_DEVIS_LU };
+}
+
+/**
+ * Le devis que voit le client : le devis accepté s'il y en a un, sinon le dernier émis encore en vigueur.
+ * Mission 14 : un devis masqué dans l'espace n'est « le devis » que s'il est accepté (même règle que « proposé »).
+ * L'ordre reste celui de la création (comme `devisProposes`) : le dernier devis fait ou déposé est « le devis ».
+ */
+export function devisEnVigueur<T extends Pick<DevisLu, "statut" | "createdAt" | "numero" | "visibleEspace">>(devis: T[]): T | null {
+  const vivants = devis
+    .filter((d) => d.numero && (STATUTS_DEVIS_EN_VIGUEUR as readonly string[]).includes(d.statut) && (d.visibleEspace !== false || d.statut === "ACCEPTE"))
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return vivants.find((d) => d.statut === "ACCEPTE") ?? vivants[0] ?? null;
 }
 

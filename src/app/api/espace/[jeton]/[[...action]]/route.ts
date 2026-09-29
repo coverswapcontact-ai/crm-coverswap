@@ -6,9 +6,8 @@ import prisma from "@/lib/prisma";
 import { analyser } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { ipDepasseLaLimite } from "@/lib/acces/limite-site";
-import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { accesDuJeton, apercuValide, confirmationRequise, confirmerTelephone } from "@/lib/espace/liens";
-import { alerterConfirmationBloquee, compteEspace, envoyerMessage, noterReponsesVues, noterVisitePermanent, pdfPourLeClient, projetDemande, schemaMessage, type ProjetVisible } from "@/lib/espace/compte";
+import { alerterConfirmationBloquee, compteEspace, envoyerMessage, noterReponsesVues, noterVisitePermanent, pdfDuProjetPourLeClient, pdfPourLeClient, projetDemande, schemaMessage, type ProjetVisible } from "@/lib/espace/compte";
 import { creerProjetClient, demanderProjetDePlus, figeDuProjet, MESSAGE_FIGE, schemaNouveauProjet } from "@/lib/espace/projets";
 import {
   accepterDevis,
@@ -214,7 +213,7 @@ export async function GET(requete: NextRequest, contexte: Contexte) {
       return image(contenu, type);
     }
     if (action.length === 2 && ressource === "devis") {
-      const { contenu, nomFichier } = await lirePdfDocument(projet.dossierId, id);
+      const { contenu, nomFichier } = await pdfDuProjetPourLeClient(projet, id);
       if (!apercu) await noterConsultationDevis(projet, id).catch(() => undefined);
       return new NextResponse(new Uint8Array(contenu), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${nomFichier}"` } });
     }

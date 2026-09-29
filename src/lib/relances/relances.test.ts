@@ -49,6 +49,8 @@ async function dossierAvecDevis(entree: { clientNom: string; email: string | nul
       type: "DEVIS",
       numero: `2026-${++rangDevis}`,
       dateEmission: new Date(Date.now() - entree.ilYaJours * JOUR),
+      // Mission 14 : la 1re relance part du plus tardif de l'émission et du dépôt — un devis émis il y a N jours l'est aussi dans le CRM.
+      createdAt: new Date(Date.now() - entree.ilYaJours * JOUR),
       objet: "Recouvrement cuisine",
       lignes: JSON.stringify([{ type: "PRESTATION", designation: "Revêtement", quantite: 3, unite: "ml", prixUnitaire: 110 }]),
       totalHt: 330,

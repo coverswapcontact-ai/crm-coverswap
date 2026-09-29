@@ -4,6 +4,9 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import { imputerSurFacture, planImputationFacture } from "@/lib/encaissements/service";
 import { LIBELLES_TYPE_DOCUMENT, PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS, type TypeDocument } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
+import { devisRenduVisible, estDevisEnvoye, passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
+import { recalculerMain } from "./main";
+import type { ChangementEtape } from "./transitions";
 import { ErreurMetier } from "./erreurs";
 import type { CategorieDestinataire } from "./mentions";
 import { formatCentimes, versCentimes } from "./montants";
@@ -66,7 +69,13 @@ export const schemaModificationDocumentExistant = z
   })
   .refine((entree) => Object.values(entree).some((valeur) => valeur !== undefined), { message: "Rien à modifier." });
 
-export type ResultatDocumentExistant = { documentId: string; numero: string; avertissements: string[] };
+export type ResultatDocumentExistant = {
+  documentId: string;
+  numero: string;
+  avertissements: string[];
+  /** Mission 14 (R1) : le passage en « Devis envoyé » écrit dans la transaction ; ses effets se lancent après (`suitesDevisEnvoye`). */
+  changements: ChangementEtape[];
+};
 
 function statutDe(type: TypeDocument, statut: string | undefined): string {
   if (type === "FACTURE") return "GENERE";
@@ -78,8 +87,13 @@ function statutDe(type: TypeDocument, statut: string | undefined): string {
  * (depuis le dossier, ou pendant la reprise d'un dossier entier). Une facture
  * reprise reçoit les paiements déjà enregistrés sur le dossier, comme une
  * facture générée.
+ *
+ * Mission 14 (R1) : un devis déposé visible, émis ou envoyé fait passer le
+ * dossier en « Devis envoyé » (depuis Qualification, Simulation ou Relance),
+ * comme un devis généré ; l'appelant lance ensuite `suitesDevisEnvoye`.
+ * `avancerEtape: false` : la reprise d'un dossier, dont l'étape est déclarée.
  */
-export async function rattacherDocumentExistant(tx: Transaction, dossierId: string, entree: EntreeDocumentExistant): Promise<ResultatDocumentExistant> {
+export async function rattacherDocumentExistant(tx: Transaction, dossierId: string, entree: EntreeDocumentExistant, options: { avancerEtape?: boolean } = {}): Promise<ResultatDocumentExistant> {
   const dossier = await tx.dossier.findUnique({
     where: { id: dossierId },
     select: { clientNom: true, clientAdresse: true, clientCp: true, clientVille: true, clientId: true, objet: true, client: { select: { categorie: true, siret: true } } },
@@ -197,16 +211,26 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
       type: "DOCUMENT_REPRIS",
       direction: "INTERNE",
       contenu: `${LIBELLES_TYPE_DOCUMENT[entree.type]} ${ligne.numero}${entree.libelleVariante ? ` « ${entree.libelleVariante} »` : ""} du ${formatDateCourte(dateEmission)} rattaché (émis avant le CRM) : ${formatCentimes(versCentimes(document.totalHt))}`,
-      metadata: JSON.stringify({ documentId: document.id, numero: ligne.numero, totalHt: document.totalHt, origine: "REPRISE" }),
+      // Mission 14 : type, statut et visibilité disent si ce dépôt passe la main au client (main.ts) ; `reprise` :
+      // pendant la reprise d'un dossier entier, dont le parcours est daté du passé, le dépôt se date de son émission.
+      metadata: JSON.stringify({ documentId: document.id, numero: ligne.numero, totalHt: document.totalHt, origine: "REPRISE", type: entree.type, statut: document.statut, visibleEspace: document.visibleEspace, ...(options.avancerEtape === false ? { reprise: true } : {}) }),
       survenuLe: dateEmission,
     },
   });
-  return { documentId: document.id, numero: ligne.numero, avertissements };
+
+  const changements: ChangementEtape[] = [];
+  if (options.avancerEtape !== false && estDevisEnvoye(document)) {
+    const changement = await passerEnDevisEnvoye(tx, dossierId, { documentId: document.id, raison: `devis ${ligne.numero} déposé, visible dans son espace` });
+    if (changement) changements.push(changement);
+  }
+  return { documentId: document.id, numero: ligne.numero, avertissements, changements };
 }
 
-/** Rattachement demandé depuis le dossier. */
+/** Rattachement demandé depuis le dossier (écran, outil « deposer_document ») ; puis, comme à la génération, l'étape et la main suivent. */
 export async function enregistrerDocumentExistant(dossierId: string, entree: EntreeDocumentExistant): Promise<ResultatDocumentExistant> {
-  return prisma.$transaction((tx) => rattacherDocumentExistant(tx, dossierId, entree));
+  const resultat = await prisma.$transaction((tx) => rattacherDocumentExistant(tx, dossierId, entree));
+  await suitesDevisEnvoye(dossierId, resultat.changements);
+  return resultat;
 }
 
 async function documentRepris(dossierId: string, documentId: string) {
@@ -253,6 +277,15 @@ export async function modifierDocumentExistant(dossierId: string, documentId: st
       }
     }
   });
+  // Mission 14 (R1) : un devis repris masqué qui devient visible est envoyé au client (main, étape), comme par l'interrupteur de l'espace.
+  const statut = entree.statut !== undefined ? statutDe(document.type as TypeDocument, entree.statut) : document.statut;
+  if (entree.visibleEspace === true && !document.visibleEspace && estDevisEnvoye({ ...document, statut, visibleEspace: true })) {
+    await prisma.dossierEvenement.create({ data: { dossierId, type: "DEVIS_ENVOYE", direction: "INTERNE", contenu: `Devis ${document.numero} : visible dans l'espace client`, metadata: JSON.stringify({ documentId: document.id, presentation: true }) } });
+    await devisRenduVisible(dossierId, document.id, document.numero!);
+  } else if (document.type === "DEVIS" && (entree.visibleEspace !== undefined || entree.statut !== undefined)) {
+    // Masqué, accepté, refusé : le devis n'attend peut-être plus sa réponse, la main est relue (main.ts).
+    await recalculerMain(dossierId);
+  }
   return avertissements;
 }
 

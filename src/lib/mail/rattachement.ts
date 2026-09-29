@@ -3,7 +3,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { completerCoordonnees, rattacherLead } from "@/lib/clients/identification";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
-import { recalculerMain } from "@/lib/dossiers/main";
+import { recalculerMain, recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { lireFichierConserve } from "@/lib/fichiers/stockage";
 import { conserverPieces, lireListe } from "@/lib/messages/stockage";
 import { decouperNom, retirerCitations, trouverCodePostalVille, trouverTelephone } from "@/lib/messages/texte";
@@ -200,7 +200,7 @@ brancherSuitesDuTri(suitesDuTri);
  * son dossier. Les prochains mails de cette adresse seront reconnus seuls.
  */
 export async function rattacherALaMain(messageId: string, clientId: string, dossierId?: string | null): Promise<{ dossierId: string | null }> {
-  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { id: true, de: true, sens: true, filCanal: true, canal: true, a: true } });
+  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { id: true, de: true, sens: true, filCanal: true, canal: true, a: true, dossierId: true } });
   if (!message) throw new ErreurMetier("Mail introuvable.", 404);
   const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, archiveLe: true } });
   if (!client || client.archiveLe) throw new ErreurMetier("Fiche client introuvable ou archivée.", 404);
@@ -209,7 +209,9 @@ export async function rattacherALaMain(messageId: string, clientId: string, doss
     if (!dossier || dossier.clientId !== clientId) throw new ErreurMetier("Ce dossier n'est pas celui de ce client.", 409);
   }
   const adresse = message.sens === "ENTRANT" ? message.de : lireListe(message.a)[0];
-  const fil = message.filCanal ? await prisma.message.findMany({ where: { canal: message.canal, filCanal: message.filCanal }, select: { id: true } }) : [{ id: message.id }];
+  const fil = message.filCanal ? await prisma.message.findMany({ where: { canal: message.canal, filCanal: message.filCanal }, select: { id: true, dossierId: true } }) : [{ id: message.id, dossierId: message.dossierId }];
+  // Mission 14 (R2) : les dossiers où le fil était tracé avant — s'il en part, leur main est relue (plus de « Répondre à … » pour lui).
+  const anciens = new Set(fil.map((m) => m.dossierId));
   await prisma.$transaction(async (tx) => {
     if (adresse && normaliserEmail(adresse)) await completerCoordonnees(tx, clientId, { emails: [adresse] });
     await tx.message.updateMany({
@@ -219,6 +221,9 @@ export async function rattacherALaMain(messageId: string, clientId: string, doss
   });
   const cible = dossierId ?? (await dossierDuMail(message.id));
   if (cible) for (const m of fil) await tracerMailDansDossier(m.id, cible);
+  // Mission 14 (R2) : un fil déjà tracé et remis « à traiter » (plus rangé) : la main est relue quand même.
+  await recalculerMainDesMessages(fil.map((m) => m.id));
+  for (const ancien of anciens) if (ancien && ancien !== cible) await recalculerMain(ancien);
   return { dossierId: cible };
 }
 

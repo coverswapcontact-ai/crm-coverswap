@@ -1271,3 +1271,124 @@ dépendances a été dressée (grep sur tout `src/`) : elle a changé trois poin
   (37 mentions) : à rafraîchir à part.
 - Aucune donnée supprimée (`AgentProfile`, `Prospect`, `ConversationSms`, `Sms`, `AnalyseMessage`, `SequenceMail`…
   restent en base) ; aucun mail ni SMS automatique ajouté.
+
+# Mission 14 (29/09/2026) — Appels, rappels, relances : un seul circuit, SMS compris
+
+Énoncé de Lucas (29/09/2026, collé dans la conversation). Il remplace deux prompts antérieurs sur les rappels (absents
+de cette REPRISE : départ de zéro). Principe : « un écran montre une seule chose, un lead a toujours une destination,
+les textes SMS n'existent qu'à un seul endroit ». Neuf parties, chacune testée, construite, commitée, déployée et
+vérifiée, avec sa section ici, « pour que je puisse arrêter à tout moment ». Aucune question : décision la plus simple,
+notée. Aucun nouvel envoi automatique (accusés SMS et mails de l'espace inchangés) ; rien de supprimé ; sauvegarde
+automatique avant chaque migration.
+
+Ordre retenu : 1, 2, 3, **5 avant 4** (la fin d'appel de la partie 4 ouvre l'écran SMS de la partie 5), 6, 7, 8, 9.
+Méthode : cartographie par huit lecteurs, puis pour chaque partie une conception écrite, une implémentation, trois
+relectures indépendantes (conformité, régressions, écrans et textes), une correction des constats vérifiés, et la
+vérification de l'orchestrateur (suite complète serveur d'essai arrêté, eslint, build, déploiement, `sante_systeme`).
+
+## Partie 1 — Qui a la main (29/09)
+Vu en prod : B. (devis 2026-043 déposé le 29/09) restait en « Simulation », « faire le devis » à moi, absent de
+`voir_relances`, objet « Recouvrement de cuisine » pour un meuble vasque ; R. (mail du 22/09 sans réponse) « chez le
+client ». Quatre règles, une migration de rattrapage.
+- **R1 devis visible = « Devis envoyé »** : nouveau `dossiers/devis-envoye.ts` — `etapeApresGeneration` (déplacée de
+  `documents.ts`, réexportée), `estDevisEnvoye` (numéroté, GENERE/ENVOYE, visible), `passerEnDevisEnvoye(tx, …)`
+  (nature AUTOMATIQUE par défaut, `depuis`, `raison`), `suitesDevisEnvoye` (effets du changement puis `recalculerMain`),
+  `devisRenduVisible` (rend le passage). `documents-existants.ts › rattacherDocumentExistant` passe le dossier en
+  « Devis envoyé » depuis Qualification, Simulation ou Relance pour un devis déposé visible ENVOYE/GENERE (raison
+  « devis N déposé, visible dans son espace ») et rend `changements` ; `enregistrerDocumentExistant` (écran,
+  `deposer_document`) lance les suites. Un devis déposé ACCEPTE/REFUSE, masqué, ou une facture : rien ne bouge (comme
+  avant). `DOCUMENT_REPRIS` porte `type`, `statut`, `visibleEspace` (+ `reprise: true` pendant `reprendreDossier`).
+  `emettre` ne passe en « Devis envoyé » que si le devis est visible (il l'est toujours aujourd'hui). Reprise d'un
+  dossier (`reprise.ts`) : `avancerEtape: false` pendant les documents, puis en fin de transaction, si l'étape déclarée
+  est Qualification ou Simulation, passage de nature REPRISE (« devis déjà envoyé », rien vers Meta).
+- **Main d'un devis = l'état ACTUEL du devis** (`main.ts › lireFaitsMain`) : DEVIS_GENERE, DEVIS_ENVOYE et
+  DOCUMENT_REPRIS relisent leur `Document` (`metadata.documentId`, archives comprises) et ne passent la main au client
+  que pour un devis visible, GENERE/ENVOYE, non archivé (sans document retrouvé : l'événement seul décide). Un
+  DOCUMENT_REPRIS ne compte en plus qu'avant la signature (Qualification → Relance, `mainSelonFaits`) ; il se date du
+  dépôt (`createdAt`), sauf ancien événement sans `type` ou `reprise: true` (date d'émission). Donc : ancien dépôt d'un
+  devis accepté, reprise en Signé/Planifié/Chantier avec une variante « envoyée » → l'étape décide (à moi en Chantier).
+- **Masqué → visible, visible → masqué** : `modifierPresentationDevis` sort de `documents.ts` (578 lignes) vers
+  `dossiers/presentation-devis.ts` (réexportée, route et outil inchangés). Rendu visible : événement `DEVIS_ENVOYE`
+  (au lieu de NOTE_AJOUTEE) puis même règle, rend `passage`. Masqué : l'étape ne recule pas, la main est relue (plus
+  « en attente de sa réponse » pour un devis invisible : « Étape « Devis envoyé » »). Même relecture après
+  `modifierDocumentExistant` (visibilité ou statut d'un devis repris) et `annulerDevis`.
+- **Outils MCP** : `presenter_devis` (REVERSIBLE gardé) — la description dit que rendre visible vaut envoi et que
+  remasquer ne recule pas l'étape ; le texte rendu dit « Le dossier passe de … à « Devis envoyé » » quand c'est le cas.
+  `deposer_document` — description, aperçu (« Le dossier passera de « Simulation » à « Devis envoyé » … » d'après
+  l'étape lue) et texte rendu (`ResultatDepot.changements`) annoncent le passage, la main au client et le délai.
+- **Relances** (`relances/service.ts`) : `referenceDuDevis` = le plus tardif de `dateEmission` et `createdAt` pour la
+  1re relance (liste, `relancerDevis`, passe périodique) ; `chargerDossiersARelancer` ne lit que les devis
+  `visibleEspace: true, archiveLe: null` (l'extension ne filtre pas les include). Même référence pour la relance SMS
+  (`commercial/relances.ts`, RELANCE_DEVIS, devis visible seulement) et la séquence mail DEVIS_NON_SIGNE
+  (`mail/sequences.ts` : `dateEmission` ET `createdAt` ≤ J-3, devis visible ; séquence inactive par défaut).
+- **Espace** : `faits.ts › devisEnVigueur` : un devis masqué n'est « le devis » que s'il est accepté ; tri par
+  `createdAt` gardé (celui de `devisProposes`), documenté. `SELECT_DEVIS_LU` + `lectureDesDevis({ avecNonRetenus })`
+  : `service.ts › chargerProjet` (donc `compte.ts`), `vue-crm.ts`, `suivi.ts` et `coherence/controle.ts` lisent les
+  mêmes colonnes (dont `visibleEspace`). `VISIBLE_DU_CLIENT` (faits.ts, même règle) filtre aussi « Mes documents »
+  (`compte.ts › documentsDuClient`), `pdfPourLeClient` et la route `/devis/<id>` de l'espace
+  (`pdfDuProjetPourLeClient`) : un devis masqué non accepté n'y est plus listé ni servi.
+- **R2 message sans réponse = à moi** : `mainSelonFaits` reçoit `messageSansReponse` et `nom` → MOI « Répondre à
+  {clientNom} » (« Répondre au client » sans nom) avant tout geste ou changement d'étape, sauf Perdu/Encaissé.
+  `lireFaitsMain` (lecture unique, `calculerMain` = `mainSelonFaits(lireFaitsMain)`) : dernier MAIL_RECU (ENTRANT) ou
+  ESPACE_MESSAGE (ENTRANT) ; réponses = MAIL_ENVOYE SORTANT, ESPACE_REPONSE SORTANT, SMS_ENVOYE hors ACCUSE_AUTO,
+  SMS_COPIE (partie 5), APPEL hors PAS_DE_REPONSE, ou un Message SORTANT non automatique plus récent dans le même fil.
+  Un MAIL_RECU dont le Message est automatique, archivé, rangé, traité ou rattaché à un AUTRE dossier ne compte plus du
+  tout (ni épinglage, ni geste « Mail du client reçu »). Fonctions exportées : `estReponse`, `messageSansReponse`
+  (rend `{ le, type, contenu }`), `motifRepondre`, `estMotifRepondre`, `lireFaitsMain`,
+  `recalculerMainDesMessages(ids)` (par `Message.dossierId`). Recalcul branché : `boite.ts` (tri qui range/remonte,
+  réponse vue dans un fil, Gmail archivé/remis, `archiverFil` dans les deux sens, `remonter`, `nePlusMontrer`), `v2.ts`
+  (`rangerMail`, `derangerMail`), `vues.ts › toutNettoyer`, `rattachement.ts › rattacherALaMain` (+ les dossiers d'où
+  le fil part), `messages/propositions.ts › RATTACHER_MESSAGE` (+ l'ancien dossier), `envoi-crm.ts` (réponse du CRM
+  dans un fil), `compte.ts › envoyerMessage` (ne recalculait pas), `commercial/appels.ts › noterAppel` (un appel
+  abouti répond). Affichage : `commercial/pilotage.ts` range la main MOI « Répondre à … » dans le groupe REPONDRE avec
+  ce motif pour action (après le SMS reçu, avant l'étape) ; `espace/suivi.ts` montre le motif avant le geste déduit de
+  l'espace. **Contrôle MAIL_SANS_REPONSE** (`coherence/controle.ts`) : même lecture (`lireFaitsMain`), levé quand la
+  main AFFICHÉE dit « chez le client » face à un message sans réponse depuis plus de 2 jours (la règle l'épinglant à
+  moi, il attrape une main affichée périmée, avec MAIN_DECALEE) ; un mail rangé ou traité ne lève plus rien ; message
+  d'espace : « Lui répondre dans son espace ». En-tête de `main.ts` à jour (exceptions de la mission 14).
+- **R3 objet** : `Dossier.objetManuelLe DateTime?` (schéma). Posé par `dossiers.ts › modifierDossier` quand l'objet
+  change vraiment : c'est le seul chemin de l'écran (PATCH), de `modifierDossierAssistant` et des cartes d'un mail
+  (`propositions-maj.ts`). `objet.ts › objetDepuisProjet` : une famille et 1 à 3 prestations nommées (« Recouvrement de
+  salle de bains : meuble vasque », « Recouvrement de mobilier : meuble TV » — seule la 1re lettre baisse ; « Autre » et
+  « Autre meuble » ignorés), sinon `objetDepuisFamilles`. `validations.ts › validerProjet` : `objetSuivi` (pure)
+  remplace l'objet, même venu du lead, tant que `objetManuelLe` est nul ; revalider refait suivre.
+  `complementDuDossier` inchangé (migration 13-1).
+- **R4 une seule étape** : `espace/etapes.ts › etapeEspace` : Facturé/Encaissé → TERMINE ; Planifié/Chantier →
+  CHANTIER ; accord ou Signé → ACOMPTE (CHANTIER si acompte reçu) ; Devis envoyé/Relance → DEVIS si devis en vigueur,
+  sinon ATTENTE_DEVIS ; Qualification/Simulation → jamais DEVIS ; En pause/Perdu : l'ordre d'avant. Doc du module et
+  `docs/COHERENCE.md` (une ligne : dépôt, visibilité, masqué/annulé) à jour.
+- **Migration `qui-a-la-main-14-1`** (`base/migrations/mission-14-partie-1.ts`, en fin de `MIGRATIONS_DONNEES`) : a)
+  Qualification/Simulation + devis visible numéroté GENERE/ENVOYE non archivé → « Devis envoyé » (`passerEnDevisEnvoye`,
+  AUTOMATIQUE, « Devis déjà envoyé : rattrapage (mission 14) »), « Préparer le devis » → « Attendre l'accord … »,
+  effets lancés en nature REPRISE (le lead suit, rien vers Meta) — sauf si le dernier changement d'étape est un RETOUR
+  de Lucas postérieur au devis (compteur `retoursGardes`) ; b) `objetManuelLe` d'après `JournalModification` (Dossier,
+  MODIFICATION, acteur HUMAIN:/ASSISTANT:, objet changé — sauf un objet vide rempli d'un objet « Recouvrement … » :
+  c'est le complément B3 d'une validation faite par Lucas depuis le CRM, dans sa session) et `ModificationDossier`
+  (champ objet), puis objet = `objetDepuisProjet` pour les projets validés sans objet manuel ; c) `recalculerMain` sur
+  tous les dossiers vivants hors Perdu/Encaissé. Compteurs : `etapesCorrigees`, `actionsCorrigees`, `retoursGardes`,
+  `objetsManuels`, `objetsCorriges`, `dossiersRelus`, `mainsChangees` ; une ligne `console.info` par dossier corrigé
+  (id + nom, journaux Railway). Attendu en prod : B. passe en « Devis envoyé », objet « Recouvrement de salle de
+  bains : meuble vasque » ; R. passe « à moi » (« Répondre à … ») tant que le mail du 22/09 n'est pas rangé ou traité.
+- Tests : `base/mission-14-partie-1.test.ts` (15 : cas B. par `deposerDocument`, masqué puis visible, reprise en
+  Simulation, reprise en Chantier avec variante « envoyée » (à moi), anciens DOCUMENT_REPRIS d'un devis accepté en
+  Planifié, seul devis masqué puis annulé (main, « Mes documents », PDF refusé), règle R2 pure, mail
+  rattaché/publication/réponse + /commercial + Espaces, message d'espace/réponse + rangé + traité + désarchivé, mail
+  déplacé dans un autre dossier, MAIL_SANS_REPONSE (rangé : rien ; main affichée périmée : levé), objet suit/écrit à la
+  main, `objetDepuisProjet` (meuble TV, autre meuble), `etapeEspace`, migration + retour en arrière gardé + objet d'une
+  validation par Lucas non « manuel » + rejeu). Adaptés en gardant l'intention : `espace-v2.test.ts` (ordre de
+  `etapeEspace` ; devis « dans l'espace » sur un dossier « Devis envoyé »), `migrations/mission-13.test.ts` (objet « … :
+  façades hautes »), `relances.test.ts` (devis créé à sa date d'émission), `commercial/relances.test.ts` (devis
+  « J+4 » remis au client il y a 5 jours ; nouveau cas : déposé aujourd'hui daté de J-6 → pas de relance, masqué →
+  jamais).
+- Pièges : l'outil Edit a réécrit `main.ts` et `reprise.ts` en CRLF (remis en LF) — vérifier par
+  `git ls-files --eol` ; `dossiers.ts` et `etapes.ts` sont en CRLF d'origine. Un devis écrit directement en base
+  (tests) a `createdAt` = maintenant : la relance attend le délai à partir de là. Dans un test, un geste à moins d'une
+  minute du passage d'étape l'emporte sur l'étape : vieillir les événements d'ouverture pour lire « Étape « … » ».
+- Reste : annuler une modification d'objet par l'assistant repose `objetManuelLe` (elle repasse par
+  `modifierDossier`). Un dossier en « Devis envoyé » dont le seul devis est masqué reste « chez le client » par
+  l'étape alors que l'espace dit « Devis en préparation » (décision de règle : faut-il « à moi » ?). La consultation
+  POST `/devis/<id>/consultation` ne vérifie pas la visibilité (le PDF, si). `dossiers.ts` (902 lignes) et
+  `espace/service.ts` (1130) dépassent 600 lignes : dette d'avant la mission, non découpée.
+- Décision (règle laissée ouverte par la relecture) : un dossier en « Devis envoyé » dont le seul devis est masqué garde
+  la main par l'étape (au client) : c'est la règle la plus simple ; à revoir si Lucas le demande.
+- Vérifié : tsc, eslint, suite complète 570/570, build Next.

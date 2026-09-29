@@ -1,11 +1,12 @@
 import prisma from "@/lib/prisma";
 import { tranche } from "@/lib/commun/pagination";
+import { estMotifRepondre } from "@/lib/dossiers/main";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression } from "./etapes";
-import { composerFaits, dateSignature, lireDevisEtPaiements, restantes as simulationsRestantes } from "./faits";
+import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, restantes as simulationsRestantes } from "./faits";
 import { confirmationRequise, jetonEspace, lienApercu, lienEspace } from "./liens";
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS } from "./projets";
 import { famille, famillesDe, lireSelection } from "@/lib/prestations/prestations";
@@ -72,7 +73,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
           source: true,
           prestations: true,
           lead: { select: { typeProjet: true } },
-          documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
+          // Mission 14 (R4) : les mêmes colonnes que l'espace du client (faits.ts).
+          documents: lectureDesDevis(),
           accords: { orderBy: { createdAt: "desc" } },
           encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
           evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, createdAt: true, survenuLe: true } },
@@ -178,6 +180,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
     else if (figeDuProjet(d.etape) === "NON_REALISE") attente = { qui: "PERSONNE", libelle: "Non réalisé" };
     else if (etape === "TERMINE" || main === "AUCUNE") attente = { qui: "PERSONNE", libelle: "Chantier terminé" };
     else if (main === "A_RELANCER") attente = { qui: "MOI", libelle: `Relancer : ${d.prochaineAction ?? motifLisible ?? LIBELLES_ETAPE_ESPACE[etape]}`, geste: "APPELER" };
+    // Mission 14 (R2) : un message du client sans réponse passe avant le geste déduit de l'espace.
+    else if (main === "MOI" && motifLisible && estMotifRepondre(motifLisible)) attente = { qui: "MOI", libelle: motifLisible };
     else if (main === "MOI") attente = geste ? { qui: "MOI", ...geste } : { qui: "MOI", libelle: motifLisible ?? "À toi de jouer" };
     else attente = { qui: "CLIENT", libelle: motifLisible ?? LIBELLES_ETAPE_ESPACE[etape] };
 

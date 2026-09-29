@@ -64,7 +64,9 @@ describe("une seule chose à faire à la fois", () => {
     assert.equal(etapes.etapeEspace({ ...base, simulationsSite: 1 }), "PROJET");
     assert.equal(etapes.etapeEspace({ ...base, simulationsCrm: 2 }), "SIMULATIONS", "des simulations à choisir passent devant les photos manquantes");
     assert.equal(etapes.etapeEspace({ ...base, simulationsCrm: 2, choix: true, projet: true, photos: 1 }), "ATTENTE_DEVIS");
-    assert.equal(etapes.etapeEspace({ ...base, devis: true }), "DEVIS", "un devis à signer passe devant tout le reste");
+    // Mission 14 : l'étape du dossier fixe la frontière du devis (« Devis envoyé » : le devis à signer passe devant tout le reste).
+    assert.equal(etapes.etapeEspace({ ...base, etapeDossier: "DEVIS_ENVOYE", devis: true }), "DEVIS", "un devis à signer passe devant tout le reste");
+    assert.equal(etapes.etapeEspace({ ...base, devis: true }), "PHOTOS", "dossier en qualification : pas « Devis à signer »");
     assert.equal(etapes.etapeEspace({ ...base, devis: true, accord: true }), "ACOMPTE");
     assert.equal(etapes.etapeEspace({ ...base, devis: true, accord: true, acompteRecu: true }), "CHANTIER");
     assert.equal(etapes.etapeEspace({ ...base, etapeDossier: "ENCAISSE" }), "TERMINE");
@@ -200,6 +202,8 @@ describe("le devis dans l'espace", () => {
     const ouvert = await dossierAvecEspace(prenom);
     const lignes = JSON.stringify([{ type: "SECTION", libelle: "Cuisine" }, { type: "PRESTATION", designation: "Recouvrement des façades", sousDesignation: "Film Cover Styl' AA01", quantite: 6, unite: "ml", prixUnitaire: 120 }]);
     const devis = await prisma.document.create({ data: { dossierId: ouvert.dossierId, type: "DEVIS", numero: `D-${prenom}`, dateEmission: new Date(), objet: "Recouvrement de cuisine", lignes, totalHt: 720, acomptePct: 30, statut: "ENVOYE" } });
+    // Mission 14 (R4) : l'étape du dossier fixe la frontière du devis — un devis envoyé, c'est un dossier « Devis envoyé ».
+    await prisma.dossier.update({ where: { id: ouvert.dossierId }, data: { etape: "DEVIS_ENVOYE" } });
     return { ...ouvert, devis };
   }
 

@@ -10,6 +10,7 @@ import { estMobileFrancais, remplirModele } from "@/lib/sms/texte";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { proposer } from "@/lib/validation/service";
+import { referenceDuDevis } from "@/lib/relances/service";
 
 /**
  * Relances commerciales : le CRM sait où en est chaque client et ce qu'il n'a
@@ -48,7 +49,8 @@ export async function proposerRelancesSms(maintenant: Date = new Date()): Promis
       lead: { select: { id: true, prenom: true } },
       // Seules les simulations publiées comptent : un brouillon, le client ne l'a jamais vu.
       espaces: { where: { archiveLe: null, revoqueLe: null }, take: 1, include: { simulations: { where: { archiveLe: null, statut: "PUBLIEE" }, orderBy: { createdAt: "desc" } } } },
-      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { createdAt: "desc" }, take: 1 },
+      // Mission 14 : le devis que le client voit (un devis masqué ne se relance pas).
+      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true }, orderBy: { createdAt: "desc" }, take: 1 },
       accords: { where: { retireLe: null }, take: 1, select: { id: true } },
     },
   });
@@ -127,7 +129,8 @@ export async function proposerRelancesSms(maintenant: Date = new Date()): Promis
     } else if (devis && consultationsDevis >= 3 && joursDepuis(espace.devisConsulteLe, maintenant) >= 0.8) {
       // Trois visites sur le devis sans accord : il hésite. Une question à lever, pas un créneau à bloquer.
       candidat = { motif: "RELANCE_DEVIS", modele: "RELANCE_DEVIS_QUESTIONS", cle: `relance-sms:${dossier.id}:HESITATION:${devis.id}`, titre: `Il hésite : ${dossier.clientNom} a relu son devis ${consultationsDevis} fois`, resume: `Devis ${devis.numero} consulté ${consultationsDevis} fois dans son espace, sans bon pour accord.`, raisonnement: "Un client qui revient plusieurs fois sur son devis sans signer a une question : un appel ou ce message la lève." };
-    } else if (devis && ["DEVIS_ENVOYE", "RELANCE"].includes(dossier.etape) && joursDepuis(reference(devis.dateEmission ?? devis.createdAt), maintenant) >= DELAIS_JOURS.DEVIS) {
+    } else if (devis && ["DEVIS_ENVOYE", "RELANCE"].includes(dossier.etape) && joursDepuis(reference(referenceDuDevis({ dateEmission: devis.dateEmission ?? devis.createdAt, createdAt: devis.createdAt })), maintenant) >= DELAIS_JOURS.DEVIS) {
+      // Mission 14 (R1) : le délai court depuis que le client a le devis — son dépôt s'il est plus tardif que sa date.
       candidat = { motif: "RELANCE_DEVIS", modele: "RELANCE_DEVIS", cle: `relance-sms:${dossier.id}:DEVIS:${devis.id}`, titre: `Relancer ${dossier.clientNom} : devis ${devis.numero} non signé`, resume: `Devis émis il y a ${Math.floor(joursDepuis(devis.dateEmission ?? devis.createdAt, maintenant))} jours, pas de bon pour accord.`, raisonnement: `Dossier à l'étape « ${dossier.etape} », devis en vigueur, aucun signe du client depuis ${DELAIS_JOURS.DEVIS} jours au moins.` };
     } else if (!devis && simulation && dossier.etape === "SIMULATION" && !choixFait && joursDepuis(reference(simulation.publieeLe ?? simulation.createdAt), maintenant) >= DELAIS_JOURS.SIMULATION) {
       const vue = Boolean(simulation.vueLe) || Boolean(espace.dernierAccesLe && espace.dernierAccesLe > (simulation.publieeLe ?? simulation.createdAt));

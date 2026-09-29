@@ -169,8 +169,9 @@ async function candidats(code: CodeSequence, maintenant: Date, limite = 50): Pro
       .slice(0, limite);
   }
   if (code === "DEVIS_NON_SIGNE") {
+    // Mission 14 (R1) : un devis visible, émis ET déposé depuis trois jours (un devis déposé aujourd'hui, daté d'avant, attend).
     const dossiers = await prisma.dossier.findMany({
-      where: { archiveLe: null, etape: { in: ["DEVIS_ENVOYE", "RELANCE"] }, clientEmail: { not: null }, accords: { none: { retireLe: null } }, documents: { some: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] }, dateEmission: { lte: new Date(maintenant.getTime() - 3 * JOUR) } } } },
+      where: { archiveLe: null, etape: { in: ["DEVIS_ENVOYE", "RELANCE"] }, clientEmail: { not: null }, accords: { none: { retireLe: null } }, documents: { some: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true, dateEmission: { lte: new Date(maintenant.getTime() - 3 * JOUR) }, createdAt: { lte: new Date(maintenant.getTime() - 3 * JOUR) } } } },
       select: { id: true, clientEmail: true, clientNom: true, clientId: true, client: { select: { prenom: true } }, documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { numero: true, totalHt: true } } },
       take: limite,
     });

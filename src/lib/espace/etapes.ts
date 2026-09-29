@@ -7,6 +7,14 @@
  * signer passe devant ce qui précise. Un devis en attente d'accord l'emporte
  * sur des photos manquantes ; des simulations publiées à choisir l'emportent
  * sur un projet pas encore précisé.
+ *
+ * Mission 14 (29/09/2026) : l'étape du DOSSIER fixe la frontière du devis — une
+ * seule source pour l'espace et le dossier. Facturé ou encaissé : terminé ;
+ * planifié ou chantier : chantier ; accord ou dossier signé : paiement (ou
+ * chantier si l'acompte est reçu) ; devis envoyé ou relance : « Devis à signer »
+ * s'il y a un devis en vigueur, sinon « Devis en préparation » ; qualification
+ * ou simulation : jamais « Devis à signer » (le choix, les simulations, les
+ * photos, le projet décident). En pause ou perdu : l'ordre d'avant, devis compris.
  */
 
 export type EtapeEspace =
@@ -50,8 +58,10 @@ const projetFait = (f: FaitsEspace) => f.projetValide ?? f.projet;
 export function etapeEspace(f: FaitsEspace): EtapeEspace {
   if (["FACTURE", "ENCAISSE"].includes(f.etapeDossier)) return "TERMINE";
   if (["PLANIFIE", "CHANTIER"].includes(f.etapeDossier)) return "CHANTIER";
-  if (f.accord) return f.acompteRecu ? "CHANTIER" : "ACOMPTE";
-  if (f.devis) return "DEVIS";
+  if (f.accord || f.etapeDossier === "SIGNE") return f.acompteRecu ? "CHANTIER" : "ACOMPTE";
+  if (["DEVIS_ENVOYE", "RELANCE"].includes(f.etapeDossier)) return f.devis ? "DEVIS" : "ATTENTE_DEVIS";
+  // Qualification ou simulation : le dossier n'a pas envoyé de devis, l'espace ne le dit pas « à signer ».
+  if (f.devis && !["QUALIFICATION", "SIMULATION"].includes(f.etapeDossier)) return "DEVIS";
   if (f.choix) return "ATTENTE_DEVIS";
   // Une simulation préparée par Lucas l'attend : c'est elle d'abord, même sans ses photos.
   if (f.simulationsCrm > 0) return "SIMULATIONS";

@@ -150,7 +150,9 @@ export const propositionRattacherMessage = definirProposition({
     });
     await remettreSiArchive(tx, message);
     if (contenu.dossierId) await tracerDansDossier(tx, message.id, contenu.dossierId, propositionId);
-    return { resultat: { clientId: client.id, dossierId: contenu.dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(contenu.dossierId); } };
+    // Mission 14 (R2) : le dossier d'où le mail part est relu aussi (sa trace archivée ne lui épingle plus la main).
+    const ancien = message.dossierId && message.dossierId !== contenu.dossierId ? message.dossierId : null;
+    return { resultat: { clientId: client.id, dossierId: contenu.dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(contenu.dossierId); await recalculerMain(ancien); } };
   },
 });
 

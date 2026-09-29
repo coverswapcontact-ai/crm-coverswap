@@ -469,6 +469,8 @@ model Dossier {
   clientEmail            String?
   clientTelephone        String
   objet                  String // ex. "Recouvrement façades de cuisine"
+  // Mission 14 (29/09/2026) : posé quand Lucas ou l'assistant écrit l'objet ; null = l'objet suit la famille validée dans l'espace.
+  objetManuelLe          DateTime?
   etape                  String             @default("QUALIFICATION") // EtapeDossier
   ouvertLe               DateTime? // date réelle d'ouverture (dossier repris d'avant le CRM) ; null = createdAt
   montantEstime          Float?

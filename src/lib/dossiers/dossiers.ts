@@ -679,12 +679,14 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
 export async function modifierDossier(dossierId: string, entree: EntreeModification): Promise<void> {
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    select: { clientId: true, client: { select: { nom: true } } },
+    select: { clientId: true, objet: true, client: { select: { nom: true } } },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
   const { prochaineActionDate, dateChantier, dateSouhaitee, dateFinChantier, clientId, ouvertLe, ...champs } = entree;
   const data: Prisma.DossierUncheckedUpdateInput = { ...champs };
+  // Mission 14 (R3) : un objet écrit par Lucas (écran, assistant, carte d'un mail) ne suit plus la famille validée dans l'espace.
+  if (champs.objet !== undefined && champs.objet !== dossier.objet) data.objetManuelLe = new Date();
   if (dateSouhaitee !== undefined) data.dateSouhaitee = dateSouhaitee ? dateDepuisJour(dateSouhaitee) : null;
   if (dateFinChantier !== undefined) data.dateFinChantier = dateFinChantier ? dateDepuisJour(dateFinChantier) : null;
   if (prochaineActionDate !== undefined) {

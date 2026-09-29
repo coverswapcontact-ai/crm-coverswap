@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { messagesEspace, type MessageEspaceVue } from "@/lib/espace/messages";
 import { lireListe } from "@/lib/messages/stockage";
+import { recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { demanderEtatGmail } from "./boite";
 import { comparerPriorite, estReclamation, lireDatesExtraites, prioriteDe, type Priorite } from "./priorite";
 import { TYPE_MAJ_DEPUIS_MAIL } from "./propositions-maj";
@@ -266,6 +267,7 @@ export async function toutNettoyer(maintenant: Date = new Date()): Promise<{ arc
   });
   await prisma.message.updateMany({ where: { id: { in: messages.map((m) => m.id) } }, data: { traiteLe: maintenant, lu: true } });
   for (const m of messages) await demanderEtatGmail(m.id);
+  await recalculerMainDesMessages(messages.map((m) => m.id));
   return { archives: aNettoyer.length };
 }
 

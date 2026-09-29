@@ -7,7 +7,7 @@ import { lireLignes } from "@/lib/dossiers/stockage";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireZones, libelleZoneClient, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { etapeEspace, LIBELLES_ETAPE_ESPACE, progression, type EtapeEspace } from "./etapes";
-import { composerFaits, dateSignature, lireDevisEtPaiements, type PaiementEspace } from "./faits";
+import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type PaiementEspace } from "./faits";
 import { confirmationRequise, lienApercu, lienEspace } from "./liens";
 import { figeDuProjet, LIBELLES_PASTILLE, projetsVisibles } from "./projets";
 import { enregistrerPrestations } from "@/lib/prestations/dossier";
@@ -107,7 +107,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       prestations: true,
       lead: { select: { typeProjet: true } },
       // Mission 11 : les devis non retenus restent visibles ici (historique), jamais chez le client.
-      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE", "NON_RETENU"] } }, orderBy: { createdAt: "desc" } },
+      documents: lectureDesDevis({ avecNonRetenus: true }),
       accords: { orderBy: { createdAt: "desc" } },
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
       evenements: { where: { archiveLe: null, OR: [{ type: "CHANGEMENT_ETAPE" }, { type: { startsWith: "ESPACE_" } }] }, orderBy: { createdAt: "desc" }, take: 200, select: { type: true, contenu: true, metadata: true, createdAt: true, survenuLe: true, direction: true } },

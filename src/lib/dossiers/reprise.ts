@@ -7,6 +7,7 @@ import { dateDepuisJour, estJourValide, formatDateCourte, instantDuJour, jourPar
 import { rattacherDocumentExistant, schemaDocumentExistant } from "./documents-existants";
 import { originesDuDossier, ouvrirDossier, reculerPremierContact, schemaCreation, suitesOuverture } from "./dossiers";
 import { lireMetadataChangementEtape, rangEtape, type MetadataChangementEtape } from "./regles";
+import { passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
 import { effetsDuChangementEtape } from "./transitions";
 
 /**
@@ -79,7 +80,8 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
       // Documents déjà émis, puis paiements déjà reçus (imputés sur ces pièces).
       const documents: ResultatReprise["documents"] = [];
       for (const [index, document] of entree.documents.entries()) {
-        const rattache = await rattacherDocumentExistant(tx, dossier.id, document);
+        // Mission 14 : l'étape d'une reprise est déclarée ; un devis déposé la fait avancer à la fin (plus bas), pas en passant.
+        const rattache = await rattacherDocumentExistant(tx, dossier.id, document, { avancerEtape: false });
         documents.push({ index, documentId: rattache.documentId });
         avertissements.push(...rattache.avertissements);
       }
@@ -136,7 +138,9 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
         }
         if (!entree.dates.etapeDepuisLe) avertissements.push(`Date d'arrivée en « ${LIBELLES_ETAPE[etape]} » inconnue : à compléter sur le dossier.`);
       }
-      return { id: dossier.id, documents, avertissements };
+      // Mission 14 (R1) : repris en Qualification ou Simulation avec un devis visible déjà envoyé, il est « Devis envoyé ».
+      const devisEnvoye = await passerEnDevisEnvoye(tx, dossier.id, { depuis: ["QUALIFICATION", "SIMULATION"], nature: "REPRISE", raison: "devis déjà envoyé" });
+      return { id: dossier.id, documents, avertissements, devisEnvoye };
     },
     { maxWait: 10_000, timeout: 60_000 }
   );
@@ -144,5 +148,7 @@ export async function reprendreDossier(entree: EntreeReprise): Promise<ResultatR
   await suitesOuverture(origines, resultat.id);
   // Le lead d'origine suit l'étape ; une reprise n'envoie rien à Meta.
   if (rangActuel > 0) await effetsDuChangementEtape({ dossierId: resultat.id, de: "QUALIFICATION", vers: etape, nature: "REPRISE" });
-  return resultat;
+  // Puis le passage en « Devis envoyé » s'il a eu lieu, et la main (un devis déposé la passe au client).
+  await suitesDevisEnvoye(resultat.id, [resultat.devisEnvoye]);
+  return { id: resultat.id, documents: resultat.documents, avertissements: resultat.avertissements };
 }

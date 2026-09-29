@@ -7,10 +7,12 @@ import { EMETTEUR } from "@/lib/dossiers/constants";
 import { lireLignes } from "@/lib/dossiers/stockage";
 import { montantsDocument } from "@/lib/dossiers/montants";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
+import { recalculerMain } from "@/lib/dossiers/main";
 import { famille, famillesDe, lireSelection, prestationsPubliques, type IdFamille, type PrestationsPubliques } from "@/lib/prestations/prestations";
 import { ACTEUR, prevenir } from "./alertes";
 import { confirmationRequise } from "./liens";
 import { etapeEspace } from "./etapes";
+import { VISIBLE_DU_CLIENT } from "./faits";
 import { figeDuProjet, LIBELLES_PASTILLE, pastilleDuProjet, peutOuvrirUnProjet, projetsVisibles, type Fige, type PastilleProjet } from "./projets";
 import { enregistrerMessageClient, marquerReponsesVues, type MessageEspaceVue } from "./messages";
 import { chargerProjet, nomDuProjetClient } from "./service";
@@ -137,7 +139,8 @@ export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">):
   const projets = await projetsVisibles(prisma, permanent.id);
   const noms = new Map(projets.map((p) => [p.dossierId, nomDuProjetClient(p.nomProjet, p.dossier.objet, famillesDe(lireSelection(p.dossier.prestations)))]));
   const documents = await prisma.document.findMany({
-    where: { dossierId: { in: projets.map((p) => p.dossierId) }, archiveLe: null, numero: { not: null }, type: { in: ["DEVIS", "FACTURE", "AVOIR"] }, statut: { not: "BROUILLON" } },
+    // Mission 14 : un devis masqué dans son espace n'y est listé que s'il est accepté.
+    where: { dossierId: { in: projets.map((p) => p.dossierId) }, archiveLe: null, numero: { not: null }, type: { in: ["DEVIS", "FACTURE", "AVOIR"] }, statut: { not: "BROUILLON" }, ...VISIBLE_DU_CLIENT },
     orderBy: [{ dateEmission: "desc" }, { createdAt: "desc" }],
   });
   const etapes = new Map(projets.map((p) => [p.dossierId, p.dossier.etape]));
@@ -167,12 +170,19 @@ export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">):
   });
 }
 
-/** Le PDF d'un de SES documents (n'importe lequel de ses projets) ; jamais celui d'un autre client. */
+/** Le PDF d'un de SES documents (n'importe lequel de ses projets) ; jamais celui d'un autre client, ni un devis masqué non accepté. */
 export async function pdfPourLeClient(permanent: Pick<EspacePermanent, "id">, documentId: string): Promise<{ contenu: Buffer; nomFichier: string; dossierId: string }> {
   const projets = await projetsVisibles(prisma, permanent.id);
-  const document = await prisma.document.findFirst({ where: { id: documentId, dossierId: { in: projets.map((p) => p.dossierId) }, archiveLe: null, numero: { not: null } }, select: { dossierId: true } });
+  const document = await prisma.document.findFirst({ where: { id: documentId, dossierId: { in: projets.map((p) => p.dossierId) }, archiveLe: null, numero: { not: null }, ...VISIBLE_DU_CLIENT }, select: { dossierId: true } });
   if (!document) throw new ErreurMetier("Document introuvable.", 404);
   return { ...(await lirePdfDocument(document.dossierId, documentId)), dossierId: document.dossierId };
+}
+
+/** Le PDF d'un document du projet ouvert (route « /devis/<id> » de l'espace) : même règle de visibilité (mission 14). */
+export async function pdfDuProjetPourLeClient(projet: Pick<EspaceClient, "dossierId">, documentId: string): Promise<{ contenu: Buffer; nomFichier: string }> {
+  const document = await prisma.document.findFirst({ where: { id: documentId, dossierId: projet.dossierId, archiveLe: null, numero: { not: null }, ...VISIBLE_DU_CLIENT }, select: { id: true } });
+  if (!document) throw new ErreurMetier("Document introuvable.", 404);
+  return lirePdfDocument(projet.dossierId, documentId);
 }
 
 /** L'espace du client en entier, pour l'accueil. Confirmation demandée : son prénom, et rien d'autre. */
@@ -248,5 +258,7 @@ export async function envoyerMessage(permanent: EspacePermanent, projet: EspaceC
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true } });
   const evenement = await avecActeur(ACTEUR, () => prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_MESSAGE", direction: "ENTRANT", contenu: `Message du client depuis son espace : « ${texte} »`.slice(0, 2100), metadata: JSON.stringify({ permanentId: permanent.id }) } }));
   await avecActeur(ACTEUR, () => enregistrerMessageClient({ dossierId, espaceId: projet?.id ?? projets.at(-1)?.id ?? null, source: "MESSAGE", texte, evenementId: evenement.id }));
+  // Mission 14 (R2) : un message sans réponse m'épingle la main (« Répondre à … ») jusqu'à ma réponse.
+  await recalculerMain(dossierId);
   await prevenir(dossierId, { titre: `Message — ${dossier?.clientNom ?? "client"}`, texte: `« ${texte.slice(0, 600)} »\nÀ vous : lui répondre (appel ou SMS).`, urgence: 4, telephone: dossier?.clientTelephone, etiquette: `message-${dossierId}`, rubrique: "messages" });
 }

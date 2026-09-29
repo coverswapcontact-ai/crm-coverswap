@@ -2,11 +2,11 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
 import { ETAPES, LIBELLES_ETAPE, PROCHAINE_ACTION_APRES_DEVIS, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
-import { calculerMain, recalculerMain } from "@/lib/dossiers/main";
+import { lireFaitsMain, mainSelonFaits, recalculerMain } from "@/lib/dossiers/main";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
 import { suivreSoldeDossier } from "@/lib/encaissements/service";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
-import { dateSignature, lireDevisEtPaiements } from "@/lib/espace/faits";
+import { dateSignature, lectureDesDevis, lireDevisEtPaiements } from "@/lib/espace/faits";
 import { lireProjet, projetComplet } from "@/lib/espace/projet";
 import { lireSelection } from "@/lib/prestations/prestations";
 import { devaliderChoix, devaliderProjet, RAISON_PROJET_VALIDE } from "@/lib/espace/validations";
@@ -88,7 +88,7 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     select: {
       id: true, clientNom: true, etape: true, prochaineAction: true, leadId: true, prestations: true, main: true, mainMotif: true,
       lead: { select: { id: true, statut: true, typeProjet: true, archiveLe: true } },
-      documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" } },
+      documents: lectureDesDevis(),
       accords: true,
       encaissements: { select: { montant: true, moyen: true, recuLe: true, statut: true } },
       evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, createdAt: true, survenuLe: true } },
@@ -162,20 +162,25 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
       signaler("STATUT_DU_LEAD", "MOYENNE", `Le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » mais son lead est resté « ${d.lead.statut} » : la section Leads et la publicité ne racontent pas la même histoire.`, `Aligner le lead sur « ${attendus[0]} »`);
     }
     // Qui a la main : ce que le dossier affiche (kanban, fiche, Espaces clients, Leads) ↔ ce que disent ses derniers gestes.
-    const regle = await calculerMain(d.id);
+    // Mission 14 : les faits lus une fois, les mêmes que ceux de la main (message du client sans réponse compris).
+    const faits = await lireFaitsMain(d.id);
+    const regle = faits ? mainSelonFaits(faits) : null;
     const responsable = REGLES_ETAPES[d.etape as EtapeDossier]?.responsable ?? null;
     const affichee = d.main === "MOI" || d.main === "CLIENT" ? d.main : responsable;
     if (regle?.qui && affichee && regle.qui !== affichee) {
       const dire = (qui: string) => (qui === "MOI" ? "à moi" : "chez le client");
       signaler("MAIN_DECALEE", "MOYENNE", `Le dossier affiche « ${dire(affichee)} » alors que ses derniers gestes le mettent « ${dire(regle.qui)} » (${regle.motif}).`, `Remettre « ${dire(regle.qui)} » partout`);
     }
-    // Mail du client sans réponse : il a écrit, personne n'a répondu depuis, et le dossier le croit « chez le client ».
-    if ((regle?.qui ?? affichee) === "CLIENT") {
-      const mails = await prisma.dossierEvenement.findMany({ where: { dossierId: d.id, archiveLe: null, type: { in: ["MAIL_RECU", "MAIL_ENVOYE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, createdAt: true, survenuLe: true, contenu: true } });
-      const dernier = mails[0];
-      const depuis = dernier ? Date.now() - (dernier.survenuLe ?? dernier.createdAt).getTime() : 0;
-      if (dernier?.type === "MAIL_RECU" && depuis > JOURS_MAIL_SANS_REPONSE * 86_400_000) {
-        signaler("MAIL_SANS_REPONSE", "HAUTE", `Le client a écrit il y a ${Math.floor(depuis / 86_400_000)} jours (${dernier.contenu.slice(0, 120)}) et n'a pas eu de réponse, alors que le dossier dit « chez le client ». Lui répondre depuis l'onglet Mail.`, null);
+    // Message du client sans réponse : il a écrit, personne n'a répondu depuis, et le dossier affiche « chez le client ».
+    // Mission 14 : la même définition que la main (main.ts › lireFaitsMain) — un mail rangé, traité, automatique ou
+    // déplacé ne compte pas ; une réponse par mail, dans l'espace, par SMS ou par un appel abouti le clôt. La règle
+    // épingle alors la main à moi : ce contrôle attrape une main affichée restée « chez le client ».
+    const sansReponse = faits?.messageSansReponse ?? null;
+    if (sansReponse && affichee === "CLIENT") {
+      const depuis = Date.now() - sansReponse.le.getTime();
+      if (depuis > JOURS_MAIL_SANS_REPONSE * 86_400_000) {
+        const ou = sansReponse.type === "MAIL_RECU" ? "depuis l'onglet Mail" : "dans son espace";
+        signaler("MAIL_SANS_REPONSE", "HAUTE", `Le client a écrit il y a ${Math.floor(depuis / 86_400_000)} jours (${sansReponse.contenu.slice(0, 120)}) et n'a pas eu de réponse, alors que le dossier dit « chez le client ». Lui répondre ${ou}.`, null);
       }
     }
   }

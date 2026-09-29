@@ -3,6 +3,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { resoudreContexte } from "@/lib/journal/acteur";
 import { lireListe } from "@/lib/messages/stockage";
 import { retirerCitations } from "@/lib/messages/texte";
+import { recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { demanderEtatGmail } from "./boite";
 import { A_COMPLETER } from "./redaction";
 import { lireDatesExtraites, type DateExtraite } from "./priorite";
@@ -124,6 +125,8 @@ export async function rangerMail(messageId: string, motif = "Rangé à la main")
   const maintenant = new Date();
   await prisma.message.updateMany({ where: { id: { in: entrants.map((m) => m.id) } }, data: { rangeLe: maintenant, rangePar: courtDe(acteur), rangeMotif: motif.slice(0, 200), lu: true, remonteLe: null } });
   for (const m of entrants) await demanderEtatGmail(m.id);
+  // Mission 14 (R2) : rangé = « pas de réponse à faire » : la main n'est plus épinglée sur ce mail.
+  await recalculerMainDesMessages(entrants.map((m) => m.id));
   const adresse = entrants[entrants.length - 1]?.de ?? null;
   if (adresse) {
     const { detecterRegleApprise } = await import("./regles-apprises");
@@ -137,6 +140,7 @@ export async function derangerMail(messageId: string): Promise<{ remis: number }
   const ranges = fil.messages.filter((m) => m.rangeLe);
   await prisma.message.updateMany({ where: { id: { in: ranges.map((m) => m.id) } }, data: { rangeLe: null, rangePar: null, rangeMotif: null } });
   for (const m of ranges) await demanderEtatGmail(m.id);
+  await recalculerMainDesMessages(ranges.map((m) => m.id));
   return { remis: ranges.length };
 }
 

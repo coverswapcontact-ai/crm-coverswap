@@ -6,6 +6,7 @@ import { lireEntetes } from "@/lib/messages/stockage";
 import { lireParametre } from "@/lib/parametres/service";
 import { mettreEnFile } from "@/lib/taches/file";
 import { envoyeurMail } from "./envoi";
+import { recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { tracerMailDansDossier } from "./rattachement";
 
 /**
@@ -155,6 +156,9 @@ export async function executerEnvoi(envoiId: string): Promise<{ envoye: boolean;
   // La trace : le fil répondu, le brouillon envoyé, l'événement dans le dossier.
   if (recu?.filCanal && !automatique) {
     await prisma.message.updateMany({ where: { canal: "EMAIL", filCanal: recu.filCanal, sens: "ENTRANT", reponduLe: null }, data: { reponduLe: maintenant } });
+    // Mission 14 (R2) : la réponse dans le fil décroche la main épinglée sur le mail du client (même sans dossier sur l'envoi).
+    const fil = await prisma.message.findMany({ where: { canal: "EMAIL", filCanal: recu.filCanal, dossierId: { not: null } }, select: { id: true } });
+    await recalculerMainDesMessages(fil.map((m) => m.id));
   }
   if (envoi.brouillonId) await prisma.brouillonMail.update({ where: { id: envoi.brouillonId }, data: { statut: "ENVOYE", envoyeLe: maintenant, envoiId: envoi.id } }).catch(() => undefined);
   if (envoi.dossierId) {

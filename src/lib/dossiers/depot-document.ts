@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { enregistrerDocumentExistant, importerPdfDocument, schemaDocumentExistant } from "@/lib/dossiers/documents-existants";
+import type { ChangementEtape } from "@/lib/dossiers/transitions";
 import { enregistrerFichier, lireFichierConserve } from "@/lib/fichiers/stockage";
 import { lirePieceMessage } from "@/lib/messages/consultation";
 
@@ -63,7 +64,17 @@ export async function lireSource(source: z.output<typeof schemaSourceDocument>):
 const versFile = (f: FichierDepose) => new File([new Uint8Array(f.contenu)], f.nom, { type: f.typeMime });
 
 export type ResultatDepot =
-  | { nature: "DOCUMENT"; documentId: string; numero: string; type: "DEVIS" | "FACTURE"; avertissements: string[]; nom: string; octets: number }
+  | {
+      nature: "DOCUMENT";
+      documentId: string;
+      numero: string;
+      type: "DEVIS" | "FACTURE";
+      avertissements: string[];
+      nom: string;
+      octets: number;
+      /** Mission 14 (R1) : un devis visible, émis ou envoyé, a fait passer le dossier en « Devis envoyé ». */
+      changements: ChangementEtape[];
+    }
   | { nature: "FICHIER"; fichierId: string; nom: string; typeMime: string; octets: number; libelle: string };
 
 export async function deposerDocument(dossierId: string, entree: EntreeDepotDocument): Promise<ResultatDepot> {
@@ -96,5 +107,5 @@ export async function deposerDocument(dossierId: string, entree: EntreeDepotDocu
     })
   );
   await importerPdfDocument(dossierId, enregistre.documentId, versFile(fichier));
-  return { nature: "DOCUMENT", documentId: enregistre.documentId, numero: enregistre.numero, type: entree.type, avertissements: enregistre.avertissements, nom: fichier.nom, octets: fichier.contenu.length };
+  return { nature: "DOCUMENT", documentId: enregistre.documentId, numero: enregistre.numero, type: entree.type, avertissements: enregistre.avertissements, nom: fichier.nom, octets: fichier.contenu.length, changements: enregistre.changements };
 }

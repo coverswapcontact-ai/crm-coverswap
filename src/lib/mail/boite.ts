@@ -5,6 +5,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireParametre } from "@/lib/parametres/service";
 import { mettreEnFile } from "@/lib/taches/file";
 import { agentMailActif } from "@/lib/messages/consultation";
+import { recalculerMainDesMessages } from "@/lib/dossiers/main";
 import {
   LIBELLE_RANGE,
   changementsGmail,
@@ -135,6 +136,12 @@ export async function classerMessage(messageId: string, options: { forcer?: bool
     await prisma.message.updateMany({ where: { canal: "EMAIL", filCanal: message.filCanal, sens: "ENTRANT", recuLe: { lte: message.recuLe }, reponduLe: null }, data: { reponduLe: message.recuLe } });
   }
   if (rangerMaintenant || remonter) await demanderEtatGmail(message.id);
+  // Mission 14 (R2) : un mail rangé ou remonté par le tri, ou une réponse partie dans le fil : la main des dossiers est relue.
+  if (rangerMaintenant || remonter) await recalculerMainDesMessages([message.id]);
+  if (message.sens === "SORTANT" && !message.automatique && message.filCanal) {
+    const fil = await prisma.message.findMany({ where: { canal: "EMAIL", filCanal: message.filCanal, dossierId: { not: null } }, select: { id: true } });
+    await recalculerMainDesMessages(fil.map((m) => m.id));
+  }
   return { decision, contact };
 }
 
@@ -259,6 +266,8 @@ async function refleterLibelles(idGmail: string, libelles: string[], rangeId: st
   if (remonte) await poserRegle(message.de, "NE_JAMAIS_RANGER", "Remonté dans Gmail par Lucas", "LUCAS:gmail");
   if (Object.keys(data).length === 0) return false;
   await prisma.message.update({ where: { id: message.id }, data });
+  // Mission 14 (R2) : archivé (traité) ou remis dans la boîte depuis Gmail : la main du dossier suit.
+  if ("rangeLe" in data || "traiteLe" in data) await recalculerMainDesMessages([message.id]);
   return true;
 }
 
@@ -406,6 +415,8 @@ export async function archiverFil(messageId: string, archiver = true): Promise<v
   const fil = await messagesDuFil(messageId);
   await prisma.message.updateMany({ where: { id: { in: fil.map((m) => m.id) } }, data: archiver ? { traiteLe: new Date(), lu: true } : { traiteLe: null } });
   for (const m of fil) await demanderEtatGmail(m.id);
+  // Mission 14 (R2) : traité = « pas de réponse à faire » ; désarchivé = de nouveau à traiter.
+  await recalculerMainDesMessages(fil.map((m) => m.id));
 }
 
 /** Remonter un mail rangé : il revient, et son expéditeur ne sera plus jamais rangé. */
@@ -421,6 +432,7 @@ export async function remonter(messageId: string): Promise<void> {
     await prisma.message.update({ where: { id: m.id }, data: { classe: classe?.clientId || classe?.leadId ? "CLIENT" : "HUMAIN", classeMotif: "Remonté à la main par Lucas.", statut: "A_TRIER" } });
     await demanderEtatGmail(m.id);
   }
+  await recalculerMainDesMessages(ranges.map((m) => m.id));
 }
 
 /** « Ne plus me montrer cet expéditeur » : pour toujours ; ses mails, présents et à venir, sont rangés. */
@@ -438,6 +450,7 @@ export async function nePlusMontrer(messageId: string): Promise<{ ranges: number
     data: { rangeLe: maintenant, rangePar: "LUCAS", rangeMotif: "Vous avez demandé de ne plus voir cet expéditeur.", classe: "BRUIT", classePar: "REGLE", lu: true, remonteLe: null },
   });
   for (const m of aRanger) await demanderEtatGmail(m.id);
+  await recalculerMainDesMessages(aRanger.map((m) => m.id));
   return { ranges: aRanger.length };
 }
 

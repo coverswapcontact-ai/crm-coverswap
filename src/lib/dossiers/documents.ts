@@ -24,6 +24,7 @@ import {
 import { ErreurMetier } from "./erreurs";
 import { mentionsLegales, type CategorieDestinataire } from "./mentions";
 import { calculerMontants, formatCentimes, versCentimes } from "./montants";
+import { etapeApresGeneration } from "./devis-envoye";
 import { attribuerNumero, numeroFactice } from "./numerotation";
 import { estEtape } from "./regles";
 import { archiverFichier, enregistrerPdf, lireFichier, lireLignes } from "./stockage";
@@ -105,16 +106,8 @@ export const schemaGeneration = z
 
 export type EntreeGeneration = z.output<typeof schemaGeneration>;
 
-// Génération d'un devis : le dossier passe à « Devis envoyé » s'il n'y est pas
-// encore et n'a pas dépassé ce stade. Génération d'une facture : le dossier
-// passe à « Facturé » depuis « Chantier ». Ailleurs l'étape ne bouge pas.
-function etapeApresGeneration(type: TypeDocument, etape: EtapeDossier): EtapeDossier | null {
-  if (type === "DEVIS" && (etape === "QUALIFICATION" || etape === "SIMULATION" || etape === "RELANCE")) {
-    return "DEVIS_ENVOYE";
-  }
-  if (type === "FACTURE" && etape === "CHANTIER") return "FACTURE";
-  return null;
-}
+// Étape après la génération (devis → « Devis envoyé », facture → « Facturé ») : devis-envoye.ts (mission 14).
+export { etapeApresGeneration };
 
 /** Destinataire tel qu'imprimé, figé sur le document à l'émission. */
 export type Destinataire = DonneesDocumentPdf["client"] & { categorie: CategorieDestinataire };
@@ -302,7 +295,8 @@ async function emettre(emission: Emission) {
           },
         });
 
-        const vers = etapeApresGeneration(emission.type, emission.etape);
+        // Mission 14 : un devis n'est « envoyé » que s'il est visible dans l'espace (un devis généré l'est toujours aujourd'hui).
+        const vers = emission.type === "DEVIS" && document.visibleEspace === false ? null : etapeApresGeneration(emission.type, emission.etape);
         const changements: ChangementEtape[] = vers
           ? [
               await appliquerChangementEtape(tx, {
@@ -565,30 +559,8 @@ export async function lirePdfDocument(dossierId: string, documentId: string) {
 
 /* ── Mission 11 : plusieurs devis par dossier ─────────────────────── */
 
-export const schemaPresentationDevis = z
-  .object({
-    visibleEspace: z.boolean("Visibilité invalide.").optional(),
-    libelleVariante: z.string("Libellé invalide.").trim().max(80, "Libellé trop long : 80 caractères maximum.").nullable().optional(),
-  })
-  .refine((entree) => entree.visibleEspace !== undefined || entree.libelleVariante !== undefined, { message: "Rien à modifier." });
-
-/** Libellé de variante et visibilité dans l'espace d'un devis émis (généré ou repris) : la présentation, jamais le contenu. */
-export async function modifierPresentationDevis(dossierId: string, documentId: string, entree: z.output<typeof schemaPresentationDevis>): Promise<{ id: string; numero: string; libelleVariante: string | null; visibleEspace: boolean }> {
-  const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
-  if (!devis?.numero) throw new ErreurMetier("Devis introuvable dans ce dossier.", 404);
-  const maj = await prisma.document.update({
-    where: { id: devis.id },
-    data: { ...(entree.visibleEspace !== undefined ? { visibleEspace: entree.visibleEspace } : {}), ...(entree.libelleVariante !== undefined ? { libelleVariante: entree.libelleVariante || null } : {}) },
-  });
-  const changements = [
-    entree.visibleEspace !== undefined && entree.visibleEspace !== devis.visibleEspace ? (entree.visibleEspace ? "visible dans l'espace client" : "masqué dans l'espace client") : null,
-    entree.libelleVariante !== undefined && (entree.libelleVariante || null) !== devis.libelleVariante ? `libellé « ${entree.libelleVariante || "—"} »` : null,
-  ].filter(Boolean);
-  if (changements.length) {
-    await prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero} : ${changements.join(", ")}`, metadata: JSON.stringify({ documentId: devis.id, presentation: true }) } });
-  }
-  return { id: maj.id, numero: devis.numero, libelleVariante: maj.libelleVariante, visibleEspace: maj.visibleEspace };
-}
+// Libellé et visibilité d'un devis émis : presentation-devis.ts (sorti de ce fichier, mission 14).
+export { modifierPresentationDevis, schemaPresentationDevis } from "./presentation-devis";
 
 /** Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté. */
 export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string }> {
@@ -600,5 +572,7 @@ export async function annulerDevis(dossierId: string, documentId: string, motif:
     prisma.document.update({ where: { id: devis.id }, data: { statut: "ANNULEE" } }),
     prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } }),
   ]);
+  // Mission 14 : un devis annulé n'attend plus la réponse du client ; la main est relue (main.ts).
+  await recalculerMain(dossierId);
   return { id: devis.id, numero: devis.numero };
 }

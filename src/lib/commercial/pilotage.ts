@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { lirePhotos } from "@/lib/dossiers/stockage";
+import { estMotifRepondre } from "@/lib/dossiers/main";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import { JOURS_A_TRAITER, LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
 import { RANG_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
@@ -120,9 +121,12 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     const repondre = conversation?.dernierSens === "ENTRANT" && !conversation.stopLe;
     const etape = dossier.etape as EtapeDossier;
 
+    // Mission 14 (R2) : un mail ou un message d'espace sans réponse épingle la main : « Répondre à … », avant l'étape.
+    const repondreMessage = dossier.main === "MOI" && estMotifRepondre(dossier.mainMotif);
     let groupe: GroupeAffaire;
     let action: string;
     if (repondre) [groupe, action] = ["REPONDRE", "Répondre à son SMS"];
+    else if (repondreMessage) [groupe, action] = ["REPONDRE", dossier.mainMotif!];
     else if (etape === "SIGNE") [groupe, action] = dossier.dateChantier ? ["PLUS_TARD", "Chantier daté : à planifier"] : ["PLANIFIER", "Appeler : fixer la date du chantier, suivre l'acompte"];
     else if (rappelDu) [groupe, action] = ["RAPPELER", dossier.prochaineAction ?? "Rappeler"];
     else if (etape === "QUALIFICATION") [groupe, action] = nbPhotos > 0 ? ["SIMULATION", `Préparer la simulation (${nbPhotos} photo${nbPhotos > 1 ? "s" : ""} reçue${nbPhotos > 1 ? "s" : ""})`] : espace ? ["ATTENTE_PHOTOS", espace.premierAccesLe ? "Attend ses photos (lien consulté)" : "Attend ses photos (lien pas encore ouvert)"] : ["DECIDER", "Envoyer le lien de son espace pour recevoir ses photos"];

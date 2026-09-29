@@ -120,7 +120,8 @@ describe("relances proposées, jamais envoyées seules", () => {
   test("devis non signé à J+4 ; et si le client répond avant la validation, la proposition devient sans objet", async () => {
     const { dossierId, leadId } = await dossierOuvert("Hugo", 8);
     await prisma.dossier.update({ where: { id: dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
-    await prisma.document.create({ data: { dossierId, type: "DEVIS", numero: "D-REL-0001", dateEmission: new Date(Date.now() - 5 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE" } });
+    // Émis et remis au client il y a cinq jours (mission 14 : le délai court depuis le plus tardif des deux).
+    await prisma.document.create({ data: { dossierId, type: "DEVIS", numero: "D-REL-0001", dateEmission: new Date(Date.now() - 5 * JOUR), createdAt: new Date(Date.now() - 5 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE" } });
     await relances.proposerRelancesSms();
     const [proposition] = await propositionsDe(dossierId);
     const contenu = JSON.parse(proposition.contenu) as { motif: string; texte: string };
@@ -131,6 +132,20 @@ describe("relances proposées, jamais envoyées seules", () => {
     await reception.enregistrerSmsEntrant({ identifiant: "r-3", numero: lead!.telephone, texte: "C'est bon pour moi, je signe ce soir", recuLe: new Date() }, "essai");
     await assert.rejects(avecActeur(LUCAS, () => validation.validerProposition(proposition.id)), /sans objet|répondu/i);
     assert.equal(await prisma.sms.count({ where: { dossierId, sens: "SORTANT" } }), 0);
+  });
+
+  test("mission 14 : un devis déposé aujourd'hui mais daté de six jours plus tôt n'est pas encore relancé ; un devis masqué jamais", async () => {
+    const { dossierId } = await dossierOuvert("Paulin", 8);
+    await prisma.dossier.update({ where: { id: dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
+    await prisma.document.create({ data: { dossierId, type: "DEVIS", numero: "D-REL-0002", dateEmission: new Date(Date.now() - 6 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE", origine: "REPRISE" } });
+    await relances.proposerRelancesSms();
+    assert.equal((await propositionsDe(dossierId)).length, 0, "le délai court depuis le dépôt");
+
+    const masque = await dossierOuvert("Masque", 8);
+    await prisma.dossier.update({ where: { id: masque.dossierId }, data: { etape: "DEVIS_ENVOYE", photos: JSON.stringify(["dossiers/x/photos/a-12345678.jpg"]) } });
+    await prisma.document.create({ data: { dossierId: masque.dossierId, type: "DEVIS", numero: "D-REL-0003", dateEmission: new Date(Date.now() - 6 * JOUR), createdAt: new Date(Date.now() - 6 * JOUR), objet: "Cuisine", lignes: "[]", totalHt: 1500, statut: "ENVOYE", visibleEspace: false } });
+    await relances.proposerRelancesSms();
+    assert.ok(!(await propositionsDe(masque.dossierId)).some((p) => (JSON.parse(p.contenu) as { motif: string }).motif === "RELANCE_DEVIS"), "masqué : le client ne le voit pas");
   });
 
   test("appel sans réponse : rappel posé au lendemain, second SMS proposé à J+3", async () => {

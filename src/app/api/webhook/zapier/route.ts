@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const resultat = await recevoirLeadDuPont(corps, "Zapier");
-    revalidatePath("/prospects");
+    revalidatePath("/leads");
     revalidatePath("/publicite");
     return NextResponse.json({
       success: true,

@@ -8,8 +8,8 @@ import { formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import type { PresetVue } from "@/lib/dossiers/types";
 import type { LigneTarifPrestation } from "@/lib/prestations/tarifs";
 import { cn } from "@/lib/utils";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, CLASSE_SAISIE } from "./ui";
+import { Bouton, CLASSE_SAISIE } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type SaisiePreset = { designation: string; unite: Unite; prix: string };
 

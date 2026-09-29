@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, BookOpen, Copy, Download, EyeOff, Info, Lock, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, EnTetePage, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, Champ, EnTetePage, Pastille, TRANS, TitreSection, CARTE } from "@/components/pilotage/ui";
 import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { dernierJourDuMois, libelleMois } from "@/lib/finances/periodes";
@@ -15,7 +15,6 @@ import type { SyntheseLue } from "@/lib/synthese/requete";
 import type { Alerte, Repartition } from "@/lib/synthese/types";
 import { cn } from "@/lib/utils";
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 const pct = (valeur: number | null) => (valeur === null ? "—" : `${String(valeur).replace(".", ",")} %`);
 const ecart = (valeur: number | null) => (valeur === null ? "—" : `${valeur > 0 ? "+" : valeur < 0 ? "−" : ""}${String(Math.abs(valeur)).replace(".", ",")} %`);
 

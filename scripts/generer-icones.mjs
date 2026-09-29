@@ -94,10 +94,7 @@ export const ECRANS_IPHONE = [
 
 const rendre = (svg, fichier, taille) => sharp(Buffer.from(svg)).resize(taille, taille).png({ compressionLevel: 9 }).toFile(path.join(SORTIE, fichier));
 
-for (const [application, dessin] of [
-  ["crm", iconeCrm],
-  ["messages", iconeMessages],
-]) {
+for (const [application, dessin] of [["crm", iconeCrm]]) {
   await rendre(dessin(), `${application}-180.png`, 180); // apple-touch-icon
   await rendre(dessin(), `${application}-192.png`, 192);
   await rendre(dessin(), `${application}-512.png`, 512);

@@ -9,7 +9,7 @@ import { proposer, rejeterProposition, validerProposition, vueProposition, type 
 import type { PropositionVue } from "@/lib/validation/types";
 import { CATEGORIES_HORS_CLIENTS, LIBELLES_CATEGORIE_MESSAGE, type CategorieHorsClients } from "./constantes";
 import { demanderConservationPieces } from "./propositions";
-import { TYPE_TACHE_ANALYSE, TYPE_TACHE_BOITE } from "./stockage";
+import { TYPE_TACHE_BOITE } from "./stockage";
 import { objetSansPrefixes } from "./texte";
 
 /**
@@ -193,14 +193,6 @@ export async function annulerBruit(messageId: string): Promise<void> {
     }
   });
   await demanderConservationPieces(messageId);
-}
-
-/** Nouvelle lecture par l'IA, demandée par la personne (coût d'un appel). */
-export async function demanderRelecture(messageId: string): Promise<void> {
-  const message = await messageExistant(messageId);
-  if (message.statut === "A_ANALYSER") throw new ErreurMetier("L'analyse de ce mail est déjà en cours.", 409);
-  if (message.sens !== "ENTRANT") throw new ErreurMetier("Seul un mail reçu se relit.", 400);
-  await mettreEnFile({ type: TYPE_TACHE_ANALYSE, cle: `relecture:${messageId}`, mode: "RECONCILIATION", charge: { messageId, relire: true } });
 }
 
 /* ── Répondre ──────────────────────────────────────────────────────── */

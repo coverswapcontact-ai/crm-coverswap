@@ -31,16 +31,15 @@ type Entree = {
 // Navigation resserrée (21/09/2026) : ce que Lucas utilise, dans l'ordre du travail — un lead
 // devient un dossier, le client avance dans son espace, on s'écrit par SMS, le client reste,
 // l'argent rentre. Le simulateur prépare les visuels (depuis ici ou depuis un dossier).
-// Retirés du menu, PAS du CRM : Commercial, Prospects, Mails (l'agent continue de trier),
-// À valider, Synthèse (les mois continuent d'être figés), Registre des numéros (il continue de
-// protéger la numérotation), Journal (il continue de tout enregistrer). Leurs adresses répondent toujours.
+// Mission 13 (lot 7, 29/09/2026) : Commercial, Prospects, Journal, Registre des numéros, SMS, la messagerie et
+// l'agent mail v1 sont retirés du CRM (leurs données restent en base) ; À valider et Synthèse restent joignables
+// par leur adresse (menu Plus : Simulateur, Finances, Site, Publicité, Tâches de fond, Dépenses, Paramètres).
 const PRINCIPALES: Entree[] = [
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsAAppeler", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone, mobile: true },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
-  // Mission 7 (22/09/2026) : SMS retiré du menu (pas de numéro professionnel) — l'écran et ses données restent, /sms répond
-  // toujours. Le mail prend le relais : l'onglet Mail, trié d'office.
+  // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
   { href: "/finances", libelle: "Finances", icone: Wallet },

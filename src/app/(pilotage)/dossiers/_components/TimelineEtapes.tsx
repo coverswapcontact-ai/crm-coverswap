@@ -14,8 +14,8 @@ import { formatHorodatage } from "@/lib/dossiers/dates";
 import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { Bouton, CLASSE_SAISIE, COULEURS_ETAPE, TRANS } from "./ui";
+import { Bouton, CLASSE_SAISIE, COULEURS_ETAPE, TRANS } from "@/components/pilotage/ui";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type Statut = "passee" | "courante" | "a-venir";
 

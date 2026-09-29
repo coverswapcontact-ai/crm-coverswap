@@ -3,10 +3,12 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { mettreEnFile } from "@/lib/taches/file";
 import { ErreurDefinitive, enregistrerTraitement } from "@/lib/taches/registre";
-import { ACTEUR_AGENT_MAIL, analyserMessage } from "./analyse";
 import { agentMailActif } from "./consultation";
 import { lireMessageGmail, listerMessagesGmail, versMessageRecu } from "./gmail";
-import { TYPE_TACHE_ANALYSE, TYPE_TACHE_BOITE, TYPE_TACHE_PIECES, TYPE_TACHE_RELEVE, conserverPieces, enregistrerMessageRecu, rangerDansBoite } from "./stockage";
+import { TYPE_TACHE_BOITE, TYPE_TACHE_PIECES, TYPE_TACHE_RELEVE, conserverPieces, enregistrerMessageRecu, rangerDansBoite } from "./stockage";
+
+// Mission 13 (lot 7) : l'analyse par l'agent v1 (règles puis modèle) est retirée ; le relevé garde son acteur.
+const ACTEUR_AGENT_MAIL = "AGENT:mail";
 
 /**
  * Relevé de la boîte mail et tâches de l'agent. Le relevé ne lit que les
@@ -48,10 +50,9 @@ export async function releverBoite(options: { signal?: AbortSignal } = {}): Prom
     if (connus.has(id)) continue;
     const gmail = await lireMessageGmail(id);
     if (!gmail) continue;
-    const { id: messageId, nouveau } = await enregistrerMessageRecu(versMessageRecu(gmail, connexion.compte));
+    const { nouveau } = await enregistrerMessageRecu(versMessageRecu(gmail, connexion.compte));
     if (!nouveau) continue;
     nouveaux++;
-    await mettreEnFile({ type: TYPE_TACHE_ANALYSE, cle: `analyse-message:${messageId}`, charge: { messageId } });
   }
   return { lus: identifiants.length, nouveaux };
 }
@@ -69,13 +70,6 @@ function messageIdDe(charge: unknown): string {
 }
 
 export function enregistrerTachesMessages(): void {
-  enregistrerTraitement(TYPE_TACHE_ANALYSE, {
-    libelle: "Analyse d'un mail par l'agent (règles, puis IA si active)",
-    acteur: ACTEUR_AGENT_MAIL,
-    delaiMaxMs: 3 * 60_000,
-    tentativesMax: 3,
-    executer: (charge, contexte) => analyserMessage(messageIdDe(charge), { relire: (charge as { relire?: boolean }).relire === true, signal: contexte.signal }),
-  });
   enregistrerTraitement(TYPE_TACHE_BOITE, {
     libelle: "Rangement d'un mail dans la boîte (archiver le bruit, remettre dans la boîte)",
     acteur: "SYSTEME:boite-mail",

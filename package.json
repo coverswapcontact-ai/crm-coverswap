@@ -9,11 +9,7 @@
     "lint": "eslint",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "base:sauvegarder": "node scripts/sauvegarder-base.mjs manuelle",
-    "base:pousser": "node scripts/avant-demarrage.mjs && prisma db push && tsx scripts/preparer-base.ts",
-    "db:seed:prospection": "tsx prisma/seed-prospection.ts",
-    "prospection:sourcing": "tsx scripts/sourcing-prospection.ts",
-    "prospection:scoring": "tsx scripts/scoring-prospection.ts",
-    "prospection:avis-refresh": "tsx scripts/refetch-avis-prospection.ts"
+    "base:pousser": "node scripts/avant-demarrage.mjs && prisma db push && tsx scripts/preparer-base.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

@@ -8,6 +8,7 @@ import { Bouton, CLASSE_SAISIE, Pastille, TRANS } from "@/components/pilotage/ui
 import type { DetailMail } from "@/lib/mail/detail";
 import { INTENTIONS, LIBELLES_INTENTION } from "@/lib/mail/intentions";
 import { cn } from "@/lib/utils";
+import { jourHeure } from "@/lib/commun/format";
 
 /**
  * Mail v2 (mission 9) : ce que Claude a écrit sur le mail, et ce que Lucas en
@@ -17,7 +18,6 @@ import { cn } from "@/lib/utils";
  */
 
 const TON_INTENTION: Record<string, "ambre" | "bleu" | "neutre"> = { REPONSE: "ambre", ACTION: "bleu", INFORMATION: "neutre" };
-const quand = (iso: string) => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function BlocIntention({ detail, onChange }: { detail: DetailMail; onChange: () => void }) {
   const [edition, setEdition] = useState(false);
@@ -77,7 +77,7 @@ export function BlocResume({ resume }: { resume: NonNullable<DetailMail["resume"
     <div className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3">
       <p className="flex flex-wrap items-center gap-2 text-[11.5px] tracking-wide text-[#8B919C] uppercase">
         Résumé du fil
-        <span className="normal-case tracking-normal">{resume.par?.startsWith("ASSISTANT") ? "par Claude" : "par vous"} · {quand(resume.le)}</span>
+        <span className="normal-case tracking-normal">{resume.par?.startsWith("ASSISTANT") ? "par Claude" : "par vous"} · {jourHeure(resume.le)}</span>
         {resume.perime ? <Pastille ton="ambre">De nouveaux messages depuis</Pastille> : null}
       </p>
       <p className="mt-1.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{resume.resume}</p>
@@ -193,7 +193,7 @@ export function BoutonSnooze({ messageId, snoozeJusqua, onChange }: { messageId:
     setOccupe(true);
     try {
       const r = await envoyerJson<{ jusqua: string | null }>(`/api/mail/${messageId}/snooze`, "POST", corps);
-      toast.success(r.jusqua ? `Remis au ${quand(r.jusqua)}` : "Remise à plus tard annulée");
+      toast.success(r.jusqua ? `Remis au ${jourHeure(r.jusqua)}` : "Remise à plus tard annulée");
       setOuvert(false);
       onChange();
     } catch (erreur) {
@@ -207,7 +207,7 @@ export function BoutonSnooze({ messageId, snoozeJusqua, onChange }: { messageId:
   return (
     <span className="relative">
       <Bouton taille="sm" variante={actif ? "primaire" : "secondaire"} className="h-11 sm:h-8" disabled={occupe} onClick={() => (actif ? void envoyer({ annuler: true }) : setOuvert((o) => !o))} icone={<AlarmClock size={14} aria-hidden />}>
-        {actif ? `Remis au ${quand(snoozeJusqua)} · annuler` : "Plus tard"}
+        {actif ? `Remis au ${jourHeure(snoozeJusqua)} · annuler` : "Plus tard"}
       </Bouton>
       {ouvert && !actif ? (
         <span className="absolute left-0 z-10 mt-1 flex w-[220px] flex-col rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-1 shadow-lg">
@@ -242,7 +242,7 @@ export function BrouillonsDeposes({ brouillons, onReprendre }: { brouillons: Det
       {prets.map((b) => (
         <div key={b.id} className="rounded-[10px] border-[0.5px] border-[#1D9E75]/35 bg-[#112B22]/40 p-3">
           <p className="flex flex-wrap items-center gap-2 text-[12px] text-[#5DCAA5]">
-            <Sparkles size={13} aria-hidden /> Brouillon déposé par Claude · {quand(b.createdAt)}
+            <Sparkles size={13} aria-hidden /> Brouillon déposé par Claude · {jourHeure(b.createdAt)}
             {b.manques.length ? <Pastille ton="ambre">{b.manques[0]}</Pastille> : null}
           </p>
           {b.objet ? <p className="mt-1 text-[13px] font-medium text-[#F2F3F5]">{b.objet}</p> : null}

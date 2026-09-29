@@ -9,7 +9,7 @@ import { estEtapeActive } from "@/lib/dossiers/regles";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { CarteDossier, CarteDossierCompacte } from "./CarteDossier";
-import { COULEURS_ETAPE } from "./ui";
+import { COULEURS_ETAPE } from "@/components/pilotage/ui";
 
 /** Dans une colonne : actions en retard d'abord, puis par date, puis sans date. */
 export function comparerParEcheance(a: DossierResume, b: DossierResume): number {

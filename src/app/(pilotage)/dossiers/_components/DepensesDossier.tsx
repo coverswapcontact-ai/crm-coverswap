@@ -9,7 +9,7 @@ import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { TitreSection, TRANS } from "./ui";
+import { TitreSection, TRANS } from "@/components/pilotage/ui";
 
 /** Dépenses du chantier et marge indicative : ce qui est facturé moins ce qui est dépensé. */
 export function DepensesDossier({ detail }: { detail: DossierDetail }) {

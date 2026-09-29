@@ -6,7 +6,7 @@ import type { SimulationSiteLigne, SimulationsSiteRecentes } from "@/lib/simulat
 import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
-import { pluriel } from "@/lib/commun/format";
+import { pluriel, quand } from "@/lib/commun/format";
 
 /**
  * Mission 13 (B19) — « Sur le site cette semaine » : les simulations faites sur
@@ -16,13 +16,6 @@ import { pluriel } from "@/lib/commun/format";
  * le lead rattaché (ouvre sa fiche) ou « anonyme ».
  */
 
-
-function quand(iso: string, maintenant: number): string {
-  const jours = Math.floor((maintenant - new Date(iso).getTime()) / 86_400_000);
-  if (jours <= 0) return "aujourd'hui";
-  if (jours === 1) return "hier";
-  return `il y a ${jours} jours`;
-}
 
 function LigneSimulation({ ligne, maintenant, onImage, onLead }: { ligne: SimulationSiteLigne; maintenant: number; onImage: (() => void) | null; onLead: () => void }) {
   const vignette = ligne.image ? (

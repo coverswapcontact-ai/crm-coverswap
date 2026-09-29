@@ -2,15 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   CheckCircle2,
   Download,
   ExternalLink,
   Heading,
   Plus,
   Settings2,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -18,7 +15,6 @@ import {
   LIBELLES_ETAPE,
   LIBELLES_TYPE_DOCUMENT,
   LIBELLES_UNITE,
-  UNITES,
   type LigneDocument,
   type TypeDocument,
   type Unite,
@@ -29,69 +25,15 @@ import {
   formatMontant,
   formatQuantite,
   lireNombre,
-  totalLigneCentimes,
 } from "@/lib/dossiers/montants";
 import type { DocumentVue, DossierDetail, PresetVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
 import { GestionTarifs } from "./GestionTarifs";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TRANS } from "./ui";
-
-type LigneSaisie =
-  | {
-      cle: string;
-      type: "PRESTATION";
-      designation: string;
-      sousDesignation: string;
-      quantite: string;
-      unite: Unite;
-      prixUnitaire: string;
-    }
-  | { cle: string; type: "SECTION"; libelle: string };
-
-type Erreurs = Record<string, string>;
-
-const nouvelleCle = () => crypto.randomUUID();
-
-const prestationVide = (): LigneSaisie => ({
-  cle: nouvelleCle(),
-  type: "PRESTATION",
-  designation: "",
-  sousDesignation: "",
-  quantite: "1",
-  unite: "ml",
-  prixUnitaire: "",
-});
-
-function saisieDepuis(lignes: LigneDocument[]): LigneSaisie[] {
-  return lignes.map((ligne) =>
-    ligne.type === "SECTION"
-      ? { cle: nouvelleCle(), type: "SECTION", libelle: ligne.libelle }
-      : {
-          cle: nouvelleCle(),
-          type: "PRESTATION",
-          designation: ligne.designation,
-          sousDesignation: ligne.sousDesignation ?? "",
-          quantite: formatQuantite(ligne.quantite),
-          unite: ligne.unite,
-          prixUnitaire: formatQuantite(ligne.prixUnitaire),
-        }
-  );
-}
-
-/** Document de départ : le devis signé (ou le dernier devis) pour une facture, le dernier devis pour un devis. */
-function documentDeDepart(detail: DossierDetail, type: TypeDocument): DocumentVue | undefined {
-  const devis = detail.documents.filter((document) => document.type === "DEVIS" && document.numero);
-  return type === "FACTURE" ? (devis.find((document) => document.statut === "ACCEPTE") ?? devis[0]) : devis[0];
-}
-
-function lireAcompte(saisie: string): number | null {
-  const valeur = lireNombre(saisie);
-  return valeur !== null && Number.isInteger(valeur) && valeur >= 0 && valeur <= 100 ? valeur : null;
-}
-
-type Resultat = { type: TypeDocument; numero: string; pdfUrl: string; totalHtCentimes: number };
+import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TRANS } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { documentDeDepart, lireAcompte, nouvelleCle, prestationVide, saisieDepuis, type Erreurs, type LigneSaisie, type Resultat } from "./generateur-lignes";
+import { LigneGenerateur } from "./LigneGenerateur";
 
 export function GenerateurDocument({
   detail,
@@ -449,122 +391,16 @@ export function GenerateurDocument({
             </div>
             <ol className="space-y-2">
               {lignes.map((ligne, index) => (
-                <li key={ligne.cle}>
-                  {ligne.type === "SECTION" ? (
-                    <div className="rounded-[9px] border-[0.5px] border-[#3A3E47] bg-[#2A2D34]/50 p-2">
-                    <div className="flex items-center gap-2">
-                      <Heading size={14} className="ml-1 shrink-0 text-[#9CA3AF]" aria-hidden />
-                      <input
-                        aria-label="Libellé de la section"
-                        value={ligne.libelle}
-                        maxLength={120}
-                        onChange={(evenement) => modifier(ligne.cle, { libelle: evenement.target.value })}
-                        placeholder="Section (ex. CUISINE, DRESSING N°1 — CHAMBRE)"
-                        aria-invalid={erreurs[`${ligne.cle}:libelle`] ? true : undefined}
-                        className={cn(CLASSE_SAISIE, "h-11 font-medium sm:h-8")}
-                      />
-                      <ActionsLigne
-                        premiere={index === 0}
-                        derniere={index === lignes.length - 1}
-                        onMonter={() => deplacer(ligne.cle, -1)}
-                        onDescendre={() => deplacer(ligne.cle, 1)}
-                        onSupprimer={() => supprimer(ligne.cle)}
-                      />
-                    </div>
-                    {erreurs[`${ligne.cle}:libelle`] ? (
-                      <p className="mt-1.5 pl-7 text-[12px] text-[#F87171]">{erreurs[`${ligne.cle}:libelle`]}</p>
-                    ) : null}
-                    </div>
-                  ) : (
-                    <div className="rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-2.5">
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_72px_92px_96px_96px_108px] sm:items-start">
-                        <div className="space-y-1.5">
-                          <input
-                            aria-label="Désignation"
-                            value={ligne.designation}
-                            maxLength={200}
-                            onChange={(evenement) => modifier(ligne.cle, { designation: evenement.target.value })}
-                            placeholder="Désignation"
-                            aria-invalid={erreurs[`${ligne.cle}:designation`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-11 sm:h-8")}
-                          />
-                          <input
-                            aria-label="Sous-désignation"
-                            value={ligne.sousDesignation}
-                            maxLength={200}
-                            onChange={(evenement) => modifier(ligne.cle, { sousDesignation: evenement.target.value })}
-                            placeholder="Sous-désignation (facultative)"
-                            className={cn(CLASSE_SAISIE, "h-11 font-semibold italic sm:h-8")}
-                          />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 sm:contents">
-                          <input
-                            aria-label="Quantité"
-                            inputMode="decimal"
-                            value={ligne.quantite}
-                            onChange={(evenement) => modifier(ligne.cle, { quantite: evenement.target.value })}
-                            aria-invalid={erreurs[`${ligne.cle}:quantite`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-11 text-center sm:h-8")}
-                          />
-                          <select
-                            aria-label="Unité"
-                            value={ligne.unite}
-                            onChange={(evenement) => modifier(ligne.cle, { unite: evenement.target.value })}
-                            className={cn(CLASSE_SAISIE, "h-11 px-2 sm:h-8")}
-                          >
-                            {UNITES.map((unite) => (
-                              <option key={unite} value={unite}>
-                                {LIBELLES_UNITE[unite]}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            aria-label="Prix unitaire HT"
-                            inputMode="decimal"
-                            value={ligne.prixUnitaire}
-                            onChange={(evenement) => modifier(ligne.cle, { prixUnitaire: evenement.target.value })}
-                            placeholder="PU HT"
-                            aria-invalid={erreurs[`${ligne.cle}:prixUnitaire`] ? true : undefined}
-                            className={cn(CLASSE_SAISIE, "h-11 text-right sm:h-8")}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between gap-2 sm:contents">
-                          <span className="text-[13px] text-[#F2F3F5] tabular-nums sm:pt-1.5 sm:text-right">
-                            {(() => {
-                              const quantite = lireNombre(ligne.quantite);
-                              const prixUnitaire = lireNombre(ligne.prixUnitaire);
-                              return quantite !== null && prixUnitaire !== null
-                                ? formatCentimes(totalLigneCentimes({ quantite, prixUnitaire }))
-                                : "—";
-                            })()}
-                          </span>
-                          <ActionsLigne
-                            premiere={index === 0}
-                            derniere={index === lignes.length - 1}
-                            onMonter={() => deplacer(ligne.cle, -1)}
-                            onDescendre={() => deplacer(ligne.cle, 1)}
-                            onSupprimer={() => supprimer(ligne.cle)}
-                          />
-                        </div>
-                      </div>
-                      {[
-                        erreurs[`${ligne.cle}:designation`],
-                        erreurs[`${ligne.cle}:quantite`],
-                        erreurs[`${ligne.cle}:prixUnitaire`],
-                      ].filter(Boolean).length > 0 ? (
-                        <p className="mt-1.5 text-[12px] text-[#F87171]">
-                          {[
-                            erreurs[`${ligne.cle}:designation`],
-                            erreurs[`${ligne.cle}:quantite`],
-                            erreurs[`${ligne.cle}:prixUnitaire`],
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        </p>
-                      ) : null}
-                    </div>
-                  )}
-                </li>
+                <LigneGenerateur
+                  key={ligne.cle}
+                  ligne={ligne}
+                  premiere={index === 0}
+                  derniere={index === lignes.length - 1}
+                  erreurs={erreurs}
+                  modifier={modifier}
+                  deplacer={deplacer}
+                  supprimer={supprimer}
+                />
               ))}
             </ol>
             {erreurs.lignes ? <p className="mt-2 text-[12px] text-[#F87171]">{erreurs.lignes}</p> : null}
@@ -689,33 +525,5 @@ export function GenerateurDocument({
     </Modale>
     {modaleParametres}
     </>
-  );
-}
-
-function ActionsLigne({
-  premiere,
-  derniere,
-  onMonter,
-  onDescendre,
-  onSupprimer,
-}: {
-  premiere: boolean;
-  derniere: boolean;
-  onMonter: () => void;
-  onDescendre: () => void;
-  onSupprimer: () => void;
-}) {
-  return (
-    <span className="flex shrink-0 justify-end gap-1">
-      <Bouton variante="fantome" taille="icone" aria-label="Monter la ligne" disabled={premiere} onClick={onMonter}>
-        <ArrowUp size={14} />
-      </Bouton>
-      <Bouton variante="fantome" taille="icone" aria-label="Descendre la ligne" disabled={derniere} onClick={onDescendre}>
-        <ArrowDown size={14} />
-      </Bouton>
-      <Bouton variante="fantome" taille="icone" aria-label="Supprimer la ligne" onClick={onSupprimer}>
-        <Trash2 size={14} />
-      </Bouton>
-    </span>
   );
 }

@@ -7,6 +7,7 @@ import { appelApi, messageErreur } from "@/components/pilotage/client";
 import { Bouton, Pastille, TitreSection } from "@/components/pilotage/ui";
 import type { SessionVue } from "@/lib/assistant/execution";
 import { cn } from "@/lib/utils";
+import { heure } from "@/lib/commun/format";
 
 /**
  * Tâches de fond → Sessions de l'assistant (mission 8) : chaque jour où
@@ -17,7 +18,6 @@ import { cn } from "@/lib/utils";
 const TON_STATUT: Record<string, "vert" | "ambre" | "rouge" | "neutre"> = { FAIT: "vert", APERCU: "ambre", REFUSE: "rouge", ERREUR: "rouge" };
 const LIBELLE_STATUT: Record<string, string> = { FAIT: "Fait", APERCU: "Aperçu", REFUSE: "Refusé", ERREUR: "Erreur" };
 const LIBELLE_NIVEAU: Record<string, string> = { LECTURE: "lecture", REVERSIBLE: "écriture", SENSIBLE: "sensible" };
-const heure = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 
 export default function SessionsAssistant({ initial }: { initial: SessionVue[] }) {
   const [sessions, setSessions] = useState(initial);

@@ -5,6 +5,7 @@ import { ExternalLink, FolderOpen, Phone, StickyNote } from "lucide-react";
 import { BadgeMain } from "@/app/(pilotage)/dossiers/_components/Indicateurs";
 import type { ContexteClient as Contexte } from "@/lib/mail/contexte";
 import { cn } from "@/lib/utils";
+import { euros, jour } from "@/lib/commun/format";
 
 /**
  * Le client à côté du mail : sa fiche, chaque projet (étape, qui a la main,
@@ -12,8 +13,6 @@ import { cn } from "@/lib/utils";
  * colonne sur ordinateur, un volet sur téléphone.
  */
 
-const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
-const jour = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null);
 
 function Ligne({ libelle, children }: { libelle: string; children: React.ReactNode }) {
   return (

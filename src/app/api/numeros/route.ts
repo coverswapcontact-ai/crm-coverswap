@@ -1,25 +1,19 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
-import { declarerNumero, lireRegistre, numerosLibres, schemaDeclaration } from "@/lib/dossiers/registre";
+import { NextResponse } from "next/server";
+import { reponseErreur } from "@/lib/commun/api";
+import { numerosLibres } from "@/lib/dossiers/registre";
 
 export const dynamic = "force-dynamic";
 
-/** GET : le registre par série ; `?libres=1` : les numéros émis hors du CRM pas encore rattachés à un document. */
-export async function GET(requete: NextRequest) {
+/**
+ * GET : les numéros émis hors du CRM pas encore rattachés à un document
+ * (rattachement d'un devis ou d'une facture existants). Mission 13 (lot 7) :
+ * l'écran Registre des numéros est retiré, Paramètres → Facturation porte la
+ * numérotation ; cette lecture reste pour DocumentExistant et RepriseDossier.
+ */
+export async function GET() {
   try {
-    if (requete.nextUrl.searchParams.get("libres") === "1") return NextResponse.json({ libres: await numerosLibres() });
-    return NextResponse.json({ series: await lireRegistre() });
+    return NextResponse.json({ libres: await numerosLibres() });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/numeros");
-  }
-}
-
-/** POST : déclare un numéro émis hors du CRM ; il ne sera jamais attribué. */
-export async function POST(requete: NextRequest) {
-  try {
-    await declarerNumero(analyser(schemaDeclaration, await lireCorpsJson(requete)));
-    return NextResponse.json({ series: await lireRegistre() }, { status: 201 });
-  } catch (erreur) {
-    return reponseErreur(erreur, "POST /api/numeros");
   }
 }

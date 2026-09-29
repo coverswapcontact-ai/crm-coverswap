@@ -2,7 +2,7 @@
 // Module Dossiers — constantes partagées (client et serveur)
 // SQLite ne supporte pas les enums Prisma : les valeurs autorisées des champs
 // `String` du schéma sont définies ici, source de vérité côté code
-// (même convention que src/lib/prospection/constants.ts).
+// (même convention que les autres modules de constantes).
 // ─────────────────────────────────────────────
 
 /* ── Étapes du tunnel ─────────────────────────────────────────── */

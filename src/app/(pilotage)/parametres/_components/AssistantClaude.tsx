@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Bot, Copy, History, RotateCcw, Save, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
+import { Bouton, Pastille, TitreSection, TRANS, ZoneTexte, CARTE } from "@/components/pilotage/ui";
 import type { OutilVue } from "@/lib/assistant/catalogue";
 import type { TexteReglable, VersionVue } from "@/lib/assistant/consignes";
 import type { VueAccesAssistant, VueConsignesAssistant } from "@/lib/assistant/vues-parametres";
 import { cn } from "@/lib/utils";
+import { jourHeureCourt } from "@/lib/commun/format";
 
 /**
  * Paramètres → Assistant Claude (mission 8) : l'adresse du serveur MCP et la
@@ -19,7 +20,6 @@ import { cn } from "@/lib/utils";
  * OAuth, avec ta session du CRM.
  */
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 type Acces = VueAccesAssistant;
 type Consignes = VueConsignesAssistant;
 
@@ -31,7 +31,6 @@ const FAMILLES: { cle: OutilVue["famille"]; libelle: string }[] = [
   { cle: "ECRITURE", libelle: "Écriture" },
 ];
 
-const quand = (iso: string | null) => (iso ? new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "jamais");
 
 export default function AssistantClaude({ initialAcces, initialConsignes }: { initialAcces: Acces; initialConsignes: Consignes }) {
   // Mission 13 (lot 3) : accès et consignes arrivent du serveur avec la page.
@@ -113,7 +112,7 @@ function CarteConnexion({ acces, onMaj }: { acces: Acces; onMaj: (a: Acces) => v
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-[#F2F3F5]">
-                    {c.nom} <span className="text-[11.5px] font-normal text-[#6B7280]">{c.origine === "CIMD" ? "identité par document" : c.origine === "DCR" ? "enregistrement dynamique" : "à la main"} · depuis le {quand(c.creeLe)}</span>
+                    {c.nom} <span className="text-[11.5px] font-normal text-[#6B7280]">{c.origine === "CIMD" ? "identité par document" : c.origine === "DCR" ? "enregistrement dynamique" : "à la main"} · depuis le {(jourHeureCourt(c.creeLe) ?? "jamais")}</span>
                   </p>
                 </div>
                 {!c.revoqueLe ? (
@@ -129,7 +128,7 @@ function CarteConnexion({ acces, onMaj }: { acces: Acces; onMaj: (a: Acces) => v
                   {c.connexions.map((j) => (
                     <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#9CA3AF]">
                       <span>
-                        {j.clientNom ?? "Client MCP"} · {j.utilisateur} · ouverte le {quand(j.creeLe)} · dernier usage {quand(j.dernierUsageLe)} · {j.active ? `expire le ${quand(j.expireLe)}` : j.revoqueLe ? "révoquée" : "expirée"}
+                        {j.clientNom ?? "Client MCP"} · {j.utilisateur} · ouverte le {(jourHeureCourt(j.creeLe) ?? "jamais")} · dernier usage {(jourHeureCourt(j.dernierUsageLe) ?? "jamais")} · {j.active ? `expire le ${(jourHeureCourt(j.expireLe) ?? "jamais")}` : j.revoqueLe ? "révoquée" : "expirée"}
                       </span>
                       {j.active ? (
                         <button type="button" className="inline-flex min-h-11 items-center text-[12px] text-[#F87171] hover:underline sm:min-h-0" disabled={occupe === j.id} onClick={() => void revoquer({ jetonId: j.id }, j.id)}>
@@ -187,7 +186,7 @@ function CarteTexte({ cle, titre, aide, texte, defaut, versions, onMaj }: { cle:
     <div className={cn(CARTE, "p-4")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[13.5px] font-medium text-[#F2F3F5]">
-          {titre} <span className="ml-1 text-[11.5px] font-normal text-[#6B7280]">{texte.source === "LUCAS" ? `écrit par toi${texte.majLe ? `, le ${quand(texte.majLe)}` : ""}` : "texte par défaut"}</span>
+          {titre} <span className="ml-1 text-[11.5px] font-normal text-[#6B7280]">{texte.source === "LUCAS" ? `écrit par toi${texte.majLe ? `, le ${(jourHeureCourt(texte.majLe) ?? "jamais")}` : ""}` : "texte par défaut"}</span>
         </p>
         <div className="flex gap-2">
           {texte.source === "LUCAS" ? (
@@ -212,7 +211,7 @@ function CarteTexte({ cle, titre, aide, texte, defaut, versions, onMaj }: { cle:
               {versions.map((v) => (
                 <li key={v.numero} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[12.5px]">
                   <span className="min-w-0 text-[#D1D5DB]">
-                    v{v.numero} · {quand(v.le)} · {v.par?.startsWith("ASSISTANT") ? "Claude" : v.par === "LUCAS" ? "toi" : (v.par ?? "?")}
+                    v{v.numero} · {(jourHeureCourt(v.le) ?? "jamais")} · {v.par?.startsWith("ASSISTANT") ? "Claude" : v.par === "LUCAS" ? "toi" : (v.par ?? "?")}
                     {v.commande ? <span className="text-[#8B919C]"> · « {v.commande} »</span> : null}
                     <span className="text-[#6B7280]"> · {v.caracteres} car.</span>
                   </span>

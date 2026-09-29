@@ -1210,3 +1210,64 @@ existantes s'est faite en deux lots (25 + 23) journalisés dans Tâches de fond 
   lots rejouable ; pages de dossiers avec filtres ; pages de leads, clients, espaces ; doublons ciblés) ; suite
   complète 566/566.
 - Aucune donnée supprimée ; sauvegarde avant la migration ; aucun mail ni SMS automatique ajouté.
+
+## Lot 7 — Retrait du poids mort, fusions, découpe (29/09)
+
+Commit « Mission 13, lot 7 : retrait du poids mort, fusions, découpe ». Avant de supprimer, une carte des
+dépendances a été dressée (grep sur tout `src/`) : elle a changé trois points de l'énoncé, notés ci-dessous.
+
+- **Retirés du CRM** (pages, composants, routes, tests, scripts ; les données restent en base) : `/commercial`
+  (+ `api/commercial/pilotage` et `api/commercial/notes`, sans appelant), `/prospects` et le démarchage B2B
+  (`api/prospects/demarchage/*`, `lib/prospects/demarchage.ts`, `lib/prospection/*` = le « lib/agents » de
+  l'énoncé, scripts `sourcing`/`scoring`/`refetch-avis`/`exporter-prospects`, `prisma/seed-prospection.ts`, les
+  scripts npm `prospection:*`), `/journal` (+ `api/journal`, `lib/journal/lecture.ts`, `libelles.ts`), `/numeros`
+  (+ `api/numeros/[id]` ; `api/numeros` ne rend plus que les numéros libres pour DocumentExistant et
+  RepriseDossier ; `lib/dossiers/registre.ts` reste, testé), `/sms` et `components/sms/*` (+ les routes
+  `api/sms/conversations*`, `flux`, `messages/[id]/reessayer`, `recherche`, `modeles` GET ; `lib/sms/contexte.ts`
+  et `suggestions.ts`), l'application `/messagerie` (manifeste, 14 icônes, variante « messages » de
+  l'installation, des abonnements push et des notifications), `/messages` (écran de l'agent mail v1),
+  `/mail/sequences` (+ `api/mail/sequences/*` ; `lib/mail/sequences.ts` reste pour les tâches), `/api/cron/relance`
+  (aucun appelant : Railway n'a pas de cron ; `proposerRelances` tourne déjà toutes les 6 h).
+- **Agent mail v1** : seule la partie propre à l'agent est retirée — `lib/messages/analyse.ts`, `ia-lecture.ts`,
+  `regles.ts`, la tâche ANALYSE_MESSAGE, la relecture par l'IA (`api/messages/[id]/relire`, bouton du lecteur)
+  et le test de l'agent. **Gardés** parce que l'onglet Mail v2, la chronologie et l'outil `deposer_document` en
+  dépendent : `gmail.ts`, `mime.ts`, `stockage.ts`, `texte.ts`, `consultation.ts`, `tri.ts`, `propositions.ts`
+  (types des propositions déjà en base), `taches.ts` (relevé, boîte, pièces jointes), les routes
+  `api/messages/*` que `LecteurMessage` appelle. `messages.test.ts` ne garde que les fonctions pures (texte, MIME).
+- **`ia/modele.ts` et `IA_CRM_ACTIVE` : gardés** — contrairement à l'énoncé, ils ne servent pas qu'à l'agent v1 :
+  la rédaction de Mail v2 (`/api/mail/brouillon`, guide de style), `mail/detail.ts`, l'outil MCP `rediger_mail`
+  (dont un test vérifie la présence), `sante_systeme` (bloc IA) et l'automatisme `IA_CRM` les appellent. En
+  production l'IA est déjà inactive (« dictez-le à Claude »). Les retirer demande de redessiner `rediger_mail` et
+  le bloc IA de `sante_systeme` : à décider à part.
+- **Migration des agents** : `migrations/agents-prospection.ts` (déjà livrée, jamais retirée) porte désormais
+  les deux profils en dur : elle rejoue à l'identique sans `lib/prospection`.
+- **Composants déplacés** : `PanneauEntrant`, `NouveauContact`, `pastilles` (sans `PastilleScore`) passent de
+  `prospects/_components` à `leads/_components`, qui les utilisait.
+- **Liens morts corrigés** : outils MCP (`Commercial` → Leads/Dossiers), alerte finances `HORS_CRM_SANS_MONTANT`
+  → Paramètres › Facturation, origine « Prospect » d'un dossier sans lien, journal (FicheClient, panneau),
+  séquences (Mail, Réglages mail), `/prospection` et `/devis/*` dans `next.config.ts`, `revalidatePath` de Zapier,
+  raccourci « Messages » du manifeste, alerte SMS reçu → fiche du contact, `push/essai` → Leads ; le service
+  worker passe en `v9` (plus de cache des écrans retirés, plus de renvoi vers la messagerie).
+- **Fusions** : un seul `ui.tsx` (`GRIS_HORS_PARCOURS`, `COULEURS_ETAPE`, `PastilleEtape` y entrent ; 26 fichiers
+  réimportent de `@/components/pilotage/ui`), un seul `client.ts` (`preparerPhoto`, `photoTropLourde` y entrent),
+  `CARTE` et `CARTE_SOMBRE` définis une fois dans `ui.tsx`. `lib/commun/format.ts` porte désormais `euros`,
+  `jour`, `jourAvecAnnee`, `jourLong`, `dateCourte`, `jourHeure`, `jourHeureCourt`, `heure`, `quand` (relatif), tous
+  en heure de Paris (le serveur Railway est en UTC : les rendus serveur et téléphone divergeaient) ; 21 définitions
+  locales retirées (`CARTE` ×10, `euros` ×7, `quand` ×6, `jour` ×4, `heure` ×3) et les homonymes qui restaient
+  renommés (`champJour` pour les validateurs zod, `centimesEnEuros`, `eurosPdf`). L'objet `format` de l'assistant
+  délègue à `commun/format`.
+- **Découpe** (extraction pure, même JSX, mêmes textes) : FicheClient 934 → 334 (`fiche-ui.tsx`,
+  `FicheCoordonnees`, `FicheConsentement`, `ModaleModificationClient`) ; LecteurMessage 788 → 383
+  (`ModalesMessage.tsx`, `expediteur.ts`) ; PanneauEntrant 748 → 552 (`styles-entrant.ts`, `BoutonOuvrirDossier`,
+  `EditionEntrant`, `ImagesDuLead` avec sa visionneuse) ; GenerateurDocument 721 → 529 (`generateur-lignes.ts`,
+  `ActionsLigne`, `LigneGenerateur`) ; EcranLeads 711 → 402 (`LigneLead.tsx`, `ModeAppels.tsx`) ; EspaceDossier
+  692 → 474 (`RubriqueEspace`, `RubriquePhotosEspace`, `RubriqueSimulationsEspace`, `RubriqueDevisEspace`) ;
+  PanneauDossier 692 → 429 (`ACompleter`, `ProchaineActionEditeur`, `HistoriqueEvenements`). Reste
+  `TableauSynthese` à 609 lignes (hors des six de l'audit).
+- Tests : `base/mission-13-lot-7.test.ts` (4 : montants, dates, heures, « quand ») ; les tests des modules
+  retirés partent avec eux (suite : 554 tests, verts ; build Next OK). Lancée pendant que le serveur d'essai
+  tournait, la suite a fait échouer une fois `prospects/doublons.test.ts` (transaction Prisma au-delà des 5 s) :
+  seul, il passe en 2,4 s ; lancer la suite serveur arrêté. `docs/ARCHITECTURE-PILOTAGE.md` cite encore les écrans retirés
+  (37 mentions) : à rafraîchir à part.
+- Aucune donnée supprimée (`AgentProfile`, `Prospect`, `ConversationSms`, `Sms`, `AnalyseMessage`, `SequenceMail`…
+  restent en base) ; aucun mail ni SMS automatique ajouté.

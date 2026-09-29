@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { FAMILLES, famille, famillesDe, type IdFamille, type SelectionPrestations } from "@/lib/prestations/prestations";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { TRANS, TitreSection } from "./ui";
+import { TRANS, TitreSection } from "@/components/pilotage/ui";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 /**
  * Les familles et sous-parties d'un dossier (fichier des prestations) : en

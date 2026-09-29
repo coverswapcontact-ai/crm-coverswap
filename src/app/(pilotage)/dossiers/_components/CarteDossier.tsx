@@ -9,8 +9,8 @@ import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
 import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
-import { PastilleEtape, TRANS } from "./ui";
 import { ChipsFamilles } from "./FamillesDossier";
+import { PastilleEtape, TRANS } from "@/components/pilotage/ui";
 
 /** Pastille rouge : prochaine action dépassée. */
 export function PastilleRetard({ className }: { className?: string }) {

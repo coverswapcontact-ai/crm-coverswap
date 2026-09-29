@@ -8,6 +8,7 @@ import { appelApi, messageErreur } from "@/components/pilotage/client";
 import { EtatVide, TitreSection, TRANS } from "@/components/pilotage/ui";
 import { FAMILLES_CHRONOLOGIE, LIBELLES_FAMILLE_CHRONOLOGIE, type EntreeChronologie, type FamilleChronologie } from "@/lib/chronologie/familles";
 import { cn } from "@/lib/utils";
+import { jourHeureCourt } from "@/lib/commun/format";
 
 /**
  * Le fil unique d'un contact (mission 9) : mails, appels, espace client,
@@ -26,7 +27,6 @@ const TON_FAMILLE: Record<FamilleChronologie, string> = {
   PROPOSITION: "border-[#F472B6]/40 bg-[#F472B6]/10 text-[#F9A8D4]",
 };
 
-const quand = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export function Chronologie({ cible, titre = "Chronologie", limite = 60, compact = false }: { cible: { client?: string | null; lead?: string | null; dossier?: string | null }; titre?: string; limite?: number; compact?: boolean }) {
   const [entrees, setEntrees] = useState<EntreeChronologie[] | null>(null);
@@ -75,7 +75,7 @@ export function Chronologie({ cible, titre = "Chronologie", limite = 60, compact
         <ol className="divide-y-[0.5px] divide-[#2A2D34]">
           {visibles.map((e) => (
             <li key={e.id} className="flex items-start gap-3 py-2">
-              <span className="w-[86px] shrink-0 pt-0.5 text-[11.5px] text-[#6B7280] tabular-nums">{quand(e.le)}</span>
+              <span className="w-[86px] shrink-0 pt-0.5 text-[11.5px] text-[#6B7280] tabular-nums">{jourHeureCourt(e.le)}</span>
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#E5E7EB]">
                   <span className={cn("rounded-full border-[0.5px] px-1.5 py-0 text-[10.5px] font-medium", TON_FAMILLE[e.famille])}>{LIBELLES_FAMILLE_CHRONOLOGIE[e.famille]}</span>

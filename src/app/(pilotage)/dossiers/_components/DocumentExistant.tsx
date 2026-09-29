@@ -3,16 +3,14 @@
 import { useEffect, useId, useState } from "react";
 import { AlertTriangle, FileUp } from "lucide-react";
 import { toast } from "sonner";
-import { ErreurApi } from "@/components/pilotage/client";
-import { Puces } from "@/components/pilotage/ui";
+import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { Puces, Bouton, Champ, Modale } from "@/components/pilotage/ui";
 import { LIBELLES_STATUT_DOCUMENT } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import { numerosProposables } from "@/lib/dossiers/numeros-libres";
 import type { NumeroLibre } from "@/lib/dossiers/registre";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, Modale } from "./ui";
 
 type TypeExistant = "DEVIS" | "FACTURE";
 const STATUTS_DEVIS = ["ENVOYE", "ACCEPTE", "REFUSE"] as const;

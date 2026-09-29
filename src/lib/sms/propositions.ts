@@ -61,7 +61,7 @@ export const propositionEnvoiSms = definirProposition({
     { code: "TROP_INSISTANT", libelle: "Ce serait trop insistant" },
   ],
   execution: "FILE",
-  liens: (contenu) => [{ libelle: "Conversation", href: `/sms?c=${contenu.conversationId}` }, ...(contenu.dossierId ? [{ libelle: "Dossier", href: `/dossiers?dossier=${contenu.dossierId}` }] : [])],
+  liens: (contenu) => (contenu.dossierId ? [{ libelle: "Dossier", href: `/dossiers?dossier=${contenu.dossierId}` }] : []),
   async pertinente(contenu) {
     const conversation = await prisma.conversationSms.findUnique({ where: { id: contenu.conversationId }, select: { stopLe: true, archiveLe: true } });
     if (!conversation) return "la conversation n'existe plus";

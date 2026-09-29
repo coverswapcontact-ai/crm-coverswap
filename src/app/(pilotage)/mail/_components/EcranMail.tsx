@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, BellOff, ChevronDown, Mail, MailOpen, Paperclip, RefreshCw, Search, Sparkles, Workflow } from "lucide-react";
+import { Archive, ArchiveRestore, BellOff, ChevronDown, Mail, MailOpen, Paperclip, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
@@ -11,7 +11,7 @@ import type { ListeMail, LigneMail, VueMail } from "@/lib/mail/vues";
 import { LIBELLES_SOURCE_MESSAGE } from "@/lib/espace/messages-constantes";
 import { cn } from "@/lib/utils";
 import { PanneauMail } from "./PanneauMail";
-import { pluriel } from "@/lib/commun/format";
+import { pluriel, quand } from "@/lib/commun/format";
 
 /**
  * L'onglet Mail (mission 7), pensé pour le pouce : trois vues — À traiter,
@@ -27,16 +27,6 @@ const VUES: { vue: Exclude<VueMail, "RANGES">; libelle: string; aide: string }[]
   { vue: "CLIENTS", libelle: "Clients", aide: "Tous les échanges avec un client, un lead ou un prospect connu." },
   { vue: "ADMINISTRATIF", libelle: "Administratif", aide: "URSSAF, impôts, banque, assurance, fournisseurs, partenaires." },
 ];
-
-function quand(iso: string): string {
-  const date = new Date(iso);
-  const maintenant = new Date();
-  const memeJour = date.toDateString() === maintenant.toDateString();
-  if (memeJour) return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const hier = new Date(maintenant.getTime() - 86_400_000);
-  if (date.toDateString() === hier.toDateString()) return "hier";
-  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-}
 
 function Mention({ ligne }: { ligne: LigneMail }) {
   if (!ligne.mention) return null;
@@ -226,9 +216,6 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
             <Bouton taille="md" variante="fantome" onClick={() => void synchroniser()} chargement={chargement} icone={<RefreshCw size={14} aria-hidden />} aria-label="Relire la boîte">
               <span className="hidden sm:inline">Relire</span>
             </Bouton>
-            <Link href="/mail/sequences" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] hover:border-[#3A3E47] sm:h-8", TRANS)}>
-              <Workflow size={14} aria-hidden /> Séquences
-            </Link>
             <Bouton taille="md" variante="secondaire" onClick={() => setNettoyage(true)} icone={<Sparkles size={14} aria-hidden />}>
               Tout nettoyer
             </Bouton>

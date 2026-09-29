@@ -9,11 +9,11 @@ import { lireNombre } from "@/lib/dossiers/montants";
 import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { appelApi, messageErreur, photoTropLourde, preparerPhoto } from "./client";
 import { RepriseDossier } from "./RepriseDossier";
 import { PARTICULIER, TypeClientDossier, erreurTypeClient, estEntreprise, sourceSelonSousTraitance, typeClientPourEnvoi, typeSelonSource, type TypeClientSaisi } from "./TypeClientDossier";
-import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TRANS } from "./ui";
 import { avertissementsCoordonnees, manquesCoordonnees, validerCoordonnees, type ChampsCoordonnees } from "./validation";
+import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TRANS } from "@/components/pilotage/ui";
+import { appelApi, messageErreur, photoTropLourde, preparerPhoto } from "@/components/pilotage/client";
 
 type Champs = ChampsCoordonnees & { prochaineAction: string; prochaineActionDate: string; etape: EtapeDossier; dateChantier: string };
 type Erreurs = Partial<Record<keyof Champs | "photos", string>>;

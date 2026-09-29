@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, Eye, FilePlus2, FileText, FileUp, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2, WandSparkles } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
@@ -11,30 +11,15 @@ import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Pastille } from "@/components/pilotage/ui";
-import { Visionneuse } from "@/components/pilotage/Visionneuse";
-import { Bouton, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
+import { Pastille, Bouton, Modale, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { euros, jour, jourHeure } from "@/lib/commun/format";
+import { Rubrique, type ConfirmationEspace } from "./RubriqueEspace";
+import { RubriquePhotosEspace } from "./RubriquePhotosEspace";
+import { RubriqueSimulationsEspace } from "./RubriqueSimulationsEspace";
+import { RubriqueDevisEspace } from "./RubriqueDevisEspace";
 
-const jour = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : null);
-const jourHeure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const euros = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }) + " €";
 const moyen = (m: string | null) => (m && m in LIBELLES_MOYEN ? LIBELLES_MOYEN[m as MoyenPaiement].toLowerCase() : null);
-
-const LIBELLES_SOURCE: Record<string, string> = { SITE: "Faite sur le site", CLIENT: "Créée par le client", API: "Préparée par moi", CHATGPT: "Préparée par moi", MANUEL: "Déposée par moi" };
-
-/** Une rubrique du bloc : titre, pastille d'état à droite, contenu. */
-function Rubrique({ titre, etat, id, children }: { titre: string; etat?: React.ReactNode; id?: string; children: React.ReactNode }) {
-  return (
-    <div id={id} className="border-t-[0.5px] border-[#2A2D34] pt-3 first:border-t-0 first:pt-0">
-      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{titre}</h4>
-        {etat}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 /**
  * L'espace client vu — et piloté — depuis le dossier : où en est le client,
@@ -68,7 +53,7 @@ export function EspaceDossier({
   const [edition, setEdition] = useState<{ tailles: TaillesProjet; precisions: string } | null>(null);
   const [destinataire, setDestinataire] = useState<{ email: string | null } | null>(null);
   const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
-  const [confirmation, setConfirmation] = useState<{ titre: string; texte: string; bouton: string; geste: GesteEspace; succes: string } | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationEspace | null>(null);
   const [gestesOuverts, setGestesOuverts] = useState(false);
   const [reponse, setReponse] = useState("");
   // Mission 12 : ses photos s'ouvrent dans la visionneuse (déposées, puis retirées), plus dans un nouvel onglet.
@@ -174,13 +159,7 @@ export function EspaceDossier({
     );
   }
 
-  const aucunDevis = !detail.documents.some((d) => d.type === "DEVIS" && d.numero);
-  const visibles = espace.devisProposes.filter((d) => d.visibleEspace || d.statut === "ACCEPTE");
   const p = espace.paiement;
-  const imagesEspace = [
-    ...espace.photos.map((photo) => ({ id: photo.id, url: photo.url, legende: "Photo déposée par le client" })),
-    ...espace.photosRetirees.map((photo) => ({ id: photo.id, url: photo.url, legende: `Photo retirée par le client le ${jour(photo.le)}` })),
-  ];
 
   return (
     <section>
@@ -274,42 +253,7 @@ export function EspaceDossier({
         </div>
 
         {/* Photos */}
-        {photoOuverte !== null && imagesEspace[photoOuverte] ? <Visionneuse images={imagesEspace} index={photoOuverte} onIndex={setPhotoOuverte} onFermer={() => setPhotoOuverte(null)} /> : null}
-        <Rubrique titre="Ses photos" etat={<Pastille ton={espace.photos.length ? "vert" : "neutre"}>{espace.photos.length} déposée{espace.photos.length > 1 ? "s" : ""}</Pastille>}>
-          {espace.photos.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {espace.photos.map((photo, i) => (
-                <button key={photo.id} type="button" onClick={() => setPhotoOuverte(i)} className="block h-12 w-12 overflow-hidden rounded-[6px] border-[0.5px] border-[#2A2D34]" aria-label="Agrandir la photo">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.vignette} alt="Photo du client" loading="lazy" className="h-full w-full object-cover" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[12.5px] text-[#8B919C]">Aucune pour l&apos;instant.</p>
-          )}
-          {espace.photosRetirees.length ? (
-            <div className="mt-2">
-              <p className="mb-1 text-[11.5px] text-[#F5B454]">
-                {espace.photosRetirees.length} photo{espace.photosRetirees.length > 1 ? "s" : ""} retirée{espace.photosRetirees.length > 1 ? "s" : ""} par le client (gardée{espace.photosRetirees.length > 1 ? "s" : ""}) :
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {espace.photosRetirees.map((photo, i) => (
-                  <div key={photo.id} className="flex items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-1 pr-2">
-                    <button type="button" onClick={() => setPhotoOuverte(espace.photos.length + i)} className="block h-11 sm:h-9 w-11 sm:w-9 overflow-hidden rounded-[5px]" aria-label="Agrandir la photo retirée">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt="Photo retirée" loading="lazy" className="h-full w-full object-cover opacity-70" />
-                    </button>
-                    <span className="text-[11px] text-[#8B919C]">le {jour(photo.le)}</span>
-                    <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "remettre-photo", photoId: photo.id }, "Photo remise dans le dossier et dans son espace")} className={cn("text-[11.5px] font-medium text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
-                      Remettre
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </Rubrique>
+        <RubriquePhotosEspace espace={espace} occupe={occupe} geste={geste} photoOuverte={photoOuverte} setPhotoOuverte={setPhotoOuverte} />
 
         {/* Projet */}
         <Rubrique
@@ -372,175 +316,10 @@ export function EspaceDossier({
         </Rubrique>
 
         {/* Simulations */}
-        <Rubrique
-          titre="Ses simulations"
-          etat={
-            <Pastille ton={espace.creation.restantes === 0 ? "ambre" : "neutre"}>
-              {espace.creation.faites} faite{espace.creation.faites > 1 ? "s" : ""} sur {espace.creation.offertes}
-              {espace.creation.faitesSite ? ` (dont ${espace.creation.faitesSite} sur le site)` : ""} · {espace.creation.restantes} restante{espace.creation.restantes > 1 ? "s" : ""}
-            </Pastille>
-          }
-        >
-          {espace.proposition ? (
-            <div className="mb-2 rounded-[8px] border-[0.5px] border-[#F5B454]/40 bg-[#F5B454]/10 p-2.5">
-              <p className="text-[12px] font-medium text-[#F5B454]">Il demande une autre proposition — le {jourHeure(espace.proposition.le)}</p>
-              {espace.proposition.message ? <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">« {espace.proposition.message} »</p> : <p className="mt-1 text-[12px] text-[#9CA3AF]">Sans message.</p>}
-              <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "retirer-demande" }, "Demande retirée")} className={cn("mt-1.5 text-[11.5px] font-medium text-[#D1D5DB] underline-offset-2 hover:underline disabled:opacity-50", TRANS)}>
-                Retirer sa demande (traitée autrement)
-              </button>
-            </div>
-          ) : null}
-          {espace.creation.demandeesLe ? <p className="mb-2 text-[12.5px] text-[#F5B454]">Il demande d&apos;autres simulations depuis le {jour(espace.creation.demandeesLe)}.</p> : null}
-          {simulationOuverte !== null && espace.simulations[simulationOuverte] ? <Visionneuse images={espace.simulations.map((s) => ({ id: s.id, url: s.url, legende: [s.titre, LIBELLES_SOURCE[s.source] ?? s.source, jour(s.le)].filter(Boolean).join(" · ") }))} index={simulationOuverte} onIndex={setSimulationOuverte} onFermer={() => setSimulationOuverte(null)} /> : null}
-          {espace.simulations.length ? (
-            <ul className="space-y-1.5">
-              {espace.simulations.map((s, index) => (
-                <li key={s.id} className={cn("flex gap-2.5 rounded-[8px] border-[0.5px] p-1.5", s.choisie ? "border-[#1D9E75]/60 bg-[#1D9E75]/10" : "border-[#2A2D34] bg-[#16181D]")}>
-                  <button type="button" onClick={() => setSimulationOuverte(index)} aria-label={`Agrandir ${s.titre ?? "la simulation"}`} className="block h-14 w-20 shrink-0 overflow-hidden rounded-[6px]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={s.url} alt={s.titre ?? "Simulation"} loading="lazy" className={cn("h-full w-full object-cover", s.statut !== "PUBLIEE" && "opacity-50")} />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <span className="text-[11px] text-[#8B919C]">{LIBELLES_SOURCE[s.source] ?? s.source} · {jour(s.le)}</span>
-                      {s.choisie ? <Pastille ton="vert">Validée</Pastille> : null}
-                      {s.statut === "BROUILLON" ? <Pastille ton="ambre">Brouillon</Pastille> : s.statut === "MASQUEE" ? <Pastille>Masquée</Pastille> : null}
-                    </div>
-                    <p className="line-clamp-2 text-[12.5px] text-[#D1D5DB]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}`).join(" · ") || s.titre || "Simulation"}</p>
-                    {s.commentaire ? <p className="text-[12px] whitespace-pre-wrap text-[#F2F3F5]">« {s.commentaire} »</p> : null}
-                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] font-medium">
-                      {s.statut === "PUBLIEE" && !s.choisie ? (
-                        <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "valider-simulation", simulationId: s.id }, "Simulation validée à sa place : le devis est à préparer")} className={cn("text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
-                          Valider à sa place
-                        </button>
-                      ) : null}
-                      {s.choisie ? (
-                        <button type="button" disabled={occupe !== null} onClick={() => void geste({ geste: "devalider-simulation" }, "Simulation dévalidée")} className={cn("text-[#D1D5DB] hover:underline disabled:opacity-50", TRANS)}>
-                          Dévalider
-                        </button>
-                      ) : null}
-                      {s.statut === "PUBLIEE" ? (
-                        <button type="button" disabled={occupe !== null} onClick={() => void simulation(s.id, "masquer")} className={cn("text-[#8B919C] hover:text-[#D1D5DB] hover:underline disabled:opacity-50", TRANS)}>
-                          Masquer
-                        </button>
-                      ) : (
-                        <button type="button" disabled={occupe !== null} onClick={() => void simulation(s.id, "afficher")} className={cn("text-[#5DCAA5] hover:underline disabled:opacity-50", TRANS)}>
-                          {s.statut === "BROUILLON" ? "Publier" : "Republier"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[12.5px] text-[#8B919C]">Aucune simulation pour l&apos;instant.</p>
-          )}
-          {espace.choix?.mode === "COMPOSITE" ? <p className="mt-1.5 text-[12.5px] text-[#5DCAA5]">Son mélange validé : {espace.choix.zones.map((z) => `${z.libelle || z.zone} — ${z.nom || z.ref}`).join(" · ")}</p> : null}
-          {espace.choix?.commentaire ? <p className="mt-1 text-[12.5px] text-[#F2F3F5]">Son mot en validant : « {espace.choix.commentaire} »</p> : null}
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Bouton taille="sm" variante={espace.creation.demandeesLe ? "primaire" : "secondaire"} icone={<WandSparkles size={13} aria-hidden />} chargement={occupe === "accorder"} onClick={() => void geste({ geste: "accorder", nombre: 3 }, "3 simulations accordées : le client peut en refaire")}>
-              Accorder 3 simulations
-            </Bouton>
-            {espace.choix || espace.proposition ? (
-              <Bouton taille="sm" variante="fantome" icone={<RotateCcw size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Réinitialiser l'étape « Simulations » ?", texte: "Plus aucune simulation n'est validée et sa demande en attente est retirée. Ses simulations restent dans sa galerie.", bouton: "Réinitialiser", geste: { geste: "reinitialiser", etape: "SIMULATIONS" }, succes: "Étape « Simulations » réinitialisée" })}>
-                Réinitialiser
-              </Bouton>
-            ) : null}
-          </div>
-          {espace.favoris.length ? <p className="mt-1.5 text-[11.5px] text-[#8B919C]">Ses teintes favorites : {espace.favoris.join(", ")}</p> : null}
-        </Rubrique>
+        <RubriqueSimulationsEspace espace={espace} occupe={occupe} geste={geste} simulation={simulation} simulationOuverte={simulationOuverte} setSimulationOuverte={setSimulationOuverte} setConfirmation={setConfirmation} />
 
         {/* Devis et accord */}
-        <Rubrique
-          titre="Devis et accord"
-          etat={
-            espace.accord ? (
-              <Pastille ton="vert"><Check size={11} strokeWidth={3} aria-hidden /> Signé le {jour(espace.accord.le)}</Pastille>
-            ) : visibles.length > 1 ? (
-              <Pastille ton="ambre">{visibles.length} devis proposés : il en choisit un</Pastille>
-            ) : espace.devis && visibles.length === 0 ? (
-              <Pastille ton="ambre">Devis masqué : il ne voit rien</Pastille>
-            ) : espace.devis ? (
-              <Pastille ton="ambre">En attente de son accord</Pastille>
-            ) : (
-              <Pastille>Pas de devis émis</Pastille>
-            )
-          }
-        >
-          {espace.devisProposes.length ? (
-            <ul className="space-y-1">
-              {espace.devisProposes.map((d) => (
-                <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-[#D1D5DB]">
-                  <span>
-                    Devis {d.numero}
-                    {d.libelle ? <span className="text-[#8B919C]"> « {d.libelle} »</span> : null} — {euros(d.total)}
-                    {d.repris ? <span className="text-[#8B919C]"> (repris)</span> : null}
-                    {d.statut === "ACCEPTE" ? <span className="text-[#5DCAA5]"> · signé</span> : d.statut === "NON_RETENU" ? <span className="text-[#8B919C]"> · non retenu</span> : null}
-                  </span>
-                  {espace.devisProposes.length > 1 ? (
-                    // Mission 13 (lot 5, B6) : chaque devis compte ses propres lectures.
-                    <span className={cn("text-[12px]", d.consultations >= 3 && !espace.accord ? "text-[#F87171]" : "text-[#8B919C]")}>
-                      {d.consultations > 0 ? `lu ${d.consultations} fois${d.consulteLe ? ` · dernière le ${jour(d.consulteLe)}` : ""}` : "pas encore ouvert"}
-                    </span>
-                  ) : null}
-                  {espace.accord ? null : (
-                    <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
-                      <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
-                      {d.visibleEspace ? "visible dans son espace" : "masqué dans son espace"}
-                    </label>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-[12.5px] text-[#8B919C]">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
-          )}
-          {espace.devis && espace.devisProposes.length <= 1 ? (
-            <p className="mt-1 text-[12px] text-[#8B919C]">
-              {espace.devis.consultations > 0 ? (
-                <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : undefined}>
-                  Devis ouvert {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})
-                </span>
-              ) : (
-                "Pas encore ouvert dans son espace"
-              )}
-            </p>
-          ) : null}
-          {espace.accord ? (
-            <p className="mt-1 text-[13px] text-[#D1D5DB]">
-              {espace.accord.source === "ESPACE" ? `Bon pour accord donné dans son espace par ${espace.accord.nom}${espace.accord.signature ? ", signé au doigt" : ""}.` : "Devis noté « accepté » dans le CRM (signé hors de l'espace) : son espace le montre signé."}
-            </p>
-          ) : null}
-          {espace.accordsRetires.map((a) => (
-            <p key={a.retireLe} className="mt-1 text-[12px] text-[#F5B454]">
-              Accord du {jour(a.le)} retiré le {jour(a.retireLe)} {a.par === "CLIENT" ? "par le client" : "par moi"}
-              {a.motif ? ` : « ${a.motif} »` : ""} (preuve gardée).
-            </p>
-          ))}
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {onFaireDevis && (espace.choix || espace.projet) && aucunDevis ? (
-              <Bouton taille="sm" variante={espace.choix ? "primaire" : "secondaire"} icone={<FileText size={13} aria-hidden />} onClick={onFaireDevis}>
-                {espace.choix ? "Faire le devis depuis son choix" : "Faire le devis depuis son projet"}
-              </Bouton>
-            ) : null}
-            {onAjouterDevis && !aucunDevis && !espace.accord ? (
-              <Bouton taille="sm" variante="secondaire" icone={<FilePlus2 size={13} aria-hidden />} onClick={onAjouterDevis}>
-                Ajouter un devis
-              </Bouton>
-            ) : null}
-            {onDeposerPdf && (espace.choix || espace.projet || !aucunDevis) && !espace.accord ? (
-              <Bouton taille="sm" variante="fantome" icone={<FileUp size={13} aria-hidden />} onClick={onDeposerPdf}>
-                Déposer un devis PDF
-              </Bouton>
-            ) : null}
-            {espace.accord?.source === "ESPACE" ? (
-              <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} onClick={() => setConfirmation({ titre: "Retirer son bon pour accord ?", texte: "L'accord ne vaut plus (sa preuve reste gardée). Si le dossier est en « Signé », il revient à « Devis envoyé », le devis redevient un devis émis et les autres devis proposés redeviennent au choix.", bouton: "Retirer l'accord", geste: { geste: "retirer-accord", motif: "" }, succes: "Accord retiré" })}>
-                Retirer son accord
-              </Bouton>
-            ) : null}
-          </div>
-        </Rubrique>
+        <RubriqueDevisEspace detail={detail} espace={espace} occupe={occupe} visibilite={visibilite} setConfirmation={setConfirmation} onFaireDevis={onFaireDevis} onAjouterDevis={onAjouterDevis} onDeposerPdf={onDeposerPdf} />
 
         {/* Paiement : ce que lit le client, à partir des encaissements du dossier. */}
         {p ? (

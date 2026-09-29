@@ -16,7 +16,6 @@
     { "src": "/icones/crm-masquable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Messages", "url": "/sms", "icons": [{ "src": "/icones/messages-192.png", "sizes": "192x192" }] },
     { "name": "À valider", "url": "/validation" },
     { "name": "Nouvelle dépense", "url": "/depenses/nouvelle" }
   ]

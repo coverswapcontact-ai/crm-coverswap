@@ -8,6 +8,7 @@ import { tarifsDesPrestations } from "@/lib/prestations/tarifs";
 import { lireListe } from "@/lib/messages/stockage";
 import { objetSansPrefixes, retirerCitations } from "@/lib/messages/texte";
 import { contexteDuContact, contexteDuMail, type ContexteClient } from "./contexte";
+import { euros } from "@/lib/commun/format";
 
 /**
  * « Rédiger avec l'IA » (mission 7) : jamais pré-rempli, seulement quand Lucas
@@ -178,7 +179,6 @@ export function garderBrouillon(texte: string, sources: string): Garde {
 
 /* ── Les faits donnés au modèle ────────────────────────────────────── */
 
-const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const dateLongue = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }) : null);
 const dateCourte = (d: Date) => d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
 
@@ -194,8 +194,8 @@ function faitsDuContexte(contexte: ContexteClient | null) {
       prochaineAction: p.prochaineAction,
       prochaineActionLe: dateLongue(p.prochaineActionDate),
       dateChantier: dateLongue(p.dateChantier),
-      devis: p.devis ? { numero: p.devis.numero, montantTTC: euros(p.devis.totalTtc), statut: p.devis.statut, signeLe: dateLongue(p.devis.signeLe), lectures: p.devis.consultations } : null,
-      paiement: p.paiement ? { total: euros(p.paiement.total), recu: euros(p.paiement.recu), reste: euros(p.paiement.reste), acompte: p.paiement.acompte !== null ? euros(p.paiement.acompte) : null, acomptePourcentage: p.paiement.acomptePct !== null ? `${p.paiement.acomptePct} %` : null, acompteRecu: p.paiement.acompteRecu, regle: p.paiement.regle } : null,
+      devis: p.devis ? { numero: p.devis.numero, montantTTC: euros(p.devis.totalTtc, 2), statut: p.devis.statut, signeLe: dateLongue(p.devis.signeLe), lectures: p.devis.consultations } : null,
+      paiement: p.paiement ? { total: euros(p.paiement.total, 2), recu: euros(p.paiement.recu, 2), reste: euros(p.paiement.reste, 2), acompte: p.paiement.acompte !== null ? euros(p.paiement.acompte, 2) : null, acomptePourcentage: p.paiement.acomptePct !== null ? `${p.paiement.acomptePct} %` : null, acompteRecu: p.paiement.acompteRecu, regle: p.paiement.regle } : null,
       simulations: { publieesParCoverSwap: p.simulations.publiees, creeesParLeClient: p.simulations.faitesParLeClient, choixDuClient: p.simulations.choisie },
       espaceClient: p.espace ? { etat: p.espace.etat, ceQuilLuiReste: p.espace.resteAFaire, derniereVisite: dateLongue(p.espace.derniereVisite) } : "pas encore d'espace",
     })),
@@ -208,7 +208,7 @@ async function faitsEntreprise() {
   return {
     entreprise: { nom: "CoverSwap", signataire: "Lucas Villemin", telephone: EMETTEUR.telephone, metier: "Rénovation par revêtements adhésifs (films Cover Styl') : cuisines, salles de bain, meubles, locaux professionnels. Sans travaux lourds." },
     prestations: FAMILLES.map((f) => `${f.libelle} : ${f.sousParties.map((sp) => sp.libelle.toLowerCase()).join(", ")}`),
-    tarifs: tarifs.map((t) => ({ prestation: `${t.familleLibelle} — ${t.libelle}`, prix: `${euros(t.prixUnitaire!)}${t.unite ? ` / ${t.unite}` : ""}` })),
+    tarifs: tarifs.map((t) => ({ prestation: `${t.familleLibelle} — ${t.libelle}`, prix: `${euros(t.prixUnitaire!, 2)}${t.unite ? ` / ${t.unite}` : ""}` })),
     conditions: [`Paiements acceptés : ${MODES_REGLEMENT.replace(/^Paiement par /, "").toLowerCase()}`, `Un devis est valable ${VALIDITE_DEVIS_JOURS} jours à compter de sa date d'émission`, "Le pourcentage d'acompte figure sur chaque devis (voir le devis du client)"],
   };
 }

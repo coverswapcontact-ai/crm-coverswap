@@ -353,7 +353,7 @@ const texteOuNull = (max: number, message: string) =>
     .nullable()
     .transform((valeur) => valeur || null);
 
-const jour = (message: string) => z.string(message).refine(estJourValide, message);
+const champJour = (message: string) => z.string(message).refine(estJourValide, message);
 
 const champsClient = {
   categorie: z.enum(CATEGORIES_CLIENT, "Catégorie invalide."),
@@ -383,7 +383,7 @@ const champsClient = {
   campagne: texteOuNull(200, "Campagne trop longue."),
   publicite: texteOuNull(200, "Publicité trop longue."),
   formulaire: texteOuNull(200, "Formulaire trop long."),
-  premierContactLe: jour("Date de premier contact invalide."),
+  premierContactLe: champJour("Date de premier contact invalide."),
   recommandeParId: z.string().max(40).nullable(),
   recommandeParTexte: texteOuNull(160, "Recommandation trop longue."),
   notes: texteOuNull(10_000, "Passif trop long : 10 000 caractères maximum."),
@@ -441,7 +441,7 @@ export async function modifierClient(clientId: string, modification: Modificatio
 
 export const schemaCreationClient = z.object({
   ...champsClient,
-  premierContactLe: jour("Date de premier contact invalide.").nullable().optional(),
+  premierContactLe: champJour("Date de premier contact invalide.").nullable().optional(),
   email: z.string().trim().max(160).nullable().optional(),
   telephone: z.string().trim().max(40).nullable().optional(),
   /** Créer même si un client a déjà cet e-mail ou ce numéro (la paire sera proposée à la fusion). */
@@ -620,7 +620,7 @@ export async function definirPrincipale(clientId: string, nature: "email" | "tel
 export const schemaConsentement = z.object({
   statut: z.enum(STATUTS_CONSENTEMENT, "Choisis la réponse du client."),
   moyen: z.enum(MOYENS_CONSENTEMENT, "Choisis comment le client a répondu."),
-  recueilliLe: jour("Date invalide."),
+  recueilliLe: champJour("Date invalide."),
   preuve: texteOuNull(1000, "Précision trop longue.").optional(),
 });
 

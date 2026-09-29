@@ -2,42 +2,17 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRightLeft,
-  Ban,
-  ChevronDown,
-  Euro,
-  ExternalLink,
-  FileText,
-  Hourglass,
-  Landmark,
-  Mail,
-  MessageSquare,
-  Phone,
-  StickyNote,
-  Undo2,
-  X,
-} from "lucide-react";
+import { ChevronDown, Euro, ExternalLink, Mail, Phone, X } from "lucide-react";
 import { toast } from "sonner";
-import { LecteurMessage } from "@/components/pilotage/messages/LecteurMessage";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import {
-  LIBELLES_ETAPE,
-  LIBELLES_SOURCE,
-  LIBELLES_TYPE_EVENEMENT,
-  type EtapeDossier,
-  type RubriqueDossier,
-  type TypeDocument,
-  type TypeEvenement,
-} from "@/lib/dossiers/constants";
+import { LIBELLES_ETAPE, LIBELLES_SOURCE, type EtapeDossier, type RubriqueDossier, type TypeDocument } from "@/lib/dossiers/constants";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { noterDebutAppel } from "@/components/pilotage/NotesAppel";
-import { formatDateCourte, formatHorodatage, jourParis } from "@/lib/dossiers/dates";
+import { formatDateCourte } from "@/lib/dossiers/dates";
 import { echeanceDe, mainDe } from "@/lib/dossiers/pilotage";
-import type { DocumentVue, DossierDetail, EvenementVue } from "@/lib/dossiers/types";
+import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { PastilleRetard, ProchaineActionResume } from "./CarteDossier";
+import { PastilleRetard } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { ChangementEtape } from "./ChangementEtape";
 import { CoordonneesClient } from "./CoordonneesClient";
@@ -54,9 +29,12 @@ import { ModalePaiement, PaiementsDossier, montantAttendu } from "./PaiementsDos
 import { PhotosDossier } from "./PhotosDossier";
 import { Chronologie } from "@/components/pilotage/Chronologie";
 import { TimelineEtapes } from "./TimelineEtapes";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, CLASSE_SAISIE, PastilleEtape, TRANS, TitreSection } from "./ui";
 import { pluriel } from "@/lib/commun/format";
+import { Bouton, PastilleEtape, TRANS, TitreSection } from "@/components/pilotage/ui";
+import { appelApi, messageErreur } from "@/components/pilotage/client";
+import { ACompleter } from "./ACompleter";
+import { HistoriqueEvenements } from "./HistoriqueEvenements";
+import { ProchaineActionEditeur } from "./ProchaineActionEditeur";
 
 const CLASSE_PUCE_LIEN = cn(
   "inline-flex h-11 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-7",
@@ -323,14 +301,14 @@ function ContenuPanneau({
               E-mail
             </a>
           ) : null}
-          {detail.origine ? (
-            <Link
-              href={detail.origine.type === "LEAD" ? `/leads?lead=${detail.origine.id}` : `/prospects?prospect=${detail.origine.id}`}
-              className={CLASSE_PUCE_LIEN}
-            >
+          {detail.origine?.type === "LEAD" ? (
+            <Link href={`/leads?lead=${detail.origine.id}`} className={CLASSE_PUCE_LIEN}>
               <ExternalLink size={12} aria-hidden />
-              {detail.origine.type === "LEAD" ? "Contact" : "Prospect"} : {detail.origine.nom}
+              Contact : {detail.origine.nom}
             </Link>
+          ) : detail.origine ? (
+            // Mission 13 (lot 7) : l'écran Prospects est retiré ; l'origine reste lisible, sans lien.
+            <span className={CLASSE_PUCE_LIEN}>Prospect : {detail.origine.nom}</span>
           ) : null}
         </div>
       </header>
@@ -362,7 +340,7 @@ function ContenuPanneau({
             <PhotosDossier detail={detail} onRecharger={onRecharger} sansTitre />
           </SectionRepliable>
           <SectionRepliable id="rubrique-historique" titre={`Historique (${detail.evenements.length})`} resume={detail.evenements[0]?.contenu} ouvert={ouvertes.historique} onBasculer={() => basculer("historique")}>
-            <HistoriqueEvenements dossierId={detail.id} evenements={detail.evenements} onRecharger={onRecharger} />
+            <HistoriqueEvenements evenements={detail.evenements} onRecharger={onRecharger} />
           </SectionRepliable>
 
           {/* 4. Les rubriques qui portent des gestes : ouvertes quand elles attendent quelque chose, repliées sinon. */}
@@ -447,249 +425,5 @@ function ContenuPanneau({
 
 /* ── À compléter ─────────────────────────────────────────────────── */
 
-/**
- * Ce qui manque au dossier : signalé, jamais exigé. En alerte (orange) ce que
- * moi seul peux compléter ; en neutre ce que le client peut encore fournir
- * depuis son espace (« en attente du client ») ; chaque point a sa croix pour
- * le masquer sur ce dossier (mémorisé, réaffichable). Un point rempli disparaît.
- */
-function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMisAJour: (detail: DossierDetail) => void }) {
-  const [occupe, setOccupe] = useState<string | null>(null);
-  const [voirMasques, setVoirMasques] = useState(false);
-  const alertes = detail.completude.filter((p) => !p.masque && !p.attenteClient);
-  const attente = detail.completude.filter((p) => !p.masque && p.attenteClient);
-  const masques = detail.completude.filter((p) => p.masque);
-  if (detail.completude.length === 0) return null;
-
-  async function basculer(code: string, masque: boolean) {
-    setOccupe(code);
-    try {
-      await envoyerJson(`/api/dossiers/${detail.id}/completude`, "PATCH", { code, masque });
-      onMisAJour(await appelApi<DossierDetail>(`/api/dossiers/${detail.id}`));
-      if (masque) toast.success("Point masqué pour ce dossier", { description: "Il ne revient pas ; « réafficher » le remet." });
-    } catch (probleme) {
-      toast.error(messageErreur(probleme));
-    } finally {
-      setOccupe(null);
-    }
-  }
-
-  const puce = (point: DossierDetail["completude"][number], ton: "alerte" | "neutre") => (
-    <li
-      key={point.code}
-      className={cn(
-        "flex items-center gap-0.5 rounded-full border-[0.5px] py-0.5 pr-0.5 pl-2 text-[12px]",
-        ton === "alerte" ? "border-[#EF9F27]/30 text-[#FCD9A0]" : "border-[#3A3E47] text-[#B4BAC4]"
-      )}
-    >
-      {point.libelle}
-      <button
-        type="button"
-        disabled={occupe !== null}
-        onClick={() => basculer(point.code, true)}
-        aria-label={`Masquer « ${point.libelle} » pour ce dossier`}
-        title="Pas nécessaire pour ce dossier : masquer"
-        className={cn("flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-40 sm:h-5 sm:w-5", ton === "alerte" ? "text-[#F5B454]" : "text-[#8B919C]")}
-      >
-        <X size={12} aria-hidden />
-      </button>
-    </li>
-  );
-
-  return (
-    <div className="space-y-2">
-      {alertes.length > 0 ? (
-        <section aria-label="À compléter" className="rounded-[11px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] px-3.5 py-3">
-          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5B454]">
-            <AlertTriangle size={13} aria-hidden />
-            À compléter · {alertes.length}
-          </p>
-          <ul className="mt-1.5 flex flex-wrap gap-1.5">{alertes.map((p) => puce(p, "alerte"))}</ul>
-        </section>
-      ) : null}
-      {attente.length > 0 ? (
-        <section aria-label="En attente du client" className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3.5 py-3">
-          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#B4BAC4]">
-            <Hourglass size={13} aria-hidden />
-            En attente du client · il peut le donner dans son espace
-          </p>
-          <ul className="mt-1.5 flex flex-wrap gap-1.5">{attente.map((p) => puce(p, "neutre"))}</ul>
-        </section>
-      ) : null}
-      {masques.length > 0 ? (
-        <div className="text-[12px] text-[#6B7280]">
-          <button type="button" onClick={() => setVoirMasques((v) => !v)} className="underline-offset-2 hover:text-[#9CA3AF] hover:underline">
-            {masques.length} point{masques.length > 1 ? "s" : ""} masqué{masques.length > 1 ? "s" : ""} · {voirMasques ? "cacher" : "voir"}
-          </button>
-          {voirMasques ? (
-            <ul className="mt-1.5 flex flex-wrap gap-1.5">
-              {masques.map((p) => (
-                <li key={p.code} className="flex items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] py-0.5 pr-1 pl-2 text-[#8B919C]">
-                  {p.libelle}
-                  <button type="button" disabled={occupe !== null} onClick={() => basculer(p.code, false)} className="rounded-full px-1.5 text-[#5DCAA5] hover:bg-white/5 disabled:opacity-40">
-                    Réafficher
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /* ── Prochaine action ────────────────────────────────────────────── */
 
-const RACCOURCIS_DATE = [
-  { libelle: "Aujourd'hui", jours: 0 },
-  { libelle: "Demain", jours: 1 },
-  { libelle: "Dans 3 j", jours: 3 },
-  { libelle: "Dans 1 sem.", jours: 7 },
-] as const;
-
-function ProchaineActionEditeur({
-  detail,
-  maintenant,
-  onMisAJour,
-}: {
-  detail: DossierDetail;
-  maintenant: Date;
-  onMisAJour: (detail: DossierDetail) => void;
-}) {
-  const actionInitiale = detail.prochaineAction ?? "";
-  const dateInitiale = detail.prochaineActionDate ? jourParis(detail.prochaineActionDate) : "";
-  const [action, setAction] = useState(actionInitiale);
-  const [date, setDate] = useState(dateInitiale);
-  const [envoi, setEnvoi] = useState(false);
-  const modifie = action.trim() !== actionInitiale || date !== dateInitiale;
-
-  async function enregistrer(evenement: React.FormEvent) {
-    evenement.preventDefault();
-    setEnvoi(true);
-    try {
-      const nouveau = await envoyerJson<DossierDetail>(`/api/dossiers/${detail.id}`, "PATCH", {
-        prochaineAction: action.trim() || null,
-        prochaineActionDate: date || null,
-      });
-      onMisAJour(nouveau);
-      toast.success("Prochaine action enregistrée");
-    } catch (probleme) {
-      toast.error("Prochaine action non enregistrée", { description: messageErreur(probleme) });
-    } finally {
-      setEnvoi(false);
-    }
-  }
-
-  return (
-    <section>
-      <TitreSection>Prochaine action</TitreSection>
-      <ProchaineActionResume dossier={detail} maintenant={maintenant} className="mb-3" />
-      <form onSubmit={enregistrer} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px_auto]">
-        <input
-          aria-label="Prochaine action"
-          value={action}
-          maxLength={140}
-          onChange={(e) => setAction(e.target.value)}
-          placeholder="Ex. Relancer par téléphone"
-          className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}
-        />
-        <input
-          type="date"
-          aria-label="Date de la prochaine action"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}
-        />
-        <Bouton type="submit" variante={modifie ? "primaire" : "secondaire"} disabled={!modifie} chargement={envoi}>
-          Enregistrer
-        </Bouton>
-      </form>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {RACCOURCIS_DATE.map((raccourci) => (
-          <button
-            key={raccourci.jours}
-            type="button"
-            onClick={() => setDate(jourParis(new Date(Date.now() + raccourci.jours * 86_400_000)))}
-            className={cn(
-              "h-11 rounded-full border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-6 sm:text-[11px]",
-              TRANS
-            )}
-          >
-            {raccourci.libelle}
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ── Historique ──────────────────────────────────────────────────── */
-
-const ICONES_EVENEMENT: Partial<Record<TypeEvenement, typeof FileText>> = {
-  CHANGEMENT_ETAPE: ArrowRightLeft,
-  DEVIS_GENERE: FileText,
-  FACTURE_GENEREE: FileText,
-  AVOIR_GENERE: FileText,
-  DEVIS_ENVOYE: FileText,
-  ENCAISSEMENT_ENREGISTRE: Euro,
-  ENCAISSEMENT_CREDITE: Landmark,
-  ENCAISSEMENT_REJETE: Ban,
-  ENCAISSEMENT_ANNULE: Undo2,
-  NOTE_AJOUTEE: StickyNote,
-  APPEL: Phone,
-  MAIL_RECU: Mail,
-  MAIL_ENVOYE: Mail,
-};
-
-function HistoriqueEvenements({ dossierId, evenements, onRecharger }: { dossierId: string; evenements: EvenementVue[]; onRecharger: () => Promise<void> }) {
-  const [tout, setTout] = useState(false);
-  const [mail, setMail] = useState<string | null>(null);
-  const liste = tout ? evenements : evenements.slice(0, 20);
-
-  return (
-    <div>
-      <Link href={`/journal?dossierId=${dossierId}`} className={cn("inline-flex min-h-11 sm:min-h-7 items-center text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
-        Journal détaillé : chaque modification, par qui et quand
-      </Link>
-      {evenements.length === 0 ? <p className="mt-2 text-[12.5px] text-[#6B7280]">Rien encore.</p> : null}
-      {evenements.length > 0 ? (
-        <ol className="mt-3 space-y-3">
-          {liste.map((evenement) => {
-            const Icone = ICONES_EVENEMENT[evenement.type] ?? MessageSquare;
-            return (
-              <li key={evenement.id} className="flex gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
-                  <Icone size={12} className="text-[#9CA3AF]" aria-hidden />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[13px] break-words text-[#D1D5DB]">{evenement.contenu}</p>
-                  <p className="mt-0.5 text-[11px] text-[#6B7280]">
-                    {LIBELLES_TYPE_EVENEMENT[evenement.type] ?? "Événement"} ·{" "}
-                    {evenement.saisiLe ? `${formatDateCourte(evenement.date)} (saisi le ${formatDateCourte(evenement.saisiLe)})` : formatHorodatage(evenement.date)}
-                    {evenement.messageId ? (
-                      <>
-                        {" · "}
-                        <button type="button" onClick={() => setMail(evenement.messageId)} className={cn("text-[#9CA3AF] underline-offset-2 hover:text-[#F2F3F5] hover:underline", TRANS)}>
-                          Lire le mail
-                        </button>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-          {!tout && evenements.length > liste.length ? (
-            <li>
-              <Bouton variante="fantome" taille="sm" onClick={() => setTout(true)}>
-                Voir les {evenements.length - liste.length} plus anciens
-              </Bouton>
-            </li>
-          ) : null}
-        </ol>
-      ) : null}
-      {mail ? <LecteurMessage key={mail} messageId={mail} onFermer={() => setMail(null)} onModifie={() => void onRecharger()} /> : null}
-    </div>
-  );
-}

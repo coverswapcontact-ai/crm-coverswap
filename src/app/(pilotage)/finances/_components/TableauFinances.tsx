@@ -7,17 +7,15 @@ import { toast } from "sonner";
 import { ModaleActionEncaissement, ModalePaiementFacture, type TypeActionEncaissement } from "@/components/pilotage/ActionsEncaissement";
 import { appelApi, messageErreur } from "@/components/pilotage/client";
 import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
-import { Bouton, EnTetePage, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
-import { formatDateCourte } from "@/lib/dossiers/dates";
+import { Bouton, EnTetePage, Pastille, TRANS, TitreSection, CARTE } from "@/components/pilotage/ui";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { LIBELLES_TRANCHE, type Urssaf } from "@/lib/finances/calculs";
 import { libelleMois } from "@/lib/finances/periodes";
 import type { ChequeACrediter, LigneEncours, TableauFinances as Tableau } from "@/lib/finances/tableau";
 import { DEFINITIONS_PARAMETRES, type CleParametre } from "@/lib/parametres/definitions";
 import { cn } from "@/lib/utils";
+import { dateCourte } from "@/lib/commun/format";
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
-const jour = (valeur: string) => formatDateCourte(`${valeur}T12:00:00Z`);
 
 function AParametrer({ manquants, pourquoi, onRenseigner }: { manquants: CleParametre[]; pourquoi: string; onRenseigner: () => void }) {
   return (
@@ -59,10 +57,10 @@ function BlocUrssaf({ titre, urssaf, aujourdhui }: { titre: string; urssaf: Urss
       <p className="mt-0.5 text-[14px] font-medium text-[#F2F3F5] first-letter:uppercase">{urssaf.periode.libelle}</p>
       <p className={cn("text-[12px]", close && !echeancePassee ? "text-[#F5B454]" : "text-[#6B7280]")}>
         {echeancePassee
-          ? `Échéance de déclaration passée (${jour(urssaf.periode.echeanceDeclaration)})`
+          ? `Échéance de déclaration passée (${dateCourte(urssaf.periode.echeanceDeclaration)})`
           : close
-            ? `À déclarer au plus tard le ${jour(urssaf.periode.echeanceDeclaration)}`
-            : `En cours · à déclarer entre le ${jour(urssaf.periode.fin)} et le ${jour(urssaf.periode.echeanceDeclaration)}`}
+            ? `À déclarer au plus tard le ${dateCourte(urssaf.periode.echeanceDeclaration)}`
+            : `En cours · à déclarer entre le ${dateCourte(urssaf.periode.fin)} et le ${dateCourte(urssaf.periode.echeanceDeclaration)}`}
       </p>
       <dl className="mt-3 space-y-1.5 text-[13px]">
         <div className="flex justify-between gap-3">
@@ -267,8 +265,8 @@ export default function TableauFinances({ initial }: { initial: Tableau }) {
                     </Pastille>
                   </div>
                   <p className="mt-0.5 text-[12px] text-[#6B7280]">
-                    {ligne.emiseLe ? `Émise le ${jour(ligne.emiseLe)}` : "Date d'émission inconnue"}
-                    {ligne.echeance && ligne.echeance !== ligne.emiseLe ? ` · échéance ${jour(ligne.echeance)}` : ""}
+                    {ligne.emiseLe ? `Émise le ${dateCourte(ligne.emiseLe)}` : "Date d'émission inconnue"}
+                    {ligne.echeance && ligne.echeance !== ligne.emiseLe ? ` · échéance ${dateCourte(ligne.echeance)}` : ""}
                     {ligne.regle > 0 ? ` · déjà réglé ${formatMontant(ligne.regle)} sur ${formatMontant(ligne.montant)}` : ""}
                   </p>
                 </div>
@@ -294,7 +292,7 @@ export default function TableauFinances({ initial }: { initial: Tableau }) {
                     {cheque.reference ? <span className="text-[#9CA3AF]"> · n° {cheque.reference}</span> : null}
                   </p>
                   <p className={cn("mt-0.5 text-[12px]", cheque.joursDepuisReception > 15 ? "text-[#F5B454]" : "text-[#6B7280]")}>
-                    Reçu le {jour(cheque.recuLe)} · il y a {cheque.joursDepuisReception} j
+                    Reçu le {dateCourte(cheque.recuLe)} · il y a {cheque.joursDepuisReception} j
                   </p>
                 </div>
                 <div className="flex gap-1.5">
@@ -372,7 +370,7 @@ export default function TableauFinances({ initial }: { initial: Tableau }) {
                         .filter((ligne) => Number(ligne.jour.slice(5, 7)) === mois)
                         .map((ligne, index) => (
                           <li key={`${ligne.encaissementId}:${ligne.mouvement}:${index}`} className="flex gap-3 border-t-[0.5px] border-[#2A2D34] px-4 py-2.5">
-                            <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{jour(ligne.jour)}</span>
+                            <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{dateCourte(ligne.jour)}</span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[13px] text-[#F2F3F5]">
                                 {ligne.client} <span className="text-[#9CA3AF]">· {ligne.nature}</span>

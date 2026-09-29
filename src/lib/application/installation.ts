@@ -1,14 +1,12 @@
 import type { Metadata, Viewport } from "next";
 
 /**
- * Deux applications installables, une seule base de code :
- *   - « CoverSwap »          : le CRM complet, ouvert sur l'écran Commercial ;
- *   - « Messages CoverSwap » : la messagerie SMS, sans la navigation du CRM.
- * Chacune a son manifeste, son icône et ses écrans de démarrage. iOS lit le
- * manifeste et l'icône de la PAGE d'où l'on fait « Sur l'écran d'accueil » :
- * c'est le gabarit de chaque entrée qui porte ces métadonnées.
+ * L'application installable « CoverSwap » : manifeste, icône et écrans de
+ * démarrage. iOS lit le manifeste et l'icône de la PAGE d'où l'on fait « Sur
+ * l'écran d'accueil » : c'est le gabarit qui porte ces métadonnées.
+ * Mission 13 (lot 7) : l'application « Messages » (messagerie SMS seule) est retirée.
  */
-export type ApplicationInstallable = "crm" | "messages";
+export type ApplicationInstallable = "crm";
 
 /** Tailles d'écran des iPhone (points × densité) : voir scripts/generer-icones.mjs. */
 const ECRANS_IPHONE = [
@@ -25,10 +23,10 @@ const ECRANS_IPHONE = [
 ] as const;
 
 export function metadonneesApplication(application: ApplicationInstallable): Metadata {
-  const titre = application === "messages" ? "Messages" : "CoverSwap";
+  const titre = "CoverSwap";
   return {
     manifest: `/manifest-${application}.webmanifest`,
-    applicationName: application === "messages" ? "Messages CoverSwap" : "CoverSwap",
+    applicationName: "CoverSwap",
     appleWebApp: {
       capable: true,
       title: titre,

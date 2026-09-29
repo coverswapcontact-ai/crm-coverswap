@@ -10,8 +10,8 @@ import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import type { EspaceDuClient } from "@/lib/espace/gestion";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
+import { jourAvecAnnee } from "@/lib/commun/format";
 
-const jour = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : null);
 const TYPES_DOCUMENT: Record<string, string> = { DEVIS: "Devis", FACTURE: "Facture", AVOIR: "Avoir" };
 
 /**
@@ -75,7 +75,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
             {e.revoque ? <Pastille ton="rouge">Lien désactivé</Pastille> : <Pastille ton="vert">Lien actif · sans expiration</Pastille>}
             {e.dernierAccesLe ? (
               <Pastille>
-                {e.nbAcces} visite{e.nbAcces > 1 ? "s" : ""} · dernière le {jour(e.dernierAccesLe)}
+                {e.nbAcces} visite{e.nbAcces > 1 ? "s" : ""} · dernière le {jourAvecAnnee(e.dernierAccesLe)}
               </Pastille>
             ) : (
               <Pastille ton="ambre">Jamais ouvert</Pastille>
@@ -87,7 +87,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
           </div>
           {e.projetDemandeLe ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] px-3 py-2">
-              <span className="text-[12.5px] text-[#F5B454]">Il demande à ouvrir un projet de plus (le {jour(e.projetDemandeLe)}).</span>
+              <span className="text-[12.5px] text-[#F5B454]">Il demande à ouvrir un projet de plus (le {jourAvecAnnee(e.projetDemandeLe)}).</span>
               <Bouton taille="sm" icone={<PlusCircle size={13} aria-hidden />} chargement={occupe === "accorder-projet"} onClick={() => void action({ action: "accorder-projet", nombre: 1 }, "Un projet de plus accordé")}>
                 Accorder un projet
               </Bouton>
@@ -148,7 +148,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
                 {donnees.documents.map((d) => (
                   <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
                     <span className="min-w-0 truncate text-[#D1D5DB]">
-                      {TYPES_DOCUMENT[d.type] ?? d.type} {d.numero} <span className="text-[#6B7280]">· {d.projet} · {jour(d.le)}</span>
+                      {TYPES_DOCUMENT[d.type] ?? d.type} {d.numero} <span className="text-[#6B7280]">· {d.projet} · {jourAvecAnnee(d.le)}</span>
                     </span>
                     <span className="shrink-0 text-[#9CA3AF] tabular-nums">
                       {formatMontant(d.montant)} · {d.statut}

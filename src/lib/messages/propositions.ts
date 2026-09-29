@@ -38,10 +38,9 @@ const texteFacultatif = (max: number) =>
 /** Statuts d'où un message peut encore être trié (pas encore rangé chez un client). */
 const STATUTS_A_TRIER = ["A_ANALYSER", "A_TRIER", "IGNORE", "BRUIT"];
 
+/** Mission 13 (lot 7) : l'agent v1 (lecture par le modèle) est retiré ; après un rangement, il reste à conserver les pièces jointes. */
 async function suitesDuTri(messageId: string): Promise<void> {
-  // Import à la demande : l'analyse importe le service de validation (pas de cycle au chargement).
-  const { apresRangement } = await import("./analyse");
-  await apresRangement(messageId);
+  await demanderConservationPieces(messageId);
 }
 
 /** Dans la transaction du tri : remet le message dans la boîte s'il en avait été retiré comme bruit. */

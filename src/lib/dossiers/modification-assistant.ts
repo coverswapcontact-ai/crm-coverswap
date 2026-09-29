@@ -10,6 +10,7 @@ import { libelleReperee, repererFamille, repererSousPartie } from "@/lib/prestat
 import { estJourValide } from "./dates";
 import { modifierDossier, type EntreeModification } from "./dossiers";
 import { recalculerMain } from "./main";
+import { euros } from "@/lib/commun/format";
 
 /**
  * Modifier un dossier à la voix (mission 10) : UN outil, plusieurs champs —
@@ -70,21 +71,21 @@ export type Changement = { champ: ChampModifiable; libelle: string; avant: unkno
 export type DevisImpacte = { id: string; numero: string; statut: string; message: string };
 export type ModificationVue = { id: string; dossierId: string; le: string; par: string; commande: string | null; changements: Changement[]; annuleeLe: string | null; annuleePar: string | null };
 
-const jour = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ.").refine(estJourValide, "Date invalide.");
+const champJour = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date attendue au format AAAA-MM-JJ.").refine(estJourValide, "Date invalide.");
 const texte = (max: number) => z.string().trim().max(max);
 
 /** Ce que l'assistant envoie : chaque champ est facultatif ; seuls ceux donnés changent. */
 export const schemaModificationAssistant = z.object({
   objet: texte(160).min(1).optional(),
   montant_estime: z.number().min(0).max(10_000_000).nullable().optional(),
-  date_souhaitee: jour.nullable().optional(),
-  date_chantier: jour.nullable().optional(),
-  date_fin_chantier: jour.nullable().optional(),
+  date_souhaitee: champJour.nullable().optional(),
+  date_chantier: champJour.nullable().optional(),
+  date_fin_chantier: champJour.nullable().optional(),
   adresse: z.object({ adresse: texte(200).optional(), code_postal: texte(10).optional(), ville: texte(80).optional() }).optional(),
   email: z.email().max(160).nullable().optional(),
   telephone: texte(30).min(6).optional(),
   prochaine_action: texte(140).nullable().optional(),
-  prochaine_action_date: jour.nullable().optional(),
+  prochaine_action_date: champJour.nullable().optional(),
   /** Toute la sélection, famille par famille (ids ou libellés) : remplace l'existante. */
   familles: z.record(z.string().max(40), z.array(z.string().max(60)).max(12)).optional(),
   /** Sous-parties à cocher ou décocher (« ilot », « SDB.plan-vasque », « plan vasque »), sans toucher au reste. */
@@ -99,7 +100,6 @@ export const schemaModificationAssistant = z.object({
 export type EntreeModificationAssistant = z.output<typeof schemaModificationAssistant>;
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
-const euros = (n: number) => `${n.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 const jourLong = (j: string | null) => (j ? new Date(`${j}T12:00:00Z`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }) : "—");
 const libelleCle = (cle: string) => {
   const t = sousPartieDeCle(cle);

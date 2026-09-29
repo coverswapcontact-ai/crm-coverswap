@@ -96,7 +96,7 @@ export type PaiementEspace = {
   regle: boolean;
 };
 
-const euros = (centimes: number) => Math.round(centimes) / 100;
+const centimesEnEuros = (centimes: number) => Math.round(centimes) / 100;
 
 /**
  * Ce que le client doit et ce qu'il a payé, à partir des encaissements VALIDES
@@ -120,13 +120,13 @@ export function paiementEspace(montants: { totalTtcCentimes: number; acompteCent
   const ligne = (du: number, recuPourCetteLigne: number, seuil: number): LignePaiement => {
     const paye = du > 0 && recuPourCetteLigne >= du - 50;
     const fin = paye ? atteint(seuil) : null;
-    return { montant: euros(du), statut: paye ? "PAYE" : recuPourCetteLigne > 0 ? "PARTIEL" : "A_REGLER", recu: euros(Math.min(du, Math.max(0, recuPourCetteLigne))), payeLe: fin?.recuLe.toISOString() ?? null, moyen: fin?.moyen ?? null };
+    return { montant: centimesEnEuros(du), statut: paye ? "PAYE" : recuPourCetteLigne > 0 ? "PARTIEL" : "A_REGLER", recu: centimesEnEuros(Math.min(du, Math.max(0, recuPourCetteLigne))), payeLe: fin?.recuLe.toISOString() ?? null, moyen: fin?.moyen ?? null };
   };
   const soldeDu = total - acompte;
   return {
-    total: euros(total),
-    recu: euros(recu),
-    reste: euros(Math.max(0, total - recu)),
+    total: centimesEnEuros(total),
+    recu: centimesEnEuros(recu),
+    reste: centimesEnEuros(Math.max(0, total - recu)),
     acompte: acompte > 0 ? { ...ligne(acompte, recu, acompte), pct: acomptePct } : null,
     solde: ligne(soldeDu, recu - acompte, total),
     encaissements: valides.map((e) => ({ montant: e.montant, le: e.recuLe.toISOString(), moyen: e.moyen })),

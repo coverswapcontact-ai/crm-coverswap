@@ -33,7 +33,7 @@ function versOctets(base64url: string): Uint8Array<ArrayBuffer> {
 const estInstallee = () => window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 const estIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-export function NotificationsAppareil({ application = "crm", compact = false }: { application?: "crm" | "messages"; compact?: boolean }) {
+export function NotificationsAppareil({ application = "crm", compact = false }: { application?: "crm"; compact?: boolean }) {
   const [etat, setEtat] = useState<Etat>("inconnu");
   const [occupe, setOccupe] = useState(false);
   const [masque, setMasque] = useState(false);
@@ -103,7 +103,7 @@ export function NotificationsAppareil({ application = "crm", compact = false }: 
     etat === "a-installer"
       ? { icone: <Smartphone size={16} aria-hidden />, texte: "Pour recevoir les notifications sur l'iPhone : bouton Partager de Safari, puis « Sur l'écran d'accueil ». Ouvrez ensuite l'application depuis son icône.", bouton: null }
       : etat === "refuse"
-        ? { icone: <BellOff size={16} aria-hidden />, texte: `Les notifications sont refusées pour cette application. Réglages → Notifications → ${application === "messages" ? "Messages" : "CoverSwap"} pour les autoriser.`, bouton: null }
+        ? { icone: <BellOff size={16} aria-hidden />, texte: `Les notifications sont refusées pour cette application. Réglages → Notifications → CoverSwap pour les autoriser.`, bouton: null }
         : { icone: <BellRing size={16} aria-hidden />, texte: compact ? "Recevoir les SMS des clients sur ce téléphone" : "Recevoir sur ce téléphone les nouveaux leads, les SMS des clients et leurs gestes dans leur espace.", bouton: "Activer" };
 
   return (

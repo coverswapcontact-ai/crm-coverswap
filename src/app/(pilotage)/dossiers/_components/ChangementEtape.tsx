@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, ArrowRight, Pause, RotateCcw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ChampsPaiement, lirePaiement, saisiePaiement, type PaiementLu, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
-import { Puces } from "@/components/pilotage/ui";
+import { Puces, Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
 import {
   LIBELLES_CRITERE,
   LIBELLES_ETAPE,
@@ -31,8 +31,7 @@ import {
 import { faitsDepuisDetail, type DocumentVue, type DossierDetail } from "@/lib/dossiers/types";
 import { MOTIFS_SANS_ACOMPTE } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TitreSection, TRANS, ZoneTexte } from "./ui";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type DonneesEtape = {
   motifPerte?: MotifPerte;

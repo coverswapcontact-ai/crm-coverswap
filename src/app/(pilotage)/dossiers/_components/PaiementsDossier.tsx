@@ -5,15 +5,14 @@ import { AlertTriangle, Ban, CircleCheck, Landmark, Pencil, Plus, Undo2 } from "
 import { toast } from "sonner";
 import { ModaleActionEncaissement, type TypeActionEncaissement } from "@/components/pilotage/ActionsEncaissement";
 import { ChampsPaiement, lirePaiement, saisiePaiement, type SaisiePaiement } from "@/components/pilotage/SaisiePaiement";
-import { Pastille } from "@/components/pilotage/ui";
+import { Pastille, Bouton, CLASSE_SAISIE, Modale, TitreSection } from "@/components/pilotage/ui";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { LIBELLES_MOYEN } from "@/lib/encaissements/constantes";
 import type { EncaissementVue, PieceVue } from "@/lib/encaissements/types";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { Bouton, CLASSE_SAISIE, Modale, TitreSection } from "./ui";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 const AUTOMATIQUE = "";
 

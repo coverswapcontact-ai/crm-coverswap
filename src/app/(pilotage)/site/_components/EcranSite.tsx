@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Globe, ImageIcon, Star } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, EnTetePage, EtatVide, ListeDeroulante, Modale, Pastille, TitreSection, ZoneTexte, CaseACocher } from "@/components/pilotage/ui";
+import { Bouton, Champ, EnTetePage, EtatVide, ListeDeroulante, Modale, Pastille, TitreSection, ZoneTexte, CaseACocher, CARTE_SOMBRE } from "@/components/pilotage/ui";
 import { formatDateCourte } from "@/lib/dossiers/dates";
 import { LIBELLES_TYPE_PROJET } from "@/lib/prospects/constantes";
 import type { PublicationVue } from "@/lib/site/publications";
@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 type Dossier = { id: string; objet: string; clientNom: string; ville: string | null; typeProjet: string | null; clientId: string | null; nbApres: number };
 type Photo = { chemin: string; apres: boolean; url: string };
 
-const CARTE = "rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]";
 const VIDE = { type: "REALISATION", titre: "", texte: "", ville: "", typeProjet: "", note: "5", auteur: "", dossierId: "", clientId: "", photoAvant: "", photoApres: "", accord: false, accordClientLe: "" };
 
 function etat(p: PublicationVue): { ton: "vert" | "ambre" | "neutre"; libelle: string } {
@@ -153,7 +152,7 @@ export default function EcranSite({ initiales, dossiers }: { initiales: Publicat
               {section.liste.map((p) => {
                 const e = etat(p);
                 return (
-                  <li key={p.id} className={cn(CARTE, "flex gap-3 p-3")}>
+                  <li key={p.id} className={cn(CARTE_SOMBRE, "flex gap-3 p-3")}>
                     {p.photoApres ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/api/dossiers/${p.dossierId}/photos/${p.photoApres.split("/").pop()?.replace(/\.[a-z0-9]+$/i, "")}`} alt="" className="h-20 w-24 shrink-0 rounded-[8px] object-cover border-[0.5px] border-[#2A2D34]" />

@@ -4,6 +4,7 @@ import { useId } from "react";
 import { Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { useGlisserPourFermer, useRetourFerme } from "./fermeture-mobile";
 
 // Primitives des écrans de pilotage (Prospects, Dossiers, Validation, Clients,
@@ -433,5 +434,45 @@ export function Pagination({ total, page, parPage = 50, onPage, feminin = false,
         </Bouton>
       </span>
     </div>
+  );
+}
+
+/* ── Mission 13 (lot 7) : ce qui vivait dans dossiers/_components/ui.tsx ── */
+
+/** La carte standard des écrans, définie une fois ; `CARTE_SOMBRE` sur fond de page (Site, Publicité). */
+export const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
+export const CARTE_SOMBRE = "rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]";
+
+// Couleur de chaque étape, la même dans le kanban, la liste et le panneau.
+// Du froid au chaud à mesure qu'on approche de l'encaissement, l'objectif ;
+// perdu et en pause sortent de la gamme, en gris neutre. Le rouge reste
+// réservé au retard.
+export const GRIS_HORS_PARCOURS = "#8B919C";
+
+export const COULEURS_ETAPE: Record<EtapeDossier, string> = {
+  QUALIFICATION: "#818CF8",
+  SIMULATION: "#60A5FA",
+  DEVIS_ENVOYE: "#22D3EE",
+  RELANCE: "#2DD4BF",
+  SIGNE: "#4ADE80",
+  PLANIFIE: "#A3E635",
+  CHANTIER: "#FDE047",
+  FACTURE: "#FBBF24",
+  ENCAISSE: "#F97316",
+  PERDU: GRIS_HORS_PARCOURS,
+  EN_PAUSE: GRIS_HORS_PARCOURS,
+};
+
+export function PastilleEtape({ etape, libelle }: { etape: EtapeDossier; libelle: string }) {
+  const couleur = COULEURS_ETAPE[etape];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
+      // Suffixes hexadécimaux d'opacité : 1A ≈ 10 %, 4D ≈ 30 %.
+      style={{ color: couleur, backgroundColor: `${couleur}1A`, borderColor: `${couleur}4D` }}
+    >
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: couleur }} />
+      {libelle}
+    </span>
   );
 }

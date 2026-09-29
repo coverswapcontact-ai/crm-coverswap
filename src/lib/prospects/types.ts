@@ -1,4 +1,4 @@
-import type { GroupeDemarchage, GroupeEntrants, IntentionLead } from "./constantes";
+import type { GroupeEntrants, IntentionLead } from "./constantes";
 
 export type EntrantResume = {
   id: string;
@@ -68,50 +68,4 @@ export type EntrantDetail = EntrantResume & {
 export type ListeEntrants = {
   lignes: EntrantResume[];
   compteurs: Record<GroupeEntrants, number>;
-};
-
-export type ProspectResume = {
-  id: string;
-  nom: string;
-  ville: string | null;
-  agent: { slug: string; nom: string };
-  statut: string;
-  groupe: GroupeDemarchage;
-  score: number;
-  signalPrincipal: string | null;
-  noteGoogle: number | null;
-  nbAvis: number | null;
-  telephone: string | null;
-  siteWeb: string | null;
-  sourceLe: string;
-  derniereActiviteLe: string;
-  dossier: { id: string; etape: string } | null;
-  client: { id: string; nom: string } | null;
-};
-
-export type ProspectDetail = ProspectResume & {
-  adresse: string | null;
-  codePostal: string | null;
-  email: string | null;
-  siret: string | null;
-  fermetureHebdo: string | null;
-  angleSuggere: string | null;
-  lienGoogleMaps: string;
-  scoreDetails: { signaux: { label: string; points: number; source?: string }[]; total: number } | null;
-  avis: { note: number; texte: string; le: string | null }[];
-  activites: { id: string; type: string; message: string; le: string }[];
-};
-
-export type ListeProspects = {
-  lignes: ProspectResume[];
-  compteurs: Record<GroupeDemarchage, number>;
-};
-
-export type EtatAgent = {
-  slug: string;
-  nom: string;
-  actif: boolean;
-  prospects: number;
-  aScorer: number;
-  aContacter: number;
 };

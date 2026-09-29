@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const schema = z.object({
   action: z.enum(["abonner", "desabonner"]).default("abonner"),
-  application: z.enum(["crm", "messages"]).default("crm"),
+  application: z.enum(["crm"]).default("crm"),
   abonnement: z.object({
     endpoint: z.url("Abonnement invalide.").max(1000),
     keys: z.object({ p256dh: z.string().min(10).max(300), auth: z.string().min(8).max(300) }).optional(),

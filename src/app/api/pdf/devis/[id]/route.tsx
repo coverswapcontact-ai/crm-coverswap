@@ -21,7 +21,7 @@ function formatDateFR(d: Date): string {
   return `${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function euros(n: number): string {
+function eurosPdf(n: number): string {
   // Intl.NumberFormat("fr-FR") utilise des espaces insécables (U+202F narrow nbsp
   // et U+00A0 nbsp) qui ne sont pas supportés par les polices Helvetica de
   // @react-pdf/renderer et apparaissent comme `/` dans le PDF.
@@ -254,8 +254,8 @@ function DevisPDF({ d }: { d: DevisData }) {
             <Text style={s.gammeLine}>Gamme : {d.gammeLabel}</Text>
           </View>
           <Text style={s.tdQte}>{d.mlTotal} ml</Text>
-          <Text style={s.tdPU}>{euros(d.prixVenteHTml)}</Text>
-          <Text style={s.tdTotal}>{euros(d.totalRevetement)}</Text>
+          <Text style={s.tdPU}>{eurosPdf(d.prixVenteHTml)}</Text>
+          <Text style={s.tdTotal}>{eurosPdf(d.totalRevetement)}</Text>
         </View>
 
         {/* Frais déplacement */}
@@ -263,8 +263,8 @@ function DevisPDF({ d }: { d: DevisData }) {
           <View style={s.tableRow}>
             <Text style={s.tdDesig}>FRAIS DE DEPLACEMENT</Text>
             <Text style={s.tdQte}>1</Text>
-            <Text style={s.tdPU}>{euros(d.fraisDeplacement)}</Text>
-            <Text style={s.tdTotal}>{euros(d.fraisDeplacement)}</Text>
+            <Text style={s.tdPU}>{eurosPdf(d.fraisDeplacement)}</Text>
+            <Text style={s.tdTotal}>{eurosPdf(d.fraisDeplacement)}</Text>
           </View>
         )}
 
@@ -283,8 +283,8 @@ function DevisPDF({ d }: { d: DevisData }) {
             <View key={i} style={s.tableRow}>
               <Text style={s.tdDesig}>{designation}</Text>
               <Text style={s.tdQte}>{l.quantite}</Text>
-              <Text style={s.tdPU}>{euros(Math.abs(l.prixUnitaire))}{l.total < 0 ? " (remise)" : ""}</Text>
-              <Text style={s.tdTotal}>{euros(l.total)}</Text>
+              <Text style={s.tdPU}>{eurosPdf(Math.abs(l.prixUnitaire))}{l.total < 0 ? " (remise)" : ""}</Text>
+              <Text style={s.tdTotal}>{eurosPdf(l.total)}</Text>
             </View>
           );
         })}
@@ -297,7 +297,7 @@ function DevisPDF({ d }: { d: DevisData }) {
         {/* Total TTC */}
         <View style={s.totalBar}>
           <Text style={s.totalLabel}>TOTAL TTC</Text>
-          <Text style={s.totalValue}>{euros(d.prixVente)}</Text>
+          <Text style={s.totalValue}>{eurosPdf(d.prixVente)}</Text>
         </View>
 
         <Text style={s.note}>*ml = mètre linéaire</Text>
@@ -308,8 +308,8 @@ function DevisPDF({ d }: { d: DevisData }) {
 
         {/* Conditions */}
         <Text style={s.condTitle}>Conditions de règlement :</Text>
-        <Text style={s.condItem}>• Acompte de 30% à la signature : {euros(d.acompte30)} TTC</Text>
-        <Text style={s.condItem}>• Solde de {euros(d.solde70)} TTC à la réception des travaux</Text>
+        <Text style={s.condItem}>• Acompte de 30% à la signature : {eurosPdf(d.acompte30)} TTC</Text>
+        <Text style={s.condItem}>• Solde de {eurosPdf(d.solde70)} TTC à la réception des travaux</Text>
         <Text style={s.condItem}>• Paiement par virement, chèque ou espèces</Text>
         <Text style={s.condItem}>{`• Devis valable 30 jours (jusqu'au ${d.expiresDate})`}</Text>
 

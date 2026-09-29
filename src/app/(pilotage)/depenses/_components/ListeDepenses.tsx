@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, ChevronLeft, ChevronRight, CloudOff, FileText, Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, CLASSE_SAISIE, EnTetePage, Modale, Pastille, Puces, TRANS, TitreSection, ZoneTexte } from "@/components/pilotage/ui";
+import { Bouton, Champ, CLASSE_SAISIE, EnTetePage, Modale, Pastille, Puces, TRANS, TitreSection, ZoneTexte, CARTE } from "@/components/pilotage/ui";
 import { envoisEnAttente, envoyerFile, retirerEnvoi, type EnvoiEnAttente } from "@/lib/depenses/boite-envoi";
 import {
   CATEGORIES_DEPENSE,
@@ -22,7 +22,6 @@ import { formatMontant, lireNombre } from "@/lib/dossiers/montants";
 import { libelleMois } from "@/lib/finances/periodes";
 import { cn } from "@/lib/utils";
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
 function ModaleDepense({
   depense,

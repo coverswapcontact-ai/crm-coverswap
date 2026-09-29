@@ -10,9 +10,9 @@ import { formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import type { ClientResume } from "@/lib/clients/types";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "./ui";
 import { avertissementsCoordonnees, validerCoordonnees, type ChampsCoordonnees, type ErreursCoordonnees } from "./validation";
+import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type Saisie = ChampsCoordonnees & { dateChantier: string; dateSouhaitee: string; dateFinChantier: string };
 

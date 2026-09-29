@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { AlertTriangle, Clock, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Pastille } from "@/components/pilotage/ui";
+import { Pastille, Bouton, Champ, COULEURS_ETAPE, Modale, TitreSection } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { dureeParEtape, formatDuree, type PassageEtape } from "@/lib/dossiers/delais";
 import { formatMontant } from "@/lib/dossiers/montants";
 import type { DossierDetail } from "@/lib/dossiers/types";
-import { envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, COULEURS_ETAPE, Modale, TitreSection } from "./ui";
+import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 function LignePrix({ libelle, montant, accent }: { libelle: string; montant: number | null; accent?: string }) {
   if (montant === null) return null;

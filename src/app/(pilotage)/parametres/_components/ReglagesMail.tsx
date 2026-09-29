@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Mail, RotateCcw, Save, Undo2, WandSparkles } from "lucide-react";
+import { Mail, RotateCcw, Save, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, CLASSE_SAISIE, Pastille, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
+import { Bouton, Champ, CLASSE_SAISIE, Pastille, TitreSection, ZoneTexte, CARTE } from "@/components/pilotage/ui";
 import type { ReglagesMailVue } from "@/lib/mail/reglages-vue";
 import type { PropositionVue } from "@/lib/validation/types";
 import type { GuideStyle } from "@/lib/mail/redaction";
@@ -19,7 +18,6 @@ import { cn } from "@/lib/utils";
  * des séquences) sont dans la liste des paramètres, plus haut.
  */
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
 type Reglages = ReglagesMailVue;
 type Modele = Reglages["modeles"][number];
@@ -39,13 +37,7 @@ export default function ReglagesMail({ initial }: { initial: Reglages }) {
 
   return (
     <section className="mt-10" id="mail">
-      <TitreSection
-        action={
-          <Link href="/mail/sequences" className={cn("inline-flex h-11 sm:h-8 items-center gap-1 text-[12.5px] text-[#5DCAA5] hover:underline", TRANS)}>
-            Séquences <ArrowRight size={13} aria-hidden />
-          </Link>
-        }
-      >
+      <TitreSection>
         Mail
       </TitreSection>
       <div className="space-y-3">

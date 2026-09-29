@@ -6,9 +6,9 @@ import { Camera, ImageOff, ImagePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail, PhotoVue } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { appelApi, envoyerJson, messageErreur, photoTropLourde, preparerPhoto } from "./client";
 import { Visionneuse } from "@/components/pilotage/Visionneuse";
-import { Bouton, TitreSection, TRANS } from "./ui";
+import { Bouton, TitreSection, TRANS } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur, photoTropLourde, preparerPhoto } from "@/components/pilotage/client";
 
 // Les photos passent par une route qui exige la session : pas d'optimisation
 // Next (elle chargerait l'image sans cookie).

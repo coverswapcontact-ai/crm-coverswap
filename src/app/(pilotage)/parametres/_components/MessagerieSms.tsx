@@ -4,13 +4,12 @@ import { useState } from "react";
 import { MessageSquare, RotateCcw, Save, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, CLASSE_SAISIE, Pastille, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, CLASSE_SAISIE, Pastille, TitreSection, CARTE } from "@/components/pilotage/ui";
 import type { EtatFournisseur } from "@/lib/sms/fournisseurs";
 import type { ModeleVue } from "@/lib/sms/modeles";
 import { mesurerSms, simplifierPourGsm } from "@/lib/sms/texte";
 import { cn } from "@/lib/utils";
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
 export type ReponseSms = { modeles: ModeleVue[]; fournisseur: EtatFournisseur };
 type Reponse = ReponseSms;

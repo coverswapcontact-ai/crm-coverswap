@@ -220,7 +220,7 @@ export const outilCeQuiMAttend = definirOutil({
       ...[...parGroupe.entries()].map(([groupe, liste]) => `${groupe} : ${liste.map((a) => `${a.nom}${a.ville ? ` (${a.ville})` : ""} — ${a.action}${a.enRetard ? " (en retard)" : ""}${a.echeance ? ` · ${format.jourCourt(a.echeance)}` : ""} [${a.dossierId ? `dossier:${a.dossierId}` : `lead:${a.leadId}`}]`).join(" · ")}`),
       mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { affaires: aMoi, compteurs: { ...pilotage.compteurs, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente }, mails: mails.lignes.slice(0, 20) }, liens: [lien("Commercial", "/commercial"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])] };
+    return { texte, donnees: { affaires: aMoi, compteurs: { ...pilotage.compteurs, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente }, mails: mails.lignes.slice(0, 20) }, liens: [lien("Leads", "/leads"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])] };
   },
 });
 

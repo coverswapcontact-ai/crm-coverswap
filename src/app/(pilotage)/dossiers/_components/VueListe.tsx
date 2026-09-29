@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { LigneDossierCompacte, PastilleACompleter, PastilleRetard, ProchaineActionResume, type DemandeRaccourci } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { comparerParEcheance } from "./VueKanban";
-import { PastilleEtape, TRANS } from "./ui";
+import { PastilleEtape, TRANS } from "@/components/pilotage/ui";
 
 export type CleTri = "prochaineAction" | "montant" | "anciennete";
 export type Tri = { cle: CleTri; sens: "asc" | "desc" };

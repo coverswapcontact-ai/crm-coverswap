@@ -14,7 +14,6 @@ process.env.META_ACCESS_TOKEN = "";
 let prisma: typeof import("@/lib/prisma").default;
 let avecActeur: typeof import("@/lib/journal/contexte").avecActeur;
 let entrants: typeof import("./entrants");
-let demarchage: typeof import("./demarchage");
 let identification: typeof import("@/lib/clients/identification");
 const LUCAS = { acteur: "HUMAIN:lucas@coverswap.fr" };
 const JOUR = 86_400_000;
@@ -24,7 +23,6 @@ before(async () => {
   avecActeur = (await import("@/lib/journal/contexte")).avecActeur;
   entrants = await import("./entrants");
   identification = await import("@/lib/clients/identification");
-  demarchage = await import("./demarchage");
   await (await import("@/lib/base/preparation")).preparerBase();
 });
 
@@ -110,79 +108,5 @@ describe("contacts entrants", () => {
     assert.equal(clientId, client.id);
     await assert.rejects(avecActeur(LUCAS, () => entrants.creerEntrant(entrants.schemaCreationEntrant.parse({ nomFamille: "Faute", telephone: "06 22" }))), /illisible/);
     await assert.rejects(avecActeur(LUCAS, () => entrants.creerEntrant(entrants.schemaCreationEntrant.parse({}))), /prénom ou un nom/);
-  });
-});
-
-describe("démarchage", () => {
-  test("agents créés au démarrage ; scoring depuis l'écran ; statuts, note, ne plus contacter ; import rejouable", async () => {
-    const agents = await demarchage.etatAgents();
-    assert.deepEqual(agents.agents.map((agent) => agent.slug), ["hotels", "restaurants"], "créés par la migration de données");
-
-    const hotels = await prisma.agentProfile.findUniqueOrThrow({ where: { slug: "hotels" } });
-    const avis = JSON.stringify([
-      { note: 2, texte: "Chambre vieillotte et salle de bain vraiment défraîchie, tout est à rafraîchir.", datePublication: new Date(Date.now() - 20 * JOUR).toISOString() },
-      { note: 3, texte: "Décoration datée, mobilier usé.", datePublication: new Date(Date.now() - 40 * JOUR).toISOString() },
-    ]);
-    const hotel = await avecActeur(LUCAS, () =>
-      prisma.prospect.create({ data: { agentProfileId: hotels.id, googlePlaceId: "place-essai-1", nom: "Hôtel des Essais", ville: "Sète", telephone: "04 67 00 00 01", noteGoogle: 3.4, nbAvis: 120, avisBruts: avis } })
-    );
-    const resultat = await avecActeur(LUCAS, () => demarchage.scorerAgent("hotels"));
-    assert.equal(resultat.evalues, 1);
-    const apresScoring = await demarchage.chargerProspect(hotel.id);
-    assert.equal(apresScoring.statut, "QUALIFIE");
-    assert.ok(apresScoring.score >= 45);
-    assert.ok(apresScoring.scoreDetails && apresScoring.scoreDetails.signaux.length > 0);
-    assert.equal(apresScoring.avis.length, 2);
-    assert.equal((await demarchage.listerProspects()).compteurs.A_CONTACTER, 1);
-
-    await avecActeur(LUCAS, () => demarchage.modifierProspect(hotel.id, { statut: "CONTACTE", note: "Appelé, rappeler lundi" }));
-    let detail = await demarchage.chargerProspect(hotel.id);
-    assert.equal(detail.groupe, "EN_COURS");
-    assert.deepEqual(detail.activites.slice(0, 2).map((activite) => activite.message).sort(), ["Appelé, rappeler lundi", "Statut : Contacté"]);
-    await avecActeur(LUCAS, () => demarchage.modifierProspect(hotel.id, { statut: "OPT_OUT" }));
-    detail = await demarchage.chargerProspect(hotel.id);
-    assert.equal(detail.groupe, "NE_PAS_CONTACTER");
-    assert.equal((await prisma.prospect.findUniqueOrThrow({ where: { id: hotel.id } })).optOut, true);
-    assert.deepEqual(await avecActeur(LUCAS, () => demarchage.modifierProspect(hotel.id, { statut: "QUALIFIE" })), ["Il avait demandé à ne plus être contacté : vérifie avant de le relancer."]);
-
-    const fichier = demarchage.schemaImportProspects.parse({
-      format: "coverswap-prospects/1",
-      agents: [{ slug: "restaurants", nom: "Agent Restaurants", actif: true, config: "{}" }],
-      prospects: [
-        {
-          agentSlug: "restaurants",
-          googlePlaceId: "place-import-1",
-          nom: "Brasserie Importée",
-          adresse: "1 quai, 34200 Sète",
-          ville: "Sète",
-          codePostal: "34200",
-          telephone: null,
-          siteWeb: null,
-          email: null,
-          emailType: "INCONNU",
-          noteGoogle: 3.9,
-          nbAvis: 210,
-          siret: null,
-          anneeCreation: null,
-          statut: "ECARTE",
-          score: 12,
-          scoreDetails: null,
-          signalPrincipal: null,
-          angleSuggere: null,
-          avisBruts: null,
-          fermetureHebdo: "lundi",
-          optOut: false,
-          optOutAt: null,
-          createdAt: "2026-06-11T08:00:00.000Z",
-          activites: [{ type: "SOURCING", details: null, createdAt: "2026-06-11T08:00:00.000Z" }],
-        },
-        { ...{ agentSlug: "hotels", googlePlaceId: "place-essai-1", nom: "Déjà là" }, adresse: null, ville: null, codePostal: null, telephone: null, siteWeb: null, email: null, emailType: "INCONNU", noteGoogle: null, nbAvis: null, siret: null, anneeCreation: null, statut: "SOURCE", score: 0, scoreDetails: null, signalPrincipal: null, angleSuggere: null, avisBruts: null, fermetureHebdo: null, optOut: false, optOutAt: null, createdAt: 1781199546548, activites: [] },
-      ],
-    });
-    assert.deepEqual(await avecActeur(LUCAS, () => demarchage.importerProspects(fichier)), { agentsCrees: 0, prospectsCrees: 1, dejaConnus: 1, activitesCreees: 2 });
-    assert.deepEqual(await avecActeur(LUCAS, () => demarchage.importerProspects(fichier)), { agentsCrees: 0, prospectsCrees: 0, dejaConnus: 2, activitesCreees: 0 }, "rejouable sans doublon");
-    const importe = await prisma.prospect.findUniqueOrThrow({ where: { googlePlaceId: "place-import-1" } });
-    assert.equal(importe.createdAt.toISOString(), "2026-06-11T08:00:00.000Z", "date de sourcing conservée");
-    assert.throws(() => demarchage.schemaImportProspects.parse({ format: "autre", agents: [], prospects: [] }), /export de prospects CoverSwap attendu/);
   });
 });

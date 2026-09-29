@@ -7,17 +7,17 @@ import { MOTIFS_ANNULATION, MOTIFS_REJET, MOTIFS_SANS_ACOMPTE, MOYENS_PAIEMENT }
 
 const codes = (liste: readonly { code: string }[]) => liste.map((motif) => motif.code) as [string, ...string[]];
 
-const jour = (message: string) => z.string(message).refine(estJourValide, message);
+const champJour = (message: string) => z.string(message).refine(estJourValide, message);
 
 export const schemaPaiement = z
   .object({
     montant: z.number("Montant invalide.").gt(0, "Le montant doit être supérieur à zéro.").max(1_000_000, "Montant invalide."),
     /** Facultatif : un paiement repris d'avant le CRM peut ne pas l'avoir (« non renseigné » au livre). */
     moyen: z.enum(MOYENS_PAIEMENT, "Moyen de paiement invalide.").nullable().optional().transform((valeur) => valeur ?? null),
-    recuLe: jour("Date de réception invalide."),
+    recuLe: champJour("Date de réception invalide."),
     reference: z.string().trim().max(120, "Référence trop longue : 120 caractères maximum.").nullable().optional(),
     /** Chèque déjà crédité au moment de la saisie. */
-    crediteLe: jour("Date de crédit invalide.").nullable().optional(),
+    crediteLe: champJour("Date de crédit invalide.").nullable().optional(),
     note: z.string().trim().max(500, "Note trop longue : 500 caractères maximum.").nullable().optional(),
   })
   .refine((paiement) => paiement.recuLe <= jourParis(new Date()), { message: "La date de réception est à venir.", path: ["recuLe"] })
@@ -37,7 +37,7 @@ export const schemaEncaissement = z.object({
   payeur: z.string().trim().max(160, "Nom du payeur trop long.").nullable().optional(),
 });
 
-export const schemaCredit = z.object({ crediteLe: jour("Date de crédit invalide.") });
+export const schemaCredit = z.object({ crediteLe: champJour("Date de crédit invalide.") });
 
 /**
  * Correction d'un paiement enregistré : ce qui est fourni remplace l'ancienne
@@ -47,13 +47,13 @@ export const schemaCredit = z.object({ crediteLe: jour("Date de crédit invalide
 export const schemaCorrectionEncaissement = z
   .object({
     montant: z.number("Montant invalide.").gt(0, "Le montant doit être supérieur à zéro.").max(1_000_000, "Montant invalide.").optional(),
-    recuLe: jour("Date de réception invalide.")
+    recuLe: champJour("Date de réception invalide.")
       .refine((valeur) => valeur <= jourParis(new Date()), "La date de réception est à venir.")
       .refine((valeur) => valeur >= "2020-01-01", "Date de réception invalide.")
       .optional(),
     moyen: z.enum(MOYENS_PAIEMENT, "Moyen de paiement invalide.").nullable().optional(),
     reference: z.string().trim().max(120, "Référence trop longue : 120 caractères maximum.").nullable().optional(),
-    crediteLe: jour("Date de crédit invalide.")
+    crediteLe: champJour("Date de crédit invalide.")
       .refine((valeur) => valeur <= jourParis(new Date()), "La date de crédit est à venir.")
       .nullable()
       .optional(),
@@ -72,6 +72,6 @@ const motifAvecPrecision = (liste: readonly { code: string }[], message: string)
     })
     .refine((entree) => entree.motif !== "AUTRE" || Boolean(entree.precision), { message: "Précise le motif.", path: ["precision"] });
 
-export const schemaRejet = motifAvecPrecision(MOTIFS_REJET, "Choisis le motif du rejet.").and(z.object({ le: jour("Date du rejet invalide.") }));
+export const schemaRejet = motifAvecPrecision(MOTIFS_REJET, "Choisis le motif du rejet.").and(z.object({ le: champJour("Date du rejet invalide.") }));
 export const schemaAnnulation = motifAvecPrecision(MOTIFS_ANNULATION, "Choisis le motif de l'annulation.");
 export const schemaSansAcompte = motifAvecPrecision(MOTIFS_SANS_ACOMPTE, "Choisis pourquoi il n'y a pas d'acompte.");

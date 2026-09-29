@@ -111,7 +111,7 @@ export const outilPointDuJour = definirOutil({
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
       `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");
-    return { texte, donnees: point, liens: [lien("Commercial", "/commercial"), lien("Mail", "/mail")] };
+    return { texte, donnees: point, liens: [lien("Leads", "/leads"), lien("Mail", "/mail")] };
   },
 });
 

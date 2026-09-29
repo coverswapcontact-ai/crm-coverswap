@@ -11,7 +11,7 @@ import { proposer, rejeterProposition, vueProposition } from "@/lib/validation/s
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
 import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture";
-import { accord, pluriel } from "@/lib/commun/format";
+import { accord, pluriel, jourHeureCourt } from "@/lib/commun/format";
 
 /**
  * Les outils du mail (mission 9) : le CRM ne lit pas les mails, c'est Claude,
@@ -21,7 +21,6 @@ import { accord, pluriel } from "@/lib/commun/format";
  */
 
 const LIBELLE_CLASSE: Record<string, string> = { CLIENT: "client", ADMINISTRATIF: "administratif", HUMAIN: "à lire", BRUIT: "rangé" };
-const heure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
 const court = (texte: string, n: number) => (texte.length > n ? `${texte.slice(0, n)}…` : texte);
 
 type Ids = Awaited<ReturnType<typeof resoudreCible>>;
@@ -65,15 +64,15 @@ export const outilLireMail = definirOutil({
     const d = await detailMail(messageId);
     const chrono = d.chronologie.slice(0, e.chronologie ?? 30);
     const lignes = [
-      `« ${d.objet} » — ${d.correspondant.nom ? `${d.correspondant.nom} <${d.correspondant.adresse}>` : d.correspondant.adresse}${d.classe ? ` · ${LIBELLE_CLASSE[d.classe] ?? d.classe}` : ""}${d.range ? " · rangé" : ""}${d.traite ? " · archivé" : ""}${d.snoozeJusqua ? ` · remis au ${heure(d.snoozeJusqua)}` : ""} [mail:${d.messageId}]`,
-      d.intention ? `Intention : ${LIBELLES_INTENTION[d.intention as keyof typeof LIBELLES_INTENTION] ?? d.intention}${d.attendu ? ` — ${d.attendu}` : ""} (${d.intentionPar ?? "?"}, ${d.intentionLe ? heure(d.intentionLe) : "?"})` : "Intention : non classé (« classer_mail »).",
-      d.resume ? `Résumé (${d.resume.par ?? "?"}, ${heure(d.resume.le)}${d.resume.perime ? ", PÉRIMÉ : de nouveaux messages depuis" : ""}) : ${d.resume.resume}${d.resume.pointsEnSuspens.length ? ` — En suspens : ${d.resume.pointsEnSuspens.map((p) => `${p.texte}${p.date ? ` (${p.date})` : ""}`).join(" ; ")}` : ""}` : d.fil.length > 2 ? "Pas de résumé (« resumer_fil »)." : "",
+      `« ${d.objet} » — ${d.correspondant.nom ? `${d.correspondant.nom} <${d.correspondant.adresse}>` : d.correspondant.adresse}${d.classe ? ` · ${LIBELLE_CLASSE[d.classe] ?? d.classe}` : ""}${d.range ? " · rangé" : ""}${d.traite ? " · archivé" : ""}${d.snoozeJusqua ? ` · remis au ${jourHeureCourt(d.snoozeJusqua)}` : ""} [mail:${d.messageId}]`,
+      d.intention ? `Intention : ${LIBELLES_INTENTION[d.intention as keyof typeof LIBELLES_INTENTION] ?? d.intention}${d.attendu ? ` — ${d.attendu}` : ""} (${d.intentionPar ?? "?"}, ${d.intentionLe ? jourHeureCourt(d.intentionLe) : "?"})` : "Intention : non classé (« classer_mail »).",
+      d.resume ? `Résumé (${d.resume.par ?? "?"}, ${jourHeureCourt(d.resume.le)}${d.resume.perime ? ", PÉRIMÉ : de nouveaux messages depuis" : ""}) : ${d.resume.resume}${d.resume.pointsEnSuspens.length ? ` — En suspens : ${d.resume.pointsEnSuspens.map((p) => `${p.texte}${p.date ? ` (${p.date})` : ""}`).join(" ; ")}` : ""}` : d.fil.length > 2 ? "Pas de résumé (« resumer_fil »)." : "",
       d.datesExtraites.length ? `Dates extraites : ${d.datesExtraites.map((x) => `${x.date}${x.heure ? ` ${x.heure}` : ""} (${x.nature === "ECHEANCE" ? "échéance" : "disponibilité"}) — « ${x.passage} »`).join(" · ")}` : "",
-      `Fil (${d.fil.length}) :\n${d.fil.map((m) => `[${heure(m.recuLe)}] ${m.sens === "SORTANT" ? (m.automatique ? "CoverSwap (automatique)" : "Lucas") : (m.deNom ?? m.de)} : ${court(m.texte.replace(/\s+/g, " ").trim(), 1200)}${m.pieces.length ? ` (pièces : ${m.pieces.map((p) => p.nom).join(", ")})` : ""} [message:${m.id}]`).join("\n")}`,
+      `Fil (${d.fil.length}) :\n${d.fil.map((m) => `[${jourHeureCourt(m.recuLe)}] ${m.sens === "SORTANT" ? (m.automatique ? "CoverSwap (automatique)" : "Lucas") : (m.deNom ?? m.de)} : ${court(m.texte.replace(/\s+/g, " ").trim(), 1200)}${m.pieces.length ? ` (pièces : ${m.pieces.map((p) => p.nom).join(", ")})` : ""} [message:${m.id}]`).join("\n")}`,
       d.propositions.length ? `Cartes en attente (${d.propositions.length}) : ${d.propositions.map((p) => `[proposition:${p.id}] ${p.titre}${p.sensible ? " (sensible : confirmation)" : ""}`).join(" · ")}` : "Aucune carte en attente.",
       d.brouillons.filter((b) => b.statut === "BROUILLON").length ? `Brouillons prêts : ${d.brouillons.filter((b) => b.statut === "BROUILLON").map((b) => `[brouillon:${b.id}] « ${b.objet ?? ""} » (${b.source === "ASSISTANT" ? "déposé par toi" : "IA du CRM"}) : ${court((b.texte ?? "").replace(/\s+/g, " "), 200)}`).join(" · ")}` : "",
       d.contexte ? `Contact : ${d.contexte.contact.nom} (${d.contexte.contact.type === "CLIENT" ? `client [client:${d.contexte.contact.clientId}]` : d.contexte.contact.type === "LEAD" ? `lead [lead:${d.contexte.contact.leadId}]` : "inconnu"})${d.contexte.contact.ville ? `, ${d.contexte.contact.ville}` : ""}${d.contexte.projets.length ? ` — projets : ${d.contexte.projets.map((p) => `${p.nom} (${p.etapeLibelle}, main : ${p.main}${p.devis ? `, devis ${p.devis.numero} ${p.devis.totalTtc} €` : ""}) [dossier:${p.dossierId}]`).join(" ; ")}` : " — aucun dossier"}` : "Contact inconnu (« rattacher_mail », ou lead à créer).",
-      chrono.length ? `Chronologie (${chrono.length}/${d.chronologie.length}) :\n${chrono.map((c) => `${heure(c.le)} · ${c.titre}${c.texte ? ` — ${court(c.texte.replace(/\s+/g, " "), 160)}` : ""}`).join("\n")}` : "",
+      chrono.length ? `Chronologie (${chrono.length}/${d.chronologie.length}) :\n${chrono.map((c) => `${jourHeureCourt(c.le)} · ${c.titre}${c.texte ? ` — ${court(c.texte.replace(/\s+/g, " "), 160)}` : ""}`).join("\n")}` : "",
     ].filter(Boolean).join("\n");
     return { texte: lignes, donnees: { ...d, fil: d.fil.map((m) => ({ ...m, texte: court(m.texte, 4000) })), chronologie: chrono }, liens: [lien("Ouvrir le mail", `/mail?mail=${d.messageId}`), ...(d.contexte?.projets[0] ? [lien("Dossier", `/dossiers?dossier=${d.contexte.projets[0].dossierId}`)] : [])] };
   },
@@ -89,7 +88,7 @@ export const outilMailsNonClasses = definirOutil({
     const mails = await mailsNonClasses({ limite: limite ?? 15 });
     if (!mails.length) return { texte: "Aucun mail à classer : tout ce qui est conservé porte une intention." };
     return {
-      texte: `${pluriel(mails.length, "mail")} à classer :\n${mails.map((m) => `[mail:${m.messageId}] ${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.classe ? ` · ${LIBELLE_CLASSE[m.classe] ?? m.classe}` : ""}${m.contact ? ` · ${m.contact.nom}` : ""}${m.messagesDuFil > 1 ? ` · fil de ${m.messagesDuFil}` : ""}${m.pieces ? ` · ${pluriel(m.pieces, "pièce")}` : ""}\n${court(m.texte.replace(/\s+/g, " "), 400)}`).join("\n\n")}`,
+      texte: `${pluriel(mails.length, "mail")} à classer :\n${mails.map((m) => `[mail:${m.messageId}] ${m.deNom ?? m.de} — « ${m.objet ?? "(sans objet)"} » ${jourHeureCourt(m.recuLe)}${m.classe ? ` · ${LIBELLE_CLASSE[m.classe] ?? m.classe}` : ""}${m.contact ? ` · ${m.contact.nom}` : ""}${m.messagesDuFil > 1 ? ` · fil de ${m.messagesDuFil}` : ""}${m.pieces ? ` · ${pluriel(m.pieces, "pièce")}` : ""}\n${court(m.texte.replace(/\s+/g, " "), 400)}`).join("\n\n")}`,
       donnees: mails,
       liens: [lien("Mail", "/mail")],
     };
@@ -106,7 +105,7 @@ export const outilRechercherMails = definirOutil({
     const trouves = await rechercherMails({ texte: e.texte, du: e.du, au: e.au, limite: e.limite ?? 10 });
     if (!trouves.length) return { texte: `Rien pour « ${e.texte} »${e.du || e.au ? " sur cette période" : ""}. Essaie avec un seul mot, ou une autre orthographe.` };
     return {
-      texte: `${pluriel(trouves.length, "mail")} pour « ${e.texte} » :\n${trouves.map((m) => `[mail:${m.messageId}] ${m.sens === "ENTRANT" ? `de ${m.deNom ?? m.de}` : `à ${m.a[0] ?? "?"}`} — « ${m.objet ?? "(sans objet)"} » ${heure(m.recuLe)}${m.contact ? ` · ${m.contact.type === "CLIENT" ? "client" : "lead"} ${m.contact.nom} [${m.contact.type.toLowerCase()}:${m.contact.id}]` : ""}${m.passage ? ` — ${m.passage}` : ""}`).join("\n")}`,
+      texte: `${pluriel(trouves.length, "mail")} pour « ${e.texte} » :\n${trouves.map((m) => `[mail:${m.messageId}] ${m.sens === "ENTRANT" ? `de ${m.deNom ?? m.de}` : `à ${m.a[0] ?? "?"}`} — « ${m.objet ?? "(sans objet)"} » ${jourHeureCourt(m.recuLe)}${m.contact ? ` · ${m.contact.type === "CLIENT" ? "client" : "lead"} ${m.contact.nom} [${m.contact.type.toLowerCase()}:${m.contact.id}]` : ""}${m.passage ? ` — ${m.passage}` : ""}`).join("\n")}`,
       donnees: trouves,
       liens: trouves.slice(0, 3).map((m) => lien(m.objet ?? m.messageId, `/mail?mail=${m.messageId}`)),
     };

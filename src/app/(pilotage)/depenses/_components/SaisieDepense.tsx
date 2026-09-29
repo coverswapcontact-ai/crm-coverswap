@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Camera, CircleCheck, CloudOff, FileText, ImagePlus, Receipt, X } from "lucide-react";
 import { toast } from "sonner";
-import { preparerPhoto } from "@/app/(pilotage)/dossiers/_components/client";
 import { Bouton, Champ, Puces, TRANS } from "@/components/pilotage/ui";
 import {
   CATEGORIES_DEPENSE,
@@ -19,6 +18,7 @@ import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, lireNombre } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
+import { preparerPhoto } from "@/components/pilotage/client";
 
 type Rattachement = { type: "CHANTIER"; dossierId: string } | { type: "HORS" } | null;
 type Resultat = { enAttente: boolean; montant: number; fournisseur: string; rattache: string };

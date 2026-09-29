@@ -14,20 +14,6 @@ export type GroupeAffaire =
   | "ATTENTE_DEVIS"
   | "PLUS_TARD"; // rappel ou chantier déjà daté
 
-export const LIBELLES_GROUPE: Record<GroupeAffaire, string> = {
-  REPONDRE: "À répondre",
-  RAPPELER: "À rappeler",
-  SIMULATION: "Simulations à préparer",
-  DEVIS: "Devis à faire",
-  PLANIFIER: "Signés : à planifier",
-  DECIDER: "À décider",
-  ECARTER: "Hors zone — à écarter, sauf décision",
-  ATTENTE_PHOTOS: "Attend ses photos",
-  ATTENTE_SIMULATION: "Simulation envoyée",
-  ATTENTE_DEVIS: "Devis envoyé",
-  PLUS_TARD: "Plus tard",
-};
-
 /** Ordre d'affichage : ce qui brûle d'abord. */
 export const GROUPES_A_MOI: GroupeAffaire[] = ["REPONDRE", "RAPPELER", "SIMULATION", "DEVIS", "PLANIFIER", "DECIDER", "ECARTER"];
 export const GROUPES_CLIENT: GroupeAffaire[] = ["ATTENTE_DEVIS", "ATTENTE_SIMULATION", "ATTENTE_PHOTOS", "PLUS_TARD"];

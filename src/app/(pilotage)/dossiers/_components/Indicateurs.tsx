@@ -4,7 +4,7 @@ import { BellRing, Hourglass, Play } from "lucide-react";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, type EtapeActive, type EtapeDossier } from "@/lib/dossiers/constants";
 import { echeanceDe, mainDe, progressionDe, type Main } from "@/lib/dossiers/pilotage";
 import { cn } from "@/lib/utils";
-import { COULEURS_ETAPE, GRIS_HORS_PARCOURS } from "./ui";
+import { COULEURS_ETAPE, GRIS_HORS_PARCOURS } from "@/components/pilotage/ui";
 
 // Indicateurs d'état partagés par les cartes, la liste, le panneau et la légende.
 

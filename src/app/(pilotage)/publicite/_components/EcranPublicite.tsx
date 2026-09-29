@@ -4,24 +4,13 @@ import { useCallback, useState } from "react";
 import { AlertTriangle, BellRing, CheckCircle2, Megaphone, RefreshCw, TestTube } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, EnTetePage, EtatVide, Pastille, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, EnTetePage, EtatVide, Pastille, TitreSection, CARTE_SOMBRE } from "@/components/pilotage/ui";
 import type { EtatCanal, ResultatParAxe, SanteMeta } from "@/lib/meta/sante";
 import type { RapportEssai } from "@/lib/meta/essai";
 import type { ResultatCanal } from "@/lib/alertes/canaux";
 import { cn } from "@/lib/utils";
-import { pluriel } from "@/lib/commun/format";
+import { pluriel, quand } from "@/lib/commun/format";
 
-const CARTE = "rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]";
-
-function quand(iso: string | null): string {
-  if (!iso) return "jamais";
-  const date = new Date(iso);
-  const minutes = Math.round((Date.now() - date.getTime()) / 60_000);
-  if (minutes < 1) return "à l'instant";
-  if (minutes < 60) return `il y a ${minutes} min`;
-  if (minutes < 60 * 24) return `il y a ${Math.round(minutes / 60)} h`;
-  return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
-}
 
 function Ligne({ libelle, valeur, ton }: { libelle: string; valeur: React.ReactNode; ton?: "vert" | "ambre" | "rouge" | "neutre" }) {
   return (
@@ -37,7 +26,7 @@ const FENETRES = [7, 21, 30] as const;
 function Tableau({ titre, lignes }: { titre: string; lignes: ResultatParAxe[] }) {
   if (lignes.length === 0) return null;
   return (
-    <div className={cn(CARTE, "overflow-x-auto p-4")}>
+    <div className={cn(CARTE_SOMBRE, "overflow-x-auto p-4")}>
       <TitreSection>{titre}</TitreSection>
       <table className="w-full min-w-[420px] text-[13px]">
         <thead>
@@ -80,7 +69,7 @@ function CanalNotification({ etat, essai }: { etat: EtatCanal; essai: ResultatCa
         : `essai en échec — ${essai.detail ?? "raison inconnue"}`
       : etat.dernier
         ? etat.dernier.ok
-          ? `dernier envoi ${quand(etat.dernier.quand)}`
+          ? `dernier envoi ${(quand(etat.dernier.quand) ?? "jamais")}`
           : `dernier envoi en échec — ${etat.dernier.detail ?? "raison inconnue"}`
         : "configuré, aucun envoi encore";
   return (
@@ -180,7 +169,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
       />
 
       {/* Mission 13 (B5) : UN état de la chaîne, le même que dans « sante_systeme » et « voir_publicite » ; les alertes en dessous. */}
-      <section className={cn(CARTE, "p-4", chaine.code === "COMPLETE" ? "border-[#1D9E75]/40 bg-[#112B22]" : chaine.code === "COUPEE" ? "border-[#F87171]/40 bg-[#F87171]/5" : "border-[#EF9F27]/40 bg-[#EF9F27]/5")}>
+      <section className={cn(CARTE_SOMBRE, "p-4", chaine.code === "COMPLETE" ? "border-[#1D9E75]/40 bg-[#112B22]" : chaine.code === "COUPEE" ? "border-[#F87171]/40 bg-[#F87171]/5" : "border-[#EF9F27]/40 bg-[#EF9F27]/5")}>
         <p className={cn("flex items-start gap-2 text-[13.5px] leading-relaxed", chaine.code === "COMPLETE" ? "text-[#5DCAA5]" : chaine.code === "COUPEE" ? "text-[#F87171]" : "text-[#F5B454]")}>
           {chaine.code === "COMPLETE" ? <CheckCircle2 size={15} aria-hidden className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} aria-hidden className="mt-0.5 shrink-0" />}
           <span>{chaine.libelle}</span>
@@ -195,7 +184,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
       </section>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <section className={cn(CARTE, "p-4")}>
+        <section className={cn(CARTE_SOMBRE, "p-4")}>
           <TitreSection
             action={
               <Bouton taille="sm" icone={<TestTube size={14} aria-hidden />} chargement={occupe === "essai"} onClick={() => void essayer(true)}>
@@ -207,7 +196,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
             <Pastille ton={recoit ? "vert" : webhook.recoit === "PRET" ? "ambre" : "rouge"}>{recoit ? "reçoit des leads" : webhook.recoit === "PRET" ? "prêt, aucun lead sur 7 jours" : "ne reçoit pas"}</Pastille>
           </TitreSection>
           <Ligne libelle="Diagnostic" valeur={webhook.recoitDetail} />
-          <Ligne libelle="Dernier lead reçu" valeur={`${quand(webhook.dernierLeadLe)}${webhook.dernierLeadNom ? ` · ${webhook.dernierLeadNom}` : ""}`} />
+          <Ligne libelle="Dernier lead reçu" valeur={`${(quand(webhook.dernierLeadLe) ?? "jamais")}${webhook.dernierLeadNom ? ` · ${webhook.dernierLeadNom}` : ""}`} />
           <Ligne libelle="Sur 24 heures" valeur={webhook.surVingtQuatreHeures} />
           <Ligne libelle="Sur 7 jours" valeur={webhook.surSeptJours} />
           <Ligne libelle="Depuis le début" valeur={webhook.total} />
@@ -219,7 +208,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
           <Ligne libelle="En cours de traitement" valeur={sante.enAttente} />
         </section>
 
-        <section className={cn(CARTE, "p-4")}>
+        <section className={cn(CARTE_SOMBRE, "p-4")}>
           <TitreSection>Accès et notifications</TitreSection>
           <Ligne libelle="Signature des appels" valeur={configuration.signature ? "vérifiée" : "META_APP_SECRET absente"} ton={configuration.signature ? "vert" : "rouge"} />
           <Ligne libelle="Lecture des formulaires" valeur={!configuration.lecture ? "jeton absent" : chaine.lectureImpossible ? "impossible (jeton refusé)" : "possible"} ton={configuration.lecture && !chaine.lectureImpossible ? "vert" : "rouge"} />
@@ -234,7 +223,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         </section>
       </div>
 
-      <section className={cn(CARTE, "p-4")}>
+      <section className={cn(CARTE_SOMBRE, "p-4")}>
         <TitreSection
           action={
             <Bouton taille="sm" icone={<BellRing size={14} aria-hidden />} chargement={occupe === "notification"} onClick={() => void testerNotification()}>
@@ -257,7 +246,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
             <ul className="mt-1 space-y-0.5 text-[12px] text-[#9CA3AF]">
               {notifications.leadsSansPush.slice(0, 5).map((lead) => (
                 <li key={lead.leadgenId}>
-                  {lead.nom ?? `leadgen_id ${lead.leadgenId}`} · {quand(lead.quand)} · {lead.detail}
+                  {lead.nom ?? `leadgen_id ${lead.leadgenId}`} · {(quand(lead.quand) ?? "jamais")} · {lead.detail}
                 </li>
               ))}
             </ul>
@@ -306,10 +295,10 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
         ) : (
           <ul className="space-y-2">
             {echecs.leads.map((lead) => (
-              <li key={lead.leadgenId} className={cn(CARTE, "flex flex-wrap items-center justify-between gap-3 p-3")}>
+              <li key={lead.leadgenId} className={cn(CARTE_SOMBRE, "flex flex-wrap items-center justify-between gap-3 p-3")}>
                 <div className="min-w-0">
                   <p className="text-[13px] text-[#F2F3F5]">
-                    Formulaire rempli {quand(lead.soumisLe)}
+                    Formulaire rempli {(quand(lead.soumisLe) ?? "jamais")}
                     {lead.campagne ? ` · ${lead.campagne}` : ""}
                   </p>
                   <p className="text-[12px] text-[#9CA3AF]">
@@ -326,7 +315,7 @@ export default function EcranPublicite({ initiale }: { initiale: SanteMeta }) {
       </section>
 
       {rapport ? (
-        <section className={cn(CARTE, "p-4")}>
+        <section className={cn(CARTE_SOMBRE, "p-4")}>
           <TitreSection
             action={
               <Bouton taille="sm" icone={<BellRing size={14} aria-hidden />} chargement={occupe === "essai"} onClick={() => void essayer(false)}>

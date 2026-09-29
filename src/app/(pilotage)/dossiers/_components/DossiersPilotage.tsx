@@ -15,9 +15,8 @@ import { PanneauDossier, type DemandeOuverture } from "./PanneauDossier";
 import { VueKanban } from "./VueKanban";
 import { type DemandeRaccourci } from "./CarteDossier";
 import { LIBELLES_TRI, SENS_PAR_DEFAUT, VueListe, type CleTri, type Tri } from "./VueListe";
-import { appelApi, messageErreur } from "./client";
-import { Pagination } from "@/components/pilotage/ui";
-import { Bouton, EtatVide, TRANS } from "./ui";
+import { Pagination, Bouton, EtatVide, TRANS } from "@/components/pilotage/ui";
+import { appelApi, messageErreur } from "@/components/pilotage/client";
 
 type Vue = "kanban" | "liste";
 const CLE_VUE = "dossiers:vue";

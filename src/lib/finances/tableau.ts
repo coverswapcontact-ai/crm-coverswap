@@ -150,7 +150,7 @@ async function chargerQualite(cheques: ChequeACrediter[]): Promise<PointQualite[
       code: "HORS_CRM_SANS_MONTANT",
       libelle: "Factures émises hors CRM sans montant au registre : leur encaissement ne peut pas être suivi",
       detail: horsCrmSansMontant.map((ligne) => ligne.numero),
-      lien: "/numeros",
+      lien: "/parametres#facturation",
     },
     {
       code: "ENCAISSE_SANS_PAIEMENT",

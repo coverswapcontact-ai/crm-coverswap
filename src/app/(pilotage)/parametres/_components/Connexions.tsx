@@ -5,20 +5,19 @@ import Link from "next/link";
 import { Bot, CircleCheck, CloudUpload, Link2, Link2Off, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Pastille, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, Pastille, TitreSection, CARTE } from "@/components/pilotage/ui";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
 import { dureeRestante } from "@/lib/google/echeance";
 import type { EtatMiroir } from "@/lib/drive/synchronisation";
 import type { EtatConnexionGoogle } from "@/lib/google/connexion";
 import type { EtatAgentMail } from "@/lib/messages/constantes";
 import { cn } from "@/lib/utils";
+import { euros } from "@/lib/commun/format";
 
-const CARTE = "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
 
 export type EtatConnexions = { google: EtatConnexionGoogle; drive: EtatMiroir; agent: EtatAgentMail };
 type Etat = EtatConnexions;
 
-const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 /** Connexion Google (Drive, Gmail), miroir Drive et agent mail : état, connexion, actions à la demande. */
 export default function Connexions({ retour, initial }: { retour: { google: string | null; compte: string | null; message: string | null }; initial: EtatConnexions }) {
@@ -174,7 +173,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
               </p>
               <p className="mt-1">
                 {agent.recusSeptJours} mail{agent.recusSeptJours > 1 ? "s" : ""} reçu{agent.recusSeptJours > 1 ? "s" : ""} en 7 jours ·{" "}
-                <Link href="/messages" className="text-[#5DCAA5] underline-offset-2 hover:underline">
+                <Link href="/mail" className="text-[#5DCAA5] underline-offset-2 hover:underline">
                   {agent.aTrier} à trier
                 </Link>
               </p>
@@ -197,8 +196,8 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
             </p>
             {agent.ia.active ? (
               <p className="mt-1">
-                Active · {agent.ia.modele} · {euros(agent.ia.depenseMois)} ce mois
-                {agent.ia.budget !== null ? ` sur ${euros(agent.ia.budget)}` : ""} ({agent.ia.appelsMois} lecture{agent.ia.appelsMois > 1 ? "s" : ""})
+                Active · {agent.ia.modele} · {euros(agent.ia.depenseMois, 2)} ce mois
+                {agent.ia.budget !== null ? ` sur ${euros(agent.ia.budget, 2)}` : ""} ({agent.ia.appelsMois} lecture{agent.ia.appelsMois > 1 ? "s" : ""})
               </p>
             ) : (
               <p className="mt-1">

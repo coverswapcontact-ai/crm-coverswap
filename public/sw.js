@@ -14,16 +14,16 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v8";
+const VERSION = "v9";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;
 const HORS_LIGNE = "/hors-ligne.html";
 const EN_LOCAL = ["localhost", "127.0.0.1"].includes(self.location.hostname);
 
-// Lectures utiles hors ligne : la liste des conversations, un fil, le pilotage commercial, les compteurs.
-const DONNEES_GARDEES = [/^\/api\/sms\/conversations/, /^\/api\/leads$/, /^\/api\/commercial\/pilotage$/, /^\/api\/pilotage\/compteurs$/];
-const JAMAIS = [/^\/api\/auth\//, /^\/auth\//, /^\/api\/sms\/flux/, /^\/api\/webhook/, /^\/api\/espace\//, /^\/api\/cron\//, /^\/_next\/webpack-hmr/, /^\/api\/push\//];
+// Lectures utiles hors ligne : la liste des leads, les compteurs.
+const DONNEES_GARDEES = [/^\/api\/leads$/, /^\/api\/pilotage\/compteurs$/];
+const JAMAIS = [/^\/api\/auth\//, /^\/auth\//, /^\/api\/webhook/, /^\/api\/espace\//, /^\/_next\/webpack-hmr/, /^\/api\/push\//];
 
 self.addEventListener("install", (evenement) => {
   self.skipWaiting();
@@ -156,13 +156,11 @@ self.addEventListener("push", (evenement) => {
 self.addEventListener("notificationclick", (evenement) => {
   evenement.notification.close();
   const lien = new URL((evenement.notification.data && evenement.notification.data.lien) || "/", self.location.origin);
-  // Un lien vers la messagerie du CRM s'ouvre dans l'application « Messages » quand c'est elle qui est ouverte.
   evenement.waitUntil(
     (async () => {
       const fenetres = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const cible = lien.pathname + lien.search;
       for (const fenetre of fenetres) {
-        const dansMessages = new URL(fenetre.url).pathname.startsWith("/messagerie");
-        const cible = dansMessages && lien.pathname === "/sms" ? `/messagerie${lien.search}` : lien.pathname + lien.search;
         try {
           await fenetre.focus();
           if ("navigate" in fenetre) await fenetre.navigate(cible);

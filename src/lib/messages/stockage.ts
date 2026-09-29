@@ -12,7 +12,6 @@ import { LIBELLE_BRUIT, libelleGmail, lirePieceGmail, modifierLibellesGmail, typ
  * message déjà archivé ne fait rien.
  */
 
-export const TYPE_TACHE_ANALYSE = "ANALYSE_MESSAGE";
 export const TYPE_TACHE_BOITE = "BOITE_MESSAGE";
 export const TYPE_TACHE_PIECES = "PIECES_MESSAGE";
 export const TYPE_TACHE_RELEVE = "RELEVE_BOITE";

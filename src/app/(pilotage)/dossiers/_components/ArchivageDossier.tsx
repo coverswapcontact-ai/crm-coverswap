@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Bouton, Champ, EtatVide, Modale } from "./ui";
+import { Bouton, Champ, EtatVide, Modale } from "@/components/pilotage/ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 /**
  * Archiver un dossier : il sort de Dossiers, son lead REVIENT dans Leads avec

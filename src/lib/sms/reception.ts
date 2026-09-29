@@ -89,11 +89,11 @@ export async function enregistrerSmsEntrant(entrant: SmsEntrant, fournisseur: st
     {
       titre: stop ? `STOP reçu — ${qui}` : `SMS de ${qui}`,
       texte: stop ? `« ${texte} »\n\nCe numéro ne recevra plus aucun SMS du CRM.` : `${texte}${conversation.leadId || conversation.clientId ? "" : "\n\nNuméro inconnu : conversation à rattacher."}`,
-      lien: `${appUrl()}/sms?c=${conversation.id}`,
-      libelleLien: "Ouvrir la conversation",
+      // Mission 13 (lot 7) : l'écran SMS est retiré ; l'alerte mène au contact.
+      lien: conversation.leadId ? `${appUrl()}/leads?lead=${conversation.leadId}` : conversation.clientId ? `${appUrl()}/clients/${conversation.clientId}` : `${appUrl()}/leads`,
+      libelleLien: "Ouvrir la fiche",
       telephone: conversation.numero,
       urgence: stop ? 3 : 4,
-      application: "messages",
       etiquette: `sms-${conversation.id}`,
     },
     { origine: stop ? "sms-stop" : "sms-recu", canaux: ["telegram", "ntfy", "pushweb"] }

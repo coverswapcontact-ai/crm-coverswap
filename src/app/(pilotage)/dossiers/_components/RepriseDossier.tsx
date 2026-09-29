@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { FilePlus2, History, Plus, Receipt, Search, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
-import { CaseACocher, Pastille, Puces } from "@/components/pilotage/ui";
+import { CaseACocher, Pastille, Puces, Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "@/components/pilotage/ui";
 import type { ClientResume, EntrepriseAnnuaire } from "@/lib/clients/types";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, LIBELLES_SOURCE, LIBELLES_STATUT_DOCUMENT, SOURCES_DOSSIER, type EtapeActive, type SourceDossier } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
@@ -12,9 +12,8 @@ import { numerosProposables } from "@/lib/dossiers/numeros-libres";
 import type { NumeroLibre } from "@/lib/dossiers/registre";
 import { LIBELLES_MOYEN, MOYENS_PAIEMENT, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
-import { appelApi, envoyerJson, messageErreur } from "./client";
 import { PARTICULIER, TypeClientDossier, erreurTypeClient, estEntreprise, sourceSelonSousTraitance, typeClientPourEnvoi, typeSelonSource, type TypeClientSaisi } from "./TypeClientDossier";
-import { Bouton, Champ, CLASSE_SAISIE, ListeDeroulante, Modale, TitreSection, TRANS } from "./ui";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type Jalon = "DEVIS_ENVOYE" | "SIGNE" | "CHANTIER" | "FACTURE";
 const JALONS: { etape: Jalon; libelle: string }[] = [

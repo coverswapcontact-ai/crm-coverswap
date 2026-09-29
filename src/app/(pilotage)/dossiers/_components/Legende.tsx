@@ -4,7 +4,7 @@ import { ArrowRight, X } from "lucide-react";
 import { ETAPES_ACTIVES, ETAPES_SORTIE, LIBELLES_ETAPE } from "@/lib/dossiers/constants";
 import { PastilleRetard } from "./CarteDossier";
 import { BadgeMain, BarreProgression } from "./Indicateurs";
-import { Bouton, PastilleEtape } from "./ui";
+import { Bouton, PastilleEtape } from "@/components/pilotage/ui";
 
 function Rubrique({ titre, children }: { titre: string; children: React.ReactNode }) {
   return (

@@ -27,7 +27,7 @@ import { VERSION_SYNTHESE, type Repartition, type Synthese } from "./types";
 const JOUR_MS = 24 * 60 * 60_000;
 const INACTIF_APRES_JOURS = 365;
 
-const euros = (centimes: number) => centimes / 100;
+const centimesEnEuros = (centimes: number) => centimes / 100;
 const arrondi1 = (valeur: number) => Math.round(valeur * 10) / 10;
 
 function mediane(valeurs: number[]): number | null {
@@ -150,7 +150,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     changements.filter((changement) => changement.metadata.vers === "PERDU" && dans(changement.createdAt)).map((changement) => ({ dossier, metadata: changement.metadata }))
   );
   const documentsPeriode = dossiers.flatMap((dossier) => dossier.documents.filter((document) => dans(document.dateEmission)));
-  const somme = (liste: { totalHt: number }[]) => euros(liste.reduce((total, document) => total + versCentimes(document.totalHt), 0));
+  const somme = (liste: { totalHt: number }[]) => centimesEnEuros(liste.reduce((total, document) => total + versCentimes(document.totalHt), 0));
   const devisEmis = documentsPeriode.filter((document) => document.type === "DEVIS");
   const facturesEmises = documentsPeriode.filter((document) => document.type === "FACTURE");
   const avoirs = documentsPeriode.filter((document) => document.type === "AVOIR");
@@ -206,7 +206,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
     .map((dossier) => {
       const facture = dossier.documents.filter((document) => document.type === "FACTURE" && document.statut !== "ANNULEE").reduce((total, document) => total + versCentimes(document.totalHt), 0);
       const depense = dossier.depenses.reduce((total, ligne) => total + versCentimes(ligne.montant), 0);
-      return { dossierId: dossier.id, clientId: dossier.clientId, facture: euros(facture), depenses: euros(depense), marge: euros(facture - depense), margePct: facture > 0 ? arrondi1(((facture - depense) / facture) * 100) : null };
+      return { dossierId: dossier.id, clientId: dossier.clientId, facture: centimesEnEuros(facture), depenses: centimesEnEuros(depense), marge: centimesEnEuros(facture - depense), margePct: facture > 0 ? arrondi1(((facture - depense) / facture) * 100) : null };
     })
     .sort((a, b) => (a.margePct ?? 0) - (b.margePct ?? 0));
 
@@ -214,7 +214,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
   const nouveaux = clients.filter((client) => dans(client.premierContactLe));
   const familleClient = (client: { source: string } | null | undefined): FamilleSource => (client ? familleDeSource(client.source) : "NON_RENSEIGNE");
   const caParFamille = (famille: FamilleSource) =>
-    livreComplet ? euros(lignesDetaillees.filter(({ encaissement }) => familleClient(encaissement?.client) === famille).reduce((total, element) => total + montantLigne(element), 0)) : null;
+    livreComplet ? centimesEnEuros(lignesDetaillees.filter(({ encaissement }) => familleClient(encaissement?.client) === famille).reduce((total, element) => total + montantLigne(element), 0)) : null;
   const recommandeurs = repartir(
     nouveaux.filter((client) => client.recommandeParId),
     (client) => client.recommandeParId!,
@@ -338,7 +338,7 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
         devisEmis: devisEmis.length,
         montantDevis: somme(devisEmis),
         signatures: signatures.length,
-        montantSigne: euros(signatures.reduce((total, signature) => total + versCentimes(signature.montant ?? 0), 0)),
+        montantSigne: centimesEnEuros(signatures.reduce((total, signature) => total + versCentimes(signature.montant ?? 0), 0)),
         facturesEmises: facturesEmises.length,
         montantFacture: somme(facturesEmises),
         avoirs: avoirs.length,
@@ -356,33 +356,33 @@ export async function calculerSynthese(du: string, au: string, maintenant: Date 
       pertes: {
         parMotif: repartir(pertes, ({ metadata }) => metadata.motifPerte ?? "NON_RENSEIGNE", (cle) => LIBELLES_MOTIF_PERTE[cle as MotifPerte] ?? "Non renseigné"),
         parEtape: repartir(pertes, ({ metadata }) => metadata.perteEtape ?? "INCONNUE", (cle) => LIBELLES_ETAPE[cle as EtapeDossier] ?? "Inconnue"),
-        montantPropose: euros(pertes.reduce((total, { metadata }) => total + versCentimes(metadata.perteMontantPropose ?? 0), 0)),
+        montantPropose: centimesEnEuros(pertes.reduce((total, { metadata }) => total + versCentimes(metadata.perteMontantPropose ?? 0), 0)),
         concurrents: [...parConcurrent.entries()]
           .map(([nom, { nombre, ecarts: liste }]) => ({ nom, nombre, ecartMoyenPct: liste.length ? arrondi1(liste.reduce((total, valeur) => total + valeur, 0) / liste.length) : null }))
           .sort((a, b) => b.nombre - a.nombre),
       },
     },
     finances: {
-      encaisse: livreComplet ? euros(encaisseCentimes) : null,
+      encaisse: livreComplet ? centimesEnEuros(encaisseCentimes) : null,
       parametresManquants: livre.manquants,
-      parMois: [...mois.entries()].sort().map(([cle, centimes]) => ({ mois: cle, montant: euros(centimes) })),
+      parMois: [...mois.entries()].sort().map(([cle, centimes]) => ({ mois: cle, montant: centimesEnEuros(centimes) })),
       parFamilleSource: livreComplet
-        ? repartir(lignesDetaillees, ({ encaissement }) => familleClient(encaissement?.client), (cle) => LIBELLES_FAMILLE_SOURCE[cle as FamilleSource] ?? cle, montantLigne).map((ligne) => ({ ...ligne, valeur: euros(ligne.valeur) }))
+        ? repartir(lignesDetaillees, ({ encaissement }) => familleClient(encaissement?.client), (cle) => LIBELLES_FAMILLE_SOURCE[cle as FamilleSource] ?? cle, montantLigne).map((ligne) => ({ ...ligne, valeur: centimesEnEuros(ligne.valeur) }))
         : [],
       parCategorieClient: livreComplet
-        ? repartir(lignesDetaillees, ({ encaissement }) => encaissement?.client?.categorie ?? "NON_RENSEIGNE", (cle) => LIBELLES_CATEGORIE_CLIENT[cle as CategorieClient] ?? "Non renseigné", montantLigne).map((ligne) => ({ ...ligne, valeur: euros(ligne.valeur) }))
+        ? repartir(lignesDetaillees, ({ encaissement }) => encaissement?.client?.categorie ?? "NON_RENSEIGNE", (cle) => LIBELLES_CATEGORIE_CLIENT[cle as CategorieClient] ?? "Non renseigné", montantLigne).map((ligne) => ({ ...ligne, valeur: centimesEnEuros(ligne.valeur) }))
         : [],
       parDepartement: livreComplet
-        ? repartir(lignesDetaillees, ({ encaissement }) => encaissement?.dossier?.clientCp?.slice(0, 2) ?? "HORS_DOSSIER", (cle) => (cle === "HORS_DOSSIER" ? "Hors dossier" : `Département ${cle}`), montantLigne).map((ligne) => ({ ...ligne, valeur: euros(ligne.valeur) }))
+        ? repartir(lignesDetaillees, ({ encaissement }) => encaissement?.dossier?.clientCp?.slice(0, 2) ?? "HORS_DOSSIER", (cle) => (cle === "HORS_DOSSIER" ? "Hors dossier" : `Département ${cle}`), montantLigne).map((ligne) => ({ ...ligne, valeur: centimesEnEuros(ligne.valeur) }))
         : [],
-      depenses: euros(depensesCentimes),
-      depensesParCategorie: repartir(depenses, (depense) => depense.categorie, libelleCategorie, (depense) => versCentimes(depense.montant)).map((ligne) => ({ ...ligne, valeur: euros(ligne.valeur) })),
-      margeBrute: livreComplet ? euros(encaisseCentimes - depensesCentimes) : null,
-      panierMoyenSigne: signatures.length ? euros(Math.round(signatures.reduce((total, signature) => total + versCentimes(signature.montant ?? 0), 0) / signatures.length)) : null,
-      panierMoyenFacture: facturesEmises.length ? euros(Math.round(facturesEmises.reduce((total, document) => total + versCentimes(document.totalHt), 0) / facturesEmises.length)) : null,
+      depenses: centimesEnEuros(depensesCentimes),
+      depensesParCategorie: repartir(depenses, (depense) => depense.categorie, libelleCategorie, (depense) => versCentimes(depense.montant)).map((ligne) => ({ ...ligne, valeur: centimesEnEuros(ligne.valeur) })),
+      margeBrute: livreComplet ? centimesEnEuros(encaisseCentimes - depensesCentimes) : null,
+      panierMoyenSigne: signatures.length ? centimesEnEuros(Math.round(signatures.reduce((total, signature) => total + versCentimes(signature.montant ?? 0), 0) / signatures.length)) : null,
+      panierMoyenFacture: facturesEmises.length ? centimesEnEuros(Math.round(facturesEmises.reduce((total, document) => total + versCentimes(document.totalHt), 0) / facturesEmises.length)) : null,
       encours: {
         total: encours.total,
-        plus30Jours: euros(encours.lignes.filter((ligne) => (ligne.joursRetard ?? 0) > 30).reduce((total, ligne) => total + versCentimes(ligne.reste), 0)),
+        plus30Jours: centimesEnEuros(encours.lignes.filter((ligne) => (ligne.joursRetard ?? 0) > 30).reduce((total, ligne) => total + versCentimes(ligne.reste), 0)),
         factures: encours.lignes.length,
       },
       margesDossiers,

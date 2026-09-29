@@ -1,4 +1,5 @@
 import type { z } from "zod/v4";
+import { dateCourte, euros, jourLong } from "@/lib/commun/format";
 
 /**
  * La couche d'outils de l'assistant (mission 8) : chaque action métier du CRM
@@ -81,10 +82,10 @@ export function adresseCrm(): string {
 
 export const lien = (libelle: string, chemin: string): LienOutil => ({ libelle, href: `${adresseCrm()}${chemin}` });
 
-const euros = (montant: number) => `${montant.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
-const jour = (valeur: string | Date | null | undefined) => (valeur ? new Date(valeur).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Paris" }) : "—");
-const jourCourt = (valeur: string | Date | null | undefined) => (valeur ? new Date(valeur).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Paris" }) : "—");
+// Mission 13 (lot 7) : les formats vivent dans lib/commun/format.ts ; ici, « — » quand la valeur manque (texte lu par Claude).
+const jourOuTiret = (valeur: string | Date | null | undefined) => jourLong(valeur) ?? "—";
+const dateCourteOuTiret = (valeur: string | Date | null | undefined) => dateCourte(valeur) ?? "—";
 const pourcent = (valeur: number | null) => (valeur === null ? "—" : `${Math.round(valeur * 100)} %`);
 
 /** Petits formats partagés par les outils (texte lu à voix haute : pas de sigles, des mots). */
-export const format = { euros, jour, jourCourt, pourcent };
+export const format = { euros, jour: jourOuTiret, jourCourt: dateCourteOuTiret, pourcent };

@@ -5,7 +5,7 @@ import { avertissementSiret, erreurSaisieSiret, formaterSiret } from "@/lib/clie
 import type { EntrepriseAnnuaire } from "@/lib/clients/types";
 import { RechercheAnnuaire } from "../../clients/_components/RechercheAnnuaire";
 import { CaseSousTraitance, ChoixTypeClient } from "../../clients/_components/TypeClient";
-import { Champ } from "./ui";
+import { Champ } from "@/components/pilotage/ui";
 
 /** `choisi` : la personne a elle-même choisi particulier ou entreprise (sinon la source peut le déduire). */
 export type TypeClientSaisi = { categorie: CategorieClient; siret: string; siretQuitte: boolean; choisi: boolean };

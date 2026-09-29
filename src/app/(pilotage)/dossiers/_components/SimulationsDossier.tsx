@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Archive, Eye, EyeOff, ImagePlus, Loader2, Send, Undo2, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
-import { appelApi, envoyerJson, messageErreur } from "./client";
-import { Pastille } from "@/components/pilotage/ui";
+import { Pastille, Bouton, Champ, Modale, TitreSection } from "@/components/pilotage/ui";
 import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
-import { Bouton, Champ, Modale, TitreSection } from "./ui";
 import { cn } from "@/lib/utils";
+import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
+import { jourHeure } from "@/lib/commun/format";
 
 /**
  * Les simulations du dossier, d'où qu'elles viennent (site, API, ChatGPT,
@@ -50,7 +50,6 @@ const SOURCES: Record<Simulation["source"], { libelle: string; ton: "bleu" | "ve
   MANUEL: { libelle: "Déposée", ton: "neutre" },
 };
 
-const heure = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: { detail: DossierDetail; onRecharger: () => Promise<void>; sansTitre?: boolean }) {
   const [donnees, setDonnees] = useState<Donnees | null>(null);
@@ -210,14 +209,14 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
                     <Loader2 size={13} className="animate-spin" aria-hidden /> Génération par l&apos;API en cours ({p.typeLibelle}, {p.zones.map((z) => z.ref).join(" · ")}) — le brouillon arrive ici, en général en une minute.
                   </span>
                 ) : (
-                  <>Génération du {heure(p.le)} non aboutie : {p.erreur}</>
+                  <>Génération du {jourHeure(p.le)} non aboutie : {p.erreur}</>
                 )}
               </div>
             ))}
 
           {chatgptEnAttente ? (
             <div className="rounded-[10px] border-[0.5px] border-[#60A5FA]/35 bg-[#60A5FA]/[0.07] px-3 py-2.5 text-[12.5px] text-[#BFDBFE]">
-              Préparé pour ChatGPT le {heure(chatgptEnAttente.le)} ({chatgptEnAttente.typeLibelle}, {chatgptEnAttente.zones.map((z) => `${z.etiquette.split(" · ")[0]} ${z.ref}`).join(", ")}, prompt v{chatgptEnAttente.promptVersion}) : déposez l&apos;image rendue, elle reprendra tout.
+              Préparé pour ChatGPT le {jourHeure(chatgptEnAttente.le)} ({chatgptEnAttente.typeLibelle}, {chatgptEnAttente.zones.map((z) => `${z.etiquette.split(" · ")[0]} ${z.ref}`).join(", ")}, prompt v{chatgptEnAttente.promptVersion}) : déposez l&apos;image rendue, elle reprendra tout.
               <button type="button" onClick={() => entree.current?.click()} className="ml-1 font-medium text-[#93C5FD] underline underline-offset-2">
                 Déposer l&apos;image
               </button>
@@ -321,12 +320,12 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
             <label className="block text-[12px] font-medium text-[#9CA3AF]">
               D&apos;où vient cette image ?
               <select value={depotInfos.preparation} onChange={(e) => setDepotInfos({ ...depotInfos, preparation: e.target.value })} className="mt-1.5 h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]">
-                <option value="auto">{chatgptEnAttente ? `ChatGPT — préparation du ${heure(chatgptEnAttente.le)} (${chatgptEnAttente.typeLibelle})` : "La dernière préparation ChatGPT (s'il y en a une)"}</option>
+                <option value="auto">{chatgptEnAttente ? `ChatGPT — préparation du ${jourHeure(chatgptEnAttente.le)} (${chatgptEnAttente.typeLibelle})` : "La dernière préparation ChatGPT (s'il y en a une)"}</option>
                 {donnees?.preparations
                   .filter((p) => p.mode === "CHATGPT" && p.id !== chatgptEnAttente?.id)
                   .map((p) => (
                     <option key={p.id} value={p.id}>
-                      ChatGPT — {heure(p.le)} ({p.typeLibelle})
+                      ChatGPT — {jourHeure(p.le)} ({p.typeLibelle})
                     </option>
                   ))}
                 <option value="aucune">Autre image (sans préparation)</option>
@@ -385,7 +384,7 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
         </div>
         {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-[#9CA3AF]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})`).join(" · ")}</p> : null}
         {s.commentaire ? <p className="text-[11.5px] leading-snug text-[#D1D5DB]">« {s.commentaire} »</p> : null}
-        <p className="text-[11px] text-[#6B7280]">{heure(s.publieeLe ?? s.le)}</p>
+        <p className="text-[11px] text-[#6B7280]">{jourHeure(s.publieeLe ?? s.le)}</p>
         {children ? <div className="flex flex-wrap gap-1.5 pt-0.5">{children}</div> : null}
       </div>
     </li>

@@ -38,30 +38,32 @@ describe("section Leads", () => {
     assert.deepEqual([ligne.telephone, ligne.telephoneLien, ligne.priorite, ligne.attendDepuis, ligne.aAppeler], [ligne.telephone, `tel:+3361000${String(rang).padStart(4, "0")}`, "SECONDAIRE", recent.createdAt.toISOString(), true]);
   });
 
-  test("à appeler : jamais appelé depuis moins de 60 jours, ou rappel échu ; ni « à écarter », ni appelé sans rappel", async () => {
+  test("mission 14 : « À appeler » = jamais appelé sans rappel daté (même ancien, même « à écarter ») ; appelé ou rappel daté = « À rappeler »", async () => {
     const neuf = await lead({ createdAt: ilYA(10) });
     const vieux = await lead({ createdAt: ilYA(90 * 1440) });
     const horsZone = await lead({ createdAt: ilYA(10), priorite: "A_ECARTER" });
-    const rappelEchu = await lead({ createdAt: ilYA(90 * 1440), statut: "CONTACTE", rappelLe: ilYA(30) });
+    const rappelEchu = await lead({ createdAt: ilYA(90 * 1440), statut: "CONTACTE", rappelLe: ilYA(30), dernierAppelLe: ilYA(2 * 1440) });
     const rappelFutur = await lead({ createdAt: ilYA(60), rappelLe: new Date(MAINTENANT.getTime() + 86_400_000) });
-    const appele = await lead({ createdAt: ilYA(60), statut: "CONTACTE" });
+    const appele = await lead({ createdAt: ilYA(60), statut: "CONTACTE", dernierAppelLe: ilYA(50) });
     await prisma.interaction.create({ data: { leadId: appele.id, type: "APPEL", contenu: "Appel — Intéressé" } });
 
-    const avant = await leads.compterLeadsAAppeler(MAINTENANT);
-    const { lignes, compteurs } = await leads.listerLeads({}, MAINTENANT);
-    const etat = Object.fromEntries(lignes.map((l) => [l.id, l.aAppeler]));
-    assert.deepEqual([etat[neuf.id], etat[vieux.id], etat[horsZone.id], etat[rappelEchu.id], etat[rappelFutur.id], etat[appele.id]], [true, false, false, true, false, false]);
-    // Le compteur de la navigation compte exactement ce que la file d'appels propose.
-    assert.equal(compteurs.aAppeler, lignes.filter((l) => l.aAppeler).length);
-    assert.equal(avant, compteurs.aAppeler);
-    // Tous restent dans la liste : seul un dossier fait sortir un lead.
-    for (const l of [neuf, vieux, horsZone, rappelEchu, rappelFutur, appele]) assert.ok(l.id in etat, l.nom);
+    const aAppeler = await leads.listerLeads({ vue: "A_APPELER" }, MAINTENANT);
+    const aRappeler = await leads.listerLeads({ vue: "A_RAPPELER" }, MAINTENANT);
+    const dans = (liste: typeof aAppeler, id: string) => liste.lignes.some((l) => l.id === id);
+    assert.deepEqual([neuf, vieux, horsZone, rappelEchu, rappelFutur, appele].map((l) => dans(aAppeler, l.id)), [true, true, true, false, false, false]);
+    assert.deepEqual([neuf, vieux, horsZone, rappelEchu, rappelFutur, appele].map((l) => dans(aRappeler, l.id)), [false, false, false, true, true, true]);
+    assert.ok(aAppeler.lignes.every((l) => l.aAppeler) && aRappeler.lignes.every((l) => !l.aAppeler), "« à appeler » = dans la liste À appeler");
+    assert.deepEqual(aRappeler.lignes.filter((l) => l.enRetard).map((l) => l.id), [rappelEchu.id], "seul le rappel passé est en retard");
+    // Les compteurs comptent exactement les listes ; l'onglet ne compte que les retards.
+    assert.deepEqual([aAppeler.compteurs.aAppeler, aAppeler.compteurs.aRappeler, aAppeler.compteurs.enRetard], [aAppeler.lignes.length, aRappeler.lignes.length, 1]);
+    assert.equal(await leads.compterLeadsEnRetard(MAINTENANT), 1);
+    assert.equal(aAppeler.compteurs.actifs, aAppeler.lignes.length + aRappeler.lignes.length);
   });
 
   test("sans suite à part ; archivé et lead avec dossier absents", async () => {
     const perdu = await lead({ statut: "PERDU" });
     const archive = await lead({ archiveLe: new Date(), archiveMotif: "Essai" });
-    const actifs = (await leads.listerLeads({}, MAINTENANT)).lignes.map((l) => l.id);
+    const actifs = [...(await leads.listerLeads({ vue: "A_APPELER" }, MAINTENANT)).lignes, ...(await leads.listerLeads({ vue: "A_RAPPELER" }, MAINTENANT)).lignes].map((l) => l.id);
     const sansSuite = (await leads.listerLeads({ vue: "SANS_SUITE" }, MAINTENANT)).lignes.map((l) => l.id);
     assert.deepEqual([actifs.includes(perdu.id), sansSuite.includes(perdu.id), actifs.includes(archive.id), sansSuite.includes(archive.id)], [false, true, false, false]);
   });
@@ -92,7 +94,7 @@ describe("section Leads", () => {
     assert.equal(await prisma.dossier.count({ where: { id: dossier.id, archiveLe: null } }), 1);
   });
 
-  test("lead du simulateur : plus de 60 jours, dossier passé au devis, ou hors zone — pas dans la file", async () => {
+  test("lead du simulateur : plus de 60 jours ou dossier passé au devis — plus dans Leads ; hors zone — dans « À appeler », hors de la file", async () => {
     const vieux = await lead({ createdAt: ilYA(70 * 1440), source: "SITE_SIMULATEUR", priorite: "PRIORITAIRE" });
     await dossierDe(vieux.id, "Vieux", "QUALIFICATION");
     const devis = await lead({ createdAt: ilYA(30), source: "SITE_SIMULATEUR", priorite: "PRIORITAIRE" });
@@ -106,8 +108,10 @@ describe("section Leads", () => {
 
     const { lignes, compteurs } = await leads.listerLeads({}, MAINTENANT);
     const etat = Object.fromEntries(lignes.map((l) => [l.id, l.aAppeler]));
-    assert.deepEqual([vieux.id in etat, devis.id in etat, etat[horsZone.id], etat[revenu.id]], [false, false, false, true]);
+    // Mission 14 : un lead a toujours une destination — le « hors zone » reste dans « À appeler » (pastille), l'écran
+    // le laisse hors de la file des appels à la suite.
+    assert.deepEqual([vieux.id in etat, devis.id in etat, etat[horsZone.id], etat[revenu.id]], [false, false, true, true]);
+    assert.equal(lignes.find((l) => l.id === horsZone.id)?.priorite, "A_ECARTER");
     assert.equal(compteurs.aAppeler, lignes.filter((l) => l.aAppeler).length);
-    assert.equal(await leads.compterLeadsAAppeler(MAINTENANT), compteurs.aAppeler);
   });
 });

@@ -6,6 +6,7 @@ import { tranche } from "@/lib/commun/pagination";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
 import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
 import { versVueNote } from "@/lib/commercial/notes-appel";
+import { aHeureParis } from "@/lib/commercial/quand";
 import type { NoteAppelVue } from "@/lib/commercial/notes-constantes";
 
 /**
@@ -14,14 +15,25 @@ import type { NoteAppelVue } from "@/lib/commercial/notes-constantes";
  * dossier s'ouvre, le lead sort d'ici : il vit dans Dossiers, sans doublon.
  * Aucun devis envoyé n'apparaît donc dans cette liste.
  *
- * Ordre : chronologique, le plus récent en haut. La priorité se lit sur la
- * pastille de chaque ligne ; elle ne change pas l'ordre.
+ * Mission 14 (29/09/2026), partie 3 — deux listes, une seule chose par écran,
+ * et un lead a toujours une destination :
+ *  - « À appeler » : jamais appelé (`dernierAppelLe` nul : ni fin d'appel, ni
+ *    échange d'appel, ni note d'appel) et sans rappel daté ; le plus récent en
+ *    haut. Les « à écarter » y restent (pastille grise) ;
+ *  - « À rappeler » : déjà appelé, ou un rappel daté ; les rappels datés dans
+ *    l'ordre chronologique (les retards viennent donc en tête), puis ceux sans
+ *    date, le plus ancien appel d'abord.
+ * Un lead ne sort des deux listes que vers un dossier, en « sans suite » (avec
+ * un motif) ou archivé. « Traité » n'existe plus (`traiteLe` n'est plus lu).
+ * La priorité se lit sur la pastille de chaque ligne ; elle ne change pas l'ordre.
  *
  * Exception (21/09/2026) : un lead du SIMULATEUR a son dossier ouvert tout
- * seul, mais reste ici — et dans la file d'appels — tant qu'aucun appel n'est
- * noté (ni sur sa fiche, ni sur son dossier), sur 60 jours, et tant que son
- * dossier n'a pas dépassé la simulation. C'est le même contact et le même
- * dossier, visible aux deux endroits ; le premier appel noté le fait sortir.
+ * seul, mais reste ici (« À appeler ») tant qu'aucun appel n'est noté (ni sur
+ * sa fiche, ni sur son dossier), sur 60 jours, et tant que son dossier n'a pas
+ * dépassé la simulation. C'est le même contact et le même dossier, visible aux
+ * deux endroits ; le premier appel noté (fin d'appel, échange, note d'appel) ou
+ * le premier rappel daté le fait sortir vers son dossier — jamais dans « À
+ * rappeler » : avec un dossier, le rappel vit sur le dossier.
  */
 
 export type ReponseLead = { question: string; reponse: string };
@@ -48,12 +60,18 @@ export type LigneLead = {
   statut: string;
   reponses: ReponseLead[];
   message: string | null;
-  /** Aucun appel noté : la personne attend depuis son arrivée. Sinon null. */
+  /** Dans « À appeler » : la personne attend depuis son arrivée. Sinon null. */
   attendDepuis: string | null;
   appels: number;
   dernierAppel: { le: string; contenu: string } | null;
+  /** Dernier appel noté, quelle qu'en soit l'issue ; null = jamais appelé. */
+  dernierAppelLe: string | null;
+  /** Appels sans réponse consécutifs depuis le dernier appel abouti. */
+  tentatives: number;
   rappelLe: string | null;
-  /** À appeler maintenant : jamais appelé, ou rappel arrivé à échéance. */
+  /** Rappel daté et passé : en tête de « À rappeler », en rouge. */
+  enRetard: boolean;
+  /** Dans la liste « À appeler » : jamais appelé, sans rappel daté. */
   aAppeler: boolean;
   conversationId: string | null;
   smsNonLus: number;
@@ -66,8 +84,6 @@ export type LigneLead = {
   dossierMain: { main: Main; motif: string | null } | null;
   /** Les dernières simulations, pour en parler pendant l'appel. */
   simulations: SimulationLead[];
-  /** Marqué comme traité depuis Leads : hors de la file d'appels. */
-  traiteLe: string | null;
   archiveLe: string | null;
   archiveMotif: string | null;
   /** Doublon probable (même nom, même ville, autre numéro et autre e-mail) : à fusionner d'un clic, ou à écarter. */
@@ -78,8 +94,20 @@ export type LigneLead = {
 
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
 
-export type VueLeads = "ACTIFS" | "SANS_SUITE" | "ARCHIVES";
-export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number; archives: number }; sources: string[]; /** Mission 13 (lot 6) : la page demandée et le total du filtre (absents des réponses d'avant, en cache). */ total?: number; page?: number; parPage?: number };
+export type VueLeads = "A_APPELER" | "A_RAPPELER" | "SANS_SUITE" | "ARCHIVES";
+export type CompteursLeads = {
+  aAppeler: number;
+  aRappeler: number;
+  /** Rappels datés et passés : le compteur de l'onglet Leads. */
+  enRetard: number;
+  /** Rappels datés plus tard dans la journée (heure de Paris). */
+  aujourdhui: number;
+  sansSuite: number;
+  archives: number;
+  /** Les deux listes ensemble (à appeler + à rappeler). */
+  actifs: number;
+};
+export type ListeLeads = { lignes: LigneLead[]; compteurs: CompteursLeads; sources: string[]; /** Mission 13 (lot 6) : la page demandée et le total du filtre (absents des réponses d'avant, en cache). */ total?: number; page?: number; parPage?: number };
 
 const VILLES_INCONNUES = /^(|non renseign[ée]e?|inconnue?)$/i;
 const LIBELLES_OCCUPATION: Record<string, string> = { PROPRIETAIRE: "Propriétaire", LOCATAIRE: "Locataire" };
@@ -93,15 +121,21 @@ const JOUR_MS = 86_400_000;
 const ETAPES_AVANT_APPEL = ["QUALIFICATION", "SIMULATION"];
 const APPEL = { type: "APPEL", archiveLe: null };
 
-/** Le cas général : pas de dossier. */
-const sansDossierActif: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] } };
+const APRES_DEVIS: readonly string[] = STATUTS_LEAD_APRES_DEVIS;
 
-/** Lead du simulateur, dossier déjà ouvert, jamais appelé, depuis moins de 60 jours (arrivée ou dernière simulation). */
+/** Le cas général : pas de dossier vivant, ni perdu, ni après devis (le pilotage commercial lit la même règle). */
+export const LEAD_SANS_DOSSIER: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] } };
+
+/**
+ * Lead du simulateur, dossier déjà ouvert, jamais appelé (ni appel ni note d'appel retenus, aucun rappel daté), depuis
+ * moins de 60 jours (arrivée ou dernière simulation). Il n'est donc jamais que dans « À appeler ».
+ */
 function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
   const limite = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   return {
     statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
-    traiteLe: null,
+    dernierAppelLe: null,
+    rappelLe: null,
     interactions: { none: APPEL },
     dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: APPEL } } },
     AND: [
@@ -111,12 +145,37 @@ function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
   };
 }
 
-const whereVue = (vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput =>
-  vue === "ARCHIVES"
-    ? { archiveLe: { not: null } }
-    : vue === "SANS_SUITE"
-      ? { dossiers: { none: { archiveLe: null } }, statut: "PERDU" }
-      : { OR: [sansDossierActif, simulationNonAppelee(maintenant)] };
+/** La base commune des deux listes : ni perdu, ni après devis, sans dossier vivant — ou lead du simulateur pas encore appelé (les archivés sont écartés par l'extension du journal). */
+const whereActif = (maintenant: Date): Prisma.LeadWhereInput => ({ OR: [LEAD_SANS_DOSSIER, simulationNonAppelee(maintenant)] });
+/** « À appeler » : jamais appelé, sans rappel daté. */
+const JAMAIS_APPELE: Prisma.LeadWhereInput = { dernierAppelLe: null, rappelLe: null };
+/** « À rappeler » : déjà appelé, ou un rappel daté. */
+const DEJA_APPELE: Prisma.LeadWhereInput = { OR: [{ dernierAppelLe: { not: null } }, { rappelLe: { not: null } }] };
+
+function whereVue(vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput {
+  switch (vue) {
+    case "ARCHIVES":
+      return { archiveLe: { not: null } };
+    case "SANS_SUITE":
+      return { dossiers: { none: { archiveLe: null } }, statut: "PERDU" };
+    case "A_APPELER":
+      return { AND: [whereActif(maintenant), JAMAIS_APPELE] };
+    case "A_RAPPELER":
+      return { AND: [whereActif(maintenant), DEJA_APPELE] };
+  }
+}
+
+/**
+ * L'ordre de chaque liste, entièrement côté serveur (la pagination est exacte). « À rappeler » : les rappels datés
+ * d'abord, du plus ancien au plus lointain (les retards en tête), puis les rappels sans date, le plus ancien appel
+ * d'abord ; à égalité, l'arrivée, puis l'identifiant (un ordre total : une ligne ne saute pas d'une page à l'autre).
+ */
+const ORDRE: Record<VueLeads, Prisma.LeadOrderByWithRelationInput[]> = {
+  A_APPELER: [{ createdAt: "desc" }],
+  A_RAPPELER: [{ rappelLe: { sort: "asc", nulls: "last" } }, { dernierAppelLe: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
+  SANS_SUITE: [{ createdAt: "desc" }],
+  ARCHIVES: [{ archiveLe: "desc" }],
+};
 
 const inclusion = {
   interactions: { where: { archiveLe: null, type: "APPEL" }, orderBy: { createdAt: "desc" }, select: { contenu: true, createdAt: true } },
@@ -167,23 +226,21 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
   const nomFamille = lead.nom.trim() === "Inconnu" ? "" : lead.nom.trim();
   const nom = (!prenom || prenom.toLowerCase() === nomFamille.toLowerCase() ? nomFamille || prenom : `${prenom} ${nomFamille}`).trim() || "Contact sans nom";
   const dernier = lead.interactions[0] ?? null;
-  const rappelEchu = Boolean(lead.rappelLe && lead.rappelLe.getTime() <= maintenant.getTime());
   const dossier = lead.dossiers[0] ?? null;
   const simulation = lead.source === "SITE_SIMULATEUR" || lead._count.simulations > 0;
   // Un lead revenu faire une simulation « arrive » à sa dernière simulation.
   const derniereSimulation = lead.simulations[0]?.createdAt ?? null;
   const arrivee = derniereSimulation && derniereSimulation > lead.createdAt ? derniereSimulation : lead.createdAt;
-  // Avec un dossier (ouvert par la simulation), un appel noté sur le dossier compte aussi.
-  const jamaisAppele = dossier
-    ? lead.interactions.length === 0 && dossier._count.evenements === 0
-    : lead.interactions.length === 0 && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE");
-  const recent = maintenant.getTime() - (dossier ? arrivee : lead.createdAt).getTime() <= JOURS_A_TRAITER * JOUR_MS;
-  const aAppeler =
+  // La base des deux listes (même règle que `whereActif`) : avec un dossier (ouvert par la simulation), seulement tant
+  // qu'aucun appel n'est noté, ni sur la fiche ni sur le dossier, ni rappel daté, sur 60 jours, avant le devis.
+  const recent = maintenant.getTime() - arrivee.getTime() <= JOURS_A_TRAITER * JOUR_MS;
+  const jamaisAppele = !lead.dernierAppelLe && !lead.rappelLe;
+  const actif =
     !lead.archiveLe &&
-    !lead.traiteLe &&
     lead.statut !== "PERDU" &&
-    lead.priorite !== "A_ECARTER" &&
-    (dossier ? simulation && jamaisAppele && recent && ETAPES_AVANT_APPEL.includes(dossier.etape) : rappelEchu || (jamaisAppele && !lead.rappelLe && recent));
+    !APRES_DEVIS.includes(lead.statut) &&
+    (!dossier || (simulation && jamaisAppele && lead.interactions.length === 0 && dossier._count.evenements === 0 && recent && ETAPES_AVANT_APPEL.includes(dossier.etape)));
+  const aAppeler = actif && jamaisAppele;
   const conversation = lead.conversationsSms[0] ?? null;
   const meta = lead.metaLeads[0] ?? null;
   return {
@@ -207,17 +264,18 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     statut: lead.statut,
     reponses: reponsesDuLead(lead),
     message: lead.message?.trim() || null,
-    attendDepuis: jamaisAppele ? (dossier ? arrivee : lead.createdAt).toISOString() : null,
+    attendDepuis: aAppeler ? (dossier ? arrivee : lead.createdAt).toISOString() : null,
     appels: lead.interactions.length,
     dernierAppel: dernier ? { le: dernier.createdAt.toISOString(), contenu: dernier.contenu.slice(0, 200) } : null,
+    dernierAppelLe: lead.dernierAppelLe?.toISOString() ?? null,
+    tentatives: lead.tentatives,
     rappelLe: lead.rappelLe?.toISOString() ?? null,
-    // Un lead jamais appelé reste « à appeler » soixante jours ; au-delà il reste dans la liste, mais la file d'appels ne le propose plus (un rappel posé, lui, vaut toujours).
+    enRetard: actif && Boolean(lead.rappelLe && lead.rappelLe.getTime() < maintenant.getTime()),
     aAppeler,
     conversationId: conversation?.id ?? null,
     smsNonLus: conversation?.nonLus ?? 0,
     photos: lead._count.photos,
     simulation,
-    traiteLe: lead.traiteLe?.toISOString() ?? null,
     archiveLe: lead.archiveLe?.toISOString() ?? null,
     archiveMotif: lead.archiveMotif,
     doublon: lead.doublonDe && !lead.doublonTraiteLe ? { de: lead.doublonDe, nom: "", motif: lead.doublonMotif ?? "Doublon probable", dossierId: null } : null,
@@ -251,47 +309,31 @@ function whereRecherche(recherche: string | undefined): Prisma.LeadWhereInput {
   };
 }
 
-/** À appeler maintenant, traduit pour la base : jamais appelé et sans rappel prévu, ou rappel échu. Les « à écarter » ne comptent pas : on ne les appelle pas. */
-function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
-  return {
-    AND: [
-      // (une priorité absente n'est pas « à écarter » : en SQL, NOT sur une valeur nulle écarterait ces leads)
-      { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] },
-      { traiteLe: null },
-      {
-        OR: [
-          {
-            ...sansDossierActif,
-            OR: [
-              { rappelLe: { lte: maintenant } },
-              { rappelLe: null, statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, createdAt: { gte: new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS) }, interactions: { none: APPEL } },
-            ],
-          },
-          simulationNonAppelee(maintenant),
-        ],
-      },
-    ],
-  };
-}
+/** Rappels passés des deux listes (un rappel daté place toujours le lead dans « À rappeler »). */
+const whereEnRetard = (maintenant: Date): Prisma.LeadWhereInput => ({ AND: [whereActif(maintenant), { rappelLe: { lt: maintenant } }] });
 
 export async function listerLeads(filtres: { vue?: VueLeads; source?: string; recherche?: string; limite?: number; page?: number; parPage?: number } = {}, maintenant: Date = new Date()): Promise<ListeLeads> {
-  const vue = filtres.vue ?? "ACTIFS";
+  const vue = filtres.vue ?? "A_APPELER";
   const communs: Prisma.LeadWhereInput[] = [filtres.source ? { source: filtres.source } : {}, whereRecherche(filtres.recherche)];
   // Mission 13 (lot 6) : une page à la fois quand l'écran la demande ; `limite` reste pour l'assistant et l'audit.
   const page = filtres.page ? tranche(filtres.page, filtres.parPage) : null;
   const where: Prisma.LeadWhereInput = { AND: [...communs, whereVue(vue, maintenant)] };
-  const [leads, actifs, aAppeler, sansSuite, archives, sources, total] = await Promise.all([
-    prisma.lead.findMany({ where, include: inclusion, orderBy: vue === "ARCHIVES" ? { archiveLe: "desc" } : { createdAt: "desc" }, ...(page ? { skip: page.skip, take: page.take } : { take: Math.min(filtres.limite ?? 300, 500) }) }),
-    prisma.lead.count({ where: whereVue("ACTIFS", maintenant) }),
-    prisma.lead.count({ where: whereAAppeler(maintenant) }),
+  // « Aujourd'hui » : jusqu'à minuit, heure de Paris (le serveur tourne en UTC).
+  const finDuJour = aHeureParis(maintenant, 1, 0);
+  const [leads, aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, sources, total] = await Promise.all([
+    prisma.lead.findMany({ where, include: inclusion, orderBy: ORDRE[vue], ...(page ? { skip: page.skip, take: page.take } : { take: Math.min(filtres.limite ?? 300, 500) }) }),
+    prisma.lead.count({ where: whereVue("A_APPELER", maintenant) }),
+    prisma.lead.count({ where: whereVue("A_RAPPELER", maintenant) }),
+    prisma.lead.count({ where: whereEnRetard(maintenant) }),
+    prisma.lead.count({ where: { AND: [whereActif(maintenant), { rappelLe: { gte: maintenant, lt: finDuJour } }] } }),
     prisma.lead.count({ where: whereVue("SANS_SUITE", maintenant) }),
     prisma.lead.count({ where: whereVue("ARCHIVES", maintenant) }),
-    prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS", maintenant), _count: { _all: true } }),
+    prisma.lead.groupBy({ by: ["source"], where: whereActif(maintenant), _count: { _all: true } }),
     prisma.lead.count({ where }),
   ]);
   return {
     lignes: await avecDoublons(leads.map((lead) => versLigne(lead, maintenant))),
-    compteurs: { actifs, aAppeler, sansSuite, archives },
+    compteurs: { aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, actifs: aAppeler + aRappeler },
     sources: sources.sort((a, b) => b._count._all - a._count._all).map((s) => s.source),
     total,
     page: page?.page ?? 1,
@@ -299,9 +341,29 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
   };
 }
 
-/** Compteur de la navigation : les leads à appeler maintenant. */
-export function compterLeadsAAppeler(maintenant: Date = new Date()): Promise<number> {
-  return prisma.lead.count({ where: whereAAppeler(maintenant) });
+/** Compteur de l'onglet Leads : les rappels en retard, rien d'autre (mission 14). */
+export function compterLeadsEnRetard(maintenant: Date = new Date()): Promise<number> {
+  return prisma.lead.count({ where: whereEnRetard(maintenant) });
+}
+
+export type RappelLead = { leadId: string; nom: string; telephone: string; le: Date; enRetard: boolean };
+
+/**
+ * Mission 14 (partie 3) — les rappels datés des leads, lus comme l'onglet Leads : seulement les leads des deux listes
+ * (ni perdu, ni archivé, ni avec un dossier : son rappel vit sur le dossier), du plus proche au plus lointain ;
+ * `enRetard` = rappel passé (`compteurs.enRetard`). `avant` coupe (fin de la journée de Paris :
+ * `aHeureParis(maintenant, 1, 0)`). Lecteur unique de l'assistant (`manager_operations`, `point_du_jour`).
+ */
+export async function rappelsDesLeads(maintenant: Date = new Date(), avant?: Date): Promise<RappelLead[]> {
+  const leads = await prisma.lead.findMany({
+    where: { AND: [whereActif(maintenant), { rappelLe: avant ? { lt: avant } : { not: null } }] },
+    select: { id: true, prenom: true, nom: true, telephone: true, rappelLe: true },
+    orderBy: [{ rappelLe: "asc" }, { id: "asc" }],
+    take: 500,
+  });
+  return leads.flatMap((l) =>
+    l.rappelLe ? [{ leadId: l.id, nom: `${l.prenom} ${l.nom}`.replace(/\bInconnu\b/g, "").trim() || "Contact sans nom", telephone: l.telephone, le: l.rappelLe, enRetard: l.rappelLe.getTime() < maintenant.getTime() }] : []
+  );
 }
 
 /** Une seule ligne, rafraîchie après un appel (le mode « enchaîner » n'a pas à recharger toute la liste). */

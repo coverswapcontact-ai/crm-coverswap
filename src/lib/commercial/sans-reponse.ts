@@ -3,7 +3,7 @@ import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel } from "./constantes";
 /**
  * Mission 14 (29/09/2026), partie 2 — lire un appel déjà noté : a-t-il abouti ?
  * Pur, sans base (partagé par la migration de la partie 2 et le décompte des
- * tentatives de la partie 3).
+ * tentatives de la partie 3, `appelSansReponse` et `tentativesALaFin`).
  *
  * Un appel est « sans réponse » si son issue, une de ses étiquettes ou son
  * texte le dit : issue PAS_DE_REPONSE, étiquette PAS_JOIGNABLE, ou « pas de
@@ -32,6 +32,40 @@ export type AppelLu = {
 
 export function estSansReponse(appel: AppelLu): boolean {
   return [appel.issue ?? "", ...(appel.etiquettes ?? []), appel.texte ?? ""].some((texte) => SANS_REPONSE.test(aplatir(texte)));
+}
+
+/** L'issue rangée dans les métadonnées d'un événement APPEL du dossier (`{"issue":"PAS_DE_REPONSE"}`), ou null. */
+export function issueDesMetadonnees(metadata: string | null | undefined): string | null {
+  try {
+    const valeur: unknown = JSON.parse(metadata || "{}");
+    const issue = valeur && typeof valeur === "object" ? (valeur as Record<string, unknown>).issue : null;
+    return typeof issue === "string" ? issue : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mission 14 (partie 3) — la règle unique des tentatives, en direct (fin
+ * d'appel, « Noter un échange ») comme dans la migration et la fusion d'un
+ * doublon : un appel dont l'issue est connue se lit sur elle seule (« Intéressé :
+ * tombé sur la messagerie hier, rappelé ce matin » a abouti) ; sans issue (échange
+ * saisi à la main), sur ses étiquettes et son texte.
+ */
+export function appelSansReponse(appel: AppelLu): boolean {
+  return appel.issue ? SANS_REPONSE.test(aplatir(appel.issue)) : estSansReponse(appel);
+}
+
+/**
+ * Mission 14 (partie 3) — les tentatives : les appels sans réponse d'affilée à
+ * la fin de l'historique, du plus récent en remontant jusqu'au premier appel
+ * abouti (qui les remet à zéro). Trois « Pas de réponse » après un « Intéressé »
+ * donnent 3 ; un « Intéressé » en dernier donne 0.
+ */
+export function tentativesALaFin(appels: readonly (AppelLu & { le: Date })[]): number {
+  const duPlusRecent = [...appels].sort((a, b) => b.le.getTime() - a.le.getTime());
+  const abouti = duPlusRecent.findIndex((appel) => !appelSansReponse(appel));
+  return abouti === -1 ? duPlusRecent.length : abouti;
 }
 
 /** L'issue d'un échange écrit par la fin d'appel : « Appel — Pas de réponse : … » → PAS_DE_REPONSE ; saisi à la main → null. */

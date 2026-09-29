@@ -4,9 +4,12 @@ import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { lirePhotos } from "@/lib/dossiers/stockage";
 import { estMotifRepondre } from "@/lib/dossiers/main";
 import { mainDe } from "@/lib/dossiers/pilotage";
+import { pluriel } from "@/lib/commun/format";
 import { JOURS_A_TRAITER, LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
+import { LEAD_SANS_DOSSIER } from "@/lib/prospects/leads";
 import { RANG_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { compterPropositionsEnAttente } from "@/lib/validation/service";
+import { aHeureParis } from "./quand";
 import { GROUPES_A_MOI, GROUPES_CLIENT, type Affaire, type GroupeAffaire, type PilotageCommercial } from "./types";
 
 /**
@@ -19,15 +22,18 @@ import { GROUPES_A_MOI, GROUPES_CLIENT, type Affaire, type GroupeAffaire, type P
  * qualification attend le client tant que ses photos ne sont pas là, puis
  * attend Lucas dès qu'elles arrivent ; un SMS reçu sans réponse rend toujours
  * la main à Lucas.
+ *
+ * Mission 14 (partie 3) : les contacts suivent la règle des deux listes de
+ * Leads. Jamais appelé (« À appeler ») : à appeler ; déjà appelé (« À
+ * rappeler ») : à rappeler si le rappel est en retard ou pour aujourd'hui,
+ * plus tard s'il est daté après, à décider s'il n'a pas de date. « Aujourd'hui »
+ * est la journée de Paris (le serveur tourne en UTC).
  */
 const JOUR_MS = 86_400_000;
 const ETAPES_COMMERCIALES: EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE", "SIGNE"];
 
-const finDeJournee = (maintenant: Date) => {
-  const fin = new Date(maintenant);
-  fin.setHours(23, 59, 59, 999);
-  return fin;
-};
+/** Le dernier instant de la journée, heure de Paris. */
+const finDeJournee = (maintenant: Date) => new Date(aHeureParis(maintenant, 1, 0).getTime() - 1);
 
 const nomComplet = (prenom: string, nom: string) => {
   const p = prenom.trim();
@@ -40,16 +46,18 @@ const villeLisible = (ville: string | null | undefined) => (ville && !/^(non ren
 export async function pilotageCommercial(maintenant: Date = new Date()): Promise<PilotageCommercial> {
   const limiteContacts = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   const ceSoir = finDeJournee(maintenant);
-  // En retard = l'échéance était hier ou avant : une action prévue ce matin n'est pas encore un retard.
-  const debutDuJour = new Date(ceSoir.getTime() - 86_400_000 + 1);
+  // Dossier en retard = l'échéance était hier ou avant : une action prévue ce matin n'est pas encore un retard.
+  const debutDuJour = aHeureParis(maintenant, 0, 0);
 
   const [contacts, dossiers, conversations, relancesAValider] = await Promise.all([
+    // Les leads des deux listes, sans dossier (le dossier a sa propre ligne) : tout rappel daté, quel que soit son âge
+    // (un retard reste un retard), et les leads arrivés ou appelés depuis moins de 60 jours. Les rappels d'abord.
     prisma.lead.findMany({
-      where: { dossiers: { none: { archiveLe: null } }, OR: [{ statut: { in: ["NOUVEAU", "DEVIS_DEMANDE"] }, createdAt: { gte: limiteContacts } }, { statut: "CONTACTE", updatedAt: { gte: limiteContacts } }] },
-      orderBy: { createdAt: "desc" },
+      where: { AND: [LEAD_SANS_DOSSIER, { OR: [{ rappelLe: { not: null } }, { createdAt: { gte: limiteContacts } }, { dernierAppelLe: { gte: limiteContacts } }] }] },
+      orderBy: [{ rappelLe: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
       take: 300,
       select: {
-        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, createdAt: true, source: true,
+        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, dernierAppelLe: true, tentatives: true, createdAt: true, source: true,
         interactions: { where: { archiveLe: null, type: { in: ["APPEL", "SMS", "EMAIL", "NOTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, contenu: true, createdAt: true } },
       },
     }),
@@ -76,15 +84,18 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     const conversation = conversationDe(lead.id, null);
     const premier = lead.interactions[0] ?? null;
     const dernier = premier && !(premier.type === "NOTE" && /^(Lead |Contact saisi|Statut :)/.test(premier.contenu)) ? premier : null;
-    const aRappeler = lead.statut !== "CONTACTE" || (lead.rappelLe !== null && lead.rappelLe <= ceSoir);
+    // « À appeler » : jamais appelé, sans rappel daté (même règle que la liste de Leads).
+    const aAppeler = !lead.dernierAppelLe && !lead.rappelLe;
+    const rappelDu = lead.rappelLe !== null && lead.rappelLe <= ceSoir;
     const repondre = conversation?.dernierSens === "ENTRANT" && !conversation.stopLe;
     let groupe: GroupeAffaire;
     let action: string;
     if (repondre) [groupe, action] = ["REPONDRE", "Répondre à son SMS"];
-    else if (lead.priorite === "A_ECARTER" && lead.statut !== "CONTACTE") [groupe, action] = ["ECARTER", "Hors zone : à classer sans suite, ou à traiter quand même"];
-    else if (aRappeler) [groupe, action] = ["RAPPELER", lead.rappelLe ? (lead.statut === "CONTACTE" ? "Rappeler (rappel prévu)" : "Rappeler : pas de réponse au premier appel") : "Appeler : nouveau contact"];
+    else if (aAppeler && lead.priorite === "A_ECARTER") [groupe, action] = ["ECARTER", "Hors zone : à classer sans suite, ou à appeler quand même"];
+    else if (aAppeler) [groupe, action] = ["RAPPELER", "Appeler : nouveau contact"];
+    else if (rappelDu) [groupe, action] = ["RAPPELER", lead.tentatives > 0 ? `Rappeler : ${pluriel(lead.tentatives, "appel")} sans réponse` : "Rappeler (rappel prévu)"];
     else if (lead.rappelLe) [groupe, action] = ["PLUS_TARD", "Rappel prévu"];
-    else [groupe, action] = ["DECIDER", "Contacté, sans suite donnée : envoyer le lien de son espace, ou classer"];
+    else [groupe, action] = ["DECIDER", "Appelé, sans rappel daté : envoyer le lien de son espace, dater un rappel, ou classer"];
     affaires.push({
       cle: `contact-${lead.id}`,
       genre: "CONTACT",
@@ -101,7 +112,8 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
       groupe,
       action,
       echeance: lead.rappelLe?.toISOString() ?? null,
-      enRetard: Boolean(lead.rappelLe && lead.rappelLe < debutDuJour),
+      // Même retard que la liste « À rappeler » et l'onglet Leads : le rappel est passé.
+      enRetard: Boolean(lead.rappelLe && lead.rappelLe < maintenant),
       depuisJours: jours(dernier?.createdAt ?? lead.createdAt),
       recuLe: lead.createdAt.toISOString(),
       dernier: repondre && conversation?.dernierExtrait ? { type: "SMS reçu", texte: conversation.dernierExtrait, le: (conversation.dernierMessageLe ?? maintenant).toISOString() } : dernier ? { type: dernier.type, texte: dernier.contenu.slice(0, 160), le: dernier.createdAt.toISOString() } : null,

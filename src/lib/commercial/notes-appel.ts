@@ -44,7 +44,19 @@ export function versVueNote(note: Pick<NoteAppel, "id" | "appelLe" | "updatedAt"
   };
 }
 
-const vide = (note: Pick<NoteAppel, "texte" | "etiquettes">) => !note.texte.trim() && lireEtiquettes(note.etiquettes).length === 0;
+/** Une note qui ne dit rien encore (ni texte, ni étiquette) : ni dans le dossier, ni un appel. */
+export const noteVide = (note: Pick<NoteAppel, "texte" | "etiquettes">) => !note.texte.trim() && lireEtiquettes(note.etiquettes).length === 0;
+
+/**
+ * Mission 14 (partie 3) — une note d'appel qui dit quelque chose compte comme un appel : le contact retient son
+ * dernier appel (`dernierAppelLe`, jamais reculé) et passe dans « À rappeler », même sans issue notée (la feuille de
+ * fin d'appel ne s'ouvre plus dès que la note a du texte). Les tentatives ne bougent pas : seules une issue ou un
+ * échange d'appel les lisent. Même règle que la migration `appels-des-leads-14-3` (`suiviDesAppels`).
+ */
+async function retenirAppel(note: NoteAppel): Promise<void> {
+  if (noteVide(note)) return;
+  await prisma.lead.updateMany({ where: { id: note.leadId, OR: [{ dernierAppelLe: null }, { dernierAppelLe: { lt: note.appelLe } }] }, data: { dernierAppelLe: note.appelLe } });
+}
 
 /** Le texte d'une note dans l'historique du dossier : sa date, ses étiquettes, puis ce qui a été dit. */
 export function contenuPourDossier(note: Pick<NoteAppel, "appelLe" | "texte" | "etiquettes">): string {
@@ -71,7 +83,7 @@ async function refleterDansDossier(note: NoteAppel, dossierConnu?: string | null
       return note;
     }
   }
-  if (vide(note)) return note;
+  if (noteVide(note)) return note;
   const dossierId = dossierConnu === undefined ? await dossierVivantDuLead(note.leadId) : dossierConnu;
   if (!dossierId) return note;
   const evenement = await prisma.dossierEvenement.create({
@@ -93,6 +105,7 @@ export async function creerNoteAppel(leadId: string, entree: EntreeNoteAppel): P
   const note = await prisma.noteAppel.create({
     data: { leadId, texte: entree.texte ?? "", etiquettes: JSON.stringify([...new Set(entree.etiquettes ?? [])]), appelLe: appelLe.getTime() > Date.now() ? new Date() : appelLe },
   });
+  await retenirAppel(note);
   return versVueNote(await refleterDansDossier(note));
 }
 
@@ -107,6 +120,7 @@ export async function modifierNoteAppel(leadId: string, noteId: string, entree: 
       ...(entree.etiquettes !== undefined ? { etiquettes: JSON.stringify([...new Set(entree.etiquettes)]) } : {}),
     },
   });
+  await retenirAppel(suite);
   return versVueNote(await refleterDansDossier(suite));
 }
 
@@ -122,7 +136,7 @@ export async function reprendreNotesDansDossier(leadId: string, dossierId: strin
   const notes = await prisma.noteAppel.findMany({ where: { leadId, archiveLe: null, dossierEvenementId: null }, orderBy: { appelLe: "asc" } });
   let reprises = 0;
   for (const note of notes) {
-    if (vide(note)) continue;
+    if (noteVide(note)) continue;
     await refleterDansDossier(note, dossierId);
     reprises++;
   }

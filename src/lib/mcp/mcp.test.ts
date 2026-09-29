@@ -132,6 +132,7 @@ describe("serveur MCP", () => {
     const autres = await Promise.all([lead(), lead(), lead(), lead()]);
     const file = await appeler("leads_a_appeler", {});
     assert.match(file, /Stella Estelle/);
+    assert.doesNotMatch(file, /Stella Stella/, "mission 14 : le prénom n'est plus doublé");
     const ids = autres.map((l) => l.id);
     const apercu = await appeler("archiver", { leads: ids, motif: "nettoyage de la file", commande: "Archive tous les leads de la file sauf Stella Estelle" });
     const jeton = jetonDe(apercu);

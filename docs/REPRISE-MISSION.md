@@ -1464,3 +1464,123 @@ disparaît.
   des journaux Railway.
 - Décision : un lead qui avait déjà un rappel prévu plus tard le garde (il revient dans « À rappeler » avec sa date)
   au lieu de « demain 18 h » : écraser une date choisie par Lucas serait une perte. Vérifié : tsc, eslint, 577/577, build.
+
+## Partie 3 — Leads : deux listes (29/09)
+Énoncé : « À appeler : les leads jamais appelés. À rappeler : les rappels datés dans l'ordre chronologique, retards en
+rouge en tête ; puis les rappels sans date, plus ancien appel d'abord. […] Le compteur de l'onglet ne compte que les
+retards. […] « Traiter » disparaît partout. Un lead ne sort des listes que vers un dossier, en perdu avec motif, ou
+archivé. » Principe : un écran montre une seule chose, un lead a toujours une destination.
+- **Données** : `Lead.dernierAppelLe DateTime?` (dernier appel noté, quelle qu'en soit l'issue) et `Lead.tentatives Int
+  @default(0)` (appels SANS RÉPONSE d'affilée depuis le dernier appel abouti), `@@index([dernierAppelLe])`. `traiteLe`
+  reste en base, plus lu ni écrit (commentaire du schéma à jour). **Une seule règle, en direct comme en rattrapage** :
+  - « appelé » = une fin d'appel (`commercial/appels.ts › noterAppel`, le lead directement ou celui du dossier, dans la
+    même transaction), un échange de type APPEL (`prospects/entrants.ts › ajouterEchange`) ou une note d'appel qui dit
+    quelque chose, texte ou étiquette (`commercial/notes-appel.ts › creerNoteAppel` / `modifierNoteAppel` →
+    `retenirAppel` : `dernierAppelLe = max(actuel, appelLe)`, jamais reculé, tentatives inchangées ; une note vide ne
+    compte pas, `noteVide` exporté). Raison : dès qu'une note a du texte, la feuille de fin d'appel ne s'ouvre plus
+    (`NotesAppel.tsx › finAppel`), le cas « note seule » est courant ;
+  - « sans réponse » = `commercial/sans-reponse.ts › appelSansReponse` : l'issue connue décide seule (« Intéressé :
+    tombé sur la messagerie hier » a abouti) ; sans issue (échange saisi à la main), étiquettes et texte comme la
+    partie 2 (`estSansReponse`, inchangé). `noterAppel` et `ajouterEchange` s'en servent (+1 ou remise à 0) ;
+    `tentativesALaFin` aussi.
+  - `modifierEntrant({ rappelLe })` n'écrit plus `traiteLe` : effacer la date d'un lead déjà appelé le laisse dans « À
+    rappeler » (« Sans date »), d'un lead jamais appelé le ramène dans « À appeler ». Défauts de rappel et issues
+    inchangés (partie 4).
+  - Fusion d'un doublon (`prospects/doublons.ts › fusionnerDoublon`) : l'ancien reprend le dernier appel des deux et
+    les tentatives relues sur l'historique réuni (sinon, un doublon déjà appelé laissait l'ancien dans « À appeler »).
+- **Lecture de l'historique, en un seul endroit** : `commercial/suivi-appels.ts` (`HISTORIQUE_APPELS`, `select` Prisma ;
+  `suiviDesAppels(...historiques)`) — échanges APPEL, événements APPEL de tous ses dossiers (`survenuLe ?? createdAt`),
+  notes d'appel non vides ; lignes archivées ignorées. Servi par la migration et la fusion.
+- **Migration `appels-des-leads-14-3`** (`base/migrations/mission-14-partie-3.ts › suivreLesAppels`, fin de
+  `MIGRATIONS_DONNEES`) : tous les leads, archivés compris (`AVEC_ARCHIVES`), `suiviDesAppels`. Idempotente : recalcule
+  tout, n'écrit que ce qui diffère, et réécrit `updatedAt` tel quel (Prisma garde une valeur fournie : le rattrapage ne
+  compte pas comme activité pour la conservation RGPD ni l'ordre des entrants). Compteurs `examines`, `modifies`,
+  `inchanges`, `appeles`, `avecTentatives` + une ligne `[migration appels-des-leads-14-3] N leads relus : …` (formats
+  `pluriel`/`accord`, aucun nom). `sans-reponse.ts` gagne `issueDesMetadonnees` (l'ancien `lireIssue` privé de la partie
+  2, qui l'importe désormais), `appelSansReponse` et `tentativesALaFin`.
+- **Listes** (`prospects/leads.ts`) : `VueLeads = A_APPELER | A_RAPPELER | SANS_SUITE | ARCHIVES`. Base commune
+  `whereActif` = l'ancienne vue ACTIFS SANS aucune condition sur `traiteLe` (ni perdu, ni après devis, sans dossier
+  vivant — `LEAD_SANS_DOSSIER`, exporté —, ou lead du simulateur jamais appelé avec dossier en Qualification/Simulation
+  sur 60 jours). Ce lead du simulateur exige désormais aussi `dernierAppelLe` ET `rappelLe` nuls (même chose dans
+  `versLigne.actif`) : il n'est jamais que dans « À appeler » ; le premier appel noté (note comprise) ou le premier
+  rappel daté le fait sortir vers son dossier, où vit son rappel. `A_APPELER` = actif, `dernierAppelLe` nul ET
+  `rappelLe` nul, `createdAt` décroissant (plus de limite de 60 jours ; les « à écarter » y restent, pastille grise en
+  anneau, hors de la file des appels à la suite). `A_RAPPELER` = actif ET (`dernierAppelLe` OU `rappelLe`), tri serveur
+  `rappelLe asc nulls last`, `dernierAppelLe asc`, `createdAt asc`, `id` (pagination exacte, vérifiée : Prisma 5.22 +
+  SQLite accepte `nulls`). `compteurs` : `aAppeler`, `aRappeler`, `enRetard` (actif, `rappelLe < maintenant`),
+  `aujourdhui` (rappel plus tard dans la journée de Paris, `aHeureParis(maintenant, 1, 0)`), `sansSuite`, `archives`,
+  `actifs` (= les deux listes, gardé pour l'audit). Défaut de `listerLeads` : `A_APPELER`. `LigneLead` : +
+  `dernierAppelLe`, `tentatives`, `enRetard` ; `aAppeler` = dans « À appeler » ; `attendDepuis` seulement dans « À
+  appeler » ; `traiteLe` retiré. `whereAAppeler` et `compterLeadsAAppeler` supprimés → `compterLeadsEnRetard`. Nouveau
+  lecteur unique des rappels pour l'assistant : `rappelsDesLeads(maintenant, avant?)` (leads des deux listes, rappel
+  daté, `enRetard` = rappel passé).
+- **API** : `GET /api/leads?vue=` accepte les quatre vues ; « ACTIFS » (anciens liens, cache hors ligne) et toute valeur
+  inconnue valent « À appeler ». `/api/leads/actions` et `menage.ts` : `ACTIONS_LEADS = ARCHIVER | RESTAURER` (TRAITER
+  et REPRENDRE refusés par le schéma, 400). `/api/pilotage/compteurs` rend `leadsEnRetard` (plus `leadsAAppeler`) ;
+  la navigation l'affiche en ROUGE sur l'onglet Leads (`Compteurs.leadsEnRetard`, `tonDe`), et ignore une clé absente
+  (réponse d'avant en cache).
+- **Écran Leads** : `page.tsx` choisit la liste au chargement (« À rappeler » s'il y a des retards, sinon « À
+  appeler ») ; `?liste=appeler|rappeler` la force (lien des notifications de la partie 7). Puces « À appeler · N »,
+  « À rappeler · N dont N en retard » (en rouge), « Sans suite · N », « Archivés · N ». Sous-titre « Jamais appelés
+  d'un côté, à rappeler de l'autre. Un lead en sort vers un dossier, sans suite ou archivé. » Le grand bouton n'existe
+  que sur les deux listes : « Enchaîner les appels · N à appeler » (lignes de la page, sans les « à écarter », les
+  simulations d'abord) ou « · N en retard » (retards de la page, dans l'ordre de la liste). Mode appels : le lead
+  affiché reste en tête jusqu'à son issue ou « Passer » (`EcranLeads › affiche`), même si un rafraîchissement l'a
+  retiré de la liste entre-temps (une note tapée pendant l'appel le fait passer dans « À rappeler » ; sans cette garde,
+  le retour du téléphone ou le relevé de la minute sautait au suivant avant l'issue) ; l'issue notée ou « Ouvrir son
+  dossier sans noter d'appel » le passent comme avant ; effet de bord voulu : un lead arrivé pendant l'appel ne
+  s'intercale plus devant celui qu'on appelle. Le reste du mode appels n'a pas changé (partie 4). Ligne « À
+  rappeler » : nom / ville · source, puis la puce de rappel (nouveau `leads/_components/DateRappel.tsx › PuceRappel` :
+  « Rappel jeu. 1 oct. 18:00 », rouge si en retard, « Sans date » sinon) et « N tentatives » ; un `<input
+  type="datetime-local">` invisible posé sur la puce (cible 44 px, police 16 px contre le zoom d'iOS ; à la souris,
+  `showPicker()`), enregistré à la fermeture du sélecteur (blur ou Entrée) par `PATCH /api/prospects/entrants/[id] {
+  rappelLe }`, toast « Rappel déplacé au … » puis liste rafraîchie ; la puce est hors du bouton de la ligne (un champ ne
+  se niche pas dans un bouton). Bouton « Appeler » vert aussi pour un retard. Format partagé : `commun/format.ts ›
+  jourSemaineHeure`. Pastille et bouton « Traité », bouton « Traités » de la sélection : retirés. Pastille « à
+  écarter » : anneau gris (plus ambre ; distinct du gris plein de « secondaire »).
+- **Fiche (`PanneauEntrant`)** : plus de « Traité / Reprendre » (prop `onAction` retirée) ; nouvelle section « Rappel »
+  (sans dossier, ni archivé, ni perdu) : la même puce, « Retirer la date », « Dernier appel le … · N tentatives sans
+  réponse » ou « Jamais appelé : il est dans « À appeler » ». `EntrantResume` gagne `rappelEnRetard`,
+  `dernierAppelLe`, `tentatives`.
+- **Lecteurs alignés** : outil MCP `leads_a_appeler` = la liste « À appeler » seule, même ordre que l'écran, coupée
+  côté serveur, nom sans prénom doublé (`LigneLead.nom`), en-tête « N leads à appeler, jamais appelés (N dans « À
+  rappeler », dont N en retard) » ; liste vide : « Personne dans « À appeler » (…) » ou « Aucun lead en attente
+  d'appel » (plus d'affirmation « tous ont été appelés ») ; paramètre `toute_la_file` retiré (l'empreinte du catalogue
+  change : reconnecter le connecteur ; un ancien appel qui l'envoie est accepté, le paramètre est ignoré). Outil
+  `archiver` : « tous sauf X » dit que `leads_a_appeler` ne couvre que « À appeler » (50 au plus) et renvoie à
+  `ce_qui_m_attend` / `chercher` pour « À rappeler ». `manager_operations` et `point_du_jour` lisent les rappels par
+  `rappelsDesLeads` (plus de lead perdu ou avec dossier, retard = heure passée, fin de journée par `aHeureParis` ; le
+  point du jour montre les retards, même d'avant aujourd'hui, puis ceux de la journée). `commercial/pilotage.ts`
+  (`ce_qui_m_attend`, `point_du_jour`) : contacts = `LEAD_SANS_DOSSIER` (rappel daté quel que soit son âge, ou arrivé
+  / appelé depuis moins de 60 jours, rappels d'abord) ; jamais appelé → RAPPELER « Appeler : nouveau contact » (ECARTER
+  si « à écarter ») ; rappel en retard ou aujourd'hui → RAPPELER (« Rappeler : N appels sans réponse » ou « Rappeler
+  (rappel prévu) ») ; daté plus tard → PLUS_TARD ; appelé sans date → DECIDER ; `enRetard` d'un contact = rappel passé
+  (comme l'onglet), « aujourd'hui » = journée de Paris (aussi pour les dossiers : `finDeJournee` et `debutDuJour`
+  passent par `aHeureParis`, le serveur est en UTC). Audit `connexions.ts` : lit les deux listes, seul un lead du
+  simulateur de « À appeler » peut y avoir son dossier (dans « À rappeler », c'est une alerte), constat « N leads en
+  cours : N à appeler (…), N à rappeler (dont N en retard) ». Textes justes : outils `creer_contact`, `archiver`,
+  `supprimer`, fenêtre « Nouveau contact », archivage d'un dossier (plus de « file d'appels » ni de « à traiter »).
+- **Découpe** : `assistant/outils/ecriture.ts` (618 lignes avant la partie) → `archiver`, `supprimer`, `restaurer` et
+  leurs aides extraits tels quels dans `assistant/outils/menage.ts` (502 + 128 lignes) ; `OUTILS_ECRITURE` inchangé
+  (même ordre).
+- Tests : `base/mission-14-partie-3.test.ts` (18) : les deux listes (ordre, retard, tentatives, ancien « traité »
+  présent, archivé / perdu / dossier vivant absents, compteurs exacts), la puce « jeu. 1 oct. 18:00 », pagination par
+  2, route `/api/pilotage/compteurs` (retards seuls, plus de `leadsAAppeler`), pilotage, outil `leads_a_appeler`,
+  `/api/leads?vue=ACTIFS`, `/api/leads/actions` refuse TRAITER/REPRENDRE, `rappelsDesLeads` + `manager_operations` +
+  `point_du_jour` (lead avec dossier absent, retard = heure passée), lead du simulateur (« À appeler » seulement ; note
+  ou rappel daté → vers son dossier), `noterAppel` (×2 sans réponse → 2, « À rappeler » → 0, via le dossier, issue
+  connue + « messagerie » → 0), `ajouterEchange` (« messagerie » → +1), note d'appel seule (→ « À rappeler »,
+  tentatives inchangées, jamais reculé, note vide ignorée), fusion d'un doublon, migration (issue connue, note vide,
+  note directe = même résultat, `updatedAt` gardé, rejouable) et sa place. Adaptés en gardant leur intention :
+  `prospects/leads.test.ts`, `menage.test.ts`, `commercial/pilotage.test.ts` (le rappel passé vient maintenant en tête
+  des appels), `dossiers/depuis-lead.test.ts`, `dossiers/main.test.ts`, `mcp/mcp.test.ts` (prénom non doublé).
+- Reste / à savoir : `prospects/entrants.ts › listerEntrants/compterEntrantsATraiter` (plus aucun écran) garde ses
+  groupes. `analyses/operations.ts` et `outils/point-du-jour.ts` calculent encore le début du jour avec `+02:00` en dur
+  pour les DOSSIERS (actions planifiées, chantiers) : une heure de décalage l'hiver (hors partie 3). La pastille « À écarter » de la fiche (`pastilles.tsx › PastillePriorite`, étiquette nommée) reste ambre.
+  Les notes d'appel d'un doublon fusionné restent sur le contact archivé (avant la partie 3 aussi) : la fusion prend
+  son dernier appel, mais une migration rejouée plus tard ne le relirait pas. La puce enregistre à la fermeture du
+  sélecteur, jamais essayée sur un vrai iPhone ; la garde du mode appels non plus.
+- Vérifié : tsc, eslint, suite complète 595/595, build ; à l'écran (390 × 660, copie d'essai m8, migrations 14-1 à 14-3
+  jouées au démarrage avec sauvegarde) : puces « À appeler · 11 », « À rappeler · 4 dont 3 en retard », vue par défaut
+  À rappeler, date déplacée → toast « Rappel déplacé au … » et ligne reclassée, plus de « Traité » dans le panneau,
+  aucune page plus large que 390 px. L'outil `leads_a_appeler` perd `toute_la_file` : Lucas reconnecte le connecteur.

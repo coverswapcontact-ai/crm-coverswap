@@ -1,7 +1,7 @@
 import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
 import { lireEtiquettes } from "@/lib/commercial/notes-appel";
 import { aHeureParis } from "@/lib/commercial/quand";
-import { estSansReponse, issueDuContenu, MOTIF_RAPPELER, sansLibelleIssue, type AppelLu } from "@/lib/commercial/sans-reponse";
+import { estSansReponse, issueDesMetadonnees, issueDuContenu, MOTIF_RAPPELER, sansLibelleIssue, type AppelLu } from "@/lib/commercial/sans-reponse";
 import { heure, jourLong } from "@/lib/commun/format";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { ecrireNote } from "@/lib/dossiers/dossiers";
@@ -61,15 +61,6 @@ const aplatir = (texte: string) => texte.normalize("NFD").replace(/\p{M}/gu, "")
 
 type Trace = { le: Date; texte: string };
 
-function lireIssue(metadata: string): string | null {
-  try {
-    const valeur: unknown = JSON.parse(metadata);
-    const issue = valeur && typeof valeur === "object" ? (valeur as Record<string, unknown>).issue : null;
-    return typeof issue === "string" ? issue : null;
-  } catch {
-    return null;
-  }
-}
 
 /** Le passage de la note autour de « rappeler », sur une ligne, pour dire pourquoi le lead revient. */
 function extrait(texte: string): string {
@@ -146,7 +137,7 @@ export async function remettreARappeler(client: BaseDonnees, maintenant: Date = 
     const appels: (AppelLu & { le: Date })[] = [
       ...lead.interactions.filter((i) => i.type === "APPEL").map((i) => ({ le: i.createdAt, texte: i.contenu, issue: issueDuContenu(i.contenu) })),
       ...lead.notesAppel.map((n) => ({ le: n.appelLe, texte: n.texte, issue: n.issue, etiquettes: lireEtiquettes(n.etiquettes) })),
-      ...lead.dossiers.flatMap((d) => d.evenements.map((e) => ({ le: e.survenuLe ?? e.createdAt, texte: e.contenu, issue: lireIssue(e.metadata) }))),
+      ...lead.dossiers.flatMap((d) => d.evenements.map((e) => ({ le: e.survenuLe ?? e.createdAt, texte: e.contenu, issue: issueDesMetadonnees(e.metadata) }))),
     ];
     const dernier = plusRecent(appels);
     // Ce que Lucas a écrit, la plus récente qui demande un rappel. Le libellé « À rappeler » que la fin d'appel met en

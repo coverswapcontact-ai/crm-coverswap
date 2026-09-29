@@ -7,6 +7,7 @@ import { formaterTelephone, normaliserEmail, normaliserTelephone } from "@/lib/c
 import { cheminVignette } from "@/lib/fichiers/images";
 import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { appelSansReponse, issueDuContenu } from "@/lib/commercial/sans-reponse";
 import {
   GROUPES_ENTRANTS,
   JOURS_A_TRAITER,
@@ -79,6 +80,9 @@ function versResume(lead: LeadResume, maintenant: Date): EntrantResume {
     prioriteMotif: lead.prioriteMotif,
     prioriteManuelle: lead.prioriteManuelle,
     rappelLe: lead.rappelLe?.toISOString() ?? null,
+    rappelEnRetard: Boolean(lead.rappelLe && lead.rappelLe.getTime() < maintenant.getTime()),
+    dernierAppelLe: lead.dernierAppelLe?.toISOString() ?? null,
+    tentatives: lead.tentatives,
   };
 }
 
@@ -277,7 +281,8 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
     ...(passeEnPerdu ? { motifPerte, perteLe: new Date(), perteCommentaire: motif?.trim() || null } : entree.statut && entree.statut !== "PERDU" && lead.statut === "PERDU" ? { motifPerte: null, perteLe: null, perteCommentaire: null } : {}),
     ...(nomFamille !== undefined ? { nom: nomFamille } : {}),
     ...(email !== undefined ? { email: email ? normaliserEmail(email) : null } : {}),
-    ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null, ...(rappelLe ? { traiteLe: null } : {}) } : {}),
+    // Mission 14 (partie 3) : effacer la date garde le lead dans « À rappeler » s'il a déjà été appelé (« Sans date »).
+    ...(rappelLe !== undefined ? { rappelLe: rappelLe ? new Date(rappelLe) : null } : {}),
   };
   await prisma.$transaction(async (tx) => {
     await tx.lead.update({ where: { id }, data });
@@ -309,15 +314,22 @@ export const schemaEchange = z.object({
   contenu: z.string("Précise l'échange.").trim().min(2, "Précise l'échange.").max(5000, "Échange trop long."),
 });
 
-/** Un échange noté ; un appel, un SMS ou un e-mail fait passer un contact à traiter en « Contacté ». */
+/**
+ * Un échange noté ; un appel, un SMS ou un e-mail fait passer un contact à traiter en « Contacté ». Un appel noté ici
+ * pose le dernier appel à maintenant (mission 14) ; ses tentatives se lisent comme dans la migration
+ * (`appelSansReponse` : « pas de réponse », « messagerie »… en ajoutent une, tout autre appel les remet à zéro).
+ */
 export async function ajouterEchange(id: string, entree: z.output<typeof schemaEchange>): Promise<void> {
   const lead = await prisma.lead.findUnique({ where: { id }, select: { statut: true, archiveLe: true, dossiers: { where: { archiveLe: null }, select: { id: true } } } });
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
   if (lead.dossiers.length > 0) throw new ErreurMetier("Ce contact a un dossier : le suivi se note sur le dossier.", 409);
   await prisma.$transaction(async (tx) => {
     await tx.interaction.create({ data: { leadId: id, type: entree.type, contenu: entree.contenu } });
-    if (entree.type !== "NOTE" && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE")) {
-      await tx.lead.update({ where: { id }, data: { statut: "CONTACTE" } });
+    const contacte = entree.type !== "NOTE" && (lead.statut === "NOUVEAU" || lead.statut === "DEVIS_DEMANDE");
+    const appel = entree.type === "APPEL";
+    if (contacte || appel) {
+      const tentatives = appelSansReponse({ issue: issueDuContenu(entree.contenu), texte: entree.contenu }) ? { increment: 1 } : 0;
+      await tx.lead.update({ where: { id }, data: { ...(contacte ? { statut: "CONTACTE" } : {}), ...(appel ? { dernierAppelLe: new Date(), tentatives } : {}) } });
     }
   });
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, CheckCheck, ExternalLink, FolderPlus, Link2, Mail, Pencil, Phone, Undo2, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, FolderPlus, Link2, Mail, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -11,11 +11,12 @@ import { Bouton, Champ, Modale, Pastille, Puces, TitreSection, ZoneTexte } from 
 import { LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type EtapeDossier, type MotifPerte } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
+import { jourHeure, jourSemaineHeure, pluriel } from "@/lib/commun/format";
 import { LIBELLES_STATUT_LEAD, LIBELLES_TYPE_ECHANGE, LIBELLES_TYPE_PROJET, STATUTS_LEAD_MANUELS, TYPES_ECHANGE, libelleSourceLead, type StatutLead, type StatutLeadManuel, type TypeEchange } from "@/lib/prospects/constantes";
 import type { EntrantDetail } from "@/lib/prospects/types";
 import type { LigneLead } from "@/lib/prospects/leads";
-import type { ActionLeads, MotifArchivage } from "@/lib/prospects/menage-constantes";
 import { SignalDoublon } from "./SignalDoublon";
+import { PuceRappel } from "./DateRappel";
 import { cn } from "@/lib/utils";
 import { PastilleIntention, PastillePriorite } from "./pastilles";
 import { LIBELLES_PRIORITE, PRIORITES, type Priorite } from "@/lib/prospects/priorite";
@@ -25,7 +26,7 @@ import { EditionEntrant } from "./EditionEntrant";
 import { ImagesDuLead } from "./ImagesDuLead";
 
 /** Fiche d'un contact entrant, jusqu'à l'ouverture de son dossier. */
-export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onAction, onRecharger }: { id: string | null; onFermer: () => void; onModifie: () => void; ligne?: LigneLead | null; onAction?: (action: ActionLeads, motif?: MotifArchivage) => void; onRecharger?: () => Promise<void> }) {
+export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onRecharger }: { id: string | null; onFermer: () => void; onModifie: () => void; ligne?: LigneLead | null; onRecharger?: () => Promise<void> }) {
   const [detail, setDetail] = useState<EntrantDetail | null>(null);
   const [echec, setEchec] = useState<{ id: string; message: string } | null>(null);
 
@@ -59,7 +60,7 @@ export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onAction
         className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
-          <Contenu detail={affiche} ligne={ligne && ligne.id === affiche.id ? ligne : null} onAction={onAction} onRecharger={onRecharger} onFermer={onFermer} onMisAJour={appliquer} />
+          <Contenu detail={affiche} ligne={ligne && ligne.id === affiche.id ? ligne : null} onRecharger={onRecharger} onFermer={onFermer} onMisAJour={appliquer} />
         ) : (
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
@@ -76,7 +77,7 @@ export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onAction
   );
 }
 
-function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }: { detail: EntrantDetail; ligne: LigneLead | null; onAction?: (action: ActionLeads, motif?: MotifArchivage) => void; onRecharger?: () => Promise<void>; onFermer: () => void; onMisAJour: (detail: EntrantDetail) => void }) {
+function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail: EntrantDetail; ligne: LigneLead | null; onRecharger?: () => Promise<void>; onFermer: () => void; onMisAJour: (detail: EntrantDetail) => void }) {
   const [envoi, setEnvoi] = useState<string | null>(null);
   const [typeEchange, setTypeEchange] = useState<TypeEchange>("APPEL");
   const [echange, setEchange] = useState("");
@@ -113,6 +114,8 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
   }
 
   const statutManuel = (STATUTS_LEAD_MANUELS as readonly string[]).includes(detail.statut) ? (detail.statut as StatutLeadManuel) : null;
+  /** Mission 14 (partie 3) : la date de rappel, changée d'un geste (effacée : « Sans date » dans « À rappeler » s'il a déjà été appelé, sinon retour dans « À appeler »). */
+  const poserRappel = (rappelLe: string | null) => void appeler("rappel", `/api/prospects/entrants/${detail.id}`, "PATCH", { rappelLe }, rappelLe ? `Rappel déplacé au ${jourSemaineHeure(rappelLe)}` : "Rappel sans date");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -153,12 +156,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
               </a>
             </>
           ) : null}
-          {/* Mission 13 (lot 3) : « traité / reprendre » vit ici (« Écrire un mail » existe déjà plus bas). */}
-          {ligne && onAction && !detail.archiveLe ? (
-            <button type="button" className={LIEN_ACTION} onClick={() => onAction(ligne.traiteLe ? "REPRENDRE" : "TRAITER")} title={ligne.traiteLe ? "Le remettre dans la file d'appels" : "Le sortir de la file d'appels, sans l'archiver"}>
-              {ligne.traiteLe ? <Undo2 size={14} aria-hidden /> : <CheckCheck size={14} aria-hidden />} {ligne.traiteLe ? "Reprendre" : "Traité"}
-            </button>
-          ) : null}
+
           {detail.archiveLe ? null : (
             <button
               type="button"
@@ -192,6 +190,30 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
             </Link>
           ) : null}
         </div>
+
+        {/* Mission 14 (partie 3) : le rappel se règle ici ; avec un dossier, il vit sur le dossier. */}
+        {detail.dossier || detail.archiveLe || detail.statut === "PERDU" ? null : (
+          <section>
+            <TitreSection>Rappel</TitreSection>
+            <div className={cn(CARTE_REMPLIE, "space-y-1")}>
+              <div className="flex flex-wrap items-center gap-x-3">
+                <PuceRappel rappelLe={detail.rappelLe} enRetard={detail.rappelEnRetard} occupe={envoi === "rappel"} onChoisir={poserRappel} />
+                {detail.rappelLe ? (
+                  <button type="button" disabled={envoi === "rappel"} onClick={() => poserRappel(null)} className="h-11 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5] disabled:opacity-50 sm:h-8">
+                    Retirer la date
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-[12.5px] text-[#8B919C]">
+                {detail.dernierAppelLe
+                  ? `Dernier appel le ${jourHeure(detail.dernierAppelLe)}${detail.tentatives > 0 ? ` · ${pluriel(detail.tentatives, "tentative")} sans réponse` : ""}. Il est dans « À rappeler ».`
+                  : detail.rappelLe
+                    ? "Pas encore appelé, rappel daté : il est dans « À rappeler »."
+                    : "Jamais appelé : il est dans « À appeler ». Dater un rappel le passe dans « À rappeler »."}
+              </p>
+            </div>
+          </section>
+        )}
 
         {detail.archiveLe ? null : (
           <section>

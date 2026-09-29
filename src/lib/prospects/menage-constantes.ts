@@ -3,5 +3,6 @@ export const MOTIFS_ARCHIVAGE = ["TEST", "DOUBLON", "HORS_CIBLE", "AUTRE"] as co
 export type MotifArchivage = (typeof MOTIFS_ARCHIVAGE)[number];
 export const LIBELLES_MOTIF_ARCHIVAGE: Record<MotifArchivage, string> = { TEST: "Test", DOUBLON: "Doublon", HORS_CIBLE: "Hors cible", AUTRE: "Autre" };
 
-export const ACTIONS_LEADS = ["ARCHIVER", "RESTAURER", "TRAITER", "REPRENDRE"] as const;
+/** Mission 14 (partie 3) : « traité / reprendre » retirés — un lead sort des listes vers un dossier, en « sans suite » ou archivé. */
+export const ACTIONS_LEADS = ["ARCHIVER", "RESTAURER"] as const;
 export type ActionLeads = (typeof ACTIONS_LEADS)[number];

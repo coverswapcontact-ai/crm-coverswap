@@ -37,7 +37,7 @@ export function NouveauContact({ onFermer, onCree }: { onFermer: () => void; onC
       ouverte
       onFermer={onFermer}
       titre="Nouveau contact"
-      description="Un appel, un salon, une recommandation : il rejoint les contacts à traiter."
+      description="Un appel, un salon, une recommandation : il rejoint « À appeler »."
       pied={
         <div className="flex justify-end gap-2">
           <Bouton variante="fantome" onClick={onFermer}>

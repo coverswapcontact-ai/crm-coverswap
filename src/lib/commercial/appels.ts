@@ -8,6 +8,7 @@ import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type SuiteAppel } from "./constantes";
 import { noterIssueSurNote } from "./notes-appel";
 import { aHeureParis } from "./quand";
+import { appelSansReponse } from "./sans-reponse";
 
 /**
  * Fin d'appel : une ligne de note, une issue, et le CRM fixe la suite.
@@ -22,6 +23,10 @@ import { aHeureParis } from "./quand";
  *
  * L'appel s'écrit dans l'histoire du contact : événement du dossier s'il y en a
  * un, échange du contact entrant sinon — c'est la règle du CRM (section 19).
+ *
+ * Mission 14 (partie 3) : le lead (directement, ou celui du dossier) retient son
+ * dernier appel (`dernierAppelLe`, il passe dans « À rappeler ») et ses appels
+ * sans réponse d'affilée (`tentatives`, remis à zéro par un appel abouti).
  */
 export { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "./constantes";
 
@@ -58,11 +63,14 @@ export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<
   const libelle = LIBELLES_ISSUE[entree.issue];
   const contenu = [`Appel — ${libelle}`, entree.note].filter(Boolean).join(" : ");
   const rappelLisible = rappel?.toLocaleString("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) ?? null;
+  // Une tentative de plus si l'issue dit « sans réponse », sinon remise à zéro (règle unique : `appelSansReponse`).
+  const suiviAppel = { dernierAppelLe: new Date(), tentatives: appelSansReponse({ issue: entree.issue }) ? { increment: 1 } : 0 };
 
   if (dossierId) {
     const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
     await prisma.$transaction(async (tx) => {
       await tx.dossierEvenement.create({ data: { dossierId: dossierId!, type: "APPEL", direction: "SORTANT", contenu, metadata: JSON.stringify({ issue: entree.issue }) } });
+      if (leadId) await tx.lead.update({ where: { id: leadId }, data: suiviAppel });
       if (rappel) await tx.dossier.update({ where: { id: dossierId! }, data: { prochaineAction: entree.issue === "PAS_DE_REPONSE" ? "Rappeler (pas de réponse)" : "Rappeler", prochaineActionDate: rappel } });
       if (entree.issue === "INTERESSE") await tx.dossier.update({ where: { id: dossierId! }, data: { updatedAt: new Date() } });
       if (entree.note && entree.issue !== "PAS_DE_REPONSE") await ecrireNote(tx, dossierId!, { etape: (dossier?.etape ?? "QUALIFICATION") as EtapeDossier, contenu: `${libelle} — ${entree.note}` });
@@ -78,10 +86,10 @@ export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<
       const lead = await tx.lead.findUnique({ where: { id: leadId! }, select: { statut: true } });
       const aTraiter = lead?.statut === "NOUVEAU" || lead?.statut === "DEVIS_DEMANDE";
       // Mission 12 : la perte porte toujours un motif ; « pas intéressé » au téléphone = projet abandonné.
-      if (entree.issue === "PAS_INTERESSE") await tx.lead.update({ where: { id: leadId! }, data: { statut: "PERDU", rappelLe: null, motifPerte: "PROJET_ABANDONNE", perteLe: new Date(), perteCommentaire: "Pas intéressé (appel)" } });
-      // Pas de réponse : la personne n'a pas été jointe, elle reste « à traiter » — avec un rappel.
-      else if (entree.issue === "PAS_DE_REPONSE") await tx.lead.update({ where: { id: leadId! }, data: { rappelLe: rappel, traiteLe: null } });
-      else await tx.lead.update({ where: { id: leadId! }, data: { ...(aTraiter ? { statut: "CONTACTE" } : {}), rappelLe: rappel, ...(rappel ? { traiteLe: null } : {}) } });
+      if (entree.issue === "PAS_INTERESSE") await tx.lead.update({ where: { id: leadId! }, data: { ...suiviAppel, statut: "PERDU", rappelLe: null, motifPerte: "PROJET_ABANDONNE", perteLe: new Date(), perteCommentaire: "Pas intéressé (appel)" } });
+      // Pas de réponse : la personne n'a pas été jointe, son statut ne bouge pas — un rappel, une tentative de plus.
+      else if (entree.issue === "PAS_DE_REPONSE") await tx.lead.update({ where: { id: leadId! }, data: { ...suiviAppel, rappelLe: rappel } });
+      else await tx.lead.update({ where: { id: leadId! }, data: { ...suiviAppel, ...(aTraiter ? { statut: "CONTACTE" } : {}), rappelLe: rappel } });
     });
   }
 

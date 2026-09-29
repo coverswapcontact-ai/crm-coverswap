@@ -1,14 +1,16 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { pilotageCommercial } from "@/lib/commercial/pilotage";
+import { aHeureParis } from "@/lib/commercial/quand";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
 import { libelleSourceLead } from "@/lib/prospects/constantes";
+import { rappelsDesLeads } from "@/lib/prospects/leads";
 import { definirOutil, format, lien } from "../definition";
 import { etatCampagne, santeSysteme } from "./lecture";
-import { pluriel } from "@/lib/commun/format";
+import { heure, jourSemaineHeure, pluriel } from "@/lib/commun/format";
 
 /**
  * Le point du jour (mission 8) : en un appel, tout ce qui a changé depuis le
@@ -50,7 +52,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     prisma.dossierEvenement.findMany({ where: { createdAt: { gte: depuis }, type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { dossierId: true, contenu: true, createdAt: true, dossier: { select: { clientNom: true, etape: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
     listerVue("A_TRAITER", { limite: 30 }),
     pilotageCommercial(maintenant),
-    prisma.lead.findMany({ where: { rappelLe: { gte: debutJour, lt: finJour }, archiveLe: null }, select: { id: true, prenom: true, nom: true, rappelLe: true, telephone: true }, orderBy: { rappelLe: "asc" }, take: 50 }),
+    // Mission 14 : les rappels de l'onglet Leads à faire d'ici ce soir (heure de Paris) — les retards d'abord, même d'avant aujourd'hui.
+    rappelsDesLeads(maintenant, aHeureParis(maintenant, 1, 0)),
     prisma.dossier.findMany({ where: { prochaineActionDate: { gte: debutJour, lt: finJour }, archiveLe: null }, select: { id: true, clientNom: true, prochaineAction: true, prochaineActionDate: true }, orderBy: { prochaineActionDate: "asc" }, take: 50 }),
     etatCampagne(maintenant),
     santeSysteme(maintenant),
@@ -78,7 +81,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       messagesEspace: messagesRecents.map((m) => ({ id: m.id, dossierId: m.dossier.id, client: m.dossier.clientNom, source: m.source, texte: m.texte.slice(0, 200), le: m.createdAt.toISOString(), lu: Boolean(m.luLe) })),
     },
     aujourdhui: {
-      rappels: rappels.map((r) => ({ leadId: r.id, nom: `${r.prenom} ${r.nom}`.trim(), a: r.rappelLe?.toISOString() ?? null, telephone: r.telephone })),
+      rappels: rappels.slice(0, 50).map((r) => ({ leadId: r.leadId, nom: r.nom, a: r.le.toISOString(), telephone: r.telephone, enRetard: r.enRetard })),
       actionsDossiers: actionsDossiers.map((d) => ({ dossierId: d.id, client: d.clientNom, action: d.prochaineAction, a: d.prochaineActionDate?.toISOString() ?? null })),
       attendentMoi: attendentMoi.map((a) => ({ nom: a.nom, etape: a.etape, action: a.action, enRetard: a.enRetard, depuisJours: a.depuisJours, dossierId: a.dossierId, leadId: a.leadId })),
       chezLeClient: pilotage.compteurs.chezLeClient,
@@ -104,10 +107,11 @@ export const outilPointDuJour = definirOutil({
     const point = await calculerPointDuJour(contexte.maintenant, { depuis: depuis_heures ? new Date(contexte.maintenant.getTime() - depuis_heures * 3_600_000) : undefined });
     const n = point.nouveautes;
     const a = point.aujourdhui;
+    const retards = a.rappels.filter((r) => r.enRetard).length;
     const texte = [
       `Point du ${format.jour(contexte.maintenant)}, depuis ${point.premierPoint ? "hier (premier point)" : format.jourCourt(point.depuis) + " " + new Date(point.depuis).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}.`,
       `Nouveau : ${pluriel(n.leads.length, "lead")}${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${pluriel(n.simulations.site, "simulation")} sur le site, ${n.simulations.espace.length} dans les espaces ; ${pluriel(n.demandesDevis, "demande")} de devis ; ${pluriel(n.devisSignes.length, "devis signé", "devis signés")}${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} a choisi le devis ${d.numero ?? "?"}${d.libelle ? ` (${d.libelle})` : ""} : ${format.euros(d.montant)}`).join(" ; ")})` : ""} ; ${pluriel(n.paiements.length, "paiement")}${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${pluriel(n.projetsClients.length, "projet ouvert", "projets ouverts")} par des clients ; ${pluriel(n.changementsEtape.length, "changement")} d'étape ; ${pluriel(n.messagesEspace.length, "message")} de clients dans leur espace${n.messagesEspace.length ? ` (${n.messagesEspace.slice(0, 4).map((m) => `${m.client} : « ${m.texte.slice(0, 80)} »`).join(" ; ")})` : ""}.`,
-      `Aujourd'hui : ${pluriel(a.rappels.length, "rappel")}${a.rappels.length ? ` (${a.rappels.map((r) => `${r.nom} à ${r.a ? new Date(r.a).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }) : "?"}`).join(", ")})` : ""}, ${pluriel(a.actionsDossiers.length, "action planifiée", "actions planifiées")}${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${pluriel(a.attendentMoi.length, "dossier")} qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
+      `Aujourd'hui : ${pluriel(a.rappels.length, "rappel")}${retards ? ` dont ${retards} en retard` : ""}${a.rappels.length ? ` (${a.rappels.map((r) => (r.enRetard ? `${r.nom}, prévu ${jourSemaineHeure(r.a)}` : `${r.nom} à ${heure(r.a)}`)).join(", ")})` : ""},${pluriel(a.actionsDossiers.length, "action planifiée", "actions planifiées")}${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${pluriel(a.attendentMoi.length, "dossier")} qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
       `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");

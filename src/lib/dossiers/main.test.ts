@@ -50,7 +50,8 @@ async function partout(dossierId: string, leadId: string) {
   const detail = await dossiers.chargerDetail(dossierId);
   const espace = (await suivi.listerEspaces(maintenant)).find((l) => l.dossierId === dossierId)!;
   const affaire = (await commercial.pilotageCommercial(maintenant)).affaires.find((a) => a.dossierId === dossierId);
-  const ligneLead = (await leads.listerLeads({ vue: "ACTIFS", limite: 500 })).lignes.find((l) => l.id === leadId);
+  // Mission 14 : Leads a deux listes (« À appeler », « À rappeler ») ; le lead est dans l'une ou l'autre.
+  const ligneLead = [...(await leads.listerLeads({ vue: "A_APPELER", limite: 500 })).lignes, ...(await leads.listerLeads({ vue: "A_RAPPELER", limite: 500 })).lignes].find((l) => l.id === leadId);
   const lu = (m: string) => (m === "A_RELANCER" ? "MOI" : m);
   return {
     carte: lu(pilotage.mainDe(resume, maintenant)),

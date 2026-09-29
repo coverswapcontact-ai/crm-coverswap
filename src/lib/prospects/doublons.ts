@@ -4,6 +4,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { fusionnerClients } from "@/lib/clients/fusion";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { pluriel } from "@/lib/commun/format";
+import { HISTORIQUE_APPELS, suiviDesAppels } from "@/lib/commercial/suivi-appels";
 
 /**
  * Le même client revenu avec un autre numéro ET une autre adresse e-mail : le
@@ -15,8 +16,9 @@ import { pluriel } from "@/lib/commun/format";
  * Fusionner : les simulations, photos, échanges et conversations du nouveau
  * contact rejoignent l'ancien ; ses nouvelles simulations du site entrent dans
  * le dossier (et l'espace) de l'ancien ; les deux fiches client n'en font plus
- * qu'une ; le dossier ouvert d'office pour le nouveau contact, s'il est resté
- * vide, est archivé ; le nouveau contact est archivé (« doublon, fusionné »).
+ * qu'une ; l'ancien reprend son suivi des appels (dernier appel, tentatives) ;
+ * le dossier ouvert d'office pour le nouveau contact, s'il est resté vide, est
+ * archivé ; le nouveau contact est archivé (« doublon, fusionné »).
  * Rien n'est supprimé.
  */
 
@@ -102,6 +104,15 @@ export async function fusionnerDoublon(leadId: string): Promise<ResultatFusion> 
     await tx.interaction.updateMany({ where: { leadId: nouveau.id }, data: { leadId: ancien.id } });
     await tx.metaLead.updateMany({ where: { leadId: nouveau.id }, data: { leadId: ancien.id } });
     await tx.conversationSms.updateMany({ where: { leadId: nouveau.id }, data: { leadId: ancien.id, ...(clientId ? { clientId } : {}) } });
+    // Mission 14 (partie 3) : l'ancien reprend le suivi des appels du nouveau — le dernier appel des deux, les tentatives
+    // relues sur l'historique réuni (même lecture que la migration) : un doublon déjà appelé ne le laisse pas dans « À appeler ».
+    const historiques = await tx.lead.findMany({ where: { ...AVEC_ARCHIVES, id: { in: [ancien.id, nouveau.id] } }, select: HISTORIQUE_APPELS });
+    const suivi = suiviDesAppels(...historiques);
+    const instants = [ancien.dernierAppelLe, nouveau.dernierAppelLe, suivi.dernierAppelLe].flatMap((d) => (d ? [d.getTime()] : []));
+    const dernierAppelLe = instants.length > 0 ? new Date(Math.max(...instants)) : null;
+    if (dernierAppelLe?.getTime() !== ancien.dernierAppelLe?.getTime() || suivi.tentatives !== ancien.tentatives) {
+      await tx.lead.update({ where: { id: ancien.id }, data: { dernierAppelLe, tentatives: suivi.tentatives } });
+    }
     // Le dossier ouvert d'office pour le nouveau contact : archivé s'il est resté vide.
     const dossiers = await tx.dossier.findMany({
       where: { leadId: nouveau.id },

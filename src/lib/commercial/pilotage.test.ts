@@ -61,9 +61,10 @@ describe("à qui est la main", () => {
       ["Prioritaire", "Standard", "HorsZone", "RappelDemain", "RappelDu", "AttendPhotos", "PhotosRecues", "SimulationChoisie", "DevisEnvoye", "Signe"].map(groupeDe),
       ["RAPPELER", "RAPPELER", "ECARTER", "PLUS_TARD", "RAPPELER", "ATTENTE_PHOTOS", "SIMULATION", "DEVIS", "ATTENTE_DEVIS", "PLANIFIER"]
     );
-    // Ordre des appels : la valeur d'abord.
+    // Ordre des appels : un rappel passé d'abord (mission 14 : même retard que la liste « À rappeler » et l'onglet Leads), puis la valeur.
     const aRappeler = vue.affaires.filter((a) => a.groupe === "RAPPELER").map((a) => a.nom.split(" ")[0]);
-    assert.deepEqual(aRappeler, ["Prioritaire", "Standard", "RappelDu"]);
+    assert.deepEqual(aRappeler, ["RappelDu", "Prioritaire", "Standard"]);
+    assert.equal(vue.affaires.find((a) => a.nom.startsWith("RappelDu"))?.enRetard, true);
     assert.deepEqual([vue.compteurs.rappeler, vue.compteurs.simulations, vue.compteurs.devis, vue.compteurs.planifier], [3, 1, 1, 1]);
     assert.equal(vue.affaires.find((a) => a.nom.startsWith("HorsZone"))?.main, "MOI");
     assert.equal(vue.compteurs.aMoi, 6, "le hors zone ne gonfle pas ce qui m'attend");

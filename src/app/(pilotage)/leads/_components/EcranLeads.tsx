@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, CheckCheck, PhoneForwarded, Plus, RefreshCw, Search, WifiOff, X, Mail } from "lucide-react";
+import { Archive, ArchiveRestore, PhoneForwarded, Plus, RefreshCw, Search, WifiOff, X, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
@@ -20,16 +20,24 @@ import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/Li
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "./NouveauContact";
 import { PanneauEntrant } from "./PanneauEntrant";
-import { pluriel } from "@/lib/commun/format";
+import { jourSemaineHeure, pluriel } from "@/lib/commun/format";
 import { ChoixMotif, Ligne } from "./LigneLead";
 import { ModeAppels } from "./ModeAppels";
 
 /* ── L'écran ───────────────────────────────────────────────────────── */
 
-export default function EcranLeads({ initial, siteInitial, leadInitial, appelsInitial }: { initial: ListeLeads; siteInitial: SimulationsSiteRecentes; leadInitial: string | null; appelsInitial: boolean }) {
+/** Les puces du haut : une liste à la fois (mission 14, partie 3). */
+const VUES: { valeur: VueLeads; libelle: string }[] = [
+  { valeur: "A_APPELER", libelle: "À appeler" },
+  { valeur: "A_RAPPELER", libelle: "À rappeler" },
+  { valeur: "SANS_SUITE", libelle: "Sans suite" },
+  { valeur: "ARCHIVES", libelle: "Archivés" },
+];
+
+export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInitial, appelsInitial }: { initial: ListeLeads; vueInitiale: VueLeads; siteInitial: SimulationsSiteRecentes; leadInitial: string | null; appelsInitial: boolean }) {
   const routeur = useRouter();
   const [donnees, setDonnees] = useState(initial);
-  const [vue, setVue] = useState<VueLeads>("ACTIFS");
+  const [vue, setVue] = useState<VueLeads>(vueInitiale);
   const [source, setSource] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const [charge, setCharge] = useState(false);
@@ -40,7 +48,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   const [horsLigne, setHorsLigne] = useState(false);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   const [ouvert, setOuvert] = useState<string | null>(leadInitial);
-  // Mission 13 (lot 3) : les cases à cocher n'apparaissent qu'en mode sélection (archiver ou traiter plusieurs leads).
+  // Mission 13 (lot 3) : les cases à cocher n'apparaissent qu'en mode sélection (archiver ou restaurer plusieurs leads).
   const [modeSelection, setModeSelection] = useState(false);
   const [nouveau, setNouveau] = useState(false);
   const [modeAppels, setModeAppels] = useState(appelsInitial);
@@ -49,10 +57,11 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   const [motifGroupe, setMotifGroupe] = useState(false);
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
   const [ouverture, setOuverture] = useState<string | null>(null);
+  const [rappelEnCours, setRappelEnCours] = useState<string | null>(null);
   const [suite, setSuite] = useState<{ lead: LigneLead; suite: SuiteAppel; dossierId: string | null } | null>(null);
   // Mission 7 : le mail prend le relais du SMS après un appel (lien de son espace, « j'ai essayé de vous joindre »).
   const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
-  const [totalAppels, setTotalAppels] = useState(() => initial.lignes.filter((lead) => lead.aAppeler && lead.priorite !== "A_ECARTER").length);
+  const [totalAppels, setTotalAppels] = useState(0);
   const filtres = useRef({ vue, source, recherche, page });
 
   const rafraichir = useCallback(async () => {
@@ -102,24 +111,55 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
     };
   }, [rafraichir]);
 
-  // La file d'appels : les leads à appeler, dans l'ordre de la liste, sans les « à écarter » ni ceux qu'on vient de passer.
-  const aAppeler = useMemo(() => donnees.lignes.filter((lead) => lead.aAppeler), [donnees.lignes]);
-  const ecartes = donnees.lignes.filter((lead) => lead.priorite === "A_ECARTER" && lead.attendDepuis).length;
-  const file = useMemo(
-    () => aAppeler.filter((lead) => lead.priorite !== "A_ECARTER" && !passes.has(lead.id)).sort((a, b) => Number(b.simulation) - Number(a.simulation)),
-    [aAppeler, passes]
+  // La file d'appels (mission 14) : les lignes de la page affichée — sur « À appeler », les jamais appelés sans les « à
+  // écarter » (les simulations d'abord) ; sur « À rappeler », les rappels en retard, dans l'ordre de la liste. Ni ceux qu'on vient de passer.
+  const aRappelerSeulement = vue === "A_RAPPELER";
+  const ecartes = vue === "A_APPELER" ? donnees.lignes.filter((lead) => lead.aAppeler && lead.priorite === "A_ECARTER").length : 0;
+  const aEnchainer = useMemo(
+    () =>
+      vue === "A_RAPPELER"
+        ? donnees.lignes.filter((lead) => lead.enRetard)
+        : vue === "A_APPELER"
+          ? donnees.lignes.filter((lead) => lead.aAppeler && lead.priorite !== "A_ECARTER").sort((a, b) => Number(b.simulation) - Number(a.simulation))
+          : [],
+    [vue, donnees.lignes]
   );
+  const vivante = useMemo(() => aEnchainer.filter((lead) => !passes.has(lead.id)), [aEnchainer, passes]);
+  // Mission 14 (partie 3) : une note d'appel compte comme un appel (le lead passe dans « À rappeler » dès qu'elle est
+  // enregistrée). Le lead affiché dans « Appels à la suite » y reste pourtant en tête jusqu'à son issue ou « Passer »,
+  // même si un rafraîchissement (retour du téléphone, relevé de la minute) l'a retiré de la liste entre-temps.
+  const [affiche, setAffiche] = useState<LigneLead | null>(null);
+  const file = useMemo(() => {
+    if (!modeAppels || !affiche || passes.has(affiche.id)) return vivante;
+    return [vivante.find((lead) => lead.id === affiche.id) ?? affiche, ...vivante.filter((lead) => lead.id !== affiche.id)];
+  }, [modeAppels, affiche, passes, vivante]);
+  if (modeAppels && (file[0]?.id ?? null) !== (affiche?.id ?? null)) setAffiche(file[0] ?? null);
+  const passer = (id: string) => setPasses((actuels) => new Set(actuels).add(id));
 
   function demarrerAppels() {
-    setVue("ACTIFS");
-    setSource(null);
-    setRecherche("");
+    setAffiche(null);
     setPasses(new Set());
-    setTotalAppels(aAppeler.filter((lead) => lead.priorite !== "A_ECARTER").length);
+    setTotalAppels(aEnchainer.length);
     setModeAppels(true);
   }
 
-  const INVERSE: Record<ActionLeads, ActionLeads> = { ARCHIVER: "RESTAURER", RESTAURER: "ARCHIVER", TRAITER: "REPRENDRE", REPRENDRE: "TRAITER" };
+  /** La date de rappel changée d'un geste sur la ligne (effacée : « Sans date »). */
+  async function deplacerRappel(lead: LigneLead, rappelLe: string | null) {
+    setRappelEnCours(lead.id);
+    try {
+      await envoyerJson(`/api/prospects/entrants/${lead.id}`, "PATCH", { rappelLe });
+      toast.success(rappelLe ? `Rappel déplacé au ${jourSemaineHeure(rappelLe)}` : "Rappel sans date", {
+        description: rappelLe ? lead.nom : lead.dernierAppelLe ? `${lead.nom} reste dans « À rappeler », après les rappels datés.` : `${lead.nom}, jamais appelé, revient dans « À appeler ».`,
+      });
+      await rafraichir();
+    } catch (erreur) {
+      toast.error("Rappel non modifié", { description: messageErreur(erreur) });
+    } finally {
+      setRappelEnCours(null);
+    }
+  }
+
+  const INVERSE: Record<ActionLeads, ActionLeads> = { ARCHIVER: "RESTAURER", RESTAURER: "ARCHIVER" };
 
   async function executer(action: ActionLeads, ids: string[], motif?: MotifArchivage): Promise<string[]> {
     const { ids: changes } = await envoyerJson<{ ids: string[] }>("/api/leads/actions", "POST", { action, ids, ...(motif ? { motif } : {}) });
@@ -141,8 +181,6 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
       const messages: Record<ActionLeads, string> = {
         ARCHIVER: `${qui} archivé${changes.length > 1 ? "s" : ""}${motif ? ` · ${LIBELLES_MOTIF_ARCHIVAGE[motif]}` : ""}`,
         RESTAURER: `${qui} restauré${changes.length > 1 ? "s" : ""}`,
-        TRAITER: `${qui} marqué${changes.length > 1 ? "s" : ""} comme traité${changes.length > 1 ? "s" : ""} : hors de la file d'appels`,
-        REPRENDRE: `${qui} remis dans la file d'appels`,
       };
       toast.success(messages[action], {
         duration: 7000,
@@ -195,6 +233,8 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
       const dossierId = lead.dossierId ?? (avecDossier ? await ouvrirDossier(lead, { rester: true }) : null);
       if (avecDossier && !dossierId) return;
       const { suite: resultat } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", { ...(dossierId ? { dossierId } : { leadId: lead.id }), issue, note });
+      // Son issue est notée : la file passe au suivant (il n'est plus gardé en tête).
+      passer(lead.id);
       await rafraichir();
       // Un mail est prêt à relire (lien de son espace, « j'ai essayé de vous joindre ») : on le propose avant de passer au suivant.
       if (resultat.messagePropose) setSuite({ lead, suite: resultat, dossierId });
@@ -210,7 +250,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
     <div className={cn("mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8", selection.size > 0 && "pb-40 md:pb-28")}>
       <EnTetePage
         titre="Leads"
-        sousTitre="Tout ce qui est entré et n'a pas encore de dossier. Le plus récent en haut."
+        sousTitre="Jamais appelés d'un côté, à rappeler de l'autre. Un lead en sort vers un dossier, sans suite ou archivé."
         actions={
           <>
             <Bouton icone={<Plus size={15} aria-hidden />} onClick={() => setNouveau(true)}>
@@ -232,21 +272,24 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
         ) : null}
       </div>
 
-      <button type="button" onClick={demarrerAppels} disabled={file.length === 0 && passes.size === 0} className={cn("flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] text-[16px] font-semibold disabled:bg-[#22262D] disabled:text-[#6B7280]", (file.length > 0 || passes.size > 0) && "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}>
-        <PhoneForwarded size={19} aria-hidden />
-        {file.length > 0 || passes.size > 0 ? `Enchaîner les appels · ${donnees.compteurs.aAppeler} à appeler` : "Personne à appeler pour l'instant"}
-      </button>
+      {vue === "A_APPELER" || vue === "A_RAPPELER" ? (
+        <button type="button" onClick={demarrerAppels} disabled={aEnchainer.length === 0} className={cn("flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] px-3 text-[16px] font-semibold disabled:bg-[#22262D] disabled:text-[#6B7280]", aEnchainer.length > 0 && "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}>
+          <PhoneForwarded size={19} aria-hidden className="shrink-0" />
+          <span className="truncate">{aEnchainer.length > 0 ? `Enchaîner les appels · ${aEnchainer.length} ${aRappelerSeulement ? "en retard" : "à appeler"}` : aRappelerSeulement ? "Aucun rappel en retard sur cette page" : "Personne à appeler sur cette page"}</span>
+        </button>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {([
-          ["ACTIFS", `En cours · ${donnees.compteurs.actifs}`],
-          ["SANS_SUITE", `Sans suite · ${donnees.compteurs.sansSuite}`],
-          ["ARCHIVES", `Archivés · ${donnees.compteurs.archives}`],
-        ] as const).map(([valeur, libelle]) => (
-          <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
-            {libelle}
-          </button>
-        ))}
+        {VUES.map(({ valeur, libelle }) => {
+          const nombre = { A_APPELER: donnees.compteurs.aAppeler, A_RAPPELER: donnees.compteurs.aRappeler, SANS_SUITE: donnees.compteurs.sansSuite, ARCHIVES: donnees.compteurs.archives }[valeur] ?? 0;
+          const retards = valeur === "A_RAPPELER" ? (donnees.compteurs.enRetard ?? 0) : 0;
+          return (
+            <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+              {libelle} · {nombre}
+              {retards > 0 ? <span className="font-medium text-[#F87171]"> dont {retards} en retard</span> : null}
+            </button>
+          );
+        })}
         {donnees.sources.length > 1 ? (
           <select value={source ?? ""} onChange={(evenement) => setSource(evenement.target.value || null)} aria-label="Source" className={cn(CLASSE_SAISIE, "h-11 sm:h-9 w-auto max-w-[14rem] rounded-full py-0 text-[13px]")}>
             <option value="">Toutes les sources</option>
@@ -280,12 +323,25 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
       {/* Le mode appels couvre tout l'écran : la liste se retire (une seule note par contact à l'écran). */}
       {modeAppels ? null : donnees.lignes.length === 0 ? (
         <div className="mt-8">
-          <EtatVide titre={recherche || source ? "Aucun lead ne correspond" : vue === "ACTIFS" ? "Aucun lead en attente" : vue === "ARCHIVES" ? "Aucun lead archivé" : "Aucun lead sans suite"} texte={vue === "ACTIFS" && !recherche && !source ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici. Ceux qui ont un dossier sont dans Dossiers." : undefined} />
+          <EtatVide
+            titre={recherche || source ? "Aucun lead ne correspond" : vue === "A_APPELER" ? "Personne à appeler" : vue === "A_RAPPELER" ? "Aucun rappel" : vue === "ARCHIVES" ? "Aucun lead archivé" : "Aucun lead sans suite"}
+            texte={recherche || source ? undefined : vue === "A_APPELER" ? "Les demandes Meta, du site et les contacts saisis à la main arrivent ici tant qu'ils n'ont pas été appelés. Ceux qui ont un dossier sont dans Dossiers." : vue === "A_RAPPELER" ? "Un lead appelé arrive ici, avec sa date de rappel ; il en sort vers un dossier, sans suite ou archivé." : undefined}
+          />
         </div>
       ) : (
         <ul className="mt-4 overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
           {donnees.lignes.map((lead) => (
-            <Ligne key={lead.id} lead={lead} maintenant={maintenant} selection={modeSelection} selectionne={selection.has(lead.id)} onSelection={() => basculer(lead.id)} onOuvrir={() => setOuvert(lead.id)} />
+            <Ligne
+              key={lead.id}
+              lead={lead}
+              maintenant={maintenant}
+              selection={modeSelection}
+              selectionne={selection.has(lead.id)}
+              onSelection={() => basculer(lead.id)}
+              onOuvrir={() => setOuvert(lead.id)}
+              onRappel={vue === "A_RAPPELER" ? (rappelLe) => void deplacerRappel(lead, rappelLe) : undefined}
+              rappelEnCours={rappelEnCours === lead.id}
+            />
           ))}
         </ul>
       )}
@@ -315,14 +371,9 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
                   }}
                 />
               ) : (
-                <>
-                  <Bouton icone={<CheckCheck size={15} aria-hidden />} chargement={enCours.size > 0} onClick={() => void agir("TRAITER", [...selection])}>
-                    Traités
-                  </Bouton>
-                  <Bouton variante="primaire" icone={<Archive size={15} aria-hidden />} onClick={() => setMotifGroupe(true)}>
-                    Archiver
-                  </Bouton>
-                </>
+                <Bouton variante="primaire" icone={<Archive size={15} aria-hidden />} onClick={() => setMotifGroupe(true)}>
+                  Archiver
+                </Bouton>
               )}
               <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-[10px] text-[#9CA3AF] hover:bg-[#2A2F37]">
                 <X size={16} aria-hidden />
@@ -335,10 +386,6 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
       <PanneauEntrant
         id={ouvert}
         ligne={donnees.lignes.find((l) => l.id === ouvert) ?? null}
-        onAction={(action, motif) => {
-          const cible = donnees.lignes.find((l) => l.id === ouvert);
-          if (cible) void agir(action, [cible.id], motif, cible.archiveMotif ? (Object.entries(LIBELLES_MOTIF_ARCHIVAGE).find(([, libelle]) => libelle === cible.archiveMotif)?.[0] as MotifArchivage | undefined) : undefined);
-        }}
         onRecharger={rafraichir}
         onFermer={() => setOuvert(null)}
         onModifie={() => void rafraichir()}
@@ -365,9 +412,10 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
           maintenant={maintenant}
           occupe={ouverture !== null}
           onQuitter={() => setModeAppels(false)}
-          onPasser={(id) => setPasses((actuels) => new Set(actuels).add(id))}
+          onPasser={passer}
           onNote={noterDansLaFile}
-          onDossier={(lead) => void ouvrirDossier(lead, { rester: true })}
+          // Comme avant : son dossier ouvert, il quitte la file.
+          onDossier={(lead) => void ouvrirDossier(lead, { rester: true }).then((dossierId) => dossierId && passer(lead.id))}
         />
       ) : null}
 

@@ -15,7 +15,9 @@ async function lead(donnees: Record<string, unknown> = {}) {
   rang++;
   return prisma.lead.create({ data: { prenom: "Menage", nom: `Lead${rang}`, telephone: `06 20 00 00 ${String(rang).padStart(2, "0")}`, ville: "Lattes", codePostal: "34970", source: "META_ADS", ...donnees } });
 }
-const dans = async (id: string, vue: "ACTIFS" | "ARCHIVES" = "ACTIFS") => (await leads.listerLeads({ vue })).lignes.find((l) => l.id === id) ?? null;
+/** Mission 14 : sans vue, les deux listes de Leads (« À appeler » puis « À rappeler »). */
+const dans = async (id: string, vue?: "ARCHIVES") =>
+  (vue ? (await leads.listerLeads({ vue })).lignes : [...(await leads.listerLeads({ vue: "A_APPELER" })).lignes, ...(await leads.listerLeads({ vue: "A_RAPPELER" })).lignes]).find((l) => l.id === id) ?? null;
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
@@ -48,22 +50,15 @@ describe("actions rapides sur les leads", () => {
     assert.equal(menage.schemaActionLeads.safeParse({ action: "ARCHIVER", ids: ["x"] }).success, false);
   });
 
-  test("marquer comme traité : reste dans Leads, sort de la file ; un rappel posé l'y remet", async () => {
-    const t = await lead();
-    const avant = await leads.compterLeadsAAppeler();
-    await menage.appliquerActionLeads({ action: "TRAITER", ids: [t.id] });
-    const ligne = await dans(t.id);
-    assert.ok(ligne?.traiteLe);
-    assert.equal(ligne?.aAppeler, false);
-    assert.equal(await leads.compterLeadsAAppeler(), avant - 1);
-    // « Annuler » = reprendre.
-    await menage.appliquerActionLeads({ action: "REPRENDRE", ids: [t.id] });
-    assert.equal((await dans(t.id))?.aAppeler, true);
-    // Traité, puis un appel « à rappeler » : le rappel efface « traité ».
-    await menage.appliquerActionLeads({ action: "TRAITER", ids: [t.id] });
+  test("mission 14 : « traité / reprendre » n'existent plus ; un lead marqué traité autrefois reste dans les listes", async () => {
+    for (const action of ["TRAITER", "REPRENDRE"]) assert.equal(menage.schemaActionLeads.safeParse({ action, ids: ["x"] }).success, false, action);
+    const t = await lead({ traiteLe: new Date(Date.now() - 86_400_000) });
+    assert.equal((await dans(t.id))?.aAppeler, true, "jamais appelé : « À appeler », traité ou non");
+    // Un appel « à rappeler » (rappel déjà passé) : il passe dans « À rappeler », en retard. `traiteLe` n'est plus écrit.
     await appels.noterAppel({ leadId: t.id, issue: "A_RAPPELER", note: "", rappelLe: new Date(Date.now() - 60_000).toISOString() });
-    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: t.id } })).traiteLe, null);
-    assert.equal((await dans(t.id))?.aAppeler, true);
+    const ligne = await dans(t.id);
+    assert.deepEqual([ligne?.aAppeler, ligne?.enRetard], [false, true]);
+    assert.ok((await prisma.lead.findUniqueOrThrow({ where: { id: t.id } })).traiteLe, "la colonne reste en base, plus lue ni écrite");
   });
 
   test("sélection multiple : plusieurs leads archivés ensemble, restaurés ensemble", async () => {
@@ -75,11 +70,12 @@ describe("actions rapides sur les leads", () => {
     for (const l of [x, y, z]) assert.ok(await dans(l.id));
   });
 
-  test("lead du simulateur avec dossier, marqué traité : sort de Leads, son dossier reste", async () => {
-    const s = await lead({ source: "SITE_SIMULATEUR", priorite: "PRIORITAIRE" });
+  test("lead du simulateur avec dossier, marqué traité autrefois : toujours dans « À appeler » tant qu'il n'est pas appelé ; son dossier reste", async () => {
+    const s = await lead({ source: "SITE_SIMULATEUR", priorite: "PRIORITAIRE", traiteLe: new Date() });
     const dossier = await prisma.dossier.create({ data: { leadId: s.id, clientNom: "Simulé", clientAdresse: "", clientCp: "34970", clientVille: "Lattes", clientTelephone: "", objet: "", source: "ENTRANT", etape: "QUALIFICATION" } });
-    assert.ok(await dans(s.id));
-    await menage.appliquerActionLeads({ action: "TRAITER", ids: [s.id] });
+    assert.equal((await dans(s.id))?.aAppeler, true);
+    // Le premier appel noté (sur son dossier) le fait sortir de Leads, vers son dossier.
+    await appels.noterAppel({ dossierId: dossier.id, issue: "PAS_DE_REPONSE", note: "" });
     assert.equal(await dans(s.id), null);
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossier.id } })).archiveLe, null);
   });

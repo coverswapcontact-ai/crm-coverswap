@@ -11,7 +11,8 @@ import { EVENEMENT_COMPTEURS } from "./evenements";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-export type Compteurs = { leadsAAppeler: number; tachesEnEchec: number; mailATraiter: number };
+/** Mission 14 (partie 3) : l'onglet Leads ne compte que les rappels en retard (en rouge). */
+export type Compteurs = { leadsEnRetard: number; tachesEnEchec: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
@@ -35,7 +36,7 @@ type Entree = {
 // l'agent mail v1 sont retirés du CRM (leurs données restent en base) ; À valider et Synthèse restent joignables
 // par leur adresse (menu Plus : Simulateur, Finances, Site, Publicité, Tâches de fond, Dépenses, Paramètres).
 const PRINCIPALES: Entree[] = [
-  { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsAAppeler", mobile: true },
+  { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone, mobile: true },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
@@ -59,7 +60,8 @@ function estActive(pathname: string, href: string): boolean {
 }
 
 function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "rouge" }) {
-  if (valeur <= 0) return null;
+  // (une réponse d'avant, servie par le cache hors ligne, peut ne pas connaître la clé)
+  if (!valeur || valeur <= 0) return null;
   return (
     <span
       className={cn(
@@ -73,12 +75,12 @@ function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "ro
 }
 
 function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
-  return cle === "tachesEnEchec" ? "rouge" : "vert";
+  return cle === "tachesEnEchec" || cle === "leadsEnRetard" ? "rouge" : "vert";
 }
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsAAppeler: 0, tachesEnEchec: 0, mailATraiter: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsEnRetard: 0, tachesEnEchec: 0, mailATraiter: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 

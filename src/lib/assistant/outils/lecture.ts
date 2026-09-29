@@ -27,7 +27,7 @@ import { definirOutil, format, lien, type LienOutil } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
 import { titreDossier } from "@/lib/commun/format";
-import { pluriel } from "@/lib/commun/format";
+import { accord, pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils de lecture (mission 8) : trouver, lire, lister ce qui attend,
@@ -172,16 +172,20 @@ export const outilLireFiche = definirOutil({
 export const outilLeadsAAppeler = definirOutil({
   nom: "leads_a_appeler",
   titre: "Les leads à appeler",
-  description: "La file d'appels : les leads jamais appelés ou dont le rappel est arrivé à échéance, du plus prioritaire au moins. Rend nom, ville, source, projet, priorité et téléphone. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage dans la file.",
+  description: "La liste « À appeler » de l'écran Leads : les leads jamais appelés, le plus récent en haut (même ordre que l'écran ; les « à écarter » y figurent, avec leur priorité). Rend nom, ville, source, projet, priorité et téléphone. Les leads déjà appelés ou avec un rappel daté sont dans « À rappeler », pas ici. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage.",
   niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional(), toute_la_file: z.boolean().optional().describe("Vrai : tous les leads actifs, pas seulement ceux à appeler maintenant.") }),
-  executer: async ({ limite, toute_la_file }) => {
-    const liste = await listerLeads({ vue: "ACTIFS", limite: 300 });
-    const lignes = (toute_la_file ? liste.lignes : liste.lignes.filter((l) => l.aAppeler)).slice(0, limite ?? 20);
-    const texte = lignes.length
-      ? `${pluriel(liste.compteurs.aAppeler, "lead")} à appeler maintenant (${liste.compteurs.actifs} actifs). ${lignes.map((l) => `${l.prenom} ${l.nom}`.trim() + `${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}${l.attendDepuis ? `, attend depuis ${format.jourCourt(l.attendDepuis)}` : l.rappelLe ? `, rappel ${format.jourCourt(l.rappelLe)}` : ""} [lead:${l.id}]`).join(" · ")}`
-      : "Personne à appeler maintenant.";
-    return { texte, donnees: lignes.map((l) => ({ id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, source: l.source, projet: l.projet, priorite: l.priorite, telephone: l.telephone, recuLe: l.recuLe, appels: l.appels, rappelLe: l.rappelLe, aAppeler: l.aAppeler })), liens: [lien("Leads", "/leads")] };
+  schema: z.object({ limite: z.number().int().min(1).max(50).optional() }),
+  executer: async ({ limite }) => {
+    // Mission 14 (partie 3) : la liste « À appeler » seule, dans l'ordre de l'écran, coupée côté serveur.
+    const liste = await listerLeads({ vue: "A_APPELER", limite: limite ?? 20 });
+    const { aAppeler, aRappeler, enRetard } = liste.compteurs;
+    const ailleurs = `${pluriel(aRappeler, "lead")} dans « À rappeler »${enRetard ? `, dont ${enRetard} en retard` : ""}`;
+    const texte = liste.lignes.length
+      ? `${pluriel(aAppeler, "lead")} à appeler, jamais ${accord(aAppeler, "appelé")} (${ailleurs}). ${liste.lignes.map((l) => `${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}, arrivé le ${format.jourCourt(l.attendDepuis ?? l.recuLe)} [lead:${l.id}]`).join(" · ")}`
+      : aRappeler
+        ? `Personne dans « À appeler » (${ailleurs}).`
+        : "Aucun lead en attente d'appel : « À appeler » et « À rappeler » sont vides.";
+    return { texte, donnees: liste.lignes.map((l) => ({ id: l.id, nom: l.nom, ville: l.ville, source: l.source, projet: l.projet, priorite: l.priorite, telephone: l.telephone, recuLe: l.recuLe, attendDepuis: l.attendDepuis })), liens: [lien("Leads", "/leads?liste=appeler")] };
   },
 });
 

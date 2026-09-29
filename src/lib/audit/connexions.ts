@@ -8,7 +8,7 @@ import { chargerLivre } from "@/lib/finances/livre";
 import { listerLeads } from "@/lib/prospects/leads";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { resolveUploadsDir } from "@/lib/uploads";
-import { pluriel } from "@/lib/commun/format";
+import { accord, pluriel } from "@/lib/commun/format";
 
 /**
  * Audit de connectivité : chaque maillon du CRM, vérifié sur les VRAIES données,
@@ -46,7 +46,7 @@ function leadsMeta() {
     const recents = await prisma.metaLead.findMany({ where: { leadId: { not: null }, OR: [{ notifications: { not: null } }, { createdAt: { gte: DEBUT_DU_PUSH } }] }, orderBy: { createdAt: "desc" }, take: 30, select: { leadId: true, pousseLe: true, notifieLe: true, createdAt: true } });
     if (recents.length === 0) return { etat: "RIEN_A_VERIFIER", constat: "Aucun lead Meta reçu depuis la mise en place du push (les leads historiques repris de Zapier ne comptent pas) : la chaîne se vérifiera au premier lead, elle est couverte par les essais automatiques.", chiffres: { leadsMeta: 0 } };
     const leads = await prisma.lead.findMany({ where: { id: { in: recents.map((r) => r.leadId as string) } }, select: { id: true, priorite: true, dossiers: { select: { id: true } } } });
-    const dansLeads = new Set((await listerLeads({ limite: 500 })).lignes.map((l) => l.id));
+    const dansLeads = new Set((await lignesDesDeuxListes()).lignes.map((l) => l.id));
     const sansPastille = leads.filter((l) => !l.priorite).length;
     const nullePart = leads.filter((l) => l.dossiers.length === 0 && !dansLeads.has(l.id)).length;
     const actifs = new Set(leads.map((l) => l.id));
@@ -61,12 +61,20 @@ function leadsMeta() {
   });
 }
 
+/** Mission 14 (partie 3) : les deux listes de Leads (« À appeler » et « À rappeler »), 500 lignes chacune au plus. */
+async function lignesDesDeuxListes() {
+  const [aAppeler, aRappeler] = await Promise.all([listerLeads({ vue: "A_APPELER", limite: 500 }), listerLeads({ vue: "A_RAPPELER", limite: 500 })]);
+  return { lignes: [...aAppeler.lignes, ...aRappeler.lignes], aAppeler: aAppeler.lignes, compteurs: aAppeler.compteurs };
+}
+
 /** Section Leads : aucun doublon avec Dossiers, et chaque ligne a sa pastille. */
 function sectionLeads() {
   return maillon("leads", "Leads : sans dossier, sans doublon, pastille lisible", async (): Promise<Resultat> => {
-    const { lignes, compteurs } = await listerLeads({ limite: 500 });
-    // Seul un lead du simulateur pas encore appelé a le droit d'être ici avec son dossier (même contact, même dossier, deux vues).
-    const permis = new Set(lignes.filter((l) => l.simulation && l.dossierId && l.attendDepuis).map((l) => l.id));
+    const { lignes, aAppeler, compteurs } = await lignesDesDeuxListes();
+    // Seul un lead du simulateur pas encore appelé a le droit d'être ici avec son dossier (même contact, même dossier, deux vues) :
+    // la requête des listes l'impose (aucun appel, aucune note d'appel, aucun rappel daté) — donc dans « À appeler » seulement ;
+    // un tel lead dans « À rappeler » est une alerte (son rappel vit sur le dossier).
+    const permis = new Set(aAppeler.filter((l) => l.simulation && l.dossierId).map((l) => l.id));
     const avecDossier = await prisma.lead.count({ where: { id: { in: lignes.filter((l) => !permis.has(l.id)).map((l) => l.id) }, dossiers: { some: { archiveLe: null } } } });
     const sansPastille = lignes.filter((l) => !l.priorite).length;
     const sansNumero = lignes.filter((l) => !l.telephoneLien).length;
@@ -75,9 +83,9 @@ function sectionLeads() {
     return {
       etat: ok ? (lignes.length === 0 ? "RIEN_A_VERIFIER" : "OK") : "ALERTE",
       constat: ok
-        ? `${pluriel(compteurs.actifs, "lead")} en cours, dont ${compteurs.aAppeler} à appeler (${permis.size} du simulateur, dossier déjà ouvert, pas encore appelés) ; aucun autre n'a de dossier.${sansPastille ? ` ${pluriel(sansPastille, "lead")} pas encore classé${sansPastille > 1 ? "s" : ""}.` : ""}`
-        : `${pluriel(avecDossier, "lead")} affiché${avecDossier > 1 ? "s" : ""} alors qu'un dossier existe ; ${pluriel(plusieursDossiers, "contact")} avec plusieurs dossiers vivants.`,
-      chiffres: { enCours: compteurs.actifs, aAppeler: compteurs.aAppeler, simulationsAAppeler: permis.size, sansSuite: compteurs.sansSuite, sansPastille, sansNumeroLisible: sansNumero, doublonsAvecDossiers: avecDossier, contactsAPlusieursDossiers: plusieursDossiers },
+        ? `${pluriel(compteurs.actifs, "lead")} en cours : ${compteurs.aAppeler} à appeler (dont ${permis.size} du simulateur, dossier déjà ouvert, pas encore appelés), ${compteurs.aRappeler} à rappeler (dont ${compteurs.enRetard} en retard) ; aucun autre n'a de dossier.${sansPastille ? ` ${pluriel(sansPastille, "lead")} pas encore ${accord(sansPastille, "classé")}.` : ""}`
+        : `${pluriel(avecDossier, "lead")} ${accord(avecDossier, "affiché")} alors qu'un dossier existe ; ${pluriel(plusieursDossiers, "contact")} avec plusieurs dossiers vivants.`,
+      chiffres: { enCours: compteurs.actifs, aAppeler: compteurs.aAppeler, aRappeler: compteurs.aRappeler, rappelsEnRetard: compteurs.enRetard, simulationsAAppeler: permis.size, sansSuite: compteurs.sansSuite, sansPastille, sansNumeroLisible: sansNumero, doublonsAvecDossiers: avecDossier, contactsAPlusieursDossiers: plusieursDossiers },
     };
   });
 }

@@ -14,7 +14,7 @@ export const outilCreerContact = definirOutil({
   nom: "creer_contact",
   titre: "Créer un contact (lead ou client) de zéro",
   description:
-    "Crée un contact dicté par Lucas (appel, salon, bouche-à-oreille) : nom, téléphone, e-mail, ville, source, projet ; il rejoint la fiche client qui a ces coordonnées ou en crée une, et entre dans la file des leads. AVANT d'écrire, l'outil cherche un doublon (même numéro, même e-mail, même nom dans la même ville) : s'il en trouve, rien n'est créé et la fiche existante est rendue — utilise-la (« lire_fiche », « ajouter_note », « ouvrir_dossier »), ou relance avec forcer: true si Lucas confirme que c'est bien une autre personne. ouvrir_dossier: true ouvre aussi le dossier du projet.",
+    "Crée un contact dicté par Lucas (appel, salon, bouche-à-oreille) : nom, téléphone, e-mail, ville, source, projet ; il rejoint la fiche client qui a ces coordonnées ou en crée une, et entre dans la liste « À appeler » de Leads. AVANT d'écrire, l'outil cherche un doublon (même numéro, même e-mail, même nom dans la même ville) : s'il en trouve, rien n'est créé et la fiche existante est rendue — utilise-la (« lire_fiche », « ajouter_note », « ouvrir_dossier »), ou relance avec forcer: true si Lucas confirme que c'est bien une autre personne. ouvrir_dossier: true ouvre aussi le dossier du projet.",
   niveau: "REVERSIBLE",
   schema: schemaCreationContact,
   executer: async (e) => {
@@ -29,7 +29,7 @@ export const outilCreerContact = definirOutil({
     }
     const c = r.cree;
     return {
-      texte: `Contact créé : ${c.nom || "sans nom"}${e.ville ? ` (${e.ville})` : ""}, source ${e.source ?? "AUTRE"}, projet ${e.type_projet ?? "CUISINE"}${c.dossierId ? ", dossier ouvert" : ""}. Il est dans la file des leads à appeler.${r.doublons.length ? ` Créé malgré ${pluriel(r.doublons.length, "doublon probable", "doublons probables")}, sur ta demande.` : ""}`,
+      texte: `Contact créé : ${c.nom || "sans nom"}${e.ville ? ` (${e.ville})` : ""}, source ${e.source ?? "AUTRE"}, projet ${e.type_projet ?? "CUISINE"}${c.dossierId ? ", dossier ouvert : il vit dans Dossiers." : ". Il est dans « À appeler » (Leads)."}${r.doublons.length ? ` Créé malgré ${pluriel(r.doublons.length, "doublon probable", "doublons probables")}, sur ta demande.` : ""}`,
       donnees: { cree: true, leadId: c.leadId, clientId: c.clientId, dossierId: c.dossierId, doublonsIgnores: r.doublons },
       liens: [lien("Fiche du lead", `/leads?lead=${c.leadId}`), ...(c.dossierId ? [lien("Dossier", `/dossiers?dossier=${c.dossierId}`)] : [])],
     };

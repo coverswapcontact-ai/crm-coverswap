@@ -83,6 +83,14 @@ export function jourHeure(valeur: Instant): string | null {
   return formater(valeur, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** « jeu. 1 oct. 18:00 » : un rendez-vous (rappel), le jour de la semaine d'abord. */
+export function jourSemaineHeure(valeur: string | Date): string;
+export function jourSemaineHeure(valeur: Instant): string | null;
+export function jourSemaineHeure(valeur: Instant): string | null {
+  const date = instant(valeur);
+  return date ? `${formater(date, { weekday: "short", day: "numeric", month: "short" })} ${formater(date, { hour: "2-digit", minute: "2-digit" })}` : null;
+}
+
 /** « 12/09 14:05 » */
 export function jourHeureCourt(valeur: string | Date): string;
 export function jourHeureCourt(valeur: Instant): string | null;

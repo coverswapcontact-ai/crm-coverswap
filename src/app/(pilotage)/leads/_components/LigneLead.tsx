@@ -4,9 +4,11 @@ import { ChevronRight, Phone, PhoneOff, Sparkles, X } from "lucide-react";
 import { LIBELLES_PRIORITE, type Priorite } from "@/lib/prospects/priorite";
 import { LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead } from "@/lib/prospects/leads";
+import { pluriel } from "@/lib/commun/format";
 import { noterDebutAppel } from "@/components/pilotage/NotesAppel";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
+import { PuceRappel } from "./DateRappel";
 
 /** Mission 13 (lot 7) — une ligne de la liste des leads et ses petites aides (attente, réponses, provenance, motif d'archivage) ; extrait d'EcranLeads. */
 
@@ -96,11 +98,16 @@ export function ChoixMotif({ onChoisir, onAnnuler, occupe }: { onChoisir: (motif
  * Mission 13 (lot 3) — une ligne par lead : pastille de priorité, nom · ville ·
  * source, le délai, UN bouton « Appeler » (44 px), chevron. Noter, écrire,
  * ouvrir le dossier, archiver, fusionner un doublon : dans le panneau, au toucher.
+ * Mission 14 (partie 3) — dans « À rappeler » (`onRappel` fourni), le délai
+ * laisse la place à la puce de la date de rappel, modifiable en un geste, et au
+ * nombre de tentatives sans réponse.
  */
-export function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir }: { lead: LigneLead; maintenant: number; selection: boolean; selectionne: boolean; onSelection: () => void; onOuvrir: () => void }) {
+export function Ligne({ lead, maintenant, selection, selectionne, onSelection, onOuvrir, onRappel, rappelEnCours = false }: { lead: LigneLead; maintenant: number; selection: boolean; selectionne: boolean; onSelection: () => void; onOuvrir: () => void; onRappel?: (iso: string | null) => void; rappelEnCours?: boolean }) {
   const archive = Boolean(lead.archiveLe);
   const priorite = lead.priorite && lead.priorite in LIBELLES_PRIORITE ? (lead.priorite as Priorite) : null;
-  const couleur = priorite === "PRIORITAIRE" ? "bg-[#EF4444]" : priorite === "STANDARD" ? "bg-[#1D9E75]" : priorite === "A_ECARTER" ? "bg-[#EF9F27]" : priorite === "SECONDAIRE" ? "bg-[#6B7280]" : "bg-[#2A2D34]";
+  // Mission 14 : « à écarter » en gris (un anneau, pour ne pas le confondre avec « secondaire », gris plein) ; il reste dans « À appeler ».
+  const couleur = priorite === "PRIORITAIRE" ? "bg-[#EF4444]" : priorite === "STANDARD" ? "bg-[#1D9E75]" : priorite === "A_ECARTER" ? "border-[1.5px] border-[#8B919C]" : priorite === "SECONDAIRE" ? "bg-[#6B7280]" : "bg-[#2A2D34]";
+  const rappel = Boolean(onRappel) && !archive;
   return (
     <li className={cn("flex items-center border-t-[0.5px] border-[#2A2D34] first:border-t-0", selectionne && "bg-[#1D9E75]/[0.06]")}>
       {selection ? (
@@ -108,24 +115,34 @@ export function Ligne({ lead, maintenant, selection, selectionne, onSelection, o
           <input type="checkbox" checked={selectionne} onChange={onSelection} aria-label={`Sélectionner ${lead.nom}`} className="h-[18px] w-[18px] accent-[#1D9E75]" />
         </label>
       ) : null}
-      <button type="button" onClick={onOuvrir} className={cn("flex min-h-[60px] min-w-0 flex-1 items-center gap-3 py-2 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", selection ? "pl-1" : "pl-3.5", TRANS)}>
-        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", couleur)} title={priorite ? `${LIBELLES_PRIORITE[priorite]}${lead.prioriteMotif ? ` — ${lead.prioriteMotif}` : ""}` : undefined} />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate text-[14.5px] font-medium text-[#F2F3F5]">{lead.nom}</span>
-            {lead.simulation ? <Sparkles size={13} aria-label="Simulation faite sur le site" className="shrink-0 text-[#93C5FD]" /> : null}
-            {lead.smsNonLus > 0 ? <span className="shrink-0 rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
-            {lead.doublon && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-[#EF9F27]/40 px-1.5 text-[10.5px] leading-[17px] text-[#F5B454]">Doublon ?</span> : null}
-            {lead.traiteLe && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-[#2A2D34] px-1.5 text-[10.5px] leading-[17px] text-[#9CA3AF]">Traité</span> : null}
+      <div className={cn("min-w-0 flex-1", selection ? "pl-1" : "pl-3.5")}>
+        <button type="button" onClick={onOuvrir} className={cn("flex w-full min-w-0 items-center gap-3 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", rappel ? "min-h-[48px] pt-2" : "min-h-[60px] py-2", TRANS)}>
+          <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", couleur)} title={priorite ? `${LIBELLES_PRIORITE[priorite]}${lead.prioriteMotif ? ` — ${lead.prioriteMotif}` : ""}` : undefined} />
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[14.5px] font-medium text-[#F2F3F5]">{lead.nom}</span>
+              {lead.simulation ? <Sparkles size={13} aria-label="Simulation faite sur le site" className="shrink-0 text-[#93C5FD]" /> : null}
+              {lead.smsNonLus > 0 ? <span className="shrink-0 rounded-full bg-[#1D9E75] px-1.5 text-[10.5px] leading-[17px] font-semibold text-[#06140F]">{lead.smsNonLus} SMS</span> : null}
+              {lead.doublon && !archive ? <span className="shrink-0 rounded-full border-[0.5px] border-[#EF9F27]/40 px-1.5 text-[10.5px] leading-[17px] text-[#F5B454]">Doublon ?</span> : null}
+            </span>
+            <span className="block truncate text-[12.5px] text-[#8B919C]">{[lead.ville, `${lead.libelleSource}${lead.campagne ? ` · ${lead.campagne}` : ""}`].filter(Boolean).join(" · ")}</span>
+            {rappel ? null : (
+              <span className="block truncate text-[12.5px] text-[#8B919C]">
+                {archive ? `Archivé le ${new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}` : lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <Attente lead={lead} maintenant={maintenant} /> : `Arrivé ${heureArrivee(lead.recuLe)}`}
+              </span>
+            )}
           </span>
-          <span className="block truncate text-[12.5px] text-[#8B919C]">{[lead.ville, `${lead.libelleSource}${lead.campagne ? ` · ${lead.campagne}` : ""}`].filter(Boolean).join(" · ")}</span>
-          <span className="block truncate text-[12.5px] text-[#8B919C]">
-            {archive ? `Archivé le ${new Date(lead.archiveLe!).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}` : lead.attendDepuis || lead.rappelLe || lead.dernierAppel ? <Attente lead={lead} maintenant={maintenant} /> : `Arrivé ${heureArrivee(lead.recuLe)}`}
-          </span>
-        </span>
-      </button>
+        </button>
+        {rappel && onRappel ? (
+          // Hors du bouton de la ligne (un champ ne se niche pas dans un bouton) ; deux lignes au plus à 390 px.
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 pb-1 pl-[22px]">
+            <PuceRappel rappelLe={lead.rappelLe} enRetard={lead.enRetard} occupe={rappelEnCours} onChoisir={onRappel} />
+            {lead.tentatives > 0 ? <span className="text-[12.5px] whitespace-nowrap text-[#8B919C]">{pluriel(lead.tentatives, "tentative")}</span> : null}
+          </div>
+        ) : null}
+      </div>
       {archive ? null : lead.telephoneLien ? (
-        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
+        <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={cn("mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full", lead.aAppeler || lead.enRetard ? "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]" : "bg-[#22262D] text-[#E5E7EB] hover:bg-[#2A2F37]", TRANS)}>
           <Phone size={18} aria-hidden />
         </a>
       ) : (

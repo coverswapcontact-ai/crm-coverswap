@@ -25,6 +25,12 @@ export type EntrantResume = {
   prioriteManuelle: boolean;
   /** Prochain rappel prévu, posé à la fin d'un appel. */
   rappelLe: string | null;
+  /** Ce rappel est passé (mission 14 : en rouge). */
+  rappelEnRetard: boolean;
+  /** Dernier appel noté, quelle qu'en soit l'issue ; null = jamais appelé (« À appeler »). */
+  dernierAppelLe: string | null;
+  /** Appels sans réponse d'affilée depuis le dernier appel abouti. */
+  tentatives: number;
 };
 
 export type SimulationVue = {

@@ -6,8 +6,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST { action, ids, motif? } : actions rapides de la liste Leads, sur un ou
- * plusieurs leads — ARCHIVER (motif), RESTAURER, TRAITER, REPRENDRE. Rend les
- * leads réellement changés : c'est ce que le bouton « Annuler » défait.
+ * plusieurs leads — ARCHIVER (motif), RESTAURER (TRAITER et REPRENDRE n'existent
+ * plus depuis la mission 14 : refusés par le schéma). Rend les leads réellement
+ * changés : c'est ce que le bouton « Annuler » défait.
  */
 export async function POST(requete: NextRequest) {
   try {

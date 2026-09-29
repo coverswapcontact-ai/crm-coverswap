@@ -154,7 +154,9 @@ describe("ouvrir un dossier depuis un lead, en un bouton", () => {
     const rappel = new Date(Date.now() + 2 * 86_400_000);
     const contact = await lead({ source: "META_ADS", campagne: "Cuisine septembre", publicite: "Avant-après", delaiProjetTexte: "Dans le mois", tailleCuisine: "MOYENNE", rappelLe: rappel, priorite: "PRIORITAIRE", prioriteMotif: "propriétaire, projet sous un mois, Hérault" });
     await prisma.photoLead.create({ data: { leadId: contact.id, chemin: image(`${contact.id}/photos/a.jpg`, 5) } });
-    assert.ok((await entrants.listerLeads()).lignes.some((ligne) => ligne.id === contact.id), "avant : dans Leads");
+    // Mission 14 : un rappel daté le place dans « À rappeler ».
+    const dansLeads = async () => (await Promise.all([entrants.listerLeads({ vue: "A_APPELER" }), entrants.listerLeads({ vue: "A_RAPPELER" })])).some((liste) => liste.lignes.some((ligne) => ligne.id === contact.id));
+    assert.ok((await entrants.listerLeads({ vue: "A_RAPPELER" })).lignes.some((ligne) => ligne.id === contact.id), "avant : dans Leads, « À rappeler »");
 
     const ouverture = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
     assert.deepEqual([ouverture.cree, ouverture.photosRangees], [true, 1]);
@@ -164,7 +166,7 @@ describe("ouvrir un dossier depuis un lead, en un bouton", () => {
     const note = await prisma.dossierEvenement.findFirst({ where: { dossierId: dossier.id, type: "NOTE_AJOUTEE" } });
     assert.match(note?.contenu ?? "", /Meta[\s\S]*Cuisine septembre[\s\S]*Avant-après[\s\S]*cuisine moyenne[\s\S]*Dans le mois[\s\S]*Hérault/);
 
-    assert.ok(!(await entrants.listerLeads()).lignes.some((ligne) => ligne.id === contact.id), "après : sorti de Leads");
+    assert.ok(!(await dansLeads()), "après : sorti de Leads");
     // Un second clic rend le même dossier.
     assert.deepEqual([(await depuisLead.ouvrirDossierDuLead(contact.id)).dossierId, await prisma.dossier.count({ where: { leadId: contact.id } })], [dossier.id, 1]);
   });

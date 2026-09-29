@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import sharp from "sharp";
+import type Sharp from "sharp";
 
 /**
  * Mission 13 (26/09/2026), lot 6 — les photos ne sont plus servies telles
@@ -11,7 +11,9 @@ import sharp from "sharp";
  *   <chemin sans extension>.vignette.<extension>   la vignette, 320 px, pour les listes.
  * Le chemin en base ne change pas : tout lecteur d'avant lit la version servie.
  * HEIC : pas de décodeur dans les binaires précompilés de sharp — la photo est
- * servie telle quelle (Safari la décode), sans vignette.
+ * servie telle quelle (Safari la décode), sans vignette. sharp se charge à la
+ * demande : s'il manque sur la machine, les photos restent servies telles
+ * quelles et rien d'autre ne casse.
  */
 
 export const COTE_MAX_SERVIE = 1600;
@@ -40,14 +42,31 @@ export function estVignette(relatif: string): boolean {
 
 const existe = (absolu: string) => fs.access(absolu).then(() => true, () => false);
 
+type ModuleSharp = typeof Sharp;
+let moduleSharp: ModuleSharp | null | undefined;
+
+/** sharp, chargé une fois à la demande ; null si le module natif manque (photo servie telle quelle). */
+async function chargerSharp(): Promise<ModuleSharp | null> {
+  if (moduleSharp !== undefined) return moduleSharp;
+  try {
+    moduleSharp = (await import("sharp")).default;
+  } catch (erreur) {
+    console.error("[photos] sharp indisponible : les photos sont servies telles quelles.", erreur);
+    moduleSharp = null;
+  }
+  return moduleSharp;
+}
+
 export type VersionsImage = { servie: Buffer; vignette: Buffer; largeur: number; hauteur: number };
 
 /** Les deux versions servies d'une image, orientation EXIF appliquée ; null si le format ne se décode pas ici. */
 export async function versionsDe(contenu: Buffer, typeMime: string): Promise<VersionsImage | null> {
   if (!estRedimensionnable(typeMime)) return null;
+  const sharp = await chargerSharp();
+  if (!sharp) return null;
   try {
     const base = sharp(contenu, { failOn: "none" }).rotate();
-    const encoder = (image: sharp.Sharp) =>
+    const encoder = (image: Sharp.Sharp) =>
       typeMime === "image/png" ? image.png({ compressionLevel: 9 }) : typeMime === "image/webp" ? image.webp({ quality: QUALITE }) : image.jpeg({ quality: QUALITE, mozjpeg: true });
     const servie = await encoder(base.clone().resize({ width: COTE_MAX_SERVIE, height: COTE_MAX_SERVIE, fit: "inside", withoutEnlargement: true })).toBuffer({ resolveWithObject: true });
     const vignette = await encoder(base.clone().resize({ width: COTE_VIGNETTE, height: COTE_VIGNETTE, fit: "inside", withoutEnlargement: true })).toBuffer();
@@ -87,6 +106,7 @@ export async function estDejaTraitee(racine: string, relatif: string): Promise<b
  * (un renommage, même volume) et les versions servies prennent sa place.
  * Idempotent : l'original présent, c'est déjà fait. Une image illisible est
  * marquée (originaux/<chemin>.illisible) pour ne pas être reprise à chaque lot.
+ * Sans sharp : rien n'est marqué, la reprise attendra qu'il soit là.
  */
 export async function redimensionnerSurPlace(racine: string, relatif: string, typeMime: string): Promise<IssueRedimensionnement> {
   if (await estDejaTraitee(racine, relatif)) return "deja";
@@ -95,6 +115,7 @@ export async function redimensionnerSurPlace(racine: string, relatif: string, ty
   const original = path.resolve(racine, cheminOriginal(relatif));
   const contenu = await fs.readFile(absolu).catch(() => null);
   if (!contenu) return "absente";
+  if (!(await chargerSharp())) return "non-redimensionnable";
   const versions = await versionsDe(contenu, typeMime);
   await fs.mkdir(path.dirname(original), { recursive: true });
   if (!versions) {

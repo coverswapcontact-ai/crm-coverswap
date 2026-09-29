@@ -258,6 +258,11 @@ export async function ouvrirEspace(dossierId: string): Promise<EspaceOuvert> {
   if (existant?.revoqueLe && existant.permanentId) existant = await prisma.espaceClient.update({ where: { id: existant.id }, data: { revoqueLe: null } });
   if (existant?.revoqueLe) throw new ErreurMetier("L'espace de ce projet est désactivé : régénérer le lien du client pour le rouvrir.", 409);
   let nouveau = false;
+  // Mission 14 (partie 9) : le module est chargé AVANT la transaction (import dynamique : `projets.ts` importe `codeLibre`
+  // et `JAMAIS` d'ici). Chargé dedans, après trois écritures, il tenait le verrou d'écriture SQLite le temps de charger
+  // tout son graphe (alertes, canaux…) — au-delà des 5 s de Prisma quand le processeur est occupé (suite de tests,
+  // serveur d'essai), et pendant ce temps aucune autre écriture (webhook, espace, tâche) ne passait.
+  const { projetsEnCours } = await import("./projets");
   const { espace, permanent } = await prisma.$transaction(async (tx) => {
     const clientId = dossier.clientId ?? (await rattacherDossier(tx, dossier));
     if (existant?.permanentId) {
@@ -274,7 +279,6 @@ export async function ouvrirEspace(dossierId: string): Promise<EspaceOuvert> {
     const espace = await tx.espaceClient.create({ data: { code, dossierId, expireLe: JAMAIS, permanentId: permanent.id } });
     await tx.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_CREE", direction: "INTERNE", contenu: "Projet ouvert dans l'espace client (le lien du client, sans expiration)", metadata: JSON.stringify({ espaceId: espace.id, permanentId: permanent.id }) } });
     // Au-delà de deux projets en cours, c'est Lucas qui ouvre : son accord est noté (le contrôle de cohérence n'y voit pas d'excès).
-    const { projetsEnCours } = await import("./projets");
     const enCours = await projetsEnCours(tx, permanent.id);
     const limite = 2 + permanent.projetsAccordes;
     if (enCours > limite) await tx.espacePermanent.update({ where: { id: permanent.id }, data: { projetsAccordes: enCours - 2 } });

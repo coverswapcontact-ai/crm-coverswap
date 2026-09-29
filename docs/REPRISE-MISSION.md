@@ -2313,3 +2313,161 @@ pas refaits. **80 outils** (78 + 2) : l'empreinte du catalogue change, Lucas rec
   d'`espaces_clients` est en E.164 (celui de `proposerSms`), pas au format « 06 12 … ». Docs
   (`ARCHITECTURE-PILOTAGE.md`, liste des outils) : partie 9.
 - Vérifié : tsc, eslint, suite complète 674/674, build.
+
+## Partie 9 — Restes de la mission 13 et API Google Calendar (29/09)
+Énoncé : « Le test de fusion des doublons qui passe par ouvrirEspace dépasse le délai de transaction Prisma quand le
+serveur d'essai tourne en même temps : rends-le fiable. docs/ARCHITECTURE-PILOTAGE.md cite encore les écrans retirés :
+mets-le à jour. » Ajout de l'orchestrateur : en prod, les tâches `AGENDA_RAPPEL` de la partie 7 sont toutes en
+ECHEC_DEFINITIF « Accès refusé par Google (accessNotConfigured) » — la portée agenda est accordée, mais l'API Google
+Calendar n'est pas activée dans le projet Google Cloud.
+- **Test fiable — correction de fond** (`espace/liens.ts › ouvrirEspace`) : l'import dynamique `await import("./projets")`
+  était DANS la transaction interactive, après trois écritures (verrou d'écriture SQLite tenu le temps de charger
+  `projets` → `alertes` → `alertes/canaux` → resend, réseau, registre…, transpilés par tsx) ; les 5 s par défaut de Prisma
+  étaient dépassées dès que le processeur était pris (suite complète ou serveur d'essai en parallèle). L'import est
+  remonté juste avant `prisma.$transaction` (toujours dynamique : `projets.ts` importe `codeLibre` et `JAMAIS` de
+  `liens.ts`, cycle sinon). Pas de délai rallongé : en SQLite une transaction qui a écrit bloque tous les autres
+  écrivains, l'allonger prolongeait le blocage. Balayage de tout `src/lib` (deux scripts : appels directs d'`import(`,
+  `fetch(`, fichiers, rendu, `prisma.` global dans un corps de `$transaction(` ; puis liste des fonctions appelées dans
+  chaque transaction interactive) : `liens.ts:277` était le seul import dans une transaction ; `documents.ts` (rendu PDF,
+  délai déclaré) et `reprise.ts` (délai déclaré) sont voulus ; `prestations/tarifs.ts` utilise la forme tableau
+  (`$transaction([...])`, pas interactive) ; toutes les fonctions appelées dans les autres transactions prennent `tx`
+  (`fusionnerClients`, `rattacherDossier`, `ouvrirDossier`, `ecrireNote`, `mettreEnFile`…). Mesures (processus entier,
+  tsx compris) : seul, 10 passages de suite, 5 108 à 5 368 ms, 3/3 verts à chaque fois ; pendant `npm test` dans un
+  second processus (677 tests, 122 s) : 9 349, 10 882 et 10 418 ms, 3/3 verts, aucun « timeout » ; la suite complète
+  lancée en parallèle est passée 677/677.
+- **API Google Calendar non activée** (`google/connexion.ts`) : `appelGoogle` lit le corps d'un 403 ; s'il contient
+  `accessNotConfigured` ou `SERVICE_DISABLED`, il lève `ApiGoogleNonActivee` (une `GoogleIndisponible`, donc une
+  `AttenteExterne` avec le préfixe « Google : » que la reconnexion réveille) avec reprise dans 6 h
+  (`ATTENTE_API_NON_ACTIVEE_MS`), sans alerte « Google coupé » ; message « API Google Calendar non activée dans le projet
+  Google Cloud (accessNotConfigured) : à activer dans la console Google Cloud → API et services → Google Calendar API,
+  puis tout repart seul. Réponse de Google : … » (le nom de l'API suit l'adresse : `nomApiGoogle` — Calendar, Gmail,
+  Drive ; la réponse de Google, 400 caractères au plus, porte le lien d'activation avec le numéro du projet). Les autres
+  403 restent définitifs (`insufficientPermissions`…), les quotas restent des erreurs ordinaires.
+  `etatConnexionGoogle()` expose `agendaApiActivee` et `agendaApiMessage` : lus sur la tâche EN_ATTENTE la plus récente
+  dont l'erreur porte `accessNotConfigured` et « API Google Calendar non activée » (aucun état à tenir : dès que les
+  tâches repassent, c'est vrai à nouveau ; `agendaApiMessage` = ce que Google a répondu, null pour une tâche remise par
+  la migration). `planifierAction › agendaManquant` le dit (« Pas inscrit dans Google Calendar : l'API Google Calendar
+  n'est pas activée dans le projet Google Cloud (Paramètres → Connexions) ; le rappel est dans le CRM et s'inscrira …
+  dès que ce sera fait. »). Carte Google de Paramètres → Connexions : « L'API Google Calendar n'est pas activée dans le
+  projet Google Cloud : à activer (console Google Cloud → API et services → Google Calendar API), puis les rappels
+  s'inscriront seuls. » + la réponse de Google en gris. `sante_systeme` (`santeSysteme.agendaApi`) : ligne « Google
+  Calendar : l'API n'est pas activée dans le projet Google Cloud (console … → Google Calendar API) ; les rappels
+  attendent et s'inscriront seuls une fois l'API activée. Réponse de Google : … » à la place de « Google : rien à
+  signaler. » ; les tâches remises en attente ne sont plus listées « en échec ». Description de l'outil à jour
+  (l'empreinte ne change pas).
+- **Migration `agenda-rappels-en-attente-14-9`** (`base/migrations/mission-14-partie-9.ts › remettreEnAttenteAgenda`,
+  fin de `MIGRATIONS_DONNEES`) : `AGENDA_RAPPEL` en ECHEC_DEFINITIF dont `derniereErreur` contient `accessNotConfigured`
+  → EN_ATTENTE, `prochainEssaiLe` = maintenant + 6 h, `tentatives` inchangé, `termineLe` et `verrouJusqua` à null,
+  `derniereErreur` = le message d'attente (« [en attente] Google : API Google Calendar non activée … ») pour que
+  Paramètres et la santé le lisent dès le déploiement et que « Reconnecter » les réveille. Compteur `remisesEnAttente`
+  + une ligne `[migration …]`. Rejouable (une tâche remise n'est plus en échec).
+- **`docs/ARCHITECTURE-PILOTAGE.md`** : chaque mention du rapport de cartographie corrigée d'après le code (journal,
+  écrans du pilotage, `/numeros` et le registre, `/api/cron/relance`, agent mail v1 → Mail v2 et boîte « À traiter »,
+  WhatsApp, Prospects → Leads, démarchage et export retirés, redirections de `next.config.ts`, SMS : fournisseur,
+  modèle, catalogue sans ancien circuit, flux et messagerie retirés, `sms/flux.ts` sans lecteur, espace client sans
+  expiration, relances-sms retiré, pilotage commercial sans écran, une seule application et `sw.js` v10, adresses en
+  404, navigation à sept entrées, Leads en deux listes et appels à la suite, simulation du site = lead, lead du
+  simulateur, « Traité » retiré, publication d'une simulation, Espaces clients, LIEN_ESPACE_SIMULATION, notes d'appel,
+  volet contexte) ; § 3 (attente d'une ressource extérieure), § 5 (plus d'ENVOI_SMS), § 13 (relances : deux tous
+  canaux), § 14, § 15 (portée calendar.events, API à activer, 403 accessNotConfigured) complétés ; nouvelle **§ 25**
+  « Appels, rappels, relances, SMS : un seul circuit (mission 14) » : qui a la main, deux listes, fin d'appel, écran SMS
+  et catalogue, copier vaut envoi, relances devis et photos, agenda et notifications (dont l'API non activée), outils
+  MCP, limites. Aucun nom de client, aucun secret.
+- Tests : `base/mission-14-partie-9.test.ts` (3) : faux Google qui répond le 403 de production → tâche EN_ATTENTE
+  (message, 6 h, tentatives 0, un seul essai, aucune alerte), `etatConnexionGoogle` (`agenda` vrai, `agendaApiActivee`
+  faux, réponse de Google), `santeSysteme` + texte de `sante_systeme` (aucune tâche en échec, ligne Google Calendar, plus
+  « rien à signaler »), texte de `planifier`, puis API activée + `terminerConnexion` (réveil) → événements posés, état
+  redevenu vrai, « Google : rien à signaler » ; `appelGoogle` avec `SERVICE_DISABLED` seul (Gmail, 6 h, message exact),
+  403 `insufficientPermissions` → `ErreurDefinitive`, `nomApiGoogle` ; migration (une tâche remise avec ses champs et son
+  message, autre raison / autre type / terminée intactes, état exposé sans message, rejouable par la fonction et par
+  `executer`, dernière et après `agenda-des-rappels-14-7`). Verts sans changement : `mission-14-partie-7/8`,
+  `espace/espace`, `espace/permanent`, `drive/drive`, `assistant/assistant`, `mcp/mcp`, `mcp-v2`, `mcp-v3`, `mcp-mail`,
+  `migrations/mission-13`, `prospects/doublons`.
+- Décisions là où la conception laissait le choix : l'état « API non activée » est **déduit des tâches en attente**
+  (pas de colonne ni de clé interne à tenir et à effacer : dès que les tâches passent, il disparaît ; son revers : après
+  l'activation, la carte le dit encore jusqu'au passage suivant, 6 h au plus, ou tout de suite par « Reconnecter ») ;
+  `agendaApiMessage` = la réponse de Google seule (la phrase de la carte est dans l'écran ; `Connexions.tsx` est un
+  composant client qui ne peut rien importer de `connexion.ts` sans tirer prisma) ; la détection vaut pour toute API
+  Google (Gmail, Drive : même attente de 6 h) et, depuis la relecture, l'état exposé aussi (`autresApisNonActivees`
+  sur `etatConnexionGoogle`, une phrase par API dans la carte et dans `sante_systeme` ; `agendaApiActivee` reste propre
+  à l'agenda pour `planifier`) ; la migration réécrit
+  `derniereErreur` avec le message d'attente (préfixe « [en attente] Google ») plutôt que de garder l'ancien, sinon ni
+  Paramètres ni le réveil par reconnexion ne la verraient ; `planifier` dit aussi l'API manquante (petit ajout,
+  cohérent avec le droit manquant).
+- Reste / à savoir : Lucas doit activer l'API Google Calendar dans le projet Google Cloud (console → API et services →
+  Google Calendar API) ; les 14 tâches repartiront seules dans les 6 h, ou tout de suite par « Reconnecter » (pas par
+  « Relancer » dans Tâches de fond : ce bouton ne vaut que pour une tâche en échec ou annulée, `relancerTache` refuse
+  une tâche en attente). Rien essayé dans un navigateur (carte Paramètres). `src/lib/sms/flux.ts` émet toujours
+  sans lecteur (noté dans la doc, pas retiré : hors périmètre). Le commentaire de tête de `public/sw.js` cite encore
+  « le flux temps réel » (sans effet). Aucun changement de schéma, aucun nouvel outil MCP (empreinte inchangée).
+- Vérifié : `npx tsc --noEmit -p .` (0 erreur), `npx eslint` sur les huit fichiers touchés (0), suite complète 677/677
+  (lancée en parallèle du test des doublons).
+- **Relecture (29/09, trois relecteurs, sept constats)** — tous réels, tous corrigés :
+  - `src/proxy.ts` modifié dans l'arbre = la garde de connexion locale (jamais commitée), pas la partie 9 → **à ne pas
+    indexer**. Fichiers du commit de la partie 9, nommément : `docs/ARCHITECTURE-PILOTAGE.md`,
+    `src/app/(pilotage)/parametres/_components/Connexions.tsx`, `src/lib/agenda/planification.ts`,
+    `src/lib/assistant/outils/lecture.ts`, `src/lib/base/migrations/index.ts`, `src/lib/espace/liens.ts`,
+    `src/lib/google/connexion.ts`, `src/lib/base/migrations/mission-14-partie-9.ts`,
+    `src/lib/base/mission-14-partie-9.test.ts`.
+  - Carte Google : `break-words` sur « Réponse de Google : … » (le lien d'activation, ~100 caractères insécables,
+    débordait de la carte à 390 px).
+  - Gmail/Drive non activée : attendait aussi 6 h mais sans rien dans Paramètres ni `sante_systeme` (avant la partie,
+    c'était un échec listé) → `apisNonActivees()` lit toutes les tâches en attente « [en attente] Google : API … »,
+    `autresApisNonActivees` exposé, une phrase par API dans la carte et dans `sante_systeme` (« Google : rien à signaler »
+    n'apparaît plus s'il manque une API) ; test ajouté (4 tests dans le fichier).
+  - `connexion.ts` : `PREFIXE_GOOGLE` remis au-dessus du JSDoc de `GoogleIndisponible` (avec son propre commentaire),
+    JSDoc complété de l'exception `ApiGoogleNonActivee` (6 h sans alerte).
+  - Doc : § 4 « cinq écrans (Leads, Dossiers, Espaces, Mail, Clients) » (et non quatre) ; § 25 Limites : « Relancer »
+    ne vaut pas pour une tâche en attente ; § 15 et § 25 disent que l'attente et l'affichage valent pour toute API.
+  - Après relecture : tsc 0, eslint 0 (8 fichiers), `mission-14-partie-9` 4/4, tests des modules touchés 77/77
+    (partie-7, partie-8, espace, permanent, drive, echeance, doublons, migrations/mission-13) + 66/66 (assistant, mcp,
+    mcp-v2, mcp-v3, mcp-mail).
+- Vérifié : tsc, eslint, suite complète 678/678, build.
+
+## Rapport final — mission 14 (29/09/2026, soir)
+
+Neuf parties livrées, chacune commitée, testée (suite complète, serveur d'essai arrêté), construite, déployée sur
+Railway et vérifiée en production par `/api/health` et `sante_systeme`. Commits : partie 1 `7795246`, 2 `9b0f89b`,
+3 `32dd676`, 5 `4391e35`, 4 `713ee5d`, 6 `7d00ed6`, 7 `f279a4d`, 8 `ae4f8b4`, 9 : le commit qui porte ce rapport. La suite passe de
+554 à 677 tests. Incident Railway (« API degradation causing slow or stuck deployments », 15:29 → 18:37 UTC) : le CRM
+a répondu 502 pendant une heure après la partie 5 (rien à voir avec le code : démarrage rejoué en local sur une copie,
+sans erreur) et les parties 6 et 7 ont été déployées ensemble.
+
+**Fait, par partie**
+- 1 Qui a la main : devis visible = « Devis envoyé », main au client, délai de relance ; message entrant sans réponse
+  = à moi « Répondre à … » ; objet qui suit la famille validée ; une seule étape pour l'espace et le dossier ;
+  rattrapage : B. → Devis envoyé et objet « Recouvrement de salle de bains : meuble vasque », R. → à moi, quatre autres
+  objets alignés sur le projet validé (Ba., T., F., Be.).
+- 2 Leads perdus : 9 leads sortis par « Traiter » ou archivés depuis le 1er septembre remis dans « À rappeler » avec
+  un rappel le 30/09 à 18 h (initiales dans les journaux Railway ; noms dans le rapport de conversation), plus un
+  rappel posé sur le dossier S. ; un rappel déjà prévu plus tard est gardé.
+- 3 Leads en deux listes : À appeler / À rappeler (retards en tête), tentatives et date de rappel modifiable en un
+  geste, compteur = retards, « Traiter » retiré.
+- 5 Écran SMS et catalogue unique (Paramètres → SMS), « Copier vaut envoi ».
+- 4 Fin d'appel : quatre puces, rappel demain 18 h, SMS A / B / D / lien, motif de perte obligatoire, lead suivant.
+- 6 Relances : devis (mail si adresse + SMS toujours, 2 au plus tous canaux), photos (`DELAI_RELANCE_PHOTOS` 3 j),
+  ancien circuit `relances-sms` retiré, libellé de l'espace juste (cas L.).
+- 7 Agenda et notifications : un événement par rappel (créé / modifié / supprimé), notification 10 min avant,
+  « N rappels aujourd'hui, N en retard, N relances proposables » dans Leads et `point_du_jour`.
+- 8 MCP : `leads_a_rappeler`, `noter_sms`, `noter_appel` avec SMS proposé et motif de perte, `voir_relances` et
+  `espaces_clients` étendus, catalogue SMS dans `voir_parametres` / `modifier_parametres` (80 outils).
+- 9 Restes : test des doublons fiable, `ARCHITECTURE-PILOTAGE.md` à jour, API Google non activée traitée comme une
+  attente.
+
+**Échoué ou laissé, et pourquoi**
+- Rien n'a échoué. Écarts assumés : un rappel déjà daté plus loin est gardé (au lieu de « demain 18 h ») ; les
+  nombres du jour portent sur les rappels de leads ; les boutons d'action des notifications web ne s'affichent pas sur
+  iPhone (limite iOS) : le toucher ouvre la fiche ; rien n'a été essayé sur un vrai iPhone (écrans vérifiés à 390 ×
+  660 sur la copie d'essai).
+- Vu en production après la partie 7 : l'API Google Calendar n'est pas activée dans le projet Google Cloud
+  (`accessNotConfigured`) : aucun événement d'agenda ne peut être écrit tant que ce n'est pas fait (partie 9 : attente
+  au lieu d'échec, message dans Paramètres → Connexions).
+
+**Ce qui attend Lucas**
+- Activer l'API Google Calendar dans le projet Google Cloud (console → API et services → Google Calendar API), puis
+  « Reconnecter » dans Paramètres → Connexions : les rappels s'inscrivent seuls.
+- Reconnecter le connecteur Claude (80 outils, nouvelle empreinte).
+- Renouveler le jeton Meta (conversions bloquées depuis le 28/09) ; passer les dépôts en privé et purger l'historique ;
+  faire tourner le secret webhook.
+- Installer la version à jour de l'application sur l'iPhone (service worker v10) et vivre un vrai appel de bout en
+  bout : feuille de fin d'appel, écran SMS (presse-papiers Safari), lead suivant.

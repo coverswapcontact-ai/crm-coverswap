@@ -22,7 +22,8 @@ type Etat = EtatConnexions;
 /**
  * Connexion Google (Drive, Gmail, Agenda), miroir Drive et agent mail : état, connexion, actions à la demande.
  * Mission 14 (partie 7) : quand le droit « agenda » manque (ou que Google n'est pas connecté), la carte le dit UNE fois
- * — pas d'alerte, rien par rappel : les rappels s'inscrivent dès qu'il est accordé.
+ * — pas d'alerte, rien par rappel : les rappels s'inscrivent dès qu'il est accordé. Partie 9 : même chose quand l'API
+ * Google Calendar n'est pas activée dans le projet Google Cloud (les tâches attendent, 6 h entre deux essais).
  */
 export default function Connexions({ retour, initial }: { retour: { google: string | null; compte: string | null; message: string | null }; initial: EtatConnexions }) {
   // Mission 13 (lot 3) : l'état arrive du serveur avec la page ; plus de « Chargement des connexions… ».
@@ -91,6 +92,18 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
               ) : null}
               {google.connexion.derniereErreur ? <p className="mt-1 text-[#F87171]">{google.connexion.derniereErreur}</p> : null}
               {google.agenda ? null : <p className="mt-1 text-[#F5B454]">Agenda : droit non accordé. Tes rappels s&apos;y inscriront dès que tu l&apos;accordes (Reconnecter).</p>}
+              {google.agendaApiActivee ? null : (
+                <p className="mt-1 text-[#F5B454]">
+                  L&apos;API Google Calendar n&apos;est pas activée dans le projet Google Cloud : à activer (console Google Cloud → API et services → Google Calendar API), puis les rappels s&apos;inscriront seuls.
+                  {google.agendaApiMessage ? <span className="mt-0.5 block break-words text-[#6B7280]">Réponse de Google : {google.agendaApiMessage}</span> : null}
+                </p>
+              )}
+              {google.autresApisNonActivees.map((api) => (
+                <p key={api.api} className="mt-1 text-[#F5B454]">
+                  L&apos;API {api.api} n&apos;est pas activée dans le projet Google Cloud : à activer (console Google Cloud → API et services → {api.api} API), puis les tâches en attente repartiront seules.
+                  {api.message ? <span className="mt-0.5 block break-words text-[#6B7280]">Réponse de Google : {api.message}</span> : null}
+                </p>
+              ))}
               <div className="mt-3 flex flex-wrap gap-2">
                 <a href="/api/google/connexion" className="inline-flex h-11 sm:h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">
                   Reconnecter

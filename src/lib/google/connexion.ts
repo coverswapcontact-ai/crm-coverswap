@@ -146,11 +146,50 @@ export type EtatConnexionGoogle = {
   connexion: { compte: string; depuis: string; portees: string[]; derniereErreur: string | null; echeance: EcheanceGoogle } | null;
   /** Mission 14 (partie 7) : le droit « agenda » (calendar.events) est accordé à la connexion active — calculé ici, l'écran n'importe que le type. */
   agenda: boolean;
+  /**
+   * Mission 14 (partie 9) : faux quand une tâche d'agenda attend parce que l'API Google Calendar n'est pas activée dans
+   * le projet Google Cloud (403 `accessNotConfigured`, alors que la portée est accordée). Lu sur les tâches en attente,
+   * sans état à tenir : dès qu'elles repassent (6 h au plus après l'activation, tout de suite après « Reconnecter »),
+   * c'est vrai à nouveau. `agendaApiMessage` : ce que Google a répondu (le lien d'activation y figure), sinon null.
+   */
+  agendaApiActivee: boolean;
+  agendaApiMessage: string | null;
+  /**
+   * Les autres API Google (Gmail, Google Drive) qu'une tâche en attente dit non activées dans le projet Google Cloud :
+   * même attente de 6 h, même remède, lues de la même façon ; `message` = ce que Google a répondu, sinon null.
+   */
+  autresApisNonActivees: { api: string; message: string | null }[];
 };
+
+/** Dans le message d'attente : « API <nom> non activée dans le projet Google Cloud ». */
+const MOTIF_API_NON_ACTIVEE = /API (.+?) non activée dans le projet Google Cloud/;
+
+/**
+ * Les API Google qu'une tâche en attente dit non activées dans le projet Google Cloud (message écrit par l'exécuteur
+ * ou posé par la migration 14-9) : une entrée par API, la plus récente d'abord, avec ce que Google a dit (null si inconnu).
+ */
+async function apisNonActivees(): Promise<{ api: string; message: string | null }[]> {
+  const taches = await prisma.tache.findMany({
+    where: { statut: "EN_ATTENTE", derniereErreur: { startsWith: `${PREFIXE_ATTENTE}${PREFIXE_GOOGLE}API `, contains: MARQUE_API_NON_ACTIVEE } },
+    orderBy: { updatedAt: "desc" },
+    select: { derniereErreur: true },
+  });
+  const parApi = new Map<string, string | null>();
+  for (const tache of taches) {
+    const texte = tache.derniereErreur ?? "";
+    const api = MOTIF_API_NON_ACTIVEE.exec(texte)?.[1];
+    if (!api || parApi.has(api)) continue;
+    const separateur = texte.indexOf(SEPARATEUR_REPONSE_GOOGLE);
+    parApi.set(api, separateur >= 0 ? texte.slice(separateur + SEPARATEUR_REPONSE_GOOGLE.length) : null);
+  }
+  return [...parApi].map(([api, message]) => ({ api, message }));
+}
 
 export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
   const { configuration, manquantes } = configurationGoogle();
   const connexion = await prisma.connexionGoogle.findFirst({ where: { deconnecteLe: null }, orderBy: { createdAt: "desc" } });
+  const apis = await apisNonActivees();
+  const agendaApi = apis.find((a) => a.api === API_CALENDAR);
   return {
     configuree: configuration !== null,
     manquantes,
@@ -164,6 +203,9 @@ export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
         }
       : null,
     agenda: configuration !== null && Boolean(connexion?.portees.split(" ").includes(PORTEES_GOOGLE.AGENDA)),
+    agendaApiActivee: !agendaApi,
+    agendaApiMessage: agendaApi?.message ?? null,
+    autresApisNonActivees: apis.filter((a) => a.api !== API_CALENDAR),
   };
 }
 
@@ -205,16 +247,62 @@ export async function connexionActive(portee: string): Promise<{ id: string; com
   return connexion && connexion.portees.split(" ").includes(portee) ? { id: connexion.id, compte: connexion.compte } : null;
 }
 
+/** Devant le message de toute `GoogleIndisponible` ; l'exécuteur y ajoute `[en attente] `, et la reconnexion réveille sur ce début. */
+const PREFIXE_GOOGLE = "Google : ";
+
 /**
  * Google coupé (jamais connecté, déconnecté, jeton expiré, accès à étendre) :
  * les actions attendent la reconnexion au lieu d'échouer, et Lucas est
- * prévenu (une alerte par demi-journée au plus).
+ * prévenu (une alerte par demi-journée au plus) — sauf `ApiGoogleNonActivee`
+ * (API non activée dans le projet Google Cloud) : attente de 6 h sans alerte,
+ * Paramètres → Connexions et `sante_systeme` le disent.
  */
 export class GoogleIndisponible extends AttenteExterne {
   /** `reprendreDansMs` : attente avant le prochain essai (15 min par défaut) ; une reconnexion réveille la tâche plus tôt. */
   constructor(message: string, reprendreDansMs?: number) {
-    super(`Google : ${message}`, reprendreDansMs);
+    super(`${PREFIXE_GOOGLE}${message}`, reprendreDansMs);
     this.name = "GoogleIndisponible";
+  }
+}
+
+/** Sans l'API activée dans le projet Google Cloud, réessayer plus tôt ne sert à rien : 6 h au plus (« Reconnecter » réveille aussi). */
+export const ATTENTE_API_NON_ACTIVEE_MS = 6 * 60 * 60_000;
+/** La marque de Google (`reason`) pour une API non activée ; gardée telle quelle dans le message pour la retrouver sur les tâches. */
+export const MARQUE_API_NON_ACTIVEE = "accessNotConfigured";
+export const API_CALENDAR = "Google Calendar";
+/** Devant ce que Google a répondu, dans le message (distinct du préfixe « Google : » de GoogleIndisponible). */
+const SEPARATEUR_REPONSE_GOOGLE = " Réponse de Google : ";
+
+/** Le nom de l'API Google appelée, d'après l'adresse (pour le message). */
+export function nomApiGoogle(url: string): string {
+  if (/\/calendar\//.test(url)) return API_CALENDAR;
+  if (/gmail\.googleapis\.com|\/gmail\//.test(url)) return "Gmail";
+  if (/\/drive\//.test(url)) return "Google Drive";
+  return "Google";
+}
+
+export function messageApiNonActivee(api: string, detail: string | null): string {
+  return `API ${api} non activée dans le projet Google Cloud (${MARQUE_API_NON_ACTIVEE}) : à activer dans la console Google Cloud → API et services → ${api} API, puis tout repart seul.${detail ? `${SEPARATEUR_REPONSE_GOOGLE}${detail}` : ""}`;
+}
+
+/** Le message qu'une tâche en attente porte pour cette raison (l'exécuteur l'écrit ; la migration 14-9 le pose sur les anciennes). */
+export function messageAttenteApiNonActivee(api: string, detail: string | null): string {
+  return `${PREFIXE_ATTENTE}${PREFIXE_GOOGLE}${messageApiNonActivee(api, detail)}`;
+}
+
+/**
+ * Mission 14 (partie 9) : l'API (Calendar, Gmail, Drive) n'est pas activée dans le projet Google Cloud — Google répond
+ * 403 `accessNotConfigured` / `SERVICE_DISABLED` alors que la connexion a bien la portée. Ce n'est pas un refus
+ * définitif : l'action ATTEND que Lucas active l'API (console Google Cloud → API et services), 6 h entre deux essais,
+ * sans alerte (Paramètres → Connexions et `sante_systeme` le disent, API par API : `etatConnexionGoogle`).
+ */
+export class ApiGoogleNonActivee extends GoogleIndisponible {
+  constructor(
+    readonly api: string,
+    readonly detail: string | null
+  ) {
+    super(messageApiNonActivee(api, detail), ATTENTE_API_NON_ACTIVEE_MS);
+    this.name = "ApiGoogleNonActivee";
   }
 }
 
@@ -288,7 +376,8 @@ async function jetonAcces(portee: string, forcer = false): Promise<string> {
 /**
  * Appel d'une API Google avec le jeton de la connexion. Un 401 renouvelle le
  * jeton et réessaie une fois ; 429 et 5xx lèvent une erreur ordinaire (la
- * tâche réessaiera plus tard) ; 403 d'accès est définitif.
+ * tâche réessaiera plus tard) ; 403 d'accès est définitif — sauf l'API non
+ * activée dans le projet Google Cloud (`accessNotConfigured`), qui fait attendre.
  */
 export async function appelGoogle(url: string, init: RequestInit & { portee: string }): Promise<Response> {
   const { portee, ...options } = init;
@@ -301,10 +390,23 @@ export async function appelGoogle(url: string, init: RequestInit & { portee: str
   if (!reponse) throw new Error("Appel Google impossible");
   if (reponse.status === 429 || reponse.status >= 500) throw new Error(`Google indisponible (${reponse.status}) : nouvel essai plus tard`);
   if (reponse.status === 403) {
-    const corps = await reponse.clone().json().catch(() => null);
-    const raison = (corps as { error?: { errors?: { reason?: string }[] } } | null)?.error?.errors?.[0]?.reason;
+    const texte = await reponse.clone().text().catch(() => "");
+    const corps = lireJsonTexte(texte) as { error?: { message?: unknown; errors?: { reason?: string }[] } } | null;
+    const raison = corps?.error?.errors?.[0]?.reason;
     if (raison === "rateLimitExceeded" || raison === "userRateLimitExceeded") throw new Error("Quota Google atteint : nouvel essai plus tard");
+    // Mission 14 (partie 9) : l'API n'est pas activée dans le projet Google Cloud — on attend, on ne renonce pas.
+    if (texte.includes(MARQUE_API_NON_ACTIVEE) || texte.includes("SERVICE_DISABLED")) {
+      throw new ApiGoogleNonActivee(nomApiGoogle(url), typeof corps?.error?.message === "string" ? corps.error.message.slice(0, 400) : null);
+    }
     throw new ErreurDefinitive(`Accès refusé par Google (${raison ?? "403"}).`);
   }
   return reponse;
+}
+
+function lireJsonTexte(texte: string): unknown {
+  try {
+    return texte ? JSON.parse(texte) : null;
+  } catch {
+    return null;
+  }
 }

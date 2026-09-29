@@ -56,11 +56,14 @@ export type ResultatPlanification = {
   texte: string;
 };
 
-/** Pourquoi rien ne s'inscrit dans l'agenda : Google pas connecté ou coupé, ou le droit « agenda » pas accordé ; null s'il est accordé. */
+/**
+ * Pourquoi rien ne s'inscrit dans l'agenda : Google pas connecté ou coupé, le droit « agenda » pas accordé, ou (partie 9)
+ * l'API Google Calendar pas activée dans le projet Google Cloud ; null quand tout est là.
+ */
 async function agendaManquant(): Promise<string | null> {
   const etat = await etatConnexionGoogle();
   if (etat.connexion?.echeance.coupee) return "Google est coupé (Paramètres → Connexions → Reconnecter)";
-  if (etat.agenda) return null;
+  if (etat.agenda) return etat.agendaApiActivee ? null : "l'API Google Calendar n'est pas activée dans le projet Google Cloud (Paramètres → Connexions)";
   if (!etat.configuree || !etat.connexion) return "Google n'est pas connecté (Paramètres → Connexions)";
   return "le droit « agenda » n'est pas accordé (Paramètres → Connexions → Reconnecter)";
 }

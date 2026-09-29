@@ -11,7 +11,7 @@ import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
-import { rappelConnexionGoogle } from "@/lib/google/connexion";
+import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
 import { listerVue } from "@/lib/mail/vues";
 import { resultatsMeta } from "@/lib/meta/sante";
@@ -373,7 +373,15 @@ export const niveauDisque = (pourcent: number): "OK" | "ATTENTION" | "URGENT" =>
 
 /** L'état de santé du système : tâches, connexions, jetons, crédits, disque, cohérence, alertes. */
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, meta, ia, alertes, coherence] = await Promise.all([etatDesTaches(), rappelConnexionGoogle(maintenant).catch(() => null), resumeChaineMeta(maintenant).catch(() => null), etatIa(maintenant, "IA_REDACTION").catch(() => null), calculerAlertes(maintenant).catch(() => []), controlerCoherence().catch(() => null)]);
+  const [taches, google, etatGoogle, meta, ia, alertes, coherence] = await Promise.all([
+    etatDesTaches(),
+    rappelConnexionGoogle(maintenant).catch(() => null),
+    etatConnexionGoogle().catch(() => null),
+    resumeChaineMeta(maintenant).catch(() => null),
+    etatIa(maintenant, "IA_REDACTION").catch(() => null),
+    calculerAlertes(maintenant).catch(() => []),
+    controlerCoherence().catch(() => null),
+  ]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
   try {
@@ -392,6 +400,10 @@ export async function santeSysteme(maintenant: Date = new Date()) {
   return {
     taches: { enEchec: echecs.map((t) => ({ type: t.type, libelle: t.libelle, erreur: t.derniereErreur })), enAttente: taches.compteurs.EN_ATTENTE, travauxEnEchec: travauxEnEchec.map((p) => ({ nom: p.nom, erreur: p.derniereErreur })) },
     google: google ? { niveau: google.niveau, coupee: google.coupee, compte: google.compte } : null,
+    // Mission 14 (partie 9) : l'API Google Calendar non activée dans le projet Google Cloud — les rappels attendent, ce n'est pas une tâche en échec.
+    agendaApi: { activee: etatGoogle?.agendaApiActivee ?? true, message: etatGoogle?.agendaApiMessage ?? null },
+    // Même chose pour Gmail ou Drive (les tâches attendent de la même façon, rien ne les listerait sinon).
+    autresApisNonActivees: etatGoogle?.autresApisNonActivees ?? [],
     meta: meta ? { etat: meta.chaine.code, message: meta.chaine.libelle, jeton: meta.jeton.message, echeance: meta.jeton.echeance } : null,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
@@ -404,7 +416,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
 export const outilSanteSysteme = definirOutil({
   nom: "sante_systeme",
   titre: "Santé du système et alertes",
-  description: "Tâches de fond en échec, connexion Google (jeton qui expire), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
+  description: "Tâches de fond en échec, connexion Google (jeton qui expire, API Google Calendar à activer dans le projet Google Cloud), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {
@@ -412,7 +424,9 @@ export const outilSanteSysteme = definirOutil({
     const texte = [
       s.taches.enEchec.length ? `${pluriel(s.taches.enEchec.length, "tâche")} en échec : ${s.taches.enEchec.map((t) => `${t.libelle}${t.erreur ? ` (${t.erreur.slice(0, 80)})` : ""}`).join(" · ")}.` : "Aucune tâche en échec.",
       s.taches.travauxEnEchec.length ? `Travaux périodiques en échec : ${s.taches.travauxEnEchec.map((p) => p.nom).join(", ")}.` : "",
-      s.google ? `Google : ${s.google.coupee ? "COUPÉ, reconnecter dans Paramètres" : `jeton ${s.google.niveau.toLowerCase()}`}${s.google.compte ? ` (${s.google.compte})` : ""}.` : "Google : rien à signaler.",
+      s.google ? `Google : ${s.google.coupee ? "COUPÉ, reconnecter dans Paramètres" : `jeton ${s.google.niveau.toLowerCase()}`}${s.google.compte ? ` (${s.google.compte})` : ""}.` : s.agendaApi.activee && !s.autresApisNonActivees.length ? "Google : rien à signaler." : "",
+      s.agendaApi.activee ? "" : `Google Calendar : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → Google Calendar API) ; les rappels attendent et s'inscriront seuls une fois l'API activée.${s.agendaApi.message ? ` Réponse de Google : ${s.agendaApi.message}` : ""}`,
+      ...s.autresApisNonActivees.map((a) => `${a.api} : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → ${a.api} API) ; les tâches attendent et repartiront seules une fois l'API activée.${a.message ? ` Réponse de Google : ${a.message}` : ""}`),
       s.meta ? `Meta : ${s.meta.message}` : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",

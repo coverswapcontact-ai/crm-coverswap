@@ -90,15 +90,16 @@ Piège rencontré : les requêtes Prisma sont paresseuses (elles partent au prem
 `then`). `avecActeur` attend donc la fonction **dans** le contexte, sinon la
 requête partirait hors de lui et perdrait son auteur.
 
-### Lire le journal (`/journal`)
+### Lire le journal
 
-L'écran « Journal » (menu Plus) lit le journal sans jamais l'écrire : par
-auteur (personnes, agent, système, site, scripts, reprise, inconnu), par type
-d'enregistrement, par période ; limité à un dossier et tout ce qui s'y
-rattache (notes, historique, documents, paiements, dépenses, mails,
-propositions) depuis le panneau du dossier, ou à une fiche client depuis
-celle-ci. Chaque ligne montre les champs changés, avant → après ; les secrets
-(jeton Google chiffré) sont masqués ; une copie caviardée (RGPD) est signalée.
+L'écran « Journal » (`/journal`, menu Plus) a été retiré au lot 7 de la
+mission 13 (29/09/2026), avec `api/journal`, `lib/journal/lecture.ts` et
+`libelles.ts` : il n'était pas utilisé. Le journal, lui, s'écrit toujours
+intégralement (déclencheurs et couche Prisma ci-dessus) ; il se lit par la
+carte « Historique de la fiche » d'un client (`src/lib/clients/fiches.ts`, SQL
+sur `JournalModification` ; `FicheClient.tsx`), par l'historique des événements
+du dossier, et en base (sauvegardes). Les secrets (jeton Google chiffré) y sont
+masqués ; une copie caviardée (RGPD) y est signalée.
 
 ### Rien ne se supprime
 
@@ -249,6 +250,12 @@ perd rien.
   tentatives par défaut ; `ErreurDefinitive` (accès révoqué, donnée invalide)
   abandonne tout de suite. Une tâche abandonnée reste visible, avec son erreur,
   et se relance à la main.
+- **Attente d'une ressource extérieure** (`AttenteExterne`, `GoogleIndisponible`) :
+  Google coupé ou pas connecté, droit manquant, API non activée dans le projet
+  Google Cloud (403 `accessNotConfigured`, `ApiGoogleNonActivee` — mission 14,
+  partie 9) → la tâche attend sans compter d'essai (15 min ; 6 h pour un droit
+  ou une API qui manquent), et la reconnexion Google la réveille. Rien n'est
+  perdu, rien n'est en échec.
 - **Reprise après plantage** : une tâche en cours porte un bail
   (`verrouJusqua`) ; passé ce délai, elle est reprise. La réservation
   (`UPDATE … WHERE statut = …`) garantit une seule exécution à la fois, même
@@ -271,17 +278,19 @@ tâches par jour.
 
 ## 4. Interface : un gabarit commun aux écrans de pilotage
 
-Le pilotage est le seul point d'entrée du CRM. Ses écrans (Prospects, Dossiers,
-À valider, Messages, Clients, Finances, puis Synthèse, Tâches, Dépenses,
-Registre des numéros, Journal, Paramètres) vivent dans le groupe de routes
+Le pilotage est le seul point d'entrée du CRM. Ses écrans (Leads, Dossiers,
+Espaces clients, Simulateur, Mail, Clients, Finances, puis Site, Publicité,
+Tâches de fond, Dépenses, Paramètres ; À valider et Synthèse restent joignables
+par leur adresse seulement — `src/components/pilotage/Navigation.tsx`, état
+après le lot 7 du 29/09/2026) vivent dans le groupe de routes
 `src/app/(pilotage)` : une charte sombre, une seule navigation. La connexion
 (`/auth/signin`) suit la même charte.
 
-- **Ordinateur** : barre du haut, compteurs à côté des entrées (contacts à
-  traiter, propositions à valider, mails à trier, tâches en échec).
-- **Téléphone** : barre du bas au pouce, quatre écrans au plus et « Plus » pour
-  le reste ; le contenu réserve la hauteur de la barre (et la zone de sécurité
-  de l'iPhone).
+- **Ordinateur** : barre du haut, compteurs à côté des entrées (rappels de
+  leads en retard, en rouge ; mails à traiter ; tâches en échec).
+- **Téléphone** : barre du bas au pouce, cinq écrans (Leads, Dossiers, Espaces,
+  Mail, Clients) et « Plus » pour le reste ; le contenu réserve la hauteur de la
+  barre (et la zone de sécurité de l'iPhone).
 - **Primitives partagées** : `src/components/pilotage/ui.tsx` (boutons, champs à
   16 px sur mobile pour éviter le zoom de Safari, modale plein écran sur
   téléphone, puces de choix rapide, pastilles) et `client.ts` (appels d'API aux
@@ -332,6 +341,9 @@ geste pour tout : valider, corriger, rejeter.
   expirer les propositions périmées (travail périodique horaire).
 - Raisonnement de l'agent et confiance (calculée par le code) conservés et
   affichés (« Pourquoi ? »).
+- Mission 14 (partie 6) : plus aucune proposition `ENVOI_SMS` n'est créée (les
+  relances sont des SMS à copier, section 25) ; celles encore en base restent
+  validables jusqu'à leur expiration, comptées dans l'en-tête de Dossiers.
 
 ## 6. Clients pérennes
 
@@ -516,8 +528,9 @@ continue et chronologique.
 `NumeroDocument` inscrit chaque numéro émis, une ligne par numéro, identifié
 par une clé `famille:année:rang` (« F:2026:12 », « :2026:38 ») :
 
-- numéros manuels (inscrits par la migration de données, ou déclarés à l'écran
-  `/numeros`), numéros de l'ancien écran, documents du CRM ;
+- numéros manuels (inscrits par la migration de données, ou par « L'inscrire au
+  registre et le rattacher » d'un document repris), numéros de l'ancien écran,
+  documents du CRM ;
 - « 2026-0001 » et « 2026-001 » ont la même clé : ils se lisent pareil pour un
   client. Si deux sources ont émis le même numéro, la migration le **signale**
   dans la note de la ligne, sans rien écraser ;
@@ -538,11 +551,15 @@ par une clé `famille:année:rang` (« F:2026:12 », « :2026:38 ») :
 - Une facture ou un avoir ne peut pas être daté avant le dernier document daté
   de sa série (horloge du serveur déréglée).
 
-Déclarer un numéro à la main (`/numeros`) : refusé s'il est déjà inscrit ; dans
-la série des factures, refusé s'il se glisserait derrière la numérotation du
-CRM ou rouvrirait une série close (« FACT » après le passage à F). L'écran
-signale les rangs sans inscription d'une série : un trou dans une série de
-factures est à déclarer ou à expliquer.
+Déclarer un numéro à la main : refusé s'il est déjà inscrit ; dans la série des
+factures, refusé s'il se glisserait derrière la numérotation du CRM ou
+rouvrirait une série close (« FACT » après le passage à F). Ces règles vivent
+dans `src/lib/dossiers/registre.ts` (`declarerNumero`, testé). L'écran
+`/numeros` qui les portait (et qui signalait les rangs sans inscription d'une
+série) a été retiré au lot 7 (29/09/2026) : aujourd'hui, la seule inscription
+manuelle passe par un document repris (`inscrireNumeroManuel`,
+`documents-existants.ts`), et `api/numeros` ne rend plus que les numéros libres
+(plus `api/numeros/compteurs`).
 
 ### Choix des séries : le plus prudent, à faire valider
 
@@ -590,8 +607,9 @@ repris).
 
 - La catégorie (particulier ou professionnel) vient de la fiche client ; un
   dossier sans client pérenne est traité en particulier.
-- Les numéros 001 à 029 de la série manuelle restent « nature inconnue » tant
-  qu'ils ne sont pas complétés à l'écran.
+- Les numéros 001 à 029 de la série manuelle restent « nature inconnue » :
+  depuis le retrait de `/numeros`, aucun écran ne permet de les compléter
+  (`completerNumero` reste dans `registre.ts`, sans appelant).
 
 ## 10. Encaissements : l'argent reçu, distinct de ce qui est facturé
 
@@ -794,8 +812,10 @@ l'autre : « à rattacher », compté et signalé.
 
 La route `/api/cron/relance` **envoyait seule** une relance aux clients dont le
 devis (ancien écran) avait plus de trois jours : contraire à « aucun mail
-envoyé sans validation ». Elle ne fait plus que **proposer** les relances dues ;
-la même proposition tourne en tâche de fond toutes les six heures.
+envoyé sans validation ». Elle a d'abord été réduite à **proposer** les relances
+dues, puis retirée au lot 7 (29/09/2026 : Railway n'a pas de cron, elle n'avait
+aucun appelant). Il reste le travail périodique `propositions-relances`, toutes
+les six heures (`src/lib/relances/service.ts`).
 
 ### Un seul chemin pour un mail vers un client
 
@@ -822,14 +842,19 @@ sans décision humaine, jamais validée en lot, jamais exécutée par un agent.
 
 - Délai : le paramètre daté `DELAI_RELANCE_DEVIS` ; sans lui, rien n'est
   proposé.
-- Dossier à l'étape « Devis envoyé » ou « Relance », devis en vigueur, adresse
-  connue ; deux relances par devis au plus (la seconde, « une dernière fois »,
-  un délai après la première).
-- Client qui a refusé ou retiré son accord pour les mails : pas de relance par
-  mail (compté, à relancer autrement).
-- Une relance ne se propose qu'une fois par rang (même rejetée) ; une
-  proposition non traitée expire au bout de quatorze jours, et devient sans
-  objet si le dossier a changé d'étape entre-temps.
+- Dossier à l'étape « Devis envoyé » ou « Relance », devis visible dans l'espace
+  (numéroté, GENERE ou ENVOYE, non archivé) ; **deux relances par devis au plus,
+  tous canaux confondus** (mission 14, partie 6 : un mail parti et un SMS copié
+  se comptent ensemble, `relancesDuDevis` ; la référence du délai est la
+  dernière relance, sinon le plus tardif de la date d'émission et du dépôt).
+- Le mail n'est proposé qu'avec une adresse connue et sans refus des mails ; le
+  SMS à copier est proposé dans tous les cas (section 25). Un client qui a
+  refusé ou retiré son accord pour les mails est compté, à relancer par SMS ou
+  par téléphone.
+- Un mail de relance ne se propose qu'une fois par rang (même rejeté) ; une
+  proposition non traitée expire au bout de quatorze jours, devient sans objet
+  si le dossier a changé d'étape entre-temps, et est annulée si la relance du
+  même rang part par SMS.
 
 ### Limites connues
 
@@ -897,7 +922,8 @@ sans règle de date bloquait sinon toutes les périodes suivantes.
 ### Alertes (`alertes.ts`)
 
 Calculées à la demande, jamais stockées, les plus graves d'abord : devis sans
-réponse (au-delà de deux fois le délai de relance), factures impayées depuis
+réponse (au-delà de deux fois le délai de relance `DELAI_RELANCE_DEVIS` ; les
+relances elles-mêmes, mail proposé et SMS à copier : section 25), factures impayées depuis
 plus de 30 jours (urgent au-delà de 60), seuil fiscal atteint à 80 % ou dépassé
 en projection, baisse des nouveaux dossiers (moins de la moitié de la moyenne
 des six mois précédents), acceptation des propositions de l'agent en baisse
@@ -924,13 +950,18 @@ l'agent mail. Appels REST directs (aucun SDK Google ajouté), simulables en test
   anti-falsification vérifié par cookie). Portées au plus juste : `drive.file`
   (le CRM ne voit que les fichiers qu'il a créés), `gmail.modify` (lire, ranger,
   archiver ; le code n'appelle jamais la corbeille ni la suppression),
-  `gmail.send`.
+  `gmail.send`, et `calendar.events` (l'agenda des rappels, mission 14).
 - **Jeton de renouvellement chiffré** (AES-256-GCM) avec `GOOGLE_TOKEN_KEY`,
   clé hors base : une copie de la base (ou du journal) ne donne pas accès au
   compte. Les jetons d'accès restent en mémoire.
 - Déconnexion : révocation chez Google ; la ligne reste, datée. Accès révoqué
   côté Google : les tâches s'arrêtent en le disant, la connexion affiche
-  « reconnecter ».
+  « reconnecter ». API non activée dans le projet Google Cloud (403
+  `accessNotConfigured` alors que la portée est accordée — vu en production le
+  29/09/2026 pour Google Calendar) : les tâches **attendent** (6 h entre deux
+  essais, `ApiGoogleNonActivee`) au lieu d'échouer, quelle que soit l'API
+  (Calendar, Gmail, Drive) ; Paramètres → Connexions et `sante_systeme` le
+  disent, API par API, avec la réponse de Google (mission 14, partie 9).
 - **Mode Test : reconnexion tous les 7 jours.** Tant que l'application reste en
   mode Test dans Google Cloud, Google fait expirer le jeton de renouvellement
   7 jours après l'autorisation (portées Drive et Gmail). L'échéance se calcule
@@ -944,7 +975,8 @@ l'agent mail. Appels REST directs (aucun SDK Google ajouté), simulables en test
   rappel des 7 jours (un refus de Google reste signalé).
 
 **À faire une fois (Lucas)** : dans Google Cloud Console, créer un projet,
-activer les API Drive et Gmail, configurer l'écran de consentement (type
+activer les API Drive, Gmail **et Google Calendar** (API et services → Google
+Calendar API ; sans elle, les rappels attendent), configurer l'écran de consentement (type
 « interne » si Google Workspace, sinon « externe » en mode test avec
 `coverswap.contact@gmail.com` comme utilisateur test), créer un identifiant
 OAuth « application web » avec l'URI de redirection
@@ -1004,7 +1036,8 @@ de l'écran était faux et devient « Retirer »).
 
 ### Ce qu'il fait (`src/lib/messages/`)
 
-- **Relevé** toutes les 5 minutes (tâche de fond) des mails reçus et envoyés de
+- **Relevé** toutes les minutes (travail `mail`, `src/lib/mail/taches.ts` ;
+  5 minutes à l'origine) des mails reçus et envoyés de
   la boîte connectée : depuis le dernier message connu moins un jour ; au
   premier passage, depuis la semaine qui précède la connexion. Spam, corbeille
   et brouillons sont ignorés. Rejouable sans doublon (identifiant Gmail unique).
@@ -1012,12 +1045,18 @@ de l'écran était faux et devient « Retirer »).
   journalisé), `ContenuMessage` (texte brut — le HTML n'est jamais affiché —,
   en-têtes utiles au tri et aux réponses ; écrit une fois, immuable),
   `PieceMessage` (description des pièces jointes).
-- **Analyse** (tâche `ANALYSE_MESSAGE`, acteur `AGENT:mail`) : les règles sûres
-  (`regles.ts`, fonction pure, testée), la conservation des pièces jointes,
-  puis la lecture par l'IA si elle est active. Chaque analyse est gardée
-  (`AnalyseMessage`, immuable) avec son raisonnement.
+- **Tri** : l'analyse de l'agent v1 (tâche `ANALYSE_MESSAGE`, `regles.ts`,
+  `ia-lecture.ts`, relecture par l'IA) a été retirée au lot 7 (29/09/2026 ; la
+  table `AnalyseMessage` reste en base). Le tri relève de l'onglet Mail v2
+  (missions 7 et 9) : règles apprises (`src/lib/mail/regles-apprises.ts`), tri
+  (`mail/tri.ts`, `messages/tri.ts`), boîte « À traiter » (`mail/vues.ts`), et
+  Claude par le serveur MCP pour le reste.
 
 ### Ce que l'agent fait seul — et seulement cela
+
+(Tableau de l'agent v1, retiré au lot 7 du 29/09/2026 : gardé pour mémoire des
+garde-fous. Le tri de Mail v2 est décrit dans `docs/REPRISE-MISSION.md`,
+missions 7 et 9.)
 
 | Geste | Condition (toutes requises) | Confiance |
 | --- | --- | --- |
@@ -1041,11 +1080,11 @@ geste.
   reçues quand l'adresse du chantier, le téléphone, l'objet et une photo sont
   là ; sinon la fiche seule, et la réponse proposée demande ce qui manque —, une
   note, une prochaine action, un changement d'étape, un brouillon de réponse.
-- La file **« À trier »** (`/messages`) garde ce qui n'est pas rangé. Chaque
-  mail s'y trie en un geste : ranger chez un client (recherche pré-remplie avec
-  le nom de l'expéditeur), nouvelle demande (formulaire pré-rempli par l'agent
-  ou, à défaut, par le mail : nom, téléphone, code postal), bruit, hors
-  clients, répondre, relire avec l'IA.
+- L'écran **« À trier »** (`/messages`, agent v1) est retiré (lot 7). Ce qui
+  attend une décision se lit dans la boîte **« À traiter »** de `/mail`
+  (`src/lib/mail/vues.ts`, `listerVue("A_TRAITER")`) : ranger chez un client,
+  nouvelle demande, bruit, hors clients, répondre. « Relire avec l'IA »
+  (`api/messages/[id]/relire`) n'existe plus.
 - **Motifs de rejet sans saisie** : quand la personne trie depuis la file, la
   proposition de l'agent est validée si c'est la même décision (il est
   crédité) ; sinon elle est rejetée avec le motif que la décision rend évident
@@ -1121,8 +1160,9 @@ fournisseur, événements `WHATSAPP_RECU` / `WHATSAPP_ENVOYE` déjà définis. P
 brancher WhatsApp Business (API Cloud de Meta) : une route webhook (signature
 `X-Hub-Signature-256` vérifiée avec `META_APP_SECRET`, route publique déclarée
 dans `routes-publiques.ts`) qui traduit chaque message en `MessageRecu` (de =
-numéro normalisé) puis appelle `enregistrerMessageRecu` et met en file
-`ANALYSE_MESSAGE` ; dans les règles, le numéro exact remplace l'adresse
+numéro normalisé) puis appelle `enregistrerMessageRecu` et le passe au tri de
+Mail v2 (`src/lib/messages/tri.ts` ; la tâche `ANALYSE_MESSAGE` et `regles.ts`
+n'existent plus) ; le numéro exact y remplace l'adresse
 (`trouverClientParCoordonnees` sait déjà le faire) ; l'archivage dans la boîte
 est sans objet ; l'envoi passerait par une proposition `ENVOI_WHATSAPP`
 sensible (fenêtre de 24 h et modèles de message imposés par Meta). Non
@@ -1130,7 +1170,7 @@ construit : il faut d'abord un compte WhatsApp Business vérifié par Meta.
 
 ### Réglages et interrupteurs
 
-- Paramètres → Connexions : état de l'agent (dernier relevé, mails à trier) et
+- Paramètres → Connexions : état de l'agent (dernier relevé, mails à traiter) et
   de l'IA (modèle, dépense du mois sur le budget) ; « Relever maintenant ».
 - `AGENT_MAIL=0` coupe l'agent (relevé compris) sans toucher à la connexion
   Google ; le miroir Drive garde son propre interrupteur (`MIROIR_DRIVE`).
@@ -1355,8 +1395,9 @@ objet, PDF.
   le destinataire s'ils manquaient. Un numéro déjà rattaché est refusé (il ne
   sert qu'une fois). Un numéro absent du registre est refusé avec
   `absentDuRegistre`, et ne s'y inscrit que sur demande explicite (« L'inscrire
-  au registre et le rattacher », mêmes règles de série que la déclaration dans
-  /numeros) : une faute de frappe inscrite y resterait pour toujours.
+  au registre et le rattacher », mêmes règles de série que `declarerNumero` —
+  l'écran `/numeros` qui les portait est retiré) : une faute de frappe inscrite y
+  resterait pour toujours.
   Nature, date ou montant qui diffèrent du registre sont signalés ; la date
   d'émission du registre, renseignée une fois, n'y change pas.
 - **Document** `origine = REPRISE` (migration `20260918100000_documents_repris`,
@@ -1403,8 +1444,10 @@ un seul écran pour saisir un dossier historique en deux minutes.
 ## 19. Prospects : tout ce qui précède un dossier
 
 L'ancien CRM (leads) et le module de prospection (établissements Google Places)
-sont devenus une section du pilotage, `/prospects`, qui alimente les dossiers.
-Deux onglets, une même fiche latérale, un même bouton « Ouvrir un dossier ».
+étaient devenus une section du pilotage, `/prospects`, à deux onglets. Depuis le
+21/09/2026 c'est la section **Leads** (`/leads`, section 21) qui alimente les
+dossiers ; `/prospects` et l'onglet Démarchage ont été retirés au lot 7
+(29/09/2026). Ce qui suit décrit ce qui reste et ce qui a disparu.
 
 ### Entrants (modèle `Lead`, `src/lib/prospects/entrants.ts`)
 
@@ -1412,17 +1455,18 @@ Ce qui arrive de soi-même : formulaires du site et simulateur (`/api/webhook`),
 publicités Meta (`/api/webhook/meta`), Zapier, et la saisie à la main
 (« Nouveau contact »).
 
-- **Groupes**, une partition calculée à la lecture (`groupeDuLead`, traduite en
-  requête par `whereGroupe`) : *À traiter* (nouveau ou devis demandé, reçu
-  depuis moins de 60 jours, sans dossier), *Contactés*, *Plus de 60 jours*,
-  *Devis ou dossier* (un dossier, ou un devis déjà envoyé, signé ou chantier
-  dans l'ancien CRM), *Sans suite*, *Archivés*. Le compteur « À traiter » est
-  celui de la navigation.
-- **Fiche** : coordonnées et gestes (appel, SMS, e-mail, fiche client),
-  statut, échanges (`Interaction` ; un appel, un SMS ou un e-mail noté fait
-  passer « Contacté »), simulations avant/après et leur PDF, demande et notes,
-  dossiers, anciens devis et factures de l'ancien CRM avec leur document,
-  archivage motivé et restauration.
+- **Listes** : les groupes d'origine (`groupeDuLead`, `listerEntrants`) n'ont
+  plus d'écran ; l'écran Leads lit `src/lib/prospects/leads.ts` — *À appeler*
+  (jamais appelé), *À rappeler* (déjà appelé, ou rappel daté), *Sans suite*,
+  *Archivés* (mission 14, partie 3 ; section 25). Le compteur de la navigation
+  est le nombre de rappels en retard.
+- **Fiche** : coordonnées et gestes (« Noter l'appel » : la feuille de fin
+  d'appel ; « SMS avec le lien » : l'écran SMS ; e-mail ; fiche client), statut,
+  section « Rappel » (date, « Retirer la date », dernier appel et tentatives sans
+  réponse), échanges (`Interaction` ; un appel noté autrement que « pas de
+  réponse » ou un échange fait passer « Contacté »), simulations avant/après et
+  leur PDF, demande et notes, dossiers, anciens devis et factures de l'ancien
+  CRM avec leur document, archivage motivé et restauration.
 - **Sans suite** demande un motif, noté dans les échanges. **Correction** : seuls
   les champs changés partent ; un numéro ou une adresse corrigés rejoignent
   aussi la fiche client (les anciens y restent, archivables depuis la fiche).
@@ -1434,39 +1478,29 @@ publicités Meta (`/api/webhook/meta`), Zapier, et la saisie à la main
   ces coordonnées, ou en crée une (`rattacherLead`, règle d'identité de la
   section 6).
 
-### Démarchage (modèle `Prospect`, `src/lib/prospects/demarchage.ts`)
+### Démarchage (modèle `Prospect`) : retiré
 
-- **Agents** hôtels et restaurants (`AgentProfile`) : leur configuration vit
-  dans `src/lib/prospection/agents.ts` ; la migration de données
-  `2026-09-17-agents-prospection` les crée au démarrage s'ils manquent, sans
-  jamais écraser une configuration existante.
-- **Groupes** par statut : À contacter (qualifié), En cours (contacté, relancé,
-  a répondu, rendez-vous), À scorer, Convertis, Écartés, Ne pas contacter.
-- **Scorer** : calcul local (`src/lib/prospection/scoring.ts`), aucun appel
-  extérieur. **Sourcer** : appels Google Places (jusqu'à 45 recherches et
-  60 fiches d'avis par passage), payants au-delà du quota gratuit : bouton
-  inactif sans `GOOGLE_PLACES_API_KEY`, confirmation explicite avant chaque
-  passage. Aucun message n'est envoyé.
-- **Fiche** : pourquoi ce prospect (signal, détail du score, avis), statut et
-  notes (`ProspectActivity`), « Ne pas contacter » daté (`optOut`).
-- **Ouvrir un dossier** (`/dossiers?prospect=<id>`) : formulaire pré-rempli,
-  client professionnel créé à la conversion, prospect « Converti ».
+Le démarchage B2B (`lib/prospects/demarchage.ts`, `lib/prospection/*` : agents
+hôtels et restaurants, scoring local, sourcing Google Places, fiche prospect,
+« Ouvrir un dossier » depuis un prospect, `/dossiers?prospect=<id>`) a été
+retiré au lot 7 (29/09/2026), avec ses routes, ses scripts npm et ses tests.
+Les tables `Prospect`, `ProspectActivity` et `AgentProfile` restent en base ;
+la migration de données `agents-prospection` (déjà livrée, jamais retirée)
+porte les deux profils en dur et rejoue à l'identique.
 
-### Prospects de la base locale
+### Prospects de la base locale : retiré
 
-Les prospects sourcés avant l'intégration vivaient dans la base SQLite du
-poste de Lucas. `node scripts/exporter-prospects.mjs [base.db] [fichier.json]`
-les exporte (lecture seule, format `coverswap-prospects/1`, fichier écrit hors
-du dépôt, qui est public) ; « Importer » dans l'onglet Démarchage ajoute ce qui
-manque sans rien écraser (clé : `googlePlaceId`) et reste rejouable.
+Le script `scripts/exporter-prospects.mjs` et l'import de l'onglet Démarchage
+sont partis avec lui (lot 7).
 
 ### L'ancien CRM : repris, réécrit, abandonné
 
-- **Réécrit dans Prospects** : liste et fiche des leads, saisie d'un lead,
-  simulations et leur PDF, échanges, anciens devis et factures (consultables
-  aussi depuis le registre des numéros), tableau et fiche de prospection (les
-  indicateurs et la file de validation factices de l'ancien écran ne sont pas
-  repris : la validation est `/validation`).
+- **Réécrit dans Prospects, puis Leads** : liste et fiche des leads, saisie
+  d'un lead, simulations et leur PDF, échanges, anciens devis et factures (lus
+  sur la fiche du contact ; l'écran du registre des numéros est retiré) ; le
+  tableau et la fiche de prospection ont été retirés au lot 7 (les indicateurs
+  et la file de validation factices de l'ancien écran n'ont jamais été repris :
+  la validation est `/validation`).
 - **Abandonné** : tableau de bord (remplacé par Dossiers et Synthèse ; les
   statistiques par source de l'ancien écran sont réécrites dans la Synthèse,
   section 14), assistant conversationnel sans accès aux
@@ -1478,12 +1512,12 @@ manque sans rien écraser (clé : `googlePlaceId`) et reste rejouable.
 - **Gardé tel quel** : webhooks, simulateur, PDF des anciens devis et factures,
   PDF des simulations, fichiers protégés (`/api/uploads`).
 - **Anciennes adresses** (`next.config.ts`, redirections temporaires) :
-  `/leads/<id>` → `/prospects?lead=<id>` (liens des anciens mails de
-  notification), `/leads`, `/leads/kanban`, `/leads/nouveau` → Prospects,
-  `/prospection` → onglet Démarchage, `/dashboard` → Dossiers, `/analytics` →
-  Synthèse, `/devis` → Registre des numéros, `/factures` → Finances,
-  `/chantiers`, `/commandes`, `/assistant` → Dossiers. Les nouveaux mails de
-  notification pointent directement sur `/prospects?lead=<id>`.
+  `/leads/<id>` → `/leads?lead=<id>` (liens des anciens mails de
+  notification), `/leads/kanban`, `/leads/nouveau` → Leads, `/dashboard` →
+  Dossiers, `/analytics` → Synthèse, `/devis/nouveau` (avec `?leadId=` :
+  `/dossiers?lead=`) et `/devis/*` → Dossiers, `/factures` → Finances,
+  `/chantiers/*`, `/commandes`, `/assistant` → Dossiers. `/prospection` n'a plus
+  de redirection. Les notifications pointent sur `/leads?lead=<id>`.
 - **Aucune donnée retirée** : leads, prospects, devis, factures, chantiers et
   commandes restent en base et au journal.
 
@@ -1503,7 +1537,8 @@ est un paramètre daté (`ZONE_DEPARTEMENTS`, `ZONE_DEPARTEMENTS_PROCHES`), jama
 une constante : zone vide → « inconnue », pas « hors zone ». Une priorité posée
 à la main (`prioriteManuelle`) n'est plus jamais recalculée. La classe sort dans
 le titre et l'urgence de la notification ; un lead à écarter n'arme pas la
-relance à trente minutes.
+relance à trente minutes, reste dans « À appeler » (pastille en anneau gris)
+mais hors de la file « Enchaîner les appels ».
 
 ### SMS (`src/lib/sms/`)
 
@@ -1512,12 +1547,16 @@ relance à trente minutes.
   trente secondes — OVH n'a pas de webhook), `brevo` (envoi seul : en France un SMS
   Brevo ne reçoit pas de réponse), `simulateur` (essais, rien ne part). Choix :
   `SMS_FOURNISSEUR`, sinon OVH si ses cinq variables sont là, sinon Brevo, sinon
-  aucun — et l'écran le dit (Paramètres → Messagerie SMS, bandeau de la messagerie).
+  aucun — Paramètres → SMS le dit. Le fournisseur ne sert plus qu'aux envois
+  automatiques (accusés de réception) et à deux textes envoyés depuis un écran
+  (nouveau lien, simulation en ligne) : tout le reste est **copié** par Lucas
+  depuis son téléphone (mission 14, section 25).
 - **Modèle** : `ConversationSms` (une par numéro, rattachée à un contact, un client,
-  ou à personne : file « à rattacher ») et `Sms`. Pas de surcharge de `Message` (tri
-  des mails, contenu immuable). Chaque SMS écrit aussi un événement `SMS_ENVOYE` /
-  `SMS_RECU` sur le dossier quand il y en a un : appels, notes et SMS se lisent
-  dans le même fil.
+  ou à personne) et `Sms`. Pas de surcharge de `Message` (tri
+  des mails, contenu immuable). Chaque SMS parti par le fournisseur écrit un
+  événement `SMS_ENVOYE` / `SMS_RECU` sur le dossier quand il y en a un ; un SMS
+  copié écrit `SMS_COPIE` (ou un échange SMS sur un lead sans dossier) : appels,
+  notes et SMS se lisent dans le même fil.
 - **Envoi** (`envoi.ts`) : l'écriture en base et l'envoi sont séparés. `envoyerSms`
   écrit la ligne (`A_ENVOYER`) et met une tâche `SMS_ENVOI` en file ; la tâche parle
   au fournisseur, avec reprises. `cleEnvoi` (unique) rend l'envoi idempotent : le
@@ -1531,35 +1570,40 @@ relance à trente minutes.
 - **Coût** : `mesurerSms` compte en GSM-7 (160/153) ou en Unicode (70/67) et nomme
   les caractères fautifs ; `simplifierPourGsm` les remplace. Seuls les textes qui
   peuvent partir par le fournisseur (drapeau `fournisseur` du catalogue : accusés,
-  ancien circuit, nouveau lien, simulation en ligne) sont tenus en GSM-7 ; les SMS
+  nouveau lien, simulation en ligne) sont tenus en GSM-7 ; les SMS
   copiés par Lucas partent de son téléphone (« À » permis).
 - **Catalogue unique** (mission 14, `catalogue.ts`) : chaque code a son libellé, son
-  groupe, sa phrase d'usage, ses variables permises, son lien (toujours en dernier,
-  sauf l'ancien circuit gardé tel quel) et son texte de départ. Les textes modifiés
+  groupe (Automatiques, Après un appel, Espace client, Relances), sa phrase d'usage,
+  ses variables permises, son lien (toujours en dernier) et son texte de départ. Les
+  textes modifiés
   vivent dans `ModeleSms` (une ligne par code, Paramètres → SMS, `verifierTexteSms`
   au serveur comme à l'écran) et se lisent par `texteDuCatalogue` (`modeles.ts`) ;
-  l'interrupteur `actif` ne vaut que pour les accusés et l'ancien circuit
-  (`lireModele`). Le SMS proposé (`proposition.ts`) suit l'action et la source du
+  l'interrupteur `actif` ne vaut que pour les deux accusés (`lireModele`). Le SMS
+  proposé (`proposition.ts`) suit l'action et la source du
   lead ; copier vaut envoi (`copie.ts`, événement `SMS_COPIE`, ou échange SMS d'un
   lead sans dossier) : un texte qui porte le lien (`porteLienEspace`) passe la main
-  au client et fait tomber « Lien pas encore envoyé ».
+  au client et fait tomber « Lien pas encore envoyé ». Les six codes de l'ancien
+  circuit de relances par le fournisseur sont archivés (partie 6).
 - **Accusé de réception** (`accuse.ts`) : seul envoi automatique. Texte de jour entre
   8 h 30 et 19 h 30 hors dimanche, variante « dès demain matin » sinon. Clé
   `accuse:<leadId>` : un lead, un accusé. Coupé si le modèle est désactivé, si le
   numéro n'est pas un mobile français, si le lead est à écarter.
-- **Temps réel** : `/api/sms/flux` (SSE, un seul processus — un `EventEmitter`).
-  L'écran a une relève de secours (dix secondes si le flux est tombé).
-- **Messagerie** (`src/components/sms/`, `/sms` dans le CRM, `/messagerie` seule) :
-  envoi optimiste, file d'attente locale (`fileAttente.ts`, `localStorage`), brouillon
-  gardé par conversation, statut par message et bouton « Réessayer », non-lus fiables
-  (une conversation n'est lue que si elle est réellement à l'écran).
+- **Temps réel et messagerie : retirés** (lot 7, 29/09/2026). La route `/api/sms/flux`
+  (SSE), l'écran de conversation `/sms`, l'application « Messages CoverSwap »
+  (`/messagerie`) et `src/components/sms/` n'existent plus : pas de numéro
+  professionnel en service, les SMS se copient. Piège : `src/lib/sms/flux.ts`
+  (l'`EventEmitter`) reste, et `envoi.ts`, `reception.ts`, `propositions.ts` et
+  `taches.ts` y émettent encore, sans plus aucun lecteur. Un SMS reçu par le
+  fournisseur s'écrit sur le dossier (`SMS_RECU`) et sonne (alerte vers la fiche du
+  contact).
 
 ### Espace client (`src/lib/espace/`, site : `/e/<jeton>`)
 
 Un lien signé, sans compte : `https://coverswap.fr/e/<code8>-<signature16>`. La
 signature est un HMAC du code et de sa version ; le jeton n'est jamais stocké. Il
-expire (90 jours), se révoque (`revoqueLe`) et se renouvelle (`version + 1` : l'ancien
-lien meurt). La page du site ne contient rien : le navigateur du client parle à l'API
+n'expire plus (mission 5 : un client = un espace permanent ; après 90 jours sans
+visite, l'espace demande les quatre derniers chiffres du téléphone), se révoque
+(`revoqueLe`) et se renouvelle (`version + 1` : l'ancien lien meurt). La page du site ne contient rien : le navigateur du client parle à l'API
 publique du CRM, `/api/espace/<jeton>/…` (CORS limité à coverswap.fr, 400 requêtes par
 dix minutes et par adresse, vingt jetons invalides et l'adresse est refusée). Chaque
 lecture passe par l'espace du jeton : un client ne peut pas nommer le dossier d'un autre.
@@ -1573,43 +1617,49 @@ l'acompte. Acteur de toutes ces écritures : `EXTERNE:espace-client`. Chaque ges
 un événement `ESPACE_*` sur le dossier ; les gestes qui comptent (photos, choix, accord)
 sonnent sur le téléphone, les photos regroupées par une tâche différée.
 
-### Relances proposées (`src/lib/commercial/relances.ts`, `src/lib/sms/propositions.ts`)
+### Relances proposées : l'ancien circuit `relances-sms` est retiré
 
-Un travail périodique (toutes les heures) regarde où en est chaque affaire et
-**propose** : photos attendues depuis deux jours, simulation sans réaction depuis
-trois, devis sans réponse depuis quatre, silence depuis dix. Chaque relance est une
-proposition `ENVOI_SMS` dans la file de validation existante (`contenu` proposé,
-`contenuValide` envoyé, `modifiee`, motif de rejet). Plafond : cinq SMS en dix jours
-vers un même numéro, accusé compris ; au-delà le CRM ne propose plus de message mais
-un changement d'étape vers `PERDU` (motif `SANS_REPONSE`) — proposé, jamais fait seul.
+Le travail périodique horaire de `src/lib/commercial/relances.ts` (photos attendues
+depuis deux jours, simulation sans réaction depuis trois, devis sans réponse depuis
+quatre, silence depuis dix → propositions `ENVOI_SMS` envoyées par le fournisseur
+après validation, plafond de cinq SMS en dix jours, puis « perdu — sans réponse »
+proposé) a été supprimé par la mission 14 (partie 6, 29/09/2026) : un seul circuit
+de relances, des SMS à copier et le mail existant (section 25). `sms/propositions.ts`
+garde seulement l'exécution des propositions `ENVOI_SMS` encore en base (validables
+jusqu'à leur expiration, comptées dans l'en-tête de Dossiers) ; la ligne
+`Planification` « relances-sms » reste en base sans effet (l'exécuteur ne lit que les
+travaux enregistrés dans `taches/traitements.ts`).
 
-### Pilotage commercial (`src/lib/commercial/pilotage.ts`, `/commercial`)
+### Pilotage commercial (`src/lib/commercial/pilotage.ts`) : l'écran est retiré
 
-Une seule liste de toutes les affaires vivantes (leads et dossiers avant chantier),
-rangée par **à qui est la main** : « À moi » (à rappeler, à répondre, simulation à
-faire, devis à faire, à valider) et « Chez le client » (photos, choix, réponse au
-devis, acompte). La main se lit dans les faits — dernier SMS, photos reçues, simulation
-déposée, devis émis — pas dans un champ à tenir à jour. Fin d'appel en deux gestes
-(issue + note) ; « pas de réponse » prépare le SMS avec le lien et pose le rappel du
-lendemain dix heures.
+L'écran `/commercial` (une seule liste des affaires vivantes rangée par à qui est
+la main, fin d'appel en deux gestes) a été retiré au lot 7 (29/09/2026), avec
+`api/commercial/pilotage` et `api/commercial/notes`. Le calcul reste :
+`pilotageCommercial()` sert les outils MCP `ce_qui_m_attend` et `point_du_jour`
+(la main se lit dans les faits, `src/lib/dossiers/main.ts` ; les contacts suivent
+les deux listes de Leads). La fin d'appel vit dans Leads : feuille
+`FeuilleFinAppel`, `POST /api/commercial/appels`, `noterAppel` (section 25).
 
-### Application mobile (`public/sw.js`, `public/manifest-*.webmanifest`)
+### Application mobile (`public/sw.js`, `public/manifest-crm.webmanifest`)
 
-Deux applications installables, une seule base de code : « CoverSwap » (le CRM,
-ouvre `/commercial`) et « Messages CoverSwap » (`/messagerie`, la messagerie seule).
-iOS lit le manifeste et l'icône de la page d'où l'on fait « Sur l'écran d'accueil » :
-ce sont les deux gabarits (`(pilotage)/layout.tsx`, `messagerie/layout.tsx`) qui les
-portent (`src/lib/application/installation.ts`). Icônes et écrans de démarrage :
+Une seule application installable, « CoverSwap » (le CRM, ouvre `/leads` ;
+raccourcis « À valider » et « Nouvelle dépense »). L'application « Messages
+CoverSwap » (`/messagerie`) et ses icônes ont été retirées au lot 7. iOS lit le
+manifeste et l'icône de la page d'où l'on fait « Sur l'écran d'accueil » : le
+gabarit `(pilotage)/layout.tsx` les porte (`src/lib/application/installation.ts`,
+`ApplicationInstallable = "crm"`). Icônes et écrans de démarrage :
 `node scripts/generer-icones.mjs`.
 
-Le service worker fait trois choses. **Notifications** : affiche le push, pose le
-badge (somme des SMS non lus), ouvre au tap l'écran concerné — dans « Messages », un
-lien `/sms?c=…` devient `/messagerie?c=…`. **Réseau médiocre** : fichiers de
+Le service worker (`VERSION = "v10"`) fait trois choses. **Notifications** : affiche
+le push, pose le badge (somme des SMS non lus), ouvre au tap l'écran concerné ; une
+alerte qui porte un numéro a deux boutons, « Appeler » (`tel:`) et le lien de l'alerte
+(« Ouvrir la fiche »…) — sur iPhone, iOS n'affiche pas ces boutons, le toucher ouvre
+la fiche (mission 14, partie 7). **Réseau médiocre** : fichiers de
 l'application en cache ; un écran déjà connu n'attend le réseau que 2,5 s. **Coupure**
 (ou serveur qui redémarre, 502 à 504) : dernière version connue de l'écran et des
-lectures utiles (conversations, fil, pilotage, compteurs), sinon `hors-ligne.html` ;
+lectures utiles (liste des leads, compteurs), sinon `hors-ligne.html` ;
 l'écran est prévenu (`serviDepuisLeCache.ts`) et affiche un bandeau. Jamais en cache :
-connexion, webhooks, flux, espace client, push, et toute réponse redirigée. Changer
+connexion, webhooks, espace client, push, et toute réponse redirigée. Changer
 `VERSION` dans `sw.js` vide les caches au passage suivant.
 
 Le push web (`src/lib/alertes/pushweb.ts`) est un canal d'alerte comme les autres :
@@ -1623,8 +1673,8 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
   faux serveurs qui imitent leurs API (`fournisseurs.test.ts`). Premier envoi réel à
   surveiller dans Tâches de fond.
 - OVH ne pousse pas les réponses : elles arrivent à la relève (trente secondes).
-- Le flux temps réel tient dans un seul processus : deux instances du CRM ne se
-  verraient pas.
+- `src/lib/sms/flux.ts` émet encore des événements sans aucun lecteur depuis le
+  retrait de `/api/sms/flux` (lot 7) : à retirer avec le prochain ménage.
 - Le service worker garde sur le téléphone des écrans lus avec une session. La page de
   connexion les efface (arriver là, c'est ne plus avoir de session) ; tant que la session
   vit, un téléphone perdu les montre encore — hors ligne compris.
@@ -1635,39 +1685,52 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
 
 Simplification du 21/09/2026. Règle : **retirer un écran du menu ne retire ni donnée ni
 traitement**. Le journal enregistre, le registre des numéros protège la numérotation, la
-synthèse fige ses mois, l'agent mail trie : seuls les onglets ont disparu, leurs adresses
-répondent toujours (`/commercial`, `/prospects`, `/messages`, `/validation`, `/synthese`,
-`/numeros`, `/journal`).
+synthèse fige ses mois, la boîte mail se trie : les onglets ont disparu, et leurs adresses
+ont répondu jusqu'au lot 7 de la mission 13 (29/09/2026), qui a retiré pour de bon les
+écrans sans usage — `/commercial`, `/prospects`, `/messages`, `/numeros`, `/journal`,
+`/sms`, `/messagerie` (404 aujourd'hui, sans redirection ; les données restent en base).
+Seuls `/validation` et `/synthese` répondent encore par leur adresse.
 
 ### Navigation (`src/components/pilotage/Navigation.tsx`)
 
-Cinq onglets, dans l'ordre du travail : **Leads, Dossiers, SMS, Clients, Finances**. Les
-petites icônes de droite restent (Site, Publicité, Tâches de fond, Dépenses, Paramètres).
-Accueil, connexion et application installée ouvrent `/leads`.
+Sept entrées, dans l'ordre du travail : **Leads** (compteur rouge : rappels en retard),
+**Dossiers, Espaces clients, Simulateur, Mail** (compteur : mails à traiter), **Clients,
+Finances** ; sur téléphone, Leads, Dossiers, Espaces, Mail et Clients au pouce, le reste
+sous « Plus ». Les petites icônes de droite restent (Site, Publicité, Tâches de fond,
+Dépenses, Paramètres). L'onglet SMS du 21/09 a été retiré dès la mission 7 (pas de numéro
+professionnel) ; le mail a pris le relais. Accueil, connexion et application installée
+ouvrent `/leads`.
 
 « À valider » n'étant plus au menu, ce que le CRM propose remonte là où on travaille :
-les **SMS proposés** se relisent dans la conversation (`src/components/sms/RelancesProposees.tsx` :
-envoyer, modifier puis envoyer, écarter avec motif — même file `Proposition`, mêmes
-traces) et sont signalés en tête de la liste des conversations ; les **autres décisions**
-(dossier à classer « perdu — sans réponse », mail préparé par l'agent) apparaissent
-dans l'en-tête de Dossiers (`PropositionsEnAttente.tsx`), seulement quand il y en a.
+les décisions en attente (dossier à classer « perdu — sans réponse », mail préparé, SMS
+de l'ancien circuit encore en base) apparaissent dans l'en-tête de Dossiers
+(`PropositionsEnAttente.tsx`), seulement quand il y en a, et mènent à `/validation`
+(aussi raccourci de l'application installée). La relecture des SMS proposés dans la
+conversation (`RelancesProposees.tsx`) est partie avec l'écran SMS (lot 7).
 
 ### Leads (`src/lib/prospects/leads.ts`, `/leads`)
 
 Tout ce qui est entré — Meta, Google Ads à venir, formulaires du site, simulateur,
-saisie à la main — et n'a **pas de dossier**. Un dossier s'ouvre : le lead sort de la
-liste (il vit dans Dossiers, aucun doublon, aucun devis envoyé ici). Ordre chronologique,
-le plus récent en haut ; la priorité se lit sur la pastille et ne change pas l'ordre.
-Chaque ligne : nom, téléphone cliquable, ville, source et campagne, heure d'arrivée,
-réponses au formulaire, et « attend un appel depuis… » (vert jusqu'à cinq minutes, ambre
-jusqu'à une heure, rouge ensuite).
+saisie à la main — et n'a **pas de dossier vivant**. Un dossier s'ouvre : le lead sort des
+listes (il vit dans Dossiers, aucun doublon, aucun devis envoyé ici). Depuis la mission 14
+(partie 3), deux listes et non plus une : **À appeler** (jamais appelés, le plus récent en
+haut ; la priorité se lit sur la pastille et ne change pas l'ordre) et **À rappeler**
+(rappels datés dans l'ordre chronologique, retards en rouge en tête, puis les rappels sans
+date, plus ancien appel d'abord), plus « Sans suite » et « Archivés ». Chaque ligne : nom,
+téléphone cliquable, ville, source et campagne ; dans « À appeler », heure d'arrivée,
+réponses au formulaire et « attend un appel depuis… » (vert jusqu'à cinq minutes, ambre
+jusqu'à une heure, rouge ensuite) ; dans « À rappeler », la puce de rappel (déplaçable
+sans ouvrir la fiche) et le nombre de tentatives sans réponse. Sous les puces : « N rappels
+aujourd'hui · N en retard · N relances proposables ». Le détail : section 25.
 
-**Appels à la suite** : la file = les leads à appeler (jamais appelés, ou rappel échu),
-dans l'ordre de la liste, sans les « à écarter ». Deux gestes par appel : l'issue, puis
-« Enregistrer · suivant » (note facultative). « Intéressé » ouvre le dossier d'abord —
-l'appel s'écrit dans SON histoire — puis propose le SMS avec le lien de son espace ; « pas
-de réponse » pose le rappel du lendemain et propose le SMS. La messagerie ramène aux
-appels (`/leads?appels=1`).
+**Appels à la suite** (« Enchaîner les appels ») : la file = les leads de la liste
+affichée (jamais appelés sans les « à écarter », ou rappels en retard), dans l'ordre de la
+liste. Un appel, puis la feuille de fin d'appel (Pas de réponse, À rappeler, Intéressé, Pas
+intéressé), puis l'écran SMS s'il y a un texte à copier, puis le lead suivant. « Intéressé »
+ouvre le dossier d'abord — l'appel s'écrit dans SON histoire — et son espace, et propose
+le SMS avec le lien ; « pas de réponse » pose le rappel du lendemain 18 h (modifiable) et
+propose le SMS. Le lead affiché reste en tête jusqu'à son issue ou « Passer », même si un
+rafraîchissement l'a retiré de la liste.
 
 **Ouvrir un dossier en un bouton** (`src/lib/dossiers/depuis-lead.ts`,
 `POST /api/leads/[id]/dossier`) : coordonnées, projet, source, montant simulé, rappel
@@ -1676,6 +1739,10 @@ classement et les échanges d'avant ; les photos jointes et les simulations rejo
 photos du dossier. L'espace client passe par la même porte (`dossierDuContact`).
 
 ### Simulation du site → dossier
+
+(Depuis le 22/09/2026, section 24 : une simulation du site reste sur le lead, sans
+dossier d'office ; ce qui suit vaut pour le rangement dans un dossier déjà ouvert et pour
+le rattrapage de l'existant.)
 
 Coordonnées + photo = dossier. Une simulation rattachée à un contact (webhook du site,
 `/api/simulate`) ouvre son dossier toute seule (`assurerDossierDeSimulation`), photo avant
@@ -1702,12 +1769,15 @@ serveur 45 s après chaque démarrage (`[audit] …`), et se relit par `GET /api
 ### Lead du simulateur : dans Leads jusqu'au premier appel (21/09/2026)
 
 Le lead le plus chaud — il a vu sa cuisine rénovée — ne doit pas être appelé en dernier.
-Son dossier s'ouvre tout seul (règle ci-dessus), mais il reste dans Leads **et** en tête de
-la file d'appels tant qu'aucun appel n'est noté, ni sur sa fiche ni sur son dossier
-(`simulationNonAppelee`, `src/lib/prospects/leads.ts`). Même contact, même dossier : deux vues,
-aucun doublon. Conditions : 60 jours depuis son arrivée ou sa dernière simulation, dossier
-encore en Qualification ou Simulation. Le premier appel noté l'y fait sortir ; il reste
-dans Dossiers.
+Depuis le 22/09/2026 sa simulation reste sur sa fiche (section 24 : plus de dossier
+d'office) ; s'il a déjà un dossier (ouvert par Lucas, ou rangé dans le dossier vivant de
+son client), il reste dans **« À appeler »** — et en tête de la file d'appels — tant
+qu'aucun appel ni aucune note d'appel n'est retenu et qu'aucun rappel n'est daté
+(`simulationNonAppelee`, `src/lib/prospects/leads.ts` ; mission 14, partie 3). Même contact,
+même dossier : deux vues, aucun doublon. Conditions : 60 jours depuis son arrivée ou sa
+dernière simulation, dossier encore en Qualification ou Simulation. Le premier appel noté
+(ou le premier rappel daté) l'y fait sortir vers son dossier, où vit son rappel ; il n'est
+jamais dans « À rappeler ».
 
 - Classe : **Prioritaire par défaut, sauf hors zone** (`qualifier`, entrée `simulation`) ;
   reclassé quand une simulation est rangée, et une fois pour l'existant (migration
@@ -1723,12 +1793,15 @@ Sur chaque ligne de Leads, sans ouvrir la fiche (`src/lib/prospects/menage.ts`,
 
 - **Archiver**, motif en un geste (Test, Doublon, Hors cible, Autre) : le lead sort de Leads
   et de la file ; il se retrouve dans le filtre **Archivés**, d'où on le restaure.
-- **Traité** : le lead sort de la file « à appeler » sans être archivé (`Lead.traiteLe`) ;
-  « Reprendre » l'y remet, et un rappel posé (appel « à rappeler » ou « pas de réponse »,
-  date de rappel saisie) efface « traité » de lui-même. Un lead du simulateur marqué traité
-  quitte Leads : il est dans Dossiers.
-- **Sélection multiple** : cases à cocher, barre en bas de l'écran — archiver (motif),
-  marquer traités, ou restaurer depuis Archivés.
+- **Traité** : retiré par la mission 14 (parties 2 et 3). Un lead qui ne décrochait pas
+  sortait de la liste par « Traiter » et se perdait ; désormais un lead ne sort des listes
+  que vers un dossier, en « sans suite » avec motif, ou archivé — un appel sans réponse le
+  met dans « À rappeler » avec son rappel. `Lead.traiteLe` reste en base, plus lu ni écrit ;
+  `ACTIONS_LEADS` = ARCHIVER | RESTAURER (TRAITER et REPRENDRE refusés, 400) ; la
+  migration `leads-a-rappeler-14-2` a ramené les leads traités ou archivés depuis le
+  01/09/2026 dont le dernier appel était sans réponse.
+- **Sélection multiple** : cases à cocher, barre en bas de l'écran — archiver (motif), ou
+  restaurer depuis Archivés.
 - Chaque action affiche « Annuler » sept secondes : l'action inverse, sur les leads
   réellement changés. Rien ne se supprime ; le journal garde chaque changement.
 
@@ -1776,8 +1849,10 @@ préremplit l'écran.
 
 Sources SITE | CHATGPT | API | MANUEL ; statuts BROUILLON → PUBLIEE ⇄ MASQUEE ; « retirer » archive.
 Tout arrive en brouillon sauf les simulations faites par le client lui-même sur le site.
-« Publier » : visible dans l'espace, étape Simulation, SMS `SIMULATION_PRETE` proposé (décoché si
-un SMS est parti il y a moins de deux heures), texte modifiable avec compte de caractères.
+« Publier » : visible dans l'espace, étape Simulation ; l'écran publie sans envoyer de SMS
+(`prevenir: false`, mission 14 partie 5 : le texte `SIMULATION_PRETE` vit dans le catalogue
+et n'a plus d'interrupteur ; la route `…/simulations/publier` garde `prevenir` pour un
+envoi par le fournisseur, en GSM-7).
 
 Client existant qui refait une simulation sur le site : rattachée par téléphone puis e-mail au
 dossier vivant, rangée dans son espace, alerte « il est en train de se décider ». Téléphone et
@@ -1823,8 +1898,10 @@ Chaque version affiche ses résultats (simulations, publiées, masquées, choisi
 Une carte par espace : étape, ce qui est fait, dernière visite, qui a la main (moi / client) ;
 signaux (photos sans simulation, autre proposition demandée, brouillons, devis relu sans
 signature, lien jamais ouvert après 48 h, lien qui expire, date à fixer) ; tri « à moi d'abord » ;
-actions (dossier, voir comme le client, copier, renvoyer par SMS — `LIEN_ESPACE` à l'étape photos,
-`LIEN_ESPACE_RAPPEL` ensuite —, simulateur, renouveler, désactiver). Rien d'autre que l'espace :
+actions (dossier, voir comme le client, copier, « SMS avec le lien » — l'écran SMS avec
+`LIEN_ESPACE`, `LIEN_ESPACE_RAPPEL` si le lien actuel a déjà été communiqué ou l'espace
+ouvert, `LIEN_ESPACE_NOUVEAU` après « Nouveau lien » —, simulateur, renouveler, désactiver).
+Rien d'autre que l'espace :
 le reste vit dans Dossiers.
 
 ### Migration et essais
@@ -1853,8 +1930,9 @@ du dossier. Essais : `src/lib/espace/espace-v2.test.ts`, `src/lib/simulateur/sim
   signature postérieurs.
 - **Zones retrouvées par libellé** (`surfaceDepuisLibelle`, dans `lireZones`) : une simulation du
   site rangée sans identifiant (« Façades : K1 (Black mat) ») retrouve ses zones.
-- **SMS** : `LIEN_ESPACE_SIMULATION` remplace `LIEN_ESPACE` quand le dossier a une simulation du site
-  (migration `sms-lien-simulation-21-09`).
+- **SMS** : `LIEN_ESPACE_SIMULATION` remplace `LIEN_ESPACE` quand une simulation du site rangée
+  dans le dossier, avec son rendu, est dans l'espace (`simulationDansLEspace` ; migration
+  `sms-lien-simulation-21-09`, règle resserrée par la mission 14, partie 5).
 - **Photos** : sélecteurs en `accept="image/*"` (l'iPhone convertit ses HEIC en JPEG) ; photo
   illisible au recadrage du simulateur = message clair.
 - **Typographie** : insécables avant « : ; ! ? % » et dans les guillemets (échappements dans le
@@ -1870,7 +1948,10 @@ s'enregistre à la frappe (1,2 s), à la sortie du champ, en passant à une autr
 sans réseau, gardé dans le téléphone (`note-appel:<lead>`) et renvoyé au retour. Une note par
 appel : la dernière de moins de 3 h se complète, au-delà la frappe en ouvre une nouvelle (« Nouvel
 appel » pour forcer). Huit étiquettes (`ETIQUETTES_APPEL`, codes stables pour les statistiques).
-L'issue enregistrée en fin d'appel s'accroche à la note ouverte (`noterIssueSurNote`). À l'ouverture
+L'issue enregistrée en fin d'appel s'accroche à la note ouverte (`noterIssueSurNote`). Depuis la
+mission 14 (partie 3), une note qui a du texte ou une étiquette compte comme un appel
+(`retenirAppel` : `Lead.dernierAppelLe`, tentatives inchangées) et fait passer le lead dans
+« À rappeler » ; la feuille de fin d'appel attend `viderNotesEnAttente` avant d'écrire l'issue. À l'ouverture
 du dossier, notes et étiquettes passent dans son historique (événement `NOTE_APPEL`, daté du jour de
 l'appel via `survenuLe`) ; les notes suivantes s'y reflètent. Un lead jamais converti garde ses notes.
 Retour de l'écran d'appel d'iOS : l'appui sur le numéro note `appel-en-cours` ; au retour
@@ -1895,7 +1976,8 @@ si l'on a navigué ailleurs entre-temps (un lien suivi n'est jamais défait). `u
 depuis le bord gauche (panneaux latéraux, plein écran) ou vers le bas (barre de titre des fenêtres).
 Branché une fois dans `SheetContent` (fiche dossier, fiche lead, prospect — bouton `Close` caché +
 zones sûres haut et bas) et `Modale` (toutes les fenêtres : zones sûres, geste retour, glisser),
-plus le mode appels, la visionneuse de simulations, le sélecteur de teinte, le volet contexte des SMS.
+plus le mode appels, la visionneuse de simulations et le sélecteur de teinte (le volet contexte des
+SMS est parti avec l'écran SMS, lot 7).
 
 ### Espace client v3 (site `coverswap/src/components/espace`)
 
@@ -1935,3 +2017,157 @@ Matrice complète : `docs/COHERENCE.md`. À retenir pour toute évolution :
 - **Simulation du site = lead** (plus de dossier d'office) ; `dossiers/archivage.ts` archive / restaure un dossier et
   rend ses simulations au lead.
 - **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Tâches de fond, `corrigerIncoherence`).
+
+## 25. Appels, rappels, relances, SMS : un seul circuit (mission 14, 29/09/2026)
+
+Principe : **un écran montre une seule chose, un lead a toujours une destination, les
+textes SMS n'existent qu'à un seul endroit**. Aucun nouvel envoi automatique : les SMS
+se copient depuis le téléphone de Lucas, et copier vaut envoi ; les accusés de réception
+et les mails de l'espace sont inchangés. Rien n'est supprimé ; chaque partie a sa
+migration de données idempotente, jouée au démarrage après sauvegarde. Le détail, partie
+par partie, est dans `docs/REPRISE-MISSION.md` (« Mission 14 »).
+
+### Qui a la main (partie 1, `src/lib/dossiers/main.ts`, `devis-envoye.ts`)
+
+Quatre règles, lues par une seule fonction (`lireFaitsMain` → `mainSelonFaits`) : un devis
+visible dans l'espace (numéroté, généré ou envoyé, non archivé) vaut « Devis envoyé »,
+d'où qu'il vienne (émis, déposé, rendu visible) — un devis masqué ne passe plus la main au
+client ; un message du client (mail rattaché, message d'espace) resté sans réponse épingle
+la main à Lucas (« Répondre à {nom} ») quels que soient les gestes plus récents, jusqu'à la
+réponse (mail, réponse dans l'espace, SMS copié ou parti, appel abouti) ; l'objet du
+dossier suit le projet validé (`objetDepuisProjet`) tant que Lucas ne l'a pas écrit lui-même
+(`Dossier.objetManuelLe`) ; l'espace n'a qu'une étape, déduite de celle du dossier
+(`espace/etapes.ts`). Migration `qui-a-la-main-14-1`.
+
+### Leads : deux listes (parties 2 et 3, `src/lib/prospects/leads.ts`)
+
+- **À appeler** = jamais appelé (`Lead.dernierAppelLe` nul, aucun rappel daté), le plus
+  récent en haut. **À rappeler** = déjà appelé ou rappel daté : rappels datés dans l'ordre
+  chronologique, retards en rouge en tête, puis les rappels sans date, plus ancien appel
+  d'abord. Un lead ne sort des listes que vers un dossier vivant, en « sans suite » (motif
+  obligatoire) ou archivé ; « Traiter » n'existe plus.
+- **Une seule règle de l'appel** : « appelé » = fin d'appel, échange APPEL ou note d'appel
+  non vide (`retenirAppel`) ; « sans réponse » = l'issue quand elle est connue, sinon les
+  mots du texte (`commercial/sans-reponse.ts`) ; `Lead.tentatives` compte les appels sans
+  réponse d'affilée. Migrations `leads-a-rappeler-14-2` (les leads traités ou archivés
+  depuis le 01/09/2026 après un dernier appel sans réponse reviennent, rappel le lendemain
+  18 h, sauf rappel déjà prévu plus tard) et `appels-des-leads-14-3` (`dernierAppelLe` et
+  `tentatives` relus sur tout l'historique, `updatedAt` gardé).
+- Le compteur de l'onglet Leads ne compte que les retards ; la puce de rappel d'une ligne
+  se déplace sans ouvrir la fiche (`PATCH /api/prospects/entrants/[id] { rappelLe }`).
+- Dates en heure de Paris : `commercial/quand.ts › aHeureParis` (« demain 18 h » au
+  calendrier, changements d'heure compris) — le serveur est en UTC.
+
+### Fin d'appel (partie 4, `src/lib/commercial/appels.ts`, `components/pilotage/FinAppel.tsx`)
+
+`noterAppel` est le seul chemin (feuille de l'écran, mode appels, outil MCP `noter_appel`).
+Quatre issues : **Pas de réponse** (tentatives + 1, rappel demain 18 h modifiable, le lead
+est dans « À rappeler » ; SMS A, puis D dès la deuxième tentative) ; **À rappeler** (date
+et heure — ce soir 18 h, demain 10 h, demain 18 h, lundi 10 h, autre — ou sans date ;
+SMS B) ; **Intéressé** (dossier vivant repris ou ouvert, puis son espace ; SMS
+`LIEN_ESPACE`, ou `LIEN_ESPACE_SIMULATION` si une simulation est déjà dans l'espace) ;
+**Pas intéressé** (motif de perte obligatoire, règle unique `dossiers/perte.ts` ; aucun
+SMS). À la troisième tentative sans réponse, le CRM propose « Pas intéressé — plus de
+réponse » sans l'imposer. L'appel s'écrit sur le dossier vivant du lead s'il en a un
+(sinon sur le lead ; un dossier clos garde l'histoire). Après la feuille : l'écran SMS si
+un texte est proposé, puis le lead suivant (`GET /api/leads/suivant`).
+
+### SMS : écran et catalogue unique, copier vaut envoi (partie 5, `src/lib/sms/`)
+
+- **Écran SMS** (`components/pilotage/sms/EcranSms.tsx`, ouvert de n'importe où par
+  `ouvrirEcranSms`) : un message prérempli selon la source du lead et l'action,
+  modifiable, « Copier » (44 px) et « Passer ». Copier = presse-papiers + `POST
+  /api/sms/copie` : événement `SMS_COPIE` sur le dossier (ou échange SMS d'un lead sans
+  dossier), main au client si le texte porte le lien (`porteLienEspace`), relance comptée
+  s'il s'agit d'une relance ; double toucher en dix minutes = une seule trace. « Passer »
+  n'écrit rien.
+- **Catalogue** (`sms/catalogue.ts`, pur) : par code, libellé, groupe (Automatiques, Après
+  un appel, Espace client, Relances), usage, variables permises (`{prenom}`, `{quand}`,
+  `{lien}`…), lien en dernier, texte de départ ; `verifierTexteSms` au serveur comme à
+  l'écran. Textes modifiés en base (`ModeleSms`, Paramètres → SMS), lus par
+  `texteDuCatalogue`. Le SMS proposé (`sms/proposition.ts`) choisit le code (tentatives,
+  simulation du site, lien déjà communiqué…) et remplit `{quand}` en heure de Paris
+  (`quandLisible`). Tout texte SMS qui vivait ailleurs (mail du lien, publication d'une
+  simulation, nouveau lien) est rapatrié. Migration `catalogue-sms-14-5`.
+
+### Relances : un seul circuit (partie 6, `src/lib/relances/`)
+
+- **Devis** : quand une relance devient proposable (délai `DELAI_RELANCE_DEVIS` depuis
+  l'émission ou la dernière relance, deux au plus tous canaux confondus), le CRM propose
+  le mail existant (proposition `ENVOI_MAIL`, s'il y a une adresse et pas de refus des
+  mails) **et** le SMS à copier (`RELANCE_DEVIS_1` / `_2`), toujours. La copie compte comme
+  une relance : le dossier passe en « Relance », le mail du même rang en attente est annulé
+  (« Relance faite par SMS ») ; un mail validé ou parti ferme le rang au SMS.
+- **Photos** : un espace ouvert sans photo ni simulation depuis `DELAI_RELANCE_PHOTOS`
+  jours (3 au départ) fait proposer le SMS du lien (`LIEN_ESPACE_RAPPEL`, ou
+  `LIEN_ESPACE` si le lien n'a jamais été communiqué) ; deux au plus ; une simulation faite
+  sur le site compte (`espace/simulations-faites.ts`, règle unique « a fait une
+  simulation »).
+- **Source unique** : `relances/proposables.ts › relancesProposables` → `GET /api/relances`,
+  la feuille Relances de l'écran Leads (`FeuilleRelances.tsx`), la rubrique de la fiche
+  du dossier, `voir_relances`, `manager_operations`, la ligne du jour. Tout est proposé,
+  rien n'est envoyé. L'ancien circuit `relances-sms` est **retiré** (section 20 ;
+  migration `relances-un-circuit-14-6` : modèles archivés, délai photos posé, mains
+  relues).
+
+### Agenda et notifications des rappels (partie 7, `src/lib/agenda/rappels.ts`)
+
+- Un **rappel** = celui d'un lead des listes (`Lead.rappelLe`) ou la prochaine action
+  « Rappeler… » datée d'un dossier ni archivé ni clos. Chaque rappel a **un** événement
+  Google Calendar de 15 minutes (« Rappeler {nom} – {ville} », `tel:` et lien de la fiche
+  dans la description), créé, déplacé ou supprimé par la tâche `AGENDA_RAPPEL` (mode
+  RECONCILIATION, une par fiche ; identifiant rangé dans `agendaEvenementId`), et une
+  notification 10 minutes avant (`RAPPEL_NOTIFICATION`, une par instant, qui relit le
+  rappel avant de sonner : déplacé ou retiré, elle se tait) sur les canaux poussés, avec
+  le numéro. Un rappel de dossier noté au jour seul (midi UTC sans
+  `prochaineActionInstant`) devient un événement « toute la journée », notifié à 9 h.
+- `synchroniserRappel` est appelée partout où un rappel change, après l'écriture, jamais
+  dans une transaction (sauf l'anonymisation RGPD, qui remet la tâche en file dans la
+  sienne). `planifierAction` (outil `planifier`, bouton d'un mail) passe par là pour un
+  rappel suivi ; une autre action de dossier ou un rappel hors des listes garde l'événement
+  direct d'avant.
+- **Sans Google, sans le droit `calendar.events`, ou sans l'API Google Calendar activée
+  dans le projet Google Cloud** (partie 9 : 403 `accessNotConfigured` →
+  `ApiGoogleNonActivee`, une `AttenteExterne`), la tâche attend — 6 h entre deux essais,
+  réveillée par « Reconnecter » — sans alerte ; Paramètres → Connexions le dit en une
+  phrase, `sante_systeme` dans son bloc Google, `planifier` dans sa réponse ; l'événement
+  se pose dès que c'est réglé. L'état se lit sur les tâches en attente
+  (`etatConnexionGoogle` : `agenda`, `agendaApiActivee`, `agendaApiMessage`, et
+  `autresApisNonActivees` pour Gmail ou Drive dans le même cas), sans état à
+  tenir. Migrations `agenda-des-rappels-14-7` (rappels futurs mis en file) et
+  `agenda-rappels-en-attente-14-9` (tâches déjà en échec pour cette raison remises en
+  attente).
+- **Les nombres du jour** (`agenda/resume.ts`) : « N rappels aujourd'hui, N en retard, N
+  relances proposables », dans `point_du_jour` et sous les puces de Leads.
+
+### Outils MCP (partie 8, `src/lib/assistant/outils/`)
+
+80 outils. `leads_a_appeler` ne rend que « À appeler » ; `leads_a_rappeler` (nouveau), même
+tri et même pagination que l'écran ; `noter_appel` rend le SMS proposé (code et texte)
+pour que Lucas le copie depuis la conversation ; `noter_sms` (nouveau) — « SMS envoyé à X »,
+code ou texte libre — produit les mêmes effets que « Copier » ; `voir_relances` montre
+les clients sans e-mail avec leur SMS et les relances photos ; `espaces_clients` filtre
+« sans photo ni simulation depuis N jours » et rend téléphone et texte ; `voir_parametres`
+(groupe SMS) et `modifier_parametres` (`sms_code` + `sms_texte`) couvrent le catalogue.
+Consignes : section « Appels, rappels, SMS (mission 14) » jointe à la lecture. Un outil
+ajouté change l'empreinte du catalogue : reconnecter le connecteur Claude.
+
+### Limites connues
+
+- Rien de tout cela n'a été essayé sur un vrai iPhone (feuille de fin d'appel par-dessus
+  la fiche, presse-papiers de Safari, retour depuis l'application Téléphone, boutons de
+  notification — iOS ne les affiche pas, le toucher ouvre la fiche).
+- Une fin d'appel sur un dossier clos pose un rappel non suivi (ni liste, ni agenda, ni
+  notification) ; le résumé le dit.
+- L'état « API Google Calendar non activée » ne se lit que tant qu'une tâche attend pour
+  cette raison : après l'activation, la carte le dit encore jusqu'au passage suivant (6 h
+  au plus ; « Reconnecter » tout de suite — « Relancer » dans Tâches de fond ne vaut que
+  pour une tâche en échec ou annulée, pas pour une tâche en attente).
+- `commercial/pilotage.ts › relancesAValider` et `ce_qui_m_attend` comptent toutes les
+  propositions en attente, pas seulement les relances.
+- Transactions : le test de fusion des doublons (`prospects/doublons.test.ts`) passait par
+  `ouvrirEspace`, qui chargeait un module **dans** sa transaction (verrou d'écriture SQLite
+  tenu le temps de la transpilation, au-delà des 5 s de Prisma quand le processeur est
+  occupé) ; l'import est remonté avant la transaction (partie 9). Règle : rien de lent
+  (import, réseau, fichier, rendu) dans une transaction interactive — hors `documents.ts`
+  et `reprise.ts`, qui font exprès un travail long avec un délai déclaré.

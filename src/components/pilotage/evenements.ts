@@ -10,3 +10,20 @@ export const EVENEMENT_COMPTEURS = "pilotage:compteurs";
 export function rafraichirCompteurs(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENEMENT_COMPTEURS));
 }
+
+/* ── Mission 14 (partie 4) : la fin d'appel prévient les écrans ─────────── */
+
+/** Un appel noté a changé des leads (listes, fiche) : l'écran Leads se recharge. */
+export const EVENEMENT_LEADS_MODIFIES = "leads:modifies";
+/** La fin d'un appel lancé depuis « Appels à la suite » est finie (SMS compris) : la file passe au lead suivant. */
+export const EVENEMENT_APPEL_TERMINE = "appel:termine";
+
+export type DetailAppelTermine = { leadId: string };
+
+export function signalerLeadsModifies(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENEMENT_LEADS_MODIFIES));
+}
+
+export function signalerAppelTermine(leadId: string): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent<DetailAppelTermine>(EVENEMENT_APPEL_TERMINE, { detail: { leadId } }));
+}

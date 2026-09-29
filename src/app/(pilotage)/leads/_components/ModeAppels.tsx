@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { FolderOpen, FolderPlus, Phone, SkipForward, X } from "lucide-react";
-import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel } from "@/lib/commercial/constantes";
+import { useState } from "react";
+import { FolderOpen, FolderPlus, NotebookPen, Phone, SkipForward, X } from "lucide-react";
+import { jourSemaineHeure, pluriel } from "@/lib/commun/format";
 import type { LigneLead, SimulationLead } from "@/lib/prospects/leads";
-import { NotesAppel, finAppel, noterDebutAppel, type NotesAppelRef } from "@/components/pilotage/NotesAppel";
+import { NotesAppel, noterDebutAppel } from "@/components/pilotage/NotesAppel";
+import { noterUnAppel } from "@/components/pilotage/RetourAppel";
 import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/fermeture-mobile";
 import { Visionneuse, imagesDesSimulations, indexDeVue } from "@/components/pilotage/Visionneuse";
 import { Bouton, TRANS } from "@/components/pilotage/ui";
@@ -56,36 +57,17 @@ export function SesSimulations({ simulations, dossierId }: { simulations: Simula
 
 /* ── Enchaîner les appels ──────────────────────────────────────────── */
 
-export function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onNote, onDossier, occupe }: { file: LigneLead[]; total: number; ecartes: number; maintenant: number; onQuitter: () => void; onPasser: (id: string) => void; onNote: (lead: LigneLead, issue: IssueAppel, note: string, ouvrirDossier: boolean) => Promise<void>; onDossier: (lead: LigneLead) => void; occupe: boolean }) {
+/**
+ * Mission 14 (partie 4) — une seule façon de noter : la fiche du lead (nom, téléphone, source, tentatives, dernier
+ * échange, notes) avec « Appeler », « Noter sans appeler » et « Passer ». L'issue se note dans la feuille de fin
+ * d'appel (`RetourAppel`), puis le SMS proposé ; la feuille rend alors la main à la file (`appel:termine`), qui passe
+ * au lead suivant.
+ */
+export function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPasser, onDossier, occupe }: { file: LigneLead[]; total: number; ecartes: number; maintenant: number; onQuitter: () => void; onPasser: (id: string) => void; onDossier: (lead: LigneLead) => void; occupe: boolean }) {
   const lead = file[0] ?? null;
-  const [issue, setIssue] = useState<IssueAppel | null>(null);
-  const [avecDossier, setAvecDossier] = useState(true);
-  const notes = useRef<NotesAppelRef>(null);
-  const [envoi, setEnvoi] = useState(false);
-  const idCourant = lead?.id ?? null;
-  const [idSuivi, setIdSuivi] = useState(idCourant);
   // Plein écran sur téléphone : le geste retour ou un glissement depuis le bord gauche en sort.
   useRetourFerme(true, onQuitter);
   const glisser = useGlisserPourFermer(onQuitter, "droite");
-  if (idSuivi !== idCourant) {
-    // Un nouveau lead s'affiche : la feuille repart vide.
-    setIdSuivi(idCourant);
-    setIssue(null);
-    setAvecDossier(true);
-  }
-
-  async function enregistrer() {
-    if (!lead || !issue) return;
-    setEnvoi(true);
-    try {
-      // La note part d'abord (l'issue s'y accroche), puis l'appel est enregistré.
-      await notes.current?.vider();
-      finAppel(lead.id);
-      await onNote(lead, issue, "", issue === "INTERESSE" && avecDossier);
-    } finally {
-      setEnvoi(false);
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#16181D]" style={glisser.style} {...glisser.gestionnaires}>
@@ -131,40 +113,24 @@ export function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPass
                 <Provenance lead={lead} /> · arrivé {heureArrivee(lead.recuLe)}
               </p>
               {lead.prioriteMotif ? <p className="mt-1 text-[12.5px] text-[#8B919C]">{lead.prioriteMotif}</p> : null}
+              {lead.tentatives > 0 || lead.rappelLe ? (
+                <p className={cn("mt-1 text-[12.5px]", lead.enRetard ? "font-medium text-[#F87171]" : "text-[#8B919C]")}>
+                  {[lead.tentatives > 0 ? `${pluriel(lead.tentatives, "appel", "appels")} sans réponse d'affilée` : null, lead.rappelLe ? `rappel ${lead.enRetard ? "en retard, prévu " : "prévu "}${jourSemaineHeure(lead.rappelLe)}` : null].filter(Boolean).join(" · ")}
+                </p>
+              ) : null}
               <Reponses lead={lead} toutes />
               {lead.dernierAppel ? <p className="mt-2 text-[12.5px] text-[#8B919C]">Dernier appel : {lead.dernierAppel.contenu}</p> : null}
               {lead.simulations.length > 0 ? <SesSimulations simulations={lead.simulations} dossierId={lead.dossierId} /> : null}
 
               {lead.telephoneLien ? (
-                <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
+                <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId, depuisFile: true })} className={cn("mt-5 flex h-16 items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] text-[19px] font-semibold tabular-nums text-[#06140F] active:bg-[#5DCAA5]", TRANS)}>
                   <Phone size={22} aria-hidden /> {lead.telephone}
                 </a>
               ) : (
                 <p className="mt-5 rounded-[14px] bg-[#22262D] px-4 py-4 text-center text-[14px] text-[#F5B454]">Numéro illisible{lead.telephone ? ` : ${lead.telephone}` : ""}. {lead.email ? `E-mail : ${lead.email}` : ""}</p>
               )}
 
-              <NotesAppel key={lead.id} ref={notes} leadId={lead.id} notes={lead.notesAppel} variante="appels" />
-
-              <p className="mt-5 mb-2 text-[12px] font-medium text-[#9CA3AF]">Issue de l&apos;appel</p>
-              <div className="grid grid-cols-2 gap-2">
-                {ISSUES_APPEL.map((valeur) => (
-                  <button key={valeur} type="button" aria-pressed={issue === valeur} onClick={() => setIssue(valeur)} className={cn("h-14 rounded-[12px] border-[0.5px] text-[15px] font-medium", issue === valeur ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#E5E7EB] hover:border-[#3A3E47]", TRANS)}>
-                    {LIBELLES_ISSUE[valeur]}
-                  </button>
-                ))}
-              </div>
-              {issue === "INTERESSE" && lead.dossierId ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Son dossier est déjà ouvert : l&apos;appel s&apos;y écrit, puis le mail avec le lien de son espace vous sera proposé.</p> : null}
-              {issue === "INTERESSE" && !lead.dossierId ? (
-                <label className="mt-3 flex items-start gap-2.5 text-[13.5px] leading-snug text-[#D1D5DB]">
-                  <input type="checkbox" checked={avecDossier} onChange={(evenement) => setAvecDossier(evenement.target.checked)} className="mt-0.5 h-5 w-5 accent-[#1D9E75]" />
-                  <span>
-                    Ouvrir son dossier tout de suite
-                    <span className="block text-[12px] text-[#8B919C]">Tout est repris ; il sort de Leads. Le mail avec le lien de son espace sera proposé ensuite.</span>
-                  </span>
-                </label>
-              ) : null}
-              {issue === "PAS_DE_REPONSE" ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Rappel posé à demain 10 h ; le mail « j&apos;ai essayé de vous joindre » vous sera proposé.</p> : null}
-              {issue === "A_RAPPELER" ? <p className="mt-3 text-[12.5px] text-[#8B919C]">Rappel posé à demain 10 h (modifiable depuis sa fiche).</p> : null}
+              <NotesAppel key={lead.id} leadId={lead.id} notes={lead.notesAppel} variante="appels" />
             </div>
           </div>
           <footer className="border-t-[0.5px] border-[#2A2D34] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -172,8 +138,9 @@ export function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPass
               <button type="button" onClick={() => onPasser(lead.id)} className={cn("flex h-14 items-center justify-center gap-1.5 rounded-[14px] border-[0.5px] border-[#2A2D34] px-4 text-[14px] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
                 <SkipForward size={16} aria-hidden /> Passer
               </button>
-              <button type="button" disabled={!issue || envoi || occupe} onClick={() => void enregistrer()} className={cn("flex h-14 items-center justify-center gap-2 rounded-[14px] bg-[#1D9E75] text-[16px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-40", TRANS)}>
-                {envoi ? "Enregistrement…" : "Enregistrer · suivant"}
+              {/* L'issue se note dans la feuille de fin d'appel ; ici, sans être passé par « Appeler » (appel manqué, rappelé d'un autre téléphone…). */}
+              <button type="button" onClick={() => noterUnAppel({ leadId: lead.id, nom: lead.nom, dossierId: lead.dossierId, depuisFile: true })} className={cn("flex h-14 items-center justify-center gap-2 rounded-[14px] border-[0.5px] border-[#1D9E75]/50 bg-[#1D9E75]/10 text-[15px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/20", TRANS)}>
+                <NotebookPen size={16} aria-hidden /> Noter sans appeler
               </button>
             </div>
             {lead.dossierId ? (
@@ -182,7 +149,7 @@ export function ModeAppels({ file, total, ecartes, maintenant, onQuitter, onPass
                 <FolderOpen size={13} aria-hidden /> Voir le dossier
               </Link>
             ) : (
-              <button type="button" onClick={() => onDossier(lead)} disabled={occupe} className="mx-auto mt-2 flex items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline disabled:opacity-50">
+              <button type="button" onClick={() => onDossier(lead)} disabled={occupe} className="mx-auto mt-2 flex min-h-11 w-fit items-center gap-1.5 text-[12.5px] text-[#5DCAA5] hover:underline disabled:opacity-50">
                 <FolderPlus size={13} aria-hidden /> Ouvrir son dossier sans noter d&apos;appel
               </button>
             )}

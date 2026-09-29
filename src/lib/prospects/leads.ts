@@ -220,11 +220,23 @@ function reponsesDuLead(lead: LeadCharge): ReponseLead[] {
   return reponses.slice(0, 8);
 }
 
+/** Prénom et nom d'un lead, sans « Inconnu » ni prénom doublé ; « Contact sans nom » à défaut (la liste, la fin d'appel). */
+export function nomDuLead(lead: { prenom: string; nom: string }): string {
+  const prenom = lead.prenom.trim() === "Inconnu" ? "" : lead.prenom.trim();
+  const nomFamille = lead.nom.trim() === "Inconnu" ? "" : lead.nom.trim();
+  return (!prenom || prenom.toLowerCase() === nomFamille.toLowerCase() ? nomFamille || prenom : `${prenom} ${nomFamille}`).trim() || "Contact sans nom";
+}
+
+/** Le numéro lisible (06 12 34 56 78), ou tel que saisi s'il est illisible ; null s'il est vide. */
+export function telephoneLisible(telephone: string): string | null {
+  const numero = normaliserTelephone(telephone);
+  return numero ? formaterTelephone(numero) : telephone.trim() || null;
+}
+
 function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
   const numero = normaliserTelephone(lead.telephone);
   const prenom = lead.prenom.trim() === "Inconnu" ? "" : lead.prenom.trim();
-  const nomFamille = lead.nom.trim() === "Inconnu" ? "" : lead.nom.trim();
-  const nom = (!prenom || prenom.toLowerCase() === nomFamille.toLowerCase() ? nomFamille || prenom : `${prenom} ${nomFamille}`).trim() || "Contact sans nom";
+  const nom = nomDuLead(lead);
   const dernier = lead.interactions[0] ?? null;
   const dossier = lead.dossiers[0] ?? null;
   const simulation = lead.source === "SITE_SIMULATEUR" || lead._count.simulations > 0;
@@ -247,7 +259,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     id: lead.id,
     nom,
     prenom: prenom || nom,
-    telephone: numero ? formaterTelephone(numero) : lead.telephone.trim() || null,
+    telephone: telephoneLisible(lead.telephone),
     telephoneLien: numero ? `tel:${numero}` : null,
     email: lead.email,
     ville: VILLES_INCONNUES.test(lead.ville.trim()) ? null : lead.ville.trim(),
@@ -344,6 +356,33 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
 /** Compteur de l'onglet Leads : les rappels en retard, rien d'autre (mission 14). */
 export function compterLeadsEnRetard(maintenant: Date = new Date()): Promise<number> {
   return prisma.lead.count({ where: whereEnRetard(maintenant) });
+}
+
+export type LeadSuivant = { id: string; nom: string; ville: string | null; telephone: string | null; raison: "RETARD" | "JAMAIS_APPELE"; dossierId: string | null };
+
+/**
+ * Mission 14 (partie 4) — le lead à appeler après une fin d'appel, hors celui qu'on vient d'appeler (`apres`) :
+ * d'abord les rappels en retard (le plus ancien d'abord, comme en tête de « À rappeler »), puis « À appeler » (le plus
+ * récent d'abord, comme la liste), sans les « à écarter » (laissés de côté par « Enchaîner les appels » aussi).
+ * null s'il n'y a personne.
+ */
+export async function leadSuivant(apres: string | null, maintenant: Date = new Date()): Promise<LeadSuivant | null> {
+  const hors: Prisma.LeadWhereInput = apres ? { id: { not: apres } } : {};
+  const choix = { id: true, prenom: true, nom: true, ville: true, telephone: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true } } } satisfies Prisma.LeadSelect;
+  const retard = await prisma.lead.findFirst({ where: { AND: [whereEnRetard(maintenant), hors] }, orderBy: [{ rappelLe: "asc" }, { id: "asc" }], select: choix });
+  const jamaisAppele = retard
+    ? null
+    : await prisma.lead.findFirst({ where: { AND: [whereVue("A_APPELER", maintenant), hors, { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] }] }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], select: choix });
+  const lead = retard ?? jamaisAppele;
+  if (!lead) return null;
+  return {
+    id: lead.id,
+    nom: nomDuLead(lead),
+    ville: VILLES_INCONNUES.test(lead.ville.trim()) ? null : lead.ville.trim(),
+    telephone: telephoneLisible(lead.telephone),
+    raison: retard ? "RETARD" : "JAMAIS_APPELE",
+    dossierId: lead.dossiers[0]?.id ?? null,
+  };
 }
 
 export type RappelLead = { leadId: string; nom: string; telephone: string; le: Date; enRetard: boolean };

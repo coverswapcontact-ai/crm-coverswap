@@ -26,6 +26,13 @@ export type EtapeSortie = (typeof ETAPES_SORTIE)[number];
 export const ETAPES = [...ETAPES_ACTIVES, ...ETAPES_SORTIE] as const;
 export type EtapeDossier = (typeof ETAPES)[number];
 
+/**
+ * Un dossier fini (encaissé) ou perdu est clos : il ne reçoit pas un nouveau projet, on en ouvre un autre. Règle du
+ * « dossier vivant » d'un contact, partagée par l'ouverture depuis un lead (`ouvrirDossierDuLead`) et la fin d'appel.
+ */
+export const ETAPES_CLOSES: EtapeDossier[] = ["PERDU", "ENCAISSE"];
+export const estDossierClos = (etape: string): boolean => (ETAPES_CLOSES as string[]).includes(etape);
+
 export const LIBELLES_ETAPE: Record<EtapeDossier, string> = {
   QUALIFICATION: "Qualification",
   SIMULATION: "Simulation",

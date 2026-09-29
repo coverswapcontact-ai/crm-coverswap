@@ -2,9 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, PhoneForwarded, Plus, RefreshCw, Search, WifiOff, X, Mail } from "lucide-react";
+import { Archive, ArchiveRestore, PhoneForwarded, Plus, RefreshCw, Search, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
-import { type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
 import { LIBELLES_SOURCE_LEAD } from "@/lib/prospects/constantes";
 import { LIBELLES_MOTIF_ARCHIVAGE, type ActionLeads, type MotifArchivage } from "@/lib/prospects/menage-constantes";
 import type { LigneLead, ListeLeads, VueLeads } from "@/lib/prospects/leads";
@@ -12,11 +11,10 @@ import type { SimulationsSiteRecentes } from "@/lib/simulations/site";
 import { SurLeSite } from "./SurLeSite";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
-import { useRetourFerme } from "@/components/pilotage/fermeture-mobile";
+import { EVENEMENT_APPEL_TERMINE, EVENEMENT_LEADS_MODIFIES, type DetailAppelTermine } from "@/components/pilotage/evenements";
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, Pagination, TRANS } from "@/components/pilotage/ui";
-import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "./NouveauContact";
 import { PanneauEntrant } from "./PanneauEntrant";
@@ -58,9 +56,6 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
   const [enCours, setEnCours] = useState<Set<string>>(new Set());
   const [ouverture, setOuverture] = useState<string | null>(null);
   const [rappelEnCours, setRappelEnCours] = useState<string | null>(null);
-  const [suite, setSuite] = useState<{ lead: LigneLead; suite: SuiteAppel; dossierId: string | null } | null>(null);
-  // Mission 7 : le mail prend le relais du SMS après un appel (lien de son espace, « j'ai essayé de vous joindre »).
-  const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [totalAppels, setTotalAppels] = useState(0);
   const filtres = useRef({ vue, source, recherche, page });
 
@@ -108,6 +103,22 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
       document.removeEventListener("visibilitychange", surRetour);
       window.removeEventListener("online", surRetour);
       oublier();
+    };
+  }, [rafraichir]);
+
+  // Mission 14 (partie 4) : la feuille de fin d'appel a écrit (la liste se recharge) ; un appel de la file est fini,
+  // SMS compris (la file passe au lead suivant : il n'est plus gardé en tête).
+  useEffect(() => {
+    const surModification = () => void rafraichir();
+    const surAppelTermine = (evenement: Event) => {
+      const leadId = (evenement as CustomEvent<DetailAppelTermine>).detail?.leadId;
+      if (leadId) setPasses((actuels) => new Set(actuels).add(leadId));
+    };
+    window.addEventListener(EVENEMENT_LEADS_MODIFIES, surModification);
+    window.addEventListener(EVENEMENT_APPEL_TERMINE, surAppelTermine);
+    return () => {
+      window.removeEventListener(EVENEMENT_LEADS_MODIFIES, surModification);
+      window.removeEventListener(EVENEMENT_APPEL_TERMINE, surAppelTermine);
     };
   }, [rafraichir]);
 
@@ -226,25 +237,6 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
       setOuverture(null);
     }
   }
-
-  async function noterDansLaFile(lead: LigneLead, issue: IssueAppel, note: string, avecDossier: boolean) {
-    try {
-      // Intéressé + dossier : le dossier s'ouvre d'abord, l'appel et sa note s'écrivent dans SON histoire.
-      const dossierId = lead.dossierId ?? (avecDossier ? await ouvrirDossier(lead, { rester: true }) : null);
-      if (avecDossier && !dossierId) return;
-      const { suite: resultat } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", { ...(dossierId ? { dossierId } : { leadId: lead.id }), issue, note });
-      // Son issue est notée : la file passe au suivant (il n'est plus gardé en tête).
-      passer(lead.id);
-      await rafraichir();
-      // Un mail est prêt à relire (lien de son espace, « j'ai essayé de vous joindre ») : on le propose avant de passer au suivant.
-      if (resultat.messagePropose) setSuite({ lead, suite: resultat, dossierId });
-      else toast.success(resultat.resume);
-    } catch (erreur) {
-      toast.error("Appel non enregistré", { description: messageErreur(erreur) });
-    }
-  }
-
-  useRetourFerme(Boolean(suite), () => setSuite(null));
 
   return (
     <div className={cn("mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8", selection.size > 0 && "pb-40 md:pb-28")}>
@@ -391,8 +383,6 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
         onModifie={() => void rafraichir()}
       />
 
-      <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void rafraichir()} />
-
       {nouveau ? (
         <NouveauContact
           onFermer={() => setNouveau(false)}
@@ -413,37 +403,9 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
           occupe={ouverture !== null}
           onQuitter={() => setModeAppels(false)}
           onPasser={passer}
-          onNote={noterDansLaFile}
           // Comme avant : son dossier ouvert, il quitte la file.
           onDossier={(lead) => void ouvrirDossier(lead, { rester: true }).then((dossierId) => dossierId && passer(lead.id))}
         />
-      ) : null}
-
-      {suite ? (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-5">
-            <p className="text-[16px] font-medium text-[#F2F3F5]">Appel noté</p>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#9CA3AF]">
-              {suite.suite.messagePropose === "LIEN_ESPACE" ? `Un mail avec le lien de son espace est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.` : `Le mail « j'ai essayé de vous joindre » est prêt pour ${suite.lead.prenom} : vous le relisez, vous l'envoyez.`}
-            </p>
-            <div className="mt-4 grid gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const { suite: resultat, lead } = suite;
-                  setSuite(null);
-                  if (resultat.messagePropose) setLienMail({ dossierId: resultat.dossierId, leadId: resultat.dossierId ? null : lead.id, code: resultat.messagePropose });
-                }}
-                className={cn("flex h-12 items-center justify-center gap-2 rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}
-              >
-                <Mail size={16} aria-hidden /> Relire le mail
-              </button>
-              <button type="button" onClick={() => setSuite(null)} className={cn("h-12 rounded-[12px] border-[0.5px] border-[#2A2D34] text-[15px] text-[#E5E7EB] hover:border-[#3A3E47]", TRANS)}>
-                Plus tard · lead suivant
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
     </div>
   );

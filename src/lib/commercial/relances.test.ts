@@ -151,7 +151,8 @@ describe("relances proposées, jamais envoyées seules", () => {
   test("appel sans réponse : rappel posé au lendemain, second SMS proposé à J+3", async () => {
     const { dossierId } = await dossierOuvert("Injoignable", 4);
     const suite = await appels.noterAppel({ dossierId, issue: "PAS_DE_REPONSE", note: "" });
-    assert.equal(suite.messagePropose, "INJOIGNABLE_LIEN");
+    // Mission 14 (partie 4) : le SMS « j'ai essayé de vous joindre » est proposé à l'écran (plus de mail).
+    assert.equal(suite.sms?.code, "PAS_DE_REPONSE");
     const dossier = await prisma.dossier.findUnique({ where: { id: dossierId } });
     assert.match(dossier?.prochaineAction ?? "", /Rappeler/);
     assert.ok(dossier?.prochaineActionDate && dossier.prochaineActionDate > new Date());
@@ -184,24 +185,24 @@ describe("relances proposées, jamais envoyées seules", () => {
 });
 
 describe("fin d'appel", () => {
-  test("intéressé : contact « contacté », et le lien de son espace est le message proposé", async () => {
+  // Mission 14 (partie 4) : « intéressé » ouvre le dossier et l'espace ; le SMS avec le lien est proposé (plus de mail).
+  test("intéressé : dossier et espace ouverts, contact « contacté », le SMS avec le lien de son espace est proposé", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Nadia", nom: "Roux", telephone: "+33612000099", ville: "Sète", source: "META_ADS" } });
     const suite = await appels.noterAppel({ leadId: lead.id, issue: "INTERESSE", note: "Cuisine en U, veut du chêne" });
-    assert.deepEqual([suite.cible, suite.messagePropose], ["CONTACT", "LIEN_ESPACE"]);
+    assert.deepEqual([suite.cible, suite.sms?.code], ["DOSSIER", "LIEN_ESPACE"]);
+    assert.ok(suite.dossierId && (await prisma.espaceClient.findUnique({ where: { dossierId: suite.dossierId } })), "son espace est ouvert");
     assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } }))?.statut, "CONTACTE");
-    assert.match((await prisma.interaction.findFirst({ where: { leadId: lead.id, type: "APPEL" } }))?.contenu ?? "", /Intéressé : Cuisine en U/);
+    assert.match((await prisma.dossierEvenement.findFirst({ where: { dossierId: suite.dossierId!, type: "APPEL" } }))?.contenu ?? "", /Intéressé : Cuisine en U/);
   });
 
-  test("à rappeler : demain 10 h à Paris par défaut ; pas intéressé : sans suite", async () => {
-    const dixHeures = appels.demainDixHeures(new Date("2026-09-21T15:00:00Z"));
-    assert.equal(dixHeures.toISOString(), "2026-09-22T08:00:00.000Z", "10 h à Paris en été = 8 h UTC");
-    assert.equal(appels.demainDixHeures(new Date("2026-12-01T15:00:00Z")).toISOString(), "2026-12-02T09:00:00.000Z", "10 h à Paris en hiver = 9 h UTC");
-
+  test("à rappeler sans date : aucun rappel inventé ; pas de réponse : demain 18 h à Paris ; pas intéressé : sans suite, avec son motif", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Paul", nom: "Morel", telephone: "+33612000098", ville: "Lattes", source: "META_ADS" } });
     await appels.noterAppel({ leadId: lead.id, issue: "A_RAPPELER", note: "En réunion" });
-    assert.ok((await prisma.lead.findUnique({ where: { id: lead.id } }))?.rappelLe);
-    await appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", note: "A déjà fait refaire" });
+    assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } }))?.rappelLe, null, "plus de défaut à demain 10 h");
+    const suite = await appels.noterAppel({ leadId: lead.id, issue: "PAS_DE_REPONSE", note: "" }, new Date("2026-09-21T15:00:00Z"));
+    assert.equal(suite.rappelLe, "2026-09-22T16:00:00.000Z", "18 h à Paris en été = 16 h UTC");
+    await appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", note: "A déjà fait refaire", motifPerte: "PROJET_ABANDONNE" });
     const apres = await prisma.lead.findUnique({ where: { id: lead.id } });
-    assert.deepEqual([apres?.statut, apres?.rappelLe], ["PERDU", null]);
+    assert.deepEqual([apres?.statut, apres?.rappelLe, apres?.motifPerte], ["PERDU", null, "PROJET_ABANDONNE"]);
   });
 });

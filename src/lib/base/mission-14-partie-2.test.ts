@@ -49,9 +49,17 @@ describe("aHeureParis : « J+n à HH:MM », heure de Paris", () => {
     assert.equal(a("2026-12-31T20:00:00Z", 1, 10), "2027-01-01T09:00:00.000Z", "passage d'année");
   });
 
-  test("demainDixHeures passe par elle, mêmes valeurs qu'avant", () => {
-    assert.equal(iso(appels.demainDixHeures(new Date("2026-09-21T15:00:00Z"))), "2026-09-22T08:00:00.000Z");
-    assert.equal(iso(appels.demainDixHeures(new Date("2026-12-01T15:00:00Z"))), "2026-12-02T09:00:00.000Z");
+  // Partie 4 : `demainDixHeures` a disparu (« à rappeler » n'a plus de défaut) ; le défaut de « pas de réponse » passe par elle.
+  test("le rappel par défaut d'un appel sans réponse passe par elle (demain 18 h, été comme hiver)", async () => {
+    for (const [maintenant, attendu] of [
+      ["2026-09-21T15:00:00Z", "2026-09-22T16:00:00.000Z"],
+      ["2026-12-01T15:00:00Z", "2026-12-02T17:00:00.000Z"],
+    ]) {
+      const lead = await prisma.lead.create({ data: { prenom: "Defaut", nom: "Essai", telephone: `+33612009${maintenant.slice(5, 7)}${maintenant.slice(8, 10)}`, ville: "Lattes", source: "META_ADS" } });
+      const suite = await appels.noterAppel({ leadId: lead.id, issue: "PAS_DE_REPONSE", note: "" }, new Date(maintenant));
+      assert.equal(suite.rappelLe, attendu);
+      assert.equal(iso((await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).rappelLe!), attendu);
+    }
   });
 });
 

@@ -62,9 +62,12 @@ describe("motif de perte obligatoire", () => {
     assert.deepEqual([l.statut, l.motifPerte, l.perteLe], ["CONTACTE", null, null]);
   });
 
-  test("note d'appel « pas intéressé » : le lead passe perdu avec un motif (projet abandonné)", async () => {
+  // Mission 14 (partie 4) : le motif n'est plus imposé (« projet abandonné » d'office) mais choisi, et obligatoire.
+  test("fin d'appel « pas intéressé » : sans motif refusé (tous les motifs cités) ; avec, le lead passe perdu avec ce motif", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Pas", nom: "Intéressé", telephone: "0600000012", ville: "Lattes", source: "AUTRE" } });
-    await avecActeur(LUCAS, () => appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", contenu: "Ne veut plus de travaux" } as unknown as Parameters<typeof appels.noterAppel>[0]));
+    await assert.rejects(avecActeur(LUCAS, () => appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", note: "" })), /Motif obligatoire pour classer sans suite : .*délai trop long/);
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).statut, "NOUVEAU", "rien n'a bougé");
+    await avecActeur(LUCAS, () => appels.noterAppel({ leadId: lead.id, issue: "PAS_INTERESSE", note: "", motifPerte: "PROJET_ABANDONNE" }));
     const l = await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } });
     assert.deepEqual([l.statut, l.motifPerte, l.perteCommentaire], ["PERDU", "PROJET_ABANDONNE", "Pas intéressé (appel)"]);
   });

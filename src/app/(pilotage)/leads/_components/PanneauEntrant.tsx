@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ExternalLink, FolderPlus, Link2, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, FolderPlus, Link2, Mail, MessageSquare, NotebookPen, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { NotesAppelDuLead, noterDebutAppel } from "@/components/pilotage/NotesAppel";
+import { noterUnAppel } from "@/components/pilotage/RetourAppel";
 import { ouvrirEcranSms } from "@/components/pilotage/sms/EcranSms";
 import { Bouton, Champ, Modale, Pastille, Puces, TitreSection, ZoneTexte } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type EtapeDossier, type MotifPerte } from "@/lib/dossiers/constants";
@@ -159,6 +160,12 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
               </a>
             </>
           ) : null}
+          {/* Mission 14 (partie 4) : la feuille de fin d'appel, sans être passé par « Appeler » ; la fiche se relit ensuite. */}
+          {detail.archiveLe ? null : (
+            <button type="button" className={LIEN_ACTION} onClick={() => noterUnAppel({ leadId: detail.id, nom: detail.nom, dossierId: detail.dossier?.id ?? null, onEnregistre: () => void relire() })}>
+              <NotebookPen size={14} aria-hidden /> Noter l&apos;appel
+            </button>
+          )}
 
           {detail.archiveLe ? null : (
             <button

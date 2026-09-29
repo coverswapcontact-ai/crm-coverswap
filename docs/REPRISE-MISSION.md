@@ -1720,3 +1720,139 @@ texte SMS qui vit ailleurs. » Principe : « les textes SMS n'existent qu'à un 
   → texte du catalogue prérempli, lien en dernier, compteur ; « Copier » (vrai clic) → toast « SMS copié », écran fermé,
   trace écrite ; Paramètres → SMS : aide, règles d'écriture, groupes Automatiques / Après un appel / Espace client /
   Relances. Le presse-papiers de Safari sur iPhone reste à confirmer par Lucas.
+
+## Partie 4 — Fin d'appel : la feuille du lot 4 (29/09)
+Énoncé : « Ses quatre puces deviennent : Pas de réponse (tentative +1, rappel demain 18 h modifiable, lead dans « À
+rappeler » ; SMS A, puis D dès la 2ᵉ tentative), À rappeler (date + heure : ce soir 18 h, demain 10 h, demain 18 h,
+lundi 10 h, ou sans date ; SMS B), Intéressé (dossier et espace ; LIEN_ESPACE), Pas intéressé (motif perdu obligatoire,
+liste existante ; aucun SMS). À la 3ᵉ tentative sans réponse, le CRM propose « Pas intéressé — plus de réponse » sans
+l'imposer. Après la puce : l'écran SMS, puis le lead suivant. » Livrée après la partie 5 (l'écran SMS existait).
+- **Serveur** (`commercial/appels.ts › noterAppel(entree, maintenant = new Date())`) : entrée `{ leadId?, dossierId?,
+  issue, note, rappelLe?: ISO | null, motifPerte?, perteCommentaire? }` (`schemaAppel`, route `POST
+  /api/commercial/appels` inchangée d'adresse).
+  - PAS_DE_REPONSE : rappel = `rappelLe`, sinon `aHeureParis(maintenant, 1, 18)` ; tentatives +1 ; lead sans dossier :
+    `rappelLe` posé, statut inchangé (« À rappeler ») ; dossier : « Rappeler (pas de réponse) » à cet instant.
+  - A_RAPPELER : `rappelLe` exact, ou `null`/absent = SANS DATE (plus de défaut à demain 10 h ; un rappel daté d'avant
+    est retiré : c'est le choix de Lucas) ; tentatives 0 ; lead NOUVEAU/DEVIS_DEMANDE → CONTACTE ; dossier :
+    « Rappeler », avec la date ou sans date. `demainDixHeures` retirée (plus aucun appelant ; tests adaptés).
+  - Cible (`cibleDeLAppel`, aussi pour `contexteAppel`) : le dossier donné ; pour un lead, son dossier VIVANT (étapes
+    closes exclues : `ETAPES_CLOSES` / `estDossierClos`, désormais dans `dossiers/constants.ts` et partagées avec
+    `depuis-lead.ts › dossierVivant`), sinon son dernier dossier clos (l'appel s'écrit dans son histoire).
+  - INTERESSE : AVANT d'écrire, si le lead n'a pas de dossier ou si le dossier visé est clos (perdu, encaissé),
+    `ouvrirDossierDuLead(leadId, { motif: "BOUTON" })` reprend son dossier vivant (le sien, sinon celui de son client)
+    ou en ouvre un nouveau (un rappel À VENIR du lead devient « Rappeler » + sa date sur le dossier : rien n'est
+    effacé ; le lead, qui a un dossier, sort des listes Leads) ; un refus ici (contact archivé) arrive avant toute
+    écriture. L'appel s'écrit dans le dossier ; tentatives 0 ; PUIS l'espace (`espaceNonOuvert` : `ouvrirEspace` dans
+    un try/catch) — un refus (lien du client désactivé, espace du projet archivé ou désactivé) n'empêche plus l'appel
+    d'être noté : « Appel noté. Dossier ouvert ; son espace ne s'est pas ouvert. {raison} », `sms: null` (réessayer
+    note l'appel à nouveau, dans le même dossier). Dossier clos SANS lead : l'appel s'y écrit, aucun espace sur un
+    projet figé, pas de SMS : « Appel noté. Son dossier est perdu : aucun espace ouvert sur un projet clos. Reprends le
+    dossier (change son étape) pour lui ouvrir son espace. » (encaissé : « … Ouvre-lui un nouveau dossier pour ce
+    projet. »).
+  - PAS_INTERESSE : motif vérifié AVANT toute écriture par la règle unique (ci-dessous) ; précision =
+    `perteCommentaire`, sinon la note. Lead sans dossier : PERDU, `motifPerte`, `perteLe`, `perteCommentaire` (la
+    précision, sinon « Pas intéressé (appel) »), rappel retiré ; dossier : `changerEtape` PERDU avec ce motif (précision,
+    sinon « Pas intéressé (dit au téléphone) ») — jamais un dossier clos : encaissé, il le reste (« Appel noté. Son
+    dossier est encaissé : il ne passe pas en perdu. ») ; déjà perdu : « Appel noté. Son dossier était déjà perdu. ».
+    Le contenu de l'appel reste « Appel — Pas intéressé[ : note] » (le motif n'y entre pas : `issueDuContenu` lit ce
+    préfixe).
+  - `dernierAppelLe` = `maintenant` (au lieu de `new Date()`), le reste de la partie 3 inchangé.
+  - Rendu `SuiteAppel` (`commercial/constantes.ts`) : `cible`, `dossierId`, `leadId`, `rappelLe`, `resume` gardés ;
+    `messagePropose` retiré (plus de mail proposé en fin d'appel) ; + `tentatives` (après cet appel ; dossier sans lead :
+    lues dans ses événements APPEL, `sms/proposition.ts › tentativesDuDossier`, exportée), `proposerSansSuite`
+    (PAS_DE_REPONSE et tentatives ≥ 3), `sms` = `proposerSms({ action: issue, leadId, dossierId, rappelLe, tentatives },
+    maintenant)` pour les trois issues, null pour PAS_INTERESSE ; préparé APRÈS l'écriture dans un try/catch (un SMS
+    impossible à préparer rend `sms: null`, l'appel ne sera pas noté deux fois). `resume` : « Appel noté. Rappel demain
+    à 18:00. » (« jeudi à 10:00 », « le 12 octobre à 10:30 »), « Appel noté. Sans date de rappel : il est dans À
+    rappeler. » (dossier : « … : « Rappeler » est la prochaine action de son dossier. »), « Appel noté. Dossier et espace
+    ouverts. », « Appel noté. Classé sans suite : délai trop long. » (AUTRE : la précision).
+- **Règle unique du motif de perte** (`dossiers/perte.ts`, nouveau) : `verifierMotifPerte(motif, precision, debut)` —
+  motif obligatoire, précision ≥ 3 caractères pour AUTRE — appelée par `modifierEntrant` (« Motif obligatoire pour
+  classer sans suite : … »), `changerEtapeDansTransaction` (« Motif de perte obligatoire : … ») et `noterAppel` (message
+  du lead) ; la liste citée est dérivée de `MOTIFS_PERTE` (« trop cher, a choisi un concurrent, plus de réponse, projet
+  abandonné, hors zone, délai trop long, ou autre (précisé) » : le délai manquait). `motifPerteDansUnePhrase` pour le
+  résumé.
+- **Routes** (derrière la session, aucune route publique) : `GET /api/commercial/appels/contexte?leadId=|dossierId=` →
+  `{ contexte: { nom, telephone, tentatives, source (libellé), rappelLe, dossierId } }` (`contexteAppel` : un lead avec
+  dossier vivant est lu par son dossier ; `rappelLe` = celui du lead ou la date de la prochaine action du dossier).
+  `GET /api/leads/suivant?apres=<leadId>` → `{ suivant: { id, nom, ville, telephone, raison: RETARD | JAMAIS_APPELE,
+  dossierId } | null }` (`prospects/leads.ts › leadSuivant` : rappels en retard, le plus ancien d'abord ; puis « À
+  appeler », le plus récent d'abord, SANS les « à écarter » — comme « Enchaîner les appels » ; jamais `apres`). Aides
+  exportées de `leads.ts` : `nomDuLead`, `telephoneLisible` (la liste s'en sert aussi).
+- **Outil MCP `noter_appel`** : `motif_perte` (enum `MOTIFS_PERTE`) exigé pour PAS_INTERESSE (refus qui liste les codes
+  et leurs libellés, avant d'écrire la note) ; AUTRE : précision dans `texte` ; description juste (pas de réponse →
+  demain 18 h, à rappeler sans moment → sans date, intéressé ouvre dossier et espace, plus de « envoyer_lien_espace ») ;
+  réponse : le résumé (nom), « {N}ᵉ appel sans réponse d'affilée : propose à Lucas de classer sans suite (motif « Plus
+  de réponse »), sans l'imposer. » si `proposerSansSuite` (N = `suite.tentatives`, le nombre réel), et « SMS proposé ({code}) : « {texte} » » (la partie 8 ajoutera
+  le renvoi à `noter_sms`). `maintenant` du contexte transmis. L'empreinte du catalogue change : reconnecter le
+  connecteur.
+- **La feuille** (`components/pilotage/FinAppel.tsx › FeuilleFinAppel`, nouveau ; `RetourAppel.tsx` = l'hôte) : « Comment
+  ça s'est passé avec {nom} ? » (+ « Publicité Meta · 2 appels sans réponse d'affilée » lu par le contexte), quatre
+  puces 44 px dans l'ordre de l'énoncé (Pas de réponse, À rappeler, Intéressé, Pas intéressé : `ORDRE_FEUILLE`,
+  `ISSUES_APPEL` garde le sien pour zod et l'outil MCP), « Précision (facultatif) » commune, Plus tard, Enregistrer
+  (désactivé tant qu'un choix exigé manque ; attend d'abord `viderNotesEnAttente(leadId)` — la note d'appel tapée ou
+  dictée juste avant part avant l'issue, qui s'y accroche).
+  Pas de réponse : « Rappel : demain 18:00 · Modifier » (champ `datetime-local` natif invisible posé sur la ligne, comme
+  `PuceRappel` ; vidé → défaut du serveur) ; tentatives déjà ≥ 2 : encart ambre « 3ᵉ appel sans réponse d'affilée… » et
+  « Classer sans suite — plus de réponse » (enregistre PAS_INTERESSE + SANS_REPONSE). À rappeler : puces « Ce soir
+  18 h » (avant 18 h seulement), « Demain 10 h », « Demain 18 h », « Lundi 10 h » (le prochain lundi, dans une semaine
+  si l'on est lundi), « Autre… » (champ date et heure, demain 10:00 au départ), « Sans date » (« Il reste dans « À
+  rappeler »… » pour un lead sans dossier ; « « Rappeler », sans date, devient la prochaine action de son dossier. »
+  quand l'appel s'écrit sur un dossier, connu de la feuille ou lu par le contexte). Intéressé : une phrase.
+  Pas intéressé : puces des `MOTIFS_PERTE` (libellés existants), précision exigée pour « Autre ». Calculs purs en heure
+  de Paris dans `commercial/quand.ts` : `raccourcisRappel`, `momentDuRappel` (« demain 18:00 », « jeudi à 10:00 »),
+  `versSaisieParis` / `depuisSaisieParis` (le champ se lit à l'horloge de Paris quel que soit le fuseau du téléphone).
+  Après Enregistrer : `finAppel`, `rafraichirCompteurs()`, événement `leads:modifies`, `onEnregistre` éventuel, toast
+  `suite.resume` (le toast faux « Un mail est prêt… » a disparu) ; puis l'écran SMS (`ouvrirEcranSms({ proposition:
+  suite.sms })`) si un SMS est proposé ; à sa fin (copié ou passé) : appel de la file → `appel:termine { leadId }` ;
+  sinon `GET /api/leads/suivant` → carte « Suivant : {nom} · {ville} » + « Rappel en retard » (rouge) / « Jamais
+  appelé », « Appeler » (`tel:` + `noterDebutAppel` : la feuille reviendra au retour) et « Plus tard » ; rien si
+  personne ; « Numéro illisible » sans bouton. Ouverture à la main : `noterUnAppel({ leadId, nom, dossierId,
+  depuisFile?, onEnregistre? })` (événement fenêtre `appel:noter`). « Plus tard » d'une ouverture à la main ne marque
+  pas l'appel en cours. Événements dans `components/pilotage/evenements.ts` (`EVENEMENT_LEADS_MODIFIES`,
+  `EVENEMENT_APPEL_TERMINE`). `AppelEnCours` gagne `depuisFile`.
+- **Mode appels** (`ModeAppels.tsx`) : plus de puces d'issue, de case « ouvrir le dossier » ni de textes faux (« demain
+  10 h… modifiable depuis sa fiche ») ; la fiche montre en plus « N appels sans réponse d'affilée · rappel prévu … »
+  (rouge si en retard) ; « Appeler » (`noterDebutAppel(..., { depuisFile: true })`), pied « Passer » + « Noter sans
+  appeler » (la feuille, `depuisFile`) ; « Voir le dossier » / « Ouvrir son dossier sans noter d'appel » gardés (ce
+  dernier passe à 44 px). La note d'appel n'a plus de `ref` (`NotesAppelRef`/`useImperativeHandle` retirés) : le
+  registre des blocs montés sert `viderNotesEnAttente` ; son texte d'aide tutoie (« tu peux dicter »).
+  `EcranLeads` : fenêtre « Appel noté / Relire le mail », `LienParMail`, `noterDansLaFile` et le `useRetourFerme` associé
+  retirés ; écoute `leads:modifies` (rafraîchit) et `appel:termine` (le lead passe : la file avance ; il restait gardé
+  en tête jusque-là par la garde de la partie 3). **Fiche du lead** (`PanneauEntrant`) : bouton « Noter l'appel » (hors
+  archivés), fiche relue après l'écriture.
+- Tests : `base/mission-14-partie-4.test.ts` (16) : raccourcis (été, 19 h, dimanche d'hiver), champ date et heure de
+  Paris et `momentDuRappel` ; pas de réponse ×3 (Meta : demain 18 h, « À rappeler », SMS A exact ; rappel choisi →
+  SMS D, « mercredi à 09:30 » ; 3ᵉ → `proposerSansSuite`, statut et rappel inchangés), simulateur → variante A, dossier
+  → « Rappeler (pas de réponse) » à l'instant ; à rappeler jeudi 10 h (SMS B exact) / sans date (« prochainement »,
+  rappel d'avant retiré, CONTACTE) et l'ordre de « À rappeler » (mardi 18 h, jeudi 10 h, sans date), dossier sans date ;
+  intéressé (dossier + espace, LIEN_ESPACE exact avec le lien, rappel à venir passé sur le dossier, lead sorti des
+  listes, `noterSmsCopie` → NON_ENVOYE tombe dans `listerEspaces`), simulateur avec simulation rangée → dossier repris,
+  LIEN_ESPACE_SIMULATION ; pas intéressé (sans motif : refus citant les sept motifs, rien d'écrit ; AUTRE sans
+  précision ; DELAI → PERDU daté, « Sans suite »), « plus de réponse » à la 3ᵉ tentative, dossier → PERDU/PRIX, route →
+  400 ; dossier vivant / clos / espace qui refuse (client revenu dont le lien est désactivé : appel noté dans son
+  nouveau dossier, résumé « son espace ne s'est pas ouvert », SMS nul, réessai noté dans le même dossier ; intéressé
+  sur un dossier perdu avec lead → nouveau dossier vivant, aucun espace sur le perdu, repris depuis la fiche du perdu ;
+  dossier encaissé sans lead → noté, sans espace ni SMS ; lead lu par son dossier vivant plutôt qu'un encaissé plus
+  récent ; pas intéressé sur un encaissé → reste encaissé) ; contexte (lead, dossier sans lead + route) ; lead suivant
+  (retards du plus ancien, jamais `apres`, puis « À appeler » du plus récent, sans « à écarter », ville inconnue →
+  null, route = fonction) ; outil `noter_appel` (refus sans motif, SMS dans la réponse, plus de
+  `envoyer_lien_espace`, HORS_ZONE, « 4ᵉ appel sans réponse d'affilée »). Adaptés en gardant leur intention :
+  `commercial/relances.test.ts` (SMS A au lieu d'INJOIGNABLE_LIEN ; intéressé → dossier, espace, LIEN_ESPACE ; à
+  rappeler sans date, pas de réponse 18 h, pas intéressé avec motif), `dossiers/perte-motif.test.ts` (motif exigé,
+  « délai trop long » cité), `base/mission-14-partie-2.test.ts` (le défaut 18 h passe par `aHeureParis`, été/hiver).
+- Reste / à savoir : rien essayé dans un navigateur ni sur iPhone — feuille par-dessus le panneau du lead (Sheet
+  base-ui modale : les éléments hors du panneau reçoivent seulement `aria-hidden`, la feuille z-70 passe au-dessus de
+  son fond), champ date et heure invisible, enchaînement feuille → écran SMS → carte « Suivant », `appel:termine` dans
+  le mode appels. Inchangé : une note d'appel qui a du texte appelle toujours `finAppel` (`NotesAppel.tsx`) — tapée
+  dans les 15 s de l'appui sur le numéro, elle empêche la feuille de s'ouvrir seule (« Noter l'appel » / « Noter sans
+  appeler » restent). La fiche du dossier (`PanneauDossier`) n'est pas relue après une fin d'appel notée depuis elle.
+  La carte « Suivant » apparaît aussi après l'appel d'un dossier. « Intéressé » dont l'espace ne s'ouvre pas : le
+  toast reste un toast de succès (le résumé dit pourquoi). « Pas de réponse » / « À rappeler » sur un contact dont le
+  seul dossier est clos : l'appel et « Rappeler » vont toujours sur ce dossier clos (comportement d'avant, inchangé).
+  Docs (`ARCHITECTURE-PILOTAGE.md`) : partie 9.
+- Vérifié : tsc, eslint, suite complète 635/635, build ; à l'écran (390 × 660, m8) : « Noter l'appel » depuis la fiche d'un
+  lead du simulateur → feuille par-dessus la fiche, puces dans l'ordre, « Pas de réponse » → « Rappel : demain 18:00 »
+  modifiable → Enregistrer → toast « Appel noté. Rappel demain à 18:00. » → écran SMS avec le texte A variante simulation
+  (« … je vous rappelle demain vers 18 h … », 168 caractères, « Vise 160 ») → Passer → carte « Suivant : … — Rappel en
+  retard » avec Appeler / Plus tard. Le retour réel depuis l'appli Téléphone de l'iPhone reste à vivre par Lucas.

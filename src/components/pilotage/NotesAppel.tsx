@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { LIBELLES_ISSUE, type IssueAppel } from "@/lib/commercial/constantes";
 import { ETIQUETTES_APPEL, LIBELLES_ETIQUETTE_APPEL, NOTE_APPEL_OUVERTE_MS, type EtiquetteAppel, type NoteAppelVue } from "@/lib/commercial/notes-constantes";
@@ -19,11 +19,6 @@ import { cn } from "@/lib/utils";
  * contact revient à l'écran, prêt à écrire.
  */
 
-export type NotesAppelRef = {
-  /** Envoie ce qui attend (avant d'enregistrer l'issue de l'appel, par exemple). */
-  vider: () => Promise<void>;
-};
-
 type Brouillon = { noteId: string | null; texte: string; etiquettes: EtiquetteAppel[]; appelLe: string | null };
 type EtatEnvoi = { etat: "" | "en-cours" | "ok" | "attente" | "erreur"; message?: string };
 
@@ -31,11 +26,15 @@ const cleLocale = (leadId: string) => `note-appel:${leadId}`;
 const CLE_APPEL_EN_COURS = "appel-en-cours";
 const DUREE_APPEL_EN_COURS_MS = 2 * 3_600_000;
 
-/** Mission 13 (lot 4) : l'appel retenu porte aussi le nom, le dossier (quand on appelle depuis lui) et si « Comment ça s'est passé ? » a déjà été proposé. */
-export type AppelEnCours = { leadId: string; le: string; nom?: string; dossierId?: string | null; proposeLe?: string };
+/**
+ * Mission 13 (lot 4) : l'appel retenu porte aussi le nom, le dossier (quand on appelle depuis lui) et si « Comment ça
+ * s'est passé ? » a déjà été proposé. Mission 14 (partie 4) : et s'il vient de « Appels à la suite » (`depuisFile`) —
+ * la fin d'appel rend alors la main à la file au lieu de proposer le lead suivant.
+ */
+export type AppelEnCours = { leadId: string; le: string; nom?: string; dossierId?: string | null; proposeLe?: string; depuisFile?: boolean };
 
 /** Appui sur le numéro d'un contact : on retient qui l'on appelle, et depuis quand. */
-export function noterDebutAppel(leadId: string, infos: { nom?: string; dossierId?: string | null } = {}): void {
+export function noterDebutAppel(leadId: string, infos: { nom?: string; dossierId?: string | null; depuisFile?: boolean } = {}): void {
   try {
     localStorage.setItem(CLE_APPEL_EN_COURS, JSON.stringify({ leadId, le: new Date().toISOString(), ...infos }));
   } catch {
@@ -74,9 +73,17 @@ export function finAppel(leadId: string): void {
 
 /* ── Retour de l'écran d'appel : un seul champ reprend la main ─────────── */
 
-type Instance = { leadId: string; priorite: number; champ: () => HTMLTextAreaElement | null };
+type Instance = { leadId: string; priorite: number; champ: () => HTMLTextAreaElement | null; vider: () => Promise<void> };
 const instances = new Set<Instance>();
 let ecoute = false;
+
+/**
+ * Envoie tout de suite la note d'appel qui attend (tapée ou dictée il y a moins de 1,2 s) dans chaque bloc monté de ce
+ * contact : la feuille de fin d'appel l'attend avant d'enregistrer l'issue, qui s'accroche à cette note.
+ */
+export async function viderNotesEnAttente(leadId: string): Promise<void> {
+  await Promise.allSettled([...instances].filter((i) => i.leadId === leadId).map((i) => i.vider()));
+}
 
 function ramenerSurLaNote() {
   const appel = appelEnCours();
@@ -127,7 +134,7 @@ const dateAppel = (iso: string) => {
   return `${jour} à ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
 };
 
-export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId: string; notes: NoteAppelVue[]; variante?: "liste" | "fiche" | "appels"; ref?: Ref<NotesAppelRef> }) {
+export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: string; notes: NoteAppelVue[]; variante?: "liste" | "fiche" | "appels" }) {
   const [brouillon, setBrouillon] = useState<Brouillon>(() => depart(leadId, notes));
   const [envoi, setEnvoi] = useState<EtatEnvoi>({ etat: "" });
   const [enregistrees, setEnregistrees] = useState<NoteAppelVue[]>([]);
@@ -240,8 +247,6 @@ export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId:
     return vol.current ?? Promise.resolve();
   }
 
-  useImperativeHandle(ref, () => ({ vider: () => vider() }));
-
   // L'autre bloc du même contact a écrit : on suit (sauf si l'on est en train d'écrire ici).
   useEffect(() => {
     const abonne: Abonne = {
@@ -261,7 +266,7 @@ export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId:
   }, [leadId, moi]);
 
   useEffect(() => {
-    const instance: Instance = { leadId, priorite: variante === "appels" ? 3 : variante === "fiche" ? 2 : 1, champ: () => champ.current };
+    const instance: Instance = { leadId, priorite: variante === "appels" ? 3 : variante === "fiche" ? 2 : 1, champ: () => champ.current, vider: () => vider() };
     instances.add(instance);
     ecouterRetours();
     const surMasque = () => document.visibilityState === "hidden" && void vider(true);
@@ -349,7 +354,7 @@ export function NotesAppel({ leadId, notes, variante = "liste", ref }: { leadId:
         autoCorrect="on"
         spellCheck
         enterKeyHint="enter"
-        placeholder={grande ? "Ce qu'il dit, pendant ou juste après l'appel (vous pouvez dicter) : cuisine de 2015, veut changer les façades avant Noël…" : "Ce qu'il a dit au téléphone…"}
+        placeholder={grande ? "Ce qu'il dit, pendant ou juste après l'appel (tu peux dicter) : cuisine de 2015, veut changer les façades avant Noël…" : "Ce qu'il a dit au téléphone…"}
         className={cn(
           "w-full resize-y rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 py-2.5 text-[16px] leading-relaxed text-[#F2F3F5] placeholder:text-[#6B7280] focus:border-[#1D9E75]/70 focus:outline-none",
           grande ? "min-h-[140px]" : "min-h-[64px] sm:text-[14px]"

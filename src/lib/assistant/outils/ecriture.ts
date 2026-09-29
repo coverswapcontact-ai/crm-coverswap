@@ -10,7 +10,8 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { etatIa } from "@/lib/ia/modele";
 import { CATEGORIES_DEPENSE, MOYENS_DEPENSE } from "@/lib/depenses/constantes";
 import { creerDepense } from "@/lib/depenses/service";
-import { ETAPES, LIBELLES_ETAPE, MOTIFS_PERTE, UNITES, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ETAPES, LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, UNITES, type EtapeDossier } from "@/lib/dossiers/constants";
+import { verifierMotifPerte } from "@/lib/dossiers/perte";
 import { jourParis } from "@/lib/dossiers/dates";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { genererDocument } from "@/lib/dossiers/documents";
@@ -118,17 +119,21 @@ export const outilNoterAppel = definirOutil({
   nom: "noter_appel",
   titre: "Noter un appel",
   description:
-    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; à défaut demain 10 h). Écrit sur le dossier s'il existe, sinon sur le lead ; « intéressé » ou « pas de réponse » prépare le mail du lien de l'espace (outil « envoyer_lien_espace »).",
+    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte) : rien n'est envoyé, Lucas le copie.",
   niveau: "REVERSIBLE",
   schema: schemaCible.extend({
     issue: z.enum(ISSUES_APPEL),
     texte: z.string().max(2000).optional(),
     etiquettes: z.array(z.enum(ETIQUETTES_APPEL)).max(8).optional(),
     rappel: z.string().max(60).optional().describe("Quand rappeler, tel que dicté : « jeudi 14h », « demain 10h », « 2026-09-25 14:00 »."),
+    motif_perte: z.enum(MOTIFS_PERTE).optional().describe("Obligatoire pour PAS_INTERESSE : PRIX (trop cher), CONCURRENT, SANS_REPONSE (plus de réponse), PROJET_ABANDONNE, HORS_ZONE, DELAI (délai trop long), AUTRE (précisé dans « texte »)."),
   }),
   executer: async (e, contexte) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu;
+    if (e.issue === "PAS_INTERESSE" && !e.motif_perte) throw new ErreurMetier(`« Pas intéressé » exige un motif (motif_perte) : ${MOTIFS_PERTE.filter((m) => m !== "AUTRE").map((m) => `${m} (${LIBELLES_MOTIF_PERTE[m].toLowerCase()})`).join(", ")}, ou AUTRE avec la précision dans « texte ». Demande-le à Lucas.`, 400);
+    // La règle unique de la perte (AUTRE exige une précision) : vérifiée avant d'écrire la note d'appel.
+    if (e.issue === "PAS_INTERESSE") verifierMotifPerte(e.motif_perte, e.texte);
     let rappelLe: string | null = null;
     if (e.rappel) {
       const date = lireDateDictee(e.rappel, contexte.maintenant);
@@ -136,9 +141,16 @@ export const outilNoterAppel = definirOutil({
       rappelLe = date.toISOString();
     }
     if (r.ids.leadId && (e.texte || e.etiquettes?.length)) await creerNoteAppel(r.ids.leadId, { texte: e.texte ?? "", etiquettes: e.etiquettes ?? [] });
-    const suite = await noterAppel({ ...(r.ids.dossierId ? { dossierId: r.ids.dossierId } : { leadId: r.ids.leadId ?? undefined }), issue: e.issue, note: e.texte ?? "", rappelLe });
+    const suite = await noterAppel(
+      { ...(r.ids.dossierId ? { dossierId: r.ids.dossierId } : { leadId: r.ids.leadId ?? undefined }), issue: e.issue, note: e.texte ?? "", rappelLe, ...(e.issue === "PAS_INTERESSE" ? { motifPerte: e.motif_perte } : {}) },
+      contexte.maintenant
+    );
+    // Mission 14 (partie 4) : le SMS proposé est dans la réponse (Lucas le copie depuis la conversation) ; plus de mail proposé.
+    const lignes = [`${suite.resume} (${r.ids.nom})`];
+    if (suite.proposerSansSuite) lignes.push(`${suite.tentatives}ᵉ appel sans réponse d'affilée : propose à Lucas de classer sans suite (motif « Plus de réponse »), sans l'imposer.`);
+    if (suite.sms) lignes.push(`SMS proposé (${suite.sms.code}) : « ${suite.sms.texte} »`);
     return {
-      texte: `${suite.resume} (${r.ids.nom})${suite.messagePropose ? ` Un mail avec le lien de son espace est prêt : « envoyer_lien_espace » avec le code ${suite.messagePropose}.` : ""}`,
+      texte: lignes.join("\n"),
       donnees: suite,
       liens: [suite.dossierId ? lien("Dossier", `/dossiers?dossier=${suite.dossierId}`) : lien("Lead", `/leads?lead=${suite.leadId}`)],
     };

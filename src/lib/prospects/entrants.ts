@@ -6,6 +6,7 @@ import { completerCoordonnees, rattacherLead } from "@/lib/clients/identificatio
 import { formaterTelephone, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
 import { cheminVignette } from "@/lib/fichiers/images";
 import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE } from "@/lib/dossiers/constants";
+import { verifierMotifPerte } from "@/lib/dossiers/perte";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { appelSansReponse, issueDuContenu } from "@/lib/commercial/sans-reponse";
 import {
@@ -272,10 +273,8 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   if (!prenomFinal && !nomFinal) throw new ErreurMetier("Indique au moins un prénom ou un nom.", 400);
 
   const passeEnPerdu = entree.statut === "PERDU" && entree.statut !== lead.statut;
-  if (passeEnPerdu) {
-    if (!motifPerte) throw new ErreurMetier("Motif obligatoire pour classer sans suite : trop cher, concurrent, plus de réponse, projet abandonné, hors zone, ou autre (précisé).", 400);
-    if (motifPerte === "AUTRE" && (motif?.trim().length ?? 0) < 3) throw new ErreurMetier("Précise le motif « autre » en quelques mots.", 400);
-  }
+  // Mission 14 (partie 4) : la règle unique du motif de perte (celle de la fin d'appel « pas intéressé »).
+  if (passeEnPerdu) verifierMotifPerte(motifPerte, motif);
   const data: Prisma.LeadUpdateInput = {
     ...champs,
     ...(passeEnPerdu ? { motifPerte, perteLe: new Date(), perteCommentaire: motif?.trim() || null } : entree.statut && entree.statut !== "PERDU" && lead.statut === "PERDU" ? { motifPerte: null, perteLe: null, perteCommentaire: null } : {}),

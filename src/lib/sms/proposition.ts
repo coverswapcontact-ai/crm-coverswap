@@ -111,8 +111,8 @@ async function simulationDuSite(lead: LeadLu | null, dossierId: string | null): 
   return simulationDansLEspace(dossierId);
 }
 
-/** Les appels sans réponse d'affilée d'un dossier sans lead, lus sur ses événements APPEL. */
-async function tentativesDuDossier(dossierId: string): Promise<number> {
+/** Les appels sans réponse d'affilée d'un dossier sans lead, lus sur ses événements APPEL (aussi la fin d'appel, partie 4). */
+export async function tentativesDuDossier(dossierId: string): Promise<number> {
   const appels = await prisma.dossierEvenement.findMany({ where: { dossierId, type: "APPEL" }, select: { metadata: true, contenu: true, createdAt: true, survenuLe: true } });
   return tentativesALaFin(appels.map((a) => ({ issue: issueDesMetadonnees(a.metadata), texte: a.contenu, le: a.survenuLe ?? a.createdAt })));
 }

@@ -7,7 +7,7 @@ import { avecActeur } from "@/lib/journal/contexte";
 import { LIBELLES_TYPE_PROJET, libelleSourceLead } from "@/lib/prospects/constantes";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { ajouterPhoto, creerDossier, ecrireNote, modifierDossier } from "./dossiers";
-import type { EtapeDossier } from "./constants";
+import { ETAPES_CLOSES, type EtapeDossier } from "./constants";
 import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { pluriel } from "@/lib/commun/format";
@@ -36,9 +36,6 @@ import { pluriel } from "@/lib/commun/format";
 
 // Mission 13 : une seule table (dossiers/objet.ts), partagée avec la validation du projet dans l'espace.
 const OBJET_PAR_TYPE_PROJET: Record<string, string> = OBJET_PAR_FAMILLE;
-
-/** Un dossier fini (encaissé) ou perdu ne reçoit pas un nouveau projet : on en ouvre un autre. */
-const ETAPES_CLOSES = ["PERDU", "ENCAISSE"];
 
 const ACTEUR_AUTOMATIQUE = { acteur: "SYSTEME:simulation-dossier", origine: "Simulation du site rangée dans son dossier" };
 

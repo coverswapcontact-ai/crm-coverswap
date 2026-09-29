@@ -1,24 +1,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PhoneIncoming } from "lucide-react";
+import { Phone, PhoneForwarded } from "lucide-react";
 import { toast } from "sonner";
-import { ISSUES_APPEL, LIBELLES_ISSUE, type IssueAppel, type SuiteAppel } from "@/lib/commercial/constantes";
+import type { SuiteAppel } from "@/lib/commercial/constantes";
+import type { LeadSuivant } from "@/lib/prospects/leads";
 import { cn } from "@/lib/utils";
-import { envoyerJson, messageErreur } from "./client";
-import { appelEnCours, finAppel, marquerAppelPropose, type AppelEnCours } from "./NotesAppel";
-import { rafraichirCompteurs } from "./Navigation";
+import { appelApi } from "./client";
+import { rafraichirCompteurs, signalerAppelTermine, signalerLeadsModifies } from "./evenements";
+import { FeuilleFinAppel } from "./FinAppel";
+import { appelEnCours, finAppel, marquerAppelPropose, noterDebutAppel, type AppelEnCours } from "./NotesAppel";
+import { ouvrirEcranSms } from "./sms/EcranSms";
 import { TRANS } from "./ui";
 
 /**
  * Mission 13 (lot 4) — au retour dans l'application après un « Appeler »
- * (Leads, panneau du lead ou du dossier), une feuille en bas de l'écran :
- * « Comment ça s'est passé ? », quatre issues, une précision, Enregistrer.
- * Sans passer par le panneau. « Plus tard » ne repose pas la question pour cet
- * appel ; la note du contact reste ouverte comme avant.
+ * (Leads, panneau du lead ou du dossier, mode appels), une feuille en bas de
+ * l'écran : « Comment ça s'est passé ? ». « Plus tard » ne repose pas la
+ * question pour cet appel.
+ *
+ * Mission 14 (29/09/2026), partie 4 — la feuille (`FinAppel.tsx`) est la seule
+ * façon de noter l'issue d'un appel ; elle s'ouvre aussi à la main
+ * (`noterUnAppel` : « Noter l'appel », « Noter sans appeler »). Après
+ * Enregistrer : l'écran SMS avec le SMS proposé (copier ou passer), puis le lead
+ * suivant — une carte « Suivant : … » (rappel en retard, sinon jamais appelé)
+ * avec « Appeler » et « Plus tard ». Un appel lancé depuis « Appels à la suite »
+ * rend la main à la file (`appel:termine`) au lieu de cette carte. Toujours : les
+ * compteurs et l'écran Leads (`leads:modifies`) se rechargent.
  */
 
 const DELAI_MIN_MS = 15_000;
+const EVENEMENT_NOTER = "appel:noter";
+
+/** Ouverture à la main : le lead (ou « dossier:<id> »), son nom, son dossier ; `onEnregistre` après l'écriture (fiche à relire). */
+export type DemandeNoterAppel = { leadId: string; nom?: string; dossierId?: string | null; depuisFile?: boolean; onEnregistre?: () => void };
+
+type AppelANoter = AppelEnCours & { manuel?: boolean; onEnregistre?: () => void };
+
+/** Ouvre la feuille de fin d'appel sans être passé par un appel (mode appels, panneau du lead). */
+export function noterUnAppel(demande: DemandeNoterAppel): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent<DemandeNoterAppel>(EVENEMENT_NOTER, { detail: demande }));
+}
 
 function appelARaconter(): AppelEnCours | null {
   const appel = appelEnCours();
@@ -26,105 +48,110 @@ function appelARaconter(): AppelEnCours | null {
   return Date.now() - new Date(appel.le).getTime() >= DELAI_MIN_MS ? appel : null;
 }
 
+const numeroComposable = (telephone: string) => telephone.replace(/[^\d+]/g, "");
+
+/** « Suivant : Marie Durand · Lattes — rappel en retard », avec « Appeler » (la feuille reviendra au retour) et « Plus tard ». */
+function CarteSuivant({ suivant, onFermer }: { suivant: LeadSuivant; onFermer: () => void }) {
+  const numero = suivant.telephone ? numeroComposable(suivant.telephone) : "";
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6" role="dialog" aria-label="Lead suivant">
+      <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 shadow-lg shadow-black/50">
+        <p className="flex items-center gap-2 text-[15px] font-medium text-[#F2F3F5]">
+          <PhoneForwarded size={16} aria-hidden className="shrink-0 text-[#5DCAA5]" />
+          <span className="min-w-0 truncate">
+            Suivant : {suivant.nom}
+            {suivant.ville ? ` · ${suivant.ville}` : ""}
+          </span>
+        </p>
+        <p className={cn("mt-0.5 pl-6 text-[12.5px]", suivant.raison === "RETARD" ? "font-medium text-[#F87171]" : "text-[#8B919C]")}>{suivant.raison === "RETARD" ? "Rappel en retard" : "Jamais appelé"}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={onFermer} className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] text-[14px] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+            Plus tard
+          </button>
+          {numero ? (
+            <a
+              href={`tel:${numero}`}
+              onClick={() => {
+                noterDebutAppel(suivant.id, { nom: suivant.nom, dossierId: suivant.dossierId });
+                onFermer();
+              }}
+              className={cn("flex min-h-[44px] items-center justify-center gap-2 rounded-[10px] bg-[#1D9E75] text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}
+            >
+              <Phone size={15} aria-hidden /> Appeler
+            </a>
+          ) : (
+            <p className="flex min-h-[44px] items-center justify-center rounded-[10px] bg-[#22262D] px-2 text-center text-[12.5px] text-[#F5B454]">Numéro illisible</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RetourAppel() {
-  const [appel, setAppel] = useState<AppelEnCours | null>(null);
-  const [issue, setIssue] = useState<IssueAppel | null>(null);
-  const [note, setNote] = useState("");
-  const [envoi, setEnvoi] = useState(false);
+  const [appel, setAppel] = useState<AppelANoter | null>(null);
+  const [suivant, setSuivant] = useState<LeadSuivant | null>(null);
 
   useEffect(() => {
     const verifier = () => {
       if (document.visibilityState !== "visible") return;
       const candidat = appelARaconter();
-      if (candidat) setAppel((actuel) => actuel ?? candidat);
+      if (!candidat) return;
+      setSuivant(null);
+      setAppel((actuel) => actuel ?? candidat);
+    };
+    const aLaMain = (evenement: Event) => {
+      const demande = (evenement as CustomEvent<DemandeNoterAppel>).detail;
+      if (!demande?.leadId) return;
+      setSuivant(null);
+      setAppel({ ...demande, le: new Date().toISOString(), manuel: true });
     };
     document.addEventListener("visibilitychange", verifier);
     window.addEventListener("pageshow", verifier);
     window.addEventListener("focus", verifier);
+    window.addEventListener(EVENEMENT_NOTER, aLaMain);
     return () => {
       document.removeEventListener("visibilitychange", verifier);
       window.removeEventListener("pageshow", verifier);
       window.removeEventListener("focus", verifier);
+      window.removeEventListener(EVENEMENT_NOTER, aLaMain);
     };
   }, []);
 
-  if (!appel) return null;
-
-  const fermer = () => {
-    setAppel(null);
-    setIssue(null);
-    setNote("");
-  };
-
-  async function enregistrer() {
-    if (!appel || !issue) return;
-    setEnvoi(true);
-    try {
-      const { suite } = await envoyerJson<{ suite: SuiteAppel }>("/api/commercial/appels", "POST", {
-        ...(appel.dossierId ? { dossierId: appel.dossierId } : { leadId: appel.leadId }),
-        issue,
-        note: note.trim(),
-      });
-      finAppel(appel.leadId);
-      toast.success(suite.resume, { description: suite.messagePropose ? "Un mail est prêt à relire dans l'onglet Mail." : undefined });
-      rafraichirCompteurs();
-      fermer();
-    } catch (erreur) {
-      toast.error("Appel non enregistré", { description: messageErreur(erreur) });
-    } finally {
-      setEnvoi(false);
+  /** Après l'écran SMS : la file reprend la main (mode appels), sinon le lead suivant est proposé (rien si personne). */
+  function terminer(fini: AppelANoter) {
+    if (fini.depuisFile) {
+      signalerAppelTermine(fini.leadId);
+      return;
     }
+    appelApi<{ suivant: LeadSuivant | null }>(`/api/leads/suivant?apres=${encodeURIComponent(fini.leadId)}`)
+      .then(({ suivant: lu }) => setSuivant(lu))
+      .catch(() => undefined);
   }
 
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6" role="dialog" aria-label="Comment s'est passé l'appel ?">
-      <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 shadow-lg shadow-black/50">
-        <p className="flex items-center gap-2 text-[15px] font-medium text-[#F2F3F5]">
-          <PhoneIncoming size={16} aria-hidden className="text-[#5DCAA5]" />
-          Comment ça s&apos;est passé{appel.nom ? ` avec ${appel.nom}` : ""} ?
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {ISSUES_APPEL.map((valeur) => (
-            <button
-              key={valeur}
-              type="button"
-              aria-pressed={issue === valeur}
-              onClick={() => setIssue(valeur)}
-              className={cn("min-h-[44px] rounded-[10px] border-[0.5px] px-3 text-[13.5px] font-medium", issue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
-            >
-              {LIBELLES_ISSUE[valeur]}
-            </button>
-          ))}
-        </div>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Précision (facultatif) : ce qu'il a dit, ce qu'il veut…"
-          aria-label="Précision"
-          rows={2}
-          className="mt-2 w-full resize-none rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 py-2 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] focus:border-[#1D9E75]/60 focus:outline-none sm:text-[14px]"
-        />
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              marquerAppelPropose();
-              fermer();
-            }}
-            className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] text-[14px] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
-          >
-            Plus tard
-          </button>
-          <button
-            type="button"
-            disabled={!issue || envoi}
-            onClick={() => void enregistrer()}
-            className={cn("min-h-[44px] rounded-[10px] bg-[#1D9E75] text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280]", TRANS)}
-          >
-            {envoi ? "Enregistrement…" : "Enregistrer"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  function enregistre(fini: AppelANoter, suite: SuiteAppel) {
+    finAppel(fini.leadId);
+    rafraichirCompteurs();
+    signalerLeadsModifies();
+    fini.onEnregistre?.();
+    toast.success(suite.resume);
+    setAppel(null);
+    if (suite.sms) ouvrirEcranSms({ proposition: suite.sms, onFini: () => terminer(fini) });
+    else terminer(fini);
+  }
+
+  if (appel) {
+    return (
+      <FeuilleFinAppel
+        key={`${appel.leadId}|${appel.le}`}
+        appel={appel}
+        onPlusTard={() => {
+          if (!appel.manuel) marquerAppelPropose();
+          setAppel(null);
+        }}
+        onEnregistre={(suite) => enregistre(appel, suite)}
+      />
+    );
+  }
+  return suivant ? <CarteSuivant suivant={suivant} onFermer={() => setSuivant(null)} /> : null;
 }

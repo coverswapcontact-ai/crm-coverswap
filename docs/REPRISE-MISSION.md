@@ -1392,3 +1392,75 @@ client ». Quatre règles, une migration de rattrapage.
 - Décision (règle laissée ouverte par la relecture) : un dossier en « Devis envoyé » dont le seul devis est masqué garde
   la main par l'étape (au client) : c'est la règle la plus simple ; à revoir si Lucas le demande.
 - Vérifié : tsc, eslint, suite complète 570/570, build Next.
+
+## Partie 2 — Récupérer les leads perdus (29/09)
+Énoncé : « Un lead qui ne décroche pas sort de la liste par « Traiter » et je le perds. » Un lead traité (`traiteLe`)
+n'est plus jamais « à appeler », même avec un rappel posé : rattrapage par une migration, puis (partie 3) « Traiter »
+disparaît.
+- **Aide de dates** : nouveau `commercial/quand.ts › aHeureParis(maintenant, joursPlusTard, heure, minute = 0)` (pur) :
+  l'instant UTC de « J+n à HH:MM, heure de Paris », J = le jour de `maintenant` à Paris, compté au CALENDRIER (plus
+  « + 24 h ») ; décalage de Paris lu à l'instant visé puis corrigé une fois (un changement d'heure entre les deux).
+  `appels.ts › demainDixHeures` = `aHeureParis(maintenant, 1, 10)` : mêmes valeurs (relances.test.ts), sauf autour des
+  changements d'heure : le 25/10 entre 0 h et 1 h (l'ancien calcul donnait le jour même) et la veille du passage à
+  l'heure d'été entre 23 h et minuit (il donnait J+2) : corrigé. Réutilisée par les parties 3, 4, 5, 7.
+- **Lire un appel** : nouveau `commercial/sans-reponse.ts` (pur, pour la partie 3 aussi) : `estSansReponse({ issue,
+  etiquettes, texte })` = issue, étiquette ou texte qui dit « pas de réponse », « (ne) répond pas », « pas répondu »,
+  « pas joignable », « injoignable », « messagerie », « répondeur », « occupé(e) » (sans casse, accents et `_`
+  aplatis : les CODES se lisent comme du texte, donc PAS_DE_REPONSE, PAS_JOIGNABLE et une future issue MESSAGERIE ou
+  OCCUPE sont reconnus) ; `issueDuContenu("Appel — {libellé}[ : …]")` → code ou null ; `sansLibelleIssue(texte)` retire
+  le libellé d'issue que la fin d'appel met en tête (« Appel — {libellé} : » d'un échange, « {libellé} — » d'une note de
+  dossier) pour ne garder que ce que Lucas a écrit ; `MOTIF_RAPPELER = /rap+el+er/i`.
+- **Migration `leads-a-rappeler-14-2`** (`base/migrations/mission-14-partie-2.ts`, fin de `MIGRATIONS_DONNEES`, cœur
+  exporté `remettreARappeler(client, maintenant)` ; rappel = `aHeureParis(instant du déploiement, 1, 18)`) :
+  candidats = leads (archivés compris) `traiteLe` ou `archiveLe` ≥ 01/09/2026 0 h Paris. Écartés : PERDU, doublon EN
+  ATTENTE (`doublonDe` sans `doublonTraiteLe`, même règle que la liste : un signalement écarté n'est pas un doublon),
+  motif d'archivage « test(s) », « essai(s) » ou « doublon(s) » en mot entier (libellé ou texte libre : « Doublon de … :
+  fusionné », « Contact d'essai Zapier… », « … de l'intégration Meta »), et la **corbeille** (`archiveMotif`
+  « Corbeille… » : supprimé par Lucas ou anonymisé). Déjà remis : une Interaction NOTE qui commence par `MARQUE_REMIS`
+  « Remis dans « À rappeler » (mission 14) », ou une DossierNote qui commence par `MARQUE_DOSSIER` « Rappel posé
+  (mission 14) ». Retenus : DERNIER appel sans réponse ou d'issue « À rappeler » (le plus récent de : Interaction APPEL
+  `createdAt`, NoteAppel `appelLe` avec issue/étiquettes/texte, DossierEvenement APPEL de TOUS les dossiers du lead
+  `survenuLe ?? createdAt` + `metadata.issue` ; événements et notes archivés ignorés) OU une note avec « rappeler » :
+  NoteAppel.texte, Interaction NOTE, Interaction APPEL et DossierNote SANS leur libellé d'issue (un ancien « À
+  rappeler » suivi d'un appel abouti ne ramène pas le lead, comme « Pas de réponse » puis « Intéressé »). PAS la demande
+  du client : ni `Lead.message` ni `Lead.notes`, ni les notes de réception qui les recopient (« Lead reçu… », « Lead
+  Meta Ads reçu… », « Nouvelle demande via… », « Nouvelle simulation… », « Nouveau contact du client… »), ni la note de
+  reprise d'un dossier (« Contact reçu le … »). Raison écrite : « dernier appel sans réponse », sinon « dernier appel
+  « À rappeler » », sinon « note « {extrait autour de rappeler} » ». Effet (une transaction courte par lead) :
+  - aucun dossier ouvert et statut hors après-devis → `traiteLe`, `archiveLe`, `archiveMotif` à null, `rappelLe` =
+    demain 18 h, Interaction NOTE « Remis dans « À rappeler » (mission 14) : {raison}. Rappel le {jourLong} à 18 h. » ;
+    si le lead avait déjà un `rappelLe` plus tard (date choisie par Lucas, ex. projet lointain), il le GARDE : « … Rappel
+    déjà prévu le {jourLong} à {HH:MM} : gardé. » (`remisRappelGarde`) ;
+  - dossier vivant (non archivé, hors Perdu/Encaissé ; le plus récent) → le lead ne bouge pas ; prochaine action vide
+    ou commençant par « rappeler » (sans casse) → « Rappeler » + `prochaineActionDate` = l'instant exact + note au
+    dossier « Rappel posé (mission 14) : {raison}. Rappel le {jourLong} à 18 h. » (`ecrireNote`, donc NOTE_AJOUTEE ; la
+    main ne bouge pas) ; rappel déjà daté plus loin → rien (`dossiersRappelGarde`) ; autre action → rien
+    (`dossiersAutreAction`) ;
+  - sans dossier vivant mais avec un dossier Perdu/Encaissé non archivé, ou statut d'après devis (DEVIS_ENVOYE, SIGNE,
+    CHANTIER_PLANIFIE, TERMINE) → aucune liste de leads ne le montrerait (`sansDossierActif`) : rien n'est écrit
+    (`horsListes`), une ligne de journal pour que Lucas tranche.
+  Compteurs : `examines`, `remis`, `remisRappelGarde`, `rappelsSurDossier`, `dossiersRappelGarde`,
+  `dossiersAutreAction`, `horsListes`, `ecartes`, `dejaRemis`, `nonConcernes` (somme = examinés). Journaux : une ligne
+  `[migration leads-a-rappeler-14-2] <id> <prénom nom> → rappel <ISO>` (+ « sur le dossier <id> » ou « (déjà prévu,
+  gardé) ») par lead remis, et une ligne par lead laissé avec sa cause (« dossier <id> gardé (« action ») », « rappel
+  déjà prévu … gardé », « laissé, hors des listes de leads (…) — {raison} ») ; le résumé est dans
+  `MigrationDonnees.resume` et la ligne `[base] Migration de données « leads-a-rappeler-14-2 »`. Rejouée : les leads
+  remis ne sont plus candidats, le dossier est reconnu par sa note (`dejaRemis`), rien n'est redaté ; `ecartes`,
+  `dossiersRappelGarde`, `dossiersAutreAction`, `horsListes`, `nonConcernes` sont des constats et restent les mêmes.
+- Tests : `base/mission-14-partie-2.test.ts` (7) : `aHeureParis` (été, hiver, veille et nuit du 25/10, veille du
+  28/03/2027, 0 h 30 Paris = veille UTC, J+0 9 h 30, fin d'année), `demainDixHeures` inchangé, `estSansReponse`,
+  `issueDuContenu`, `MOTIF_RAPPELER`, `sansLibelleIssue` ; migration sur base d'essai (traité le 10/09 « Pas de
+  réponse » → remis le 30/09 16 h UTC avec sa note ; archivé « Autre » + note d'appel « À rapeller à midi » → restauré ;
+  doublon écarté → remis ; doublon en attente, « Test », contact d'essai Zapier, traité le 20/08, « Intéressé » après
+  « Pas de réponse », « À rappeler » puis « Intéressé », PERDU, corbeille → laissés ; « rappeler » dans le message du
+  client → non concerné ; dossier Encaissé ouvert, statut DEVIS_ENVOYE sans dossier → hors des listes, rien d'écrit ;
+  dernier appel « À rappeler » avec un rappel plus loin → remis avec sa date ; dossier vivant sans action → « Rappeler »
+  demain 18 h + note « Rappel posé » ; dossier « Rappeler » daté plus loin → gardé ; dossier « Attendre les photos du
+  client » → gardé ; rejouée le lendemain puis par `executer` → aucune écriture, rien de redaté) ; ordre dans la liste.
+- Reste / à savoir : les leads `horsListes` (dossier Encaissé/Perdu resté ouvert, statut d'après devis) ne sont pas
+  touchés : leurs noms sont dans les journaux Railway, à trancher à la main. Un dossier EN_PAUSE non archivé compte comme
+  vivant (règle de la conception) : il peut prendre « Rappeler » demain 18 h. « occupé » peut attraper « s'est occupé
+  de… » dans un texte d'appel. Aucun outil MCP ne liste les leads traités ou archivés : le nombre et les noms viennent
+  des journaux Railway.
+- Décision : un lead qui avait déjà un rappel prévu plus tard le garde (il revient dans « À rappeler » avec sa date)
+  au lieu de « demain 18 h » : écraser une date choisie par Lucas serait une perte. Vérifié : tsc, eslint, 577/577, build.

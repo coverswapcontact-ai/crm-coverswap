@@ -7,6 +7,7 @@ import { recalculerMain } from "@/lib/dossiers/main";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { ISSUES_APPEL, LIBELLES_ISSUE, type SuiteAppel } from "./constantes";
 import { noterIssueSurNote } from "./notes-appel";
+import { aHeureParis } from "./quand";
 
 /**
  * Fin d'appel : une ligne de note, une issue, et le CRM fixe la suite.
@@ -37,11 +38,7 @@ export const schemaAppel = z
 
 /** Demain à 10 h, heure de Paris (le serveur tourne en UTC). */
 export function demainDixHeures(maintenant: Date = new Date()): Date {
-  const jourParis = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date(maintenant.getTime() + 86_400_000));
-  // Décalage de Paris ce jour-là : +01:00 ou +02:00.
-  const decalage = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", timeZoneName: "shortOffset" }).formatToParts(new Date(`${jourParis}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "UTC+1";
-  const heures = Number(/([+-]\d+)/.exec(decalage)?.[1] ?? 1);
-  return new Date(`${jourParis}T${String(10 - heures).padStart(2, "0")}:00:00Z`);
+  return aHeureParis(maintenant, 1, 10);
 }
 
 export async function noterAppel(entree: z.output<typeof schemaAppel>): Promise<SuiteAppel> {

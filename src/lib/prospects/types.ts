@@ -48,7 +48,7 @@ export type EntrantDetail = EntrantResume & {
   message: string | null;
   styleSouhaite: string | null;
   /** Photos jointes à la demande (servies derrière la session). */
-  photos: { id: string; url: string; le: string }[];
+  photos: { id: string; url: string; vignette: string; le: string }[];
   campagne: string | null;
   publicite: string | null;
   formulaire: string | null;

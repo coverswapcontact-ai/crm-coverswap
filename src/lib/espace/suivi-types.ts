@@ -95,3 +95,6 @@ export type ClientEspace = {
   signaux: Signal[];
   projets: LigneEspace[];
 };
+
+/** Mission 13 (lot 6) : une page de clients (50) avec le total. */
+export type PageEspaces = { clients: ClientEspace[]; total: number; page: number; parPage: number };

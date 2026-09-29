@@ -50,7 +50,7 @@ export type DossierResume = {
   teintes: Record<string, string>;
 };
 
-export type PhotoVue = { id: string; url: string; type: string; /** Après chantier (portfolio). */ apres: boolean };
+export type PhotoVue = { id: string; url: string; /** Mission 13 (lot 6) : la vignette 320 px, pour les listes. */ vignette: string; type: string; /** Après chantier (portfolio). */ apres: boolean };
 
 export type NoteVue = { id: string; etape: EtapeDossier; contenu: string; createdAt: string };
 

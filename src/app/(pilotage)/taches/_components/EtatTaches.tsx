@@ -5,7 +5,7 @@ import { AlertTriangle, Ban, ChevronDown, CircleCheck, Clock, Loader2, RotateCw 
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
-import { Bouton, EnTetePage, EtatVide, Pastille, TitreSection, TRANS } from "@/components/pilotage/ui";
+import { Bouton, EnTetePage, EtatVide, Pagination, Pastille, TitreSection, TRANS } from "@/components/pilotage/ui";
 import { formatHorodatage } from "@/lib/dossiers/dates";
 import { LIBELLES_STATUT_TACHE } from "@/lib/taches/statuts";
 import type { EtatTaches as Etat, TacheVue } from "@/lib/taches/lecture";
@@ -99,26 +99,6 @@ function Repli({ titre, nombre, ton, ouvertParDefaut = false, children }: { titr
   );
 }
 
-function Pagination({ total, page, onPage }: { total: number; page: number; onPage: (page: number) => void }) {
-  if (total <= PAR_PAGE) return null;
-  const derniere = Math.ceil(total / PAR_PAGE) - 1;
-  return (
-    <div className="mt-2 flex items-center justify-between gap-2 text-[12.5px] text-[#9CA3AF]">
-      <span className="tabular-nums">
-        {page * PAR_PAGE + 1}–{Math.min((page + 1) * PAR_PAGE, total)} sur {total}
-      </span>
-      <span className="flex gap-1.5">
-        <Bouton taille="sm" variante="fantome" disabled={page === 0} onClick={() => onPage(page - 1)} className="min-h-[44px]">
-          Précédentes
-        </Bouton>
-        <Bouton taille="sm" variante="fantome" disabled={page >= derniere} onClick={() => onPage(page + 1)} className="min-h-[44px]">
-          Suivantes
-        </Bouton>
-      </span>
-    </div>
-  );
-}
-
 export default function EtatTaches({ initial, children }: { initial: Etat; children?: ReactNode }) {
   const [etat, setEtat] = useState(initial);
   const [chargement, setChargement] = useState(false);
@@ -174,7 +154,7 @@ export default function EtatTaches({ initial, children }: { initial: Etat; child
                 <LigneTache key={tache.id} tache={tache} onChange={() => void recharger()} />
               ))}
             </ul>
-            <Pagination total={aVoir.length} page={pageAVoir} onPage={setPageAVoir} />
+            <Pagination total={aVoir.length} page={pageAVoir + 1} parPage={PAR_PAGE} feminin onPage={(p) => setPageAVoir(p - 1)} />
           </>
         )}
       </section>
@@ -229,7 +209,7 @@ export default function EtatTaches({ initial, children }: { initial: Etat; child
                 <LigneTache key={tache.id} tache={tache} onChange={() => void recharger()} />
               ))}
             </ul>
-            <Pagination total={finies.length} page={pageFinies} onPage={setPageFinies} />
+            <Pagination total={finies.length} page={pageFinies + 1} parPage={PAR_PAGE} feminin onPage={(p) => setPageFinies(p - 1)} />
             {finies.length < totalFinies ? <p className="mt-2 text-[12px] text-[#6B7280]">Les {finies.length} plus récentes sur {totalFinies}.</p> : null}
           </>
         )}

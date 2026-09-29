@@ -5,7 +5,9 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import {
   ETAPES,
+  ETAPES_SORTIE,
   LIBELLES_ETAPE,
+  REGLES_ETAPES,
   SOURCES_DOSSIER,
   type DirectionEvenement,
   type EtapeActive,
@@ -16,7 +18,7 @@ import {
   type TypeDocument,
   type TypeEvenement,
 } from "./constants";
-import { dateDepuisJour, estJourValide, instantDuJour, jourParis } from "./dates";
+import { dateDepuisJour, debutDuJourParis, estJourValide, instantDuJour, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
@@ -26,6 +28,7 @@ import {
   idPhoto,
   lireFichier,
   lireLignes,
+  lireVignette,
   lirePhotos,
   archiverFichier,
   archiverFichiersDossier,
@@ -36,6 +39,7 @@ import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
 import { CATEGORIES_CLIENT } from "@/lib/clients/constantes";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { tranche } from "@/lib/commun/pagination";
 import { alertesACompleter, LIBELLES_QUALITE_DOSSIERS, lireMasques, pointsACompleter, type CodeCompletude, type PointACompleter } from "./completude";
 import { delaisCles, ecartsPrix, parcoursEtapes } from "./delais";
 
@@ -155,6 +159,8 @@ export const schemaNote = z.object({
 /* ── Lecture ────────────────────────────────────────────────────── */
 
 const urlPhoto = (dossierId: string, chemin: string) => `/api/dossiers/${dossierId}/photos/${idPhoto(chemin)}`;
+// Mission 13 (lot 6) : la vignette 320 px pour les listes, la version 1 600 px pour la visionneuse.
+const urlVignette = (dossierId: string, chemin: string) => `${urlPhoto(dossierId, chemin)}?taille=vignette`;
 const urlPdf = (dossierId: string, documentId: string) => `/api/dossiers/${dossierId}/documents/${documentId}/pdf`;
 
 function etapeLue(valeur: string): EtapeDossier {
@@ -279,7 +285,11 @@ export async function listerDossiers(): Promise<DossierResume[]> {
     orderBy: { updatedAt: "desc" },
     include: { documents: DERNIER_DEVIS },
   });
+  return resumesDe(dossiers);
+}
 
+/** Les résumés d'une liste de dossiers : étape quittée des perdus et en pause, points à compléter — sur ces dossiers seulement. */
+async function resumesDe(dossiers: DossierAvecDernierDevis[]): Promise<DossierResume[]> {
   // Perdus et en pause : la barre de progression reste à l'étape quittée,
   // lue dans leurs changements d'étape (du plus récent au plus ancien).
   const sortis = dossiers.filter((dossier) => estEtapeSortie(dossier.etape)).map((dossier) => dossier.id);
@@ -297,10 +307,75 @@ export async function listerDossiers(): Promise<DossierResume[]> {
     if (metadata) parDossier.set(changement.dossierId, [...(parDossier.get(changement.dossierId) ?? []), metadata]);
   }
 
-  const completude = await pointsACompleterDossiers(prisma);
+  const completude = dossiers.length > 0 ? await pointsACompleterDossiers(prisma, { id: { in: dossiers.map((dossier) => dossier.id) } }) : new Map<string, PointACompleter[]>();
   return dossiers.map((dossier) =>
     versResume(dossier, etapeAvantSortie(parDossier.get(dossier.id) ?? []), completude.get(dossier.id) ?? [])
   );
+}
+
+/* ── Mission 13 (lot 6) : une page de dossiers, filtres côté serveur ─────── */
+
+export type VueDossiers = "EN_COURS" | "TOUS" | "A_FAIRE";
+export type FiltresDossiers = { page?: number; parPage?: number; vue?: VueDossiers; recherche?: string; masquerInactifs?: boolean };
+export type CompteursDossiers = { enCours: number; aFaire: number; enRetard: number; sorties: number; inactifs: number };
+export type PageDossiers = {
+  dossiers: DossierResume[];
+  total: number;
+  page: number;
+  parPage: number;
+  /** Sur tous les dossiers vivants, quel que soit le filtre : les chiffres de l'en-tête. */
+  compteurs: CompteursDossiers;
+};
+
+const JOURS_INACTIF = 30;
+const ETAPES_RESPONSABLE_MOI = ETAPES.filter((etape) => REGLES_ETAPES[etape].responsable === "MOI");
+const ETAPES_RESPONSABLE_CLIENT = ETAPES.filter((etape) => REGLES_ETAPES[etape].responsable === "CLIENT");
+
+/** « À faire » (pilotage.ts › mainDe) en clause Prisma : la main à moi, ou le client en retard (à relancer). */
+function whereAFaire(maintenant: Date): Prisma.DossierWhereInput {
+  const debutDuJour = debutDuJourParis(maintenant);
+  return {
+    OR: [
+      { etape: { in: ETAPES_RESPONSABLE_MOI }, OR: [{ main: null }, { main: "MOI" }] },
+      { etape: { in: ETAPES_RESPONSABLE_CLIENT }, main: "MOI" },
+      { etape: { in: [...ETAPES_RESPONSABLE_MOI, ...ETAPES_RESPONSABLE_CLIENT] }, OR: [{ main: null }, { main: "CLIENT" }], prochaineActionDate: { lt: debutDuJour } },
+    ],
+  };
+}
+
+function whereRechercheDossiers(recherche: string | undefined): Prisma.DossierWhereInput {
+  const termes = (recherche ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 5);
+  if (termes.length === 0) return {};
+  return { AND: termes.map((terme) => ({ OR: [{ clientNom: { contains: terme } }, { clientVille: { contains: terme } }, { objet: { contains: terme } }, { prochaineAction: { contains: terme } }] })) };
+}
+
+/**
+ * L'écran Dossiers ne charge qu'une page (50) : vue (en cours, tous, à faire),
+ * recherche et masquage des inactifs se font ici, plus dans le navigateur.
+ * Les compteurs de l'en-tête portent sur tous les dossiers vivants.
+ */
+export async function pageDossiers(filtres: FiltresDossiers = {}, maintenant: Date = new Date()): Promise<PageDossiers> {
+  const { page, parPage, skip, take } = tranche(filtres.page, filtres.parPage);
+  const vue = filtres.vue ?? "EN_COURS";
+  const aFaire = whereAFaire(maintenant);
+  const limiteInactif = new Date(maintenant.getTime() - JOURS_INACTIF * 86_400_000);
+  const horsSortie: Prisma.DossierWhereInput = { etape: { notIn: [...ETAPES_SORTIE] } };
+  const conditions: Prisma.DossierWhereInput[] = [whereRechercheDossiers(filtres.recherche)];
+  if (vue === "A_FAIRE") conditions.push(aFaire);
+  else if (vue === "EN_COURS") conditions.push(horsSortie);
+  if (filtres.masquerInactifs) conditions.push({ OR: [aFaire, { updatedAt: { gte: limiteInactif } }] });
+  const where: Prisma.DossierWhereInput = { AND: conditions };
+  const [total, dossiers, enCours, nbAFaire, enRetard, sorties, vieux, vieuxAFaire] = await Promise.all([
+    prisma.dossier.count({ where }),
+    prisma.dossier.findMany({ where, orderBy: { updatedAt: "desc" }, skip, take, include: { documents: DERNIER_DEVIS } }),
+    prisma.dossier.count({ where: { etape: { notIn: [...ETAPES_SORTIE, "ENCAISSE"] } } }),
+    prisma.dossier.count({ where: aFaire }),
+    prisma.dossier.count({ where: { etape: { notIn: ["PERDU", "ENCAISSE"] }, prochaineActionDate: { lt: debutDuJourParis(maintenant) } } }),
+    prisma.dossier.count({ where: { etape: { in: [...ETAPES_SORTIE] } } }),
+    prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }] } }),
+    prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }, aFaire] } }),
+  ]);
+  return { dossiers: await resumesDe(dossiers), total, page, parPage, compteurs: { enCours, aFaire: nbAFaire, enRetard, sorties, inactifs: Math.max(0, vieux - vieuxAFaire) } };
 }
 
 function messageDeLEvenement(metadata: string): string | null {
@@ -321,7 +396,8 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
       client: { select: { id: true, nom: true } },
       notes: { orderBy: { createdAt: "asc" } },
       // Un mail rangé puis déplacé ailleurs laisse une trace archivée, hors de l'historique affiché.
-      evenements: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 300 },
+      // Mission 13 (lot 6) : 120 événements suffisent au panneau (20 affichés, le reste sur « Voir les plus anciens ») ; 300 pesaient à chaque ouverture.
+      evenements: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 120 },
       documents: {
         orderBy: { createdAt: "desc" },
         include: {
@@ -369,6 +445,7 @@ export async function chargerDetail(dossierId: string): Promise<DossierDetail> {
   const photos: PhotoVue[] = lirePhotos(dossier.photos).map((chemin) => ({
     id: idPhoto(chemin),
     url: urlPhoto(dossier.id, chemin),
+    vignette: urlVignette(dossier.id, chemin),
     type: typeMimePhoto(chemin),
     apres: estPhotoApres(chemin),
   }));
@@ -795,7 +872,7 @@ export async function ajouterPhoto(dossierId: string, fichier: File, apres = fal
   for (let essai = 0; essai < 3; essai++) {
     const { brut, chemins } = await photosDuDossier(dossierId);
     if (await remplacerPhotos(dossierId, brut, [...chemins, chemin])) {
-      return { id: idPhoto(chemin), url: urlPhoto(dossierId, chemin), type: typeMimePhoto(chemin), apres: estPhotoApres(chemin) };
+      return { id: idPhoto(chemin), url: urlPhoto(dossierId, chemin), vignette: urlVignette(dossierId, chemin), type: typeMimePhoto(chemin), apres: estPhotoApres(chemin) };
     }
   }
   await archiverFichier(chemin, "photo-non-rattachee").catch(() => {});
@@ -812,11 +889,12 @@ export async function supprimerPhoto(dossierId: string, photoId: string): Promis
   await archiverFichier(chemin, "photo-retiree");
 }
 
-export async function lirePhoto(dossierId: string, photoId: string): Promise<{ contenu: Buffer; type: string }> {
+export async function lirePhoto(dossierId: string, photoId: string, taille: "servie" | "vignette" = "servie"): Promise<{ contenu: Buffer; type: string }> {
   if (!ID_PHOTO.test(photoId)) throw new ErreurMetier("Photo introuvable.", 404);
   const { chemins } = await photosDuDossier(dossierId);
   const chemin = chemins.find((c) => idPhoto(c) === photoId);
-  const contenu = chemin ? await lireFichier(chemin) : null;
+  // Mission 13 (lot 6) : la vignette pour les listes, sinon la version servie (1 600 px).
+  const contenu = chemin ? (taille === "vignette" ? await lireVignette(chemin) : await lireFichier(chemin)) : null;
   if (!chemin || !contenu) throw new ErreurMetier("Photo introuvable.", 404);
   return { contenu, type: typeMimePhoto(chemin) };
 }

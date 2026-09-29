@@ -19,7 +19,7 @@ import { useGlisserPourFermer, useRetourFerme } from "@/components/pilotage/ferm
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
 import { Visionneuse, imagesDesSimulations, indexDeVue } from "@/components/pilotage/Visionneuse";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
-import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, TRANS } from "@/components/pilotage/ui";
+import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, Pagination, TRANS } from "@/components/pilotage/ui";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { cn } from "@/lib/utils";
 import { NouveauContact } from "../../prospects/_components/NouveauContact";
@@ -342,6 +342,10 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   const [source, setSource] = useState<string | null>(null);
   const [recherche, setRecherche] = useState("");
   const [charge, setCharge] = useState(false);
+  // Mission 13 (lot 6) : une page à la fois ; un filtre qui change ramène à la première (la clé des filtres change).
+  const cleFiltres = `${vue}|${source ?? ""}|${recherche}`;
+  const [pageDemandee, setPageDemandee] = useState({ page: initial.page ?? 1, cle: cleFiltres });
+  const page = pageDemandee.cle === cleFiltres ? pageDemandee.page : 1;
   const [horsLigne, setHorsLigne] = useState(false);
   const [maintenant, setMaintenant] = useState(() => Date.now());
   const [ouvert, setOuvert] = useState<string | null>(leadInitial);
@@ -358,13 +362,13 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   // Mission 7 : le mail prend le relais du SMS après un appel (lien de son espace, « j'ai essayé de vous joindre »).
   const [lienMail, setLienMail] = useState<CibleLienMail | null>(null);
   const [totalAppels, setTotalAppels] = useState(() => initial.lignes.filter((lead) => lead.aAppeler && lead.priorite !== "A_ECARTER").length);
-  const filtres = useRef({ vue, source, recherche });
+  const filtres = useRef({ vue, source, recherche, page });
 
   const rafraichir = useCallback(async () => {
-    const { vue: v, source: s, recherche: q } = filtres.current;
+    const { vue: v, source: s, recherche: q, page: p } = filtres.current;
     setCharge(true);
     try {
-      const parametres = new URLSearchParams({ vue: v, ...(s ? { source: s } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
+      const parametres = new URLSearchParams({ vue: v, page: String(p), ...(s ? { source: s } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
       setDonnees(await appelApi<ListeLeads>(`/api/leads?${parametres}`));
       setHorsLigne(vientDuCache());
       setMaintenant(Date.now());
@@ -385,10 +389,10 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
   }
 
   useEffect(() => {
-    filtres.current = { vue, source, recherche };
+    filtres.current = { vue, source, recherche, page };
     const minuterie = window.setTimeout(() => void rafraichir(), recherche ? 250 : 0);
     return () => window.clearTimeout(minuterie);
-  }, [vue, source, recherche, rafraichir]);
+  }, [vue, source, recherche, page, rafraichir]);
 
   // Un lead arrive pendant que l'écran est ouvert : il apparaît tout seul. L'horloge de l'attente tourne chaque demi-minute.
   useEffect(() => {
@@ -594,6 +598,7 @@ export default function EcranLeads({ initial, siteInitial, leadInitial, appelsIn
           ))}
         </ul>
       )}
+      {modeAppels ? null : <Pagination total={donnees.total ?? donnees.lignes.length} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />}
 
       {selection.size > 0 ? (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-3 pb-2 md:bottom-4">

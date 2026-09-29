@@ -1,5 +1,5 @@
 import { estRubriqueDossier } from "@/lib/dossiers/constants";
-import { listerDossiers } from "@/lib/dossiers/dossiers";
+import { pageDossiers } from "@/lib/dossiers/dossiers";
 import { clientPourDossier, leadPourDossier, prospectPourDossier } from "@/lib/dossiers/leads";
 import DossiersPilotage from "./_components/DossiersPilotage";
 
@@ -21,13 +21,13 @@ export default async function DossiersPage({
   // Mission 13 (lot 4) : ?rubrique=photos|messages|devis|encaisser|historique|etape ouvre le panneau sur cette rubrique.
   const rubrique = typeof parametres.rubrique === "string" && estRubriqueDossier(parametres.rubrique) ? parametres.rubrique : null;
   const [dossiers, leadInitial] = await Promise.all([
-    listerDossiers(),
+    pageDossiers({ page: 1 }),
     client ? clientPourDossier(client) : lead ? leadPourDossier(lead) : prospect ? prospectPourDossier(prospect) : null,
   ]);
 
   return (
     <DossiersPilotage
-      dossiersInitiaux={dossiers}
+      initial={dossiers}
       leadInitial={leadInitial}
       dossierInitialId={dossier}
       demandeInitiale={dossier && rubrique ? { rubrique, cle: 1 } : null}

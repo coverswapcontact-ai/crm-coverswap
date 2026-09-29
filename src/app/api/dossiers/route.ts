@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyser, lireFormulaire, reponseErreur, texteFormulaire } from "@/lib/dossiers/api";
-import { creerDossier, listerDossiers, schemaCreation } from "@/lib/dossiers/dossiers";
+import { lirePage } from "@/lib/commun/pagination";
+import { creerDossier, pageDossiers, schemaCreation } from "@/lib/dossiers/dossiers";
 import { ErreurMetier } from "@/lib/dossiers/erreurs";
 
-export async function GET() {
+/** GET ?page=1&vue=EN_COURS|TOUS|A_FAIRE&q=…&inactifs=0 : une page de 50 dossiers, filtrée ici (mission 13, lot 6). */
+export async function GET(requete: NextRequest) {
   try {
-    return NextResponse.json({ dossiers: await listerDossiers() });
+    const parametres = requete.nextUrl.searchParams;
+    const vue = parametres.get("vue");
+    const { page, parPage } = lirePage(parametres);
+    return NextResponse.json(
+      await pageDossiers({
+        page,
+        parPage,
+        vue: vue === "TOUS" || vue === "A_FAIRE" ? vue : "EN_COURS",
+        recherche: parametres.get("q")?.slice(0, 120) ?? undefined,
+        masquerInactifs: parametres.get("inactifs") === "0",
+      })
+    );
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/dossiers");
   }

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { tranche } from "@/lib/commun/pagination";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateDepuisJour, estJourValide } from "@/lib/dossiers/dates";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -78,9 +79,9 @@ export type FiltresClients = {
 
 const FICHE_ANONYMISEE = "Fiche anonymisée (RGPD) : elle ne se modifie plus.";
 
-export async function listerClients(filtres: FiltresClients = {}): Promise<ClientResume[]> {
+function whereClients(filtres: FiltresClients): Prisma.ClientWhereInput {
   const termes = (filtres.recherche ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 5);
-  const where: Prisma.ClientWhereInput = {
+  return {
     ...(filtres.archives ? { archiveLe: { not: null } } : {}),
     ...(filtres.categorie ? { categorie: filtres.categorie } : {}),
     ...(filtres.source ? { source: filtres.source } : {}),
@@ -97,13 +98,26 @@ export async function listerClients(filtres: FiltresClients = {}): Promise<Clien
       };
     }),
   };
+}
+
+export async function listerClients(filtres: FiltresClients = {}): Promise<ClientResume[]> {
   const clients = await prisma.client.findMany({
-    where,
+    where: whereClients(filtres),
     include: inclusionResume,
     orderBy: { updatedAt: "desc" },
     take: Math.min(filtres.limite ?? 200, 500),
   });
   return clients.map(versResume).sort((a, b) => b.derniereActiviteLe.localeCompare(a.derniereActiviteLe));
+}
+
+export type PageClients = { clients: ClientResume[]; total: number; page: number; parPage: number };
+
+/** Mission 13 (lot 6) : une page de fiches (50), du plus récent mouvement au plus ancien, avec le total. */
+export async function pageClients(filtres: FiltresClients & { page?: number; parPage?: number } = {}): Promise<PageClients> {
+  const where = whereClients(filtres);
+  const { page, parPage, skip, take } = tranche(filtres.page, filtres.parPage);
+  const [total, clients] = await Promise.all([prisma.client.count({ where }), prisma.client.findMany({ where, include: inclusionResume, orderBy: { updatedAt: "desc" }, skip, take })]);
+  return { clients: clients.map(versResume), total, page, parPage };
 }
 
 function versCoordonnee(ligne: {

@@ -415,7 +415,7 @@ function Contenu({ detail, ligne, onAction, onRecharger, onFermer, onMisAJour }:
               {detail.photos.map((photo, index) => (
                 <button key={photo.id} type="button" onClick={() => setPhotoOuverte(index)} className="block w-full" aria-label={`Agrandir la photo ${index + 1}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.url} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" />
+                  <img src={photo.vignette} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" />
                 </button>
               ))}
             </div>

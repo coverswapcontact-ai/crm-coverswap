@@ -7,7 +7,8 @@ import { Building2, Copy, Search, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
-import { Bouton, EnTetePage, EtatVide, ListeDeroulante, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, EnTetePage, EtatVide, ListeDeroulante, Pagination, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
+import type { PageClients } from "@/lib/clients/fiches";
 import {
   FAMILLES_SOURCE,
   LIBELLES_CATEGORIE_CLIENT,
@@ -18,7 +19,7 @@ import {
   type FamilleSource,
 } from "@/lib/clients/constantes";
 import { formaterTelephone } from "@/lib/clients/normalisation";
-import type { ClientResume, LigneAcquisition } from "@/lib/clients/types";
+import type { LigneAcquisition } from "@/lib/clients/types";
 import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
@@ -104,18 +105,24 @@ function Acquisition({ lignes }: { lignes: LigneAcquisition[] }) {
 }
 
 export default function ListeClients({
-  initiaux,
+  initial,
   acquisition,
 }: {
-  initiaux: ClientResume[];
+  /** Mission 13 (lot 6) : la première page (50), rendue avec l'écran. */
+  initial: PageClients;
   acquisition: LigneAcquisition[];
 }) {
   const router = useRouter();
-  const [clients, setClients] = useState(initiaux);
+  const [clients, setClients] = useState(initial.clients);
+  const [total, setTotal] = useState(initial.total);
   const [recherche, setRecherche] = useState("");
   const [categorie, setCategorie] = useState<CategorieClient | null>(null);
   const [source, setSource] = useState("");
   const [archives, setArchives] = useState(false);
+  // Une page à la fois ; un filtre qui change ramène à la première.
+  const cleFiltres = `${recherche}|${categorie ?? ""}|${source}|${archives}`;
+  const [pageDemandee, setPageDemandee] = useState({ page: 1, cle: cleFiltres });
+  const page = pageDemandee.cle === cleFiltres ? pageDemandee.page : 1;
   const [chargement, setChargement] = useState(false);
   const [creation, setCreation] = useState<CategorieClient | null>(null);
   const [rechercheDoublons, setRechercheDoublons] = useState(false);
@@ -123,7 +130,7 @@ export default function ListeClients({
   const filtresActifs = recherche.trim() !== "" || categorie !== null || source !== "" || archives;
 
   useEffect(() => {
-    if (!filtresActifs) return;
+    if (!filtresActifs && page === 1) return;
     let actif = true;
     const minuterie = window.setTimeout(() => {
       setChargement(true);
@@ -132,9 +139,12 @@ export default function ListeClients({
       if (categorie) parametres.set("categorie", categorie);
       if (source) parametres.set("source", source);
       if (archives) parametres.set("archives", "1");
-      appelApi<{ clients: ClientResume[] }>(`/api/clients?${parametres}`)
-        .then(({ clients: lus }) => {
-          if (actif) setClients(lus);
+      parametres.set("page", String(page));
+      appelApi<PageClients>(`/api/clients?${parametres}`)
+        .then((lue) => {
+          if (!actif) return;
+          setClients(lue.clients);
+          setTotal(lue.total);
         })
         .catch((erreur) => toast.error("Recherche impossible", { description: messageErreur(erreur) }))
         .finally(() => {
@@ -145,13 +155,13 @@ export default function ListeClients({
       actif = false;
       window.clearTimeout(minuterie);
     };
-  }, [recherche, categorie, source, archives, filtresActifs]);
+  }, [recherche, categorie, source, archives, filtresActifs, page]);
 
-  const affiches = filtresActifs ? clients : initiaux;
+  const affiches = filtresActifs || page > 1 ? clients : initial.clients;
+  const totalAffiche = filtresActifs || page > 1 ? total : initial.total;
   // Totaux sur toutes les fiches actives (la liste n'en charge que les plus récentes).
   const totalClients = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clients, 0), [acquisition]);
   const totalSignes = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clientsSignes, 0), [acquisition]);
-  const LIMITE_LISTE = 200;
 
   async function chercherDoublons() {
     setRechercheDoublons(true);
@@ -285,13 +295,7 @@ export default function ListeClients({
             ))}
           </ul>
         )}
-        {!filtresActifs && initiaux.length < totalClients ? (
-          <p className="mt-2 text-[12px] text-[#6B7280]">
-            Les {initiaux.length} fiches les plus récentes sur {totalClients} : cherche un nom, une ville, un e-mail ou un numéro pour trouver les autres.
-          </p>
-        ) : filtresActifs && clients.length >= LIMITE_LISTE ? (
-          <p className="mt-2 text-[12px] text-[#6B7280]">Les {LIMITE_LISTE} premiers résultats : précise la recherche pour trouver les autres.</p>
-        ) : null}
+        <Pagination total={totalAffiche} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />
       </section>
 
       {creation ? <CreationClient categorieInitiale={creation} onFermer={() => setCreation(null)} /> : null}

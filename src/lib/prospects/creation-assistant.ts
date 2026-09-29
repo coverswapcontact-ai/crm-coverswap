@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { trouverClientParCoordonnees } from "@/lib/clients/identification";
@@ -43,9 +44,19 @@ export async function reperDoublonsContact(entree: EntreeCreationContact): Promi
   if (client) doublons.push({ type: "CLIENT", id: client.id, nom: client.nom || "client", ville: client.ville ?? null, motif: telephone && email ? "même numéro ou même e-mail" : telephone ? "même numéro de téléphone" : "même adresse e-mail", clientId: client.id });
   const nom = nomNormalise(entree.prenom, entree.nom);
   const ville = villeNormalisee(entree.ville);
+  // Mission 13 (lot 6) : plus de balayage de toute la base — seules les fiches qui partagent un mot du nom, le numéro ou l'e-mail sont lues.
+  const nomTape = entree.nom?.trim() ?? "";
+  const motsDuNom = nom.split(" ").filter((mot) => mot.length >= 3);
+  const criteresNom: Prisma.ClientWhereInput[] = [...(nomTape ? [{ nom: { contains: nomTape } }] : []), ...motsDuNom.map((mot) => ({ nom: { contains: mot } }))];
+  const criteresLead: Prisma.LeadWhereInput[] = [
+    ...(telephone ? [{ telephone: { contains: telephone.slice(-9) } }] : []),
+    ...(email ? [{ email: { contains: email } }] : []),
+    ...(nomTape ? [{ nom: { contains: nomTape } }] : []),
+    ...motsDuNom.map((mot) => ({ nom: { contains: mot } })),
+  ];
   // Une fiche client au même nom (et même ville, quand les deux sont connues) : probable, jamais appliqué seul.
   if (nom) {
-    const clients = await prisma.client.findMany({ where: { archiveLe: null, ...(client ? { id: { not: client.id } } : {}) }, select: { id: true, nom: true, prenom: true, ville: true }, orderBy: { updatedAt: "desc" }, take: 2000 });
+    const clients = await prisma.client.findMany({ where: { archiveLe: null, ...(client ? { id: { not: client.id } } : {}), OR: criteresNom }, select: { id: true, nom: true, prenom: true, ville: true }, orderBy: { updatedAt: "desc" }, take: 2000 });
     for (const c of clients) {
       const nomClient = nomNormalise(c.prenom && !c.nom.toLowerCase().includes(c.prenom.toLowerCase()) ? c.prenom : "", c.nom);
       if (!memeNom(nom, nomClient) || (ville && c.ville && villeNormalisee(c.ville) !== ville)) continue;
@@ -53,7 +64,7 @@ export async function reperDoublonsContact(entree: EntreeCreationContact): Promi
       if (doublons.length >= 5) break;
     }
   }
-  const leads = await prisma.lead.findMany({ where: { archiveLe: null }, select: { id: true, prenom: true, nom: true, telephone: true, email: true, ville: true, clientId: true }, orderBy: { createdAt: "desc" }, take: 2000 });
+  const leads = criteresLead.length === 0 ? [] : await prisma.lead.findMany({ where: { archiveLe: null, OR: criteresLead }, select: { id: true, prenom: true, nom: true, telephone: true, email: true, ville: true, clientId: true }, orderBy: { createdAt: "desc" }, take: 2000 });
   for (const lead of leads) {
     if (lead.clientId && doublons.some((d) => d.type === "CLIENT" && d.id === lead.clientId)) continue;
     const parTelephone = Boolean(telephone) && normaliserTelephone(lead.telephone) === telephone;

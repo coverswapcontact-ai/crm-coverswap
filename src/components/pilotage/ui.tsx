@@ -414,3 +414,24 @@ export function Pastille({
     </span>
   );
 }
+
+/** Mission 13 (lot 6) — une page à la fois (50 par défaut) ; la page se compte à partir de 1. */
+export function Pagination({ total, page, parPage = 50, onPage, feminin = false, className }: { total: number; page: number; parPage?: number; onPage: (page: number) => void; feminin?: boolean; className?: string }) {
+  if (total <= parPage) return null;
+  const derniere = Math.max(1, Math.ceil(total / parPage));
+  return (
+    <div className={cn("mt-3 flex items-center justify-between gap-2 text-[12.5px] text-[#9CA3AF]", className)}>
+      <span className="tabular-nums">
+        {(page - 1) * parPage + 1}–{Math.min(page * parPage, total)} sur {total}
+      </span>
+      <span className="flex gap-1.5">
+        <Bouton taille="sm" variante="fantome" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          {feminin ? "Précédentes" : "Précédents"}
+        </Bouton>
+        <Bouton taille="sm" variante="fantome" disabled={page >= derniere} onClick={() => onPage(page + 1)}>
+          {feminin ? "Suivantes" : "Suivants"}
+        </Bouton>
+      </span>
+    </div>
+  );
+}

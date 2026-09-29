@@ -6,10 +6,11 @@ type Contexte = { params: Promise<{ id: string; photoId: string }> };
 
 // L'URL ne porte pas d'extension de fichier : elle passe toujours par le
 // middleware (session obligatoire), quel que soit son matcher.
-export async function GET(_request: NextRequest, { params }: Contexte) {
+export async function GET(request: NextRequest, { params }: Contexte) {
   try {
     const { id, photoId } = await params;
-    const { contenu, type } = await lirePhoto(id, photoId);
+    // Mission 13 (lot 6) : ?taille=vignette pour les listes (320 px), sinon la version servie (1 600 px).
+    const { contenu, type } = await lirePhoto(id, photoId, request.nextUrl.searchParams.get("taille") === "vignette" ? "vignette" : "servie");
     return new NextResponse(new Uint8Array(contenu), {
       headers: {
         "Content-Type": type,

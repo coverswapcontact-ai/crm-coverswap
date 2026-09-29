@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { listerClientsEspaces } from "@/lib/espace/suivi";
+import { pageClientsEspaces } from "@/lib/espace/suivi";
 import EcranEspaces from "./_components/EcranEspaces";
 
 export const metadata: Metadata = {
@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function EspacesPage() {
-  return <EcranEspaces initial={await listerClientsEspaces()} />;
+  return <EcranEspaces initial={await pageClientsEspaces(new Date(), { page: 1 })} />;
 }

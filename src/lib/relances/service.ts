@@ -87,12 +87,22 @@ export async function listerRelances(maintenant: Date = new Date()): Promise<{ d
   const { jours: delai, parametre } = await lireDelaiRelance(maintenant);
   const enAttente = await prisma.proposition.findMany({ where: { type: "ENVOI_MAIL", statut: "EN_ATTENTE", contenu: { contains: "RELANCE_DEVIS" } }, select: { id: true, contenu: true, expireLe: true } });
   const liste: DevisARelancer[] = [];
-  for (const dossier of await chargerDossiersARelancer()) {
+  const dossiers = await chargerDossiersARelancer();
+  // Mission 13 (lot 6) : les relances déjà faites en une requête pour tous les dossiers (plus de N+1).
+  const envois =
+    dossiers.length > 0
+      ? await prisma.dossierEvenement.findMany({
+          where: { dossierId: { in: dossiers.map((d) => d.id) }, type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } },
+          orderBy: { createdAt: "desc" },
+          select: { dossierId: true, metadata: true, createdAt: true },
+        })
+      : [];
+  for (const dossier of dossiers) {
     const devis = dossier.documents[0];
     if (!devis?.numero || !devis.dateEmission) continue;
     const consentement = dossier.client?.consentements[0]?.statut;
     const adresse = dossier.clientEmail ?? dossier.client?.emails[0]?.adresse ?? null;
-    const relances = await relancesFaites(dossier.id, devis.id);
+    const relances = envois.filter((e) => e.dossierId === dossier.id && (e.metadata ?? "").includes(devis.id));
     const reference = relances[0]?.createdAt ?? devis.dateEmission;
     const proposition = enAttente.find((p) => p.contenu.includes(devis.id));
     liste.push({

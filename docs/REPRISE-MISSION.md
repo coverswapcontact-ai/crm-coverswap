@@ -1168,3 +1168,45 @@ native de 16 px dans un libellé de 44 px) ; aucune page plus large que 390 px (
 - Tests : `base/mission-13-lot-5.test.ts` (4 : formats ; deux devis comptés séparément et vue CRM ; migration
   rejouable) ; suite complète 560/560 après alignement des attentes.
 - Aucun mail ni SMS automatique ajouté ; aucune donnée supprimée ; sauvegarde automatique avant la migration.
+
+## Lot 6 — Photos et montée en charge (29/09)
+
+Commit « Mission 13, lot 6 : photos et montée en charge ». Vérifié sur la copie d'essai (m8 : 109 dossiers, 121 clients,
+48 photos) : Dossiers rend « 1–50 sur 109 » puis « 51–100 sur 109 » (50 lignes par page, en-tête « 108 en cours · 88 à
+faire · 69 en retard » calculé côté serveur) ; Clients « 1–50 sur 121 » ; Leads et Espaces sans pagination sous 50 ;
+une photo de 135 Ko servie, sa vignette 11 Ko ; `/api/uploads/originaux/…` répond 404 ; la reprise des 48 photos
+existantes s'est faite en deux lots (25 + 23) journalisés dans Tâches de fond (48 originaux hors ligne, 48 vignettes,
+0 illisible).
+
+- **Photos en trois versions** (`lib/fichiers/images.ts`, sharp était déjà en dépendance) : au dépôt (`stockage.ts ›
+  enregistrerPhoto`, donc espace client, panneau, images de lead recopiées ; `simulations/images.ts` pour les photos
+  du site), l'original part dans `originaux/<chemin>` (jamais servi, jamais effacé), la version servie est réduite à
+  1 600 px de côté (JPEG q82 / PNG / WebP selon l'entrée, orientation EXIF appliquée, même extension : aucun chemin ne
+  change en base), la vignette 320 px s'écrit en `<chemin>.vignette.<ext>`. HEIC ou image illisible : servie telle
+  quelle, sans vignette. `lireFichier` retombe sur l'original si la version servie manque ; `lireVignette` retombe sur
+  la servie ; l'archivage d'une photo retirée emporte les trois. `PhotoVue.vignette` (`?taille=vignette` sur
+  `/api/dossiers/[id]/photos/[photoId]`) alimente les vignettes du panneau, de la rubrique Espace et du panneau du lead
+  (`/api/uploads/<chemin>.vignette.<ext>`, qui retombe sur la version servie tant que la vignette n'existe pas) ; la
+  visionneuse ouvre la version servie. Drive reçoit l'original hors ligne quand il existe.
+- **Reprise des photos d'avant** : migration `photos-redimensionnees-13-6` (sauvegarde automatique avant) met en file la
+  tâche `REDIMENSIONNER_PHOTOS` (`lib/fichiers/redimensionnement.ts`) ; chaque lot traite 25 photos (dossiers archivés
+  compris, photos de lead, photos « avant » des simulations du site) et remet le lot suivant en file tant qu'il en
+  reste ; idempotent (original présent = déjà fait ; image illisible marquée `originaux/<chemin>.illisible`). Bilan par
+  lot dans Tâches de fond. Le volume garde les originaux : rien n'est effacé (≈ 330 Ko de plus par photo, version servie
+  et vignette).
+- **Pagination 50 par page** (`lib/commun/pagination.ts › tranche`, `Pagination` dans `components/pilotage/ui.tsx`,
+  reprise par Tâches de fond) : `dossiers.ts › pageDossiers` (vue en cours / tous / à faire, recherche, inactifs
+  masqués — tout côté serveur ; « à faire » est `mainDe` traduit en clause Prisma, avec `dates.ts › debutDuJourParis`) ;
+  `suivi.ts › pageClientsEspaces` (les clés des clients par une requête légère rangée par dernière activité, les faits
+  calculés pour la page seule) ; `leads.ts › listerLeads({ page })` (total du filtre) ; `fiches.ts › pageClients`.
+  Les écrans gardent la première page rendue par le serveur et ne demandent que les suivantes ; un filtre qui change
+  ramène à la première page. `listerDossiers`, `listerClientsEspaces`, `listerClients` et `listerLeads({ limite })`
+  restent pour l'assistant, l'audit et les tests. Dans Espaces, les puces (À toi, Chez le client, Signaux) comptent la
+  page affichée.
+- **Plus de N+1** : `relances/service.ts › listerRelances` lit les relances faites en une requête pour tous les
+  dossiers ; `creation-assistant.ts › reperDoublonsContact` ne lit que les fiches qui partagent un mot du nom, le
+  numéro ou l'e-mail (fini les 2 000 leads en mémoire) ; `chargerDetail` charge 120 événements au lieu de 300.
+- Tests : `base/mission-13-lot-6.test.ts` (6 : minuit à Paris ; dépôt en trois versions et archivage ; reprise par
+  lots rejouable ; pages de dossiers avec filtres ; pages de leads, clients, espaces ; doublons ciblés) ; suite
+  complète 566/566.
+- Aucune donnée supprimée ; sauvegarde avant la migration ; aucun mail ni SMS automatique ajouté.

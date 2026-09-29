@@ -281,7 +281,7 @@ export function EspaceDossier({
               {espace.photos.map((photo, i) => (
                 <button key={photo.id} type="button" onClick={() => setPhotoOuverte(i)} className="block h-12 w-12 overflow-hidden rounded-[6px] border-[0.5px] border-[#2A2D34]" aria-label="Agrandir la photo">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.url} alt="Photo du client" loading="lazy" className="h-full w-full object-cover" />
+                  <img src={photo.vignette} alt="Photo du client" loading="lazy" className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>

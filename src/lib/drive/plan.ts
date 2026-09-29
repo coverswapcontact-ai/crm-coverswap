@@ -5,6 +5,7 @@ import { LIBELLES_ETAPE, LIBELLES_TYPE_DOCUMENT, type EtapeDossier, type TypeDoc
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { estPhotoApres, idPhoto, lireFichier, lirePhotos, typeMimePhoto } from "@/lib/dossiers/stockage";
+import { cheminOriginal } from "@/lib/fichiers/images";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { chargerPaiementsDossier } from "@/lib/encaissements/soldes";
 import { chargerLivre, livreEnCsv } from "@/lib/finances/livre";
@@ -150,7 +151,8 @@ export async function planMiroir(maintenant: Date = new Date()): Promise<Element
         dossier: false,
         empreinte: chemin,
         contenu: async () => {
-          const octets = await lireFichier(chemin);
+          // Mission 13 (lot 6) : Drive reçoit l'original (hors ligne) quand il existe, sinon la version servie.
+          const octets = (await lireFichier(cheminOriginal(chemin))) ?? (await lireFichier(chemin));
           if (!octets) throw new Error(`Photo absente du stockage : ${chemin}`);
           return { type: typeMimePhoto(chemin), octets };
         },

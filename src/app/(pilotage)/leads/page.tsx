@@ -15,6 +15,6 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const parametres = await searchParams;
   const lead = typeof parametres.lead === "string" && /^[a-z0-9]{10,40}$/i.test(parametres.lead) ? parametres.lead : null;
   // Mission 13 (B19) : les simulations faites sur le site cette semaine, visibles ici et non plus seulement par l'assistant.
-  const [initial, site] = await Promise.all([listerLeads(), simulationsSiteRecentes(7)]);
+  const [initial, site] = await Promise.all([listerLeads({ page: 1 }), simulationsSiteRecentes(7)]);
   return <EcranLeads initial={initial} siteInitial={site} leadInitial={lead} appelsInitial={parametres.appels === "1"} />;
 }

@@ -1,11 +1,10 @@
 "use client";
 
 import { alertesACompleter } from "@/lib/dossiers/completude";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Archive, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
 import { toast } from "sonner";
-import { echeanceDe, estAFaire } from "@/lib/dossiers/pilotage";
-import { estEtapeSortie } from "@/lib/dossiers/regles";
+import type { PageDossiers } from "@/lib/dossiers/dossiers";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAttente";
@@ -17,6 +16,7 @@ import { VueKanban } from "./VueKanban";
 import { type DemandeRaccourci } from "./CarteDossier";
 import { LIBELLES_TRI, SENS_PAR_DEFAUT, VueListe, type CleTri, type Tri } from "./VueListe";
 import { appelApi, messageErreur } from "./client";
+import { Pagination } from "@/components/pilotage/ui";
 import { Bouton, EtatVide, TRANS } from "./ui";
 
 type Vue = "kanban" | "liste";
@@ -34,12 +34,6 @@ function lireVueParDefaut(): Vue {
   }
   return window.matchMedia("(max-width: 767px)").matches ? "liste" : "kanban";
 }
-
-const normaliser = (texte: string) =>
-  texte
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
 
 function resumeDepuisDetail(detail: DossierDetail): DossierResume {
   return {
@@ -70,7 +64,6 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
 const CLASSE_ONGLET = "flex h-11 items-center gap-1.5 rounded-[7px] px-3 text-[13px] font-medium sm:h-7";
 
 const CLE_INACTIFS = "dossiers:masquer-inactifs";
-const JOURS_INACTIF = 30;
 
 function lireMasquerInactifs(): boolean {
   try {
@@ -80,25 +73,22 @@ function lireMasquerInactifs(): boolean {
   }
 }
 
-/** Inactif : rien bougé depuis 30 jours et le client a la main (un dossier qui m'attend n'est jamais masqué). */
-function estInactif(dossier: DossierResume, maintenant: Date): boolean {
-  if (estAFaire(dossier, maintenant)) return false;
-  return maintenant.getTime() - new Date(dossier.updatedAt).getTime() > JOURS_INACTIF * 86_400_000;
-}
-
 export default function DossiersPilotage({
-  dossiersInitiaux,
+  initial,
   leadInitial,
   dossierInitialId,
   demandeInitiale = null,
 }: {
-  dossiersInitiaux: DossierResume[];
+  /** Mission 13 (lot 6) : la première page (50), rendue par le serveur avec l'écran ; le reste se demande page par page. */
+  initial: PageDossiers;
   leadInitial: LeadTrouve | null;
   dossierInitialId: string | null;
   /** Mission 13 (lot 4) : ?rubrique= dans l'adresse (notification, Espaces clients) — la rubrique du panneau à ouvrir. */
   demandeInitiale?: DemandeOuverture | null;
 }) {
-  const [dossiers, setDossiers] = useState(dossiersInitiaux);
+  const [dossiers, setDossiers] = useState(initial.dossiers);
+  const [total, setTotal] = useState(initial.total);
+  const [compteurs, setCompteurs] = useState(initial.compteurs);
   const vueParDefaut = useSyncExternalStore(sansAbonnement, lireVueParDefaut, () => "kanban" as const);
   const [vueChoisie, setVueChoisie] = useState<Vue | null>(null);
   const vue = vueChoisie ?? vueParDefaut;
@@ -112,6 +102,10 @@ export default function DossiersPilotage({
   const [archivesOuvertes, setArchivesOuvertes] = useState(false);
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>({ cle: "prochaineAction", sens: "asc" });
+  // Mission 13 (lot 6) : une page à la fois ; changer un filtre ramène à la première page (la clé des filtres change).
+  const cleFiltres = `${filtreAFaire}|${afficherSorties}|${recherche}|${masquerInactifs}`;
+  const [pageDemandee, setPageDemandee] = useState({ page: initial.page, cle: cleFiltres });
+  const page = pageDemandee.cle === cleFiltres ? pageDemandee.page : 1;
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
   // Mission 13 (lot 4) : la rubrique demandée par un raccourci (ligne, Espaces clients, notification), une fois.
   const [demande, setDemande] = useState<{ dossierId: string; demande: DemandeOuverture } | null>(dossierInitialId && demandeInitiale ? { dossierId: dossierInitialId, demande: demandeInitiale } : null);
@@ -154,14 +148,37 @@ export default function DossiersPilotage({
       actuel.cle === cle ? { cle, sens: actuel.sens === "asc" ? "desc" : "asc" } : { cle, sens: SENS_PAR_DEFAUT[cle] }
     );
 
+  // Le serveur ne rend qu'une page, filtrée là-bas ; les filtres vivent dans une référence pour que la fonction reste stable.
+  const filtres = useRef({ page, filtreAFaire, afficherSorties, recherche, masquerInactifs });
   const rafraichir = useCallback(async () => {
+    const f = filtres.current;
     try {
-      const reponse = await appelApi<{ dossiers: DossierResume[] }>("/api/dossiers");
+      const parametres = new URLSearchParams({
+        page: String(f.page),
+        vue: f.filtreAFaire ? "A_FAIRE" : f.afficherSorties ? "TOUS" : "EN_COURS",
+        ...(f.recherche.trim() ? { q: f.recherche.trim() } : {}),
+        ...(f.masquerInactifs ? { inactifs: "0" } : {}),
+      });
+      const reponse = await appelApi<PageDossiers>(`/api/dossiers?${parametres}`);
       setDossiers(reponse.dossiers);
+      setTotal(reponse.total);
+      setCompteurs(reponse.compteurs);
     } catch (erreur) {
       toast.error("Liste des dossiers non rechargée", { description: messageErreur(erreur) });
     }
   }, []);
+
+  const premierRendu = useRef(true);
+  useEffect(() => {
+    filtres.current = { page, filtreAFaire, afficherSorties, recherche, masquerInactifs };
+    if (premierRendu.current) {
+      premierRendu.current = false;
+      // La première page est arrivée avec l'écran : on ne la redemande que si l'appareil masque les inactifs.
+      if (page === initial.page && !filtreAFaire && !afficherSorties && !recherche && !masquerInactifs) return;
+    }
+    const minuterie = window.setTimeout(() => void rafraichir(), recherche ? 250 : 0);
+    return () => window.clearTimeout(minuterie);
+  }, [page, filtreAFaire, afficherSorties, recherche, masquerInactifs, rafraichir, initial.page]);
 
   const mettreAJour = useCallback((detail: DossierDetail) => {
     setDossiers((liste) => {
@@ -172,28 +189,9 @@ export default function DossiersPilotage({
     });
   }, []);
 
-  const sorties = useMemo(() => dossiers.filter((dossier) => estEtapeSortie(dossier.etape)), [dossiers]);
-
-  // « À faire » : les dossiers où j'ai la main, retards compris, y compris un
-  // dossier en pause dont la date de reprise est passée. Sinon, perdus et en
-  // pause restent masqués tant que leur filtre n'est pas activé.
-  const visibles = useMemo(() => {
-    const termes = normaliser(recherche).split(/\s+/).filter(Boolean);
-    return dossiers.filter((dossier) => {
-      if (filtreAFaire) {
-        if (!estAFaire(dossier, maintenant)) return false;
-      } else if (!afficherSorties && estEtapeSortie(dossier.etape)) {
-        return false;
-      }
-      if (masquerInactifs && estInactif(dossier, maintenant)) return false;
-      if (termes.length === 0) return true;
-      const texte = normaliser(
-        [dossier.clientNom, dossier.clientVille, dossier.objet, dossier.prochaineAction ?? ""].join(" ")
-      );
-      return termes.every((terme) => texte.includes(terme));
-    });
-  }, [dossiers, afficherSorties, filtreAFaire, recherche, maintenant, masquerInactifs]);
-  const inactifs = dossiers.filter((dossier) => (afficherSorties || !estEtapeSortie(dossier.etape)) && estInactif(dossier, maintenant)).length;
+  // Mission 13 (lot 6) : la page arrive déjà filtrée par le serveur.
+  const visibles = dossiers;
+  const inactifs = compteurs.inactifs;
 
   const basculerInactifs = () => {
     const suite = !masquerInactifs;
@@ -205,10 +203,9 @@ export default function DossiersPilotage({
     }
   };
 
-  const enCours = dossiers.filter((dossier) => dossier.etape !== "ENCAISSE" && !estEtapeSortie(dossier.etape)).length;
-  const enRetard = dossiers.filter((dossier) => echeanceDe(dossier, maintenant) === "retard").length;
-  const aFaire = dossiers.filter((dossier) => estAFaire(dossier, maintenant)).length;
-  const tous = dossiers.filter((dossier) => afficherSorties || !estEtapeSortie(dossier.etape)).length;
+  // Les chiffres viennent du serveur, sur tous les dossiers vivants (la page n'en montre que 50).
+  const { enCours, enRetard, aFaire } = compteurs;
+  const tous = filtreAFaire ? compteurs.enCours : total;
 
   const ouvrirCreation = () => setCreation((actuelle) => ({ ouverte: true, lead: null, cle: actuelle.cle + 1 }));
 
@@ -341,7 +338,7 @@ export default function DossiersPilotage({
             )}
           >
             Perdus et en pause
-            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{sorties.length}</span>
+            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{compteurs.sorties}</span>
           </button>
         )}
 
@@ -403,7 +400,7 @@ export default function DossiersPilotage({
       {legendeOuverte ? <Legende onFermer={() => setLegendeOuverte(false)} /> : null}
 
       <main className="mt-5">
-        {dossiers.length === 0 ? (
+        {total === 0 && compteurs.enCours + compteurs.sorties === 0 ? (
           <EtatVide
             icone={<FolderOpen size={18} className="text-[#6B7280]" aria-hidden />}
             titre="Aucun dossier pour l'instant"
@@ -432,6 +429,7 @@ export default function DossiersPilotage({
         ) : (
           <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
         )}
+        <Pagination total={total} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />
       </main>
 
       <PanneauDossier

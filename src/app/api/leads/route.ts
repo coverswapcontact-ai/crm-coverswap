@@ -15,6 +15,8 @@ export async function GET(requete: NextRequest) {
         vue: parametres.get("vue") === "SANS_SUITE" ? "SANS_SUITE" : parametres.get("vue") === "ARCHIVES" ? "ARCHIVES" : "ACTIFS",
         source: source && (SOURCES_LEAD as readonly string[]).includes(source) ? source : undefined,
         recherche: parametres.get("q")?.slice(0, 120) ?? undefined,
+        // Mission 13 (lot 6) : une page de 50.
+        page: Number(parametres.get("page")) || 1,
       })
     );
   } catch (erreur) {

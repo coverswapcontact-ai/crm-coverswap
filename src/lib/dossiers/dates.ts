@@ -108,3 +108,11 @@ export function formatHorodatage(date: Date | string): string {
 export function formatDateCourte(date: Date | string): string {
   return FORMAT_DATE_COURTE.format(versDate(date));
 }
+
+/** Mission 13 (lot 6) : l'instant où commence le jour de `maintenant` à Paris (pour « en retard » en clause Prisma : date < ce début). */
+export function debutDuJourParis(maintenant: Date = new Date()): Date {
+  const minuitUtc = new Date(`${jourParis(maintenant)}T00:00:00.000Z`);
+  // formatToParts : « 02 h » en français ne se convertit pas en nombre, la partie « hour » si.
+  const heureAParis = Number(new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", hour12: false }).formatToParts(minuitUtc).find((partie) => partie.type === "hour")?.value ?? "0") % 24;
+  return new Date(minuitUtc.getTime() - heureAParis * 3_600_000);
+}

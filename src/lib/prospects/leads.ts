@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { mainDe, type Main } from "@/lib/dossiers/pilotage";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import prisma from "@/lib/prisma";
+import { tranche } from "@/lib/commun/pagination";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
 import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
 import { versVueNote } from "@/lib/commercial/notes-appel";
@@ -78,7 +79,7 @@ export type LigneLead = {
 export type SimulationLead = { id: string; le: string; reference: string | null; prix: number | null; avant: string | null; apres: string | null };
 
 export type VueLeads = "ACTIFS" | "SANS_SUITE" | "ARCHIVES";
-export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number; archives: number }; sources: string[] };
+export type ListeLeads = { lignes: LigneLead[]; compteurs: { actifs: number; aAppeler: number; sansSuite: number; archives: number }; sources: string[]; /** Mission 13 (lot 6) : la page demandée et le total du filtre (absents des réponses d'avant, en cache). */ total?: number; page?: number; parPage?: number };
 
 const VILLES_INCONNUES = /^(|non renseign[ée]e?|inconnue?)$/i;
 const LIBELLES_OCCUPATION: Record<string, string> = { PROPRIETAIRE: "Propriétaire", LOCATAIRE: "Locataire" };
@@ -273,21 +274,28 @@ function whereAAppeler(maintenant: Date): Prisma.LeadWhereInput {
   };
 }
 
-export async function listerLeads(filtres: { vue?: VueLeads; source?: string; recherche?: string; limite?: number } = {}, maintenant: Date = new Date()): Promise<ListeLeads> {
+export async function listerLeads(filtres: { vue?: VueLeads; source?: string; recherche?: string; limite?: number; page?: number; parPage?: number } = {}, maintenant: Date = new Date()): Promise<ListeLeads> {
   const vue = filtres.vue ?? "ACTIFS";
   const communs: Prisma.LeadWhereInput[] = [filtres.source ? { source: filtres.source } : {}, whereRecherche(filtres.recherche)];
-  const [leads, actifs, aAppeler, sansSuite, archives, sources] = await Promise.all([
-    prisma.lead.findMany({ where: { AND: [...communs, whereVue(vue, maintenant)] }, include: inclusion, orderBy: vue === "ARCHIVES" ? { archiveLe: "desc" } : { createdAt: "desc" }, take: Math.min(filtres.limite ?? 300, 500) }),
+  // Mission 13 (lot 6) : une page à la fois quand l'écran la demande ; `limite` reste pour l'assistant et l'audit.
+  const page = filtres.page ? tranche(filtres.page, filtres.parPage) : null;
+  const where: Prisma.LeadWhereInput = { AND: [...communs, whereVue(vue, maintenant)] };
+  const [leads, actifs, aAppeler, sansSuite, archives, sources, total] = await Promise.all([
+    prisma.lead.findMany({ where, include: inclusion, orderBy: vue === "ARCHIVES" ? { archiveLe: "desc" } : { createdAt: "desc" }, ...(page ? { skip: page.skip, take: page.take } : { take: Math.min(filtres.limite ?? 300, 500) }) }),
     prisma.lead.count({ where: whereVue("ACTIFS", maintenant) }),
     prisma.lead.count({ where: whereAAppeler(maintenant) }),
     prisma.lead.count({ where: whereVue("SANS_SUITE", maintenant) }),
     prisma.lead.count({ where: whereVue("ARCHIVES", maintenant) }),
     prisma.lead.groupBy({ by: ["source"], where: whereVue("ACTIFS", maintenant), _count: { _all: true } }),
+    prisma.lead.count({ where }),
   ]);
   return {
     lignes: await avecDoublons(leads.map((lead) => versLigne(lead, maintenant))),
     compteurs: { actifs, aAppeler, sansSuite, archives },
     sources: sources.sort((a, b) => b._count._all - a._count._all).map((s) => s.source),
+    total,
+    page: page?.page ?? 1,
+    parPage: page?.parPage ?? leads.length,
   };
 }
 

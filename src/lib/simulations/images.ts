@@ -3,6 +3,8 @@ import path from "path";
 import { randomUUID } from "crypto";
 import prisma from "@/lib/prisma";
 import { resolveUploadsDir } from "@/lib/uploads";
+import { redimensionnerSurPlace } from "@/lib/fichiers/images";
+import { typeDeLaPhoto } from "@/lib/fichiers/redimensionnement";
 
 /**
  * Images reçues du site (photos de la demande, photo avant, rendu après) :
@@ -50,6 +52,8 @@ export async function enregistrerPhotosLead(leadId: string, photos: string[], or
   for (const photo of photos.slice(0, 4)) {
     const chemin = await enregistrerImageBase64(photo, path.join(leadId, "photos"), `${randomUUID()}.${extensionDe(photo)}`);
     if (!chemin) continue;
+    // Mission 13 (lot 6) : version 1 600 px servie et vignette, l'original hors ligne (jamais bloquant).
+    await redimensionnerSurPlace(resolveUploadsDir(), chemin, typeDeLaPhoto(chemin)).catch(() => undefined);
     await prisma.photoLead.create({ data: { leadId, chemin, origine } });
     ecrites += 1;
   }
@@ -77,6 +81,7 @@ export async function rattacherImagesSimulation(leadId: string, avantBase64: str
     recente ?? (await prisma.simulation.create({ data: { leadId, source: "SITE_SIMULATEUR", referenceChoisie: referenceChoisie ?? null } }));
   const dossier = path.join(leadId, simulation.id);
   const imageBeforePath = await enregistrerImageBase64(avantBase64, dossier, "before.jpg");
+  if (imageBeforePath) await redimensionnerSurPlace(resolveUploadsDir(), imageBeforePath, "image/jpeg").catch(() => undefined);
   const imageAfterPath = await enregistrerImageBase64(apresBase64, dossier, "after.png");
   await prisma.simulation.update({
     where: { id: simulation.id },

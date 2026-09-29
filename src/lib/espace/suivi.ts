@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { tranche } from "@/lib/commun/pagination";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -20,7 +21,7 @@ import { nomDuProjetClient, photosDuClient } from "./service";
  */
 
 export type { ClientEspace, CodeSignal, LigneEspace, Signal } from "./suivi-types";
-import type { ClientEspace, LigneEspace, Signal } from "./suivi-types";
+import type { ClientEspace, LigneEspace, Signal , PageEspaces } from "./suivi-types";
 import { simulationsGratuites } from "./service";
 
 const JOUR = 86_400_000;
@@ -38,10 +39,16 @@ function teintesDuChoix(choixJson: string | null, simulations: { id: string; zon
   }
 }
 
-export async function listerEspaces(maintenant: Date = new Date(), filtre: { permanentId?: string } = {}): Promise<LigneEspace[]> {
+export type FiltreEspaces = { permanentId?: string; permanentIds?: string[]; espaceIds?: string[] };
+
+export async function listerEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}): Promise<LigneEspace[]> {
   const gratuites = await simulationsGratuites();
   const espaces = await prisma.espaceClient.findMany({
-    where: filtre.permanentId ? { permanentId: filtre.permanentId } : {},
+    where: filtre.permanentId
+      ? { permanentId: filtre.permanentId }
+      : filtre.permanentIds || filtre.espaceIds
+        ? { OR: [{ permanentId: { in: filtre.permanentIds ?? [] } }, { id: { in: filtre.espaceIds ?? [] } }] }
+        : {},
     include: {
       // Archives comprises : une simulation retirée par Lucas a coûté, elle reste comptée dans le quota.
       simulations: { where: { ...AVEC_ARCHIVES }, select: { id: true, statut: true, source: true, publieeLe: true, archiveLe: true, zones: true, choisieLe: true } },
@@ -238,7 +245,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: { per
  * donne la main ; ses signaux (nouveau projet ouvert par le client, projet de plus
  * demandé, téléphone à confirmer) s'ajoutent à ceux de ses projets.
  */
-export async function listerClientsEspaces(maintenant: Date = new Date(), filtre: { permanentId?: string } = {}): Promise<ClientEspace[]> {
+export async function listerClientsEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}): Promise<ClientEspace[]> {
   const lignes = await listerEspaces(maintenant, filtre);
   const permanents = await prisma.espacePermanent.findMany({ where: { id: { in: [...new Set(lignes.map((l) => l.permanentId).filter((id): id is string => Boolean(id)))] } } });
   const parId = new Map(permanents.map((p) => [p.id, p]));
@@ -285,4 +292,27 @@ export async function listerClientsEspaces(maintenant: Date = new Date(), filtre
     });
   }
   return clients.sort((a, b) => poids(a.attente.qui) - poids(b.attente.qui) || (b.derniereActivite ?? b.lienEmisLe).localeCompare(a.derniereActivite ?? a.lienEmisLe));
+}
+
+/**
+ * Mission 13 (lot 6) — une page de clients (50) : les clés des clients (espace
+ * permanent, ou projet isolé) se lisent d'une requête légère, rangées par
+ * dernière activité ; les faits ne se calculent que pour la page demandée.
+ */
+export async function pageClientsEspaces(maintenant: Date = new Date(), options: { page?: number; parPage?: number } = {}): Promise<PageEspaces> {
+  const { page, parPage, skip, take } = tranche(options.page, options.parPage);
+  const legers = await prisma.espaceClient.findMany({ select: { id: true, permanentId: true, dernierAccesLe: true, createdAt: true } });
+  const activite = new Map<string, number>();
+  for (const espace of legers) {
+    const cle = espace.permanentId ?? `projet:${espace.id}`;
+    const derniere = Math.max(espace.dernierAccesLe?.getTime() ?? 0, espace.createdAt.getTime());
+    activite.set(cle, Math.max(activite.get(cle) ?? 0, derniere));
+  }
+  const cles = [...activite.entries()].sort((a, b) => b[1] - a[1]).map(([cle]) => cle);
+  const total = cles.length;
+  const tranchee = cles.slice(skip, skip + take);
+  const permanentIds = tranchee.filter((cle) => !cle.startsWith("projet:"));
+  const espaceIds = tranchee.filter((cle) => cle.startsWith("projet:")).map((cle) => cle.slice("projet:".length));
+  const clients = tranchee.length > 0 ? await listerClientsEspaces(maintenant, { permanentIds, espaceIds }) : [];
+  return { clients, total, page, parPage };
 }

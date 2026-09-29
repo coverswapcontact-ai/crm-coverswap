@@ -44,7 +44,7 @@ export type VueEspaceCrm = {
   etapes: ReturnType<typeof progression>;
   /** Ce qu'il lui reste à faire, en une phrase. */
   resteAFaire: string;
-  photos: { id: string; url: string }[];
+  photos: { id: string; url: string; vignette: string }[];
   photosRetirees: { id: string; url: string; le: string; par: string }[];
   projet: (ProjetClient & { resume: string }) | null;
   projetValide: { le: string; par: string } | null;
@@ -171,7 +171,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
     etapeLibelle: LIBELLES_ETAPE_ESPACE[etape],
     etapes: progression(faits),
     resteAFaire: resteAFaire(etape, manque, Boolean(espace.projetValideLe), photos.length),
-    photos: photos.map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/photos/${p.id}` })),
+    photos: photos.map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/photos/${p.id}`, vignette: `/api/dossiers/${dossierId}/photos/${p.id}?taille=vignette` })),
     photosRetirees: lirePhotosRetirees(espace.photosRetirees).map((p) => ({ id: p.id, url: `/api/dossiers/${dossierId}/espace/photos-retirees/${p.id}`, le: p.le, par: p.par })),
     projet: projet ? { ...projet, resume: resumerProjet(projet) } : null,
     projetValide: espace.projetValideLe ? { le: espace.projetValideLe.toISOString(), par: espace.projetValidePar ?? "CLIENT" } : null,

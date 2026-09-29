@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomBytes } from "crypto";
 import { resolveUploadsDir } from "@/lib/uploads";
+import { DOSSIER_ORIGINAUX, cheminOriginal, cheminVignette, ecrirePhotoAvecVersions } from "@/lib/fichiers/images";
 import { FORMATS_PHOTO, PHOTO_OCTETS_MAX, type LigneDocument, type TypeDocument } from "./constants";
 import { ErreurMetier } from "./erreurs";
 
@@ -79,9 +80,9 @@ export async function enregistrerPhoto(dossierId: string, fichier: File, apres =
   verifierPhoto(fichier);
   const id = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
   const relatif = path.posix.join(RACINE, dossierId, apres ? "photos-apres" : "photos", `${id}.${FORMATS_PHOTO[fichier.type]}`);
-  const absolu = cheminAbsolu(relatif);
-  await fs.mkdir(path.dirname(absolu), { recursive: true });
-  await fs.writeFile(absolu, Buffer.from(await fichier.arrayBuffer()));
+  cheminAbsolu(relatif);
+  // Mission 13 (lot 6) : l'original hors ligne (originaux/), la version 1 600 px servie, la vignette 320 px.
+  await ecrirePhotoAvecVersions(path.resolve(resolveUploadsDir()), relatif, Buffer.from(await fichier.arrayBuffer()), fichier.type);
   return relatif;
 }
 
@@ -104,9 +105,26 @@ export async function lireFichier(relatif: string): Promise<Buffer | null> {
   try {
     return await fs.readFile(cheminAbsolu(relatif));
   } catch (erreur) {
+    if (!estAbsent(erreur)) throw erreur;
+  }
+  // Mission 13 (lot 6) : la version servie manque (coupure pendant le redimensionnement) — l'original hors ligne prend le relais.
+  if (relatif.startsWith(`${DOSSIER_ORIGINAUX}/`)) return null;
+  try {
+    return await fs.readFile(cheminAbsolu(cheminOriginal(relatif)));
+  } catch (erreur) {
     if (estAbsent(erreur)) return null;
     throw erreur;
   }
+}
+
+/** La vignette (320 px) d'une photo ; à défaut (HEIC, photo d'avant le lot 6 pas encore reprise), la version servie. */
+export async function lireVignette(relatif: string): Promise<Buffer | null> {
+  try {
+    return await fs.readFile(cheminAbsolu(cheminVignette(relatif)));
+  } catch (erreur) {
+    if (!estAbsent(erreur)) throw erreur;
+  }
+  return lireFichier(relatif);
 }
 
 // Rien ne se supprime, fichiers compris : un fichier retiré part dans
@@ -126,9 +144,13 @@ async function deplacerVersArchives(relatif: string, raison: string): Promise<vo
 /** Retire un fichier de son emplacement vivant, en le gardant aux archives. */
 export async function archiverFichier(relatif: string, raison: string): Promise<void> {
   await deplacerVersArchives(relatif, raison);
+  // Mission 13 (lot 6) : l'original hors ligne et la vignette suivent (absents : rien à faire).
+  await deplacerVersArchives(cheminOriginal(relatif), raison);
+  await deplacerVersArchives(cheminVignette(relatif), raison);
 }
 
 /** Retire tous les fichiers d'un dossier (création interrompue), en les gardant aux archives. */
 export async function archiverFichiersDossier(dossierId: string, raison: string): Promise<void> {
   await deplacerVersArchives(path.posix.join(RACINE, dossierId), raison);
+  await deplacerVersArchives(path.posix.join(DOSSIER_ORIGINAUX, RACINE, dossierId), raison);
 }

@@ -24,7 +24,7 @@ function Vignette({ photo, taille, className }: { photo: PhotoVue; taille: strin
   }
   return (
     <Image
-      src={photo.url}
+      src={photo.vignette}
       alt="Photo du chantier"
       fill
       unoptimized

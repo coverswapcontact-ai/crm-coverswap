@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { CATEGORIES_CLIENT, SOURCES_CLIENT, type CategorieClient, type SourceClient } from "@/lib/clients/constantes";
-import { creerClientManuel, listerClients, schemaCreationClient } from "@/lib/clients/fiches";
+import { lirePage } from "@/lib/commun/pagination";
+import { creerClientManuel, listerClients, pageClients, schemaCreationClient } from "@/lib/clients/fiches";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +12,18 @@ export async function GET(requete: NextRequest) {
     const parametres = requete.nextUrl.searchParams;
     const categorie = parametres.get("categorie") ?? "";
     const source = parametres.get("source") ?? "";
-    const clients = await listerClients({
+    const filtres = {
       recherche: parametres.get("recherche") ?? undefined,
       categorie: (CATEGORIES_CLIENT as readonly string[]).includes(categorie) ? (categorie as CategorieClient) : undefined,
       source: (SOURCES_CLIENT as readonly string[]).includes(source) ? (source as SourceClient) : undefined,
       archives: parametres.get("archives") === "1",
-      limite: Number(parametres.get("limite")) || undefined,
-    });
+    };
+    // Mission 13 (lot 6) : ?page=1 rend une page de 50 avec le total ; sans page, l'ancienne liste bornée.
+    if (parametres.has("page")) {
+      const { page, parPage } = lirePage(parametres);
+      return NextResponse.json(await pageClients({ ...filtres, page, parPage }));
+    }
+    const clients = await listerClients({ ...filtres, limite: Number(parametres.get("limite")) || undefined });
     return NextResponse.json({ clients });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/clients");

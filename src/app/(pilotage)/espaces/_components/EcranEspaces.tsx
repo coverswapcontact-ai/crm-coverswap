@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Camera, Check, ChevronDown, Copy, Euro, Eye, FilePlus2, FileText, FileUp, FolderOpen, Mail, MessageSquare, Phone, PlusCircle, RefreshCw, Send, ShieldOff, Smartphone, WandSparkles } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, EnTetePage, EtatVide, Pastille, TRANS } from "@/components/pilotage/ui";
+import { Bouton, EnTetePage, EtatVide, Pagination, Pastille, TRANS } from "@/components/pilotage/ui";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
 import { LIBELLES_ETAPE_ESPACE, type EtapeEspace } from "@/lib/espace/etapes";
-import type { ClientEspace, LigneEspace } from "@/lib/espace/suivi-types";
+import type { ClientEspace, LigneEspace, PageEspaces } from "@/lib/espace/suivi-types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,8 +47,11 @@ function ilYa(iso: string | null, maintenant: number): string {
 
 const aDesSignaux = (c: ClientEspace) => c.signaux.some((s) => s.ton !== "gris");
 
-export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
-  const [clients, setClients] = useState(initial);
+export default function EcranEspaces({ initial }: { initial: PageEspaces }) {
+  const [clients, setClients] = useState(initial.clients);
+  // Mission 13 (lot 6) : une page de 50 clients à la fois.
+  const [total, setTotal] = useState(initial.total);
+  const [page, setPage] = useState(initial.page);
   const [filtre, setFiltre] = useState<Filtre>("TOUS");
   const [etape, setEtape] = useState<EtapeEspace | "TOUTES">("TOUTES");
   const [tri, setTri] = useState<Tri>("MAIN");
@@ -64,17 +67,23 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
       return suivants;
     });
 
-  const rafraichir = useCallback(async () => {
-    setCharge(true);
-    try {
-      setClients((await appelApi<{ clients: ClientEspace[] }>("/api/espaces")).clients);
-      setMaintenant(Date.now());
-    } catch (erreur) {
-      toast.error(messageErreur(erreur));
-    } finally {
-      setCharge(false);
-    }
-  }, []);
+  const rafraichir = useCallback(
+    async (pageVoulue?: number) => {
+      setCharge(true);
+      try {
+        const lue = await appelApi<PageEspaces>(`/api/espaces?page=${pageVoulue ?? page}`);
+        setClients(lue.clients);
+        setTotal(lue.total);
+        setPage(lue.page);
+        setMaintenant(Date.now());
+      } catch (erreur) {
+        toast.error(messageErreur(erreur));
+      } finally {
+        setCharge(false);
+      }
+    },
+    [page]
+  );
 
   const compteurs = useMemo(
     () => ({
@@ -170,6 +179,7 @@ export default function EcranEspaces({ initial }: { initial: ClientEspace[] }) {
           ))}
         </div>
       )}
+      <Pagination total={total} page={page} onPage={(p) => void rafraichir(p)} />
     </div>
   );
 }

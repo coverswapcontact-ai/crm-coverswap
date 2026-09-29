@@ -6,6 +6,7 @@ import { enregistrerTachesDossiers } from "@/lib/dossiers/taches";
 import { enregistrerTachesDrive } from "@/lib/drive/synchronisation";
 import { enregistrerTachesEncaissements } from "@/lib/encaissements/reprise";
 import { enregistrerTachesEspace } from "@/lib/espace/taches";
+import { enregistrerTachesRedimensionnement } from "@/lib/fichiers/redimensionnement";
 import { enregistrerTachesMail } from "@/lib/mail/taches";
 import { enregistrerTachesMessages } from "@/lib/messages/taches";
 import { enregistrerTachesMeta } from "@/lib/meta/taches";
@@ -42,4 +43,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesCoherence();
   enregistrerTachesSauvegardes();
   enregistrerTachesCorbeille();
+  enregistrerTachesRedimensionnement();
 }

@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { completerCoordonnees, rattacherLead } from "@/lib/clients/identification";
 import { formaterTelephone, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
+import { cheminVignette } from "@/lib/fichiers/images";
 import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE } from "@/lib/dossiers/constants";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import {
@@ -179,7 +180,7 @@ export async function chargerEntrant(id: string, maintenant: Date = new Date()):
     notes: lead.notes,
     message: lead.message,
     styleSouhaite: lead.styleSouhaite,
-    photos: lead.photos.map((photo) => ({ id: photo.id, url: `/api/uploads/${photo.chemin}`, le: photo.createdAt.toISOString() })),
+    photos: lead.photos.map((photo) => ({ id: photo.id, url: `/api/uploads/${photo.chemin}`, vignette: `/api/uploads/${cheminVignette(photo.chemin)}`, le: photo.createdAt.toISOString() })),
     campagne: lead.campagne,
     publicite: lead.publicite,
     formulaire: lead.formulaire,

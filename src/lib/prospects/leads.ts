@@ -227,6 +227,12 @@ export function nomDuLead(lead: { prenom: string; nom: string }): string {
   return (!prenom || prenom.toLowerCase() === nomFamille.toLowerCase() ? nomFamille || prenom : `${prenom} ${nomFamille}`).trim() || "Contact sans nom";
 }
 
+/** La ville, ou null quand elle n'est pas renseignée (« Non renseignée », « Inconnue », vide) — mission 14 (partie 7). */
+export function villeLisible(ville: string | null | undefined): string | null {
+  const propre = (ville ?? "").trim();
+  return VILLES_INCONNUES.test(propre) ? null : propre;
+}
+
 /** Le numéro lisible (06 12 34 56 78), ou tel que saisi s'il est illisible ; null s'il est vide. */
 export function telephoneLisible(telephone: string): string | null {
   const numero = normaliserTelephone(telephone);
@@ -324,20 +330,21 @@ function whereRecherche(recherche: string | undefined): Prisma.LeadWhereInput {
 /** Rappels passés des deux listes (un rappel daté place toujours le lead dans « À rappeler »). */
 const whereEnRetard = (maintenant: Date): Prisma.LeadWhereInput => ({ AND: [whereActif(maintenant), { rappelLe: { lt: maintenant } }] });
 
+/** « Aujourd'hui » : rappels à venir d'ici minuit, heure de Paris (le serveur tourne en UTC) — `compteurs.aujourdhui`. */
+const whereRappelAujourdhui = (maintenant: Date): Prisma.LeadWhereInput => ({ AND: [whereActif(maintenant), { rappelLe: { gte: maintenant, lt: aHeureParis(maintenant, 1, 0) } }] });
+
 export async function listerLeads(filtres: { vue?: VueLeads; source?: string; recherche?: string; limite?: number; page?: number; parPage?: number } = {}, maintenant: Date = new Date()): Promise<ListeLeads> {
   const vue = filtres.vue ?? "A_APPELER";
   const communs: Prisma.LeadWhereInput[] = [filtres.source ? { source: filtres.source } : {}, whereRecherche(filtres.recherche)];
   // Mission 13 (lot 6) : une page à la fois quand l'écran la demande ; `limite` reste pour l'assistant et l'audit.
   const page = filtres.page ? tranche(filtres.page, filtres.parPage) : null;
   const where: Prisma.LeadWhereInput = { AND: [...communs, whereVue(vue, maintenant)] };
-  // « Aujourd'hui » : jusqu'à minuit, heure de Paris (le serveur tourne en UTC).
-  const finDuJour = aHeureParis(maintenant, 1, 0);
   const [leads, aAppeler, aRappeler, enRetard, aujourdhui, sansSuite, archives, sources, total] = await Promise.all([
     prisma.lead.findMany({ where, include: inclusion, orderBy: ORDRE[vue], ...(page ? { skip: page.skip, take: page.take } : { take: Math.min(filtres.limite ?? 300, 500) }) }),
     prisma.lead.count({ where: whereVue("A_APPELER", maintenant) }),
     prisma.lead.count({ where: whereVue("A_RAPPELER", maintenant) }),
     prisma.lead.count({ where: whereEnRetard(maintenant) }),
-    prisma.lead.count({ where: { AND: [whereActif(maintenant), { rappelLe: { gte: maintenant, lt: finDuJour } }] } }),
+    prisma.lead.count({ where: whereRappelAujourdhui(maintenant) }),
     prisma.lead.count({ where: whereVue("SANS_SUITE", maintenant) }),
     prisma.lead.count({ where: whereVue("ARCHIVES", maintenant) }),
     prisma.lead.groupBy({ by: ["source"], where: whereActif(maintenant), _count: { _all: true } }),
@@ -356,6 +363,15 @@ export async function listerLeads(filtres: { vue?: VueLeads; source?: string; re
 /** Compteur de l'onglet Leads : les rappels en retard, rien d'autre (mission 14). */
 export function compterLeadsEnRetard(maintenant: Date = new Date()): Promise<number> {
   return prisma.lead.count({ where: whereEnRetard(maintenant) });
+}
+
+/**
+ * Mission 14 (partie 7) — les rappels du jour des deux listes, comptés comme l'écran Leads (`compteurs.aujourdhui` et
+ * `compteurs.enRetard`) : à venir d'ici ce soir, et déjà passés (tous jours confondus). Lu par le point du jour.
+ */
+export async function compterRappelsDuJour(maintenant: Date = new Date()): Promise<{ aujourdhui: number; enRetard: number }> {
+  const [aujourdhui, enRetard] = await Promise.all([prisma.lead.count({ where: whereRappelAujourdhui(maintenant) }), prisma.lead.count({ where: whereEnRetard(maintenant) })]);
+  return { aujourdhui, enRetard };
 }
 
 export type LeadSuivant = { id: string; nom: string; ville: string | null; telephone: string | null; raison: "RETARD" | "JAMAIS_APPELE"; dossierId: string | null };

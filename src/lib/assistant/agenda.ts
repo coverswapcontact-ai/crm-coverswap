@@ -1,39 +1,84 @@
 import { PORTEES_GOOGLE, appelGoogle, connexionActive } from "@/lib/google/connexion";
+import { jourParis } from "@/lib/dossiers/dates";
 
 /**
  * Google Calendar, pour les rappels et actions que l'assistant planifie
  * (mission 8). Le droit « calendar.events » est demandé à la prochaine
  * reconnexion Google (Paramètres → Connexions) ; tant qu'il manque, tout se
  * planifie dans le CRM et l'outil le dit — rien ne se perd.
+ *
+ * Mission 14 (partie 7) : chaque rappel daté (lead, ou « Rappeler… » d'un
+ * dossier), quelle que soit son origine (appel noté, puce de la liste, dossier,
+ * planifier, migration), a ici UN événement, créé, déplacé ou supprimé par la
+ * tâche AGENDA_RAPPEL (`agenda/rappels.ts`) ; sans le droit, la tâche attend la
+ * reconnexion. Un rappel noté au jour seul est un événement « toute la journée ».
  */
 
 const API = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
-export type EvenementAgenda = { titre: string; description?: string | null; debut: Date; fin: Date; lieu?: string | null };
+/** `journee` (mission 14, partie 7) : événement « toute la journée » du jour de Paris de `debut` (`fin` est ignorée). */
+export type EvenementAgenda = { titre: string; description?: string | null; debut: Date; fin: Date; lieu?: string | null; journee?: boolean };
+
+const lendemain = (jour: string) => new Date(Date.parse(`${jour}T12:00:00.000Z`) + 86_400_000).toISOString().slice(0, 10);
 
 export async function agendaDisponible(): Promise<boolean> {
   return Boolean(await connexionActive(PORTEES_GOOGLE.AGENDA));
 }
 
+/**
+ * Le corps envoyé à Google : titre, description, lieu, début et fin en heure de Paris (ou le jour entier), rappels par
+ * défaut de l'agenda. `effacerAutreForme` (PATCH) : Google fusionne les objets d'un PATCH, l'autre forme de l'horaire
+ * (`date` ou `dateTime`) est donc remise à null pour qu'un rappel passe de « à l'heure » à « toute la journée » et retour.
+ */
+function corpsEvenement(evenement: EvenementAgenda, effacerAutreForme = false) {
+  const jour = jourParis(evenement.debut);
+  const horaire = (instant: Date) => ({ dateTime: instant.toISOString(), timeZone: "Europe/Paris", ...(effacerAutreForme ? { date: null } : {}) });
+  const journee = (date: string) => ({ date, ...(effacerAutreForme ? { dateTime: null, timeZone: null } : {}) });
+  return {
+    summary: evenement.titre.slice(0, 200),
+    description: evenement.description?.slice(0, 2000) ?? undefined,
+    location: evenement.lieu ?? undefined,
+    start: evenement.journee ? journee(jour) : horaire(evenement.debut),
+    end: evenement.journee ? journee(lendemain(jour)) : horaire(evenement.fin),
+    reminders: { useDefault: true },
+  };
+}
+
+const JSON_UTF8 = { "Content-Type": "application/json; charset=UTF-8" };
+const adresseEvenement = (id: string) => `${API}/${encodeURIComponent(id)}`;
+
 /** Crée l'événement ; rend null (sans erreur) si le droit Google manque. */
 export async function creerEvenementAgenda(evenement: EvenementAgenda): Promise<{ id: string; lien: string | null } | null> {
   if (!(await agendaDisponible())) return null;
-  const reponse = await appelGoogle(API, {
-    portee: PORTEES_GOOGLE.AGENDA,
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=UTF-8" },
-    body: JSON.stringify({
-      summary: evenement.titre.slice(0, 200),
-      description: evenement.description?.slice(0, 2000) ?? undefined,
-      location: evenement.lieu ?? undefined,
-      start: { dateTime: evenement.debut.toISOString(), timeZone: "Europe/Paris" },
-      end: { dateTime: evenement.fin.toISOString(), timeZone: "Europe/Paris" },
-      reminders: { useDefault: true },
-    }),
-  });
+  const reponse = await appelGoogle(API, { portee: PORTEES_GOOGLE.AGENDA, method: "POST", headers: JSON_UTF8, body: JSON.stringify(corpsEvenement(evenement)) });
   if (!reponse.ok) throw new Error(`Google Calendar a refusé l'événement (${reponse.status}).`);
   const corps = (await reponse.json()) as { id?: string; htmlLink?: string };
   return { id: corps.id ?? "", lien: corps.htmlLink ?? null };
+}
+
+/**
+ * Mission 14 (partie 7) — met à jour l'événement `id` (PATCH : titre, description, horaires). Un événement effacé à la
+ * main dans Google revient (`status: confirmed`). Rend null si le droit Google manque, ou si l'événement n'existe
+ * plus chez Google (404, 410) : l'appelant en crée un autre.
+ */
+export async function modifierEvenementAgenda(id: string, evenement: EvenementAgenda): Promise<{ id: string; lien: string | null } | null> {
+  if (!(await agendaDisponible())) return null;
+  const reponse = await appelGoogle(adresseEvenement(id), { portee: PORTEES_GOOGLE.AGENDA, method: "PATCH", headers: JSON_UTF8, body: JSON.stringify({ ...corpsEvenement(evenement, true), status: "confirmed" }) });
+  if (reponse.status === 404 || reponse.status === 410) return null;
+  if (!reponse.ok) throw new Error(`Google Calendar a refusé la mise à jour de l'événement (${reponse.status}).`);
+  const corps = (await reponse.json().catch(() => ({}))) as { id?: string; htmlLink?: string };
+  return { id: corps.id ?? id, lien: corps.htmlLink ?? null };
+}
+
+/**
+ * Mission 14 (partie 7) — retire l'événement `id` de l'agenda. Déjà parti (404, 410 : effacé à la main dans Google) :
+ * ce n'est pas une erreur. Rend false si le droit Google manque (rien n'a été tenté).
+ */
+export async function supprimerEvenementAgenda(id: string): Promise<boolean> {
+  if (!(await agendaDisponible())) return false;
+  const reponse = await appelGoogle(adresseEvenement(id), { portee: PORTEES_GOOGLE.AGENDA, method: "DELETE" });
+  if (reponse.ok || reponse.status === 404 || reponse.status === 410) return true;
+  throw new Error(`Google Calendar a refusé la suppression de l'événement (${reponse.status}).`);
 }
 
 /**

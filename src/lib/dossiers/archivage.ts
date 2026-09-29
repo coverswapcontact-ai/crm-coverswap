@@ -1,6 +1,7 @@
 import prisma, { type BaseDonnees } from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { ErreurMetier } from "./erreurs";
+import { synchroniserRappels } from "@/lib/agenda/rappels";
 
 /**
  * Archiver un dossier — et pouvoir le restaurer. Rien ne se supprime.
@@ -57,6 +58,8 @@ export async function archiverDossierAvec(client: BaseDonnees, dossierId: string
 export async function archiverDossier(dossierId: string, motif: string): Promise<{ leadId: string | null }> {
   if (!motif.trim()) throw new ErreurMetier("Indique pourquoi ce dossier est archivé.", 400);
   const { leadId } = await archiverDossierAvec(prisma, dossierId, motif.trim());
+  // Mission 14 (partie 7) : un dossier archivé perd l'événement de son rappel ; son lead revient dans les listes (avec le sien).
+  await synchroniserRappels([{ type: "DOSSIER", id: dossierId }, ...(leadId ? [{ type: "LEAD" as const, id: leadId }] : [])]);
   return { leadId };
 }
 
@@ -85,6 +88,8 @@ export async function restaurerDossier(dossierId: string): Promise<void> {
   const projet = await prisma.espaceClient.findUnique({ where: { dossierId }, select: { id: true, revoqueLe: true, permanent: { select: { revoqueLe: true } } } });
   const reapparait = Boolean(projet?.revoqueLe && projet.permanent && !projet.permanent.revoqueLe);
   if (reapparait) await prisma.espaceClient.update({ where: { id: projet!.id }, data: { revoqueLe: null } });
+  // Le rappel du dossier revient dans l'agenda ; son lead sort des listes : le sien en part.
+  await synchroniserRappels([{ type: "DOSSIER", id: dossierId }, ...(dossier.leadId ? [{ type: "LEAD" as const, id: dossier.leadId }] : [])]);
   await prisma.dossierEvenement.create({ data: { dossierId, type: "DOSSIER_RESTAURE", direction: "INTERNE", contenu: `Dossier restauré : il revient dans Dossiers, son lead sort de Leads. ${reapparait ? "Le projet réapparaît dans l'espace du client." : projet ? "L'espace client reste désactivé tant qu'un nouveau lien n'est pas émis." : ""}`.trim(), metadata: "{}" } });
 }
 

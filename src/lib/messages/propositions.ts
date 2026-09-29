@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { recalculerMain } from "@/lib/dossiers/main";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { analyser } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
@@ -334,7 +335,8 @@ export const propositionNouvelleDemande = definirProposition({
       if (dossierId) await archiverFichiersDossier(dossierId, "creation-interrompue").catch(() => {});
       throw erreur;
     }
-    return { resultat: { clientId, dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(dossierId); } };
+    // Mission 14 (partie 7) : un dossier ouvert avec « Rappeler… » daté a son événement d'agenda et sa notification.
+    return { resultat: { clientId, dossierId }, apresValidation: async () => { await suitesDuTri(message.id); await recalculerMain(dossierId); if (dossierId) await synchroniserRappel({ type: "DOSSIER", id: dossierId }); } };
   },
 });
 

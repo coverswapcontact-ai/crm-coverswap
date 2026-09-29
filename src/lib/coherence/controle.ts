@@ -12,6 +12,7 @@ import { lireSelection } from "@/lib/prestations/prestations";
 import { devaliderChoix, devaliderProjet, RAISON_PROJET_VALIDE } from "@/lib/espace/validations";
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS, projetsVisibles } from "@/lib/espace/projets";
 import { pluriel } from "@/lib/commun/format";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * Contrôle de cohérence : chaque section du CRM dit une partie de la vérité sur
@@ -346,6 +347,7 @@ export async function corrigerIncoherence(cle: string): Promise<{ corrigee: bool
       const actuelle = (await prisma.dossier.findUnique({ where: { id: dossierId! }, select: { prochaineAction: true } }))?.prochaineAction ?? "";
       const suite = devis && /préparer le devis/i.test(actuelle) ? PROCHAINE_ACTION_APRES_DEVIS : null;
       await prisma.dossier.update({ where: { id: dossierId! }, data: { prochaineAction: suite, prochaineActionDate: null } });
+      await synchroniserRappel({ type: "DOSSIER", id: dossierId! });
       await prisma.dossierEvenement.create({ data: { dossierId: dossierId!, type: "COHERENCE_CORRIGEE", direction: "INTERNE", contenu: suite ? `Contrôle de cohérence : prochaine action « ${actuelle} » remplacée par « ${suite} » (le devis est rattaché)` : `Contrôle de cohérence : prochaine action « ${actuelle} » effacée (plus aucune simulation validée)`, metadata: JSON.stringify({ code: incoherence.code }) } });
       break;
     }

@@ -29,6 +29,7 @@ import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { pluriel } from "@/lib/commun/format";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -903,6 +904,8 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
       prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: maintenant } }),
     ]);
   });
+  // Mission 14 (partie 7) : la prochaine action remplacée (un rappel peut-être) → l'agenda suit.
+  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
   if (auteur === "CLIENT") await prevenir(espace.dossierId, { titre: `Simulation validée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer le devis.`, urgence: 5, telephone: dossier?.clientTelephone });
   return choix;
 }
@@ -947,6 +950,7 @@ export async function demanderProposition(espace: EspaceClient, entree: z.output
     ]);
     await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "PROPOSITION", texte: entree.commentaire || texte, simulationId: simulation?.id ?? null, evenementId: evenement.id });
   });
+  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
   await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone, rubrique: "messages" });
 }
 
@@ -1059,6 +1063,7 @@ export async function accepterDevis(espace: EspaceClient, entree: z.output<typeo
     }
     await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Appeler le client : fixer la date du chantier, suivre l'acompte", prochaineActionDate: new Date() } });
   });
+  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
 
   await prevenir(
     espace.dossierId,

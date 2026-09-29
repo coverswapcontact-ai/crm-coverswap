@@ -9,6 +9,7 @@ import {
   type EtapeDossier,
 } from "./constants";
 import { dateDepuisJour, estJourValide } from "./dates";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { ecrireNote } from "./dossiers";
 import { ErreurMetier } from "./erreurs";
 import { changerEtapeDansTransaction, effetsDuChangementEtape } from "./transitions";
@@ -78,6 +79,8 @@ export const propositionProchaineAction = definirProposition({
       where: { id: contenu.dossierId },
       data: { prochaineAction: contenu.action, prochaineActionDate: contenu.date ? dateDepuisJour(contenu.date) : null },
     });
+    // Mission 14 (partie 7) : un « Rappeler » daté (ou un rappel remplacé) → l'agenda suit, une fois la validation écrite.
+    return { apresValidation: () => synchroniserRappel({ type: "DOSSIER", id: contenu.dossierId }) };
   },
   async pertinente(contenu) {
     const dossier = await dossierVivant(contenu.dossierId);

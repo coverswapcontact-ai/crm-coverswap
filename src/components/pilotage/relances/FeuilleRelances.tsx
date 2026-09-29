@@ -220,23 +220,38 @@ export function FeuilleRelances({ donnees, onRecharger, onFermer }: { donnees: R
   );
 }
 
-/** Écran Leads, sous les puces : « Relances proposables · N » (masqué s'il n'y en a pas), qui ouvre la feuille. */
-export function LigneRelances() {
+const CLASSE_MORCEAU = "inline-flex h-11 items-center rounded-[8px] px-1.5 hover:text-[#F2F3F5] sm:h-8";
+
+/**
+ * Écran Leads, sous les puces (mission 14, partie 7) : « N rappels aujourd'hui · N en retard · N relances proposables ».
+ * Chaque morceau se touche : les rappels ouvrent la liste « À rappeler » (`onRappels`), les relances la feuille
+ * Relances. Les rappels sont les comptes de la liste (servis avec elle) ; les relances, la lecture de `/api/relances`
+ * faite à l'ouverture de l'écran (pas une requête de plus).
+ */
+export function LigneDuJour({ aujourdhui, enRetard, onRappels }: { aujourdhui: number; enRetard: number; onRappels: () => void }) {
   const { donnees, recharger } = useRelances(null);
   const [ouverte, setOuverte] = useState(false);
   const total = donnees?.total ?? 0;
   return (
     <>
-      {total > 0 ? (
-        <button
-          type="button"
-          onClick={() => setOuverte(true)}
-          className={cn("mt-3 flex h-11 w-full items-center gap-2 rounded-[12px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3.5 text-left text-[13.5px] text-[#F5B454] hover:bg-[#EF9F27]/20 sm:h-10 sm:w-auto", TRANS)}
-        >
-          <BellRing size={15} aria-hidden className="shrink-0" />
-          Relances proposables · {total}
+      <p className="mt-3 flex flex-wrap items-center gap-x-0.5 text-[13.5px] text-[#9CA3AF]">
+        <BellRing size={15} aria-hidden className="mr-1 shrink-0" />
+        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, TRANS)}>
+          {pluriel(aujourdhui, "rappel")} aujourd&apos;hui
         </button>
-      ) : null}
+        <span aria-hidden>·</span>
+        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, enRetard > 0 && "font-medium text-[#F87171]", TRANS)}>
+          {enRetard} en retard
+        </button>
+        {donnees ? (
+          <>
+            <span aria-hidden>·</span>
+            <button type="button" onClick={() => setOuverte(true)} className={cn(CLASSE_MORCEAU, total > 0 && "text-[#F5B454]", TRANS)}>
+              {pluriel(total, "relance proposable", "relances proposables")}
+            </button>
+          </>
+        ) : null}
+      </p>
       {ouverte ? (
         <FeuilleRelances
           donnees={donnees}

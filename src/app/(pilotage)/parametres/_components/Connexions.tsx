@@ -19,7 +19,11 @@ export type EtatConnexions = { google: EtatConnexionGoogle; drive: EtatMiroir; a
 type Etat = EtatConnexions;
 
 
-/** Connexion Google (Drive, Gmail), miroir Drive et agent mail : état, connexion, actions à la demande. */
+/**
+ * Connexion Google (Drive, Gmail, Agenda), miroir Drive et agent mail : état, connexion, actions à la demande.
+ * Mission 14 (partie 7) : quand le droit « agenda » manque (ou que Google n'est pas connecté), la carte le dit UNE fois
+ * — pas d'alerte, rien par rappel : les rappels s'inscrivent dès qu'il est accordé.
+ */
 export default function Connexions({ retour, initial }: { retour: { google: string | null; compte: string | null; message: string | null }; initial: EtatConnexions }) {
   // Mission 13 (lot 3) : l'état arrive du serveur avec la page ; plus de « Chargement des connexions… ».
   const [etat, setEtat] = useState<Etat>(initial);
@@ -55,7 +59,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
       <div className="grid gap-2.5 md:grid-cols-2">
         <div className={cn(CARTE, "p-4")}>
           <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
-            <Link2 size={15} aria-hidden /> Compte Google (Drive, Gmail)
+            <Link2 size={15} aria-hidden /> Compte Google (Drive, Gmail, Agenda)
           </p>
           {!google.configuree ? (
             <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
@@ -86,6 +90,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
                 </p>
               ) : null}
               {google.connexion.derniereErreur ? <p className="mt-1 text-[#F87171]">{google.connexion.derniereErreur}</p> : null}
+              {google.agenda ? null : <p className="mt-1 text-[#F5B454]">Agenda : droit non accordé. Tes rappels s&apos;y inscriront dès que tu l&apos;accordes (Reconnecter).</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 <a href="/api/google/connexion" className="inline-flex h-11 sm:h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">
                   Reconnecter
@@ -104,7 +109,8 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
           ) : (
             <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
               <Pastille ton="ambre">Pas connecté</Pastille>
-              <p className="mt-2">Autorise le CRM à écrire dans Drive (ses propres fichiers seulement) et à lire, ranger et envoyer les mails de la boîte.</p>
+              <p className="mt-2">Autorise le CRM à écrire dans Drive (ses propres fichiers seulement), à lire, ranger et envoyer les mails de la boîte, et à inscrire tes rappels dans l&apos;agenda.</p>
+              <p className="mt-1 text-[#F5B454]">Google n&apos;est pas connecté : tes rappels s&apos;inscriront dans l&apos;agenda dès que tu le connectes.</p>
               <a href="/api/google/connexion" className="mt-3 inline-flex h-11 sm:h-9 items-center rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]">
                 Connecter le compte Google
               </a>

@@ -25,7 +25,10 @@ export const PORTEES_GOOGLE = {
   DRIVE: "https://www.googleapis.com/auth/drive.file",
   GMAIL_MODIFIER: "https://www.googleapis.com/auth/gmail.modify",
   GMAIL_ENVOYER: "https://www.googleapis.com/auth/gmail.send",
-  /** Mission 8 : l'assistant inscrit les rappels et actions planifiées dans Google Calendar (accordé à la prochaine reconnexion). */
+  /**
+   * Mission 8 : l'assistant inscrit les actions planifiées dans Google Calendar (accordé à la prochaine reconnexion).
+   * Mission 14 (partie 7) : chaque rappel daté (lead ou dossier) y a son événement, tenu à jour par la tâche AGENDA_RAPPEL.
+   */
   AGENDA: "https://www.googleapis.com/auth/calendar.events",
 } as const;
 const PORTEES_DEMANDEES = ["openid", "email", ...Object.values(PORTEES_GOOGLE)];
@@ -141,6 +144,8 @@ export type EtatConnexionGoogle = {
   configuree: boolean;
   manquantes: string[];
   connexion: { compte: string; depuis: string; portees: string[]; derniereErreur: string | null; echeance: EcheanceGoogle } | null;
+  /** Mission 14 (partie 7) : le droit « agenda » (calendar.events) est accordé à la connexion active — calculé ici, l'écran n'importe que le type. */
+  agenda: boolean;
 };
 
 export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
@@ -158,6 +163,7 @@ export async function etatConnexionGoogle(): Promise<EtatConnexionGoogle> {
           echeance: echeanceJetonGoogle({ depuis: connexion.createdAt, derniereErreur: connexion.derniereErreur }, { modeTest: !applicationGooglePubliee() }),
         }
       : null,
+    agenda: configuration !== null && Boolean(connexion?.portees.split(" ").includes(PORTEES_GOOGLE.AGENDA)),
   };
 }
 
@@ -205,8 +211,9 @@ export async function connexionActive(portee: string): Promise<{ id: string; com
  * prévenu (une alerte par demi-journée au plus).
  */
 export class GoogleIndisponible extends AttenteExterne {
-  constructor(message: string) {
-    super(`Google : ${message}`);
+  /** `reprendreDansMs` : attente avant le prochain essai (15 min par défaut) ; une reconnexion réveille la tâche plus tôt. */
+  constructor(message: string, reprendreDansMs?: number) {
+    super(`Google : ${message}`, reprendreDansMs);
     this.name = "GoogleIndisponible";
   }
 }

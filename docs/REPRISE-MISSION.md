@@ -2018,3 +2018,149 @@ un seul endroit.
 - Vérifié : tsc, eslint, suite complète 646/646, build ; à l'écran (390 × 660, m8) : ligne « Relances proposables · 9 »
   sous les puces de Leads → feuille (devis avec « SMS » et « Relire le mail », « A refusé les mails : le SMS seul »,
   espaces sans photo ni simulation) → « SMS » → RELANCE_DEVIS_1 prérempli → « Copier » → toast, la ligne disparaît (8).
+
+## Partie 7 — Agenda et notifications des rappels (29/09)
+Énoncé : « Chaque rappel daté passe par la fonction de planifier : événement Google Agenda de 15 minutes « Rappeler
+{nom} – {ville} », numéro en tel: et lien de la fiche dans la description. Changer ou retirer la date met l'événement à
+jour ou le supprime. Sans droit agenda, Paramètres le dit une fois et l'événement se pose dès qu'il est accordé.
+Notification push 10 minutes avant chaque rappel, avec deux boutons : Appeler (tel:) et Ouvrir la fiche. Par les tâches
+de fond, pas par une nouvelle route cron. point_du_jour et l'écran Leads : « N rappels aujourd'hui, N en retard, N
+relances proposables ». » Principe : un rappel, une trace dans Google, un seul circuit.
+- **Qu'est-ce qu'un rappel** (`agenda/rappels.ts`, nouveau) : celui d'un LEAD (`Lead.rappelLe`, lead des listes Leads :
+  ni archivé, ni perdu, ni après devis, sans dossier vivant — `LEAD_SANS_DOSSIER`) ou celui d'un DOSSIER (prochaine
+  action qui commence par « Rappeler » — `estRappel(action)`, helper unique —, datée, dossier ni archivé ni clos). Les
+  nombres « aujourd'hui / en retard » portent sur les leads seuls ; les rappels de dossier ont aussi événement et
+  notification.
+- **À l'heure ou au jour seul** (`estJourSeul(date, instant)`) : une date de dossier notée au jour (écran du dossier,
+  proposition validée, création, carte d'un mail : midi UTC, `dateDepuisJour`) n'est pas lue comme « 14 h ». Elle est
+  « jour seul » quand elle vaut `T12:00:00.000Z` ET n'est pas `Dossier.prochaineActionInstant` (nouveau, posé par les
+  écritures à l'heure : `noterAppel`, `planifierAction`, rappel repris d'un lead) ; toute autre heure est un instant
+  exact. Le champ se périme seul : une date réécrite au jour ne vaut plus l'instant rangé. Jour seul → événement « toute
+  la journée » (`start.date`/`end.date`) et notification à **9 h (Paris)** ce jour-là (« Rappel aujourd'hui : {nom} »),
+  aucune si 9 h est déjà passé quand il est posé, rien le lendemain. `modifierDossier` garde l'instant rangé quand le
+  même jour de Paris est renvoyé (l'écran envoie toujours le jour, même quand seul le texte change : un rappel d'appel à
+  18 h reste à 18 h). « planifier … 14:00 » l'été (midi UTC pile) reste un événement de 15 min à 14 h.
+- **Données** : `Lead.agendaEvenementId String?`, `Dossier.agendaEvenementId String?` (l'événement Google du rappel,
+  effacé quand le rappel l'est ; rangé sans toucher `updatedAt` : ce n'est pas une activité du contact),
+  `Dossier.prochaineActionInstant DateTime?` (ci-dessus).
+- **Google** (`assistant/agenda.ts`, en-tête mis à jour) : `modifierEvenementAgenda(id, evenement)` (PATCH,
+  `status: confirmed` : un événement effacé à la main dans Google revient ; 404/410 → null, l'appelant en crée un autre ;
+  l'autre forme de l'horaire est remise à null — `date: null` ou `dateTime/timeZone: null` — car Google fusionne les
+  objets d'un PATCH) et `supprimerEvenementAgenda(id)` (DELETE ; 404/410 = déjà parti, pas une erreur), même accès que la
+  création (`appelGoogle`/`jetonAcces`, `agendaDisponible`). `EvenementAgenda.journee` (toute la journée).
+  `etatConnexionGoogle()` expose `agenda: boolean` (portée calendar.events accordée à la connexion active, calculé côté
+  serveur). `GoogleIndisponible(message, reprendreDansMs?)`.
+- **`synchroniserRappel({ type, id })`** — appelée partout où un rappel change, APRÈS l'écriture, ne lève jamais :
+  - `AGENDA_RAPPEL` (mode RECONCILIATION, clé `agenda-rappel:<type>:<id>`, acteur `SYSTEME:agenda`) relit l'état
+    COURANT : rappel daté → crée ou met à jour l'événement (15 min ou toute la journée, « Rappeler {prénom nom} – {ville} »
+    ou « Rappeler {nom} », description « Appeler : tel:+33… » puis « Fiche : https://crm.coverswap.fr/leads?lead=… » ou
+    `/dossiers?dossier=…`, rappels par défaut de l'agenda) et range l'id ; plus de rappel → DELETE et id effacé. Droit
+    agenda absent ou Google pas connecté : la tâche ATTEND (`GoogleIndisponible`, « [en attente] Google : droit
+    « agenda » non accordé… », réessai 6 h au plus, sans alerte) ; la reconnexion Google (`terminerConnexion` →
+    `reveillerTachesEnAttente`, existant) la réveille et l'événement se pose (vérifié par les tests). Google coupé (jeton
+    révoqué) : chemin existant (alerte « Google coupé » 12 h, attente 15 min).
+  - `RAPPEL_NOTIFICATION` (clé `rappel-push:<type>:<id>:<ISO>`, `apres` = rappel − 10 min (9 h le jour dit pour un jour
+    seul), ou tout de suite si c'est plus proche ; rien pour un rappel passé ; priorité 5 ; acteur `SYSTEME:rappels`) :
+    revérifie que le rappel vaut toujours cet ISO (sinon `{ notifie: false, resume: "Rappel déplacé…" | "Rappel
+    retiré…" }`), puis `alerter` sur `CANAUX_PUSH` (pas le mail) : « Rappel dans 10 min : {nom} », « {ville} · {06 12 34
+    56 78} · {N appels sans réponse} · {projet} » (appels sans réponse : ceux du lead, sinon `tentativesDuDossier` pour un
+    dossier sans lead — la règle de `noterAppel`), lien de la fiche, « Ouvrir la fiche », `telephone`, étiquette
+    `rappel:<type>:<id>` (une notification remplace la précédente du même rappel), `origine` = la clé. Plus proche que
+    10 min à l'exécution : « Rappel dans N min » ; déjà passé (serveur arrêté pendant la fenêtre) : rien. Une clé passée
+    sans notifier (rappel déplacé puis remis à la même heure) est réarmée.
+  - Une fiche qui n'a jamais eu de rappel ne crée aucune tâche (ni rappel, ni événement rangé, ni tâche d'agenda connue).
+- **Branchements** (tous après la transaction) : `noterAppel` (lead et dossier, toutes issues), `modifierEntrant`
+  (rappel, statut/perdu, prénom, nom, ville, numéro), `archiverEntrant`/`restaurerEntrant`, `appliquerActionLeads`
+  (archiver/restaurer, MCP compris), corbeille (leads), fusion d'un doublon ; **ouverture d'un dossier** :
+  `suitesOuverture` → `rappelALOuverture(dossierId, leadId)` — donc `creerDossier` (écran Dossiers, origine « Contact »
+  ou fiche client via `leadDuClient`, bouton du lead) et `reprendreDossier` (même en Qualification) : le rappel À VENIR
+  du lead passe sur le dossier à son heure exacte quand le dossier n'a pas d'autre prochaine action (ou un « Rappeler »
+  du même jour), le lead le perd ; sinon il reste sur le lead, en sommeil (il revient si le dossier est archivé) ; puis
+  l'agenda suit pour les deux (événement du lead supprimé, celui du dossier posé). `ouvrirDossierDuLead` efface en plus
+  tout rappel restant du lead (comme avant). `modifierDossier` (écran, assistant `modifier_dossier`, cartes mail),
+  `effetsDuChangementEtape` (perdu, encaissé, repris), `archiverDossier`/`restaurerDossier` (le dossier ET son lead, qui
+  entre dans les listes ou en sort), proposition PROCHAINE_ACTION validée et proposition NOUVELLE_DEMANDE d'un mail
+  (`apresValidation`), et les écritures automatiques qui remplacent sans condition une prochaine action (espace :
+  simulation choisie, autre proposition demandée, devis signé, bon pour accord retiré (`retirerAccord`) ; simulations
+  publiées (`publierSimulations`) ; chèque rejeté ; contrôle de cohérence). Les écritures conditionnelles (« Préparer le
+  devis… », « Attendre les photos… », « (projet validé) », « autre proposition ») ne remplacent jamais un « Rappeler » :
+  pas de synchronisation. **Anonymisation RGPD** : `rappelLe` du lead remis à null et la tâche d'agenda remise en file
+  DANS la transaction (`resynchroniserAgendaDans`) pour chaque lead ou dossier qui a un événement : elle relit l'état
+  validé et supprime l'événement (nom, numéro) ; la notification programmée se tait (elle relit le rappel). Traitements
+  enregistrés dans `taches/traitements.ts` (`enregistrerTachesRappels`).
+- **`planifierAction`** : un rappel (lead, ou action de dossier « Rappeler… ») ne crée plus son propre événement — il
+  passe par `synchroniserRappel` (un seul événement de 15 min, déplacé quand on replanifie : fini les doublons dans
+  Google ; `fin` rendue = début + 15 min) ; un rappel de dossier garde l'instant dicté (« jeudi 14h » → 14:00, plus midi
+  UTC ; `prochaineActionInstant` posé). Un rappel **hors des listes** (lead sans suite, archivé, qui a déjà son devis ou
+  un dossier ; dossier perdu, encaissé ou archivé : `lireRappel` rend null) garde l'événement direct d'avant (30 min,
+  « Rappeler — {nom} ») et le texte le dit : « Inscrit dans Google Calendar. Ce contact est sans suite : ce rappel n'est
+  pas dans les listes du CRM et n'aura pas de notification. Événement à part : replanifier en crée un autre. » Une autre
+  action de dossier garde son comportement (jour seul, événement créé tout de suite). Textes : « Inscrit dans Google
+  Calendar (un seul événement par rappel : replanifier le déplace). » ; « Pas inscrit dans Google Calendar : Google n'est
+  pas connecté (Paramètres → Connexions) ; le rappel est dans le CRM et s'inscrira dans Google Calendar dès que ce sera
+  fait. » ; « … : le droit « agenda » n'est pas accordé (Paramètres → Connexions → Reconnecter) … » ; « … : Google est
+  coupé … ». `ResultatPlanification.rappel` = rappel suivi ; `agenda` reste null pour un rappel suivi (l'événement est
+  posé par la tâche, dans la seconde). L'outil `planifier` : `duree_minutes` décrit « un rappel dure toujours 15 minutes ».
+- **Fin d'appel sur un dossier clos** (perdu, encaissé) : le rappel s'écrit sur le dossier mais n'est suivi nulle part
+  (ni liste, ni agenda, ni notification) ; le résumé le dit : « Appel noté. Rappel demain à 18:00. Son dossier est
+  encaissé : ce rappel n'est ni dans l'agenda ni notifié (ouvre-lui un nouveau dossier pour ce projet pour le suivre). »
+  (« reprends le dossier (change son étape) » pour un dossier perdu).
+- **Migration `agenda-des-rappels-14-7`** (`base/migrations/mission-14-partie-7.ts › inscrireLesRappels`, fin de
+  `MIGRATIONS_DONNEES`) : `synchroniserRappel` pour chaque rappel FUTUR (leads des listes avec `rappelLe` à venir, dont
+  ceux remis à rappeler par la partie 2 ; dossiers ni archivés ni clos dont l'action « Rappeler… » est datée plus tard,
+  ou notée au jour seul pour aujourd'hui ou après — l'ancien `planifier` rangeait le jour seul, même « jeudi 9h » : ces
+  rappels-là deviennent des événements « toute la journée », notifiés à 9 h). Compteurs `leads`, `dossiers` + une ligne
+  `[migration …]`. Rejouable (clés idempotentes, aucune tâche en double).
+- **Notification web** : `envoyerParPushWeb` transmet `telephone` (E.164) et `libelleLien` ; `ChargePush.telephone`,
+  `ChargePush.libelleLien`. `public/sw.js` (**VERSION v10**) : toute alerte qui porte un numéro (rappel, SMS reçu,
+  nouveau lead, geste dans l'espace client…) a `actions` « Appeler » / {libellé du lien de l'alerte, « Ouvrir la fiche »
+  à défaut — « Ouvrir le dossier » pour l'espace client, comme Telegram, ntfy et le mail} et `data: { lien, telephone }` ;
+  `notificationclick` : « appeler » → `clients.openWindow("tel:…")`, le bouton du lien ou toucher simple → l'écran (comme
+  avant). **À savoir** (connaissance générale, non vérifiable ici) : sur iPhone, iOS n'affiche pas les boutons d'action
+  des notifications web ; le toucher ouvre la fiche, qui a « Appeler ». ntfy et Telegram ont déjà leur bouton
+  « Appeler » (inchangé).
+- **Paramètres → Connexions** : carte « Compte Google (Drive, Gmail, Agenda) » ; droit manquant : « Agenda : droit non
+  accordé. Tes rappels s'y inscriront dès que tu l'accordes (Reconnecter). » ; pas connecté : « Google n'est pas
+  connecté : tes rappels s'inscriront dans l'agenda dès que tu le connectes. » Une phrase, pas d'alerte, rien par rappel.
+- **Les nombres du jour** (`agenda/resume.ts › resumeDuJour(maintenant)`) : `{ rappelsAujourdhui, rappelsEnRetard,
+  relancesProposables }` = rappels des leads à venir d'ici minuit (Paris) et déjà passés (tous jours confondus) —
+  `prospects/leads.ts › compterRappelsDuJour`, mêmes clauses que `compteurs.aujourdhui`/`enRetard` de la liste — et
+  `relancesProposables(maintenant).total` (partie 6). `point_du_jour` : nouvelle ligne après « Aujourd'hui : … »
+  (inchangée) : « Rappels : N aujourd'hui, N en retard, N relances proposables. » ; `aujourdhui` gagne les trois
+  nombres ; début et fin de journée par `debutDuJourParis` / `aHeureParis` (plus de « +02:00 » figé, faux d'une heure
+  l'hiver). Écran Leads : sous les puces, « N rappels aujourd'hui · N en retard · N relances proposables »
+  (`FeuilleRelances.tsx › LigneDuJour`, remplace « Relances proposables · N ») ; rappels → liste « À rappeler », relances
+  → la feuille Relances ; rappels servis avec la liste, relances par la lecture de `/api/relances` déjà faite à
+  l'ouverture (aucune requête de plus). `leads.ts` exporte aussi `villeLisible`.
+- Tests : `base/mission-14-partie-7.test.ts` (14, Google simulé par `definirTransportGoogleEssai`, alerte par
+  `definirAlerteurRappelsEssai`) : sans Google puis sans droit (textes de planifier, tâche en attente 6 h, rien chez
+  Google), droit accordé → réveil → événement ; rappel posé → POST (titre, 15 min, tel:, fiche, id rangé), déplacé →
+  PATCH du même id, **date retirée → DELETE et id effacé** (`updatedAt` intact), lead sans rappel → aucune tâche ; le
+  rappel migre vers le dossier (heure exacte, DELETE du lead, POST du dossier) puis dossier perdu → DELETE ; `planifier`
+  deux fois → un seul événement (PATCH), rappel de dossier à l'heure dite, autre action au jour et à part (le rappel
+  remplacé quitte l'agenda) ; `estRappel` ; notification à rappel − 10 min, rappel déplacé → l'ancienne ne notifie pas,
+  la bonne appelle `alerter` (titre, texte, `telephone`, fiche, étiquette, canaux poussés, origine), remise à l'heure
+  d'avant → réarmée ; rappel dans 4 min → tout de suite, passé → rien, retiré → rien ; `resumeDuJour` + ligne du
+  point du jour (frontière de minuit à Paris l'hiver, actions des dossiers de la journée de Paris) ; migration
+  (leads/dossiers retenus et écartés, clés, rejouable sans doublon, événements posés, inscrite après la partie 6).
+  Relecture (5) : jour seul → événement toute la journée + notification à 9 h (« Rappel aujourd'hui », rien le
+  lendemain), « 14:00 » planifié l'été reste à l'heure (PATCH `date: null`), texte seul changé → l'heure d'un appel
+  gardée, autre jour sans heure → PATCH vers la journée ; `planifier` d'un lead sans suite et d'un dossier perdu →
+  événement direct et texte, fin de 15 min pour un rappel suivi ; `creerDossier` avec lead → le rappel passe sur le
+  dossier, archivage/restauration → l'agenda suit le lead ; appel sans réponse sur un dossier encaissé → le résumé le
+  dit, dossier sans lead → « 2 appels sans réponse » ; anonymisation RGPD → DELETE, `rappelLe` effacé, notification
+  muette. Adapté : `dossiers/depuis-lead.test.ts` (le rappel passe sur le dossier à l'instant exact, plus le jour seul).
+- Reste / à savoir : rien essayé dans un navigateur ni sur iPhone (ligne du jour, carte Google, boutons de la
+  notification, `openWindow("tel:")` non garanti hors Chromium ; PATCH d'un événement entre « à l'heure » et « toute la
+  journée » vérifié contre un Google simulé seulement). Un « Rappeler » posé à la main pour AUJOURD'HUI après 9 h (jour
+  seul) n'a pas de notification (il vient d'être posé) ; un rappel au jour seul est notifié à 9 h, heure assumée.
+  L'événement direct d'un rappel hors des listes n'est pas suivi : si le contact revient dans les listes (statut rendu),
+  son rappel reçoit un second événement, suivi celui-là. Une fin d'appel sur un dossier clos pose un rappel non suivi
+  (dit dans le résumé ; le suivre demanderait de rouvrir ou reprendre le dossier). `commercial/pilotage.ts ›
+  relancesAValider` et `ce_qui_m_attend` comptent toujours toutes les propositions en attente (hors conception de la
+  partie 7, signalé par la partie 6). Dette de taille (fichiers déjà au-delà de 600 lignes avant la partie 7, quelques
+  lignes ajoutées, pas de découpe) : `espace/service.ts` (1135 lignes), `dossiers/dossiers.ts` (912),
+  `encaissements/service.ts` (605 ; 602 avant). Docs (`ARCHITECTURE-PILOTAGE.md`) : partie 9.
+- Vérifié : tsc, eslint, suite complète 660/660, build. Déploiement : Railway en incident (« API degradation causing
+  slow or stuck deployments », 15:29 → 18:37 UTC) : la partie 6 (`7d00ed6`) est restée en file ; les parties 6 et 7 sont
+  vérifiées en production ensemble dès que le déploiement passe.

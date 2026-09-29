@@ -59,6 +59,7 @@ model Lead {
   // Mission 14 (partie 3) : les deux listes de Leads. Jamais appelé (null) = « À appeler » ; appelé ou rappel daté = « À rappeler ».
   dernierAppelLe   DateTime? // dernier appel noté (fin d'appel, échange d'appel, note d'appel non vide), quelle qu'en soit l'issue
   tentatives       Int               @default(0) // appels SANS RÉPONSE consécutifs depuis le dernier appel abouti
+  agendaEvenementId String? // Mission 14 (partie 7) : l'événement Google Agenda de son rappel (agenda/rappels.ts), effacé quand le rappel l'est
   // Doublon probable (même nom, même ville, quelques jours d'écart, autre téléphone et autre e-mail) :
   // signalé, jamais fusionné seul — Lucas fusionne en un clic ou écarte le signalement.
   doublonDe        String? // contact déjà connu qui semble être la même personne
@@ -490,7 +491,11 @@ model Dossier {
   perteCommentaire       String?
   prochaineAction        String?
   prochaineActionDate    DateTime?
-  dateChantier           DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
+  agendaEvenementId      String? // Mission 14 (partie 7) : l'événement Google Agenda de son rappel (« Rappeler… » daté), effacé quand le rappel l'est
+  // Mission 14 (partie 7) : l'instant exact d'un rappel choisi à l'heure (appel, planifier, rappel repris d'un lead). Une date
+  // à midi UTC (notée au jour, `dateDepuisJour`) n'est « à l'heure » que si elle vaut encore cet instant ; sinon c'est un jour seul.
+  prochaineActionInstant DateTime?
+  dateChantier          DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
   // Mission 10 (23/09/2026) : ce que l'assistant modifie à la voix, tracé champ par champ (ModificationDossier).
   dateSouhaitee          DateTime? // date de chantier souhaitée par le client
   dateFinChantier        DateTime? // fin du chantier, quand il dure plusieurs jours

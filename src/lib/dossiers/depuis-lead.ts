@@ -11,6 +11,7 @@ import { ETAPES_CLOSES, type EtapeDossier } from "./constants";
 import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { pluriel } from "@/lib/commun/format";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * Du contact entrant au dossier, sans ressaisie.
@@ -236,8 +237,13 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
         await modifierDossier(idDossier, { ouvertLe: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(reelle) }).catch((erreur: unknown) => console.error(`[dossiers] date réelle du dossier ${idDossier} non posée :`, erreur));
       }
     }
-    // Le rappel vit désormais sur le dossier.
+    // Le rappel vit désormais sur le dossier, à son heure exacte : `creerDossier` l'y a repris (mission 14, partie 7 :
+    // `rappelALOuverture`, qui a aussi supprimé l'événement du lead et posé celui du dossier). Un rappel passé, ou écarté
+    // par une autre prochaine action, ne reste pas sur le lead.
     if (lead.rappelLe) await prisma.lead.update({ where: { id: lead.id }, data: { rappelLe: null } });
+  } else if (lead.agendaEvenementId) {
+    // Un lead repris par son dossier vivant n'a plus de rappel à lui : son événement quitte l'agenda.
+    await synchroniserRappel({ type: "LEAD", id: lead.id });
   }
 
   const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId, { silencieux: options.silencieux });

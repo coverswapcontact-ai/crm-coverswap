@@ -6,6 +6,7 @@ import { ARCHIVE_A_NEUTRALISER, A_NEUTRALISER } from "@/lib/drive/synchronisatio
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { pseudonyme } from "@/lib/synthese/references";
 import { mettreEnFile } from "@/lib/taches/file";
+import { resynchroniserAgendaDans } from "@/lib/agenda/rappels";
 import { CARTE_DONNEES_PERSONNELLES, type ContexteAnonymisation, EFFACE } from "./carte";
 
 /**
@@ -296,6 +297,8 @@ export async function anonymiserDansTransaction(
         data.anonymiseLe = maintenant;
       }
       if (modele === "PieceMessage") data.statut = "NON_CONSERVEE";
+      // Mission 14 (partie 7) : plus de rappel pour une personne anonymisée (ni agenda, ni notification).
+      if (modele === "Lead" && ligne.rappelLe) data.rappelLe = null;
       // Rien ne part plus vers une personne anonymisée : envoi en attente annulé, séquence arrêtée.
       if (modele === "EnvoiMail" && ligne.statut === "A_ENVOYER") Object.assign(data, { statut: "ANNULE", erreur: "Client anonymisé (RGPD)" });
       if (modele === "InscriptionSequence" && (ligne.statut === "EN_COURS" || ligne.statut === "EN_VALIDATION")) Object.assign(data, { statut: "ARRETEE", arretMotif: "Client anonymisé (RGPD)", prochainEnvoiLe: null });
@@ -318,6 +321,12 @@ export async function anonymiserDansTransaction(
     await tx.miroirDrive.updateMany({ where: { OR: photos, etat: "ARCHIVE" }, data: { etat: ARCHIVE_A_NEUTRALISER } });
     await tx.miroirDrive.updateMany({ where: { OR: photos, etat: { notIn: ["ARCHIVE", ARCHIVE_A_NEUTRALISER] } }, data: { etat: A_NEUTRALISER } });
   }
+  // Mission 14 (partie 7) : l'événement Google Agenda d'un rappel (nom, numéro, lien de la fiche) est supprimé par la tâche
+  // de l'agenda, remise en file avec la transaction : elle relit l'état validé (plus de rappel). Sans droit agenda, elle attend.
+  await resynchroniserAgendaDans(tx, [
+    ...champ.lignes.Lead.filter((ligne) => ligne.agendaEvenementId).map((ligne) => ({ type: "LEAD" as const, id: String(ligne.id) })),
+    ...champ.lignes.Dossier.filter((ligne) => ligne.agendaEvenementId).map((ligne) => ({ type: "DOSSIER" as const, id: String(ligne.id) })),
+  ]);
   // Fichiers (photos, pièces jointes, images de simulation) : effacés par une tâche rejouable, après la validation.
   await mettreEnFile(
     { type: TYPE_TACHE_EFFACEMENT, cle: `rgpd-effacement:${clientId}`, mode: "RECONCILIATION", charge: { chemins: champ.chemins, dossierIds: champ.dossierIds } },

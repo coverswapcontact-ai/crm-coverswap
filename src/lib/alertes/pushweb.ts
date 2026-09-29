@@ -14,7 +14,11 @@ import { pluriel } from "@/lib/commun/format";
  * une paire générée une fois et gardée en base (CleInterne, hors journal).
  * Un abonnement que le navigateur a révoqué (HTTP 404 ou 410) est archivé.
  */
-export type ChargePush = { titre: string; texte: string; lien?: string; etiquette?: string; badge?: number };
+/**
+ * `telephone` (E.164, mission 14 partie 7) : la notification porte « Appeler » et le bouton du lien, titré `libelleLien`
+ * (« Ouvrir la fiche » à défaut) — public/sw.js.
+ */
+export type ChargePush = { titre: string; texte: string; lien?: string; etiquette?: string; badge?: number; telephone?: string; libelleLien?: string };
 
 const memoire = globalThis as unknown as { __pushWebAbonnes?: number; __vapid?: { publique: string; privee: string } };
 

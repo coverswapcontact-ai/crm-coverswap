@@ -10,6 +10,7 @@ import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, resumerProjet, type ProjetClient } from "./projet";
 import { lireSelection } from "@/lib/prestations/prestations";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * Valider, dévalider, revalider — et tout ce qui se défait dans l'espace client.
@@ -261,6 +262,8 @@ export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif 
     await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: auteur === "CLIENT" ? "Appeler : il a retiré son bon pour accord" : "Refaire signer le devis", prochaineActionDate: maintenant } });
   });
   if (dossier.etape === "SIGNE") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "SIGNE", "DEVIS_ENVOYE", "RETOUR", `${RAISON_ACCORD_RETIRE} ${par(auteur)}`));
+  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit.
+  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `ACCORD RETIRÉ — ${dossier.clientNom}`, `Le client a retiré son bon pour accord sur le devis ${accord.numeroDevis ?? ""}${motif ? ` : « ${motif} »` : ""}.\nÀ vous : l'appeler.`, 5, dossier.clientTelephone);
   return { retire: true };
 }

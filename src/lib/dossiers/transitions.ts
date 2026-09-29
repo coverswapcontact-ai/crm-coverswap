@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { recalculerMain } from "./main";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
 import { MOTIFS_SANS_ACOMPTE, libelleMotif } from "@/lib/encaissements/constantes";
@@ -333,6 +334,8 @@ const STATUT_LEAD_PAR_ETAPE: Partial<Record<EtapeDossier, string>> = {
 export async function effetsDuChangementEtape(changement: ChangementEtape): Promise<void> {
   // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts).
   await recalculerMain(changement.dossierId);
+  // Mission 14 (partie 7) : perdu ou encaissé, le rappel du dossier quitte l'agenda ; repris, il y revient.
+  await synchroniserRappel({ type: "DOSSIER", id: changement.dossierId });
   // Mission 7 : chantier terminé (facturé ou encaissé) → merci et invitation à laisser un avis, par mail, une fois.
   if ((changement.vers === "FACTURE" || changement.vers === "ENCAISSE") && changement.nature !== "RETOUR" && changement.nature !== "REPRISE") {
     const { notifierClient } = await import("@/lib/mail/notifications");

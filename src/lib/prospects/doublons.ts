@@ -4,6 +4,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { fusionnerClients } from "@/lib/clients/fusion";
 import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { pluriel } from "@/lib/commun/format";
+import { synchroniserRappels } from "@/lib/agenda/rappels";
 import { HISTORIQUE_APPELS, suiviDesAppels } from "@/lib/commercial/suivi-appels";
 
 /**
@@ -131,6 +132,10 @@ export async function fusionnerDoublon(leadId: string): Promise<ResultatFusion> 
     });
     return { simulations: simulations.count, photos: photos.count, dossiersArchives };
   });
+
+  // Mission 14 (partie 7) : le doublon archivé (et son dossier vide) perd l'événement de son rappel.
+  const dossiersDuNouveau = await prisma.dossier.findMany({ where: { ...AVEC_ARCHIVES, leadId: nouveau.id }, select: { id: true } });
+  await synchroniserRappels([{ type: "LEAD", id: nouveau.id }, ...dossiersDuNouveau.map((d) => ({ type: "DOSSIER" as const, id: d.id }))]);
 
   // Les simulations rejoignent le dossier vivant du contact d'origine (ouvert au besoin), et son espace.
   const ouverture = bilan.simulations + bilan.photos > 0 ? await ouvrirDossierDuLead(ancien.id, { motif: "SIMULATION", silencieux: true }) : null;

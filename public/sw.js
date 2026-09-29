@@ -14,7 +14,7 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v9";
+const VERSION = "v10";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;
@@ -137,13 +137,26 @@ self.addEventListener("push", (evenement) => {
   const titre = charge.titre || "CoverSwap";
   evenement.waitUntil(
     (async () => {
+      // Mission 14 (partie 7) : toute alerte qui porte un numéro (rappel, SMS reçu, nouveau lead, geste dans l'espace
+      // client…) a deux boutons, « Appeler » et le lien de l'alerte (« Ouvrir la fiche », « Ouvrir le dossier »…), là où
+      // le système les affiche (Android, ordinateur ; iOS ne montre pas ces boutons, le toucher ouvre le lien).
+      const telephone = typeof charge.telephone === "string" && charge.telephone ? charge.telephone : null;
+      const libelleLien = typeof charge.libelleLien === "string" && charge.libelleLien ? charge.libelleLien : "Ouvrir la fiche";
       await self.registration.showNotification(titre, {
         body: charge.texte || "",
         tag: charge.etiquette || undefined,
         renotify: Boolean(charge.etiquette),
         icon: "/icones/crm-192.png",
         badge: "/icones/pastille-96.png",
-        data: { lien: charge.lien || "/" },
+        ...(telephone
+          ? {
+              actions: [
+                { action: "appeler", title: "Appeler" },
+                { action: "fiche", title: libelleLien },
+              ],
+            }
+          : {}),
+        data: { lien: charge.lien || "/", telephone },
       });
       if (typeof charge.badge === "number" && "setAppBadge" in self.navigator) {
         await (charge.badge > 0 ? self.navigator.setAppBadge(charge.badge) : self.navigator.clearAppBadge()).catch(() => undefined);
@@ -153,9 +166,15 @@ self.addEventListener("push", (evenement) => {
 });
 
 // Un tap ouvre directement l'écran concerné : la conversation, la fiche, la relance à valider.
+// « Appeler » (toute alerte qui porte un numéro) compose le numéro ; le bouton du lien ou un tap simple ouvrent l'écran.
 self.addEventListener("notificationclick", (evenement) => {
   evenement.notification.close();
-  const lien = new URL((evenement.notification.data && evenement.notification.data.lien) || "/", self.location.origin);
+  const donnees = evenement.notification.data || {};
+  if (evenement.action === "appeler" && donnees.telephone) {
+    evenement.waitUntil(self.clients.openWindow(`tel:${donnees.telephone}`).catch(() => undefined));
+    return;
+  }
+  const lien = new URL(donnees.lien || "/", self.location.origin);
   evenement.waitUntil(
     (async () => {
       const fenetres = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

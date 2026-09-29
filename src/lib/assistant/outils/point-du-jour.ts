@@ -3,7 +3,8 @@ import prisma from "@/lib/prisma";
 import { pilotageCommercial } from "@/lib/commercial/pilotage";
 import { aHeureParis } from "@/lib/commercial/quand";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
-import { jourParis } from "@/lib/dossiers/dates";
+import { debutDuJourParis } from "@/lib/dossiers/dates";
+import { resumeDuJour } from "@/lib/agenda/resume";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
 import { libelleSourceLead } from "@/lib/prospects/constantes";
@@ -37,11 +38,11 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
   const precedent = options.depuis === undefined ? await dernierPoint() : options.depuis;
   // Sans point précédent : les dernières 24 heures.
   const depuis = precedent ?? new Date(maintenant.getTime() - JOUR);
-  const aujourdhui = jourParis(maintenant);
-  const debutJour = new Date(`${aujourdhui}T00:00:00+02:00`);
-  const finJour = new Date(debutJour.getTime() + JOUR);
+  // Mission 14 (partie 7) : la journée de Paris, été comme hiver (plus de « +02:00 » figé : faux d'une heure dès le 25/10).
+  const debutJour = debutDuJourParis(maintenant);
+  const finJour = aHeureParis(maintenant, 1, 0);
 
-  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents] = await Promise.all([
+  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents, duJour] = await Promise.all([
     prisma.lead.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true, priorite: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.simulationEspace.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, source: true, statut: true, createdAt: true, dossierId: true }, take: 50 }),
     prisma.simulationSite.count({ where: { createdAt: { gte: depuis } } }),
@@ -60,6 +61,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     compterMessagesNonLus(),
     prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
     prisma.messageEspace.findMany({ where: { createdAt: { gte: depuis }, auteur: "CLIENT", archiveLe: null }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, texte: true, source: true, createdAt: true, luLe: true, dossier: { select: { id: true, clientNom: true } } } }),
+    // Mission 14 (partie 7) : les nombres du jour, comptés comme l'écran Leads.
+    resumeDuJour(maintenant),
   ]);
 
   const nomsDossiers = new Map((await prisma.dossier.findMany({ where: { id: { in: simulationsEspace.map((s) => s.dossierId) } }, select: { id: true, clientNom: true } })).map((d) => [d.id, d.clientNom]));
@@ -88,6 +91,9 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       mailsATraiter: mails.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant.nom ?? m.correspondant.adresse, objet: m.objet, mention: m.mention, contact: m.contact?.nom ?? null })),
       messagesEspaceNonLus: messagesNonLus,
       propositionsEnAttente,
+      rappelsAujourdhui: duJour.rappelsAujourdhui,
+      rappelsEnRetard: duJour.rappelsEnRetard,
+      relancesProposables: duJour.relancesProposables,
     },
     campagne: { enCours: campagne.enCours, jour: campagne.jour, duree: campagne.duree, depenseEstimee: campagne.depenseEstimee, leads: campagne.leads, coutParLead: campagne.coutParLead, regle: campagne.regle },
     alertes: { taches: sante.taches, google: sante.google, meta: sante.meta, ia: sante.ia, disqueLibreMo: sante.disqueLibreMo, disque: sante.disque, coherence: sante.coherence, autres: sante.alertes },
@@ -112,6 +118,7 @@ export const outilPointDuJour = definirOutil({
       `Point du ${format.jour(contexte.maintenant)}, depuis ${point.premierPoint ? "hier (premier point)" : format.jourCourt(point.depuis) + " " + new Date(point.depuis).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}.`,
       `Nouveau : ${pluriel(n.leads.length, "lead")}${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${pluriel(n.simulations.site, "simulation")} sur le site, ${n.simulations.espace.length} dans les espaces ; ${pluriel(n.demandesDevis, "demande")} de devis ; ${pluriel(n.devisSignes.length, "devis signé", "devis signés")}${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} a choisi le devis ${d.numero ?? "?"}${d.libelle ? ` (${d.libelle})` : ""} : ${format.euros(d.montant)}`).join(" ; ")})` : ""} ; ${pluriel(n.paiements.length, "paiement")}${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${pluriel(n.projetsClients.length, "projet ouvert", "projets ouverts")} par des clients ; ${pluriel(n.changementsEtape.length, "changement")} d'étape ; ${pluriel(n.messagesEspace.length, "message")} de clients dans leur espace${n.messagesEspace.length ? ` (${n.messagesEspace.slice(0, 4).map((m) => `${m.client} : « ${m.texte.slice(0, 80)} »`).join(" ; ")})` : ""}.`,
       `Aujourd'hui : ${pluriel(a.rappels.length, "rappel")}${retards ? ` dont ${retards} en retard` : ""}${a.rappels.length ? ` (${a.rappels.map((r) => (r.enRetard ? `${r.nom}, prévu ${jourSemaineHeure(r.a)}` : `${r.nom} à ${heure(r.a)}`)).join(", ")})` : ""},${pluriel(a.actionsDossiers.length, "action planifiée", "actions planifiées")}${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${pluriel(a.attendentMoi.length, "dossier")} qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
+      `Rappels : ${a.rappelsAujourdhui} aujourd'hui, ${a.rappelsEnRetard} en retard, ${pluriel(a.relancesProposables, "relance proposable", "relances proposables")}.`,
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
       `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");

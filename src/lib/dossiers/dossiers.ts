@@ -20,6 +20,7 @@ import {
 } from "./constants";
 import { dateDepuisJour, debutDuJourParis, estJourValide, instantDuJour, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
+import { rappelALOuverture, synchroniserRappel } from "@/lib/agenda/rappels";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
 import {
@@ -649,7 +650,8 @@ export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | 
 /**
  * Après l'ouverture, jamais bloquant : le lead B2C passe à « Contacté » ; le
  * prospect B2B est converti en client (il sort des séquences de prospection),
- * sauf s'il s'est désinscrit.
+ * sauf s'il s'est désinscrit. Mission 14 (partie 7) : le rappel à venir du lead
+ * passe sur le dossier, et l'agenda suit pour les deux (`rappelALOuverture`).
  */
 export async function suitesOuverture({ lead, prospect }: Origines, dossierId: string): Promise<void> {
   try {
@@ -671,6 +673,7 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
   } catch (erreur) {
     console.error("[dossiers] mise à jour du lead d'origine :", erreur);
   }
+  await rappelALOuverture(dossierId, lead?.id ?? null);
 }
 
 /* ── Modification ───────────────────────────────────────────────── */
@@ -679,7 +682,7 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
 export async function modifierDossier(dossierId: string, entree: EntreeModification): Promise<void> {
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    select: { clientId: true, objet: true, client: { select: { nom: true } } },
+    select: { clientId: true, objet: true, prochaineActionDate: true, client: { select: { nom: true } } },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
@@ -689,7 +692,10 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   if (champs.objet !== undefined && champs.objet !== dossier.objet) data.objetManuelLe = new Date();
   if (dateSouhaitee !== undefined) data.dateSouhaitee = dateSouhaitee ? dateDepuisJour(dateSouhaitee) : null;
   if (dateFinChantier !== undefined) data.dateFinChantier = dateFinChantier ? dateDepuisJour(dateFinChantier) : null;
-  if (prochaineActionDate !== undefined) {
+  // Mission 14 (partie 7) : le même jour renvoyé (l'écran envoie toujours le jour, même quand seul le texte change) garde
+  // l'instant rangé — un rappel noté à 18 h par un appel ne devient pas « jour seul ».
+  const memeJour = Boolean(prochaineActionDate && dossier.prochaineActionDate && jourParis(dossier.prochaineActionDate) === prochaineActionDate);
+  if (prochaineActionDate !== undefined && !memeJour) {
     data.prochaineActionDate = prochaineActionDate ? dateDepuisJour(prochaineActionDate) : null;
   }
   if (dateChantier !== undefined) data.dateChantier = dateChantier ? dateDepuisJour(dateChantier) : null;
@@ -723,6 +729,10 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
     await tx.dossier.update({ where: { id: dossierId }, data });
     if (ouvertLe || data.clientId) await reculerPremierContact(tx, dossierId);
   });
+  // Mission 14 (partie 7) : la prochaine action (un rappel posé, déplacé, remplacé) ou le contact changent → l'agenda suit.
+  if (prochaineActionDate !== undefined || champs.prochaineAction !== undefined || champs.clientNom !== undefined || champs.clientVille !== undefined || champs.clientTelephone !== undefined) {
+    await synchroniserRappel({ type: "DOSSIER", id: dossierId });
+  }
 }
 
 /* ── Points à compléter masqués ─────────────────────────────────── */

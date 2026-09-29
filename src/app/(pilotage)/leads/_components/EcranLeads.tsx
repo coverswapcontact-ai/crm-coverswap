@@ -13,7 +13,7 @@ import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pi
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
 import { EVENEMENT_APPEL_TERMINE, EVENEMENT_LEADS_MODIFIES, type DetailAppelTermine } from "@/components/pilotage/evenements";
 import { NotificationsAppareil } from "@/components/pilotage/NotificationsAppareil";
-import { LigneRelances } from "@/components/pilotage/relances/FeuilleRelances";
+import { LigneDuJour } from "@/components/pilotage/relances/FeuilleRelances";
 import { ecouterLeCache, vientDuCache } from "@/components/pilotage/serviDepuisLeCache";
 import { Bouton, CLASSE_SAISIE, EnTetePage, EtatVide, Pagination, TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
@@ -310,8 +310,8 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, leadInit
         </label>
       </div>
 
-      {/* Mission 14 (partie 6) : les relances proposables (devis, espaces sans photo), masquées s'il n'y en a pas. */}
-      {modeAppels ? null : <LigneRelances />}
+      {/* Mission 14 (partie 7) : les nombres du jour — rappels (→ « À rappeler ») et relances proposables (→ la feuille). */}
+      {modeAppels ? null : <LigneDuJour aujourdhui={donnees.compteurs.aujourdhui ?? 0} enRetard={donnees.compteurs.enRetard ?? 0} onRappels={() => setVue("A_RAPPELER")} />}
 
       {/* Mission 13 (B19) : ce qui s'est passé sur le site cette semaine, à côté des leads qui en viennent. */}
       {modeAppels ? null : <SurLeSite resume={siteInitial} onOuvrirLead={(id) => setOuvert(id)} />}

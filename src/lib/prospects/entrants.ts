@@ -9,6 +9,7 @@ import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE } from "@/lib/dossiers/constants";
 import { verifierMotifPerte } from "@/lib/dossiers/perte";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { appelSansReponse, issueDuContenu } from "@/lib/commercial/sans-reponse";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import {
   GROUPES_ENTRANTS,
   JOURS_A_TRAITER,
@@ -300,6 +301,10 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
     }
   });
   if (priorite !== undefined) await poserPriorite(id, priorite === "AUTO" ? null : priorite);
+  // Mission 14 (partie 7) : rappel posé, déplacé ou retiré, passage en perdu, nom, ville ou numéro corrigés → l'agenda suit.
+  if (rappelLe !== undefined || entree.statut !== undefined || entree.prenom !== undefined || nomFamille !== undefined || entree.ville !== undefined || entree.telephone !== undefined) {
+    await synchroniserRappel({ type: "LEAD", id });
+  }
   // Code postal ou notes corrigés : la classe de rappel peut changer (sauf si elle est posée à la main).
   if (entree.codePostal !== undefined || entree.notes !== undefined) await classerLeadSansBloquer(id);
   if ((nouvelEmail || nouveauTelephone) && lead.clientId) {
@@ -342,6 +347,7 @@ export async function archiverEntrant(id: string, motif: string): Promise<void> 
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
   if (lead.archiveLe) throw new ErreurMetier("Contact déjà archivé.", 409);
   await prisma.lead.update({ where: { id }, data: { archiveLe: new Date(), archiveMotif: motif } });
+  await synchroniserRappel({ type: "LEAD", id });
 }
 
 export async function restaurerEntrant(id: string): Promise<void> {
@@ -349,6 +355,7 @@ export async function restaurerEntrant(id: string): Promise<void> {
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
   if (!lead.archiveLe) return;
   await prisma.lead.update({ where: { id }, data: { archiveLe: null, archiveMotif: null } });
+  await synchroniserRappel({ type: "LEAD", id });
 }
 
 export const schemaCreationEntrant = z.object({

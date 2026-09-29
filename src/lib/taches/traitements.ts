@@ -1,3 +1,4 @@
+import { enregistrerTachesRappels } from "@/lib/agenda/rappels";
 import { enregistrerTachesSauvegardes } from "@/lib/base/taches";
 import { enregistrerTachesClients } from "@/lib/clients/taches";
 import { enregistrerTachesCoherence } from "@/lib/coherence/taches";
@@ -27,6 +28,9 @@ import { enregistrerTachesValidation } from "@/lib/validation/taches";
  * puis envoyés par le fournisseur) est retiré — les relances sont des SMS à
  * copier (`relances/proposables.ts`). Sa ligne `Planification` reste en base :
  * l'exécuteur et l'écran des tâches ne lisent que les travaux enregistrés.
+ *
+ * Mission 14 (partie 7) : les rappels — l'événement Google Agenda de chaque rappel
+ * daté et la notification 10 minutes avant (tâches datées, pas de route cron).
  */
 export function enregistrerTousLesTraitements(): void {
   enregistrerTachesValidation();
@@ -47,4 +51,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesSauvegardes();
   enregistrerTachesCorbeille();
   enregistrerTachesRedimensionnement();
+  enregistrerTachesRappels();
 }

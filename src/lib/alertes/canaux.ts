@@ -228,7 +228,13 @@ async function envoyerMail(alerte: Alerte): Promise<ResultatCanal> {
 async function envoyerParPushWeb(alerte: Alerte): Promise<ResultatCanal> {
   try {
     const { envoyerPushWeb } = await import("./pushweb");
-    return await envoyerPushWeb({ titre: alerte.titre, texte: alerte.texte, lien: alerte.lien, etiquette: alerte.etiquette }, { application: alerte.application });
+    // Mission 14 (partie 7) : le numéro et le libellé du lien voyagent aussi — toute alerte qui porte un numéro (rappel, SMS
+    // reçu, nouveau lead, espace client) reçoit « Appeler » et son bouton de lien, là où le navigateur les affiche.
+    const telephone = alerte.telephone ? telephoneInternational(alerte.telephone) : null;
+    return await envoyerPushWeb(
+      { titre: alerte.titre, texte: alerte.texte, lien: alerte.lien, etiquette: alerte.etiquette, ...(telephone ? { telephone } : {}), ...(alerte.libelleLien ? { libelleLien: alerte.libelleLien } : {}) },
+      { application: alerte.application }
+    );
   } catch (erreur) {
     return { canal: "pushweb", ok: false, configure: false, detail: `push web indisponible : ${decrireErreur(erreur).slice(0, 200)}` };
   }

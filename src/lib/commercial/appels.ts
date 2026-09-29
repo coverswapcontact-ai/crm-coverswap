@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { synchroniserRappels, type CibleRappel } from "@/lib/agenda/rappels";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { ecrireNote } from "@/lib/dossiers/dossiers";
 import { recalculerMain } from "@/lib/dossiers/main";
@@ -141,9 +142,10 @@ export async function noterAppel(entree: EntreeAppel, maintenant: Date = new Dat
     await prisma.$transaction(async (tx) => {
       await tx.dossierEvenement.create({ data: { dossierId: idDossier, type: "APPEL", direction: "SORTANT", contenu, metadata: JSON.stringify({ issue: entree.issue }) } });
       if (leadId) tentatives = (await tx.lead.update({ where: { id: leadId }, data: suiviAppel, select: { tentatives: true } })).tentatives;
-      // Le rappel d'un dossier est sa prochaine action ; « à rappeler » sans date : « Rappeler », sans date.
+      // Le rappel d'un dossier est sa prochaine action ; « à rappeler » sans date : « Rappeler », sans date. L'instant est
+      // retenu (mission 14, partie 7) : « 14 h » reste 14 h, jamais lu comme un jour seul.
       if (entree.issue === "PAS_DE_REPONSE" || entree.issue === "A_RAPPELER") {
-        await tx.dossier.update({ where: { id: idDossier }, data: { prochaineAction: entree.issue === "PAS_DE_REPONSE" ? "Rappeler (pas de réponse)" : "Rappeler", prochaineActionDate: rappel } });
+        await tx.dossier.update({ where: { id: idDossier }, data: { prochaineAction: entree.issue === "PAS_DE_REPONSE" ? "Rappeler (pas de réponse)" : "Rappeler", prochaineActionDate: rappel, prochaineActionInstant: rappel } });
       }
       if (entree.issue === "INTERESSE") await tx.dossier.update({ where: { id: idDossier }, data: { updatedAt: new Date() } });
       if (note && entree.issue !== "PAS_DE_REPONSE") await ecrireNote(tx, idDossier, { etape: (dossier?.etape ?? "QUALIFICATION") as EtapeDossier, contenu: `${libelle} — ${note}` });
@@ -178,6 +180,10 @@ export async function noterAppel(entree: EntreeAppel, maintenant: Date = new Dat
 
   // L'issue s'inscrit aussi sur la note prise pendant l'appel (elle en garde la trace, même sans dossier).
   if (leadId) await noterIssueSurNote(leadId, entree.issue).catch((erreur: unknown) => console.error("[appels] issue non reportée sur la note :", erreur));
+
+  // Mission 14 (partie 7) : le rappel posé, déplacé ou retiré (lead ou dossier) passe dans l'agenda et la notification.
+  const cibles: CibleRappel[] = [...(leadId ? [{ type: "LEAD" as const, id: leadId }] : []), ...(dossierId ? [{ type: "DOSSIER" as const, id: dossierId }] : [])];
+  await synchroniserRappels(cibles, maintenant);
 
   // Le SMS proposé : l'appel est déjà écrit, un SMS impossible à préparer ne doit pas le faire noter deux fois.
   // « Intéressé » sans espace ouvert : pas de SMS avec un lien (il rouvrirait l'espace d'un projet clos, ou échouerait).
@@ -216,6 +222,12 @@ function resumeDeLAppel(
     if (suite.etapeClose === "PERDU") return "Appel noté. Son dossier était déjà perdu.";
     if (suite.etapeClose) return `Appel noté. Son dossier est ${LIBELLES_ETAPE[suite.etapeClose as EtapeDossier]?.toLowerCase() ?? "clos"} : il ne passe pas en perdu.`;
     return `Appel noté. Classé sans suite : ${suite.motif ?? "pas intéressé"}.`;
+  }
+  // Mission 14 (partie 7) : un dossier clos n'a ni liste, ni agenda, ni notification pour ce rappel — on le dit.
+  if (suite.rappel && suite.etapeClose) {
+    const clos = suite.etapeClose === "PERDU" ? "perdu" : (LIBELLES_ETAPE[suite.etapeClose as EtapeDossier]?.toLowerCase() ?? "clos");
+    const faire = suite.etapeClose === "PERDU" ? "reprends le dossier (change son étape)" : "ouvre-lui un nouveau dossier pour ce projet";
+    return `Appel noté. Rappel ${momentDuRappel(suite.rappel, suite.maintenant, "à")}. Son dossier est ${clos} : ce rappel n'est ni dans l'agenda ni notifié (${faire} pour le suivre).`;
   }
   if (suite.rappel) return `Appel noté. Rappel ${momentDuRappel(suite.rappel, suite.maintenant, "à")}.`;
   return suite.dossier ? "Appel noté. Sans date de rappel : « Rappeler » est la prochaine action de son dossier." : "Appel noté. Sans date de rappel : il est dans À rappeler.";

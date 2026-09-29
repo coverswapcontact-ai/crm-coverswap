@@ -9,6 +9,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { alerter } from "@/lib/alertes/canaux";
 import { FORMATS_PHOTO, PHOTO_OCTETS_MAX } from "@/lib/dossiers/constants";
 import { changerEtape } from "@/lib/dossiers/transitions";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { lienPourLeProjet, ouvrirEspace } from "@/lib/espace/liens";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
@@ -374,6 +375,8 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
     if (dossier?.etape === "QUALIFICATION") await changerEtape(dossierId, { vers: "SIMULATION" }).catch((erreur) => console.error("[simulations] passage en Simulation (non bloquant) :", erreur));
     // Publiée : la main passe au client, partout (dossiers/main.ts).
     await recalculerMain(dossierId);
+    // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit.
+    await synchroniserRappel({ type: "DOSSIER", id: dossierId });
     // Mission 7 : le client est prévenu par mail, automatiquement (une fois par publication).
     const { notifierClient } = await import("@/lib/mail/notifications");
     mail = await notifierClient("SIMULATION_PUBLIEE", dossierId, aPublier.map((s) => s.id).sort().join("+"));

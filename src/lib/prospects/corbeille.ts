@@ -7,6 +7,7 @@ import { anonymiserClient } from "@/lib/rgpd/conservation";
 import { mettreEnFile } from "@/lib/taches/file";
 import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { titreDossier } from "@/lib/commun/format";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { pluriel } from "@/lib/commun/format";
 
 /**
@@ -54,6 +55,8 @@ export async function mettreALaCorbeille(entree: { leads: string[]; dossiers: st
     const lead = await prisma.lead.findUnique({ where: { id }, select: { id: true, archiveLe: true } });
     if (!lead) throw new ErreurMetier(`Lead ${id} introuvable : rien n'a été fait.`, 404);
     await prisma.lead.update({ where: { id }, data: { archiveLe: lead.archiveLe ?? maintenant, archiveMotif: motif } });
+    // Mission 14 (partie 7) : à la corbeille, son rappel quitte l'agenda (le dossier, lui, passe par l'archivage).
+    await synchroniserRappel({ type: "LEAD", id });
     faits.leads.push(id);
   }
   for (const id of dossiers) {

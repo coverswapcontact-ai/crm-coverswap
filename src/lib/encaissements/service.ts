@@ -13,6 +13,7 @@ import {
 import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET, libelleMotif, type MoyenPaiement } from "./constantes";
 import type { CorrectionEncaissement, EntreePaiement } from "./schemas";
 import { faitsPaiements, piecesDuDossier } from "./soldes";
+import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * Encaissements : l'argent reçu, distinct de ce qui est facturé.
@@ -338,6 +339,8 @@ async function terminerEncaissement(
     );
   });
   if (changement) await effetsDuChangementEtape(changement);
+  // Mission 14 (partie 7) : un chèque rejeté remplace la prochaine action (un rappel peut-être) → l'agenda suit.
+  else if (encaissement.dossierId && fin.statut === "REJETE") await synchroniserRappel({ type: "DOSSIER", id: encaissement.dossierId });
   return encaissement.dossierId;
 }
 

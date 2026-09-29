@@ -162,7 +162,8 @@ describe("ouvrir un dossier depuis un lead, en un bouton", () => {
     assert.deepEqual([ouverture.cree, ouverture.photosRangees], [true, 1]);
     const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ouverture.dossierId } });
     assert.deepEqual([dossier.clientNom, dossier.clientTelephone, dossier.clientEmail, dossier.objet, dossier.prochaineAction], [`Marie ${contact.nom}`, contact.telephone, contact.email, "Recouvrement de cuisine", "Rappeler"]);
-    assert.equal(dossier.prochaineActionDate?.toISOString().slice(0, 10), new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(rappel));
+    // Mission 14 (partie 7) : le rappel passe sur le dossier à son heure exacte (plus seulement son jour).
+    assert.equal(dossier.prochaineActionDate?.toISOString(), rappel.toISOString());
     const note = await prisma.dossierEvenement.findFirst({ where: { dossierId: dossier.id, type: "NOTE_AJOUTEE" } });
     assert.match(note?.contenu ?? "", /Meta[\s\S]*Cuisine septembre[\s\S]*Avant-après[\s\S]*cuisine moyenne[\s\S]*Dans le mois[\s\S]*Hérault/);
 

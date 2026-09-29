@@ -162,7 +162,7 @@ export const outilPlanifier = definirOutil({
   titre: "Planifier un rappel ou une action",
   description: "Planifie un rappel (lead) ou la prochaine action d'un dossier à un moment donné (« jeudi 14h », « demain 10h30 », « 2026-09-25 14:00 »), et l'inscrit dans Google Calendar si le droit est accordé (sinon l'outil le dit : rien n'est perdu, l'action est dans le CRM). Réversible : replanifier remplace.",
   niveau: "REVERSIBLE",
-  schema: schemaCible.extend({ action: z.string().min(1).max(200).describe("« Rappeler », « Passer prendre les mesures »…"), quand: z.string().min(1).max(60), duree_minutes: z.number().int().min(5).max(480).optional() }),
+  schema: schemaCible.extend({ action: z.string().min(1).max(200).describe("« Rappeler », « Passer prendre les mesures »…"), quand: z.string().min(1).max(60), duree_minutes: z.number().int().min(5).max(480).optional().describe("Durée d'une action de dossier (30 min à défaut) ; un rappel dure toujours 15 minutes.") }),
   executer: async (e, contexte) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu;

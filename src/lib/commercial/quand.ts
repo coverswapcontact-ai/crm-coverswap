@@ -74,6 +74,25 @@ export function quandLisible(date: Date | null | undefined, maintenant: Date): s
   return `le ${vise.jour === 1 ? "1er" : vise.jour} ${MOIS[vise.mois - 1]} ${heure}`;
 }
 
+/**
+ * Mission 14 (partie 8) — le jour d'un rappel noté au jour seul (sans heure
+ * choisie, `estJourSeul`), tel qu'un SMS le dit : « aujourd'hui », « demain »,
+ * « jeudi » (dans les 6 jours), « le 12 octobre » au-delà — jamais une heure que
+ * Lucas n'a pas choisie. Sans date, ou un jour déjà passé : « prochainement ».
+ */
+export function jourLisible(date: Date | null | undefined, maintenant: Date): string {
+  if (!date || Number.isNaN(date.getTime())) return "prochainement";
+  const vise = murale(date);
+  const jour = murale(maintenant);
+  const jourVise = Date.UTC(vise.annee, vise.mois - 1, vise.jour);
+  const ecart = Math.round((jourVise - Date.UTC(jour.annee, jour.mois - 1, jour.jour)) / JOUR_MS);
+  if (ecart < 0) return "prochainement";
+  if (ecart === 0) return "aujourd'hui";
+  if (ecart === 1) return "demain";
+  if (ecart <= 6) return JOURS_SEMAINE[new Date(jourVise).getUTCDay()];
+  return `le ${vise.jour === 1 ? "1er" : vise.jour} ${MOIS[vise.mois - 1]}`;
+}
+
 /* ── Mission 14 (partie 4) : le rappel choisi à la fin d'un appel ──────────── */
 
 const deux = (nombre: number) => String(nombre).padStart(2, "0");

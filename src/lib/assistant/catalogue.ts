@@ -20,6 +20,7 @@ import { OUTILS_LECTURE } from "./outils/lecture";
 import { OUTILS_MAIL } from "./outils/mail";
 import { OUTILS_REGLAGES_ECRITURE, OUTILS_REGLAGES_LECTURE } from "./outils/reglages";
 import { OUTILS_SIMULATION } from "./outils/simulation";
+import { OUTILS_SMS } from "./outils/sms";
 import { outilPointDuJour } from "./outils/point-du-jour";
 
 /**
@@ -49,6 +50,7 @@ export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_ANALYSE,
   ...OUTILS_MAIL,
   ...OUTILS_ECRITURE,
+  ...OUTILS_SMS,
   ...OUTILS_DOCUMENTS,
   ...OUTILS_CONTACTS,
   ...OUTILS_ACTIONS,

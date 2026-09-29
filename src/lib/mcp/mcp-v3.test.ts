@@ -113,7 +113,7 @@ describe("Mission 11 : libérer le MCP", () => {
     const ecart = ecartAvecLeServeur(outils.tools.map((t) => t.name));
     assert.deepEqual(ecart, { manquants: [], enTrop: [] }, `outils manquants ou en trop : ${JSON.stringify(ecart)}`);
     assert.equal(outils.tools.length, CATALOGUE.length);
-    for (const nom of ["creer_contact", "deposer_document", "annuler_document", "presenter_devis", "retirer_accord", "simulations_site", "voir_parametres", "modifier_parametres", "voir_relances", "relancer", "annuler_relance", "changer_teinte", "voir_publicite", "lister_outils", "supprimer", "classer_mail", "rediger_mail"]) {
+    for (const nom of ["creer_contact", "deposer_document", "annuler_document", "presenter_devis", "retirer_accord", "simulations_site", "voir_parametres", "modifier_parametres", "voir_relances", "relancer", "annuler_relance", "changer_teinte", "voir_publicite", "lister_outils", "supprimer", "classer_mail", "rediger_mail", "leads_a_rappeler", "noter_sms"]) {
       assert.ok(outils.tools.some((t) => t.name === nom), `outil absent de tools/list : ${nom}`);
     }
     const registre = registreOutils();

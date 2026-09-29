@@ -59,9 +59,13 @@ function relancePhotos(metadata: string): boolean {
   }
 }
 
-/** Les relances photos proposables aujourd'hui (une par projet d'espace), de la plus ancienne ouverture à la plus récente. */
-export async function relancesPhotosProposables(maintenant: Date = new Date(), filtre: { dossierId?: string } = {}): Promise<RelancePhotos[]> {
-  const { jours: delai } = await lireDelaiRelancePhotos(maintenant);
+/**
+ * Les relances photos proposables aujourd'hui (une par projet d'espace), de la plus ancienne ouverture à la plus
+ * récente. `delai` (partie 8, filtre « sans photo ni simulation depuis N jours » de l'assistant) remplace
+ * DELAI_RELANCE_PHOTOS : la même règle, avec N à la place du paramètre.
+ */
+export async function relancesPhotosProposables(maintenant: Date = new Date(), filtre: { dossierId?: string; delai?: number } = {}): Promise<RelancePhotos[]> {
+  const delai = filtre.delai ?? (await lireDelaiRelancePhotos(maintenant)).jours;
   const espaces = await prisma.espaceClient.findMany({
     where: { revoqueLe: null, archiveLe: null, dossier: { archiveLe: null, etape: { in: ETAPES_PHOTOS }, ...(filtre.dossierId ? { id: filtre.dossierId } : {}) } },
     orderBy: { createdAt: "asc" },

@@ -40,7 +40,7 @@ async function nomsDe(leads: string[], dossiers: string[]) {
 async function archiver(e: z.output<typeof schemaArchivage>): Promise<ResultatOutil> {
   const leads = [...new Set(e.leads ?? [])];
   const dossiers = [...new Set(e.dossiers ?? [])];
-  if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à archiver : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler »).", 400);
+  if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à archiver : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler », « leads_a_rappeler »).", 400);
   const noms = await nomsDe(leads, dossiers);
   if (noms.inconnus) throw new ErreurMetier(`${pluriel(noms.inconnus, "identifiant inconnu", "identifiants inconnus")} : rien n'a été fait.`, 404);
   const faits: string[] = [];
@@ -61,7 +61,7 @@ const apercuArchivage = async (e: z.output<typeof schemaArchivage>) => {
 export const outilArchiver = definirOutil({
   nom: "archiver",
   titre: "Archiver des leads ou des dossiers",
-  description: "Archive un ou plusieurs leads (ils sortent des listes « À appeler » et « À rappeler ») ou dossiers, avec un motif. Réversible par « restaurer ». Au-delà de trois éléments : aperçu de la liste, puis confirmation. Pour « tous sauf X » : liste d'abord (« leads_a_appeler » ne couvre que « À appeler », 50 au plus ; les leads de « À rappeler » se trouvent par « ce_qui_m_attend » ou « chercher »), retire X, puis donne les identifiants restants ; dis à Lucas ce que tes listes ne couvraient pas.",
+  description: "Archive un ou plusieurs leads (ils sortent des listes « À appeler » et « À rappeler ») ou dossiers, avec un motif. Réversible par « restaurer ». Au-delà de trois éléments : aperçu de la liste, puis confirmation. Pour « tous sauf X » : liste d'abord (« leads_a_appeler » pour « À appeler », « leads_a_rappeler » pour « À rappeler », 50 par page au plus — lis toutes les pages), retire X, puis donne les identifiants restants ; dis à Lucas ce que tes listes ne couvraient pas.",
   niveau: "REVERSIBLE",
   schema: schemaArchivage,
   masse: (e) => (e.leads?.length ?? 0) + (e.dossiers?.length ?? 0),
@@ -96,7 +96,7 @@ export const outilSupprimer = definirOutil({
   executer: async (e) => {
     const leads = [...new Set(e.leads ?? [])];
     const dossiers = [...new Set(e.dossiers ?? [])];
-    if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à supprimer : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler »).", 400);
+    if (leads.length + dossiers.length === 0) throw new ErreurMetier("Rien à supprimer : donne des identifiants de leads ou de dossiers (« chercher », « leads_a_appeler », « leads_a_rappeler »).", 400);
     const noms = await nomsDe(leads, dossiers);
     if (noms.inconnus) throw new ErreurMetier(`${pluriel(noms.inconnus, "identifiant inconnu", "identifiants inconnus")} : rien n'a été fait.`, 404);
     const mise = await mettreALaCorbeille({ leads, dossiers, motif: e.motif });

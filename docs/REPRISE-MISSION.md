@@ -2164,3 +2164,152 @@ relances proposables ». » Principe : un rappel, une trace dans Google, un seul
 - Vérifié : tsc, eslint, suite complète 660/660, build. Déploiement : Railway en incident (« API degradation causing
   slow or stuck deployments », 15:29 → 18:37 UTC) : la partie 6 (`7d00ed6`) est restée en file ; les parties 6 et 7 sont
   vérifiées en production ensemble dès que le déploiement passe.
+
+## Partie 8 — Le MCP suit (29/09)
+Énoncé : « leads_a_appeler ne rend plus que « À appeler » ; nouvel outil leads_a_rappeler, même tri que l'écran.
+noter_appel : […] sa réponse contient le SMS proposé (code et texte), pour que je le copie depuis la conversation
+Claude. Nouvel outil noter_sms : « SMS envoyé à X » (code ou texte libre) produit les mêmes effets que « Copier ».
+voir_relances inclut les clients sans e-mail, avec leur SMS. espaces_clients prend un filtre « sans photo ni
+simulation depuis N jours » et rend téléphone et texte. voir_parametres et modifier_parametres couvrent le catalogue
+SMS. » Les parties 3, 4 et 6 avaient déjà fait `leads_a_appeler` (liste « À appeler » seule, prénom non doublé,
+description juste), `noter_appel` (défauts de `noterAppel` : pas de réponse → demain 18 h, à rappeler sans moment →
+sans date ; SMS proposé dans la réponse) et `voir_relances` (sans e-mail avec leur SMS, relances photos) : complétés,
+pas refaits. **80 outils** (78 + 2) : l'empreinte du catalogue change, Lucas reconnecte le connecteur Claude.
+- **`leads_a_rappeler`** (nouveau, LECTURE, `assistant/outils/lecture.ts`, après `leads_a_appeler` dans
+  `OUTILS_LECTURE`) : `{ limite?: 1..50 (20), page? }` → `listerLeads({ vue: "A_RAPPELER", page, parPage })`, donc
+  exactement l'ordre et la pagination de l'écran (datés croissants, retards en tête, puis sans date, plus ancien appel
+  d'abord). En-tête « N leads à rappeler dont N en retard, N aujourd'hui (page P sur Q) » ; par ligne « - Nom (ville) —
+  source, téléphone, N tentatives, rappel jeu. 1 oct. 18:00 [EN RETARD] | rappel sans date, dernier appel ven. 25 sept.
+  11:00 (pas de réponse) [lead:id] » (`jourSemaineHeure` ; l'issue du dernier appel lue par `issueDuContenu` sur le
+  dernier échange APPEL ; la date = `dernierAppelLe`). Page hors liste : « cette page est vide » ; liste vide :
+  « Personne dans « À rappeler ». ». `donnees` = compteurs, page, pages, total et les `LigneLead` brutes ; lien
+  `/leads?liste=rappeler`.
+- **`noter_appel`** : la ligne du SMS devient « SMS proposé ({code}) : « {texte} » — une fois envoyé, dis-le-moi
+  (« noter_sms »). » ; description à jour (le lien de l'espace est dans le texte pour « intéressé », `noter_sms`
+  ensuite). Gardé tel quel : « {N}ᵉ appel sans réponse d'affilée : propose à Lucas de classer sans suite (motif « Plus
+  de réponse »), sans l'imposer. » (partie 4, le nombre réel plutôt que « 3ᵉ tentative » : figé par son test).
+- **`noter_sms`** (nouveau, REVERSIBLE, `assistant/outils/sms.ts`, `OUTILS_SMS` après `OUTILS_ECRITURE` dans le
+  catalogue) : `schemaCible` + `code?` (enum `CODES_SMS`) + `texte?` (≤ 918), au moins l'un des deux (`.refine`, refus
+  « Donne le code du SMS (catalogue), le texte envoyé, ou les deux. »). Appelle `noterSmsCopie` (origine ASSISTANT) :
+  mêmes effets que « Copier » (trace SMS_COPIE sur le dossier ou échange SMS sur le lead, lien communiqué → main au
+  client et « Lien pas encore envoyé » qui tombe, relance comptée, R2, double toucher en 10 min → une trace).
+  - code seul → le texte est recomposé : `proposerSms` avec l'action du code (`ACTION_DU_CODE` : PAS_DE_REPONSE* →
+    PAS_DE_REPONSE, A_RAPPELER, LIEN_ESPACE / _SIMULATION → LIEN_ESPACE, INJOIGNABLE_LIEN, LIEN_ESPACE_RAPPEL /
+    _NOUVEAU / SIMULATION_PRETE → LIEN_ESPACE_RAPPEL, RELANCE_DEVIS_1/2 → RELANCE_DEVIS ; accusés → A_RAPPELER, sans
+    effet) et le rappel posé (`rappelDe` : prochaine action « Rappeler… » datée du dossier, sinon `Lead.rappelLe`) ; si
+    le CRM aurait choisi une autre variante (tentatives, simulation du site), le code dit par Lucas est gardé et rempli
+    par `texteDuCatalogue` avec les mêmes variables (prénom, lien, `quandLisible`). Un rappel de dossier noté au jour
+    seul (`estJourSeul` de `agenda/rappels`, midi UTC sans `prochaineActionInstant`) se dit par son jour — « je vous
+    rappelle jeudi » — par `jourLisible` (nouvel export de `commercial/quand.ts` : aujourd'hui / demain / jeudi / le
+    12 octobre / prochainement), jamais « vers 14 h » (relecture). Un code de lien ouvre l'espace (et le dossier) s'il
+    le faut, comme `lien_espace`. La réponse ajoute « Texte noté : « … » ».
+  - Relance photos (relecture) : un code de lien (`CODES_LIEN_ESPACE`) sur un dossier que `relancesPhotosProposables(
+    maintenant, { dossierId })` rend (espace sans photo ni simulation, délai écoulé, < 2 relances) passe `relance:
+    { type: "PHOTOS", rang }` à `noterSmsCopie`, comme FeuilleRelances → EcranSms → Copier : la trace porte la relance,
+    `relancesFaites` monte, le plafond de 2 s'applique, effet « relance photos n° N comptée (2 au plus) ». Un texte
+    modifié sans le lien compte quand même (le code dit la relance). Un lien envoyé hors relance (rien de proposable)
+    n'en compte pas, comme l'écran Espaces.
+  - Double toucher (relecture) : quand `noterSmsCopie` rend `deja`, la réponse ne dit que « déjà noté il y a moins de
+    10 minutes : rien de plus n'est écrit » (ni « lien communiqué », ni « relance n° N comptée ») et `donnees.relance`
+    vaut null.
+  - texte seul → code LIBRE (« SMS copié : « … » ») ; code + texte → le texte tel quel sous ce code.
+  - RELANCE_DEVIS_1|2 → `relanceDuDossier` : le devis du dossier lu par `listerRelances(maintenant, { dossierId })`
+    (numéroté, visible, GENERE/ENVOYE, dossier en Devis envoyé / Relance) et son rang réel (relances faites + 1) ;
+    refus 409 clair sans dossier, sans devis, ou après 2 relances (rien d'écrit). Le rang n'a pas à être proposable
+    (délai) : un SMS envoyé compte. `noterSmsCopie` applique ensuite `verifierRelanceParSms` et `relanceDevisFaiteParSms`
+    (dossier en « Relance », mail du même rang annulé).
+  - Réponse : « Noté : SMS {code} envoyé à {nom} ({texte libre, } écrit dans l'histoire du dossier | écrit dans les
+    échanges du lead | déjà noté il y a moins de 10 minutes : rien de plus n'est écrit, lien de l'espace communiqué : la
+    main passe au client, relance n° N du devis {numéro} comptée (2 au plus, mail ou SMS)). » `donnees` = `CopieNotee`
+    + code, texte, relance. Par le nom, la cible résolue est le dossier (nom « Client — objet »), comme tout outil.
+- **`voir_relances`** : rien à changer (partie 6 : clients sans e-mail avec leur SMS, bloc « N relances photos
+  proposables : - Nom : espace ouvert il y a N jours, ni photo ni simulation — relance photos n° R (lien jamais envoyé).
+  SMS (code) : « … » [dossier:id] », textes figés par `mission-14-partie-6.test.ts`) ; vérifié par un test de la partie 8.
+- **`espaces_clients`** : `sans_photo_ni_simulation_depuis_jours?: 1..60` → `relancesPhotosProposables(maintenant, {
+  delai: N })` (nouvelle option `delai` de `relances/photos.ts` : la règle de la relance photos telle quelle — délai
+  compté depuis la plus récente de l'ouverture, du dernier lien communiqué et de la dernière relance photos ; 2 relances
+  au plus ; pas de STOP ; aucune simulation d'où qu'elle vienne ; aucune photo du client — avec N à la place de
+  DELAI_RELANCE_PHOTOS). Une ligne par projet : « - Nom : espace ouvert il y a N jours, ni photo ni simulation [(lien
+  jamais envoyé)], +336… — SMS (LIEN_ESPACE | LIEN_ESPACE_RAPPEL | LIEN_ESPACE_NOUVEAU) : « … » [dossier:id] » (le
+  numéro tel que `proposerSms` le rend, E.164), en-tête « N projets d'espace sans photo ni simulation depuis N jours
+  (rien n'est envoyé : Lucas copie le SMS, puis « noter_sms ») », `donnees` = les `RelancePhotos`. Sans le filtre :
+  inchangé (lit `maintenant` du contexte).
+- **`voir_parametres`** : `groupe` accepte aussi « SMS » (enum élargie, les autres valeurs inchangées). Bloc
+  « Catalogue SMS (Paramètres → SMS ; un texte se change par « modifier_parametres » avec sms_code + sms_texte ; …) : »
+  puis par groupe (`GROUPES_SMS`, `LIBELLES_GROUPE_SMS`) « - CODE — libellé[ (coupé)] : « texte en vigueur » »
+  (`listerCatalogue` : le texte de Lucas ou de départ). Placé après le solde OpenAI et avant la numérotation quand tout
+  est demandé (ordre et textes des autres blocs inchangés, `mcp-v3.test.ts` vert) ; avec `groupe: "SMS"` : ce seul
+  bloc (sans la ligne « Aucun secret… ») ; avec un autre groupe : absent. `donnees.sms` = le catalogue. Titre et
+  description à jour.
+- **`modifier_parametres`** : troisième forme, exclusive des deux autres, `sms_code` (enum `CODES_SMS`) + `sms_texte`
+  (1..600, `.trim()`) ; `.refine` : « Donne soit cle + valeur, soit automatisme + actif, soit sms_code + sms_texte. »
+  (`/Donne soit cle/` de mcp-v3 toujours vrai). `texteSmsAModifier(code, texte, poser)` : `verifierTexteSms` dès
+  l'aperçu (« Refusé : Texte SMS LIEN_ESPACE refusé : Le lien doit rester à la fin du message. », variable inconnue
+  idem, aucun jeton) ; l'aperçu ne lit que (`listerCatalogue` rend le texte de départ même sans ligne en base) ; la
+  ligne `ModeleSms` manquante n'est posée par `poserModelesParDefaut` qu'à l'exécution confirmée, sous l'acteur
+  ASSISTANT (relecture : l'aperçu d'un outil SENSIBLE n'écrit rien). Aperçu « Je vais remplacer le texte SMS {code}
+  ({libellé}) : « ancien » → « nouveau ». Il vaudra pour les prochains SMS proposés ; les SMS déjà copiés ne changent
+  pas. » puis, confirmé, `modifierModele(id, { texte })` : « Texte SMS {code} ({libellé}) remplacé : « nouveau »
+  (avant : « ancien »). Il vaut pour les prochains SMS proposés. » Description et titre à jour.
+- **`dossiers_par_etape`** et **`lire_fiche`** (ajout de l'orchestrateur + relecture) : la main lue par la règle unique
+  `dossiers/pilotage.ts › mainDe` (étape + main rangée + retard), par un seul `quiALaMain` de `lecture.ts` : « à toi »,
+  « à toi : à relancer » (A_RELANCER : l'étape attend le client mais la prochaine action est dépassée — c'est à Lucas de
+  relancer, comme `estAFaire`, la carte « à relancer » et la rédaction mail), « chez le client », « personne » pour un
+  dossier perdu ou encaissé (main nulle) — plus jamais « (à toi) » pour un Perdu. `lire_fiche` écrit « la main est à
+  personne / à toi / à toi : à relancer / chez le client » (avant : « à toi » pour tout ce qui n'était pas CLIENT).
+- **`archiver` / `supprimer`** (relecture) : les textes renvoient à « leads_a_rappeler » pour « À rappeler » (« tous sauf
+  X » : lister les deux listes, 50 par page, toutes les pages) au lieu de « ce_qui_m_attend » (qui ne rend que les
+  rappels dus ce soir).
+- **Consignes** (`assistant/consignes.ts`) : nouvelle `SECTION_MISSION14` « ## Appels, rappels, SMS (mission 14) »,
+  jointe à la lecture comme les trois autres (garde `^## Appels, rappels, SMS`), donc en prod (texte par défaut) et pour
+  un texte de Lucas qui ne l'a pas : « qui dois-je appeler / rappeler ? » → `leads_a_appeler` / `leads_a_rappeler` ;
+  après `noter_appel`, lire le SMS proposé tel quel, c'est Lucas qui le copie ; quand il dit l'avoir envoyé →
+  `noter_sms` (code, texte s'il l'a modifié, ou le texte rédigé par Claude : court, vouvoiement, lien en fin) ; aucun
+  SMS ne part tout seul (sauf les deux accusés) ; `voir_relances`, `espaces_clients` filtré, catalogue SMS par
+  `voir_parametres` (groupe SMS) / `modifier_parametres`. La puce `lien_espace` de `SECTION_ACTIONS` renvoie aussi à
+  `noter_sms`.
+- Tests : `base/mission-14-partie-8.test.ts` (14) : registre à 80, niveaux et paramètres des deux outils, vrai client
+  MCP en mémoire (`InMemoryTransport` du SDK sur `construireServeur`) → `ecartAvecLeServeur` vide, 80 outils,
+  « [Lecture] » / « [Écriture réversible] », ressource consignes avec la section ; consignes par défaut et un texte de
+  Lucas enregistré (sans la section → jointe à la lecture, puis retour au défaut) ; rappel au jour seul → « jeudi », à
+  l'heure → « jeudi vers 10 h » ; double toucher (lien et relance de devis) sans effet annoncé, `relance` null ;
+  relance photos par `noter_sms` (n° 1 au premier lien, trace `{ type: "PHOTOS", rang: 1 }`, n° 2 à +10 j avec un
+  texte sans lien, plus rien à +20 j, lien hors relance non compté) ; aperçu sms sans ligne en base (rien de posé) puis
+  confirmation (ligne posée et réécrite) ; A_RELANCER « (à toi : à relancer) » et « lire_fiche » sur les quatre cas ;
+  `leads_a_rappeler` (ordre hier / aujourd'hui / jeudi / sans date ancien / sans date récent, en-tête « 5 leads à
+  rappeler dont 1 en retard, 1 aujourd'hui », « rappel dim. 27 sept. 18:00 EN RETARD », « rappel sans date », « dernier
+  appel … (pas de réponse) », jamais appelé absent, pages 2 sur 3, page vide, limite 200 refusée) ; `noter_appel` pas
+  de réponse (SMS A exact + renvoi à `noter_sms`, rien tracé) puis `noter_sms` code seul (texte recomposé « demain vers
+  18 h », échange SMS, journal FAIT/REVERSIBLE) ; intéressé (SMS LIEN_ESPACE avec le lien) puis `noter_sms` par le nom →
+  NON_ENVOYE tombe, main CLIENT « Lien de son espace envoyé… », SMS_COPIE origine ASSISTANT, double toucher → une
+  trace ; texte seul → LIBRE ; ni l'un ni l'autre → « Paramètres invalides » ; code + texte modifié → le texte ;
+  RELANCE_DEVIS_1 (dossier sans e-mail, devis à J-6) → relance n° 1 comptée, « Relance », `listerRelances` 1/2/non
+  proposable, RELANCE_DEVIS_2 à +6 j → 2, 3ᵉ → « Refusé : Déjà 2 relances… » sans trace, sans dossier → refus ;
+  `espaces_clients` filtré (4 j : présent pour N = 3 avec téléphone et SMS LIEN_ESPACE « lien jamais envoyé », absent
+  pour N = 5 ; `voir_relances` le montre ; `noter_sms` LIEN_ESPACE → absent tout de suite, LIEN_ESPACE_RAPPEL à +10 j ;
+  sans filtre : la liste d'avant ; N = 60 : « Aucun projet… ») ; `voir_parametres` groupe SMS (14 codes, groupes et
+  textes exacts, sans paramètres ni numérotation), sans groupe (groupes < catalogue SMS < numérotation < automatismes),
+  COMMERCIAL sans catalogue ; `modifier_parametres` sms (aperçu exact et jeton, rien d'écrit, confirmation, texte en
+  vigueur et `voir_parametres` et `noter_appel` A_RAPPELER qui suivent, lien au milieu et `{prénom}` refusés sans
+  jeton, quatre formes invalides, cle + valeur toujours acceptée) ; `dossiers_par_etape` (Perdu « (personne) »,
+  Qualification « (à toi) », filtre PERDU). Adaptés : `mcp/mcp-v3.test.ts` (les deux noms dans tools/list),
+  `assistant/assistant.test.ts` (`leads_a_rappeler` parmi les lectures exécutées avec `{}`). Verts sans changement :
+  `mcp.test.ts`, `mcp-v2.test.ts`, `mcp-mail.test.ts`, `mission-14-partie-1/2/3/4/5/6/7.test.ts`,
+  `relances/relances.test.ts`, `sms/sms.test.ts`, `espace/devis-multiples.test.ts` (relus après la relecture).
+- Relecture (29/09, trois relecteurs, dix constats tous réels, tous corrigés) : relance photos jamais comptée par
+  `noter_sms` ; double toucher qui annonçait des effets ; A_RELANCER rendu « chez le client » (`dossiers_par_etape`) et
+  « à toi » pour un Perdu (`lire_fiche`) ; aperçu de `modifier_parametres` qui posait des lignes ; rappel au jour seul
+  lu « vers 14 h » ; `archiver` qui renvoyait à `ce_qui_m_attend` ; cas de test des consignes qui ne testait rien.
+- Décisions là où la conception laissait le choix : le filtre d'`espaces_clients` est exactement la règle de la relance
+  photos (cap de 2, STOP, référence au dernier lien) avec N ; `groupe: "SMS"` ne rend que le bloc, sans la ligne
+  « Aucun secret » ; le bloc SMS vient après le solde OpenAI (qui appartient au groupe Simulateur) ; `noter_sms` avec
+  un code de relance ne vérifie pas que la relance est déjà proposable (délai), seulement le devis et le plafond ; le
+  code dit par Lucas prime sur la variante que le CRM aurait choisie ; `leads_a_rappeler` pagine par
+  `listerLeads({ page, parPage })` plutôt que par `limite` ; le texte « {N}ᵉ appel sans réponse d'affilée » de la
+  partie 4 est gardé (plus juste que « 3ᵉ tentative »).
+- Reste / à savoir : reconnecter le connecteur Claude (80 outils, nouvelle empreinte). Un `noter_sms` avec un code de
+  lien sur un lead sans dossier ouvre son dossier et son espace pour composer le texte (comme `lien_espace`), même si
+  Lucas a en fait envoyé un texte sans lien : donner le texte évite l'ouverture. Le numéro rendu par le filtre
+  d'`espaces_clients` est en E.164 (celui de `proposerSms`), pas au format « 06 12 … ». Docs
+  (`ARCHITECTURE-PILOTAGE.md`, liste des outils) : partie 9.
+- Vérifié : tsc, eslint, suite complète 674/674, build.

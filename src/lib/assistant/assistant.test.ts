@@ -360,7 +360,7 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
   });
 
   test("les cinq managers et les outils de lecture répondent sans erreur, avec leurs définitions", async () => {
-    for (const nom of ["manager_commercial", "manager_finances", "manager_marketing", "manager_clients", "manager_operations", "synthese", "ce_qui_m_attend", "leads_a_appeler", "dossiers_par_etape", "espaces_clients", "mails_a_traiter", "campagne", "sante_systeme"]) {
+    for (const nom of ["manager_commercial", "manager_finances", "manager_marketing", "manager_clients", "manager_operations", "synthese", "ce_qui_m_attend", "leads_a_appeler", "leads_a_rappeler", "dossiers_par_etape", "espaces_clients", "mails_a_traiter", "campagne", "sante_systeme"]) {
       const r = await appeler(nom, {});
       assert.ok(r.texte.length > 20, nom);
       assert.doesNotMatch(r.texte, /a échoué|^Refusé|Paramètres invalides/, `${nom} : ${r.texte.slice(0, 200)}`);

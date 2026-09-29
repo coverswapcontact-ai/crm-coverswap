@@ -228,7 +228,7 @@ export const SECTION_ACTIONS = `## Dossiers, photos, espace (mission 10)
 - Doute sur le dossier visé (deux Rousse, deux projets d'un même client) : demande lequel avant d'agir, ne choisis jamais.
 - Avant de conseiller une teinte ou de préparer une simulation, regarde les photos (« voir_photos ») et les simulations déjà faites (« voir_simulations ») : tu parles de ce que tu as vu, tu dis ce que tu n'as pas pu voir.
 - Une réponse dans l'espace (« repondre_espace ») est courte, vouvoie, ne promet ni prix ni date absents du CRM ; ce qui manque s'écrit « [à compléter] », et l'envoi est alors bloqué. Elle est sensible : aperçu, confirmation de Lucas.
-- « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM) ; « modifier_consignes » et « modifier_tarifs » montrent l'aperçu avant et gardent l'historique ; « depenses » répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
+- « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM ; quand Lucas dit l'avoir envoyé : « noter_sms ») ; « modifier_consignes » et « modifier_tarifs » montrent l'aperçu avant et gardent l'historique ; « depenses » répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
 - Toute action en lot (plus de trois éléments) reste sensible : aperçu puis confirmation.`;
 
 /** Section « Devis multiples, contacts, réglages » (mission 11), jointe aux consignes si elles ne l'ont pas. */
@@ -241,12 +241,20 @@ export const SECTION_MISSION11 = `## Devis multiples, contacts, réglages (missi
 - « voir_parametres » / « modifier_parametres » : campagne, capacité (réserve de trésorerie, chantiers par mois), délais, solde OpenAI, et les interrupteurs des automatismes (mails de l'espace, SMS d'accusé, séquences, IA du CRM) — toute modification sous confirmation ; jamais un secret. « voir_relances » / « relancer » / « annuler_relance » pour les relances de devis.
 - Un outil que « lister_outils » rend mais que l'application dit « not registered » : demande à Lucas de reconnecter le connecteur (Paramètres → Connecteurs → CRM CoverSwap), puis réessaie.`;
 
+/** Section « Appels, rappels, SMS » (mission 14) : les deux listes de leads, la fin d'appel, les SMS à copier ; jointe aux consignes si elles ne l'ont pas. */
+export const SECTION_MISSION14 = `## Appels, rappels, SMS (mission 14)
+- « Qui dois-je appeler ? » → « leads_a_appeler » (les jamais appelés, le plus récent en haut). « Qui dois-je rappeler ? » → « leads_a_rappeler » (les rappels datés dans l'ordre, retards en tête, puis les rappels sans date) ; « point_du_jour » et « ce_qui_m_attend » comptent les mêmes rappels.
+- Après un appel, « noter_appel » avec l'issue : pas de réponse (rappel demain 18 h à défaut, tentatives comptées), à rappeler (le moment dicté, ou sans date), intéressé (dossier et espace ouverts), pas intéressé (motif_perte obligatoire). Sa réponse donne le SMS proposé (code et texte) : lis-le à Lucas tel quel, c'est lui qui le copie dans Messages. Aucun SMS ne part tout seul (sauf les deux accusés de réception automatiques) : ni toi ni le CRM n'envoyez de SMS.
+- Quand Lucas dit avoir envoyé un SMS (« c'est envoyé », « je lui ai envoyé le lien »), « noter_sms » avec le code (et le texte s'il l'a modifié) : mêmes effets que « Copier » (trace dans l'histoire, lien communiqué → main au client, relance de devis comptée). Un SMS que tu rédiges pour lui : court, vouvoiement, le lien de l'espace en fin de message, puis « noter_sms » avec ce texte quand il l'a envoyé.
+- « voir_relances » liste les relances à faire (devis : mail à valider et SMS à copier ; espaces sans photo ni simulation) ; « espaces_clients » avec sans_photo_ni_simulation_depuis_jours donne le téléphone et le SMS du lien. Les textes SMS se lisent par « voir_parametres » (groupe SMS) et se changent par « modifier_parametres » (sms_code + sms_texte, sous confirmation).`;
+
 export const lireConsignes = async (): Promise<TexteReglable> => {
   const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
   let texte = t.texte.trim();
   if (!/^## Mail/m.test(texte)) texte = `${texte}\n\n${SECTION_MAIL}`;
   if (!/^## Dossiers, photos, espace/m.test(texte)) texte = `${texte}\n\n${SECTION_ACTIONS}`;
   if (!/^## Devis multiples, contacts, réglages/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION11}`;
+  if (!/^## Appels, rappels, SMS/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION14}`;
   return texte === t.texte.trim() ? t : { ...t, texte };
 };
 export const enregistrerConsignes = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_CONSIGNES, texte, par, commande);

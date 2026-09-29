@@ -8,6 +8,7 @@ import { depensesDuDossier } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } from "@/lib/dossiers/constants";
 import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
+import { mainDe } from "@/lib/dossiers/pilotage";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { rappelConnexionGoogle } from "@/lib/google/connexion";
@@ -18,6 +19,9 @@ import { resumeChaineMeta } from "@/lib/meta/sante";
 import { lireParametres } from "@/lib/parametres/service";
 import { chargerEntrant } from "@/lib/prospects/entrants";
 import { listerLeads } from "@/lib/prospects/leads";
+import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
+import { issueDuContenu } from "@/lib/commercial/sans-reponse";
+import { relancesPhotosProposables } from "@/lib/relances/photos";
 import { listerSimulationsDossier } from "@/lib/simulations/dossier";
 import { calculerAlertes } from "@/lib/synthese/alertes";
 import { calculerSynthese } from "@/lib/synthese/calcul";
@@ -27,7 +31,7 @@ import { definirOutil, format, lien, type LienOutil } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
 import { titreDossier } from "@/lib/commun/format";
-import { accord, pluriel } from "@/lib/commun/format";
+import { accord, jourSemaineHeure, pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils de lecture (mission 8) : trouver, lire, lister ce qui attend,
@@ -101,6 +105,16 @@ function ligneEtape(etape: string) {
   return LIBELLES_ETAPE[etape as EtapeDossier] ?? etape;
 }
 
+/**
+ * Mission 14 (partie 8) : qui a la main, par la règle unique (`dossiers/pilotage.ts › mainDe` : étape, main rangée,
+ * retard) — « à toi », « à toi : à relancer » (l'étape attend le client mais la prochaine action est dépassée),
+ * « chez le client », « personne » (dossier perdu ou encaissé). Les mêmes mots dans « lire_fiche » et « dossiers_par_etape ».
+ */
+function quiALaMain(d: { etape: string; prochaineActionDate: string | null; main: "MOI" | "CLIENT" | null }, maintenant: Date): string {
+  const main = mainDe({ etape: d.etape as EtapeDossier, prochaineActionDate: d.prochaineActionDate, main: d.main }, maintenant);
+  return main === "AUCUNE" ? "personne" : main === "MOI" ? "à toi" : main === "A_RELANCER" ? "à toi : à relancer" : "chez le client";
+}
+
 export const outilLireFiche = definirOutil({
   nom: "lire_fiche",
   titre: "Lire une fiche complète",
@@ -108,7 +122,7 @@ export const outilLireFiche = definirOutil({
     "Rend tout ce que le CRM sait d'un dossier (étape, qui a la main, prochaine action, devis et factures, paiements, simulations, notes d'appel, dépenses, historique récent), d'un client (coordonnées, dossiers, leads) ou d'un lead (demande, source, réponses au formulaire, échanges). Utilise-le pour « où en est le dossier X ? ». Donne un identifiant ou un nom.",
   niveau: "LECTURE",
   schema: schemaCible,
-  executer: async (cible) => {
+  executer: async (cible, contexte) => {
     let ids;
     try {
       ids = await resoudreCible(cible);
@@ -125,8 +139,9 @@ export const outilLireFiche = definirOutil({
       const depenses = await depensesDuDossier(d.id).catch(() => ({ depenses: [], total: 0 }));
       const devis = d.documents.filter((x) => x.type === "DEVIS");
       const factures = d.documents.filter((x) => x.type === "FACTURE");
+      const main = quiALaMain(d, contexte.maintenant);
       parties.push(
-        `Dossier ${titreDossier(d)} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${d.main === "CLIENT" ? "chez le client" : "à toi"}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
+        `Dossier ${titreDossier(d)} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${main === "personne" ? "à personne" : main}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
         d.prochaineAction ? `Prochaine action : ${d.prochaineAction}${d.prochaineActionDate ? ` le ${format.jour(d.prochaineActionDate)}` : ""}.` : "Pas de prochaine action notée.",
         d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
         d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
@@ -189,19 +204,46 @@ export const outilLeadsAAppeler = definirOutil({
   },
 });
 
+export const outilLeadsARappeler = definirOutil({
+  nom: "leads_a_rappeler",
+  titre: "Les leads à rappeler",
+  description:
+    "La liste « À rappeler » de l'écran Leads, dans le même ordre : les leads déjà appelés ou avec un rappel daté — d'abord les rappels datés du plus ancien au plus lointain (les retards en tête, marqués EN RETARD), puis les rappels sans date, le plus ancien appel d'abord. Par lead : nom, ville, source, téléphone, tentatives (appels sans réponse d'affilée), le rappel (« jeu. 1 oct. 18:00 » ou « sans date ») et le dernier appel (date, issue). Réponse à « qui dois-je rappeler ? ». Les jamais appelés sont dans « leads_a_appeler ». Pages de 20 (« limite », « page »).",
+  niveau: "LECTURE",
+  schema: z.object({ limite: z.number().int().min(1).max(50).optional().describe("Lignes par page (20 par défaut)."), page: z.number().int().min(1).optional().describe("Page à lire (1 par défaut).") }),
+  executer: async ({ limite, page }, contexte) => {
+    // Mission 14 (partie 8) : la liste « À rappeler » seule, triée et paginée côté serveur comme l'écran.
+    const liste = await listerLeads({ vue: "A_RAPPELER", page: page ?? 1, parPage: limite ?? 20 }, contexte.maintenant);
+    const { aRappeler, enRetard, aujourdhui } = liste.compteurs;
+    const total = liste.total ?? liste.lignes.length;
+    const pages = Math.max(1, Math.ceil(total / (liste.parPage || 1)));
+    const entete = `${pluriel(aRappeler, "lead")} à rappeler dont ${enRetard} en retard, ${aujourdhui} aujourd'hui${pages > 1 ? ` (page ${liste.page} sur ${pages})` : ""}`;
+    const ligne = (l: (typeof liste.lignes)[number]) => {
+      const issue = l.dernierAppel ? issueDuContenu(l.dernierAppel.contenu) : null;
+      const dernierAppelLe = l.dernierAppelLe ?? l.dernierAppel?.le ?? null;
+      const dernier = dernierAppelLe ? `dernier appel ${jourSemaineHeure(dernierAppelLe)}${issue ? ` (${LIBELLES_ISSUE[issue].toLowerCase()})` : ""}` : "aucun appel noté";
+      const rappel = l.rappelLe ? `rappel ${jourSemaineHeure(l.rappelLe)}${l.enRetard ? " EN RETARD" : ""}` : "rappel sans date";
+      return `- ${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.libelleSource}, ${l.telephone ?? "numéro illisible"}, ${pluriel(l.tentatives, "tentative")}, ${rappel}, ${dernier} [lead:${l.id}]`;
+    };
+    const texte = liste.lignes.length ? `${entete} :\n${liste.lignes.map(ligne).join("\n")}` : aRappeler ? `${entete} : cette page est vide.` : "Personne dans « À rappeler ».";
+    return { texte, donnees: { compteurs: liste.compteurs, page: liste.page, pages, total, lignes: liste.lignes }, liens: [lien("Leads", "/leads?liste=rappeler")] };
+  },
+});
+
 export const outilDossiersParEtape = definirOutil({
   nom: "dossiers_par_etape",
   titre: "Les dossiers, par étape",
   description: "Tous les dossiers en cours, groupés par étape (qualification, simulation, devis envoyé, relance, signé, planifié, chantier, facturé, encaissé), avec qui a la main et la prochaine action. Filtre possible sur une étape.",
   niveau: "LECTURE",
   schema: z.object({ etape: z.enum(ETAPES).optional().describe("Une seule étape, sinon toutes.") }),
-  executer: async ({ etape }) => {
+  executer: async ({ etape }, contexte) => {
     const dossiers = (await listerDossiers()).filter((d) => !etape || d.etape === etape);
     const groupes = new Map<string, typeof dossiers>();
     for (const d of dossiers) groupes.set(d.etape, [...(groupes.get(d.etape) ?? []), d]);
+    // Mission 14 (partie 8) : la règle unique de la main — un dossier perdu ou encaissé n'est à personne, un retard chez le client est à relancer.
     const texte = [...groupes.entries()]
       .sort((a, b) => ETAPES.indexOf(a[0] as EtapeDossier) - ETAPES.indexOf(b[0] as EtapeDossier))
-      .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${titreDossier(d)}${d.main === "CLIENT" ? " (chez le client)" : " (à toi)"}${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
+      .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${titreDossier(d)} (${quiALaMain(d, contexte.maintenant)})${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
       .join("\n");
     return { texte: texte || "Aucun dossier.", donnees: dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime })), liens: [lien("Dossiers", "/dossiers")] };
   },
@@ -231,11 +273,23 @@ export const outilCeQuiMAttend = definirOutil({
 export const outilEspacesClients = definirOutil({
   nom: "espaces_clients",
   titre: "Les espaces clients et leur état",
-  description: "Chaque client qui a un espace : lien actif ou non, jamais ouvert ou vu récemment, projets en cours, ce qu'il attend (de lui ou de Lucas), signaux (lien jamais ouvert, photos sans simulation, demande d'un projet de plus…).",
+  description:
+    "Chaque client qui a un espace : lien actif ou non, jamais ouvert ou vu récemment, projets en cours, ce qu'il attend (de lui ou de Lucas), signaux (lien jamais ouvert, photos sans simulation, demande d'un projet de plus…). Avec « sans_photo_ni_simulation_depuis_jours » (N) : seulement les projets d'espace ouverts depuis N jours sans aucune photo ni simulation (la règle de la relance photos, N à la place de DELAI_RELANCE_PHOTOS), avec le téléphone et le SMS du lien à copier (LIEN_ESPACE_RAPPEL, ou LIEN_ESPACE si le lien ne lui a jamais été communiqué) ; une fois envoyé : « noter_sms ».",
   niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional() }),
-  executer: async ({ limite }) => {
-    const clients = (await listerClientsEspaces()).slice(0, limite ?? 30);
+  schema: z.object({
+    limite: z.number().int().min(1).max(50).optional(),
+    sans_photo_ni_simulation_depuis_jours: z.number().int().min(1).max(60).optional().describe("N : ne rend que les projets d'espace sans photo ni simulation depuis N jours, avec téléphone et SMS."),
+  }),
+  executer: async ({ limite, sans_photo_ni_simulation_depuis_jours: jours }, contexte) => {
+    if (jours) {
+      // Mission 14 (partie 8) : la règle de la relance photos (relances/photos.ts), avec N à la place du paramètre.
+      const projets = (await relancesPhotosProposables(contexte.maintenant, { delai: jours })).slice(0, limite ?? 30);
+      const ligne = (p: (typeof projets)[number]) =>
+        `- ${p.clientNom} : espace ouvert il y a ${pluriel(p.joursDepuisOuverture, "jour")}, ni photo ni simulation${p.lienCommunique ? "" : " (lien jamais envoyé)"}, ${p.sms?.telephone ?? "numéro inconnu"} — ${p.sms ? `SMS (${p.sms.code}) : « ${p.sms.texte} »` : "SMS indisponible (voir la fiche du dossier)"} [dossier:${p.dossierId}]`;
+      const texte = projets.length ? `${pluriel(projets.length, "projet d'espace", "projets d'espace")} sans photo ni simulation depuis ${pluriel(jours, "jour")} (rien n'est envoyé : Lucas copie le SMS, puis « noter_sms ») :\n${projets.map(ligne).join("\n")}` : `Aucun projet d'espace sans photo ni simulation depuis ${pluriel(jours, "jour")}.`;
+      return { texte, donnees: projets, liens: [lien("Espaces clients", "/espaces")] };
+    }
+    const clients = (await listerClientsEspaces(contexte.maintenant)).slice(0, limite ?? 30);
     const texte = clients.length
       ? clients.map((c) => `${c.clientNom}${c.ville ? ` (${c.ville})` : ""} : ${c.revoque ? "lien désactivé" : c.premierAccesLe ? `vu ${c.nbAcces} fois, dernière visite ${format.jourCourt(c.dernierAccesLe)}` : "jamais ouvert"} ; ${pluriel(c.projetsEnCours, "projet")} en cours ; ${c.attente.qui === "MOI" ? "attend Lucas" : c.attente.qui === "CLIENT" ? "attend le client" : "rien en attente"} — ${c.attente.libelle}${c.signaux.length ? ` ; signaux : ${c.signaux.map((s) => s.libelle).join(", ")}` : ""} [client:${c.clientId}]`).join("\n")
       : "Aucun espace client ouvert.";
@@ -369,4 +423,4 @@ export const outilSanteSysteme = definirOutil({
   },
 });
 
-export const OUTILS_LECTURE = [outilChercher, outilLireFiche, outilLeadsAAppeler, outilDossiersParEtape, outilCeQuiMAttend, outilEspacesClients, outilMailsATraiter, outilSynthese, outilCampagne, outilSanteSysteme];
+export const OUTILS_LECTURE = [outilChercher, outilLireFiche, outilLeadsAAppeler, outilLeadsARappeler, outilDossiersParEtape, outilCeQuiMAttend, outilEspacesClients, outilMailsATraiter, outilSynthese, outilCampagne, outilSanteSysteme];

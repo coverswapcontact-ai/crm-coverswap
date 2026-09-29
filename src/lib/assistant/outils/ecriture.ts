@@ -119,7 +119,7 @@ export const outilNoterAppel = definirOutil({
   nom: "noter_appel",
   titre: "Noter un appel",
   description:
-    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte) : rien n'est envoyé, Lucas le copie.",
+    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte, le lien de l'espace compris pour « intéressé ») : rien n'est envoyé, lis-le à Lucas, il le copie dans Messages ; quand il dit l'avoir envoyé, « noter_sms » avec ce code.",
   niveau: "REVERSIBLE",
   schema: schemaCible.extend({
     issue: z.enum(ISSUES_APPEL),
@@ -145,10 +145,11 @@ export const outilNoterAppel = definirOutil({
       { ...(r.ids.dossierId ? { dossierId: r.ids.dossierId } : { leadId: r.ids.leadId ?? undefined }), issue: e.issue, note: e.texte ?? "", rappelLe, ...(e.issue === "PAS_INTERESSE" ? { motifPerte: e.motif_perte } : {}) },
       contexte.maintenant
     );
-    // Mission 14 (partie 4) : le SMS proposé est dans la réponse (Lucas le copie depuis la conversation) ; plus de mail proposé.
+    // Mission 14 (parties 4 et 8) : le SMS proposé est dans la réponse (Lucas le copie depuis la conversation) ; plus de
+    // mail proposé ; une fois envoyé, « noter_sms » trace la copie.
     const lignes = [`${suite.resume} (${r.ids.nom})`];
     if (suite.proposerSansSuite) lignes.push(`${suite.tentatives}ᵉ appel sans réponse d'affilée : propose à Lucas de classer sans suite (motif « Plus de réponse »), sans l'imposer.`);
-    if (suite.sms) lignes.push(`SMS proposé (${suite.sms.code}) : « ${suite.sms.texte} »`);
+    if (suite.sms) lignes.push(`SMS proposé (${suite.sms.code}) : « ${suite.sms.texte} » — une fois envoyé, dis-le-moi (« noter_sms »).`);
     return {
       texte: lignes.join("\n"),
       donnees: suite,

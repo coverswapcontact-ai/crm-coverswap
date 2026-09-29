@@ -342,7 +342,8 @@ describe("Mission 10 : les actions qui manquaient", () => {
     const t = await appeler("lien_espace", { nom: "Sansmail", commande: "Donne-moi le lien de l'espace de Karim, je lui envoie par SMS" });
     assert.match(t, /Espace ouvert pour Karim Sansmail \(0600000033\)\. Rien n'a été envoyé/);
     assert.match(t, /Lien : https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_.-]+/);
-    assert.match(t, /SMS :\nBonjour Karim, comme convenu, voici votre espace personnel : déposez-y 2 ou 3 photos de la pièce/);
+    // Mission 14 (partie 5) : le SMS vient du catalogue (LIEN_ESPACE), le lien en dernier.
+    assert.match(t, /SMS :\nBonjour Karim, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. https:\/\/coverswap\.fr\/e\/[A-Za-z0-9_.-]+$/m);
     assert.doesNotMatch(t, /Il a aussi un e-mail/);
     const dossier = await prisma.dossier.findFirstOrThrow({ where: { leadId: ids.leadKarim } });
     assert.ok(await prisma.espaceClient.findUnique({ where: { dossierId: dossier.id } }), "l'espace existe");
@@ -351,7 +352,7 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossier.id } })).main, "CLIENT");
     const rappel = await appeler("lien_espace", { dossierId: dossier.id, code: "LIEN_ESPACE_RAPPEL", commande: "Redonne-moi le lien de Karim" });
     assert.match(rappel, /Espace déjà ouvert/);
-    assert.match(rappel, /voici à nouveau le lien de votre espace/);
+    assert.match(rappel, /Voici à nouveau le lien de votre espace, tout votre projet y est à jour : https:\/\/coverswap\.fr\/e\//);
   });
 
   test("« Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie, rattaché ou non", async () => {

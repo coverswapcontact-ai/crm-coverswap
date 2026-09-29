@@ -47,3 +47,28 @@ export function aHeureParis(maintenant: Date, joursPlusTard: number, heure: numb
   const essai = voulue - decalageParis(new Date(voulue));
   return new Date(voulue - decalageParis(new Date(essai)));
 }
+
+const JOURS_SEMAINE = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const JOUR_MS = 86_400_000;
+
+/**
+ * Mission 14 (partie 5) — le moment d'un rappel, tel qu'un SMS le dit au client
+ * (`{quand}`), en heure de Paris : « aujourd'hui vers 14 h » (avant 18 h), « ce
+ * soir vers 18 h » (18 h ou plus), « demain vers 18 h », « jeudi vers 10 h » (dans
+ * les 6 jours), « le 12 octobre vers 10 h » au-delà ; « vers 10 h 30 » quand les
+ * minutes ne sont pas nulles. Sans date, ou un jour déjà passé : « prochainement ».
+ */
+export function quandLisible(date: Date | null | undefined, maintenant: Date): string {
+  if (!date || Number.isNaN(date.getTime())) return "prochainement";
+  const vise = murale(date);
+  const jour = murale(maintenant);
+  const jourVise = Date.UTC(vise.annee, vise.mois - 1, vise.jour);
+  const ecart = Math.round((jourVise - Date.UTC(jour.annee, jour.mois - 1, jour.jour)) / JOUR_MS);
+  if (ecart < 0) return "prochainement";
+  const heure = `vers ${vise.heure} h${vise.minute ? ` ${String(vise.minute).padStart(2, "0")}` : ""}`;
+  if (ecart === 0) return vise.heure >= 18 ? `ce soir ${heure}` : `aujourd'hui ${heure}`;
+  if (ecart === 1) return `demain ${heure}`;
+  if (ecart <= 6) return `${JOURS_SEMAINE[new Date(jourVise).getUTCDay()]} ${heure}`;
+  return `le ${vise.jour === 1 ? "1er" : vise.jour} ${MOIS[vise.mois - 1]} ${heure}`;
+}

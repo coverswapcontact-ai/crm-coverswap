@@ -13,6 +13,7 @@ let taches: typeof import("./taches");
 let modeles: typeof import("./modeles");
 let simulateur: typeof import("./fournisseurs/simulateur");
 let texte: typeof import("./texte");
+let catalogue: typeof import("./catalogue");
 
 function reglerEnvironnement(): void {
   // Aucun canal d'alerte réel pendant les essais ; le fournisseur est le simulateur.
@@ -31,6 +32,7 @@ before(async () => {
   modeles = await import("./modeles");
   simulateur = await import("./fournisseurs/simulateur");
   texte = await import("./texte");
+  catalogue = await import("./catalogue");
   await modeles.poserModelesParDefaut();
 });
 after(async () => {
@@ -50,12 +52,23 @@ describe("texte d'un SMS", () => {
     assert.equal(texte.simplifierPourGsm("Votre simulation est prête — « ça » vous plaît ? 😀"), 'Votre simulation est prete - "ca" vous plait ? ');
   });
 
-  test("les messages types par défaut tiennent dans l'alphabet GSM-7, l'accusé en deux SMS au plus", () => {
-    for (const modele of modeles.MODELES_PAR_DEFAUT) {
-      const mesure = texte.mesurerSms(modele.texte.replace(/\{\w+\}/g, ""));
+  // Mission 14 (partie 5) : l'exigence GSM-7 ne vaut que pour ce que le fournisseur peut envoyer (facturé au SMS) —
+  // drapeau `fournisseur` : les accusés, l'ancien circuit, le nouveau lien et la simulation en ligne. Les SMS copiés
+  // partent du téléphone de Lucas : le texte B dit « À très vite ».
+  test("les messages envoyés par le fournisseur tiennent dans l'alphabet GSM-7, l'accusé en deux SMS au plus", () => {
+    const parLeFournisseur = catalogue.CATALOGUE_SMS.filter((modele) => modele.fournisseur);
+    assert.deepEqual(
+      parLeFournisseur.map((modele) => modele.code),
+      ["ACCUSE_RECEPTION", "ACCUSE_RECEPTION_HORS_HORAIRES", "LIEN_ESPACE_NOUVEAU", "SIMULATION_PRETE", "INJOIGNABLE_J3", "RELANCE_PHOTOS", "RELANCE_SIMULATION", "RELANCE_DEVIS", "RELANCE_DEVIS_QUESTIONS", "RELANCE_DERNIERE"]
+    );
+    assert.ok(catalogue.CATALOGUE_SMS.filter((modele) => modele.automatique || modele.groupe === "ANCIEN").every((modele) => modele.fournisseur));
+    for (const modele of parLeFournisseur) {
+      const mesure = texte.mesurerSms(modele.defaut.replace(/\{\w+\}/g, ""));
       assert.deepEqual(mesure.horsGsm, [], `${modele.code} contient des caractères hors GSM-7`);
     }
-    const accuseRempli = texte.remplirModele(modeles.MODELES_PAR_DEFAUT[0].texte, { prenom: "Marie-Christine" });
+    assert.deepEqual(texte.mesurerSms(catalogue.definitionSms("A_RAPPELER")!.defaut).horsGsm, ["À"], "un SMS copié peut sortir de l'alphabet GSM-7");
+    assert.equal(catalogue.CATALOGUE_SMS[0].code, "ACCUSE_RECEPTION");
+    const accuseRempli = texte.remplirModele(catalogue.CATALOGUE_SMS[0].defaut, { prenom: "Marie-Christine" });
     assert.ok(texte.mesurerSms(accuseRempli).segments <= 2, "l'accusé doit rester court");
     assert.match(accuseRempli, /STOP/);
   });

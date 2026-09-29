@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ExternalLink, FolderPlus, Link2, Mail, Pencil, Phone, UserRound, X } from "lucide-react";
+import { Archive, ArchiveRestore, ExternalLink, FolderPlus, Link2, Mail, MessageSquare, Pencil, Phone, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { NotesAppelDuLead, noterDebutAppel } from "@/components/pilotage/NotesAppel";
+import { ouvrirEcranSms } from "@/components/pilotage/sms/EcranSms";
 import { Bouton, Champ, Modale, Pastille, Puces, TitreSection, ZoneTexte } from "@/components/pilotage/ui";
 import { LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type EtapeDossier, type MotifPerte } from "@/lib/dossiers/constants";
 import { formatDateCourte, formatHorodatage } from "@/lib/dossiers/dates";
@@ -113,6 +114,8 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
     }
   }
 
+  const relire = () => appelApi<{ entrant: EntrantDetail }>(`/api/prospects/entrants/${detail.id}`).then((reponse) => onMisAJour(reponse.entrant)).catch(() => undefined);
+
   const statutManuel = (STATUTS_LEAD_MANUELS as readonly string[]).includes(detail.statut) ? (detail.statut as StatutLeadManuel) : null;
   /** Mission 14 (partie 3) : la date de rappel, changée d'un geste (effacée : « Sans date » dans « À rappeler » s'il a déjà été appelé, sinon retour dans « À appeler »). */
   const poserRappel = (rappelLe: string | null) => void appeler("rappel", `/api/prospects/entrants/${detail.id}`, "PATCH", { rappelLe }, rappelLe ? `Rappel déplacé au ${jourSemaineHeure(rappelLe)}` : "Rappel sans date");
@@ -177,6 +180,13 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
               }}
             >
               <Link2 size={14} aria-hidden /> Lien espace client
+            </button>
+          )}
+          {/* Mission 14 (partie 5) : le lien par SMS, prérempli (premier lien ou « à nouveau »), copié = envoyé. */}
+          {detail.archiveLe ? null : (
+            // L'espace (et le dossier) a pu s'ouvrir pour préparer le SMS : la fiche se relit, copié ou non.
+            <button type="button" className={LIEN_ACTION} onClick={() => ouvrirEcranSms({ demande: { action: "ENVOYER_LIEN", leadId: detail.id, dossierId: detail.dossier?.id ?? null }, onFini: () => void relire() })}>
+              <MessageSquare size={14} aria-hidden /> SMS avec le lien
             </button>
           )}
           {detail.email ? (

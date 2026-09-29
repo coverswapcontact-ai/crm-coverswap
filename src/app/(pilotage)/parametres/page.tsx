@@ -7,7 +7,7 @@ import { reglagesMail } from "@/lib/mail/reglages-vue";
 import { etatAgentMail } from "@/lib/messages/consultation";
 import { parametresPourEcran } from "@/lib/parametres/service";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
-import { listerModeles } from "@/lib/sms/modeles";
+import { listerCatalogue } from "@/lib/sms/modeles";
 import OngletsParametres from "./_components/OngletsParametres";
 
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
     etatMiroir(),
     etatAgentMail(),
     reglagesMail(),
-    listerModeles(),
+    listerCatalogue(),
     vueAcces(),
     vueConsignes(),
     lireCompteurs(),

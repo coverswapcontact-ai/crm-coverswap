@@ -55,7 +55,13 @@ async function contact(prenom: string, donnees: Record<string, unknown> = {}) {
 }
 const dossierDe = (id: string) => prisma.dossier.findUniqueOrThrow({ where: { id } });
 const espaceDe = (id: string) => prisma.espaceClient.findUniqueOrThrow({ where: { id } });
-const numero = () => `2026-${Math.floor(Math.random() * 400 + 500)}`;
+// Des numéros distincts à coup sûr (un tirage au hasard pouvait en donner deux égaux : contrainte unique type + numéro).
+let rangNumero = 500;
+const numero = () => `2026-${rangNumero++}`;
+// Un devis écrit directement en base n'est pas au registre : la génération (max du registre + 1) pourrait reprendre son
+// numéro. Il prend donc le sien dans une autre plage.
+let rangDirect = 900;
+const numeroDirect = () => `2026-${rangDirect++}`;
 
 async function simulationPubliee(dossierId: string, titre: string) {
   const vue = await simulations.deposerSimulationDossier(dossierId, new File([new Uint8Array(JPEG)], `${titre}.jpg`, { type: "image/jpeg" }), { titre, preparationId: null });
@@ -210,7 +216,7 @@ describe("R1 : un devis visible, émis ou déposé, c'est « Devis envoyé »", 
     await prisma.dossier.update({ where: { id: c.dossierId }, data: { etape: "PLANIFIE" } });
     await prisma.dossierEvenement.create({ data: { dossierId: c.dossierId, type: "CHANGEMENT_ETAPE", direction: "INTERNE", contenu: "Signé → Planifié (dossier repris)", metadata: JSON.stringify({ de: "SIGNE", vers: "PLANIFIE", nature: "SUIVANTE" }), survenuLe: le } });
     for (const statut of ["ACCEPTE", "ENVOYE"]) {
-      const devis = await prisma.document.create({ data: { dossierId: c.dossierId, type: "DEVIS", numero: numero(), dateEmission: le, objet: "Cuisine", lignes: "[]", totalHt: 900, statut, origine: "REPRISE" } });
+      const devis = await prisma.document.create({ data: { dossierId: c.dossierId, type: "DEVIS", numero: numeroDirect(), dateEmission: le, objet: "Cuisine", lignes: "[]", totalHt: 900, statut, origine: "REPRISE" } });
       await prisma.dossierEvenement.create({ data: { dossierId: c.dossierId, type: "DOCUMENT_REPRIS", direction: "INTERNE", contenu: `Devis ${devis.numero} du ${dates.jourParis(le)} rattaché (émis avant le CRM) : 900,00 €`, metadata: JSON.stringify({ documentId: devis.id, numero: devis.numero, origine: "REPRISE" }), survenuLe: le } });
     }
     await prisma.dossierEvenement.updateMany({ where: { dossierId: c.dossierId, type: { notIn: ["CHANGEMENT_ETAPE", "DOCUMENT_REPRIS"] } }, data: { createdAt: new Date(le.getTime() - JOUR) } });
@@ -393,7 +399,7 @@ describe("migration qui-a-la-main-14-1", () => {
     // Écrit directement en base, comme avant la règle : devis repris, étape Simulation, « Préparer le devis ».
     const a = await contact("Anatole");
     await prisma.dossier.update({ where: { id: a.dossierId }, data: { etape: "SIMULATION", prochaineAction: "Préparer le devis (simulation choisie)" } });
-    const devis = await prisma.document.create({ data: { dossierId: a.dossierId, type: "DEVIS", numero: numero(), dateEmission: new Date(Date.now() - 2 * JOUR), objet: "Meuble vasque", lignes: "[]", totalHt: 630, statut: "ENVOYE", origine: "REPRISE" } });
+    const devis = await prisma.document.create({ data: { dossierId: a.dossierId, type: "DEVIS", numero: numeroDirect(), dateEmission: new Date(Date.now() - 2 * JOUR), objet: "Meuble vasque", lignes: "[]", totalHt: 630, statut: "ENVOYE", origine: "REPRISE" } });
     await prisma.dossierEvenement.create({ data: { dossierId: a.dossierId, type: "DOCUMENT_REPRIS", direction: "INTERNE", contenu: `Devis ${devis.numero} du 27/09/2026 rattaché (émis avant le CRM) : 630,00 €`, metadata: JSON.stringify({ documentId: devis.id, numero: devis.numero, origine: "REPRISE" }), survenuLe: devis.dateEmission } });
     await prisma.dossierEvenement.create({ data: { dossierId: a.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: "ENTRANT", contenu: "Simulation validée", survenuLe: new Date(Date.now() - 3 * JOUR) } });
     await main.recalculerMain(a.dossierId);

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Navigation } from "@/components/pilotage/Navigation";
 import { RetourAppel } from "@/components/pilotage/RetourAppel";
+import { HoteEcranSms } from "@/components/pilotage/sms/EcranSms";
 import { VUE_APPLICATION, metadonneesApplication } from "@/lib/application/installation";
 
 // Application installable « CoverSwap » : manifeste, icône et écrans de démarrage du CRM.
@@ -15,6 +16,8 @@ export default function PilotageLayout({ children }: { children: React.ReactNode
       <Navigation />
       {/* Mission 13 (lot 4) : au retour d'un appel, « Comment ça s'est passé ? » sans passer par le panneau. */}
       <RetourAppel />
+      {/* Mission 14 (partie 5) : l'écran SMS (copier vaut envoi), ouvert de n'importe où par ouvrirEcranSms. */}
+      <HoteEcranSms />
       {/* Mission 13 (lot 5) : la zone sûre du haut (barre d'état de l'iPhone) dès le gabarit, plus de rustine par écran. */}
       <main className="pt-[env(safe-area-inset-top)] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
     </div>

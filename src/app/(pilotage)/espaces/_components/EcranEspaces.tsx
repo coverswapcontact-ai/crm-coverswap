@@ -8,6 +8,7 @@ import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/clie
 import { Bouton, EnTetePage, EtatVide, Pagination, Pastille, TRANS } from "@/components/pilotage/ui";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
+import { ouvrirEcranSms } from "@/components/pilotage/sms/EcranSms";
 import { LIBELLES_ETAPE_ESPACE, type EtapeEspace } from "@/lib/espace/etapes";
 import type { ClientEspace, LigneEspace, PageEspaces } from "@/lib/espace/suivi-types";
 import { cn } from "@/lib/utils";
@@ -516,6 +517,12 @@ function CarteProjet({ ligne, plusieurs, onRecharger }: { ligne: LigneEspace; pl
           // Mission 7 : le mail prend le relais du SMS (texte relu, rien ne part sans votre clic).
           <button type="button" onClick={() => setLienMail({ dossierId: ligne.dossierId, code: ligne.etape === "PHOTOS" ? "LIEN_ESPACE" : "LIEN_ESPACE_RAPPEL" })} className={BOUTON_LIEN}>
             <Mail size={13} aria-hidden /> Envoyer le lien par mail
+          </button>
+        ) : null}
+        {ligne.lien && !ligne.fige ? (
+          // Mission 14 (partie 5) : le lien par SMS (premier lien s'il n'en a jamais reçu, sinon « à nouveau »), copié = envoyé.
+          <button type="button" onClick={() => ouvrirEcranSms({ demande: { action: "ENVOYER_LIEN", dossierId: ligne.dossierId }, onFini: ({ copie }) => { if (copie) void onRecharger(); } })} className={cn(BOUTON_LIEN, "h-11 sm:h-7")}>
+            <MessageSquare size={13} aria-hidden /> SMS avec le lien
           </button>
         ) : null}
         <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void onRecharger()} />

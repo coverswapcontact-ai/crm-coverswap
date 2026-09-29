@@ -1584,3 +1584,139 @@ archivé. » Principe : un écran montre une seule chose, un lead a toujours une
   jouées au démarrage avec sauvegarde) : puces « À appeler · 11 », « À rappeler · 4 dont 3 en retard », vue par défaut
   À rappeler, date déplacée → toast « Rappel déplacé au … » et ligne reclassée, plus de « Traité » dans le panneau,
   aucune page plus large que 390 px. L'outil `leads_a_appeler` perd `toute_la_file` : Lucas reconnecte le connecteur.
+
+## Partie 5 — Écran SMS et catalogue unique (29/09)
+Énoncé : « Un message, un bouton « Copier » (44 px), un bouton « Passer ». Texte prérempli selon la source du lead et
+l'action ; modifiable avant copie. Copier vaut envoi […]. Un seul catalogue, dans Paramètres → SMS […]. Rapatrie tout
+texte SMS qui vit ailleurs. » Principe : « les textes SMS n'existent qu'à un seul endroit ». Livrée avant la partie 4
+(la fin d'appel ouvrira cet écran).
+- **Catalogue** (`sms/catalogue.ts`, pur, importable par les écrans) : `CATALOGUE_SMS` (`as const`), par code `libelle`,
+  `groupe` (AUTOMATIQUES, APRES_APPEL, ESPACE, RELANCES, ANCIEN), `usage`, `variables` permises (`prenom`, `quand`,
+  `lien`, `validite`, `montant`), `lien` (doit finir par `{lien}`), `automatique`, `fournisseur` (peut partir par le
+  fournisseur, facturé : accusés, ancien circuit, LIEN_ESPACE_NOUVEAU, SIMULATION_PRETE → GSM-7 exigé), `defaut`.
+  Codes : les deux accusés (textes inchangés) ; A PAS_DE_REPONSE_SIMULATION / PAS_DE_REPONSE, D PAS_DE_REPONSE_2,
+  B A_RAPPELER (textes de Lucas, copie exacte) ; LIEN_ESPACE, LIEN_ESPACE_SIMULATION, INJOIGNABLE_LIEN,
+  LIEN_ESPACE_RAPPEL, LIEN_ESPACE_NOUVEAU, SIMULATION_PRETE (réécrits : parler du projet, aucune simulation promise, le
+  lien en dernier) ; RELANCE_DEVIS_1/_2 ; l'ancien circuit (INJOIGNABLE_J3, RELANCE_PHOTOS, RELANCE_SIMULATION,
+  RELANCE_DEVIS, RELANCE_DEVIS_QUESTIONS, RELANCE_DERNIERE) tel quel jusqu'à la partie 6. `CODES_LIEN_ESPACE` (les six
+  codes du lien), `aUnInterrupteur` (accusés + ancien circuit, et eux seuls), `porteLienEspace(texte)` (LA règle « ce
+  SMS porte le lien » : `/e/<jeton>` dans le texte, quel que soit le code), `verifierTexteSms(code, texte)` (règle
+  unique, écran et serveur : toute accolade doit être une variable exacte du code — `{prénom}` refusé ; « Le lien doit
+  rester à la fin du message. », « Ce message ne porte pas le lien de l'espace : retire {lien}. », « Variable non
+  permise : {x}. Celles de ce message : … » ; l'ancien circuit n'a que le contrôle des variables, son lien au milieu
+  reste permis), `ACTIONS_SMS`, types `PropositionSms` / `RelanceSms`, `LONGUEUR_VISEE` = 160.
+- **Textes en base** (`sms/modeles.ts`) : `ModeleSms` garde une ligne par code (texte modifié par Lucas, interrupteur).
+  UNE lecture : `texteDuCatalogue(code, variables)` = ligne non archivée, sinon le texte de départ (l'interrupteur
+  `actif` n'y entre pas : il ne vaut que pour les accusés et l'ancien circuit, lus par `lireModele`), remplie par
+  `remplirModele` (« Bonjour {prenom}, » sans prénom → « Bonjour, »). `modifierModele` applique `verifierTexteSms` (un
+  interrupteur seul n'y passe pas). `poserModelesParDefaut` part du catalogue. `listerCatalogue()` (Paramètres) : ordre
+  du catalogue, ligne en base ou `id: null`. Retirés : `MODELES_PAR_DEFAUT`, `listerModeles`, `proposerTexte` (mort).
+  `DEVIS_PRET`, `MERCI_ACCORD` sortis du catalogue. Les accusés (`accuse.ts`) et l'ancien circuit (`commercial/
+  relances.ts`) lisent toujours `lireModele` (interrupteur `actif`) : inchangés.
+- **Migration `catalogue-sms-14-5`** (`base/migrations/mission-14-partie-5.ts › unifierCatalogueSms`, fin de
+  `MIGRATIONS_DONNEES`) : pose les codes manquants ; remplace le texte en base de LIEN_ESPACE, LIEN_ESPACE_SIMULATION,
+  INJOIGNABLE_LIEN, LIEN_ESPACE_RAPPEL, SIMULATION_PRETE par le nouveau texte de départ (le journal garde l'ancien ;
+  un texte déjà égal n'est pas réécrit) ; remet `actif` à vrai sur les codes sans interrupteur (l'écran d'avant
+  proposait « Ne plus proposer » partout, plus aucun bouton ne lèverait la coupure) ; archive DEVIS_PRET et
+  MERCI_ACCORD (« Mission 14 : plus utilisé »). Compteurs `crees`, `reecrits`, `reactives`, `archives` + une ligne
+  `[migration catalogue-sms-14-5] …`. Ne tourne qu'une fois : un texte modifié ensuite par Lucas n'est jamais écrasé.
+- **Rapatriement** : `proposerLienParSms` (outil `lien_espace`) compose depuis le catalogue (LIEN_ESPACE →
+  LIEN_ESPACE_SIMULATION seulement si `simulationDansLEspace(dossierId)` : une simulation rangée dans le dossier avec
+  son rendu, ce que l'espace montre — la règle d'avant cette partie et celle du mail), plus de signature « Lucas,
+  CoverSwap » ajoutée ; il écrit toujours `ESPACE_LIEN_COMMUNIQUE` (metadata `code` = le code retenu) ; les phrases de
+  `PROPOSITIONS` restent celles du MAIL (`PHRASES_LIEN`, inutilisé, retiré). Description de l'outil mise à jour
+  (catalogue, variante simulation). `texteNouveauLien` quitte `espace/textes.ts` pour `espace/gestion.ts`
+  (asynchrone, LIEN_ESPACE_NOUVEAU). `texteSmsPublication` lit SIMULATION_PRETE par `texteDuCatalogue` (la branche
+  « modèle désactivé » disparaît : un code non automatique n'a plus d'interrupteur ; l'écran publie de toute façon
+  avec `prevenir: false`). Plus aucun « Bonjour » SMS en dur dans `src/lib` hors mails et catalogue.
+- **Prénom** : `sms/texte.ts › prenomDuContact(...candidats)` (pur) : premier mot du premier candidat qui n'est ni
+  vide, ni « Inconnu », ni « Client », dans l'ordre fiche client → lead → nom du dossier. La même règle pour le SMS
+  proposé, le mail et `lien_espace` (`destinataireDuDossier`), SIMULATION_PRETE (`texteSmsPublication`) et le nouveau
+  lien (`gestion.ts › destinataire`, qui lisait le lead d'abord).
+- **SMS proposé** (`sms/proposition.ts › proposerSms({ action, leadId?, dossierId?, rappelLe?, relance?, tentatives? },
+  maintenant)`) → `{ code, texte, telephone, nom, prenom, leadId, dossierId, lien?, relance? }`. Un lead qui a un
+  dossier vivant est lu par son dossier (même prénom partout). Nom affiché : prénom + nom du lead sans « Inconnu »
+  (comme la liste des leads), sinon le nom du dossier, sinon « Contact sans nom ». PAS_DE_REPONSE : tentatives
+  (données, sinon `Lead.tentatives`, sinon les APPEL du dossier) ≥ 2 → D, sinon A simulation (règle
+  d'`estIssuDuSimulateur` ou simulation rangée : il a fait une simulation) / A ; `{quand}` = rappel ou demain 18 h.
+  A_RAPPELER : `{quand}` ou « prochainement ». INTERESSE / LIEN_ESPACE : premier lien, LIEN_ESPACE_SIMULATION
+  seulement si `simulationDansLEspace`. **ENVOYER_LIEN** (ajout, boutons « SMS avec le lien ») : lien actuel déjà
+  envoyé (texte contenant `/e/<jeton>`) ou espace ouvert depuis l'émission du lien (`lienEmisLe`) →
+  LIEN_ESPACE_RAPPEL ; sinon un envoi d'une version antérieure (`/e/<code du client>-`, ou du projet avant le 22/09)
+  ou une visite d'avant « Nouveau lien » → LIEN_ESPACE_NOUVEAU ; sinon le premier lien. INJOIGNABLE_LIEN ;
+  LIEN_ESPACE_RAPPEL et RELANCE_PHOTOS → LIEN_ESPACE_RAPPEL ; RELANCE_DEVIS { documentId, rang } → RELANCE_DEVIS_1/_2
+  pour un devis que le client attend (`copie.ts › devisARelancer` : type DEVIS, numéroté, GENERE ou ENVOYE,
+  `visibleEspace`, non archivé, du dossier visé — le filtre de `relances/service.ts` ; sinon 404/409 clair). Les
+  actions avec lien ouvrent l'espace (et le dossier) s'il le faut ; aucune n'écrit d'événement de SMS. `{quand}` :
+  `commercial/quand.ts › quandLisible(date, maintenant)` (pur, Paris) : « aujourd'hui vers 14 h », « ce soir vers
+  18 h », « demain vers 18 h », « jeudi vers 10 h » (2 à 6 jours), « le 12 octobre vers 10 h », « le 1er novembre … »,
+  « vers 10 h 30 » ; null ou jour passé → « prochainement ».
+- **Copier vaut envoi** (`sms/copie.ts › noterSmsCopie({ code, texte, leadId?, dossierId?, relance?, origine: ECRAN |
+  ASSISTANT }, maintenant)`) : cible = le dossier donné, sinon le dossier vivant du lead, sinon le lead. Dossier :
+  `DossierEvenement` SMS_COPIE SORTANT, contenu « SMS {code} copié : « … » » (LIBRE : « SMS copié : « … » »), metadata
+  `{ code, texte, canal: "SMS", origine, relance? }`, puis `recalculerMain`. Lead sans dossier : `Interaction` SMS, même
+  contenu (statut du lead inchangé). Même cible + même contenu en moins de 10 min → rend la trace existante (`deja`).
+  Une `relance` passe par `devisARelancer` (et exige un dossier). SMS_COPIE : `TYPES_EVENEMENT` + « SMS copié » ;
+  `passageDeMain` → CLIENT « Lien de son espace envoyé : en attente du client » quand son TEXTE porte le lien
+  (`porteLienEspace` sur `metadata.texte`) — texte libre compris, code de lien dont Lucas a retiré le lien exclu ;
+  c'est la règle de « Lien pas encore envoyé » (`espace/suivi.ts › liensEnvoyes(contient)` : SMS parti, mail,
+  SMS_COPIE ou ESPACE_LIEN_COMMUNIQUE dont le texte contient le jeton → `NON_ENVOYE` tombe, `lienEnvoyeLe`,
+  `JAMAIS_OUVERT` peut se déclencher). `CopieNotee.lien` suit la même règle. R2 le comptait déjà comme réponse
+  (vérifié par un test). `MODELES_LIEN` (regex de préfixes) reste pour les SMS_ENVOYE du fournisseur : la main se
+  recalcule sur tout l'historique, les modèles d'hier doivent rester reconnus.
+- **Routes** : `POST /api/sms/copie` (zod `schemaCopie` : code du catalogue ou LIBRE, texte 1..918, lead/dossier,
+  relance { documentId, rang 1..2 }) ; `POST /api/sms/proposition` (action de `ACTIONS_SMS`, cible, `rappelLe` ISO,
+  relance). Derrière la session par le proxy (refus par défaut, aucune route publique ajoutée).
+- **Écran SMS** (`components/pilotage/sms/EcranSms.tsx`) : `EcranSms({ proposition? | demande?, onFini })`, Dialog
+  base-ui z-[80] (au-dessus de RetourAppel z-70 et du mode appels), plein écran sur téléphone, centré sur ordinateur ;
+  « SMS à {nom} » + `tel:` (44 px sur téléphone), zone modifiable (16 px), compteur « N caractères · N SMS » (« Vise
+  160 caractères » en ambre sans lien — tutoiement, la conception disait « Visez »), « Copier » (48 px, principal) :
+  presse-papiers (repli sélection + `execCommand`), puis `POST /api/sms/copie` avec le texte tel quel, toast « SMS
+  copié : colle-le dans Messages », `onFini({ copie: true })` ; échec d'écriture : toast « SMS copié, mais pas
+  enregistré », l'écran reste. « Passer » (et le geste retour) : rien d'écrit. « Ouvrir Messages » (`sms:`).
+  Ouverture de n'importe où : `ouvrirEcranSms({ proposition? , demande?, onFini? })` (événement fenêtre `sms:ouvrir`)
+  reçu par `HoteEcranSms`, monté dans `(pilotage)/layout.tsx`.
+- **Branchements** : « SMS avec le lien » (action ENVOYER_LIEN) dans le panneau du lead (`PanneauEntrant`, fiche relue
+  ensuite), la rubrique Espace du dossier (`EspaceDossier`) et chaque projet d'Espaces clients (`EcranEspaces`) ;
+  « Copier le lien » et le mail inchangés.
+- **Paramètres → SMS** (`MessagerieSms.tsx`, `listerCatalogue`) : le catalogue par groupe, ancien circuit replié en fin
+  (`<details>`) ; par code : libellé, phrase d'usage, variables, texte, compteur sur un exemple rempli (prénom, lien,
+  « demain vers 18 h »), « Vise 160 caractères » sans lien, « Revenir au texte de départ » (tout texte de départ
+  s'enregistre, ancien circuit compris), Annuler, Enregistrer (désactivé si `verifierTexteSms` refuse, message sous la
+  zone). Interrupteur et pastille « Coupé » seulement là où il y en a un (`aUnInterrupteur` : accusés, ancien circuit) ;
+  alerte Unicode en ambre et « Simplifier les accents » pour tout code `fournisseur` (dont nouveau lien et simulation
+  en ligne). Aide : un seul endroit, rien ne part tout seul sauf les deux accusés, copier vaut envoi, règles d'écriture.
+- **Doc** : `docs/ARCHITECTURE-PILOTAGE.md` § SMS : la phrase « douze messages types en GSM-7 » remplacée par le GSM-7
+  des seuls codes `fournisseur` et un paragraphe « Catalogue unique ».
+- Tests : `base/mission-14-partie-5.test.ts` (24) : textes exacts, règles d'écriture (tout texte de départ passe sa
+  validation, ancien circuit compris ; `{prénom}` refusé ; lien lu sur le texte ; interrupteurs),
+  `texteDuCatalogue` (défaut sans ligne, texte modifié, ligne coupée toujours lue, « Bonjour, »), `modifierModele`
+  (lien au milieu refusé, lien en fin accepté, {lien} sur un code sans lien, variable étrangère, `{prénom}`, texte de
+  départ de l'ancien circuit accepté), `listerCatalogue`, `quandLisible` été/hiver/changement d'heure, `proposerSms`
+  (Meta → A « demain vers 18 h », simulateur → variante A, tentatives 2 → D, B « prochainement » / « jeudi vers
+  10 h », INTERESSE : simulateur sans rendu → LIEN_ESPACE, simulation rangée avec rendu → LIEN_ESPACE_SIMULATION, sans
+  événement ; prénom de la fiche client et jamais « Inconnu », identique à `lien_espace` ; ENVOYER_LIEN premier →
+  RAPPEL → NOUVEAU après « Nouveau lien » → RAPPEL, et ouvert avant le nouveau lien → NOUVEAU ; relances 1/2 et refus :
+  brouillon, accepté, masqué, archivé, facture, autre dossier), `noterSmsCopie` (SMS_COPIE, main CLIENT, NON_ENVOYE
+  absent, JAMAIS_OUVERT à J+3, double copie → une trace, R2, relance en metadata sur un vrai devis, relance refusée
+  sans dossier ou devis inconnu, LIBRE avec le lien → main au client, code de lien sans le lien → rien, lead sans
+  dossier → Interaction, LIBRE et code inconnu par la route), route de proposition, `lien_espace` (sans simulation
+  dans l'espace → LIEN_ESPACE, avec → variante) / nouveau lien / publication depuis le catalogue, migration (réécrits,
+  créé, coupures levées sans toucher l'ancien circuit, archivés, journal, rejouable, une seule fois, à la fin).
+  Adaptés : `sms/sms.test.ts` (GSM-7 exigé des codes `fournisseur`, liste figée ; le texte B contient « À »),
+  `mcp/mcp-v2.test.ts` (textes de `lien_espace`).
+- Reste / à savoir : l'écran SMS n'a été essayé dans aucun navigateur (ouvert par-dessus le panneau du lead, une
+  feuille base-ui : focus et « clic dehors » à vérifier ; presse-papiers de Safari iOS). L'écran s'ouvre sans focus dans
+  la zone (pas de clavier d'emblée). « SMS avec le lien » ouvre l'espace (et le dossier) pour préparer le texte, même si
+  Lucas passe ensuite (comme « Lien espace client »). La fin d'appel (partie 4), le comptage des relances par SMS_COPIE
+  (partie 6) et `noter_sms` (partie 8) restent à brancher ; le libellé `ModeleSms.libelle` en base n'est plus affiché
+  (celui du catalogue l'est). SIMULATION_PRETE n'a plus d'interrupteur : l'envoi par le fournisseur ne dépend plus que
+  de `prevenir` (l'écran publie avec `prevenir: false`, la route garde `true` par défaut).
+- Retouches de l'orchestrateur après l'essai à l'écran : si le presse-papiers refuse (pas de geste, ancien navigateur),
+  le bouton devient « J'ai copié le texte » : Lucas copie à la main et l'envoi s'enregistre quand même ; une espace
+  manquait dans l'aide de Paramètres → SMS. Test de la partie 1 stabilisé (numéros de devis tirés au hasard qui
+  pouvaient se croiser : numéros suivis, et une plage à part pour les devis écrits directement en base).
+- Vérifié : tsc, eslint, 619/619, build ; à l'écran (390 × 660, m8) : « SMS avec le lien » depuis le panneau d'un lead
+  → texte du catalogue prérempli, lien en dernier, compteur ; « Copier » (vrai clic) → toast « SMS copié », écran fermé,
+  trace écrite ; Paramètres → SMS : aide, règles d'écriture, groupes Automatiques / Après un appel / Espace client /
+  Relances. Le presse-papiers de Safari sur iPhone reste à confirmer par Lucas.

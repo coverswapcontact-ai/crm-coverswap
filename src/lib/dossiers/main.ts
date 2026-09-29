@@ -24,6 +24,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { porteLienEspace } from "@/lib/sms/catalogue";
 import { LIBELLES_ETAPE, LIBELLES_TYPE_DOCUMENT, REGLES_ETAPES, type EtapeDossier } from "./constants";
 
 export type QuiALaMain = "MOI" | "CLIENT";
@@ -41,9 +42,12 @@ const lireMetadata = (json: string): Record<string, unknown> => {
   }
 };
 
+// Les SMS partis par le fournisseur (SMS_ENVOYE) qui portaient le lien, reconnus à leur modèle (préfixe : les
+// variantes d'hier comprises, car la main se recalcule sur tout l'historique). Les SMS copiés se lisent au texte.
 const MODELES_LIEN = /^(LIEN_ESPACE|INJOIGNABLE_LIEN|RELANCE_PHOTOS|SIMULATION_PRETE)/;
 
 const MOTIF_DEVIS_ENVOYE = "Devis envoyé : en attente de sa réponse";
+const MOTIF_LIEN_ENVOYE = "Lien de son espace envoyé : en attente du client";
 
 /** Les étapes où un devis déposé passe la main au client : avant la signature. Après, l'étape (déclarée à la reprise) décide. */
 const ETAPES_DEPOT_DEVIS: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
@@ -105,7 +109,13 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     case "SMS_ENVOYE": {
       const meta = lireMetadata(evenement.metadata);
       const lien = meta.origine === "LIEN_ESPACE" || (typeof meta.modele === "string" && MODELES_LIEN.test(meta.modele));
-      return lien ? { qui: "CLIENT", motif: "Lien de son espace envoyé : en attente du client" } : null;
+      return lien ? { qui: "CLIENT", motif: MOTIF_LIEN_ENVOYE } : null;
+    }
+    // Mission 14 (partie 5) : un SMS copié par Lucas (copier vaut envoi) dont le texte porte le lien de son espace,
+    // quel que soit son code (texte libre compris) — la règle de « Lien pas encore envoyé » (`porteLienEspace`).
+    case "SMS_COPIE": {
+      const texte = lireMetadata(evenement.metadata).texte;
+      return porteLienEspace(typeof texte === "string" ? texte : evenement.contenu) ? { qui: "CLIENT", motif: MOTIF_LIEN_ENVOYE } : null;
     }
     // Le client revient sur ce qu'il avait fait : c'est de nouveau à lui.
     case "ESPACE_SIMULATION_DEVALIDEE":
@@ -190,6 +200,7 @@ export const TYPES_MAIN = [
   "ESPACE_REPONSE",
   "ESPACE_LIEN_COMMUNIQUE",
   "DOCUMENT_REPRIS",
+  "SMS_COPIE",
 ];
 
 /* ── Mission 14 (R2) : un message du client sans réponse ─────────────────────── */

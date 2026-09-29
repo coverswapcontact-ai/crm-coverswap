@@ -272,6 +272,8 @@ export const TYPES_EVENEMENT = [
   "DOSSIER_MODIFIE",
   "ESPACE_REPONSE",
   "ESPACE_LIEN_COMMUNIQUE",
+  // Mission 14 (partie 5) : un SMS copié par Lucas depuis l'écran SMS (copier vaut envoi), ou noté par l'assistant
+  "SMS_COPIE",
 ] as const;
 export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
 
@@ -321,6 +323,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   DOSSIER_MODIFIE: "Dossier modifié",
   ESPACE_REPONSE: "Réponse envoyée dans l'espace",
   ESPACE_LIEN_COMMUNIQUE: "Lien de l'espace communiqué",
+  SMS_COPIE: "SMS copié",
 };
 // Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
 

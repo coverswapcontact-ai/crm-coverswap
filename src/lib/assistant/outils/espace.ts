@@ -88,7 +88,7 @@ export const outilLienEspace = definirOutil({
   nom: "lien_espace",
   titre: "Le lien de l'espace et le SMS prêt à copier (rien d'envoyé)",
   description:
-    "Pour un lead sans e-mail (Meta) ou quand Lucas préfère le SMS : ouvre l'espace du client (et son dossier s'il manque), n'envoie RIEN, et rend le lien et le texte du SMS prêt à copier, avec la phrase du code : LIEN_ESPACE (après un appel intéressé : déposer les photos), INJOIGNABLE_LIEN (« j'ai essayé de vous joindre »), LIEN_ESPACE_RAPPEL (renvoyer le lien). Tracé dans le dossier « lien communiqué par SMS » ; la main passe au client. Pour envoyer par mail : « envoyer_lien_espace ».",
+    "Pour un lead sans e-mail (Meta) ou quand Lucas préfère le SMS : ouvre l'espace du client (et son dossier s'il manque), n'envoie RIEN, et rend le lien et le SMS prêt à copier, pris dans le catalogue SMS (Paramètres → SMS) : LIEN_ESPACE (après un appel intéressé ; LIEN_ESPACE_SIMULATION quand une simulation du site est déjà dans son espace, le code retenu est dans les données), INJOIGNABLE_LIEN (« j'ai essayé de vous joindre »), LIEN_ESPACE_RAPPEL (renvoyer le lien). Tracé dans le dossier « lien communiqué par SMS » ; la main passe au client. Pour envoyer par mail : « envoyer_lien_espace ».",
   niveau: "REVERSIBLE",
   schema: schemaCible.extend({ code: z.enum(CODES_LIEN_MAIL).optional().describe("LIEN_ESPACE par défaut.") }),
   executer: async (e) => {

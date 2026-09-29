@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronDown, Copy, Eye, Link2, Lock, Mail, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2 } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, Link2, Lock, Mail, MessageSquare, Pencil, RefreshCw, RotateCcw, ShieldOff, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import type { GesteEspace, VueEspaceCrm } from "@/lib/espace/vue-crm";
 import { famille, famillesDe, libelleTaille, resumerSelection, type TaillesProjet } from "@/lib/prestations/prestations";
 import { NouveauLien } from "@/components/pilotage/espace/NouveauLien";
 import { LienParMail, type CibleLienMail } from "@/components/pilotage/espace/LienParMail";
+import { ouvrirEcranSms } from "@/components/pilotage/sms/EcranSms";
 import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constantes";
 import { cn } from "@/lib/utils";
 import { Pastille, Bouton, Modale, TitreSection, TRANS, ZoneTexte } from "@/components/pilotage/ui";
@@ -236,6 +237,23 @@ export function EspaceDossier({
               className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
             >
               <Mail size={13} aria-hidden /> Envoyer le lien par mail
+            </button>
+          ) : null}
+          {espace.lien ? (
+            // Mission 14 (partie 5) : le lien par SMS (premier lien s'il n'en a jamais reçu, sinon « à nouveau »), copié = envoyé.
+            <button
+              type="button"
+              onClick={() =>
+                ouvrirEcranSms({
+                  demande: { action: "ENVOYER_LIEN", dossierId: detail.id },
+                  onFini: ({ copie }) => {
+                    if (copie) void Promise.all([charger(), onRecharger()]);
+                  },
+                })
+              }
+              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
+            >
+              <MessageSquare size={13} aria-hidden /> SMS avec le lien
             </button>
           ) : null}
           {espace.revoqueLe ? null : (

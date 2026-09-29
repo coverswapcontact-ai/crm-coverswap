@@ -3,13 +3,18 @@ import { recalculerMain } from "@/lib/dossiers/main";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { envoyerSms } from "@/lib/sms/envoi";
+import { texteDuCatalogue } from "@/lib/sms/modeles";
+import { prenomDuContact } from "@/lib/sms/texte";
 import { lienEspace, renouvelerEspace, revoquerEspace } from "./liens";
 import { accorderProjets, projetsVisibles } from "./projets";
 import { documentsDuClient, type DocumentClient } from "./compte";
 import { listerClientsEspaces, type ClientEspace } from "./suivi";
-import { PHRASE_NOUVEAU_LIEN, texteNouveauLien } from "./textes";
+import { PHRASE_NOUVEAU_LIEN } from "./textes";
 
-export { texteNouveauLien };
+/** Le SMS proposé avec un nouveau lien (catalogue SMS, LIEN_ESPACE_NOUVEAU) ; sans lien donné, « {lien} » reste à remplacer. */
+export function texteNouveauLien(prenom: string, lien = "{lien}"): Promise<string> {
+  return texteDuCatalogue("LIEN_ESPACE_NOUVEAU", { prenom, lien });
+}
 
 /**
  * L'espace permanent d'un client, piloté depuis le CRM (fiche client, Espaces
@@ -17,8 +22,6 @@ export { texteNouveauLien };
  * nouveau part au clic de Lucas, texte relu — mission 7, le mail remplace le
  * SMS), le désactiver, lui accorder un projet de plus. Rien ne part sans Lucas.
  */
-
-const CLIENT_INCONNU = /^(inconnu|client)$/i;
 
 async function destinataire(clientId: string): Promise<{ prenom: string; numero: string | null; email: string | null }> {
   const [client, dossier] = await Promise.all([
@@ -34,9 +37,9 @@ async function destinataire(clientId: string): Promise<{ prenom: string; numero:
     }),
     prisma.dossier.findFirst({ where: { clientId }, orderBy: { createdAt: "desc" }, select: { clientTelephone: true, clientEmail: true } }),
   ]);
-  const brut = (client?.leads[0]?.prenom ?? client?.prenom ?? client?.nom.split(/\s+/)[0] ?? "").trim().split(/\s+/)[0] ?? "";
   return {
-    prenom: CLIENT_INCONNU.test(brut) ? "" : brut,
+    // La règle du SMS proposé et du mail du lien : fiche client, puis lead, puis nom, sans « Inconnu ».
+    prenom: prenomDuContact(client?.prenom, client?.leads[0]?.prenom, client?.nom),
     numero: client?.telephones[0]?.numero ?? dossier?.clientTelephone ?? null,
     email: normaliserEmail(client?.emails[0]?.adresse) ?? normaliserEmail(dossier?.clientEmail) ?? null,
   };
@@ -49,9 +52,10 @@ export type EspaceDuClient = { espace: ClientEspace | null; documents: DocumentC
 export async function espaceDuClient(clientId: string): Promise<EspaceDuClient> {
   const permanent = await prisma.espacePermanent.findUnique({ where: { clientId } });
   const { prenom, numero, email } = await destinataire(clientId);
-  if (!permanent) return { espace: null, documents: [], smsNouveauLien: texteNouveauLien(prenom), numero, email };
+  const smsNouveauLien = await texteNouveauLien(prenom);
+  if (!permanent) return { espace: null, documents: [], smsNouveauLien, numero, email };
   const [clients, documents] = await Promise.all([listerClientsEspaces(new Date(), { permanentId: permanent.id }), documentsDuClient(permanent)]);
-  return { espace: clients[0] ?? null, documents, smsNouveauLien: texteNouveauLien(prenom), numero, email };
+  return { espace: clients[0] ?? null, documents, smsNouveauLien, numero, email };
 }
 
 async function dossierDeReference(permanentId: string): Promise<string | null> {
@@ -85,9 +89,10 @@ export async function regenererLien(
     mail = await programmerEnvoi({ cle: `nouveau-lien:${permanent.id}:${permanent.version}`, nature: "NOUVEAU", modele: "LIEN_ESPACE_NOUVEAU", a: email, objet: contenu.objet, texte: contenu.texte, html: contenu.html, dossierId, clientId: permanent.clientId });
   } else if (envoi.sms) {
     if (!numero) throw new ErreurMetier("Nouveau lien émis, mais aucun numéro connu pour ce client : copiez le lien et envoyez-le autrement.", 409);
-    const modele = (envoi.texte?.trim() || texteNouveauLien(prenom)).slice(0, 700);
-    const texte = modele.includes("{lien}") ? modele.replace("{lien}", lien) : `${modele} ${lien}`;
-    const envoye = await envoyerSms({ numero, rattachement: { clientId: permanent.clientId }, texte, origine: "LIEN_ESPACE", modele: "LIEN_ESPACE_NOUVEAU", textePropose: texteNouveauLien(prenom).replace("{lien}", lien), cleEnvoi: `nouveau-lien:${permanent.id}:${permanent.version}` });
+    const propose = await texteNouveauLien(prenom, lien);
+    const modele = envoi.texte?.trim().slice(0, 700);
+    const texte = !modele ? propose : modele.includes("{lien}") ? modele.replace("{lien}", lien) : `${modele} ${lien}`;
+    const envoye = await envoyerSms({ numero, rattachement: { clientId: permanent.clientId }, texte, origine: "LIEN_ESPACE", modele: "LIEN_ESPACE_NOUVEAU", textePropose: propose, cleEnvoi: `nouveau-lien:${permanent.id}:${permanent.version}` });
     sms = { id: envoye.id, statut: envoye.statut };
   }
   if (dossierId) {

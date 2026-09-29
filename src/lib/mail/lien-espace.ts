@@ -3,6 +3,10 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { lienPourLeProjet, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
+import type { CodeSms } from "@/lib/sms/catalogue";
+import { texteDuCatalogue } from "@/lib/sms/modeles";
+import { simulationDansLEspace } from "@/lib/sms/proposition";
+import { prenomDuContact } from "@/lib/sms/texte";
 import { programmerEnvoi } from "./envoi-crm";
 import { mailNotification } from "./notifications";
 
@@ -35,9 +39,6 @@ const PROPOSITIONS: Record<CodeLienMail, { objet: string; phrase: string; bouton
   },
 };
 
-/** Les mêmes phrases, lisibles par l'assistant (« lien_espace », mission 10). */
-export const PHRASES_LIEN = PROPOSITIONS;
-
 /** Il a déjà fait une simulation sur le site : le mail le lui dit — c'est ce qui fait ouvrir. */
 const PHRASE_AVEC_SIMULATION = "Comme convenu, votre simulation vous attend dans votre espace personnel. Ajoutez-y 2 ou 3 photos de la pièce : je vous prépare mes propositions.";
 
@@ -56,10 +57,10 @@ async function destinataireDuDossier(dossierId: string) {
     },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
-  const brut = (dossier.client?.prenom || dossier.lead?.prenom || dossier.clientNom.split(" ")[0] || "").trim();
   return {
     a: normaliserEmail(dossier.client?.emails[0]?.adresse) ?? normaliserEmail(dossier.clientEmail) ?? normaliserEmail(dossier.lead?.email) ?? null,
-    prenom: /^(inconnu|client)$/i.test(brut) ? "" : (brut.split(/\s+/)[0] ?? ""),
+    // La même règle que le SMS proposé (`proposerSms`) : fiche client, puis lead, puis nom du dossier, sans « Inconnu ».
+    prenom: prenomDuContact(dossier.client?.prenom, dossier.lead?.prenom, dossier.clientNom),
     clientId: dossier.clientId,
     leadId: dossier.leadId,
   };
@@ -73,7 +74,7 @@ export async function proposerLienParMail(entree: { leadId?: string | null; doss
   else throw new ErreurMetier("Indique le contact ou le dossier.", 400);
   const { a, prenom } = await destinataireDuDossier(dossierId);
   const base = PROPOSITIONS[entree.code];
-  const avecSimulation = entree.code === "LIEN_ESPACE" && (await prisma.simulation.count({ where: { dossierId, archiveLe: null, imageAfterPath: { not: null } } })) > 0;
+  const avecSimulation = entree.code === "LIEN_ESPACE" && (await simulationDansLEspace(dossierId));
   return { dossierId, code: entree.code, a, prenom, objet: base.objet, phrase: avecSimulation ? PHRASE_AVEC_SIMULATION : base.phrase, bouton: base.bouton };
 }
 
@@ -105,13 +106,17 @@ export async function envoyerLienParMail(entree: { dossierId: string; code: Code
   return { envoiId: id, deja };
 }
 
-export type PropositionLienSms = { dossierId: string; code: CodeLienMail; prenom: string; telephone: string | null; lien: string; sms: string; nouveau: boolean; email: string | null };
+export type PropositionLienSms = { dossierId: string; code: CodeSms; prenom: string; telephone: string | null; lien: string; sms: string; nouveau: boolean; email: string | null };
 
 /**
  * Mission 10 (« lien_espace ») : les leads Meta n'ont souvent pas d'e-mail.
  * L'espace s'ouvre (et le dossier avec) ; le CRM n'envoie rien : il rend le
  * lien et le texte du SMS, que Lucas copie dans son téléphone. Tracé dans le
  * dossier (« lien communiqué par SMS ») : la main passe au client.
+ * Mission 14 (partie 5) : le SMS vient du catalogue (les phrases ci-dessus
+ * restent celles du MAIL) ; LIEN_ESPACE devient LIEN_ESPACE_SIMULATION quand une
+ * simulation du site est déjà dans son espace (`simulationDansLEspace`, la règle
+ * de l'écran SMS et du mail).
  */
 export async function proposerLienParSms(entree: { leadId?: string | null; dossierId?: string | null; code: CodeLienMail }): Promise<PropositionLienSms> {
   let dossierId = entree.dossierId ?? null;
@@ -127,11 +132,9 @@ export async function proposerLienParSms(entree: { leadId?: string | null; dossi
   if (!lien) throw new ErreurMetier("L'espace de ce projet est fermé ou son lien désactivé.", 409);
   const { a, prenom } = await destinataireDuDossier(dossierId);
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientTelephone: true } });
-  const base = PROPOSITIONS[entree.code];
-  const avecSimulation = entree.code === "LIEN_ESPACE" && (await prisma.simulation.count({ where: { dossierId, archiveLe: null, imageAfterPath: { not: null } } })) > 0;
-  const phrase = avecSimulation ? PHRASE_AVEC_SIMULATION : base.phrase;
-  const sms = `Bonjour${prenom ? ` ${prenom}` : ""}, ${phrase.charAt(0).toLowerCase()}${phrase.slice(1)} ${lien}\nLucas, CoverSwap`;
-  await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_COMMUNIQUE", direction: "SORTANT", contenu: `Lien de l'espace communiqué par SMS (texte rendu à Lucas, à copier) : « ${sms.replace(/\n/g, " ")} »`.slice(0, 1500), metadata: JSON.stringify({ code: entree.code, canal: "SMS" }) } });
+  const code: CodeSms = entree.code === "LIEN_ESPACE" && (await simulationDansLEspace(dossierId)) ? "LIEN_ESPACE_SIMULATION" : entree.code;
+  const sms = await texteDuCatalogue(code, { prenom, lien });
+  await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_LIEN_COMMUNIQUE", direction: "SORTANT", contenu: `Lien de l'espace communiqué par SMS (texte rendu à Lucas, à copier) : « ${sms.replace(/\s+/g, " ")} »`.slice(0, 1500), metadata: JSON.stringify({ code, canal: "SMS" }) } });
   await recalculerMain(dossierId);
-  return { dossierId, code: entree.code, prenom, telephone: dossier?.clientTelephone ?? null, lien, sms, nouveau, email: a };
+  return { dossierId, code, prenom, telephone: dossier?.clientTelephone ?? null, lien, sms, nouveau, email: a };
 }

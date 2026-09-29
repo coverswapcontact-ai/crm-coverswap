@@ -1529,8 +1529,20 @@ relance à trente minutes.
   (`estDemandeArret` : STOP, ARRET, DESABONNER…) pose `stopLe` sur la conversation :
   tout envoi vers ce numéro est ensuite refusé par le serveur, quel que soit l'écran.
 - **Coût** : `mesurerSms` compte en GSM-7 (160/153) ou en Unicode (70/67) et nomme
-  les caractères fautifs ; `simplifierPourGsm` les remplace. Les douze messages types
-  (`modeles.ts`, table `ModeleSms`, modifiables dans Paramètres) sont écrits en GSM-7.
+  les caractères fautifs ; `simplifierPourGsm` les remplace. Seuls les textes qui
+  peuvent partir par le fournisseur (drapeau `fournisseur` du catalogue : accusés,
+  ancien circuit, nouveau lien, simulation en ligne) sont tenus en GSM-7 ; les SMS
+  copiés par Lucas partent de son téléphone (« À » permis).
+- **Catalogue unique** (mission 14, `catalogue.ts`) : chaque code a son libellé, son
+  groupe, sa phrase d'usage, ses variables permises, son lien (toujours en dernier,
+  sauf l'ancien circuit gardé tel quel) et son texte de départ. Les textes modifiés
+  vivent dans `ModeleSms` (une ligne par code, Paramètres → SMS, `verifierTexteSms`
+  au serveur comme à l'écran) et se lisent par `texteDuCatalogue` (`modeles.ts`) ;
+  l'interrupteur `actif` ne vaut que pour les accusés et l'ancien circuit
+  (`lireModele`). Le SMS proposé (`proposition.ts`) suit l'action et la source du
+  lead ; copier vaut envoi (`copie.ts`, événement `SMS_COPIE`, ou échange SMS d'un
+  lead sans dossier) : un texte qui porte le lien (`porteLienEspace`) passe la main
+  au client et fait tomber « Lien pas encore envoyé ».
 - **Accusé de réception** (`accuse.ts`) : seul envoi automatique. Texte de jour entre
   8 h 30 et 19 h 30 hors dimanche, variante « dès demain matin » sinon. Clé
   `accuse:<leadId>` : un lead, un accusé. Coupé si le modèle est désactivé, si le

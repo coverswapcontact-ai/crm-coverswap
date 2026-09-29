@@ -42,6 +42,26 @@ function teintesDuChoix(choixJson: string | null, simulations: { id: string; zon
 
 export type FiltreEspaces = { permanentId?: string; permanentIds?: string[]; espaceIds?: string[] };
 
+/** Les événements du dossier qui disent « lien communiqué » : un SMS copié par Lucas, ou le texte rendu par l'assistant (« lien_espace »). */
+const TYPES_LIEN_COMMUNIQUE = ["SMS_COPIE", "ESPACE_LIEN_COMMUNIQUE"];
+
+/**
+ * Le lien de l'espace est « envoyé » quand un texte qui le contient est parti : un SMS (fournisseur, pas en échec),
+ * un mail (mission 7), ou — mission 14, partie 5 — un SMS copié par Lucas (`SMS_COPIE`) ou rendu à copier par
+ * l'assistant (`ESPACE_LIEN_COMMUNIQUE`). Du plus ancien au plus récent ; `contient` restreint au jeton d'un espace.
+ * La même règle pour le signal « Lien pas encore envoyé », « Lien jamais ouvert » et le choix du SMS avec le lien ;
+ * c'est aussi le texte, pas le code, qui passe la main au client après un SMS copié (`sms/catalogue › porteLienEspace`).
+ */
+export async function liensEnvoyes(contient = "/e/"): Promise<{ texte: string; createdAt: Date }[]> {
+  const [sms, mails, evenements] = await Promise.all([
+    prisma.sms.findMany({ where: { sens: "SORTANT", texte: { contains: contient }, statut: { not: "ECHEC" } }, select: { texte: true, createdAt: true } }),
+    prisma.envoiMail.findMany({ where: { texte: { contains: contient }, statut: { in: ["A_ENVOYER", "ENVOYE"] } }, select: { texte: true, createdAt: true } }),
+    prisma.dossierEvenement.findMany({ where: { type: { in: TYPES_LIEN_COMMUNIQUE }, contenu: { contains: contient } }, select: { contenu: true, createdAt: true, survenuLe: true } }),
+  ]);
+  const communiques = evenements.map((e) => ({ texte: e.contenu, createdAt: e.survenuLe ?? e.createdAt }));
+  return [...sms, ...mails, ...communiques].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
 export async function listerEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}): Promise<LigneEspace[]> {
   const gratuites = await simulationsGratuites();
   const espaces = await prisma.espaceClient.findMany({
@@ -84,15 +104,12 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
   });
   const vivants = espaces.filter((e) => !e.dossier.archiveLe);
   const dossierIds = vivants.map((e) => e.dossierId);
-  const [activites, smsAvecLien, mailsAvecLien] = await Promise.all([
+  const [activites, envoisDuLien] = await Promise.all([
     dossierIds.length
       ? prisma.dossierEvenement.groupBy({ by: ["dossierId"], where: { dossierId: { in: dossierIds }, direction: "ENTRANT", type: { startsWith: "ESPACE_" } }, _max: { createdAt: true } })
       : Promise.resolve([] as { dossierId: string; _max: { createdAt: Date | null } }[]),
-    prisma.sms.findMany({ where: { sens: "SORTANT", texte: { contains: "/e/" }, statut: { not: "ECHEC" } }, orderBy: { createdAt: "asc" }, select: { texte: true, createdAt: true } }),
-    // Mission 7 : le lien part désormais par mail (notifications, nouveau lien, réponses).
-    prisma.envoiMail.findMany({ where: { texte: { contains: "/e/" }, statut: { in: ["A_ENVOYER", "ENVOYE"] } }, orderBy: { createdAt: "asc" }, select: { texte: true, createdAt: true } }),
+    liensEnvoyes(),
   ]);
-  const liensEnvoyes = [...smsAvecLien, ...mailsAvecLien].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const activiteParDossier = new Map(activites.map((a) => [a.dossierId, a._max.createdAt]));
 
   const lignes: LigneEspace[] = [];
@@ -101,8 +118,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
     // Le lien envoyé est celui du client (son espace permanent) ; un lien d'avant le 22/09 portait le code du projet.
     const signable = espace.permanent ?? espace;
     const jeton = jetonEspace(signable);
-    const envoi = liensEnvoyes.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
-    const ancienEnvoi = envoi ? null : (liensEnvoyes.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
+    const envoi = envoisDuLien.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
+    const ancienEnvoi = envoi ? null : (envoisDuLien.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
     const photos = (await photosDuClient(d.id, d.photos)).length;
     const vivantes = espace.simulations.filter((s) => !s.archiveLe);
     const publiees = vivantes.filter((s) => s.statut === "PUBLIEE");

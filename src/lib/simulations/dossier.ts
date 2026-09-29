@@ -15,8 +15,8 @@ import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { conversationDuNumero } from "@/lib/sms/conversations";
 import { envoyerSms } from "@/lib/sms/envoi";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
-import { lireModele } from "@/lib/sms/modeles";
-import { estMobileFrancais, remplirModele } from "@/lib/sms/texte";
+import { texteDuCatalogue } from "@/lib/sms/modeles";
+import { estMobileFrancais, prenomDuContact } from "@/lib/sms/texte";
 import { lireZones, surfaceDepuisLibelle, typeSurface, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 
 /**
@@ -332,7 +332,7 @@ export type ResultatPublication = { publiees: number; sms: { envoye: boolean; ra
 
 /** Texte du SMS « simulations prêtes », tel que Lucas le verra avant de publier. */
 export async function texteSmsPublication(dossierId: string): Promise<{ texte: string | null; raison?: string; dejaPrevenuLe?: string; attente?: string }> {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true, leadId: true, clientId: true, lead: { select: { prenom: true } } } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true, leadId: true, clientId: true, lead: { select: { prenom: true } }, client: { select: { prenom: true } } } });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
   const espace = await prisma.espaceClient.findFirst({ where: { dossierId } });
   if (!espace || espace.revoqueLe) return { texte: null, raison: "Le lien de l'espace est désactivé : émettez un nouveau lien pour prévenir le client." };
@@ -341,12 +341,10 @@ export async function texteSmsPublication(dossierId: string): Promise<{ texte: s
   const conversation = await prisma.conversationSms.findUnique({ where: { numero: numero! } });
   if (conversation?.stopLe) return { texte: null, raison: "Ce numéro a répondu STOP : aucun SMS ne peut plus lui être envoyé." };
   const recent = conversation ? await prisma.sms.findFirst({ where: { conversationId: conversation.id, sens: "SORTANT", modele: "SIMULATION_PRETE", statut: { not: "ECHEC" }, createdAt: { gte: new Date(Date.now() - 2 * 3_600_000) } }, orderBy: { createdAt: "desc" } }) : null;
-  const modele = await lireModele("SIMULATION_PRETE");
-  if (!modele?.actif) return { texte: null, raison: "Le message type « Simulation déposée » est désactivé (Paramètres → Messagerie SMS)." };
-  const prenom = (dossier.lead?.prenom ?? dossier.clientNom.split(/\s+/)[0] ?? "").trim();
   const lien = await lienPourLeProjet(espace);
   if (!lien) return { texte: null, raison: "Le lien de l'espace est désactivé : émettez un nouveau lien pour prévenir le client." };
-  const texte = remplirModele(modele.texte, { prenom: /^(inconnu|client)$/i.test(prenom) ? "" : prenom.split(/\s+/)[0], lien });
+  // Mission 14 (partie 5) : le texte vient du catalogue SMS (SIMULATION_PRETE), le prénom de la règle commune.
+  const texte = await texteDuCatalogue("SIMULATION_PRETE", { prenom: prenomDuContact(dossier.client?.prenom, dossier.lead?.prenom, dossier.clientNom), lien });
   // Sans fournisseur, le SMS est écrit mais reste en attente : Lucas le sait avant de cliquer.
   const fournisseur = etatFournisseur();
   return { texte, ...(recent ? { dejaPrevenuLe: recent.createdAt.toISOString() } : {}), ...(fournisseur.nom ? {} : { attente: fournisseur.remarque ?? "Aucun fournisseur de SMS configuré." }) };

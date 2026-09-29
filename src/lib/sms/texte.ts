@@ -101,6 +101,22 @@ export function remplirModele(modele: string, variables: Record<string, string |
     .trim();
 }
 
+/** Les valeurs posées faute de mieux par les formulaires (Meta, site) : ce ne sont pas des prénoms. */
+const PRENOM_PAR_DEFAUT = /^(inconnu|client)$/i;
+
+/**
+ * Le prénom à écrire au client : le premier mot du premier candidat qui en est un vrai (ni vide, ni « Inconnu »,
+ * ni « Client »), dans l'ordre donné — fiche client, lead, puis nom du dossier. Vide s'il n'y en a aucun
+ * (« Bonjour {prenom}, » devient alors « Bonjour, »). La même règle pour le SMS proposé, le mail et « lien_espace ».
+ */
+export function prenomDuContact(...candidats: (string | null | undefined)[]): string {
+  for (const candidat of candidats) {
+    const mot = (candidat ?? "").trim().split(/\s+/)[0] ?? "";
+    if (mot && !PRENOM_PAR_DEFAUT.test(mot)) return mot;
+  }
+  return "";
+}
+
 /** Le numéro est-il un mobile français joignable par SMS (06 ou 07) ? Attend le format international. */
 export function estMobileFrancais(numeroInternational: string | null | undefined): boolean {
   return /^\+33[67]\d{8}$/.test(numeroInternational ?? "");

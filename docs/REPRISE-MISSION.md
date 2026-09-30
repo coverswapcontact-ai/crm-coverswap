@@ -2429,7 +2429,7 @@ Calendar n'est pas activée dans le projet Google Cloud.
 Neuf parties livrées, chacune commitée, testée (suite complète, serveur d'essai arrêté), construite, déployée sur
 Railway et vérifiée en production par `/api/health` et `sante_systeme`. Commits : partie 1 `7795246`, 2 `9b0f89b`,
 3 `32dd676`, 5 `4391e35`, 4 `713ee5d`, 6 `7d00ed6`, 7 `f279a4d`, 8 `ae4f8b4`, 9 : le commit qui porte ce rapport. La suite passe de
-554 à 677 tests. Incident Railway (« API degradation causing slow or stuck deployments », 15:29 → 18:37 UTC) : le CRM
+554 à 678 tests. Incident Railway (« API degradation causing slow or stuck deployments », 15:29 → 18:37 UTC) : le CRM
 a répondu 502 pendant une heure après la partie 5 (rien à voir avec le code : démarrage rejoué en local sur une copie,
 sans erreur) et les parties 6 et 7 ont été déployées ensemble.
 
@@ -2471,3 +2471,266 @@ sans erreur) et les parties 6 et 7 ont été déployées ensemble.
   faire tourner le secret webhook.
 - Installer la version à jour de l'application sur l'iPhone (service worker v10) et vivre un vrai appel de bout en
   bout : feuille de fin d'appel, écran SMS (presse-papiers Safari), lead suivant.
+
+# Mission 15 (29-30/09/2026) — Simulateur : niveau studio graphique, sur le site et dans l'espace client
+
+Énoncé de Lucas (29/09/2026, soir ; enchaîné après la mission 14). Deux dépôts : le site `coverswap` (simulateur
+public et interface de l'espace client) et le CRM (génération, API de l'espace, moteur de prompt). Objectif : un seul
+moteur de prompt au niveau des prompts « studio », une génération asynchrone et visible, une interface haut de gamme
+et stable, les mêmes rendus sur le site et dans l'espace. Ordre imposé : génération asynchrone et écran d'attente →
+moteur (CRM) → banc → site → espace. Chaque partie : tests, lint, build, commit, déploiement vérifié (Railway pour
+le CRM, Vercel pour le site : `commit` de `coverswap.fr/api/health`), section ici. Aucune génération par les tests :
+tout ce qui coûte est simulé (faux OpenAI local pour les essais) ; seule la page `/simulateur/banc` génère, à la
+demande de Lucas. Méthode : cartographie par cinq lecteurs, puis par partie : conception écrite, implémentation, trois
+relectures (conformité, sûreté et coût, écrans et textes), correction des constats vérifiés, vérification de
+l'orchestrateur (suites complètes des deux dépôts, builds, essai local de bout en bout, déploiements).
+
+## Partie 1 — Génération asynchrone, visible, reprenable (29/09, relecture corrigée le 30/09)
+
+Énoncé § 2 : « je ne comprends pas que la simulation est en train d'être créée, et je devrais pouvoir quitter à tout
+moment ». Le CRM crée un TRAVAIL et répond tout de suite ; la génération tourne en tâche de fond (voie longue de
+l'exécuteur) ; le navigateur suit, montre un écran d'attente honnête, et retrouve le rendu au retour — même après avoir
+fermé l'onglet, même par le lien d'un mail sur un autre appareil. Plus aucun repli Vercel. Le prompt ne change pas (il
+vient encore de `prepare` du site) ; le moteur est la partie 2. Déploiement : CRM d'abord (nouveau contrat), puis site ;
+le CRM garde l'ancien contrat synchrone tant que le site d'avant l'appelle.
+
+### CRM
+- **Schéma** : nouveau modèle `TravailSimulation` (`prisma/schema.prisma`, après `SimulationSite`) : `parcoursId`,
+  `leadId?`, `ipOrigine?`, `projet`, `references` (JSON), `page/source/campagne?`, `statut` (`EN_ATTENTE | EN_COURS |
+  PRETE | ECHEC`), `etape?` (`analyse | matieres | rendu`, libre pour la partie 2), `demarreLe?`, `termineLe?`,
+  `dureeMs?`, `erreurRaison?`, `erreurMessage?`, `simulationSiteId?`, `promptTexte?`, `swatchUrls` (JSON), `photoPath?`
+  (`site/<parcoursId>/travaux/<id>.jpg` sur le volume, **effacé dès PRETE**), `notifierEmail?`, `notifierTelephone?`,
+  `notifieLe?`, `archiveLe?`, `archiveMotif?`, `ecriture?` ; index `parcoursId`, `statut`. Ajout pur (compatible `db push`
+  sans `--accept-data-loss`) ; `npx prisma generate` fait. **Aucune migration de données** (nouveau modèle vide).
+- **`POST /api/simulate`** (`src/app/api/simulate/route.ts`, réécrit) : origine étrangère → **403** (comme
+  `api/espace`) ; ordre des vérifications **expiration → HMAC → quota (`simulationAutorisee`) → `purgerSiNecessaire`**
+  (une requête forgée ou expirée ne consomme plus rien). Corps avec `asynchrone: true` → `creerTravailSimulation` (photo
+  écrite sur le volume, travail EN_ATTENTE, tâche `SIMULATION_SITE` clé `simulation-site:<id>`, `tentativesMax 1`,
+  `delaiMaxMs 240 000`, priorité 7) et réponse **202** `{ ok, travailId, attenteEstimeeS }` (`attenteEstimeeS` = médiane
+  des `dureeMs` des 20 derniers travaux PRETE, sinon 75, jamais sous 15). Une photo vide ou trop grosse → ECHEC
+  « photo-refusee » ; une **écriture impossible sur le volume** (plein, droits) → ECHEC « stockage » (`MESSAGE_STOCKAGE`,
+  qui n'accuse pas la photo) et **quota rendu** (`rendreSimulation`) ; exception à la création → `rendreSimulation` puis
+  500 avec un message qui dit quoi faire. Sans `asynchrone` : **ancien contrat synchrone** conservé à l'identique
+  (extraction pure `src/lib/site/simulation-synchrone.ts › genererEtGarderSynchrone`), à retirer en partie 4 une fois le
+  site déployé. CORS : `GET, POST, OPTIONS` (`src/lib/site/cors-simulate.ts` : en-têtes, origine, IP, validation des
+  identifiants — partagé par les trois routes).
+- **`GET /api/simulate?id=<travailId>&p=<parcoursId>`** (même route, `Cache-Control: no-store`, sans quota) :
+  `suivreTravail` (`src/lib/simulations/travaux-lecture.ts`) → `{ statut, etape, attenteEstimeeS, demarreLe, termineLe,
+  simulationSiteId, references, image?, imageAvant?, erreur?: { raison, message } }` ; `image`/`imageAvant` en data URL
+  **seulement PRETE** ; 404 sans détail si le parcours ne correspond pas. Un travail EN_COURS depuis plus de 10 min ou
+  jamais pris après 30 min se lit **ECHEC « delai »** (`statutLu`) ; un rendu purgé ou un travail archivé par la purge →
+  ECHEC « purgee » (`MESSAGE_PURGEE`, lu AVEC les archives : `AVEC_ARCHIVES`, l'extension Prisma écarte sinon les lignes
+  archivées).
+- **`GET /api/simulate/image?id=&p=&quoi=apres|avant`** (`src/app/api/simulate/image/route.ts`) : le rendu ou la
+  photo avant cadrée, servis par adresse (`private, max-age=86400`, `noindex`) — les fichiers suivent le rattachement au
+  lead (`cheminsImagesTravail` lit la `Simulation` du lead quand la `SimulationSite` a été déplacée).
+- **Tâche `SIMULATION_SITE`** (`src/lib/simulations/travaux.ts › executerTravailSimulation`, enregistrée par
+  `enregistrerTachesSimulationSite` dans `taches/traitements.ts`, acteur `SYSTEME:simulateur-site`, **voie longue**) :
+  EN_ATTENTE → EN_COURS (`demarreLe`, `etape: "rendu"`, `updateMany` conditionnel) → `genererRendu` (origine SITE, via
+  `generateurSite()` remplaçable) → `enregistrerSimulationSite` (photo avant gardée = `resultat.avant` **cadrée au
+  format du rendu** quand il existe, sinon la photo du visiteur) + rattachement au lead du parcours (ou au lead posé par
+  « Me prévenir », relu à ce moment) + `assurerDossierDeSimulation` → **photo du travail effacée du volume**
+  (`images.ts › effacerImage` : fichier + dossier `travaux/` s'il est vide ; la SimulationSite garde l'avant, « Réessayer »
+  renvoie la photo depuis le navigateur) → PRETE + `simulationSiteId` + `dureeMs` + `photoPath: null` +
+  `notifierTravailPret`. Échec classé → ECHEC + raison/message (`config` → `service-indisponible`) ; `rendreSimulation(ip)`
+  sur `service-indisponible`, `config`, `interrompue`. Exception au stockage → ECHEC « stockage ». Travail déjà démarré
+  réclamé une seconde fois → **ECHEC « interrompue »** sans rappeler OpenAI ; travail déjà fini → inchangé. `signal`
+  respecté : abandon → ECHEC « delai » tout de suite ; si le rendu arrive quand même plus tard (payé), il est gardé et le
+  travail passe PRETE (le lien du mail et la reprise le retrouvent) — c'est pourquoi la photo d'un travail ECHEC n'est
+  effacée que par la purge, pas à l'échec.
+- **Rétention** (`src/lib/site/simulations.ts › purgerTravauxSimulation`, appelée par `purgerSiNecessaire` avec la purge
+  des SimulationSite, même passage, mêmes 30 jours) : travaux non archivés de plus de 30 jours → photo effacée, dossier
+  `travaux/` retiré s'il est vide, `photoPath / ipOrigine / promptTexte: null`, `archiveLe` + `archiveMotif` (jamais de
+  delete) ; le suivi répond encore « purgee ».
+- **Voie longue de l'exécuteur** (`src/lib/taches/executeur.ts`, `registre.ts › Traitement.voie`,
+  `typesDeVoieLongue`, `file.ts › reveillerExecuteur`) : les traitements `voie: "longue"` (`SIMULATION_SITE`,
+  `SIMULATION_API` dans `simulateur/taches.ts`) sont lus **à part** (requête dédiée, `LONGUES_MAX = 2` places, ids en
+  cours exclus) et lancés sans attendre ; les courtes gardent leur tour en série (`TACHES_PAR_TOUR`). Une place libérée
+  réveille l'exécuteur. Essais : `tachesLonguesEnCours()`, `attendreTachesLongues()`.
+- **« Me prévenir »** : `POST /api/simulate/prevenir` (`src/app/api/simulate/prevenir/route.ts`) avec `{ travailId,
+  parcoursId, email?, telephone?, consentement: true, consentementTexte? }` — preuve = le couple travail (cuid) + parcours
+  (UUID), limite 12 par IP et 10 min, origine vérifiée. `src/lib/simulations/prevenir.ts › enregistrerDemandePrevenir` :
+  lead du parcours retrouvé (même parcours ET même contact, sinon même e-mail/téléphone — **e-mail, téléphone et parcours
+  manquants complétés sur la fiche**) ou créé (prénom/nom « Inconnu » comme le webhook, source `SITE_SIMULATEUR`,
+  `typeProjet` déduit du projet, `formulaire: "simulateur · me prévenir"`), note « En attente du rendu : a demandé à être
+  prévenu par … » (téléphone seul : « aucun SMS automatique : à rappeler quand le rendu est prêt »), **consentement
+  enregistré comme par le webhook** (`rattacherLead` avec `{ accorde: true, moyen: FORMULAIRE_SITE, preuve: texte de la
+  case }` — une ligne `consentementMail` par demande, jamais rejouée), `classerLeadSansBloquer`, **alerte à Lucas**
+  (`notifierDemandeDuSite`, origine `lead-site`, pour un contact nouveau ou un numéro qui n'était pas encore sur ce
+  travail : téléphone seul = c'est lui qui rappelle), `notifierEmail`/`notifierTelephone`/`leadId` sur le travail ;
+  rejouable (ni second lead, ni seconde note, ni second consentement). **Statut relu après l'écriture** : si le rendu est
+  arrivé pendant la demande (la tâche a relu le travail avant l'adresse), le mail part quand même — `notifieLe` garantit
+  l'unicité si les deux chemins l'appellent. Messages d'erreur complets (« … : vérifiez-la », « … : relancez-la depuis
+  vos choix », « Le service ne répond pas : réessayez dans un instant »).
+- **Mail « simulation prête »** (`notifierTravailPret`) : une fois par travail (`notifieLe` posé par `updateMany`
+  conditionnel AVANT l'envoi, rendu si l'envoi échoue), seulement avec une adresse, seulement si l'interrupteur
+  **`NOTIF_SIMULATION_SITE_PRETE`** est actif (paramètre `definitions.ts` groupe SIMULATEUR, choix ACTIF/INACTIF, actif
+  tant qu'il n'est pas coupé ; automatisme du même code dans `automatismes/interrupteurs.ts`, famille ESPACE, réglable
+  par Paramètres et `modifier_parametres`, listé par `voir_parametres`). Gabarit `mailNotification` des notifications de
+  l'espace (`MODELE_SIMULATION_SITE_PRETE`), rendu PNG en pièce jointe, lien
+  **`https://coverswap.fr/simulateur?reprise=<travailId>&p=<parcoursId>`** (`lienDeReprise` : les DEUX preuves que le
+  suivi exige — ouvert sur un autre appareil, sans mémoire locale, le site adopte ce parcours), `repondreA` contact@.
+  Envoyeur commun `mail/envoi.ts › envoyeurMail()` (boîte Gmail si connectée, sinon Resend ; remplaçable en essai).
+  Trace : interaction `EMAIL` sur le lead.
+- **Écran Leads** : `simulations/travaux-lecture.ts › travauxSiteRecents(7)` (compteurs sur la semaine, 20 lignes :
+  statut, projet, teintes, raison et message d'échec, « à prévenir » / « prévenu par mail ») → `leads/page.tsx` →
+  `EcranLeads` (`travauxInitial`) → `SurLeSite.tsx` : « · N en cours · N en échec » dans la ligne repliée, et la liste
+  des travaux au-dessus des simulations quand elle est ouverte.
+- **Routes publiques** : `/api/simulate/image` et `/api/simulate/prevenir` (exacts) ajoutés à `routes-publiques.ts`,
+  test complété (`/api/simulate/autre` reste non public). `src/proxy.ts` non touché.
+- **RGPD** : `TravailSimulation` inscrit dans la carte des données personnelles (`rgpd/carte.ts` : `notifierEmail`,
+  `notifierTelephone`, `ipOrigine`, `photoPath`, `promptTexte`, `references` effacés ; projet, statut, dates, durée et
+  raison gardés) et dans le périmètre d'anonymisation (`rgpd/anonymisation.ts`) : les travaux **du lead OU de son
+  parcours** (le webhook rattache les simulations, pas les travaux : un client qui a simulé puis demandé un devis laissait
+  sa photo, son IP et la consigne qui décrit sa pièce), photo effacée du volume par la tâche d'effacement.
+
+### Site
+- **Lanceur de tests** : `"test": "node --import tsx --test \"src/**/*.test.ts\""`, `tsx` en devDependency
+  (`package.json`, `package-lock.json`).
+- **Mémoire locale v2** (`src/lib/simulateur/stockage.ts`, IndexedDB `coverswap-simulateur` version 2) : `projet`,
+  `photo` (data URL réduite), `selections`, `parcoursId` (copié depuis le sessionStorage, remis dedans au retour :
+  `lib/parcours.ts › adopterParcoursId`), `travailEnCours { travailId, lanceLe, attenteEstimeeS } | null`,
+  `rendus[] { travailId, simulationSiteId, urlApres, urlAvant, references, le }` (adresses du CRM, **plus aucune image
+  en base64**), `majLe`. Migration douce v1 → v2 à la lecture (`lib/simulateur/reprise.ts › migrerEtat`) :
+  `simulationSiteIds` gardés dans `rendus` sans adresse (ils partent avec la demande de devis), `resultat` et
+  `rendusLocaux` abandonnés.
+- **Génération** (`src/lib/simulateur/generation-client.ts`) : `prepare` (inchangé, un jeton Turnstile par appel) →
+  `POST CRM /api/simulate` avec `asynchrone: true` → `travailEnCours` en mémoire → sondage `GET /api/simulate?id=&p=`
+  toutes les 3 s (`_components/useSondage.ts` : relancé au `visibilitychange` visible et à `online`, arrêt à PRETE /
+  ECHEC). La décision est une fonction pure (`reprise.ts › reduireSondage`) : réponse en cours → continuer ; PRETE →
+  résultat ; ECHEC → raison/message du CRM ; 404 → « introuvable » ; réseau ou 5xx → « hors ligne », on continue (le
+  travail continue côté CRM) et on n'abandonne qu'après 10 min ; **« delai » seulement EN_COURS, compté depuis le
+  `demarreLe` du CRM, même seuil que lui (10 min, `EN_COURS_MAX_MS`)** — en file d'attente (campagne : deux générations
+  en parallèle au plus), le navigateur attend tant que le CRM ne dit pas ECHEC ; un rendu payé n'est plus abandonné à 6
+  min. **`/api/simulation` (repli Vercel) supprimée**, ainsi que `lib/simulateur/cadrage.ts` et
+  `lib/simulateur/erreurs-generation.ts` (copie morte des messages du CRM) ; CRM injoignable au lancement → « Le
+  service de simulation ne répond pas pour l'instant. Votre photo et vos choix sont conservés : réessayez dans un
+  instant. » + Réessayer. « Voir le résultat » attend le jeton Turnstile quand la clé est posée ; **« Réessayer » aussi**
+  (bouton désactivé avec « Vérification anti-robot en cours… » tant que le jeton suivant n'est pas là :
+  `attenteReessai`). Le texte de la case « Me prévenir » (`TEXTE_CONSENTEMENT_PREVENIR`, `reprise.ts`) part avec la
+  demande comme preuve du consentement.
+- **Écran d'attente** `src/components/simulation/EcranAttente.tsx` (réutilisable par l'espace en partie 6, sans réseau
+  ni Turnstile, thème clair blanc cassé / noir doux, coins peu arrondis, sans emoji) : la photo en grand assombrie +
+  lueur CSS lente (`@keyframes lueur-attente` dans `globals.css`, `motion-reduce:hidden`) ; tuiles des films (vignette +
+  nom) ; trois étapes nommées avec phrase (« Lecture de votre photo », « Préparation des matières », « Rendu
+  photographique »), cochées d'après `etape` (`etapesCochees` : `rendu` → deux premières, PRETE → toutes) ; **titre `h2`
+  « Votre simulation se prépare »** (nom accessible de la région), temps indicatif en mots dessous (`texteAttente`,
+  arrondi à 15 s : « environ 1 min 15 », jamais une barre) ; `aria-live="polite"` sur le statut ; la phrase clé « Vous
+  pouvez quitter cette page : votre simulation continue. Revenez sur le simulateur pour la retrouver. » ; « Me prévenir
+  quand c'est prêt » (e-mail ou téléphone + case de consentement → `demanderAEtrePrevenu`) ; état d'échec : titre « Nous
+  n'avons pas réussi cette fois-ci. » + LE message (cause et action suivante — **la phrase « Votre photo et vos choix
+  sont conservés » n'est plus écrite deux fois** : elle n'est que dans les messages, `MESSAGE_ECHEC_GENERIQUE` ne
+  répète plus le titre) + Réessayer (sauf pannes : quota, service indisponible, captcha) + la demande « simulation à la
+  main » (`children`, titre en `h3`). Pendant l'attente, Choisir / Retirer / Changer de photo **et l'indicateur d'étapes**
+  (`Formulaires.tsx › Indicateur verrou`) sont désactivés (« Choix figés pendant la génération ») ; `?projet=` dans
+  l'adresse ne change pas la pièce d'un travail en cours.
+- **Reprise** (`reprise.ts › decisionAuMontage`, `Simulateur.tsx`) : `travailEnCours` → l'écran d'attente reprend le
+  sondage (un rendu arrivé pendant l'absence → résultat) ; `?reprise=<travailId>&p=<parcoursId>` (lien du mail) sonde ce
+  travail **avec le parcours du lien** (`decision.parcoursId`, adopté avant de sonder : autre appareil, mémoire vide) ;
+  parcours récent (< 30 jours) sans travail → bandeau « Reprendre ma simulation » (vignette, Reprendre → étape 2 ou 3,
+  Recommencer) ; arrivée depuis l'accueil (`/simulateur?suite=1`) → direct. **Sans photo sur cet appareil** : l'étape 2
+  se rend quand même (échec posé, ou « Commencez par une photo » + bouton), l'échec dit la vérité
+  (`MESSAGE_SANS_PHOTO` : « Nous ne retrouvons pas cette simulation sur cet appareil. Si un mail vous l'a annoncée, le
+  rendu y est joint ; pour en faire une nouvelle, commencez par une photo. ») avec « Nouvelle simulation » à la place de
+  Réessayer et du formulaire (qui ne peut pas partir sans photo) ; « Essayer une autre finition » sans photo → étape 1.
+  `HomeClient.tsx` **fusionne** avec la mémoire (rendus, parcours, travail en cours gardés ; photo et pièce remplacées —
+  **sauf pendant une génération** : la photo et la pièce du travail en cours restent, la nouvelle photo attendra la fin).
+- **Arrivée du résultat** (`_components/EcranResultat.tsx`) : les deux images préchargées **avant** d'être montrées, leur
+  rapport (`naturalWidth / naturalHeight`) réserve la place du bloc (à défaut 4/3 comme l'écran d'attente : plus de
+  saut de mise en page à la reprise ni au changement de rendu), la photo avant se fond dans l'après en 1 s (opacité ;
+  instantané si `prefers-reduced-motion`), puis `AvantApres` de l'espace (`components/espace/AvantApres.tsx`, hauteur
+  naturelle, `touch-pan-y`, nouvelle prop facultative `ratio`) remplace `BeforeAfterSlider` (fichier laissé, plus
+  importé). Plusieurs rendus → pastilles « Rendu 1, 2… » (44 px de haut).
+- **Contact** : `simulationIds` = tous les `simulationSiteId` du parcours ; après un rendu, les références du rendu
+  affiché ; **après un échec** (`envoyer(e, depuisEchec = true)`), les choix COURANTS, la photo et `simulationEchouee` —
+  jamais les références d'un rendu précédent. `/api/simulation/contact` n'accepte plus `rendusLocaux`.
+  `Simulateur.tsx` découpé : `Formulaires.tsx` (Indicateur, ChampsContact), `EcranResultat.tsx`, `useSondage.ts`.
+- **Promesse de délai** : une seule formulation, `lib/offre.ts › DELAI_RENDU` = « une à deux minutes »
+  (`DUREE_SIMULATION` y renvoie), reprise par la page du simulateur (description, étapes « Comment ça marche », intro) et
+  le bouton ; l'écran d'attente garde l'estimation calculée.
+- **Documentation** : `docs/SUIVI.md` (§ 2 `SIMULATION_ECHEC` avec ses étapes `photo | lancement | generation`, § 5
+  variables Vercel `OPENAI_*` inutiles au site, § 6 flux asynchrone), `.env.example` (variables OpenAI retirées côté site),
+  commentaires de `simulation-prompt.ts` et `projets.ts` (plus de `/api/simulation`),
+  `scripts/verifier-simulateur.mjs` au nouveau contrat (202 → sondage `?id=&p=` → PRETE/ECHEC, image par adresse, 404
+  d'un autre parcours ; `--sans-generation` ne coûte rien).
+- Tests site : `src/lib/simulateur/reprise.test.ts` (8) — migration v1 → v2, décision au montage (travail en cours,
+  lien `?reprise=` avec et sans `p`, bandeau/direct/trop vieux), machine d'état du sondage (continuer, prêt, échec, hors
+  ligne, 404, délai depuis `demarreLe`, file d'attente qui ne devient pas un échec, aucun message ne répète le titre),
+  étapes cochées, attente en mots.
+
+### Décisions
+- Suivi par `GET /api/simulate?id=&p=` (chemin exact déjà public), images par **adresse** (`/api/simulate/image`),
+  l'état du navigateur ne garde plus de base64.
+- Ancien contrat détecté par l'absence de `asynchrone: true` ; à retirer en partie 4.
+- Téléphone seul = **pas de SMS** ; la note du lead le dit, l'alerte fait sonner le téléphone de Lucas, il rappelle.
+- Voie longue à **2** ; lue à part des courtes (sinon une file de générations cachait les mails dans un tour de 10).
+- Preuve de « Me prévenir » = `travailId + parcoursId` (rien de devinable) + limite par IP ; pas de Turnstile sur cet
+  appel. Le lien du mail porte les deux (le parcours est un UUID de session, pas une identité).
+- Mail « simulation prête » par l'envoyeur commun (`envoyeurMail()` : Gmail si connectée, sinon Resend) et non par
+  `programmerEnvoi` (qui exige un dossier et la boîte Gmail) ; gabarit des notifications de l'espace, rendu en pièce
+  jointe.
+- La photo avant gardée en `SimulationSite` est la version **cadrée au format du rendu** ; sans cadrage, la photo du
+  visiteur. La photo du travail est effacée dès PRETE (volume de 500 Mo), gardée jusqu'à la purge pour un ECHEC (un rendu
+  tardif après abandon par `signal` a encore besoin d'elle).
+- Rétention des travaux = celle des simulations du site (30 jours), archivage jamais suppression ; un travail archivé
+  répond « purgee » au suivi.
+- Règle de délai côté navigateur = celle du serveur (10 min EN_COURS depuis `demarreLe`) ; l'attente en file n'est jamais
+  un échec côté navigateur.
+- Consentement de « Me prévenir » enregistré comme celui du webhook (une ligne par demande, preuve = texte de la case,
+  transmis par le site, connu du CRM à défaut).
+- Aucune migration de données ; aucun nouvel outil MCP (empreinte inchangée) ; `voir_parametres` liste le nouvel
+  interrupteur par `listerAutomatismes`.
+
+### Relecture (30/09) — 23 constats de trois relecteurs, tous vérifiés dans le code
+Corrigés (21) : lien du mail sans parcours (×3, bloquant côté site) ; page vide après un échec sans photo ; photo des
+travaux jamais effacée (×2) ; anonymisation limitée aux travaux avec `leadId` ; consentement et alerte absents de « Me
+prévenir » ; délai client à 6 min quel que soit le statut ; course « Me prévenir » / fin de tâche ; choix « figés »
+contournables (indicateur, `?projet=`, accueil) ; formulaire d'échec avec les références d'un ancien rendu ;
+« Réessayer » muet sans jeton Turnstile ; téléphone non complété sur un lead connu ; fichier mort + commentaires +
+`.env.example` + script de vérification ; écriture impossible sur le volume lue comme « photo refusée » sans quota rendu ;
+phrase d'échec écrite deux fois ; promesse « moins d'une minute » contre « une à deux minutes » ; titre accessible de
+l'écran d'attente et `h2 → h4` ; pastilles sous 44 px ; saut de mise en page du résultat ; messages d'erreur sans action
+suivante ; documentation en retard. Écarté (0). Deux constats étaient des doublons d'un autre (même correction).
+
+### Vérifié
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 9 fichiers touchés par la relecture 0 ;
+  `mission-15-partie-1.test.ts` **16/16** (création 202 + travail + tâche ; ordre expiration → HMAC → quota ; 403
+  origine ; ancien contrat ; PRETE + SimulationSite + dureeMs + GET + image + médiane + **photo du travail effacée** ;
+  ECHEC classé + « Sur le site » ; réclamation double → interrompue sans second appel ; signal → delai + travail perdu ;
+  **purge à 30 jours (fichier absent, ligne archivée, suivi « purgee », récent intact)** ; **volume inaccessible →
+  « stockage », générateur non appelé, quota rendu, photo vide → « photo-refusee »** ; « Me prévenir » e-mail (un lead,
+  une note, **un consentement, une alerte**, un mail avec pièce jointe et **lien `?reprise=&p=`**, jamais deux,
+  rattachement, image lisible après déplacement) ; téléphone seul (**alerte**) + demande tardive ; **e-mail puis numéro →
+  numéro sur la fiche + alerte** ; **anonymisation d'un travail du parcours sans `leadId`** ; interrupteur coupé ; voie
+  longue 3 → 2 + 1, courte non bloquée — le test attend désormais que les deux longues aient réclamé leur ligne, elles
+  sont lancées sans être attendues). Suites des modules touchés : `site` 3/3, `rgpd` 7/7, `routes-publiques` 3/3,
+  `prospects/notification` 2/2, `erreurs-generation` 3/3, `mission-14-partie-7` (anonymisation) 14/14. OpenAI simulé
+  par injection (`definirGenerateurEssai`), mail par `definirEnvoyeurMailEssai`, alerte constatée par la ligne
+  `AlerteEnvoi` (`origine: lead-site`, aucun canal configuré → rien ne part).
+- Site : `npm run lint` 0 ; `npm test` 8/8 ; `npx tsc --noEmit` propre sur les sources (les seules erreurs viennent de
+  `.next/types/validator.ts` et `.next/dev/types/validator.ts`, caches d'un ancien `next dev`/`build` qui citent encore
+  la route supprimée : le prochain `next build` les régénère).
+
+### Reste / à savoir
+- Rien essayé dans un navigateur (ni `next dev`, ni `next build` : à l'orchestrateur). À regarder en vrai : lien du mail
+  ouvert sur un autre appareil (écran d'attente puis résultat sans photo locale, « Essayer une autre finition » → photo),
+  le fondu et la place réservée du résultat, « Réessayer » avec la clé Turnstile posée.
+- La course « Me prévenir » / fin de tâche et le `catch` de la route (`rendreSimulation` avant le 500) sont corrigés mais
+  pas couverts par un test dédié (le chemin « demande après PRETE → mail tout de suite » exerce la relecture du statut).
+- Promesse de délai : la page du simulateur dit « une à deux minutes » ; l'accueil (« Transformé en 60 s », « moins
+  d'une minute »), le pied de page, les zones, le blog et la FAQ disent encore « 60 secondes » / « moins d'une minute »
+  (`HomeClient.tsx`, `Footer.tsx`, `zones/[slug]/page.tsx`, `blog/page.tsx`, `data/faq.ts`, `data/blog-articles.ts`,
+  `app/page.tsx`, `llms.txt`) : texte marketing, à aligner sur `DELAI_RENDU` en partie 4 (design complet) ou sur décision
+  de Lucas.
+- Accueil pendant une génération : la nouvelle photo de l'accueil n'est pas gardée (la mémoire reste celle du travail en
+  cours) ; le visiteur retombe sur l'écran d'attente. À améliorer si le cas se présente (garder la photo en attente).
+- `BeforeAfterSlider.tsx` n'est plus importé (à retirer en partie 4 avec le design complet). Le formulaire « simulation
+  à la main » sous l'échec garde les champs sombres du site dans la carte claire (design complet en partie 4).
+- La partie 2 remplira `etape: "analyse" | "matieres"` ; la partie 6 réutilisera `EcranAttente`.
+- Vercel : `OPENAI_API_KEY` / `OPENAI_IMAGE_MODEL` ne servent plus au site (repli supprimé) : à retirer des variables
+  quand Lucas le souhaite (noté dans `.env.example` et `docs/SUIVI.md`). Aucun secret touché.
+- Vérifié par l'orchestrateur : CRM tsc, eslint, suite complète 694/694, build ; site lint, 8 tests, build. Essai local
+  de bout en bout (site sur 3000 → copie du CRM sur 3001 → faux OpenAI sur 3999) : `POST /api/simulate` → 202, sondage
+  `GET ?id=&p=` toutes les 3 s, tâche SIMULATION_SITE terminée en 5 s, écran d'attente (photo assombrie, film, trois
+  étapes, « environ 15 s » sur la médiane locale, phrase de reprise, « Me prévenir »), fondu puis curseur avant/après au
+  ratio réel (1024 × 1024), formulaire ; aucun débordement à 390 px. Déploiement : CRM d'abord, site ensuite.

@@ -114,6 +114,47 @@ model SimulationSite {
   @@index([createdAt])
 }
 
+// Mission 15 (partie 1) — une génération du simulateur du site, ASYNCHRONE :
+// créée à la demande du navigateur (EN_ATTENTE, photo écrite sur le volume),
+// prise par la tâche SIMULATION_SITE (EN_COURS), puis PRETE (la SimulationSite
+// est créée, `simulationSiteId`) ou ECHEC (raison classée + message pour le
+// visiteur). Le navigateur la suit par GET /api/simulate?id=&p= et la retrouve
+// après avoir quitté la page ; « Me prévenir » ajoute une adresse, et UN mail
+// part à la fin (`notifieLe`, jamais deux fois). Rien ne se supprime : archivage.
+model TravailSimulation {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  parcoursId        String
+  leadId            String? // lead du parcours (« Me prévenir » ou coordonnées déjà laissées)
+  ipOrigine         String?
+  projet            String // cuisine | salle-de-bain | meubles | mur-plafond | professionnel
+  references        String    @default("[]") // JSON { zone, libelle, ref, nom }[]
+  page              String?
+  source            String?
+  campagne          String?
+  statut            String    @default("EN_ATTENTE") // EN_ATTENTE | EN_COURS | PRETE | ECHEC
+  etape             String? // analyse | matieres | rendu (libre : la partie 2 en ajoute)
+  demarreLe         DateTime?
+  termineLe         DateTime?
+  dureeMs           Int?
+  erreurRaison      String? // service-indisponible | photo-refusee | surcharge | delai | erreur | interrompue | stockage…
+  erreurMessage     String?
+  simulationSiteId  String?
+  promptTexte       String?
+  swatchUrls        String    @default("[]") // JSON string[]
+  photoPath         String? // site/<parcoursId>/travaux/<id>.jpg sur le volume
+  notifierEmail     String?
+  notifierTelephone String?
+  notifieLe         DateTime?
+  archiveLe         DateTime?
+  archiveMotif      String?
+  ecriture          String?
+
+  @@index([parcoursId])
+  @@index([statut])
+}
+
 // Événement de parcours sur le site (simulation lancée, résultat vu, devis
 // demandé…) : aucune donnée personnelle, un identifiant de parcours navigateur
 // et la page. Lu par la synthèse (audience par source et par page).

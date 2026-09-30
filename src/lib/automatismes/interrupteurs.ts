@@ -18,6 +18,8 @@ export type Automatisme = { code: string; libelle: string; description: string; 
 
 const CODE_SMS = "SMS_ACCUSE_RECEPTION";
 const CODE_SMS_HORS_HORAIRES = "SMS_ACCUSE_RECEPTION_HORS_HORAIRES";
+/** Paramètre (groupe Simulateur) et non modèle de notification de l'espace : le destinataire est un visiteur du site, sans dossier. */
+const CODE_NOTIF_SIMULATION_SITE = "NOTIF_SIMULATION_SITE_PRETE";
 
 export async function listerAutomatismes(): Promise<Automatisme[]> {
   const liste: Automatisme[] = [];
@@ -32,6 +34,9 @@ export async function listerAutomatismes(): Promise<Automatisme[]> {
   for (const s of await listerSequences()) {
     liste.push({ code: `SEQUENCE_${s.code}`, libelle: `Séquence de mails : ${s.nom}`, description: `${s.description} (${s.mode === "AUTOMATIQUE" ? "envoi automatique" : "chaque mail passe par « À valider »"}).`, famille: "SEQUENCE", actif: s.active });
   }
+  // Mission 15 (partie 1) : le mail « simulation prête » du simulateur du site (« Me prévenir »), actif par défaut.
+  const simulationSite = await lireParametre(CODE_NOTIF_SIMULATION_SITE);
+  liste.push({ code: CODE_NOTIF_SIMULATION_SITE, libelle: "Mail au visiteur du site : simulation prête (« Me prévenir »)", description: "Un visiteur de coverswap.fr qui attend son rendu peut laisser son adresse : un seul mail part quand c'est prêt, avec l'image et le lien pour la retrouver. Jamais de SMS.", famille: "ESPACE", actif: simulationSite !== "INACTIF" });
   const ia = await lireParametre("IA_CRM_ACTIVE");
   liste.push({ code: "IA_CRM", libelle: "IA appelée par le CRM lui-même (clé du serveur, coût par appel)", description: "En pause : seul l'assistant Claude (MCP, abonnement) lit et rédige. Active : l'ancien chemin est de nouveau permis.", famille: "AGENT", actif: ia === "ACTIVE" });
   const rangement = await lireParametre("MAIL_RANGEMENT_GMAIL");
@@ -48,7 +53,9 @@ export async function lireAutomatisme(code: string): Promise<Automatisme> {
 /** Règle un interrupteur ; rend l'état d'avant et d'après. */
 export async function reglerAutomatisme(code: string, actif: boolean, par: string): Promise<{ avant: Automatisme; apres: Automatisme }> {
   const avant = await lireAutomatisme(code);
-  if (code.startsWith("NOTIF_")) {
+  if (code === CODE_NOTIF_SIMULATION_SITE) {
+    await enregistrerParametre({ cle: CODE_NOTIF_SIMULATION_SITE, valeur: actif ? "ACTIF" : "INACTIF", valableDu: new Date(), source: par });
+  } else if (code.startsWith("NOTIF_")) {
     const evenement = code.slice("NOTIF_".length) as EvenementNotifie;
     const modele = await modeleNotification(evenement);
     await enregistrerModeleNotification(evenement, { ...modele, actif }, par);

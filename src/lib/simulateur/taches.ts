@@ -20,6 +20,8 @@ export function enregistrerTachesSimulateur(): void {
     acteur: "SYSTEME:simulateur",
     tentativesMax: 1,
     delaiMaxMs: 240_000,
+    // Mission 15 : voie longue de l'exécuteur (deux générations en parallèle, sans bloquer les tâches courtes).
+    voie: "longue",
     executer: async (charge) => executerGenerationApi((charge as { preparationId: string }).preparationId),
   });
   enregistrerTravailPeriodique({

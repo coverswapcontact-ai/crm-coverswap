@@ -53,6 +53,8 @@ describe("routes publiques", () => {
       "/api/webhook/meta",
       "/api/webhook/zapier",
       "/api/simulate",
+      "/api/simulate/image",
+      "/api/simulate/prevenir",
       "/manifest-crm.webmanifest",
       "/sw.js",
       "/hors-ligne.html",

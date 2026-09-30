@@ -48,6 +48,12 @@ export type Traitement = {
   /** Au-delà, la tentative est abandonnée (et réessayée plus tard). */
   delaiMaxMs?: number;
   tentativesMax?: number;
+  /**
+   * Mission 15 : « longue » pour une génération d'image (40 à 90 s) — exécutée
+   * dans la voie longue de l'exécuteur (deux en parallèle au plus) sans bloquer
+   * les tâches courtes (mails, Drive, notifications). « courte » par défaut.
+   */
+  voie?: "courte" | "longue";
   executer: (charge: unknown, contexte: ContexteTraitement) => Promise<unknown>;
 };
 
@@ -76,6 +82,11 @@ export function enregistrerTravailPeriodique(travail: TravailPeriodique): void {
 
 export function traitementDe(type: string): Traitement | undefined {
   return registre.traitements.get(type);
+}
+
+/** Types de tâches de la voie longue (mission 15) : l'exécuteur les lit à part. */
+export function typesDeVoieLongue(): string[] {
+  return [...registre.traitements.entries()].filter(([, t]) => t.voie === "longue").map(([type]) => type);
 }
 
 export function travauxPeriodiques(): TravailPeriodique[] {

@@ -288,6 +288,16 @@ export const DEFINITIONS_PARAMETRES = {
     ],
     groupe: "SIMULATEUR",
   },
+  NOTIF_SIMULATION_SITE_PRETE: {
+    libelle: "Mail « simulation prête » aux visiteurs du site (« Me prévenir »)",
+    aide: "Sur coverswap.fr, un visiteur qui attend son rendu peut laisser son adresse pour être prévenu. Actif (par défaut) : UN mail part quand le rendu est prêt, avec l'image jointe et le lien pour le retrouver. Inactif : rien ne part (la demande reste notée sur le lead). Un numéro de téléphone seul ne déclenche jamais de SMS.",
+    nature: "choix",
+    options: [
+      { valeur: "ACTIF", libelle: "Actif" },
+      { valeur: "INACTIF", libelle: "Inactif" },
+    ],
+    groupe: "SIMULATEUR",
+  },
 } as const satisfies Record<string, DefinitionParametre>;
 
 export type CleParametre = keyof typeof DEFINITIONS_PARAMETRES;

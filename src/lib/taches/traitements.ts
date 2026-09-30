@@ -14,6 +14,7 @@ import { enregistrerTachesCorbeille } from "@/lib/prospects/corbeille";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
 import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
 import { enregistrerTachesSimulateur } from "@/lib/simulateur/taches";
+import { enregistrerTachesSimulationSite } from "@/lib/simulations/travaux";
 import { enregistrerTachesSms } from "@/lib/sms/taches";
 import { enregistrerTachesSynthese } from "@/lib/synthese/instantanes";
 import { enregistrerTachesValidation } from "@/lib/validation/taches";
@@ -31,6 +32,10 @@ import { enregistrerTachesValidation } from "@/lib/validation/taches";
  *
  * Mission 14 (partie 7) : les rappels — l'événement Google Agenda de chaque rappel
  * daté et la notification 10 minutes avant (tâches datées, pas de route cron).
+ *
+ * Mission 15 (partie 1) : la génération du simulateur du site (SIMULATION_SITE),
+ * en voie longue avec SIMULATION_API : deux rendus en parallèle au plus, sans
+ * bloquer les tâches courtes.
  */
 export function enregistrerTousLesTraitements(): void {
   enregistrerTachesValidation();
@@ -47,6 +52,7 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesEspace();
   enregistrerTachesDossiers();
   enregistrerTachesSimulateur();
+  enregistrerTachesSimulationSite();
   enregistrerTachesCoherence();
   enregistrerTachesSauvegardes();
   enregistrerTachesCorbeille();

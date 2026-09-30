@@ -50,6 +50,13 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const leadIds = leads.map((lead) => lead.id);
   const photosLead = await client.photoLead.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
   const simulationsSite = await client.simulationSite.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } });
+  // Mission 15 : les travaux de génération du site, rattachés au lead (« Me prévenir ») OU laissés par le même parcours
+  // (le visiteur a simulé puis demandé un devis : le webhook rattache les simulations, pas les travaux — leur photo,
+  // l'adresse IP et la consigne qui décrit sa pièce sont pourtant à lui).
+  const parcoursIds = leads.map((lead) => lead.parcoursId).filter((parcoursId): parcoursId is string => Boolean(parcoursId));
+  const travauxSimulation = await client.travailSimulation.findMany({
+    where: { ...AVEC_ARCHIVES, OR: [{ leadId: { in: leadIds } }, ...(parcoursIds.length ? [{ parcoursId: { in: parcoursIds } }] : [])] },
+  });
   const [interactions, notesAppel, simulations, devis, chantiers] = await Promise.all([
     client.interaction.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
     client.noteAppel.findMany({ where: { ...AVEC_ARCHIVES, leadId: { in: leadIds } } }),
@@ -115,6 +122,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...chantiers.flatMap((chantier) => [...cheminsLocaux(chantier.photosAvant), ...cheminsLocaux(chantier.photosApres)]),
     ...photosLead.map((photo) => photo.chemin).filter((chemin) => chemin !== EFFACE),
     ...simulationsSite.flatMap((s) => [s.imageBeforePath, s.imageAfterPath]).filter((chemin): chemin is string => Boolean(chemin)),
+    ...travauxSimulation.map((t) => t.photoPath).filter((chemin): chemin is string => Boolean(chemin)),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
     ...simulationsEspace.flatMap((simulation) => [simulation.chemin, simulation.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
@@ -145,6 +153,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       Simulation: simulations,
       PhotoLead: photosLead,
       SimulationSite: simulationsSite,
+      TravailSimulation: travauxSimulation,
       PublicationSite: publicationsSite,
       Devis: devis.map((ligne) => Object.fromEntries(Object.entries(ligne).filter(([cle]) => cle !== "facture"))),
       Chantier: chantiers,

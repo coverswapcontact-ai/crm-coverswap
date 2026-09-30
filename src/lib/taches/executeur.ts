@@ -1,8 +1,8 @@
 import type { Tache } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { avecActeur } from "@/lib/journal/contexte";
-import { surNouvelleTache } from "./file";
-import { AttenteExterne, ErreurDefinitive, PREFIXE_ATTENTE, traitementDe, travauxPeriodiques, type TravailPeriodique } from "./registre";
+import { reveillerExecuteur, surNouvelleTache } from "./file";
+import { AttenteExterne, ErreurDefinitive, PREFIXE_ATTENTE, traitementDe, travauxPeriodiques, typesDeVoieLongue, type TravailPeriodique } from "./registre";
 
 const DELAI_MAX_DEFAUT_MS = 5 * 60_000;
 const MARGE_BAIL_MS = 60_000;
@@ -179,21 +179,69 @@ async function executerTravail(travail: TravailPeriodique, maintenant: Date): Pr
   }
 }
 
-/** Un tour : les tâches dues, puis les travaux périodiques dus. Rend le nombre de tâches examinées. */
+/* ── Voie longue (mission 15) ──────────────────────────────────────
+   Les traitements déclarés `voie: "longue"` (générations d'images, 40 à 90 s)
+   s'exécutent hors du tour, au plus LONGUES_MAX à la fois : une génération ne
+   bloque ni les mails, ni Drive, ni les notifications ; deux visiteurs qui
+   lancent en même temps n'attendent pas l'un derrière l'autre. La réclamation
+   en base (`reclamer`) reste la seule garde entre processus. */
+export const LONGUES_MAX = 2;
+const CLE_LONGUES = "__coverswapTachesLongues";
+const globalLongues = globalThis as unknown as Record<string, Map<string, Promise<void>> | undefined>;
+const longuesEnCours = (globalLongues[CLE_LONGUES] ??= new Map());
+
+function lancerLongue(tache: Tache, maintenant: Date): void {
+  const execution = executerTache(tache, maintenant)
+    .catch((erreur) => console.error(`[taches] voie longue ${tache.type} ${tache.id} :`, messageDe(erreur)))
+    .finally(() => {
+      longuesEnCours.delete(tache.id);
+      // Une place se libère : la tâche longue suivante n'attend pas le prochain tour.
+      reveillerExecuteur();
+    });
+  longuesEnCours.set(tache.id, execution);
+}
+
+/** Nombre de tâches longues en cours d'exécution dans ce processus. */
+export function tachesLonguesEnCours(): number {
+  return longuesEnCours.size;
+}
+
+/** Essais : attend la fin des tâches longues lancées (elles ne bloquent pas le tour). */
+export async function attendreTachesLongues(): Promise<void> {
+  while (longuesEnCours.size > 0) await Promise.allSettled([...longuesEnCours.values()]);
+}
+
+/**
+ * Un tour : les tâches longues dues sont lancées en parallèle (LONGUES_MAX au
+ * plus, sans attendre — lues à part pour qu'une file de générations ne cache
+ * jamais les courtes), les courtes en série, puis les travaux périodiques dus.
+ * Rend le nombre de tâches examinées.
+ */
 export async function executerTour(maintenant = new Date()): Promise<number> {
-  const dues = await prisma.tache.findMany({
-    where: {
-      OR: [
-        { statut: "EN_ATTENTE", prochainEssaiLe: { lte: maintenant } },
-        { statut: "EN_COURS", verrouJusqua: { lt: maintenant } },
-      ],
-    },
+  const dueMaintenant = [
+    { statut: "EN_ATTENTE", prochainEssaiLe: { lte: maintenant } },
+    { statut: "EN_COURS", verrouJusqua: { lt: maintenant } },
+  ];
+  const typesLongs = typesDeVoieLongue();
+  const places = LONGUES_MAX - longuesEnCours.size;
+  const longues =
+    typesLongs.length > 0 && places > 0
+      ? await prisma.tache.findMany({
+          where: { type: { in: typesLongs }, id: { notIn: [...longuesEnCours.keys()] }, OR: dueMaintenant },
+          orderBy: [{ priorite: "desc" }, { prochainEssaiLe: "asc" }],
+          take: places,
+        })
+      : [];
+  for (const tache of longues) lancerLongue(tache, maintenant);
+
+  const courtes = await prisma.tache.findMany({
+    where: { ...(typesLongs.length > 0 ? { type: { notIn: typesLongs } } : {}), OR: dueMaintenant },
     orderBy: [{ priorite: "desc" }, { prochainEssaiLe: "asc" }],
     take: TACHES_PAR_TOUR,
   });
-  for (const tache of dues) await executerTache(tache, maintenant);
+  for (const tache of courtes) await executerTache(tache, maintenant);
   for (const travail of travauxPeriodiques()) await executerTravail(travail, maintenant);
-  return dues.length;
+  return courtes.length + longues.length;
 }
 
 type EtatExecuteur = {

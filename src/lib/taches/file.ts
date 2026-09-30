@@ -29,6 +29,11 @@ export function surNouvelleTache(reveil: () => void): void {
   globalReveil[CLE_REVEIL] = reveil;
 }
 
+/** Réveille l'exécuteur (une place de la voie longue se libère, mission 15). */
+export function reveillerExecuteur(): void {
+  globalReveil[CLE_REVEIL]?.();
+}
+
 /**
  * Met une tâche en file et rend son identifiant. À appeler de préférence dans
  * la transaction de l'écriture qui la motive (passer `client: tx`) : la tâche

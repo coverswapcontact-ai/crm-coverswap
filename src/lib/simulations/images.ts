@@ -13,7 +13,26 @@ import { typeDeLaPhoto } from "@/lib/fichiers/redimensionnement";
  * illisible ne doit jamais faire perdre le contact.
  */
 
-const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 Mo décodés
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024; // 15 Mo décodés
+const MIN_IMAGE_BYTES = 64;
+
+/** Taille décodée approximative d'une image base64 (data URL ou brut), en octets. */
+export function octetsImageBase64(base64: unknown): number {
+  if (!base64 || typeof base64 !== "string") return 0;
+  const m = base64.match(/^data:([^;]+);base64,(.+)$/);
+  const brut = m ? m[2] : base64;
+  return Math.floor((brut.length * 3) / 4);
+}
+
+/**
+ * Vrai si l'image est d'une taille acceptable (ni vide, ni au-delà de 15 Mo).
+ * Permet de distinguer une image refusée d'une panne d'écriture (volume plein,
+ * droits) : `enregistrerImageBase64` rend null dans les deux cas.
+ */
+export function imageBase64Acceptable(base64: unknown): boolean {
+  const octets = octetsImageBase64(base64);
+  return octets >= MIN_IMAGE_BYTES && octets <= MAX_IMAGE_BYTES;
+}
 
 /** Écrit une image base64 (data URL ou brut) et renvoie son chemin relatif, ou null. */
 export async function enregistrerImageBase64(base64: string, dossierRelatif: string, nomFichier: string): Promise<string | null> {
@@ -27,7 +46,7 @@ export async function enregistrerImageBase64(base64: string, dossierRelatif: str
       return null;
     }
     const buf = Buffer.from(brut, "base64");
-    if (buf.length < 64) return null;
+    if (buf.length < MIN_IMAGE_BYTES) return null;
     const dossier = path.join(resolveUploadsDir(), dossierRelatif);
     await fs.mkdir(dossier, { recursive: true });
     await fs.writeFile(path.join(dossier, nomFichier), buf);
@@ -36,6 +55,19 @@ export async function enregistrerImageBase64(base64: string, dossierRelatif: str
     console.error("[images] écriture impossible (non bloquant) :", err);
     return null;
   }
+}
+
+/**
+ * Efface une image du volume (chemin relatif au dossier des téléversements) et
+ * retire son dossier s'il est resté vide. Jamais bloquant : un fichier déjà
+ * absent n'est pas une erreur.
+ */
+export async function effacerImage(cheminRelatif: string | null | undefined): Promise<void> {
+  if (!cheminRelatif) return;
+  const absolu = path.join(resolveUploadsDir(), cheminRelatif);
+  await fs.rm(absolu, { force: true }).catch(() => undefined);
+  // `rmdir` refuse un dossier non vide : c'est exactement ce qu'on veut.
+  await fs.rmdir(path.dirname(absolu)).catch(() => undefined);
 }
 
 /** Extension de fichier d'après le type déclaré dans la data URL (jpg par défaut). */

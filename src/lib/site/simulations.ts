@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { resolveUploadsDir } from "@/lib/uploads";
-import { enregistrerImageBase64 } from "@/lib/simulations/images";
+import { effacerImage, enregistrerImageBase64 } from "@/lib/simulations/images";
 import { pluriel } from "@/lib/commun/format";
 
 /**
@@ -120,6 +120,26 @@ export async function purgerSimulationsSite(maintenant: Date = new Date()): Prom
   return perimees.length;
 }
 
+/**
+ * Mission 15 : les travaux de génération (TravailSimulation) suivent la même
+ * rétention. Passé 30 jours, la photo du visiteur encore sur le volume (travail
+ * en échec, ou jamais fini) est effacée, le dossier `travaux/` vidé, et la
+ * ligne archivée sans donnée personnelle (adresse IP, consigne qui décrit la
+ * pièce) — jamais supprimée : le suivi répond encore « purgée ».
+ */
+export async function purgerTravauxSimulation(maintenant: Date = new Date()): Promise<number> {
+  const limite = new Date(maintenant.getTime() - RETENTION_SANS_DEMANDE_MS);
+  const perimes = await prisma.travailSimulation.findMany({ where: { archiveLe: null, createdAt: { lt: limite } }, take: 200, select: { id: true, photoPath: true } });
+  for (const t of perimes) {
+    await effacerImage(t.photoPath);
+    await prisma.travailSimulation.update({
+      where: { id: t.id },
+      data: { photoPath: null, ipOrigine: null, promptTexte: null, archiveLe: maintenant, archiveMotif: "Travail de plus de 30 jours : photo et consigne effacées" },
+    });
+  }
+  return perimes.length;
+}
+
 let dernierePurge = 0;
 /** Purge opportuniste, au plus une fois par heure, déclenchée par le trafic du simulateur. */
 export async function purgerSiNecessaire(): Promise<void> {
@@ -128,6 +148,8 @@ export async function purgerSiNecessaire(): Promise<void> {
   try {
     const n = await purgerSimulationsSite();
     if (n > 0) console.log(`[site] ${pluriel(n, "simulation sans demande purgée", "simulations sans demande purgées")}`);
+    const t = await purgerTravauxSimulation();
+    if (t > 0) console.log(`[site] ${pluriel(t, "travail de simulation archivé", "travaux de simulation archivés")}`);
   } catch (err) {
     console.error("[site] purge impossible :", err);
   }

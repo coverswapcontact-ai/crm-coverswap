@@ -84,6 +84,8 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   },
   PhotoLead: { remplacer: () => ({ chemin: EFFACE }), garde: "date et origine de la photo jointe (fichier effacé)" },
   SimulationSite: { remplacer: () => ({ imageBeforePath: null, imageAfterPath: null, ipOrigine: null, references: "[]" }), garde: "projet, dates, page et source du parcours (images effacées)" },
+  // Mission 15 (partie 1) : le travail de génération du site (« Me prévenir » y écrit une adresse ou un numéro).
+  TravailSimulation: { remplacer: () => ({ notifierEmail: null, notifierTelephone: null, ipOrigine: null, photoPath: null, promptTexte: null, references: "[]" }), garde: "projet, statut, dates, durée et raison d'échec du travail (photo effacée)" },
   PublicationSite: { remplacer: () => ({ texte: null, auteur: null, photoAvant: null, photoApres: null }), garde: "titre, ville et type ; sans photo ni texte, la publication disparaît du site" },
   Devis: { remplacer: () => ({ notesInternes: null }), garde: "numéro et montants de l'ancien écran" },
   Facture: { conserve: "facture de l'ancien écran : conservation légale de 10 ans" },

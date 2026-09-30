@@ -5326,11 +5326,7 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 > **Mission 18 en attente** (énoncé complet : `docs/MISSION-18.md`) : à démarrer seulement après la fin complète de la
 > mission 17 (A, B, C, PR, rapport de 5 lignes), sur la même branche.
 
-- [ ] A Tâches — écrit et commité : cœur (`src/lib/a-faire/`), 10 détecteurs, écran `/taches` (accueil), routes
-      `/api/a-faire/…`, badges, « Tâches de fond » sur `/taches-de-fond`, créneaux libres, outils MCP `taches`,
-      `repondre_tache`, `ajouter_tache` (83 outils, empreinte `70d9e22b2bfb`), notification du matin (paramètre
-      `NOTIF_TACHES_MATIN`), captures `docs/captures/mission-17/`. 922 tests verts. En cours : migration de mise en
-      route, relecture adverse (moteur/détecteurs ; réponses/écran/MCP), puis corrections, build, PR.
+- [x] A Tâches — livrée (voir la section « Partie A » plus bas) ; PR vers `main`.
 - [ ] B Analytique — conception écrite (`docs/ANALYTIQUE.md`) ; lecture du code et des maquettes faite.
 - [ ] C Contrôle total par le MCP — inventaire des actions de l'interface fait (notes de travail), tableau à écrire.
 
@@ -5354,3 +5350,44 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
   `REGLE_TACHE`, validée dans À valider) ; pas de règle par condition métier.
 - Migration : les clients du 29/09 sont retrouvés par empreinte de leur nom normalisé (le dépôt est public : aucun nom
   en clair) ; un seul candidat ou rien.
+
+## Mission 17, partie A — Tâches (30/09, terminée)
+
+**Livré** (conception : `docs/TACHES.md`) :
+- Modèle `TacheAFaire` (clé stable `TYPE:sujet`, occurrence du besoin dans `donnees.occurrence`), `RegleTache`,
+  `Lead.dernierContactLe`, `Dossier.prochaineActionManuelle*`. Code : `src/lib/a-faire/`.
+- Dix détecteurs (dossiers, leads, mails, messages d'espace, propositions, relances, signaux des espaces, cohérence,
+  système, tâches manuelles) + un moteur unique (`reconcilier`) : passe toutes les 15 min et 3 s après chaque geste.
+  Sources lues en entier (plus de limite de 300 pour les détecteurs).
+- Coche du CRM avec la preuve datée (« coché par le CRM : devis 2026-043 déposé », « SMS copié à 10:30 »…) ; sujet
+  disparu → fermée seule ; « Pas à faire » gardé jusqu'au prochain geste du client ; prochaine action posée à la main
+  prioritaire (événement `PROCHAINE_ACTION_MANUELLE`, compté comme une réponse par la règle de la main) ; « Fait » sur
+  cette tâche lève la vigueur ; trois fois la même raison en 30 jours → proposition `REGLE_TACHE`.
+- Écran `/taches` (accueil de l'application, premier onglet du téléphone) : Aujourd'hui (10), En lot, Plus tard, Fait
+  aujourd'hui, « Tout est traité », « J'ai 5/15/30/60 min », Commencer, balayage (droite Fait, gauche Plus tard),
+  « Annuler » 5 s, raccourcis qui font l'action (appel + fin d'appel, SMS, mail avec réponse ouverte, fil de l'espace,
+  simulateur, devis prérempli, encaissement, créneaux libres de l'agenda pour la date du chantier, Valider/Ignorer,
+  « Relire et valider » pour une proposition sensible). Liste servie en ~30 ms (build de production, 166 tâches).
+- « Tâches de fond » déménage à `/taches-de-fond`. Badge Mail = tâches mail/espace. Badge Tâches = tâches du jour.
+- MCP : `taches`, `repondre_tache` (FAIT, PLUS_TARD, PAS_A_FAIRE, ANNULER ; aperçu + jeton quand l'effet touche le
+  client ou l'argent), `ajouter_tache` ; `ce_qui_m_attend` et `point_du_jour` lisent les tâches. **83 outils**
+  (empreinte à relire par `lister_outils`) : **reconnecter le connecteur Claude**.
+- Notification du matin (8 h, paramètre `NOTIF_TACHES_MATIN`, Oui par défaut), rien envoyé aux clients.
+- Migration `taches-a-faire-17-a` (sauvegarde automatique avant) : première passe, décisions du 29/09 (J. R. Plus tard
+  7 j « J'attends sa modification visuelle » et fils archivés ; L. B. « elle fait sa simulation elle-même » ; C. M.
+  contactée par mail le 29/09 → « À rappeler » ; FLD Tech date du chantier « réglé »), clients retrouvés par empreinte
+  du nom (un seul candidat, sinon rien : voir le journal de démarrage, en initiales) ; anciens leads en un lot ; 28
+  points restants des missions 15 et 16 en tâches manuelles (lot « reprise »).
+- Relecture adverse sous deux angles (20 défauts confirmés, tous corrigés et testés). Tests : 822 → 940. Lint, build.
+- Captures (vrais passages des détecteurs, noms fictifs) : `docs/captures/mission-17/` (liste, minutes, réponses,
+  tout traité, commencer, date du chantier ; 390 et 1 440 px).
+
+**À vérifier en production** (non joignable depuis la session) : le journal de démarrage de la migration (décisions
+appliquées ou « introuvables »/« ambigus »), puis `taches` vue `PAR_TYPE` (nombre de tâches au lancement par type) et
+`/taches` sur l'iPhone.
+
+**Décisions** (en plus de celles du haut) : durée affichée dans la ligne grise sur téléphone ; « Fait » sur un appel pose
+`dernierAppelLe` ; une proposition sensible ne se valide jamais depuis la ligne (aperçu d'abord) ; aucun apprentissage
+sur « Ignorer » une proposition ; une tâche ajoutée pour une date future est « Plus tard » jusqu'à ce jour ; la
+tâche mise en surbrillance au retour est celle qu'on a ouverte si elle reste à faire, sinon la suivante ; les
+rappels du CRM dans l'agenda ne bloquent pas un jour de chantier.

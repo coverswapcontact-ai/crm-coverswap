@@ -271,6 +271,18 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       });
       return encaissement ? `encaissement de ${euros(encaissement.montant)} saisi` : null;
     }
+    case "RELANCER_DEVIS":
+    case "RELANCER_PHOTOS": {
+      // La relance faite : un SMS de relance copié, ou le mail de relance parti (docs/TACHES.md § 5).
+      if (!tache.dossierId) return null;
+      const trace = await prisma.dossierEvenement.findFirst({
+        where: { dossierId: tache.dossierId, createdAt: { gt: depuis }, OR: [{ type: "SMS_COPIE", metadata: { contains: '"relance"' } }, { type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } }] },
+        orderBy: { createdAt: "desc" },
+        select: { type: true, createdAt: true },
+      });
+      if (!trace) return null;
+      return `${trace.type === "SMS_COPIE" ? "SMS de relance copié" : "mail de relance parti"} ${leOuA(trace.createdAt, maintenant)}`;
+    }
     case "VALIDER": {
       const propositionId = texteOuNull(donnees.propositionId) ?? texteOuNull(raccourci.propositionId);
       if (!propositionId) return null;

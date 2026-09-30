@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CheckCheck, CircleCheck } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, CheckCheck, CircleCheck } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
@@ -21,9 +23,17 @@ const STATUTS_ONGLET: Record<Onglet, StatutProposition[]> = {
 
 /* ── Écran ─────────────────────────────────────────────────────────── */
 
-export default function FileValidation({ initiales, totalEnAttente }: { initiales: PropositionVue[]; totalEnAttente: number }) {
+/**
+ * `cible` (mission 17, partie A, relecture) : la proposition demandée par `?proposition=<id>` (« Relire et valider »
+ * depuis Tâches) : seule à l'écran, en tête, avec son aperçu et ses boutons ; « Voir toutes » revient à la file.
+ * `cibleDemandee` sans `cible` : l'identifiant ne correspond à rien (message, puis la file).
+ */
+export default function FileValidation({ initiales, totalEnAttente, cible = null, cibleDemandee = false }: { initiales: PropositionVue[]; totalEnAttente: number; cible?: PropositionVue | null; cibleDemandee?: boolean }) {
+  const routeur = useRouter();
   const [onglet, setOnglet] = useState<Onglet>("attente");
-  const [propositions, setPropositions] = useState(initiales);
+  const [propositions, setPropositions] = useState(() => (cible && cible.statut === "EN_ATTENTE" && !initiales.some((p) => p.id === cible.id) ? [cible, ...initiales] : initiales));
+  // La proposition ouverte depuis Tâches : seule à l'écran tant qu'on ne demande pas « Voir toutes ».
+  const [seule, setSeule] = useState<PropositionVue | null>(cible);
   // La liste ne charge que les 200 plus récentes : le total vient du serveur.
   const [total, setTotal] = useState(totalEnAttente);
   const [chargement, setChargement] = useState(false);
@@ -52,6 +62,7 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
   }, []);
 
   const changerOnglet = (nouvelOnglet: Onglet) => {
+    if (seule) voirToutes();
     setOnglet(nouvelOnglet);
     setFiltreType(null);
     void charger(nouvelOnglet);
@@ -66,7 +77,19 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
     return [...vus.entries()].map(([type, { libelle, nombre }]) => ({ type, libelle, nombre }));
   }, [propositions]);
 
-  const visibles = filtreType ? propositions.filter((proposition) => proposition.type === filtreType) : propositions;
+  useEffect(() => {
+    if (cibleDemandee && !cible) toast.info("Cette proposition n'existe plus", { description: "Voici ce qui attend encore ta validation." });
+  }, [cible, cibleDemandee]);
+
+  // La carte ouverte suit la file : décidée ici, elle en sort (et l'écran le dit).
+  const cibleEnFile = seule ? (propositions.find((p) => p.id === seule.id) ?? null) : null;
+  const cibleVue = seule ? (seule.statut === "EN_ATTENTE" ? cibleEnFile : seule) : null;
+  const voirToutes = () => {
+    setSeule(null);
+    routeur.replace("/validation", { scroll: false });
+  };
+
+  const visibles = cibleVue ? [cibleVue] : filtreType ? propositions.filter((proposition) => proposition.type === filtreType) : propositions;
   const groupables = onglet === "attente" ? visibles.filter((proposition) => proposition.validationGroupee) : [];
 
   const retirer = (id: string) => {
@@ -171,6 +194,24 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
         }
       />
 
+      {seule ? (
+        <div className="mt-5 flex flex-wrap items-center gap-2 rounded-[11px] border-[0.5px] border-[#1D9E75]/35 bg-[#112B22]/60 px-3.5 py-2.5 text-[13px] text-[#D1D5DB]">
+          <span className="min-w-0 flex-1">
+            {cibleVue
+              ? cibleVue.statut === "EN_ATTENTE"
+                ? "La proposition ouverte depuis Tâches : relis-la, puis valide, corrige ou rejette."
+                : "Cette proposition a déjà été décidée : la voici telle quelle."
+              : "Proposition décidée. Voici le reste de la file."}
+          </span>
+          <Link href="/taches" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] px-3 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] pointer-fine:h-8", TRANS)}>
+            <ArrowLeft size={14} aria-hidden /> Tâches
+          </Link>
+          <button type="button" onClick={voirToutes} className={cn("inline-flex h-11 items-center rounded-[8px] px-3 text-[#5DCAA5] hover:bg-[#1D9E75]/10 pointer-fine:h-8", TRANS)}>
+            Voir toutes
+          </button>
+        </div>
+      ) : null}
+
       <div
         role="tablist"
         aria-label="Propositions"
@@ -200,7 +241,7 @@ export default function FileValidation({ initiales, totalEnAttente }: { initiale
         ))}
       </div>
 
-      {types.length > 1 ? (
+      {types.length > 1 && !seule ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           <button
             type="button"

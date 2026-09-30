@@ -10,10 +10,11 @@ import { listerRelances, type DevisARelancer } from "./service";
  */
 export type RelancesProposables = { devis: DevisARelancer[]; photos: RelancePhotos[]; total: number };
 
-export async function relancesProposables(maintenant: Date = new Date(), filtre: { dossierId?: string; smsPhotos?: boolean } = {}): Promise<RelancesProposables> {
+export async function relancesProposables(maintenant: Date = new Date(), filtre: { dossierId?: string; smsPhotos?: boolean; smsDevis?: boolean } = {}): Promise<RelancesProposables> {
   // Mission 17 (partie A) : `smsPhotos: false` (détecteur des tâches) ne prépare pas le SMS des relances photos, qui
-  // peut ouvrir un espace (relances/photos.ts) ; celui des devis n'écrit jamais (il n'ouvre aucun espace).
-  const [{ devis }, photos] = await Promise.all([listerRelances(maintenant, { dossierId: filtre.dossierId }), relancesPhotosProposables(maintenant, { dossierId: filtre.dossierId, sms: filtre.smsPhotos })]);
+  // peut ouvrir un espace (relances/photos.ts) ; celui des devis n'écrit jamais (il n'ouvre aucun espace), mais
+  // `smsDevis: false` évite une lecture par devis (relecture : le détecteur tourne toutes les 15 minutes).
+  const [{ devis }, photos] = await Promise.all([listerRelances(maintenant, { dossierId: filtre.dossierId, sms: filtre.smsDevis }), relancesPhotosProposables(maintenant, { dossierId: filtre.dossierId, sms: filtre.smsPhotos })]);
   // Un client en STOP n'a pas de SMS : sa relance n'est à faire ici que par le mail à relire (sinon : par téléphone, « voir_relances »).
   const proposables = devis.filter((d) => d.proposable && (!d.stop || d.mail !== null));
   return { devis: proposables, photos, total: proposables.length + photos.length };

@@ -9,9 +9,9 @@ import { cleTache, type Detecteur } from "./types";
 /**
  * Mission 17 (partie A) : détecteur ESPACE_MESSAGES — ce que le client a écrit dans son espace (message, commentaire
  * d'une simulation, demande d'autre proposition) et que Lucas n'a pas lu (`MessageEspace` CLIENT, `luLe` nul ;
- * `messagesEspace({ nonLus: true, limite: 500 })`), groupé par dossier → REPONDRE « Répondre · Nom », niveau 1, clé
- * `REPONDRE:dossier:<id>` (la même que MAIL et les SMS : le moteur fusionne). Raison « « extrait » · il y a 2 h » (le
- * plus récent) ; `depuis` = le plus ancien non lu. Raccourci : le fil de l'espace, champ de réponse ouvert ;
+ * `messagesEspace({ nonLus: true, limite: null })` : TOUS — relecture : une liste tronquée ferait cocher un dossier non lu),
+ * groupé par dossier → REPONDRE « Répondre · Nom », niveau 1, clé `REPONDRE:dossier:<id>` (la même que MAIL et les
+ * SMS : le moteur fusionne). Raison « « extrait » · le 30/09 à 14 h » (le plus récent ; date absolue) ; `depuis` = le plus ancien non lu. Raccourci : le fil de l'espace, champ de réponse ouvert ;
  * `donnees.espaceDossierId` (l'effet « Fait / Pas à faire » marque lu et écrit l'événement : reponses.ts).
  * Un dossier archivé est ignoré. Un message déjà répondu par un autre canal (mail parti, SMS copié, appel abouti,
  * réponse notée depuis Tâches, prochaine action posée à la main : `dossiers/main.ts › estReponse`) APRÈS le dernier
@@ -23,8 +23,8 @@ type Evenement = { dossierId: string; type: string; direction: string; metadata:
 
 export const detecteurEspaceMessages: Detecteur = {
   source: "ESPACE_MESSAGES",
-  async detecter({ maintenant }) {
-    const messages = await messagesEspace({ nonLus: true, limite: 500 });
+  async detecter() {
+    const messages = await messagesEspace({ nonLus: true, limite: null });
     if (messages.length === 0) return [];
     const parDossier = new Map<string, MessageEspaceVue[]>();
     // Du plus récent au plus ancien (ordre de messagesEspace).
@@ -64,7 +64,7 @@ export const detecteurEspaceMessages: Detecteur = {
         clientId: dossier.clientId,
         leadId: dossier.leadId,
         titre: titreTache("Répondre", dossier.clientNom),
-        raison: `${entreGuillemets(recent.texte, 50, "(message vide)")} · ${moment(recuLe, maintenant)}${nombre}`,
+        raison: `${entreGuillemets(recent.texte, 50, "(message vide)")} · ${moment(recuLe)}${nombre}`,
         niveau: 1,
         depuis: plusAncienne(liste.map((m) => new Date(m.le))),
         raccourci: { genre: "ESPACE", libelle: "Répondre dans l'espace", dossierId, rubrique: "messages", href: `/dossiers?dossier=${dossierId}&rubrique=messages&repondre=1` },

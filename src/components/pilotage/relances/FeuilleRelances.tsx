@@ -123,7 +123,7 @@ export function RelectureMail({ propositionId, dossierId, onFini }: { propositio
       onValider={async (corrections) => {
         try {
           await envoyerJson(`/api/validation/${proposition.id}/valider`, "POST", { corrections });
-          toast.success("Mail de relance validé : il part", { description: proposition.titre });
+          toast.success("Mail validé : il part", { description: proposition.titre });
           onFini(true);
         } catch (erreur) {
           toast.error("Validation impossible", { description: messageErreur(erreur) });

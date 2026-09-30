@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { EMETTEUR } from "@/lib/dossiers/constants";
 import { dateEnLettres } from "@/lib/dossiers/dates";
@@ -140,6 +141,8 @@ export type DevisARelancer = {
   stop: boolean;
   /** Le SMS à copier (quand la relance est proposable, sauf STOP) : texte du catalogue, téléphone, relance à compter. */
   sms: PropositionSms | null;
+  /** Le numéro du SMS (celui du lead d'abord, sinon celui du dossier), même quand le SMS n'est pas préparé (`sms: false`). */
+  telephone: string | null;
   /** La proposition de mail de relance qui attend sa validation, s'il y en a une (sinon : pas d'adresse, refus des mails, pas encore proposée ou déjà traitée). */
   mail: { propositionId: string; a: string | null; expireLe: string | null } | null;
   /**
@@ -168,7 +171,7 @@ const destinataireDuMail = (contenu: string): string | null => {
  * copier (sauf STOP) ; le client sans e-mail y est, avec son SMS. Un mail de relance validé et pas encore parti rend
  * la relance non proposable : elle est faite. Rien n'est écrit (le SMS n'ouvre aucun espace).
  */
-export async function listerRelances(maintenant: Date = new Date(), filtre: { dossierId?: string } = {}): Promise<{ delai: number; delaiParDefaut: boolean; devis: DevisARelancer[] }> {
+export async function listerRelances(maintenant: Date = new Date(), filtre: { dossierId?: string; sms?: boolean } = {}): Promise<{ delai: number; delaiParDefaut: boolean; devis: DevisARelancer[] }> {
   const { jours: delai, parametre } = await lireDelaiRelance(maintenant);
   const dossiers = await chargerDossiersARelancer({ dossierId: filtre.dossierId });
   // Mission 13 (lot 6) : les relances déjà faites en une requête pour tous les dossiers (plus de N+1).
@@ -200,8 +203,10 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
     // Un mail de relance validé part (file d'exécution) : la relance est faite, rien d'autre à proposer.
     const proposable = prochaine !== null && prochaine.getTime() <= maintenant.getTime() && traite?.statut !== "VALIDEE";
     const stop = estEnStop([dossier.lead?.telephone, dossier.clientTelephone]);
+    // Mission 17 (partie A, relecture) : `sms: false` (détecteur des tâches, comptes du jour) ne prépare pas le SMS —
+    // une lecture par devis à chaque passage ; l'écran SMS le prépare à l'ouverture.
     const sms =
-      proposable && !stop
+      proposable && !stop && filtre.sms !== false
         ? await proposerSms({ action: "RELANCE_DEVIS", dossierId: dossier.id, relance: { documentId: devis.id, rang } }, maintenant).catch((erreur: unknown) => {
             console.error(`[relances] SMS de relance impossible à préparer pour le dossier ${dossier.id} :`, erreur);
             return null;
@@ -224,6 +229,7 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
       refusMail: consentement === "REFUSE" || consentement === "RETIRE",
       stop,
       sms,
+      telephone: normaliserTelephone(dossier.lead?.telephone ?? null) ?? normaliserTelephone(dossier.clientTelephone ?? null),
       mail: proposition ? { propositionId: proposition.id, a: destinataireDuMail(proposition.contenu), expireLe: proposition.expireLe?.toISOString() ?? null } : null,
       mailTraite: traite ? { propositionId: traite.id, statut: traite.statut as StatutMailTraite } : null,
     });

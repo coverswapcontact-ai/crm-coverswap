@@ -9,6 +9,7 @@ import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
 import { FILTRE_DEMANDE_DE_DEVIS, libelleSourceLead } from "@/lib/prospects/constantes";
 import { rappelsDesLeads } from "@/lib/prospects/leads";
+import { compterMailATraiter } from "@/lib/a-faire/ecran";
 import { listeTaches } from "@/lib/a-faire/lecture";
 import { definirOutil, format, lien } from "../definition";
 import { etatCampagne, santeSysteme } from "./lecture";
@@ -44,7 +45,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
   const debutJour = debutDuJourParis(maintenant);
   const finJour = aHeureParis(maintenant, 1, 0);
 
-  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents, duJour, taches] = await Promise.all([
+  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents, duJour, taches, nombreMails] = await Promise.all([
     prisma.lead.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true, priorite: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.simulationEspace.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, source: true, statut: true, createdAt: true, dossierId: true }, take: 50 }),
     prisma.simulationSite.count({ where: { createdAt: { gte: depuis } } }),
@@ -68,6 +69,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     resumeDuJour(maintenant),
     // Mission 17 (partie A) : « ce qui t'attend » vient des tâches de Lucas (a-faire/lecture.ts).
     listeTaches(maintenant),
+    // Mission 17 (partie A, relecture) : le nombre de mails à traiter de l'onglet Mail (un seul compteur partout).
+    compterMailATraiter(maintenant),
   ]);
 
   const nomsDossiers = new Map((await prisma.dossier.findMany({ where: { id: { in: simulationsEspace.map((s) => s.dossierId) } }, select: { id: true, clientNom: true } })).map((d) => [d.id, d.clientNom]));
@@ -93,6 +96,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       actionsDossiers: actionsDossiers.map((d) => ({ dossierId: d.id, client: d.clientNom, action: d.prochaineAction, a: d.prochaineActionDate?.toISOString() ?? null })),
       attendentMoi: attendentMoi.map((a) => ({ nom: a.nom, etape: a.etape, action: a.action, enRetard: a.enRetard, depuisJours: a.depuisJours, dossierId: a.dossierId, leadId: a.leadId })),
       chezLeClient: pilotage.compteurs.chezLeClient,
+      /** Le nombre de l'onglet Mail (compterMailATraiter) ; la liste ci-dessous en montre au plus 30. */
+      nombreMailsATraiter: nombreMails,
       mailsATraiter: mails.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant.nom ?? m.correspondant.adresse, objet: m.objet, mention: m.mention, contact: m.contact?.nom ?? null })),
       messagesEspaceNonLus: messagesNonLus,
       propositionsEnAttente,
@@ -129,7 +134,7 @@ export const outilPointDuJour = definirOutil({
     const texte = [
       `Point du ${format.jour(contexte.maintenant)}, depuis ${point.premierPoint ? "hier (premier point)" : format.jourCourt(point.depuis) + " " + new Date(point.depuis).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}.`,
       `Nouveau : ${pluriel(n.leads.length, "lead")}${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${pluriel(n.simulations.site, "simulation")} sur le site, ${n.simulations.espace.length} dans les espaces ; ${pluriel(n.demandesDevis, "demande")} de devis ; ${pluriel(n.devisSignes.length, "devis signé", "devis signés")}${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} a choisi le devis ${d.numero ?? "?"}${d.libelle ? ` (${d.libelle})` : ""} : ${format.euros(d.montant)}`).join(" ; ")})` : ""} ; ${pluriel(n.paiements.length, "paiement")}${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${pluriel(n.projetsClients.length, "projet ouvert", "projets ouverts")} par des clients ; ${pluriel(n.changementsEtape.length, "changement")} d'étape ; ${pluriel(n.messagesEspace.length, "message")} de clients dans leur espace${n.messagesEspace.length ? ` (${n.messagesEspace.slice(0, 4).map((m) => `${m.client} : « ${m.texte.slice(0, 80)} »`).join(" ; ")})` : ""}.`,
-      `Aujourd'hui : ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
+      `Aujourd'hui : ${pluriel(a.nombreMailsATraiter, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
       `Rappels : ${a.rappelsAujourdhui} aujourd'hui, ${a.rappelsEnRetard} en retard, ${pluriel(a.relancesProposables, "relance proposable", "relances proposables")}.`,
       `Ce qui t'attend : ${resumeTaches(a.taches)}`,
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",

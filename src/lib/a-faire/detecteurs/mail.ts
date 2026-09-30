@@ -3,7 +3,7 @@ import { pluriel } from "@/lib/commun/format";
 import { RANGS_PRIORITE } from "@/lib/mail/priorite";
 import { conversations, filtrerVue, type LigneMail } from "@/lib/mail/vues";
 import type { Detection, NiveauTache, SujetTache } from "../types";
-import { entreGuillemets, moment, nomLisible, paquets, plusAncienne, raccourcir, titreTache } from "./libelles";
+import { entreGuillemets, jourEtMois, moment, nomLisible, paquets, plusAncienne, raccourcir, titreTache } from "./libelles";
 import { cleTache, type Detecteur } from "./types";
 
 /**
@@ -112,8 +112,8 @@ export const detecteurMail: Detecteur = {
       const nom = dossier?.clientNom ?? l.contact?.nom ?? l.correspondant.nom ?? l.correspondant.adresse;
       const connu = sujet.type !== "SYSTEME" || l.classe === "CLIENT";
       const niveau: NiveauTache = relance ? 2 : connu || l.priorite.rang === RANGS_PRIORITE.RECLAMATION ? 1 : 3;
-      const joursSansReponse = dernierSortant ? Math.floor((maintenant.getTime() - dernierSortant.recuLe.getTime()) / 86_400_000) : 0;
-      const quoi = l.revenu ? "revenu du report" : relance ? `sans réponse depuis ${pluriel(joursSansReponse, "jour")}` : `reçu ${moment(dernierEntrant?.recuLe ?? new Date(l.recuLe), maintenant)}`;
+      // Dates absolues (relecture) : un « il y a 2 h » réécrivait la tâche à chaque passage.
+      const quoi = l.revenu ? "revenu du report" : relance && dernierSortant ? `sans réponse depuis le ${jourEtMois(dernierSortant.recuLe)}` : `reçu ${moment(dernierEntrant?.recuLe ?? new Date(l.recuLe))}`;
       vues.push({
         fil: l.fil,
         recuLe: new Date(l.recuLe),

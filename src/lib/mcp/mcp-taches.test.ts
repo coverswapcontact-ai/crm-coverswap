@@ -179,10 +179,10 @@ describe("« taches » : la liste lue à voix haute", () => {
 });
 
 describe("« repondre_tache » : fait, plus tard, pas à faire, annuler", () => {
-  test("FAIT par identifiant, puis ANNULER : l'effet (contact noté) est annulé avant de partir, la tâche est de nouveau à faire", async () => {
+  test("FAIT par identifiant, puis ANNULER : l'effet (appel noté) est annulé avant de partir, la tâche est de nouveau à faire", async () => {
     const id = ids[`APPELER:lead:${ids.nadia}`];
     const r = await appeler("repondre_tache", { tache: id, reponse: "FAIT", commande: "C'est fait, je l'ai eue" });
-    assert.match(r.texte, /^C'est noté : « Appeler · Nadia Essai » est faite\. Dans 6 secondes : le contact sera noté sur la fiche\. Pour annuler : « repondre_tache » avec tache « \w+ » et reponse ANNULER\.$/);
+    assert.match(r.texte, /^C'est noté : « Appeler · Nadia Essai » est faite\. Dans 6 secondes : l'appel sera noté sur la fiche\. Pour annuler : « repondre_tache » avec tache « \w+ » et reponse ANNULER\.$/);
     const faite = await prisma.tacheAFaire.findUniqueOrThrow({ where: { id } });
     assert.deepEqual([faite.statut, faite.reponse, faite.reponduPar], ["FAITE", "FAIT", "ASSISTANT:claude"]);
     assert.equal(faite.reponduLe?.toISOString(), MERCREDI.toISOString());
@@ -193,7 +193,8 @@ describe("« repondre_tache » : fait, plus tard, pas à faire, annuler", () => 
     assert.match(annule.texte, /^Annulé : « Appeler · Nadia Essai » est de nouveau à faire\. L'effet n'était pas encore parti : il ne partira pas\./);
     assert.equal((await prisma.tacheAFaire.findUniqueOrThrow({ where: { id } })).statut, "A_FAIRE");
     assert.equal((await prisma.tache.findUniqueOrThrow({ where: { id: effet.id } })).statut, "ANNULEE");
-    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: ids.nadia } })).dernierContactLe, null);
+    const nadia = await prisma.lead.findUniqueOrThrow({ where: { id: ids.nadia } });
+    assert.deepEqual([nadia.dernierContactLe, nadia.dernierAppelLe], [null, null]);
   });
 
   test("PLUS_TARD DEMAIN (9 h, heure de Paris) ; PLUS_TARD « le 12 » (date dictée) ; une date illisible est refusée", async () => {
@@ -284,12 +285,17 @@ describe("« repondre_tache » : fait, plus tard, pas à faire, annuler", () => 
 });
 
 describe("« ajouter_tache », « ce_qui_m_attend »", () => {
-  test("ajouter_tache avec une cible (nom) et une date dictée : une tâche MANUELLE sur le contact, échéance jeudi 9 h", async () => {
+  test("ajouter_tache avec une cible (nom) et une date dictée : une tâche MANUELLE sur le contact, « Plus tard » jusqu'à jeudi 9 h", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Zéphyrin", nom: "Moulard", telephone: "+33612345681", ville: "Castries", source: "META_ADS" } });
     const r = await appeler("ajouter_tache", { titre: "Passer voir la cuisine de Moulard", quand: "jeudi", cible: { nom: "Moulard" }, commande: "Ajoute : passer voir la cuisine de Moulard jeudi" });
     assert.match(r.texte, /^Tâche ajoutée : « Passer voir la cuisine de Moulard » \(Zéphyrin Moulard\), pour jeudi 1er octobre \[tache:\w+\]\./);
     const ajoutee = await prisma.tacheAFaire.findFirstOrThrow({ where: { type: "MANUELLE", titre: "Passer voir la cuisine de Moulard" } });
-    assert.deepEqual([ajoutee.leadId, ajoutee.sujetType, ajoutee.source, ajoutee.statut, ajoutee.echeance?.toISOString()], [lead.id, "LEAD", "MANUELLE", "A_FAIRE", "2026-10-01T07:00:00.000Z"]);
+    // Relecture : datée, elle attend dans « Plus tard » jusqu'au jour dit (9 h) et n'encombre pas « Aujourd'hui ».
+    assert.match(r.texte, /Elle attend dans « Plus tard » et revient en tête de ta liste ce jour-là/);
+    assert.deepEqual(
+      [ajoutee.leadId, ajoutee.sujetType, ajoutee.source, ajoutee.statut, ajoutee.echeance?.toISOString(), ajoutee.plusTardJusqua?.toISOString(), ajoutee.raison],
+      [lead.id, "LEAD", "MANUELLE", "PLUS_TARD", "2026-10-01T07:00:00.000Z", "2026-10-01T07:00:00.000Z", "pour le 1 oct."]
+    );
     assert.equal((r.donnees as TacheLue).lien, `http://localhost:3001/leads?lead=${lead.id}`);
 
     const inconnu = await appeler("ajouter_tache", { titre: "Rappeler quelqu'un", cible: { nom: "Xylophène Introuvable" }, commande: "ajoute" });
@@ -300,7 +306,8 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
     const liste = await lecture.listeTaches(MERCREDI);
     const r = await appeler("ce_qui_m_attend", {});
     assert.match(r.texte, new RegExp(`^${liste.compteurs.aujourdhui} tâches aujourd'hui, environ `));
-    assert.match(r.texte, /1 revient demain/);
+    // La reportée à demain et la tâche ajoutée pour jeudi (« Plus tard » jusqu'à jeudi 9 h).
+    assert.match(r.texte, /2 reviennent demain/);
     assert.match(r.texte, /Plus tard \(\d+\) :\n1\. Appeler · Nadia Essai — nouveau contact d'hier, 3 min · revient jeudi 1er octobre à 9 h/);
     assert.match(r.texte, /Fait aujourd'hui \(\d+\) :\n1\. /);
     assert.match(r.texte, /\nAussi : 0 mail à traiter, 1 proposition à valider \(cartes de mise à jour, relances, règles\), 0 message d'espace non lu\./);
@@ -314,6 +321,21 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
     const point = await appeler("point_du_jour", { depuis_heures: 24 });
     assert.match(point.texte, /\nCe qui t'attend : \d+ tâches aujourd'hui, environ .* : 1\. /);
     assert.match(point.texte, /\nAujourd'hui : 0 mail à traiter, 0 message d'espace non lu, 1 proposition à valider\./);
+  });
+
+  test("relecture : un seul compteur de mails — ce_qui_m_attend et point_du_jour disent le nombre de l'onglet Mail (tâches du mail et de l'espace)", async () => {
+    const { compterMailATraiter } = await import("@/lib/a-faire/ecran");
+    // Une tâche « Répondre » venue du mail (la boîte elle-même est vide dans cet essai : l'ancien compteur disait 0).
+    await moteur.reconcilier([detection({ cle: "REPONDRE:fil:essai-compteur", type: "REPONDRE", source: "MAIL", titre: "Répondre · Inconnu", raison: "« Question » · reçu le 30/09 à 9 h", raccourci: { genre: "MAIL", libelle: "Répondre", href: "/mail" } })], { sources: [], maintenant: MERCREDI });
+    const nombre = await compterMailATraiter(MERCREDI);
+    assert.equal(nombre, 1);
+    const r = await appeler("ce_qui_m_attend", {});
+    assert.match(r.texte, /\nAussi : 1 mail à traiter, /);
+    assert.equal((r.donnees as { compteurs: { mailsATraiter: number } }).compteurs.mailsATraiter, nombre);
+    const point = await appeler("point_du_jour", { depuis_heures: 24 });
+    assert.match(point.texte, /\nAujourd'hui : 1 mail à traiter, /);
+    assert.equal((point.donnees as { aujourdhui: { nombreMailsATraiter: number } }).aujourdhui.nombreMailsATraiter, nombre);
+    await prisma.tacheAFaire.update({ where: { cle: "REPONDRE:fil:essai-compteur" }, data: { archiveLe: MERCREDI, archiveMotif: "essai" } });
   });
 });
 

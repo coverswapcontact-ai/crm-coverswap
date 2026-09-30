@@ -201,7 +201,8 @@ describe("détecteurs DOSSIERS et LEADS", () => {
     const appeler = await tacheSure(`APPELER:lead:${lNouveau.id}`);
     assert.equal(appeler.titre, "Appeler · Nouveau Essai");
     assert.equal(appeler.niveau, 2, "arrivé il y a moins de 24 h");
-    assert.match(appeler.raison, /^arrivé il y a 3 h · \S/);
+    // Relecture : date absolue (heure de Paris), rien ne change d'un passage à l'autre.
+    assert.match(appeler.raison, /^arrivé le \d\d\/\d\d à \d+ h( \d\d)? · \S/);
     assert.equal(appeler.source, "LEADS");
     assert.deepEqual([appeler.sujetType, appeler.sujetId, appeler.leadId], ["LEAD", lNouveau.id, lNouveau.id]);
     assert.equal(raccourciDe(appeler).genre, "APPEL");
@@ -214,7 +215,7 @@ describe("détecteurs DOSSIERS et LEADS", () => {
 
     const rappel = await tacheSure(`RAPPELER:lead:${lRappel.id}`);
     assert.deepEqual([rappel.titre, rappel.niveau, rappel.raison], ["Rappeler · Rappel Essai", 2, "2 appels sans réponse"]);
-    assert.equal((await tacheSure(`RAPPELER:lead:${lRappel14.id}`)).raison, "rappel prévu à 14 h");
+    assert.match((await tacheSure(`RAPPELER:lead:${lRappel14.id}`)).raison, /^rappel prévu le \d\d\/\d\d à 14 h$/);
 
     const decider = await tacheSure(`DECIDER:lead:${lDecider.id}`);
     assert.deepEqual([decider.titre, decider.niveau, decider.raison, raccourciDe(decider).genre], ["Décider · Decider Essai", 3, "appelé le 28/09, sans rappel daté", "LEAD"]);
@@ -240,7 +241,7 @@ describe("détecteurs DOSSIERS et LEADS", () => {
     assert.deepEqual([motif.titre, motif.raison, raccourciDe(motif).genre, raccourciDe(motif).rubrique], ["Répondre · Motif", "message sans réponse depuis le 28/09", "ESPACE", "messages"]);
 
     const rappelDossier = await tacheSure(`RAPPELER:dossier:${dRappel.id}`);
-    assert.deepEqual([rappelDossier.titre, rappelDossier.niveau, rappelDossier.raison, raccourciDe(rappelDossier).genre, raccourciDe(rappelDossier).dossierId], ["Rappeler · Rappel", 2, "rappel prévu à 14 h", "APPEL", dRappel.id]);
+    assert.deepEqual([rappelDossier.titre, rappelDossier.niveau, rappelDossier.raison, raccourciDe(rappelDossier).genre, raccourciDe(rappelDossier).dossierId], ["Rappeler · Rappel", 2, "rappel prévu le 29/09 à 14 h", "APPEL", dRappel.id]);
 
     const date = await tacheSure(`DATE_CHANTIER:dossier:${dSigne.id}`);
     assert.deepEqual([date.titre, date.niveau, date.raison, date.montant, raccourciDe(date).genre], ["Fixer la date du chantier · Signe", 1, "accord du 28/09", 4000, "PLANIFIER"]);
@@ -264,7 +265,7 @@ describe("détecteurs DOSSIERS et LEADS", () => {
 
     // Prochaine action posée à la main : la seule tâche du dossier, le jour de sa date.
     const action = await tacheSure(`PROCHAINE_ACTION:dossier:${dVigueur.id}`);
-    assert.deepEqual([action.titre, action.niveau, action.raison], ["Attendre sa modification visuelle · Vigueur", 2, "prévue aujourd'hui"]);
+    assert.deepEqual([action.titre, action.niveau, action.raison], ["Attendre sa modification visuelle · Vigueur", 2, "prévue le 29/09"]);
     assert.deepEqual((await prisma.tacheAFaire.findMany({ where: { dossierId: dVigueur.id } })).map((t) => t.type), ["PROCHAINE_ACTION"]);
     assert.equal(await prisma.tacheAFaire.count({ where: { dossierId: dVigueurDemain.id } }), 0, "demain : rien aujourd'hui, et rien d'autre tant qu'elle est en vigueur");
 

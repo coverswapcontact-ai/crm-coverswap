@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { chargerFiche } from "@/lib/clients/fiches";
 import { notesDuLead } from "@/lib/commercial/notes-appel";
+import { compterMailATraiter } from "@/lib/a-faire/ecran";
 import { listeTaches } from "@/lib/a-faire/lecture";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
@@ -262,18 +263,26 @@ export const outilCeQuiMAttend = definirOutil({
   executer: async ({}, contexte) => {
     // Import à l'appel : « taches » importe « schemaCible » d'ici (pas de cycle au chargement).
     const { texteListe } = await import("./taches");
-    const [liste, mails, messagesNonLus, propositionsEnAttente] = await Promise.all([listeTaches(contexte.maintenant), listerVue("A_TRAITER", { limite: 50 }), compterMessagesNonLus(), prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } })]);
+    // Mission 17 (partie A, relecture) : le nombre de mails à traiter est celui de l'onglet Mail (les tâches du mail et de
+    // l'espace : a-faire/ecran.ts › compterMailATraiter) — un seul compteur partout.
+    const [liste, mails, mailsATraiter, messagesNonLus, propositionsEnAttente] = await Promise.all([
+      listeTaches(contexte.maintenant),
+      listerVue("A_TRAITER", { limite: 50 }),
+      compterMailATraiter(contexte.maintenant),
+      compterMessagesNonLus(),
+      prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
+    ]);
     const { texte: texteTaches, aujourdhui } = await texteListe(liste, contexte.maintenant);
     const texte = [
       texteTaches,
-      `Aussi : ${pluriel(mails.compteurs.A_TRAITER, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
+      `Aussi : ${pluriel(mailsATraiter, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
       mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
     return {
       texte,
       donnees: {
         genereLe: liste.genereLe,
-        compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter: mails.compteurs.A_TRAITER, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
+        compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
         aujourdhui,
         lots: liste.lots,
         plusTard: liste.plusTard,

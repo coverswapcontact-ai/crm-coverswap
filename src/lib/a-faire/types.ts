@@ -189,8 +189,18 @@ export const LIBELLES_RAISON_PAS_A_FAIRE: Record<RaisonPasAFaire, string> = {
   CLASSE_EN_LOT: "Classé en lot",
 };
 
-/** La liste courte adaptée au type (§ 2 de l'énoncé) : « client perdu » seulement quand il y a un client. */
-export function raisonsPasAFaire(type: TypeTache): RaisonPasAFaire[] {
+/**
+ * La liste courte adaptée au type (§ 2 de l'énoncé) : « client perdu » seulement quand il y a un client.
+ * Mission 17 (partie A, relecture) : `aClient: false` (tâche sans dossier ni lead : un mail d'un inconnu, un fil sans
+ * contact) retire « client perdu » — il n'y a personne à classer perdu (le serveur le refuse aussi). Sans option : la
+ * liste du type.
+ */
+export function raisonsPasAFaire(type: TypeTache, options: { aClient?: boolean } = {}): RaisonPasAFaire[] {
+  const raisons = raisonsDuType(type);
+  return options.aClient === false ? raisons.filter((r) => r !== "CLIENT_PERDU") : raisons;
+}
+
+function raisonsDuType(type: TypeTache): RaisonPasAFaire[] {
   switch (type) {
     case "REPONDRE":
     case "LIRE_MAIL":
@@ -233,6 +243,8 @@ export type TacheVue = {
   leadId: string | null;
   dossierId: string | null;
   clientId: string | null;
+  /** Vrai si la tâche porte sur un dossier ou un lead : « client perdu » n'est proposé que dans ce cas (raisonsPasAFaire). */
+  aClient: boolean;
   titre: string;
   raison: string;
   niveau: NiveauTache;

@@ -42,3 +42,14 @@ export function messagesDeLaTache(raccourci: Record<string, unknown>, donnees: R
   const liste = [raccourci.messageId, donnees.messageId, ...(Array.isArray(donnees.messageIds) ? donnees.messageIds : [])];
   return [...new Set(liste.filter((id): id is string => typeof id === "string" && id.length > 0))];
 }
+
+/**
+ * Mission 17 (partie A, relecture) : l'occurrence du besoin, dans `donnees.occurrence` (posée par les détecteurs, lue
+ * par le moteur › besoinNouveau et la vue des espaces) ; null si elle manque.
+ */
+export const CLE_OCCURRENCE = "occurrence";
+
+export function occurrenceDe(donnees: Record<string, unknown> | null | undefined): string | null {
+  const valeur = donnees?.[CLE_OCCURRENCE];
+  return typeof valeur === "string" && valeur ? valeur : null;
+}

@@ -1,4 +1,4 @@
-import type { CodeSignal } from "@/lib/espace/suivi-types";
+import type { CodeSignal, LigneEspace } from "@/lib/espace/suivi-types";
 import type { TypeTache } from "../types";
 import { cleTache } from "./types";
 
@@ -30,6 +30,33 @@ export const TYPE_DU_SIGNAL: Record<CodeSignal, TypeTache | null> = {
 
 /** Les signaux portés par le client (son espace permanent), pas par un de ses projets. */
 export const SIGNAUX_DU_CLIENT: readonly CodeSignal[] = ["NOUVEAU_PROJET", "PROJET_DEMANDE", "CONFIRMATION_DEMANDEE"];
+
+/**
+ * Mission 17 (partie A, relecture) : l'occurrence du besoin que porte un signal de projet (`donnees.occurrence`,
+ * moteur.ts › besoinNouveau) — le lien à envoyer (espace créé le …), le lien envoyé le … et jamais ouvert, le lien qui
+ * expire le … Tous tombent sur la même clé ENVOYER_LIEN : un « Fait » sur « Envoyer le lien » n'éteint pas « Lien
+ * expiré » un mois plus tard. Null : le signal n'en porte pas (le geste du client suffit à rouvrir). Partagé par le
+ * détecteur et la vue des espaces (un signal d'une AUTRE occurrence que la tâche écartée reste affiché).
+ */
+export function occurrenceDuSignal(code: CodeSignal, projet: Pick<LigneEspace, "creeLe" | "lienEnvoyeLe" | "expireLe">): string | null {
+  switch (code) {
+    case "NON_ENVOYE":
+      return `NON_ENVOYE:${projet.creeLe}`;
+    case "JAMAIS_OUVERT":
+      return `JAMAIS_OUVERT:${projet.lienEnvoyeLe ?? projet.creeLe}`;
+    case "EXPIRE":
+    case "EXPIRE_BIENTOT":
+      return `${code}:${projet.expireLe}`;
+    default:
+      return null;
+  }
+}
+
+/** L'occurrence d'une tâche vue sur plusieurs signaux : les leurs, sans doublon, triées (« a|b »). */
+export function occurrenceDesSignaux(occurrences: readonly (string | null | undefined)[]): string | null {
+  const liste = [...new Set(occurrences.filter((o): o is string => Boolean(o)))].sort();
+  return liste.length ? liste.join("|") : null;
+}
 
 /** La clé de la tâche d'un signal : sur le dossier du projet, ou sur le client pour un signal du client. Null : pas de tâche. */
 export function cleDuSignal(code: CodeSignal, cible: { dossierId?: string | null; clientId?: string | null }): string | null {

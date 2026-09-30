@@ -2,15 +2,16 @@ import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { aHeureParis } from "@/lib/commercial/quand";
 import type { Affaire } from "@/lib/commercial/types";
-import { euros, heure, pluriel } from "@/lib/commun/format";
+import { euros, pluriel } from "@/lib/commun/format";
 import { estDossierClos } from "@/lib/dossiers/constants";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { lireLignes, lirePhotos } from "@/lib/dossiers/stockage";
 import { MOTIFS_SANS_ACOMPTE } from "@/lib/encaissements/constantes";
-import { faitsPaiements } from "@/lib/encaissements/soldes";
+import { restesDesFactures } from "@/lib/encaissements/soldes";
 import { jourMois } from "../achevement";
 import type { Detection, NiveauTache, Raccourci, TypeTache } from "../types";
+import { heureLisible } from "./libelles";
 import { pilotageDuPassage } from "./pilotage-partage";
 import { cleTache, type ContexteDetection, type Detecteur } from "./types";
 
@@ -32,6 +33,13 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  *   moteur écarte toutes les autres détections de ce dossier tant qu'elle l'est.
  * Montant en jeu : devis accepté, sinon accord, sinon le plus gros devis en vigueur visible, sinon l'estimation (jamais
  * un devis annulé, remplacé ou non retenu).
+ *
+ * Mission 17 (partie A, relecture) :
+ * - occurrence du besoin (`donnees.occurrence`, moteur.ts) : l'acompte, ou le solde et sa facture ; la date du rappel ;
+ *   l'instant où l'action a été posée à la main — un besoin suivant sur la même clé revient après un « Fait » ;
+ * - pas de « Préparer la simulation » quand une simulation attend d'être publiée (brouillon) : « Publier » la reprend ;
+ * - les restes dus des dossiers facturés sont lus en une fois (plus une lecture par dossier) ;
+ * - raisons en dates absolues (« rappel prévu le 30/09 à 14 h ») : rien ne change d'un passage à l'autre.
  */
 
 /** Le dernier instant de la journée de Paris (le serveur tourne en UTC). */
@@ -45,19 +53,10 @@ const ETAPES_ACOMPTE = ["SIGNE", "PLANIFIE", "CHANTIER"];
 const ETAPES_RELANCE_DEVIS = ["DEVIS_ENVOYE", "RELANCE"];
 const LONGUEUR_ACTION = 60;
 
-/** « 14 h », « 9 h 30 » (heure de Paris). */
-function heureLisible(date: Date): string {
-  const [h, m] = heure(date).split(":");
-  return `${Number(h)} h${m && m !== "00" ? ` ${m}` : ""}`;
-}
-
-/** « prévu à 14 h » (aujourd'hui), « prévu le 28/09 à 14 h », « prévu le 28/09 » (jour seul). */
-function quandPrevu(date: Date, instant: Date | null, maintenant: Date, feminin = false): string {
-  const aujourdhui = date.getTime() >= aHeureParis(maintenant, 0, 0).getTime();
+/** « prévu le 28/09 à 14 h », « prévu le 28/09 » (jour seul). Toujours absolu. */
+function quandPrevu(date: Date, instant: Date | null, feminin = false): string {
   const aLHeure = instant !== null && instant.getTime() === date.getTime();
-  const prevu = feminin ? "prévue" : "prévu";
-  if (aujourdhui) return aLHeure ? `${prevu} à ${heureLisible(date)}` : `${prevu} aujourd'hui`;
-  return `${prevu} le ${jourMois(date)}${aLHeure ? ` à ${heureLisible(date)}` : ""}`;
+  return `${feminin ? "prévue" : "prévu"} le ${jourMois(date)}${aLHeure ? ` à ${heureLisible(date)}` : ""}`;
 }
 
 /** Le texte court d'une action posée à la main, pour un titre : une ligne, 60 caractères au plus, majuscule en tête. */
@@ -100,7 +99,7 @@ async function lireDossiers(ids: string[]) {
         prochaineAction: true, prochaineActionDate: true, prochaineActionInstant: true,
         documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { statut: true, totalHt: true, acomptePct: true, lignes: true, visibleEspace: true } },
         accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, totalHt: true, acomptePct: true } },
-        espaces: { where: { archiveLe: null }, select: { simulations: { where: { archiveLe: null, choisieLe: { not: null } }, select: { choisieLe: true } } } },
+        espaces: { where: { archiveLe: null }, select: { simulations: { where: { archiveLe: null, OR: [{ choisieLe: { not: null } }, { statut: "BROUILLON" }] }, select: { choisieLe: true, statut: true } } } },
       },
     }),
     prisma.dossierEvenement.findMany({ where: { dossierId: { in: ids }, type: "ESPACE_PHOTOS" }, select: { dossierId: true, createdAt: true, survenuLe: true } }),
@@ -131,6 +130,7 @@ async function lireDossiers(ids: string[]) {
         nbPhotos: lirePhotos(d.photos).length,
         photosLe: photosLe.get(d.id) ?? null,
         choisieLe: plusRecent(d.espaces.flatMap((e) => e.simulations.map((s) => s.choisieLe))),
+        brouillon: d.espaces.some((e) => e.simulations.some((s) => s.statut === "BROUILLON")),
         accordLe: d.accords[0]?.createdAt ?? null,
         signeLe: signeLe.get(d.id) ?? null,
         sansAcompte: sansAcompte.get(d.id) ?? [],
@@ -159,7 +159,7 @@ function surLeDossier(d: DossierLu, type: TypeTache, champs: { titre: string; ra
 }
 
 /** La détection d'une affaire du pilotage (dossier, main à Lucas) ; null quand ce groupe n'appelle pas de tâche ici. */
-function depuisLAffaire(a: Affaire, d: DossierLu, maintenant: Date): Detection | null {
+function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
   const telephone = a.telephone ?? normaliserTelephone(d.clientTelephone);
   switch (a.groupe) {
     case "REPONDRE": {
@@ -197,18 +197,24 @@ function depuisLAffaire(a: Affaire, d: DossierLu, maintenant: Date): Detection |
       const relance = a.action.startsWith("Relancer");
       // La relance d'un devis en attente : le détecteur RELANCES la propose (RELANCER_DEVIS), pas de doublon ici.
       if (relance && ETAPES_RELANCE_DEVIS.includes(d.etape)) return null;
-      const date = d.prochaineActionDate ?? maintenant;
+      // Sans date (main « à relancer ») : l'origine du besoin reste fixe d'un passage à l'autre.
+      const date = d.prochaineActionDate ?? d.mainLe ?? d.updatedAt;
       return surLeDossier(d, "RAPPELER", {
         titre: `${relance ? "Relancer" : "Rappeler"} · ${d.nom}`,
-        raison: `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, maintenant, relance)}`,
+        raison: d.prochaineActionDate ? `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, relance)}` : relance ? "relance à faire" : "rappel à faire",
         niveau: 2,
         depuis: date,
         echeance: d.prochaineActionDate,
         raccourci: { genre: "APPEL", libelle: relance ? "Relancer" : "Rappeler", telephone, dossierId: d.id, leadId: d.leadId, href: telephone ? `tel:${telephone}` : null },
-        donnees: d.prochaineAction ? { action: d.prochaineAction } : {},
+        donnees: {
+          ...(d.prochaineAction ? { action: d.prochaineAction } : {}),
+          ...(d.prochaineActionDate ? { occurrence: `${d.prochaineActionDate.toISOString()}|${d.prochaineAction ?? ""}` } : {}),
+        },
       });
     }
     case "SIMULATION": {
+      // Une simulation préparée attend d'être publiée : « Publier la simulation » (SIGNAUX) la reprend.
+      if (d.brouillon) return null;
       const raison = d.nbPhotos > 0 ? `${pluriel(d.nbPhotos, "photo reçue", "photos reçues")}${d.photosLe ? ` le ${jourMois(d.photosLe)}` : ""}` : "aucune simulation publiée";
       return surLeDossier(d, "SIMULATION", {
         titre: `Préparer la simulation · ${d.nom}`,
@@ -236,6 +242,7 @@ function depuisLAffaire(a: Affaire, d: DossierLu, maintenant: Date): Detection |
         niveau: 3,
         depuis: d.createdAt,
         raccourci: { genre: "SMS", libelle: "Copier le SMS", dossierId: d.id, leadId: d.leadId, sms: { action: "ENVOYER_LIEN", dossierId: d.id } },
+        donnees: { occurrence: "SANS_ESPACE" },
       });
     default:
       return null;
@@ -261,7 +268,7 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
 
   for (const a of affaires) {
     const d = dossiers.get(a.dossierId!);
-    const detection = d ? depuisLAffaire(a, d, maintenant) : null;
+    const detection = d ? depuisLAffaire(a, d) : null;
     if (detection) detections.push(detection);
   }
 
@@ -282,18 +289,19 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
         depuis: d.accordLe ?? d.signeLe ?? d.mainLe ?? d.updatedAt,
         montant: acompte,
         raccourci: { genre: "ENCAISSER", libelle: "Encaisser", dossierId: d.id, rubrique: "encaisser", href: lienDossier(d.id, "&rubrique=encaisser") },
+        donnees: { occurrence: "ACOMPTE" },
       })
     );
   }
 
-  // Le solde : un reste dû sur les factures actives (le dossier passe seul à « Encaissé » quand il est réglé).
+  // Le solde : un reste dû sur les factures actives (le dossier passe seul à « Encaissé » quand il est réglé). Lus en une fois.
+  const restes = await restesDesFactures(prisma, encaisser.solde);
   for (const id of encaisser.solde) {
     const d = dossiers.get(id);
-    if (!d) continue;
-    const faits = await faitsPaiements(prisma, id);
-    if (faits.resteCentimes <= 0) continue;
-    const facture = faits.pieces.find((p) => p.type === "FACTURE" && p.active && (p.resteCentimes ?? 0) > 0) ?? null;
-    const reste = faits.resteCentimes / 100;
+    const du = restes.get(id);
+    if (!d || !du || du.resteCentimes <= 0) continue;
+    const facture = du.facture;
+    const reste = du.resteCentimes / 100;
     detections.push(
       surLeDossier(d, "ENCAISSER", {
         titre: `Encaisser le solde · ${d.nom}`,
@@ -302,25 +310,26 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
         depuis: facture?.emisLe ?? d.updatedAt,
         montant: reste,
         raccourci: { genre: "ENCAISSER", libelle: "Encaisser", dossierId: d.id, rubrique: "encaisser", href: lienDossier(d.id, "&rubrique=encaisser") },
+        donnees: { occurrence: `SOLDE:${facture?.documentId ?? facture?.numero ?? "facture"}` },
       })
     );
   }
 
   // La prochaine action posée à la main, le jour de sa date (ou en retard) : la seule tâche de ce dossier tant qu'elle est en vigueur.
   const ceSoir = finDeJournee(maintenant);
-  const debutDuJour = aHeureParis(maintenant, 0, 0);
   for (const action of vigueur.values()) {
     const d = dossiers.get(action.dossierId);
     if (!d || estDossierClos(d.etape) || !action.date || action.date.getTime() > ceSoir.getTime()) continue;
     detections.push(
       surLeDossier(d, "PROCHAINE_ACTION", {
         titre: `${actionCourte(action.action)} · ${d.nom}`,
-        raison: action.date.getTime() < debutDuJour.getTime() ? `prévue le ${jourMois(action.date)}, en retard` : "prévue aujourd'hui",
+        // « en retard » change au plus une fois (à minuit) : pas une réécriture à chaque passage.
+        raison: `prévue le ${jourMois(action.date)}${action.date.getTime() < aHeureParis(maintenant, 0, 0).getTime() ? ", en retard" : ""}`,
         niveau: 2,
         depuis: action.date,
         echeance: action.date,
         raccourci: { genre: "DOSSIER", libelle: "Ouvrir le dossier", dossierId: d.id, href: lienDossier(d.id) },
-        donnees: { action: action.action, poseeLe: action.le.toISOString(), par: action.par },
+        donnees: { action: action.action, poseeLe: action.le.toISOString(), par: action.par, occurrence: action.le.toISOString() },
       })
     );
   }

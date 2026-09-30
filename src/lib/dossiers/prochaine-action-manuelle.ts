@@ -24,14 +24,29 @@ export const estActeurManuel = (acteur: string): boolean => {
 };
 
 /**
+ * Le même texte reposé par Lucas ou Claude est-il une action nouvelle ? Oui s'il était retenu à la main et que le client
+ * s'est manifesté depuis (la vigueur est tombée). Sinon — l'écran renvoie le texte avec une autre date, un formulaire
+ * renvoie tous ses champs, un texte écrit par le CRM — rien de neuf.
+ */
+async function memeTexteAReposer(dossierId: string, action: string): Promise<boolean> {
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { prochaineActionManuelle: true, prochaineActionManuelleLe: true } });
+  if (!dossier?.prochaineActionManuelleLe || dossier.prochaineActionManuelle?.trim() !== action) return false;
+  const { dernierEvenementClientDossiers } = await import("@/lib/a-faire/evenements-client");
+  const geste = (await dernierEvenementClientDossiers([dossierId])).get(dossierId);
+  return Boolean(geste && geste.getTime() > dossier.prochaineActionManuelleLe.getTime());
+}
+
+/**
  * Après l'écriture de la prochaine action : si son texte a changé et que l'auteur est Lucas ou Claude, la retient comme
  * manuelle. Un texte effacé efface aussi l'action retenue (sans événement). Jamais bloquant : rend vrai si l'action a
  * été retenue.
+ * Mission 17 (partie A, relecture) : le MÊME texte reposé est retenu de nouveau quand le client s'est manifesté depuis
+ * — « j'attends sa modification visuelle », reposé après sa réponse, tient de nouveau le dossier (memeTexteAReposer).
  */
 export async function noterProchaineActionManuelle(dossierId: string, entree: { action: string | null | undefined; avant: string | null | undefined; date: Date | null }, maintenant: Date = new Date()): Promise<boolean> {
   const action = entree.action?.trim() || null;
-  if (action === (entree.avant?.trim() || null)) return false;
   try {
+    if (action === (entree.avant?.trim() || null) && (!action || !(await memeTexteAReposer(dossierId, action)))) return false;
     const { acteur } = await resoudreContexte();
     if (!estActeurManuel(acteur)) return false;
     if (!action) {

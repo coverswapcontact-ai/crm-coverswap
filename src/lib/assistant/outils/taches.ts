@@ -403,7 +403,8 @@ async function descriptionPerte(tache: TacheAFaire, motif: MotifPerte, precision
 
 /**
  * Ce que la réponse va faire sur la source, en mots (le même calcul que `reponses.ts › effetsDe`, pour le dire à
- * Lucas) : proposition validée ou ignorée, fil archivé ou reporté, messages de l'espace lus, contact noté, perte.
+ * Lucas) : proposition validée ou ignorée, fil archivé ou reporté, messages de l'espace lus, appel noté, prochaine action
+ * levée, perte.
  */
 async function effetsEnMots(tache: TacheAFaire, e: EntreeRepondre, jusqua: Date | null): Promise<string[]> {
   const raccourci = lireObjet(tache.raccourci);
@@ -427,7 +428,8 @@ async function effetsEnMots(tache: TacheAFaire, e: EntreeRepondre, jusqua: Date 
   if ((texteOuNull(donnees.espaceDossierId) || (depuisLEspace && tache.dossierId)) && e.reponse !== "PLUS_TARD") {
     effets.push(`les messages de l'espace seront marqués lus (${e.reponse === "FAIT" ? "répondu hors du CRM" : "pas de réponse à faire"})`);
   }
-  if (e.reponse === "FAIT" && (tache.type === "APPELER" || tache.type === "RAPPELER") && tache.leadId) effets.push("le contact sera noté sur la fiche");
+  if (e.reponse === "FAIT" && (tache.type === "APPELER" || tache.type === "RAPPELER") && tache.leadId) effets.push("l'appel sera noté sur la fiche");
+  if (e.reponse !== "PLUS_TARD" && tache.type === "PROCHAINE_ACTION" && tache.dossierId && texteOuNull(donnees.poseeLe)) effets.push("la prochaine action posée à la main sera retirée du dossier (il revient au suivi normal)");
   if (pertePrevue(tache, e)) effets.push(await descriptionPerte(tache, e.motif_perte!, e.precision?.trim() || null));
   return effets.filter(Boolean);
 }
@@ -438,7 +440,7 @@ export const outilRepondreTache = definirOutil({
   nom: "repondre_tache",
   titre: "Répondre à une tâche (fait, plus tard, pas à faire, annuler)",
   description:
-    "La réponse de Lucas à une tâche de sa liste. « C'est fait » → FAIT avec l'identifiant de la DERNIÈRE tâche citée (rendu par « taches ») ; « plus tard », « demain », « jeudi », « le 12 » → PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison (DEJA_FAIT, CLIENT_LE_FAIT, PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE pour un mail, CLIENT_PERDU avec motif_perte, AUTRE avec texte) ; « annule » → ANNULER (remet la tâche comme avant et défait l'effet quand c'est possible). Sans identifiant, le titre approché est cherché parmi les tâches ouvertes : plusieurs candidats → demande laquelle, ne choisis jamais. L'effet sur la source part 6 secondes après (proposition validée ou ignorée, fil archivé ou reporté, messages lus, contact noté). Sensible (aperçu puis confirmation) quand l'effet touche le client ou l'argent : « Fait » sur une validation qui envoie un mail ou un SMS ou touche un montant, « client perdu » qui passe un contact sans suite ou un dossier perdu.",
+    "La réponse de Lucas à une tâche de sa liste. « C'est fait » → FAIT avec l'identifiant de la DERNIÈRE tâche citée (rendu par « taches ») ; « plus tard », « demain », « jeudi », « le 12 » → PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison (DEJA_FAIT, CLIENT_LE_FAIT, PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE pour un mail, CLIENT_PERDU avec motif_perte, AUTRE avec texte) ; « annule » → ANNULER (remet la tâche comme avant et défait l'effet quand c'est possible). Sans identifiant, le titre approché est cherché parmi les tâches ouvertes : plusieurs candidats → demande laquelle, ne choisis jamais. L'effet sur la source part 6 secondes après (proposition validée ou ignorée, fil archivé ou reporté, messages lus, appel noté, prochaine action levée). Sensible (aperçu puis confirmation) quand l'effet touche le client ou l'argent : « Fait » sur une validation qui envoie un mail ou un SMS ou touche un montant, « client perdu » qui passe un contact sans suite ou un dossier perdu.",
   niveau: "REVERSIBLE",
   schema: schemaRepondre,
   sensible: async (e) => {
@@ -567,7 +569,7 @@ export const outilAjouterTache = definirOutil({
     );
     const lue = await lireEnMots(v, contexte.maintenant, false);
     return {
-      texte: `Tâche ajoutée : « ${v.titre} »${ids ? ` (${ids.nom})` : ""}${v.echeance ? `, pour ${retourLisible(v.echeance).replace(/ à \d+ h.*$/, "")}` : ""} [tache:${v.id}]. Elle est dans ta liste (${v.dureeMin} min) ; « c'est fait » la coche. Pour la retirer : « repondre_tache » PAS_A_FAIRE (raison PAS_PERTINENT).`,
+      texte: `Tâche ajoutée : « ${v.titre} »${ids ? ` (${ids.nom})` : ""}${v.echeance ? `, pour ${retourLisible(v.echeance).replace(/ à \d+ h.*$/, "")}` : ""} [tache:${v.id}]. ${v.statut === "PLUS_TARD" ? "Elle attend dans « Plus tard » et revient en tête de ta liste ce jour-là" : "Elle est dans ta liste"} (${v.dureeMin} min) ; « c'est fait » la coche. Pour la retirer : « repondre_tache » PAS_A_FAIRE (raison PAS_PERTINENT).`,
       donnees: lue,
       liens: [lien("Tâches", "/taches"), ...(v.dossierId ? [lien("Dossier", `/dossiers?dossier=${v.dossierId}`)] : v.leadId ? [lien("Contact", `/leads?lead=${v.leadId}`)] : [])],
     };

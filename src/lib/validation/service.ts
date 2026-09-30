@@ -445,7 +445,8 @@ export type FiltresPropositions = {
   dossierId?: string;
   clientId?: string;
   messageId?: string;
-  limite?: number;
+  /** 100 par défaut, 500 au plus ; `null` : toutes (détecteur des tâches : ce qui n'est pas lu ne doit pas être coché). */
+  limite?: number | null;
 };
 
 export async function listerPropositions(filtres: FiltresPropositions = {}): Promise<PropositionVue[]> {
@@ -458,7 +459,7 @@ export async function listerPropositions(filtres: FiltresPropositions = {}): Pro
       ...(filtres.messageId ? { messageId: filtres.messageId } : {}),
     },
     orderBy: { createdAt: "desc" },
-    take: Math.min(filtres.limite ?? 100, 500),
+    take: filtres.limite === null ? undefined : Math.min(filtres.limite ?? 100, 500),
   });
   return propositions.map(vueProposition);
 }

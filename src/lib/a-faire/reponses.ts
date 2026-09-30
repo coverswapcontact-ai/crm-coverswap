@@ -6,6 +6,7 @@ import { analyser } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { aHeureParis } from "@/lib/commercial/quand";
 import { MOTIFS_PERTE, type MotifPerte } from "@/lib/dossiers/constants";
+import { jour } from "@/lib/commun/format";
 import { dateDepuisJour, estJourValide, jourParis } from "@/lib/dossiers/dates";
 import { motifPerteDansUnePhrase, verifierMotifPerte } from "@/lib/dossiers/perte";
 import { resoudreContexte } from "@/lib/journal/acteur";
@@ -150,7 +151,12 @@ type Effet =
   | { genre: "MAIL_ARCHIVER"; messageId: string }
   | { genre: "MAIL_REPORTER"; messageId: string; jusqua: string }
   | { genre: "ESPACE"; dossierId: string; evenement: "REPONSE_INUTILE" | "REPONDU_HORS_CRM" }
+  /** Charges mises en file avant la relecture : « Fait » sur APPELER/RAPPELER posait le dernier contact écrit. */
   | { genre: "DERNIER_CONTACT"; leadId: string }
+  /** Mission 17 (partie A, relecture) : « Fait » sur APPELER/RAPPELER note un appel (`dernierAppelLe`), pas un contact écrit. */
+  | { genre: "DERNIER_APPEL"; leadId: string }
+  /** Mission 17 (partie A, relecture) : « Fait » ou « Pas à faire » sur PROCHAINE_ACTION lève l'action posée à la main. */
+  | { genre: "LEVER_ACTION"; dossierId: string; poseeLe: string }
   /** `enLot` : classé depuis « Tout classer » — jamais redirigé vers le dossier du contact (refusé s'il en a un). */
   | { genre: "PERTE_LEAD"; leadId: string; motifPerte: MotifPerte; precision: string | null; enLot?: boolean }
   | { genre: "PERTE_DOSSIER"; dossierId: string; motifPerte: MotifPerte; precision: string | null };
@@ -161,7 +167,30 @@ type Inverse =
   | { genre: "MAIL_SNOOZE"; messageId: string; avant: string | null }
   | { genre: "ESPACE"; dossierId: string; messagesLus: string[]; evenementId: string }
   | { genre: "DERNIER_CONTACT"; leadId: string; le: string; avant?: string | null }
+  | { genre: "DERNIER_APPEL"; leadId: string; le: string; avant: string | null }
+  | { genre: "ACTION_MANUELLE"; dossierId: string; avant: ActionAvant }
   | { genre: "STATUT_LEAD"; leadId: string; statut: string };
+
+/** La prochaine action d'un dossier telle qu'elle était avant d'être levée (pour « Annuler »). */
+type ActionAvant = {
+  prochaineAction: string | null;
+  prochaineActionDate: string | null;
+  prochaineActionInstant: string | null;
+  prochaineActionManuelle: string | null;
+  prochaineActionManuelleLe: string | null;
+  prochaineActionPar: string | null;
+};
+
+/** Mission 17 (partie A, relecture) : ce que « Annuler » n'a pas pu défaire, dit en français (jamais un code). */
+const LIBELLES_INVERSE: Record<Inverse["genre"], string> = {
+  MAIL_DESARCHIVER: "fil à désarchiver",
+  MAIL_SNOOZE: "report du fil à annuler",
+  ESPACE: "messages de l'espace à remettre non lus",
+  DERNIER_CONTACT: "contact à retirer de la fiche",
+  DERNIER_APPEL: "appel à retirer de la fiche",
+  ACTION_MANUELLE: "prochaine action à remettre sur le dossier",
+  STATUT_LEAD: "contact à remettre dans les listes",
+};
 
 /** La charge d'une tâche de fond A_FAIRE_EFFET. */
 export type ChargeEffet = { tacheId: string; reponse: ReponseTache; reponduLe: string; acteur: string; effets: Effet[] };
@@ -209,7 +238,10 @@ function effetsDe(tache: TacheAFaire, decision: Decision): Effet[] {
   const depuisLEspace = tache.type === "REPONDRE" && (tache.source === "ESPACE_MESSAGES" || raccourci.genre === "ESPACE");
   const espaceDossierId = texteOuNull(donnees.espaceDossierId) ?? (depuisLEspace ? tache.dossierId : null);
   if (espaceDossierId && reponse !== "PLUS_TARD") effets.push({ genre: "ESPACE", dossierId: espaceDossierId, evenement: reponse === "FAIT" ? "REPONDU_HORS_CRM" : "REPONSE_INUTILE" });
-  if (reponse === "FAIT" && (tache.type === "APPELER" || tache.type === "RAPPELER") && tache.leadId) effets.push({ genre: "DERNIER_CONTACT", leadId: tache.leadId });
+  if (reponse === "FAIT" && (tache.type === "APPELER" || tache.type === "RAPPELER") && tache.leadId) effets.push({ genre: "DERNIER_APPEL", leadId: tache.leadId });
+  // L'action posée à la main est faite (ou n'a plus lieu d'être) : elle ne tient plus le dossier muet.
+  const poseeLe = texteOuNull(donnees.poseeLe);
+  if (reponse !== "PLUS_TARD" && tache.type === "PROCHAINE_ACTION" && tache.dossierId && poseeLe) effets.push({ genre: "LEVER_ACTION", dossierId: tache.dossierId, poseeLe });
   if (reponse === "PAS_A_FAIRE" && decision.raison === "CLIENT_PERDU" && decision.motifPerte) {
     if (tache.dossierId) effets.push({ genre: "PERTE_DOSSIER", dossierId: tache.dossierId, motifPerte: decision.motifPerte, precision: decision.precisionPerte });
     else if (tache.leadId) effets.push({ genre: "PERTE_LEAD", leadId: tache.leadId, motifPerte: decision.motifPerte, precision: decision.precisionPerte });
@@ -305,6 +337,51 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
       sortie.inverses.push({ genre: "ESPACE", dossierId: effet.dossierId, messagesLus: nonLus.map((m) => m.id), evenementId: evenement.id });
       return;
     }
+    case "DERNIER_APPEL": {
+      // Le dernier appel avance (jamais ne recule) ; « Annuler » remet la date d'avant.
+      const lead = await prisma.lead.findUnique({ where: { id: effet.leadId }, select: { dernierAppelLe: true } });
+      if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
+      const avant = lead.dernierAppelLe;
+      if (avant && avant.getTime() >= contexte.reponduLe.getTime()) return;
+      const { count } = await prisma.lead.updateMany({ where: { id: effet.leadId, dernierAppelLe: avant }, data: { dernierAppelLe: contexte.reponduLe } });
+      if (count === 1) {
+        sortie.faits.push("appel noté sur la fiche");
+        sortie.inverses.push({ genre: "DERNIER_APPEL", leadId: effet.leadId, le: contexte.reponduLe.toISOString(), avant: avant?.toISOString() ?? null });
+      }
+      return;
+    }
+    case "LEVER_ACTION": {
+      const dossier = await prisma.dossier.findUnique({
+        where: { id: effet.dossierId },
+        select: { prochaineAction: true, prochaineActionDate: true, prochaineActionInstant: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true, prochaineActionPar: true },
+      });
+      if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
+      // Reposée entre-temps (autre instant) : la nouvelle action tient, on n'y touche pas.
+      if (dossier.prochaineActionManuelleLe?.toISOString() !== effet.poseeLe) return;
+      // Le texte est encore celui posé à la main : l'action est faite, la prochaine action du dossier se vide (sinon un
+      // rappel échu ferait naître « Rappeler » juste après « Fait »). Remplacé depuis : seul le « à la main » tombe.
+      const memeTexte = dossier.prochaineAction === dossier.prochaineActionManuelle;
+      const { count } = await prisma.dossier.updateMany({
+        where: { id: effet.dossierId, prochaineActionManuelleLe: dossier.prochaineActionManuelleLe },
+        data: { prochaineActionManuelle: null, prochaineActionManuelleLe: null, prochaineActionPar: null, ...(memeTexte ? { prochaineAction: null, prochaineActionDate: null, prochaineActionInstant: null } : {}) },
+      });
+      if (count !== 1) return;
+      await apresChangementAction(effet.dossierId);
+      sortie.faits.push(memeTexte ? "prochaine action retirée du dossier" : "prochaine action rendue au suivi normal");
+      sortie.inverses.push({
+        genre: "ACTION_MANUELLE",
+        dossierId: effet.dossierId,
+        avant: {
+          prochaineAction: dossier.prochaineAction,
+          prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null,
+          prochaineActionInstant: dossier.prochaineActionInstant?.toISOString() ?? null,
+          prochaineActionManuelle: dossier.prochaineActionManuelle,
+          prochaineActionManuelleLe: dossier.prochaineActionManuelleLe.toISOString(),
+          prochaineActionPar: dossier.prochaineActionPar,
+        },
+      });
+      return;
+    }
     case "DERNIER_CONTACT": {
       // Le dernier contact avance (jamais ne recule) ; « Annuler » remet la date d'avant.
       const lead = await prisma.lead.findUnique({ where: { id: effet.leadId }, select: { dernierContactLe: true } });
@@ -343,6 +420,13 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
       return;
     }
   }
+}
+
+/** Après un changement de la prochaine action d'un dossier : l'agenda suit, la main est recalculée. */
+async function apresChangementAction(dossierId: string): Promise<void> {
+  const [{ synchroniserRappel }, { recalculerMain }] = await Promise.all([import("@/lib/agenda/rappels"), import("@/lib/dossiers/main")]);
+  await synchroniserRappel({ type: "DOSSIER", id: dossierId });
+  await recalculerMain(dossierId);
 }
 
 const STATUT_DE_LA_REPONSE: Record<ReponseTache, StatutTache> = { FAIT: "FAITE", PLUS_TARD: "PLUS_TARD", PAS_A_FAIRE: "PAS_A_FAIRE" };
@@ -486,8 +570,11 @@ export async function repondreTache(id: string, entree: EntreeReponse, maintenan
       break;
     }
     case "PAS_A_FAIRE": {
-      const permises = raisonsPasAFaire(type);
+      // Mission 17 (partie A, relecture) : « client perdu » exige un client (dossier ou lead) à classer perdu.
+      const aClient = Boolean(tache.dossierId || tache.leadId);
+      const permises = raisonsPasAFaire(type, { aClient });
       const raison = e.raison?.trim() as RaisonPasAFaire | undefined;
+      if (raison === "CLIENT_PERDU" && !aClient) throw new ErreurMetier("« Client perdu » : cette tâche ne porte sur aucun client (ni dossier ni contact) — choisis une autre raison.", 400);
       if (!raison || !permises.includes(raison)) {
         throw new ErreurMetier(`« Pas à faire » : choisis la raison (${permises.map((r) => LIBELLES_RAISON_PAS_A_FAIRE[r].toLowerCase()).join(", ")}).`, 400);
       }
@@ -543,6 +630,27 @@ async function defaire(inverse: Inverse, maintenant: Date): Promise<string> {
     case "DERNIER_CONTACT":
       await prisma.lead.updateMany({ where: { id: inverse.leadId, dernierContactLe: new Date(inverse.le) }, data: { dernierContactLe: dateOuNull(inverse.avant) } });
       return "contact retiré de la fiche";
+    case "DERNIER_APPEL":
+      await prisma.lead.updateMany({ where: { id: inverse.leadId, dernierAppelLe: new Date(inverse.le) }, data: { dernierAppelLe: dateOuNull(inverse.avant) } });
+      return "appel retiré de la fiche";
+    case "ACTION_MANUELLE": {
+      // Remise seulement si personne n'a reposé d'action depuis.
+      const a = inverse.avant;
+      const { count } = await prisma.dossier.updateMany({
+        where: { id: inverse.dossierId, prochaineActionManuelleLe: null },
+        data: {
+          prochaineAction: a.prochaineAction,
+          prochaineActionDate: dateOuNull(a.prochaineActionDate),
+          prochaineActionInstant: dateOuNull(a.prochaineActionInstant),
+          prochaineActionManuelle: a.prochaineActionManuelle,
+          prochaineActionManuelleLe: dateOuNull(a.prochaineActionManuelleLe),
+          prochaineActionPar: a.prochaineActionPar,
+        },
+      });
+      if (count !== 1) throw new ErreurMetier("une autre prochaine action a été posée depuis", 409);
+      await apresChangementAction(inverse.dossierId);
+      return "prochaine action remise sur le dossier";
+    }
     case "STATUT_LEAD": {
       const { modifierEntrant } = await import("@/lib/prospects/entrants");
       await modifierEntrant(inverse.leadId, { statut: inverse.statut as "NOUVEAU" | "DEVIS_DEMANDE" | "CONTACTE" });
@@ -582,7 +690,7 @@ async function annuler(id: string, maintenant: Date, signaler: boolean): Promise
       try {
         defaits.push(await defaire(inverse, maintenant));
       } catch (erreur) {
-        nonDefaits.push(`${inverse.genre.toLowerCase().replace(/_/g, " ")} : ${messageDe(erreur)}`);
+        nonDefaits.push(`${LIBELLES_INVERSE[inverse.genre] ?? "à défaire à la main"} : ${messageDe(erreur)}`);
       }
     }
     nonDefaits.push(...irreversibles);
@@ -628,21 +736,29 @@ function nouvelIdentifiant(): string {
   return `c${Date.now().toString(36)}${randomBytes(8).toString("hex")}`;
 }
 
-function echeanceDe(texte: string | null | undefined): Date | null {
+/**
+ * L'échéance d'une tâche ajoutée, et l'instant où elle doit être dans la liste : un jour (AAAA-MM-JJ) → ce jour à 9 h,
+ * heure de Paris ; une date ISO → cet instant.
+ */
+function echeanceDe(texte: string | null | undefined): { echeance: Date; retour: Date } | null {
   if (!texte) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(texte)) {
     if (!estJourValide(texte)) throw new ErreurMetier("Échéance invalide (AAAA-MM-JJ).", 400);
-    return dateDepuisJour(texte);
+    const echeance = dateDepuisJour(texte);
+    return { echeance, retour: aHeureParis(echeance, 0, 9) };
   }
   const d = new Date(texte);
   if (Number.isNaN(d.getTime())) throw new ErreurMetier("Échéance invalide (AAAA-MM-JJ ou date ISO).", 400);
-  return d;
+  return { echeance: d, retour: d };
 }
 
 /**
  * Une tâche à moi (MANUELLE), dite par Lucas ou Claude : niveau 3, 5 minutes, clé `MANUELLE:<id>`, sujet déduit de la
  * cible (dossier, sinon lead, sinon client, sinon aucun). Jamais cochée par absence ; `condition` (facultative) est lue
  * par le détecteur MANUELLE (detecteurs/manuelles.ts › acheves).
+ *
+ * Mission 17 (partie A, relecture) : une échéance à venir range la tâche « Plus tard » jusqu'à ce jour-là, 9 h (heure
+ * de Paris), raison « pour le 12 oct. » : elle n'encombre pas « Aujourd'hui » ni le badge, et revient en tête le jour dit.
  */
 export async function ajouterTache(entree: EntreeAjout, maintenant: Date = new Date()): Promise<TacheVue> {
   const e = analyser(schemaAjout, entree);
@@ -672,6 +788,10 @@ export async function ajouterTache(entree: EntreeAjout, maintenant: Date = new D
       : clientId
         ? { genre: "PAGE", libelle: "Ouvrir la fiche client", href: `/clients/${clientId}` }
         : { genre: "PAGE", libelle: "Faire", href: null };
+  const echeance = echeanceDe(e.echeance);
+  const aVenir = echeance && echeance.retour.getTime() > maintenant.getTime() ? echeance.retour : null;
+  const raison = [e.raison?.trim() || (aVenir ? null : "ajoutée à la main"), aVenir ? `pour le ${jour(aVenir)}` : null].filter(Boolean).join(" · ");
+  const { acteur } = aVenir ? await resoudreContexte() : { acteur: null };
   const ligne = await prisma.tacheAFaire.create({
     data: {
       cle: `MANUELLE:${nouvelIdentifiant()}`,
@@ -683,15 +803,16 @@ export async function ajouterTache(entree: EntreeAjout, maintenant: Date = new D
       dossierId,
       clientId,
       titre: e.titre,
-      raison: e.raison?.trim() || "ajoutée à la main",
+      raison,
       niveau: 3,
       montant: null,
       depuis: maintenant,
-      echeance: echeanceDe(e.echeance),
+      echeance: echeance?.echeance ?? null,
       dureeMin: dureeDe("MANUELLE", await dureesMesurees()),
       raccourci: jsonStable(raccourci),
       donnees: jsonStable(e.condition ? { condition: e.condition } : {}),
-      statut: "A_FAIRE",
+      statut: aVenir ? "PLUS_TARD" : "A_FAIRE",
+      ...(aVenir ? { reponse: "PLUS_TARD", plusTardJusqua: aVenir, reponduLe: maintenant, reponduPar: acteur } : {}),
       detecteLe: maintenant,
     },
   });
@@ -701,8 +822,11 @@ export async function ajouterTache(entree: EntreeAjout, maintenant: Date = new D
 
 /* ── Les lots : « Tout classer » ───────────────────────────────────────── */
 
-/** `laissees` : les tâches du lot qui ne se classent pas d'un geste (contact qui a un dossier) : à revoir une par une. */
-export type ResultatLot = { classees: number; effets: number; laissees: number };
+/**
+ * `laissees` : les tâches du lot qui ne se classent pas d'un geste (contact qui a un dossier) : à revoir une par une.
+ * `le` : l'instant du classement (ISO), à rendre à `annulerLot` — seules les tâches classées à cet instant reviennent.
+ */
+export type ResultatLot = { classees: number; effets: number; laissees: number; le: string };
 
 /**
  * « Tout classer » : chaque tâche du lot (à faire, ou « Plus tard » échu : ce que la liste compte) passe « Pas à faire »
@@ -740,12 +864,24 @@ export async function classerLot(lot: string, maintenant: Date = new Date()): Pr
     }
   }
   await signalerChangementTaches();
-  return { classees, effets, laissees: candidates.length - taches.length };
+  return { classees, effets, laissees: candidates.length - taches.length, le: maintenant.toISOString() };
 }
 
-/** Défait « Tout classer » : chaque tâche classée en lot revient comme avant, et son effet est annulé ou défait. */
-export async function annulerLot(lot: string, maintenant: Date = new Date()): Promise<{ restaurees: number; nonDefaits: string[] }> {
-  const taches = await prisma.tacheAFaire.findMany({ where: { lot, statut: "PAS_A_FAIRE", reponseRaison: "CLASSE_EN_LOT", precedent: { not: null } }, select: { id: true } });
+/**
+ * Défait « Tout classer » : chaque tâche classée en lot revient comme avant, et son effet est annulé ou défait.
+ * Mission 17 (partie A, relecture) : seulement le classement de l'instant `le` (rendu par `classerLot`) — jamais celui
+ * d'un autre jour ; sans `le`, le dernier classement de ce lot.
+ */
+export async function annulerLot(lot: string, maintenant: Date = new Date(), le?: string): Promise<{ restaurees: number; nonDefaits: string[] }> {
+  const classees = { lot, statut: "PAS_A_FAIRE", reponseRaison: "CLASSE_EN_LOT", precedent: { not: null } };
+  let instant: Date | null;
+  if (le) {
+    instant = new Date(le);
+    if (Number.isNaN(instant.getTime())) throw new ErreurMetier("Instant du classement illisible.", 400);
+  } else {
+    instant = (await prisma.tacheAFaire.findFirst({ where: classees, orderBy: { reponduLe: "desc" }, select: { reponduLe: true } }))?.reponduLe ?? null;
+  }
+  const taches = instant ? await prisma.tacheAFaire.findMany({ where: { ...classees, reponduLe: instant }, select: { id: true } }) : [];
   const nonDefaits = new Set<string>();
   for (const t of taches) {
     const resultat = await annuler(t.id, maintenant, false);
@@ -763,7 +899,8 @@ export async function annulerLot(lot: string, maintenant: Date = new Date()): Pr
  * si une règle active existe déjà pour ce type et cette raison. Proposée au nom du CRM.
  */
 export async function proposerRegleSiBesoin(type: TypeTache, raison: string, maintenant: Date): Promise<{ propositionId: string; creee: boolean } | null> {
-  if (RAISONS_SANS_APPRENTISSAGE.includes(raison) || !(TYPES_TACHE as readonly string[]).includes(type)) return null;
+  // Mission 17 (partie A, relecture) : « Ignorer » une validation décide d'UNE proposition, pas du type de tâche : rien à apprendre.
+  if (type === "VALIDER" || RAISONS_SANS_APPRENTISSAGE.includes(raison) || !(TYPES_TACHE as readonly string[]).includes(type)) return null;
   const nombre = await prisma.tacheAFaire.count({
     where: { type, reponse: "PAS_A_FAIRE", reponseRaison: raison, reponduLe: { gte: new Date(maintenant.getTime() - FENETRE_APPRENTISSAGE_JOURS * JOUR) }, NOT: { reponduPar: { startsWith: "SYSTEME:" } } },
   });

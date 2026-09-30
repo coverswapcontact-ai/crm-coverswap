@@ -80,7 +80,7 @@ function Contenu({ dossierId, onFini }: { dossierId: string; onFini: (pose: bool
             <ul className="grid grid-cols-2 gap-2">
               {donnees.libres.map((j) => (
                 <li key={j.jour}>
-                  <button type="button" disabled={pose !== null} onClick={() => void poser(j.jour, j.libelle)} className={cn("flex min-h-12 w-full items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] first-letter:uppercase hover:border-[#1D9E75]/60 hover:bg-[#112B22] disabled:opacity-50 sm:min-h-10 sm:text-[13px]", pose === j.jour && "border-[#1D9E75]/60 bg-[#112B22]", TRANS)}>
+                  <button type="button" disabled={pose !== null} onClick={() => void poser(j.jour, j.libelle)} className={cn("flex min-h-12 w-full items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] first-letter:uppercase hover:border-[#1D9E75]/60 hover:bg-[#112B22] disabled:opacity-50 pointer-fine:min-h-10 sm:text-[13px]", pose === j.jour && "border-[#1D9E75]/60 bg-[#112B22]", TRANS)}>
                     {j.libelle}
                   </button>
                 </li>
@@ -93,8 +93,8 @@ function Contenu({ dossierId, onFini }: { dossierId: string; onFini: (pose: bool
                 if (autre) void poser(autre, jourCourt(autre));
               }}
             >
-              <input type="date" value={autre} onChange={(e) => setAutre(e.target.value)} aria-label="Une autre date" className={cn(CLASSE_SAISIE, "h-11 flex-1 sm:h-9")} />
-              <button type="submit" disabled={!autre || pose !== null} className={cn("h-11 shrink-0 rounded-[10px] bg-[#1D9E75] px-4 text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] sm:h-9 sm:text-[13px]", TRANS)}>
+              <input type="date" value={autre} onChange={(e) => setAutre(e.target.value)} aria-label="Une autre date" className={cn(CLASSE_SAISIE, "h-11 flex-1 pointer-fine:h-9")} />
+              <button type="submit" disabled={!autre || pose !== null} className={cn("h-11 shrink-0 rounded-[10px] bg-[#1D9E75] px-4 text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-9 sm:text-[13px]", TRANS)}>
                 Poser
               </button>
             </form>

@@ -69,15 +69,42 @@ export function heureDe(iso: string): string {
   return `${String(p.heure).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`;
 }
 
-/** La ligne grise d'une tâche à faire : sa raison ; pour une reportée, quand elle revient (et pourquoi elle attend). */
-export function ligneGrise(tache: Pick<TacheVue, "raison" | "statut" | "plusTardJusqua" | "reponseRaison" | "raccourci">, maintenant: Date): string {
+/** Une tâche à moi ajoutée avec une échéance à venir : elle attend son jour (pas un report de Lucas, sans raison). */
+function pourSonEcheance(tache: Partial<Pick<TacheVue, "type" | "echeance" | "plusTardJusqua" | "reponseRaison">>): boolean {
+  if (tache.type !== "MANUELLE" || !tache.echeance || !tache.plusTardJusqua || tache.reponseRaison) return false;
+  const jourDe = (iso: string) => partiesParis(new Date(iso)).jour;
+  return jourDe(tache.echeance) === jourDe(tache.plusTardJusqua);
+}
+
+/** « demain », « lundi », « le 12 oct. » : le jour d'une échéance, heure de Paris. */
+export function jourLisible(iso: string, maintenant: Date): string {
+  const cible = partiesParis(new Date(iso));
+  const ecart = ecartJours(partiesParis(maintenant).jour, cible.jour);
+  if (ecart === 0) return "aujourd'hui";
+  if (ecart === 1) return "demain";
+  if (ecart > 1 && ecart < 7) return cible.lire({ weekday: "long" });
+  return `le ${cible.lire({ day: "numeric", month: "short" })}`;
+}
+
+/**
+ * La ligne grise d'une tâche à faire : sa raison ; pour une reportée, quand elle revient (et pourquoi elle attend) ;
+ * pour une tâche ajoutée pour plus tard (jamais répondue), le jour prévu (« pour le 12 oct. »).
+ * Mission 17 (partie A, relecture) : la marche à suivre d'une tâche système n'est plus ici (elle ne tenait pas sur
+ * un téléphone) : `marcheASuivre`, en entier dans « … » et en mode Commencer.
+ */
+export function ligneGrise(tache: Pick<TacheVue, "raison" | "statut" | "plusTardJusqua" | "reponseRaison" | "raccourci"> & Partial<Pick<TacheVue, "reponse" | "type" | "echeance">>, maintenant: Date): string {
   if (tache.statut === "PLUS_TARD" && tache.plusTardJusqua && Date.parse(tache.plusTardJusqua) > maintenant.getTime()) {
+    if (tache.reponse === null || pourSonEcheance(tache)) return `pour ${jourLisible(tache.plusTardJusqua, maintenant)}`;
     const attente = tache.reponseRaison && tache.reponseRaison in LIBELLES_RAISON_PLUS_TARD ? ` · ${LIBELLES_RAISON_PLUS_TARD[tache.reponseRaison as RaisonPlusTard].toLowerCase()}` : "";
     return `revient ${momentLisible(tache.plusTardJusqua, maintenant)}${attente}`;
   }
-  // Une page du CRM ou externe (réglage, jeton) : la marche à suivre, en une ligne.
-  if (tache.raccourci.genre === "PAGE" && tache.raccourci.marche) return tache.raccourci.marche;
   return tache.raison;
+}
+
+/** La marche à suivre d'une page du CRM ou externe (réglage, jeton), en entier ; null s'il n'y en a pas. */
+export function marcheASuivre(tache: Pick<TacheVue, "raccourci">): string | null {
+  const marche = tache.raccourci.marche?.trim();
+  return marche ? marche : null;
 }
 
 /**

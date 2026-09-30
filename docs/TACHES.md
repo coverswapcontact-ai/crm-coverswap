@@ -97,11 +97,16 @@ Le moteur (`a-faire/moteur.ts › reconcilier`) écrit :
      retour `A_FAIRE` ;
    - `FAITE` ou `PAS_A_FAIRE` **par Lucas ou Claude** → rien, sauf si un événement du client est arrivé après
      `reponduLe` (alors retour `A_FAIRE`). Pour un sujet SYSTEME (pas de client) : retour `A_FAIRE` si la condition
-     tient encore 24 h après la réponse.
+     tient encore 24 h après la réponse. Retour `A_FAIRE` aussi quand le **besoin** a changé : `donnees.occurrence`
+     (devis + rang de la relance, acompte ou solde + facture, instant du rappel, instant où l'action a été posée à la
+     main, envoi ou expiration du lien) diffère de celle de la tâche close — une même clé porte des besoins successifs.
+   - Une seule tâche par besoin : HESITE est repris par RELANCER_DEVIS du même dossier (la relance dit « relu N
+     fois ») ; « Préparer la simulation » n'est pas proposée quand un brouillon attend d'être publié.
 3. Chaque tâche `A_FAIRE`/`PLUS_TARD` d'une source couverte par le passage, qui n'a pas été détectée :
    - sujet disparu (lead archivé ou perdu, dossier archivé ou perdu) → `PAS_A_FAIRE`, raison `SUJET_DISPARU` ;
    - sinon → `FAITE` par le CRM ; `reponseTexte` = « coché par le CRM : … » (preuve lue en base par
-     `a-faire/achevement.ts`, ex. « devis 2026-043 déposé », « réponse partie le 29/09 ») ;
+     `a-faire/achevement.ts`, ex. « devis 2026-043 déposé », « réponse partie le 29/09 », « à 21:40 » le jour même) ;
+     une preuve est toujours datée après `depuis` (sinon « plus rien à faire ») ;
    - les tâches `MANUELLE` ne sont jamais cochées par absence (seulement par leur condition, s'il y en a une).
 4. Règles apprises (`RegleTache` actives) : `NE_PLUS_PROPOSER` écarte le type ; `ATTENDRE n` ne crée la tâche que si
    `depuis + n jours ≤ maintenant`.
@@ -121,6 +126,10 @@ seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Posée à la main,
 `PROCHAINE_ACTION_MANUELLE` qui compte comme une réponse pour la règle de la main (ce qui est plus ancien est traité)
 et qui passe la main au client si le texte dit d'attendre (`/\battend|\battente\b/i` : « en attente de… » compris), sinon à
 Lucas.
+
+Les détecteurs lisent leurs sources **en entier** (pilotage sans limite, propositions et messages d'espace sans
+limite) : ce qui n'est pas lu ne doit pas être coché par absence. Leurs raisons portent des dates **absolues** (« reçu
+le 30/09 à 14 h ») : un second passage qui ne voit rien de neuf n'écrit rien.
 
 Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les détecteurs puis `reconcilier`.
 - Travail périodique `taches-a-faire` toutes les 15 minutes (le contrôle de cohérence, coûteux, au plus une fois par
@@ -166,16 +175,24 @@ raccourci → « Fait » ou coche du CRM dans l'heure), bornée entre la moitié
 
 ## 4. Réponses
 
-- **Fait** : `FAITE`. Effet sur la source : proposition → validée ; mail → fil archivé ; message d'espace → lu, et
-  événement `REPONSE_INUTILE` (compte comme une réponse) ; lead « Appeler » → `dernierContactLe` posé.
+- **Fait** : `FAITE`. Effet sur la source : proposition → validée (jamais une sensible : son raccourci est « Relire et
+  valider », l'aperçu) ; mail → fil archivé ; message d'espace → lu, et événement `REPONSE_INUTILE` (compte comme une
+  réponse) ; lead « Appeler » / « Rappeler » → `dernierAppelLe` posé (un appel, pas un contact écrit) ;
+  PROCHAINE_ACTION (Fait ou Pas à faire) → l'action posée à la main est levée (texte et date vidés s'ils sont encore
+  les siens) : le dossier revient au suivi normal ; « Annuler » la remet.
 - **Plus tard** : `PLUS_TARD` jusqu'à CE_SOIR (18 h), DEMAIN (9 h), LUNDI (9 h), SEMAINE (+7 j, 9 h) ou une date ;
   raison facultative (`ATTEND_CLIENT` « J'attends le client », …). Mail → fil reporté (snooze) jusqu'à la même date.
 - **Pas à faire** : `PAS_A_FAIRE` + raison adaptée au type : CLIENT_LE_FAIT, DEJA_FAIT, CLIENT_PERDU (motif de perte
-  obligatoire : lead → sans suite, dossier → perdu), PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE (mail), AUTRE (texte).
+  obligatoire : lead → sans suite, dossier → perdu ; seulement si la tâche a un dossier ou un lead —
+  `raisonsPasAFaire(type, { aClient })`, `TacheVue.aClient`, refus 400 sinon), PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE
+  (mail), AUTRE (texte).
   Mail → fil archivé (ne demande pas de réponse) ; proposition → ignorée ; message d'espace → lu + `REPONSE_INUTILE`.
 - Rien ne se supprime. Les effets sur la source partent dans la file (`A_FAIRE_EFFET`, dans 6 s) : « Annuler »
   (5 s à l'écran) remet l'état précédent (`precedent`) et annule l'effet encore en attente.
-- **Apprentissage** : trois « Pas à faire » de même type et même raison en 30 jours → proposition `REGLE_TACHE`
+- « Tout classer » rend l'instant du classement (`le`) ; « Annuler » (`…/annuler { le }`) ne remet que les tâches classées
+  à cet instant. Une tâche ajoutée avec une échéance à venir attend « Plus tard » jusqu'à ce jour-là, 9 h (« pour le
+  12 oct. »).
+- **Apprentissage** (jamais sur VALIDER : ignorer une proposition ne dit rien du type) : trois « Pas à faire » de même type et même raison en 30 jours → proposition `REGLE_TACHE`
   (mécanisme `proposer`, écran À valider, outil `valider_proposition`) : « Préparer la simulation : attendre 3 jours
   avant de la proposer ». Validée → une ligne `RegleTache`.
 
@@ -186,7 +203,7 @@ raccourci → « Fait » ou coche du CRM dans l'heure), bornée entre la moitié
 | DEVIS | un devis visible (`estDevisEnvoye`) | « devis 2026-043 déposé » / « émis » |
 | SIMULATION | une simulation PUBLIEE | « simulation publiée le 29/09 » |
 | REPONDRE | réponse partie (mail sortant, réponse d'espace, SMS copié, appel abouti), fil archivé ou rangé | « réponse partie le 29/09 » |
-| APPELER | lead contacté (appel, SMS copié, mail parti) | « SMS copié le 29/09 » |
+| APPELER | lead contacté par Lucas (appel, SMS copié ou envoyé, mail parti ; jamais un message reçu ni l'accusé automatique) ; lead qui a écrit | « SMS copié le 29/09 », « il a écrit : à lui répondre » |
 | DATE_CHANTIER | `dateChantier` posée | « date posée au 12/10 » |
 | ENCAISSER | un encaissement VALIDE | « encaissement de 1 200 € saisi » |
 | VALIDER | proposition décidée | « proposition validée » |

@@ -71,11 +71,12 @@ export async function enregistrerMessageClient(entree: { dossierId: string; espa
   }
 }
 
-export async function messagesEspace(options: { dossierId?: string | null; nonLus?: boolean; limite?: number } = {}): Promise<MessageEspaceVue[]> {
+/** `limite` : 30 par défaut ; `null` : tous (détecteur des tâches : rien ne doit rester non lu faute d'avoir été lu). */
+export async function messagesEspace(options: { dossierId?: string | null; nonLus?: boolean; limite?: number | null } = {}): Promise<MessageEspaceVue[]> {
   const lignes = await prisma.messageEspace.findMany({
     where: { archiveLe: null, ...(options.dossierId ? { dossierId: options.dossierId } : {}), ...(options.nonLus ? { auteur: "CLIENT", luLe: null } : {}) },
     orderBy: { createdAt: "desc" },
-    take: options.limite ?? 30,
+    take: options.limite === null ? undefined : (options.limite ?? 30),
     include: { dossier: { select: { clientNom: true } } },
   });
   return lignes.map(versVue);

@@ -1,4 +1,4 @@
-import { quand } from "@/lib/commun/format";
+import { dateCourte, heure } from "@/lib/commun/format";
 
 /**
  * Mission 17 (partie A) : les petits textes des tâches vues par les détecteurs MAIL, ESPACE_MESSAGES, PROPOSITIONS,
@@ -27,17 +27,22 @@ export function entreGuillemets(texte: string | null | undefined, max = 50, vide
   return court ? `« ${court} »` : vide;
 }
 
-/** « hier », « il y a 2 h », « le 12 sept. » : un moment passé, à lire après un participe (« reçu hier »). */
-export function moment(date: Date, maintenant: Date): string {
-  const relatif = quand(date, maintenant);
-  return /^(à l'instant|il y a|hier)/.test(relatif) ? relatif : `le ${relatif}`;
+/** « 14 h », « 9 h 30 » (heure de Paris). */
+export function heureLisible(date: Date): string {
+  const [h, m] = heure(date).split(":");
+  return `${Number(h)} h${m && m !== "00" ? ` ${m}` : ""}`;
 }
 
-/** « aujourd'hui », « hier », « il y a 7 jours » : un nombre de jours déjà compté. */
-export function ilYaJours(jours: number): string {
-  if (jours <= 0) return "aujourd'hui";
-  if (jours === 1) return "hier";
-  return `il y a ${jours} jours`;
+/** « 29/09 » : le jour et le mois, heure de Paris. */
+export const jourEtMois = (date: Date): string => dateCourte(date).slice(0, 5);
+
+/**
+ * « le 29/09 à 14 h 05 » : un moment passé, à lire après un participe (« reçu le 29/09 à 14 h 05 »).
+ * Mission 17 (partie A, relecture) : toujours une date ABSOLUE dans une raison — un « il y a 12 min » réécrivait la
+ * tâche à chaque passage ; l'écran calcule le relatif s'il le veut (depuis `depuis`).
+ */
+export function moment(date: Date): string {
+  return `le ${jourEtMois(date)} à ${heureLisible(date)}`;
 }
 
 /** « 1re », « 2e ». */

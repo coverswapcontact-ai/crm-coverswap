@@ -217,21 +217,35 @@ describe("routes de l'écran Tâches", () => {
     assert.match(mauvaise.corps.error, /FAIT, PLUS_TARD ou PAS_A_FAIRE/);
   });
 
-  test("Ajouter une tâche (texte, date, contact) : une tâche à moi, en tête de la liste du jour", async () => {
+  test("Ajouter une tâche (texte, date, contact) : sans date, dans la liste du jour ; datée, « Plus tard » jusqu'à ce jour-là 9 h (« pour le … »)", async () => {
+    const { jourParis, dateDepuisJour } = await import("@/lib/dossiers/dates");
+    const { aHeureParis } = await import("@/lib/commercial/quand");
+    const { jour } = await import("@/lib/commun/format");
     const lead = await unLead("Ajout");
-    const cree = await json<{ tache: TacheVue }>(await routes.ajouter.POST(requete("/api/a-faire/ajouter", { titre: "Rappeler le carreleur · Essai", echeance: "2026-12-01", leadId: lead.id })));
+    // Relecture : une échéance à venir n'encombre pas « Aujourd'hui » (ni le badge) — elle revient le jour dit, 9 h.
+    const dans12 = jourParis(new Date(Date.now() + 12 * J));
+    const cree = await json<{ tache: TacheVue }>(await routes.ajouter.POST(requete("/api/a-faire/ajouter", { titre: "Rappeler le carreleur · Essai", echeance: dans12, leadId: lead.id })));
     assert.equal(cree.status, 201);
     assert.equal(cree.corps.tache.type, "MANUELLE");
     assert.equal(cree.corps.tache.leadId, lead.id);
+    assert.equal(cree.corps.tache.aClient, true);
     assert.equal(cree.corps.tache.raccourci.genre, "LEAD");
-    assert.ok(cree.corps.tache.echeance?.startsWith("2026-12-01"));
-    const liste = await lireListe();
-    assert.equal(liste.aujourdhui.some((v) => v.id === cree.corps.tache.id), true);
+    assert.ok(cree.corps.tache.echeance?.startsWith(dans12));
+    assert.equal(cree.corps.tache.statut, "PLUS_TARD");
+    assert.equal(cree.corps.tache.plusTardJusqua, aHeureParis(dateDepuisJour(dans12), 0, 9).toISOString());
+    assert.equal(cree.corps.tache.raison, `pour le ${jour(dateDepuisJour(dans12))}`);
+    let liste = await lireListe();
+    assert.equal(liste.aujourdhui.some((v) => v.id === cree.corps.tache.id), false);
+    assert.equal(liste.plusTard.some((v) => v.id === cree.corps.tache.id), true);
     const vide = await json<{ error: string }>(await routes.ajouter.POST(requete("/api/a-faire/ajouter", { titre: " " })));
     assert.equal(vide.status, 400);
     const sansCible = await json<{ tache: TacheVue }>(await routes.ajouter.POST(requete("/api/a-faire/ajouter", { titre: "Commander des rouleaux" })));
     assert.equal(sansCible.corps.tache.raccourci.genre, "PAGE");
     assert.equal(sansCible.corps.tache.raccourci.href, null, "rien à ouvrir : le bouton principal la dit faite");
+    assert.equal(sansCible.corps.tache.aClient, false);
+    assert.equal(sansCible.corps.tache.statut, "A_FAIRE");
+    liste = await lireListe();
+    assert.equal(liste.aujourdhui.some((v) => v.id === sansCible.corps.tache.id), true, "sans date : dans la liste du jour");
   });
 
   test("« J'ai 15 minutes » : ce qui tient, regroupé ; minutes illisibles refusées", async () => {
@@ -268,11 +282,16 @@ describe("routes de l'écran Tâches", () => {
     );
     const un = await json<{ taches: TacheVue[] }>(await routes.lot.GET(requete("/api/a-faire/lots/anciens-leads"), avecLot("anciens-leads")));
     assert.equal(un.corps.taches.length, 3);
-    const classe = await json<{ classees: number; laissees: number }>(await routes.classer.POST(requete("/api/a-faire/lots/anciens-leads/classer", {}), avecLot("anciens-leads")));
+    const classe = await json<{ classees: number; laissees: number; le: string }>(await routes.classer.POST(requete("/api/a-faire/lots/anciens-leads/classer", {}), avecLot("anciens-leads")));
     assert.equal(classe.status, 200);
     assert.deepEqual([classe.corps.classees, classe.corps.laissees], [2, 1]);
+    assert.ok(!Number.isNaN(Date.parse(classe.corps.le)), "l'instant du classement, à rendre à « Annuler »");
     assert.equal((await lireListe()).lots[0]?.nombre, 1, "reste le contact qui a un dossier");
-    const annule = await json<{ restaurees: number }>(await routes.annulerLot.POST(requete("/api/a-faire/lots/anciens-leads/annuler", {}), avecLot("anciens-leads")));
+    const illisible = await routes.annulerLot.POST(requete("/api/a-faire/lots/anciens-leads/annuler", { le: "hier" }), avecLot("anciens-leads"));
+    assert.equal(illisible.status, 400);
+    const autreInstant = await json<{ restaurees: number }>(await routes.annulerLot.POST(requete("/api/a-faire/lots/anciens-leads/annuler", { le: new Date(Date.parse(classe.corps.le) - J).toISOString() }), avecLot("anciens-leads")));
+    assert.equal(autreInstant.corps.restaurees, 0, "un autre instant : rien ne revient");
+    const annule = await json<{ restaurees: number }>(await routes.annulerLot.POST(requete("/api/a-faire/lots/anciens-leads/annuler", { le: classe.corps.le }), avecLot("anciens-leads")));
     assert.equal(annule.corps.restaurees, 2);
     assert.equal((await lireListe()).lots[0]?.nombre, 3);
     const inconnu = await routes.lot.GET(requete("/api/a-faire/lots/%2E%2E"), avecLot("%2E%2E"));
@@ -427,9 +446,19 @@ describe("textes de l'écran", () => {
     assert.equal(affichage.ligneFaite({ ...base, statut: "PAS_A_FAIRE", reponse: "PAS_A_FAIRE", reponseRaison: "CLIENT_LE_FAIT", reponseTexte: null, reponduParLisible: "Claude" }), "pas à faire : le client le fait lui-même · Claude à 10:12");
   });
 
-  test("la ligne grise : la marche à suivre d'une page, sinon la raison", () => {
+  test("la ligne grise : la raison (la marche à suivre d'une page à part, en entier) ; une tâche ajoutée pour plus tard : son jour", () => {
     const base = { raison: "jeton Meta expiré", statut: "A_FAIRE" as const, plusTardJusqua: null, reponseRaison: null };
-    assert.equal(affichage.ligneGrise({ ...base, raccourci: { genre: "PAGE", libelle: "Ouvrir Meta", href: "https://exemple.test", externe: true, marche: "Paramètres → Connexions → Renouveler" } }, MAINTENANT), "Paramètres → Connexions → Renouveler");
+    const page = { ...base, raccourci: { genre: "PAGE" as const, libelle: "Ouvrir Meta", href: "https://exemple.test", externe: true, marche: "Paramètres → Connexions → Renouveler" } };
+    assert.equal(affichage.ligneGrise(page, MAINTENANT), "jeton Meta expiré");
+    assert.equal(affichage.marcheASuivre(page), "Paramètres → Connexions → Renouveler");
     assert.equal(affichage.ligneGrise({ ...base, raccourci: { genre: "DOSSIER", libelle: "Ouvrir" } }, MAINTENANT), "jeton Meta expiré");
+    assert.equal(affichage.marcheASuivre({ raccourci: { genre: "DOSSIER", libelle: "Ouvrir" } }), null);
+    const pourPlusTard = { ...base, statut: "PLUS_TARD" as const, plusTardJusqua: "2026-10-12T07:00:00.000Z", reponse: null, raccourci: { genre: "PAGE" as const, libelle: "Fait", href: null } };
+    assert.equal(affichage.ligneGrise(pourPlusTard, MAINTENANT), "pour le 12 oct.");
+    assert.equal(affichage.ligneGrise({ ...pourPlusTard, plusTardJusqua: "2026-10-01T07:00:00.000Z" }, MAINTENANT), "pour demain");
+    // Telle que l'écrit ajouterTache (réponse PLUS_TARD posée à la création) : son jour, pas « revient ».
+    const ajoutee = { ...pourPlusTard, reponse: "PLUS_TARD" as const, type: "MANUELLE" as const, echeance: "2026-10-11T22:00:00.000Z" };
+    assert.equal(affichage.ligneGrise(ajoutee, MAINTENANT), "pour le 12 oct.");
+    assert.match(affichage.ligneGrise({ ...ajoutee, reponseRaison: "PAS_LE_TEMPS" }, MAINTENANT), /^revient le 12 oct\. 9 h/);
   });
 });

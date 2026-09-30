@@ -1,11 +1,12 @@
 import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { aHeureParis } from "@/lib/commercial/quand";
-import { dateCourte, heure, pluriel, quand } from "@/lib/commun/format";
+import { dateCourte, pluriel } from "@/lib/commun/format";
 import { JOURS_A_TRAITER, libelleSourceLead } from "@/lib/prospects/constantes";
 import { LEAD_SANS_DOSSIER, nomDuLead } from "@/lib/prospects/leads";
 import { jourMois } from "../achevement";
 import type { Detection, NiveauTache, Raccourci, TypeTache } from "../types";
+import { heureLisible, moment } from "./libelles";
 import { pilotageDuPassage } from "./pilotage-partage";
 import { cleTache, type ContexteDetection, type Detecteur } from "./types";
 
@@ -21,6 +22,9 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  * ni contactés depuis, sans rappel daté → CLASSER_LEAD en lot « anciens-leads » (niveau 5), tous, sans limite ; un
  * ancien qui vient d'écrire un SMS reçoit plutôt REPONDRE.
  * Clés : `APPELER:lead:<id>`… Lecture seule ; ne jamais appeler `proposerSms` ici (il ouvre dossier et espace).
+ * Mission 17 (partie A, relecture) : raisons en dates absolues (« arrivé le 30/09 à 9 h 50 ») — un « il y a 12 min »
+ * réécrivait la tâche à chaque passage ; un rappel porte son occurrence (`donnees.occurrence` = l'instant du rappel) :
+ * un nouveau rappel après un « Fait » est un besoin nouveau (moteur.ts).
  */
 
 const JOUR_MS = 86_400_000;
@@ -30,17 +34,8 @@ const SELECTION = { id: true, prenom: true, nom: true, telephone: true, source: 
 
 type LeadLu = { id: string; prenom: string; nom: string; telephone: string; source: string; createdAt: Date; rappelLe: Date | null; tentatives: number; dernierAppelLe: Date | null; dernierContactLe: Date | null; clientId: string | null; prioriteMotif: string | null };
 
-/** « 14 h », « 9 h 30 » (heure de Paris). */
-function heureLisible(date: Date): string {
-  const [h, m] = heure(date).split(":");
-  return `${Number(h)} h${m && m !== "00" ? ` ${m}` : ""}`;
-}
-
-/** « arrivé il y a 3 h », « arrivé hier », « arrivé le 12/09 ». */
-function arrivee(createdAt: Date, maintenant: Date): string {
-  const relatif = quand(createdAt, maintenant);
-  return /^(il y a|à l'instant|hier)/.test(relatif) ? `arrivé ${relatif}` : `arrivé le ${jourMois(createdAt)}`;
-}
+/** « arrivé le 30/09 à 9 h 50 » (heure de Paris). */
+const arrivee = (createdAt: Date): string => `arrivé ${moment(createdAt)}`;
 
 const lienLead = (id: string) => `/leads?lead=${id}`;
 
@@ -86,7 +81,6 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
   const leads = new Map((await prisma.lead.findMany({ where: { id: { in: contacts.map((a) => a.leadId!) } }, select: SELECTION })).map((l) => [l.id, l]));
   const detections: Detection[] = [];
   const ceSoir = new Date(aHeureParis(maintenant, 1, 0).getTime() - 1);
-  const debutDuJour = aHeureParis(maintenant, 0, 0);
 
   for (const a of contacts) {
     const lead = leads.get(a.leadId!);
@@ -116,7 +110,7 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
           detections.push(
             surLeLead(lead, "APPELER", {
               titre: `Appeler · ${nom}`,
-              raison: `${arrivee(lead.createdAt, maintenant)} · ${libelleSourceLead(lead.source)}`,
+              raison: `${arrivee(lead.createdAt)} · ${libelleSourceLead(lead.source)}`,
               niveau: recent ? 2 : 3,
               depuis: lead.createdAt,
               raccourci: appel(lead, telephone, "Appeler"),
@@ -124,7 +118,7 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
           );
         } else if (lead.rappelLe && lead.rappelLe.getTime() <= ceSoir.getTime()) {
           const rappel = lead.rappelLe;
-          const prevu = rappel.getTime() >= debutDuJour.getTime() ? `rappel prévu à ${heureLisible(rappel)}` : `rappel prévu le ${jourMois(rappel)} à ${heureLisible(rappel)}`;
+          const prevu = `rappel prévu le ${jourMois(rappel)} à ${heureLisible(rappel)}`;
           detections.push(
             surLeLead(lead, "RAPPELER", {
               titre: `Rappeler · ${nom}`,
@@ -133,6 +127,7 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
               depuis: rappel,
               echeance: rappel,
               raccourci: appel(lead, telephone, "Rappeler"),
+              donnees: { occurrence: rappel.toISOString() },
             })
           );
         }

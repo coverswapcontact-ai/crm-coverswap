@@ -3,7 +3,7 @@ import type { CodeSignal } from "@/lib/espace/suivi-types";
 import { jourMois } from "../achevement";
 import type { Detection, NiveauTache, Raccourci, TypeTache } from "../types";
 import { entreGuillemets, titreTache } from "./libelles";
-import { cleDuSignal } from "./signaux-cles";
+import { cleDuSignal, occurrenceDesSignaux, occurrenceDuSignal } from "./signaux-cles";
 import type { Detecteur } from "./types";
 
 /**
@@ -28,6 +28,8 @@ import type { Detecteur } from "./types";
  * Deux signaux de même clé (proposition et simulations demandées ; lien pas envoyé et lien expiré ; nouveau projet et
  * projet demandé) font UNE tâche : la plus urgente donne titre et raccourci, la raison dit les deux. Les projets figés
  * (terminés, non réalisés) ne rendent rien. CONFIRMATION_DEMANDEE n'est pas une tâche. Lecture seule.
+ * Mission 17 (partie A, relecture) : les signaux du lien portent leur occurrence (signaux-cles.ts › occurrenceDuSignal) ;
+ * la raison du lien jamais ouvert dit la date d'envoi (« envoyé le 26/09 »), pas un nombre de jours qui change.
  */
 
 /** Une tâche vue sur un signal, avant le regroupement par clé ; `ordre` départage deux signaux de même niveau. */
@@ -95,7 +97,14 @@ function gabaritDuProjet(signal: Signal, p: LigneEspace): Gabarit | null {
     case "NON_ENVOYE":
       return { type: "ENVOYER_LIEN", verbe: "Envoyer le lien", niveau: 3, depuis: creeLe, raison: minuscule(signal.libelle), raccourci: sms("ENVOYER_LIEN") };
     case "JAMAIS_OUVERT":
-      return { type: "ENVOYER_LIEN", verbe: "Renvoyer le lien", niveau: 3, depuis: p.lienEnvoyeLe ? new Date(p.lienEnvoyeLe) : creeLe, raison: minuscule(signal.libelle), raccourci: sms("LIEN_ESPACE_RAPPEL") };
+      return {
+        type: "ENVOYER_LIEN",
+        verbe: "Renvoyer le lien",
+        niveau: 3,
+        depuis: p.lienEnvoyeLe ? new Date(p.lienEnvoyeLe) : creeLe,
+        raison: p.lienEnvoyeLe ? `lien jamais ouvert (envoyé le ${jourMois(new Date(p.lienEnvoyeLe))})` : "lien jamais ouvert",
+        raccourci: sms("LIEN_ESPACE_RAPPEL"),
+      };
     case "EXPIRE":
     case "EXPIRE_BIENTOT":
       return { type: "ENVOYER_LIEN", verbe: "Renvoyer le lien", niveau: 5, depuis: creeLe, raison: minuscule(signal.libelle), raccourci: sms("ENVOYER_LIEN") };
@@ -125,7 +134,7 @@ function gabaritDuClient(signal: Signal, c: ClientEspace): Gabarit | null {
   }
 }
 
-function vueDe(g: Gabarit, cle: string, nom: string, cible: { dossierId?: string; clientId?: string | null }, signal: Signal): Vue {
+function vueDe(g: Gabarit, cle: string, nom: string, cible: { dossierId?: string; clientId?: string | null }, signal: Signal, occurrence: string | null = null): Vue {
   const sujet = cible.dossierId ? { type: "DOSSIER" as const, id: cible.dossierId } : { type: "CLIENT" as const, id: cible.clientId! };
   return {
     ordre: ORDRE.indexOf(signal.code),
@@ -143,7 +152,7 @@ function vueDe(g: Gabarit, cle: string, nom: string, cible: { dossierId?: string
       montant: g.montant ?? null,
       depuis: g.depuis,
       raccourci: g.raccourci,
-      donnees: { signaux: [signal.code] },
+      donnees: { signaux: [signal.code], ...(occurrence ? { occurrence } : {}) },
     },
   };
 }
@@ -160,7 +169,7 @@ export const detecteurSignaux: Detecteur = {
         for (const signal of p.signaux) {
           const cle = cleDuSignal(signal.code, { dossierId: p.dossierId });
           const gabarit = cle ? gabaritDuProjet(signal, p) : null;
-          if (cle && gabarit) vues.push(vueDe(gabarit, cle, p.clientNom, { dossierId: p.dossierId, clientId }, signal));
+          if (cle && gabarit) vues.push(vueDe(gabarit, cle, p.clientNom, { dossierId: p.dossierId, clientId }, signal, occurrenceDuSignal(signal.code, p)));
         }
       }
       // Les signaux du client lui-même (ceux des projets, recopiés dans `c.signaux`, sont lus ci-dessus).
@@ -183,11 +192,12 @@ function regrouper(vues: readonly Vue[]): Detection[] {
     const tete = tries[0];
     if (tries.length === 1) return tete.detection;
     const precisions = [...new Set(tries.map((v) => v.precision))];
+    const occurrence = occurrenceDesSignaux(tries.map((v) => v.detection.donnees?.occurrence as string | undefined));
     return {
       ...tete.detection,
       raison: precisions.join(" ; "),
       depuis: tries.map((v) => v.detection.depuis).reduce((a, b) => (b.getTime() < a.getTime() ? b : a)),
-      donnees: { signaux: [...new Set(tries.flatMap((v) => (v.detection.donnees?.signaux as string[]) ?? []))] },
+      donnees: { signaux: [...new Set(tries.flatMap((v) => (v.detection.donnees?.signaux as string[]) ?? []))], ...(occurrence ? { occurrence } : {}) },
     };
   });
 }

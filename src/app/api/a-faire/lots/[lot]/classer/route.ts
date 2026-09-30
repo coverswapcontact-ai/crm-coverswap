@@ -5,7 +5,7 @@ import { cleDeLot } from "../../../parametres";
 
 export const dynamic = "force-dynamic";
 
-/** POST /api/a-faire/lots/<lot>/classer : « Tout classer ». Rend { classees, effets, laissees } ; annulable (…/annuler). */
+/** POST /api/a-faire/lots/<lot>/classer : « Tout classer ». Rend { classees, effets, laissees, le } ; annulable (…/annuler { le }). */
 export async function POST(_requete: NextRequest, { params }: { params: Promise<{ lot: string }> }) {
   try {
     const lot = cleDeLot((await params).lot);

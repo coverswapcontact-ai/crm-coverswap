@@ -7,9 +7,11 @@ import type { Achevement, ActionManuelle } from "./detecteurs/types";
 import { dureeDe, dureeReelle, dureesMesurees } from "./durees";
 import { dateOuNull, etatDe, lirePrecedent, type Precedent } from "./etat";
 import { dernierEvenementClient, filDeLaCle } from "./evenements-client";
-import { jsonStable, lireObjet } from "./json";
-import { ACTEUR_TACHES, SOURCES_TACHE, type Detection, type NiveauTache, type ReponseTache, type SourceTache, type StatutTache } from "./types";
+import { jsonStable, lireObjet, occurrenceDe } from "./json";
+import { ACTEUR_TACHES, SOURCES_TACHE, type Detection, type NiveauTache, type ReponseTache, type SourceTache, type StatutTache, type TypeTache } from "./types";
 import { actionsManuellesEnVigueur } from "./vigueur";
+
+export { CLE_OCCURRENCE, occurrenceDe } from "./json";
 
 /**
  * Mission 17 (partie A) : le moteur des tâches (docs/TACHES.md § 2). Les détecteurs voient ; `reconcilier` écrit :
@@ -33,6 +35,12 @@ import { actionsManuellesEnVigueur } from "./vigueur";
  *    condition est revenue : la réponse est remise à zéro, ou le « Plus tard » de Lucas que la coche avait recouvert
  *    est rendu s'il court encore) ; retour d'une tâche répondue par Lucas ou Claude si le client s'est manifesté
  *    depuis, ou, pour un sujet SYSTEME, si la condition tient encore 24 h après la réponse.
+ *    Mission 17 (partie A, relecture) : ou si le BESOIN a changé — `donnees.occurrence` (détecteurs : devis + rang de la
+ *    relance, acompte ou solde + facture, date du rappel, instant où l'action a été posée à la main, envoi du lien…)
+ *    diffère de celle que la tâche portait quand Lucas a répondu (une tâche d'avant les occurrences : le besoin est né
+ *    après la réponse). Une même clé porte ainsi des besoins successifs sans qu'un « Fait » n'éteigne les suivants.
+ *    Une seule tâche par besoin : une tâche reprise par une autre du même dossier (HESITE par RELANCER_DEVIS : la relance
+ *    dit « relu N fois ») n'est pas créée, et celle qui était ouverte est cochée « reprise dans … ».
  * 4. Les tâches achevées par leur condition propre (`acheves` des détecteurs : tâches MANUELLE à condition) sont cochées.
  * 5. Absence : chaque tâche A_FAIRE/PLUS_TARD dont toutes les sources sont couvertes, non vue, reçoit l'issue de
  *    `achevement.ts` (sujet disparu → PAS_A_FAIRE SUJET_DISPARU ; mail reporté → PLUS_TARD ; sinon FAITE « coché par
@@ -78,6 +86,43 @@ export function ecarteeParVigueur(d: { type: string; source: string; dossierId?:
 }
 
 const plusAncien = (a: Date, b: Date) => (a.getTime() <= b.getTime() ? a : b);
+
+/**
+ * Le besoin a-t-il changé depuis la réponse de Lucas ou de Claude ? Oui si la détection porte une occurrence différente
+ * de celle de la tâche ; une tâche sans occurrence (écrite avant) : oui si le besoin est né après la réponse.
+ */
+export function besoinNouveau(ligne: Pick<TacheAFaire, "donnees" | "reponduLe">, d: Pick<Detection, "donnees" | "depuis">): boolean {
+  const nouvelle = occurrenceDe(d.donnees);
+  if (!nouvelle) return false;
+  const ancienne = occurrenceDe(lireObjet(ligne.donnees));
+  if (ancienne) return ancienne !== nouvelle;
+  return Boolean(ligne.reponduLe && d.depuis.getTime() > ligne.reponduLe.getTime());
+}
+
+/** Une tâche reprise par une autre du même dossier : une seule tâche par besoin (le type repris → celui qui le reprend). */
+export const REPRISES: readonly { reprise: TypeTache; par: TypeTache }[] = [{ reprise: "HESITE", par: "RELANCER_DEVIS" }];
+
+/**
+ * Les reprises (pur) : une détection d'un type repris, sur un dossier où celle qui la reprend est vue (et sera visible :
+ * `visible`), n'est pas gardée ; sa raison s'ajoute à celle qui la reprend. Rend les détections gardées et, par clé
+ * reprise, le titre de celle qui la reprend.
+ */
+export function appliquerReprises(detections: readonly Detection[], visible: (cle: string) => boolean = () => true): { gardees: Detection[]; reprises: Map<string, string> } {
+  const reprises = new Map<string, string>();
+  const parCle = new Map(detections.map((d) => [d.cle, { ...d }]));
+  for (const { reprise, par } of REPRISES) {
+    for (const d of detections) {
+      if (d.type !== reprise || !d.dossierId) continue;
+      const tenante = [...parCle.values()].find((x) => x.type === par && x.dossierId === d.dossierId && visible(x.cle));
+      if (!tenante) continue;
+      tenante.raison = `${tenante.raison} · ${d.raison}`;
+      tenante.niveau = Math.min(tenante.niveau, d.niveau) as NiveauTache;
+      parCle.delete(d.cle);
+      reprises.set(d.cle, tenante.titre);
+    }
+  }
+  return { gardees: detections.filter((d) => parCle.has(d.cle)).map((d) => parCle.get(d.cle)!), reprises };
+}
 
 /** Fusion par clé (étape 1). Pur : l'ordre des détections reçues ne change pas le résultat. */
 export function fusionnerDetections(detections: readonly Detection[]): Detection[] {
@@ -208,6 +253,12 @@ export async function reconcilier(detections: readonly Detection[], options: Opt
     prisma.tacheAFaire.findMany({ where: { statut: "PLUS_TARD" } }),
     dureesMesurees(),
   ]);
+  // Une seule tâche par besoin : ce qui est repris par une autre tâche du dossier (visible : ouverte, à créer, ou
+  // cochée par le CRM — elle revient) n'est pas écrit à part.
+  const { gardees, reprises } = appliquerReprises(fusionnees, (cle) => {
+    const l = existantes.get(cle);
+    return !l || l.statut === "A_FAIRE" || l.statut === "PLUS_TARD" || parLeCrm(l.reponduPar);
+  });
   // Les gestes du client, lus une fois pour tous les sujets qui peuvent en dépendre (retours, réouvertures).
   const aLire = [...existantes.values(), ...plusTard].filter((l) => l.statut !== "A_FAIRE" && (l.dossierId || l.leadId || l.clientId || filDeLaCle(l.cle)));
   const gesteDuClient = aLire.length ? await dernierEvenementClient(aLire) : () => null;
@@ -270,7 +321,7 @@ export async function reconcilier(detections: readonly Detection[], options: Opt
 
   await avecActeur({ acteur: ACTEUR_TACHES, origine: "a-faire:reconciliation" }, async () => {
     // 3. Les détections.
-    for (const d of fusionnees) {
+    for (const d of gardees) {
       vues.add(d.cle);
       const ligne = existantes.get(d.cle);
       if (ligne) traitees.add(ligne.id);
@@ -313,7 +364,7 @@ export async function reconcilier(detections: readonly Detection[], options: Opt
       } else if (ligne.statut === "FAITE" || ligne.statut === "PAS_A_FAIRE") {
         const systemeToujoursLa = ligne.sujetType === "SYSTEME" && ligne.reponduLe !== null && ligne.reponduLe.getTime() + JOUR <= maintenant.getTime();
         if (parLeCrm(ligne.reponduPar)) retour = reouverture(ligne);
-        else if (clientSEstManifeste(ligne) || systemeToujoursLa) retour = { statut: "A_FAIRE", ...REPONSE_EFFACEE };
+        else if (clientSEstManifeste(ligne) || systemeToujoursLa || besoinNouveau(ligne, d)) retour = { statut: "A_FAIRE", ...REPONSE_EFFACEE };
         // Répondue par Lucas ou Claude, rien de neuf : on n'y touche pas.
         else continue;
       }
@@ -341,6 +392,11 @@ export async function reconcilier(detections: readonly Detection[], options: Opt
       if (vues.has(ligne.cle) || traitees.has(ligne.id) || ligne.type === "MANUELLE") continue;
       // Une autre source la voyait et n'a pas tourné ce passage : on ne sait pas, on n'y touche pas.
       if (sourcesDeLaTache(ligne).some((s) => !couvertes.has(s))) continue;
+      const reprisePar = reprises.get(ligne.cle);
+      if (reprisePar) {
+        await cocher(ligne, { statut: "FAITE", texte: `${PREFIXE_COCHE}reprise dans « ${reprisePar} »` });
+        continue;
+      }
       const action = ligne.dossierId ? vigueur.get(ligne.dossierId) : undefined;
       if (action && ecarteeParVigueur(ligne, vigueur) && !(await sujetDisparu(ligne))) {
         await cocher(ligne, { statut: "FAITE", texte: `${PREFIXE_COCHE}prochaine action posée à la main (« ${action.action} »)` });

@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { AjoutTache } from "./AjoutTache";
 import { FeuilleDateChantier } from "./FeuilleDateChantier";
 import { FeuilleReponse, type EtapeReponse } from "./FeuilleReponse";
-import { LigneFaite, LigneTache, type ActionsLigne } from "./LigneTache";
+import { LigneFaite, LigneTache, estSensible, propositionDe, raccourciDe, valideDansLaLigne, type ActionsLigne } from "./LigneTache";
 import { Minutes } from "./Minutes";
 import { ModeTaches } from "./ModeTaches";
 
@@ -36,6 +36,10 @@ import { ModeTaches } from "./ModeTaches";
  * (appel, SMS, mail, fil de l'espace, devis, encaissement, date du chantier…), sur place ; après, la liste revient au
  * même endroit, la tâche suivante en surbrillance. Trois réponses : Fait, Plus tard, Pas à faire — chacune annulable
  * 5 s (« Annuler » dans le message).
+ *
+ * Mission 17 (partie A, relecture) : une proposition sensible (argent ou client) ne se valide jamais d'ici — « Fait »,
+ * le balayage et le bouton principal ouvrent son aperçu (relecture du mail, ou « À valider » sur la proposition) ;
+ * « Annuler » d'un « Tout classer » ne défait que ce classement-là (son instant `le`).
  */
 
 type Ouvert =
@@ -71,9 +75,9 @@ function commencer(id: string): void {
 }
 
 function messageReponse(tache: TacheVue, entree: EntreeReponse, apres: TacheVue | null, maintenant: number): string {
-  if (entree.reponse === "FAIT") return tache.raccourci.genre === "VALIDER" ? "Validé" : "Fait";
+  if (entree.reponse === "FAIT") return valideDansLaLigne(tache) ? "Validé" : "Fait";
   if (entree.reponse === "PLUS_TARD") return apres?.plusTardJusqua ? `Plus tard · revient ${momentLisible(apres.plusTardJusqua, new Date(maintenant))}` : "Plus tard";
-  if (tache.raccourci.genre === "VALIDER" && entree.raison === "PAS_PERTINENT") return "Ignoré";
+  if (tache.type === "VALIDER" && entree.raison === "PAS_PERTINENT") return "Ignoré";
   const raison = entree.raison && entree.raison in LIBELLES_RAISON_PAS_A_FAIRE ? LIBELLES_RAISON_PAS_A_FAIRE[entree.raison as RaisonPasAFaire].toLowerCase() : null;
   return raison ? `Pas à faire · ${raison}` : "Pas à faire";
 }
@@ -96,7 +100,7 @@ function Section({ titre, nombre, children, action }: { titre: string; nombre?: 
 function SectionRepliee({ titre, nombre, ouverte, onBasculer, children }: { titre: string; nombre: number; ouverte: boolean; onBasculer: () => void; children: React.ReactNode }) {
   return (
     <section className="mt-6">
-      <button type="button" aria-expanded={ouverte} onClick={onBasculer} className={cn("-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-2 text-left hover:bg-[#1C1F25] sm:min-h-9", TRANS)}>
+      <button type="button" aria-expanded={ouverte} onClick={onBasculer} className={cn("-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-2 text-left hover:bg-[#1C1F25] pointer-fine:min-h-9", TRANS)}>
         <span className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
           {titre} <span className="tabular-nums">· {nombre}</span>
         </span>
@@ -109,6 +113,8 @@ function SectionRepliee({ titre, nombre, ouverte, onBasculer, children }: { titr
 }
 
 const CLASSE_LISTE = "overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
+/** Les boutons communs (32 px dès sm) : 44 px au doigt à toutes les largeurs, compacts pour un pointeur fin. */
+const CLASSE_BOUTON_DOIGT = "sm:h-11 pointer-fine:h-8";
 
 export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
   const routeur = useRouter();
@@ -286,8 +292,9 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
     } catch (erreur) {
       setMasquees((m) => retirer(m, tache.id));
       setTraitees((t) => retirer(t, tache.id));
-      if (erreur instanceof ErreurApi && erreur.status === 409 && tache.raccourci.genre === "VALIDER") {
-        toast.error("À valider avec son aperçu", { description: messageErreur(erreur), action: { label: "Ouvrir", onClick: () => routeur.push("/validation") } });
+      const propositionId = propositionDe(tache);
+      if (erreur instanceof ErreurApi && erreur.status === 409 && propositionId) {
+        toast.error("À valider avec son aperçu", { description: messageErreur(erreur), action: { label: "Ouvrir", onClick: () => routeur.push(`/validation?proposition=${encodeURIComponent(propositionId)}`) } });
       } else {
         toast.error("Réponse non enregistrée", { description: messageErreur(erreur) });
       }
@@ -330,7 +337,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
 
   /** La fiche de la tâche (le toucher de la ligne) : le dossier, le contact, le mail ; sinon l'action elle-même. */
   function ouvrirFiche(tache: TacheVue): void {
-    const r = tache.raccourci;
+    const r = raccourciDe(tache);
     const dossierId = r.dossierId ?? tache.dossierId;
     const leadId = r.leadId ?? tache.leadId;
     if (r.genre === "MAIL" || r.genre === "ESPACE" || r.genre === "DOSSIER" || r.genre === "DEVIS" || r.genre === "ENCAISSER" || r.genre === "LEAD") return lancer(tache);
@@ -342,7 +349,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
   }
 
   function lancer(tache: TacheVue): void {
-    const r = tache.raccourci;
+    const r = raccourciDe(tache);
     const dossierId = r.dossierId ?? tache.dossierId;
     const leadId = r.leadId ?? tache.leadId;
     const messageId = r.messageId ?? (Array.isArray(tache.donnees.messageIds) && typeof tache.donnees.messageIds[0] === "string" ? tache.donnees.messageIds[0] : null);
@@ -371,12 +378,15 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
         return aller(r.href ?? (dossierId ? `/simulateur?dossier=${dossierId}` : "/simulateur"));
       case "RELANCE_MAIL":
         if (r.propositionId && dossierId) return setOuvert({ vue: "RELANCE", propositionId: r.propositionId, dossierId });
+        // Sans dossier : la proposition, ouverte dans « À valider ».
+        if (r.propositionId) return aller(`/validation?proposition=${encodeURIComponent(r.propositionId)}`);
         return ouvrirFiche(tache);
       case "PLANIFIER":
         if (dossierId) return setOuvert({ vue: "PLANIFIER", dossierId });
         return ouvrirFiche(tache);
       case "VALIDER":
-        return void repondre(tache, { reponse: "FAIT" });
+        // Garde : raccourciDe a déjà changé une proposition sensible en « Relire et valider ».
+        return estSensible(tache) ? undefined : void repondre(tache, { reponse: "FAIT" });
       case "LEAD":
         if (leadId) return setOuvert({ vue: "LEAD", leadId });
         return r.href ? aller(r.href) : demanderReponse(tache, "choix");
@@ -403,7 +413,8 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
     onAppel: appeler,
     onOuvrir: ouvrirFiche,
     onMenu: (tache) => demanderReponse(tache, "choix"),
-    onFait: (tache) => void repondre(tache, { reponse: "FAIT" }),
+    // Une proposition sensible : « Fait » (balayage, mode Commencer) ouvre son aperçu, rien ne se valide d'un geste.
+    onFait: (tache) => (estSensible(tache) ? lancer(tache) : void repondre(tache, { reponse: "FAIT" })),
     onPlusTard: (tache) => demanderReponse(tache, "plusTard"),
     onIgnorer: (tache) => void repondre(tache, { reponse: "PAS_A_FAIRE", raison: "PAS_PERTINENT" }),
   };
@@ -438,9 +449,10 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
     lancerSerie(groupe ? groupe.libelle : `${minutes === 60 ? "1 h" : `${minutes} min`} · ${pluriel(plan.taches.length, "tâche")}`, taches);
   }
 
-  async function annulerLot(lot: LotVue) {
+  /** Défait CE classement (l'instant `le` rendu par « Tout classer »), jamais ceux des jours d'avant. */
+  async function annulerLot(lot: LotVue, le: string) {
     try {
-      const resultat = await envoyerJson<{ restaurees: number; nonDefaits: string[] }>(`/api/a-faire/lots/${encodeURIComponent(lot.cle)}/annuler`, "POST");
+      const resultat = await envoyerJson<{ restaurees: number; nonDefaits: string[] }>(`/api/a-faire/lots/${encodeURIComponent(lot.cle)}/annuler`, "POST", { le });
       toast.success("Annulé", { description: resultat.nonDefaits.length ? `Ne se défait pas : ${resultat.nonDefaits.join(" ; ")}.` : `${pluriel(resultat.restaurees, "tâche revenue", "tâches revenues")}.` });
       void relire();
     } catch (erreur) {
@@ -455,7 +467,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       toast.success(pluriel(resultat.classees, "tâche classée", "tâches classées"), {
         description: resultat.laissees ? `${pluriel(resultat.laissees, "contact a", "contacts ont")} un dossier : à revoir un par un.` : lot.libelle,
         duration: 5000,
-        action: { label: "Annuler", onClick: () => void annulerLot(lot) },
+        action: { label: "Annuler", onClick: () => void annulerLot(lot, resultat.le) },
       });
       relireApres();
     } catch (erreur) {
@@ -501,7 +513,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
         titre="Tâches"
         sousTitre={sousTitreTaches({ aujourdhui: aujourdhui.length, minutesAujourdhui })}
         actions={
-          <Bouton variante="fantome" icone={<RefreshCw size={15} aria-hidden />} chargement={actualisation} onClick={() => void actualiser()} title="Relire le CRM maintenant (sinon toutes les 15 minutes)">
+          <Bouton variante="fantome" className={CLASSE_BOUTON_DOIGT} icone={<RefreshCw size={15} aria-hidden />} chargement={actualisation} onClick={() => void actualiser()} title="Relire le CRM maintenant (sinon toutes les 15 minutes)">
             Actualiser
           </Bouton>
         }
@@ -513,7 +525,16 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
         </p>
       ) : null}
 
-      <AjoutTache onAjoutee={() => relireApres()} />
+      <AjoutTache
+        onAjoutee={(tache) => {
+          // Ajoutée pour plus tard : « Plus tard » s'ouvre, la tâche en surbrillance avec son jour.
+          if (tache.statut === "PLUS_TARD") {
+            setPlusTardOuvert(true);
+            setRetour({ id: tache.id, suivante: null });
+          }
+          relireApres();
+        }}
+      />
 
       {toutTraite ? null : (
         <>
@@ -565,10 +586,10 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
                   <span className="block text-[12.5px] text-[#8B919C] tabular-nums">environ {lot.dureeMin >= 60 ? `${Math.round(lot.dureeMin / 60)} h` : `${lot.dureeMin} min`} un par un</span>
                 </span>
                 <span className="flex shrink-0 gap-2">
-                  <Bouton variante="secondaire" chargement={lotEnCours === lot.cle} onClick={() => void toutClasser(lot)}>
+                  <Bouton variante="secondaire" className={CLASSE_BOUTON_DOIGT} chargement={lotEnCours === lot.cle} onClick={() => void toutClasser(lot)}>
                     Tout classer
                   </Bouton>
-                  <Bouton variante="fantome" disabled={lotEnCours === lot.cle} onClick={() => void revoirLot(lot)}>
+                  <Bouton variante="fantome" className={CLASSE_BOUTON_DOIGT} disabled={lotEnCours === lot.cle} onClick={() => void revoirLot(lot)}>
                     Revoir un par un
                   </Bouton>
                 </span>
@@ -630,7 +651,17 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
         />
       ) : null}
 
-      <FeuilleReponse demande={reponse} occupe={reponse ? occupees.has(reponse.tache.id) : false} onFermer={() => setReponse(null)} onRepondre={(tache, entree) => void repondre(tache, entree)} />
+      <FeuilleReponse
+        demande={reponse}
+        maintenant={maintenant}
+        occupe={reponse ? occupees.has(reponse.tache.id) : false}
+        onFermer={() => setReponse(null)}
+        onRepondre={(tache, entree) => void repondre(tache, entree)}
+        onApercu={(tache) => {
+          setReponse(null);
+          lancer(tache);
+        }}
+      />
     </div>
   );
 }

@@ -65,6 +65,7 @@ export function versVue(ligne: TacheAFaire): TacheVue {
     leadId: ligne.leadId,
     dossierId: ligne.dossierId,
     clientId: ligne.clientId,
+    aClient: Boolean(ligne.dossierId || ligne.leadId),
     titre: ligne.titre,
     raison: ligne.raison,
     niveau: (Math.min(5, Math.max(1, Math.round(ligne.niveau))) || 3) as NiveauTache,

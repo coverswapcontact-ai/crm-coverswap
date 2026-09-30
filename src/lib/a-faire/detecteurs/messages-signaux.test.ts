@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { preparerBaseEssai } from "@/test/base-essai";
+import { dateCourte } from "@/lib/commun/format";
 
 preparerBaseEssai();
 process.env.UPLOADS_DIR = mkdtempSync(path.join(tmpdir(), "coverswap-a-faire-signaux-"));
@@ -115,7 +116,8 @@ describe("MAIL : les fils « À traiter »", () => {
     const repondre = await tache(`REPONDRE:lead:${ninon.id}`);
     assert.equal(repondre.type, "REPONDRE");
     assert.equal(repondre.titre, "Répondre · Ninon Essai");
-    assert.equal(repondre.raison, "« Question sur le devis » · reçu hier");
+    // Relecture : date absolue (un « reçu hier » réécrivait la tâche d'un passage à l'autre).
+    assert.equal(repondre.raison, "« Question sur le devis » · reçu le 27/09 à 10 h");
     assert.equal(repondre.niveau, 1);
     assert.equal(repondre.leadId, ninon.id);
     assert.equal(repondre.depuis.getTime(), question.recuLe.getTime());
@@ -127,7 +129,7 @@ describe("MAIL : les fils « À traiter »", () => {
 
     const relance = await tache(`REPONDRE:lead:${oscar.id}`);
     assert.equal(relance.titre, "Relancer par mail · Oscar Essai");
-    assert.equal(relance.raison, "« Re: Vos disponibilités » · sans réponse depuis 6 jours");
+    assert.equal(relance.raison, "« Re: Vos disponibilités » · sans réponse depuis le 22/09");
     assert.equal(relance.niveau, 2);
     assert.equal(relance.depuis.getTime(), envoye.recuLe.getTime());
 
@@ -149,7 +151,8 @@ describe("MAIL : les fils « À traiter »", () => {
     const repondue = await tache(`REPONDRE:lead:${paula.id}`);
     assert.equal(repondue.statut, "FAITE");
     assert.equal(repondue.reponduPar, "SYSTEME:taches-a-faire");
-    assert.equal(repondue.reponseTexte, "coché par le CRM : réponse partie le 28/09");
+    // Relecture : une preuve du jour se lit à l'heure (« Fait aujourd'hui »).
+    assert.equal(repondue.reponseTexte, "coché par le CRM : réponse partie à 09:00");
 
     const quentin = await unLead("Quentin");
     const autre = await unMail({ leadId: quentin.id, objet: "Merci" });
@@ -202,7 +205,7 @@ describe("MAIL : les fils « À traiter »", () => {
     const revenue = await tache(cle);
     assert.equal(revenue.statut, "A_FAIRE");
     assert.equal(revenue.reponse, null);
-    assert.equal(revenue.raison, "« Re: Pour info » · reçu il y a 1 h");
+    assert.equal(revenue.raison, "« Re: Pour info » · reçu le 29/09 à 11 h");
   });
 });
 
@@ -214,7 +217,7 @@ describe("ESPACE_MESSAGES : ce que le client écrit dans son espace", () => {
     await passe(["ESPACE_MESSAGES"]);
     const cle = `REPONDRE:dossier:${durand.id}`;
     const vue = await tache(cle);
-    assert.deepEqual([vue.titre, vue.raison, vue.niveau, vue.source], ["Répondre · Durand Essai", "« Pouvez-vous changer la teinte ? » · il y a 2 h", 1, "ESPACE_MESSAGES"]);
+    assert.deepEqual([vue.titre, vue.raison, vue.niveau, vue.source], ["Répondre · Durand Essai", "« Pouvez-vous changer la teinte ? » · le 28/09 à 8 h", 1, "ESPACE_MESSAGES"]);
     assert.deepEqual(JSON.parse(vue.raccourci), { genre: "ESPACE", libelle: "Répondre dans l'espace", dossierId: durand.id, rubrique: "messages", href: `/dossiers?dossier=${durand.id}&rubrique=messages&repondre=1` });
     assert.deepEqual(JSON.parse(vue.donnees), { espaceDossierId: durand.id });
     assert.equal((await passe(["ESPACE_MESSAGES"])).crees, 0);
@@ -261,7 +264,7 @@ describe("PROPOSITIONS : ce qui attend une validation", () => {
     assert.equal(t.titre, "Valider · Noter le coloris choisi par le client dans le dossier de la…");
     assert.equal(t.niveau, 3);
     assert.deepEqual([t.sujetType, t.dossierId], ["DOSSIER", d.id]);
-    assert.match(t.raison, /· proposée il y a 1 h$/);
+    assert.match(t.raison, /· proposée le 28\/09 à 9 h$/);
     assert.deepEqual(JSON.parse(t.raccourci), { genre: "VALIDER", libelle: "Valider", propositionId: premiere.id, dossierId: d.id, href: "/validation" });
     assert.deepEqual(JSON.parse(t.donnees), { propositionId: premiere.id, sensible: false });
     const r = await tache(`VALIDER:proposition:${regle.id}`);
@@ -280,6 +283,22 @@ describe("PROPOSITIONS : ce qui attend une validation", () => {
     assert.deepEqual((await executerFile(fait.effet!.cle)).faits, ["proposition validée et exécutée"]);
     assert.equal((await prisma.proposition.findUniqueOrThrow({ where: { id: seconde.id } })).statut, "EXECUTEE");
   });
+
+  test("relecture : une proposition SENSIBLE n'a pas « Valider » dans la ligne — « Relire et valider » ouvre l'aperçu (mail) ou la page de validation", async () => {
+    await toutRetirer();
+    const d = await unDossier("Sensible Essai");
+    const mail = await prisma.proposition.create({ data: { type: "ENVOI_MAIL", titre: "Répondre au client", resume: "r", contenu: JSON.stringify({ motif: "REPONSE", a: "client@exemple.test", objet: "Votre projet", texte: "Bonjour", dossierId: d.id }), auteur: "AGENT:mail", statut: "EN_ATTENTE", dossierId: d.id } });
+    const inconnue = await prisma.proposition.create({ data: { type: "TYPE_INCONNU_ESSAI", titre: "Quelque chose de neuf", resume: "r", contenu: "{}", auteur: "AGENT:mail", statut: "EN_ATTENTE" } });
+    await passe(["PROPOSITIONS"]);
+    const tMail = await tache(`VALIDER:proposition:${mail.id}`);
+    assert.equal(JSON.parse(tMail.donnees).sensible, true);
+    assert.deepEqual(JSON.parse(tMail.raccourci), { genre: "RELANCE_MAIL", libelle: "Relire et valider", propositionId: mail.id, dossierId: d.id });
+    const tAutre = await tache(`VALIDER:proposition:${inconnue.id}`);
+    assert.deepEqual(JSON.parse(tAutre.raccourci), { genre: "PAGE", libelle: "Relire et valider", propositionId: inconnue.id, dossierId: null, href: `/validation?proposition=${inconnue.id}` });
+    // Le serveur refuse toujours « Fait » sur une validation sensible (elle passe par son aperçu).
+    await assert.rejects(() => avecActeur(LUCAS, () => reponses.repondreTache(tMail.id, { reponse: "FAIT" }, LUNDI)), (e: Error & { status?: number }) => e.status === 409);
+    await prisma.proposition.updateMany({ where: { id: { in: [mail.id, inconnue.id] } }, data: { statut: "ANNULEE" } });
+  });
 });
 
 describe("RELANCES : devis et photos", () => {
@@ -290,11 +309,14 @@ describe("RELANCES : devis et photos", () => {
     await passe(["RELANCES"]);
     const cle = `RELANCER_DEVIS:dossier:${d.id}`;
     const t = await tache(cle);
-    assert.deepEqual([t.titre, t.raison, t.niveau, t.montant, t.dureeMin], ["Relancer le devis · Relance Essai", "devis 2026-901 envoyé il y a 7 jours, 1re relance", 2, 4200, 2]);
+    assert.deepEqual([t.titre, t.raison, t.niveau, t.montant, t.dureeMin], ["Relancer le devis · Relance Essai", `devis 2026-901 envoyé le ${dateCourte(devis.dateEmission!).slice(0, 5)}, 1re relance`, 2, 4200, 2]);
     const raccourci = JSON.parse(t.raccourci);
     assert.equal(raccourci.genre, "SMS");
     assert.deepEqual(raccourci.sms, { action: "RELANCE_DEVIS", dossierId: d.id, relance: { documentId: devis.id, rang: 1 } });
-    assert.match(String(JSON.parse(t.donnees).texteSms), /devis/i);
+    // Relecture : le SMS n'est plus préparé à chaque passage (l'écran SMS et « taches » le préparent) ; l'occurrence du besoin
+    // est le devis et le rang de la relance.
+    assert.equal(JSON.parse(t.donnees).texteSms, undefined);
+    assert.equal(JSON.parse(t.donnees).occurrence, `${devis.id}:1`);
 
     const mail = await prisma.proposition.create({ data: { type: "ENVOI_MAIL", titre: "Relance", resume: "r", contenu: JSON.stringify({ motif: "RELANCE_DEVIS", documentIds: [devis.id], a: "client@exemple.test", objet: "Votre devis", texte: "Bonjour" }), auteur: "SYSTEME:relances", statut: "EN_ATTENTE", dossierId: d.id, cleUnicite: `relance:${devis.id}:1` } });
     await passe(["RELANCES", "PROPOSITIONS"]);
@@ -308,7 +330,7 @@ describe("RELANCES : devis et photos", () => {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { createdAt: plus(LUNDI, -5 * J) } });
     await passe(["RELANCES"]);
     const p = await tache(`RELANCER_PHOTOS:dossier:${photos.id}`);
-    assert.deepEqual([p.titre, p.raison, p.niveau], ["Relancer pour les photos · Photos Essai", "espace ouvert il y a 5 jours, sans photo, 1re relance", 3]);
+    assert.deepEqual([p.titre, p.raison, p.niveau], ["Relancer pour les photos · Photos Essai", `espace ouvert le ${dateCourte(plus(LUNDI, -5 * J)).slice(0, 5)}, sans photo, 1re relance`, 3]);
     assert.deepEqual(JSON.parse(p.raccourci).sms, { action: "RELANCE_PHOTOS", dossierId: photos.id, relance: { type: "PHOTOS", rang: 1 } });
   });
 

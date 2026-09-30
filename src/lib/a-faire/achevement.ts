@@ -1,6 +1,8 @@
 import type { TacheAFaire } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { dateCourte, euros } from "@/lib/commun/format";
+import { aHeureParis } from "@/lib/commercial/quand";
+import { dateCourte, euros, heure } from "@/lib/commun/format";
+import { jourParis } from "@/lib/dossiers/dates";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { lireObjet, messagesDeLaTache, texteOuNull } from "./json";
 
@@ -11,6 +13,12 @@ import { lireObjet, messagesDeLaTache, texteOuNull } from "./json";
  * - « Plus tard » quand c'est un mail reporté (snooze) : jusqu'à la date du report, sans être cochée ;
  * - « Faite » sinon, avec la preuve lue en base : « coché par le CRM : devis 2026-043 déposé ».
  * Lecture seule : le moteur écrit (moteur.ts).
+ *
+ * Mission 17 (partie A, relecture) : une preuve est toujours datée APRÈS la naissance du besoin (`depuis` ; pour un
+ * rappel, le début de son jour : un appel passé le matin d'un rappel prévu l'après-midi compte) — une ancienne preuve
+ * (l'acompte d'un autre besoin, un vieil appel) ne coche rien : sans preuve, « plus rien à faire ». Un contact ne compte
+ * que SORTANT et de la main de Lucas (jamais un SMS ou un mail reçu, ni un accusé automatique) ; un lead jamais contacté
+ * qui a écrit dit « il a écrit : à lui répondre ». Une preuve du jour se lit à l'heure (« réponse partie à 21:40 »).
  */
 
 export const PREFIXE_COCHE = "coché par le CRM : ";
@@ -34,6 +42,17 @@ export function jourMois(date: Date): string {
 }
 
 const coche = (texte: string): string => `${PREFIXE_COCHE}${texte}`;
+
+/** « à 21:40 » le jour même (heure de Paris), sinon « le 29/09 ». */
+export function leOuA(date: Date, maintenant: Date): string {
+  return jourParis(date) === jourParis(maintenant) ? `à ${heure(date)}` : `le ${jourMois(date)}`;
+}
+
+/** Une interaction de lead SORTANTE de la main de Lucas : SMS copié ou envoyé, mail envoyé, appel. */
+const SMS_COPIE = /^SMS(?: \S+)? copié/;
+const smsSortant = (contenu: string) => SMS_COPIE.test(contenu) || contenu.startsWith("SMS envoyé");
+const mailSortant = (contenu: string) => contenu.startsWith("Mail envoyé");
+const appelAbouti = (contenu: string) => !/pas de réponse|messagerie/i.test(contenu);
 
 /** Le sujet a-t-il disparu ? Rend la raison lisible (« dossier perdu »), ou null. Un dossier l'emporte sur son lead. */
 export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierId">): Promise<string | null> {
@@ -121,46 +140,86 @@ async function reponsePartie(tache: Tache, messageIds: string[]): Promise<Date |
     if (e.type === "MAIL_ENVOYE" || e.type === "ESPACE_REPONSE") return e.direction === "SORTANT";
     return true;
   });
-  const echange = echanges.find((e) => e.type !== "APPEL" || !/pas de réponse|messagerie/i.test(e.contenu));
+  // Jamais un « SMS reçu » ni un « Mail reçu » (les échanges d'un lead gardent les deux sens) ; ni un accusé automatique.
+  const echange = echanges.find((e) => (e.type === "APPEL" ? appelAbouti(e.contenu) : e.type === "SMS" ? smsSortant(e.contenu) : mailSortant(e.contenu)));
   return plusAncien([mail?.recuLe, evenement ? (evenement.survenuLe ?? evenement.createdAt) : null, echange?.createdAt]);
 }
 
-/** Le dernier contact d'un lead (ou d'un dossier) : « appel noté le 29/09 », « SMS copié le 29/09 », « mail parti le 29/09 ». */
-async function dernierContact(tache: Tache): Promise<string | null> {
+/**
+ * Le dernier contact SORTANT d'un lead (ou d'un dossier) après `apres` : « appel noté le 29/09 », « SMS copié à 14:05 »,
+ * « mail parti le 29/09 ». Un SMS ou un mail reçu n'est jamais un contact ; l'accusé automatique non plus. Sans contact :
+ * le lead a écrit (« il a écrit : à lui répondre »), ou un rappel est posé, ou rien.
+ */
+async function dernierContact(tache: Tache, apres: Date, maintenant: Date): Promise<string | null> {
   const candidats: { le: Date; texte: string }[] = [];
   const ajouter = (le: Date | null | undefined, texte: string) => {
-    if (le) candidats.push({ le, texte });
+    if (le && le.getTime() > apres.getTime()) candidats.push({ le, texte });
   };
+  let rappelLe: Date | null = null;
   if (tache.leadId) {
-    const [lead, sms, mail] = await Promise.all([
-      prisma.lead.findUnique({ where: { id: tache.leadId }, select: { dernierAppelLe: true, dernierContactLe: true, rappelLe: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } } }),
-      prisma.interaction.findFirst({ where: { leadId: tache.leadId, type: "SMS" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
-      prisma.interaction.findFirst({ where: { leadId: tache.leadId, type: "EMAIL", contenu: { startsWith: "Mail envoyé" } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+    const leadId = tache.leadId;
+    const [lead, echanges, smsEnvoye] = await Promise.all([
+      prisma.lead.findUnique({ where: { id: leadId }, select: { dernierAppelLe: true, dernierContactLe: true, rappelLe: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } } }),
+      prisma.interaction.findMany({ where: { leadId, type: { in: ["SMS", "EMAIL", "APPEL"] }, createdAt: { gt: apres } }, orderBy: { createdAt: "desc" }, take: 50, select: { type: true, contenu: true, createdAt: true } }),
+      // Un SMS parti de la messagerie (hors accusé automatique) : sa trace dit « SMS envoyé », comme l'accusé.
+      prisma.sms.findFirst({ where: { sens: "SORTANT", origine: { not: "ACCUSE_AUTO" }, statut: { not: "ECHEC" }, createdAt: { gt: apres }, OR: [{ leadId }, { conversation: { leadId } }] }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
     ]);
-    ajouter(lead?.dernierAppelLe, "appel noté le");
-    ajouter(sms?.createdAt, "SMS copié le");
-    ajouter(mail?.createdAt, "mail parti le");
-    if (lead?.dernierContactLe && !candidats.some((c) => Math.abs(c.le.getTime() - lead.dernierContactLe!.getTime()) < 60_000)) ajouter(lead.dernierContactLe, "contacté le");
-    ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert le");
-    if (candidats.length === 0 && lead?.rappelLe) return `rappel posé au ${jourMois(lead.rappelLe)}`;
+    ajouter(lead?.dernierAppelLe, "appel noté");
+    ajouter(echanges.find((e) => e.type === "APPEL" && appelAbouti(e.contenu))?.createdAt, "appel noté");
+    ajouter(echanges.find((e) => e.type === "SMS" && SMS_COPIE.test(e.contenu))?.createdAt, "SMS copié");
+    ajouter(smsEnvoye?.createdAt, "SMS envoyé");
+    ajouter(echanges.find((e) => e.type === "EMAIL" && mailSortant(e.contenu))?.createdAt, "mail parti");
+    const contactLe = lead?.dernierContactLe;
+    if (contactLe && !candidats.some((c) => Math.abs(c.le.getTime() - contactLe.getTime()) < 60_000)) ajouter(contactLe, "contacté");
+    ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert");
+    rappelLe = lead?.rappelLe ?? null;
   }
   if (tache.dossierId) {
-    const evenements = await prisma.dossierEvenement.findMany({ where: { dossierId: tache.dossierId, type: { in: ["APPEL", "SMS_COPIE", "MAIL_ENVOYE"] }, direction: "SORTANT" }, orderBy: { createdAt: "desc" }, take: 5, select: { type: true, createdAt: true, survenuLe: true } });
-    for (const e of evenements) ajouter(e.survenuLe ?? e.createdAt, e.type === "APPEL" ? "appel noté le" : e.type === "SMS_COPIE" ? "SMS copié le" : "mail parti le");
+    const evenements = await prisma.dossierEvenement.findMany({
+      where: { dossierId: tache.dossierId, type: { in: ["APPEL", "SMS_COPIE", "SMS_ENVOYE", "MAIL_ENVOYE"] }, direction: "SORTANT", OR: [{ createdAt: { gt: apres } }, { survenuLe: { gt: apres } }] },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: { type: true, metadata: true, createdAt: true, survenuLe: true },
+    });
+    for (const e of evenements) {
+      const meta = lireObjet(e.metadata);
+      if (e.type === "APPEL" && meta.issue === "PAS_DE_REPONSE") continue;
+      if (e.type === "SMS_ENVOYE" && meta.origine === "ACCUSE_AUTO") continue;
+      ajouter(e.survenuLe ?? e.createdAt, e.type === "APPEL" ? "appel noté" : e.type === "SMS_COPIE" ? "SMS copié" : e.type === "SMS_ENVOYE" ? "SMS envoyé" : "mail parti");
+    }
   }
   const dernier = candidats.sort((a, b) => b.le.getTime() - a.le.getTime())[0];
-  return dernier ? `${dernier.texte} ${jourMois(dernier.le)}` : null;
+  if (dernier) return `${dernier.texte} ${leOuA(dernier.le, maintenant)}`;
+  if (tache.leadId && (await aEcritDepuis(tache.leadId, apres))) return "il a écrit : à lui répondre";
+  if (rappelLe) return `rappel posé au ${jourMois(rappelLe)}`;
+  return null;
+}
+
+/** Le lead a-t-il écrit (SMS, mail) après `apres` ? */
+async function aEcritDepuis(leadId: string, apres: Date): Promise<boolean> {
+  const [sms, mail, trace] = await Promise.all([
+    prisma.sms.findFirst({ where: { sens: "ENTRANT", createdAt: { gt: apres }, OR: [{ leadId }, { conversation: { leadId } }] }, select: { id: true } }),
+    prisma.message.findFirst({ where: { leadId, sens: "ENTRANT", automatique: false, recuLe: { gt: apres } }, select: { id: true } }),
+    prisma.interaction.findFirst({ where: { leadId, createdAt: { gt: apres }, OR: [{ contenu: { startsWith: "SMS reçu" } }, { contenu: { startsWith: "Mail reçu" } }] }, select: { id: true } }),
+  ]);
+  return Boolean(sms || mail || trace);
 }
 
 /** La preuve de l'achèvement, lue en base, selon le type (docs/TACHES.md § 5). */
 async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
   const raccourci = lireObjet(tache.raccourci);
   const donnees = lireObjet(tache.donnees);
+  const depuis = tache.depuis;
   switch (tache.type) {
     case "DEVIS": {
       if (!tache.dossierId) return null;
       const devis = await prisma.document.findFirst({
-        where: { dossierId: tache.dossierId, type: "DEVIS", numero: { not: null }, OR: [{ statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true }, { statut: "ACCEPTE" }] },
+        where: {
+          dossierId: tache.dossierId,
+          type: "DEVIS",
+          numero: { not: null },
+          AND: [{ OR: [{ statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true }, { statut: "ACCEPTE" }] }, { OR: [{ createdAt: { gt: depuis } }, { dateEmission: { gt: depuis } }] }],
+        },
         orderBy: { createdAt: "desc" },
         select: { numero: true, origine: true },
       });
@@ -169,14 +228,24 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
     case "SIMULATION":
     case "PUBLIER": {
       if (!tache.dossierId) return null;
-      const simulation = await prisma.simulationEspace.findFirst({ where: { dossierId: tache.dossierId, statut: "PUBLIEE" }, orderBy: [{ publieeLe: "desc" }, { updatedAt: "desc" }], select: { publieeLe: true, updatedAt: true } });
-      return simulation ? `simulation publiée le ${jourMois(simulation.publieeLe ?? simulation.updatedAt)}` : null;
+      const simulation = await prisma.simulationEspace.findFirst({
+        where: { dossierId: tache.dossierId, statut: "PUBLIEE", OR: [{ publieeLe: { gt: depuis } }, { publieeLe: null, updatedAt: { gt: depuis } }] },
+        orderBy: [{ publieeLe: "desc" }, { updatedAt: "desc" }],
+        select: { publieeLe: true, updatedAt: true },
+      });
+      if (simulation) return `simulation publiée ${leOuA(simulation.publieeLe ?? simulation.updatedAt, maintenant)}`;
+      // Préparée, pas encore publiée : la tâche « Publier » la reprend.
+      if (tache.type === "SIMULATION") {
+        const brouillon = await prisma.simulationEspace.findFirst({ where: { dossierId: tache.dossierId, statut: "BROUILLON", archiveLe: null }, select: { id: true } });
+        if (brouillon) return "simulation préparée, à publier";
+      }
+      return null;
     }
     case "REPONDRE":
     case "LIRE_MAIL": {
       const messageIds = messagesDeLaTache(raccourci, donnees);
       const reponse = tache.type === "REPONDRE" ? await reponsePartie(tache, messageIds) : null;
-      if (reponse) return `réponse partie le ${jourMois(reponse)}`;
+      if (reponse) return `réponse partie ${leOuA(reponse, maintenant)}`;
       const fils = await etatDesFils(messageIds, maintenant);
       if (fils?.range) return "mail rangé";
       if (fils) return tache.type === "LIRE_MAIL" && !fils.traite ? "mail lu" : "mail archivé";
@@ -184,8 +253,10 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       return null;
     }
     case "APPELER":
+      return dernierContact(tache, depuis, maintenant);
     case "RAPPELER":
-      return dernierContact(tache);
+      // Un appel passé le matin d'un rappel prévu l'après-midi compte.
+      return dernierContact(tache, plusAncien([depuis, aHeureParis(depuis, 0, 0)]) ?? depuis, maintenant);
     case "DATE_CHANTIER": {
       if (!tache.dossierId) return null;
       const dossier = await prisma.dossier.findUnique({ where: { id: tache.dossierId }, select: { dateChantier: true } });
@@ -193,7 +264,11 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
     }
     case "ENCAISSER": {
       if (!tache.dossierId) return null;
-      const encaissement = await prisma.encaissement.findFirst({ where: { dossierId: tache.dossierId, statut: "VALIDE" }, orderBy: [{ recuLe: "desc" }, { createdAt: "desc" }], select: { montant: true } });
+      const encaissement = await prisma.encaissement.findFirst({
+        where: { dossierId: tache.dossierId, statut: "VALIDE", OR: [{ createdAt: { gt: depuis } }, { recuLe: { gt: depuis } }] },
+        orderBy: [{ recuLe: "desc" }, { createdAt: "desc" }],
+        select: { montant: true },
+      });
       return encaissement ? `encaissement de ${euros(encaissement.montant)} saisi` : null;
     }
     case "VALIDER": {

@@ -184,6 +184,7 @@ export function sourceDepuisLead(source: string): { source: SourceClient; source
     case "SITE_SIMULATEUR":
     case "SITE_DEVIS":
     case "SITE_CONTACT":
+    case "SITE_PRO":
       return { source };
     case "TIKTOK":
       return { source: "RESEAUX_SOCIAUX", sourceDetail: "TikTok" };

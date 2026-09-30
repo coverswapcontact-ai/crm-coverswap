@@ -148,3 +148,25 @@ export function depuisSaisieParis(valeur: string): Date | null {
   const date = aHeureParis(new Date(Date.UTC(annee, mois - 1, jour, 12)), 0, heure, minute);
   return Number.isNaN(date.getTime()) ? null : date;
 }
+
+/* ── Mission 16 (partie 4) : le rappel demandé sur le site ─────────────────── */
+
+/** Les trois créneaux proposés au visiteur après son rendu (le site calcule les mêmes libellés : `lib/rappel.ts`). */
+export const CRENEAUX_RAPPEL_SITE = ["ce-soir-18h", "demain-10h", "demain-18h"] as const;
+export type CreneauRappelSite = (typeof CRENEAUX_RAPPEL_SITE)[number];
+
+/** Passé cette heure (Paris), « ce soir 18 h » devient « demain 18 h » : Lucas n'a pas le temps de se retourner. */
+export const DERNIERE_MINUTE_CE_SOIR = { heure: 17, minute: 30 };
+
+/**
+ * L'instant du rappel demandé, en heure de Paris : « ce soir 18 h » = aujourd'hui 18:00 si l'on est avant 17:30,
+ * sinon demain 18:00 ; « demain 10 h » ; « demain 18 h ». Un samedi ou un dimanche passe au lundi, même heure.
+ */
+export function rappelDuCreneau(creneau: CreneauRappelSite, maintenant: Date): Date {
+  const limite = aHeureParis(maintenant, 0, DERNIERE_MINUTE_CE_SOIR.heure, DERNIERE_MINUTE_CE_SOIR.minute);
+  const [jours, heure] = creneau === "ce-soir-18h" ? [maintenant.getTime() < limite.getTime() ? 0 : 1, 18] : creneau === "demain-10h" ? [1, 10] : [1, 18];
+  const aujourdhui = murale(maintenant);
+  const jourSemaine = new Date(Date.UTC(aujourdhui.annee, aujourdhui.mois - 1, aujourdhui.jour + jours)).getUTCDay();
+  const report = jourSemaine === 6 ? 2 : jourSemaine === 0 ? 1 : 0;
+  return aHeureParis(maintenant, jours + report, heure);
+}

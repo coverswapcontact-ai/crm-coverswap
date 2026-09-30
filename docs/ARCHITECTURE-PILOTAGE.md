@@ -1951,6 +1951,39 @@ en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/r
   cartes de réalisation) ; sans `l`, la photo telle quelle.
   Événement `WHATSAPP_CLIQUE` (« Écrire sur WhatsApp » de l'accueil) : liste blanche, ligne « Clics
   WhatsApp » de la synthèse, son propre type canonique.
+- **Tunnel du site** (mission 16, partie 4, `lib/site/tunnel.ts`, `lib/site/tarifs-publics.ts`) :
+  `GET /api/site/tarifs` (publique, rendue à la demande — la base n'existe pas au build de Railway —,
+  cache HTTP d'une heure, 120 appels par IP et par 10 min) rend, par famille, chaque sous-partie avec
+  `metrage` et `prixUnitaire` (tarif attribué ou trouvé par mots-clés, `null` sinon) et les formats de
+  pièce tirés des repères de taille (cuisine : Petite ≈ 3 m, Moyenne ≈ 5 m, Grande ≈ 8 m ; salle de
+  bain : ses deux repères ; mobilier et pro : aucun) ; jamais une désignation ni une marge. Le webhook
+  accepte `rappelCreneau` (`ce-soir-18h` | `demain-10h` | `demain-18h` → `rappelLe` par
+  `rappelDuCreneau`, heure de Paris, « ce soir » après 17 h 30 = demain, samedi et dimanche → lundi),
+  `estimationMin` / `estimationMax` / `formatPiece` / `canal` / `pageEntree` (colonnes du lead ; une
+  valeur illisible est ignorée, jamais une raison de perdre le lead), `SITE_PRO` (score 40, mail au
+  gérant comme une demande de devis, `surfaceM2` en note, `surfaceMl` en `mlEstimes`). Une seule règle
+  dit ce qu'est une demande de devis (`estDemandeDeDevis`, `FILTRE_DEMANDE_DE_DEVIS`,
+  `prospects/constantes.ts`) : `SITE_DEVIS` (ancien), `SITE_PRO`, et `SITE_CONTACT` quand le formulaire de
+  /contact porte un projet (« Autre » = un message) — webhook (statut, accusé, mail), classement,
+  intention, push, point du jour ; un message de /contact d'un contact déjà connu prévient aussi Lucas
+  (mail et push). Après un rendu du simulateur (`SITE_SIMULATEUR` avec une simulation imagée ou une
+  photo, et `afficherLienEspace: true` envoyé par le site — ni l'ancien site ni la demande après un échec
+  de génération ne le posent), l'espace s'ouvre
+  (`ouvrirEspaceALEnvoi` : dossier « Rappeler » ou « Appeler : simulation faite sur le site ») et
+  `lienEspace` revient dans la réponse — le site l'AFFICHE, rien n'est envoyé — mais SEULEMENT à un
+  contact neuf (aucune autre fiche, archivées comprises, ni dossier, ni espace avant la demande) ou au
+  même parcours qui l'a déjà reçu : à un contact déjà connu, jamais (sinon quiconque connaît son
+  téléphone ouvrirait son espace) ; au-delà de deux projets en cours ou lien désactivé : `null`, c'est
+  Lucas qui ouvre. Un événement `ESPACE_DEMANDE_SITE` (entrant, metadata `{ parcoursId, lienAffiche }`)
+  l'écrit au dossier et rend la main à Lucas (« Demande du site : le rappeler ») ; quand le lien est
+  affiché, il rappelle que le téléphone n'est pas vérifié (régénérer le lien au moindre doute, avant tout
+  devis). Le rappel suit le contact
+  (`suivreLeRappel` : dossier vivant → `rappelALOuverture`, sinon « À rappeler » +
+  `synchroniserRappel`). La note du lead dit l'estimation vue, le rappel demandé et l'origine.
+  Événements `ESTIMATION_VUE` et `RAPPEL_DEMANDE` ; l'entonnoir compte sept étapes (visite → pièce →
+  photo → génération → rendu vu → estimation vue → contact ou rappel), l'estimation étant FACULTATIVE
+  (sans abandons ; le contact se compte parmi les rendus vus). Doublons : `nomNormalise` garde chaque mot
+  une fois (un prénom recopié en nom reste un prénom seul, jamais un doublon probable).
 - **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
   section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
   film, verrous, contrôle final, `{{direction_artistique}}`), planche PNG (grands échantillons

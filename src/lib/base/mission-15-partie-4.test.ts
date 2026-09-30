@@ -342,8 +342,11 @@ describe("événements du site — l'entonnoir du simulateur", () => {
   test("nouveaux types acceptés ; entonnoir emboîté avec les abandons ; les anciens noms comptent encore", () => {
     for (const type of ["PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU"]) assert.ok(evenements.estTypeEvenementSite(type), type);
     const e = (parcoursId: string, type: string) => ({ parcoursId, type });
+    // Mission 16 (partie 4) : sept étapes — la visite (PAGE_VUE) en tête, l'estimation vue avant le contact.
+    const visites = ["a", "b", "c", "d", "z"].map((p) => e(p, "PAGE_VUE"));
     const entonnoir = evenements.calculerEntonnoir([
-      e("a", "PIECE_CHOISIE"), e("a", "PHOTO_CHARGEE"), e("a", "GENERATION_LANCEE"), e("a", "RESULTAT_VU"), e("a", "DEVIS_DEMANDE"),
+      ...visites,
+      e("a", "PIECE_CHOISIE"), e("a", "PHOTO_CHARGEE"), e("a", "GENERATION_LANCEE"), e("a", "RESULTAT_VU"), e("a", "ESTIMATION_VUE"), e("a", "DEVIS_DEMANDE"),
       e("b", "PIECE_CHOISIE"), e("b", "PHOTO_CHARGEE"), e("b", "GENERATION_LANCEE"),
       e("c", "PIECE_CHOISIE"),
       // Ancien site : anciens noms.
@@ -352,10 +355,13 @@ describe("événements du site — l'entonnoir du simulateur", () => {
       e("z", "DEVIS_DEMANDE"), e("z", "RESULTAT_VU"),
     ]);
     assert.deepEqual(entonnoir.etapes.map((x) => [x.cle, x.parcours, x.abandons]), [
-      ["piece", 4, null],
+      ["visite", 5, null],
+      ["piece", 4, 1],
       ["photo", 3, 1],
       ["generation", 3, 0],
       ["resultat", 2, 1],
+      // Mission 16 (partie 4) : l'estimation est facultative (sans abandons) ; le contact se compte parmi les résultats vus.
+      ["estimation", 1, null],
       ["contact", 1, 1],
     ]);
   });
@@ -363,7 +369,8 @@ describe("événements du site — l'entonnoir du simulateur", () => {
   test("entonnoirSite lit la base sur la période ; la synthèse compte GENERATION_LANCEE et RESULTAT_VU comme les anciens", async () => {
     const jour = new Date().toISOString().slice(0, 10);
     const p = parcours();
-    for (const type of ["PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU"] as const) await evenements.enregistrerEvenementSite({ parcoursId: p, type, page: "/simulateur", source: "meta" });
+    // Mission 16 (partie 4) : l'entonnoir commence à la visite (PAGE_VUE).
+    for (const type of ["PAGE_VUE", "PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU"] as const) await evenements.enregistrerEvenementSite({ parcoursId: p, type, page: "/simulateur", source: "meta" });
     const entonnoir = await evenements.entonnoirSite(7);
     assert.ok(entonnoir.etapes.find((x) => x.cle === "resultat")!.parcours >= 1);
     // Les anciens noms (site d'avant la partie 4) sont rangés sous les nouveaux : une seule ligne par étape.

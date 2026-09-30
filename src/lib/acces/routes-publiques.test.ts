@@ -39,6 +39,7 @@ describe("routes publiques", () => {
       "/api/simulate/autre",
       "/api/site/echantillons",
       "/api/site/avis-google/autre",
+      "/api/site/tarifs/autre",
       "/auth/signin/../../dossiers",
     ]) {
       assert.equal(estRoutePublique(chemin), false, chemin);
@@ -62,6 +63,7 @@ describe("routes publiques", () => {
       "/api/site/echantillons/NE31",
       "/api/site/simulateur",
       "/api/site/avis-google",
+      "/api/site/tarifs",
       "/manifest-crm.webmanifest",
       "/sw.js",
       "/hors-ligne.html",

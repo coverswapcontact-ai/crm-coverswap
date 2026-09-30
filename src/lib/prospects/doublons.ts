@@ -34,7 +34,9 @@ export function nomNormalise(prenom: string | null | undefined, nom: string | nu
     .replace(/[^a-z]+/g, " ")
     .trim()
     .split(" ")
-    .filter(Boolean)
+    // Chaque mot une fois (mission 16, partie 4) : le simulateur ne demande que le prénom, que le site recopie en nom
+    // (« Marie Marie ») ; dédoublé, il redevient un seul mot et le garde-fou « un prénom seul ne suffit pas » joue.
+    .filter((mot, i, mots) => mot !== "" && mots.indexOf(mot) === i)
     .sort()
     .join(" ");
 }

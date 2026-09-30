@@ -22,6 +22,9 @@ export const TYPES_EVENEMENT_SITE = [
   "FORMULAIRE_ECHEC",
   // Mission 16 (partie 3) : « Écrire sur WhatsApp » (dernier appel de l'accueil). Son propre type canonique : ce n'est pas un formulaire envoyé.
   "WHATSAPP_CLIQUE",
+  // Mission 16 (partie 4) : le tunnel après le rendu — l'estimation affichée, puis la demande d'être rappelé.
+  "ESTIMATION_VUE",
+  "RAPPEL_DEMANDE",
 ] as const;
 export type TypeEvenementSite = (typeof TYPES_EVENEMENT_SITE)[number];
 
@@ -39,6 +42,8 @@ export const LIBELLES_EVENEMENT_SITE: Record<TypeEvenementSite, string> = {
   CONTACT_ENVOYE: "Formulaires envoyés",
   FORMULAIRE_ECHEC: "Formulaires en échec",
   WHATSAPP_CLIQUE: "Clics WhatsApp",
+  ESTIMATION_VUE: "Estimations vues",
+  RAPPEL_DEMANDE: "Rappels demandés",
 };
 
 export type EntreeEvenementSite = {
@@ -152,24 +157,42 @@ export async function syntheseSite(du: string, au: string): Promise<SyntheseSite
   };
 }
 
-/* ── Entonnoir du simulateur (mission 15, partie 4) ───────────────── */
+/* ── Entonnoir du simulateur (mission 15, partie 4 ; mission 16, partie 4) ───────────────── */
 
-/** Une étape de l'entonnoir : les types qui la marquent (nouveau nom, puis ancien). */
-export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[] }[] = [
+/**
+ * Une étape de l'entonnoir : les types qui la marquent (nouveau nom, puis ancien). Mission 16 (partie 4) : sept
+ * étapes — la visite (une page vue) en tête, l'estimation vue entre le rendu et le contact, et la demande de rappel
+ * comptée comme un contact. L'estimation est FACULTATIVE : la demande part aussi sans taille choisie (cuisine), donc
+ * elle n'est pas un passage obligé — comptée parmi les résultats vus, sans abandons, et le contact se compte parmi
+ * les résultats vus (pas parmi les estimations vues : sinon une demande sans taille serait un « abandon »).
+ */
+export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[]; facultative?: true }[] = [
+  { cle: "visite", libelle: "Visite", types: ["PAGE_VUE"] },
   { cle: "piece", libelle: "Pièce choisie", types: ["PIECE_CHOISIE"] },
   { cle: "photo", libelle: "Photo chargée", types: ["PHOTO_CHARGEE", "SIMULATION_PHOTO"] },
   { cle: "generation", libelle: "Génération lancée", types: ["GENERATION_LANCEE", "SIMULATION_LANCEE"] },
   { cle: "resultat", libelle: "Résultat vu", types: ["RESULTAT_VU", "SIMULATION_RESULTAT"] },
-  { cle: "contact", libelle: "Coordonnées laissées", types: ["DEVIS_DEMANDE", "CONTACT_ENVOYE"] },
+  { cle: "estimation", libelle: "Estimation vue", types: ["ESTIMATION_VUE"], facultative: true },
+  { cle: "contact", libelle: "Contact ou rappel", types: ["DEVIS_DEMANDE", "CONTACT_ENVOYE", "RAPPEL_DEMANDE"] },
 ];
 
-export type EtapeEntonnoir = { cle: string; libelle: string; parcours: number; /** Parcours de l'étape d'avant qui ne sont pas allés plus loin (null pour la première). */ abandons: number | null };
+export type EtapeEntonnoir = {
+  cle: string;
+  libelle: string;
+  parcours: number;
+  /** Parcours de l'étape obligatoire d'avant qui ne sont pas allés plus loin (null pour la première et pour une étape facultative). */
+  abandons: number | null;
+  /** Étape qu'on peut sauter (l'estimation) : l'étape suivante se compte sans elle. */
+  facultative?: true;
+};
 export type EntonnoirSite = { jours: number; etapes: EtapeEntonnoir[] };
 
 /**
  * L'entonnoir emboîté : un parcours compte à une étape s'il l'a atteinte ET
  * avait atteint la précédente (une demande de contact sans résultat vu n'est
- * pas un « contact après simulation »). Pur : testable sans base.
+ * pas un « contact après simulation »). Une étape facultative (l'estimation) se
+ * compte parmi les parcours de l'étape d'avant, sans abandons, et ne sert pas
+ * d'étape précédente à la suivante. Pur : testable sans base.
  */
 export function calculerEntonnoir(evenements: { parcoursId: string; type: string }[], jours = 7): EntonnoirSite {
   const parType = new Map<string, Set<string>>();
@@ -182,6 +205,10 @@ export function calculerEntonnoir(evenements: { parcoursId: string; type: string
   for (const etape of ETAPES_ENTONNOIR) {
     const atteint = new Set<string>();
     for (const type of etape.types) for (const p of parType.get(type) ?? []) if (!precedent || precedent.has(p)) atteint.add(p);
+    if (etape.facultative) {
+      etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: null, facultative: true });
+      continue;
+    }
     etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: precedent ? Math.max(0, precedent.size - atteint.size) : null });
     precedent = atteint;
   }

@@ -35,6 +35,12 @@ model Lead {
   publicite        String?
   formulaire       String?
   metaLeadgenId    String?
+  // Mission 16 (partie 4) : ce que le tunnel du site sait du contact. Tout est facultatif.
+  canal            String? // utm_source/medium ou site référent de la première visite (« meta/paid », « google »)
+  pageEntree       String? // première page vue sur le site (« /prestations/cuisine »)
+  estimationMin    Int? // fourchette affichée après le rendu (€), telle que la personne l'a vue
+  estimationMax    Int?
+  formatPiece      String? // taille choisie pour l'estimation (« en-l » : cuisine moyenne)
   // Depuis le site (17/09/2026) : champs structurés au lieu de notes concaténées
   message          String? // ce que la personne a écrit dans le formulaire
   styleSouhaite    String? // style demandé (marbre blanc, chêne…)

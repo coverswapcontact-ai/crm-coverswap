@@ -28,13 +28,14 @@ export const STATUTS_LEAD_APRES_DEVIS = ["DEVIS_ENVOYE", "SIGNE", "CHANTIER_PLAN
 export const STATUTS_LEAD_MANUELS = ["NOUVEAU", "DEVIS_DEMANDE", "CONTACTE", "PERDU"] as const satisfies readonly StatutLead[];
 export type StatutLeadManuel = (typeof STATUTS_LEAD_MANUELS)[number];
 
-export const SOURCES_LEAD = ["SITE_DEVIS", "SITE_SIMULATEUR", "SITE_CONTACT", "META_ADS", "INSTAGRAM", "TIKTOK", "ORGANIQUE", "REFERENCE", "MAIL", "AUTRE"] as const;
+export const SOURCES_LEAD = ["SITE_DEVIS", "SITE_SIMULATEUR", "SITE_CONTACT", "SITE_PRO", "META_ADS", "INSTAGRAM", "TIKTOK", "ORGANIQUE", "REFERENCE", "MAIL", "AUTRE"] as const;
 export type SourceLead = (typeof SOURCES_LEAD)[number];
 
 export const LIBELLES_SOURCE_LEAD: Record<string, string> = {
   SITE_DEVIS: "Site : demande de devis",
   SITE_SIMULATEUR: "Site : simulateur",
   SITE_CONTACT: "Site : contact",
+  SITE_PRO: "Site : devis pro",
   META_ADS: "Publicité Meta",
   INSTAGRAM: "Instagram",
   TIKTOK: "TikTok",
@@ -45,6 +46,23 @@ export const LIBELLES_SOURCE_LEAD: Record<string, string> = {
 };
 
 export const libelleSourceLead = (source: string): string => LIBELLES_SOURCE_LEAD[source] ?? source;
+
+/**
+ * Mission 16 (partie 4) : ce qu'est une demande de devis venue du site, en UNE règle (webhook, classement, intention,
+ * push, point du jour). L'ancien formulaire de /devis (encore lu), celui de /pro, et celui de /contact quand il porte
+ * un projet : tous les boutons « Demander un devis » du site y mènent ; « Autre » y reste un simple message.
+ */
+export const SOURCES_DEMANDE_DE_DEVIS = ["SITE_DEVIS", "SITE_PRO"] as const;
+
+export function estDemandeDeDevis(lead: { source: string; typeProjet?: string | null }): boolean {
+  if ((SOURCES_DEMANDE_DE_DEVIS as readonly string[]).includes(lead.source)) return true;
+  return lead.source === "SITE_CONTACT" && !!lead.typeProjet && lead.typeProjet !== "AUTRE";
+}
+
+/** La même règle, en filtre de la base (à poser au niveau d'un `where` sans autre `OR`). */
+export const FILTRE_DEMANDE_DE_DEVIS = {
+  OR: [{ source: { in: [...SOURCES_DEMANDE_DE_DEVIS] } }, { source: "SITE_CONTACT", typeProjet: { not: "AUTRE" } }],
+};
 
 export const TYPES_PROJET = ["CUISINE", "SDB", "MEUBLES", "PRO", "AUTRE"] as const;
 export type TypeProjet = (typeof TYPES_PROJET)[number];
@@ -85,8 +103,8 @@ export const LIBELLES_GROUPE_ENTRANTS: Record<GroupeEntrants, string> = {
 export type IntentionLead = "DEVIS" | "SIMULATION" | "CONTACT";
 
 /** Ce que le contact a demandé : un devis, une simulation, ou un simple contact. */
-export function intentionDuLead(lead: { source: string; statut: string; simulations: { source: string }[] }): IntentionLead {
-  if (lead.source === "SITE_DEVIS" || lead.statut === "DEVIS_DEMANDE" || lead.simulations.some((simulation) => simulation.source === "SITE_DEVIS")) return "DEVIS";
+export function intentionDuLead(lead: { source: string; statut: string; typeProjet?: string | null; simulations: { source: string }[] }): IntentionLead {
+  if (estDemandeDeDevis(lead) || lead.statut === "DEVIS_DEMANDE" || lead.simulations.some((simulation) => simulation.source === "SITE_DEVIS")) return "DEVIS";
   if (lead.source === "SITE_SIMULATEUR" || lead.simulations.length > 0) return "SIMULATION";
   return "CONTACT";
 }

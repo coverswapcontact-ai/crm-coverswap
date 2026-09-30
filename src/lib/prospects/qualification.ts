@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma, { type BaseDonnees } from "@/lib/prisma";
 import { lireParametres } from "@/lib/parametres/service";
+import { estDemandeDeDevis } from "./constantes";
 import { lireDepartements, qualifier, type Qualification, type ReponseLue, type ZoneIntervention } from "./priorite";
 
 /**
@@ -42,6 +43,7 @@ const SELECTION = {
   notes: true,
   message: true,
   source: true,
+  typeProjet: true,
   statut: true,
   prioriteManuelle: true,
   metaLeads: { select: { reponses: true }, orderBy: { recuLe: "desc" as const }, take: 1 },
@@ -60,7 +62,8 @@ function qualifierLead(lead: LeadAClasser, zone: ZoneIntervention): Qualificatio
     {
       codePostal: lead.codePostal,
       reponses: reponsesDepuis(lead.metaLeads[0]?.reponses, lead.notes),
-      devisDemande: lead.source === "SITE_DEVIS" || lead.statut === "DEVIS_DEMANDE",
+      // Mission 16 (partie 4) : la règle commune (formulaire de /devis, de /pro, ou de /contact avec un projet).
+      devisDemande: estDemandeDeDevis(lead) || lead.statut === "DEVIS_DEMANDE",
       simulation: estIssuDuSimulateur(lead),
     },
     zone

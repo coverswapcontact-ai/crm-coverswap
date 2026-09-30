@@ -75,7 +75,7 @@ async function recopierDansLeDossier(dossierId: string, cheminRelatif: string, n
 }
 
 /** Le dossier vivant de ce contact, sinon celui de son client (un seul dossier par projet en cours). */
-async function dossierVivant(lead: { id: string; clientId: string | null }): Promise<string | null> {
+export async function dossierVivant(lead: { id: string; clientId: string | null }): Promise<string | null> {
   const duLead = await prisma.dossier.findFirst({ where: { leadId: lead.id, etape: { notIn: ETAPES_CLOSES } }, orderBy: { createdAt: "desc" }, select: { id: true } });
   if (duLead) return duLead.id;
   if (!lead.clientId) return null;

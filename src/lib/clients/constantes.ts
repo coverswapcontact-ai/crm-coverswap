@@ -16,6 +16,7 @@ export const SOURCES_CLIENT = [
   "SITE_SIMULATEUR",
   "SITE_DEVIS",
   "SITE_CONTACT",
+  "SITE_PRO",
   "RECOMMANDATION",
   "BOUCHE_A_OREILLE",
   "RESEAUX_SOCIAUX",
@@ -33,6 +34,7 @@ export const LIBELLES_SOURCE_CLIENT: Record<SourceClient, string> = {
   SITE_SIMULATEUR: "Site : simulateur",
   SITE_DEVIS: "Site : demande de devis",
   SITE_CONTACT: "Site : formulaire de contact",
+  SITE_PRO: "Site : demande de devis pro",
   RECOMMANDATION: "Recommandation (personne connue)",
   BOUCHE_A_OREILLE: "Bouche-à-oreille",
   RESEAUX_SOCIAUX: "Réseaux sociaux (non payé)",
@@ -47,7 +49,7 @@ export const LIBELLES_SOURCE_CLIENT: Record<SourceClient, string> = {
 /** Familles de canaux, pour « bouche-à-oreille contre Meta » et le reste. */
 export const FAMILLES_SOURCE = {
   PAYANT: ["META_ADS"],
-  SITE: ["SITE_SIMULATEUR", "SITE_DEVIS", "SITE_CONTACT"],
+  SITE: ["SITE_SIMULATEUR", "SITE_DEVIS", "SITE_CONTACT", "SITE_PRO"],
   RELATIONNEL: ["RECOMMANDATION", "BOUCHE_A_OREILLE", "SOUS_TRAITANCE"],
   ORGANIQUE: ["RESEAUX_SOCIAUX", "ORGANIQUE", "SALON"],
   DEMARCHAGE: ["PROSPECTION"],

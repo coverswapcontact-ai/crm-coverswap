@@ -23,6 +23,7 @@ import { pluriel, quand } from "@/lib/commun/format";
  *
  * Mission 15 (partie 4) : l'entonnoir du simulateur (pièce → photo →
  * génération → résultat vu → coordonnées), avec les abandons à chaque étape.
+ * Mission 16 (partie 4) : visite en tête, estimation vue (facultative) avant le contact.
  */
 
 /** Une ligne par étape : le nombre de parcours et, entre parenthèses, ceux de l'étape d'avant qui se sont arrêtés là. */
@@ -38,8 +39,11 @@ function Entonnoir({ entonnoir }: { entonnoir: EntonnoirSite }) {
         {entonnoir.etapes.map((etape, i) => (
           <li key={etape.cle} className="flex items-center gap-1.5">
             {i > 0 ? <span aria-hidden className="text-[#6B7280]">→</span> : null}
-            <span className="text-[#F2F3F5]">
+            {/* Mission 16 (partie 4) : une étape facultative (l'estimation) se lit entre parenthèses : on peut la sauter. */}
+            <span className={etape.facultative ? "text-[#9CA3AF]" : "text-[#F2F3F5]"} title={etape.facultative ? "Étape facultative : la demande part aussi sans elle" : undefined}>
+              {etape.facultative ? "(" : null}
               {etape.libelle} <span className="font-medium">{etape.parcours}</span>
+              {etape.facultative ? ")" : null}
             </span>
             {etape.abandons ? (
               <span className="text-[#F87171]" title={`${pluriel(etape.abandons, "parcours arrêté", "parcours arrêtés")} à cette étape`}>

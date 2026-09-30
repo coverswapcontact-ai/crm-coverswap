@@ -12,9 +12,12 @@ import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations
 import { rattacherSimulationsSite } from "@/lib/site/simulations";
 import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
 import { notifierDemandeDuSite } from "@/lib/prospects/notification";
+import { estDemandeDeDevis } from "@/lib/prospects/constantes";
 import { reperDoublonProbable } from "@/lib/prospects/doublons";
 import type { Priorite } from "@/lib/prospects/priorite";
 import { pluriel } from "@/lib/commun/format";
+import { CRENEAUX_RAPPEL_SITE, momentDuRappel, rappelDuCreneau } from "@/lib/commercial/quand";
+import { complementsDeLaDemande, ouvrirEspaceALEnvoi, suivreLeRappel, type EspaceALEnvoi } from "@/lib/site/tunnel";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -56,7 +59,39 @@ const webhookSchema = z.object({
   imageBefore: z.string().optional(),
   imageAfter: z.string().optional(),
   imageOriginal: z.string().optional(),
+  // Mission 16 (partie 4) : le tunnel du site. Une valeur illisible est ignorée (`catch`), jamais une raison de perdre le lead.
+  rappelCreneau: z.enum(CRENEAUX_RAPPEL_SITE).optional().catch(undefined),
+  estimationMin: z.number().int().min(1).max(1_000_000).optional().catch(undefined),
+  estimationMax: z.number().int().min(1).max(1_000_000).optional().catch(undefined),
+  formatPiece: texteCourt(40),
+  canal: texteCourt(60),
+  pageEntree: texteCourt(200),
+  // Formulaire de /pro : surface approximative, en m² OU en mètres linéaires.
+  surfaceM2: z.number().positive().max(100_000).optional().catch(undefined),
+  surfaceMl: z.number().positive().max(100_000).optional().catch(undefined),
+  // Le site AFFICHERA le lien de l'espace (formulaire après un rendu) : sans ce drapeau, le site ne l'ouvre pas (ancien
+  // site, demande après un échec de génération) — rien ne dirait alors au dossier un « lien affiché » qui ne l'est pas.
+  afficherLienEspace: z.boolean().optional().catch(undefined),
 });
+
+/** Les listes Leads et Dossiers se relisent ; jamais bloquant (le lead est déjà écrit, un 500 ferait renvoyer la demande). */
+function rafraichirLesEcrans() {
+  try {
+    revalidatePath("/leads");
+    revalidatePath("/dossiers");
+  } catch (erreur) {
+    console.warn("[webhook] écrans non rafraîchis :", erreur instanceof Error ? erreur.message : erreur);
+  }
+}
+
+/** Un texte facultatif coupé à `max` caractères (jamais refusé : le lead passe avant la forme). */
+function texteCourt(max: number) {
+  return z
+    .string()
+    .optional()
+    .catch(undefined)
+    .transform((v) => v?.trim().slice(0, max) || undefined);
+}
 
 function normalizeData(body: z.infer<typeof webhookSchema>) {
   const isMeta = !!(body.first_name || body.last_name || body.phone);
@@ -74,7 +109,10 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
     body.campaign_name ? `Campagne: ${body.campaign_name}` : null,
   ].filter(Boolean).join(" | ");
 
-  const notes = body.notes || metaNotes || undefined;
+  const surface = body.surfaceM2 ? `Surface approximative : ${body.surfaceM2} m²` : null;
+  const notes = [body.notes || metaNotes || null, surface].filter(Boolean).join(" — ") || undefined;
+  // Une fourchette n'est gardée qu'entière et dans l'ordre.
+  const estimation = body.estimationMin && body.estimationMax && body.estimationMin <= body.estimationMax ? { estimationMin: body.estimationMin, estimationMax: body.estimationMax } : { estimationMin: undefined, estimationMax: undefined };
 
   return {
     prenom, nom, telephone, email, ville,
@@ -83,7 +121,7 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
     typeProjet: body.typeProjet || "CUISINE",
     referenceChoisie: body.referenceChoisie,
     prixDevis: body.prixDevis,
-    mlEstimes: body.mlEstimes,
+    mlEstimes: body.mlEstimes ?? body.surfaceMl,
     lienSimulation: body.lienSimulation,
     notes,
     message: body.message?.trim() || undefined,
@@ -92,6 +130,10 @@ function normalizeData(body: z.infer<typeof webhookSchema>) {
     formulaire: body.form_name,
     publicite: body.ad_name,
     campagne: body.campaign_name,
+    ...estimation,
+    formatPiece: body.formatPiece,
+    canal: body.canal,
+    pageEntree: body.pageEntree,
   };
 }
 
@@ -100,7 +142,7 @@ function calculateScore(data: ReturnType<typeof normalizeData>): number {
   const sourceScores: Record<string, number> = {
     META_ADS: 15, TIKTOK: 10, INSTAGRAM: 15,
     ORGANIQUE: 25, REFERENCE: 40, AUTRE: 10,
-    SITE_SIMULATEUR: 30, SITE_DEVIS: 45, SITE_CONTACT: 35,
+    SITE_SIMULATEUR: 30, SITE_DEVIS: 45, SITE_CONTACT: 35, SITE_PRO: 40,
   };
   score += sourceScores[data.source] || 10;
 
@@ -213,6 +255,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nous avons déjà bien reçu vos demandes. Nous vous rappelons très vite." }, { status: 429 });
     }
 
+    // ── Mission 16 (partie 4) : le rappel demandé sur le site, daté ici (heure de Paris, week-end → lundi) ──
+    const maintenant = new Date();
+    const rappelLe = parsed.data.rappelCreneau ? rappelDuCreneau(parsed.data.rappelCreneau, maintenant) : null;
+    // Une seule règle (prospects/constantes) : formulaire de /devis (ancien), de /pro, ou de /contact avec un projet.
+    const demandeDeDevis = estDemandeDeDevis({ source: data.source, typeProjet: data.typeProjet });
+    // Un message écrit sur le site (devis, pro, contact) : Lucas est prévenu même pour un contact déjà connu.
+    const demandeEcrite = demandeDeDevis || data.source === "SITE_CONTACT";
+
     // ── DEDUP: same browser journey, then existing lead by phone OR email ──
     const existing = await findExistingLead(data.telephone, data.email, data.parcoursId);
 
@@ -234,8 +284,13 @@ export async function POST(request: NextRequest) {
       if (!existing.message && data.message) updates.message = data.message;
       if (!existing.styleSouhaite && data.styleSouhaite) updates.styleSouhaite = data.styleSouhaite;
       if (!existing.parcoursId && data.parcoursId) updates.parcoursId = data.parcoursId;
-      // Si le nouveau lead est un SITE_DEVIS, élever le statut
-      if (data.source === "SITE_DEVIS" && existing.statut === "NOUVEAU") {
+      // Mission 16 : la dernière estimation vue compte ; l'origine reste celle de la première visite ; un rappel demandé remplace l'ancien.
+      if (data.estimationMin && data.estimationMax) Object.assign(updates, { estimationMin: data.estimationMin, estimationMax: data.estimationMax, formatPiece: data.formatPiece ?? null });
+      if (!existing.canal && data.canal) updates.canal = data.canal;
+      if (!existing.pageEntree && data.pageEntree) updates.pageEntree = data.pageEntree;
+      if (rappelLe) updates.rappelLe = rappelLe;
+      // Si le nouveau lead est une demande de devis (formulaire ou pro), élever le statut
+      if (demandeDeDevis && existing.statut === "NOUVEAU") {
         updates.statut = "DEVIS_DEMANDE";
       }
       if (Object.keys(updates).length > 0) {
@@ -245,7 +300,7 @@ export async function POST(request: NextRequest) {
       isNew = true;
       const scoreSignature = calculateScore(data);
       lead = await prisma.lead.create({
-        data: { ...data, ipOrigine: ipVisiteur === "inconnue" ? null : ipVisiteur, scoreSignature },
+        data: { ...data, ipOrigine: ipVisiteur === "inconnue" ? null : ipVisiteur, scoreSignature, rappelLe },
       });
     }
 
@@ -301,12 +356,14 @@ export async function POST(request: NextRequest) {
     // ── Handle simulation (images + record) ──
     const hasImages = !!(parsed.data.imageBefore || parsed.data.imageAfter);
     const isSimulation = data.source === "SITE_SIMULATEUR" || hasImages;
+    // Mission 16 : estimation vue, rappel demandé, origine de la visite — à la suite de la note, quelle qu'elle soit.
+    const complements = complementsDeLaDemande({ ...data, rappelLe }, maintenant).map((ligne) => ` — ${ligne}`).join("");
 
     if (simulationsRattachees.length > 0 && !hasImages) {
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `${isNew ? "Lead reçu via le simulateur" : "Nouvelle demande via le simulateur"} (${data.source}) — ${pluriel(simulationsRattachees.length, "simulation rattachée", "simulations rattachées")}${data.message ? ` — Message : ${data.message}` : ""}`,
+          contenu: `${isNew ? "Lead reçu via le simulateur" : "Nouvelle demande via le simulateur"} (${data.source}) — ${pluriel(simulationsRattachees.length, "simulation rattachée", "simulations rattachées")}${data.message ? ` — Message : ${data.message}` : ""}${complements}`,
           leadId: lead.id,
         },
       });
@@ -338,7 +395,7 @@ export async function POST(request: NextRequest) {
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `Nouvelle simulation (${data.source})${data.referenceChoisie ? ` — réf. ${data.referenceChoisie}` : ""}${data.notes ? ` — ${data.notes}` : ""}`,
+          contenu: `Nouvelle simulation (${data.source})${data.referenceChoisie ? ` — réf. ${data.referenceChoisie}` : ""}${data.notes ? ` — ${data.notes}` : ""}${complements}`,
           leadId: lead.id,
         },
       });
@@ -350,7 +407,7 @@ export async function POST(request: NextRequest) {
       await prisma.interaction.create({
         data: {
           type: "NOTE",
-          contenu: `${prefix} (${data.source})${details ? ` — ${details}` : ""}`,
+          contenu: `${prefix} (${data.source})${details ? ` — ${details}` : ""}${complements}`,
           leadId: lead.id,
         },
       });
@@ -360,13 +417,22 @@ export async function POST(request: NextRequest) {
     //    de dossier). Si le contact a déjà un dossier vivant, photo avant et rendus y sont rangés (et rejoignent son espace). ──
     const aSimule = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0;
     const ouverture = aSimule ? await assurerDossierDeSimulation(lead.id) : null;
+    // ── Mission 16 (partie 4) : après un rendu du simulateur, l'espace client s'ouvre et son lien revient au site, qui
+    //    l'AFFICHE (rien n'est envoyé) — à un contact neuf, ou au même parcours, jamais à un contact déjà connu.
+    //    Seulement quand le site le demande (`afficherLienEspace`, formulaire après un rendu) : ni l'ancien site ni la
+    //    demande après un échec de génération n'ouvrent l'espace. Au-delà de deux projets en cours, c'est Lucas qui
+    //    ouvre : lien null. ──
+    const espace: EspaceALEnvoi | null = data.source === "SITE_SIMULATEUR" && parsed.data.afficherLienEspace === true ? await ouvrirEspaceALEnvoi(lead.id, { rappel: !!rappelLe, nouveau: isNew, parcoursId: data.parcoursId }) : null;
+    // Le rappel demandé : sur le dossier s'il en a un (à l'heure exacte), sinon « À rappeler » ; agenda et notification suivent.
+    if (rappelLe) await suivreLeRappel(lead.id);
+    const dossierIdFinal = espace?.dossierId ?? ouverture?.dossierId ?? null;
     // La simulation vient d'être rattachée : la classe (Prioritaire d'office, sauf hors zone) est relue pour le push.
     const classeFinale = aSimule ? ((await prisma.lead.findUnique({ where: { id: lead.id }, select: { priorite: true, prioriteMotif: true } })) ?? null) : null;
 
     // Accusé de réception au visiteur (site seulement, jamais Meta) : ce que nous
     // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
     // vérifié (EMAIL_FROM) : sans lui, rien ne part et on le journalise.
-    if (data.source.startsWith("SITE_") && data.email && (isNew || data.source === "SITE_DEVIS" || simulationsRattachees.length > 0)) {
+    if (data.source.startsWith("SITE_") && data.email && (isNew || demandeDeDevis || simulationsRattachees.length > 0)) {
       if (!process.env.EMAIL_FROM || !process.env.RESEND_API_KEY) {
         console.warn("[webhook] accusé de réception non envoyé : EMAIL_FROM ou RESEND_API_KEY absente");
       } else {
@@ -407,10 +473,10 @@ export async function POST(request: NextRequest) {
 
     // Notification email au gérant :
     // - tout NOUVEAU lead (peu importe la source)
-    // - OU TOUTE demande de devis, même d'un client déjà en base (un client
-    //   qui redemande un devis est très chaud → à ne jamais rater).
-    const isDevis = data.source === "SITE_DEVIS";
-    if (isNew || isDevis) {
+    // - OU TOUTE demande écrite sur le site (devis, pro, contact), même d'un client déjà en base (un client
+    //   qui redemande un devis est très chaud → à ne jamais rater ; un client qui écrit attend une réponse).
+    const isDevis = demandeDeDevis;
+    if (isNew || demandeEcrite) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";
@@ -418,14 +484,15 @@ export async function POST(request: NextRequest) {
           SITE_SIMULATEUR: "Simulation IA",
           SITE_DEVIS: "Demande de devis",
           SITE_CONTACT: "Formulaire contact",
+          SITE_PRO: "Site (pro)",
           META_ADS: "Meta Ads",
         };
         await resend.emails.send({
           from: process.env.EMAIL_FROM || "CoverSwap <onboarding@resend.dev>",
           to: process.env.LEAD_NOTIFICATION_EMAIL || "contact@coverswap.fr",
           subject: isDevis
-            ? `🔥 Demande de devis${!isNew ? " (client existant)" : ""} — ${data.prenom} ${data.nom}`
-            : `🔔 Nouveau lead ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
+            ? `🔥 Demande de devis${data.source === "SITE_PRO" ? " pro" : ""}${!isNew ? " (client existant)" : ""} — ${data.prenom} ${data.nom}`
+            : `🔔 ${isNew ? "Nouveau lead" : "Nouveau message (client existant)"} ${sourceLabel[data.source] || data.source} — ${data.prenom} ${data.nom}`,
           html: `
             <h2>Nouveau lead reçu</h2>
             <table style="border-collapse:collapse;font-family:sans-serif;">
@@ -441,7 +508,7 @@ export async function POST(request: NextRequest) {
               <tr><td style="padding:4px 12px;font-weight:bold;">Mails commerciaux</td><td>${consentement === "ACCORDE" ? "accord donné" : consentement === "REFUSE" ? "case non cochée" : "non demandé"}</td></tr>
             </table>
             <br/>
-            <a href="${ouverture?.dossierId ? `${appUrl}/dossiers?dossier=${ouverture.dossierId}` : `${appUrl}/leads?lead=${lead.id}`}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
+            <a href="${dossierIdFinal ? `${appUrl}/dossiers?dossier=${dossierIdFinal}` : `${appUrl}/leads?lead=${lead.id}`}" style="display:inline-block;padding:10px 20px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;">Voir dans le CRM</a>
           `,
         });
       } catch (emailErr) {
@@ -452,11 +519,11 @@ export async function POST(request: NextRequest) {
     // Push : le téléphone sonne pour une demande du site comme pour un lead Meta (jamais bloquant).
     let notifications: { canal: string; ok: boolean }[] = [];
     // … et pour une simulation refaite par un lead déjà connu, même sans dossier (il se décide : c'est le moment d'appeler).
-    if (isNew || isDevis || ouverture?.cree || ((ouverture?.simulationsRangees ?? 0) > 0 && !avaitUnEspace) || (!ouverture && simulationsRattachees.length > 0)) {
+    if (isNew || demandeEcrite || ouverture?.cree || ((ouverture?.simulationsRangees ?? 0) > 0 && !avaitUnEspace) || (!ouverture && simulationsRattachees.length > 0)) {
       try {
         const resultats = await notifierDemandeDuSite({
           leadId: lead.id,
-          dossierId: ouverture?.dossierId ?? null,
+          dossierId: dossierIdFinal,
           prenom: data.prenom,
           nom: data.nom,
           telephone: data.telephone,
@@ -470,6 +537,7 @@ export async function POST(request: NextRequest) {
           message: data.message ?? null,
           priorite: classeFinale?.priorite ? { classe: classeFinale.priorite as Priorite, motif: classeFinale.prioriteMotif ?? "" } : qualification ? { classe: qualification.priorite as Priorite, motif: qualification.motif } : null,
           doublon: doublon?.motif ?? null,
+          rappel: rappelLe ? momentDuRappel(rappelLe, maintenant, "à") : null,
         });
         notifications = resultats.map((r) => ({ canal: r.canal, ok: r.ok }));
       } catch (erreurPush) {
@@ -477,11 +545,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    revalidatePath("/leads");
-    revalidatePath("/dossiers");
+    rafraichirLesEcrans();
 
     return NextResponse.json(
-      { success: true, leadId: lead.id, deduped: !isNew, consentement, photos: photosEcrites, simulations: simulationsRattachees.length, dossierId: ouverture?.dossierId ?? null, notifications },
+      {
+        success: true,
+        leadId: lead.id,
+        deduped: !isNew,
+        consentement,
+        photos: photosEcrites,
+        simulations: simulationsRattachees.length,
+        dossierId: dossierIdFinal,
+        notifications,
+        // Mission 16 (partie 4) : le lien de l'espace, que le site AFFICHE (null : pas d'espace ouvert par le site), et le rappel daté.
+        lienEspace: espace?.lien ?? null,
+        rappelLe: rappelLe?.toISOString() ?? null,
+      },
       { status: 200 }
     );
   } catch (error) {

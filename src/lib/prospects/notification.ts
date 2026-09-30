@@ -1,6 +1,6 @@
 import { alerter, type ResultatCanal } from "@/lib/alertes/canaux";
 import { LIBELLES_PRIORITE, type Priorite } from "./priorite";
-import { LIBELLES_TYPE_PROJET, libelleSourceLead } from "./constantes";
+import { LIBELLES_TYPE_PROJET, estDemandeDeDevis, libelleSourceLead } from "./constantes";
 import { pluriel } from "@/lib/commun/format";
 
 /**
@@ -28,17 +28,21 @@ export async function notifierDemandeDuSite(demande: {
   priorite?: { classe: Priorite; motif: string } | null;
   /** Doublon probable repéré à l'arrivée (même nom, même ville) : à fusionner d'un clic dans Leads. */
   doublon?: string | null;
+  /** Mission 16 (partie 4) : le rappel demandé sur le site, en mots (« demain à 10:00 »). */
+  rappel?: string | null;
 }): Promise<ResultatCanal[]> {
   const base = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
   const classe = demande.priorite?.classe ?? null;
-  const devis = demande.source === "SITE_DEVIS";
+  // Mission 16 (partie 4) : la règle commune (formulaire de /devis, de /pro, ou de /contact avec un projet).
+  const devis = estDemandeDeDevis(demande);
   const prenom = demande.prenom && demande.prenom !== "Inconnu" ? demande.prenom : demande.nom;
-  const quoi = demande.simulations > 0 ? "Simulation sur le site" : devis ? "Demande de devis" : libelleSourceLead(demande.source);
+  const quoi = demande.simulations > 0 ? "Simulation sur le site" : demande.source === "SITE_PRO" ? "Demande de devis pro" : devis ? "Demande de devis" : libelleSourceLead(demande.source);
   const lignes = [
     `${demande.prenom !== "Inconnu" ? demande.prenom : ""} ${demande.nom !== "Inconnu" ? demande.nom : ""}`.trim() || "Contact sans nom",
     demande.telephone ? `📞 ${demande.telephone}` : "Téléphone non communiqué",
     `Projet : ${LIBELLES_TYPE_PROJET[demande.typeProjet] ?? demande.typeProjet}${demande.ville ? ` · ${demande.ville}` : ""}`,
     demande.priorite ? `${LIBELLES_PRIORITE[demande.priorite.classe].toUpperCase()} — ${demande.priorite.motif}` : null,
+    demande.rappel ? `Rappel demandé : ${demande.rappel}` : null,
     demande.simulations > 0 ? `${pluriel(demande.simulations, "simulation")} — ${demande.dossierId ? "dossier ouvert, photos rangées" : "à retrouver sur sa fiche"}` : null,
     demande.photos > 0 ? `${pluriel(demande.photos, "photo jointe", "photos jointes")}` : null,
     demande.campagne ? `Campagne : ${demande.campagne}` : null,

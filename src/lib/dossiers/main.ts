@@ -175,6 +175,9 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
       return client ? { qui: "MOI", motif: "Message du client dans son espace" } : null;
     case "ESPACE_NOUVEAU_PROJET":
       return client ? { qui: "MOI", motif: "Nouveau projet ouvert par le client" } : null;
+    // Mission 16 (partie 4) : il a laissé ses coordonnées sur le site après une simulation (« Nous vous rappelons »).
+    case "ESPACE_DEMANDE_SITE":
+      return client ? { qui: "MOI", motif: "Demande du site : le rappeler" } : null;
     case "SMS_RECU":
       return { qui: "MOI", motif: "SMS du client reçu" };
     case "MAIL_RECU":
@@ -213,6 +216,7 @@ export const TYPES_MAIN = [
   "ESPACE_ACCORD_RETIRE",
   "ESPACE_MESSAGE",
   "ESPACE_NOUVEAU_PROJET",
+  "ESPACE_DEMANDE_SITE",
   "SMS_RECU",
   "MAIL_RECU",
   "WHATSAPP_RECU",

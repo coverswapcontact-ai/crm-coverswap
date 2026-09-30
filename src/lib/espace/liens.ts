@@ -216,9 +216,12 @@ export async function confirmerTelephone(permanent: EspacePermanent, chiffres: s
 
 /* ── Ouvrir, révoquer, régénérer ─────────────────────────────────────── */
 
-/** Le dossier vivant d'un contact ; ouvert (avec tout ce qu'on sait de lui) s'il n'en a pas encore. */
-export async function dossierDuContact(leadId: string): Promise<string> {
-  return (await ouvrirDossierDuLead(leadId, { motif: "ESPACE", prochaineAction: "Attendre les photos du client" })).dossierId;
+/**
+ * Le dossier vivant d'un contact ; ouvert (avec tout ce qu'on sait de lui) s'il n'en a pas encore. `prochaineAction` :
+ * celle du dossier ouvert (mission 16 : « Rappeler » quand le visiteur a demandé un rappel sur le site).
+ */
+export async function dossierDuContact(leadId: string, prochaineAction = "Attendre les photos du client"): Promise<string> {
+  return (await ouvrirDossierDuLead(leadId, { motif: "ESPACE", prochaineAction })).dossierId;
 }
 
 export type EspaceOuvert = { espace: EspaceClient; permanent: EspacePermanent; lien: string; nouveau: boolean };
@@ -295,8 +298,8 @@ export async function ouvrirEspace(dossierId: string): Promise<EspaceOuvert> {
 }
 
 /** Depuis la fiche d'un contact : ouvre le dossier s'il le faut, puis l'espace. */
-export async function ouvrirEspaceDuContact(leadId: string): Promise<EspaceOuvert & { dossierId: string }> {
-  const dossierId = await dossierDuContact(leadId);
+export async function ouvrirEspaceDuContact(leadId: string, options: { prochaineAction?: string } = {}): Promise<EspaceOuvert & { dossierId: string }> {
+  const dossierId = await dossierDuContact(leadId, options.prochaineAction);
   return { ...(await ouvrirEspace(dossierId)), dossierId };
 }
 

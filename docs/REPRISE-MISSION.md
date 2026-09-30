@@ -4475,3 +4475,289 @@ appel à Google, aucun serveur ni build lancé.
   pièces en photos « Ambiance », trois faits, huit matières, trois études étiquetées avec la fourchette d'`offre.ts`,
   étapes, confiance sans avis (Google non connecté : bloc absent), dernier appel avec WhatsApp en second ; le bouton
   collé apparaît après l'ouverture et s'efface sur le dernier appel ; rien ne déborde.
+
+## Mission 16, partie 4 — Le tunnel : estimation, coordonnées, espace ouvert, rappel, WhatsApp, /pro, /contact (30/09)
+
+Énoncé § 4 (4.1 à 4.4), § 8 (aucun envoi automatique nouveau). Après le rendu, le simulateur montre une estimation
+(taille choisie en un geste, tarifs du CRM), demande prénom et téléphone (e-mail facultatif), propose un rappel à un
+créneau, et affiche le lien de l'espace client que le CRM vient d'ouvrir — rien n'est envoyé par le site. `/pro` devient
+une page de devis pro (références « Ambiance », formulaire photos + surface, source `SITE_PRO`) ; `/contact` passe en une
+colonne (`SITE_CONTACT`) ; `/devis` → 301 `/simulateur`, `/prestations/professionnel` → 301 `/pro`. Aucun appel
+OpenAI, aucune image générée, aucun serveur ni build lancé.
+
+### CRM (à déployer AVANT le site : colonnes du lead, webhook, route des tarifs, liste blanche des événements)
+- **`prisma/schema.prisma`** : `Lead.canal`, `pageEntree`, `estimationMin Int?`, `estimationMax Int?`, `formatPiece`
+  (nullables : `db push` compatible au démarrage) ; `npx prisma generate` fait.
+- **`GET /api/site/tarifs`** (`src/app/api/site/tarifs/route.ts`, `src/lib/site/tarifs-publics.ts`) : `{ version: 1,
+  familles: [{ id, sousParties: [{ id, libelle, metrage, prixUnitaire|null, unite }], formats: [{ id, libelle, aide,
+  metres }] }] }` depuis `tarifsDesPrestations()` (tarif attribué ou trouvé par mots-clés ; prix nul, négatif ou
+  illisible → `null`) et les repères de taille : cuisine `une-rangee` « Petite » ≈ 3 m, `en-l` « Moyenne » ≈ 5 m, `ilot`
+  « Grande » ≈ 8 m (aide « En L, ≈ 5 m ») ; salle de bain ses deux repères ; mobilier (taille en portes) et pro (sans
+  repère) : aucun format. Jamais une désignation, un identifiant de tarif, une marge. `force-dynamic` + `Cache-Control:
+  public, max-age=3600, s-maxage=3600`, CORS `*`, 120 appels / IP / 10 min ; erreur de base → la même forme sans prix
+  (`no-store`). Déclarée dans `routes-publiques.ts` (+ test).
+- **Webhook** (`src/app/api/webhook/route.ts`, 572 lignes) : zod étendu, chaque nouveau champ en `.catch(undefined)`
+  (une valeur illisible est ignorée, jamais une raison de perdre le lead) : `rappelCreneau` (`ce-soir-18h` |
+  `demain-10h` | `demain-18h`), `estimationMin` / `estimationMax` (entiers, gardés seulement dans l'ordre),
+  `formatPiece` (≤ 40), `canal` (≤ 60), `pageEntree` (≤ 200) coupés, `surfaceM2` (→ note « Surface approximative :
+  40 m² ») et `surfaceMl` (→ `mlEstimes`). `SITE_PRO` : score 40, statut « Devis demandé » d'un lead existant, mail
+  au gérant comme une demande de devis (« Demande de devis pro »), libellé « Site (pro) ». Lead existant : la dernière
+  estimation remplace l'ancienne, canal et page d'entrée seulement s'ils manquaient, un rappel demandé remplace
+  l'ancien. La note du lead ajoute « Estimation vue sur le site : 1 500 à 1 900 € (taille : …) », « Rappel demandé :
+  demain à 10:00 », « Arrivé par meta/paid, sur /prestations/cuisine » (`complementsDeLaDemande`). Réponse : +
+  `lienEspace` (ou null), `rappelLe` (ISO), `dossierId` de l'espace. `revalidatePath` devenu non bloquant
+  (`rafraichirLesEcrans`) : un 500 après l'écriture ferait renvoyer la demande (et il rend le webhook testable).
+- **Rappel** : `rappelDuCreneau(creneau, maintenant)` (`src/lib/commercial/quand.ts`, heure de Paris) — « ce soir »
+  = aujourd'hui 18:00 avant 17:30, sinon demain 18:00 ; demain 10:00 ; demain 18:00 ; samedi ou dimanche → lundi même
+  heure. `suivreLeRappel` (`src/lib/site/tunnel.ts`), hors transaction : dossier vivant → `rappelALOuverture` (mission
+  14 : le rappel passe sur le dossier, à l'heure exacte), sinon `synchroniserRappel({ type: "LEAD" })` → « À rappeler »,
+  événement Google Agenda et notification 10 min avant (tâches `AGENDA_RAPPEL`, `RAPPEL_NOTIFICATION`). Push de la
+  demande : ligne « Rappel demandé : demain à 10:00 » (`notifierDemandeDuSite`, option `rappel`).
+- **Espace ouvert à l'envoi** (`ouvrirEspaceALEnvoi`, `src/lib/site/tunnel.ts`) : `SITE_SIMULATEUR` avec une
+  simulation imagée ou une photo, ET le drapeau `afficherLienEspace: true` que seul le formulaire après un rendu envoie
+  (zod, facultatif : ni l'ancien site ni la demande après un échec de génération n'ouvrent l'espace — le webhook est
+  neutre pour eux) → `ouvrirEspaceDuContact(leadId, { prochaineAction })` (option ajoutée dans
+  `src/lib/espace/liens.ts` : « Rappeler » si un rappel est demandé — le rappel passe alors sur le dossier —, sinon
+  « Appeler : simulation faite sur le site »), sous l'acteur `SYSTEME:site-tunnel`. Refus avant toute ouverture : au-delà
+  de deux projets en cours (`peutOuvrirUnProjet`, rien n'est noté à la place de Lucas) ou lien du client désactivé →
+  `lienEspace: null`. **Le lien n'est rendu qu'à un contact NEUF** (aucune autre fiche, archivées comprises, ni dossier,
+  ni espace avant la demande) **ou au même parcours qui l'a déjà reçu** (idempotent) ; à un contact déjà connu, l'espace
+  est ouvert mais le lien n'est pas affiché. Un événement de dossier **`ESPACE_DEMANDE_SITE`** (entrant, metadata
+  `{ parcoursId, lienAffiche }`, libellé « Demande laissée sur le site ») le dit et rend la main à Lucas (« Demande du
+  site : le rappeler », `dossiers/main.ts`, `TYPES_MAIN`) ; quand le lien est affiché, l'événement rappelle que le
+  téléphone n'est pas vérifié (`AVERTISSEMENT_TELEPHONE_NON_VERIFIE` : si la personne jointe n'a pas fait la simulation,
+  « Nouveau lien » avant tout devis). `dossierVivant` exporté de `dossiers/depuis-lead.ts`.
+  Aucun mail ni SMS : seul l'accusé SMS existant part (nouveau contact, heures ouvrées).
+- **Événements** (`src/lib/site/evenements.ts`) : `ESTIMATION_VUE` « Estimations vues », `RAPPEL_DEMANDE` « Rappels
+  demandés » ; `ETAPES_ENTONNOIR` en sept étapes : visite (`PAGE_VUE`) → pièce → photo → génération → rendu vu →
+  estimation vue → « Contact ou rappel » (`DEVIS_DEMANDE` | `CONTACT_ENVOYE` | `RAPPEL_DEMANDE`) ; `calculerEntonnoir`
+  pur et emboîté, l'estimation étant une étape `facultative` (comptée parmi les rendus vus, sans abandons ; le contact
+  se compte parmi les rendus vus : une demande sans taille choisie n'est plus un « abandon »). `SurLeSite` l'affiche
+  entre parenthèses, en gris.
+- **Sources** : `SITE_PRO` dans `SOURCES_LEAD` (« Site : devis pro »), `SOURCES_CLIENT` (« Site : demande de devis
+  pro », famille « Site internet »), `sourceDepuisLead`.
+- **Demande de devis : une seule règle** (`src/lib/prospects/constantes.ts` : `SOURCES_DEMANDE_DE_DEVIS`,
+  `estDemandeDeDevis({ source, typeProjet })`, `FILTRE_DEMANDE_DE_DEVIS`) : `SITE_DEVIS` (ancien, encore lu), `SITE_PRO`,
+  et `SITE_CONTACT` quand le formulaire de /contact porte un projet (« Autre » = un simple message). Lue par le webhook
+  (statut « Devis demandé » d'un lead existant, accusé, mail au gérant), `qualification.ts` (Prioritaire « a demandé
+  un devis de lui-même » ; `typeProjet` ajouté à la sélection), `intentionDuLead` (pastille « Devis demandé »),
+  `notification.ts` et le point du jour (`point-du-jour.ts`, compteur « demandes de devis »). Un message de /contact
+  d'un contact DÉJÀ connu prévient Lucas (mail « Nouveau message (client existant) » et push) : alertes internes
+  seulement, aucun envoi nouveau au client.
+- **Doublons** (`src/lib/prospects/doublons.ts › nomNormalise`) : chaque mot une fois — le simulateur ne demande que le
+  prénom, recopié en nom (« Marie Marie ») ; dédoublé, c'est un prénom seul, jamais un doublon probable.
+- `docs/ARCHITECTURE-PILOTAGE.md` : puce « Tunnel du site » (drapeau, règle des demandes de devis, entonnoir,
+  doublons). `src/proxy.ts` : garde locale, non touchée.
+
+### Site
+- **Après le rendu** (`src/app/simulateur/_components/`) : `DemandeApresRendu.tsx` (sous les films de
+  `EcranResultat`) = `Estimation.tsx` (« Quelle taille ? » seulement si la taille change le chiffre
+  (`estimationCalculable`) : formats en boutons ≥ 44 px, une colonne par format (deux pour la salle de bain),
+  `aria-pressed`, plan vu de dessus `PlanCuisine` pour la cuisine, `DessinFamille` sinon ; puis « Estimation : 1 500 à 1 900 € » et « Déplacement
+  compris. Le devis exact suit vos photos. » ; sans format : la fourchette de la pièce ou « Prix sur devis », tout de
+  suite), formulaire « Recevoir mon devis » (UN bouton principal), `Rappel.tsx` (« Être rappelé », trois créneaux,
+  facultatif), `BoutonWhatsApp` en secondaire (`depuis: simulateur-resultat`, message « Bonjour, je viens de simuler
+  ma cuisine (façades K1 Black Mat, plan de travail MK15 Travertin) sur coverswap.fr. », jamais le lien de l'espace),
+  téléphone en lien (cible de 44 px) ; après
+  l'envoi `EspacePret.tsx` (« Votre espace est prêt », lien en clair, « Ouvrir mon espace », « Copier le lien »,
+  « Lucas vous appelle demain à 10 h. » ou « Nous vous rappelons pour finaliser. », WhatsApp en lien discret ; sans
+  lien : « Demande bien reçue »). `Simulateur.tsx` (591 lignes) : prop `tarifs` (page : `chargerTarifs()` avec les
+  zones), `ESTIMATION_VUE` une fois par simulation (réarmée par « Nouvelle simulation », comme les étapes de
+  l'entonnoir), « Nouvelle simulation » garde la ville et le code postal du parcours,
+  `RAPPEL_DEMANDE` après l'envoi, phrase du rappel d'après le `rappelLe` du CRM (sinon le même calcul local),
+  ville / code postal gardés dans la mémoire du parcours après un envoi, `?ref=` lu au montage.
+- **Coordonnées** (`Formulaires.tsx › ChampsContact`) : « Prénom * », téléphone *, e-mail « (facultatif) » (exigé pour
+  la demande « par e-mail » après un échec : `emailRequis`), ville et code postal seulement s'ils ne sont pas connus
+  (`avecVille`), consentement ; plus de message libre (`Formulaire.message` retiré).
+- **Libs** : `src/lib/estimation.ts` (`estimer`, `estimationCalculable`, `FAMILLE_DU_PROJET`, `ZONE_VERS_SOUS_PARTIE`, `repliDeLaFamille`,
+  `formatsDeLaFamille`, `texteEstimation`, `estimationPourEnvoi`, `PRECISION_ESTIMATION`) ; `src/lib/tarifs-site.ts`
+  (`chargerTarifs` : `revalidate` 3600, 5 s au plus, null si erreur, silence ou forme illisible ; `tarifsLisibles`) ;
+  `src/lib/rappel.ts` (`creneauxRappel`, `rappelDuCreneau` — mêmes règles que le CRM —, `libelleRappel`,
+  `phraseRappel`) ; `src/lib/simulateur/demande.ts` (`corpsDemandeSimulation`) ; `src/lib/simulateur/matiere-demandee.ts`
+  (`lireRefDemandee`, `appliquerMatiereDemandee`) + hook `useMatiereDemandee.ts` ; `src/lib/photos-formulaire.ts`
+  (`reduirePhoto`, `photosARetenir`, extraits de `DevisForm`) + composant `src/components/ChampPhotos.tsx` (zone photos
+  commune à /contact et /pro) ; `whatsapp.ts › messageWhatsAppSimulation` (pièce et films, sans lien) ;
+  `src/lib/offre-legere.ts` (l'offre sans le catalogue, réexportée par `offre.ts` : les composants clients — formulaires
+  de /pro et /contact, simulateur, `estimation.ts` — n'embarquent plus `revetements.json`) ;
+  `src/components/BlocsPrestation.tsx` (surfaces, atouts, étapes numérotées, phrase du tarif, FAQ : dessinés une fois,
+  rendus par `ContenuPrestation`, /pro et /comment-ca-marche) ; `Turnstile › actif` (rien ne se charge avant le premier
+  geste, place réservée) ; `reprise.ts` : `EtatSimulateur.ville`,
+  `codePostal`, `refDemandee` ; `evenements-site.ts` : `ESTIMATION_VUE`, `RAPPEL_DEMANDE` ; `crm.ts` : `SITE_PRO`,
+  champs du tunnel, `lienEspace` / `rappelLe` lus dans la réponse, `resolveSource` (déplacé ici, testé), mail de
+  secours avec rappel, estimation, surface, arrivée.
+- **`POST /api/simulation/contact`** : validation pure `validation.ts › validerContactSimulation` (sans bibliothèque),
+  e-mail facultatif, `rappelCreneau` parmi les trois, fourchette entière et ordonnée, `afficherLienEspace` gardé
+  seulement s'il vaut `true` sans échec (transmis au CRM) ; Turnstile, pot de miel et
+  `maxDuration` 30 inchangés ; réponse + `lienEspace`, `rappelLe`.
+- **`POST /api/contact`** : `resolveSource` de `lib/crm` (« coverswap.fr/contact » → `SITE_CONTACT`, `SITE_PRO` explicite,
+  rien → `SITE_CONTACT`) ; transmet `canal` et `pageEntree` ; pro : type de projet PRO, société et type de lieu en note,
+  surface en `surfaceM2` ou `surfaceMl`.
+- **`/pro`** (`src/app/pro/page.tsx`, `contenu.ts`, `_components/FormulairePro.tsx`) : « Vos espaces professionnels,
+  rénovés sans fermer. », une ligne courte (`LIGNE_PRO`, tirée de l'accroche), « Demander un devis pro » → `#devis-pro` ; trois `Photo` « Ambiance »
+  (`pro-hotel`, `pro-restaurant`, `pro-commerce`, `alt` décrivant l'image) ; trois arguments ; formulaire (prénom et nom,
+  société facultative, téléphone, e-mail, ville, type de lieu, surface m² | mètres linéaires, projet, photos ≤ 4,
+  consentement, Turnstile au premier geste, pot de miel ; champ surface de 128 px au plus (`max-w-32`) ; confirmation
+  en `titre-2` ; `DEVIS_DEMANDE { formulaire: pro }`) ; « Le covering pour les professionnels, en détail » : TOUS les
+  textes de l'ancienne `/prestations/professionnel` (accroche entière, intro, surfaces, atouts, déroulement, prix, FAQ,
+  avec `BlocsPrestation`) et leur balisage (`Service` avec l'offre sur `/pro#devis-pro`, `FAQPage`, `HowTo`, fil d'Ariane), lien vers les
+  films pour vitrages.
+- **`/contact`** : une colonne, « Écrivez-nous », téléphone (horaires) et e-mail d'`ENTREPRISE`, `DevisForm`
+  (`SITE_CONTACT`), `#espace` « Votre espace client » avec la phrase de la conception. Open Graph : `og-image.jpg`.
+  Confirmation du formulaire sans pastille verte : « Message envoyé » — « Nous vous répondons sous 48 h. » ; Turnstile au
+  premier geste.
+- **Redirections** (`next.config.ts`) : `/devis` → `/simulateur`, `/prestations/professionnel` → `/pro` (permanentes).
+  `src/app/devis/page.tsx` supprimée ; « professionnel » retirée de `generateStaticParams` de `/prestations/[slug]`.
+  Liens réécrits : `lienPrestation(slug)` (`data/prestations.ts` : « professionnel » → `/pro`) dans `ContenuPrestation`,
+  `/prestations`, `sitemap.ts`, `llms.txt` ; « Demander un devis » → `/contact` (`ContenuPrestation` par défaut,
+  `/realisations`, `/prestations`) ; zones → `/pro` ; `ServiceSchema` : offre par défaut sur `/simulateur`, et, sur une page
+  de prestation, l'offre suit son bouton principal (`/simulateur?projet=<pièce>`, ou `/contact` pour les vitrages). Sitemap : `/devis`
+  et `/prestations/professionnel` retirées, `/pro` ajoutée ; `llms.txt` : simulateur, /pro, contact.
+- **Textes retirés de `/devis` et `/contact` : repris DANS CETTE PARTIE** (règle « aucun texte SEO retiré sans reprise ») :
+  `src/app/comment-ca-marche/devis-en-ligne.ts` → section `#devis` de /comment-ca-marche « Votre devis covering en
+  ligne, gratuit » (présentation, trois étapes, quatre avantages, lien « Demandez votre devis gratuit » → /contact,
+  mots-clés de /devis dans ses métadonnées) ; métadonnées de /simulateur (cible de la 301) : « devis covering en
+  ligne, gratuit et sans engagement » dans la description (la phrase d'avant gardée), mots-clés de /devis.
+- `docs/SUIVI.md` : événements (`ESTIMATION_VUE`, `RAPPEL_DEMANDE`, `DEVIS_DEMANDE` pro, WhatsApp après le rendu),
+  entonnoir en sept étapes, champs envoyés au CRM, § 9 « Le tunnel après le rendu ».
+
+### Décisions
+- **`/api/site/tarifs` en `force-dynamic`, pas `force-static` : écart à la conception.** Une route `force-static` est
+  rendue au build ; celle-ci lit la base, que le build de Railway n'a pas (volume monté au démarrage) : le build aurait
+  échoué, ou figé des prix vides. Cache tenu par l'en-tête (1 h) et par le site (`revalidate` 3600).
+- **Formats : ceux du CRM, pas toujours trois.** Cuisine : trois des quatre repères (En U laissé) ; salle de bain : ses
+  deux repères ; mobilier (taille comptée en portes) et pro (aucun repère) : aucun format → la fourchette de la pièce
+  (« Meubles : dès 250 € », pro « Prix sur devis ») tout de suite. Rien n'est inventé côté site.
+- **L'estimation ne cache jamais une partie du projet** : calculée seulement si CHAQUE zone du rendu est chiffrable par
+  la longueur (façades, meuble vasque, comptoir, mobilier…) avec un prix au mètre linéaire ; un plan de travail, une
+  crédence ou un tablier choisis → la fourchette de la pièce d'`offre.ts` (qui couvre la pièce entière). Aucun tarif en
+  `forfait` / `jour` n'est multiplié par des mètres. Fourchette : total arrondi à la centaine, ± 12 %, au moins 100 €
+  d'écart.
+- **« Quelle taille ? » seulement si la taille change le chiffre** (`estimationCalculable`) : un plan de travail, une
+  crédence, un tablier choisis, ou un tarif absent → la fourchette de la pièce tout de suite, sans geste pour rien.
+- **`ESTIMATION_VUE`** quand une estimation s'affiche (taille choisie, ou pièce sans format), une fois par SIMULATION
+  (« Nouvelle simulation » la réarme, comme l'émetteur de l'entonnoir réarme les autres étapes ; l'entonnoir du CRM compte
+  des parcours distincts) ; hors de l'émetteur (un réf dans le simulateur) pour ne pas changer `ORDRE_ENTONNOIR`.
+- **Estimation = étape facultative de l'entonnoir** (CRM) : sans cela, une demande envoyée sans taille choisie comptait
+  comme un abandon à l'estimation et manquait au contact.
+- **Espace ouvert par le site seulement sur demande explicite (`afficherLienEspace`)** : le CRM écrivait « lien
+  affiché » pour la demande après un échec (la photo suffisait à ouvrir l'espace, l'écran n'en montre pas) et pour
+  l'ancien site (CRM déployé d'abord). Après un échec, rien ne change donc (texte « par e-mail », pas d'espace).
+- **Téléphone non vérifié** : le lien affiché est celui de l'espace PERMANENT, rattaché par un numéro que le visiteur a
+  tapé ; si ce n'était pas le sien, tout ce qui rejoindrait ce client lui serait visible. Choix : le dossier le dit à
+  Lucas (événement), qui vérifie à l'appel (« Appeler : simulation faite sur le site ») et régénère le lien au moindre
+  doute. Une régénération automatique au premier envoi du lien par Lucas toucherait tous les chemins d'envoi (mail,
+  SMS copié, assistant) : laissée à la décision de Lucas.
+- **Lien de l'espace affiché seulement à un contact neuf ou au même parcours : ajout à la conception (sécurité).**
+  Sans cela, quiconque connaît le téléphone ou l'e-mail d'un client ouvrait son espace (projets, devis, adresse) depuis
+  le site. Un contact connu voit « Demande bien reçue » ; Lucas l'appelle et envoie le lien (`envoyer_lien_espace`).
+- **Chaque demande du simulateur avec rendu ouvre un dossier** (Qualification) : l'espace est attaché à un dossier —
+  écart assumé à la règle du 22/09 (« une simulation n'ouvre plus de dossier »), exigé par l'énoncé § 4.2. Le contact
+  quitte « À appeler » pour Dossiers ; prochaine action « Appeler : simulation faite sur le site » ou « Rappeler » daté ;
+  main à Lucas (`ESPACE_DEMANDE_SITE`), sinon l'ouverture de l'espace l'aurait donnée au client (« Espace ouvert : en
+  attente du client »).
+- **Le rappel suit le dossier** quand l'espace s'ouvre (règle de la mission 14) : « À rappeler » pour un lead sans
+  dossier, prochaine action datée du dossier sinon — la conception disait « le lead entre dans À rappeler ». Cas limite :
+  un dossier vivant qui a déjà une autre prochaine action garde la sienne ; le rappel reste sur le lead, en sommeil, et
+  la note du lead et le push le disent.
+- **Créneaux côté site** : codes envoyés, jamais d'heure ; deux codes au même instant (samedi, ou après 17 h 30) → un
+  seul bouton ; la phrase de confirmation lit le `rappelLe` renvoyé par le CRM.
+- **Validation de `/api/simulation/contact` écrite à la main** : le site n'a pas zod en dépendance (seulement transitive) ;
+  aucune dépendance ajoutée.
+- **Coordonnées** : ville et code postal restent exigés quand ils s'affichent (le code postal classe le lead) ; message
+  libre retiré (Lucas rappelle). Formulaire pro : société facultative, e-mail exigé (devis écrit).
+- **Argument « Résistant »** : « Film conçu pour l'usage intensif, nettoyage courant. » plutôt que « classé usage
+  intensif » (aucun classement sourcé ; la FAQ pro dit « conçus pour les locaux recevant du public »).
+- **Matière présélectionnée** : posée sur la PREMIÈRE zone de la pièce (l'ordre du CRM met les façades d'abord), même si
+  elle avait déjà une matière (choix exprès), puis oubliée ; référence absente du catalogue → oubliée.
+- **`/devis` supprimée** (la 301 la rend inatteignable) ; ses textes sont repris sur /comment-ca-marche (section `#devis`)
+  et dans les métadonnées de /simulateur, dès cette partie.
+- **WhatsApp après l'envoi** en lien discret (le bloc a déjà « Ouvrir mon espace » et « Copier le lien »).
+- **WhatsApp sans le lien de l'espace : écart à la conception (sécurité).** Le lien est un accès porteur (90 jours sans
+  confirmation) : dans `wa.me/…?text=`, il partait en clair dans une adresse (serveurs de wa.me, historique du
+  navigateur). Lucas retrouve l'espace par le numéro qui écrit.
+- **/contact compte comme une demande de devis quand un projet est choisi** : tous les boutons « Demander un devis » y
+  mènent ; avant cette partie, le site l'envoyait en `SITE_DEVIS`. « Autre » reste un message, mais un contact connu
+  qui écrit prévient quand même Lucas.
+- **Doublons côté CRM** (mots dédoublés dans `nomNormalise`) plutôt que `nom: "Inconnu"` côté site : `splitName` sert
+  aussi /contact, et le CRM protège tous les chemins.
+- **Blocs de prestation partagés** : les atouts de /pro passent en deux colonnes sur téléphone (le dessin des pages de
+  prestation), les titres des cartes en `h4` sous les `h3` d'« en détail ».
+
+### Vérifié
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 18 fichiers touchés 0 ; **`src/lib/base/mission-16-partie-4.test.ts`
+  13/13** (tarifs : forme, rien d'interne, trois formats, 110 €/ml des tarifs de départ, crédence null, tarif attribué
+  lu, sans prix, prix nul / négatif / NaN → null, route publique ; `rappelDuCreneau` : 17:29 / 17:30, demain 10 h et
+  18 h, vendredi → lundi, samedi, dimanche, hiver ; webhook : rappel sans simulation → `rappelLe` juste, actif « À
+  rappeler », tâches `AGENDA_RAPPEL` et `RAPPEL_NOTIFICATION`, note ; `SITE_SIMULATEUR` avec simulation → espace
+  ouvert, rendu dans l'espace, lien `https://coverswap.fr/e/…`, rappel à l'heure exacte sur le dossier, estimation /
+  format / canal / page d'entrée sur le lead, second envoi même parcours → même lien, un seul projet, dernière
+  estimation, événement `ESPACE_DEMANDE_SITE`, main « Demande du site : le rappeler » ; même téléphone depuis un autre
+  navigateur → pas de lien ; client connu (fiche archivée) → pas de lien ; troisième projet → pas de lien, rien
+  d'accordé ; `SITE_PRO` score + 5 sur `SITE_CONTACT`, libellé, surface m² et ml ; valeurs illisibles ignorées ;
+  `complementsDeLaDemande` ; `ESTIMATION_VUE` / `RAPPEL_DEMANDE` acceptés par la route, entonnoir en sept étapes, ligne
+  « Rappels demandés ») — `fetch` remplacé : aucune requête réseau, aucun SMS ; `mission-15-partie-4` mis à jour
+  (entonnoir à sept étapes, visite en tête) ; **suite complète `npm test` 810/810**.
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 hors le cache `.next/types/validator.ts` et
+  `.next/dev/types/validator.ts` (ils citent `src/app/devis/page.js`, supprimée : le build les régénère) ; `npm test`
+  **173/173** (40 nouveaux) : `src/lib/estimation.test.ts` 9/9 (cuisine moyenne deux zones → 1 500 à 1 900 €, arrondi,
+  ± 12 %, zone non chiffrable → repli, petite surface, replis, meubles « dès 250 € », pro et murs sur devis, jamais NaN,
+  envoi, table des zones complète), `src/lib/rappel.test.ts` 7/7 (mercredi, 17 h 45, vendredi, samedi, dimanche,
+  changement d'heure, mêmes instants que le CRM, phrases), `src/app/api/simulation/contact/validation.test.ts` 5/5,
+  `src/redirections.test.ts` 4/4 (paires permanentes, `/devis` supprimée, « professionnel » plus générée, aucun lien
+  interne vers une adresse redirigée — motif vérifié sur les formes d'avant —, sitemap), `src/lib/tunnel.test.ts` 15/15
+  (sources, WhatsApp, corps de la demande, câblage du simulateur, `?ref=`, mémoire, tarifs lus / repli, photos, écrans
+  rendus : un seul bouton principal, champs réduits, espace affiché sans aucun envoi, /pro rendue avec tous les textes
+  de l'ancienne page et trois « Ambiance », /contact) ; `reprise.test.ts` mis à jour (état v2 + trois champs).
+- Pas lancé (orchestrateur) : serveur, build, Lighthouse, captures 390 × 660.
+- **Corrections après relecture (trois relecteurs, 23 constats)** — CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les
+  11 fichiers touchés 0 ; `mission-16-partie-4.test.ts` **17/17** (nouveaux : sans drapeau — ancien site, demande après
+  échec — aucun espace ni « lien affiché » ; l'événement rappelle le téléphone non vérifié ; `SITE_PRO` Prioritaire,
+  intention « Devis », point du jour à 3 (deux /pro, un /contact avec projet, pas « Autre ») ; contact connu par
+  /contact : push, puis statut « Devis demandé » et Prioritaire avec un projet ; deux « Marie » de la même ville : pas de
+  doublon ; entonnoir : estimation facultative) ; tests des modules liés 194/194 ; **suite complète `npm test` 814/814**.
+  Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 hors le cache `.next/types/validator.ts` et
+  `.next/dev/types/validator.ts` ; `npm test` **179/179** (nouveaux : `estimationCalculable`, `afficherLienEspace` dans la
+  validation et le corps, WhatsApp sans lien, colonnes par format, téléphone 44 px, Turnstile au premier geste,
+  `offre-legere`, blocs partagés, offre du `Service` des vitrages sur /contact, textes de /devis repris,
+  « Nouvelle simulation » garde la ville).
+
+### Reste / à savoir
+- **Ordre de déploiement : CRM d'abord** (colonnes, webhook, `/api/site/tarifs`, événements). Avant lui : le webhook
+  d'avant ignore les nouveaux champs (le lead passe, sans lien d'espace : « Demande bien reçue »), `/api/site/tarifs`
+  répond 404 (estimation sur les fourchettes d'`offre.ts`), `ESTIMATION_VUE` / `RAPPEL_DEMANDE` refusés (400, ignorés).
+  Le CRM seul, avec l'ancien site : aucun espace ouvert par le site (pas de drapeau), rien d'autre ne change.
+- **Lucas — lien régénéré au premier envoi ?** Le lien affiché sur le site n'est vérifié par personne ; aujourd'hui le
+  dossier le signale. Régénérer d'office l'espace au premier envoi du lien par Lucas (mail, SMS, assistant) serait plus
+  sûr, mais couperait le lien que le visiteur a gardé : à trancher.
+- **Lucas — tarifs** : l'estimation lit ses tarifs. Avec les tarifs de départ (ceux d'une base neuve, à vérifier en
+  production), seules les façades de cuisine sont chiffrées (110 €/ml « cuisine / façades ») : Moyenne ≈ 1 000 à 1 200 €, Grande ≈ 1 500 à 2 000 € pour les façades
+  seules ; salle de bain, mobilier, pro → fourchettes d'`offre.ts`. Attribuer un tarif à chaque sous-partie « au
+  métrage » (Dossiers → Tarifs, ou `modifier_tarifs`) : facades-hautes, facades-basses, meuble-vasque, comptoir…
+- **Lucas — « Déplacement compris »** (énoncé) contre la FAQ générale (« frais de déplacement éventuels écrits dans le
+  devis », hors zone) : à accorder (phrase limitée à la zone, ou FAQ).
+- **Lucas — dossiers ouverts par le site** : chaque demande après un rendu arrive dans Dossiers (Qualification, main à
+  Lucas, « Appeler : simulation faite sur le site » ou « Rappeler » daté), plus dans « À appeler ».
+- **Orchestrateur** : capture `etape-simulation` du nouvel écran Résultat (estimation visible) → `npm run images` (la
+  partie 3 bascule alors l'étape 2 de l'accueil sur « Vous voyez le rendu et l'estimation »). À regarder à 390 × 660 :
+  boutons de taille (trois colonnes, deux en salle de bain), créneaux, « Votre espace est prêt » (lien long qui passe
+  à la ligne), /pro (ouverture courte, références, formulaire, champ surface et bouton d'unité sur une ligne), /contact,
+  la section `#devis` de /comment-ca-marche ; Lighthouse de /pro (Turnstile au premier geste) ; `/devis` et `/prestations/professionnel`
+  en 308 après déploiement (le script `scripts/verifier-redirections.mjs` est de la partie 5).
+- Partie 5 : en réécrivant /comment-ca-marche, garder (ou déplacer, jamais effacer) la section `#devis` et
+  `devis-en-ligne.ts` ; `/prestations` (index) garde son lien
+  « Envoyer mes photos » vers `/contact` jusqu'à sa 301 ; les pages par pièce gardent « Demander un devis » →
+  `/contact` ; `/matieres` doit mener à `/simulateur?ref=<ref>` (déjà lu par le simulateur).
+
+### Vérifié par l'orchestrateur (30/09)
+- CRM 814/814 + build ; site lint, 179/179, build ; 0 appel ntfy réel. Essai de bout en bout sur la pile d'essai à
+  390 × 660 : simulation → écran Résultat avec « Combien ça coûte ? » (fourchette cuisine d'`offre.ts`, faute de tarif
+  attribué dans la base d'essai), coordonnées réduites (prénom, téléphone, e-mail facultatif), créneaux de rappel →
+  « Demande bien reçue · Lucas vous appelle demain à 10 h ». Dans le CRM d'essai : lead SITE_SIMULATEUR (estimation
+  1 200-3 500 €, page d'entrée), dossier ouvert (prochaine action « Rappeler »), espace ouvert, événement
+  `ESPACE_DEMANDE_SITE` « lien affiché ». En essai le site n'affiche pas « Votre espace est prêt » : il n'accepte que
+  des liens `https://` et le CRM d'essai en fabrique en `http://localhost` (en production : `https://coverswap.fr/e/…`)
+  — à regarder sur la première vraie demande.
+- Capture `etape-simulation` (étape 2 de « Comment ça marche ») : écran Résultat du simulateur sur l'image d'ambiance
+  de l'ouverture avec le rendu du moteur, composée sur fond clair ; test de l'accueil aligné (l'estimation est annoncée).
+- Piège : une photo de dossier client avait servi de photo d'essai ; retirée du dossier du site, jamais commitée
+  (vérifié dans l'historique). Règle : essais du site public avec les images d'ambiance seulement.

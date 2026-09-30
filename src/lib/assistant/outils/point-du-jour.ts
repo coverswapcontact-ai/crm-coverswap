@@ -7,7 +7,7 @@ import { debutDuJourParis } from "@/lib/dossiers/dates";
 import { resumeDuJour } from "@/lib/agenda/resume";
 import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
-import { libelleSourceLead } from "@/lib/prospects/constantes";
+import { FILTRE_DEMANDE_DE_DEVIS, libelleSourceLead } from "@/lib/prospects/constantes";
 import { rappelsDesLeads } from "@/lib/prospects/leads";
 import { definirOutil, format, lien } from "../definition";
 import { etatCampagne, santeSysteme } from "./lecture";
@@ -46,7 +46,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     prisma.lead.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true, priorite: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.simulationEspace.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, source: true, statut: true, createdAt: true, dossierId: true }, take: 50 }),
     prisma.simulationSite.count({ where: { createdAt: { gte: depuis } } }),
-    prisma.lead.count({ where: { createdAt: { gte: depuis }, archiveLe: null, source: "SITE_DEVIS" } }),
+    // Mission 16 (partie 4) : la règle commune des demandes de devis (le site n'émet plus SITE_DEVIS).
+    prisma.lead.count({ where: { createdAt: { gte: depuis }, archiveLe: null, ...FILTRE_DEMANDE_DE_DEVIS } }),
     prisma.accordDevis.findMany({ where: { createdAt: { gte: depuis }, retireLe: null }, select: { id: true, documentId: true, totalHt: true, numeroDevis: true, nomSignataire: true, createdAt: true, dossier: { select: { id: true, clientNom: true } } }, take: 50 }),
     prisma.encaissement.findMany({ where: { createdAt: { gte: depuis }, statut: "VALIDE" }, select: { id: true, montant: true, moyen: true, payeur: true, recuLe: true, dossier: { select: { id: true, clientNom: true } } }, take: 50 }),
     prisma.dossier.findMany({ where: { createdAt: { gte: depuis }, source: "ESPACE_CLIENT", archiveLe: null }, select: { id: true, clientNom: true, objet: true, createdAt: true }, take: 50 }),

@@ -47,7 +47,6 @@ const NOMS: Record<string, { nom: string; pluriel: boolean }> = {
   coutParSigne: { nom: "le coût par chantier signé", pluriel: false },
   coutParLeadMeta: { nom: "le coût par lead Meta", pluriel: false },
 };
-const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /**
  * « Sur les 30 derniers jours, les leads montent : 18 contre 12 sur la période d'avant, +50 % (CRM). » — relecture B

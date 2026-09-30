@@ -137,6 +137,6 @@ export async function synchroniserFicheGoogle(periode: { depuis?: string; jusqua
         lignes += 1;
       }
     }
-    return { lignes, appels, detail: { emplacement, avis } };
+    return { lignes, appels, detail: { emplacement, avis, premierPassage } };
   });
 }

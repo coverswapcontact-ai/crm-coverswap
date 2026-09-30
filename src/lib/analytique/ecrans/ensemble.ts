@@ -5,7 +5,7 @@ import { visitesDuSite } from "../appuis";
 import { carnetDeCommandes, comptesDesLeads, coutPar, depensePubDeLaPeriode, detailDepensePub, devisDeLaPeriode, encaissementsDeLaPeriode, leadsDeLaPeriode, leadsMeta as filtrerLeadsMeta, PLAFOND_PUB, signesMeta as filtrerSignesMeta, toutesLesSignatures, totalEncaisse, type DepensePub, type LeadAnalyse } from "../calculs";
 import { bornes, decalerMois, dernierJourDuMoisDe, joursDe, periodePrecedente } from "../periode";
 import { COULEURS_FAMILLE, FAMILLES, LIBELLES_FAMILLE, type EcranEnsemble, type EtatSource, type Famille, type LigneSource, type Periode, type ResumeDuJour } from "../types";
-import { arrondi2, chiffresDisponibles, compterDans, etatDe, indicateur, jourEntame, ratio, serieParJour } from "./commun";
+import { chiffresDisponibles, compterDans, etatDe, indicateur, jourEntame, ratio, serieParJour } from "./commun";
 import { calculerPublicite, campagneAnalytique, verdictsDeLaCampagne } from "./publicite";
 import { chiffresFiche, chiffresSeo, vuesFicheParMois } from "./seo";
 import { simulationsDuSite } from "./site";

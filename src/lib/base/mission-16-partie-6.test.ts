@@ -256,7 +256,7 @@ describe("en base : entonnoirSite, syntheseSite, outils de l'assistant", () => {
     assert.deepEqual(brutes.map((b) => b.source), ["meta/paid", "meta/paid", "meta/paid", "google.com", "meta/paid", "meta/paid"]);
 
     // La synthèse de la période porte le même entonnoir (instantané version 5).
-    const jour = new Date().toISOString().slice(0, 10);
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date()); // jour de Paris (la synthèse lit des jours de Paris)
     const synthese = await evenements.syntheseSite(jour, jour);
     assert.ok(synthese.entonnoir?.parFamille);
     assert.equal(synthese.entonnoir.parFamille.meta[4].parcours, 1);

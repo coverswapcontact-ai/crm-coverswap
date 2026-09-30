@@ -69,7 +69,7 @@ describe("simulations du site avant coordonnées", () => {
 
 describe("événements du site", () => {
   test("synthèse : parcours, entonnoir, par source et par page", async () => {
-    const jour = new Date().toISOString().slice(0, 10);
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date()); // jour de Paris (la synthèse lit des jours de Paris)
     const envoyer = (parcoursId: string, type: (typeof evenements.TYPES_EVENEMENT_SITE)[number], page: string, source?: string) =>
       evenements.enregistrerEvenementSite({ parcoursId, type, page, source: source ?? null });
     await envoyer("p1", "PAGE_VUE", "/", "instagram");

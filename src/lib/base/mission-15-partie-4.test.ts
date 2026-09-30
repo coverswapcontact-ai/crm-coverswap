@@ -367,7 +367,7 @@ describe("événements du site — l'entonnoir du simulateur", () => {
   });
 
   test("entonnoirSite lit la base sur la période ; la synthèse compte GENERATION_LANCEE et RESULTAT_VU comme les anciens", async () => {
-    const jour = new Date().toISOString().slice(0, 10);
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date()); // jour de Paris (la synthèse lit des jours de Paris)
     const p = parcours();
     // Mission 16 (partie 4) : l'entonnoir commence à la visite (PAGE_VUE).
     for (const type of ["PAGE_VUE", "PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU"] as const) await evenements.enregistrerEvenementSite({ parcoursId: p, type, page: "/simulateur", source: "meta" });

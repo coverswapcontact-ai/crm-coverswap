@@ -4761,3 +4761,273 @@ OpenAI, aucune image générée, aucun serveur ni build lancé.
   de l'ouverture avec le rendu du moteur, composée sur fond clair ; test de l'accueil aligné (l'estimation est annoncée).
 - Piège : une photo de dossier client avait servi de photo d'essai ; retirée du dossier du site, jamais commitée
   (vérifié dans l'historique). Règle : essais du site public avec les images d'ambiance seulement.
+
+## Mission 16, partie 5 — Les autres pages, les redirections, le SEO (30/09)
+
+Énoncé § 2 (architecture : six pages, chaque adresse retirée → 301), § 5 (autres pages), § 7 (SEO). `/matieres` devient
+la page « choisir et essayer » (catalogue rebâti sur les composants du simulateur, matière en grand, « Essayer sur ma
+photo »), `/realisations` et les pages par pièce « se projeter puis simuler », `/comment-ca-marche` porte le procédé,
+le prix et les objections ; `/revetements`, `/prestations` et `/blog` passent en 301 ; métadonnées, balisage, sitemap,
+robots et llms.txt alignés. Le CRM n'est pas touché. Aucun appel OpenAI, aucune image générée, aucun serveur ni build
+lancé.
+
+### CRM
+- Rien (aucun lien du CRM vers une adresse retirée : `grep coverswap.fr/(revetements|blog|prestations|devis)` vide ;
+  les mails pointent déjà `/e/…`). `src/proxy.ts` : garde locale, non touchée.
+
+### Site
+- **`/matieres`** (`src/app/matieres/page.tsx`, `_components/Matieres.tsx`, règles pures `src/lib/matieres.ts`) :
+  surtitre « Catalogue Cover Styl' », `titre-1` « Choisissez votre matière », intro d'UNE phrase (« 497 références
+  Cover Styl'. Touchez une matière pour la voir en grand. », deux lignes au plus à 390 px). Familles en pastilles
+  collées sous l'en-tête, barre d'un bord à l'autre (`-mx-4`, groupe défilant `px-4` : l'anneau de focus des pastilles
+  du bout n'est pas rogné) (`choixFamilles` : « Tout » + `FAMILLES`, comptées dans le catalogue) + « Favoris (n) » ;
+  recherche en français (`filtrerMatieres`) ; favoris du simulateur (`useFavoris`, `BoutonFavori` 44 px sur chaque
+  tuile) ; tuiles, cœur et recherche en `scroll-mt-[140px]` (atteints au clavier, ils s'arrêtent sous l'en-tête et la
+  barre collée) ; état de la liste en règles pures (`etatListeMatieres` : premier lot, squelette, échec, compte,
+  « Voir plus ») ; squelette `SqueletteTuiles grand` à la grille des vraies tuiles (`GRILLE_TUILES_GRANDES`) ; tuiles `TuileFilm taille="grand"` (vignette
+  320 px du CRM, famille, nom · réf.) en 3 colonnes / 5 à partir de 768 px ; « Voir plus (n) » par lots de 30. Le
+  serveur rend les 30 premières (référencement) ; le catalogue entier arrive après l'hydratation (`chargerCatalogue`,
+  import dynamique, déplacé de `FeuilleCatalogue` dans `lib/matieres` : UNE copie en mémoire pour la page et la feuille
+  du simulateur, que `FeuilleCatalogue` réexporte). Une tuile ouvre la matière EN GRAND : `PleinEcran modale` + `ZoomImage`
+  sur l'échantillon entier (`urlEchantillon`, `/api/site/echantillons/<ref>` sans `l`), pied clair : nom, « Réf. K1 ·
+  Couleurs », `Lien` principal « Essayer sur ma photo » → `/simulateur?ref=<ref>` (par `useLiensDeFeuille` : la
+  navigation part une fois le plein écran fermé et son entrée d'historique rendue), favori en secondaire ; en modal :
+  page verrouillée derrière, molette qui ne fait que zoomer, focus au bouton « Fermer » à l'ouverture, Tab et Maj+Tab
+  gardés dans le dialogue, focus rendu à la tuile à la fermeture. Adresse lue sans `useSearchParams`
+  (`useSyncExternalStore` sur `location.search`) → `lireAdresseMatieres` : `?famille=` inconnue → « Tout » ; `?ref=`
+  inconnu → rien d'ouvert ; `?ref=` connu → ouvert UNE fois, sa famille filtre (sauf `?famille=` explicite).
+  Métadonnées : « Matières Cover Styl' : bois, marbre, béton, couleurs — 497 références | CoverSwap », description
+  (« … Bois, pierre, béton, métal, couleur, textile, paillettes. … ») et mots-clés de /revetements. Supprimés : `src/app/revetements/page.tsx`, `CatalogueClient.tsx`, `ImageReference.tsx`
+  (plus aucun appelant).
+- **`PleinEcran`** : options `libelle` (nom du dialogue), `pied` (bandeau clair sous l'image, zone sûre) et `modale`
+  (page verrouillée par `verrouillerLaPage` / `liberer`, désormais exportés de `Feuille.tsx` ; focus au bouton
+  « Fermer » ; `garderLeFocus` : Tab et Maj+Tab tournent dans le dialogue ; `ZoomImage retenirMolette` : écouteur de
+  molette posé à la main, NON passif — React pose « wheel » en passif, où `preventDefault` ne peut rien) ; le simulateur
+  et l'espace ne les passent pas (rendu et comportement inchangés). **Catalogue** : `simulation/ElementsCatalogue.tsx`
+  (`BoutonFavori`, `CHAMP_RECHERCHE`) et `lib/matieres › filtrerMatieres`, `messageAucuneMatiere` servent la page ET
+  `FeuilleCatalogue` (plus de filtre, de cœur, de champ ni de message recopiés ; la feuille garde son « d'un
+  échantillon »). **`CartesPieces`** : option `liens` (pièce →
+  adresse) : chaque carte devient un lien (même dessin, même photo) ; sans elle, les boutons de choix (simulateur,
+  accueil, espace inchangés).
+- **`/realisations`** (`src/app/realisations/page.tsx`, `revalidate` 300 ; `components/Realisations.tsx` fondu dedans et
+  supprimé) : h1 « Ce que ça donne ». Description par `generateMetadata` (même `chargerPublications`, en cache) :
+  « photos après chantier publiées avec l'accord des clients[, et leurs avis] » seulement s'il y a des réalisations
+  publiées, sinon « des exemples simulés, étiquetés comme tels, et les prix par projet » (l'Open Graph et la carte de
+  partage suivent) ; titre inchangé. Réalisations publiées → sous un h2 masqué « Nos chantiers » (plan h1 › h2 › h3
+  des cartes), une `CarteRealisation` chacune (avant / après en WebP du
+  CRM, matières → `/matieres?ref=`, prix et durée publiés sinon habituels libellés, ville) puis « Simuler ma pièce » ;
+  sinon « Les premières réalisations arrivent » (texte d'avant, Instagram) + les trois études SIMULÉES de l'accueil
+  (`choisirEtudes([])`, `CarteSimulee` exportée de `RealisationsAccueil`) + « Simuler ma pièce ». Avis publiés : leur
+  section. En bas, « Ce que nous recouvrons » : les cinq pièces du simulateur (`CartesPieces liens`, photos
+  `piece-*`) → `lienPiece` (`data/prestations.ts`) : `/prestations/cuisine`, `/salle-de-bain`, `/meubles`, `/pro`,
+  murs et plafond → `/simulateur?projet=mur-plafond` ; les textes de l'ancien index /prestations (présentation, tarif,
+  « Un doute sur ce qui est possible chez vous ? » → /contact, films pour vitrages).
+- **Pages par pièce** (`ContenuPrestation.tsx` réécrit, `/prestations/[slug]/page.tsx` : `revalidate` 300, fil
+  d'Ariane Accueil › Réalisations › pièce) : ouverture = surtitre, `titreCourt` (7 mots au plus, champ ajouté à
+  `data/prestations.ts` : « Rénover sa cuisine sans la casser », « Une salle de bain rénovée, sans casse », « Un meuble
+  relooké, sans poncer ni peindre », « Habiller un vitrage, sans changer le verre »), accroche, bouton de la pièce
+  (`libelleSimuler` : « Simuler ma cuisine » / « ma salle de bain » / « mes meubles » → `/simulateur?projet=<pièce>`),
+  « Demander un devis » (/contact) en secondaire, l'ambiance `piece-*` étiquetée « Ambiance » (`priorite`, `alt` de
+  `ALT_PIECES`, `lib/images-pieces.ts`). Puis : présentation (l'ancien h1 en h2 quand il diffère + les paragraphes),
+  surfaces + atouts, étude de cas (`etudeDeLaPiece`, `accueil/etudes.ts` : la réalisation publiée du même type avec
+  photo après, sinon la simulation du moteur pour la cuisine, sinon rien), déroulement, « Combien ça coûte »
+  (fourchette d'`offre.ts`, « Estimer sur ma photo » → simulateur), FAQ, autres prestations, dernier appel ; fonds
+  alternés avec ou sans étude. Balisage inchangé (`Service` avec l'offre sur le bouton principal, `FAQPage`, `HowTo`,
+  `BreadcrumbList`). Vitrages : pas d'image ni d'étude, « Demander un devis » en principal.
+- **`/comment-ca-marche`** (`page.tsx` réécrit, textes dans `contenu.ts`) : ouverture (l'ouverture provisoire et « Pas
+  de travaux » de l'ancien accueil) ; `CommentCaMarche` de l'accueil (trois étapes avec image, « Simuler ma cuisine » ;
+  nouvelle prop `note` : « Pendant le rendu, vous pouvez quitter la page… ») ; « Le prix » `#prix` (mesure au mètre
+  linéaire, `PRIX_EXPLICATION`, ce qui est compris, TVA + devis valable `VALIDITE_DEVIS_JOURS` j + acompte
+  `ACOMPTE_POURCENT` %, tableau des `FOURCHETTES`, « Estimer sur ma photo ») ; « Vos questions » `#objections` : six
+  objections (durabilité, entretien, garantie, chaleur et eau, cuisine neuve, location), une ligne et deux phrases au
+  plus ; la garantie, la chaleur et l'eau, la location LISENT leur réponse dans `FAQ_GENERALE` (`FAQ_GARANTIE`,
+  `FAQ_EAU_CHALEUR`, `FAQ_RETRAIT`, exportées de `data/faq.ts` : une seule source) ; puis la FAQ générale repliée
+  `#faq` SANS ces trois (`FAQ_RESTANTE`) — UN `FAQPage` (`QUESTIONS_BALISEES`), chaque question une fois ; le devis en ligne `#devis` (textes de
+  /devis, partie 4) ; « Pour aller plus loin » `#guides` (tous les guides + films pour vitrages ; intro de l'ancien
+  index /blog) ; dernier appel. `SectionsCommentCaMarche.tsx` supprimé (plus d'appelant).
+- **Guides** (`/blog/[slug]`) : fil d'Ariane visible et balisé Accueil › Comment ça marche, « Comment ça marche » et
+  « Voir tous les guides » → `/comment-ca-marche#guides` ; `ArticleSchema` gardé. Illustration : `<img>` avec
+  `srcSet={fondSrcSet(...)}` (800 / 1600 px déjà dans `public/images/fonds/`), `sizes` à la largeur réelle du cadre
+  (`TAILLES_ILLUSTRATION`), `fetchPriority="high"` (premier écran d'un téléphone) — au lieu de `next/image`, qui, en
+  `unoptimized`, ne servait que le 1600 px (jusqu'à 245 Ko). `/blog/page.tsx` et `BlogClient.tsx` supprimés.
+- **Zones** : `/zones/[slug]` — `ZoneLocalBusinessSchema` retiré (une seconde fiche `LocalBusiness` par ville, nom et
+  coordonnées de centre-ville) → `ServiceSchema` avec `zone` (`areaServed` : `{ City, ville }`, `provider` : `@id` de
+  l'entreprise ; nouvelle option de `ServiceSchema`) ; « Simuler ma cuisine » en principal (ouverture et dernier appel),
+  « 1 journée » / « 10 ans » lus dans `offre.ts` ; textes locaux inchangés. `/zones` : « Simuler ma cuisine » en
+  principal, « Demander un devis pour ma ville » en secondaire.
+- **Métadonnées** : `src/lib/metadonnees.ts › metadonneesPage({ titre, description, chemin, image? })` → titre absolu,
+  description ≤ 160 (`couperDescription` : fin de phrase, sinon dernier mot + « … »), canonical absolu, Open Graph
+  complet (`og-image.jpg` clair, `siteName`, `fr_FR`), carte de partage — sur TOUTES les pages publiques (accueil,
+  simulateur, matières, réalisations, comment ça marche, pro, contact, zones + 8, pièces, guides, 3 légales). Fil
+  d'Ariane balisé ajouté aux 3 pages légales. `/desinscription` : Open Graph propre (non indexée). `LocalBusiness`
+  (`JsonLd.tsx`) : garantie lue dans `offre.ts`.
+- **Redirections** (`next.config.ts`, permanentes) : + `/revetements` → `/matieres`, `/prestations` → `/realisations`,
+  `/blog` → `/comment-ca-marche` (les sous-pages `/blog/<guide>` et `/prestations/<pièce>` gardent leur adresse ; la
+  requête `?famille=` passe). **`scripts/verifier-redirections.mjs`** (sonde en ligne : HEAD sans suivre, `SITE=`,
+  attend 301/308 + `location`, dont `/revetements?famille=bois` → `/matieres?famille=bois`, code de sortie 1 sinon).
+- **`sitemap.ts`** : `/`, `/simulateur`, `/matieres`, `/realisations`, `/comment-ca-marche`, `/pro`, `/contact`,
+  `/zones` + 8, 3 pages par pièce + vitrages, les guides, 3 légales ; `LAST_BUILD` 2026-09-30 ; plus `/devis`, `/blog`,
+  `/prestations`, `/revetements`, `/prestations/professionnel`. **`robots.ts`** : `disallow` `/api/`, `/e/`,
+  `/desinscription`. **`llms.txt`** réécrit (parcours, pages par pièce, familles et nombres du catalogue, guides, zones,
+  contact et espace client).
+- `docs/SUIVI.md` § 10 « Les autres pages, les redirections, le SEO » (et § 7 : fonds des pages par pièce).
+
+### Les 301 (liste complète, `next.config.ts`)
+- `/simulation` → `/simulateur` (existante) ; `/blog/tendances-deco-2025-covering` → `/blog/quelle-finition-choisir`
+  (existante) ; `/devis` → `/simulateur` (partie 4) ; `/prestations/professionnel` → `/pro` (partie 4) ;
+  `/revetements` → `/matieres` ; `/prestations` → `/realisations` ; `/blog` → `/comment-ca-marche`.
+
+### Textes déplacés (d'où → vers où)
+- /revetements : description (avec « Bois, pierre, béton, métal, couleur, textile, paillettes »), mots-clés →
+  métadonnées de /matieres ; h1 « Catalogue Cover Styl' » → surtitre ; à l'écran, les familles sont les pastilles
+  (l'intro ne les énumère plus : deux lignes au plus).
+- /prestations (index) : présentation (« Un film adhésif Cover Styl' posé à chaud… sans trace. ») → intro de « Ce que
+  nous recouvrons » (/realisations) ; phrase du tarif et « Devis gratuit sous 48 h » → paragraphe dessous ; « Un doute
+  sur ce qui est possible chez vous ? Envoyez des photos… » + « Envoyer mes photos » → même section ; les cinq cartes
+  (h1, accroche, fourchette de chaque prestation) → les pages par pièce, qui les portaient déjà ; vitrages → lien.
+- /blog (index) : « Les vraies questions, les vraies réponses » + « Ce que coûte un covering, combien de temps il tient,
+  comment se passe la pose, quelle finition choisir, comment l'entretenir » → intro de `#guides` ; mots-clés →
+  métadonnées de /comment-ca-marche.
+- Ancien accueil (`textes-accueil-retires.md`) → /comment-ca-marche : ouverture provisoire (« Cuisine, salle de bain,
+  meubles, locaux professionnels : un film Cover Styl' posé sur vos surfaces existantes… réversible, garanti 10 ans ») et
+  « Pas de travaux » → ouverture ; « Un prix lisible » et « Des prix au mètre linéaire » (mesure, `PRIX_EXPLICATION`,
+  TVA, devis valable 30 jours, acompte 30 %, tableau « Ordres de grandeur… ») → `#prix` ; « Réversible et garanti » →
+  objections « garantie » et « location » ; habillage du module (« vous pouvez quitter la page, la simulation
+  continue ») → note sous les étapes ; FAQ → fondue dans les objections pour trois questions (garantie, eau et
+  chaleur, retrait → « location » : réponses lues telles quelles), le reste → `#faq`. Objection « durabilité »
+  réécrite depuis la conclusion du guide `covering-adhesif-durabilite` (elle recopiait la première phrase de la réponse
+  « eau et chaleur »).
+- `CommentCaSePasse` (étapes « Une photo / Un devis sous 48 h / Une journée de pose ») : remplacé par les trois étapes
+  avec image ; « teintes validées sur échantillons » → « Compris » du prix ; « finition par finition », « nettoyage,
+  pose à chaud, finitions vérifiées » restent dans le déroulement des pages par pièce.
+- Pages par pièce : l'ancien h1 (plus long que 7 mots) → titre de la présentation.
+
+### Décisions
+- **Étude de cas des pages par pièce : réelle, sinon la simulation de la cuisine, sinon RIEN** (salle de bain, meubles,
+  vitrages aujourd'hui). L'étude « simulée » de l'accueil pour la salle de bain et les meubles est l'image d'ambiance
+  `piece-*` — déjà l'ouverture de leur page : la montrer deux fois n'apprend rien. Emplacements en attente d'une vraie
+  réalisation. Vitrages (type `AUTRE` au CRM, qui range d'autres chantiers) : jamais d'étude rapprochée.
+- **Avis de /realisations : section à part** — `PublicationSite` ne relie pas un avis à une réalisation (« avis lié »
+  de la conception impossible sans colonne) ; rien d'ajouté au CRM.
+- **Cinq pièces de /realisations = celles du simulateur** (photos `piece-*`, libellés et zones du CRM, comme l'accueil)
+  ; murs et plafond n'ont pas de page → le simulateur sur cette pièce ; vitrages (pas de pièce au simulateur) → lien
+  texte.
+- **Chargement du catalogue déplacé dans `lib/matieres`** (réexporté par `FeuilleCatalogue`) : la page Matières n'embarque
+  pas la feuille du simulateur, et une seule copie en mémoire sert les deux.
+- **`/matieres` : pas de bouton principal au premier écran** — le geste est la tuile ; « Essayer sur ma photo » est le
+  bouton principal de la matière en grand. Famille affichée sur chaque tuile (libellé de `TuileFilm`).
+- **Avant l'arrivée du catalogue** : le premier lot du serveur pour « Tout » ; une autre famille ou une recherche
+  montre un squelette le temps de l'import ; en cas d'échec, le message d'échec (même sous le premier lot de « Tout » :
+  « Le reste du catalogue ne s'est pas chargé (30 matières affichées)… »), le compte des matières affichées et pas de
+  « Voir plus ».
+- **`PleinEcran` étendu (options), pas une nouvelle vue** ; le comportement modal (verrou de la page, focus, Tab gardé,
+  molette retenue) seulement quand `modale` : le plein écran du simulateur et de l'espace (`AvantApres`) ne change pas
+  (interdit de la mission) — il a le même défaut de page qui défile derrière, à généraliser si l'orchestrateur le
+  veut (passer `modale` depuis `AvantApres`). `ZoomImage retenirMolette` : seulement dans le plein écran modal (dans
+  la feuille du catalogue, la molette continue aussi de faire défiler la feuille).
+- **Objections et FAQ générale : une source** — les objections qui couvrent une question de la FAQ lisent SA réponse ;
+  les questions de la FAQ gardent leur formulation dans les réponses, pas comme titre (« Le covering résiste-t-il à
+  l'eau et à la chaleur ? » devient « Et la chaleur, l'eau ? » : une ligne).
+- **Titre de /realisations gardé** (« Réalisations et avis — … ») : seule la description suit ce qui est publié.
+- **Descriptions ≤ 160 caractères** : coupées par le helper à la fin d'une phrase (sinon au mot, « … ») ; les textes
+  entiers restent dans la page et le balisage (`descriptionSeo` dans `Service`). Réécrites pour tenir : /simulateur
+  (« Votre pièce avec une matière Cover Styl', sur votre photo, en environ 1 min 30. Puis un devis covering en ligne,
+  gratuit et sans engagement, sous 48 h. » ; la phrase « coordonnées demandées seulement… » reste dans la page, le test
+  de la partie 4 l'y cherche), /comment-ca-marche, pages de ville (sans « premium »). Open Graph = titre et description
+  de la page (les textes Open Graph propres de /contact, /zones, /blog d'avant ne sont plus distincts).
+- **Titre des guides gardé** (« … | Blog CoverSwap ») : aucune variation de titre sur des pages référencées.
+- **`Service` des villes sans `containedInPlace`** : l'ancien balisage mettait Nîmes dans l'Hérault ; la ville seule.
+- **`/prestations/[slug]` : `notFound()` pour « professionnel »** (la 301 passe avant ; filet si elle disparaissait).
+- **Neuf guides, pas sept** : la conception comptait 7 ; `data/blog-articles.ts` en a 9 — tous listés (sitemap, `#guides`,
+  llms.txt), rien n'est codé en dur.
+
+### Vérifié
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 hors le cache `.next/types/validator.ts` (il cite
+  `src/app/{blog,prestations,revetements}/page.js`, supprimées : le build le régénère) ; `npm test` **222/222** (179 →
+  222 : 43 nouveaux, 4 anciens réécrits ; 7 ajoutés par la relecture) :
+  - `src/redirections.test.ts` 8/8 (sept paires permanentes, aucune de plus sans test ; index exacts, sous-pages non
+    redirigées ; pages retirées absentes, remplaçantes présentes, `generateStaticParams` = cuisine, meubles, salle de
+    bain, vitrages ; composants retirés supprimés ; aucun lien interne vers une adresse redirigée — motif vérifié sur
+    les formes d'avant et sur les pages gardées ; sitemap ; la liste du script = `next.config.ts` ; sonde simulée :
+    301/308 + location → ok, 200 / mauvaise cible / réseau coupé → KO, aucune requête réseau) ;
+  - `src/lib/metadonnees.test.ts` 5/5 (canonical absolu, Open Graph complet, carte, image, coupe des descriptions ;
+    toutes les pages statiques et générées — /realisations (CRM simulé injoignable), pièces, 8 villes, 9 guides —
+    passent le contrôle ; aucune page n'écrit
+    `openGraph:` / `alternates:` à la main ; fil d'Ariane balisé partout sauf l'accueil) ;
+  - `src/app/sitemap.test.ts` 5/5 (aucune adresse redirigée ni privée, liste exacte, dates, robots, llms.txt) ;
+  - `src/lib/matieres.test.ts` 14/14 (`?ref` inconnu → rien d'ouvert, famille inconnue → « Tout », `constructor` refusé ;
+    `?ref=K1` → ouvert + « couleur » ; `?famille` prioritaire ; `lienEssayer` encodé ; familles comptées ; filtre famille
+    / favoris / « noyer » / « noir mat » ; catalogue chargé une fois et partagé ; page rendue : 30 tuiles, le 31e absent,
+    « Voir plus (467) », aucun principal, 3 / 5 colonnes, intro ≤ 84 caractères ; matière en grand : `PleinEcran`,
+    échantillon entier, « Essayer sur ma photo », `useLiensDeFeuille` ; `etatListeMatieres` : premier lot compté au
+    total, famille en attente, ÉCHEC sur « Tout » → message sous le premier lot, 30 comptées, pas de « Voir plus »,
+    échec sur une famille, comptes filtrés, messages vides (page et feuille) ; la feuille lit `filtrerMatieres`,
+    `messageAucuneMatiere`, `BoutonFavori`, `CHAMP_RECHERCHE` ; modal : `modale`, verrou, `retenirMolette`, écouteur
+    `{ passive: false }`, `garderLeFocus` (dernier → premier, premier → dernier, milieu libre, dehors → dedans) ;
+    `scroll-mt-[140px]` sur tuile, cœur et recherche, pastilles non rognées ; squelette `grand` = grille et hauteurs des
+    tuiles, squelette du simulateur inchangé) ;
+  - `src/app/autres-pages.test.ts` 15/15 (`fetch` remplacé : CRM simulé — /realisations sans et avec publications
+    (description honnête dans les deux cas, plan h1 › h2 › h3), cinq liens de pièces, textes de /prestations repris ; pages par pièce : titre ≤ 7 mots, ancien h1 gardé, deux
+    boutons principaux de la pièce, image `piece-*` seule prioritaire, balisage et fil ; vitrages ; `etudeDeLaPiece` ;
+    /comment-ca-marche : ordre des sections, deux « Simuler ma cuisine », prix et tableau, objections ≤ 2 phrases, les
+    trois reprises lisent la réponse de la FAQ, `FAQ_RESTANTE` sans elles, aucune phrase dite deux fois, chaque réponse
+    de la FAQ affichée une fois, un seul `FAQPage` sans nom en double, « film adhésif » une fois au plus, guides +
+    vitrages, textes de l'ancien accueil ; villes : plus de `LocalBusiness`, `Service` rattaché à `#entreprise`, Nîmes
+    comprise ; index des zones ; guides ; illustration des 9 guides en `srcset` 800 / 1600 + `sizes`, plus de
+    `next/image`) ;
+  - réécrits : `accueil.test.ts` (métadonnées de l'accueil par le helper ; lecture de `?ref` dans `Matieres` /
+    `lireAdresseMatieres` ; carte de /realisations dans la page), `tunnel.test.ts` (description du simulateur ≤ 160, la
+    phrase sur les coordonnées cherchée dans la page).
+- CRM : non touché (`git status` : `src/proxy.ts` seul, garde locale).
+- Pas lancé (orchestrateur) : serveur, build, Lighthouse, captures 390 × 660, sonde des redirections en ligne.
+
+### Relecture (3 relecteurs, 14 constats dont 3 doublons) — suite donnée
+- FAQ de /comment-ca-marche en double (3 constats, dont 1 « important ») : **corrigé** (objections qui lisent la FAQ,
+  `FAQ_RESTANTE`, `QUESTIONS_BALISEES` sans nom en double, test réécrit).
+- Étude de cas salle de bain / meubles absente : **écarté** — écart assumé et motivé (même image que l'ouverture),
+  remonté à l'orchestrateur ci-dessous.
+- Description de /realisations qui promet des photos de chantier : **corrigé** (`generateMetadata`).
+- Échec du catalogue muet sur « Tout » (2 constats) : **corrigé** (`etatListeMatieres`).
+- Plein écran sans verrou, molette passive, focus qui s'échappe (« important ») : **corrigé** (`modale`).
+- Squelette à 3 colonnes (saut au chargement) : **corrigé** (`SqueletteTuiles grand`, `GRILLE_TUILES_GRANDES`).
+- Focus sous les barres collées, anneau des pastilles rogné : **corrigé** (`scroll-mt-[140px]`, `-mx-4` / `px-4`).
+- /realisations sans h2 au-dessus des h3 : **corrigé** (h2 `sr-only` « Nos chantiers »).
+- Filtre, cœur, champ, messages recopiés entre /matieres et `FeuilleCatalogue` : **corrigé** (`ElementsCatalogue.tsx`,
+  `filtrerMatieres`, `messageAucuneMatiere`).
+- Intro de /matieres sur 4 lignes : **corrigé** (une phrase de 70 caractères).
+- Illustration des guides en JPEG 1600 px seul : **corrigé** (srcset 800 / 1600) ; le passage par
+  `preparer-images.mjs` (AVIF / WebP) n'est pas fait : il ajouterait 9 originaux Unsplash au manifeste des images
+  préparées (tests `images-depot` / `images-manifeste`) — à trancher avec le sort des fonds Unsplash.
+
+### Reste / à savoir
+- **Orchestrateur, après déploiement** : `node scripts/verifier-redirections.mjs` (8 sondes, 308 attendues). Au build,
+  le cache `.next/types/validator.ts` se régénère (erreurs tsc de cache disparues).
+- **À regarder à 390 × 660** : /matieres (première rangée de tuiles dans le premier écran avec l'intro d'une phrase,
+  pastilles collées sous l'en-tête d'un bord à l'autre, tuiles à 3 colonnes ≈ 111 px avec le cœur, noms tronqués,
+  matière en grand : pied clair + bouton, page immobile derrière — molette, doigt sur le bandeau —, retour du
+  téléphone qui ferme et rend la page à la même position, Tab qui reste dans le dialogue, « Essayer sur ma photo » qui
+  arrive au simulateur avec la matière posée ; `?famille=bois` : le squelette puis les tuiles sans saut) ; `/matieres?ref=K1` et `?famille=bois` depuis l'accueil ;
+  `/revetements?famille=bois` → `/matieres?famille=bois` ; /realisations (études simulées, cinq cartes-liens) ; pages
+  par pièce (ouverture : texte puis image carrée, LCP) ; /comment-ca-marche (tableau des prix, objections) ; zones.
+- **Orchestrateur — étude de cas salle de bain et meubles** : écart à la conception § 2 (« sinon simulée étiquetée »)
+  maintenu : leur seule image « simulée » est l'ambiance `piece-*`, déjà l'ouverture de la page (même image, même
+  fourchette que « Combien ça coûte ») ; à valider, sinon brancher `etudeAmbiance` dans `etudeDeLaPiece` (une ligne).
+- **Orchestrateur — plein écran du simulateur, de l'espace, de l'accueil** (`AvantApres` → `PleinEcran` sans `modale`) :
+  la page derrière défile encore à la molette, Tab en sort ; corriger = passer `modale` (touche le simulateur, donc
+  pas fait ici).
+- **Lucas — vraies réalisations** : dès qu'une réalisation est publiée (écran Site du CRM, photo après, type de projet),
+  elle prend la carte de /realisations, l'étude de cas de sa page par pièce et (avec l'avant) l'ouverture de l'accueil.
+  Emplacements en attente : étude de cas salle de bain, meubles, vitrages ; cinq photos de pièces (ambiances).
+- **Lucas — fonds des pages par pièce** : les photos Unsplash de `fond` (`data/prestations.ts`) ne s'affichent plus ;
+  elles restent dans le dépôt (citées par les données) — à retirer avec les images si Lucas le veut.
+- **Espace client, mails du CRM** : inchangés (déjà `/e/…`) ; le pied mène à `/contact#espace`.
+
+### Vérifié par l'orchestrateur (30/09)
+- Site lint, 222/222, build. Essai à 390 × 660 : /matieres, /comment-ca-marche, /realisations, /prestations/cuisine,
+  rien ne déborde. Retouches : intro de /comment-ca-marche ramenée à trois lignes (phrase de l'ancien accueil gardée
+  pour le référencement, « pas de démontage… » passé sous les étapes) ; « prix constatés » → « prix habituels » (ce
+  sont les fourchettes d'`offre.ts`, pas des prix relevés).
+- Écart validé : pas d'étude de cas sur les pages salle de bain et meubles tant qu'aucune réalisation n'est publiée
+  (la seule image possible est déjà l'ouverture de la page).
+- Site `d5d2f9d` (Vercel 15:50 UTC) ; `SITE=https://coverswap.fr node scripts/verifier-redirections.mjs` : 8/8 en 308 ;
+  /matieres, /realisations, /comment-ca-marche, /pro, pages par pièce, zones, guides et sitemap en 200.

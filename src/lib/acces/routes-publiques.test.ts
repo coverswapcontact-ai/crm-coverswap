@@ -37,6 +37,7 @@ describe("routes publiques", () => {
       "/api/webhook/autre",
       "/api/healthcheck",
       "/api/simulate/autre",
+      "/api/site/echantillons",
       "/auth/signin/../../dossiers",
     ]) {
       assert.equal(estRoutePublique(chemin), false, chemin);
@@ -56,6 +57,8 @@ describe("routes publiques", () => {
       "/api/simulate/image",
       "/api/simulate/prevenir",
       "/api/simulate/analyse",
+      "/api/simulate/photo",
+      "/api/site/echantillons/NE31",
       "/api/site/simulateur",
       "/manifest-crm.webmanifest",
       "/sw.js",

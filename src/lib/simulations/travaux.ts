@@ -48,8 +48,9 @@ export type EntreeTravail = {
   parcoursId: string;
   projet: string;
   references: ReferenceSimulee[];
-  prompt: string;
-  swatchUrls: string[];
+  /** Mission 15 (partie 4) : le site n'envoie plus de prompt — null, et le moteur construit la consigne (V1 revu ou V2). */
+  prompt?: string | null;
+  swatchUrls?: string[];
   photoBase64: string;
   page?: string | null;
   source?: string | null;
@@ -123,8 +124,8 @@ export async function creerTravailSimulation(entree: EntreeTravail): Promise<{ t
       parcoursId: entree.parcoursId,
       projet: entree.projet.slice(0, 40),
       references: JSON.stringify(entree.references.slice(0, 5)),
-      promptTexte: entree.prompt,
-      swatchUrls: JSON.stringify(entree.swatchUrls),
+      promptTexte: entree.prompt ?? null,
+      swatchUrls: JSON.stringify(entree.swatchUrls ?? []),
       page: entree.page?.slice(0, 200) ?? null,
       source: entree.source?.slice(0, 120) ?? null,
       campagne: entree.campagne?.slice(0, 120) ?? null,

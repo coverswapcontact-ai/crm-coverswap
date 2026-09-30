@@ -81,7 +81,9 @@ describe("événements du site", () => {
     await envoyer("p3", "PAGE_VUE", "/");
     const s = await evenements.syntheseSite(jour, jour);
     assert.equal(s.parcours, 3);
-    assert.equal(s.parType.find((l) => l.cle === "SIMULATION_LANCEE")?.valeur, 2);
+    // Les anciens noms sont rangés sous les nouveaux (mission 15, partie 4).
+    assert.equal(s.parType.find((l) => l.cle === "GENERATION_LANCEE")?.valeur, 2);
+    assert.equal(s.parType.some((l) => l.cle === "SIMULATION_LANCEE"), false);
     assert.equal(s.tauxCompletionSimulateur, 50);
     assert.equal(s.tauxDevisApresResultat, 100);
     assert.deepEqual(s.parSource.map((l) => [l.cle, l.parcours, l.simulations, l.devis]), [["direct", 2, 1, 0], ["instagram", 1, 1, 1]]);

@@ -25,6 +25,8 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/simulate/image", protection: "rendu d'un travail du simulateur du site : identifiant du travail (cuid) ET identifiant de parcours exigés, origine vérifiée ; rien d'autre n'est lisible" },
   { chemin: "/api/simulate/prevenir", protection: "« Me prévenir » du simulateur du site : identifiant du travail ET du parcours exigés (preuve), origine vérifiée, limite par IP ; n'écrit qu'une adresse sur le travail et une note sur le lead du parcours" },
   { chemin: "/api/simulate/analyse", protection: "analyse de la photo du visiteur (mission 15) : origine vérifiée, parcours exigé, 10 analyses par adresse et par jour ; GET ?e=&p= : empreinte SHA-256 de la photo ET parcours exigés, rien d'autre n'est lisible" },
+  { chemin: "/api/simulate/photo", protection: "photo du visiteur préparée par le CRM (HEIC converti, réduite) : origine vérifiée, parcours exigé, 20 conversions par adresse et par 10 min ; rien n'est écrit ni gardé" },
+  { chemin: "/api/site/echantillons/", prefixe: true, protection: "échantillons du catalogue Cover Styl' (vignette 320 px ou image entière) pour le simulateur public : lecture seule, catalogue public, cache sur le volume" },
   { chemin: "/api/site/simulateur", protection: "pièces et zones du simulateur (libellés, limites) : lecture seule, constantes du code, aucune donnée" },
   { chemin: "/api/site/evenements", protection: "événements de parcours du site : sans donnée personnelle, origine et limite par IP vérifiées par la route" },
   { chemin: "/api/site/publications", protection: "réalisations et avis publiés avec accord : lecture seule, aucun identifiant de client" },

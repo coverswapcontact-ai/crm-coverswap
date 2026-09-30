@@ -167,17 +167,17 @@ describe("POST /api/simulate — nouveau contrat asynchrone", () => {
     assert.match(local.headers.get("access-control-allow-methods") ?? "", /GET/);
   });
 
-  test("ancien contrat (sans « asynchrone ») : réponse synchrone avec l'image, comme avant", async () => {
+  test("ancien contrat synchrone (sans « asynchrone ») : retiré en partie 4 — 400 « contrat », rien de généré", async () => {
     const p = parcours();
     const { asynchrone: _retire, ...ancien } = corpsValide(p);
     void _retire;
     const reponse = await route.POST(requete(ancien, { ip: "203.0.113.60" }));
-    assert.equal(reponse.status, 200);
-    const corps = (await reponse.json()) as { success: boolean; image: string; simulationSiteId: string | null };
-    assert.equal(corps.success, true);
-    assert.match(corps.image, /^data:image\/png;base64,/);
-    assert.ok(corps.simulationSiteId);
-    assert.equal(appelsGenerateur, 1);
+    assert.equal(reponse.status, 400);
+    const corps = (await reponse.json()) as { reason: string; error: string };
+    assert.equal(corps.reason, "contrat");
+    assert.match(corps.error, /rechargez la page/);
+    assert.equal(appelsGenerateur, 0);
+    assert.equal(await prisma.travailSimulation.count({ where: { parcoursId: p } }), 0);
   });
 });
 

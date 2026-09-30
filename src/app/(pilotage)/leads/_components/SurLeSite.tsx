@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, ChevronDown, Globe, ImageOff, Loader2 } from "lucide-react";
 import type { SimulationSiteLigne, SimulationsSiteRecentes } from "@/lib/simulations/site";
 import type { TravailSiteLigne, TravauxSiteRecents } from "@/lib/simulations/travaux-lecture";
+import type { EntonnoirSite } from "@/lib/site/evenements";
 import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,38 @@ import { pluriel, quand } from "@/lib/commun/format";
  * Mission 15 (partie 1) : la génération est asynchrone ; les travaux encore en
  * cours ou en échec des 7 jours s'affichent au-dessus, avec la raison d'échec
  * et « à prévenir » quand le visiteur a laissé une adresse.
+ *
+ * Mission 15 (partie 4) : l'entonnoir du simulateur (pièce → photo →
+ * génération → résultat vu → coordonnées), avec les abandons à chaque étape.
  */
+
+/** Une ligne par étape : le nombre de parcours et, entre parenthèses, ceux de l'étape d'avant qui se sont arrêtés là. */
+function Entonnoir({ entonnoir }: { entonnoir: EntonnoirSite }) {
+  const total = entonnoir.etapes[0]?.parcours ?? 0;
+  if (total === 0) return <p className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-2.5 text-[12.5px] text-[#9CA3AF]">Entonnoir du simulateur : aucun parcours commencé ces {entonnoir.jours} derniers jours.</p>;
+  return (
+    <div className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-2.5">
+      <p className="text-[12px] text-[#9CA3AF]">
+        Entonnoir du simulateur · {entonnoir.jours} derniers jours · <span className="text-[#F87171]">(−n)</span> : parcours arrêtés à cette étape
+      </p>
+      <ol className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]" aria-label="Entonnoir du simulateur">
+        {entonnoir.etapes.map((etape, i) => (
+          <li key={etape.cle} className="flex items-center gap-1.5">
+            {i > 0 ? <span aria-hidden className="text-[#6B7280]">→</span> : null}
+            <span className="text-[#F2F3F5]">
+              {etape.libelle} <span className="font-medium">{etape.parcours}</span>
+            </span>
+            {etape.abandons ? (
+              <span className="text-[#F87171]" title={`${pluriel(etape.abandons, "parcours arrêté", "parcours arrêtés")} à cette étape`}>
+                (−{etape.abandons})<span className="sr-only"> {pluriel(etape.abandons, "parcours arrêté", "parcours arrêtés")} ici</span>
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
 
 function LigneSimulation({ ligne, maintenant, onImage, onLead }: { ligne: SimulationSiteLigne; maintenant: number; onImage: (() => void) | null; onLead: () => void }) {
@@ -94,7 +126,7 @@ function LigneTravail({ ligne, maintenant }: { ligne: TravailSiteLigne; maintena
   );
 }
 
-export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: SimulationsSiteRecentes; travaux?: TravauxSiteRecents; onOuvrirLead: (leadId: string) => void }) {
+export function SurLeSite({ resume, travaux, entonnoir, onOuvrirLead }: { resume: SimulationsSiteRecentes; travaux?: TravauxSiteRecents; entonnoir?: EntonnoirSite; onOuvrirLead: (leadId: string) => void }) {
   const [ouvert, setOuvert] = useState(false);
   const [image, setImage] = useState<number | null>(null);
   const [maintenant] = useState(() => Date.now());
@@ -120,6 +152,7 @@ export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: Simulatio
         ) : null}
         <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-[#9CA3AF] transition-transform", ouvert && "rotate-180")} />
       </button>
+      {ouvert && entonnoir ? <Entonnoir entonnoir={entonnoir} /> : null}
       {ouvert && lignesTravaux.length > 0 ? (
         <ul className="divide-y-[0.5px] divide-[#2A2D34] border-t-[0.5px] border-[#2A2D34]" aria-label="Générations en cours ou en échec">
           {lignesTravaux.map((ligne) => (

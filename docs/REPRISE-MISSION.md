@@ -3156,3 +3156,302 @@ pas. Rien n'a été généré : OpenAI est simulé dans les tests, la page ne pa
   `prix.ts › FACTEUR_QUALITE` est à corriger d'après la campagne.
 - Dans le pire des cas (deux tentatives par rendu V2), la voie longue traite deux rendus à la fois : 18 rendus ≈ 20 à
   40 min.
+
+## Partie 4 — Le site : design, stabilité, les quatre écrans (30/09)
+
+Énoncé § 3, § 4 (4.1, 4.2, 4.3), § 1.1 côté site, § 7 : le site devient un simple CLIENT du CRM (il ne construit plus
+de prompt), quatre écrans « Pièce · Photo · Matières · Résultat » sur un thème clair « éditorial » (jetons partagés),
+catalogue en feuille avec le corps de la page verrouillé, aucun défilement parasite, photo HEIC convertie par le CRM,
+analyse de la photo dès son chargement (zones grisées, conseil de qualité), entonnoir mesuré. Rien n'a été généré :
+OpenAI et le décodeur HEIC sont simulés dans les tests ; aucun serveur, aucun build lancé (orchestrateur).
+
+### CRM (petites modifications, à déployer AVANT le site)
+- **`POST /api/simulate` — nouveau contrat** (`src/app/api/simulate/route.ts`, `src/lib/site/contrat-simulate.ts`) : corps
+  `{ projet, selections: [{ surface, ref }], sig, exp, parcoursId, photo_base64, asynchrone: true, page, source, campagne }`,
+  `sig` = HMAC-SHA256 de `v2\n<parcours>\n<projet>\n<surface:ref,…>\n<exp>` (`chaineSigneeSelections`, une ligne par
+  élément dans l'ordre reçu ; comparaison en temps constant `signatureValide`). Le CRM relit lui-même les zones (source
+  unique `zones.ts` : zones de la pièce, doublons ignorés, ≤ `ZONES_MAX`, incompatibilités → 400 `zone-inconnue` /
+  `aucune-zone` / `trop-de-zones` / `surfaces-incompatibles`) et les références (catalogue : 400 `reference-inconnue` ;
+  catalogue injoignable sans copie → 503) → `references` `{ zone, libelle (source unique), ref, nom (catalogue) }`,
+  `promptTexte: null`, `swatchUrls: []` — le moteur construit la consigne (V1 revu par `construirePromptV1` +
+  échantillons du cache, ou V2). Ordre : expiration → signature → sélections → 409 `zone-non-visible` (analyse connue)
+  → quota → purge → travail 202. **L'ancien corps asynchrone (prompt + swatchUrls signés) reste accepté** le temps du
+  déploiement du site (branche `lireContratPrompt`, à retirer plus tard) ; **le contrat SYNCHRONE d'avant la partie 1
+  est retiré** : sans `asynchrone: true` → 400 `contrat` « Le simulateur a été mis à jour : rechargez la page… » ;
+  `src/lib/site/simulation-synchrone.ts` supprimé. `EntreeTravail.prompt`/`swatchUrls` facultatifs (`travaux.ts`).
+- **`POST /api/simulate/photo`** (`src/app/api/simulate/photo/route.ts`, `src/lib/site/conversion-photo.ts`) : multipart
+  `parcoursId` + `photo` (25 Mo au plus) ; HEIC reconnu par la boîte `ftyp` (`heic|heix|hevc|hevx|mif1|msf1|…`), le nom ou
+  le type, **décodé par `heic-decode`** (libheif en wasm, dépendance directe, `src/types/heic-decode.d.ts` ; `heic-convert`
+  retiré après relecture : il ré-encodait la photo pleine résolution en JPEG par `jpeg-js`, synchrone, avant que sharp la
+  redécode) : les pixels RGBA vont droit dans sharp (`raw`), réduction 1600 px + JPEG q86 → `{ ok, photo_base64, largeur,
+  hauteur, convertie }` ; un JPEG/PNG passe par `rotate()` (EXIF). Rien n'est écrit ni gardé. **Une conversion à la
+  fois** (file en mémoire, `enSerie`) et **plafond global** : `LIMITE_CONVERSIONS = { parIp: 20, global: 60 }` par 10 min
+  (`conversionRefusee(ip)` → 429 `ip-quota` / `global-quota`). Refus : 403 origine, 400 `parcours` / `bad-request` /
+  `trop-lourde` / `format` / `illisible`. Décodeur injectable (`definirDecodeurHeicEssai`, rend `{ largeur, hauteur, data }`).
+- **`GET /api/site/echantillons/<ref>[?l=320]`** (`src/app/api/site/echantillons/[ref]/route.ts`) : la vignette 320 px
+  (`vignetteEchantillon`) ou l'échantillon entier (`imageEchantillon`), même cache du volume que l'espace et le CRM ;
+  `Cache-Control: public, max-age=604800`, ACAO `*` ; référence `^[A-Za-z0-9_-]{1,24}$` sinon 400, inconnue → 404.
+- **Routes publiques** (`routes-publiques.ts` + test) : `/api/simulate/photo` (exact), `/api/site/echantillons/`
+  (préfixe) ; `/api/simulate/autre` et `/api/site/echantillons` (sans référence) restent protégées. `src/proxy.ts` non touché.
+- **Événements** (`src/lib/site/evenements.ts`) : nouveaux types `PIECE_CHOISIE`, `PHOTO_CHARGEE`, `GENERATION_LANCEE`,
+  `RESULTAT_VU` (libellés) ; les anciens (`SIMULATION_PHOTO|LANCEE|RESULTAT`) restent acceptés et sont **rangés sous le
+  nouveau nom** (`TYPE_CANONIQUE`, `typeCanonique`) : `parType` a UNE ligne par étape (anciens + nouveaux additionnés, plus
+  jamais « 3 résultats vus · 2 résultats vus »), `estLancee` / `estResultat` s'en servent ; la phrase « Site : … simulations
+  lancées, … résultats vus » de la synthèse rédigée (`synthese/redaction.ts`) lit `GENERATION_LANCEE` / `RESULTAT_VU`
+  (elle comptait encore les anciens noms → 0 dès le site déployé). **Entonnoir** : `ETAPES_ENTONNOIR` (pièce → photo → génération →
+  résultat vu → coordonnées = `DEVIS_DEMANDE|CONTACT_ENVOYE`), `calculerEntonnoir(evenements)` PUR et EMBOÎTÉ (un
+  parcours compte à une étape s'il avait atteint la précédente ; `abandons` = parcours de l'étape d'avant qui
+  s'arrêtent là), `entonnoirSite(jours)`. Affiché dans **« Sur le site cette semaine »** (`SurLeSite.tsx › Entonnoir`,
+  `leads/page.tsx` → `EcranLeads › entonnoirInitial`) : « Pièce choisie 12 → Photo chargée 9 (−3) → … », avec la légende
+  « (−n) : parcours arrêtés à cette étape » dans l'en-tête et un `title` + texte lecteur d'écran sur chaque nombre rouge.
+- **Tests** : `src/lib/base/mission-15-partie-4.test.ts` **15/15** (chaîne signée ; sélections signées → 202, références
+  relues (libellé source unique + nom catalogue), pas de prompt, tâche → PRETE en V1 avec consigne du CRM et 2 films du
+  cache ; refus avant tout coût : signature d'un autre contenu 401, ancienne chaîne 401, zone hors pièce, 5 zones,
+  incompatibles, référence inconnue, illisible, pièce inconnue, expiration, contrat synchrone 400 — rien de généré, aucun
+  travail ; ancien corps prompt 202 avec prompt gardé ; 409 zone-non-visible avec la liste, zone visible 202 ; photo :
+  JPEG 2400×1800 → 1600×1200 JPEG, HEIC simulé (pixels RGBA) → convertie, HEIC indécodable → `format`, 403/400/25
+  Mo/illisible, 20 puis 429 ; plafond global par 10 min + conversions en série ; échantillons : entier 640, vignette
+  320×320 gardée sur le volume, 404/400 ; routes publiques ; entonnoir emboîté avec anciens noms ; `entonnoirSite` +
+  synthèse : anciens noms fusionnés dans `parType`, phrase « Site : … » rédigée avec les bons comptes).
+  `mission-15-partie-1.test.ts` : le test « ancien contrat » attend désormais 400 `contrat` (16/16). Suites touchées :
+  `site.test.ts` 3/3 (parType lit `GENERATION_LANCEE`), `routes-publiques.test.ts` 3/3, `synthese.test.ts`,
+  `mission-15-partie-2.test.ts` + `simulateur.test.ts` 34/34. `npx tsc --noEmit -p .` 0 ; eslint 0 sur les fichiers touchés.
+- **Doc** : `docs/ARCHITECTURE-PILOTAGE.md` (routes publiques du simulateur, partie 4).
+
+### Site
+- **Supprimés** : `src/lib/simulation-prompt.ts`, `src/lib/simulateur/surfaces.ts`, `src/app/api/simulation/consigne/`,
+  `src/lib/rate-limit.ts`, `src/app/simulateur/_components/ChoixReference.tsx`, `src/components/BeforeAfterSlider.tsx`.
+  `projets.ts` ne garde que l'écran (`uploadHint`, `uploadTip`, `crmTypeProjet`, plus d'emoji ni de champ de prompt).
+- **Zones du CRM** `src/lib/simulateur/zones.ts` : `chargerZonesSimulateur()` (`GET <CRM>/api/site/simulateur`,
+  revalidate 1 h, lu par la page du simulateur, la page d'accueil et `prepare`), **`ZONES_REPLI`** (copie figée de la liste
+  du 30/09 : le simulateur reste debout si le CRM ne répond pas), `pieceDe`, `zoneDe`, `titrePiece` (« Votre cuisine »…),
+  `composantesDe` (« Façades (toutes) » = hauts + bas) ; **`DELAI_ZONES_MS` = 5 s** (`AbortSignal.timeout` sur le fetch :
+  un CRM muet donne le repli, `prepare` n'attend jamais la coupure Vercel) ; `zonesMaxEnLettres(4)` = « quatre » (les textes
+  « Jusqu'à quatre zones » de `/simulateur` et de l'accueil lisent `zones.zonesMax`).
+- **`prepare`** (`src/app/api/simulation/prepare/route.ts`) : pot de miel → `depasseLaLimite("prepare:<ip>")`
+  (`src/lib/limite-abus.ts`, 30 par 10 min, fenêtre glissante, pur) → parcours → Turnstile → `validerSelections(zones,
+  projet, selections)` (`selections.ts`, réécrit : zones de la pièce du CRM, doublons ignorés, catalogue, limite,
+  incompatibilités) → `signerSelections` (`src/lib/simulateur/signature.ts`, même chaîne que le CRM, 90 s) → `{ ok,
+  projet, selections, sig, exp, parcoursId }`. Aucun prompt.
+- **Client du CRM** `src/lib/simulateur/generation-client.ts` : `lancerGeneration` (prepare → POST CRM avec les sélections
+  signées ; 409 → `{ raison: "zone-non-visible", message, zones }`), `demanderAnalyse` / `sonderAnalyse`
+  (`/api/simulate/analyse`), `convertirPhotoParLeCrm` (multipart `/api/simulate/photo`), `urlVignette(ref)` /
+  `urlEchantillon(ref)` (`/api/site/echantillons`), `sonderTravail`, `demanderAEtrePrevenu` inchangés. `PANNES` (sans
+  « Réessayer ») ne contient plus `captcha` : le widget Turnstile est réinitialisé après chaque appel, un nouvel essai part
+  avec un jeton neuf.
+- **Photo** `src/lib/simulateur/photo.ts` : `createImageBitmap(file, { imageOrientation: "from-image" })` (EXIF
+  respecté, repli `<img>`), 25 Mo, fonctions pures `verifierFichier`, `dimensionsReduites`, `poidsKoDe`, `estHeic` ; un
+  HEIC que le navigateur ne décode pas rend `{ aConvertir, file }` → le CRM le convertit (plus de message « changez le
+  réglage de votre iPhone » ; message `conversion` : capture d'écran ou JPEG).
+- **Mémoire** `reprise.ts` : `EtatSimulateur.analyse: EtatAnalyse | null` (`empreinte`, `statut`, `zonesVisibles`,
+  `zonesNonVisibles`, `verdict`, `conseil`, `raison` — un CODE), lu par `migrerEtat` ; **`photoLargeur` / `photoHauteur`**
+  (dimensions connues à la préparation, `rapportPhoto(etat)` → `aspect-ratio` réservé sur la photo de l'écran Matières et
+  l'aperçu de l'écran Photo : rien ne saute) ; **`ATTENTE_PAR_DEFAUT_S` = 90** (une seule valeur, alignée sur `DELAI_RENDU`
+  « environ 1 min 30 », utilisée par `migrerEtat`, `generation-client` et l'écran d'attente — plus de « 1 min 15 ») ; `reduireAnalyse(reponse CRM)`,
+  `zoneNonVisible(analyse, composantes)` (grisée seulement si toutes les composantes connues le sont ; une zone
+  inconnue de l'analyse ne l'est jamais), `MESSAGE_ANALYSE_SAUTEE` (phrase neutre, aucun détail interne), `TITRES_VERDICT`.
+- **Machine d'état des écrans** `src/lib/simulateur/ecrans.ts` (pure) : `ECRANS` 1..4, `ecranMax`, `ecranAtteignable`
+  (toujours en arrière, en avant jusqu'à ce qui est fait, rien pendant une génération), `reduireEcran(courant, geste)`
+  (changer de pièce vide SEULEMENT les matières ; reprendre la photo garde les matières ; « Essayer d'autres matières »
+  revient aux matières avec les choix, ou à la photo sans photo locale), `ecranDepuisEtape` (reprise).
+- **Entonnoir** `src/lib/simulateur/entonnoir.ts` (pur) : `creerEmetteur(envoyer)` (une étape par parcours, un retour en
+  arrière ne recompte rien), `rouvrirGeneration` (nouvelle génération — « Réessayer » ET « Essayer d'autres matières » —
+  : génération + résultat recomptés, pas la pièce ni la photo), `reinitialiser`. `evenements-site.ts` : `PIECE_CHOISIE`, `PHOTO_CHARGEE`, `GENERATION_LANCEE`, `RESULTAT_VU`
+  (dataLayer : `simulation_photo_uploaded`, `simulation_textures_selected`, `simulation_generated` gardés) ; le
+  formulaire du simulateur émet `DEVIS_DEMANDE` (dernière étape côté CRM). Le module d'accueil émet `PIECE_CHOISIE` et
+  `PHOTO_CHARGEE` (`depuis: accueil`) ; `/simulateur?suite=1` crée l'émetteur avec ces étapes DÉJÀ émises
+  (`creerEmetteur(envoyer, dejaEmises)`, jamais deux événements par parcours).
+- **Jetons et thème** (`src/app/globals.css` `@theme`) : `--color-fond` #F5F4F1, `--color-fond-2`, `--color-encre`
+  #1A1A1A, `--color-encre-2`, `--color-trait`, `--color-accent` #CC0000 (une seule), `--color-accent-fond`,
+  `--color-accent-texte` (#8f1d12, le rouge en texte), `--color-encre-survol` (#3f3b36), `--color-sombre` (#111110) — plus
+  aucune couleur en dur dans les composants —, `--color-ok-*`,
+  `--rayon-sm/md` (6/10 px), `--duree-courte/moyenne` (150/250 ms), `--ease`, `--espace-1..5` ; portée
+  **`[data-theme="simulation"]`** (fond, encre, `color-scheme: light`, sélection et focus dans l'encre, transitions
+  coupées par `prefers-reduced-motion`) ; `html:has([data-page="simulateur"])` : `scroll-behavior: auto`, `color-scheme:
+  light`, fond et encre du thème sur `body`, barre de défilement claire (l'élastique de l'iPhone et la barre du viewport
+  appartiennent à `html`, hors de la portée `[data-theme]`) — page du simulateur seulement. Le reste du site ne change pas
+  (mission 16). Bloc `.before-after-slider` retiré.
+- **Composants partagés `src/components/simulation/`** : `Feuille` (+ `useRetourNavigateur`, `cx` ; corps verrouillé par
+  `position: fixed` + `top: -scrollY` restauré à la fermeture sans lissage, barre de défilement compensée, UN verrou pour
+  plusieurs feuilles, `z-[70]`, `overscroll-contain`, Échap / glisser / geste retour, `entete` collant) — `espace/ui.tsx`
+  le RÉ-EXPORTE (même signature, plus de copie) ; `FeuilleCatalogue` (UN catalogue : recherche 16 px, familles en
+  filtres — des boutons `aria-pressed` dans un `role="group"`, pas des onglets ARIA sans clavier —, tuiles carrées hauteur
+  fixe, favoris (cœur : zone de toucher 44 px), vue agrandie avec **pincer-zoom** (`ZoomImage`), « Voir plus », vignettes
+  320 px du CRM préchargées, **« Appliquer le même film à … »**, squelettes) ; `AvantApres` (déplacé ici, rapport de
+  l'image, `touch-action: none` sur la POIGNÉE seulement, `touch-pan-y` ailleurs, clic pour placer, clavier
+  ← → Début Fin, **« Comparer »** qui alterne, **« Plein écran »** → `PleinEcran` (avant/après, pincer-zoom, Échap, geste
+  retour) — `espace/AvantApres.tsx` le ré-exporte sans les outils jusqu'à la partie 6) ; `EcranAttente` (jetons,
+  `Bouton`, `lecturePhoto` = ce que l'analyse a vu sous « Lecture de votre photo », même API pour la partie 6) ;
+  `FilEtapes` (« Pièce · Photo · Matières · Résultat », étapes faites cliquables, étapes à venir en `encre-2` lisible, la
+  raison du verrou ÉCRITE sous le fil (`role="status"`, hauteur réservée, `aria-describedby` des étapes verrouillées) ;
+  hauteur fixe) ; `CartesPieces` (dessins au trait `espace/Illustrations` : **`MursDeFace` ajouté**, `DessinFamille("MURS")` ;
+  gris → couleur + trait d'accent à la sélection ; hauteur fixe ; jamais un emoji ; boutons `aria-pressed` dans un
+  `role="group"`, pas un `radiogroup` sans flèches) ; `TuileFilm` ; `Bouton` (principal / secondaire / discret, occupé,
+  **désactivé avec la raison lisible dessous** ; `FOCUS_FICHIER` : le libellé d'un champ de fichier `sr-only` montre le
+  focus clavier par `:has(:focus-visible)`) ; `PleinEcran` (« Avant / Après » à 44 px) ; `Squelette`.
+- **Les quatre écrans** `src/app/simulateur/_components/` (Simulateur.tsx 590 lignes ; tout ≤ 600) :
+  `EcranPiece` (« Quelle pièce transformons-nous ? », cartes des pièces du CRM ; aucune carte n'apparaît choisie tant que
+  la pièce ne l'a pas été — clic, `?projet=`, accueil ou photo en mémoire — : `pieceChoisie`, l'état vide garde `cuisine` en
+  repli) ; `EcranPhoto` (« Prendre une photo »
+  `capture="environment"` et « Choisir dans mes photos » sans `capture` de même rang, glisser-déposer, trois conseils
+  avec schéma en trait — de face, toute la zone visible (`CuisineDeFace cadre="ensemble"`), lumière du jour —, « 25 Mo »,
+  photo existante avec « Garder cette photo ») ; `EcranMatieres` (la photo en haut au rapport réel jamais rognée +
+  « Reprendre » + état de l'analyse ; conseil de qualité titré par verdict avec la phrase du CRM, « Reprendre la photo » /
+  **« Continuer quand même »** ; une rangée par zone : nom, état (« à choisir » / tuile du film), Choisir / Modifier /
+  Retirer ; zone non visible grisée « Non visible sur la photo » ; refus 409 affiché en clair et la zone marquée ;
+  bouton principal **collé en bas** au-dessus de `env(safe-area-inset-bottom)`, actif dès qu'une zone a un film, raison
+  sinon (« Choisissez au moins une matière », « Vérification anti-robot en cours… ») ; le focus revient sur « Modifier »
+  par `focus({ preventScroll: true })`) ; `EcranResultat` (titre « Votre cuisine »… du CRM, fondu avant → après 1 s,
+  `AvantApres` avec Comparer et plein écran, films utilisés en tuiles, « Essayer d'autres matières », historique en
+  pastilles + **comparaison de deux rendus côte à côte** (sélecteur à 44 px), **Télécharger** et **Partager** (Web Share
+  API avec le fichier, repli téléchargement ; texte alternatif et texte de partage invariables : « Simulation : Vos
+  meubles », « … après simulation, avec CoverSwap. ») AVANT le formulaire de contact, en fin d'écran) ; `EnteteSimulateur`
+  (logo + « Accueil », dans le flux) ; `useAnalyse` (demande dès la photo chargée — sauf si une analyse déjà PRÊTE ou SAUTÉE
+  est en mémoire au montage : rien n'est renvoyé —, sondage 3 s au plus 2 min, relancé quand la page redevient visible,
+  `SAUTEE delai` sinon) ; `useFavoris` (favoris en `localStorage`) ; `Formulaires.tsx` (`ChampsContact` en clair,
+  `CaseConsentement clair`). `Simulateur.tsx` : orchestrateur (reprise, sondage, analyse, entonnoir, le SEUL défilement
+  programmé = le haut de l'étape quand elle change et seulement si la page avait défilé, `smooth` sauf reduced-motion ;
+  aucun `scrollIntoView` ni `autoFocus`). **Après un échec de génération** : le retour arrière par le fil, « Garder cette
+  photo », le choix d'une pièce et un bouton « Revenir à mes matières » sur l'écran d'échec effacent l'échec et le refus 409
+  (`effacerEchec`) — plus aucun refus (`ip-quota`, `captcha`, quota…) ne bloque le visiteur sur le formulaire de secours ;
+  changer de pièce remet aussi `analyse` à null (l'analyse était celle de l'autre pièce) ; le message d'erreur est un seul
+  `role="alert"` (plus de `aria-live` autour : une seule annonce). `page.tsx` : `export const viewport` (`viewportFit: "cover"`, `themeColor`
+  #F5F4F1), `data-theme="simulation" data-page="simulateur"`, plus de `<main>` imbriqué, quatre étapes du HowTo,
+  FAQ en clair ; `Turnstile` reçoit `theme="light"` et n'est monté qu'à partir de l'écran des matières (après le
+  premier geste).
+- **Habillage global** : `HorsSimulateur` (nouveau) masque `Header` et `WhatsAppButton` sur `/simulateur` ;
+  `CookieBanner` est **discret** sur `/simulateur` (ne s'ouvre pas seul ; « Gérer les cookies » du pied de page le
+  rouvre) ; `ScrollToTop` ne fait rien sur `/simulateur`.
+- **Accueil** `HomeClient.tsx › SimulationSection({ pieces, zonesMax })` : les mêmes cartes (`CartesPieces`, pièces du CRM
+  passées par `app/page.tsx`), les mêmes boutons photo (focus clavier visible), sur la carte claire du thème ; plus
+  d'emoji, plus de « max 10 Mo » ni de « 60 s » ; fusion avec la mémoire du simulateur (`analyse: null`, dimensions de la
+  photo gardées) ; **si une génération est en cours dans la mémoire**, la photo n'est plus perdue en silence : un
+  `role="status"` le dit (« Une simulation est déjà en cours sur cet appareil : nous l'affichons d'abord. Revenez ensuite
+  reprendre cette photo. ») avec « Voir la simulation en cours » ; la photo reste affichée sur l'accueil.
+- **Délai promis** : `lib/offre.ts › DELAI_RENDU = "environ 1 min 30"` (`DUREE_SIMULATION` y renvoie), repris partout
+  (accueil, `Footer`, `blog/page`, `blog/[slug]`, `devis`, `zones/[slug]`, `app/page`, `llms.txt`, `data/faq`,
+  `data/blog-articles`) : plus aucun « 60 s » / « moins d'une minute » / « une à deux minutes ».
+- **`/api/simulation/contact`** : vérifié, inchangé (partie 1 : `simulationIds` = tout le parcours, dernier rendu affiché).
+  `Permissions-Policy: camera=()` inchangé (le sélecteur natif `capture` n'en dépend pas).
+- **`scripts/verifier-simulateur.mjs`** : nouveau contrat (sélections signées, aucun prompt, zone hors pièce, sans zone ;
+  génération avec `{ projet, selections, sig, exp }` ; références relues par le CRM). **`docs/SUIVI.md`** : événements de
+  l'entonnoir, § 6 (client du CRM, analyse, HEIC, vignettes).
+- **Tests site** (`npm test` **31/31**) : `photo.test.ts` (25 Mo, format, HEIC par extension, messages sans consigne
+  iPhone, réduction 1600, poids), `signature.test.ts` (chaîne signée stable = celle du CRM, ordre et référence
+  signés, `validerSelections` contre `ZONES_REPLI` : doublons, zone-inconnue, référence, limite, incompatibles, pièce,
+  catalogue réel AA05 ; zones de repli = 5 pièces / 4 zones / titres ; `zonesMaxEnLettres` ; CRM muet → repli au délai
+  (fetch injecté), CRM vivant lu, CRM en erreur → repli ; limite d'abus 30 puis refus, fenêtre glissante),
+  `ecrans.test.ts` (atteignables, génération fige, gestes, retour sans perte, écran de départ, titre par pièce),
+  `entonnoir.test.ts` (ordre, une fois, rouvrir, réinitialiser), `reprise.test.ts` (+ analyse gardée / illisible,
+  `reduireAnalyse`, `zoneNonVisible`, phrase neutre ; dimensions de la photo et `rapportPhoto`, attente par défaut =
+  `DELAI_RENDU`). `npm run lint` 0 ; `npx tsc --noEmit -p .` propre sur les sources
+  (seule erreur : `.next/types/validator.ts` cite encore la route `consigne` supprimée — cache d'un ancien build, régénéré
+  par le prochain `next build`).
+
+### Décisions
+- **Déploiement : CRM d'abord** (il accepte le nouveau contrat ET l'ancien corps asynchrone), puis le site ; l'ancien corps
+  (prompt signé) pourra être retiré du CRM ensuite. Le contrat synchrone d'avant la partie 1 est retiré maintenant.
+- Chaîne signée `v2\nparcours\nprojet\nsurface:ref,…\nexp` : l'ordre des sélections fait partie de la signature ; le CRM
+  la recalcule depuis ce qu'il reçoit et relit tout (libellés de la source unique, noms du catalogue) : rien du navigateur
+  n'entre dans la consigne. Pas de prompt côté site, même en V1 (`construirePromptV1` du CRM : le « V1 revu » de la partie 2).
+- **HEIC par le CRM** (`heic-decode`, wasm — pixels bruts à sharp, une conversion à la fois) plutôt qu'un décodeur dans le
+  navigateur (lourd) ou un message de réglage iPhone ; rien n'est gardé côté CRM, limite 20 par adresse et 60 pour le site
+  par 10 min. Les octets `ftyp` font foi avant le nom.
+- **Vignettes par une route publique du CRM** (`/api/site/echantillons/<ref>?l=320`, cache commun du volume) plutôt que
+  les images S3 pleine taille ; un seul catalogue (`FeuilleCatalogue`) pour le site, l'espace en partie 6.
+- **Header réduit à un retour vers l'accueil, WhatsApp masqué, cookies discrets** pendant le parcours (le bandeau se rouvre
+  par « Gérer les cookies » du pied de page, qui reste). `viewportFit: cover` sur `/simulateur`.
+- Zones du CRM avec **repli figé** (`ZONES_REPLI`) : le simulateur ne dépend pas du CRM pour s'afficher ; les libellés
+  sont ceux du CRM (« Meubles bas », « Murs carrelés »…).
+- Entonnoir **emboîté** côté CRM (un contact sans résultat vu n'est pas un « contact après simulation ») ; côté site, une
+  étape par parcours ; une nouvelle génération recompte génération + résultat. `DEVIS_DEMANDE` reste l'événement de
+  conversion (pas de double `CONTACT_ENVOYE`).
+- L'analyse est demandée par contenu de photo (le CRM répond 200 tout de suite pour une photo déjà analysée) ; le site
+  ne lit que des codes de raison et dit une phrase neutre ; une zone inconnue de l'analyse n'est jamais grisée.
+- `Feuille` et `AvantApres` sont déplacés dans `components/simulation` et RÉ-EXPORTÉS par l'espace (une seule copie ;
+  l'espace garde son apparence, sans les nouveaux outils, jusqu'à la partie 6).
+- Cartes des pièces : dessins au trait (`public/` n'a aucune photo de réalisation) — **photos de réalisation à fournir
+  pour les cinq cartes** (Lucas), `MursDeFace` dessiné pour la cinquième.
+- `DELAI_RENDU` = « environ 1 min 30 » (attente médiane arrondie), une seule formulation sur tout le site.
+- Le bouton collé « Voir le résultat » est `fixed` (pas `sticky`) avec `env(safe-area-inset-bottom)` ; l'écran des
+  matières réserve 7 rem en bas.
+
+### Reste / à savoir
+- Vérifié par l'orchestrateur (30/09) : CRM 764/764 + build, site lint + 31/31 + build ; parcours complet en local à
+  390 × 660 sur la pile d'essai (faux OpenAI, CRM copie, site) : Pièce → Photo (photo injectée) → analyse « Photo lue »
+  → Matières (feuille catalogue, échantillon en grand, « Choisir pour : Meubles hauts ») → « Voir le résultat » → écran
+  d'attente (3 étapes, « Lecture de votre photo : fait ») → Résultat (Avant / Après, Comparer, Plein écran, tuiles,
+  Télécharger / Partager, formulaire). Retouche : le bandeau « Reprendre ma simulation » met ses deux boutons sur une
+  rangée entière au format téléphone. `scripts/mesurer-couleurs.mjs` lancé : 497 `hex` écrits, 0 échec. Pas de
+  simulateur iOS sur ce poste : pincer-zoom, `capture`, clavier virtuel et zone sûre à vérifier sur un vrai téléphone.
+- `scripts/mesurer-couleurs.mjs` (partie 2) **pas lancé** (497 téléchargements S3 → `hex` dans `revetements.json`) : à
+  lancer par l'orchestrateur avant le déploiement du site si le `hex` doit servir au moteur V2.
+- `.next/types/validator.ts` cite encore `api/simulation/consigne` : erreur `tsc` de cache, disparaît au prochain build.
+- L'ancien corps asynchrone (prompt signé) reste accepté par le CRM : à retirer une fois le site déployé (partie 5 ou 6).
+- Le module d'accueil convertit un HEIC par le CRM avec le parcours de session (`obtenirParcoursId`) ; sans
+  `NEXT_PUBLIC_SIMULATE_URL`, il dit d'envoyer une capture d'écran.
+- Partie 6 : `FeuilleCatalogue`, `Feuille`, `AvantApres` (avec outils), `EcranAttente`, `Bouton`, `CartesPieces` sont
+  prêts pour l'espace ; `ChoixReference` a disparu, `CatalogueTeintes` de l'espace attend la 6.
+
+### Relecture (30/09, soir) — les constats des trois relecteurs et leur sort
+Tout vérifié dans le code ; corrigé sauf mention contraire. Vérifications relancées après : CRM `npx tsc --noEmit -p .` 0,
+eslint 0 sur les fichiers touchés, `mission-15-partie-4.test.ts` 15/15, `site.test.ts` + `routes-publiques.test.ts` +
+`synthese.test.ts` + `mission-15-partie-1.test.ts` 28/28 ; SITE `npm run lint` 0, `npm test` 31/31, `npx tsc --noEmit -p .`
+propre sur les sources (seule erreur : `.next/types/validator.ts`, cache d'un ancien build citant `consigne`). Aucun appel
+OpenAI, aucun décodage wasm réel (décodeur simulé).
+- **Important, site — échec « panne » sans issue** : réel. `effacerEchec()` appelé par `allerA` (fil), `choisirPiece`,
+  « Garder cette photo », « Nouvelle simulation », `recommencer` ; bouton « Revenir à mes matières » sur l'écran d'échec
+  quand la photo existe ; `captcha` retiré de `PANNES` (jeton neuf à chaque essai). `ip-quota` reste sans « Réessayer »
+  immédiat, mais le visiteur revient aux matières et relance plus tard.
+- **Important, CRM — synthèse rédigée à 0** : réel. `redaction.ts` lit `GENERATION_LANCEE` / `RESULTAT_VU`, et `parType`
+  fusionne les anciens noms (test : phrase « Site : … » vérifiée contre `parType`).
+- **Mineur, CRM — deux lignes « Résultats vus »** : réel. `TYPE_CANONIQUE` : une ligne par étape ; libellés anciens
+  suffixés « (ancien site) » (plus affichés).
+- **Mineur, site — `PIECE_CHOISIE`/`PHOTO_CHARGEE` émis deux fois depuis l'accueil, « Réessayer » ne recompte pas** : réel.
+  Émetteur créé avec `dejaEmises` ; `onReessayer` appelle `rouvrir()` avant `generer()` (le commentaire d'entonnoir.ts est
+  maintenant vrai).
+- **Mineur, site — photo de l'accueil perdue pendant une génération** (deux constats) : réel. Message `role="status"` +
+  « Voir la simulation en cours », la photo reste sur l'accueil ; plus de départ silencieux.
+- **Mineur, site — `chargerZonesSimulateur` sans délai** (deux constats) : réel. `AbortSignal.timeout(DELAI_ZONES_MS = 5 s)`,
+  test avec un fetch muet injecté (le minuteur d'`AbortSignal.timeout` est unref : le test tient la boucle).
+- **Important, CRM — `heic-convert` bloque la boucle d'événements** : réel (vérifié dans `node_modules/heic-convert/formats-node.js`
+  : `jpegJs.encode` synchrone pleine résolution). `heic-decode` seul → `sharp(raw)` ; conversions en série ; plafond global
+  60 / 10 min ; `heic-convert` désinstallé (`npm uninstall` + `npm install heic-decode`), doc ARCHITECTURE-PILOTAGE mise à jour.
+- **Mineur, site — analyse de l'ancienne pièce gardée au changement de pièce** : réel. `analyse: null` quand la pièce change.
+- **Mineur, site — photo renvoyée à l'analyse à chaque montage** : réel. `useAnalyse` ne redemande rien si une analyse
+  PRÊTE / SAUTÉE / ÉCHEC est déjà en mémoire au premier passage.
+- **Important, site — cibles < 44 px** (catalogue : filtres, cœur, cases « Appliquer… » ; sélecteur « Comparer avec » ;
+  « Avant / Après » du plein écran) : réel, tout à 44 px.
+- **Important, site — photo sans ratio réservé (CLS)** : réel. `photoLargeur` / `photoHauteur` dans l'état (v2, facultatifs,
+  `migrerEtat`), `rapportPhoto` → `aspect-ratio` sur l'écran Matières, l'aperçu de l'écran Photo et l'aperçu de l'accueil.
+- **Mineur, site — verrou du fil en `title` seulement** : réel. Raison écrite sous le fil (`role="status"`, hauteur réservée)
+  + `aria-describedby`.
+- **Mineur, site — étapes à venir illisibles (`text-trait`, 1,4:1)** : réel. `text-encre-2` `font-normal`.
+- **Mineur, site — « Vos meubles, simulée »** : réel. Formulations invariables.
+- **Mineur, site — `role="alert"` dans `aria-live`** : réel. Une seule région.
+- **Mineur, site — focus invisible sur les champs de fichier `sr-only`** : réel. `FOCUS_FICHIER` (`has-[:focus-visible]`)
+  sur les libellés (écran Photo et accueil) ; `peer` ne convenait pas (le libellé est le parent, pas un frère).
+- **Mineur, site — `tablist`/`radiogroup` sans clavier** : réel. Filtres → `role="group"` + `aria-pressed` ; cartes de
+  pièces → `role="group"` + `aria-pressed` (choisir une carte fait avancer le parcours : des flèches de radio n'auraient
+  pas de sens).
+- **Mineur, site — 75 s contre « 1 min 30 »** : réel. `ATTENTE_PAR_DEFAUT_S = 90` (reprise.ts), utilisé aux trois endroits,
+  note dans offre.ts, test `texteAttente(90) === DELAI_RENDU`.
+- **Mineur, site — `html`/`body` noirs sous le thème clair** : réel. Règles `html:has([data-page="simulateur"])` (color-scheme,
+  body, barre de défilement).
+- **Mineur, site — « Cuisine » déjà choisie à la première visite** : réel. `pieceChoisie` (clic, `?projet=`, accueil, photo
+  en mémoire ; remis à faux par « Recommencer ») ; `projet: "cuisine"` reste le repli interne.
+- **Mineur, site — « Jusqu'à quatre zones » en dur** : réel. `zonesMaxEnLettres(zones.zonesMax)` sur `/simulateur`
+  (`etapesDe`) et à l'accueil (`SimulationSection({ zonesMax })`).
+- **Mineur, site — `libellesDuSimulateur` morte** : réel. Supprimée.
+- **Mineur, site — couleurs en dur** : réel. Trois jetons ajoutés, plus aucune occurrence hors `globals.css`.
+- **Mineur, CRM — « (−3) » sans légende** : réel. Légende dans l'en-tête + `title` / texte lecteur d'écran.
+- Aucun constat écarté. Au passage : `Simulateur.tsx` était passé à 609 lignes → favoris extraits dans `useFavoris.ts`
+  (590 lignes).
+
+### Reste ouvert après relecture
+- Rien vu dans un navigateur (ni `next dev`, ni `next build`, ni Lighthouse) : à l'orchestrateur — en particulier le rendu
+  de `has-[:focus-visible]:outline-3` (Tailwind v4) et des `aspect-ratio` réservés, captures à 390 px, CLS.
+- `AbortSignal.timeout` passé au `fetch` patché de Next (`next: { revalidate }`) : accepté par Next 15, à confirmer au
+  build (aucun avertissement attendu).
+- `heic-decode` réel jamais exécuté ici (simulé) : un vrai HEIC d'iPhone à passer sur le CRM déployé (orientation `irot`
+  appliquée par libheif — à vérifier sur une photo en portrait).

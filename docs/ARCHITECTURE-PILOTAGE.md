@@ -1922,7 +1922,16 @@ en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/r
   `POST|GET /api/simulate/analyse` (analyse de la photo lancée dès qu'elle est chargée, tâche
   **`ANALYSE_PHOTO`** en voie longue, 10 analyses par adresse et 400 par jour comptées seulement
   quand une tâche est mise en file ; le site ne lit qu'un code de raison), `GET /api/site/simulateur`
-  (pièces et zones de la source unique, sans consigne).
+  (pièces et zones de la source unique, sans consigne). Partie 4 : le site est un simple client —
+  `POST /api/simulate` reçoit `{ projet, selections, sig, exp, parcoursId, photo_base64, asynchrone }`
+  (signature HMAC de « v2 / parcours / projet / surface:ref,… / exp », `lib/site/contrat-simulate.ts`) et
+  relit zones et références lui-même ; l'ancien corps asynchrone (prompt signé) reste accepté le temps
+  du déploiement, le contrat synchrone est retiré (400 « contrat »). `POST /api/simulate/photo`
+  (multipart : la photo HEIC décodée par `heic-decode` (pixels bruts passés à sharp, une conversion à la fois, 20 par adresse et 60 pour le site par 10 min) et réduite, rien d'écrit) et
+  `GET /api/site/echantillons/<ref>[?l=320]` (vignettes du catalogue pour le simulateur public).
+  Événements de l'entonnoir (`site/evenements.ts`) : `PIECE_CHOISIE`, `PHOTO_CHARGEE`,
+  `GENERATION_LANCEE`, `RESULTAT_VU`, puis `DEVIS_DEMANDE` ; `entonnoirSite()` (emboîté, abandons par
+  étape) dans « Sur le site cette semaine ».
 - **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
   section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
   film, verrous, contrôle final, `{{direction_artistique}}`), planche PNG (grands échantillons

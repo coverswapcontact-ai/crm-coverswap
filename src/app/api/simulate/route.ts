@@ -4,35 +4,34 @@ import { purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulation
 import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
 import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
 import { entetesCorsSimulateur, ipDuVisiteurSimulateur, origineSimulateurAutorisee, parcoursIdValide, travailIdValide } from "@/lib/site/cors-simulate";
-import { genererEtGarderSynchrone } from "@/lib/site/simulation-synchrone";
+import { lireSelectionsCorps, resoudreSelections, signatureSelections, signatureValide } from "@/lib/site/contrat-simulate";
 import { zonesNonVisiblesPourPhoto } from "@/lib/simulateur/analyses";
 import { reglagesSimulateur } from "@/lib/simulateur/reglages";
-import { ZONES_MAX, ZONES_SIMULATEUR } from "@/lib/simulateur/zones";
+import { ZONES_MAX, ZONES_SIMULATEUR, type IdZone } from "@/lib/simulateur/zones";
 import { creerTravailSimulation, referencesCoherentes, zonesDuTravail } from "@/lib/simulations/travaux";
 import { suivreTravail } from "@/lib/simulations/travaux-lecture";
 
 /**
  * /api/simulate — le simulateur du site, côté génération (Railway, sans plafond de temps).
  *
- * Mission 15 (partie 1) : ASYNCHRONE. Le navigateur appelle d'abord
- * coverswap.fr/api/simulation/prepare (captcha, construction du prompt,
- * signature HMAC), puis transmet ici { prompt, swatchUrls, sig, exp, parcoursId,
- * photo_base64, asynchrone: true }. Vérifications DANS CET ORDRE : expiration,
- * signature, puis quota (une requête forgée ou expirée ne consomme rien), puis
- * purge opportuniste. La photo est écrite sur le volume, un TravailSimulation
- * EN_ATTENTE est créé et sa tâche mise en file ; réponse immédiate 202
- * { ok, travailId, attenteEstimeeS }. Le navigateur suit ensuite par
- * GET /api/simulate?id=&p= (sans quota) ; les images se lisent par /api/simulate/image.
+ * Mission 15 (partie 1) : ASYNCHRONE. La photo est écrite sur le volume, un
+ * TravailSimulation EN_ATTENTE est créé et sa tâche mise en file ; réponse
+ * immédiate 202 { ok, travailId, attenteEstimeeS }. Le navigateur suit ensuite
+ * par GET /api/simulate?id=&p= (sans quota) ; les images se lisent par
+ * /api/simulate/image.
  *
- * Ancien contrat (site d'avant la partie 1, sans `asynchrone`) : réponse
- * synchrone avec l'image — gardé pendant la transition, à retirer en partie 4.
+ * Mission 15 (partie 4) : le site est un simple CLIENT — il n'envoie plus de
+ * prompt. Corps : { projet, selections: [{ surface, ref }], sig, exp, parcoursId,
+ * photo_base64, asynchrone: true, page, source, campagne }, où `sig` signe
+ * { parcoursId, projet, selections, exp } (contrat-simulate.ts). Le CRM relit
+ * les zones (source unique) et les références (catalogue) ; le moteur (V1 revu
+ * ou V2) construit lui-même la consigne. L'ancien corps asynchrone (prompt +
+ * swatchUrls signés) reste accepté le temps du déploiement du site ; le contrat
+ * SYNCHRONE d'avant la partie 1 est RETIRÉ (400 « contrat »).
  *
- * Mission 15 (partie 2) : avant le quota, au plus ZONES_MAX zones (400
- * « trop-de-zones »), en moteur V2 les références sont confrontées aux
- * échantillons signés (400 « references »), et une zone que l'analyse de la
- * photo ne voit pas répond 409 « zone-non-visible » (le site le dit avant de
- * dépenser). Le prompt envoyé par le site sert au moteur V1 ; en V2 le CRM
- * construit le sien depuis les références (pipeline.ts).
+ * Vérifications DANS CET ORDRE : expiration, signature, sélections, zone non
+ * visible (409 d'après l'analyse connue), puis quota (une requête forgée,
+ * expirée ou refusée ne consomme rien), puis purge opportuniste.
  *
  * Variables d'environnement requises sur Railway :
  *   - OPENAI_API_KEY          (clé OpenAI avec crédits image)
@@ -43,6 +42,8 @@ export const dynamic = "force-dynamic";
 // maxDuration est un concept Vercel ignoré par Railway, mais on le déclare
 // haut au cas où ce code tournerait un jour sur une plateforme serverless.
 export const maxDuration = 300;
+
+export const MESSAGE_CONTRAT = "Le simulateur a été mis à jour : rechargez la page, votre photo est conservée.";
 
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: entetesCorsSimulateur(req.headers.get("origin")) });
@@ -66,6 +67,64 @@ export async function GET(req: NextRequest) {
   }
 }
 
+type Corps = {
+  asynchrone?: unknown;
+  parcoursId?: unknown;
+  projet?: unknown;
+  selections?: unknown;
+  sig?: unknown;
+  exp?: unknown;
+  photo_base64?: unknown;
+  page?: unknown;
+  source?: unknown;
+  campagne?: unknown;
+  /** Ancien corps asynchrone (site d'avant la partie 4) : prompt et adresses signés, références libres. */
+  prompt?: unknown;
+  swatchUrls?: unknown;
+  references?: unknown;
+};
+
+const texte = (v: unknown, max: number): string | null => (typeof v === "string" && v ? v.slice(0, max) : null);
+
+/** La demande relue et vérifiée, prête à devenir un travail. */
+type Demande = { references: ReferenceSimulee[]; zones: { zone: IdZone; ref: string }[]; prompt: string | null; swatchUrls: string[] };
+type Refus = { status: number; raison: string; message: string; zones?: IdZone[] };
+
+async function lireContratSelections(body: Corps, secret: string, parcoursId: string, exp: number, sig: string): Promise<Demande | Refus> {
+  const selections = lireSelectionsCorps(body.selections);
+  if (!selections) return { status: 400, raison: "bad-request", message: "Sélections illisibles : rechargez la page." };
+  const projet = typeof body.projet === "string" ? body.projet : "";
+  if (!signatureValide(secret, sig, signatureSelections(secret, { parcoursId, projet, selections, exp }))) {
+    console.error("[simulate] signature invalide (sélections)");
+    return { status: 401, raison: "bad-signature", message: "Signature invalide." };
+  }
+  const lecture = await resoudreSelections(projet, selections);
+  if (!lecture.ok) return { status: lecture.status, raison: lecture.raison, message: lecture.message };
+  return { references: lecture.references, zones: lecture.zones, prompt: null, swatchUrls: [] };
+}
+
+/** Ancien corps asynchrone (prompt signé) : gardé le temps que le site de la partie 4 soit déployé. */
+async function lireContratPrompt(body: Corps, secret: string, parcoursId: string, exp: number, sig: string): Promise<Demande | Refus> {
+  const prompt = typeof body.prompt === "string" ? body.prompt : "";
+  const swatchUrls = Array.isArray(body.swatchUrls) ? body.swatchUrls.filter((u): u is string => typeof u === "string") : [];
+  const attendue = crypto.createHmac("sha256", secret).update(`${prompt}\n${swatchUrls.join(",")}\n${exp}\np:${parcoursId}`).digest("hex");
+  if (!signatureValide(secret, sig, attendue)) {
+    console.error("[simulate] signature invalide (prompt)");
+    return { status: 401, raison: "bad-signature", message: "Signature invalide." };
+  }
+  const references = Array.isArray(body.references)
+    ? (body.references as unknown[]).filter((r): r is ReferenceSimulee => !!r && typeof r === "object" && typeof (r as ReferenceSimulee).ref === "string").slice(0, 5).map((r) => ({ zone: String(r.zone ?? ""), libelle: String(r.libelle ?? ""), ref: String(r.ref), nom: String(r.nom ?? "") }))
+    : [];
+  const zones = zonesDuTravail(references);
+  if (zones.length > ZONES_MAX) return { status: 400, raison: "trop-de-zones", message: `Au plus ${ZONES_MAX} zones par simulation : retirez-en une, vous pourrez relancer une simulation ensuite.` };
+  // Moteur V2 : les références (non signées) doivent correspondre aux échantillons signés.
+  const reglages = await reglagesSimulateur().catch(() => null);
+  if (reglages?.moteur === "V2" && references.length > 0 && !(await referencesCoherentes(references, swatchUrls))) {
+    return { status: 400, raison: "references", message: "Les références choisies ne correspondent pas à la demande signée : relancez la simulation." };
+  }
+  return { references, zones, prompt, swatchUrls };
+}
+
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   const cors = entetesCorsSimulateur(origin);
@@ -78,76 +137,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: MESSAGES_ECHEC["service-indisponible"], reason: "service-indisponible" }, { status: 503, headers: cors });
   }
 
-  let body: {
-    prompt?: string;
-    swatchUrls?: string[];
-    sig?: string;
-    exp?: number;
-    leadId?: string;
-    referenceChoisie?: string;
-    photo_base64?: string;
-    // Parcours sans coordonnées (simulateur v2) : la simulation est gardée ici, rattachée plus tard au lead.
-    parcoursId?: string;
-    projet?: string;
-    references?: ReferenceSimulee[];
-    page?: string;
-    source?: string;
-    campagne?: string;
-    /** Mission 15 : nouveau contrat (travail + suivi). Absent : ancien contrat synchrone. */
-    asynchrone?: boolean;
-  };
+  let body: Corps;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "JSON invalide." }, { status: 400, headers: cors });
+    return NextResponse.json({ error: "JSON invalide.", reason: "bad-request" }, { status: 400, headers: cors });
   }
+  // Le contrat synchrone (site d'avant la mission 15) n'existe plus : une page restée ouverte recharge.
+  if (body.asynchrone !== true) return NextResponse.json({ error: MESSAGE_CONTRAT, reason: "contrat" }, { status: 400, headers: cors });
 
-  const { prompt, sig, exp, leadId, referenceChoisie, photo_base64, projet, page, source, campagne } = body;
-  const swatchUrls = Array.isArray(body.swatchUrls) ? body.swatchUrls.filter((u): u is string => typeof u === "string") : [];
   const parcoursId = parcoursIdValide(body.parcoursId);
-  const references = Array.isArray(body.references)
-    ? body.references.filter((r): r is ReferenceSimulee => !!r && typeof r === "object" && typeof r.ref === "string").slice(0, 5).map((r) => ({ zone: String(r.zone ?? ""), libelle: String(r.libelle ?? ""), ref: String(r.ref), nom: String(r.nom ?? "") }))
-    : [];
-  const ip = ipDuVisiteurSimulateur(req.headers);
+  if (!parcoursId) return NextResponse.json({ error: "Identifiant de parcours manquant : rechargez la page.", reason: "parcours" }, { status: 400, headers: cors });
+  const sig = typeof body.sig === "string" ? body.sig : "";
+  const exp = typeof body.exp === "number" ? body.exp : Number.NaN;
+  const photo_base64 = typeof body.photo_base64 === "string" ? body.photo_base64 : "";
+  if (!sig || !Number.isFinite(exp) || !photo_base64) return NextResponse.json({ error: "Paramètres manquants.", reason: "bad-request" }, { status: 400, headers: cors });
 
-  if (!prompt || !sig || !exp || !photo_base64) {
-    return NextResponse.json({ error: "Paramètres manquants.", reason: "bad-request" }, { status: 400, headers: cors });
-  }
+  // 1) Expiration de la signature.
+  if (Date.now() > exp) return NextResponse.json({ error: "Session expirée, relancez la simulation.", reason: "expired" }, { status: 401, headers: cors });
 
-  // 1) Expiration du jeton
-  if (Date.now() > exp) {
-    return NextResponse.json({ error: "Session expirée, relancez la simulation.", reason: "expired" }, { status: 401, headers: cors });
-  }
+  // 2) Signature, puis relecture des sélections (nouveau contrat) ou du prompt signé (ancien corps asynchrone).
+  const demande = Array.isArray(body.selections) ? await lireContratSelections(body, secret, parcoursId, exp, sig) : typeof body.prompt === "string" ? await lireContratPrompt(body, secret, parcoursId, exp, sig) : ({ status: 400, raison: "bad-request", message: "Paramètres manquants." } satisfies Refus);
+  if ("status" in demande) return NextResponse.json({ error: demande.message, reason: demande.raison }, { status: demande.status, headers: cors });
 
-  // 2) Vérification HMAC (anti-falsification prompt + anti-détournement swatchUrls
-  //    + leadId : personne ne peut rattacher une image à la fiche d'un autre).
-  //    Sans leadId (ancien site), l'ancienne forme reste acceptée.
-  const cle = leadId ? leadId : parcoursId ? `p:${parcoursId}` : null;
-  const base = `${prompt}\n${swatchUrls.join(",")}\n${exp}`;
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(cle ? `${base}\n${cle}` : base)
-    .digest("hex");
-  const sigBuf = Buffer.from(sig, "hex");
-  const expBuf = Buffer.from(expected, "hex");
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    console.error("[simulate] signature invalide");
-    return NextResponse.json({ error: "Signature invalide.", reason: "bad-signature" }, { status: 401, headers: cors });
-  }
-
-  // Mission 15 (partie 2) — avant de dépenser : au plus ZONES_MAX zones (le moteur n'en étiquette pas plus), en V2 les
-  // références (non signées) doivent correspondre aux échantillons signés, et une zone choisie que l'analyse de la
-  // photo ne voit pas est refusée (409, avec la liste).
-  if (body.asynchrone === true && references.length > 0) {
-    const zones = zonesDuTravail(references);
-    if (zones.length > ZONES_MAX) {
-      return NextResponse.json({ error: `Au plus ${ZONES_MAX} zones par simulation : retirez-en une, vous pourrez relancer une simulation ensuite.`, reason: "trop-de-zones" }, { status: 400, headers: cors });
-    }
-    const reglages = await reglagesSimulateur().catch(() => null);
-    if (reglages?.moteur === "V2" && !(await referencesCoherentes(references, swatchUrls))) {
-      return NextResponse.json({ error: "Les références choisies ne correspondent pas à la demande signée : relancez la simulation.", reason: "references" }, { status: 400, headers: cors });
-    }
-    const nonVisibles = await zonesNonVisiblesPourPhoto(photo_base64, zones.map((z) => z.zone)).catch(() => []);
+  // 3) Une zone choisie que l'analyse connue de la photo ne voit pas : dit avant de dépenser (jamais à l'aveugle).
+  if (demande.zones.length > 0) {
+    const nonVisibles = await zonesNonVisiblesPourPhoto(photo_base64, demande.zones.map((z) => z.zone)).catch(() => []);
     if (nonVisibles.length > 0) {
       const libelles = nonVisibles.map((z) => ZONES_SIMULATEUR[z].libelle);
       return NextResponse.json(
@@ -157,7 +172,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3) Limite quotidienne par IP et globale — APRÈS la signature : une requête forgée ne consomme rien.
+  // 4) Limite quotidienne par IP et globale — APRÈS la signature : une requête forgée ne consomme rien.
+  const ip = ipDuVisiteurSimulateur(req.headers);
   const quota = simulationAutorisee(ip);
   if (!quota.ok) {
     return NextResponse.json(
@@ -173,32 +189,25 @@ export async function POST(req: NextRequest) {
   }
   await purgerSiNecessaire();
 
-  // 4) Nouveau contrat : le travail est créé, la tâche mise en file, la réponse part tout de suite.
-  if (body.asynchrone === true) {
-    if (!parcoursId) return NextResponse.json({ error: "Identifiant de parcours manquant : rechargez la page.", reason: "parcours" }, { status: 400, headers: cors });
-    try {
-      const { travailId, attenteEstimeeS } = await creerTravailSimulation({
-        parcoursId,
-        projet: typeof projet === "string" ? projet : "cuisine",
-        references,
-        prompt,
-        swatchUrls,
-        photoBase64: photo_base64,
-        page: typeof page === "string" ? page : null,
-        source: typeof source === "string" ? source : null,
-        campagne: typeof campagne === "string" ? campagne : null,
-        ipOrigine: ip === "inconnue" ? null : ip,
-      });
-      return NextResponse.json({ ok: true, travailId, attenteEstimeeS }, { status: 202, headers: cors });
-    } catch (err) {
-      // Panne de notre côté : le quota compté juste avant est rendu au visiteur.
-      rendreSimulation(ip);
-      console.error("[simulate] création du travail impossible :", err);
-      return NextResponse.json({ error: "Le service de simulation ne répond pas pour l'instant. Votre photo et vos choix sont conservés : réessayez dans un instant.", reason: "internal" }, { status: 500, headers: cors });
-    }
+  // 5) Le travail est créé, la tâche mise en file, la réponse part tout de suite.
+  try {
+    const { travailId, attenteEstimeeS } = await creerTravailSimulation({
+      parcoursId,
+      projet: typeof body.projet === "string" ? body.projet : "cuisine",
+      references: demande.references,
+      prompt: demande.prompt,
+      swatchUrls: demande.swatchUrls,
+      photoBase64: photo_base64,
+      page: texte(body.page, 200),
+      source: texte(body.source, 120),
+      campagne: texte(body.campagne, 120),
+      ipOrigine: ip === "inconnue" ? null : ip,
+    });
+    return NextResponse.json({ ok: true, travailId, attenteEstimeeS }, { status: 202, headers: cors });
+  } catch (err) {
+    // Panne de notre côté : le quota compté juste avant est rendu au visiteur.
+    rendreSimulation(ip);
+    console.error("[simulate] création du travail impossible :", err);
+    return NextResponse.json({ error: "Le service de simulation ne répond pas pour l'instant. Votre photo et vos choix sont conservés : réessayez dans un instant.", reason: "internal" }, { status: 500, headers: cors });
   }
-
-  // 5) Ancien contrat (transition) : génération et stockage dans la requête.
-  const reponse = await genererEtGarderSynchrone({ prompt, swatchUrls, photoBase64: photo_base64, ip, leadId, referenceChoisie, parcoursId, projet, references, page, source, campagne });
-  return NextResponse.json(reponse.corps, { status: reponse.status, headers: cors });
 }

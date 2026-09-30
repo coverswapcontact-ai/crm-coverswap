@@ -182,6 +182,10 @@ export async function purgerSiNecessaire(): Promise<void> {
     const { purgerAnalyses } = await import("@/lib/simulateur/analyses");
     const a = await purgerAnalyses();
     if (a > 0) console.log(`[site] ${pluriel(a, "analyse de photo archivée", "analyses de photos archivées")}`);
+    // Mission 15 (partie 3) : les images du banc de comparaison aussi (ligne gardée, image effacée).
+    const { purgerRendusBanc } = await import("@/lib/simulateur/banc/banc");
+    const b = await purgerRendusBanc();
+    if (b > 0) console.log(`[site] ${pluriel(b, "rendu du banc archivé", "rendus du banc archivés")}`);
   } catch (err) {
     console.error("[site] purge impossible :", err);
   }

@@ -1889,6 +1889,33 @@ en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/r
   campagne du banc), `SIMULATEUR_PLANCHE` (OUI/NON), `SIMULATEUR_QUALITE_SITE` (medium),
   `SIMULATEUR_QUALITE_ESPACE` (high, vaut aussi pour le CRM), `SIMULATEUR_SEUIL_CONTROLE` (5 à 9,
   défaut 7) ; lus par `simulateur/reglages.ts`.
+- **Banc de comparaison** (mission 15, partie 3 : `/simulateur/banc`, `src/lib/simulateur/banc/`) :
+  six cas fixes (`cas.ts` : la PHOTO d'un dossier de prod par ses identifiants `dossierId` +
+  `photoId`, pièce, zones et teintes ; rien n'est copié dans le dépôt, un identifiant inconnu affiche
+  « photo introuvable » et le cas n'est pas lancé) × trois variantes (`v1-swatches` : V1 revu,
+  échantillons bruts, medium ; `v2-planche` et `v2-swatches` : moteur studio à la qualité de
+  l'espace). Coût estimé AVANT tout lancement (`estimerCampagne` : une génération par rendu, une
+  analyse par photo, un contrôle par rendu V2, et le pire cas avec une seconde tentative) ; « Lancer
+  la campagne » avec confirmation, ou un cas, ou une variante — rien ne part sans le clic de Lucas.
+  Chaque rendu = une tâche **`SIMULATION_BANC`** (voie longue, une tentative, 8 min) qui passe par le
+  pipeline commun avec les réglages de la variante, et une ligne **`RenduBanc`** (statut, étape,
+  score, défauts, tentatives, coût réel, durée, prompt, direction artistique ; image sous
+  `banc/<cas>/<variante>-<n>.jpg`). Jamais de `SimulationEspace` ; les appels comptent dans
+  `GenerationImage` à l'origine CRM. La page se relit toutes les 5 s (`GET /api/simulateur/banc`),
+  rendus côte à côte par cas (vignette → plein écran, « Voir le prompt »), total de la campagne ;
+  elle rappelle `SIMULATEUR_MOTEUR` et renvoie vers Paramètres → Simulateur (c'est Lucas qui bascule).
+  Un rendu déjà en attente ou en cours pour le même cas et la même variante n'est pas doublé ; une
+  tâche reprise après un redéploiement pose ECHEC « interrompu » sans rappeler OpenAI. Tenue en
+  ordre : la ligne et sa tâche naissent dans une même transaction ; une ligne en attente ou en cours
+  dont la tâche `banc:<id>` n'est plus vivante (annulée depuis l'écran des tâches, échec hors du
+  rendu) est basculée en ECHEC « tâche annulée ou perdue » à la relecture ou au lancement suivant
+  (`remettreEnOrdreBanc`) ; un rendu payé dont l'image ne peut pas être écrite (volume plein) passe
+  en ECHEC avec son coût réel. Le total de la campagne est compté en base sur tous les rendus
+  (agrégats, pas les 200 relus) et comprend les analyses de photo (`GenerationImage` phase
+  `analyse`, origine CRM, dossiers du banc, depuis le premier rendu). Rétention : les images du banc
+  sont effacées après 30 jours (`purgerRendusBanc`, appelée par la purge opportuniste du simulateur ;
+  ligne gardée avec `chemin: null`). RGPD : les rendus d'un dossier entrent dans l'anonymisation
+  (image et consigne effacées).
 - **Routes publiques du simulateur du site** (sans session, CORS coverswap.fr) : `POST /api/simulate`
   (travail asynchrone ; en V2 les références sont confrontées aux échantillons signés après une
   relecture du catalogue, au plus 4 zones, 409 « zone-non-visible » d'après l'analyse connue),

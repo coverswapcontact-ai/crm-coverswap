@@ -99,6 +99,8 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const espacesPermanents = await client.espacePermanent.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   const preparations = await client.preparationSimulation.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+  // Mission 15 (partie 3) : les rendus du banc de comparaison faits sur une photo de ses dossiers.
+  const rendusBanc = await client.renduBanc.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   // Mission 15 (partie 2) : les analyses des photos de la personne (description de sa pièce), par l'empreinte de ses travaux, simulations et préparations.
   const empreintes = [...new Set([...simulationsSite.map((s) => s.photoEmpreinte), ...travauxSimulation.map((t) => t.photoEmpreinte), ...preparations.map((p) => p.photoEmpreinte)].filter((e): e is string => Boolean(e)))];
   const analysesPhoto = empreintes.length ? await client.analysePhoto.findMany({ where: { ...AVEC_ARCHIVES, empreinte: { in: empreintes } } }) : [];
@@ -130,6 +132,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...fichiers.map((fichier) => fichier.chemin),
     ...simulationsEspace.flatMap((simulation) => [simulation.chemin, simulation.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
     ...preparations.flatMap((p) => [p.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
+    ...rendusBanc.map((r) => r.chemin).filter((chemin): chemin is string => Boolean(chemin)),
   ];
 
   return {
@@ -157,6 +160,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       PhotoLead: photosLead,
       SimulationSite: simulationsSite,
       TravailSimulation: travauxSimulation,
+      RenduBanc: rendusBanc,
       PublicationSite: publicationsSite,
       Devis: devis.map((ligne) => Object.fromEntries(Object.entries(ligne).filter(([cle]) => cle !== "facture"))),
       Chantier: chantiers,

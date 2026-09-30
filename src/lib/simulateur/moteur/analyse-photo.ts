@@ -81,18 +81,24 @@ export async function analyserPhoto(photo: Buffer, pieceId: IdPiece, zonesPossib
   );
 }
 
-/** Le format de la photo, mesuré (jamais demandé au modèle). */
-export async function formatDeLaPhoto(photo: Buffer): Promise<FormatImage | null> {
+/** Les dimensions d'une image (octets ou chemin absolu), orientation EXIF appliquée ; null si elle est illisible. */
+export async function dimensionsImage(source: Buffer | string): Promise<{ largeur: number; hauteur: number } | null> {
   try {
     const sharp = (await import("sharp")).default;
-    const meta = await sharp(photo).rotate().metadata();
+    const meta = await sharp(source).rotate().metadata();
     const tourne = (meta.orientation ?? 1) >= 5;
     const largeur = (tourne ? meta.height : meta.width) ?? 0;
     const hauteur = (tourne ? meta.width : meta.height) ?? 0;
-    return largeur && hauteur ? formatDepuisDimensions(largeur, hauteur) : null;
+    return largeur && hauteur ? { largeur, hauteur } : null;
   } catch {
     return null;
   }
+}
+
+/** Le format de la photo, mesuré (jamais demandé au modèle). */
+export async function formatDeLaPhoto(photo: Buffer): Promise<FormatImage | null> {
+  const dims = await dimensionsImage(photo);
+  return dims ? formatDepuisDimensions(dims.largeur, dims.hauteur) : null;
 }
 
 /** Une zone choisie est-elle visible d'après l'analyse ? Une zone composée l'est si l'une de ses zones l'est ; une zone inconnue de l'analyse l'est (jamais bloquer à tort). */

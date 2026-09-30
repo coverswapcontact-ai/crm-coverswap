@@ -14,6 +14,7 @@ import { enregistrerTachesCorbeille } from "@/lib/prospects/corbeille";
 import { enregistrerTachesRelances } from "@/lib/relances/service";
 import { enregistrerTachesRgpd } from "@/lib/rgpd/conservation";
 import { enregistrerTachesAnalyses } from "@/lib/simulateur/analyses";
+import { enregistrerTachesBanc } from "@/lib/simulateur/banc/banc";
 import { enregistrerTachesSimulateur } from "@/lib/simulateur/taches";
 import { enregistrerTachesSimulationSite } from "@/lib/simulations/travaux";
 import { enregistrerTachesSms } from "@/lib/sms/taches";
@@ -37,7 +38,8 @@ import { enregistrerTachesValidation } from "@/lib/validation/taches";
  * Mission 15 (partie 1) : la génération du simulateur du site (SIMULATION_SITE),
  * en voie longue avec SIMULATION_API : deux rendus en parallèle au plus, sans
  * bloquer les tâches courtes. Partie 2 : l'analyse d'une photo (ANALYSE_PHOTO),
- * lancée par le site dès la photo chargée, sur la même voie.
+ * lancée par le site dès la photo chargée, sur la même voie. Partie 3 : les
+ * rendus du banc de comparaison (SIMULATION_BANC), même voie, lancés par Lucas.
  */
 export function enregistrerTousLesTraitements(): void {
   enregistrerTachesValidation();
@@ -56,6 +58,7 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesSimulateur();
   enregistrerTachesSimulationSite();
   enregistrerTachesAnalyses();
+  enregistrerTachesBanc();
   enregistrerTachesCoherence();
   enregistrerTachesSauvegardes();
   enregistrerTachesCorbeille();

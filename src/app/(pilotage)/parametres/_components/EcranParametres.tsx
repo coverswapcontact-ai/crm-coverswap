@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { History, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -100,7 +101,7 @@ export default function GroupesParametres({ parametres, groupes, onMisAJour }: {
         const liste = parametres.filter((parametre) => parametre.groupe === groupe);
         if (liste.length === 0) return null;
         return (
-          <section key={groupe} className="mt-6">
+          <section key={groupe} id={groupe.toLowerCase()} className="mt-6 scroll-mt-4">
             <TitreSection>{GROUPES_PARAMETRES[groupe]}</TitreSection>
             {groupe === "AGENT" ? (
               <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
@@ -109,7 +110,10 @@ export default function GroupesParametres({ parametres, groupes, onMisAJour }: {
             ) : null}
             {groupe === "SIMULATEUR" ? (
               <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
-                Coût estimé d&apos;un rendu (1 à 4 échantillons) : {QUALITES.map((q) => `${q} ${[1, 4].map((n) => `${coutEstime(n, q).toFixed(2).replace(".", ",")} $`).join(" à ")}`).join(" · ")}. Mesure de référence en medium (mai 2026) ; high ≈ ×1,7 et low ≈ ×0,4, à confirmer par le banc. L&apos;analyse de la photo et le contrôle du rendu (moteur V2) coûtent environ un demi-centime chacun.
+                Coût estimé d&apos;un rendu (1 à 4 échantillons) : {QUALITES.map((q) => `${q} ${[1, 4].map((n) => `${coutEstime(n, q).toFixed(2).replace(".", ",")} $`).join(" à ")}`).join(" · ")}. Mesure de référence en medium (mai 2026) ; high ≈ ×1,7 et low ≈ ×0,4, à confirmer par le banc. L&apos;analyse de la photo et le contrôle du rendu (moteur V2) coûtent environ un demi-centime chacun.{" "}
+                <Link href="/simulateur/banc" className="text-[#5DCAA5] hover:underline">
+                  Banc de comparaison V1 / V2
+                </Link>
               </p>
             ) : null}
             <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]", TRANS)}>

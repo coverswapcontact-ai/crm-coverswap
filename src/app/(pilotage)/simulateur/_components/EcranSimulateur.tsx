@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { BookText, ChevronRight, Coins, Search, Sparkles, WandSparkles, X } from "lucide-react";
+import { BookText, ChevronRight, Coins, FlaskConical, Search, Sparkles, WandSparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Bouton, CLASSE_SAISIE, EnTetePage, Pastille, TRANS } from "@/components/pilotage/ui";
@@ -147,9 +147,14 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
         titre="Simulateur"
         sousTitre="Une photo du client, une teinte par zone : par l'API, ou préparé pour ChatGPT."
         actions={
-          <Link href="/simulateur/prompts" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
-            <BookText size={14} aria-hidden /> Prompts
-          </Link>
+          <>
+            <Link href="/simulateur/banc" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+              <FlaskConical size={14} aria-hidden /> Banc
+            </Link>
+            <Link href="/simulateur/prompts" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+              <BookText size={14} aria-hidden /> Prompts
+            </Link>
+          </>
         }
       />
 

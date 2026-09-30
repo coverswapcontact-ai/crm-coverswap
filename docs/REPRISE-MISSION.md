@@ -2987,3 +2987,172 @@ artistique de chaque simulation (site compris) sont désormais lisibles dans le 
   rendu, contrôle 8/10, travail prêt en 7,5 s, moteur V2 tracé sur la simulation ; en V1 le même parcours reste
   identique à la partie 1. Le sondage du site s'arrête quand l'onglet est caché et reprend dès qu'il redevient
   visible (vérifié en forçant l'état). Déploiement CRM seul (le site ne change pas dans cette partie).
+
+### Correctif après la partie 2 — attente reconnue par marqueur (30/09/2026, commit `2ebbd4c`)
+
+Vu en production après le déploiement de la partie 2 : les 14 tâches d'agenda remises en attente par la migration
+14-9 étaient retombées en ECHEC_DEFINITIF, avec le message d'une attente (« API Google Calendar non activée …
+accessNotConfigured ») mais sans le préfixe « [en attente] », et Paramètres disait « Google : rien à signaler ».
+Cause : l'exécuteur ne reconnaissait l'attente que par `instanceof AttenteExterne`, et le bundle de production de
+Next porte deux copies du module `taches/registre` (instrumentation d'un côté, routes de l'autre) : une erreur levée
+dans l'une n'est pas `instanceof` la classe de l'autre.
+
+- `AttenteExterne` et `ErreurDefinitive` portent un marqueur (`attenteExterne`, `erreurDefinitive`) ;
+  `estAttenteExterne` / `estErreurDefinitive` reconnaissent l'objet par sa forme. L'exécuteur, Drive, mail, messages
+  et validation passent par ces fonctions. **Règle** : ne plus écrire `instanceof AttenteExterne` ni
+  `instanceof ErreurDefinitive` dans le CRM.
+- `apisNonActivees()` lit aussi les tâches déjà en échec pour cette raison.
+- Migration `agenda-rappels-en-attente-15-2b` (même fonction que 14-9, rejouable) ; test
+  `mission-15-partie-2b.test.ts`.
+- Vérifié en production à 04:47 UTC par `sante_systeme` : 28 tâches en attente, ligne Google Calendar affichée, seuls
+  les 4 échecs Meta (jeton) restent.
+
+## Partie 3 — Le banc de comparaison `/simulateur/banc` (30/09)
+
+Énoncé § 6 : six photos de dossiers de prod × trois variantes du moteur (ancien prompt avec échantillons bruts, moteur
+studio avec planche, moteur studio avec échantillons bruts), score du contrôle, coût réel, durée et prompt de chaque
+rendu ; coût de la campagne affiché AVANT ; c'est LUCAS qui lance ; `SIMULATEUR_MOTEUR` reste V1 tant qu'il ne bascule
+pas. Rien n'a été généré : OpenAI est simulé dans les tests, la page ne part qu'au clic.
+
+### CRM
+- **Cas** `src/lib/simulateur/banc/cas.ts` (sans dépendance Node, lu par l'écran) : `CAS_BANC`, six cas par identifiants
+  de PROD (`dossierId` + `photoId` de `Dossier.photos`, rien n'est copié dans le dépôt) — `t-cuisine` (hauts AB02, bas D1,
+  plan MK15), `b-sdb` (meuble-vasque CT68), `ba-cuisine` (bas NE55, plan NH73), `be-sdb` (meuble-vasque AA12 + portes de
+  placard AA12, zone `portes-dressing`), `f-cuisine` (hauts NF15, bas NF15, plan MK15), `d-sdb` (carrelage mural AL23,
+  tablier AL23) ; libellés à l'initiale (jamais un nom). `VARIANTES_BANC` : `v1-swatches` (V1 revu, échantillons bruts,
+  **medium**), `v2-planche`, `v2-swatches` (moteur studio, qualité **`SIMULATEUR_QUALITE_ESPACE`**). `filmsDuCas`.
+- **Service** `src/lib/simulateur/banc/banc.ts` : `estimerCampagne(cas, reglages)` (pure : une génération par rendu
+  au `coutEstime(films, qualité)`, une analyse par photo, un contrôle par rendu V2 ; `totalMin` = une tentative,
+  `totalMax` = seconde tentative + second contrôle sur chaque rendu V2 ; `renduMin`/`renduMax` pour la phrase « 18 ×
+  0,21 à 0,58 $ ») ; `photoDuCas` (dossier vivant + photo « avant » par `idPhoto`) ; `etatBanc({ cas? })` (réglages,
+  cas avec `photo` ou null = « photo introuvable », estimation sur les cas lançables, 200 derniers rendus, total) ;
+  `lancerBanc({ cas?, variante? }, { cas? })` → une ligne `RenduBanc` EN_ATTENTE + une tâche **`SIMULATION_BANC`**
+  (`cle banc:<id>`, priorité 6, une tentative) par rendu, cas sans photo ignoré (`RAISON_PHOTO_INTROUVABLE`), rendu
+  déjà en attente ou en cours pour le même cas × variante non doublé (`RAISON_DEJA_EN_COURS`), **ordre variante par
+  variante** (les deux places de la voie longue ne traitent pas en même temps les deux variantes V2 d'une même photo :
+  l'analyse est faite une fois puis réutilisée par empreinte) ; `executerRenduBanc(id, signal)` : départ posé d'un seul
+  geste (`updateMany` EN_ATTENTE → EN_COURS ; réclamé une seconde fois → ECHEC « interrompu » sans rappeler OpenAI),
+  photo relue sur le volume, `genererAvecMoteur({ origine: "CRM", reglages: { …reglages, moteur, planche }, qualite,
+  dossierId, echeance, surEtape, signal })`, image écrite **`banc/<cas>/<variante>-<n>.jpg`** (n = rang du rendu de ce
+  cas dans cette variante, nom libre vérifié sur le disque), ligne PRET avec score, défauts, tentatives, coût réel
+  (rendus + contrôles), durée, prompt, direction artistique ; échec → ECHEC + message et raison ; `imageRenduBanc`
+  (chemin borné au volume) ; `enregistrerTachesBanc` (voie longue, acteur `SYSTEME:simulateur-banc`, 480 s), listé
+  dans `taches/traitements.ts`. **Jamais de `SimulationEspace`, jamais d'espace ouvert, jamais de
+  `PreparationSimulation`** ; les appels comptent dans `GenerationImage` à l'origine CRM (dossierId du cas).
+- **Schéma** : nouveau modèle **`RenduBanc`** (`campagneId`, `cas`, `variante`, `dossierId`, `photoId`, `piece`,
+  `zones` JSON, `statut` EN_ATTENTE | EN_COURS | PRET | ECHEC, `etape`, `moteur`, `qualite`, `coutEstime`, `chemin`,
+  `largeur`, `hauteur`, `score`, `defauts` JSON, `tentatives`, `coutDollars`, `dureeMs`, `promptTexte`,
+  `directionArtistique`, `erreur`, `demarreLe`, `termineLe`, archivage, `ecriture` ; index `[cas, variante]`,
+  `[createdAt]`). Ajout pur (`db push` sans `--accept-data-loss`), `npx prisma generate` fait. **Aucune migration de
+  données** (modèle vide).
+- **Tenue en ordre (relecture du 30/09)** : la ligne et sa tâche naissent dans **une même transaction**
+  (`prisma.$transaction` + `mettreEnFile(…, tx)`) ; `remettreEnOrdreBanc()` (appelée par `etatBanc` et `lancerBanc`)
+  bascule en ECHEC « tâche annulée ou perdue : relance ce rendu » toute ligne EN_ATTENTE/EN_COURS dont la tâche
+  `banc:<id>` n'est plus EN_ATTENTE/EN_COURS (annulée depuis l'écran des tâches, échec hors du rendu) : plus de
+  cas × variante bloqué « déjà en cours » pour toujours. La persistance après une génération **payée** (chemin, mkdir,
+  écriture, update PRET) est sous try/catch : ECHEC « Rendu payé mais non enregistré (…) » avec `coutDollars` et
+  `tentatives` réels, jamais EN_COURS à vie. `estIdPiece` de `zones.ts` (plus de liste de pièces recopiée).
+- **Total en base** : `total` compté par agrégats (`groupBy` statut, `_sum coutDollars`), indépendant du `take: 200`,
+  lignes archivées comprises (`AVEC_ARCHIVES`) ; il inclut les **analyses de photo** (`GenerationImage` phase `analyse`,
+  origine CRM, dossiers des rendus, depuis le premier rendu) et expose `analysesDollars` (la page affiche « dont x $
+  d'analyses ») : comparable à l'estimation affichée au-dessus.
+- **Rétention** : `purgerRendusBanc()` (30 jours, `RETENTION_BANC_MS`) efface l'image et garde la ligne (`chemin: null`,
+  `archiveLe`, motif) ; branchée dans `site/simulations.ts › purgerSiNecessaire` (import dynamique, comme les
+  analyses). La page le dit (« télécharge celles à garder »). Les lignes archivées restent listées et comptées.
+- **Dimensions** : `dimensionsImage(source)` extrait de `moteur/analyse-photo.ts` (`formatDeLaPhoto` s'en sert) ;
+  `RenduBanc.largeur/hauteur` posés à l'écriture (sharp), dimensions de la photo du cas lues une fois par chemin
+  (cache mémoire) → `width`/`height` sur les `<img>` plein écran (plus de saut de la modale).
+- **Routes** (derrière la session, rien de public) : `GET /api/simulateur/banc` (état, `no-store`, relu toutes les
+  5 s), `POST /api/simulateur/banc { cas?, variante? }` → 202 `{ campagneId, lances, ignores }`,
+  `GET /api/simulateur/banc/[id]/image` (`?telecharger=1`).
+- **Page** `src/app/(pilotage)/simulateur/banc/page.tsx` → `_components/EcranBanc.tsx` (relecture toutes les 5 s ;
+  bandeau « Moteur en service » V1/V2 + planche + qualités + seuil avec lien Paramètres → Simulateur ; bloc « Campagne
+  complète : 18 rendus (6 cas × 3 variantes) · 18 × min à max $ + 6 analyses et 12 contrôles ≈ totalMin $, jusqu'à
+  totalMax $ » ; boutons « Lancer la campagne » et un par variante (n rendus · ≈ coût) avec **modale de confirmation** ;
+  total de la campagne (tous les rendus, et les rendus affichés) avec compteurs en cours / prêts / en échec) et
+  `CarteCas.tsx` (par cas : photo du dossier — vignette → plein écran —, les trois rendus côte à côte : vignette →
+  plein écran + téléchargement, pastille statut / étape / « contrôle n/10 · 2 essais » ambre sous le seuil, coût réel,
+  durée, défauts, « Voir le prompt » en modale avec copie, « n rendus précédents » ; « Lancer ce cas · ≈ coût » ; « Photo
+  introuvable » sans bouton). Tutoiement (convention du CRM), cibles 44 px, thème graphite.
+- **Liens** : écran Simulateur (`EcranSimulateur`, bouton « Banc » à côté de « Prompts ») et Paramètres → Simulateur
+  (`EcranParametres`, « Banc de comparaison V1 / V2 » dans le paragraphe des coûts). Retour du banc vers
+  **`/parametres#simulateur`** : chaque groupe de paramètres porte `id={groupe.toLowerCase()}` (`scroll-mt-4`) et
+  `ANCRES` d'`OngletsParametres` connaît `pilotage`, `commercial`, `publicite`, `simulateur`, `rgpd` (→ onglet
+  Activité).
+- **Finitions** : pluriels accordés (« 1 rendu », « 1 prêt », « 1 rendu lancé en tout ») ; message « interrompu » au
+  tutoiement ; `motion-reduce:animate-none` sur les spinners (`CarteCas` et `Bouton` partagé de `ui.tsx`) ;
+  description de la variante V1 explicite (« V1 revu … pas le prompt signé que le site envoie encore »).
+- **RGPD** : `RenduBanc` dans la carte (`carte.ts` : image, prompt, direction artistique, défauts et erreur effacés ;
+  cas, variante, score, coût et dates gardés) et dans le périmètre d'anonymisation (`anonymisation.ts` : rendus des
+  dossiers de la personne, image effacée par la tâche d'effacement).
+- **Documentation** : `docs/ARCHITECTURE-PILOTAGE.md` (Simulateur du CRM › Banc de comparaison).
+
+### Site
+- Rien (vérifications relancées : vertes).
+
+### Décisions
+- Teintes des zones que l'énoncé ne fixait pas : bas de Ba. en NE55 et son plan en NH73, plan de F. en MK15 (teintes
+  vues dans les simulations de prod) ; « portes de placard » de Be. = zone `portes-dressing` dans une pièce salle de
+  bain (le moteur accepte toute zone connue ; le même film AA12 sur les deux zones, comme le rendu choisi en prod).
+- Le « V1 » du banc est le **V1 revu** (`moteur/v1.ts`, échantillons du cache), pas le prompt signé du site :
+  assumé (relecture du 30/09), dit dans la description de la variante et à dire à Lucas dans le rapport — le banc
+  compare le moteur studio au V1 tel que le CRM le reconstruit (mêmes étages, textes des zones de la source unique,
+  écarts listés en tête de `v1.ts`), pas octet pour octet au prompt que le site envoie encore jusqu'à la partie 4.
+  Faire produire le prompt réel du site demanderait une route côté site (`promptV1`/`swatchUrlsV1` du pipeline) :
+  hors périmètre de la partie 3.
+- Les images du banc suivent la rétention du site (30 jours) plutôt que de rester sur le volume de 500 Mo (plein le
+  22/09) ; « Télécharger le rendu » existe pour garder un rendu.
+- Le coût des analyses est compté par `GenerationImage` (phase analyse, origine CRM, dossiers des rendus, depuis le
+  premier rendu) : une analyse déjà connue avant la campagne n'a rien coûté au banc et n'est pas comptée ; une analyse
+  d'une AUTRE photo du même dossier faite au CRM pendant la campagne serait comptée (rare, accepté).
+- `RenduBanc` porte `piece` et `zones` : la tâche ne dépend pas de `cas.ts` (un cas modifié plus tard ne change pas un
+  rendu déjà lancé ; les essais passent leurs propres cas par `{ cas }`).
+- Un seul rendu à la fois par cas × variante ; relancer crée un nouveau rendu (`-2.jpg`, « 1 rendu précédent »), rien
+  n'est écrasé ni supprimé.
+- Coût affiché = `coutEstime` de la partie 2 (facteur high ×1,7 à confirmer par le banc) + 0,005 $ par appel vision ;
+  le pire cas double chaque rendu V2 (seconde tentative sous le seuil).
+- Lancement variante par variante pour que l'analyse d'une photo ne soit payée qu'une fois (vu en essai : les deux
+  variantes V2 d'une même photo lancées en parallèle sur les deux places → deux analyses, `obtenirAnalyse` n'a pas de
+  verrou entre le test et la création ; ≈ 0,005 $, hors périmètre, à savoir).
+- Aucun paramètre nouveau, aucun outil MCP, aucune route publique ; `SIMULATEUR_MOTEUR` non touché (Lucas bascule).
+
+### Vérifié (après la relecture du 30/09)
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 10 fichiers touchés par la relecture 0 ;
+  `mission-15-partie-3.test.ts` **12/12** (les 8 d'avant — estimation : 6 × 3 = 18, V1 medium / V2 high, renduMin 0,21
+  et renduMax 0,58, totalMin/Max ; cas de prod sans photo → « photo introuvable », rien de lancé ; campagne simulée →
+  18 rendus PRET, fichiers `banc/<cas>/<variante>-1.jpg`, V1 sans contrôle et sans « ROLE », V2 contrôle 9/10 +
+  direction artistique, 6 planches / 12 échantillons, 6 medium / 12 high, 6 analyses + 12 contrôles comptés au CRM, coût
+  réel > rendu seul, **0 SimulationEspace / EspaceClient / PreparationSimulation**, état et **total = rendus + analyses**
+  (`analysesDollars` > 0), dimensions 1536 × 1024 du rendu et 1200 × 900 de la photo, image servie 200 / 404, second
+  clic non doublé ; cas sans photo → 15 rendus et `-2.jpg` ; un cas / une variante / les deux ; contrôle 5 puis 9 → 2
+  tentatives, défaut rappelé, coût des deux ; générateur en échec → ECHEC + message, pas de fichier ; reprise après
+  redéploiement → « interrompu » sans appel ; route POST 400 / 202, GET, V1 en medium même avec l'espace en low ; carte
+  RGPD — plus 4 nouveaux : **tâche annulée** depuis l'écran des tâches → ligne ECHEC « tâche annulée ou perdue », cas
+  relançable, autant de tâches `banc:<id>` que de lignes ; **rendu payé non enregistré** (un fichier à la place du
+  dossier `banc/<cas>`) → ECHEC avec coût réel et tentatives, un seul appel, relance acceptée ; **purge à 30 jours** →
+  image effacée, ligne gardée (score, coût, prompt), route image 404, total inchangé ; **pièce inconnue** → ECHEC sans
+  appel). Suites des modules touchés : `rgpd.test.ts`, `routes-publiques.test.ts`, `mission-15-partie-2.test.ts`,
+  `simulateur.test.ts` **44/44** ; `taches.test.ts` + `mission-14-partie-6.test.ts` **27/27** ;
+  `mission-15-partie-1.test.ts` **16/16**. OpenAI simulé par injection (`definirGenerateurEssai`,
+  `definirVisionEssai`) : aucun appel réseau, aucune image générée. `npx prisma generate` refait (colonnes `largeur`,
+  `hauteur`).
+- Site : `npm run lint` 0 ; `npm test` 8/8 ; `npx tsc --noEmit -p .` 0 (rien touché par la partie 3).
+- Piège vu : l'extension Prisma `journal` ajoute `archiveLe: null` à tout `findMany`/`count`/`aggregate`/`groupBy` qui
+  ne parle pas d'`archiveLe` — une ligne purgée disparaissait du total ; `...AVEC_ARCHIVES` posé sur les lectures du
+  banc qui doivent voir les lignes archivées.
+
+### Reste / à savoir
+- Rien lancé en vrai (ni build, ni serveur, ni OpenAI) : à l'orchestrateur — build du CRM, `db push` (nouveau modèle),
+  puis la campagne par Lucas depuis `/simulateur/banc` (coût affiché avant, ≈ 6 à 7 $ pour une tentative par rendu avec
+  l'espace en high). Les six photos de prod doivent être encore dans leurs dossiers : sinon « photo introuvable ».
+- Page vue en local par l'orchestrateur (copie d'essai, faux OpenAI, 390 × 660) : cas T. monté sur la copie avec sa
+  photo, « Lancer ce cas » → modale de confirmation → 3 rendus prêts (V1 0,21 $ sans contrôle, V2 planche et V2
+  échantillons contrôle 8/10), coût réel par cas et total, modale du prompt (13 777 caractères, copie), plein écran,
+  ancre `/parametres#simulateur` qui défile bien. Deux retouches après relecture : boutons de lancement grisés quand
+  aucun cas n'a de photo ; « 1 analyse », « 1 contrôle » au singulier.
+- Le V1 du banc reste le V1 revu du CRM (décision assumée, voir Décisions) : à dire à Lucas avant qu'il tranche V1/V2.
+- `SIMULATEUR_MOTEUR` reste V1 ; après le banc, c'est Lucas qui bascule (Paramètres → Simulateur, lien depuis la page).
+- Le facteur high (×1,7) et le coût vision (0,005 $) sont des estimations : le banc donne les coûts réels par rendu,
+  `prix.ts › FACTEUR_QUALITE` est à corriger d'après la campagne.
+- Dans le pire des cas (deux tentatives par rendu V2), la voie longue traite deux rendus à la fois : 18 rendus ≈ 20 à
+  40 min.

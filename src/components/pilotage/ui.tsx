@@ -61,7 +61,7 @@ export function Bouton({
       )}
       {...props}
     >
-      {chargement ? <Loader2 size={14} className="animate-spin" aria-hidden /> : icone}
+      {chargement ? <Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden /> : icone}
       {children}
     </button>
   );

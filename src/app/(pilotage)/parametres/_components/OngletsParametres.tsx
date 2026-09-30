@@ -34,7 +34,8 @@ const ONGLETS: { valeur: Onglet; libelle: string }[] = [
   { valeur: "assistant", libelle: "Assistant" },
 ];
 const CLE_MEMOIRE = "parametres-onglet";
-const ANCRES: Record<string, Onglet> = { activite: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", mail: "mail", sms: "sms", assistant: "assistant" };
+// Les groupes de l'onglet Activité ont chacun leur ancre (`id` posé par GroupesParametres) : `/parametres#simulateur` depuis le banc.
+const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", mail: "mail", sms: "sms", assistant: "assistant" };
 const GROUPES_ACTIVITE: readonly GroupeParametre[] = ["PILOTAGE", "COMMERCIAL", "PUBLICITE", "SIMULATEUR", "RGPD"];
 const GROUPES_FACTURATION: readonly GroupeParametre[] = ["ENCAISSEMENT", "FACTURATION"];
 const GROUPES_AVANCES: readonly GroupeParametre[] = ["FISCAL", "SOCIAL"];

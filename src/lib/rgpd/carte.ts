@@ -88,6 +88,8 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   TravailSimulation: { remplacer: () => ({ notifierEmail: null, notifierTelephone: null, ipOrigine: null, photoPath: null, promptTexte: null, references: "[]", photoEmpreinte: null }), garde: "projet, statut, dates, durée et raison d'échec du travail (photo effacée)" },
   // Mission 15 (partie 2) : l'analyse d'une photo (description de la pièce), retrouvée par l'empreinte des travaux et simulations de la personne.
   AnalysePhoto: { remplacer: () => ({ json: null, parcoursId: null, photoPath: null, raison: null }), garde: "empreinte, pièce, statut, coût et dates (description de la pièce effacée)" },
+  // Mission 15 (partie 3) : un rendu du banc de comparaison fait sur la photo d'un dossier de la personne.
+  RenduBanc: { remplacer: () => ({ chemin: null, promptTexte: null, directionArtistique: null, defauts: null, erreur: null }), garde: "cas, variante, statut, score, coût, durée et dates (image et consigne effacées)" },
   PublicationSite: { remplacer: () => ({ texte: null, auteur: null, photoAvant: null, photoApres: null }), garde: "titre, ville et type ; sans photo ni texte, la publication disparaît du site" },
   Devis: { remplacer: () => ({ notesInternes: null }), garde: "numéro et montants de l'ancien écran" },
   Facture: { conserve: "facture de l'ancien écran : conservation légale de 10 ans" },

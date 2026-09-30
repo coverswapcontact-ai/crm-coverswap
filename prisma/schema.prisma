@@ -1686,6 +1686,47 @@ model GenerationImage {
   @@index([createdAt])
 }
 
+/// Mission 15 (partie 3) : un rendu du banc de comparaison `/simulateur/banc` — un cas (la photo d'un dossier,
+/// `simulateur/banc/cas.ts`) × une variante (v1-swatches | v2-planche | v2-swatches). Jamais publié dans un espace
+/// client : l'image vit sous banc/<cas>/<variante>-<n>.jpg sur le volume ; le coût est compté dans GenerationImage
+/// (origine CRM). Rien ne se supprime : archivage.
+model RenduBanc {
+  id                  String    @id @default(cuid())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  campagneId          String // les rendus lancés d'un même clic
+  cas                 String // identifiant du cas (cas.ts)
+  variante            String // v1-swatches | v2-planche | v2-swatches
+  dossierId           String
+  photoId             String
+  piece               String // cuisine | salle-de-bain | …
+  zones               String    @default("[]") // JSON { zone, ref }[]
+  statut              String    @default("EN_ATTENTE") // EN_ATTENTE | EN_COURS | PRET | ECHEC
+  etape               String? // analyse | matieres | rendu
+  moteur              String? // V1 | V2
+  qualite             String? // low | medium | high
+  coutEstime          Float?
+  chemin              String? // banc/<cas>/<variante>-<n>.jpg (null après la purge à 30 jours ou l'anonymisation)
+  largeur             Int? // dimensions de l'image (place réservée à l'écran)
+  hauteur             Int?
+  score               Int?
+  defauts             String? // JSON { type, detail }[]
+  tentatives          Int?
+  coutDollars         Float? // rendu(s) + contrôle(s), réel
+  dureeMs             Int?
+  promptTexte         String?
+  directionArtistique String?
+  erreur              String?
+  demarreLe           DateTime?
+  termineLe           DateTime?
+  archiveLe           DateTime?
+  archiveMotif        String?
+  ecriture            String?
+
+  @@index([cas, variante])
+  @@index([createdAt])
+}
+
 // Notes prises pendant un appel à un contact : une par appel, datée, avec ses étiquettes
 // (trop cher, veut réfléchir…). Enregistrées au fil de la frappe. Elles restent sur la fiche
 // du contact même s'il n'aboutit jamais ; à l'ouverture de son dossier, elles sont reprises

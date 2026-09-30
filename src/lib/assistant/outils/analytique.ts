@@ -4,6 +4,7 @@ import { resoudrePeriode } from "@/lib/analytique/periode";
 import { resumeEnregistre } from "@/lib/analytique/resume";
 import { FAMILLES, LIBELLES_FAMILLE, LIBELLES_ONGLET, LIBELLES_VERDICT, ONGLETS_ANALYTIQUE, PERIODES_ANALYTIQUE, type EcranAnalytique, type EtatSource, type Indicateur, type ResumeDuJour, type SourceDonnees } from "@/lib/analytique/types";
 import { definirOutil, format, lien } from "../definition";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Mission 17 (partie B) — l'outil `analytique` (lecture) : n'importe quel onglet de l'écran /analytique pour une
@@ -16,6 +17,8 @@ const NOMS_SOURCE: Record<SourceDonnees, string> = { CRM: "CRM", SITE: "site", M
 const ETATS: Record<EtatSource["etat"], string> = { A_JOUR: "à jour", EN_ECHEC: "en échec", NON_BRANCHEE: "non branchée", EN_ATTENTE_ACCES: "en attente d'accès" };
 
 const nombre = (v: number) => v.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+/** « 5,1 % » : un ratio 0..1 en pourcentage, une décimale au plus. */
+const pct = (ratio: number) => `${(Math.round(ratio * 1000) / 10).toLocaleString("fr-FR")} %`;
 export function valeurLisible(i: Pick<Indicateur, "format" | "valeur">): string {
   if (i.valeur === null) return "—";
   if (i.format === "euros") return format.euros(i.valeur);
@@ -39,17 +42,17 @@ function lignesOnglet(ecran: EcranAnalytique): string[] {
       const p = ecran.publicite;
       return [
         `Tunnel : ${t.etapes.map((e) => `${e.libelle} ${e.valeur === null ? "—" : nombre(e.valeur)}${e.tauxPassage !== null ? ` (${Math.round(e.tauxPassage * 100)} %)` : ""}`).join(" → ")}.${t.perteMax ? ` L'étape qui perd le plus : ${t.perteMax.libelle} (${t.perteMax.perdus} perdus).` : ""}`,
-        p ? `Publicité Meta : ${p.jourCampagne !== null && p.dureeCampagne !== null ? `jour ${p.jourCampagne} sur ${p.dureeCampagne}, ` : ""}dépense ${p.depense === null ? "inconnue" : `${format.euros(p.depense)}${p.estimation ? " (estimation)" : ""}`}${p.budget !== null ? ` sur ${format.euros(p.budget)}` : ""}, ${p.leads} leads, ${p.coutParLead !== null ? `${format.euros(p.coutParLead)} par lead` : "coût par lead —"}${p.publicites.length ? ` ; ${p.publicites.map((x) => `${x.nom} : ${LIBELLES_VERDICT[x.verdict]} (${x.detail})`).join(" · ")}` : ""}.` : "Publicité : aucune campagne.",
+        p ? `Publicité Meta : ${p.jourCampagne !== null && p.dureeCampagne !== null ? `jour ${p.jourCampagne} sur ${p.dureeCampagne}, ` : ""}dépense ${p.depense === null ? "inconnue" : `${format.euros(p.depense)}${p.estimation ? " (estimation)" : ""}`}${p.budget !== null ? ` sur ${format.euros(p.budget)}` : ""}, ${pluriel(p.leads, "lead")}, ${p.coutParLead !== null ? `${format.euros(p.coutParLead)} par lead` : "coût par lead —"}${p.publicites.length ? ` ; ${p.publicites.map((x) => `${x.nom} : ${LIBELLES_VERDICT[x.verdict]} (${x.detail})`).join(" · ")}` : ""}.` : "Publicité : aucune campagne.",
         ecran.seo && ecran.seo.clics !== null ? `SEO : ${nombre(ecran.seo.clics)} clics, ${nombre(ecran.seo.impressions ?? 0)} affichages, position ${ecran.seo.position ?? "—"}${ecran.seo.opportunites.length ? ` ; vu jamais cliqué : ${ecran.seo.opportunites.map((o) => `« ${o.requete} » ${o.impressions} affichages`).join(", ")}` : ""}.` : "",
-        ecran.qualite.length ? `Qualité par source : ${ecran.qualite.map((q) => `${q.libelle} ${q.leads} leads, ${q.joints} joints, ${q.devis} devis${q.tauxDevis !== null ? ` (${Math.round(q.tauxDevis * 100)} %)` : ""}${q.horsTunnel ? " (hors tunnel)" : ""}`).join(" · ")}.` : "",
-        `Argent : ${format.euros(ecran.argent.encaisse)} encaissés, ${format.euros(ecran.argent.devisEnAttente)} de devis en attente, dépense pub ${ecran.argent.depensePub === null ? "inconnue" : format.euros(ecran.argent.depensePub)}${ecran.argent.ratioPub !== null ? `, pub du mois = ${Math.round(ecran.argent.ratioPub * 1000) / 10} % de l'encaissé du mois dernier (plafond ${Math.round(ecran.argent.plafond * 100)} %)` : ""}.`,
+        ecran.qualite.length ? `Qualité par source : ${ecran.qualite.map((q) => `${q.libelle} ${pluriel(q.leads, "lead")}, ${pluriel(q.joints, "joint")}, ${q.devis} devis${q.tauxDevis !== null ? ` (${pct(q.tauxDevis)})` : ""}${q.horsTunnel ? " (hors tunnel)" : ""}`).join(" · ")}.` : "",
+        `Argent : ${format.euros(ecran.argent.encaisse)} encaissés, ${format.euros(ecran.argent.devisEnAttente)} de devis en attente, dépense pub ${ecran.argent.depensePub === null ? "inconnue" : format.euros(ecran.argent.depensePub)}${ecran.argent.ratioPub !== null ? `, pub du mois = ${pct(ecran.argent.ratioPub)} de l'encaissé du mois dernier (plafond ${pct(ecran.argent.plafond)})` : ""}.`,
       ];
     }
     case "publicite": {
       const pubs = ecran.lignes.filter((l) => l.niveau === "PUBLICITE");
       return [
         ecran.campagne ? `Campagne : ${ecran.campagne.jour !== null ? `jour ${ecran.campagne.jour} sur ${ecran.campagne.duree}` : "—"}${ecran.campagne.budget !== null ? `, budget ${format.euros(ecran.campagne.budget)}` : ""}${ecran.campagne.regleDuJour ? ` ; règle du jour : ${ecran.campagne.regleDuJour}` : ""}.` : "Aucune campagne renseignée.",
-        pubs.length ? `Par publicité :\n${pubs.slice(0, 15).map((l) => `  - ${l.nom} : ${ecran.estimation ? "dépense inconnue (estimation globale seulement)" : format.euros(l.depense)}, ${l.leadsCrm} leads CRM${ecran.estimation ? "" : ` (${l.leadsPlateforme} chez Meta)`}, ${l.devis} devis, ${l.signes} signés${l.coutParLead !== null ? `, ${format.euros(l.coutParLead)} par lead` : ""}${l.verdict ? ` — ${LIBELLES_VERDICT[l.verdict]}${l.raisonVerdict ? ` : ${l.raisonVerdict}` : ""}` : ""}`).join("\n")}` : "Aucune publicité sur la période.",
+        pubs.length ? `Par publicité :\n${pubs.slice(0, 15).map((l) => `  - ${l.nom} : ${ecran.estimation ? "dépense inconnue (estimation globale seulement)" : format.euros(l.depense)}, ${pluriel(l.leadsCrm, "lead")} CRM${ecran.estimation ? "" : ` (${l.leadsPlateforme} chez Meta)`}, ${l.devis} devis, ${pluriel(l.signes, "signé")}${l.coutParLead !== null ? `, ${format.euros(l.coutParLead)} par lead` : ""}${l.verdict ? ` — ${LIBELLES_VERDICT[l.verdict]}${l.raisonVerdict ? ` : ${l.raisonVerdict}` : ""}` : ""}`).join("\n")}` : "Aucune publicité sur la période.",
       ];
     }
     case "seo":
@@ -64,12 +67,12 @@ function lignesOnglet(ecran: EcranAnalytique): string[] {
       return [
         `Entonnoir : ${ecran.entonnoir.etapes.map((e) => `${e.libelle} ${e.valeur ?? "—"}`).join(" → ")}.`,
         ecran.pagesEntree.length ? `Pages d'entrée : ${ecran.pagesEntree.slice(0, 6).map((p) => `${p.page} ${p.visites}`).join(", ")}.` : "",
-        (ecran.sources as unknown as { famille: string; nom: string; visites: number }[]).length ? `Provenances : ${(ecran.sources as unknown as { famille: keyof typeof LIBELLES_FAMILLE; nom: string; visites: number }[]).slice(0, 8).map((s) => `${s.nom} (${LIBELLES_FAMILLE[s.famille] ?? s.famille}) ${s.visites}`).join(", ")}.` : "",
+        ecran.provenances.length ? `Provenances : ${ecran.provenances.slice(0, 8).map((s) => `${s.nom} (${LIBELLES_FAMILLE[s.famille]}) ${s.visites}`).join(", ")}.` : "",
       ];
     case "argent": {
       const dernier = ecran.regle20.at(-1);
       return [
-        dernier ? `Règle des 20 % (${dernier.mois}) : ${format.euros(dernier.depensePub)} de pub pour ${format.euros(dernier.encaissePrecedent)} encaissés le mois d'avant${dernier.ratio !== null ? `, soit ${Math.round(dernier.ratio * 1000) / 10} %` : ""}${dernier.depasse ? " — plafond dépassé" : ""}.` : "",
+        dernier ? `Règle des 20 % (${dernier.mois}) : ${format.euros(dernier.depensePub)} de pub pour ${format.euros(dernier.encaissePrecedent)} encaissés le mois d'avant${dernier.ratio !== null ? `, soit ${pct(dernier.ratio)}` : ""}${dernier.depasse ? " — plafond dépassé" : ""}.` : "",
         ecran.carnet.length ? `Carnet de commandes : ${ecran.carnet.length} devis en attente, ${format.euros(ecran.carnet.reduce((t, c) => t + c.montant, 0))} (${ecran.carnet.slice(0, 5).map((c) => `${c.client} ${format.euros(c.montant)}${c.relances ? `, ${c.relances} relance${c.relances > 1 ? "s" : ""}` : ""}`).join(" · ")}).` : "Carnet de commandes vide.",
         ecran.fiscal?.franchiseTva ? `Franchise de TVA : ${format.euros(ecran.fiscal.franchiseTva.atteint)} sur ${ecran.fiscal.franchiseTva.plafond !== null ? format.euros(ecran.fiscal.franchiseTva.plafond) : "—"}.` : "",
         ecran.fiscal?.urssaf ? `URSSAF de la période en cours : ${ecran.fiscal.urssaf.estime !== null ? format.euros(ecran.fiscal.urssaf.estime) : "—"}.` : "",
@@ -81,7 +84,7 @@ function lignesOnglet(ecran: EcranAnalytique): string[] {
 /** Le texte lisible d'un écran (pur). */
 export function texteAnalytique(ecran: EcranAnalytique, resume: ResumeDuJour | null): string {
   const filtre = ecran.onglet === "ensemble" && ecran.filtreSource ? `, source ${LIBELLES_FAMILLE[ecran.filtreSource]}` : "";
-  const etats = ecran.onglet === "site" ? [] : ecran.sources;
+  const etats = ecran.sources;
   return [
     `Analytique — ${LIBELLES_ONGLET[ecran.onglet]}, ${ecran.periode.libelle} (${ecran.periode.du} → ${ecran.periode.au}, comparé à ${ecran.periode.precedente.du} → ${ecran.periode.precedente.au})${filtre}. Calculé le ${format.jour(ecran.genereLe)}.`,
     resume ? `Résumé du jour (rédigé par règles, à reformuler sans changer les chiffres) :\n${resume.phrases.map((p) => `- ${p.amorce} ${p.texte}`).join("\n")}` : "",

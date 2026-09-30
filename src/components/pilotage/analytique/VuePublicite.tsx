@@ -133,6 +133,7 @@ function colonnes(approx: boolean): Colonne<LignePublicite & { profondeur: numbe
     },
     {
       cle: "verdict",
+      className: "pl-4",
       titre: "Verdict",
       rendu: (l) => (l.verdict ? <BadgeVerdict verdict={l.verdict} titre={l.raisonVerdict} /> : null),
     },

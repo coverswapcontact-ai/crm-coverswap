@@ -3,7 +3,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { jourParis } from "@/lib/dossiers/dates";
 import { familleDeSource, visitesDuSite, type VisitesAnalyse } from "../appuis";
 import { bornes, joursDe, periodePrecedente } from "../periode";
-import { COULEURS_FAMILLE, FAMILLES, LIBELLES_FAMILLE, type EcranSite, type Famille, type Periode, type Tunnel } from "../types";
+import { COULEURS_FAMILLE, FAMILLES, LIBELLES_FAMILLE, type EcranSite, type EtatSource, type Famille, type Periode, type Tunnel } from "../types";
 import { indicateur, ratio, serieParJour } from "./commun";
 import { tunnelDe } from "./tunnel";
 
@@ -52,7 +52,7 @@ export function entonnoirDuSite(visites: number | null, s: SimulationsSite): Tun
 
 const APPAREILS: Record<string, string> = { TELEPHONE: "Téléphone", TABLETTE: "Tablette", ORDINATEUR: "Ordinateur" };
 
-export async function construireEcranSite(periode: Periode): Promise<Omit<EcranSite, "genereLe" | "alertes">> {
+export async function construireEcranSite(periode: Periode, options: { etats: EtatSource[] }): Promise<Omit<EcranSite, "genereLe" | "alertes">> {
   const precedente = periodePrecedente(periode);
   const [visites, visitesAvant, sims, simsAvant] = await Promise.all([visitesDuSite(periode), visitesDuSite(precedente), simulationsDuSite(periode), simulationsDuSite(precedente)]);
   const jours = joursDe(periode);
@@ -71,12 +71,11 @@ export async function construireEcranSite(periode: Periode): Promise<Omit<EcranS
     points: visites ? visites.parJour.map((p) => ({ jour: p.jour, valeurs: Object.fromEntries(familles.map((f) => [f, p.parFamille[f] ?? 0])) })) : [],
   };
   const trafic = (visites?.sources ?? []).map((s) => ({ famille: s.famille, nom: s.nom || LIBELLES_FAMILLE[s.famille], visites: s.visites, simulations: s.simulations, leads: s.leads }));
-  const ecran = {
-    onglet: "site" as const,
+  return {
+    onglet: "site",
     periode,
-    // Contrat : dans l'écran Site, `sources` désigne les provenances du trafic (EcranSite), pas l'état des sources de
-    // données — le site et le CRM, seules sources de cet onglet, sont toujours lus en direct.
-    sources: trafic,
+    sources: options.etats,
+    provenances: trafic,
     indicateurs,
     courbe,
     pagesEntree: (visites?.pagesEntree ?? []).slice(0, 30).map((p) => ({ page: p.page, visites: p.visites, simulations: p.simulations, leads: p.leads })),
@@ -85,5 +84,4 @@ export async function construireEcranSite(periode: Periode): Promise<Omit<EcranS
     pays: visites?.pays ?? [],
     entonnoir: entonnoirDuSite(visites?.visites ?? null, sims),
   };
-  return ecran as unknown as Omit<EcranSite, "genereLe" | "alertes">;
 }

@@ -67,7 +67,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
                       {euros(ligne.depensePub)} de pub · {euros(ligne.encaissePrecedent)} encaissés avant
                     </span>
                   </div>
-                  {ligne.ratio === null ? (
+                  {ligne.ratio === null || ligne.depensePub === 0 ? (
                     <p className="text-[12px] text-[#6B7280]">{ligne.depensePub > 0 ? "Rien d'encaissé le mois d'avant : ratio non calculable." : "Pas de pub ce mois-là."}</p>
                   ) : (
                     <div className="flex items-center gap-3">

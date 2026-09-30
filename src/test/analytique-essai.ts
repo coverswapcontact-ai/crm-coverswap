@@ -19,7 +19,8 @@
  * - carnet : le devis B (900 €, une relance par SMS) ;
  * - site : 3 visites (SEO, Meta, direct), 2 simulations lancées, 1 terminée rattachée au lead du site.
  */
-import type { PrismaClient } from "@prisma/client";
+/** Le client du CRM (étendu par le journal) ; importé en type seulement : la base d'essai est choisie avant. */
+type PrismaClient = (typeof import("@/lib/prisma"))["default"];
 
 export const MERCREDI = new Date("2026-09-30T08:00:00.000Z");
 const le = (iso: string) => new Date(iso);

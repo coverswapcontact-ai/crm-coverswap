@@ -13,14 +13,14 @@ import { VuePublicite } from "./VuePublicite";
 import { VueSeo } from "./VueSeo";
 import { VueSite } from "./VueSite";
 
-function Vue({ ecran, etats, chaineMeta }: { ecran: Ecran; etats: EtatSource[]; chaineMeta: SanteMeta | null }) {
+function Vue({ ecran, chaineMeta }: { ecran: Ecran; chaineMeta: SanteMeta | null }) {
   switch (ecran.onglet) {
     case "publicite":
       return <VuePublicite ecran={ecran} chaineMeta={chaineMeta} />;
     case "seo":
       return <VueSeo ecran={ecran} />;
     case "site":
-      return <VueSite ecran={ecran} etats={etats} />;
+      return <VueSite ecran={ecran} />;
     case "argent":
       return <VueArgent ecran={ecran} />;
     default:
@@ -42,7 +42,7 @@ export function EcranAnalytique({ requete, ecran, etats, chaineMeta = null }: { 
       <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pt-5 pb-8 leading-[normal] md:gap-6 md:px-10 md:pt-8 md:pb-12" data-onglet={ecran.onglet}>
         <EnTeteAnalytique requete={courante} periode={ecran.periode} sources={etats} genereLe={ecran.genereLe} />
         <ZoneContenu>
-          <Vue ecran={ecran} etats={etats} chaineMeta={chaineMeta} />
+          <Vue ecran={ecran} chaineMeta={chaineMeta} />
         </ZoneContenu>
       </div>
     </FournisseurAnalytique>

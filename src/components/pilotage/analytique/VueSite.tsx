@@ -3,38 +3,22 @@
  * simulation → lead, visites par jour et par source, pages d'entrée, pages vues, sources (les assistants IA à part),
  * appareils, pays (déduit du fuseau, approximation volontaire), et le chemin de la visite au lead.
  */
-import { COULEURS_FAMILLE, LIBELLES_FAMILLE, type EcranSite, type EtatSource, type Famille } from "@/lib/analytique/types";
+import { COULEURS_FAMILLE, LIBELLES_FAMILLE, type EcranSite } from "@/lib/analytique/types";
 import { BarresHorizontales, Carte, EtatVideSource, GrilleTuiles, Pastille, Tableau, TunnelBarres, etatDe } from "./base";
 import { formaterValeur } from "./format";
 import { CourbeTemps, LegendeCourbe } from "./Graphiques";
 
 const nombre = (valeur: number) => formaterValeur(valeur, "nombre");
 
-export type ProvenanceSite = {
-  famille: Famille;
-  nom: string;
-  visites: number;
-  simulations: number;
-  leads: number;
-};
-
-/**
- * Dans l'écran Site, `sources` désigne les PROVENANCES du trafic (contrat EcranSite), pas l'état des sources de
- * données (EcranCommun) : la page passe ces états à part (`etats`).
- */
-export function provenancesDuSite(ecran: EcranSite): ProvenanceSite[] {
-  return (ecran.sources as unknown[]).filter((s): s is ProvenanceSite => typeof s === "object" && s !== null && "famille" in s && "visites" in s);
-}
-
-export function VueSite({ ecran, etats }: { ecran: EcranSite; etats: EtatSource[] }) {
-  const etatSite = etatDe(etats, "SITE");
-  const provenances = provenancesDuSite(ecran);
+export function VueSite({ ecran }: { ecran: EcranSite }) {
+  const etatSite = etatDe(ecran.sources, "SITE");
+  const provenances = ecran.provenances;
   const sourcesIa = provenances.filter((s) => s.famille === "ia");
   const autresSources = provenances.filter((s) => s.famille !== "ia");
   const sansVisite = ecran.courbe.points.every((point) => Object.values(point.valeurs).every((v) => !v));
   return (
     <>
-      <GrilleTuiles indicateurs={ecran.indicateurs} sources={etats} />
+      <GrilleTuiles indicateurs={ecran.indicateurs} sources={ecran.sources} />
 
       <Carte
         titre={ecran.courbe.titre}

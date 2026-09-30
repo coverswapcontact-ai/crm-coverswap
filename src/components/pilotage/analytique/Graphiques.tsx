@@ -39,6 +39,12 @@ function graduation(valeur: number, format: Format): string {
   return formaterValeur(valeur, "nombre");
 }
 
+/** La largeur de l'axe Y d'après sa plus longue graduation (« 3 500 € » ne se coupe pas). */
+function largeurAxe(lignes: Ligne[], series: Serie[], format: Format): number {
+  const max = Math.max(0, ...lignes.flatMap((l) => series.map((s) => Math.abs(Number(l[s.cle] ?? 0)))));
+  return Math.max(28, Math.round(graduation(max, format).length * 6.6) + 10);
+}
+
 function Legende({ series, compact }: { series: Serie[]; compact?: boolean }) {
   return (
     <ul className={cn("flex flex-wrap items-center text-[#D1D5DB]", compact ? "gap-x-4 gap-y-1 text-[12px]" : "gap-x-[18px] gap-y-1 text-[13px]")}>
@@ -145,7 +151,7 @@ function Trace({ lignes, series, formats, hauteur, compact, aire }: { lignes: Li
           />
           <YAxis
             hide={compact}
-            width={format === "euros" ? 44 : 32}
+            width={largeurAxe(lignes, series, format)}
             tick={AXE}
             axisLine={false}
             tickLine={false}

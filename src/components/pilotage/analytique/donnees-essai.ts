@@ -347,7 +347,6 @@ const courbeSite: Courbe = {
   points: JOURS.map((jour, i) => ({ jour, valeurs: parFamille(i) })),
 };
 
-// Contrat : dans l'écran Site, `sources` désigne les provenances du trafic (pas l'état des sources de données).
 export const SITE_ESSAI: EcranSite = {
   ...commun("site"),
   indicateurs: [
@@ -384,7 +383,7 @@ export const SITE_ESSAI: EcranSite = {
     { page: "/covering-meuble-montpellier", vues: 97 },
     { page: "/contact", vues: 64 },
   ],
-  sources: [
+  provenances: [
     { famille: "seo", nom: "google.com", visites: 318, simulations: 9, leads: 4 },
     { famille: "meta", nom: "facebook.com (pub)", visites: 204, simulations: 12, leads: 8 },
     { famille: "direct", nom: "Direct", visites: 121, simulations: 3, leads: 2 },
@@ -395,7 +394,7 @@ export const SITE_ESSAI: EcranSite = {
     { famille: "ia", nom: "chatgpt.com", visites: 31, simulations: 2, leads: 0 },
     { famille: "ia", nom: "perplexity.ai", visites: 6, simulations: 0, leads: 0 },
     { famille: "ia", nom: "claude.ai", visites: 2, simulations: 0, leads: 0 },
-  ] as unknown as EcranSite["sources"],
+  ],
   appareils: [
     { appareil: "Téléphone", visites: 587 },
     { appareil: "Ordinateur", visites: 193 },

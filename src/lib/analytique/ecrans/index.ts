@@ -49,8 +49,8 @@ export async function ecranSeo(periode: Periode, options: OptionsEcran = {}, mai
 }
 
 export async function ecranSite(periode: Periode, options: OptionsEcran = {}, maintenant: Date = new Date()): Promise<EcranSite> {
-  const { alertes } = await commun("site", options, maintenant);
-  return { ...(await construireEcranSite(periode)), genereLe: maintenant.toISOString(), alertes } as EcranSite;
+  const { etats, alertes } = await commun("site", options, maintenant);
+  return { ...(await construireEcranSite(periode, { etats })), genereLe: maintenant.toISOString(), alertes };
 }
 
 export async function ecranArgent(periode: Periode, options: OptionsEcran = {}, maintenant: Date = new Date()): Promise<EcranArgent> {

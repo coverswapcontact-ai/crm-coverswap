@@ -316,6 +316,8 @@ function CarteFiche({ ecran }: { ecran: EcranEnsemble }) {
   );
 }
 
+const TEXTE_ETAT_FICHE = { A_JOUR: "à jour", EN_ECHEC: "synchronisation en échec", NON_BRANCHEE: "pas encore branchée", EN_ATTENTE_ACCES: "accès API en attente" } as const;
+
 /** Téléphone : SEO et fiche Google fusionnés, avec la première opportunité. */
 function CarteSeoFicheTelephone({ ecran }: { ecran: EcranEnsemble }) {
   const { seo, fiche } = ecran;
@@ -333,23 +335,14 @@ function CarteSeoFicheTelephone({ ecran }: { ecran: EcranEnsemble }) {
       )}
       {opportunite ? (
         <p className={ENCADRE}>
-          <span className="text-[#F5B454]">Opportunité&nbsp;:</span> «&nbsp;
+          <span className="text-[#F5B454]">Opportunité&nbsp;:</span>{" "}
+          «&nbsp;
           {opportunite.requete}&nbsp;», {formaterValeur(opportunite.impressions, "nombre")} affichages, {formaterValeur(opportunite.clics, "nombre")} clic.
         </p>
       ) : null}
       {!fiche && seo ? (
         <p className="text-[12px] text-[#9CA3AF]">
-          Fiche Google&nbsp;:{" "}
-          {libelleEtat(
-            etatDe(ecran.sources, "FICHE_GOOGLE") ?? {
-              source: "FICHE_GOOGLE",
-              branchee: false,
-              etat: "NON_BRANCHEE",
-              derniereReussite: null,
-              erreur: null,
-              aFaire: null,
-            }
-          ).toLowerCase()}
+          Fiche Google&nbsp;: {TEXTE_ETAT_FICHE[etatDe(ecran.sources, "FICHE_GOOGLE")?.etat ?? "NON_BRANCHEE"]}
         </p>
       ) : null}
     </Carte>

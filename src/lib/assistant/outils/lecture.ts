@@ -346,7 +346,7 @@ export function ligneEntonnoirSite(lignes: string[]): string {
 export const outilSynthese = definirOutil({
   nom: "synthese",
   titre: "Synthèse d'une période",
-  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). La même synthèse que l'écran Synthèse du CRM. Pour des analyses détaillées, préférer les outils « manager_… ».",
+  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). Synthèse historique (mois figés) : l'écran du CRM est désormais l'Analytique — pour ses chiffres exacts (tuiles, tunnel, publicité, SEO, site, argent), préférer « analytique » ; pour des analyses détaillées, les outils « manager_… ».",
   niveau: "LECTURE",
   schema: schemaPeriode,
   executer: async (entree) => {
@@ -466,7 +466,7 @@ function texteAnalytique(sources: { source: string; etat: string; derniereReussi
 }
 
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle, analytique] = await Promise.all([
+  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle, analytique, alertesAnalytique] = await Promise.all([
     etatDesTaches(),
     rappelConnexionGoogle(maintenant).catch(() => null),
     etatConnexionGoogle().catch(() => null),
@@ -478,6 +478,8 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     etatAvisGoogle().catch(() => null),
     // Mission 17 (partie B) : l'état des sources de l'Analytique (variables et suivi en base, sans appel réseau).
     import("@/lib/analytique/etat").then((m) => m.etatDesSources(maintenant)).catch(() => null),
+    // Les alertes de l'Analytique (coût par lead, chute de trafic, requête qui décolle, www en double) : les mêmes que l'écran.
+    import("@/lib/analytique/cache").then((m) => m.alertesPourSante(maintenant)).catch(() => []),
   ]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
@@ -503,6 +505,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     autresApisNonActivees: etatGoogle?.autresApisNonActivees ?? [],
     meta: meta ? { etat: meta.chaine.code, message: meta.chaine.libelle, jeton: meta.jeton.message, echeance: meta.jeton.echeance } : null,
     avisGoogle,
+    alertesAnalytique: alertesAnalytique.map((a) => ({ gravite: a.gravite, texte: a.texte, lien: a.lien ?? null })),
     analytique: analytique ? { sources: analytique.filter((e) => e.source !== "CRM" && e.source !== "SITE").map((e) => ({ source: e.source, etat: e.etat, derniereReussite: e.derniereReussite, erreur: e.erreur, aFaire: e.aFaire })) } : null,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
@@ -529,6 +532,7 @@ export const outilSanteSysteme = definirOutil({
       s.meta ? `Meta : ${s.meta.message}` : "",
       s.avisGoogle ? texteAvisGoogle(s.avisGoogle) : "",
       s.analytique ? texteAnalytique(s.analytique.sources) : "",
+      s.alertesAnalytique.length ? `Analytique : ${s.alertesAnalytique.map((a) => a.texte).join(" · ")}` : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",

@@ -7,12 +7,9 @@ import type { RequeteAnalytique } from "@/components/pilotage/analytique/requete
 /**
  * Mission 17 (partie B) — l'écran d'une requête de l'Analytique (page /analytique et GET /api/analytique) : période
  * résolue en jours de Paris, écran servi par `ecranAnalytique` (cache mémoire, instantané du jour, sinon calcul), et
- * l'état des sources de données. Dans l'écran Site, `sources` désigne les provenances du trafic (contrat EcranSite) :
- * l'état des sources est alors relu à part.
+ * l'état des sources de données.
  */
 export type EcranCharge = { ecran: EcranAnalytique; etats: EtatSource[] };
-
-const estEtatSource = (valeur: unknown): valeur is EtatSource => typeof valeur === "object" && valeur !== null && "etat" in valeur && "branchee" in valeur;
 
 /**
  * Les chiffres peuvent venir du cache (5 min en mémoire, instantané du jour) ; l'état des sources, lui, est relu à
@@ -27,8 +24,5 @@ export async function chargerEcran(requete: RequeteAnalytique, maintenant: Date 
       return null;
     }),
   ]);
-  const sources = ecran.sources as unknown[];
-  const duCalcul = ecran.onglet !== "site" && sources.every(estEtatSource) ? (sources as EtatSource[]) : [];
-  const etats = frais ?? duCalcul;
-  return { ecran: ecran.onglet === "site" || !frais ? ecran : { ...ecran, sources: frais }, etats };
+  return frais ? { ecran: { ...ecran, sources: frais }, etats: frais } : { ecran, etats: ecran.sources };
 }

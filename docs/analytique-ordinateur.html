@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analytique CoverSwap, ordinateur (maquette validée le 30/09/2026)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#16181D;font-family:Inter,system-ui,sans-serif;color:#F2F3F5}
+a{color:#5DCAA5;text-decoration:none}a:hover{color:#8FE0C3}
+.card{background:#1C1F25;border:1px solid #2A2D34;border-radius:14px}
+.lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9CA3AF;font-weight:500}
+.num{font-family:'Space Grotesk',Inter,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tab{height:32px;padding:0 14px;border-radius:8px;border:0;background:transparent;color:#9CA3AF;font:500 13px Inter,sans-serif;cursor:pointer}
+.tab-on{background:#22262D;color:#F2F3F5}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 1680px; box-sizing: border-box; background: #16181D; display: flex; flex-direction: column;">
+
+<header style="height: 56px; box-sizing: border-box; padding: 0 40px; border-bottom: 1px solid #2A2D34; display: flex; align-items: center; gap: 28px;">
+<div style="font: 600 15px 'Space Grotesk', sans-serif; letter-spacing: -.01em;">CoverSwap</div>
+<nav style="display: flex; gap: 4px; flex-grow: 1;">
+<a href="#" class="tab" style="display: flex; align-items: center;">Tâches</a>
+<a href="#" class="tab" style="display: flex; align-items: center;">Leads</a>
+<a href="#" class="tab" style="display: flex; align-items: center;">Dossiers</a>
+<a href="#" class="tab" style="display: flex; align-items: center;">Espaces clients</a>
+<a href="#" class="tab" style="display: flex; align-items: center;">Mail</a>
+<a href="#" class="tab" style="display: flex; align-items: center;">Clients</a>
+<a href="#" class="tab tab-on" style="display: flex; align-items: center;">Analytique</a>
+</nav>
+<div style="width: 30px; height: 30px; border-radius: 15px; background: #22262D; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #D1D5DB;">LV</div>
+</header>
+
+<div style="padding: 32px 40px 48px; display: flex; flex-direction: column; gap: 24px;">
+
+<div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;">
+<div style="display: flex; flex-direction: column; gap: 6px;">
+<h1 class="num" style="margin: 0; font-size: 34px; font-weight: 600;">Analytique</h1>
+<div style="font-size: 13px; color: #9CA3AF; display: flex; gap: 16px; align-items: center;">
+<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 7px; height: 7px; border-radius: 4px; background: #5DCAA5;"></span>Meta synchronisé à 07:02</span>
+<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 7px; height: 7px; border-radius: 4px; background: #5DCAA5;"></span>Search Console à 06:40</span>
+<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 7px; height: 7px; border-radius: 4px; background: #F5B454;"></span>Fiche Google&nbsp;: en attente d'accès</span>
+</div>
+</div>
+<div style="display: flex; gap: 4px; padding: 4px; background: #1C1F25; border: 1px solid #2A2D34; border-radius: 10px;">
+<button class="tab">7 jours</button>
+<button class="tab tab-on">30 jours</button>
+<button class="tab">90 jours</button>
+<button class="tab">12 mois</button>
+<button class="tab">Dates…</button>
+</div>
+</div>
+
+<div style="display: flex; gap: 4px; border-bottom: 1px solid #2A2D34;">
+<button class="tab" style="border-radius: 0; height: 40px; color: #F2F3F5; box-shadow: inset 0 -2px 0 #5DCAA5;">Vue d'ensemble</button>
+<button class="tab" style="border-radius: 0; height: 40px;">Publicité</button>
+<button class="tab" style="border-radius: 0; height: 40px;">SEO et Google</button>
+<button class="tab" style="border-radius: 0; height: 40px;">Site</button>
+<button class="tab" style="border-radius: 0; height: 40px;">Argent</button>
+</div>
+
+<section class="card" style="padding: 22px 26px; display: grid; grid-template-columns: 200px minmax(0, 1fr) 280px; gap: 28px; align-items: start; background: #1A2420; border-color: #24463A;">
+<div style="display: flex; flex-direction: column; gap: 6px;">
+<div class="lbl" style="color: #5DCAA5;">Résumé du jour</div>
+<div style="font-size: 13px; color: #9CA3AF;">Mercredi 30 septembre, 07:05</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.5; color: #E5E7EB;">
+<div><span style="color: #5DCAA5; font-weight: 600;">Ça monte.</span> Le prospect Meta coûte 3,91&nbsp;€, bien sous tes 5 à 8&nbsp;€ de l'an dernier. Jour 9 sur 21 de la campagne.</div>
+<div><span style="color: #F5B454; font-weight: 600;">Ça coince.</span> 4 devis pour 45 leads, et aucun signé. 10 leads Meta n'ont jamais décroché.</div>
+<div><span style="color: #F2F3F5; font-weight: 600;">À faire.</span> Relancer les 6 devis en attente&nbsp;: 9&nbsp;060&nbsp;€ en jeu.</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<div class="lbl">Alertes</div>
+<div style="font-size: 13px; color: #F5B454; display: flex; gap: 8px;"><span>●</span><span>www et sans www indexés tous les deux</span></div>
+<div style="font-size: 13px; color: #F5B454; display: flex; gap: 8px;"><span>●</span><span>«&nbsp;covering meuble montpellier&nbsp;»&nbsp;: 160 affichages, 0 clic</span></div>
+<div style="font-size: 13px; color: #9CA3AF; display: flex; gap: 8px;"><span>●</span><span>Clé secrète Meta absente (sans effet)</span></div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px;">
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Visites du site</div>
+<div class="num" style="font-size: 30px; font-weight: 600; color: #6B7280;">—</div>
+<div style="font-size: 12px; color: #9CA3AF; line-height: 1.4;">Suivi maison à brancher sur coverswap.fr</div>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Simulations</div>
+<div style="display: flex; align-items: baseline; gap: 10px;"><div class="num" style="font-size: 30px; font-weight: 600;">30</div><div style="font-size: 12px; color: #5DCAA5;">57&nbsp;% laissent leurs coordonnées</div></div>
+<svg width="100%" height="28" viewBox="0 0 160 28" preserveAspectRatio="none"><polyline points="0,22 20,20 40,24 60,16 80,18 100,12 120,14 140,8 160,6" fill="none" stroke="#5DCAA5" stroke-width="1.6" stroke-linejoin="round"></polyline></svg>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Leads</div>
+<div style="display: flex; align-items: baseline; gap: 10px;"><div class="num" style="font-size: 30px; font-weight: 600;">45</div><div style="font-size: 12px; color: #5DCAA5;">▲ nouveau</div></div>
+<svg width="100%" height="28" viewBox="0 0 160 28" preserveAspectRatio="none"><polyline points="0,24 20,14 40,18 60,8 80,18 100,12 120,16 140,14 160,14" fill="none" stroke="#5DCAA5" stroke-width="1.6" stroke-linejoin="round"></polyline></svg>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Devis envoyés</div>
+<div style="display: flex; align-items: baseline; gap: 10px;"><div class="num" style="font-size: 30px; font-weight: 600;">4</div><div style="font-size: 12px; color: #9CA3AF;">8,9&nbsp;% des leads</div></div>
+<svg width="100%" height="28" viewBox="0 0 160 28" preserveAspectRatio="none"><polyline points="0,24 40,24 60,18 80,24 100,24 120,18 140,12 160,12" fill="none" stroke="#9CA3AF" stroke-width="1.6" stroke-linejoin="round"></polyline></svg>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Chantiers signés</div>
+<div style="display: flex; align-items: baseline; gap: 10px;"><div class="num" style="font-size: 30px; font-weight: 600;">0</div><div style="font-size: 12px; color: #F5B454;">9&nbsp;060&nbsp;€ en attente</div></div>
+<div style="height: 28px; display: flex; align-items: flex-end;"><div style="height: 4px; flex-grow: 1; border-radius: 2px; background: #22262D;"></div></div>
+</div>
+<div class="card" style="padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Coût par lead Meta</div>
+<div style="display: flex; align-items: baseline; gap: 10px;"><div class="num" style="font-size: 30px; font-weight: 600;">3,91&nbsp;€</div><div style="font-size: 12px; color: #5DCAA5;">réel Meta</div></div>
+<svg width="100%" height="28" viewBox="0 0 160 28" preserveAspectRatio="none"><polyline points="0,6 20,10 40,12 60,14 80,15 100,17 120,18 140,19 160,20" fill="none" stroke="#5DCAA5" stroke-width="1.6" stroke-linejoin="round"></polyline></svg>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 16px;">
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 20px;">
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">Leads par jour et par source</div><div style="font-size: 13px; color: #9CA3AF;">Depuis le lancement de la campagne, le 22 septembre</div></div>
+<div style="display: flex; gap: 18px; font-size: 13px; color: #D1D5DB;">
+<span style="display: flex; align-items: center; gap: 7px;"><span style="width: 14px; height: 3px; border-radius: 2px; background: #5DCAA5;"></span>Pub Meta</span>
+<span style="display: flex; align-items: center; gap: 7px;"><span style="width: 14px; height: 3px; border-radius: 2px; background: #7AA7FF;"></span>Site</span>
+<span style="display: flex; align-items: center; gap: 7px;"><span style="width: 14px; height: 3px; border-radius: 2px; background: #F5B454;"></span>Mail</span>
+</div>
+</div>
+<svg width="100%" height="260" viewBox="0 0 800 260">
+<g font-family="Inter, sans-serif" font-size="11" fill="#6B7280">
+<text x="0" y="194">0</text><text x="0" y="144">2</text><text x="0" y="94">4</text><text x="0" y="44">6</text>
+</g>
+<g stroke="#2A2D34" stroke-width="1">
+<line x1="28" y1="190" x2="780" y2="190"></line><line x1="28" y1="140" x2="780" y2="140" stroke-dasharray="3 5"></line><line x1="28" y1="90" x2="780" y2="90" stroke-dasharray="3 5"></line><line x1="28" y1="40" x2="780" y2="40" stroke-dasharray="3 5"></line>
+</g>
+<path d="M40,115 L130,65 L220,90 L310,40 L400,90 L490,65 L580,115 L670,90 L760,90 L760,190 L40,190 Z" fill="#5DCAA5" fill-opacity="0.10"></path>
+<polyline points="40,115 130,65 220,90 310,40 400,90 490,65 580,115 670,90 760,90" fill="none" stroke="#5DCAA5" stroke-width="2.2" stroke-linejoin="round"></polyline>
+<polyline points="40,190 130,165 220,190 310,165 400,190 490,165 580,165 670,165 760,165" fill="none" stroke="#7AA7FF" stroke-width="2" stroke-linejoin="round"></polyline>
+<polyline points="40,190 490,190 580,165 670,190 760,190" fill="none" stroke="#F5B454" stroke-width="1.6" stroke-dasharray="4 4" stroke-linejoin="round"></polyline>
+<line x1="310" y1="30" x2="310" y2="190" stroke="#3A3E47" stroke-width="1"></line>
+<circle cx="310" cy="40" r="4.5" fill="#16181D" stroke="#5DCAA5" stroke-width="2"></circle>
+<rect x="322" y="22" width="132" height="54" rx="8" fill="#22262D" stroke="#3A3E47"></rect>
+<text x="334" y="42" font-family="Inter, sans-serif" font-size="11" fill="#9CA3AF">Jeudi 25 septembre</text>
+<text x="334" y="62" font-family="Inter, sans-serif" font-size="13" fill="#F2F3F5">6 Meta · 1 site</text>
+<g font-family="Inter, sans-serif" font-size="11" fill="#6B7280" text-anchor="middle">
+<text x="40" y="214">22/09</text><text x="130" y="214">23/09</text><text x="220" y="214">24/09</text><text x="310" y="214">25/09</text><text x="400" y="214">26/09</text><text x="490" y="214">27/09</text><text x="580" y="214">28/09</text><text x="670" y="214">29/09</text><text x="760" y="214">30/09</text>
+</g>
+<text x="780" y="248" text-anchor="end" font-family="Inter, sans-serif" font-size="10" fill="#6B7280">Courbe d'illustration&nbsp;: le module tracera les vraies valeurs</text>
+</svg>
+</div>
+
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">Tunnel commercial</div><div style="font-size: 13px; color: #9CA3AF;">Toutes sources, 30 derniers jours</div></div>
+<div style="display: flex; flex-direction: column; gap: 14px;">
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">Leads</span><span class="num" style="font-weight: 600;">45</span></div><div style="height: 10px; border-radius: 5px; background: #5DCAA5; width: 100%;"></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">Appelés <span style="color: #6B7280;">· 60&nbsp;%</span></span><span class="num" style="font-weight: 600;">27</span></div><div style="height: 10px; border-radius: 5px; background: #22262D;"><div style="height: 10px; border-radius: 5px; background: #4DB892; width: 60%;"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">Joints <span style="color: #6B7280;">· 63&nbsp;%</span></span><span class="num" style="font-weight: 600;">17</span></div><div style="height: 10px; border-radius: 5px; background: #22262D;"><div style="height: 10px; border-radius: 5px; background: #3FA480; width: 38%;"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">Devis envoyés <span style="color: #F5B454;">· 24&nbsp;%</span></span><span class="num" style="font-weight: 600;">4</span></div><div style="height: 10px; border-radius: 5px; background: #22262D;"><div style="height: 10px; border-radius: 5px; background: #2F8F6D; width: 9%;"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">Signés</span><span class="num" style="font-weight: 600;">0</span></div><div style="height: 10px; border-radius: 5px; background: #22262D;"></div></div>
+</div>
+<div style="padding: 12px 14px; border-radius: 10px; background: #22262D; font-size: 13px; line-height: 1.45; color: #D1D5DB;">L'étape qui perd le plus&nbsp;: <span style="color: #F5B454;">joint → devis</span>. 13 personnes jointes n'ont pas reçu de devis.</div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+<div style="display: flex; justify-content: space-between; align-items: center;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">Publicité Meta</div><a href="#" style="font-size: 13px;">Détail →</a></div>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<div style="display: flex; justify-content: space-between; font-size: 13px; color: #9CA3AF;"><span>Campagne&nbsp;: jour 9 sur 21</span><span>201&nbsp;€ sur 469&nbsp;€</span></div>
+<div style="height: 6px; border-radius: 3px; background: #22262D;"><div style="height: 6px; border-radius: 3px; background: #5DCAA5; width: 43%;"></div></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Leads</div><div class="num" style="font-size: 22px; font-weight: 600;">38</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Par lead</div><div class="num" style="font-size: 22px; font-weight: 600;">3,91&nbsp;€</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Par devis</div><div class="num" style="font-size: 22px; font-weight: 600;">≈ 75&nbsp;€</div></div>
+</div>
+<div style="border-top: 1px solid #2A2D34; padding-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+<div style="display: flex; flex-direction: column; gap: 3px;"><div style="font-size: 14px; font-weight: 500;">Claquement de doigt</div><div style="font-size: 12px; color: #9CA3AF;">16 joints sur 26 appelés</div></div>
+<span style="font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 20px; background: #112B22; color: #5DCAA5;">Garder</span>
+</div>
+<div style="font-size: 12px; color: #6B7280;">Google Ads&nbsp;: pas encore branché</div>
+</div>
+
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+<div style="display: flex; justify-content: space-between; align-items: center;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">SEO Google</div><a href="#" style="font-size: 13px;">Détail →</a></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Clics</div><div class="num" style="font-size: 22px; font-weight: 600;">106</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Affichages</div><div class="num" style="font-size: 22px; font-weight: 600;">1&nbsp;770</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Position</div><div class="num" style="font-size: 22px; font-weight: 600;">10,5</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px;">
+<div class="lbl">Opportunités&nbsp;: vu, jamais cliqué</div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">covering meuble montpellier</span><span class="num" style="color: #9CA3AF;">160</span></div><div style="height: 4px; border-radius: 2px; background: #22262D;"><div style="height: 4px; border-radius: 2px; background: #F5B454; width: 100%;"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">covering mobilier devis gratuit</span><span class="num" style="color: #9CA3AF;">138</span></div><div style="height: 4px; border-radius: 2px; background: #22262D;"><div style="height: 4px; border-radius: 2px; background: #F5B454; width: 86%;"></div></div></div>
+<div style="display: flex; flex-direction: column; gap: 6px;"><div style="display: flex; justify-content: space-between; font-size: 13px;"><span style="color: #D1D5DB;">devis covering mobilier en ligne</span><span class="num" style="color: #9CA3AF;">110</span></div><div style="height: 4px; border-radius: 2px; background: #22262D;"><div style="height: 4px; border-radius: 2px; background: #F5B454; width: 69%;"></div></div></div>
+</div>
+</div>
+
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 18px;">
+<div style="display: flex; justify-content: space-between; align-items: center;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">Fiche Google</div><span style="font-size: 12px; color: #F5B454;">Accès API en attente</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Vues</div><div class="num" style="font-size: 22px; font-weight: 600;">706</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Interactions</div><div class="num" style="font-size: 22px; font-weight: 600;">164</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Avis</div><div class="num" style="font-size: 22px; font-weight: 600;">2 · 5,0</div></div>
+</div>
+<svg width="100%" height="70" viewBox="0 0 300 70" preserveAspectRatio="none">
+<path d="M0,68 L60,68 L120,62 L180,30 L240,6 L300,18 L300,70 L0,70 Z" fill="#7AA7FF" fill-opacity="0.12"></path>
+<polyline points="0,68 60,68 120,62 180,30 240,6 300,18" fill="none" stroke="#7AA7FF" stroke-width="2" stroke-linejoin="round"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between; font-size: 11px; color: #6B7280;"><span>avr.</span><span>mai</span><span>juin</span><span>juil.</span><span>août</span><span>sept.</span></div>
+<div style="padding: 10px 12px; border-radius: 10px; background: #22262D; font-size: 13px; color: #D1D5DB;">Catégorie «&nbsp;Décorateur d'intérieur&nbsp;»&nbsp;: tu ressors sur «&nbsp;bricolage&nbsp;», pas sur «&nbsp;covering&nbsp;».</div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;">
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 16px;">
+<div style="font: 600 17px 'Space Grotesk', sans-serif;">Qualité par source</div>
+<div style="display: grid; grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr)); gap: 0; font-size: 13px;">
+<div class="lbl" style="padding: 8px 0; border-bottom: 1px solid #2A2D34;">Source</div><div class="lbl" style="padding: 8px 0; border-bottom: 1px solid #2A2D34; text-align: right;">Leads</div><div class="lbl" style="padding: 8px 0; border-bottom: 1px solid #2A2D34; text-align: right;">Joints</div><div class="lbl" style="padding: 8px 0; border-bottom: 1px solid #2A2D34; text-align: right;">Devis</div><div class="lbl" style="padding: 8px 0; border-bottom: 1px solid #2A2D34; text-align: right;">Taux devis</div>
+<div style="padding: 11px 0; border-bottom: 1px solid #2A2D34; display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #5DCAA5;"></span>Pub Meta</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">38</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">16</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">2</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right; color: #9CA3AF;">5&nbsp;%</div>
+<div style="padding: 11px 0; border-bottom: 1px solid #2A2D34; display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #7AA7FF;"></span>Site&nbsp;: simulateur</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">6</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">1</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">2</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right; color: #5DCAA5; font-weight: 600;">33&nbsp;%</div>
+<div style="padding: 11px 0; border-bottom: 1px solid #2A2D34; display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #F5B454;"></span>Mail</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">1</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">0</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right;">0</div><div class="num" style="padding: 11px 0; border-bottom: 1px solid #2A2D34; text-align: right; color: #9CA3AF;">—</div>
+<div style="padding: 11px 0; display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 4px; background: #C4A5FF;"></span>ChatGPT <span style="font-size: 11px; color: #6B7280;">(simulations)</span></div><div class="num" style="padding: 11px 0; text-align: right;">2</div><div class="num" style="padding: 11px 0; text-align: right;">—</div><div class="num" style="padding: 11px 0; text-align: right;">1</div><div class="num" style="padding: 11px 0; text-align: right; color: #9CA3AF;">—</div>
+</div>
+</div>
+
+<div class="card" style="padding: 24px 26px; display: flex; flex-direction: column; gap: 16px;">
+<div style="display: flex; justify-content: space-between; align-items: center;"><div style="font: 600 17px 'Space Grotesk', sans-serif;">Argent</div><a href="#" style="font-size: 13px;">Détail →</a></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Encaissé sur 30 j</div><div class="num" style="font-size: 22px; font-weight: 600;">[MONTANT]</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Devis en attente</div><div class="num" style="font-size: 22px; font-weight: 600; color: #F5B454;">9&nbsp;060&nbsp;€</div></div>
+<div style="display: flex; flex-direction: column; gap: 4px;"><div class="lbl">Dépense pub</div><div class="num" style="font-size: 22px; font-weight: 600;">201&nbsp;€</div></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<div style="display: flex; justify-content: space-between; font-size: 13px; color: #9CA3AF;"><span>Pub réinvestie sur le chiffre encaissé</span><span>plafond 20&nbsp;%</span></div>
+<div style="height: 8px; border-radius: 4px; background: #22262D; position: relative;"><div style="height: 8px; border-radius: 4px; background: #5DCAA5; width: 40%;"></div><div style="position: absolute; left: 80%; top: -4px; width: 2px; height: 16px; background: #F2F3F5;"></div></div>
+</div>
+<div style="font-size: 12px; color: #6B7280;">Le module calcule ce ratio à partir des encaissements saisis dans Finances.</div>
+</div>
+</section>
+
+</div>
+</div>
+</body>
+</html>

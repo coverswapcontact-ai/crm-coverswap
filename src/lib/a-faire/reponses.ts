@@ -13,8 +13,9 @@ import { acteurValide, avecActeur } from "@/lib/journal/contexte";
 import { annulerTache, mettreEnFile } from "@/lib/taches/file";
 import { jourMois } from "./achevement";
 import { dureeDe, dureeReelle, dureesMesurees } from "./durees";
+import { dateOuNull, etatDe, lirePrecedent, type Precedent, type ProgressionEffet } from "./etat";
 import { jsonStable, lireObjet, messagesDeLaTache, texteOuNull } from "./json";
-import { versVue } from "./lecture";
+import { filtreDuLot, versVue } from "./lecture";
 import { ACTIONS_TYPE, libelleRegle, TYPE_REGLE_TACHE } from "./propositions";
 import { signalerChangementTaches, TYPE_TACHE_EFFET } from "./signal";
 import {
@@ -52,7 +53,11 @@ export const DELAI_EFFET_MS = 6_000;
 export const SEUIL_APPRENTISSAGE = 3;
 export const FENETRE_APPRENTISSAGE_JOURS = 30;
 const JOUR = 86_400_000;
-const RAISONS_SANS_APPRENTISSAGE = ["SUJET_DISPARU", "CLASSE_EN_LOT"];
+/**
+ * Mission 17 (partie A, relecture) : ces raisons n'apprennent rien sur le TYPE de tâche — « client perdu » porte sur un
+ * client, « autre » est un texte libre ; « plus d'actualité » et « classé en lot » ne sont pas des choix un par un.
+ */
+const RAISONS_SANS_APPRENTISSAGE = ["SUJET_DISPARU", "CLASSE_EN_LOT", "CLIENT_PERDU", "AUTRE"];
 export const MOTIF_CLASSEMENT_LOT = "Classé en lot depuis Tâches";
 
 /* ── Entrées ───────────────────────────────────────────────────────────── */
@@ -137,47 +142,17 @@ export function jusquaPlusTard(choix: { quand?: QuandPlusTard | null; date?: str
   return jusqua;
 }
 
-/* ── État d'une réponse (pour « Annuler ») ─────────────────────────────── */
-
-type EtatReponse = {
-  statut: StatutTache;
-  reponse: string | null;
-  reponseRaison: string | null;
-  reponseTexte: string | null;
-  reponduLe: string | null;
-  reponduPar: string | null;
-  plusTardJusqua: string | null;
-  revenueLe: string | null;
-  dureeReelleSec: number | null;
-};
-
-type Precedent = { avant: EtatReponse; reponse: ReponseTache; le: string; effet: { cle: string } | null };
-
-function etatDe(t: TacheAFaire): EtatReponse {
-  return {
-    statut: t.statut as StatutTache,
-    reponse: t.reponse,
-    reponseRaison: t.reponseRaison,
-    reponseTexte: t.reponseTexte,
-    reponduLe: t.reponduLe?.toISOString() ?? null,
-    reponduPar: t.reponduPar,
-    plusTardJusqua: t.plusTardJusqua?.toISOString() ?? null,
-    revenueLe: t.revenueLe?.toISOString() ?? null,
-    dureeReelleSec: t.dureeReelleSec,
-  };
-}
-
-const date = (iso: string | null) => (iso ? new Date(iso) : null);
-
 /* ── Effets sur la source ──────────────────────────────────────────────── */
 
 type Effet =
-  | { genre: "PROPOSITION"; propositionId: string; decision: "VALIDER" | "REJETER" }
+  /** `motif` : le motif du rejet (DEJA_FAIT, INUTILE) ; une validation ne part que d'une tâche VALIDER. */
+  | { genre: "PROPOSITION"; propositionId: string; decision: "VALIDER" | "REJETER"; motif?: string }
   | { genre: "MAIL_ARCHIVER"; messageId: string }
   | { genre: "MAIL_REPORTER"; messageId: string; jusqua: string }
   | { genre: "ESPACE"; dossierId: string; evenement: "REPONSE_INUTILE" | "REPONDU_HORS_CRM" }
   | { genre: "DERNIER_CONTACT"; leadId: string }
-  | { genre: "PERTE_LEAD"; leadId: string; motifPerte: MotifPerte; precision: string | null }
+  /** `enLot` : classé depuis « Tout classer » — jamais redirigé vers le dossier du contact (refusé s'il en a un). */
+  | { genre: "PERTE_LEAD"; leadId: string; motifPerte: MotifPerte; precision: string | null; enLot?: boolean }
   | { genre: "PERTE_DOSSIER"; dossierId: string; motifPerte: MotifPerte; precision: string | null };
 
 /** Ce que l'effet a changé et que « Annuler » sait défaire. */
@@ -185,7 +160,7 @@ type Inverse =
   | { genre: "MAIL_DESARCHIVER"; messageId: string }
   | { genre: "MAIL_SNOOZE"; messageId: string; avant: string | null }
   | { genre: "ESPACE"; dossierId: string; messagesLus: string[]; evenementId: string }
-  | { genre: "DERNIER_CONTACT"; leadId: string; le: string }
+  | { genre: "DERNIER_CONTACT"; leadId: string; le: string; avant?: string | null }
   | { genre: "STATUT_LEAD"; leadId: string; statut: string };
 
 /** La charge d'une tâche de fond A_FAIRE_EFFET. */
@@ -196,17 +171,28 @@ export type ResultatEffet = { resume: string; faits: string[]; refus: string[]; 
 
 type Decision = { reponse: ReponseTache; raison: string | null; jusqua: Date | null; motifPerte: MotifPerte | null; precisionPerte: string | null };
 
-/** Les effets d'une réponse, d'après ce que la tâche désigne (proposition, mails, messages d'espace, lead, dossier). */
+const propositionDe = (raccourci: Record<string, unknown>, donnees: Record<string, unknown>) => texteOuNull(donnees.propositionId) ?? texteOuNull(raccourci.propositionId);
+
+/**
+ * Les effets d'une réponse, d'après ce que la tâche désigne (proposition, mails, messages d'espace, lead, dossier).
+ *
+ * Mission 17 (partie A, relecture) : seule une tâche VALIDER valide sa proposition sur « Fait » (et jamais une
+ * proposition sensible : repondreTache le refuse avant). Sur toute autre tâche, une proposition attachée (brouillon de
+ * réponse, SMS de relance…) n'est que REJETÉE — « Fait » : déjà fait autrement ; « Pas à faire » : inutile — et le
+ * reste des effets (fil archivé, messages lus) s'applique comme sans proposition.
+ */
 function effetsDe(tache: TacheAFaire, decision: Decision): Effet[] {
   const raccourci = lireObjet(tache.raccourci);
   const donnees = lireObjet(tache.donnees);
   const effets: Effet[] = [];
   const { reponse } = decision;
-  const propositionId = texteOuNull(donnees.propositionId) ?? texteOuNull(raccourci.propositionId);
-  if (propositionId) {
-    // Une proposition née d'un mail : c'est elle qu'on décide, le fil suit son propre cours.
-    if (reponse !== "PLUS_TARD") effets.push({ genre: "PROPOSITION", propositionId, decision: reponse === "FAIT" ? "VALIDER" : "REJETER" });
+  const propositionId = propositionDe(raccourci, donnees);
+  const motifRejet = reponse === "FAIT" || decision.raison === "DEJA_FAIT" ? "DEJA_FAIT" : "INUTILE";
+  if (tache.type === "VALIDER" && propositionId) {
+    // La proposition est l'objet de la tâche : c'est elle qu'on décide, le fil d'où elle vient suit son propre cours.
+    if (reponse !== "PLUS_TARD") effets.push(reponse === "FAIT" ? { genre: "PROPOSITION", propositionId, decision: "VALIDER" } : { genre: "PROPOSITION", propositionId, decision: "REJETER", motif: motifRejet });
   } else {
+    if (propositionId && reponse !== "PLUS_TARD") effets.push({ genre: "PROPOSITION", propositionId, decision: "REJETER", motif: motifRejet });
     for (const messageId of messagesDeLaTache(raccourci, donnees)) {
       if (reponse === "PLUS_TARD") effets.push({ genre: "MAIL_REPORTER", messageId, jusqua: decision.jusqua!.toISOString() });
       else effets.push({ genre: "MAIL_ARCHIVER", messageId });
@@ -229,6 +215,17 @@ async function prochaineCleEffet(tacheId: string): Promise<string> {
   return `${prefixe}${(await prisma.tache.count({ where: { cle: { startsWith: prefixe } } })) + 1}`;
 }
 
+/** Mission 17 (partie A, relecture) : ce qui est sensible (argent, client) passe par l'aperçu et la confirmation d'« À valider ». */
+const REFUS_SENSIBLE = "proposition sensible (argent ou client) : valide-la depuis « À valider », avec son aperçu";
+
+/** Une proposition encore à décider et sensible (définition du type ; type inconnu : sensible). */
+async function propositionSensible(propositionId: string): Promise<boolean> {
+  const proposition = await prisma.proposition.findUnique({ where: { id: propositionId } });
+  if (!proposition || proposition.statut !== "EN_ATTENTE") return false;
+  const { vueProposition } = await import("@/lib/validation/service");
+  return vueProposition(proposition).sensible;
+}
+
 const estErreurMetier = (erreur: unknown): erreur is Error => erreur instanceof ErreurMetier || (erreur instanceof Error && erreur.name === "ErreurMetier");
 const messageDe = (erreur: unknown) => (erreur instanceof Error ? erreur.message : String(erreur));
 const STATUTS_LEAD_RESTAURABLES = ["NOUVEAU", "DEVIS_DEMANDE", "CONTACTE"];
@@ -237,13 +234,15 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
   switch (effet.genre) {
     case "PROPOSITION": {
       if (effet.decision === "VALIDER") {
+        // Garde (la réponse l'a déjà refusé) : une proposition sensible ne se valide jamais depuis Tâches.
+        if (await propositionSensible(effet.propositionId)) throw new ErreurMetier(REFUS_SENSIBLE, 409);
         const { appliquerProposition } = await import("@/lib/mail/appliquer");
         const vue = await appliquerProposition(effet.propositionId);
         sortie.faits.push(vue.statut === "EXECUTEE" ? "proposition validée et exécutée" : "proposition validée");
         sortie.irreversibles.push("la proposition validée ne se défait pas d'ici");
       } else {
         const { rejeterProposition } = await import("@/lib/validation/service");
-        await rejeterProposition(effet.propositionId, { motif: "INUTILE" });
+        await rejeterProposition(effet.propositionId, { motif: effet.motif ?? "INUTILE" });
         sortie.faits.push("proposition ignorée");
         sortie.irreversibles.push("la proposition reste ignorée (un rejet est définitif)");
       }
@@ -271,8 +270,14 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
     }
     case "ESPACE": {
       // Rejouée (nouvel essai de la file), l'étape ne double pas l'événement.
-      const deja = await prisma.dossierEvenement.findFirst({ where: { dossierId: effet.dossierId, type: effet.evenement, metadata: { contains: `"reponduLe":"${contexte.reponduLe.toISOString()}"` } }, select: { id: true } });
-      if (deja) return;
+      const deja = await prisma.dossierEvenement.findFirst({ where: { dossierId: effet.dossierId, type: effet.evenement, metadata: { contains: `"reponduLe":"${contexte.reponduLe.toISOString()}"` } }, select: { id: true, metadata: true } });
+      if (deja) {
+        // Déjà fait par un essai précédent : l'inverse est reconstruit (« Annuler » doit pouvoir le défaire).
+        const lus = lireObjet(deja.metadata).messagesLus;
+        const messagesLus = Array.isArray(lus) ? lus.filter((id): id is string => typeof id === "string") : [];
+        sortie.inverses.push({ genre: "ESPACE", dossierId: effet.dossierId, messagesLus, evenementId: deja.id });
+        return;
+      }
       const nonLus = await prisma.messageEspace.findMany({ where: { dossierId: effet.dossierId, auteur: "CLIENT", luLe: null }, select: { id: true } });
       const { marquerMessagesLus } = await import("@/lib/espace/messages");
       await marquerMessagesLus(effet.dossierId);
@@ -293,10 +298,15 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
       return;
     }
     case "DERNIER_CONTACT": {
-      const { count } = await prisma.lead.updateMany({ where: { id: effet.leadId, dernierContactLe: null }, data: { dernierContactLe: contexte.reponduLe } });
+      // Le dernier contact avance (jamais ne recule) ; « Annuler » remet la date d'avant.
+      const lead = await prisma.lead.findUnique({ where: { id: effet.leadId }, select: { dernierContactLe: true } });
+      if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
+      const avant = lead.dernierContactLe;
+      if (avant && avant.getTime() >= contexte.reponduLe.getTime()) return;
+      const { count } = await prisma.lead.updateMany({ where: { id: effet.leadId, dernierContactLe: avant }, data: { dernierContactLe: contexte.reponduLe } });
       if (count === 1) {
         sortie.faits.push("contact noté sur la fiche");
-        sortie.inverses.push({ genre: "DERNIER_CONTACT", leadId: effet.leadId, le: contexte.reponduLe.toISOString() });
+        sortie.inverses.push({ genre: "DERNIER_CONTACT", leadId: effet.leadId, le: contexte.reponduLe.toISOString(), avant: avant?.toISOString() ?? null });
       }
       return;
     }
@@ -304,6 +314,8 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
       const lead = await prisma.lead.findUnique({ where: { id: effet.leadId }, select: { statut: true, dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true } } } });
       if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
       if (lead.dossiers[0]) {
+        // « Tout classer » ne touche jamais un dossier (étapes engageantes : jamais en lot).
+        if (effet.enLot) throw new ErreurMetier("ce contact a un dossier : à classer depuis son dossier, pas en lot", 409);
         await appliquerEffet({ genre: "PERTE_DOSSIER", dossierId: lead.dossiers[0].id, motifPerte: effet.motifPerte, precision: effet.precision }, contexte, sortie);
         return;
       }
@@ -325,33 +337,75 @@ async function appliquerEffet(effet: Effet, contexte: { tacheId: string; repondu
   }
 }
 
+const STATUT_DE_LA_REPONSE: Record<ReponseTache, StatutTache> = { FAIT: "FAITE", PLUS_TARD: "PLUS_TARD", PAS_A_FAIRE: "PAS_A_FAIRE" };
+
+/** La réponse que porte la charge est-elle toujours celle de la tâche (ni annulée, ni remplacée, ni rouverte) ? */
+function reponseTient(tache: Pick<TacheAFaire, "statut" | "reponse" | "reponduLe"> | null, charge: Pick<ChargeEffet, "reponse" | "reponduLe">): boolean {
+  return Boolean(tache && tache.reponse === charge.reponse && tache.reponduLe?.toISOString() === charge.reponduLe && tache.statut === STATUT_DE_LA_REPONSE[charge.reponse]);
+}
+
+const progressionVide = (): ProgressionEffet => ({ faits: [], textes: [], refus: [], inverses: [], irreversibles: [] });
+
 /**
- * L'exécution d'une tâche de fond A_FAIRE_EFFET. Relit la tâche : une réponse annulée ou remplacée depuis n'a plus
- * d'effet. Chaque effet est tenté ; un refus métier (proposition déjà décidée, étape déjà atteinte) est noté sans
- * arrêter les autres ; une autre erreur fait réessayer la file (les effets déjà faits ne se doublent pas).
+ * L'exécution d'une tâche de fond A_FAIRE_EFFET. La tâche est relue avant CHAQUE effet : une réponse annulée,
+ * remplacée ou rouverte (le client a écrit, la tâche est de nouveau « à faire ») n'a plus d'effet. Chaque effet est
+ * tenté ; un refus métier (proposition déjà décidée, étape déjà atteinte) est noté sans arrêter les autres ; une autre
+ * erreur fait réessayer la file.
+ *
+ * Mission 17 (partie A, relecture) : ce qui est fait est rangé au fil de l'eau sur la tâche (`precedent.progression`,
+ * etat.ts) : un nouvel essai saute les effets déjà faits, et « Annuler » défait tout ce qui est rangé, même quand
+ * l'effet n'est pas allé au bout. Le résumé ne cite ni titre ni nom (la file des tâches de fond est hors RGPD).
  */
 export async function executerEffet(chargeBrute: unknown): Promise<ResultatEffet> {
   const charge = chargeBrute as Partial<ChargeEffet>;
   const vide = (resume: string): ResultatEffet => ({ resume, faits: [], refus: [], inverses: [], irreversibles: [] });
-  if (!charge?.tacheId || !Array.isArray(charge.effets) || !charge.reponduLe) return vide("Charge illisible : rien à faire.");
-  const tache = await prisma.tacheAFaire.findUnique({ where: { id: charge.tacheId }, select: { id: true, reponse: true, reponduLe: true, titre: true } });
+  if (!charge?.tacheId || !Array.isArray(charge.effets) || !charge.reponduLe || !charge.reponse) return vide("Charge illisible : rien à faire.");
+  const lire = () => prisma.tacheAFaire.findUnique({ where: { id: charge.tacheId! }, select: { id: true, type: true, statut: true, reponse: true, reponduLe: true, precedent: true } });
+  const tache = await lire();
   if (!tache) return vide("Tâche introuvable : rien à faire.");
-  if (tache.reponse !== charge.reponse || tache.reponduLe?.toISOString() !== charge.reponduLe) return vide("Réponse annulée ou remplacée : effet abandonné.");
+  const reference = { reponse: charge.reponse, reponduLe: charge.reponduLe };
+  if (!reponseTient(tache, reference)) return vide("Réponse annulée ou remplacée : effet abandonné.");
   const acteur = typeof charge.acteur === "string" && acteurValide(charge.acteur) ? charge.acteur : ACTEUR_TACHES;
   const reponduLe = new Date(charge.reponduLe);
-  const sortie = vide("");
+  const dejaFaite = lirePrecedent(tache.precedent)?.progression ?? progressionVide();
+  const progression: ProgressionEffet = { ...progressionVide(), ...dejaFaite };
+  let interrompu = false;
   await avecActeur({ acteur, origine: `a-faire:effet ${tache.id}` }, async () => {
-    for (const effet of charge.effets!) {
+    for (const [index, effet] of charge.effets!.entries()) {
+      if (progression.faits.includes(index)) continue;
+      const courante = await lire();
+      if (!reponseTient(courante, reference)) {
+        interrompu = true;
+        break;
+      }
+      const partie = vide("");
       try {
-        await appliquerEffet(effet, { tacheId: tache.id, reponduLe }, sortie);
+        await appliquerEffet(effet, { tacheId: tache.id, reponduLe }, partie);
       } catch (erreur) {
         if (!estErreurMetier(erreur)) throw erreur;
-        sortie.refus.push(messageDe(erreur));
+        partie.refus.push(messageDe(erreur));
+      }
+      progression.faits.push(index);
+      progression.textes.push(...partie.faits);
+      progression.refus.push(...partie.refus);
+      progression.inverses.push(...partie.inverses);
+      progression.irreversibles.push(...partie.irreversibles);
+      // Rangé sur la tâche tant que la réponse tient (sinon « Annuler » est passé entre-temps : dit dans le résumé).
+      const precedent = lirePrecedent(courante!.precedent);
+      const { count } = precedent
+        ? await prisma.tacheAFaire.updateMany({ where: { id: tache.id, reponse: charge.reponse, reponduLe }, data: { precedent: JSON.stringify({ ...precedent, progression }) } })
+        : { count: 0 };
+      if (count !== 1) {
+        progression.refus.push(`réponse annulée pendant l'exécution : ${partie.faits.join(", ") || "rien"} à défaire à la main`);
+        interrompu = true;
+        break;
       }
     }
   });
   await signalerChangementTaches();
-  sortie.resume = `${tache.titre} : ${[...sortie.faits, ...sortie.refus.map((r) => `refusé (${r})`)].join(", ") || "rien à changer"}.`;
+  const sortie: ResultatEffet = { resume: "", faits: progression.textes, refus: progression.refus, inverses: progression.inverses as Inverse[], irreversibles: progression.irreversibles };
+  const detail = [...sortie.faits, ...sortie.refus.map((r) => `refusé (${r})`)].join(", ") || "rien à changer";
+  sortie.resume = `Tâche ${tache.type} ${tache.id} : ${detail}${interrompu ? " (arrêté : réponse annulée ou tâche rouverte)" : ""}.`;
   return sortie;
 }
 
@@ -406,10 +460,15 @@ export async function repondreTache(id: string, entree: EntreeReponse, maintenan
   let decision: Decision;
   let colonnes: Parameters<typeof enregistrerReponse>[1];
   switch (e.reponse) {
-    case "FAIT":
+    case "FAIT": {
+      // Mission 17 (partie A, relecture) : « Fait » sur une tâche VALIDER valide sa proposition — jamais une sensible
+      // (argent, client) : elle passe par « À valider », son aperçu et sa confirmation.
+      const propositionId = type === "VALIDER" ? propositionDe(lireObjet(tache.raccourci), lireObjet(tache.donnees)) : null;
+      if (propositionId && (await propositionSensible(propositionId))) throw new ErreurMetier(`« Fait » impossible ici : ${REFUS_SENSIBLE}.`, 409);
       decision = { reponse: "FAIT", raison: null, jusqua: null, motifPerte: null, precisionPerte: null };
       colonnes = { statut: "FAITE", reponse: "FAIT", reponseRaison: null, reponseTexte: texte, plusTardJusqua: null, dureeReelleSec: dureeReelle(tache.commenceLe, maintenant) ?? tache.dureeReelleSec };
       break;
+    }
     case "PLUS_TARD": {
       const raison = e.raison?.trim() || null;
       if (raison && !(RAISONS_PLUS_TARD as readonly string[]).includes(raison)) throw new ErreurMetier(`Raison invalide pour « Plus tard » : ${RAISONS_PLUS_TARD.join(", ")}.`, 400);
@@ -474,7 +533,7 @@ async function defaire(inverse: Inverse, maintenant: Date): Promise<string> {
       return inverse.messagesLus.length ? "messages de l'espace remis non lus" : "réponse retirée du dossier";
     }
     case "DERNIER_CONTACT":
-      await prisma.lead.updateMany({ where: { id: inverse.leadId, dernierContactLe: new Date(inverse.le) }, data: { dernierContactLe: null } });
+      await prisma.lead.updateMany({ where: { id: inverse.leadId, dernierContactLe: new Date(inverse.le) }, data: { dernierContactLe: dateOuNull(inverse.avant) } });
       return "contact retiré de la fiche";
     case "STATUT_LEAD": {
       const { modifierEntrant } = await import("@/lib/prospects/entrants");
@@ -487,8 +546,8 @@ async function defaire(inverse: Inverse, maintenant: Date): Promise<string> {
 async function annuler(id: string, maintenant: Date, signaler: boolean): Promise<ResultatAnnulation> {
   const tache = await prisma.tacheAFaire.findUnique({ where: { id } });
   if (!tache || tache.archiveLe) throw new ErreurMetier("Tâche introuvable.", 404);
-  const precedent = lireObjet(tache.precedent) as Partial<Precedent>;
-  if (!precedent.avant) throw new ErreurMetier("Rien à annuler sur cette tâche.", 409);
+  const precedent = lirePrecedent(tache.precedent);
+  if (!precedent) throw new ErreurMetier("Rien à annuler sur cette tâche.", 409);
   const avant = precedent.avant;
   // L'état d'abord : un effet qui partirait maintenant verra la réponse annulée et ne fera rien (executerEffet).
   const ligne = await prisma.tacheAFaire.update({
@@ -498,10 +557,10 @@ async function annuler(id: string, maintenant: Date, signaler: boolean): Promise
       reponse: avant.reponse,
       reponseRaison: avant.reponseRaison,
       reponseTexte: avant.reponseTexte,
-      reponduLe: date(avant.reponduLe),
+      reponduLe: dateOuNull(avant.reponduLe),
       reponduPar: avant.reponduPar,
-      plusTardJusqua: date(avant.plusTardJusqua),
-      revenueLe: date(avant.revenueLe),
+      plusTardJusqua: dateOuNull(avant.plusTardJusqua),
+      revenueLe: dateOuNull(avant.revenueLe),
       dureeReelleSec: avant.dureeReelleSec,
       precedent: null,
     },
@@ -509,6 +568,20 @@ async function annuler(id: string, maintenant: Date, signaler: boolean): Promise
   const defaits: string[] = [];
   const nonDefaits: string[] = [];
   let effetAnnule = false;
+  /** Défait ce que l'effet a fait (inverses), et dit ce qui ne se défait pas. */
+  const defaireTout = async (inverses: readonly Inverse[], irreversibles: readonly string[]) => {
+    for (const inverse of inverses) {
+      try {
+        defaits.push(await defaire(inverse, maintenant));
+      } catch (erreur) {
+        nonDefaits.push(`${inverse.genre.toLowerCase().replace(/_/g, " ")} : ${messageDe(erreur)}`);
+      }
+    }
+    nonDefaits.push(...irreversibles);
+  };
+  // Mission 17 (partie A, relecture) : ce que l'effet a déjà fait est rangé au fil de l'eau (executerEffet) : défait
+  // même quand l'effet attend un nouvel essai ou a échoué en route.
+  const progression = precedent.progression;
   const file = precedent.effet?.cle ? await prisma.tache.findUnique({ where: { cle: precedent.effet.cle } }) : null;
   if (file) {
     if (file.statut === "EN_ATTENTE" || file.statut === "ECHEC_DEFINITIF") {
@@ -518,18 +591,13 @@ async function annuler(id: string, maintenant: Date, signaler: boolean): Promise
       } catch {
         nonDefaits.push("l'effet venait de partir : relance « Annuler » dans un instant");
       }
+      if (progression) await defaireTout(progression.inverses as Inverse[], progression.irreversibles);
     } else if (file.statut === "EN_COURS") {
-      nonDefaits.push("l'effet est en train de s'exécuter : il s'arrêtera de lui-même (réponse annulée) ou sera à défaire à la main");
+      if (progression) await defaireTout(progression.inverses as Inverse[], progression.irreversibles);
+      nonDefaits.push("l'effet est en train de s'exécuter : il s'arrête de lui-même (réponse annulée) ; ce qu'il ferait encore d'ici là est à défaire à la main");
     } else if (file.statut === "TERMINEE") {
       const resultat = lireObjet(file.resultat) as Partial<ResultatEffet>;
-      for (const inverse of resultat.inverses ?? []) {
-        try {
-          defaits.push(await defaire(inverse, maintenant));
-        } catch (erreur) {
-          nonDefaits.push(`${inverse.genre.toLowerCase().replace(/_/g, " ")} : ${messageDe(erreur)}`);
-        }
-      }
-      nonDefaits.push(...(resultat.irreversibles ?? []));
+      await defaireTout(progression ? (progression.inverses as Inverse[]) : (resultat.inverses ?? []), progression ? progression.irreversibles : (resultat.irreversibles ?? []));
     }
   }
   if (signaler) await signalerChangementTaches();
@@ -625,19 +693,29 @@ export async function ajouterTache(entree: EntreeAjout, maintenant: Date = new D
 
 /* ── Les lots : « Tout classer » ───────────────────────────────────────── */
 
-export type ResultatLot = { classees: number; effets: number };
+/** `laissees` : les tâches du lot qui ne se classent pas d'un geste (contact qui a un dossier) : à revoir une par une. */
+export type ResultatLot = { classees: number; effets: number; laissees: number };
 
 /**
- * « Tout classer » : chaque tâche à faire du lot passe « Pas à faire » (CLASSE_EN_LOT) ; un ancien contact
- * (CLASSER_LEAD) est classé sans suite, motif « plus de réponse », par la même file d'effets. Annulable (annulerLot).
+ * « Tout classer » : chaque tâche du lot (à faire, ou « Plus tard » échu : ce que la liste compte) passe « Pas à faire »
+ * (CLASSE_EN_LOT) ; un ancien contact (CLASSER_LEAD) est classé sans suite, motif « plus de réponse », par la même file
+ * d'effets. Annulable (annulerLot).
+ *
+ * Mission 17 (partie A, relecture) : un contact qui a un dossier (même signé) n'est jamais classé en lot — son dossier
+ * passerait perdu, et les étapes engageantes ne se décident jamais en lot : sa tâche reste à faire (`laissees`).
+ * `classees` ne compte que les tâches réellement classées (une tâche cochée par le CRM entre-temps reste comme elle est).
  */
 export async function classerLot(lot: string, maintenant: Date = new Date()): Promise<ResultatLot> {
-  const taches = await prisma.tacheAFaire.findMany({ where: { lot, statut: "A_FAIRE" } });
-  if (taches.length === 0) throw new ErreurMetier("Rien à classer dans ce lot.", 404);
+  const candidates = await prisma.tacheAFaire.findMany({ where: filtreDuLot(lot, maintenant) });
+  if (candidates.length === 0) throw new ErreurMetier("Rien à classer dans ce lot.", 404);
+  const leadIds = [...new Set(candidates.filter((t) => t.type === "CLASSER_LEAD" && t.leadId).map((t) => t.leadId!))];
+  const avecDossier = new Set(leadIds.length ? (await prisma.dossier.findMany({ where: { leadId: { in: leadIds } }, select: { leadId: true } })).map((d) => d.leadId) : []);
+  const taches = candidates.filter((t) => !(t.type === "CLASSER_LEAD" && t.leadId && avecDossier.has(t.leadId)));
   const { acteur } = await resoudreContexte();
+  let classees = 0;
   let effets = 0;
   for (const tache of taches) {
-    const perte: Effet[] = tache.type === "CLASSER_LEAD" && tache.leadId ? [{ genre: "PERTE_LEAD", leadId: tache.leadId, motifPerte: "SANS_REPONSE", precision: MOTIF_CLASSEMENT_LOT }] : [];
+    const perte: Effet[] = tache.type === "CLASSER_LEAD" && tache.leadId ? [{ genre: "PERTE_LEAD", leadId: tache.leadId, motifPerte: "SANS_REPONSE", precision: MOTIF_CLASSEMENT_LOT, enLot: true }] : [];
     try {
       const { effet } = await enregistrerReponse(
         tache,
@@ -646,6 +724,7 @@ export async function classerLot(lot: string, maintenant: Date = new Date()): Pr
         acteur,
         maintenant
       );
+      classees++;
       if (effet) effets++;
     } catch (erreur) {
       // Une tâche qui vient de changer (cochée par le CRM entre-temps) reste comme elle est.
@@ -653,7 +732,7 @@ export async function classerLot(lot: string, maintenant: Date = new Date()): Pr
     }
   }
   await signalerChangementTaches();
-  return { classees: taches.length, effets };
+  return { classees, effets, laissees: candidates.length - taches.length };
 }
 
 /** Défait « Tout classer » : chaque tâche classée en lot revient comme avant, et son effet est annulé ou défait. */

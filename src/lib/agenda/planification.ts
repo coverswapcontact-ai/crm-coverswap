@@ -5,6 +5,7 @@ import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { modifierDossier } from "@/lib/dossiers/dossiers";
 import { noterProchaineActionManuelle } from "@/lib/dossiers/prochaine-action-manuelle";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { modifierEntrant } from "@/lib/prospects/entrants";
 import { creerEvenementAgenda } from "@/lib/assistant/agenda";
 import { etatConnexionGoogle } from "@/lib/google/connexion";
@@ -92,6 +93,8 @@ export async function planifierAction(entree: EntreePlanification): Promise<Resu
       await prisma.dossier.update({ where: { id: entree.dossierId }, data: { prochaineAction: entree.action.slice(0, 120), prochaineActionDate: entree.debut, prochaineActionInstant: entree.debut } });
       // Mission 17 (partie A) : planifiée par Lucas ou Claude, c'est une prochaine action manuelle (l'autre branche passe par modifierDossier).
       await noterProchaineActionManuelle(entree.dossierId, { action: entree.action.slice(0, 120), avant: dossier.prochaineAction, date: entree.debut });
+      // Même texte, autre date : rien n'est retenu de neuf, mais la tâche PROCHAINE_ACTION suit la nouvelle date.
+      await signalerChangementTaches();
     } else {
       await modifierDossier(entree.dossierId, { prochaineAction: entree.action.slice(0, 120), prochaineActionDate: jourParis(entree.debut) } as Parameters<typeof modifierDossier>[1]);
     }

@@ -119,7 +119,8 @@ posé, `prochaineAction` égale au texte retenu, et aucun événement du client 
 aucun détecteur ne crée de tâche sur ce dossier (signaux, cohérence, étapes, messages plus anciens compris) ; une
 seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Posée à la main, elle écrit un événement
 `PROCHAINE_ACTION_MANUELLE` qui compte comme une réponse pour la règle de la main (ce qui est plus ancien est traité)
-et qui passe la main au client si le texte dit d'attendre (`/attend/i`), sinon à Lucas.
+et qui passe la main au client si le texte dit d'attendre (`/\battend|\battente\b/i` : « en attente de… » compris), sinon à
+Lucas.
 
 Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les détecteurs puis `reconcilier`.
 - Travail périodique `taches-a-faire` toutes les 15 minutes (le contrôle de cohérence, coûteux, au plus une fois par

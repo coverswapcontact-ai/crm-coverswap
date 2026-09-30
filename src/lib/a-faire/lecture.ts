@@ -231,9 +231,17 @@ export async function planMinutes(minutes: number, maintenant: Date = new Date()
   };
 }
 
+/**
+ * Mission 17 (partie A, relecture) : les tâches d'un lot telles que la liste les compte (`lotsDe`) : à faire, ou
+ * « Plus tard » échu. « Tout classer » (reponses.ts › classerLot) et « Revoir un par un » prennent les mêmes.
+ */
+export function filtreDuLot(lot: string, maintenant: Date) {
+  return { lot, OR: [{ statut: "A_FAIRE" }, { statut: "PLUS_TARD", plusTardJusqua: { lte: maintenant } }] };
+}
+
 /** Les tâches à faire d'un lot (« Revoir un par un »), dans l'ordre de la liste. */
 export async function tachesDuLot(lot: string, maintenant: Date = new Date()): Promise<TacheVue[]> {
-  const lignes = await prisma.tacheAFaire.findMany({ where: { lot, statut: "A_FAIRE" } });
+  const lignes = await prisma.tacheAFaire.findMany({ where: filtreDuLot(lot, maintenant) });
   return trierTaches(lignes.map(versVue), maintenant);
 }
 

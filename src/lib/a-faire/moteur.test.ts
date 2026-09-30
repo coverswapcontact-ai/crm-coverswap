@@ -116,7 +116,7 @@ describe("moteur : création, fusion, coche du CRM", () => {
     assert.equal((await tache(det.cle)).titre, "Faire le devis · Doublon");
   });
 
-  test("fusion par clé : la source ≠ DOSSIERS la plus récente donne le raccourci ; niveau le plus urgent, montant le plus grand", async () => {
+  test("fusion par clé : la source la plus récente donne le raccourci ; niveau le plus urgent, montant le plus grand ; toutes les sources rangées", async () => {
     await toutRetirer();
     const d = await unDossier("Fusion");
     const cle = `REPONDRE:dossier:${d.id}`;
@@ -133,7 +133,7 @@ describe("moteur : création, fusion, coche du CRM", () => {
     assert.equal(ligne.niveau, 1);
     assert.equal(ligne.montant, 5000);
     assert.equal(ligne.depuis.getTime(), plus(MERCREDI, -5 * H).getTime(), "l'origine du besoin : la plus ancienne");
-    assert.deepEqual(JSON.parse(ligne.donnees), { espaceDossierId: d.id, messageIds: ["m-essai"], sms: true });
+    assert.deepEqual(JSON.parse(ligne.donnees), { espaceDossierId: d.id, messageIds: ["m-essai"], sms: true, sourcesVues: ["DOSSIERS", "ESPACE_MESSAGES", "MAIL"] });
     // L'ordre des détections ne change rien : le passage suivant n'écrit pas.
     assert.deepEqual(await moteur.reconcilier([parEspace, parMail, parSms], { sources: ["DOSSIERS", "MAIL", "ESPACE_MESSAGES"], maintenant: MERCREDI }), RIEN);
   });
@@ -551,7 +551,7 @@ describe("lecture : tri, « Aujourd'hui », lots, « j'ai 15 minutes »", () => 
 
     // « Tout classer » : les deux anciens contacts passent sans suite par la file d'effets ; « Annuler » les remet.
     const classement = await avecActeur(LUCAS, () => reponses.classerLot("anciens-leads", MERCREDI));
-    assert.deepEqual(classement, { classees: 2, effets: 2 });
+    assert.deepEqual(classement, { classees: 2, effets: 2, laissees: 0 });
     const liste2 = await lecture.listeTaches(MERCREDI);
     assert.equal(liste2.lots.length, 0);
     assert.equal(liste2.faitAujourdhui.length, 2);
@@ -619,5 +619,262 @@ describe("passage complet", () => {
     for (const d of detecteurs.DETECTEURS) assert.deepEqual(await d.detecter(contexte), []);
     assert.equal(detecteurs.cleTache("REPONDRE", { type: "DOSSIER", id: "d1" }), "REPONDRE:dossier:d1");
     assert.equal(detecteurs.cleTache("SYSTEME", { type: "SYSTEME", id: null }, "jeton-meta"), "SYSTEME:jeton-meta");
+  });
+});
+
+/** Mission 17 (partie A) — relecture adverse du lot 1 : chaque défaut corrigé a son essai. */
+describe("relecture du lot 1 : défauts corrigés", () => {
+  const executerFile = async (cle: string) => reponses.executerEffet(JSON.parse((await prisma.tache.findUniqueOrThrow({ where: { cle } })).charge));
+  const terminer = async (cle: string, resultat: unknown) => prisma.tache.update({ where: { cle }, data: { statut: "TERMINEE", resultat: JSON.stringify(resultat) } });
+
+  test("fusion : la source la plus récente fournit le raccourci, même DOSSIERS ; une détection qui ne porte que son sujet est soumise à la vigueur", async () => {
+    await toutRetirer();
+    const d = await unDossier("Sujet seul");
+    const cle = `REPONDRE:dossier:${d.id}`;
+    const parSms = detectionDe({ cle, type: "REPONDRE", dossierId: d.id, source: "DOSSIERS", depuis: plus(MERCREDI, -H), raccourci: { genre: "SMS", libelle: "Répondre par SMS" } });
+    const parMail = detectionDe({ cle, type: "REPONDRE", dossierId: d.id, source: "MAIL", depuis: plus(MERCREDI, -3 * J), raccourci: { genre: "MAIL", libelle: "Répondre" } });
+    const [fusionnee] = moteur.fusionnerDetections([parMail, parSms]);
+    assert.equal(fusionnee.source, "DOSSIERS");
+    assert.equal(fusionnee.raccourci.genre, "SMS", "le SMS d'il y a 1 h, pas le vieux mail");
+    assert.equal(fusionnee.depuis.getTime(), plus(MERCREDI, -3 * J).getTime());
+
+    const devis = detectionDe({ cle: `DEVIS:dossier:${d.id}`, type: "DEVIS", sujet: { type: "DOSSIER", id: d.id } });
+    assert.equal(devis.dossierId, undefined, "seul le sujet désigne le dossier");
+    const enVigueur = new Map([[d.id, { dossierId: d.id, action: "Attendre ses retours", date: null, le: MERCREDI, par: LUCAS.acteur }]]);
+    const bilan = await moteur.reconcilier([devis], { sources: ["DOSSIERS"], maintenant: plus(MERCREDI, H), vigueur: enVigueur });
+    assert.deepEqual(bilan, { ...RIEN, ecartees: 1 });
+    assert.equal(await prisma.tacheAFaire.count({ where: { cle: devis.cle } }), 0);
+  });
+
+  test("une source en panne ne fait pas cocher ce qu'une autre voyait aussi ; recouvert par une coche du CRM, le « Plus tard » de Lucas lui est rendu", async () => {
+    await toutRetirer();
+    const d = await unDossier("Deux sources");
+    const cle = `REPONDRE:dossier:${d.id}`;
+    const parMail = detectionDe({ cle, type: "REPONDRE", source: "MAIL", dossierId: d.id, niveau: 1, depuis: plus(MERCREDI, -5 * H), raccourci: { genre: "MAIL", libelle: "Répondre" } });
+    const parEspace = detectionDe({ cle, type: "REPONDRE", source: "ESPACE_MESSAGES", dossierId: d.id, niveau: 1, depuis: plus(MERCREDI, -H), raccourci: { genre: "ESPACE", libelle: "Répondre" } });
+    await moteur.reconcilier([parMail, parEspace], { sources: ["MAIL", "ESPACE_MESSAGES"], maintenant: MERCREDI });
+    assert.deepEqual(JSON.parse((await tache(cle)).donnees).sourcesVues, ["ESPACE_MESSAGES", "MAIL"]);
+    const { id } = await tache(cle);
+    const reportee = await avecActeur(LUCAS, () => reponses.repondreTache(id, { reponse: "PLUS_TARD", quand: "SEMAINE" }, plus(MERCREDI, MIN)));
+    const jusqua = reportee.tache.plusTardJusqua;
+
+    // L'espace ne voit plus rien (message lu ailleurs), le détecteur MAIL est en panne : on ne sait pas, rien ne bouge.
+    const panne = await detection.passeComplete(plus(MERCREDI, H), {
+      detecteurs: [
+        { source: "MAIL", detecter: async () => Promise.reject(new Error("boîte injoignable")) },
+        { source: "ESPACE_MESSAGES", detecter: async () => [] },
+      ],
+    });
+    assert.equal(panne.reconciliation.cochees, 0);
+    assert.equal((await tache(cle)).statut, "PLUS_TARD");
+    // Le mail seul la voit encore : elle garde son « Plus tard », sa source devient MAIL.
+    await moteur.reconcilier([parMail], { sources: ["MAIL", "ESPACE_MESSAGES"], maintenant: plus(MERCREDI, 2 * H) });
+    const parLeMail = await tache(cle);
+    assert.equal(parLeMail.statut, "PLUS_TARD");
+    assert.equal(parLeMail.source, "MAIL");
+    assert.equal(JSON.parse(parLeMail.donnees).sourcesVues, undefined);
+    // Plus personne ne la voit : cochée par le CRM (l'état d'avant est rangé).
+    assert.deepEqual(await moteur.reconcilier([], { sources: ["MAIL", "ESPACE_MESSAGES"], maintenant: plus(MERCREDI, 3 * H) }), { ...RIEN, cochees: 1 });
+    assert.equal((await tache(cle)).statut, "FAITE");
+    // Elle revient (condition revenue) : le « Plus tard » de Lucas court encore, il lui est rendu.
+    assert.deepEqual(await moteur.reconcilier([parMail], { sources: ["MAIL"], maintenant: plus(MERCREDI, 4 * H) }), { ...RIEN, rouvertes: 1 });
+    const rendue = await tache(cle);
+    assert.equal(rendue.statut, "PLUS_TARD");
+    assert.equal(rendue.plusTardJusqua?.toISOString(), jusqua);
+    assert.equal(lecture.versVue(rendue).reponduParLisible, "Lucas");
+    assert.deepEqual((await lecture.listeTaches(plus(MERCREDI, 4 * H))).aujourdhui, [], "pas dans « Aujourd'hui » avant sa date");
+  });
+
+  test("un mail reporté par le CRM revient « à faire » dès que le détecteur le revoit (report levé)", async () => {
+    await toutRetirer();
+    const lead = await unLead("Deporte");
+    const message = await unMail(lead.id, { snoozeJusqua: plus(MERCREDI, 5 * J) });
+    const det = detectionDe({ cle: `REPONDRE:lead:${lead.id}`, type: "REPONDRE", source: "MAIL", leadId: lead.id, niveau: 1, raccourci: { genre: "MAIL", libelle: "Répondre", messageId: message.id } });
+    await moteur.reconcilier([det], { sources: ["MAIL"], maintenant: MERCREDI });
+    await moteur.reconcilier([], { sources: ["MAIL"], maintenant: plus(MERCREDI, H) });
+    assert.equal((await tache(det.cle)).statut, "PLUS_TARD");
+    const avant = await prisma.tache.findUnique({ where: { cle: "a-faire:detection" } });
+    await avecActeur(LUCAS, async () => (await import("@/lib/mail/v2")).annulerSnooze(message.id));
+    const signal = await prisma.tache.findUniqueOrThrow({ where: { cle: "a-faire:detection" } });
+    assert.ok(!avant || signal.updatedAt.getTime() > avant.updatedAt.getTime(), "annulerSnooze demande un passage");
+    assert.deepEqual(await moteur.reconcilier([det], { sources: ["MAIL"], maintenant: plus(MERCREDI, 2 * H) }), { ...RIEN, rouvertes: 1 });
+    const revenue = await tache(det.cle);
+    assert.equal(revenue.statut, "A_FAIRE");
+    assert.equal(revenue.revenueLe?.getTime(), plus(MERCREDI, 2 * H).getTime());
+  });
+
+  test("NE_PLUS_PROPOSER : les tâches ouvertes du type passent « Pas à faire » par le CRM ; la règle retirée, elles reviennent", async () => {
+    await toutRetirer();
+    const d = await unDossier("Regle");
+    const det = detectionDe({ cle: `PUBLIER:dossier:${d.id}`, type: "PUBLIER", dossierId: d.id });
+    await moteur.reconcilier([det], { sources: ["DOSSIERS"], maintenant: MERCREDI });
+    await avecActeur(LUCAS, () => prisma.regleTache.create({ data: { type: "PUBLIER", raison: "PAS_PERTINENT", effet: "NE_PLUS_PROPOSER", libelle: "Publier la simulation : ne plus la proposer", par: LUCAS.acteur } }));
+    assert.deepEqual(await moteur.reconcilier([det], { sources: ["DOSSIERS"], maintenant: plus(MERCREDI, H) }), { ...RIEN, cochees: 1 });
+    const ecartee = await tache(det.cle);
+    assert.equal(ecartee.statut, "PAS_A_FAIRE");
+    assert.equal(ecartee.reponduPar, types.ACTEUR_TACHES);
+    assert.equal(ecartee.reponseTexte, "coché par le CRM : règle « Publier la simulation : ne plus la proposer »");
+    assert.deepEqual(await moteur.reconcilier([det], { sources: ["DOSSIERS"], maintenant: plus(MERCREDI, 2 * H) }), { ...RIEN, ecartees: 1 });
+    await prisma.regleTache.updateMany({ where: { archiveLe: null }, data: { archiveLe: new Date(), archiveMotif: "fin de l'essai" } });
+    assert.deepEqual(await moteur.reconcilier([det], { sources: ["DOSSIERS"], maintenant: plus(MERCREDI, 3 * H) }), { ...RIEN, rouvertes: 1 });
+    const revenue = await tache(det.cle);
+    assert.equal(revenue.statut, "A_FAIRE");
+    assert.equal(revenue.reponse, null, "réponse remise à zéro");
+    assert.equal(lecture.versVue(revenue).reponseTexte, null);
+  });
+
+  test("une détection mal formée : sa source n'est pas couverte, sa tâche n'est pas cochée ; les valides passent", async () => {
+    await toutRetirer();
+    const d = await unDossier("Mal formee");
+    const autre = await unDossier("Bien formee");
+    const det = detectionDe({ cle: `DEVIS:dossier:${d.id}`, type: "DEVIS", dossierId: d.id });
+    await moteur.reconcilier([det], { sources: ["DOSSIERS"], maintenant: MERCREDI });
+    const bilan = await detection.passeComplete(plus(MERCREDI, H), {
+      detecteurs: [{ source: "DOSSIERS", detecter: async () => [{ ...det, niveau: 0 as never }, detectionDe({ cle: `SIMULATION:dossier:${autre.id}`, type: "SIMULATION", dossierId: autre.id })] }],
+    });
+    assert.equal(bilan.sources[0].couverte, false);
+    assert.match(bilan.sources[0].erreur ?? "", /1 détection mal formée/);
+    assert.deepEqual(bilan.reconciliation, { ...RIEN, crees: 1 });
+    assert.equal((await tache(det.cle)).statut, "A_FAIRE");
+  });
+
+  test("une tâche rouverte (le client a écrit) : réponse remise à zéro, et l'effet encore en file ne part pas", async () => {
+    await toutRetirer();
+    const lead = await unLead("Rouverte");
+    const message = await unMail(lead.id);
+    const det = detectionDe({ cle: `REPONDRE:lead:${lead.id}`, type: "REPONDRE", source: "MAIL", leadId: lead.id, niveau: 1, raccourci: { genre: "MAIL", libelle: "Répondre", messageId: message.id } });
+    await moteur.reconcilier([det], { sources: ["MAIL"], maintenant: MERCREDI });
+    const { id } = await tache(det.cle);
+    const fait = await avecActeur(LUCAS, () => reponses.repondreTache(id, { reponse: "FAIT" }, MERCREDI));
+    await unMail(lead.id, { recuLe: plus(MERCREDI, 2_000) });
+    assert.deepEqual(await moteur.reconcilier([det], { sources: ["MAIL"], maintenant: plus(MERCREDI, 4_000) }), { ...RIEN, rouvertes: 1 });
+    const rouverte = await tache(det.cle);
+    assert.equal(rouverte.statut, "A_FAIRE");
+    assert.equal(rouverte.reponse, null);
+    assert.equal(rouverte.reponduPar, null);
+    assert.equal(rouverte.precedent, null);
+    assert.match((await executerFile(fait.effet!.cle)).resume, /annulée ou remplacée/);
+    assert.equal((await prisma.message.findUniqueOrThrow({ where: { id: message.id } })).traiteLe, null, "le fil (avec le nouveau mail) n'est pas archivé");
+  });
+
+  test("lots : un « Plus tard » échu compte et se classe ; un ancien contact qui a un dossier (même signé) n'est jamais classé en lot", async () => {
+    await toutRetirer();
+    const lot = { cle: `anciens-${unique()}`, libelle: "ancien lead à classer|anciens leads à classer" };
+    const seul = await unLead("Seul");
+    const signe = await unLead("Signe");
+    const dossier = await unDossier("Signe", { leadId: signe.id, etape: "SIGNE" });
+    const dets = [seul, signe].map((l) => detectionDe({ cle: `CLASSER_LEAD:lead:${l.id}`, type: "CLASSER_LEAD", source: "LEADS", leadId: l.id, niveau: 5, lot }));
+    await moteur.reconcilier(dets, { sources: [], maintenant: MERCREDI });
+    await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(dets[0].cle)).id, { reponse: "PLUS_TARD", quand: "DEMAIN" }, MERCREDI));
+    const jeudi = new Date("2026-10-01T08:00:00.000Z");
+    assert.equal((await lecture.listeTaches(jeudi)).lots.find((l) => l.cle === lot.cle)?.nombre, 2);
+    assert.equal((await lecture.tachesDuLot(lot.cle, jeudi)).length, 2, "compté et revu : les mêmes");
+    const classement = await avecActeur(LUCAS, () => reponses.classerLot(lot.cle, jeudi));
+    assert.deepEqual(classement, { classees: 1, effets: 1, laissees: 1 });
+    const effet = await prisma.tache.findFirstOrThrow({ where: { type: "A_FAIRE_EFFET", charge: { contains: (await tache(dets[0].cle)).id } }, orderBy: { createdAt: "desc" } });
+    assert.deepEqual((await reponses.executerEffet(JSON.parse(effet.charge))).faits, ["contact classé sans suite"]);
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: seul.id } })).statut, "PERDU");
+    assert.equal((await tache(dets[1].cle)).statut, "A_FAIRE", "à revoir une par une");
+    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossier.id } })).etape, "SIGNE");
+  });
+
+  test("« Fait » et proposition : seule une tâche VALIDER la valide, jamais une sensible ; ailleurs elle est rejetée « déjà fait »", async () => {
+    await toutRetirer();
+    const d = await unDossier("Proposition");
+    const envoi = () =>
+      prisma.proposition.create({ data: { type: "ENVOI_MAIL", titre: "Réponse", resume: "r", contenu: JSON.stringify({ motif: "REPONSE", a: "client@exemple.test", objet: "Re", texte: "Bonjour", dossierId: d.id }), auteur: "AGENT:mail", statut: "EN_ATTENTE" } });
+    const brouillon = await envoi();
+    const repondre = detectionDe({ cle: `REPONDRE:dossier:${d.id}`, type: "REPONDRE", source: "MAIL", dossierId: d.id, niveau: 1, donnees: { propositionId: brouillon.id } });
+    await moteur.reconcilier([repondre], { sources: [], maintenant: MERCREDI });
+    const fait = await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(repondre.cle)).id, { reponse: "FAIT" }, MERCREDI));
+    const resultat = await executerFile(fait.effet!.cle);
+    assert.deepEqual(resultat.faits, ["proposition ignorée"]);
+    assert.match(resultat.resume, /^Tâche REPONDRE /);
+    assert.doesNotMatch(resultat.resume, /Essai|Proposition/, "ni titre ni nom dans la file des tâches de fond");
+    const rejetee = await prisma.proposition.findUniqueOrThrow({ where: { id: brouillon.id } });
+    assert.equal(rejetee.statut, "REJETEE");
+    assert.equal(rejetee.motifRejet, "DEJA_FAIT");
+    assert.equal(await prisma.tache.count({ where: { cle: `proposition:${brouillon.id}` } }), 0, "aucun envoi mis en file");
+
+    const sensible = await envoi();
+    const valider = detectionDe({ cle: `VALIDER:proposition:${sensible.id}`, type: "VALIDER", source: "PROPOSITIONS", dossierId: d.id, donnees: { propositionId: sensible.id } });
+    const note = await prisma.proposition.create({ data: { type: "NOTE_DOSSIER", titre: "Note", resume: "n", contenu: JSON.stringify({ dossierId: d.id, texte: "Coloris choisi" }), auteur: "AGENT:mail", statut: "EN_ATTENTE" } });
+    const validerNote = detectionDe({ cle: `VALIDER:proposition:${note.id}`, type: "VALIDER", source: "PROPOSITIONS", dossierId: d.id, donnees: { propositionId: note.id } });
+    await moteur.reconcilier([valider, validerNote], { sources: [], maintenant: MERCREDI });
+    await assert.rejects(avecActeur(LUCAS, async () => reponses.repondreTache((await tache(valider.cle)).id, { reponse: "FAIT" }, MERCREDI)), /À valider/);
+    assert.equal((await prisma.proposition.findUniqueOrThrow({ where: { id: sensible.id } })).statut, "EN_ATTENTE");
+    const faitNote = await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(validerNote.cle)).id, { reponse: "FAIT" }, MERCREDI));
+    assert.deepEqual((await executerFile(faitNote.effet!.cle)).faits, ["proposition validée et exécutée"]);
+    assert.equal((await prisma.proposition.findUniqueOrThrow({ where: { id: note.id } })).decidePar, LUCAS.acteur);
+  });
+
+  test("« Fait » sur APPELER puis RAPPELER : le dernier contact avance ; « Annuler » remet la date d'avant", async () => {
+    await toutRetirer();
+    const lead = await unLead("Contact");
+    const appeler = detectionDe({ cle: `APPELER:lead:${lead.id}`, type: "APPELER", source: "LEADS", leadId: lead.id, niveau: 2 });
+    await moteur.reconcilier([appeler], { sources: [], maintenant: MERCREDI });
+    const premier = await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(appeler.cle)).id, { reponse: "FAIT" }, MERCREDI));
+    await terminer(premier.effet!.cle, await executerFile(premier.effet!.cle));
+    const lundi = plus(MERCREDI, 5 * J);
+    const rappeler = detectionDe({ cle: `RAPPELER:lead:${lead.id}`, type: "RAPPELER", source: "LEADS", leadId: lead.id, niveau: 2 });
+    await moteur.reconcilier([rappeler], { sources: [], maintenant: lundi });
+    const second = await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(rappeler.cle)).id, { reponse: "FAIT" }, lundi));
+    const resultat = await executerFile(second.effet!.cle);
+    assert.deepEqual(resultat.faits, ["contact noté sur la fiche"]);
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).dernierContactLe?.getTime(), lundi.getTime());
+    await terminer(second.effet!.cle, resultat);
+    const idRappeler = (await tache(rappeler.cle)).id;
+    const annule = await avecActeur(LUCAS, () => reponses.annulerReponse(idRappeler, plus(lundi, MIN)));
+    assert.deepEqual(annule.defaits, ["contact retiré de la fiche"]);
+    assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: lead.id } })).dernierContactLe?.getTime(), MERCREDI.getTime(), "la date d'avant, pas rien");
+  });
+
+  test("un effet rejoué ne se double pas et garde ses inverses ; « Annuler » défait ce qui est fait même si la file attend un nouvel essai", async () => {
+    await toutRetirer();
+    const d = await unDossier("Rejoue");
+    const message = await prisma.messageEspace.create({ data: { dossierId: d.id, auteur: "CLIENT", source: "MESSAGE", texte: "Merci !" } });
+    const det = detectionDe({ cle: `REPONDRE:dossier:${d.id}`, type: "REPONDRE", source: "ESPACE_MESSAGES", dossierId: d.id, niveau: 1, raccourci: { genre: "ESPACE", libelle: "Répondre" }, donnees: { espaceDossierId: d.id } });
+    await moteur.reconcilier([det], { sources: [], maintenant: MERCREDI });
+    const { id } = await tache(det.cle);
+    const r = await avecActeur(LUCAS, () => reponses.repondreTache(id, { reponse: "PAS_A_FAIRE", raison: "PAS_DE_REPONSE_A_FAIRE" }, MERCREDI));
+    const premier = await executerFile(r.effet!.cle);
+    assert.deepEqual(premier.faits, ["messages de l'espace marqués lus"]);
+    // La file réessaie (erreur plus loin, redémarrage) : rien n'est doublé, les inverses sont gardés.
+    const second = await executerFile(r.effet!.cle);
+    assert.equal(second.inverses.length, 1);
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: d.id, type: "REPONSE_INUTILE" } }), 1);
+    assert.ok((await prisma.messageEspace.findUniqueOrThrow({ where: { id: message.id } })).luLe);
+    // La file attend encore (nouvel essai) : « Annuler » l'annule ET défait ce qui est déjà fait.
+    const annule = await avecActeur(LUCAS, () => reponses.annulerReponse(id, plus(MERCREDI, MIN)));
+    assert.equal(annule.effetAnnule, true);
+    assert.deepEqual(annule.defaits, ["messages de l'espace remis non lus"]);
+    assert.equal((await prisma.messageEspace.findUniqueOrThrow({ where: { id: message.id } })).luLe, null);
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: d.id, type: "REPONSE_INUTILE" } }), 0, "l'événement est archivé");
+  });
+
+  test("apprentissage et main : « client perdu » et « autre » n'apprennent rien ; « En attente de… » passe la main au client ; une PROCHAINE_ACTION validée est manuelle", async () => {
+    await toutRetirer();
+    for (const raison of ["CLIENT_PERDU", "AUTRE"]) {
+      for (let i = 0; i < 3; i++) {
+        const lead = await unLead(`Appris ${raison} ${i}`);
+        const det = detectionDe({ cle: `APPELER:lead:${lead.id}`, type: "APPELER", source: "LEADS", leadId: lead.id });
+        await moteur.reconcilier([det], { sources: [], maintenant: MERCREDI });
+        const entree = raison === "AUTRE" ? { reponse: "PAS_A_FAIRE" as const, raison, texte: "numéro faux" } : { reponse: "PAS_A_FAIRE" as const, raison, motifPerte: "HORS_ZONE" };
+        const r = await avecActeur(LUCAS, async () => reponses.repondreTache((await tache(det.cle)).id, entree, plus(MERCREDI, i * MIN)));
+        assert.equal(r.regle, null, `${raison} ${i}`);
+      }
+    }
+    const ev = (action: string) => ({ type: "PROCHAINE_ACTION_MANUELLE", direction: "INTERNE", metadata: JSON.stringify({ action }), contenu: "" });
+    assert.equal(main.passageDeMain(ev("En attente de ses photos"))?.qui, "CLIENT");
+    assert.equal(main.passageDeMain(ev("Relancer pour le coloris"))?.qui, "MOI");
+
+    const d = await unDossier("Proposee");
+    const proposition = await prisma.proposition.create({ data: { type: "PROCHAINE_ACTION", titre: "Prochaine action", resume: "p", contenu: JSON.stringify({ dossierId: d.id, action: "Attendre ses photos", date: null }), auteur: "AGENT:mail", statut: "EN_ATTENTE" } });
+    await avecActeur(LUCAS, () => validation.validerProposition(proposition.id));
+    const pose = await prisma.dossier.findUniqueOrThrow({ where: { id: d.id } });
+    assert.equal(pose.prochaineActionManuelle, "Attendre ses photos");
+    assert.equal(pose.prochaineActionPar, LUCAS.acteur);
+    assert.equal(pose.main, "CLIENT");
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: d.id, type: "PROCHAINE_ACTION_MANUELLE" } }), 1);
   });
 });

@@ -87,6 +87,12 @@ export function motifRepondre(nom: string | null | undefined): string {
 export const estMotifRepondre = (motif: string | null | undefined): boolean => /^Répondre (à |au client$)/.test(motif ?? "");
 
 /**
+ * Mission 17 (partie A) : une prochaine action manuelle qui dit d'attendre le client (docs/TACHES.md § 2) :
+ * « Attendre… », « J'attends… », et aussi « En attente de… » (relecture : `/attend/i` ne voyait pas « attente »).
+ */
+export const DIT_D_ATTENDRE = /\battend|\battente\b/i;
+
+/**
  * Les événements qui passent la main, et à qui. Seuls les gestes du CLIENT
  * (direction ENTRANT) lui font revenir la main : ce que Lucas fait à sa place
  * (INTERNE) ne compte pas comme une réponse du client.
@@ -186,11 +192,12 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     case "WHATSAPP_RECU":
       return { qui: "MOI", motif: "Message WhatsApp du client reçu" };
     // Mission 17 (partie A) : une prochaine action posée à la main (Lucas ou Claude). Elle dit qui attend qui :
-    // « Attendre sa modification visuelle » passe la main au client, toute autre action la garde à Lucas.
+    // « Attendre sa modification visuelle » (ou « En attente de ses photos ») passe la main au client, toute autre
+    // action la garde à Lucas.
     case "PROCHAINE_ACTION_MANUELLE": {
       const meta = lireMetadata(evenement.metadata);
       const action = typeof meta.action === "string" && meta.action.trim() ? meta.action.trim() : evenement.contenu;
-      return { qui: /attend/i.test(action) ? "CLIENT" : "MOI", motif: action };
+      return { qui: DIT_D_ATTENDRE.test(action) ? "CLIENT" : "MOI", motif: action };
     }
     // REPONSE_INUTILE (« pas de réponse à faire ») et REPONDU_HORS_CRM (« j'ai répondu ailleurs ») répondent au
     // message du client (estReponse) sans passer la main : le geste suivant, ou l'étape, décide.

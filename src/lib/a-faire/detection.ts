@@ -7,8 +7,9 @@ import { actionsManuellesEnVigueur } from "./vigueur";
 
 /**
  * Mission 17 (partie A) : un passage des détecteurs (docs/TACHES.md § 2). Le contexte (instant, prochaines actions
- * manuelles en vigueur) est lu une fois ; chaque détecteur tourne à part : une erreur est journalisée et SA source
- * n'est pas couverte ce passage (ses tâches ne sont pas cochées à tort) ; les autres continuent. Puis le moteur écrit.
+ * manuelles en vigueur) est lu une fois ; chaque détecteur tourne à part : une erreur (ou une détection mal formée) est
+ * journalisée et SA source n'est pas couverte ce passage (ses tâches ne sont pas cochées à tort) ; les autres
+ * continuent. Puis le moteur écrit.
  * Le filtre de vigueur est appliqué par le moteur (moteur.ts › reconcilier), pas ici.
  */
 
@@ -54,6 +55,13 @@ export async function passeComplete(maintenant: Date = new Date(), options: { so
       try {
         const [detections, acheves] = await Promise.all([detecteur.detecter(contexte), detecteur.acheves ? detecteur.acheves(contexte) : Promise.resolve<Achevement[]>([])]);
         const retenues = detections.map((d) => valide(d, detecteur.source)).filter((d): d is Detection => d !== null);
+        // Mission 17 (partie A, relecture) : une détection mal formée ne doit pas faire cocher sa tâche. Les détections
+        // valides sont écrites, mais la source n'est pas couverte ce passage (rien de ce qu'elle ne voit plus n'est coché).
+        const malFormees = detections.length - retenues.length;
+        if (malFormees > 0) {
+          const erreur = `${pluriel(malFormees, "détection mal formée", "détections mal formées")} : source non couverte ce passage`;
+          return { source: detecteur.source, couverte: false, detections: retenues, acheves, dureeMs: Date.now() - depart, erreur } as const;
+        }
         return { source: detecteur.source, couverte: true, detections: retenues, acheves, dureeMs: Date.now() - depart } as const;
       } catch (erreur) {
         console.error(`[a-faire] détecteur ${detecteur.source} en échec (source non couverte ce passage) :`, erreur);

@@ -114,6 +114,7 @@ export async function snoozer(messageId: string, jusqua: Date): Promise<void> {
 export async function annulerSnooze(messageId: string): Promise<void> {
   const fil = await filDe(messageId);
   await prisma.message.updateMany({ where: { id: { in: fil.messages.map((m) => m.id) } }, data: { snoozeJusqua: null } });
+  await signalerChangementTaches(); // Mission 17 (partie A) : le report levé, la tâche « Répondre » revient.
 }
 
 /* ── Ranger à la main (lu + libellé), et le contraire ───────────────── */

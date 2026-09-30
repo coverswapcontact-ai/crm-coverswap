@@ -73,14 +73,26 @@ export const propositionProchaineAction = definirProposition({
     { cle: "date", libelle: "Date", nature: "jour" },
   ],
   execution: "IMMEDIATE",
-  async executer(contenu, { tx }) {
+  async executer(contenu, { tx, decidePar }) {
     if (!tx) throw new Error("PROCHAINE_ACTION s'exécute dans la transaction de la validation");
+    const avant = await tx.dossier.findUnique({ where: { id: contenu.dossierId }, select: { prochaineAction: true } });
+    const prochaineActionDate = contenu.date ? dateDepuisJour(contenu.date) : null;
     await tx.dossier.update({
       where: { id: contenu.dossierId },
-      data: { prochaineAction: contenu.action, prochaineActionDate: contenu.date ? dateDepuisJour(contenu.date) : null },
+      data: { prochaineAction: contenu.action, prochaineActionDate },
     });
     // Mission 14 (partie 7) : un « Rappeler » daté (ou un rappel remplacé) → l'agenda suit, une fois la validation écrite.
-    return { apresValidation: () => synchroniserRappel({ type: "DOSSIER", id: contenu.dossierId }) };
+    // Mission 17 (partie A, relecture) : validée par Lucas (ou Claude sur sa phrase), c'est une prochaine action posée à
+    // la main, comme par modifierDossier (vigueur, événement, main) ; retenue au nom de celui qui a décidé.
+    return {
+      apresValidation: async () => {
+        await synchroniserRappel({ type: "DOSSIER", id: contenu.dossierId });
+        const [{ avecActeur }, { noterProchaineActionManuelle }] = await Promise.all([import("@/lib/journal/contexte"), import("./prochaine-action-manuelle")]);
+        await avecActeur({ acteur: decidePar, origine: "proposition:PROCHAINE_ACTION" }, () =>
+          noterProchaineActionManuelle(contenu.dossierId, { action: contenu.action, avant: avant?.prochaineAction, date: prochaineActionDate })
+        );
+      },
+    };
   },
   async pertinente(contenu) {
     const dossier = await dossierVivant(contenu.dossierId);

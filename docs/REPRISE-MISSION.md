@@ -5256,3 +5256,60 @@ générée, aucun serveur, aucun build, aucun Lighthouse lancé (l'orchestrateur
   LCP est le « Render Delay » (2,5 s) : évaluation du socle React / Next avant la peinture, sous processeur ralenti.
 - Cible 0,95 / LCP 2 s non atteinte : `lighthouserc.json` bloque sur un plancher (performance 0,85, LCP 4 s, TBT
   400 ms) ; accessibilité, bonnes pratiques, SEO et CLS au niveau de la cible (docs/SUIVI.md § seuils).
+
+## Rapport final — mission 16 (30/09/2026)
+
+Six parties livrées, chacune relue sous trois angles, corrigée, testée, construite, essayée à 390 × 660, déployée et
+vérifiée en production. Site : 1 `91754ea`, 2 `d6253b5`, 3 `9245e35`, 4 `55056a1`, 5 `d5d2f9d`, 6 `a71eada` (+
+`9c7b71f`). CRM : 2 `8a063fb`, 3 `f58c444`, 4 `48d455e`, 6 `07dc46e`. Tests : site 40 → 246, CRM 773 → 822.
+Intégration continue verte dès sa première exécution (lint, tests, build, Lighthouse, captures 375 / 768 / 1440).
+
+**Fait**
+- 1 Thème clair partout (celui du simulateur), en-tête et pied communs, menu : Simuler, Matières, Réalisations,
+  Comment ça marche, Pro. Emojis, verre, dégradés, lueurs et animations d'apparition retirés.
+- 2 Images préparées en AVIF / WebP / JPEG (le site n'utilise plus l'optimiseur de Vercel), douze générations.
+- 3 Accueil en huit sections : ouverture avant / après étiquetée « Simulation », essai sur photo, trois faits, huit
+  matières, études (simulées tant qu'aucune réalisation n'est publiée), étapes, confiance, dernier appel.
+- 4 Tunnel : estimation depuis les tarifs du CRM, coordonnées réduites, espace ouvert et lien affiché (contact neuf
+  seulement), rappel sur trois créneaux (agenda, rien envoyé au client), WhatsApp en second, `/pro` en SITE_PRO.
+- 5 `/matieres`, `/realisations`, `/comment-ca-marche`, pages par pièce, zones ; 7 redirections 308 vérifiées en
+  production ; sitemap, robots, llms.txt, Open Graph par page, un seul `LocalBusiness`.
+- 6 Plus aucun traceur tiers (GTM, GA, pixel Meta, Clarity, Vercel Analytics) ni bandeau cookies ; entonnoir en sept
+  étapes par source (Meta, recherche, direct) dans Leads → « Sur le site cette semaine ».
+
+**Lighthouse mobile, production (30/09, 17 h UTC)**
+
+| Page | Perf. | Access. | Bonnes prat. | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| Accueil | 93 | 100 | 100 | 100 | 2,8 s | 0 |
+| Simulateur | 94 | 100 | 100 | 100 | 2,8 s | 0 |
+| Matières | 97 | 100 | 100 | 100 | 2,4 s | 0 |
+| Réalisations | 97 | 100 | 96 | 100 | 2,4 s | 0 |
+| Comment ça marche | 96 | 100 | 100 | 100 | 2,6 s | 0 |
+| Pro | 98 | 100 | 100 | 100 | 2,1 s | 0 |
+
+Avant la mission : accueil 79, simulateur 81. Cible non atteinte partout : performance 95 sur l'accueil et le
+simulateur, LCP sous 2 s. Le reste vient du socle React / Next évalué avant la peinture ; la CI bloque sur un plancher
+(0,85, LCP 4 s) et au niveau de la cible pour l'accessibilité, les bonnes pratiques, le SEO et le CLS.
+
+**Coût des images générées : 2,73 $** (11 ambiances à 2,33 $ + le rendu de l'ouverture par le moteur 0,40 $, contrôle
+8/10). Aucune personne, aucun texte, aucune marque ; toutes étiquetées « Ambiance » ou « Simulation ».
+
+**Emplacements qui attendent une vraie photo** : l'ouverture de l'accueil, les cinq cartes de pièces, les trois études
+de l'accueil et de /realisations, l'étude des pages salle de bain, meubles et vitrages, les trois références de /pro,
+les étapes « photographier » et « pose ». La première réalisation publiée depuis le CRM avec avant et après remplace
+d'elle-même l'ouverture.
+
+**Reste à Lucas**
+- Avis Google : poser `GOOGLE_PLACES_API_KEY` et `GOOGLE_PLACE_ID` sur Railway, après avoir validé les règles de Google
+  (attribution, copie de 24 h). Sans elles, le bloc n'apparaît pas.
+- Prix : seules les façades de cuisine ont un tarif (110 €/ml) ; attribuer les autres sous-parties. Accorder « Déplacement
+  compris » (estimation) avec la FAQ (frais hors zone).
+- Textes et photos des vraies études de cas (publication depuis le CRM, avec accord) ; origine des trois images de
+  l'ancienne racine du dépôt (préparées, non utilisées).
+- Vercel : retirer les variables GTM, GA, pixel Meta et Clarity, désactiver Vercel Analytics et le conteneur GTM.
+  Mettre `utm_source=meta` sur les liens des publicités.
+- Politique de confidentialité à relire ; décider si les conversions Meta partent pour tous les dossiers (intérêt
+  légitime) ou seulement ceux venus de Meta ; fixer la durée de conservation des visites.
+- Noter le solde OpenAI dans Paramètres (les 2,73 $ ont été comptés dans une base d'essai, pas en production).
+- Vérifier « Votre espace est prêt » sur la première vraie demande (non visible en essai local, lien en http).

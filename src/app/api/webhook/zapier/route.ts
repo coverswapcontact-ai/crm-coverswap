@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   try {
     const resultat = await recevoirLeadDuPont(corps, "Zapier");
     revalidatePath("/leads");
-    revalidatePath("/publicite");
+    revalidatePath("/analytique");
     return NextResponse.json({
       success: true,
       leadId: resultat.leadId,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       pousseRecue: resultat.notifications.some((n) => n.ok && CANAUX_PUSH.includes(n.canal)),
       ...(resultat.notifications.some((n) => n.ok && CANAUX_PUSH.includes(n.canal))
         ? {}
-        : { avertissement: "Aucune notification poussée n'est partie : voir /publicite ou /api/webhook/diagnostic." }),
+        : { avertissement: "Aucune notification poussée n'est partie : voir la chaîne des leads Meta (Analytique, onglet Publicité) ou /api/webhook/diagnostic." }),
     });
   } catch (erreur) {
     // Ne pas acquitter : Zapier rejouera, et le leadgen_id garantit l'absence de doublon.

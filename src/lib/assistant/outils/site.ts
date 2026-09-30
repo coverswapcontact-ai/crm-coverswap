@@ -64,7 +64,7 @@ export const outilSimulationsSite = definirOutil({
     }
     const anonymes = lignes.filter((s) => !s.leadId).length;
     const texte = total === 0 ? `Aucune simulation faite sur le site sur ${pluriel(e.jours ?? 7, "jour")}${e.lead_id ? " pour ce lead" : ""}.` : [`${pluriel(total, "simulation")} sur le site sur ${pluriel(e.jours ?? 7, "jour")} : ${pluriel(anonymes, "anonyme")}, ${pluriel(total - anonymes, "rattachée")} à un lead ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")}.`, ...textes].join("\n");
-    return { texte, images, donnees: { total, anonymes, simulations: choisies.map((s) => ({ id: s.id, le: s.createdAt.toISOString(), projet: s.projet, references: lireReferences(s.references), referenceChoisie: s.referenceChoisie, page: s.page, source: s.source, campagne: s.campagne, leadId: s.leadId, rattacheeLe: s.rattacheeLe?.toISOString() ?? null, purgee: Boolean(s.archiveLe) })) }, liens: [lien("Synthèse", "/synthese")] };
+    return { texte, images, donnees: { total, anonymes, simulations: choisies.map((s) => ({ id: s.id, le: s.createdAt.toISOString(), projet: s.projet, references: lireReferences(s.references), referenceChoisie: s.referenceChoisie, page: s.page, source: s.source, campagne: s.campagne, leadId: s.leadId, rattacheeLe: s.rattacheeLe?.toISOString() ?? null, purgee: Boolean(s.archiveLe) })) }, liens: [lien("Analytique — Site", "/analytique?onglet=site")] };
   },
 });
 

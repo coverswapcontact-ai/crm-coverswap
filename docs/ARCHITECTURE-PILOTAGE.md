@@ -151,6 +151,34 @@ doit être justifié ici :
   fournit (paire VAPID du push web) ; le journal en garderait une copie lisible ;
 - `AbonnementPush` : abonnement d'un appareil aux notifications du navigateur
   (adresse de livraison, clés de chiffrement), réécrit à chaque envoi.
+- `DepensePubJour`, `SeoJour`, `FicheGoogleJour` (Analytique, section 26) :
+  historique quotidien copié depuis Meta et Google, écrit en rafale par upsert
+  (les mêmes jours sont réécrits toutes les 3 h pour Meta, chaque nuit pour
+  Google, parce que ces chiffres sont révisés), sans donnée personnelle ; la
+  source de vérité reste chez Meta ou Google. Les journaliser doublerait chaque
+  ligne à chaque passage sans rien apprendre ;
+- `InstantaneAnalytique` : écrans de l'Analytique pré-calculés et résumé du jour,
+  recalculés chaque jour à partir de données elles-mêmes lisibles ailleurs ;
+- `EvenementSite` (mission 17, partie B) : la mesure d'audience du site, une ligne
+  par page vue, écrite en rafale et jamais modifiée, sans donnée personnelle ; elle
+  est purgée à 25 mois (ci-dessous) et une copie dans le journal immuable survivrait
+  à la purge. Les copies journalisées avant le 30/09/2026 restent (sans empreinte de
+  visiteur : la colonne n'existait pas).
+
+### Modèles purgeables : la seule exception à « rien ne se supprime »
+
+`MODELES_PURGEABLES` (dans `declencheurs.ts`) liste des mesures anonymes, sans
+`archiveLe`, dont la durée de conservation est imposée. La couche Prisma n'y
+accepte que `deleteMany` (jamais `delete` ni une suppression imbriquée), et le
+déclencheur `interdit_suppression_<table>` n'y laisse passer qu'une ligne plus
+vieille qu'un âge minimal (`createdAt`) : même une purge mal écrite ne peut pas
+effacer une mesure récente.
+
+- `EvenementSite` (âge minimal 750 jours) : la mesure d'audience du site (page
+  vue, étape du simulateur), avec une empreinte de visiteur valable un jour. La
+  recommandation de la CNIL pour une mesure exemptée de consentement borne la
+  conservation à 25 mois : le travail quotidien `analytique-purge-mesure`
+  (`analytique/mesure.ts › purgerMesureSite`) supprime ce qui a dépassé 25 mois.
 
 ### Limites connues
 
@@ -2330,3 +2358,86 @@ ajouté change l'empreinte du catalogue : reconnecter le connecteur Claude.
   occupé) ; l'import est remonté avant la transaction (partie 9). Règle : rien de lent
   (import, réseau, fichier, rendu) dans une transaction interactive — hors `documents.ts`
   et `reprise.ts`, qui font exprès un travail long avec un délai déclaré.
+
+## 26. Analytique : connecteurs et mesure du site (mission 17, partie B, 30/09/2026)
+
+Conception : `docs/ANALYTIQUE.md`. Cette section décrit la RÉCEPTION des chiffres ;
+les écrans et leurs calculs sont dans `src/lib/analytique/` (types.ts, écrans).
+
+### Familles de source (`src/lib/analytique/sources.ts`)
+
+Une seule définition, pure (importable côté client) : `familleDe({ source, medium,
+campagne, referent, gclid, leadSource, canal })` → meta, google-ads, seo,
+fiche-google, ia, reseaux, direct, autre ; `familleDuLead(lead)` (Lead.source
+META_ADS → meta, puis `canal`, puis le parcours, puis la source du lead). L'IA est
+testée avant Meta et le SEO sur l'hôte complet (`meta.ai` n'est pas Meta,
+`gemini.google.com` n'est pas du SEO). `site/familles-source.ts` (entonnoir de
+l'écran Leads, outils `synthese` et `voir_publicite`) s'y appuie désormais : un lien
+Facebook sans marqueur payant est un réseau social, `chatgpt.com` est de l'IA ;
+un instantané mensuel d'avant (familles meta, recherche, direct, autre) reste lisible.
+
+### Mesure du site sans cookie (`analytique/mesure.ts`, `api/site/evenements`)
+
+À chaque événement, le CRM calcule `visiteur = sha256(sel du jour ‖ IP tronquée
+(/24, /48) ‖ User-Agent ‖ "coverswap.fr")` tronqué à 16 caractères, la classe
+d'appareil (TELEPHONE, TABLETTE, ORDINATEUR), le pays d'après le fuseau horaire
+envoyé par le site (table fuseau → pays, sans géolocalisation), l'hôte référent et
+la famille ; puis il oublie l'IP et le User-Agent. Les robots (User-Agent vide ou de
+robot, aperçu de lien, navigateur sans tête, Lighthouse) ne sont pas enregistrés. Le
+sel du jour est tiré au hasard et gardé sous UNE clé de `CleInterne`
+(`analytique-sel-du-jour`, table hors journal), remplacée au premier événement de
+chaque jour (heure de Paris) : aucun historique des sels, aucune empreinte reliable
+d'un jour à l'autre. Nouveaux champs acceptés (tous facultatifs) : `referent`,
+`fuseau`, `utmSource`/`utm_source`, `utmMedium`, `utmCampagne`, `utmContenu`
+(ou un objet `utm`), `gclid` (présence seulement) ; `parcoursId` devient facultatif
+(l'empreinte du jour en tient lieu : `v-<visiteur>`). Conservation : 25 mois.
+
+`analytique/visites.ts › visitesSurPeriode(du, au, { famille? })` : visite = même
+visiteur du jour, pause de moins de 30 minutes ; page d'entrée = première PAGE_VUE ;
+famille, appareil et pays = ceux de la première page. Un passage linéaire sur les
+événements triés par visiteur (index `[visiteur, createdAt]`), par tranches de
+5 000. Les événements d'avant la mesure (sans empreinte) se regroupent par parcours.
+
+### Connecteurs
+
+| Source | Module | Variables Railway | Écrit |
+|---|---|---|---|
+| Meta (vraie dépense) | `meta/depense.ts` (`graph.ts › appelerTout`) | `META_AD_ACCOUNT_ID`, `META_ADS_TOKEN` (repli `META_ACCESS_TOKEN`) | `DepensePubJour` |
+| Search Console | `google/search-console.ts` | `GOOGLE_SERVICE_ACCOUNT_JSON`, `SEARCH_CONSOLE_SITE` (défaut `sc-domain:coverswap.fr`) | `SeoJour` |
+| Fiche Google | `google/fiche.ts` | `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_BUSINESS_LOCATION`, `GOOGLE_BUSINESS_ACCOUNT` | `FicheGoogleJour` |
+| Google Ads | — (aucune campagne) | — | — |
+
+- Google par compte de service (`google/compte-service.ts`) : JWT RS256 signé avec
+  `node:crypto`, échangé à `oauth2.googleapis.com/token`, jeton gardé en mémoire
+  jusqu'à 60 s avant expiration ; 401 → nouveau jeton, un seul nouvel essai ; 401,
+  403 ou « quota 0 » → `AccesEnAttente` (état « en attente d'accès », jamais une
+  erreur bruyante). Indépendant de la connexion OAuth de Lucas (pas d'alerte
+  « Google coupé »).
+- Meta : `/act_<id>/insights` niveau publicité, `time_increment=1`, pagination
+  suivie ; leads = `onsite_conversion.lead_grouped` sinon `lead` ; codes 80000 à
+  80014 passagers (limites « Business Use Case ») ; jeton refusé → échec définitif.
+- Suivi (`analytique/suivi.ts`) : une ligne `SourceAnalytique` par source (dernier
+  essai, dernière réussite gardée en cas d'échec, erreur, échecs de suite, détail JSON
+  avec l'état et le début de la série d'échecs). État lu par
+  `analytique/etat.ts › etatDesSources` (écran, `sante_systeme` : champ `analytique`).
+- File de tâches (`analytique/synchro.ts`) : traitement `ANALYTIQUE_SYNCHRO`
+  (charge `{ source, depuis?, jusqua? }`), travaux `analytique-meta-recent` (3 derniers
+  jours toutes les 3 h), `analytique-nuit` (à partir de 4 h, Paris : Meta sur toute la
+  campagne ou 90 jours, Search Console 16 mois au premier passage puis 5 jours, fiche
+  540 jours puis 10), `analytique-purge-mesure` (quotidien). `relancerSynchro(source)`
+  pour le bouton « Relancer ».
+- Pannes : tâche système `SYSTEME:synchro-<source>` (niveau 4 au-delà de 24 h
+  d'échec), détecteur `a-faire/detecteurs/systeme.ts` ; les tâches `ANALYTIQUE_SYNCHRO`
+  en échec ne font pas en plus une tâche « tâches de fond ».
+
+### Limites connues
+
+- Pays : déduit du fuseau horaire (un Belge réglé sur Paris compte en France).
+- iPad récent : il se présente comme un Mac, compté « ordinateur ».
+- Meta : une publicité dont Meta ramènerait la dépense d'un jour à rien garde sa
+  dernière ligne (upsert sans effacement) ; les jours suivent le fuseau du compte.
+- Search Console : jours de Google (heure du Pacifique) ; requêtes anonymisées
+  absentes du détail (les totaux viennent de la ligne TOTAL).
+- Fiche Google : les API Business Profile restent fermées tant que Google n'a pas
+  accordé l'accès au projet ; aucun appel réel n'a encore abouti.
+

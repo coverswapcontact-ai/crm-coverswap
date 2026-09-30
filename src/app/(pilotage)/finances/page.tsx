@@ -6,7 +6,7 @@ import TableauFinances from "./_components/TableauFinances";
 
 export const metadata: Metadata = {
   title: "Finances — CoverSwap",
-  description: "Encaissements, URSSAF, seuils, factures à encaisser et livre des recettes.",
+  description: "Factures à encaisser et paiements, chèques à créditer, points à corriger, livre des recettes et son export.",
 };
 
 export const dynamic = "force-dynamic";

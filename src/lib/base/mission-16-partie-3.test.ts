@@ -298,14 +298,16 @@ describe("WHATSAPP_CLIQUE", () => {
       new NextRequest("http://localhost/api/site/evenements", {
         method: "POST",
         body: JSON.stringify({ parcoursId, type: "WHATSAPP_CLIQUE", page: "/", source: "instagram", meta: { depuis: "accueil-final" } }),
-        headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.40" },
+        // Mission 17 (partie B) : un navigateur (sans User-Agent, la mesure y voit un robot et n'enregistre rien).
+        headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.40", "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" },
       })
     );
     assert.equal(reponse.status, 200);
     assert.deepEqual(await reponse.json(), { ok: true });
     const ligne = await prisma.evenementSite.findFirstOrThrow({ where: { parcoursId } });
     assert.deepEqual([ligne.type, ligne.page, JSON.parse(ligne.meta ?? "{}")], ["WHATSAPP_CLIQUE", "/", { depuis: "accueil-final" }]);
-    const jour = new Date().toISOString().slice(0, 10);
+    // Le jour de Paris (relecture B, point 13 : la synthèse du site lit des jours de Paris ; après 22 h UTC, le jour UTC est la veille).
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date());
     const synthese = await evenements.syntheseSite(jour, jour);
     assert.deepEqual(synthese.parType.find((t) => t.cle === "WHATSAPP_CLIQUE"), { cle: "WHATSAPP_CLIQUE", libelle: "Clics WhatsApp", valeur: 1, parcours: 1 });
     // Un type inconnu reste refusé.

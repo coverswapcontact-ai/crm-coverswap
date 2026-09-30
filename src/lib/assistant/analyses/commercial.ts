@@ -245,7 +245,7 @@ export const outilManagerCommercial = definirOutil({
       `Devis en attente aujourd'hui : ${a.devisEnAttente.nombre} pour ${format.euros(a.devisEnAttente.montantTotal)}, ancienneté moyenne ${a.devisEnAttente.ancienneteMoyenneJours ?? "—"} jours, ${a.devisEnAttente.relusSansSignature} ${accord(a.devisEnAttente.relusSansSignature, "relu")} sans signature.`,
       `Panier moyen signé : ${a.panierMoyen.global !== null ? format.euros(a.panierMoyen.global) : "—"} sur ${pluriel(a.panierMoyen.signes, "signature")}${a.panierMoyen.parFamille.length ? ` (${a.panierMoyen.parFamille.map((f) => `${f.libelle} ${f.panier !== null ? format.euros(f.panier) : "—"}`).join(", ")})` : ""}.`,
     ].filter(Boolean).join("\n");
-    return { texte, donnees: a, liens: [lien("Synthèse", `/synthese?du=${a.periode.du}&au=${a.periode.au}`), lien("Dossiers", "/dossiers")] };
+    return { texte, donnees: a, liens: [lien("Analytique", `/analytique?du=${a.periode.du}&au=${a.periode.au}`), lien("Dossiers", "/dossiers")] };
   },
 });
 

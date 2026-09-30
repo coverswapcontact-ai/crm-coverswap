@@ -10,6 +10,7 @@ import { OUTILS_CONTACTS } from "./outils/contacts";
 import { OUTILS_DOCUMENTS } from "./outils/documents";
 import { OUTILS_PARAMETRES_ECRITURE, OUTILS_PARAMETRES_LECTURE } from "./outils/parametres";
 import { OUTILS_PUBLICITE } from "./outils/publicite";
+import { OUTILS_ANALYTIQUE } from "./outils/analytique";
 import { OUTILS_RELANCES_ECRITURE, OUTILS_RELANCES_LECTURE } from "./outils/relances";
 import { OUTILS_SITE } from "./outils/site";
 import { OUTILS_DEPENSES } from "./outils/depenses";
@@ -47,6 +48,7 @@ export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_PARAMETRES_LECTURE,
   ...OUTILS_RELANCES_LECTURE,
   ...OUTILS_PUBLICITE,
+  ...OUTILS_ANALYTIQUE,
   ...OUTILS_CATALOGUE,
   outilPointDuJour,
   ...OUTILS_ANALYSE,

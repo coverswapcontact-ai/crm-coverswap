@@ -1,4 +1,6 @@
 import { enregistrerTachesAFaire } from "@/lib/a-faire/taches";
+import { enregistrerTachesAnalytique } from "@/lib/analytique/synchro";
+import { enregistrerTachesAnalytiqueCalculs } from "@/lib/analytique/cache";
 import { enregistrerTachesRappels } from "@/lib/agenda/rappels";
 import { enregistrerTachesSauvegardes } from "@/lib/base/taches";
 import { enregistrerTachesClients } from "@/lib/clients/taches";
@@ -45,6 +47,11 @@ import { enregistrerTachesValidation } from "@/lib/validation/taches";
  * Mission 17 (partie A) : les tâches de Lucas — passage des détecteurs après un geste (A_FAIRE_DETECTION), effet
  * d'une réponse sur sa source (A_FAIRE_EFFET) et passage complet toutes les 15 minutes (« taches-a-faire ») ;
  * a-faire/taches.ts n'importe les détecteurs qu'à l'exécution (pas de cycle avec taches/lecture.ts).
+ *
+ * Mission 17 (partie B) : le pré-calcul de l'Analytique (« analytique-du-jour » : écrans des périodes standard et
+ * résumé du jour, une fois par jour dès 7 h, analytique/cache.ts). Et les connecteurs : synchronisation d'une source
+ * (ANALYTIQUE_SYNCHRO : dépense Meta, Search Console, fiche Google), dépense Meta récente toutes les 3 h, passe de la
+ * nuit (4 h, Paris) et purge des événements du site de plus de 25 mois (analytique/synchro.ts).
  */
 export function enregistrerTousLesTraitements(): void {
   enregistrerTachesValidation();
@@ -70,4 +77,6 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesRedimensionnement();
   enregistrerTachesRappels();
   enregistrerTachesAFaire();
+  enregistrerTachesAnalytiqueCalculs();
+  enregistrerTachesAnalytique();
 }

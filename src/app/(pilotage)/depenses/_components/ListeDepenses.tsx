@@ -193,7 +193,7 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
   const [liste, setListe] = useState(initiale);
   const [ouverte, setOuverte] = useState<DepenseVue | null>(null);
   const [attente, setAttente] = useState<EnvoiEnAttente[]>([]);
-  const { annee, depenses, total, parCategorie, aRattacher, sansJustificatif } = liste;
+  const { annee, depenses, total, aRattacher, sansJustificatif } = liste;
 
   async function recharger() {
     try {
@@ -219,7 +219,6 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
     return () => window.removeEventListener("online", vider);
   }, [annee]);
 
-  const max = Math.max(...parCategorie.map((ligne) => ligne.total), 1);
   const mois = [...new Set(depenses.map((depense) => Number(jourParis(depense.payeeLe).slice(5, 7))))];
 
   return (
@@ -272,42 +271,19 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
         </div>
       ) : null}
 
-      <div className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-3">
-        <div className={cn(CARTE, "p-3.5")}>
-          <p className="text-[12px] text-[#9CA3AF]">Dépensé en {annee}</p>
-          <p className="mt-1 text-[20px] font-semibold text-[#F2F3F5] tabular-nums">{formatMontant(total)}</p>
-        </div>
-        <div className={cn(CARTE, "p-3.5")}>
-          <p className="text-[12px] text-[#9CA3AF]">À rattacher</p>
-          <p className={cn("mt-1 text-[20px] font-semibold tabular-nums", aRattacher > 0 ? "text-[#F5B454]" : "text-[#F2F3F5]")}>{aRattacher}</p>
-        </div>
-        <div className={cn(CARTE, "p-3.5")}>
-          <p className="text-[12px] text-[#9CA3AF]">Sans justificatif</p>
-          <p className={cn("mt-1 text-[20px] font-semibold tabular-nums", sansJustificatif > 0 ? "text-[#F5B454]" : "text-[#F2F3F5]")}>{sansJustificatif}</p>
-        </div>
-      </div>
-
-      {parCategorie.length > 0 ? (
-        <section className="mt-8">
-          <TitreSection>Par catégorie</TitreSection>
-          <div className={cn(CARTE, "space-y-2.5 p-4")}>
-            {parCategorie.map((ligne) => (
-              <div key={ligne.categorie}>
-                <div className="flex justify-between gap-3 text-[13px]">
-                  <span className="text-[#D1D5DB]">{ligne.libelle}</span>
-                  <span className="text-[#9CA3AF] tabular-nums">{formatMontant(ligne.total)}</span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#2A2D34]">
-                  <div className="h-full rounded-full bg-[#1D9E75]/70" style={{ width: `${(ligne.total / max) * 100}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* Mission 17 (partie B) : les chiffres (total et répartition par catégorie de la période) sont dans l'Analytique,
+          onglet Argent, « Dépenses par catégorie » ; restent le travail — ce qui attend un chantier ou un justificatif — la liste et la saisie. */}
+      {aRattacher > 0 || sansJustificatif > 0 ? (
+        <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#F5B454]">
+          <AlertTriangle size={14} aria-hidden className="shrink-0" />
+          {aRattacher > 0 ? <span>{aRattacher} à rattacher à un chantier</span> : null}
+          {aRattacher > 0 && sansJustificatif > 0 ? <span aria-hidden className="text-[#6B7280]">·</span> : null}
+          {sansJustificatif > 0 ? <span>{sansJustificatif} sans justificatif</span> : null}
+        </p>
       ) : null}
 
       <section className="mt-8">
-        <TitreSection>Dépenses {annee}</TitreSection>
+        <TitreSection action={depenses.length > 0 ? <span className="text-[13px] font-medium text-[#D1D5DB] tabular-nums">{formatMontant(total)}</span> : undefined}>Dépenses {annee}</TitreSection>
         {depenses.length === 0 ? (
           <p className="text-[13px] text-[#6B7280]">Aucune dépense en {annee}.</p>
         ) : (

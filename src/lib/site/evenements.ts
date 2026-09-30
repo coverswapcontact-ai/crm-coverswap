@@ -1,7 +1,8 @@
 import prisma from "@/lib/prisma";
+import { bornes } from "@/lib/analytique/periode";
 import { FAMILLES_SOURCE_SITE, familleDesParcours, type FamilleSourceSite } from "./familles-source";
 
-// Mission 16 (partie 6) : la famille d'une source (Meta, recherche, direct, autre), calculée à la lecture. Module pur à part : l'écran Leads (client) l'importe sans la base.
+// Mission 16 (partie 6) : la famille d'une source, calculée à la lecture (mission 17 : définition unique de analytique/sources.ts, familles de l'Analytique). Module pur à part : l'écran Leads (client) l'importe sans la base.
 export { FAMILLES_SOURCE_SITE, LIBELLES_FAMILLE_SOURCE_SITE, familleDesParcours, familleSource, type FamilleSourceSite } from "./familles-source";
 
 /**
@@ -57,10 +58,23 @@ export type EntreeEvenementSite = {
   source?: string | null;
   campagne?: string | null;
   meta?: Record<string, unknown> | null;
+  /** Mission 17 (partie B) : calculés par le CRM à la réception (analytique/mesure.ts), jamais l'IP ni le navigateur. */
+  visiteur?: string | null;
+  appareil?: string | null;
+  pays?: string | null;
+  referent?: string | null;
+  famille?: string | null;
 };
 
 export function estTypeEvenementSite(valeur: unknown): valeur is TypeEvenementSite {
   return typeof valeur === "string" && (TYPES_EVENEMENT_SITE as readonly string[]).includes(valeur);
+}
+
+/** Le JSON libre de l'événement, 1 000 caractères au plus — jamais coupé au milieu (un JSON tronqué serait illisible). */
+function metaCourte(meta: Record<string, unknown> | null | undefined): string | null {
+  if (!meta) return null;
+  const texte = JSON.stringify(meta);
+  return texte.length <= 1000 ? texte : JSON.stringify({ tronque: true });
 }
 
 export async function enregistrerEvenementSite(entree: EntreeEvenementSite): Promise<void> {
@@ -71,7 +85,12 @@ export async function enregistrerEvenementSite(entree: EntreeEvenementSite): Pro
       page: entree.page?.slice(0, 200) ?? null,
       source: entree.source?.slice(0, 120) ?? null,
       campagne: entree.campagne?.slice(0, 120) ?? null,
-      meta: entree.meta ? JSON.stringify(entree.meta).slice(0, 1000) : null,
+      meta: metaCourte(entree.meta),
+      visiteur: entree.visiteur ?? null,
+      appareil: entree.appareil ?? null,
+      pays: entree.pays ?? null,
+      referent: entree.referent?.slice(0, 120) ?? null,
+      famille: entree.famille ?? null,
     },
   });
 }
@@ -111,26 +130,32 @@ const estResultat = (type: string) => typeCanonique(type) === "RESULTAT_VU";
 
 /** Entonnoir et audience du site sur la période, par source et par page. */
 export async function syntheseSite(du: string, au: string): Promise<SyntheseSite> {
+  // Jours de Paris (relecture B, point 13) : du premier jour 0 h au lendemain du dernier jour 0 h, heure de Paris.
+  const { debut, fin } = bornes({ du, au });
   const evenements = await prisma.evenementSite.findMany({
-    where: { createdAt: { gte: new Date(du), lte: new Date(`${au}T23:59:59.999Z`) } },
-    select: { parcoursId: true, type: true, page: true, source: true },
+    where: { createdAt: { gte: debut, lt: fin } },
+    select: { parcoursId: true, type: true, page: true, source: true, famille: true },
     // Par date : la famille d'un parcours est celle de sa première source (mission 16, partie 6).
     orderBy: { createdAt: "asc" },
   });
   const parcours = new Set(evenements.map((e) => e.parcoursId));
-  const parType = TYPES_EVENEMENT_SITE.filter((type) => !TYPE_CANONIQUE[type]).map((type) => {
-    const lignes = evenements.filter((e) => typeCanonique(e.type) === type);
-    return { cle: type, libelle: LIBELLES_EVENEMENT_SITE[type], valeur: lignes.length, parcours: new Set(lignes.map((e) => e.parcoursId)).size };
-  }).filter((ligne) => ligne.valeur > 0);
-
+  // Un seul passage par regroupement (relecture B, point 13 : plus de recopie de tableau à chaque événement).
   const groupes = (cle: (e: (typeof evenements)[number]) => string) => {
     const index = new Map<string, (typeof evenements)[number][]>();
     for (const e of evenements) {
       const k = cle(e);
-      index.set(k, [...(index.get(k) ?? []), e]);
+      const liste = index.get(k);
+      if (liste) liste.push(e);
+      else index.set(k, [e]);
     }
     return [...index.entries()];
   };
+  const parTypeCanonique = new Map(groupes((e) => typeCanonique(e.type)));
+  const parType = TYPES_EVENEMENT_SITE.filter((type) => !TYPE_CANONIQUE[type]).map((type) => {
+    const lignes = parTypeCanonique.get(type) ?? [];
+    return { cle: type, libelle: LIBELLES_EVENEMENT_SITE[type], valeur: lignes.length, parcours: new Set(lignes.map((e) => e.parcoursId)).size };
+  }).filter((ligne) => ligne.valeur > 0);
+
   const parSource = groupes((e) => e.source || "direct")
     .map(([cle, lignes]) => ({
       cle,
@@ -181,8 +206,10 @@ function joursDeLaPeriode(du: string, au: string): number {
  * elle n'est pas un passage obligé — comptée parmi les résultats vus, sans abandons, et le contact se compte parmi
  * les résultats vus (pas parmi les estimations vues : sinon une demande sans taille serait un « abandon »).
  */
-export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[]; facultative?: true }[] = [
-  { cle: "visite", libelle: "Visite", types: ["PAGE_VUE"] },
+export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[]; facultative?: true; ouverte?: true }[] = [
+  // Mission 17 (relecture B) : une page vue ne porte plus l'identifiant du simulateur (vie privée : route
+  // /api/site/evenements), la visite n'est donc plus un préalable de l'étape suivante (« ouverte ») : elle se compte seule.
+  { cle: "visite", libelle: "Visite", types: ["PAGE_VUE"], ouverte: true },
   { cle: "piece", libelle: "Pièce choisie", types: ["PIECE_CHOISIE"] },
   { cle: "photo", libelle: "Photo chargée", types: ["PHOTO_CHARGEE", "SIMULATION_PHOTO"] },
   { cle: "generation", libelle: "Génération lancée", types: ["GENERATION_LANCEE", "SIMULATION_LANCEE"] },
@@ -223,16 +250,18 @@ export function calculerEntonnoir(evenements: readonly { parcoursId: string; typ
     parType.get(e.type)!.add(e.parcoursId);
   }
   let precedent: Set<string> | null = null;
+  let exige: Set<string> | null = null;
   const etapes: EtapeEntonnoir[] = [];
   for (const etape of ETAPES_ENTONNOIR) {
     const atteint = new Set<string>();
-    for (const type of etape.types) for (const p of parType.get(type) ?? []) if (!precedent || precedent.has(p)) atteint.add(p);
+    for (const type of etape.types) for (const p of parType.get(type) ?? []) if (!exige || exige.has(p)) atteint.add(p);
     if (etape.facultative) {
       etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: null, facultative: true });
       continue;
     }
     etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: precedent ? Math.max(0, precedent.size - atteint.size) : null });
     precedent = atteint;
+    exige = etape.ouverte ? null : atteint;
   }
   return { jours, etapes };
 }
@@ -246,7 +275,7 @@ export const AUTRES_SOURCES_MAX = 8;
  * l'ordre chronologique), puis chaque famille a son entonnoir emboîté, calculé comme le global : la somme des familles
  * redonne le global, étape par étape. Rien de rétroactif : la famille se calcule à la lecture. Pur : testable sans base.
  */
-export function calculerEntonnoirParFamille(evenements: readonly { parcoursId: string; type: string; source?: string | null }[], jours = 7): EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">> {
+export function calculerEntonnoirParFamille(evenements: readonly { parcoursId: string; type: string; source?: string | null; famille?: string | null }[], jours = 7): EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">> {
   const familles = familleDesParcours(evenements);
   const parFamille = Object.fromEntries(
     FAMILLES_SOURCE_SITE.map((famille) => [famille, calculerEntonnoir(evenements.filter((e) => familles.get(e.parcoursId)?.famille === famille), jours).etapes])
@@ -266,8 +295,24 @@ export async function entonnoirSite(jours = 7, maintenant: Date = new Date()): P
   const types = ETAPES_ENTONNOIR.flatMap((e) => [...e.types]);
   const evenements = await prisma.evenementSite.findMany({
     where: { createdAt: { gte: depuis }, type: { in: types } },
-    select: { parcoursId: true, type: true, source: true },
+    select: { parcoursId: true, type: true, source: true, famille: true },
     orderBy: { createdAt: "asc" },
   });
   return calculerEntonnoirParFamille(evenements, jours);
+}
+
+/**
+ * Mission 17 (relecture B, écran point 8) : l'entonnoir du simulateur en sept étapes sur une PÉRIODE de l'Analytique
+ * (jours de Paris, bornes incluses), global et par famille — l'ancien bloc « Sur le site cette semaine », repris dans
+ * l'onglet Site pour la période choisie.
+ */
+export async function entonnoirSurPeriode(du: string, au: string): Promise<EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">>> {
+  const { debut, fin } = bornes({ du, au });
+  const types = ETAPES_ENTONNOIR.flatMap((e) => [...e.types]);
+  const evenements = await prisma.evenementSite.findMany({
+    where: { createdAt: { gte: debut, lt: fin }, type: { in: types } },
+    select: { parcoursId: true, type: true, source: true, famille: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return calculerEntonnoirParFamille(evenements, joursDeLaPeriode(du, au));
 }

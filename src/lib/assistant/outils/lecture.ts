@@ -15,9 +15,7 @@ import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
 import { listerVue } from "@/lib/mail/vues";
-import { resultatsMeta } from "@/lib/meta/sante";
 import { resumeChaineMeta } from "@/lib/meta/sante";
-import { lireParametres } from "@/lib/parametres/service";
 import { chargerEntrant } from "@/lib/prospects/entrants";
 import { listerLeads } from "@/lib/prospects/leads";
 import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
@@ -29,7 +27,12 @@ import { calculerSynthese } from "@/lib/synthese/calcul";
 import { etatAvisGoogle } from "@/lib/site/avis-google";
 import { texteEntonnoirParFamille } from "@/lib/site/familles-source";
 import { etatDesTaches } from "@/lib/taches/lecture";
-import { lireConsignes, regleDuJour, sectionProtocole } from "../consignes";
+import { etatsDesSources } from "@/lib/analytique/appuis";
+import { chiffresDisponibles, etatDe } from "@/lib/analytique/ecrans/commun";
+import { calculerPublicite, campagneAnalytique, verdictsDeLaCampagne } from "@/lib/analytique/ecrans/publicite";
+import { coutPar } from "@/lib/analytique/calculs";
+import { nombreDeJours, resoudrePeriode as resoudrePeriodeAnalytique } from "@/lib/analytique/periode";
+import { LIBELLES_VERDICT } from "@/lib/analytique/types";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
@@ -344,11 +347,12 @@ export function ligneEntonnoirSite(lignes: string[]): string {
 export const outilSynthese = definirOutil({
   nom: "synthese",
   titre: "Synthèse d'une période",
-  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). La même synthèse que l'écran Synthèse du CRM. Pour des analyses détaillées, préférer les outils « manager_… ».",
+  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). Synthèse historique (mois figés) : l'écran du CRM est désormais l'Analytique — pour ses chiffres exacts (tuiles, tunnel, publicité, SEO, site, argent), préférer « analytique » ; pour des analyses détaillées, les outils « manager_… ».",
   niveau: "LECTURE",
   schema: schemaPeriode,
-  executer: async (entree) => {
-    const { periode } = resoudrePeriode(entree);
+  executer: async (entree, contexte) => {
+    // L'instant de la session (relecture B, point A) : sans lui, la période glissait d'un jour après 22 h UTC.
+    const { periode } = resoudrePeriode(entree, contexte.maintenant);
     const s = await calculerSynthese(periode.du, periode.au);
     const c = s.commercial;
     const texte = [
@@ -361,40 +365,78 @@ export const outilSynthese = definirOutil({
       // Mission 16 (partie 6) : une ligne par famille de source (calculée à la lecture, sans requête de plus).
       ligneEntonnoirSite(s.site?.entonnoir ? texteEntonnoirParFamille(s.site.entonnoir) : []),
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients, entonnoirSite: s.site?.entonnoir ?? null }, liens: [lien("Synthèse", `/synthese?du=${periode.du}&au=${periode.au}`)] };
+    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients, entonnoirSite: s.site?.entonnoir ?? null }, liens: [lien("Analytique", `/analytique?du=${periode.du}&au=${periode.au}`)] };
   },
 });
 
-/** L'état de la campagne : jour, dépense estimée, leads, coût par lead, règle du protocole. */
+/**
+ * L'état de la campagne (mission 17, partie B : mêmes calculs que l'onglet Publicité de l'Analytique) : jour en jours
+ * de Paris, dépense réelle Meta quand la synchronisation a réussi (sinon prorata du budget jour par jour, le jour en
+ * cours au prorata des heures, marqué estimation), leads Meta du CRM (attribution par identifiants, dédoublonnés),
+ * coût par lead, résultats par campagne et par publicité avec leur propre dépense et le verdict du protocole, règle du
+ * jour. Sans synchronisation, la dépense d'une publicité n'est pas connue : pas de coût par lead par publicité (plus
+ * de prorata qui donnait le même coût à toutes).
+ */
 export async function etatCampagne(maintenant: Date = new Date()) {
-  const valeurs = await lireParametres(["CAMPAGNE_DEBUT", "CAMPAGNE_BUDGET", "CAMPAGNE_DUREE_JOURS"], maintenant);
-  const debut = typeof valeurs.CAMPAGNE_DEBUT === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valeurs.CAMPAGNE_DEBUT) ? valeurs.CAMPAGNE_DEBUT : null;
-  const budget = typeof valeurs.CAMPAGNE_BUDGET === "number" ? valeurs.CAMPAGNE_BUDGET : null;
-  const duree = typeof valeurs.CAMPAGNE_DUREE_JOURS === "number" && valeurs.CAMPAGNE_DUREE_JOURS > 0 ? valeurs.CAMPAGNE_DUREE_JOURS : 21;
-  const jour = debut ? Math.floor((maintenant.getTime() - new Date(`${debut}T00:00:00+02:00`).getTime()) / 86_400_000) + 1 : null;
-  const enCours = jour !== null && jour >= 1 && jour <= duree;
-  const jours = enCours && jour ? jour : 7;
-  const resultats = await resultatsMeta(jours);
-  const consignes = await lireConsignes();
-  const protocole = sectionProtocole(consignes.texte);
-  const regle = enCours && jour ? regleDuJour(protocole, jour) : null;
-  const depenseEstimee = enCours && budget !== null && jour ? Math.round((budget * Math.min(jour, duree)) / duree) : null;
-  const coutParLead = depenseEstimee !== null && resultats.leads > 0 ? Math.round((depenseEstimee / resultats.leads) * 100) / 100 : null;
-  return { debut, budget, duree, jour, enCours, depenseEstimee, leads: resultats.leads, coutParLead, parCampagne: resultats.parCampagne, parPublicite: resultats.parPublicite, regle, protocole, fenetreJours: jours };
+  const [campagne, etats] = await Promise.all([campagneAnalytique(maintenant), etatsDesSources(maintenant)]);
+  const synchro = chiffresDisponibles(etatDe(etats, "META"));
+  const fenetre = campagne.fenetre ?? resoudrePeriodeAnalytique({ p: "7j" }, maintenant);
+  const calcul = await calculerPublicite(fenetre, maintenant, synchro);
+  const { verdicts } = await verdictsDeLaCampagne(campagne, maintenant, synchro, calcul, fenetre);
+  const depense = calcul.depense.total;
+  // Une seule définition des leads Meta et du coût par lead (relecture B, point 5 : calculs.ts, comme l'écran Analytique).
+  const leads = calcul.leadsMeta.length;
+  const coutParLead = coutPar(depense, leads);
+  const axe = (niveau: "CAMPAGNE" | "PUBLICITE") =>
+    calcul.lignes
+      .filter((l) => l.niveau === niveau && l.plateforme === "META")
+      .map((l) => ({ id: l.id, nom: l.nom, leads: l.leadsCrm, leadsMeta: synchro ? l.leadsPlateforme : null, contactes: l.appeles, joints: l.joints, devis: l.devis, signes: l.signes, encaisse: l.encaisse, depense: synchro ? l.depense : null, coutParLead: l.coutParLead, coutParDevis: l.coutParDevis, coutParSigne: l.coutParSigne, verdict: niveau === "PUBLICITE" ? verdicts.get(l.id)?.verdict ?? null : null, raisonVerdict: niveau === "PUBLICITE" ? verdicts.get(l.id)?.raison ?? null : null }))
+      .sort((a, b) => b.leads - a.leads || a.nom.localeCompare(b.nom));
+  return {
+    debut: campagne.debut,
+    budget: campagne.budget,
+    duree: campagne.duree,
+    jour: campagne.jour,
+    enCours: campagne.enCours,
+    depense,
+    origineDepense: calcul.depense.origine,
+    estimation: calcul.depense.estimation,
+    /** Compatibilité : la dépense quand elle est estimée (prorata), sinon null. */
+    depenseEstimee: calcul.depense.estimation ? depense : null,
+    leads,
+    coutParLead,
+    parCampagne: axe("CAMPAGNE"),
+    parPublicite: axe("PUBLICITE"),
+    regle: campagne.regleDuJour,
+    protocole: campagne.protocole,
+    fenetreJours: nombreDeJours(fenetre.du, fenetre.au),
+    fenetre: { du: fenetre.du, au: fenetre.au },
+  };
+}
+
+/** « dépense 162 € (estimation : prorata du budget) » / « dépense 158,40 € (réel Meta) ». */
+export function texteDepenseCampagne(e: { depense: number | null; estimation: boolean; origineDepense: string }): string {
+  if (e.depense === null) return "dépense inconnue";
+  return `dépense ${format.euros(e.depense)} (${e.origineDepense === "MIXTE" ? `réel Meta sur les jours synchronisés${e.estimation ? ", estimation (prorata du budget) ailleurs" : ", dépenses saisies ailleurs"}` : e.estimation ? "estimation : prorata du budget, la synchronisation Meta n'est pas branchée" : e.origineDepense === "SYNCHRO" ? "réel Meta" : "dépenses « Publicité » saisies"})`;
+}
+
+/** Une ligne par publicité : leads, devis, signés, coût par lead (réel) et verdict du protocole. */
+export function textePublicites(parPublicite: Awaited<ReturnType<typeof etatCampagne>>["parPublicite"]): string {
+  return parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}, ${p.devis} devis, ${pluriel(p.signes, "signé")}${p.coutParLead !== null ? `, ${format.euros(p.coutParLead)} par lead` : ""}${p.verdict ? ` — ${LIBELLES_VERDICT[p.verdict]}${p.raisonVerdict ? ` (${p.raisonVerdict})` : ""}` : ""}`).join(" · ");
 }
 
 export const outilCampagne = definirOutil({
   nom: "campagne",
   titre: "L'état de la campagne publicitaire",
-  description: "Jour de campagne (« jour 3 sur 21 »), dépense estimée au prorata du budget (le CRM ne lit pas la dépense réelle chez Meta), leads Meta reçus, coût par lead estimé, résultats par campagne et par publicité, et la règle du protocole qui s'applique ce jour (consignes). Les paramètres de campagne (début, budget, durée) se posent dans Paramètres → Campagne publicitaire.",
+  description: "Jour de campagne (« jour 3 sur 21 », jours de Paris), dépense (réelle Meta quand la synchronisation est branchée, sinon estimée au prorata du budget — dis lequel), leads Meta reçus dans le CRM, coût par lead, résultats par campagne et par publicité avec leur propre coût par lead et le verdict du protocole (garder, surveiller, couper, trop tôt), et la règle du protocole qui s'applique ce jour (consignes). Mêmes calculs que l'onglet Publicité de l'Analytique. Les paramètres de campagne (début, budget, durée) se posent dans Paramètres → Campagne publicitaire.",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {
     const e = await etatCampagne(contexte.maintenant);
     const texte = e.debut
-      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}${e.depenseEstimee !== null ? `, dépense estimée ${format.euros(e.depenseEstimee)} (prorata, pas la dépense réelle Meta)` : ""}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ≈ ${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${e.parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}, ${p.devis} devis, ${pluriel(p.signes, "signé")}`).join(" · ")}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
+      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}, ${texteDepenseCampagne(e)}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ${e.estimation ? "≈ " : ""}${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${textePublicites(e.parPublicite)}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
       : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
-    return { texte, donnees: e, liens: [lien("Publicité", "/publicite"), lien("Paramètres", "/parametres")] };
+    return { texte, donnees: e, liens: [lien("Analytique — Publicité", "/analytique?onglet=publicite"), lien("Paramètres", "/parametres")] };
   },
 });
 
@@ -413,8 +455,21 @@ export function texteAvisGoogle(e: { connectes: boolean; note: number | null; no
 }
 
 /** L'état de santé du système : tâches, connexions, jetons, crédits, disque, cohérence, alertes. */
+const LIBELLES_ETAT_SOURCE: Record<string, string> = { A_JOUR: "à jour", EN_ECHEC: "EN ÉCHEC", NON_BRANCHEE: "non branchée", EN_ATTENTE_ACCES: "en attente d'accès" };
+const LIBELLES_SOURCE_ANALYTIQUE: Record<string, string> = { META: "dépense Meta", GOOGLE_ADS: "Google Ads", SEARCH_CONSOLE: "Search Console", FICHE_GOOGLE: "fiche Google" };
+
+/** Mission 17 (partie B) : une ligne par source de l'Analytique (état, dernière réussite, ce qu'il faut faire). */
+function texteAnalytique(sources: { source: string; etat: string; derniereReussite: string | null; erreur: string | null; aFaire: string | null }[]): string {
+  const morceaux = sources.map((e) => {
+    const reussite = e.derniereReussite ? ` (dernière synchronisation réussie le ${format.jourCourt(new Date(e.derniereReussite))})` : "";
+    const detail = e.etat === "EN_ECHEC" ? `${reussite}${e.erreur ? ` : ${e.erreur.slice(0, 120)}` : ""}` : e.etat === "A_JOUR" ? reussite : "";
+    return `${LIBELLES_SOURCE_ANALYTIQUE[e.source] ?? e.source} ${LIBELLES_ETAT_SOURCE[e.etat] ?? e.etat}${detail}${e.aFaire && e.etat !== "A_JOUR" ? ` — ${e.aFaire}` : ""}`;
+  });
+  return `Analytique : ${morceaux.join(" · ")}.`;
+}
+
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle] = await Promise.all([
+  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle, analytique, alertesAnalytique] = await Promise.all([
     etatDesTaches(),
     rappelConnexionGoogle(maintenant).catch(() => null),
     etatConnexionGoogle().catch(() => null),
@@ -424,6 +479,10 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     controlerCoherence().catch(() => null),
     // Mission 16 (partie 3) : les avis Google de l'accueil du site (sans appeler Google : la dernière lecture gardée).
     etatAvisGoogle().catch(() => null),
+    // Mission 17 (partie B) : l'état des sources de l'Analytique (variables et suivi en base, sans appel réseau).
+    import("@/lib/analytique/etat").then((m) => m.etatDesSources(maintenant)).catch(() => null),
+    // Les alertes de l'Analytique (coût par lead, chute de trafic, requête qui décolle, www en double) : les mêmes que l'écran.
+    import("@/lib/analytique/cache").then((m) => m.alertesPourSante(maintenant)).catch(() => []),
   ]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
@@ -449,6 +508,8 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     autresApisNonActivees: etatGoogle?.autresApisNonActivees ?? [],
     meta: meta ? { etat: meta.chaine.code, message: meta.chaine.libelle, jeton: meta.jeton.message, echeance: meta.jeton.echeance } : null,
     avisGoogle,
+    alertesAnalytique: alertesAnalytique.map((a) => ({ gravite: a.gravite, texte: a.texte, lien: a.lien ?? null })),
+    analytique: analytique ? { sources: analytique.filter((e) => e.source !== "CRM" && e.source !== "SITE").map((e) => ({ source: e.source, etat: e.etat, derniereReussite: e.derniereReussite, erreur: e.erreur, aFaire: e.aFaire })) } : null,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
     disque,
@@ -460,7 +521,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
 export const outilSanteSysteme = definirOutil({
   nom: "sante_systeme",
   titre: "Santé du système et alertes",
-  description: "Tâches de fond en échec, connexion Google (jeton qui expire, API Google Calendar à activer dans le projet Google Cloud), avis Google du site (connectés ou non), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
+  description: "Tâches de fond en échec, connexion Google (jeton qui expire, API Google Calendar à activer dans le projet Google Cloud), avis Google du site (connectés ou non), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), sources de l'Analytique (dépense Meta, Search Console, fiche Google : à jour, en échec, non branchée, en attente d'accès), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {
@@ -473,6 +534,8 @@ export const outilSanteSysteme = definirOutil({
       ...s.autresApisNonActivees.map((a) => `${a.api} : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → ${a.api} API) ; les tâches attendent et repartiront seules une fois l'API activée.${a.message ? ` Réponse de Google : ${a.message}` : ""}`),
       s.meta ? `Meta : ${s.meta.message}` : "",
       s.avisGoogle ? texteAvisGoogle(s.avisGoogle) : "",
+      s.analytique ? texteAnalytique(s.analytique.sources) : "",
+      s.alertesAnalytique.length ? `Analytique : ${s.alertesAnalytique.map((a) => a.texte).join(" · ")}` : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",

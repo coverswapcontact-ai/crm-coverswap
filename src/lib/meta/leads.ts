@@ -337,8 +337,8 @@ async function alerterLeadIllisible(ligne: MetaLead, message: string): Promise<v
       `Raison : ${message}`,
       "Le lead est conservé et sera récupéré automatiquement dès que l'accès sera rétabli. En attendant, il est visible dans Meta (Gestionnaire de formulaires).",
     ].join("\n\n"),
-    lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/publicite`,
-    libelleLien: "Voir l'écran Publicité",
+    lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/analytique?onglet=publicite#chaine-meta`,
+    libelleLien: "Voir la chaîne des leads Meta",
     urgence: 5,
   }, { origine: "lead-illisible" });
 }

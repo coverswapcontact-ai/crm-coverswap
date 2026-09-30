@@ -212,9 +212,18 @@ model EvenementSite {
   source     String?
   campagne   String?
   meta       String? // JSON libre, court (projet, référence, raison d'échec…)
+  // Mission 17 (partie B) : mesure sans cookie (docs/ANALYTIQUE.md § 3). Calculés par le CRM à la réception, jamais
+  // l'IP ni le navigateur en clair : visiteur = empreinte du jour (sel détruit chaque nuit), appareil = classe.
+  visiteur   String? // empreinte tronquée, valable un jour (heure de Paris)
+  appareil   String? // TELEPHONE | TABLETTE | ORDINATEUR
+  pays       String? // code ISO à deux lettres, déduit du fuseau horaire du navigateur (approximation)
+  referent   String? // hôte du site d'où vient la visite (« chatgpt.com »), sans chemin
+  famille    String? // famille de source (analytique/sources.ts), calculée à la réception
 
   @@index([createdAt])
   @@index([type, createdAt])
+  @@index([visiteur, createdAt])
+  @@index([parcoursId])
 }
 
 // Ce que le CRM publie sur le site : une réalisation (photo après, éventuellement
@@ -2156,4 +2165,86 @@ model RegleTache {
   archiveLe    DateTime?
   archiveMotif String?
   ecriture     String?
+}
+
+// ─────────────────────────────────────────────
+// Mission 17 (partie B) : l'Analytique (src/lib/analytique, docs/ANALYTIQUE.md). Historique quotidien des sources
+// externes (écrit par upsert, rien ne s'efface), état de chaque synchronisation, écrans pré-calculés.
+// ─────────────────────────────────────────────
+
+model DepensePubJour {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  plateforme      String // META | GOOGLE_ADS
+  jour            String // AAAA-MM-JJ, fuseau du compte publicitaire
+  compteId        String
+  campagneId      String
+  campagneNom     String?
+  ensembleId      String?
+  ensembleNom     String?
+  publiciteId     String
+  publiciteNom    String?
+  depense         Float
+  impressions     Int
+  clics           Int
+  clicsLien       Int?
+  leadsPlateforme Int      @default(0)
+  actions         String? // JSON brut des actions de la plateforme
+  devise          String   @default("EUR")
+  synchroniseLe   DateTime
+  ecriture        String?
+
+  @@unique([plateforme, jour, publiciteId])
+  @@index([plateforme, campagneId, jour])
+  @@index([jour])
+}
+
+model SeoJour {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  jour          String // AAAA-MM-JJ
+  dimension     String // TOTAL | REQUETE | PAGE
+  cle           String // "" pour TOTAL, la requête ou l'adresse de la page
+  clics         Int
+  impressions   Int
+  position      Float? // position moyenne pondérée
+  synchroniseLe DateTime
+  ecriture      String?
+
+  @@unique([jour, dimension, cle])
+  @@index([dimension, jour])
+}
+
+model FicheGoogleJour {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  jour          String // AAAA-MM-JJ
+  metrique      String // BUSINESS_IMPRESSIONS_DESKTOP_SEARCH, CALL_CLICKS, WEBSITE_CLICKS, BUSINESS_DIRECTION_REQUESTS… ou AVIS_NOMBRE, AVIS_NOTE
+  valeur        Float
+  synchroniseLe DateTime
+  ecriture      String?
+
+  @@unique([jour, metrique])
+}
+
+model SourceAnalytique {
+  source            String    @id // META | GOOGLE_ADS | SEARCH_CONSOLE | FICHE_GOOGLE | SITE
+  updatedAt         DateTime  @updatedAt
+  dernierEssaiLe    DateTime?
+  derniereReussiteLe DateTime?
+  derniereErreur    String?
+  echecsConsecutifs Int       @default(0)
+  detail            String? // JSON : compte lu, période couverte, lignes écrites
+  ecriture          String?
+}
+
+model InstantaneAnalytique {
+  cle       String   @id // « ensemble:30j:2026-09-30 », « resume:2026-09-30 », « sel:2026-09-30 »
+  updatedAt DateTime @updatedAt
+  calculeLe DateTime
+  contenu   String // JSON de l'écran (EcranAnalytique), du résumé du jour, ou le sel du jour
+  ecriture  String?
 }

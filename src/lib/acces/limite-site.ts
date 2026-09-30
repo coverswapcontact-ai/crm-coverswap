@@ -99,3 +99,31 @@ export function ipDuVisiteur(entetes: { get(nom: string): string | null }): stri
   if (transmise && /^[0-9a-fA-F.:]{3,45}$/.test(transmise)) return transmise;
   return entetes.get("x-forwarded-for")?.split(",")[0]?.trim() || entetes.get("x-real-ip") || "inconnue";
 }
+
+/** Adresse privée, locale ou interne à l'hébergeur (jamais celle d'un visiteur d'Internet). */
+export function estIpInterne(ip: string): boolean {
+  const v = ip.trim().toLowerCase().replace(/^::ffff:/, "");
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(v);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 10 || a === 127 || a === 0 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+  }
+  return v === "::1" || v === "::" || /^f[cd][0-9a-f]{2}:/.test(v) || /^fe[89ab][0-9a-f]:/.test(v);
+}
+
+/**
+ * Mission 17 (relecture B, point 8) — l'IP du CLIENT d'une route appelée DIRECTEMENT par le navigateur (mesure du site :
+ * /api/site/evenements). Même règle que `ipDuVisiteur` quand la chaîne X-Forwarded-For est honnête (« client, proxy
+ * interne » → le client), mais lue par la DROITE : la première adresse publique en partant de la fin est celle qu'a
+ * ajoutée le proxy de Railway (l'appelant réel de son point d'entrée) ; tout ce qui la précède a pu être écrit par le
+ * navigateur lui-même (« 1.2.3.4, <IP réelle> » : l'IP réelle est retenue, la fausse ignorée). Sans adresse publique
+ * (développement, réseau interne) : X-Real-IP, puis la première valeur. L'en-tête X-Visiteur-Ip (posé par le serveur
+ * du site dans `ipDuVisiteur`) n'est PAS lu ici : un navigateur pourrait l'écrire.
+ */
+export function ipDuClient(entetes: { get(nom: string): string | null }): string {
+  const chaine = (entetes.get("x-forwarded-for") ?? "").split(",").map((v) => v.trim()).filter((v) => /^[0-9a-fA-F.:]{3,45}$/.test(v));
+  for (let i = chaine.length - 1; i >= 0; i--) if (!estIpInterne(chaine[i])) return chaine[i];
+  const reelle = entetes.get("x-real-ip")?.trim();
+  if (reelle && /^[0-9a-fA-F.:]{3,45}$/.test(reelle)) return reelle;
+  return chaine[0] || "inconnue";
+}

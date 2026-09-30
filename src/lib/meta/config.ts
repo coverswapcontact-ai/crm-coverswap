@@ -24,6 +24,27 @@ export function pixelId(): string | undefined {
   return process.env.META_PIXEL_ID || process.env.META_DATASET_ID || undefined;
 }
 
+/**
+ * Mission 17 (partie B) — la vraie dépense publicitaire (API Marketing, insights) : le compte publicitaire
+ * (META_AD_ACCOUNT_ID, avec ou sans « act_ ») et un jeton qui a le droit `ads_read` (META_ADS_TOKEN : jeton
+ * d'utilisateur système du Business Manager ; repli META_ACCESS_TOKEN). Le jeton de page ne lit pas un compte
+ * publicitaire. Rend null quand il manque l'un des deux.
+ */
+export function configurationPublicite(env: NodeJS.ProcessEnv = process.env): { compteId: string; jeton: string } | null {
+  const compte = env.META_AD_ACCOUNT_ID?.trim().replace(/^act_/i, "");
+  const jeton = env.META_ADS_TOKEN?.trim() || env.META_ACCESS_TOKEN?.trim();
+  return compte && /^\d+$/.test(compte) && jeton ? { compteId: compte, jeton } : null;
+}
+
+/** Les variables de la dépense publicitaire qui manquent (noms seulement). */
+export function variablesPubliciteManquantes(env: NodeJS.ProcessEnv = process.env): string[] {
+  const manquantes: string[] = [];
+  const compte = env.META_AD_ACCOUNT_ID?.trim().replace(/^act_/i, "");
+  if (!compte || !/^\d+$/.test(compte)) manquantes.push("META_AD_ACCOUNT_ID");
+  if (!env.META_ADS_TOKEN?.trim() && !env.META_ACCESS_TOKEN?.trim()) manquantes.push("META_ADS_TOKEN");
+  return manquantes;
+}
+
 export type EtatConfiguration = {
   /** Le webhook peut vérifier les appels de Meta (obligatoire). */
   signature: boolean;

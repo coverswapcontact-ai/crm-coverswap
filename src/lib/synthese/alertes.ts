@@ -74,12 +74,13 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
           gravite: seuil.pourcentage >= 100 ? "URGENT" : "ATTENTION",
           titre: `${seuil.libelle} : ${String(seuil.pourcentage).replace(".", ",")} % atteint`,
           detail: depasseProjection ? `Au rythme actuel, ${formatMontant(seuil.projection!)} au 31 décembre pour un seuil de ${formatMontant(seuil.seuil)}. À voir avec le comptable.` : `Seuil : ${formatMontant(seuil.seuil)}.`,
-          lien: "/finances",
+          // Mission 17 (partie B) : les seuils vivent dans l'onglet Argent de l'Analytique (/finances garde le travail).
+          lien: "/analytique?onglet=argent",
         });
       }
     }
   } else if (tableau.seuils.etat === "PARAMETRES") {
-    alertes.push({ code: "PARAMETRES_SEUILS", gravite: "INFO", titre: "Seuils fiscaux non renseignés", detail: "La progression vers les seuils de TVA et du régime micro n'est pas suivie.", lien: "/finances" });
+    alertes.push({ code: "PARAMETRES_SEUILS", gravite: "INFO", titre: "Seuils fiscaux non renseignés", detail: "La progression vers les seuils de TVA et du régime micro n'est pas suivie.", lien: "/analytique?onglet=argent" });
   }
 
   // Activité qui s'arrête
@@ -122,8 +123,8 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
       code: "AGENT_DEGRADE",
       gravite: "ATTENTION",
       titre: "Les propositions de l'agent sont moins souvent acceptées",
-      detail: `${Math.round(tauxRecent)} % acceptées ces 30 derniers jours, contre ${Math.round(tauxAvant)} % avant. Motifs de rejet à regarder dans la synthèse.`,
-      lien: "/synthese",
+      detail: `${Math.round(tauxRecent)} % acceptées ces 30 derniers jours, contre ${Math.round(tauxAvant)} % avant. Motifs de rejet à regarder dans l'Analytique (Agent et qualité des données).`,
+      lien: "/analytique#agent-qualite",
     });
   }
   const echecs = await prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } });

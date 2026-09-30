@@ -58,6 +58,29 @@ export const MODELES_HORS_JOURNAL: ReadonlySet<string> = new Set([
   // Abonnements aux notifications du navigateur : état technique d'un appareil
   // (adresse de livraison et clés de chiffrement), réécrit à chaque envoi.
   "AbonnementPush",
+  // Mission 17 (partie B) : historique quotidien des sources externes de l'Analytique (dépense publicitaire, Search
+  // Console, fiche Google) et écrans pré-calculés. Écrits en rafale par upsert à chaque synchronisation (les mêmes jours
+  // réécrits toutes les 3 h ou chaque nuit), sans donnée personnelle ; la source de vérité est chez Meta ou Google.
+  "DepensePubJour",
+  "SeoJour",
+  "FicheGoogleJour",
+  "InstantaneAnalytique",
+  // Mesure d'audience du site (une ligne par page vue) : écrite en rafale, jamais modifiée, sans donnée personnelle, et
+  // PURGÉE à 25 mois (MODELES_PURGEABLES) — une copie dans le journal immuable survivrait à la purge.
+  "EvenementSite",
+]);
+
+/**
+ * La SEULE exception à « rien ne se supprime » (docs/ARCHITECTURE-PILOTAGE.md, « Modèles purgeables ») : des mesures
+ * anonymes sans `archiveLe` dont la durée de conservation est imposée. La couche Prisma y accepte `deleteMany` (jamais
+ * `delete` ni une suppression imbriquée) et la base n'y accepte un DELETE que pour une ligne plus vieille que
+ * `joursMin` jours (`createdAt`) : même une purge mal écrite ne peut pas effacer une mesure récente.
+ *
+ * `EvenementSite` : mesure d'audience du site (page vue, étape du simulateur) — la recommandation de la CNIL pour une
+ * mesure exemptée de consentement borne la conservation à 25 mois (analytique/mesure.ts › purgerMesureSite).
+ */
+export const MODELES_PURGEABLES: ReadonlyMap<string, { joursMin: number; raison: string }> = new Map([
+  ["EvenementSite", { joursMin: 750, raison: "mesure d'audience anonyme, conservée 25 mois au plus (CNIL)" }],
 ]);
 
 export type RegleImmuabilite = {
@@ -274,10 +297,16 @@ export function declencheursDuModele(modele: ModeleSql): Declencheur[] {
   const liste = colonnes(modele);
   const aEcriture = liste.some((colonne) => colonne.champ === "ecriture");
   const aArchive = liste.some((colonne) => colonne.champ === "archiveLe");
+  const purge = MODELES_PURGEABLES.get(modele.name);
+  // Modèle purgeable : seule une ligne plus vieille que `joursMin` jours peut partir (createdAt en millisecondes, ou en texte ISO).
+  const saufPurge = purge
+    ? `
+WHEN NOT (CASE WHEN typeof(OLD."createdAt") IN ('integer', 'real') THEN OLD."createdAt" < ${MAINTENANT_MS} - ${purge.joursMin * 86_400_000} ELSE julianday(OLD."createdAt") < julianday('now', '-${purge.joursMin} days') END)`
+    : "";
   const resultat: Declencheur[] = [
     {
       nom: `interdit_suppression_${table}`,
-      sql: `CREATE TRIGGER ${ident(`interdit_suppression_${table}`)} BEFORE DELETE ON ${ident(table)}
+      sql: `CREATE TRIGGER ${ident(`interdit_suppression_${table}`)} BEFORE DELETE ON ${ident(table)}${saufPurge}
 BEGIN
   SELECT RAISE(ABORT, ${texte(messageSuppression(modele.name))});
 END;`,

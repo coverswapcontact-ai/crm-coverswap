@@ -436,7 +436,7 @@ export const outilRattacherDepense = definirOutil({
       nom = r.ids.nom;
     }
     const { depense, dejaRecue } = await creerDepense({ payeeLe: e.payee_le ?? jourParis(contexte.maintenant), montant: e.montant, fournisseur: e.fournisseur, categorie: e.categorie as (typeof CATEGORIES_DEPENSE)[number]["code"], libelle: e.libelle ?? null, moyen: e.moyen ?? null, dossierId, horsChantier: e.hors_chantier ?? !dossierId, note: null }, null);
-    return { texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${format.euros(depense.montant)} chez ${depense.fournisseur} (${depense.categorie})${nom ? `, rattachée au chantier de ${nom}` : ", hors chantier"}.`, donnees: { depenseId: depense.id }, liens: [lien("Dépenses", "/finances")] };
+    return { texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${format.euros(depense.montant)} chez ${depense.fournisseur} (${depense.categorie})${nom ? `, rattachée au chantier de ${nom}` : ", hors chantier"}.`, donnees: { depenseId: depense.id }, liens: [lien("Dépenses", "/depenses")] };
   },
 });
 

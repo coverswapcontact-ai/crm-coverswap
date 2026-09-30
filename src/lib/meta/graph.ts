@@ -37,8 +37,18 @@ export function estProblemeDeDroits(erreur: unknown): boolean {
 
 type ReponseErreur = { error?: { message?: string; code?: number; error_subcode?: number; type?: string } };
 
+/**
+ * Codes d'une panne ou d'une limite PASSAGÈRE : 1/2 pannes de Meta ; 4, 17, 32, 613 limites de débit ; 80000 à 80014
+ * limites « Business Use Case » de l'API Marketing (insights, publicités), qui se lèvent seules après quelques minutes.
+ */
+export function estCodePassager(code: number | null | undefined): boolean {
+  const c = code ?? -1;
+  return [1, 2, 4, 17, 32, 613].includes(c) || (c >= 80000 && c <= 80014);
+}
+
+/** Un appel GET à l'API Graph : un chemin relatif à GRAPH, ou une adresse complète (page suivante d'une pagination). */
 async function appeler<T>(chemin: string, parametres: Record<string, string>): Promise<T> {
-  const url = new URL(`${GRAPH}/${chemin}`);
+  const url = new URL(/^https?:\/\//.test(chemin) ? chemin : `${GRAPH}/${chemin}`);
   for (const [cle, valeur] of Object.entries(parametres)) url.searchParams.set(cle, valeur);
   let rep: Response;
   try {
@@ -56,11 +66,39 @@ async function appeler<T>(chemin: string, parametres: Record<string, string>): P
   if (!rep.ok) {
     const err = (corps as ReponseErreur).error ?? {};
     const code = err.code ?? null;
-    // 4/17/32/613 : limites de débit ; 1/2 : pannes passagères de Meta.
-    const passagere = rep.status >= 500 || [1, 2, 4, 17, 32, 613].includes(code ?? -1);
+    const passagere = rep.status >= 500 || estCodePassager(code);
     throw new ErreurGraph(err.message ?? `HTTP ${rep.status} ${texte.slice(0, 200)}`, rep.status, code, err.error_subcode ?? null, passagere);
   }
   return corps as T;
+}
+
+/** Un appel GET unique à l'API Graph (lecture d'un objet : compte publicitaire, publicité…). */
+export function appelerGraph<T>(chemin: string, parametres: Record<string, string>): Promise<T> {
+  return appeler<T>(chemin, parametres);
+}
+
+/** Une page d'une liste de l'API Graph. */
+type PageGraph<T> = { data?: T[]; paging?: { next?: string; cursors?: { after?: string } } };
+
+/**
+ * Mission 17 (partie B) — la variante PAGINÉE : suit `paging.next` jusqu'au bout et rend toutes les lignes. `pagesMax`
+ * borne la boucle (une réponse qui renverrait toujours un « next » ne tourne pas sans fin) : atteinte avec une page
+ * suivante encore annoncée, c'est une ERREUR (jamais une liste tronquée rendue comme complète).
+ */
+export async function appelerTout<T>(chemin: string, parametres: Record<string, string>, options: { pagesMax?: number } = {}): Promise<T[]> {
+  const pagesMax = options.pagesMax ?? 200;
+  const lignes: T[] = [];
+  let page = await appeler<PageGraph<T>>(chemin, parametres);
+  for (let n = 1; ; n++) {
+    lignes.push(...(page.data ?? []));
+    const suivante = page.paging?.next;
+    if (!suivante) break;
+    // Relecture B (point 12) : une liste coupée à la limite de pages donnerait des chiffres faux sans le dire.
+    if (n >= pagesMax) throw new ErreurGraph(`Lecture de ${chemin.split("?")[0]} arrêtée à ${pagesMax} pages sans atteindre la fin : chiffres incomplets, rien n'est compté.`, null, null, null, false);
+    // L'adresse « next » porte déjà tous les paramètres (jeton compris) et le curseur.
+    page = await appeler<PageGraph<T>>(suivante, {});
+  }
+  return lignes;
 }
 
 const CHAMPS_LEAD_RICHES = "id,created_time,field_data,form_id,ad_id,adset_id,campaign_id,ad_name,adset_name,campaign_name,platform,is_organic,custom_disclaimer_responses";

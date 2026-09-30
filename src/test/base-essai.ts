@@ -71,6 +71,12 @@ export const CANAUX_SORTANTS = [
   "META_PAGE_ACCESS_TOKEN",
   "META_CONVERSIONS_TOKEN",
   "GOOGLE_PLACES_API_KEY",
+  // Mission 17 (partie B) : les connecteurs de l'Analytique (dépense Meta, compte de service Google).
+  "META_ADS_TOKEN",
+  "META_AD_ACCOUNT_ID",
+  "GOOGLE_SERVICE_ACCOUNT_JSON",
+  "GOOGLE_BUSINESS_LOCATION",
+  "GOOGLE_BUSINESS_ACCOUNT",
 ] as const;
 
 /**

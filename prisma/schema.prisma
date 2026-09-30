@@ -105,6 +105,15 @@ model SimulationSite {
   leadId           String? // renseigné au rattachement
   simulationId     String? // Simulation créée sur le lead au rattachement
   rattacheeLe      DateTime?
+  // Mission 15 (partie 2) : ce que le moteur de prompt a produit pour ce rendu.
+  moteur              String? // V1 | V2
+  promptTexte         String?
+  directionArtistique String?
+  photoEmpreinte      String? // SHA-256 de la photo : clé de l'analyse réutilisée (AnalysePhoto)
+  analyse             String? // JSON AnalysePhoto (description de la pièce, zones visibles, objets, lumière, qualité)
+  scoreControle       Int? // contrôle automatique du rendu, 0 à 10
+  defautsControle     String? // JSON { type, detail }[]
+  tentatives          Int? // générations faites pour ce rendu (1 ou 2)
   archiveLe        DateTime? // purge : images effacées, ligne conservée sans image
   archiveMotif     String?
   ecriture         String?
@@ -147,12 +156,37 @@ model TravailSimulation {
   notifierEmail     String?
   notifierTelephone String?
   notifieLe         DateTime?
+  // Mission 15 (partie 2) : empreinte de la photo (analyse réutilisée) et moteur employé.
+  photoEmpreinte    String?
+  moteur            String? // V1 | V2
   archiveLe         DateTime?
   archiveMotif      String?
   ecriture          String?
 
   @@index([parcoursId])
   @@index([statut])
+}
+
+// Mission 15 (partie 2) : l'analyse d'une photo par le modèle vision, clé = empreinte SHA-256 de la photo —
+// lue avant tout appel, réutilisée pour toute génération sur la même photo (site, espace, CRM). `parcoursId` :
+// le dernier parcours du site qui l'a demandée (preuve du suivi). Jamais supprimée : archivée (json effacé) à la purge.
+model AnalysePhoto {
+  empreinte    String    @id
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  piece        String // cuisine | salle-de-bain | meubles | mur-plafond | professionnel
+  parcoursId   String?
+  statut       String    @default("EN_COURS") // EN_COURS | PRETE | SAUTEE | ECHEC
+  raison       String? // pourquoi elle a été sautée (budget, clé, délai…)
+  json         String? // AnalysePhoto
+  photoPath    String? // photo en attente d'analyse (site/<parcoursId>/analyses/<empreinte>.jpg), effacée ensuite
+  coutDollars  Float?
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+
+  @@index([parcoursId])
+  @@index([createdAt])
 }
 
 // Événement de parcours sur le site (simulation lancée, résultat vu, devis
@@ -1479,6 +1513,13 @@ model SimulationEspace {
   preparationId     String?
   simulationId      String? // Simulation du contact, quand elle a été faite sur le site
   coutDollars       Float? // génération par l'API
+  // Mission 15 (partie 2) : moteur de prompt, direction artistique, analyse de la photo, contrôle du rendu.
+  moteur              String? // V1 | V2
+  directionArtistique String?
+  analyse             String? // JSON AnalysePhoto
+  scoreControle       Int?
+  defautsControle     String? // JSON { type, detail }[]
+  tentatives          Int?
   publieeLe         DateTime?
   masqueeLe         DateTime?
   vueLe             DateTime? // première fois que le client l'a vue
@@ -1576,6 +1617,15 @@ model PreparationSimulation {
   coutEstime    Float? // en dollars
   erreur        String?
   resultatId    String? // SimulationEspace produite
+  // Mission 15 (partie 2) : moteur de prompt, direction artistique, analyse de la photo, contrôle du rendu.
+  moteur              String? // V1 | V2
+  etape               String? // analyse | matieres | rendu (écran d'attente de l'espace, partie 5)
+  directionArtistique String?
+  photoEmpreinte      String?
+  analyse             String? // JSON AnalysePhoto
+  scoreControle       Int?
+  defautsControle     String? // JSON { type, detail }[]
+  tentatives          Int?
   archiveLe     DateTime?
   archiveMotif  String?
   ecriture      String?
@@ -1619,6 +1669,7 @@ model GenerationImage {
   createdAt     DateTime @default(now())
   origine       String // SITE | CRM | ESPACE
   modele        String
+  phase         String   @default("rendu") // rendu | analyse | controle (mission 15 : les appels vision comptent ici aussi)
   statut        String // REUSSI | ECHEC
   erreur        String?
   dureeMs       Int

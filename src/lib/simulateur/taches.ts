@@ -1,7 +1,7 @@
 import { enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { analyserCatalogueParLots } from "./catalogue";
 import { surveillerCredit } from "./consommation";
-import { TACHE_SIMULATION_API, executerGenerationApi } from "./preparation";
+import { DELAI_TACHE_API_MS, TACHE_SIMULATION_API, executerGenerationApi } from "./preparation";
 import { pluriel } from "@/lib/commun/format";
 
 /**
@@ -19,10 +19,10 @@ export function enregistrerTachesSimulateur(): void {
     libelle: "Simulateur : génération d'une simulation par l'API",
     acteur: "SYSTEME:simulateur",
     tentativesMax: 1,
-    delaiMaxMs: 240_000,
+    delaiMaxMs: DELAI_TACHE_API_MS,
     // Mission 15 : voie longue de l'exécuteur (deux générations en parallèle, sans bloquer les tâches courtes).
     voie: "longue",
-    executer: async (charge) => executerGenerationApi((charge as { preparationId: string }).preparationId),
+    executer: async (charge, { signal }) => executerGenerationApi((charge as { preparationId: string }).preparationId, signal),
   });
   enregistrerTravailPeriodique({
     nom: "catalogue-couleurs",

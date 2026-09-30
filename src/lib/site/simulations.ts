@@ -19,11 +19,24 @@ export const DOSSIER_SITE = "site";
 
 export type ReferenceSimulee = { zone: string; libelle: string; ref: string; nom: string };
 
-export type EntreeSimulationSite = {
+/** Mission 15 (partie 2) : ce que le moteur de prompt a produit pour ce rendu, gardé sur la simulation (visible au CRM). */
+export type TraceMoteur = {
+  moteur?: string | null;
+  promptTexte?: string | null;
+  directionArtistique?: string | null;
+  photoEmpreinte?: string | null;
+  analyse?: string | null;
+  scoreControle?: number | null;
+  defautsControle?: string | null;
+  tentatives?: number | null;
+};
+
+export type EntreeSimulationSite = TraceMoteur & {
   parcoursId: string;
   projet: string;
   references: ReferenceSimulee[];
   imageAvantBase64: string;
+  /** Data URL du rendu : l'extension du fichier suit son type (JPEG depuis la mission 15, PNG avant). */
   imageApresBase64: string;
   page?: string | null;
   source?: string | null;
@@ -31,6 +44,12 @@ export type EntreeSimulationSite = {
   ipOrigine?: string | null;
   dureeMs?: number | null;
 };
+
+/** L'extension d'un fichier d'après le type d'une data URL (jpg à défaut). */
+export function extensionDataUrl(dataUrl: string): "jpg" | "png" | "webp" {
+  const type = /^data:image\/(\w+);base64,/.exec(dataUrl)?.[1]?.toLowerCase();
+  return type === "png" ? "png" : type === "webp" ? "webp" : "jpg";
+}
 
 export async function enregistrerSimulationSite(entree: EntreeSimulationSite): Promise<{ id: string; imageBeforePath: string | null; imageAfterPath: string | null }> {
   const creee = await prisma.simulationSite.create({
@@ -44,11 +63,19 @@ export async function enregistrerSimulationSite(entree: EntreeSimulationSite): P
       campagne: entree.campagne ?? null,
       ipOrigine: entree.ipOrigine ?? null,
       dureeMs: entree.dureeMs ?? null,
+      moteur: entree.moteur ?? null,
+      promptTexte: entree.promptTexte ?? null,
+      directionArtistique: entree.directionArtistique ?? null,
+      photoEmpreinte: entree.photoEmpreinte ?? null,
+      analyse: entree.analyse ?? null,
+      scoreControle: entree.scoreControle ?? null,
+      defautsControle: entree.defautsControle ?? null,
+      tentatives: entree.tentatives ?? null,
     },
   });
   const dossier = path.join(DOSSIER_SITE, entree.parcoursId, creee.id);
   const imageBeforePath = await enregistrerImageBase64(entree.imageAvantBase64, dossier, "avant.jpg");
-  const imageAfterPath = await enregistrerImageBase64(entree.imageApresBase64, dossier, "apres.png");
+  const imageAfterPath = await enregistrerImageBase64(entree.imageApresBase64, dossier, `apres.${extensionDataUrl(entree.imageApresBase64)}`);
   await prisma.simulationSite.update({ where: { id: creee.id }, data: { imageBeforePath, imageAfterPath } });
   return { id: creee.id, imageBeforePath, imageAfterPath };
 }
@@ -91,7 +118,8 @@ export async function rattacherSimulationsSite(leadId: string, parcoursId: strin
     });
     const dossier = path.join(leadId, simulation.id);
     const imageBeforePath = await deplacerImage(s.imageBeforePath, dossier, "before.jpg");
-    const imageAfterPath = await deplacerImage(s.imageAfterPath, dossier, "after.png");
+    // Le rendu garde son type (JPEG depuis la mission 15, PNG avant).
+    const imageAfterPath = await deplacerImage(s.imageAfterPath, dossier, `after${path.posix.extname(s.imageAfterPath ?? "") || ".png"}`);
     await prisma.simulation.update({ where: { id: simulation.id }, data: { imageBeforePath, imageAfterPath } });
     await prisma.simulationSite.update({
       where: { id: s.id },
@@ -150,6 +178,10 @@ export async function purgerSiNecessaire(): Promise<void> {
     if (n > 0) console.log(`[site] ${pluriel(n, "simulation sans demande purgée", "simulations sans demande purgées")}`);
     const t = await purgerTravauxSimulation();
     if (t > 0) console.log(`[site] ${pluriel(t, "travail de simulation archivé", "travaux de simulation archivés")}`);
+    // Mission 15 (partie 2) : les analyses de photos suivent la même rétention.
+    const { purgerAnalyses } = await import("@/lib/simulateur/analyses");
+    const a = await purgerAnalyses();
+    if (a > 0) console.log(`[site] ${pluriel(a, "analyse de photo archivée", "analyses de photos archivées")}`);
   } catch (err) {
     console.error("[site] purge impossible :", err);
   }

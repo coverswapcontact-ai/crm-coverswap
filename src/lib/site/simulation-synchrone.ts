@@ -43,7 +43,8 @@ export async function genererEtGarderSynchrone(entree: EntreeSynchrone): Promise
       const raison = resultat.raison === "config" ? "service-indisponible" : resultat.raison;
       return { status: resultat.status, corps: { error: resultat.message, reason: raison } };
     }
-    const b64 = resultat.image.toString("base64");
+    // Le rendu est JPEG depuis la mission 15 (`output_format`) : la data URL, et donc l'extension des fichiers, suivent son type réel.
+    const rendu = `data:${resultat.type};base64,${resultat.image.toString("base64")}`;
     const cadrage = { avant: resultat.avant };
     const startMs = Date.now() - resultat.dureeMs;
 
@@ -58,7 +59,7 @@ export async function genererEtGarderSynchrone(entree: EntreeSynchrone): Promise
           projet: typeof projet === "string" ? projet.slice(0, 40) : "cuisine",
           references,
           imageAvantBase64: photo_base64,
-          imageApresBase64: `data:image/png;base64,${b64}`,
+          imageApresBase64: rendu,
           page: typeof page === "string" ? page.slice(0, 200) : null,
           source: typeof source === "string" ? source.slice(0, 120) : null,
           campagne: typeof campagne === "string" ? campagne.slice(0, 120) : null,
@@ -79,7 +80,7 @@ export async function genererEtGarderSynchrone(entree: EntreeSynchrone): Promise
     }
     if (leadId) {
       try {
-        simulationId = await rattacherImagesSimulation(leadId, photo_base64, `data:image/png;base64,${b64}`, referenceChoisie ?? null);
+        simulationId = await rattacherImagesSimulation(leadId, photo_base64, rendu, referenceChoisie ?? null);
         console.log(`[simulate] images rattachées lead=${leadId} simulation=${simulationId ?? "?"}`);
         await assurerDossierDeSimulation(leadId);
       } catch (err) {
@@ -90,7 +91,7 @@ export async function genererEtGarderSynchrone(entree: EntreeSynchrone): Promise
     return {
       status: 200,
       // imageAvant : la photo au cadrage exact du rendu (rognée au format du modèle), pour un avant / après superposable.
-      corps: { success: true, image: `data:image/png;base64,${b64}`, imageAvant: cadrage.avant ? `data:image/jpeg;base64,${cadrage.avant.toString("base64")}` : null, simulationId, simulationSiteId },
+      corps: { success: true, image: rendu, imageAvant: cadrage.avant ? `data:image/jpeg;base64,${cadrage.avant.toString("base64")}` : null, simulationId, simulationSiteId },
     };
   } catch (err) {
     console.error("[simulate] erreur:", err);

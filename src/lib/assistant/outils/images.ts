@@ -68,7 +68,7 @@ export const outilVoirSimulations = definirOutil({
   nom: "voir_simulations",
   titre: "Voir les simulations d'un dossier (avant / après)",
   description:
-    "Rend les simulations d'un dossier comme de vraies images : l'après, et l'avant quand il existe ; pour chacune les teintes posées par zone, la source (site, client, CRM), le statut (brouillon, publiée, masquée), si le client l'a vue, choisie ou commentée. Les 4 plus récentes par défaut (8 au plus) ; « simulation_id » pour une seule.",
+    "Rend les simulations d'un dossier comme de vraies images : l'après, et l'avant quand il existe ; pour chacune les teintes posées par zone, la source (site, client, CRM), le statut (brouillon, publiée, masquée), si le client l'a vue, choisie ou commentée, le moteur et le score du contrôle automatique (mission 15). Les 4 plus récentes par défaut (8 au plus) ; « simulation_id » pour une seule ; « avec_prompt » : le texte du prompt donné au modèle et la direction artistique de chaque simulation (pour comparer avec les prompts « studio »).",
   niveau: "LECTURE",
   schema: z.object({
     dossierId: z.string().max(40).optional(),
@@ -78,6 +78,7 @@ export const outilVoirSimulations = definirOutil({
     nombre: z.number().int().min(1).max(8).optional(),
     simulation_id: z.string().max(40).optional(),
     sans_avant: z.boolean().optional().describe("Vrai : ne pas joindre les photos avant (moitié moins d'images)."),
+    avec_prompt: z.boolean().optional().describe("Vrai : rendre aussi le texte du prompt donné au modèle et la direction artistique (mission 15)."),
   }),
   executer: async (e) => {
     const r = await cibler(e, "DOSSIER");
@@ -92,9 +93,14 @@ export const outilVoirSimulations = definirOutil({
     const lignes: string[] = [];
     for (const [i, s] of choisies.entries()) {
       const teintes = s.zones.length ? s.zones.map((z) => `${z.libelle} : ${z.nom} (${z.ref})`).join(", ") : "teintes non renseignées";
-      const etat = [LIBELLES_STATUT[s.statut] ?? s.statut, s.vueLe ? `vue par le client le ${format.jourCourt(s.vueLe)}` : s.statut === "PUBLIEE" ? "pas encore vue par le client" : null, s.choisie ? "CHOISIE par le client" : null, s.commentaire ? `commentaire : « ${s.commentaire} »` : null].filter(Boolean).join(" ; ");
+      const etat = [LIBELLES_STATUT[s.statut] ?? s.statut, s.vueLe ? `vue par le client le ${format.jourCourt(s.vueLe)}` : s.statut === "PUBLIEE" ? "pas encore vue par le client" : null, s.choisie ? "CHOISIE par le client" : null, s.commentaire ? `commentaire : « ${s.commentaire} »` : null, s.moteur ? `moteur ${s.moteur}` : null, s.scoreControle !== null ? `contrôle ${s.scoreControle}/10${s.tentatives && s.tentatives > 1 ? ` en ${s.tentatives} essais` : ""}` : null].filter(Boolean).join(" ; ");
       const titre = `Simulation ${i + 1}${s.titre ? ` « ${s.titre} »` : ""} du ${format.jourCourt(s.le)} — ${LIBELLES_SOURCE[s.source] ?? s.source} — ${s.typeLibelle ?? "surface non renseignée"} — ${teintes} — ${etat} [simulation:${s.id}]`;
       lignes.push(titre);
+      if (e.avec_prompt) {
+        if (s.directionArtistique) lignes.push(`  Direction artistique : ${s.directionArtistique}`);
+        if (s.defautsControle.length) lignes.push(`  Défauts relevés par le contrôle : ${s.defautsControle.map((d) => `${d.type} — ${d.detail}`).join(" ; ")}`);
+        lignes.push(s.promptTexte ? `  Prompt donné au modèle :\n${s.promptTexte}` : "  Prompt : non enregistré pour cette simulation.");
+      }
       if (images.length >= IMAGES_MAX_PAR_RESULTAT) continue;
       const apres = await imagePourResultat((await imageSimulationDossier(r.ids.dossierId, s.id, "image").catch(() => null))?.contenu ?? null, `${titre} — APRÈS`);
       if (apres) images.push(apres);
@@ -104,7 +110,7 @@ export const outilVoirSimulations = definirOutil({
       }
     }
     const texte = [`${r.ids.nom} : ${pluriel(liste.length, "simulation")}${espace ? "" : " (pas d'espace client ouvert)"} ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")} (après, puis avant quand elle existe).`, ...lignes].join("\n");
-    return { texte, images, donnees: { total: liste.length, simulations: choisies.map((s) => ({ id: s.id, titre: s.titre, source: s.source, statut: s.statut, type: s.typeSurface, zones: s.zones, le: s.le, publieeLe: s.publieeLe, vueLe: s.vueLe, choisie: s.choisie, commentaire: s.commentaire, avant: Boolean(s.avant) })) }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`), lien("Simulateur", `/simulateur?dossier=${r.ids.dossierId}`)] };
+    return { texte, images, donnees: { total: liste.length, simulations: choisies.map((s) => ({ id: s.id, titre: s.titre, source: s.source, statut: s.statut, type: s.typeSurface, zones: s.zones, le: s.le, publieeLe: s.publieeLe, vueLe: s.vueLe, choisie: s.choisie, commentaire: s.commentaire, avant: Boolean(s.avant), moteur: s.moteur, scoreControle: s.scoreControle, tentatives: s.tentatives, ...(e.avec_prompt ? { promptTexte: s.promptTexte, directionArtistique: s.directionArtistique, defautsControle: s.defautsControle } : {}) })) }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`), lien("Simulateur", `/simulateur?dossier=${r.ids.dossierId}`)] };
   },
 });
 

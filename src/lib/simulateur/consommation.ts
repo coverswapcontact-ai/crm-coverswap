@@ -1,6 +1,8 @@
 import prisma from "@/lib/prisma";
 import { alerter } from "@/lib/alertes/canaux";
 import { coutEstime } from "@/lib/simulations/generation";
+import { COUT_ESTIME_VISION_DOLLARS } from "@/lib/simulations/prix";
+import { reglagesSimulateur, type ReglagesSimulateur } from "./reglages";
 
 /**
  * Le compteur de crédit du simulateur : ce que coûtent les générations
@@ -11,10 +13,18 @@ import { coutEstime } from "@/lib/simulations/generation";
  * (`GenerationImage`). Le solde s'estime à partir du dernier solde relevé par
  * Lucas (paramètre daté « Crédit OpenAI »), moins ce qui a été consommé depuis.
  * Avec une clé d'administration (OPENAI_ADMIN_KEY, facultative), le coût réel
- * du mois est lu chez OpenAI en plus.
+ * du mois est lu chez OpenAI en plus. Les simulations restantes et la garde de
+ * l'espace client s'estiment au prix de la qualité de l'espace et du CRM
+ * (Paramètres, high par défaut), analyse et contrôle compris en moteur V2.
  */
 
 export const SEUIL_ALERTE_DOLLARS = 2;
+
+/** Ce que coûte une simulation de l'espace ou du CRM avec `echantillons` films, aux réglages en vigueur. */
+export function coutSimulationEspace(reglages: ReglagesSimulateur, echantillons: number): number {
+  const vision = reglages.moteur === "V2" ? 2 * COUT_ESTIME_VISION_DOLLARS : 0;
+  return Math.round((coutEstime(echantillons, reglages.qualiteEspace) + vision) * 100) / 100;
+}
 
 export type Consommation = {
   mois: { total: number; site: number; crm: number; espace: number; generations: number; echecs: number };
@@ -52,11 +62,12 @@ async function coutReelDuMois(depuis: Date): Promise<{ mois: number; lu: string 
 
 export async function consommation(maintenant: Date = new Date()): Promise<Consommation> {
   const debut = debutDuMois(maintenant);
-  const [lignes, releve, dernierEchec, derniereReussite] = await Promise.all([
+  const [lignes, releve, dernierEchec, derniereReussite, reglages] = await Promise.all([
     prisma.generationImage.findMany({ where: { createdAt: { gte: debut } }, select: { origine: true, statut: true, coutDollars: true } }),
     prisma.parametre.findFirst({ where: { cle: "SIMULATEUR_CREDIT_OPENAI", valableDu: { lte: maintenant } }, orderBy: [{ valableDu: "desc" }, { createdAt: "desc" }], select: { valeur: true, valableDu: true } }),
     prisma.generationImage.findFirst({ where: { statut: "ECHEC", erreur: { startsWith: "service-indisponible" } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
     prisma.generationImage.findFirst({ where: { statut: "REUSSI" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+    reglagesSimulateur(maintenant),
   ]);
   const somme = (filtre: (l: (typeof lignes)[number]) => boolean) => Math.round(lignes.filter(filtre).reduce((s, l) => s + (l.coutDollars ?? 0), 0) * 100) / 100;
   let solde: Consommation["solde"] = null;
@@ -65,7 +76,7 @@ export async function consommation(maintenant: Date = new Date()): Promise<Conso
     const depuis = await prisma.generationImage.aggregate({ where: { createdAt: { gte: releve.valableDu } }, _sum: { coutDollars: true } });
     const consommeDepuis = Math.round((depuis._sum.coutDollars ?? 0) * 100) / 100;
     const estime = Math.round((valeur - consommeDepuis) * 100) / 100;
-    solde = { releve: valeur, releveLe: releve.valableDu.toISOString(), consommeDepuis, estime, simulationsRestantes: Math.max(0, Math.floor(estime / coutEstime(2))) };
+    solde = { releve: valeur, releveLe: releve.valableDu.toISOString(), consommeDepuis, estime, simulationsRestantes: Math.max(0, Math.floor(estime / coutSimulationEspace(reglages, 2))) };
   }
   return {
     mois: { total: somme(() => true), site: somme((l) => l.origine === "SITE"), crm: somme((l) => l.origine === "CRM"), espace: somme((l) => l.origine === "ESPACE"), generations: lignes.filter((l) => l.statut === "REUSSI").length, echecs: lignes.filter((l) => l.statut === "ECHEC").length },
@@ -100,10 +111,15 @@ export async function surveillerCredit(maintenant: Date = new Date()): Promise<{
 /**
  * Peut-on générer maintenant ? Non si la dernière génération a été refusée faute
  * de crédit (sans réussite depuis), ou si le solde estimé ne couvre plus une
- * simulation. L'espace client ne lance alors rien : ses choix sont gardés.
+ * simulation de l'espace (qualité de l'espace, analyse et contrôle en V2, une
+ * seconde tentative possible). L'espace client ne lance alors rien : ses choix
+ * sont gardés.
  */
 export async function creditDisponible(maintenant: Date = new Date()): Promise<boolean> {
   const etat = await consommation(maintenant);
   if (etat.creditEpuise) return false;
-  return !etat.solde || etat.solde.estime >= coutEstime(1);
+  if (!etat.solde) return true;
+  const reglages = await reglagesSimulateur(maintenant);
+  const tentatives = reglages.moteur === "V2" ? 2 : 1;
+  return etat.solde.estime >= coutSimulationEspace(reglages, 1) * tentatives;
 }

@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { z } from "zod/v4";
 import type { PreparationSimulation } from "@prisma/client";
@@ -7,16 +6,20 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
 import { avecActeur } from "@/lib/journal/contexte";
 import { lireFichier, idPhoto, lirePhotos, estPhotoApres } from "@/lib/dossiers/stockage";
-import { adresseDuSite, ouvrirEspace } from "@/lib/espace/liens";
+import { ouvrirEspace } from "@/lib/espace/liens";
 import { photosDuClient } from "@/lib/espace/service";
 import { mettreEnFile } from "@/lib/taches/file";
-import { ErreurDefinitive } from "@/lib/taches/registre";
-import { coutEstime, genererRendu } from "@/lib/simulations/generation";
+import { coutEstime, extensionDe, typeImage } from "@/lib/simulations/generation";
 import { ecrireImageSimulation, lireImage } from "@/lib/simulations/dossier";
+import { genererAvecMoteur, type SortiePipeline } from "@/lib/simulations/pipeline";
 import { tailleSelonRatio } from "@/lib/simulations/cadrage";
+import type { EtapeTravail } from "@/lib/simulations/travaux-lecture";
 import { analyseDe, referenceObligatoire } from "./catalogue";
 import { promptCourant } from "./bibliotheque";
+import { directionArtistique } from "./moteur/direction-artistique";
+import type { DefautRendu } from "./moteur/types";
 import { etiquettes, formatDePhoto, rendrePrompt } from "./rendu";
+import { qualitePourOrigine, reglagesSimulateur } from "./reglages";
 import { decrireTeintePourPrompt, resumerTeinte } from "./teintes";
 import { ZONES, estZone, lireZones, typeSurface, type IdZone } from "./types-surface";
 
@@ -28,12 +31,19 @@ import { ZONES, estZone, lireZones, typeSurface, type IdZone } from "./types-sur
  *    référence, couleur mesurée, veinage, finition), la planche des teintes
  *    (image) et la photo cadrée au format de ChatGPT ; l'image rendue, déposée
  *    ensuite, reprend tout (version du prompt comprise) ;
- *  - API : la consigne est demandée au SITE (même moteur, mêmes prompts que le
- *    simulateur public), l'image est générée ici en tâche de fond, et arrive
- *    en brouillon dans le dossier.
+ *  - API : la génération part en tâche de fond par le pipeline commun
+ *    (`simulations/pipeline.ts` : moteur V1 ou V2 selon Paramètres —
+ *    analyse de la photo réutilisée par empreinte, planche, contrôle du rendu),
+ *    et l'image arrive en brouillon dans le dossier (ou publiée, pour le client).
+ *
+ * Mission 15 (partie 2) : plus aucune consigne demandée au site (`consigneDuSite`
+ * a disparu) ; le prompt de la bibliothèque est lu AVANT le cadrage de la photo
+ * (un type sans prompt ne laisse plus de fichier « avant » orphelin).
  */
 
 export const TACHE_SIMULATION_API = "SIMULATION_API";
+/** Mission 15 (partie 2) : analyse + rendu + contrôle + seconde tentative tiennent dans 8 min. */
+export const DELAI_TACHE_API_MS = 480_000;
 
 export const schemaPreparation = z.object({
   dossierId: z.string().min(1).max(40),
@@ -50,11 +60,14 @@ export type PreparationVue = {
   dossierId: string;
   mode: "CHATGPT" | "API";
   statut: string;
+  /** Mission 15 : l'étape en cours d'une génération par l'API (analyse | matieres | rendu). */
+  etape: string | null;
   typeSurface: string;
   typeLibelle: string;
   /** La photo du dossier choisie (identifiant public), pour rouvrir la préparation dans l'écran. */
   photoId: string;
   zones: ZonePreparee[];
+  /** Le prompt : celui à copier (ChatGPT), ou celui que le moteur a donné au modèle (API, une fois générée). */
   prompt: string | null;
   promptVersion: number | null;
   format: string | null;
@@ -64,9 +77,26 @@ export type PreparationVue = {
   erreur: string | null;
   resultatId: string | null;
   le: string;
+  moteur: string | null;
+  directionArtistique: string | null;
+  scoreControle: number | null;
+  /** Le score est sous le seuil du contrôle (Paramètres) : la pastille de l'écran passe en ambre. */
+  sousSeuil: boolean;
+  defautsControle: DefautRendu[];
+  tentatives: number | null;
 };
 
-function versVue(p: PreparationSimulation): PreparationVue {
+export function lireDefauts(json: string | null | undefined): DefautRendu[] {
+  if (!json) return [];
+  try {
+    const lu: unknown = JSON.parse(json);
+    return Array.isArray(lu) ? (lu as DefautRendu[]).filter((d) => d && typeof d === "object" && typeof d.detail === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function versVue(p: PreparationSimulation, seuilControle: number): PreparationVue {
   const zones = (() => {
     try {
       return JSON.parse(p.zones) as ZonePreparee[];
@@ -74,17 +104,18 @@ function versVue(p: PreparationSimulation): PreparationVue {
       return [];
     }
   })();
-  const format = p.promptTexte ? (/(landscape 3:2|portrait 2:3|square 1:1)/.exec(p.promptTexte)?.[1] ?? null) : null;
+  const format = p.promptTexte ? (/(landscape 3:2|portrait 2:3|square 1:1|1536×1024 landscape|1024×1536 portrait|1024×1024 square)/.exec(p.promptTexte)?.[1] ?? null) : null;
   return {
     id: p.id,
     dossierId: p.dossierId,
     mode: p.mode === "API" ? "API" : "CHATGPT",
     statut: p.statut,
+    etape: p.etape,
     typeSurface: p.typeSurface,
     typeLibelle: typeSurface(p.typeSurface)?.libelle ?? p.typeSurface,
     photoId: idPhoto(p.photoSource),
     zones,
-    prompt: p.mode === "CHATGPT" ? p.promptTexte : null,
+    prompt: p.promptTexte,
     promptVersion: p.promptVersion,
     format,
     photo: `/api/simulateur/preparations/${p.id}/photo`,
@@ -93,6 +124,12 @@ function versVue(p: PreparationSimulation): PreparationVue {
     erreur: p.erreur,
     resultatId: p.resultatId,
     le: p.createdAt.toISOString(),
+    moteur: p.moteur,
+    directionArtistique: p.directionArtistique,
+    scoreControle: p.scoreControle,
+    sousSeuil: typeof p.scoreControle === "number" && p.scoreControle < seuilControle,
+    defautsControle: lireDefauts(p.defautsControle),
+    tentatives: p.tentatives,
   };
 }
 
@@ -149,12 +186,12 @@ export async function preparerSimulation(entree: z.output<typeof schemaPreparati
   choisies.sort((a, b) => type.zones.indexOf(a.zone) - type.zones.indexOf(b.zone));
   const lettres = etiquettes(type, choisies.map((c) => c.zone));
 
-  const octets = await lireFichier(chemin);
-  if (!octets) throw new ErreurMetier("Photo introuvable sur le serveur.", 404);
-  const cadree = await cadrerPhoto(octets);
-  const photoAvant = await ecrireImageSimulation(dossier.id, cadree.image, "jpg", "-avant");
+  // Le prompt de la bibliothèque d'abord : un type sans prompt échoue AVANT d'écrire quoi que ce soit (photo cadrée).
+  const prompt = entree.mode === "CHATGPT" ? await promptCourant(type.id) : null;
+  const reglages = await reglagesSimulateur();
 
   const zones: ZonePreparee[] = [];
+  const zonesMoteur = [];
   for (const { zone, ref } of choisies) {
     const reference = await referenceObligatoire(ref);
     const analyse = await analyseDe(ref);
@@ -165,18 +202,25 @@ export async function preparerSimulation(entree: z.output<typeof schemaPreparati
       ref: reference.id,
       nom: reference.nom,
       resume: resumerTeinte(reference, analyse),
-      hex: analyse?.hex ?? null,
+      hex: analyse?.hex ?? reference.hex ?? null,
       description: decrireTeintePourPrompt(reference, analyse, zone),
     });
+    zonesMoteur.push({ zone, etiquette: lettres.get(zone)!.charAt(0) as "A" | "B" | "C" | "D", reference: { ref: reference.id, nom: reference.nom, famille: reference.famille, categorie: reference.categorie, finition: reference.finition, tags: reference.tags, hex: reference.hex ?? null, couleur: analyse } });
   }
+  const direction = directionArtistique(type.projet, zonesMoteur);
+
+  const octets = await lireFichier(chemin);
+  if (!octets) throw new ErreurMetier("Photo introuvable sur le serveur.", 404);
+  const cadree = await cadrerPhoto(octets);
+  const photoAvant = await ecrireImageSimulation(dossier.id, cadree.image, "jpg", "-avant");
 
   const format = formatDePhoto(cadree.largeur, cadree.hauteur);
-  const prompt = entree.mode === "CHATGPT" ? await promptCourant(type.id) : null;
+  const origine = options.origine ?? "CRM";
   const creee = await prisma.preparationSimulation.create({
     data: {
       dossierId: dossier.id,
       mode: entree.mode,
-      origine: options.origine ?? "CRM",
+      origine,
       statut: entree.mode === "API" ? "EN_COURS" : "PREPAREE",
       photoSource: chemin,
       photoAvant,
@@ -184,25 +228,27 @@ export async function preparerSimulation(entree: z.output<typeof schemaPreparati
       zones: JSON.stringify(zones),
       promptId: prompt?.promptId ?? null,
       promptVersion: prompt?.version ?? null,
-      promptTexte: prompt ? rendrePrompt(prompt.texte, { type, zones: zones.map((z) => ({ zone: z.zone as IdZone, etiquette: z.etiquette, teinte: z.description })), format }) : null,
-      coutEstime: entree.mode === "API" ? coutEstime(new Set(zones.map((z) => z.ref)).size) : null,
+      promptTexte: prompt ? rendrePrompt(prompt.texte, { type, zones: zones.map((z) => ({ zone: z.zone as IdZone, etiquette: z.etiquette, teinte: z.description })), format, directionArtistique: direction }) : null,
+      coutEstime: entree.mode === "API" ? coutEstime(new Set(zones.map((z) => z.ref)).size, qualitePourOrigine(reglages, origine === "CLIENT" ? "ESPACE" : "CRM")) : null,
+      moteur: entree.mode === "API" ? reglages.moteur : null,
+      directionArtistique: direction,
     },
   });
   if (entree.mode === "API") {
     await mettreEnFile({ type: TACHE_SIMULATION_API, cle: `simulation-api:${creee.id}`, charge: { preparationId: creee.id }, priorite: 7, tentativesMax: 1 });
   }
-  return versVue(creee);
+  return versVue(creee, reglages.seuilControle);
 }
 
 export async function lirePreparation(id: string): Promise<PreparationVue> {
   const p = await prisma.preparationSimulation.findUnique({ where: { id } });
   if (!p) throw new ErreurMetier("Préparation introuvable.", 404);
-  return versVue(p);
+  return versVue(p, (await reglagesSimulateur()).seuilControle);
 }
 
 export async function preparationsRecentes(dossierId: string): Promise<PreparationVue[]> {
-  const lignes = await prisma.preparationSimulation.findMany({ where: { dossierId, createdAt: { gte: new Date(Date.now() - 14 * 86_400_000) } }, orderBy: { createdAt: "desc" }, take: 12 });
-  return lignes.map(versVue);
+  const [lignes, reglages] = await Promise.all([prisma.preparationSimulation.findMany({ where: { dossierId, createdAt: { gte: new Date(Date.now() - 14 * 86_400_000) } }, orderBy: { createdAt: "desc" }, take: 12 }), reglagesSimulateur()]);
+  return lignes.map((p) => versVue(p, reglages.seuilControle));
 }
 
 export async function photoDePreparation(id: string): Promise<{ contenu: Buffer; type: string }> {
@@ -211,36 +257,28 @@ export async function photoDePreparation(id: string): Promise<{ contenu: Buffer;
   return lireImage(p.photoAvant ?? p.photoSource);
 }
 
-/* ── Mode API : la consigne du site, l'image générée ici ─────────── */
-
-/** Demande au site la consigne de son moteur (mêmes prompts que le simulateur public), requête signée. */
-export async function consigneDuSite(projet: string, selections: { surface: string; ref: string }[]): Promise<{ prompt: string; swatchUrls: string[] }> {
-  const secret = process.env.SIMULATE_TOKEN_SECRET;
-  if (!secret) throw new ErreurDefinitive("SIMULATE_TOKEN_SECRET absente : le CRM ne peut pas demander la consigne au site.");
-  const corps = JSON.stringify({ project_type: projet, selections });
-  const horodatage = String(Date.now());
-  const signature = createHmac("sha256", secret).update(`${horodatage}\n${corps}`).digest("hex");
-  const reponse = await fetch(`${adresseDuSite()}/api/simulation/consigne`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-coverswap-horodatage": horodatage, "x-coverswap-signature": signature },
-    body: corps,
-    signal: AbortSignal.timeout(15_000),
-  }).catch((erreur: unknown) => {
-    throw new Error(`site injoignable (${erreur instanceof Error ? erreur.message : "réseau"})`);
-  });
-  const donnees = (await reponse.json().catch(() => ({}))) as { prompt?: string; swatchUrls?: string[]; error?: string };
-  if (!reponse.ok || !donnees.prompt || !Array.isArray(donnees.swatchUrls)) {
-    const message = donnees.error ?? `le site a répondu HTTP ${reponse.status}`;
-    if (reponse.status >= 400 && reponse.status < 500) throw new ErreurDefinitive(`Consigne refusée par le site : ${message}`);
-    throw new Error(`Consigne indisponible : ${message}`);
-  }
-  return { prompt: donnees.prompt, swatchUrls: donnees.swatchUrls };
-}
+/* ── Mode API : la génération par le pipeline commun, ici ─────────── */
 
 const ACTEUR_API = { acteur: "SYSTEME:simulateur", origine: "Simulation générée par l'API depuis le CRM" };
 const ACTEUR_ESPACE = { acteur: "EXTERNE:espace-client", origine: "Simulation créée par le client dans son espace" };
 /** Message d'échec quand OpenAI refuse faute de crédit : l'espace le reconnaît (préfixe) pour parler au client autrement. */
 export const CREDIT_EPUISE = "Crédit OpenAI épuisé ou clé refusée : rechargez le crédit, puis relancez.";
+/** La tâche a été reprise après une coupure (redéploiement pendant la génération) : OpenAI n'est jamais rappelé. */
+export const MESSAGE_INTERROMPUE_API = "Génération interrompue par une mise à jour du service : relancez la simulation.";
+
+type Reussite = Extract<SortiePipeline, { ok: true }>;
+
+/** Ce que le moteur a produit, écrit sur la SimulationEspace et sur la préparation (visible au CRM). */
+function traceDe(resultat: Reussite) {
+  return {
+    moteur: resultat.moteur,
+    directionArtistique: resultat.directionArtistique,
+    analyse: resultat.analyse ? JSON.stringify(resultat.analyse) : null,
+    scoreControle: resultat.scoreControle,
+    defautsControle: resultat.defautsControle ? JSON.stringify(resultat.defautsControle) : null,
+    tentatives: resultat.tentatives,
+  };
+}
 
 /**
  * Une simulation créée par le client dans son espace : visible tout de suite
@@ -252,24 +290,23 @@ async function publierSimulationDuClient(
   p: { id: string; dossierId: string; photoAvant: string | null; typeSurface: string },
   type: NonNullable<ReturnType<typeof typeSurface>>,
   zones: ReturnType<typeof lireZones>,
-  prompt: string,
-  image: Buffer,
-  coutDollars: number,
+  resultat: Reussite,
   clientNom: string
 ): Promise<{ simulationId: string | null }> {
   return avecActeur(ACTEUR_ESPACE, async () => {
     const { espace } = await ouvrirEspace(p.dossierId);
-    const chemin = await ecrireImageSimulation(p.dossierId, image, "png");
+    const chemin = await ecrireImageSimulation(p.dossierId, resultat.image, extensionDe(resultat.type ?? typeImage(resultat.image)));
     const ordre = await prisma.simulationEspace.count({ where: { espaceId: espace.id } });
     const maintenant = new Date();
     const titre = `Votre simulation — ${zones.map((z) => z.nom).join(", ")}`.slice(0, 80);
+    const trace = traceDe(resultat);
     const simulation = await prisma.$transaction(async (tx) => {
       const creee = await tx.simulationEspace.create({
-        data: { espaceId: espace.id, dossierId: p.dossierId, chemin, titre, ordre, source: "CLIENT", statut: "PUBLIEE", publieeLe: maintenant, vueLe: maintenant, photoAvant: p.photoAvant, typeSurface: p.typeSurface, zones: JSON.stringify(zones), promptTexte: prompt, preparationId: p.id, coutDollars },
+        data: { espaceId: espace.id, dossierId: p.dossierId, chemin, titre, ordre, source: "CLIENT", statut: "PUBLIEE", publieeLe: maintenant, vueLe: maintenant, photoAvant: p.photoAvant, typeSurface: p.typeSurface, zones: JSON.stringify(zones), promptTexte: resultat.prompt, preparationId: p.id, coutDollars: resultat.coutTotalDollars, ...trace },
       });
-      await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id } });
+      await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id, promptTexte: resultat.prompt, photoEmpreinte: resultat.empreinte, etape: "rendu", ...trace } });
       await tx.dossierEvenement.create({
-        data: { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ")} (≈ ${coutDollars.toFixed(2).replace(".", ",")} $)`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
+        data: { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ")} (≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10` : ""})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
       });
       return creee;
     });
@@ -284,7 +321,7 @@ Il se projette : c'est le moment de l'appeler.`, lien: `${appUrl()}/dossiers?dos
 }
 const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
 
-export async function executerGenerationApi(preparationId: string): Promise<{ simulationId: string | null }> {
+export async function executerGenerationApi(preparationId: string, signal?: AbortSignal): Promise<{ simulationId: string | null }> {
   const p = await prisma.preparationSimulation.findUnique({ where: { id: preparationId } });
   if (!p || p.mode !== "API" || p.statut !== "EN_COURS") return { simulationId: p?.resultatId ?? null };
   const type = typeSurface(p.typeSurface);
@@ -299,22 +336,34 @@ export async function executerGenerationApi(preparationId: string): Promise<{ si
     return { simulationId: null };
   };
   if (!type) return echouer("Type de surface inconnu.");
-  let consigne: { prompt: string; swatchUrls: string[] };
-  try {
-    consigne = await consigneDuSite(type.projet, zones.map((z) => ({ surface: z.zone, ref: z.ref })));
-  } catch (erreur) {
-    return echouer(erreur instanceof Error ? erreur.message : "Consigne indisponible.");
-  }
+  const zonesMoteur = zones.filter((z) => estZone(z.zone)).map((z) => ({ zone: z.zone as IdZone, ref: z.ref }));
+  if (zonesMoteur.length === 0) return echouer("Aucune zone connue dans cette préparation.");
   const photo = await lireFichier(p.photoAvant ?? p.photoSource);
   if (!photo) return echouer("Photo avant introuvable sur le serveur.");
   const duClient = p.origine === "CLIENT";
-  const resultat = await genererRendu({ prompt: consigne.prompt, swatchUrls: consigne.swatchUrls, photo, origine: duClient ? "ESPACE" : "CRM", dossierId: p.dossierId, preparationId: p.id });
+  const reglages = await reglagesSimulateur();
+  // Comme le site (`demarreLe`) : la première étape est posée d'un seul geste, seulement si aucune ne l'était.
+  // Une préparation déjà démarrée (tâche réclamée une seconde fois après un redéploiement) devient ECHEC sans
+  // rappeler OpenAI — l'analyse, le rendu et le contrôle déjà payés ne le seraient pas deux fois.
+  const demarreLe = Date.now();
+  const { count } = await prisma.preparationSimulation.updateMany({ where: { id: p.id, statut: "EN_COURS", etape: null }, data: { etape: reglages.moteur === "V2" ? "analyse" : "rendu" } });
+  if (count !== 1) return echouer(MESSAGE_INTERROMPUE_API);
+  const surEtape = async (etape: EtapeTravail) => {
+    await prisma.preparationSimulation.updateMany({ where: { id: p.id, statut: "EN_COURS" }, data: { etape } }).catch(() => undefined);
+  };
+  let resultat: SortiePipeline;
+  try {
+    resultat = await genererAvecMoteur({ photo, piece: type.projet, zones: zonesMoteur, origine: duClient ? "ESPACE" : "CRM", reglages, dossierId: p.dossierId, preparationId: p.id, echeance: demarreLe + DELAI_TACHE_API_MS, surEtape, signal });
+  } catch (erreur) {
+    return echouer(erreur instanceof Error ? erreur.message : "Génération impossible.");
+  }
   if (!resultat.ok) return echouer(resultat.raison === "service-indisponible" || resultat.raison === "config" ? CREDIT_EPUISE : resultat.message);
-  if (duClient) return publierSimulationDuClient(p, type, zones, consigne.prompt, resultat.image, resultat.coutDollars, dossier?.clientNom ?? "Le client");
+  if (duClient) return publierSimulationDuClient(p, type, zones, resultat, dossier?.clientNom ?? "Le client");
 
+  const trace = traceDe(resultat);
   return avecActeur(ACTEUR_API, async () => {
     const { espace } = await ouvrirEspace(p.dossierId);
-    const chemin = await ecrireImageSimulation(p.dossierId, resultat.image, "png");
+    const chemin = await ecrireImageSimulation(p.dossierId, resultat.image, extensionDe(resultat.type ?? typeImage(resultat.image)));
     const ordre = await prisma.simulationEspace.count({ where: { espaceId: espace.id } });
     const simulation = await prisma.$transaction(async (tx) => {
       const creee = await tx.simulationEspace.create({
@@ -329,13 +378,14 @@ export async function executerGenerationApi(preparationId: string): Promise<{ si
           photoAvant: p.photoAvant,
           typeSurface: p.typeSurface,
           zones: JSON.stringify(zones),
-          promptTexte: consigne.prompt,
+          promptTexte: resultat.prompt,
           preparationId: p.id,
-          coutDollars: resultat.coutDollars,
+          coutDollars: resultat.coutTotalDollars,
+          ...trace,
         },
       });
-      await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id } });
-      await tx.dossierEvenement.create({ data: { dossierId: p.dossierId, type: "SIMULATION_BROUILLON", direction: "INTERNE", contenu: `Simulation générée par l'API en brouillon : ${creee.titre} (≈ ${resultat.coutDollars.toFixed(2).replace(".", ",")} $)`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) } });
+      await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id, promptTexte: resultat.prompt, photoEmpreinte: resultat.empreinte, etape: "rendu", ...trace } });
+      await tx.dossierEvenement.create({ data: { dossierId: p.dossierId, type: "SIMULATION_BROUILLON", direction: "INTERNE", contenu: `Simulation générée par l'API en brouillon : ${creee.titre} (≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10` : ""}, moteur ${resultat.moteur})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) } });
       return creee;
     });
     await recalculerMain(p.dossierId);

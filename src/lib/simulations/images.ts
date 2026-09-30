@@ -114,7 +114,8 @@ export async function rattacherImagesSimulation(leadId: string, avantBase64: str
   const dossier = path.join(leadId, simulation.id);
   const imageBeforePath = await enregistrerImageBase64(avantBase64, dossier, "before.jpg");
   if (imageBeforePath) await redimensionnerSurPlace(resolveUploadsDir(), imageBeforePath, "image/jpeg").catch(() => undefined);
-  const imageAfterPath = await enregistrerImageBase64(apresBase64, dossier, "after.png");
+  // Le nom du rendu suit son type (JPEG depuis la mission 15, PNG avant).
+  const imageAfterPath = await enregistrerImageBase64(apresBase64, dossier, `after.${extensionDe(apresBase64)}`);
   await prisma.simulation.update({
     where: { id: simulation.id },
     data: { imageBeforePath: imageBeforePath ?? simulation.imageBeforePath, imageAfterPath: imageAfterPath ?? simulation.imageAfterPath },

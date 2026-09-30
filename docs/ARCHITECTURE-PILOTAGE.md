@@ -207,7 +207,9 @@ Commandes locales :
 - `npm run base:pousser` : sauvegarde si besoin, `db push`, puis déclencheurs et
   migrations de données (redémarrer ensuite le serveur de développement) ;
 - `npm test` : tests sur des copies temporaires de la base (jamais la base de
-  développement ni la production).
+  développement ni la production) ;
+- `npm run simulateur:prompts` : régénère `src/lib/simulateur/prompts-defaut.ts` (la bibliothèque
+  ChatGPT est GÉNÉRÉE par le moteur de prompt, mission 15 ; un test vérifie que le fichier est à jour).
 
 ## 2. Accès : refus par défaut
 
@@ -1867,28 +1869,57 @@ Client/dossier → photo avant (parmi les siennes) → type de surface (10 types
 une teinte par zone (catalogue du site, goûts du client et teintes essayées en premier, recherche
 en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/recherche-finitions.ts`).
 
-- **Par l'API** : coût estimé sur le bouton ; la consigne vient **du site** (`POST
-  /api/simulation/consigne`, signée HMAC, mêmes prompts spécialisés que le simulateur public) et
-  la génération passe par `genererRendu` (`src/lib/simulations/generation.ts`), exactement le
-  service de `/api/simulate`. Résultat en brouillon avec son coût réel (lu dans `usage`).
+- **Par l'API** (mission 15, partie 2) : coût estimé sur le bouton (qualité de l'espace et du CRM,
+  Paramètres) ; plus aucune consigne demandée au site — la génération passe par le **pipeline
+  commun** `src/lib/simulations/pipeline.ts › genererAvecMoteur` (le même pour le site, l'espace
+  client et le banc), moteur **V1 ou V2 selon `SIMULATEUR_MOTEUR`** : V1 = le « V1 revu » de
+  `moteur/v1.ts` (structure de l'ancien prompt du site, textes des zones de la source unique
+  `zones.ts`) avec les échantillons bruts du cache ; V2 = analyse de la photo par vision
+  (`analyses.ts`, réutilisée par empreinte SHA-256 : table `AnalysePhoto`), planche d'échantillons
+  étiquetés (`moteur/planche.tsx`, `SIMULATEUR_PLANCHE`), prompt « studio » en douze blocs
+  (`moteur/index.ts › construirePrompt`, direction artistique par règles, réalisme des matériaux),
+  contrôle automatique du rendu (`moteur/controle-rendu.ts`, score sur 10) et, sous
+  `SIMULATEUR_SEUIL_CONTROLE`, une seconde tentative avec les défauts rappelés — la meilleure gardée,
+  si le temps de la tâche le permet. `genererRendu` (`src/lib/simulations/generation.ts`) reste le
+  seul appel d'image (JPEG q90). Une tâche reprise après un redéploiement pose ECHEC « interrompue »
+  sans rappeler OpenAI. Résultat en brouillon avec son coût réel, le moteur, le score, les défauts, la
+  direction artistique et le prompt donné au modèle (fiche du dossier, `ResultatPreparation`,
+  outil MCP `voir_simulations` avec `avec_prompt`).
+- **Paramètres → Simulateur** (`SIMULATEUR_*`) : `SIMULATEUR_MOTEUR` (V1/V2, défaut V1 jusqu'à la
+  campagne du banc), `SIMULATEUR_PLANCHE` (OUI/NON), `SIMULATEUR_QUALITE_SITE` (medium),
+  `SIMULATEUR_QUALITE_ESPACE` (high, vaut aussi pour le CRM), `SIMULATEUR_SEUIL_CONTROLE` (5 à 9,
+  défaut 7) ; lus par `simulateur/reglages.ts`.
+- **Routes publiques du simulateur du site** (sans session, CORS coverswap.fr) : `POST /api/simulate`
+  (travail asynchrone ; en V2 les références sont confrontées aux échantillons signés après une
+  relecture du catalogue, au plus 4 zones, 409 « zone-non-visible » d'après l'analyse connue),
+  `POST|GET /api/simulate/analyse` (analyse de la photo lancée dès qu'elle est chargée, tâche
+  **`ANALYSE_PHOTO`** en voie longue, 10 analyses par adresse et 400 par jour comptées seulement
+  quand une tâche est mise en file ; le site ne lit qu'un code de raison), `GET /api/site/simulateur`
+  (pièces et zones de la source unique, sans consigne).
 - **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
   section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
-  film, verrous, contrôle final), planche PNG (grands échantillons étiquetés par zone,
-  `next/og`), photo avant recadrée au format de sortie. iPhone : « Enregistrer les 2 images »
-  (feuille de partage), « Copier le prompt », « Ouvrir ChatGPT », puis « Déposer l'image » : le
-  rendu reprend seul la photo avant, les teintes, le type et la version du prompt (dernière
-  préparation ChatGPT de moins de 72 h, `PreparationSimulation`).
+  film, verrous, contrôle final, `{{direction_artistique}}`), planche PNG (grands échantillons
+  étiquetés par zone, `next/og`), photo avant recadrée au format de sortie. iPhone : « Enregistrer
+  les 2 images » (feuille de partage), « Copier le prompt », « Ouvrir ChatGPT », puis « Déposer
+  l'image » : le rendu reprend seul la photo avant, les teintes, le type et la version du prompt
+  (dernière préparation ChatGPT de moins de 72 h, `PreparationSimulation`).
 - **Couleurs mesurées** (`couleur.ts`) : moyenne Lab sur l'échantillon, mise en mots (un chêne est
   « miel » ou « beige », jamais « jaune ») ; cache `analyses-couleur.json`, travail périodique
   `catalogue-couleurs`.
-- **Crédit** (`consommation.ts`) : chaque génération (site ou CRM) laisse une `GenerationImage`
-  immuable (jetons, coût) ; compteur du mois, solde estimé depuis le paramètre
-  `SIMULATEUR_CREDIT_OPENAI` (ou `OPENAI_ADMIN_KEY` si posée), alerte sous 2 $.
+- **Crédit** (`consommation.ts`) : chaque génération (site, espace ou CRM) et chaque appel vision
+  (phase `analyse` ou `controle`, origine du demandeur) laisse une `GenerationImage` immuable
+  (jetons, coût) ; compteur du mois ventilé par origine, solde estimé depuis le paramètre
+  `SIMULATEUR_CREDIT_OPENAI` (ou `OPENAI_ADMIN_KEY` si posée), simulations restantes et garde de
+  l'espace au prix de la qualité de l'espace (analyse et contrôle compris en V2), alerte sous 2 $.
 
 ### Bibliothèque de prompts (`/simulateur/prompts`, `bibliotheque.ts`, `prompts-defaut.ts`)
 
-Un prompt par type de surface ; chaque enregistrement est une nouvelle version immuable
-(`PromptSimulationVersion`), « revenir » recopie une ancienne version sous un nouveau numéro.
+`prompts-defaut.ts` est **généré** (`npm run simulateur:prompts` → `moteur/generer-prompts.ts` →
+`moteur/modele-chatgpt.ts`) : la version 1 de chaque prompt est le prompt du moteur en mode
+`chatgpt`, avec les marqueurs de la bibliothèque ; la migration `prompts-studio-15-2` a posé cette
+version sur les prompts jamais modifiés par Lucas. Un prompt par type de surface ; chaque
+enregistrement est une nouvelle version immuable (`PromptSimulationVersion`), « revenir » recopie
+une ancienne version sous un nouveau numéro.
 Vérification avant enregistrement (`verifierModele`) : une section `[zone:…]` par zone avec
 `{{teinte}}` et `{{etiquette}}`, balises équilibrées, variables connues, « Image 1 / Image 2 ».
 Chaque version affiche ses résultats (simulations, publiées, masquées, choisies).

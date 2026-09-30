@@ -41,7 +41,7 @@ const SWATCHES = ["https://ssi.s3.fr-par.scw.cloud/essai/NE31.jpg"];
 const REFERENCES = [{ zone: "credence", libelle: "Crédence", ref: "NE31", nom: "Chêne clair" }];
 
 let appelsGenerateur = 0;
-let reponseGenerateur: () => Promise<import("@/lib/simulations/generation").ResultatGeneration> = async () => ({ ok: true, image: PIXEL_OCTETS, avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
+let reponseGenerateur: () => Promise<import("@/lib/simulations/generation").ResultatGeneration> = async () => ({ ok: true, image: PIXEL_OCTETS, type: "image/png", avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
 let mails: { a: string; objet: string; pieces: number; texte: string }[] = [];
 
 function signer(exp: number, parcoursId: string, prompt = PROMPT, swatchUrls = SWATCHES): string {
@@ -92,6 +92,8 @@ before(async () => {
   envoi = await import("@/lib/mail/envoi");
   interrupteurs = await import("@/lib/automatismes/interrupteurs");
   simulationsSite = await import("@/lib/site/simulations");
+  // Mission 15 (partie 2) : les références sont confrontées aux échantillons signés — catalogue posé à la main, aucun appel au site.
+  (await import("@/lib/simulateur/catalogue")).definirCatalogueEssai([{ id: "NE31", nom: "Chêne clair", famille: "bois", categorie: "Wood", finition: "Soft", image: SWATCHES[0], tags: ["chêne"] }]);
   await (await import("@/lib/base/preparation")).preparerBase();
   travaux.enregistrerTachesSimulationSite();
   travaux.definirGenerateurEssai(async () => {
@@ -235,7 +237,7 @@ describe("tâche SIMULATION_SITE et suivi", () => {
       await executeur.executerTour();
       await executeur.attendreTachesLongues();
     } finally {
-      reponseGenerateur = async () => ({ ok: true, image: PIXEL_OCTETS, avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
+      reponseGenerateur = async () => ({ ok: true, image: PIXEL_OCTETS, type: "image/png", avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
     }
     const t = await travailDe(travailId);
     assert.deepEqual([t.statut, t.erreurRaison], ["ECHEC", "service-indisponible"]);
@@ -278,7 +280,7 @@ describe("tâche SIMULATION_SITE et suivi", () => {
       assert.deepEqual(await execution, { statut: "ECHEC", raison: "delai" });
     } finally {
       liberer();
-      reponseGenerateur = async () => ({ ok: true, image: PIXEL_OCTETS, avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
+      reponseGenerateur = async () => ({ ok: true, image: PIXEL_OCTETS, type: "image/png", avant: null, taille: "1024x1024", dureeMs: 1234, usage: { texte: 10, image: 20, sortie: 30 }, coutDollars: 0.02, generationId: null });
     }
     assert.equal((await travailDe(travailId)).erreurRaison, "delai");
 

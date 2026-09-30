@@ -5,7 +5,10 @@ import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
 import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
 import { entetesCorsSimulateur, ipDuVisiteurSimulateur, origineSimulateurAutorisee, parcoursIdValide, travailIdValide } from "@/lib/site/cors-simulate";
 import { genererEtGarderSynchrone } from "@/lib/site/simulation-synchrone";
-import { creerTravailSimulation } from "@/lib/simulations/travaux";
+import { zonesNonVisiblesPourPhoto } from "@/lib/simulateur/analyses";
+import { reglagesSimulateur } from "@/lib/simulateur/reglages";
+import { ZONES_MAX, ZONES_SIMULATEUR } from "@/lib/simulateur/zones";
+import { creerTravailSimulation, referencesCoherentes, zonesDuTravail } from "@/lib/simulations/travaux";
 import { suivreTravail } from "@/lib/simulations/travaux-lecture";
 
 /**
@@ -23,6 +26,13 @@ import { suivreTravail } from "@/lib/simulations/travaux-lecture";
  *
  * Ancien contrat (site d'avant la partie 1, sans `asynchrone`) : réponse
  * synchrone avec l'image — gardé pendant la transition, à retirer en partie 4.
+ *
+ * Mission 15 (partie 2) : avant le quota, au plus ZONES_MAX zones (400
+ * « trop-de-zones »), en moteur V2 les références sont confrontées aux
+ * échantillons signés (400 « references »), et une zone que l'analyse de la
+ * photo ne voit pas répond 409 « zone-non-visible » (le site le dit avant de
+ * dépenser). Le prompt envoyé par le site sert au moteur V1 ; en V2 le CRM
+ * construit le sien depuis les références (pipeline.ts).
  *
  * Variables d'environnement requises sur Railway :
  *   - OPENAI_API_KEY          (clé OpenAI avec crédits image)
@@ -123,6 +133,28 @@ export async function POST(req: NextRequest) {
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     console.error("[simulate] signature invalide");
     return NextResponse.json({ error: "Signature invalide.", reason: "bad-signature" }, { status: 401, headers: cors });
+  }
+
+  // Mission 15 (partie 2) — avant de dépenser : au plus ZONES_MAX zones (le moteur n'en étiquette pas plus), en V2 les
+  // références (non signées) doivent correspondre aux échantillons signés, et une zone choisie que l'analyse de la
+  // photo ne voit pas est refusée (409, avec la liste).
+  if (body.asynchrone === true && references.length > 0) {
+    const zones = zonesDuTravail(references);
+    if (zones.length > ZONES_MAX) {
+      return NextResponse.json({ error: `Au plus ${ZONES_MAX} zones par simulation : retirez-en une, vous pourrez relancer une simulation ensuite.`, reason: "trop-de-zones" }, { status: 400, headers: cors });
+    }
+    const reglages = await reglagesSimulateur().catch(() => null);
+    if (reglages?.moteur === "V2" && !(await referencesCoherentes(references, swatchUrls))) {
+      return NextResponse.json({ error: "Les références choisies ne correspondent pas à la demande signée : relancez la simulation.", reason: "references" }, { status: 400, headers: cors });
+    }
+    const nonVisibles = await zonesNonVisiblesPourPhoto(photo_base64, zones.map((z) => z.zone)).catch(() => []);
+    if (nonVisibles.length > 0) {
+      const libelles = nonVisibles.map((z) => ZONES_SIMULATEUR[z].libelle);
+      return NextResponse.json(
+        { error: `${libelles.length > 1 ? "Ces zones ne sont pas visibles" : "Cette zone n'est pas visible"} sur votre photo : ${libelles.join(", ")}. Retirez-${libelles.length > 1 ? "les" : "la"}, ou reprenez une photo où ${libelles.length > 1 ? "elles apparaissent" : "elle apparaît"}.`, reason: "zone-non-visible", zones: nonVisibles },
+        { status: 409, headers: cors }
+      );
+    }
   }
 
   // 3) Limite quotidienne par IP et globale — APRÈS la signature : une requête forgée ne consomme rien.

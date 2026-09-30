@@ -8,6 +8,7 @@ import { ChampsParametre, saisieVide, versCorps } from "@/components/pilotage/Sa
 import { Bouton, Modale, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
 import { formatDateCourte } from "@/lib/dossiers/dates";
 import { GROUPES_PARAMETRES, formaterValeurParametre, type CleParametre, type GroupeParametre, type ParametreVue } from "@/lib/parametres/definitions";
+import { QUALITES, coutEstime } from "@/lib/simulations/prix";
 import { cn } from "@/lib/utils";
 
 function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; onModifier: () => void }) {
@@ -104,6 +105,11 @@ export default function GroupesParametres({ parametres, groupes, onMisAJour }: {
             {groupe === "AGENT" ? (
               <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
                 Facultatif : tant que ces réglages manquent, l&apos;IA ne lit aucun mail et ne coûte rien ; l&apos;agent trie avec ses règles sûres. La clé ANTHROPIC_API_KEY se pose sur le serveur, jamais ici.
+              </p>
+            ) : null}
+            {groupe === "SIMULATEUR" ? (
+              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
+                Coût estimé d&apos;un rendu (1 à 4 échantillons) : {QUALITES.map((q) => `${q} ${[1, 4].map((n) => `${coutEstime(n, q).toFixed(2).replace(".", ",")} $`).join(" à ")}`).join(" · ")}. Mesure de référence en medium (mai 2026) ; high ≈ ×1,7 et low ≈ ×0,4, à confirmer par le banc. L&apos;analyse de la photo et le contrôle du rendu (moteur V2) coûtent environ un demi-centime chacun.
               </p>
             ) : null}
             <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]", TRANS)}>

@@ -1,57 +1,24 @@
+import { ZONES_SIMULATEUR, estZoneElementaire, type IdZoneElementaire, type SensPose } from "./zones";
+
 /**
  * Types de surface du simulateur du CRM et leurs zones — constantes partagées
  * par l'écran et le serveur (aucune dépendance Node).
  *
- * Une zone porte l'identifiant d'une surface du simulateur du site
- * (coverswap/src/lib/simulateur/surfaces.ts) : en mode API, le CRM envoie ces
- * identifiants au site, qui construit la consigne avec SES prompts. Le mode
- * ChatGPT, lui, s'appuie sur la bibliothèque de prompts du CRM.
+ * Mission 15 (partie 2) : les zones elles-mêmes (libellés, consigne, sens de
+ * pose) vivent dans `zones.ts`, source unique du site, de l'espace et du moteur
+ * de prompt ; ce fichier n'en garde que la lecture (`ZONES`) et les types de
+ * surface du CRM (dix types) et de l'espace (un par pièce).
  */
 
-export type IdZone =
-  | "meubles-hauts"
-  | "meubles-bas"
-  | "plan-de-travail"
-  | "credence"
-  | "plan-vasque"
-  | "meuble-vasque"
-  | "portes-dressing"
-  | "meuble-tv"
-  | "comptoir-habillage"
-  | "comptoir-plateau"
-  | "mobilier-pro"
-  | "rangements-pro"
-  // Surfaces du simulateur du site que seul l'espace client propose (mode API : la consigne vient du site).
-  | "carrelage-mural"
-  | "tablier-baignoire"
-  | "meuble-complet"
-  | "habillage-mural"
-  | "mur-principal"
-  | "mur-accent"
-  | "plafond";
+/** Une zone rangée dans une simulation : toujours élémentaire (« Façades (toutes) » est dépliée à la lecture). */
+export type IdZone = IdZoneElementaire;
 
-/** Libellé de la zone (écran, planche des teintes) et sens de pose d'un décor directionnel. */
-export const ZONES: Record<IdZone, { libelle: string; anglais: string; sens: "vertical" | "longueur" | "horizontal" }> = {
-  "meubles-hauts": { libelle: "Meubles hauts", anglais: "wall units (upper cabinets)", sens: "vertical" },
-  "meubles-bas": { libelle: "Meubles bas", anglais: "base units, tall units and island fronts", sens: "vertical" },
-  "plan-de-travail": { libelle: "Plan de travail", anglais: "worktop", sens: "longueur" },
-  credence: { libelle: "Crédence", anglais: "backsplash", sens: "horizontal" },
-  "plan-vasque": { libelle: "Plan vasque", anglais: "vanity top", sens: "longueur" },
-  "meuble-vasque": { libelle: "Meuble vasque", anglais: "vanity cabinet fronts", sens: "vertical" },
-  "portes-dressing": { libelle: "Portes du dressing", anglais: "wardrobe doors", sens: "vertical" },
-  "meuble-tv": { libelle: "Meuble TV", anglais: "TV unit", sens: "horizontal" },
-  "comptoir-habillage": { libelle: "Façade du bar", anglais: "bar front cladding", sens: "vertical" },
-  "comptoir-plateau": { libelle: "Plateau du bar", anglais: "bar top", sens: "longueur" },
-  "mobilier-pro": { libelle: "Mobilier", anglais: "commercial furniture body panels", sens: "vertical" },
-  "rangements-pro": { libelle: "Rangements", anglais: "storage fronts", sens: "vertical" },
-  "carrelage-mural": { libelle: "Murs carrelés", anglais: "tiled walls", sens: "vertical" },
-  "tablier-baignoire": { libelle: "Tablier de baignoire", anglais: "bathtub side panel", sens: "horizontal" },
-  "meuble-complet": { libelle: "Commode, buffet, bureau", anglais: "freestanding furniture", sens: "horizontal" },
-  "habillage-mural": { libelle: "Habillage mural", anglais: "wall cladding", sens: "vertical" },
-  "mur-principal": { libelle: "Mur principal", anglais: "main wall", sens: "vertical" },
-  "mur-accent": { libelle: "Second mur", anglais: "accent wall", sens: "vertical" },
-  plafond: { libelle: "Plafond", anglais: "ceiling", sens: "longueur" },
-};
+/** Libellé de la zone (écran, planche des teintes) et sens de pose d'un décor directionnel — lus dans `zones.ts`. */
+export const ZONES: Record<IdZone, { libelle: string; anglais: string; sens: SensPose }> = Object.fromEntries(
+  Object.values(ZONES_SIMULATEUR)
+    .filter((z) => estZoneElementaire(z.id))
+    .map((z) => [z.id, { libelle: z.libelle, anglais: z.nomCourt, sens: z.sens }])
+) as Record<IdZone, { libelle: string; anglais: string; sens: SensPose }>;
 
 export type TypeSurface = {
   id: string;

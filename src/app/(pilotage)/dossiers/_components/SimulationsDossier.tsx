@@ -39,6 +39,15 @@ type Simulation = {
   image: string;
   avant: string | null;
   horsEspace?: boolean;
+  // Mission 15 (partie 2) : ce que le moteur a donné au modèle, lisible ici pour comparer avec les prompts « studio ».
+  moteur: string | null;
+  promptTexte: string | null;
+  directionArtistique: string | null;
+  scoreControle: number | null;
+  /** Score sous le seuil de Paramètres (calculé côté serveur) : pastille ambre. */
+  sousSeuil: boolean;
+  defautsControle: { type: string; detail: string }[];
+  tentatives: number | null;
 };
 type Preparation = { id: string; mode: "CHATGPT" | "API"; statut: string; typeLibelle: string; zones: { etiquette: string; ref: string; nom: string }[]; erreur: string | null; le: string; promptVersion: number | null };
 type Donnees = { espace: { id: string; lien: string | null } | null; simulations: Simulation[]; preparations: Preparation[]; sms: { texte: string | null; raison?: string; dejaPrevenuLe?: string; attente?: string } };
@@ -356,6 +365,7 @@ function Groupe({ titre, aide, action, children }: { titre: string; aide: string
 
 function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s: Simulation; selection?: boolean; onSelection?: () => void; occupe: string | null; onOuvrir: (quoi: "image" | "avant") => void; children?: React.ReactNode }) {
   const source = SOURCES[s.source];
+  const [detail, setDetail] = useState<"" | "direction" | "prompt">("");
   return (
     <li className={cn("overflow-hidden rounded-[10px] border-[0.5px] bg-[#1C1F25]", s.choisie ? "border-[#1D9E75]" : selection ? "border-[#5DCAA5]/70" : "border-[#2A2D34]", occupe?.endsWith(s.id) && "opacity-70")}>
       <div className="relative">
@@ -380,9 +390,28 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
           <Pastille ton={source.ton}>{source.libelle}</Pastille>
           {s.promptVersion ? <Pastille>prompt v{s.promptVersion}</Pastille> : null}
           {s.coutDollars ? <Pastille>{s.coutDollars.toFixed(2).replace(".", ",")} $</Pastille> : null}
+          {s.moteur ? <Pastille>moteur {s.moteur}</Pastille> : null}
+          {s.scoreControle !== null ? <Pastille ton={s.sousSeuil ? "ambre" : "vert"}>contrôle {s.scoreControle}/10{s.tentatives && s.tentatives > 1 ? ` · ${s.tentatives} essais` : ""}</Pastille> : null}
           {s.choisie ? <Pastille ton="vert">Choisie</Pastille> : s.vueLe ? <Pastille ton="bleu">Vue</Pastille> : null}
         </div>
         {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-[#9CA3AF]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})`).join(" · ")}</p> : null}
+        {s.defautsControle.length > 0 ? <p className="text-[11.5px] leading-snug text-[#F5B454]">Défauts relevés : {s.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
+        {s.directionArtistique || s.promptTexte ? (
+          <div className="flex flex-wrap gap-2 text-[11.5px]">
+            {s.directionArtistique ? (
+              <button type="button" onClick={() => setDetail((d) => (d === "direction" ? "" : "direction"))} className="min-h-[44px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+                {detail === "direction" ? "Masquer la direction artistique" : "Direction artistique"}
+              </button>
+            ) : null}
+            {s.promptTexte ? (
+              <button type="button" onClick={() => setDetail((d) => (d === "prompt" ? "" : "prompt"))} className="min-h-[44px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+                {detail === "prompt" ? "Masquer le prompt" : `Prompt (${s.promptTexte.length} caractères)`}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {detail === "direction" && s.directionArtistique ? <p className="rounded-[8px] bg-[#16181D] p-2 text-[11.5px] leading-relaxed text-[#D1D5DB]">{s.directionArtistique}</p> : null}
+        {detail === "prompt" && s.promptTexte ? <pre className="max-h-64 overflow-auto rounded-[8px] bg-[#16181D] p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB] select-all">{s.promptTexte}</pre> : null}
         {s.commentaire ? <p className="text-[11.5px] leading-snug text-[#D1D5DB]">« {s.commentaire} »</p> : null}
         <p className="text-[11px] text-[#6B7280]">{jourHeure(s.publieeLe ?? s.le)}</p>
         {children ? <div className="flex flex-wrap gap-1.5 pt-0.5">{children}</div> : null}

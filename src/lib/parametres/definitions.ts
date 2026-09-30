@@ -288,6 +288,61 @@ export const DEFINITIONS_PARAMETRES = {
     ],
     groupe: "SIMULATEUR",
   },
+  SIMULATEUR_MOTEUR: {
+    libelle: "Moteur de prompt du simulateur",
+    aide: "V1 : l'ancien prompt (échantillons bruts, sans analyse de la photo ni contrôle du rendu) — pour le site, celui qu'il envoie ; pour l'espace et le CRM, le « V1 revu » du CRM (même structure, textes des zones partagés avec le V2, quelques retouches de pose). V2 : le moteur « studio » de la mission 15 (analyse de la photo, planche d'échantillons étiquetés, direction artistique, contrôle automatique, seconde tentative sous le seuil). Sans valeur saisie : V1, jusqu'à la campagne du banc de comparaison.",
+    nature: "choix",
+    options: [
+      { valeur: "V1", libelle: "V1 — ancien prompt" },
+      { valeur: "V2", libelle: "V2 — moteur studio" },
+    ],
+    groupe: "SIMULATEUR",
+  },
+  SIMULATEUR_PLANCHE: {
+    libelle: "Planche d'échantillons étiquetés (moteur V2)",
+    aide: "Oui (par défaut) : le modèle reçoit la photo et UNE planche où chaque échantillon porte sa lettre et sa zone (Image 2). Non : les échantillons bruts sont joints un par un (Images 2, 3…), comme avant.",
+    nature: "choix",
+    options: [
+      { valeur: "OUI", libelle: "Oui" },
+      { valeur: "NON", libelle: "Non" },
+    ],
+    groupe: "SIMULATEUR",
+  },
+  SIMULATEUR_QUALITE_SITE: {
+    libelle: "Qualité des rendus du site coverswap.fr",
+    aide: "Qualité demandée au modèle d'image pour les visiteurs du site. Sans valeur saisie : medium (environ 0,21 $ par rendu à un échantillon). High coûte environ 1,7 fois plus ; low environ 0,4 fois (mesures de référence à confirmer par le banc).",
+    nature: "choix",
+    options: [
+      { valeur: "low", libelle: "low" },
+      { valeur: "medium", libelle: "medium" },
+      { valeur: "high", libelle: "high" },
+    ],
+    groupe: "SIMULATEUR",
+  },
+  SIMULATEUR_QUALITE_ESPACE: {
+    libelle: "Qualité des rendus de l'espace client et du CRM",
+    aide: "Qualité demandée au modèle d'image pour les simulations créées dans l'espace client et depuis le CRM (mode API). Sans valeur saisie : high (environ 1,7 fois le coût de medium).",
+    nature: "choix",
+    options: [
+      { valeur: "low", libelle: "low" },
+      { valeur: "medium", libelle: "medium" },
+      { valeur: "high", libelle: "high" },
+    ],
+    groupe: "SIMULATEUR",
+  },
+  SIMULATEUR_SEUIL_CONTROLE: {
+    libelle: "Seuil du contrôle automatique des rendus (moteur V2)",
+    aide: "Note sur 10 donnée par le contrôle automatique (le modèle compare la photo et le rendu). En dessous, une seconde génération est faite avec les défauts relevés dans la consigne, et la meilleure des deux est gardée ; une seconde génération coûte autant que la première. Sans valeur saisie : 7.",
+    nature: "choix",
+    options: [
+      { valeur: "5", libelle: "5" },
+      { valeur: "6", libelle: "6" },
+      { valeur: "7", libelle: "7" },
+      { valeur: "8", libelle: "8" },
+      { valeur: "9", libelle: "9" },
+    ],
+    groupe: "SIMULATEUR",
+  },
   NOTIF_SIMULATION_SITE_PRETE: {
     libelle: "Mail « simulation prête » aux visiteurs du site (« Me prévenir »)",
     aide: "Sur coverswap.fr, un visiteur qui attend son rendu peut laisser son adresse pour être prévenu. Actif (par défaut) : UN mail part quand le rendu est prêt, avec l'image jointe et le lien pour le retrouver. Inactif : rien ne part (la demande reste notée sur le lead). Un numéro de téléphone seul ne déclenche jamais de SMS.",

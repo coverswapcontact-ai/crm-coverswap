@@ -276,7 +276,7 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                 Générer via l&apos;API{cout !== null && pret ? ` · ≈ ${dollars(cout)}` : ""}
               </Bouton>
             </div>
-            {!pret ? <p className="text-[12.5px] text-[#8B919C]">Choisissez une photo et au moins une teinte.</p> : null}
+            {!pret ? <p className="text-[12.5px] text-[#8B919C]">Choisis une photo et au moins une teinte.</p> : null}
             {consommation?.cle === false ? <p className="text-[12.5px] text-[#F5B454]">Mode API indisponible : la clé OpenAI n&apos;est pas posée sur ce serveur.</p> : null}
 
             {preparation ? (
@@ -394,7 +394,7 @@ function CompteurCredit({ consommation }: { consommation: Consommation | null })
       ) : (
         <p>
           <Link href="/parametres" className="text-[#F5B454] hover:underline">
-            Solde inconnu : notez votre solde OpenAI dans Paramètres
+            Solde inconnu : note ton solde OpenAI dans Paramètres
           </Link>
         </p>
       )}

@@ -34,7 +34,18 @@ export type Preparation = {
   coutEstime: number | null;
   erreur: string | null;
   resultatId: string | null;
+  /** Mission 15 (partie 2) : l'étape en cours, le moteur, la direction artistique, le contrôle du rendu. */
+  etape?: string | null;
+  moteur?: string | null;
+  directionArtistique?: string | null;
+  scoreControle?: number | null;
+  /** Score sous le seuil de Paramètres (calculé côté serveur) : pastille ambre. */
+  sousSeuil?: boolean;
+  defautsControle?: { type: string; detail: string }[];
+  tentatives?: number | null;
 };
+
+const ETAPES_API: Record<string, string> = { analyse: "Lecture de la photo", matieres: "Préparation des matières", rendu: "Rendu photographique" };
 
 export function ResultatChatGPT({ preparation, onDepose }: { preparation: Preparation; onDepose: () => void }) {
   const [fichiers, setFichiers] = useState<File[] | null>(null);
@@ -196,18 +207,21 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
 export function SuiviApi({ preparation, onFini }: { preparation: Preparation; onFini: (p: Preparation) => void }) {
   const [courante, setCourante] = useState(preparation);
   const [secondes, setSecondes] = useState(0);
+  const [voirPrompt, setVoirPrompt] = useState(false);
+  // Le départ du compteur est posé (dans l'effet) une fois par préparation : il ne repart pas à chaque étape (analyse → matières → rendu).
+  const debut = useRef(0);
 
   useEffect(() => {
     if (courante.statut !== "EN_COURS") return;
-    const debut = Date.now();
-    const horloge = window.setInterval(() => setSecondes(Math.round((Date.now() - debut) / 1000)), 1000);
+    debut.current = Date.now();
+    const horloge = window.setInterval(() => setSecondes(Math.round((Date.now() - debut.current) / 1000)), 1000);
     const releve = window.setInterval(async () => {
       try {
         const { preparation: suite } = await appelApi<{ preparation: Preparation }>(`/api/simulateur/preparations/${courante.id}`);
         if (suite.statut !== "EN_COURS") {
           setCourante(suite);
           onFini(suite);
-        }
+        } else setCourante((actuelle) => (suite.etape !== actuelle.etape ? suite : actuelle)); // l'étape seule change : l'effet (et le compteur) ne redémarre pas
       } catch {
         // relevé suivant
       }
@@ -222,9 +236,13 @@ export function SuiviApi({ preparation, onFini }: { preparation: Preparation; on
     return (
       <div className="rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 text-[13px] text-[#D1D5DB]">
         <p className="flex items-center gap-2 font-medium text-[#F2F3F5]">
-          <Loader2 size={15} className="animate-spin" aria-hidden /> Génération par l&apos;API… {secondes} s
+          <Loader2 size={15} className="animate-spin" aria-hidden />
+          {/* L'étape est annoncée au lecteur d'écran ; le compteur de secondes reste hors de la région live. */}
+          <span aria-live="polite">{courante.etape && ETAPES_API[courante.etape] ? ETAPES_API[courante.etape] : "Génération par l'API"}</span>
+          <span>… {secondes} s</span>
         </p>
-        <p className="mt-1.5 text-[12.5px] text-[#9CA3AF]">En général une minute. Vous pouvez quitter cet écran : l&apos;image arrive en brouillon dans le dossier, et je vous préviens.</p>
+        <p className="mt-1.5 text-[12.5px] text-[#9CA3AF]">{courante.moteur === "V2" ? "Une à deux minutes (analyse de la photo, rendu, contrôle)." : "En général une minute."} Tu peux quitter cet écran : l&apos;image arrive en brouillon dans le dossier, et je te préviens.</p>
+        {courante.directionArtistique ? <p className="mt-2 text-[12px] leading-relaxed text-[#9CA3AF]">Direction artistique : {courante.directionArtistique}</p> : null}
       </div>
     );
   }
@@ -236,6 +254,20 @@ export function SuiviApi({ preparation, onFini }: { preparation: Preparation; on
       <p className="flex items-center gap-2 text-[13px] font-medium text-[#5DCAA5]">
         <Check size={15} aria-hidden /> Simulation générée, en brouillon dans le dossier
       </p>
+      <div className="flex flex-wrap gap-1.5">
+        {courante.moteur ? <Pastille>moteur {courante.moteur}</Pastille> : null}
+        {typeof courante.scoreControle === "number" ? <Pastille ton={courante.sousSeuil ? "ambre" : "vert"}>contrôle {courante.scoreControle}/10{courante.tentatives && courante.tentatives > 1 ? ` · ${courante.tentatives} essais` : ""}</Pastille> : null}
+      </div>
+      {courante.defautsControle?.length ? <p className="text-[12px] leading-relaxed text-[#F5B454]">Défauts relevés : {courante.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
+      {courante.directionArtistique ? <p className="text-[12px] leading-relaxed text-[#9CA3AF]">Direction artistique : {courante.directionArtistique}</p> : null}
+      {courante.prompt ? (
+        <>
+          <button type="button" onClick={() => setVoirPrompt((v) => !v)} className="min-h-[44px] text-[12.5px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+            {voirPrompt ? "Masquer le prompt" : `Lire le prompt donné au modèle (${courante.prompt.length} caractères)`}
+          </button>
+          {voirPrompt ? <pre className="max-h-72 overflow-auto rounded-[8px] bg-[#16181D] p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB] select-all">{courante.prompt}</pre> : null}
+        </>
+      ) : null}
       {courante.resultatId ? (
         // eslint-disable-next-line @next/next/no-img-element -- image privée servie derrière la session
         <img src={`/api/dossiers/${courante.dossierId}/simulations/${courante.resultatId}/image`} alt="Simulation générée" className="w-full rounded-[10px]" />

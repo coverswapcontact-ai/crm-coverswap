@@ -2,54 +2,49 @@ import prisma from "@/lib/prisma";
 import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio, type TailleSortie } from "./cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI, type RaisonEchec } from "@/lib/site/erreurs-generation";
 import { pluriel } from "@/lib/commun/format";
+import { coutEnDollars as coutEnDollarsPrix, type Qualite, type Usage } from "./prix";
 
 /**
  * LE générateur d'images des simulations — un seul, pour toutes les portes :
- *  - le simulateur du site (/api/simulate : consigne construite et signée par
- *    le site, image générée ici) ;
- *  - le simulateur du CRM en mode API (consigne demandée au site, même
- *    fichier de prompts, puis générée ici).
+ *  - le simulateur du site (/api/simulate, travail asynchrone) ;
+ *  - l'espace client et le simulateur du CRM en mode API ;
+ *  - le banc de comparaison (partie 3).
  *
  * Réglage validé en production (mai 2026) : `input_fidelity: high` (LE levier
  * contre la dérive de teinte, l'application partielle et les modifications
- * parasites) et `quality: medium` (le passage à high triplait le coût sans
- * gain sur ces symptômes). La photo est mise au format du modèle avant l'envoi
- * (cadrage.ts) : avant et après restent superposables.
+ * parasites). La qualité (`low | medium | high`) vient des paramètres
+ * (mission 15 : medium pour le site, high pour l'espace et le CRM). La photo est
+ * mise au format du modèle avant l'envoi (cadrage.ts) : avant et après restent
+ * superposables.
  *
- * Chaque appel écrit une ligne `GenerationImage` (jetons, coût en dollars) :
- * c'est le compteur de consommation du simulateur.
+ * Mission 15 (partie 2) : les images jointes sont fournies par l'appelant —
+ * `planche` (l'Image 2 étiquetée) ou `swatches` (échantillons bruts, lus dans
+ * le cache du CRM) ; `swatchUrls` reste accepté pour le prompt V1 du site
+ * (téléchargés en parallèle). Sortie JPEG q90 (`output_format`,
+ * `output_compression`) : des rendus trois à cinq fois plus légers sur le
+ * volume. Chaque appel écrit une ligne `GenerationImage` (phase `rendu`).
  */
 
 // Seuls les hôtes de Cover Styl' sont autorisés pour les échantillons (anti-SSRF).
 const HOTES_ECHANTILLONS = new Set(["ssi.s3.fr-par.scw.cloud", "cms.coverstyl.com"]);
 // OpenAI peut être lent (input_fidelity high : 40 à 90 s). Railway n'a pas de plafond ; on coupe à 180 s.
-const DELAI_OPENAI_MS = 180_000;
+export const DELAI_OPENAI_MS = 180_000;
 
-/** Prix publics en dollars par million de jetons (entrée texte, entrée image, sortie image). */
-const PRIX: Record<string, { texte: number; image: number; sortie: number }> = {
-  "gpt-image-1": { texte: 5, image: 10, sortie: 40 },
-  "gpt-image-1-mini": { texte: 2, image: 2.5, sortie: 8 },
-};
+export { PRIX, coutEstime, type Qualite, type Usage } from "./prix";
 
 export const modeleImage = () => process.env.OPENAI_IMAGE_MODEL || "gpt-image-1";
 const baseOpenAI = () => (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
 
-export type Usage = { texte: number; image: number; sortie: number };
-
 export function coutEnDollars(usage: Usage, modele = modeleImage()): number {
-  const prix = PRIX[modele] ?? PRIX["gpt-image-1"];
-  return Math.round(((usage.texte * prix.texte + usage.image * prix.image + usage.sortie * prix.sortie) / 1_000_000) * 10_000) / 10_000;
-}
-
-/** Coût annoncé AVANT de lancer (mesuré en production, qualité medium, 1536 × 1024) : 0,21 $ avec un échantillon, +0,066 $ par échantillon de plus. */
-export function coutEstime(echantillons: number): number {
-  return Math.round((0.21 + 0.066 * Math.max(0, echantillons - 1)) * 100) / 100;
+  return coutEnDollarsPrix(usage, modele);
 }
 
 type Sortie = { status: number; raison: RaisonEchec | "swatch-download-failed" | "no-image-data" | "config"; message: string };
 
+export type TypeImage = "image/jpeg" | "image/png";
+
 export type ResultatGeneration =
-  | { ok: true; image: Buffer; avant: Buffer | null; taille: TailleSortie; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null }
+  | { ok: true; image: Buffer; /** Type réel du rendu, lu dans ses octets : JPEG depuis la mission 15 (`output_format`), PNG si le modèle en rend un malgré tout. */ type: TypeImage; avant: Buffer | null; taille: TailleSortie; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null }
   | ({ ok: false; dureeMs: number } & Sortie);
 
 /** Dimensions d'une image JPEG ou PNG, lues dans ses premiers octets. */
@@ -71,6 +66,13 @@ export function dimensionsImage(buf: Buffer): { width: number; height: number } 
   }
   return null;
 }
+
+/** Le type d'une image d'après ses premiers octets (PNG, sinon JPEG). */
+export function typeImage(buf: Buffer): TypeImage {
+  return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 ? "image/png" : "image/jpeg";
+}
+
+export const extensionDe = (type: TypeImage): "png" | "jpg" => (type === "image/png" ? "png" : "jpg");
 
 async function telechargerEchantillon(url: string): Promise<Buffer | null> {
   try {
@@ -104,6 +106,7 @@ async function noter(ligne: {
       data: {
         origine: ligne.origine,
         modele: modeleImage(),
+        phase: "rendu",
         statut: ligne.statut,
         erreur: ligne.erreur?.slice(0, 500) ?? null,
         dureeMs: ligne.dureeMs,
@@ -124,29 +127,56 @@ async function noter(ligne: {
   }
 }
 
-export async function genererRendu(entree: {
+export type EntreeGeneration = {
   prompt: string;
-  swatchUrls: string[];
   photo: Buffer;
   origine: "SITE" | "CRM" | "ESPACE";
+  /** Échantillons bruts à télécharger (prompt V1 du site) — ignorés si `swatches` ou `planche` est donné. */
+  swatchUrls?: string[];
+  /** Échantillons bruts déjà lus (cache du CRM) : Images 2, 3… */
+  swatches?: Buffer[];
+  /** La planche étiquetée : Image 2. */
+  planche?: Buffer | null;
+  qualite?: Qualite;
   dossierId?: string | null;
   preparationId?: string | null;
-}): Promise<ResultatGeneration> {
+  signal?: AbortSignal;
+};
+
+/* ── Générateur remplaçable pour les essais (aucun appel OpenAI d'un test) ── */
+export type Generateur = (entree: EntreeGeneration) => Promise<ResultatGeneration>;
+const CLE_GENERATEUR = "__coverswapGenerateurSiteEssai";
+const globalEssai = globalThis as unknown as Record<string, Generateur | null | undefined>;
+
+/** Essais seulement : remplace le générateur d'images pour toutes les portes (null : revient au vrai). */
+export function definirGenerateurEssai(generateur: Generateur | null): void {
+  if (generateur) globalEssai[CLE_GENERATEUR] = generateur;
+  else delete globalEssai[CLE_GENERATEUR];
+}
+/** Le générateur en vigueur : celui des essais s'il est posé, sinon le vrai (OpenAI). */
+export const generateurEnVigueur = (): Generateur => globalEssai[CLE_GENERATEUR] ?? genererRendu;
+
+export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGeneration> {
   const debut = Date.now();
   const cle = process.env.OPENAI_API_KEY;
   if (!cle) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: MESSAGES_ECHEC["service-indisponible"] };
+  const swatchUrls = entree.swatchUrls ?? [];
+  const nombreJoint = () => (entree.planche ? 1 : (entree.swatches?.length ?? swatchUrls.length));
   const echec = async (sortie: Sortie, detail?: string): Promise<ResultatGeneration> => {
     const dureeMs = Date.now() - debut;
-    await noter({ origine: entree.origine, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, echantillons: entree.swatchUrls.length, dossierId: entree.dossierId, preparationId: entree.preparationId });
+    await noter({ origine: entree.origine, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, echantillons: nombreJoint(), dossierId: entree.dossierId, preparationId: entree.preparationId });
     return { ok: false, dureeMs, ...sortie };
   };
 
-  // 1) Échantillons : tous requis — mieux vaut refuser que laisser le modèle inventer une couleur.
-  const echantillons: Buffer[] = [];
-  for (const url of entree.swatchUrls) {
-    const octets = await telechargerEchantillon(url);
-    if (!octets) return { ok: false, dureeMs: Date.now() - debut, status: 502, raison: "swatch-download-failed", message: "Impossible de charger les références de texture. Réessayez dans un instant." };
-    echantillons.push(octets);
+  // 1) Les images jointes après la photo : la planche, ou les échantillons bruts (fournis, sinon téléchargés en parallèle —
+  //    tous requis : mieux vaut refuser que laisser le modèle inventer une couleur).
+  let jointes: { octets: Buffer; type: string; nom: string }[];
+  if (entree.planche) jointes = [{ octets: entree.planche, type: "image/png", nom: "board.png" }];
+  else if (entree.swatches) jointes = entree.swatches.map((octets, i) => ({ octets, type: "image/jpeg", nom: `sample_${i + 1}.jpg` }));
+  else {
+    const telecharges = await Promise.all(swatchUrls.map(telechargerEchantillon));
+    if (telecharges.some((t) => !t)) return { ok: false, dureeMs: Date.now() - debut, status: 502, raison: "swatch-download-failed", message: "Impossible de charger les références de texture. Réessayez dans un instant." };
+    jointes = telecharges.map((octets, i) => ({ octets: octets!, type: "image/jpeg", nom: `sample_${i + 1}.jpg` }));
   }
 
   // 2) Photo au format du modèle : sans cela il recadre à sa façon et le rendu n'est plus superposable.
@@ -158,13 +188,16 @@ export async function genererRendu(entree: {
   formulaire.append("model", modeleImage());
   formulaire.append("prompt", entree.prompt);
   formulaire.append("size", cadrage.taille);
-  formulaire.append("quality", "medium");
+  formulaire.append("quality", entree.qualite ?? "medium");
   formulaire.append("input_fidelity", "high");
-  formulaire.append("image[]", new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }), "kitchen.png");
-  echantillons.forEach((octets, i) => formulaire.append("image[]", new Blob([new Uint8Array(octets)], { type: "image/jpeg" }), `texture_${i}.jpg`));
+  formulaire.append("output_format", "jpeg");
+  formulaire.append("output_compression", "90");
+  formulaire.append("image[]", new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }), "room.png");
+  for (const j of jointes) formulaire.append("image[]", new Blob([new Uint8Array(j.octets)], { type: j.type }), j.nom);
 
   const controleur = new AbortController();
   const minuterie = setTimeout(() => controleur.abort(), DELAI_OPENAI_MS);
+  entree.signal?.addEventListener("abort", () => controleur.abort(), { once: true });
   let reponse: Response;
   try {
     reponse = await fetch(`${baseOpenAI()}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${cle}` }, body: formulaire, signal: controleur.signal });
@@ -202,7 +235,7 @@ export async function genererRendu(entree: {
   };
   const coutDollars = coutEnDollars(usage);
   const dureeMs = Date.now() - debut;
-  console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${pluriel(echantillons.length, "échantillon")}, ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
-  const generationId = await noter({ origine: entree.origine, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: echantillons.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
-  return { ok: true, image, avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId };
+  console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${entree.qualite ?? "medium"}, ${entree.planche ? "planche" : pluriel(jointes.length, "échantillon")}, ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
+  const generationId = await noter({ origine: entree.origine, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: jointes.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
+  return { ok: true, image, type: typeImage(image), avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId };
 }

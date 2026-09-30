@@ -7,7 +7,7 @@ import { analysesConnues, catalogue, type Reference } from "./catalogue";
 import { photosAvantDuDossier, preparerSimulation, type PreparationVue } from "./preparation";
 import { correspondRecherche, sansAccents } from "./recherche-teintes";
 import { resumerTeinte } from "./teintes";
-import { TYPES_SURFACE, TYPES_SURFACE_ESPACE, typeSurface, typeSurfacePourProjet, ZONES, type IdZone, type TypeSurface } from "./types-surface";
+import { TYPES_SURFACE, TYPES_SURFACE_ESPACE, pieceDuType, typeSurface, typeSurfacePourProjet, ZONES, type IdZone, type TypeSurface } from "./types-surface";
 
 /**
  * « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot bois »
@@ -62,14 +62,26 @@ export function repererZone(texte: string, type: TypeSurface): IdZone | null {
   return parPrefixe.length === 1 ? parPrefixe[0] : null;
 }
 
-/** Le type de surface : dit (« cuisine », « plan vasque », « salle de bain »), sinon celui du projet du dossier. */
+/**
+ * Un type de l'espace (« espace-salle-de-bain », dit « salle de bain », « mobilier », « pro ») n'a pas de prompt
+ * ChatGPT : il est ramené au type du CRM équivalent (plan-vasque, dressing, bar…) par le projet et ses zones.
+ * Mission 15 (partie 2) : corrige « Prompt introuvable » (carte crm-generation § 10).
+ */
+function typeDuCrm(type: TypeSurface, zonesProjet: string[]): TypeSurface {
+  if (TYPES_SURFACE.some((t) => t.id === type.id)) return type;
+  const piece = pieceDuType(type.id);
+  if (piece === "MURS") throw new ErreurMetier("Les murs et le plafond n'ont pas de prompt ChatGPT : le client les simule depuis son espace (mode API).", 400);
+  return typeSurface(typeSurfacePourProjet(piece, zonesProjet)) ?? TYPES_SURFACE[0];
+}
+
+/** Le type de surface : dit (« cuisine », « plan vasque », « salle de bain »), sinon celui du projet du dossier. Toujours un type du CRM. */
 export function repererTypeSurface(texte: string | null | undefined, typeProjet: string | null, zonesProjet: string[]): TypeSurface {
   if (texte?.trim()) {
     const n = sansAccents(texte).replace(/[^a-z0-9]+/g, " ").trim();
     const direct = typeSurface(texte.trim()) ?? TYPES_SURFACE.find((t) => sansAccents(t.libelle) === n) ?? Object.values(TYPES_SURFACE_ESPACE).find((t) => sansAccents(t.libelle) === n);
-    if (direct) return direct;
+    if (direct) return typeDuCrm(direct, zonesProjet);
     const f = repererFamille(texte);
-    if (f) return TYPES_SURFACE_ESPACE[f.id] ?? TYPES_SURFACE_ESPACE.CUISINE;
+    if (f) return typeDuCrm(TYPES_SURFACE_ESPACE[f.id] ?? TYPES_SURFACE_ESPACE.CUISINE, zonesProjet);
     throw new ErreurMetier(`Type de surface inconnu : « ${texte} ». Possibles : ${TYPES_SURFACE.map((t) => `${t.libelle} (${t.id})`).join(", ")}.`, 400);
   }
   return typeSurface(typeSurfacePourProjet(typeProjet, zonesProjet)) ?? TYPES_SURFACE[0];

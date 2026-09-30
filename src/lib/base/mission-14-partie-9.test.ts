@@ -244,8 +244,9 @@ describe("migration « agenda-rappels-en-attente-14-9 »", () => {
 
     assert.deepEqual(await migration.remettreEnAttenteAgenda(prisma, maintenant), { remisesEnAttente: 0 }, "rejouée : rien à refaire");
     assert.deepEqual(await migration.migrationAgendaRappelsEnAttente14.executer(prisma), { remisesEnAttente: 0 });
+    // Ordre relatif seulement (comme la partie 7) : chaque mission suivante ajoute sa migration à la fin.
     const noms = (await import("@/lib/base/migrations")).MIGRATIONS_DONNEES.map((m) => m.nom);
-    assert.equal(noms.at(-1), "agenda-rappels-en-attente-14-9");
+    assert.ok(noms.includes("agenda-rappels-en-attente-14-9"), noms.join(", "));
     assert.ok(noms.indexOf("agenda-rappels-en-attente-14-9") > noms.indexOf("agenda-des-rappels-14-7"), noms.join(", "));
   });
 });

@@ -10,7 +10,10 @@ import { ZONES, type IdZone, type TypeSurface } from "./types-surface";
 export type ZonePourPrompt = { zone: IdZone; etiquette: string; teinte: string };
 
 const SECTION = /\[zone:([a-z0-9-]+)\]\s*\n?([\s\S]*?)\[\/zone\]\n?/g;
-const VARIABLES_GLOBALES = ["nombre_echantillons", "format", "zones_inchangees"] as const;
+/** Mission 15 (partie 2) : les modèles du moteur (12 blocs, quatre zones) dépassent 12 000 caractères ; gpt-image-1 en accepte 32 000. */
+export const LONGUEUR_MAX = 20_000;
+// Mission 15 (partie 2) : {{direction_artistique}} — la direction artistique calculée par le moteur pour les films choisis.
+const VARIABLES_GLOBALES = ["nombre_echantillons", "format", "zones_inchangees", "direction_artistique"] as const;
 const VARIABLES_SECTION = ["teinte", "etiquette"] as const;
 
 /** Lettre de l'échantillon sur la planche : A, B, C… dans l'ordre des zones du type. */
@@ -24,7 +27,7 @@ function listeEnAnglais(elements: string[]): string {
   return `${elements.slice(0, -1).join(", ")} and ${elements[elements.length - 1]}`;
 }
 
-export function rendrePrompt(modele: string, entree: { type: TypeSurface; zones: ZonePourPrompt[]; format: string }): string {
+export function rendrePrompt(modele: string, entree: { type: TypeSurface; zones: ZonePourPrompt[]; format: string; directionArtistique?: string | null }): string {
   const parZone = new Map(entree.zones.map((z) => [z.zone, z]));
   const inchangees = entree.type.zones.filter((z) => !parZone.has(z));
   const texte = modele.replace(/\r\n/g, "\n").replace(SECTION, (_tout, zone: string, corps: string) => {
@@ -38,6 +41,7 @@ export function rendrePrompt(modele: string, entree: { type: TypeSurface; zones:
     zones_inchangees: inchangees.length
       ? `• NOT COVERED: the ${listeEnAnglais(inchangees.map((z) => ZONES[z].anglais))}. ${inchangees.length > 1 ? "They keep their" : "It keeps its"} original material and colour exactly.`
       : "",
+    direction_artistique: entree.directionArtistique?.trim() || "Keep the scene calm and credible, photographed at eye level: the new material simply belongs to the room.",
   };
   return texte
     .replace(/\{\{(\w+)\}\}/g, (tout, nom: string) => (nom in variables ? variables[nom as keyof typeof variables] : tout))
@@ -64,17 +68,18 @@ export function verifierModele(modele: string, type: TypeSurface): { erreurs: st
   const avertissements: string[] = [];
   const texte = modele.replace(/\r\n/g, "\n");
   if (texte.trim().length < 200) erreurs.push("Le prompt est trop court pour verrouiller la scène (200 caractères au moins).");
-  if (texte.length > 12_000) erreurs.push("Le prompt est trop long (12 000 caractères au plus).");
+  if (texte.length > LONGUEUR_MAX) erreurs.push(`Le prompt est trop long (${LONGUEUR_MAX.toLocaleString("fr-FR")} caractères au plus).`);
   const ouvertures = (texte.match(/\[zone:[a-z0-9-]+\]/g) ?? []).length;
   const fermetures = (texte.match(/\[\/zone\]/g) ?? []).length;
   if (ouvertures !== fermetures) erreurs.push(`Balises de zone déséquilibrées : ${ouvertures} [zone:…] pour ${fermetures} [/zone].`);
-  const sections = new Map<string, string>();
-  for (const [, zone, corps] of texte.matchAll(SECTION)) sections.set(zone, corps);
+  // Une zone peut avoir plusieurs sections (mission 15 : l'affectation et son contrôle final) : {{teinte}} dans l'une d'elles suffit.
+  const sections = new Map<string, string[]>();
+  for (const [, zone, corps] of texte.matchAll(SECTION)) sections.set(zone, [...(sections.get(zone) ?? []), corps]);
   for (const zone of type.zones) {
     const corps = sections.get(zone);
     if (corps === undefined) erreurs.push(`Il manque la section [zone:${zone}] (${ZONES[zone].libelle}).`);
-    else if (!corps.includes("{{teinte}}")) erreurs.push(`La section ${ZONES[zone].libelle} doit contenir {{teinte}} : sans elle, la teinte choisie n'apparaît pas dans le prompt.`);
-    else if (!corps.includes("{{etiquette}}")) avertissements.push(`La section ${ZONES[zone].libelle} ne cite pas {{etiquette}} : ChatGPT ne saura pas quel échantillon de la planche lui correspond.`);
+    else if (!corps.some((c) => c.includes("{{teinte}}"))) erreurs.push(`La section ${ZONES[zone].libelle} doit contenir {{teinte}} : sans elle, la teinte choisie n'apparaît pas dans le prompt.`);
+    else if (!corps.some((c) => c.includes("{{etiquette}}"))) avertissements.push(`La section ${ZONES[zone].libelle} ne cite pas {{etiquette}} : ChatGPT ne saura pas quel échantillon de la planche lui correspond.`);
   }
   for (const zone of sections.keys()) {
     if (!type.zones.includes(zone as IdZone)) avertissements.push(`La section [zone:${zone}] n'est pas une zone du type « ${type.libelle} » : elle ne sera jamais utilisée.`);

@@ -186,7 +186,8 @@ export async function notifierTravailPret(travailId: string): Promise<{ envoye: 
       texte: mail.texte,
       html: mail.html,
       repondreA: "contact@coverswap.fr",
-      pieces: rendu ? [{ nom: `simulation-coverswap-${travail.projet}.png`, type: "image/png", contenu: rendu }] : undefined,
+      // Mission 15 (partie 2) : le rendu est un JPEG (moteur), un PNG pour les anciens travaux — le nom suit le fichier.
+      pieces: rendu ? [{ nom: `simulation-coverswap-${travail.projet}.${/\.png$/i.test(chemins.apres ?? "") ? "png" : "jpg"}`, type: /\.png$/i.test(chemins.apres ?? "") ? "image/png" : "image/jpeg", contenu: rendu }] : undefined,
     });
     if (travail.leadId) await prisma.interaction.create({ data: { leadId: travail.leadId, type: "EMAIL", contenu: `Mail « simulation prête » envoyé à ${travail.notifierEmail} (rendu joint, lien de reprise du simulateur).` } }).catch(() => undefined);
     return { envoye: true };

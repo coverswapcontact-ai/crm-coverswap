@@ -83,9 +83,11 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
     garde: "identifiants Meta (leadgen, campagne, publicité), dates et statut : le suivi des campagnes sans les réponses du formulaire",
   },
   PhotoLead: { remplacer: () => ({ chemin: EFFACE }), garde: "date et origine de la photo jointe (fichier effacé)" },
-  SimulationSite: { remplacer: () => ({ imageBeforePath: null, imageAfterPath: null, ipOrigine: null, references: "[]" }), garde: "projet, dates, page et source du parcours (images effacées)" },
+  SimulationSite: { remplacer: () => ({ imageBeforePath: null, imageAfterPath: null, ipOrigine: null, references: "[]", promptTexte: null, directionArtistique: null, analyse: null, photoEmpreinte: null }), garde: "projet, dates, page et source du parcours, moteur, score du contrôle (images, consigne et description de la pièce effacées)" },
   // Mission 15 (partie 1) : le travail de génération du site (« Me prévenir » y écrit une adresse ou un numéro).
-  TravailSimulation: { remplacer: () => ({ notifierEmail: null, notifierTelephone: null, ipOrigine: null, photoPath: null, promptTexte: null, references: "[]" }), garde: "projet, statut, dates, durée et raison d'échec du travail (photo effacée)" },
+  TravailSimulation: { remplacer: () => ({ notifierEmail: null, notifierTelephone: null, ipOrigine: null, photoPath: null, promptTexte: null, references: "[]", photoEmpreinte: null }), garde: "projet, statut, dates, durée et raison d'échec du travail (photo effacée)" },
+  // Mission 15 (partie 2) : l'analyse d'une photo (description de la pièce), retrouvée par l'empreinte des travaux et simulations de la personne.
+  AnalysePhoto: { remplacer: () => ({ json: null, parcoursId: null, photoPath: null, raison: null }), garde: "empreinte, pièce, statut, coût et dates (description de la pièce effacée)" },
   PublicationSite: { remplacer: () => ({ texte: null, auteur: null, photoAvant: null, photoApres: null }), garde: "titre, ville et type ; sans photo ni texte, la publication disparaît du site" },
   Devis: { remplacer: () => ({ notesInternes: null }), garde: "numéro et montants de l'ancien écran" },
   Facture: { conserve: "facture de l'ancien écran : conservation légale de 10 ans" },
@@ -150,15 +152,15 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   // L'espace permanent (mission 5) : ses favoris partent ; le code, les dates et les compteurs restent (sans identité).
   EspacePermanent: { remplacer: () => ({ favoris: null }), garde: "code du lien, dates d'accès et de confirmation, compteurs de visites et de projets accordés" },
   SimulationEspace: {
-    remplacer: () => ({ chemin: EFFACE, photoAvant: null, titre: null, description: null, commentaireClient: null }),
-    garde: "source, statut, teintes, version du prompt, coût et dates (images effacées)",
+    remplacer: () => ({ chemin: EFFACE, photoAvant: null, titre: null, description: null, commentaireClient: null, analyse: null, promptTexte: null, directionArtistique: null }),
+    garde: "source, statut, teintes, version du prompt, moteur, score du contrôle, coût et dates (images, consigne et description de la pièce effacées)",
   },
   AccordDevis: { conserve: "preuve du bon pour accord donné sur un devis émis (signature au doigt comprise) : conservée avec le document, même durée légale" },
   // Mission 10 (23/09/2026) : ce que l'assistant a modifié (valeurs d'avant et d'après, phrase de Lucas) et les messages de l'espace.
   ModificationDossier: { remplacer: () => ({ champs: "[]", commande: null }), garde: "dates, acteur et annulation : la trace qu'une modification a eu lieu, sans ses valeurs" },
   MessageEspace: { remplacer: () => ({ texte: EFFACE }), garde: "auteur, source, dates (lu, notifié) : la mesure des échanges, sans leur contenu" },
   // Simulateur du CRM (21/09/2026).
-  PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null }), garde: "type de surface, teintes, version du prompt, mode et dates (photos effacées)" },
+  PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null, analyse: null, promptTexte: null, directionArtistique: null, photoEmpreinte: null }), garde: "type de surface, teintes, version du prompt, moteur, score du contrôle, mode et dates (photos, consigne et description de la pièce effacées)" },
   GenerationImage: { conserve: "coût d'une génération d'image : jetons, montant et durée, aucune donnée de la personne" },
   Proposition: {
     remplacer: (ligne): Record<string, string | null> =>

@@ -99,6 +99,9 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   const espacesPermanents = await client.espacePermanent.findMany({ where: { ...AVEC_ARCHIVES, clientId: { in: clientIds } } });
   const simulationsEspace = await client.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
   const preparations = await client.preparationSimulation.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } });
+  // Mission 15 (partie 2) : les analyses des photos de la personne (description de sa pièce), par l'empreinte de ses travaux, simulations et préparations.
+  const empreintes = [...new Set([...simulationsSite.map((s) => s.photoEmpreinte), ...travauxSimulation.map((t) => t.photoEmpreinte), ...preparations.map((p) => p.photoEmpreinte)].filter((e): e is string => Boolean(e)))];
+  const analysesPhoto = empreintes.length ? await client.analysePhoto.findMany({ where: { ...AVEC_ARCHIVES, empreinte: { in: empreintes } } }) : [];
 
   // Onglet Mail (mission 7) : envois, brouillons de l'IA, inscriptions aux séquences.
   const parContact = { OR: [{ clientId: { in: clientIds } }, { leadId: { in: leadIds } }, { dossierId: { in: dossierIds } }] };
@@ -175,6 +178,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       EspacePermanent: espacesPermanents,
       SimulationEspace: simulationsEspace,
       PreparationSimulation: preparations,
+      AnalysePhoto: analysesPhoto,
       EnvoiMail: envoisMail,
       BrouillonMail: brouillonsMail,
       InscriptionSequence: inscriptionsSequence,
@@ -233,7 +237,7 @@ export async function apercuAnonymisation(clientId: string): Promise<ApercuAnony
 
 /* ── Anonymiser ────────────────────────────────────────────────────── */
 
-type Delegue = { update: (args: { where: { id?: string; messageId?: string }; data: Record<string, unknown> }) => Promise<unknown> };
+type Delegue = { update: (args: { where: { id?: string; messageId?: string; empreinte?: string }; data: Record<string, unknown> }) => Promise<unknown> };
 
 function delegue(tx: Transaction, modele: string): Delegue {
   return (tx as unknown as Record<string, Delegue>)[modele.charAt(0).toLowerCase() + modele.slice(1)];
@@ -316,11 +320,11 @@ export async function anonymiserDansTransaction(
         Object.assign(data, { statut: "ANNULEE", decideLe: maintenant, decidePar: options.decidePar, commentaireRejet: "Client anonymisé (RGPD)" });
       }
       if (Object.keys(data).length === 0) continue;
-      const cle = modele === "ContenuMessage" ? { messageId: String(ligne.messageId) } : { id: String(ligne.id) };
+      const cle = modele === "ContenuMessage" ? { messageId: String(ligne.messageId) } : modele === "AnalysePhoto" ? { empreinte: String(ligne.empreinte) } : { id: String(ligne.id) };
       await delegue(tx, modele).update({ where: cle, data });
       bilan.lignes[modele] = (bilan.lignes[modele] ?? 0) + 1;
     }
-    const ids = lignes.map((ligne) => String(modele === "ContenuMessage" ? ligne.messageId : ligne.id));
+    const ids = lignes.map((ligne) => String(modele === "ContenuMessage" ? ligne.messageId : modele === "AnalysePhoto" ? ligne.empreinte : ligne.id));
     bilan.journalCaviarde += await caviarderJournal(tx, modele, ids, contexte, maintenant);
   }
 

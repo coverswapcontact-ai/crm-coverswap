@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
 import { mkdtempSync, promises as fs } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -23,10 +22,8 @@ let defauts: typeof import("./prompts-defaut");
 let sharp: typeof import("sharp");
 
 const SECRET = "secret-partage-pour-les-essais";
-let serveurSite: Server;
 let serveurOpenAI: Server;
 let reponseOpenAI: { status: number; corps: unknown } = { status: 200, corps: {} };
-const consignesRecues: { signatureValide: boolean; corps: { project_type: string; selections: { surface: string; ref: string }[] } }[] = [];
 
 async function ecouter(serveur: Server): Promise<string> {
   await new Promise<void>((ok) => serveur.listen(0, "127.0.0.1", ok));
@@ -52,18 +49,8 @@ before(async () => {
   process.env.SIMULATE_TOKEN_SECRET = SECRET;
   process.env.OPENAI_API_KEY = "cle-factice";
 
-  // Le « site » : la consigne signée, construite par son moteur (ici : un texte témoin).
-  serveurSite = createServer((requete, reponse) => {
-    let corps = "";
-    requete.on("data", (m) => (corps += m));
-    requete.on("end", () => {
-      const attendue = createHmac("sha256", SECRET).update(`${requete.headers["x-coverswap-horodatage"]}\n${corps}`).digest("hex");
-      consignesRecues.push({ signatureValide: attendue === requete.headers["x-coverswap-signature"], corps: JSON.parse(corps) });
-      reponse.writeHead(200, { "Content-Type": "application/json" });
-      reponse.end(JSON.stringify({ prompt: "CONSIGNE DU SITE (moteur unique)", swatchUrls: [] }));
-    });
-  });
-  process.env.SITE_URL = await ecouter(serveurSite);
+  // Mission 15 (partie 2) : plus de consigne demandée au site — le prompt vient du moteur du CRM (V1 par défaut).
+  process.env.SITE_URL = "http://127.0.0.1:9/jamais-appele";
   // « OpenAI » : une image et sa consommation, ou une erreur.
   serveurOpenAI = createServer((requete, reponse) => {
     requete.resume();
@@ -92,7 +79,6 @@ before(async () => {
 });
 
 after(async () => {
-  serveurSite.close();
   serveurOpenAI.close();
   await prisma.$disconnect();
 });
@@ -115,7 +101,7 @@ describe("bibliothèque de prompts", () => {
       assert.doesNotMatch(texte, /\{\{|\[zone:|\[\/zone\]/, type.id);
       for (const zone of type.zones) assert.match(texte, new RegExp(`TEINTE-${zone}`), `${type.id} / ${zone}`);
       assert.match(texte, /Image 1/);
-      assert.match(texte, /without asking me any question/);
+      assert.match(texte, /without asking any question/);
     }
   });
 
@@ -125,8 +111,8 @@ describe("bibliothèque de prompts", () => {
     const lettres = rendu.etiquettes(type, [...zones]);
     assert.deepEqual([...lettres.values()], ["A · Meubles hauts", "B · Meubles bas", "C · Plan de travail"]);
     const texte = rendu.rendrePrompt(defauts.PROMPTS_PAR_DEFAUT.cuisine.texte, { type, zones: zones.map((zone) => ({ zone, etiquette: lettres.get(zone)!, teinte: `T-${zone}` })), format: "portrait 2:3" });
-    assert.match(texte, /sample "A · Meubles hauts" on Image 2/);
-    assert.doesNotMatch(texte, /BACKSPLASH — sample/);
+    assert.match(texte, /Sample "A · Meubles hauts" \(its label on Image 2\)/);
+    assert.doesNotMatch(texte, /goes on the backsplash/);
     assert.match(texte, /NOT COVERED: the backsplash\. It keeps its original material/);
     assert.match(texte, /3 in all, one per zone/);
     assert.match(texte, /portrait 2:3/);
@@ -145,7 +131,7 @@ describe("bibliothèque de prompts", () => {
   test("versions : enregistrer, revenir en arrière (une version de plus), jamais réécrire", async () => {
     await bibliotheque.poserPromptsParDefaut();
     const v1 = await bibliotheque.lirePrompt("credence");
-    const modifie = v1.texte.replace("TASK: edit Image 1", "TASK: carefully edit Image 1");
+    const modifie = v1.texte.replace("ROLE\n", "ROLE (careful)\n");
     const v2 = await bibliotheque.enregistrerVersion("credence", { texte: modifie, note: "Plus prudent" });
     assert.deepEqual([v2.versionCourante, v2.versions.length], [2, 2]);
     await assert.rejects(bibliotheque.enregistrerVersion("credence", { texte: modifie }), /Aucune modification/);
@@ -196,19 +182,21 @@ describe("préparer pour ChatGPT", () => {
 });
 
 describe("générer par l'API", () => {
-  test("la consigne vient du site (requête signée), l'image arrive en brouillon avec son coût ; la consommation est comptée", async () => {
+  test("le prompt vient du moteur du CRM (V1 par défaut, échantillons du cache), l'image arrive en brouillon avec son coût ; la consommation est comptée", async () => {
     const { dossierId, photoId } = await dossierAvecPhoto("Api Essai");
     reponseOpenAI = { status: 200, corps: { data: [{ b64_json: (await image(1536, 1024, { r: 90, g: 80, b: 70 }, "png")).toString("base64") }], usage: { input_tokens: 5000, input_tokens_details: { text_tokens: 2000, image_tokens: 3000 }, output_tokens: 4000 } } };
     const prep = await preparation.preparerSimulation({ dossierId, photoId, typeSurface: "cuisine", mode: "API", zones: [{ zone: "meubles-hauts", ref: "AA01" }, { zone: "meubles-bas", ref: "AA01" }] });
-    assert.deepEqual([prep.statut, prep.coutEstime], ["EN_COURS", 0.21], "une seule teinte : un seul échantillon, le coût annoncé le dit");
+    // Une seule teinte : un seul échantillon ; le CRM génère en qualité high (paramètre, 1,7 × 0,21 $).
+    assert.deepEqual([prep.statut, prep.coutEstime, prep.moteur], ["EN_COURS", 0.36, "V1"]);
+    assert.match(prep.directionArtistique ?? "", /single monolithic|One material/);
     assert.equal(await prisma.tache.count({ where: { type: preparation.TACHE_SIMULATION_API, cle: `simulation-api:${prep.id}` } }), 1);
 
     const { simulationId } = await preparation.executerGenerationApi(prep.id);
-    const consigne = consignesRecues.at(-1)!;
-    assert.equal(consigne.signatureValide, true);
-    assert.deepEqual(consigne.corps, { project_type: "cuisine", selections: [{ surface: "meubles-hauts", ref: "AA01" }, { surface: "meubles-bas", ref: "AA01" }] });
     const simulation = await prisma.simulationEspace.findUniqueOrThrow({ where: { id: simulationId! } });
-    assert.deepEqual([simulation.source, simulation.statut, simulation.promptTexte], ["API", "BROUILLON", "CONSIGNE DU SITE (moteur unique)"]);
+    assert.deepEqual([simulation.source, simulation.statut, simulation.moteur], ["API", "BROUILLON", "V1"]);
+    assert.match(simulation.promptTexte ?? "", /^TASK: TEXTURE REPLACEMENT ON A REAL PHOTOGRAPH/, "le prompt V1 du moteur du CRM");
+    assert.match(simulation.promptTexte ?? "", /Cover Styl' ref\. AA01 "Beige Oak" — flat sample in IMAGE 2/);
+    assert.equal((await preparation.lirePreparation(prep.id)).prompt, simulation.promptTexte, "le prompt donné au modèle est relisible sur la préparation");
     // 2 000 × 5 $ + 3 000 × 10 $ + 4 000 × 40 $ par million de jetons = 0,20 $
     assert.equal(simulation.coutDollars, 0.2);
     const generation = await prisma.generationImage.findFirstOrThrow({ where: { preparationId: prep.id } });
@@ -236,7 +224,8 @@ describe("générer par l'API", () => {
     await prisma.parametre.create({ data: { cle: "SIMULATEUR_CREDIT_OPENAI", valeur: JSON.stringify(10), valableDu: new Date(Date.now() - 86_400_000) } });
     const etat = await consommation.consommation();
     assert.deepEqual([etat.solde?.releve, etat.solde?.consommeDepuis, etat.solde?.estime], [10, 0.2, 9.8]);
-    assert.ok((etat.solde?.simulationsRestantes ?? 0) > 30);
+    // Au prix d'une simulation de l'espace et du CRM (deux échantillons en high : 0,47 $), pas au prix medium.
+    assert.equal(etat.solde?.simulationsRestantes, 20);
   });
 });
 

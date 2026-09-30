@@ -2734,3 +2734,256 @@ suivante ; documentation en retard. Écarté (0). Deux constats étaient des dou
   `GET ?id=&p=` toutes les 3 s, tâche SIMULATION_SITE terminée en 5 s, écran d'attente (photo assombrie, film, trois
   étapes, « environ 15 s » sur la médiane locale, phrase de reprise, « Me prévenir »), fondu puis curseur avant/après au
   ratio réel (1024 × 1024), formulaire ; aucun débordement à 390 px. Déploiement : CRM d'abord, site ensuite.
+
+## Partie 2 — Le moteur de prompt (CRM), une seule source (30/09)
+
+Énoncé § 1 (1.1 à 1.8) : un seul moteur de prompt « studio » au CRM, pour le site, l'espace client, le CRM (mode API) et
+la bibliothèque ChatGPT. Douze blocs en anglais, analyse de la photo par un modèle vision AVANT la génération (réutilisée
+par empreinte), planche d'échantillons étiquetés, direction artistique par règles, réalisme des matériaux, contrôle
+automatique du rendu avec seconde tentative sous le seuil. Paramètre `SIMULATEUR_MOTEUR` : **V1 par défaut** (l'ancien
+prompt, sans analyse ni contrôle) jusqu'à la campagne du banc (partie 3) — Lucas basculera. Les six prompts « studio »
+de la préparation de prod n'ont pas pu être relus : la structure de l'énoncé fait foi ; le prompt et la direction
+artistique de chaque simulation (site compris) sont désormais lisibles dans le CRM et par `voir_simulations` pour comparer.
+
+### CRM
+- **Source unique des zones** `src/lib/simulateur/zones.ts` : 20 zones (les 19 élémentaires + `facades-cuisine`,
+  composée de hauts + bas), chacune avec libellé FR, description, nom EN (`nom`, `nomCourt`), `cible`, `limites`,
+  `exclus`, `pose`, `sens`, `famillePose`, `controle`, `exclut`, `compose` ; cinq pièces (`PIECES` : id, libellé,
+  titre « Votre cuisine », code d'espace, nom EN, phrase générique) ; `ZONES_MAX = 4` ; `zonesPubliques()` (sans la
+  consigne) servie par **`GET /api/site/simulateur`** (route publique, `force-static`, 1 h) pour la partie 4.
+  `types-surface.ts` dérive désormais `IdZone` (élémentaires) et `ZONES` (libellé, anglais, sens) de ce fichier : mêmes
+  libellés qu'avant, les étiquettes « A · Meubles hauts » ne bougent pas.
+- **Moteur** `src/lib/simulateur/moteur/` : `types.ts` (entrée, `AnalysePhoto`, `PromptConstruit`, 12 `BLOCS`),
+  `blocs.ts` (une fonction pure par bloc : ROLE, IMAGES, ART DIRECTION, HOW THE JOB IS DONE IN REAL LIFE, THE <KITCHEN>
+  IN IMAGE 1, MATERIAL ASSIGNMENT avec NOT COVERED (objets de l'analyse + zones visibles non choisies) et NOT USED IN
+  THIS IMAGE, MATERIAL REALISM (une ligne par film distinct + règles d'échelle, pose tendue, lumière physique, couleur
+  exacte), PHOTOGRAPHIC QUALITY (réglages globaux seulement), LOCKED (objets cités), AVOID, FINAL CHECK (+ « each
+  zone wears ITS OWN film », « never like a render or a collage », défauts de la tentative précédente), OUTPUT),
+  `index.ts › construirePrompt(entree)` → `{ texte, blocs, directionArtistique, version: "v2" }`, `etiquettesPour`
+  (lève au-delà de 4 zones, ne tronque jamais), `filmsDistincts` (un même film sur deux zones : décrit une fois,
+  « Samples A and B »), `contientEmoji` ; `direction-artistique.ts` (huit règles testées une par une + phrase générique,
+  3 phrases au plus) ; `materiaux.ts` (`profilDe` — fusion de `profilRevetement` du site et de `profilDe` du CRM,
+  `teintes.ts` l'importe d'ici —, 16 profils « studio » : essence probable d'un bois d'après le nom, largeur et rythme
+  du fil d'après le contraste mesuré, pores, finition, lumière ; `poseDeZone` par famille de pose ; `couleurEnPhrase` :
+  « light warm beige (about #C9B28F), low-contrast decor » depuis la mesure du CRM ou le `hex` du catalogue) ;
+  **`v1.ts` = le « V1 revu »** (voir Décisions) ; `planche.tsx` (`construirePlanche(tuiles)` par `ImageResponse` de
+  next/og, utilisable hors requête ; la route `/planche` l'appelle) ; `vision.ts` (appel commun
+  `POST /v1/chat/completions`, `gpt-4.1-mini`, JSON strict, 40 s, injectable `definirVisionEssai`, **origine** du
+  demandeur sur chaque ligne `GenerationImage`) ; `analyse-photo.ts` (`analyserPhoto`, schéma, `zoneVisible` /
+  `zonesNonVisibles`) ; `controle-rendu.ts` (`controlerRendu`, score 0-10, défauts typés) ; `modele-chatgpt.ts` +
+  `generer-prompts.ts` (la bibliothèque ChatGPT générée).
+- **Analyse de la photo** `src/lib/simulateur/analyses.ts` + modèle **`AnalysePhoto`** (`empreinte` SHA-256 @id,
+  `piece`, `parcoursId`, `statut` EN_COURS | PRETE | SAUTEE | ECHEC, `raison`, `json`, `photoPath`, `coutDollars`,
+  archivage) : lue avant tout appel, réutilisée pour toute génération sur la même photo (site, espace, CRM) ; une
+  analyse en cours ailleurs est attendue jusqu'à 45 s, puis on génère sans. **`POST /api/simulate/analyse`**
+  `{ parcoursId, projet, photo_base64 }` (origine vérifiée) : photo écrite `site/<parcoursId>/analyses/<empreinte>.jpg`,
+  tâche **`ANALYSE_PHOTO`** (voie longue, priorité 8, une tentative, 90 s), réponse 202 ; la même photo déjà analysée →
+  200 tout de suite. **Quota** (`limite-site.ts › analyseAutorisee`, `LIMITE_ANALYSES = { parIp: 10, global: 400 }`
+  par jour) demandé et compté SEULEMENT quand une tâche est mise en file (202) : une photo refusée (400), une pièce
+  inconnue (400) ou une analyse déjà prête (200) ne consomment rien, même à quota atteint ; 429 `ip-quota` /
+  `global-quota`. **`GET /api/simulate/analyse?e=&p=`** → `{ statut, analyse, raison }` (404 sans détail si le parcours
+  ne correspond pas) ; `raison` n'est qu'un **code** (`budget | cle | delai | erreur | invalide | purgee`,
+  `codeRaisonSite`) — le détail (montant du budget, erreur HTTP d'OpenAI) reste dans `AnalysePhoto.raison` pour le CRM.
+  Coût compté dans `GenerationImage` (**nouvelle colonne `phase`** : `rendu` | `analyse` | `controle`, `modele
+  gpt-4.1-mini` ajouté à `PRIX`, origine SITE pour la tâche du site) ET dans le budget IA (`AppelIa`, usages
+  `VISION_ANALYSE_PHOTO` / `VISION_CONTROLE_RENDU`, euros ≈ dollars × 0,92, `ia/modele.ts › consommationDuMois`
+  exporté) ; budget `IA_BUDGET_MENSUEL` atteint ou clé absente → analyse **sautée** avec raison, jamais la génération
+  bloquée. Purge à 30 jours avec les travaux (`purgerSiNecessaire`) : json et photo effacés, ligne archivée.
+- **`POST /api/simulate`** : avant le quota, au plus `ZONES_MAX` zones (400 **`trop-de-zones`**, message clair) ; en
+  **moteur V2 seulement**, les références (non signées) sont confrontées aux échantillons signés
+  (`travaux.ts › referencesCoherentes`) — un écart fait d'abord **relire le catalogue du site** (`catalogue.ts ›
+  rafraichirCatalogue`, cache de 6 h ignoré : le site répare ses adresses d'images chaque semaine), puis refuse 400
+  `references` si l'écart reste ; site injoignable : on laisse passer (la garde ne protège aucun coût) — et une zone
+  choisie que l'analyse connue ne voit pas répond **409 `zone-non-visible`** avec la liste et une phrase ; « Façades
+  (toutes) » est visible si les hauts ou les bas le sont ; sans analyse connue, rien n'est refusé. `photoEmpreinte`
+  posée sur le travail à la création.
+- **Pipeline commun** `src/lib/simulations/pipeline.ts › genererAvecMoteur` (site, espace, CRM, banc) : V1 = le prompt
+  signé du site + ses `swatchUrls` (téléchargés **en parallèle**), ou `construirePromptV1` + échantillons du cache ;
+  V2 = étape `analyse` (réutilisée / attendue / faite) → `matieres` (références + couleur mesurée, planche — sous-titre
+  « CoverSwap · Cuisine », le libellé de la pièce — ou échantillons du cache `imageEchantillon` en parallèle, format
+  mesuré) → `rendu` (prompt du moteur, génération) → contrôle → sous le seuil, seconde génération avec les défauts dans
+  FINAL CHECK, **la meilleure des deux (score)** gardée ; deux tentatives au plus, et la seconde seulement s'il reste
+  au moins `BUDGET_SECONDE_TENTATIVE_MS` (rendu 180 s + contrôle 40 s + 15 s) avant l'`echeance` de la tâche (sinon la
+  première est gardée : une génération coupée par l'exécuteur serait payée pour rien). Étapes écrites sur
+  `TravailSimulation.etape` et `PreparationSimulation.etape` (nouvelle colonne, lue par `SuiviApi` ; partie 5 pour
+  l'espace).
+- **`generation.ts`** : `genererRendu({ prompt, photo, planche? | swatches? | swatchUrls?, qualite, origine… })`,
+  `input_fidelity: high` partout, **`output_format: "jpeg"`, `output_compression: 90`** (rendus 3 à 5 fois plus
+  légers : `apres.jpg`, `after.jpg`, `.jpg` dans les dossiers — l'extension suit le type réel, `typeImage`,
+  `extensionDataUrl` ; les anciens PNG restent lisibles), photo nommée `room.png`, planche `board.png`, échantillons
+  `sample_n.jpg` ; `ResultatGeneration.type` ; `DELAI_OPENAI_MS` exporté ; registre du générateur d'essai
+  (`definirGenerateurEssai`, `generateurEnVigueur`) déplacé ici, valable pour toutes les portes. L'ancien contrat
+  synchrone (`site/simulation-synchrone.ts`, gardé jusqu'à la partie 4) type lui aussi le rendu d'après
+  `resultat.type` (plus de `data:image/png` sur des octets JPEG ; `rattacherImagesSimulation` nomme `after.<ext>`).
+  `src/lib/simulations/prix.ts` (pur) : `PRIX`, `coutEnDollars`, **`coutEstime(n, qualite)`** (`FACTEUR_QUALITE`
+  low 0,4 / medium 1 / high 1,7, à confirmer par le banc), `MODELE_VISION`, `COUT_ESTIME_VISION_DOLLARS`.
+- **Paramètres** (`definitions.ts`, groupe SIMULATEUR, natures `choix`) : `SIMULATEUR_MOTEUR` (V1/V2, défaut V1 ;
+  l'aide dit que le V1 de l'espace et du CRM est le « V1 revu »), `SIMULATEUR_PLANCHE` (OUI/NON, défaut OUI),
+  `SIMULATEUR_QUALITE_SITE` (défaut medium), `SIMULATEUR_QUALITE_ESPACE` (défaut high, vaut aussi pour le CRM),
+  `SIMULATEUR_SEUIL_CONTROLE` (5..9, défaut 7) ; lus par `simulateur/reglages.ts › reglagesSimulateur()` ; visibles
+  dans Paramètres, l'API et `voir_parametres` / `modifier_parametres`. Paramètres → Simulateur affiche le coût estimé
+  par qualité (`EcranParametres`) ; `GET /api/simulateur/consommation` rend `coutParQualite` et `reglages`, et
+  `coutParEchantillons` à la qualité de l'espace. **Crédit** (`consommation.ts`) : `simulationsRestantes` et
+  `creditDisponible` (garde de l'espace) s'estiment au prix de l'espace (`coutSimulationEspace` : qualité de l'espace,
+  + 2 appels vision en V2, × 2 tentatives possibles pour la garde), plus au prix medium. `SIMULATION_SITE` et
+  `SIMULATION_API` : `delaiMaxMs` porté à **480 s**, `signal` transmis.
+- **Espace et CRM (mode API)** `preparation.ts` : `consigneDuSite` **supprimé** (plus aucun appel à
+  `/api/simulation/consigne` du site — à retirer côté site en partie 4) ; `promptCourant` appelé **AVANT** le cadrage
+  de la photo (plus de fichier « avant » orphelin) ; `coutEstime(n, qualité de l'espace)` ; `directionArtistique`
+  calculée à la préparation ; `executerGenerationApi(preparationId, signal)` pose la première étape d'un seul geste
+  (`updateMany … etape: null`) : une préparation déjà démarrée (tâche réclamée une seconde fois après un
+  redéploiement) devient ECHEC « interrompue par une mise à jour du service » **sans rappeler OpenAI** (comme le site
+  avec `demarreLe`) ; puis passe par le pipeline (origine ESPACE ou CRM, qualité high, `echeance`) ; `SimulationEspace`
+  et `PreparationSimulation` reçoivent `moteur`, `directionArtistique`, `analyse`, `scoreControle`, `defautsControle`,
+  `tentatives`, `promptTexte` (le prompt réellement donné au modèle, V1 ou V2), `photoEmpreinte` (préparation) ;
+  `coutDollars` = rendu(s) + contrôle(s) ; `PreparationVue.prompt` rendu pour les deux modes + `etape`, `moteur`,
+  `directionArtistique`, `scoreControle`, **`sousSeuil`** (score < `SIMULATEUR_SEUIL_CONTROLE`, calculé côté serveur),
+  `defautsControle`, `tentatives`. `SimulationSite` reçoit les mêmes traces (`TraceMoteur`) + `promptTexte` et
+  `photoEmpreinte`.
+- **Simulations du site dans la fiche** (`simulations/dossier.ts`) : `synchroniserSimulationsSite` relit la
+  `SimulationSite` d'origine (`origineDuSite`, par `simulationId`, archivée comprise) et recopie `moteur`,
+  `promptTexte`, `directionArtistique`, `analyse`, `scoreControle`, `defautsControle`, `tentatives` sur la
+  `SimulationEspace` source SITE ; la vue « hors espace » (dossier sans espace) les porte aussi → la rubrique
+  Simulations, `ResultatPreparation` et `voir_simulations` montrent le prompt d'une simulation faite sur coverswap.fr
+  (la comparaison avec les prompts « studio » vaut pour les trois portes). `SimulationVue.sousSeuil`.
+- **`repererTypeSurface`** (`preparation-assistant.ts`) : un type de l'espace (« salle de bain », « mobilier »,
+  « pro », `espace-*`) est ramené au type du CRM équivalent par `typeSurfacePourProjet` (plan-vasque, dressing,
+  meuble-tv, bar, mobilier-pro) — plus de « Prompt introuvable » ; les murs (`espace-murs`) sont refusés avec une
+  phrase claire (pas de prompt ChatGPT : mode API depuis l'espace).
+- **Bibliothèque ChatGPT** : `prompts-defaut.ts` est **GÉNÉRÉ** (`npm run simulateur:prompts` →
+  `scripts/generer-prompts-defaut.ts` → `moteur/generer-prompts.ts` → `moteur/modele-chatgpt.ts`) : le prompt du
+  moteur en mode `chatgpt` avec les marqueurs existants (`[zone:…]`, `{{teinte}}`, `{{etiquette}}`,
+  `{{nombre_echantillons}}`, `{{format}}`, `{{zones_inchangees}}`) + **`{{direction_artistique}}`** (nouvelle variable
+  de `rendu.ts`, remplie par le moteur pour les films choisis) ; `verifierModele` accepte plusieurs sections par zone
+  (affectation + contrôle final) et une longueur jusqu'à **20 000 caractères** (`LONGUEUR_MAX`, gpt-image-1 en accepte
+  32 000 ; la cuisine à quatre zones fait 12 300). Un test (`moteur.test.ts`) exige que le fichier généré soit la sortie
+  actuelle du moteur (sinon : lancer le script). **Migration `prompts-studio-15-2`** (fin de `MIGRATIONS_DONNEES`) :
+  sur chaque prompt jamais modifié par Lucas (toutes les versions signées CoverSwap) dont la version en service
+  n'est pas le texte du moteur, une version « Moteur studio (mission 15) » est posée et mise en service ; un prompt
+  modifié par Lucas n'est pas touché ; rejouable. Le test de la mission 14 (partie 9) qui exigeait sa migration « en
+  dernier » vérifie désormais l'ordre relatif (comme la partie 7).
+- **Écrans** (tutoiement, convention du CRM) : rubrique Simulations du dossier (`SimulationsDossier.tsx`) : pastilles
+  « moteur V2 », « contrôle 9/10 · 2 essais » (ambre d'après `sousSeuil`, plus un 7 en dur), défauts relevés, boutons
+  « Direction artistique » et « Prompt (n caractères) » (texte dépliable) ; `ResultatPreparation.tsx › SuiviApi` :
+  l'étape en cours (« Lecture de la photo », « Préparation des matières », « Rendu photographique ») dans une région
+  `aria-live="polite"` (le compteur de secondes en dehors), compteur qui ne repart plus à zéro à chaque étape
+  (`useRef` posé une fois par préparation, `setState` fonctionnel au relevé), puis moteur, score, défauts, direction
+  artistique et « Lire le prompt donné au modèle » ; « Tu peux quitter cet écran… je te préviens » ; `EcranSimulateur`
+  passé au tutoiement (« Choisis une photo… », « note ton solde OpenAI »).
+- **MCP** `voir_simulations` : `moteur` et `contrôle n/10` dans chaque ligne ; **`avec_prompt: true`** rend le texte du
+  prompt, la direction artistique et les défauts (niveau LECTURE ; empreinte des outils changée par le nouveau
+  paramètre, `mcp-v3` la recalcule) — simulations du site comprises.
+- **Catalogue** : `catalogue.ts › Reference.hex` (lu de `/api/catalogue` du site quand il est présent, sinon mesuré par
+  le CRM comme avant) ; `couleurDe` préfère la mesure du CRM ; `rafraichirCatalogue()` (relecture immédiate, essais :
+  `definirCatalogueEssai(refs, { auRechargement })`).
+- **RGPD** : `carte.ts` efface aussi `promptTexte`, `directionArtistique`, `analyse`, `photoEmpreinte` (SimulationSite,
+  SimulationEspace, PreparationSimulation, TravailSimulation) ; `AnalysePhoto` entre dans la carte et dans
+  l'anonymisation (retrouvée par l'empreinte des travaux, simulations et préparations de la personne : `json`,
+  `parcoursId`, `photoPath` effacés).
+- **Schéma** (ajouts compatibles `db push` sans `--accept-data-loss`, `npx prisma generate` fait) : `GenerationImage.phase`
+  (défaut `rendu`) ; `SimulationSite` + `moteur`, `promptTexte`, `directionArtistique`, `photoEmpreinte`, `analyse`,
+  `scoreControle`, `defautsControle`, `tentatives` ; `TravailSimulation` + `photoEmpreinte`, `moteur` ;
+  `SimulationEspace` + `moteur`, `directionArtistique`, `analyse`, `scoreControle`, `defautsControle`, `tentatives` ;
+  `PreparationSimulation` + les mêmes + `etape`, `photoEmpreinte` ; nouveau modèle `AnalysePhoto`. Routes publiques :
+  `/api/simulate/analyse`, `/api/site/simulateur` (test complété ; `/api/simulate/autre` reste non public).
+  `src/proxy.ts` non touché.
+- **Documentation** : `docs/ARCHITECTURE-PILOTAGE.md` (Simulateur du CRM › Par l'API, Paramètres SIMULATEUR_*, routes
+  publiques du simulateur et tâche ANALYSE_PHOTO, crédit, bibliothèque générée, commande `simulateur:prompts`).
+
+### Site
+- `scripts/mesurer-couleurs.mjs` (sharp) : mesure la couleur moyenne de chaque échantillon (même mesure que
+  `couleur.ts` du CRM : 48 × 48, moyenne) et écrit `hex` dans `src/data/revetements.json` (`--tout` pour tout
+  remesurer) ; `verifier-catalogue.mjs --reparer` conserve le champ. **Pas lancé** (497 téléchargements : à lancer par
+  l'orchestrateur en partie 4, puis `/api/catalogue` le sert au redéploiement). Rien d'autre côté site dans cette
+  partie : `prepare` envoie encore son prompt (V1) ; le CRM construit le sien en V2 depuis les références.
+
+### Décisions
+- Vision chez OpenAI (`gpt-4.1-mini`, `chat/completions`, `response_format: json_schema` strict — sans `minimum` /
+  `maximum`, non acceptés en mode strict ; la borne 0-10 est appliquée à la lecture) ; `IA_MODELE` reste le modèle
+  Anthropic du courrier. Dépense vision comptée en double à dessein : `GenerationImage` (dollars, compteur du
+  simulateur, à l'origine du demandeur) et `AppelIa` (euros ≈ × 0,92, budget IA) ; sans budget saisi, pas de plafond
+  (un appel ≈ 0,005 $).
+- Table `AnalysePhoto` dédiée, clé = empreinte de la photo ; preuve du suivi = empreinte (64 hex, non devinable) +
+  parcours ; le dernier parcours demandeur est gardé sur la ligne ; la même photo redemandée par un autre parcours
+  reçoit l'analyse prête tout de suite. L'analyse est faite quel que soit le moteur (le site s'en servira pour griser
+  les zones et le conseil photo) ; seule la génération V1 l'ignore. Le site ne lit jamais un message interne (budget
+  en euros, nom de variable, corps d'erreur OpenAI) : un code, et la partie 4 dira une phrase neutre au vouvoiement
+  (« L'analyse de la photo n'a pas pu être faite : vous pouvez lancer la simulation sans. »).
+- Le 409 `zone-non-visible` ne s'applique que si une analyse est connue (jamais un refus à l'aveugle). La garde des
+  références (400) ne s'applique qu'en **V2** (en V1 le HMAC couvre déjà le prompt et les adresses, et V1 télécharge
+  les adresses signées) et jamais sur un cache périmé : relecture du catalogue d'abord ; elle ne protège aucun coût,
+  donc site injoignable = on laisse passer.
+- **V1 = « V1 revu », assumé** : `moteur/v1.ts` n'est pas une copie octet pour octet du prompt du site (mesuré par
+  un dump des deux côtés, scratchpad `p2/v1-diff.txt`) — même structure et mêmes textes de scène (emojis retirés),
+  mais les textes des zones viennent de la source unique (revus pour le V2), remis au vocabulaire V1 (« IMAGE 1 »,
+  « another target ») ; onze retouches de fond restent (« WALL UNITS » sans « ONLY », « and the returns, matched at the
+  fold » sur plan / plateau / plan vasque, « seams invisible » sur les murs et le plafond, « the decor restarts on every
+  door and drawer » sur le meuble vasque, « laid in one length » sur le tablier). Une copie exacte aurait dupliqué les
+  19 zones (contraire à la source unique, et `zones.ts` frôle les 600 lignes) pour une différence de mots ; le banc
+  (partie 3) compare donc « V1 revu » et V2, et l'aide de `SIMULATEUR_MOTEUR` le dit.
+- Planche par `ImageResponse` (police embarquée par `@vercel/og` ; le texte SVG de sharp dépend des polices système
+  de Railway) ; une tuile par zone (lettre + zone), un film sur deux zones est décrit une fois (« Samples A and B ») ;
+  échantillons bruts : un par film distinct (« Image 2 »).
+- Cache des descriptions de matériaux : la phrase est dérivée à chaque fois (pure, instantanée) de la mesure déjà
+  cachée dans `analyses-couleur.json` — pas de second cache.
+- Rendus en JPEG q90 (extension d'après le type réel, ancien contrat synchrone compris) ; les anciens PNG restent servis
+  tels quels.
+- Seconde tentative : score absent (contrôle sauté) = pas de seconde tentative ; à égalité, la première est gardée ;
+  un échec de la seconde génération garde la première ; plus assez de temps avant la fin de la tâche = première gardée.
+- `delaiMaxMs` 480 s pour les deux tâches de génération ; `ANALYSE_PHOTO` en voie longue avec priorité 8. Plafond global
+  d'analyses à 400 par jour (≈ 2 $ et 400 photos de passage sur le volume au pire).
+- `LONGUEUR_MAX` des prompts ChatGPT : 20 000 (les modèles générés dépassent 12 000).
+- Migration des prompts : « jamais modifié par Lucas » = toutes les versions signées CoverSwap ; la version studio est
+  posée sans écraser l'historique ; un prompt modifié est laissé (Lucas copie ou restaure depuis Simulateur → Prompts).
+- Site : les libellés des zones de la source unique reprennent ceux du CRM (« Meubles bas »), pas ceux du site
+  (« Meubles bas, colonnes et îlot ») ; la description garde le détail.
+- Le seuil de la pastille de contrôle vient de Paramètres (`sousSeuil` calculé côté serveur dans les deux vues), pas
+  d'un 7 en dur dans les écrans.
+
+### Vérifié
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les fichiers touchés 0 ; `moteur/moteur.test.ts` **22/22**
+  (trois instantanés figés — cuisine bois + pierre paysage planche, salle de bain un film portrait échantillons bruts,
+  pro comptoir même film chatgpt —, douze blocs dans l'ordre, sans emoji, défauts précédents dans FINAL CHECK, cinq zones
+  refusées, chaque règle de direction artistique, seize profils, couleur en phrase, essence, pose, zones publiques,
+  lecture des JSON d'analyse et de contrôle, V1 revu au vocabulaire V1, `prompts-defaut.ts` = sortie du moteur,
+  bibliothèque générée valide et rendue, films distincts) ; `mission-15-partie-2.test.ts` **18/18** (migration
+  prompts-studio ; analyse mise en cache par empreinte, comptée en GenerationImage phase analyse et AppelIa ; route
+  `/api/simulate/analyse` 202 → tâche (origine SITE) → PRETE, autre parcours 404, photo effacée, quota compté à la
+  mise en file seulement — 10 par jour, prête = 200 et refusée = 400 même à quota atteint —, plafond global 400 puis
+  429, origine 403 ; budget dépassé → sautée, le site ne lit que le code « budget » ; 409 zone-non-visible + façades
+  composées ; références incohérentes : V1 202, V2 400, V2 sur cache périmé réparé par le site 202 ; cinq zones 400 ;
+  `/api/site/simulateur` ; V2 site : contrôle 5 puis 9 → deux tentatives, défaut dans FINAL CHECK, meilleure gardée,
+  planche jointe, medium, contrôles comptés au site, tout relisible sur la SimulationSite, rendu `apres.jpg` ; plus
+  assez de temps → première gardée ; V2 sans planche : échantillons bruts, un par film, « Image 2 » ; V1 : prompt du
+  site tel quel, échantillons par adresse, aucun appel vision ; espace/CRM V2 : analyse de la photo cadrée réutilisée,
+  high, brouillon avec moteur, score, prompt, étape, `sousSeuil` suivant le paramètre, appels vision comptés au CRM ;
+  tâche reprise après redéploiement → ECHEC interrompue sans appel ; simulation du site V2 → fiche du dossier (hors
+  espace puis dans l'espace) avec prompt, direction artistique, score, analyse ; `repererTypeSurface` ; planche PNG
+  1600 × 1000). Suites touchées : `simulateur.test.ts` 16/16 (simulations restantes au prix high : 20 pour 9,80 $),
+  `mission-15-partie-1.test.ts` 16/16, `mission-14-partie-9.test.ts` verte (ordre relatif des migrations),
+  `routes-publiques` 3/3 ; **`npm test` complet : 734/734** (la suite complète échouait 727/728 sur le test de la
+  mission 14 qui exigeait sa migration en dernier ; corrigé). OpenAI simulé par injection (`definirGenerateurEssai`,
+  `definirVisionEssai`) : aucun appel réseau, aucune image générée.
+- Site : `npm run lint` 0 ; `npm test` 8/8 ; `npx tsc --noEmit -p .` 0 (rien de changé côté site par la relecture).
+
+### Reste / à savoir
+- Rien lancé en vrai (ni `next build`, ni serveur, ni OpenAI) : à l'orchestrateur — build des deux dépôts, essai local
+  avec le faux OpenAI (le pipeline V2 attend aussi des réponses `chat/completions` JSON), puis déploiement du CRM
+  d'abord. Le facteur high ≈ ×1,7 et le coût d'un appel vision (≈ 0,005 $) sont des estimations à confirmer par le banc.
+- `SIMULATEUR_MOTEUR` reste V1 tant que Lucas ne bascule pas ; en V1, rien ne change pour les visiteurs (sauf le rendu
+  en JPEG et la limite à 4 zones, que le site respecte déjà) — la garde des références ne s'applique qu'en V2.
+- Partie 3 (banc) : le pipeline expose `genererAvecMoteur({ reglages: { ...reglages, moteur, planche }, echeance })` et
+  le générateur injectable commun ; le « V1 » du banc est le V1 revu (pas le prompt signé du site). Partie 4 :
+  supprimer `/api/simulation/consigne` et le prompt du site, lire `GET /api/site/simulateur`, lancer
+  `scripts/mesurer-couleurs.mjs`, dire au visiteur la phrase neutre quand `raison` de l'analyse est un code, retirer
+  l'ancien contrat synchrone ; partie 5 : `PreparationSimulation.etape` est déjà écrit, `suivreCreation` ne le rend pas
+  encore ; le message « interrompue » d'une préparation de l'espace est à montrer au client.
+- Le libellé « Murs, plafond » dit tel quel à `preparer_simulation` n'est pas reconnu (la virgule ; comportement
+  d'avant) ; `espace-murs` l'est et est refusé proprement.
+- `docs/SUIVI.md` du site ne décrit pas encore les routes `/api/simulate/analyse` et `/api/site/simulateur` : à écrire
+  avec la partie 4 (la documentation du CRM, elle, est à jour).
+- Vérifié par l'orchestrateur : CRM tsc, eslint, suite complète 734/734, build ; site lint, 8 tests, build. Essai local en
+  V2 (copie du CRM, faux OpenAI étendu à la vision) : `POST /api/simulate` → analyse de la photo (vision), planche,
+  rendu, contrôle 8/10, travail prêt en 7,5 s, moteur V2 tracé sur la simulation ; en V1 le même parcours reste
+  identique à la partie 1. Le sondage du site s'arrête quand l'onglet est caché et reprend dès qu'il redevient
+  visible (vérifié en forçant l'état). Déploiement CRM seul (le site ne change pas dans cette partie).

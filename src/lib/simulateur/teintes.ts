@@ -1,5 +1,6 @@
 import type { Reference } from "./catalogue";
 import { contrasteEnMots, couleurEnMots, type AnalyseCouleur } from "./couleur";
+import { LIBELLES_PROFIL, profilDe, type Profil } from "./moteur/materiaux";
 import type { IdZone } from "./types-surface";
 import { ZONES } from "./types-surface";
 
@@ -9,75 +10,15 @@ import { ZONES } from "./types-surface";
  * motif, sens de pose sur la zone, finition. Si ChatGPT lit mal l'échantillon
  * de la planche, la description compense.
  *
- * (Le mode API n'utilise pas ce fichier : sa consigne est construite par le
- * site, avec ses propres profils de revêtement.)
+ * Mission 15 (partie 2) : les seize profils (`profilDe`) vivent dans le moteur
+ * (`moteur/materiaux.ts`, fusion avec `profilRevetement` du site) ; ce fichier
+ * les relit.
  */
 
-export type Profil =
-  | "uni-mat"
-  | "uni-brillant"
-  | "uni-raye"
-  | "bois"
-  | "bois-peint"
-  | "marbre"
-  | "pierre"
-  | "terrazzo"
-  | "beton"
-  | "brique"
-  | "metal-brosse"
-  | "metal-poli"
-  | "metal-patine"
-  | "cuir"
-  | "tissu"
-  | "paillettes";
+export { profilDe, type Profil };
 
-const contient = (texte: string, mots: string[]) => mots.some((m) => texte.includes(m));
-
-export function profilDe(r: Pick<Reference, "nom" | "famille" | "categorie" | "tags">): Profil {
-  const nom = ` ${r.nom} ${r.tags.join(" ")} ${r.categorie} `.toLowerCase();
-  switch (r.famille) {
-    case "couleur":
-      if (contient(nom, ["stripe"])) return "uni-raye";
-      return contient(nom, ["lacquer", "gloss", "shiny", "brillant"]) ? "uni-brillant" : "uni-mat";
-    case "bois":
-      return contient(nom, ["painted", "peint", "plain white", "turquoise", "dark blue"]) ? "bois-peint" : "bois";
-    case "pierre":
-      if (contient(nom, ["terrazzo", "multicolored", "spotted"])) return "terrazzo";
-      if (contient(nom, ["marble", "marquina", "statuary", "onyx", "arabesque", "armani", "lombarda", "crema", "polished", "imperial", "opal", "calacatta", "carrara"])) return "marbre";
-      return "pierre";
-    case "beton":
-      return contient(nom, ["brick"]) ? "brique" : "beton";
-    case "metal":
-      if (contient(nom, ["chrom", "glow", "aurora", "laser"])) return "metal-poli";
-      if (contient(nom, ["patina", "corten", "antique", "iron", "copper", "bronze", "roseate"])) return "metal-patine";
-      return "metal-brosse";
-    case "textile":
-      return r.tags.includes("cuir") || contient(nom, ["leather"]) ? "cuir" : "tissu";
-    case "paillettes":
-      return "paillettes";
-    default:
-      return "uni-mat";
-  }
-}
-
-const LIBELLES_PROFIL: Record<Profil, string> = {
-  "uni-mat": "uni",
-  "uni-brillant": "uni",
-  "uni-raye": "uni rainuré",
-  bois: "bois",
-  "bois-peint": "bois peint",
-  marbre: "marbre",
-  pierre: "pierre",
-  terrazzo: "terrazzo",
-  beton: "béton",
-  brique: "brique",
-  "metal-brosse": "métal brossé",
-  "metal-poli": "métal poli",
-  "metal-patine": "métal patiné",
-  cuir: "cuir",
-  tissu: "textile",
-  paillettes: "paillettes",
-};
+/** Ce qu'il faut d'une référence pour la décrire (le catalogue du site, ou une référence du moteur). */
+export type ReferenceDecrite = Pick<Reference, "id" | "nom" | "famille" | "categorie" | "finition" | "tags">;
 
 const SENS_EN: Record<"vertical" | "longueur" | "horizontal", string> = {
   vertical: "vertically (bottom to top) on this surface",
@@ -85,7 +26,7 @@ const SENS_EN: Record<"vertical" | "longueur" | "horizontal", string> = {
   horizontal: "horizontally on this surface",
 };
 
-function finitionEn(r: Reference, profil: Profil): string {
+function finitionEn(r: ReferenceDecrite, profil: Profil): string {
   if (profil === "uni-brillant") return "high-gloss lacquer-look finish: soft reflections of the lights already in the room, nothing invented";
   if (profil === "metal-poli") return "polished metallic finish, reflecting only the existing room, blurred";
   if (profil === "paillettes") return "glossy ground with tiny sparkling flakes";
@@ -108,7 +49,7 @@ function grainDuBois(analyse: AnalyseCouleur): string {
 }
 
 /** La teinte en une phrase anglaise, pour une zone donnée (le sens du veinage dépend de la surface). */
-export function decrireTeintePourPrompt(r: Reference, analyse: AnalyseCouleur | null, zone: IdZone | null): string {
+export function decrireTeintePourPrompt(r: ReferenceDecrite, analyse: AnalyseCouleur | null, zone: IdZone | null): string {
   const profil = profilDe(r);
   const couleur = analyse ? couleurEnMots(analyse).en : null;
   const sens = SENS_EN[zone ? ZONES[zone].sens : "vertical"];
@@ -151,7 +92,7 @@ export function decrireTeintePourPrompt(r: Reference, analyse: AnalyseCouleur | 
 }
 
 /** La teinte en quelques mots, pour l'écran et l'espace client : « bois · beige chaud clair · mat ». */
-export function resumerTeinte(r: Reference, analyse: AnalyseCouleur | null): string {
+export function resumerTeinte(r: ReferenceDecrite, analyse: AnalyseCouleur | null): string {
   const profil = profilDe(r);
   const couleur = analyse ? couleurEnMots(analyse).fr.replace(/\s*\(#[0-9A-F]{6}\)$/, "") : null;
   const finition = profil === "uni-brillant" ? "brillant" : profil.startsWith("metal") ? "métallisé" : profil === "paillettes" ? "pailleté" : r.finition === "Structured" ? "mat texturé" : "mat";

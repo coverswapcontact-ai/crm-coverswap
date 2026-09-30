@@ -67,6 +67,31 @@ export function rendreSimulation(ip: string, maintenant: number = Date.now()): v
   if (simulationsGlobales.nombre > 0) simulationsGlobales.nombre -= 1;
 }
 
+/**
+ * Mission 15 (partie 2) : analyses de photos par jour, par adresse et pour tout le site (un appel vision d'un
+ * demi-centime chacune, et une photo écrite sur le volume en attendant la tâche). Ne compte que ce qui est
+ * réellement mis en file : une photo refusée ou une analyse déjà prête ne consomme rien (`demanderAnalyseSite`).
+ */
+export const LIMITE_ANALYSES = { parIp: 10, global: 400 };
+const analysesParIp = new Map<string, { jour: string; nombre: number }>();
+let analysesGlobales = { jour: "", nombre: 0 };
+
+/** Une nouvelle analyse de photo est-elle autorisée pour cette IP aujourd'hui ? La compte si oui. */
+export function analyseAutorisee(ip: string, maintenant: number = Date.now()): { ok: boolean; raison?: "ip" | "global" } {
+  const jour = jourDe(maintenant);
+  if (analysesGlobales.jour !== jour) {
+    analysesGlobales = { jour, nombre: 0 };
+    analysesParIp.clear();
+  }
+  if (analysesGlobales.nombre >= LIMITE_ANALYSES.global) return { ok: false, raison: "global" };
+  const entree = analysesParIp.get(ip);
+  const nombre = entree && entree.jour === jour ? entree.nombre : 0;
+  if (nombre >= LIMITE_ANALYSES.parIp) return { ok: false, raison: "ip" };
+  analysesParIp.set(ip, { jour, nombre: nombre + 1 });
+  analysesGlobales.nombre += 1;
+  return { ok: true };
+}
+
 /** IP du visiteur : celle que le site transmet, sinon celle de l'appelant. */
 export function ipDuVisiteur(entetes: { get(nom: string): string | null }): string {
   const transmise = entetes.get("x-visiteur-ip")?.trim();

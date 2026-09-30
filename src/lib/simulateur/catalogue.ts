@@ -17,7 +17,8 @@ import { analyserCouleur, type AnalyseCouleur } from "./couleur";
  * stockage de Cover Styl'.
  */
 
-export type Reference = { id: string; nom: string; famille: string; categorie: string; finition: string; image: string; tags: string[] };
+/** Une référence du catalogue du site ; `hex` (couleur moyenne mesurée par `coverswap/scripts/mesurer-couleurs.mjs`) quand le site la sert. */
+export type Reference = { id: string; nom: string; famille: string; categorie: string; finition: string; image: string; tags: string[]; hex?: string | null };
 
 const DUREE_CACHE_MS = 6 * 3_600_000;
 const HOTES_ECHANTILLONS = new Set(["ssi.s3.fr-par.scw.cloud", "cms.coverstyl.com"]);
@@ -26,15 +27,16 @@ const dossierSimulateur = () => path.join(resolveUploadsDir(), "simulateur");
 const copieCatalogue = () => path.join(dossierSimulateur(), "catalogue.json");
 const fichierAnalyses = () => path.join(dossierSimulateur(), "analyses-couleur.json");
 
-type Cache = { references: Reference[]; parId: Map<string, Reference>; luLe: number; source: "site" | "copie" };
+type Cache = { references: Reference[]; parId: Map<string, Reference>; luLe: number; source: "site" | "copie"; /** Essais : ce que « relire le site » installera. */ essaiSuivant?: Reference[] | null };
 const CLE = "__coverswapCatalogue";
 const globalCache = globalThis as unknown as Record<string, Cache | undefined>;
+const LU_POUR_TOUJOURS = Number.MAX_SAFE_INTEGER;
 
 function lireListe(brut: unknown): Reference[] {
   const liste = Array.isArray(brut) ? brut : Array.isArray((brut as { references?: unknown })?.references) ? (brut as { references: unknown[] }).references : [];
   return liste
     .filter((r): r is Reference => !!r && typeof r === "object" && typeof (r as Reference).id === "string" && typeof (r as Reference).image === "string")
-    .map((r) => ({ id: r.id, nom: String(r.nom ?? r.id), famille: String(r.famille ?? ""), categorie: String(r.categorie ?? ""), finition: String(r.finition ?? ""), image: r.image, tags: Array.isArray(r.tags) ? r.tags.map(String) : [] }));
+    .map((r) => ({ id: r.id, nom: String(r.nom ?? r.id), famille: String(r.famille ?? ""), categorie: String(r.categorie ?? ""), finition: String(r.finition ?? ""), image: r.image, tags: Array.isArray(r.tags) ? r.tags.map(String) : [], hex: typeof r.hex === "string" && /^#[0-9A-Fa-f]{6}$/.test(r.hex) ? r.hex.toUpperCase() : null }));
 }
 
 function mettreEnCache(references: Reference[], source: Cache["source"]): Cache {
@@ -43,22 +45,50 @@ function mettreEnCache(references: Reference[], source: Cache["source"]): Cache 
   return cache;
 }
 
-/** Pour les essais : un catalogue posé à la main (null : revenir au site). */
-export function definirCatalogueEssai(references: Reference[] | null): void {
-  globalCache[CLE] = references ? { references, parId: new Map(references.map((r) => [r.id, r])), luLe: Number.MAX_SAFE_INTEGER, source: "site" } : undefined;
+/**
+ * Pour les essais : un catalogue posé à la main (null : revenir au site) ; `auRechargement` : ce que le site
+ * « servira » quand le CRM le relira (`rafraichirCatalogue`), pour jouer un catalogue réparé.
+ */
+export function definirCatalogueEssai(references: Reference[] | null, options: { auRechargement?: Reference[] | null } = {}): void {
+  globalCache[CLE] = references ? { references, parId: new Map(references.map((r) => [r.id, r])), luLe: LU_POUR_TOUJOURS, source: "site", essaiSuivant: options.auRechargement ?? null } : undefined;
+}
+
+/** Le catalogue tel que le site le sert maintenant, mis en cache et recopié sur le volume ; lève si le site ne répond pas. */
+async function lireDepuisLeSite(): Promise<Cache> {
+  const reponse = await fetch(`${adresseDuSite()}/api/catalogue`, { signal: AbortSignal.timeout(8000), headers: { Accept: "application/json" } });
+  if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+  const references = lireListe(await reponse.json());
+  if (references.length < 20) throw new Error(`catalogue trop court (${references.length})`);
+  await fs.mkdir(dossierSimulateur(), { recursive: true });
+  await fs.writeFile(copieCatalogue(), JSON.stringify(references));
+  return mettreEnCache(references, "site");
+}
+
+/**
+ * Relit le catalogue du site MAINTENANT, sans attendre les six heures (le site vient peut-être de réparer ses
+ * adresses d'images) : vrai si le site a répondu, faux s'il est injoignable (le cache reste tel quel).
+ */
+export async function rafraichirCatalogue(): Promise<boolean> {
+  const actuel = globalCache[CLE];
+  if (actuel?.luLe === LU_POUR_TOUJOURS) {
+    // Catalogue d'essai : « le site » sert ce que l'essai a prévu, ou le même.
+    if (actuel.essaiSuivant) definirCatalogueEssai(actuel.essaiSuivant);
+    return true;
+  }
+  try {
+    await lireDepuisLeSite();
+    return true;
+  } catch (erreur) {
+    console.warn("[simulateur] catalogue du site non relu :", erreur instanceof Error ? erreur.message : erreur);
+    return false;
+  }
 }
 
 async function chargerCache(): Promise<Cache> {
   const actuel = globalCache[CLE];
   if (actuel && Date.now() - actuel.luLe < DUREE_CACHE_MS) return actuel;
   try {
-    const reponse = await fetch(`${adresseDuSite()}/api/catalogue`, { signal: AbortSignal.timeout(8000), headers: { Accept: "application/json" } });
-    if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
-    const references = lireListe(await reponse.json());
-    if (references.length < 20) throw new Error(`catalogue trop court (${references.length})`);
-    await fs.mkdir(dossierSimulateur(), { recursive: true });
-    await fs.writeFile(copieCatalogue(), JSON.stringify(references));
-    return mettreEnCache(references, "site");
+    return await lireDepuisLeSite();
   } catch (erreur) {
     if (actuel) {
       actuel.luLe = Date.now() - DUREE_CACHE_MS + 10 * 60_000; // nouvel essai dans dix minutes

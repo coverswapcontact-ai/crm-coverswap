@@ -91,7 +91,8 @@ export type EtatIa = {
 
 const arrondi = (montant: number) => Math.round(montant * 10_000) / 10_000;
 
-async function consommationDuMois(maintenant: Date): Promise<{ depense: number; appels: number }> {
+/** Dépense du mois civil (heure de Paris) en euros, tous usages — les appels vision du simulateur (mission 15) y entrent aussi. */
+export async function consommationDuMois(maintenant: Date): Promise<{ depense: number; appels: number }> {
   const mois = jourParis(maintenant).slice(0, 7);
   const lignes = await prisma.appelIa.findMany({
     where: { createdAt: { gte: new Date(maintenant.getTime() - 33 * 86_400_000), lte: maintenant } },

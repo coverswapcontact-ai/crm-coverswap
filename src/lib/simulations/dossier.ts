@@ -18,6 +18,7 @@ import { envoyerSms } from "@/lib/sms/envoi";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { texteDuCatalogue } from "@/lib/sms/modeles";
 import { estMobileFrancais, prenomDuContact } from "@/lib/sms/texte";
+import { reglagesSimulateur } from "@/lib/simulateur/reglages";
 import { lireZones, surfaceDepuisLibelle, typeSurface, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 
 /**
@@ -78,9 +79,21 @@ export async function ecrireImageSimulation(dossierId: string, octets: Buffer, e
 
 /* ── Simulations faites sur le site ───────────────────────────────── */
 
+/** Ce qu'on relit sur la SimulationSite d'origine : les références, et ce que le moteur a produit (mission 15, partie 2). */
+type OrigineSite = { references: string; moteur: string | null; promptTexte: string | null; directionArtistique: string | null; analyse: string | null; scoreControle: number | null; defautsControle: string | null; tentatives: number | null };
+
+/** La simulation d'origine du parcours (`SimulationSite`) d'une simulation du contact, archivée comprise ; null si elle n'existe plus. */
+async function origineDuSite(simulationId: string): Promise<OrigineSite | null> {
+  return prisma.simulationSite.findFirst({ where: { ...AVEC_ARCHIVES, simulationId }, select: { references: true, moteur: true, promptTexte: true, directionArtistique: true, analyse: true, scoreControle: true, defautsControle: true, tentatives: true } });
+}
+
+/** Les traces du moteur d'une simulation du site, telles qu'elles s'écrivent sur la SimulationEspace (vides sans origine). */
+function traceDuSite(origine: OrigineSite | null) {
+  return { moteur: origine?.moteur ?? null, promptTexte: origine?.promptTexte ?? null, directionArtistique: origine?.directionArtistique ?? null, analyse: origine?.analyse ?? null, scoreControle: origine?.scoreControle ?? null, defautsControle: origine?.defautsControle ?? null, tentatives: origine?.tentatives ?? null };
+}
+
 /** Zones et teintes d'une simulation du site, relues sur la simulation d'origine du parcours. */
-async function zonesDuSite(simulationId: string, notes: string | null, referenceChoisie: string | null): Promise<ZoneTeinte[]> {
-  const origine = await prisma.simulationSite.findFirst({ where: { ...AVEC_ARCHIVES, simulationId }, select: { references: true } });
+function zonesDuSite(origine: OrigineSite | null, notes: string | null, referenceChoisie: string | null): ZoneTeinte[] {
   const depuisParcours = lireZones(origine?.references ?? null);
   if (depuisParcours.length > 0) return depuisParcours;
   // Ancien parcours : « Libellé : REF (Nom) | … » dans les notes.
@@ -95,8 +108,11 @@ async function zonesDuSite(simulationId: string, notes: string | null, reference
 
 /**
  * Les simulations du site rangées dans ce dossier rejoignent son espace, déjà
- * publiées (le client les a vues). Rejouable : une simulation déjà présente —
- * même retirée par Lucas — n'est jamais recréée. Rend les lignes créées.
+ * publiées (le client les a vues), avec ce que le moteur a produit (prompt,
+ * direction artistique, analyse, contrôle : relus sur la SimulationSite
+ * d'origine, lisibles dans la fiche et par `voir_simulations`). Rejouable :
+ * une simulation déjà présente — même retirée par Lucas — n'est jamais recréée.
+ * Rend les lignes créées.
  */
 export async function synchroniserSimulationsSite(dossierId: string): Promise<SimulationEspace[]> {
   const espace = await prisma.espaceClient.findFirst({ where: { dossierId }, select: { id: true } });
@@ -109,7 +125,8 @@ export async function synchroniserSimulationsSite(dossierId: string): Promise<Si
   const creees: SimulationEspace[] = [];
   for (const simulation of simulations) {
     if (connues.has(simulation.id)) continue;
-    const zones = await zonesDuSite(simulation.id, simulation.notes, simulation.referenceChoisie);
+    const origine = await origineDuSite(simulation.id);
+    const zones = zonesDuSite(origine, simulation.notes, simulation.referenceChoisie);
     const ordre = await prisma.simulationEspace.count({ where: { ...AVEC_ARCHIVES, espaceId: espace.id } });
     creees.push(
       await prisma.simulationEspace.create({
@@ -125,6 +142,7 @@ export async function synchroniserSimulationsSite(dossierId: string): Promise<Si
           zones: zones.length ? JSON.stringify(zones) : null,
           simulationId: simulation.id,
           ordre,
+          ...traceDuSite(origine),
         },
       })
     );
@@ -191,9 +209,28 @@ export type SimulationVue = {
   avant: string | null;
   /** Rangée dans le dossier sans espace client : elle rejoindra l'espace à son ouverture. */
   horsEspace?: boolean;
+  /** Mission 15 (partie 2) : ce que le moteur a donné au modèle, lisible dans la fiche (comparaison avec les prompts « studio »). */
+  moteur: string | null;
+  promptTexte: string | null;
+  directionArtistique: string | null;
+  scoreControle: number | null;
+  /** Le score est sous le seuil du contrôle (Paramètres) : la pastille passe en ambre. */
+  sousSeuil: boolean;
+  defautsControle: { type: string; detail: string }[];
+  tentatives: number | null;
 };
 
-function versVue(dossierId: string, s: SimulationEspace): SimulationVue {
+function lireDefautsControle(json: string | null): { type: string; detail: string }[] {
+  if (!json) return [];
+  try {
+    const lu: unknown = JSON.parse(json);
+    return Array.isArray(lu) ? lu.filter((d): d is { type: string; detail: string } => Boolean(d) && typeof d === "object" && typeof (d as { detail?: unknown }).detail === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function versVue(dossierId: string, s: SimulationEspace, seuilControle: number): SimulationVue {
   return {
     id: s.id,
     source: (SOURCES_SIMULATION as readonly string[]).includes(s.source) ? (s.source as SourceSimulation) : "MANUEL",
@@ -212,18 +249,30 @@ function versVue(dossierId: string, s: SimulationEspace): SimulationVue {
     commentaire: s.commentaireClient,
     image: `/api/dossiers/${dossierId}/simulations/${s.id}/image`,
     avant: s.photoAvant ? `/api/dossiers/${dossierId}/simulations/${s.id}/avant` : null,
+    moteur: s.moteur,
+    promptTexte: s.promptTexte,
+    directionArtistique: s.directionArtistique,
+    scoreControle: s.scoreControle,
+    sousSeuil: typeof s.scoreControle === "number" && s.scoreControle < seuilControle,
+    defautsControle: lireDefautsControle(s.defautsControle),
+    tentatives: s.tentatives,
   };
 }
+
+const seuilControle = async () => (await reglagesSimulateur()).seuilControle;
 
 export async function listerSimulationsDossier(dossierId: string): Promise<{ espace: { id: string; lien: string | null } | null; simulations: SimulationVue[] }> {
   const espace = await prisma.espaceClient.findFirst({ where: { dossierId }, select: { id: true, code: true, version: true, revoqueLe: true, permanentId: true } });
   if (espace) await synchroniserSimulationsSite(dossierId).catch((erreur) => console.error("[simulations] synchronisation du site :", erreur));
+  const seuil = await seuilControle();
   const lignes = espace ? await prisma.simulationEspace.findMany({ where: { espaceId: espace.id }, orderBy: [{ createdAt: "desc" }] }) : [];
-  const vues = lignes.map((s) => versVue(dossierId, s));
+  const vues = lignes.map((s) => versVue(dossierId, s, seuil));
   if (!espace) {
-    // Pas encore d'espace : les simulations du site se montrent quand même au dossier.
+    // Pas encore d'espace : les simulations du site se montrent quand même au dossier, avec ce que le moteur a produit.
     const site = await prisma.simulation.findMany({ where: { dossierId, imageAfterPath: { not: null } }, orderBy: { createdAt: "desc" } });
     for (const s of site) {
+      const origine = await origineDuSite(s.id);
+      const trace = traceDuSite(origine);
       vues.push({
         id: `site-${s.id}`,
         source: "SITE",
@@ -232,7 +281,7 @@ export async function listerSimulationsDossier(dossierId: string): Promise<{ esp
         description: s.notes,
         typeSurface: null,
         typeLibelle: null,
-        zones: await zonesDuSite(s.id, s.notes, s.referenceChoisie),
+        zones: zonesDuSite(origine, s.notes, s.referenceChoisie),
         promptVersion: null,
         coutDollars: null,
         le: s.createdAt.toISOString(),
@@ -243,6 +292,13 @@ export async function listerSimulationsDossier(dossierId: string): Promise<{ esp
         image: `/api/uploads/${s.imageAfterPath}`,
         avant: s.imageBeforePath ? `/api/uploads/${s.imageBeforePath}` : null,
         horsEspace: true,
+        moteur: trace.moteur,
+        promptTexte: trace.promptTexte,
+        directionArtistique: trace.directionArtistique,
+        scoreControle: trace.scoreControle,
+        sousSeuil: typeof trace.scoreControle === "number" && trace.scoreControle < seuil,
+        defautsControle: lireDefautsControle(trace.defautsControle),
+        tentatives: trace.tentatives,
       });
     }
   }
@@ -324,7 +380,7 @@ export async function deposerSimulationDossier(dossierId: string, fichier: File,
     return simulation;
   });
   await recalculerMain(dossierId);
-  return versVue(dossierId, creee);
+  return versVue(dossierId, creee, await seuilControle());
 }
 
 /* ── Publier, masquer, retirer ────────────────────────────────────── */
@@ -440,7 +496,7 @@ export async function changerStatutSimulation(dossierId: string, simulationId: s
     const { notifierClient } = await import("@/lib/mail/notifications");
     await notifierClient("SIMULATION_PUBLIEE", dossierId, simulation.id);
   }
-  return versVue(dossierId, modifiee);
+  return versVue(dossierId, modifiee, await seuilControle());
 }
 
 export async function modifierSimulation(dossierId: string, simulationId: string, entree: { titre?: string | null; description?: string | null }): Promise<SimulationVue> {
@@ -452,5 +508,5 @@ export async function modifierSimulation(dossierId: string, simulationId: string
       ...(entree.description !== undefined ? { description: entree.description?.trim().slice(0, 400) || null } : {}),
     },
   });
-  return versVue(dossierId, modifiee);
+  return versVue(dossierId, modifiee, await seuilControle());
 }

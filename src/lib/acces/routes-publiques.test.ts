@@ -55,6 +55,8 @@ describe("routes publiques", () => {
       "/api/simulate",
       "/api/simulate/image",
       "/api/simulate/prevenir",
+      "/api/simulate/analyse",
+      "/api/site/simulateur",
       "/manifest-crm.webmanifest",
       "/sw.js",
       "/hors-ligne.html",

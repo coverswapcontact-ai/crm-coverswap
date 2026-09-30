@@ -3,15 +3,15 @@ import { z } from "zod/v4";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { enregistrerVersion, lirePrompt, restaurerVersion, texteDeVersion } from "@/lib/simulateur/bibliotheque";
-import { etiquettes, rendrePrompt, verifierModele } from "@/lib/simulateur/rendu";
+import { LONGUEUR_MAX, etiquettes, rendrePrompt, verifierModele } from "@/lib/simulateur/rendu";
 import { typeSurface } from "@/lib/simulateur/types-surface";
 
 export const dynamic = "force-dynamic";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("enregistrer"), texte: z.string().max(12_000, "Prompt trop long (12 000 caractères au plus)."), note: z.string().max(300).nullable().optional() }),
+  z.object({ action: z.literal("enregistrer"), texte: z.string().max(LONGUEUR_MAX, `Prompt trop long (${LONGUEUR_MAX.toLocaleString("fr-FR")} caractères au plus).`), note: z.string().max(300).nullable().optional() }),
   z.object({ action: z.literal("restaurer"), numero: z.number().int().min(1) }),
-  z.object({ action: z.literal("verifier"), texte: z.string().max(12_000) }),
+  z.object({ action: z.literal("verifier"), texte: z.string().max(LONGUEUR_MAX) }),
 ]);
 
 /** Teintes d'exemple de l'aperçu : on voit où tombe chaque morceau du prompt sans rien préparer. */

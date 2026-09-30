@@ -88,8 +88,8 @@ function useGestes(recharger: () => void, apresCopie?: () => void) {
   return { ouvrirSms: setSms, ouvrirMail: setMail, fenetres };
 }
 
-/** La relecture existante d'une proposition de mail (celle de « À valider ») : corriger puis valider. */
-function RelectureMail({ propositionId, dossierId, onFini }: { propositionId: string; dossierId: string; onFini: (fait: boolean) => void }) {
+/** La relecture existante d'une proposition de mail (celle de « À valider ») : corriger puis valider. Mission 17 (partie A) : exportée pour l'écran Tâches (relance par mail). */
+export function RelectureMail({ propositionId, dossierId, onFini }: { propositionId: string; dossierId: string; onFini: (fait: boolean) => void }) {
   const [proposition, setProposition] = useState<PropositionVue | null>(null);
   useEffect(() => {
     let actif = true;

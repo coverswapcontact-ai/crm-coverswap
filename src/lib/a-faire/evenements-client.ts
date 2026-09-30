@@ -97,20 +97,72 @@ export async function dernierEvenementClientLeads(ids: readonly string[]): Promi
 }
 
 /**
- * Le plus récent geste du client pour chaque sujet (dossier et lead confondus), sous la clé `dossier:<id>` ou
- * `lead:<id>` : une seule lecture groupée pour tout un passage du moteur.
+ * Pour chaque client, le plus récent geste : un `Message` ENTRANT rattaché au client, ou un geste sur l'un de ses
+ * dossiers (même liste que ci-dessus). Pour une tâche posée sur un client sans dossier ni lead (mail d'un client connu).
  */
-export async function dernierEvenementClient(sujets: readonly { dossierId?: string | null; leadId?: string | null }[]): Promise<(sujet: { dossierId?: string | null; leadId?: string | null }) => Date | null> {
-  const dossierIds = sujets.map((s) => s.dossierId).filter((id): id is string => Boolean(id));
-  const leadIds = sujets.map((s) => s.leadId).filter((id): id is string => Boolean(id));
-  const [dossiers, leads] = await Promise.all([
-    dossierIds.length ? dernierEvenementClientDossiers(dossierIds) : new Map<string, Date>(),
-    leadIds.length ? dernierEvenementClientLeads(leadIds) : new Map<string, Date>(),
+export async function dernierEvenementClientClients(ids: readonly string[]): Promise<Map<string, Date>> {
+  const carte = new Map<string, Date>();
+  const uniques = [...new Set(ids.filter(Boolean))];
+  for (const paquet of paquets(uniques)) {
+    const [messages, dossiers] = await Promise.all([
+      prisma.message.groupBy({ by: ["clientId"], where: { clientId: { in: paquet }, sens: "ENTRANT" }, _max: { recuLe: true } }),
+      prisma.dossier.findMany({ where: { clientId: { in: paquet }, ...AVEC_ARCHIVES }, select: { id: true, clientId: true } }),
+    ]);
+    for (const g of messages) retenir(carte, g.clientId, g._max.recuLe);
+    const gestes = await dernierEvenementClientDossiers(dossiers.map((d) => d.id));
+    for (const d of dossiers) retenir(carte, d.clientId, gestes.get(d.id));
+  }
+  return carte;
+}
+
+/** Pour chaque fil de mails (tâche REPONDRE:fil:<fil> ou LIRE_MAIL:fil:<fil>, sans contact connu), le dernier mail reçu. */
+export async function dernierEvenementClientFils(fils: readonly string[]): Promise<Map<string, Date>> {
+  const carte = new Map<string, Date>();
+  const uniques = [...new Set(fils.filter(Boolean))];
+  for (const paquet of paquets(uniques)) {
+    const [parFil, parId] = await Promise.all([
+      prisma.message.groupBy({ by: ["filCanal"], where: { filCanal: { in: paquet }, sens: "ENTRANT" }, _max: { recuLe: true } }),
+      // Un fil sans identifiant chez le fournisseur a pour clé l'id de son message (mail/vues.ts : filCanal ?? id).
+      prisma.message.findMany({ where: { id: { in: paquet }, filCanal: null, sens: "ENTRANT" }, select: { id: true, recuLe: true } }),
+    ]);
+    for (const g of parFil) retenir(carte, g.filCanal, g._max.recuLe);
+    for (const m of parId) retenir(carte, m.id, m.recuLe);
+  }
+  return carte;
+}
+
+/** Le fil d'une clé de tâche `TYPE:fil:<fil>`, s'il y en a un. */
+export function filDeLaCle(cle: string | null | undefined): string | null {
+  const trouve = /^[A-Z_]+:fil:(.+)$/.exec(cle ?? "");
+  return trouve ? trouve[1] : null;
+}
+
+type SujetLu = { dossierId?: string | null; leadId?: string | null; clientId?: string | null; cle?: string | null };
+
+/**
+ * Le plus récent geste du client pour chaque sujet (dossier, lead, client, ou fil de mails sans contact) : une seule
+ * lecture groupée pour tout un passage du moteur.
+ */
+export async function dernierEvenementClient(sujets: readonly SujetLu[]): Promise<(sujet: SujetLu) => Date | null> {
+  const ids = (cle: keyof SujetLu) => sujets.map((s) => s[cle]).filter((id): id is string => Boolean(id));
+  const dossierIds = ids("dossierId");
+  const leadIds = ids("leadId");
+  const clientIds = ids("clientId");
+  const fils = sujets.map((s) => filDeLaCle(s.cle)).filter((f): f is string => Boolean(f));
+  const vide = new Map<string, Date>();
+  const [dossiers, leads, clients, parFil] = await Promise.all([
+    dossierIds.length ? dernierEvenementClientDossiers(dossierIds) : vide,
+    leadIds.length ? dernierEvenementClientLeads(leadIds) : vide,
+    clientIds.length ? dernierEvenementClientClients(clientIds) : vide,
+    fils.length ? dernierEvenementClientFils(fils) : vide,
   ]);
   return (sujet) => {
-    const a = sujet.dossierId ? dossiers.get(sujet.dossierId) : undefined;
-    const b = sujet.leadId ? leads.get(sujet.leadId) : undefined;
-    if (a && b) return a.getTime() >= b.getTime() ? a : b;
-    return a ?? b ?? null;
+    const dates = [
+      sujet.dossierId ? dossiers.get(sujet.dossierId) : undefined,
+      sujet.leadId ? leads.get(sujet.leadId) : undefined,
+      sujet.clientId ? clients.get(sujet.clientId) : undefined,
+      parFil.get(filDeLaCle(sujet.cle) ?? ""),
+    ].filter((d): d is Date => Boolean(d));
+    return dates.length ? dates.reduce((a, b) => (a.getTime() >= b.getTime() ? a : b)) : null;
   };
 }

@@ -27,6 +27,7 @@ import {
 import type { EntrantDetail, EntrantResume, ListeEntrants } from "./types";
 import { PRIORITES, comparerPourRappel } from "./priorite";
 import { classerLeadSansBloquer, poserPriorite } from "./qualification";
+import { retenirContactEcrit } from "./contact-ecrit";
 
 // Contacts entrants (modèle Lead) : ce que le site, Meta, Zapier et la saisie
 // à la main font arriver. Ils vivent ici jusqu'au dossier ; ensuite leur
@@ -85,6 +86,7 @@ function versResume(lead: LeadResume, maintenant: Date): EntrantResume {
     rappelLe: lead.rappelLe?.toISOString() ?? null,
     rappelEnRetard: Boolean(lead.rappelLe && lead.rappelLe.getTime() < maintenant.getTime()),
     dernierAppelLe: lead.dernierAppelLe?.toISOString() ?? null,
+    dernierContactLe: lead.dernierContactLe?.toISOString() ?? null,
     tentatives: lead.tentatives,
   };
 }
@@ -337,7 +339,10 @@ export async function ajouterEchange(id: string, entree: z.output<typeof schemaE
       const tentatives = appelSansReponse({ issue: issueDuContenu(entree.contenu), texte: entree.contenu }) ? { increment: 1 } : 0;
       await tx.lead.update({ where: { id }, data: { ...(contacte ? { statut: "CONTACTE" } : {}), ...(appel ? { dernierAppelLe: new Date(), tentatives } : {}) } });
     }
+    // Mission 17 (partie A) : un SMS ou un mail noté est un contact écrit — le lead passe dans « À rappeler », sans date.
+    if (entree.type === "SMS" || entree.type === "EMAIL") await retenirContactEcrit(id, new Date(), tx);
   });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
 }
 
 export const schemaMotif = z.object({

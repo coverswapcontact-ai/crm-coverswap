@@ -6,7 +6,7 @@ import { issueDeLAbsence, PREFIXE_COCHE, sujetDisparu, type IssueAbsence } from 
 import type { Achevement, ActionManuelle } from "./detecteurs/types";
 import { dureeDe, dureeReelle, dureesMesurees } from "./durees";
 import { dateOuNull, etatDe, lirePrecedent, type Precedent } from "./etat";
-import { dernierEvenementClient } from "./evenements-client";
+import { dernierEvenementClient, filDeLaCle } from "./evenements-client";
 import { jsonStable, lireObjet } from "./json";
 import { ACTEUR_TACHES, SOURCES_TACHE, type Detection, type NiveauTache, type ReponseTache, type SourceTache, type StatutTache } from "./types";
 import { actionsManuellesEnVigueur } from "./vigueur";
@@ -209,7 +209,7 @@ export async function reconcilier(detections: readonly Detection[], options: Opt
     dureesMesurees(),
   ]);
   // Les gestes du client, lus une fois pour tous les sujets qui peuvent en dépendre (retours, réouvertures).
-  const aLire = [...existantes.values(), ...plusTard].filter((l) => l.statut !== "A_FAIRE" && (l.dossierId || l.leadId));
+  const aLire = [...existantes.values(), ...plusTard].filter((l) => l.statut !== "A_FAIRE" && (l.dossierId || l.leadId || l.clientId || filDeLaCle(l.cle)));
   const gesteDuClient = aLire.length ? await dernierEvenementClient(aLire) : () => null;
   const clientSEstManifesteDepuis = (ligne: TacheAFaire, depuis: Date | null) => {
     if (!depuis) return false;

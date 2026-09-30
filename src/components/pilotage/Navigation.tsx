@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FolderKanban, Globe, Mail, Megaphone, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { FolderKanban, Globe, ListChecks, Mail, Megaphone, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -11,8 +11,11 @@ import { EVENEMENT_COMPTEURS } from "./evenements";
 import { BandeauRappelGoogle } from "./RappelGoogle";
 import { TRANS } from "./ui";
 
-/** Mission 14 (partie 3) : l'onglet Leads ne compte que les rappels en retard (en rouge). */
-export type Compteurs = { leadsEnRetard: number; tachesEnEchec: number; mailATraiter: number };
+/**
+ * Mission 14 (partie 3) : l'onglet Leads ne compte que les rappels en retard (en rouge).
+ * Mission 17 (partie A) : l'onglet Tâches compte les tâches d'« Aujourd'hui » (10 au plus, en vert).
+ */
+export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; tachesEnEchec: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
@@ -25,7 +28,7 @@ type Entree = {
   court?: string;
   icone: LucideIcon;
   compteur?: keyof Compteurs;
-  /** Barre du bas sur téléphone (4 entrées au plus, « Plus » en cinquième). */
+  /** Barre du bas sur téléphone (5 entrées au plus, « Plus » en sixième). */
   mobile?: boolean;
 };
 
@@ -35,14 +38,17 @@ type Entree = {
 // Mission 13 (lot 7, 29/09/2026) : Commercial, Prospects, Journal, Registre des numéros, SMS, la messagerie et
 // l'agent mail v1 sont retirés du CRM (leurs données restent en base) ; À valider et Synthèse restent joignables
 // par leur adresse (menu Plus : Simulateur, Finances, Site, Publicité, Tâches de fond, Dépenses, Paramètres).
+// Mission 17 (partie A) : « Tâches » en premier, l'accueil de l'application ; sur téléphone, Clients passe dans « Plus »
+// (Tâches, Leads, Dossiers, Espaces, Mail, puis Plus).
 const PRINCIPALES: Entree[] = [
+  { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
   { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone, mobile: true },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
-  { href: "/clients", libelle: "Clients", icone: Users, mobile: true },
+  { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
 
@@ -50,7 +56,7 @@ const PRINCIPALES: Entree[] = [
 const SECONDAIRES: Entree[] = [
   { href: "/site", libelle: "Site", icone: Globe },
   { href: "/publicite", libelle: "Publicité", icone: Megaphone },
-  { href: "/taches", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
+  { href: "/taches-de-fond", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
@@ -80,7 +86,7 @@ function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ leadsEnRetard: 0, tachesEnEchec: 0, mailATraiter: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, tachesEnEchec: 0, mailATraiter: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 
@@ -134,7 +140,7 @@ export function Navigation() {
         className="sticky top-0 z-40 hidden border-b-[0.5px] border-[#2A2D34] bg-[#16181D]/95 backdrop-blur md:block"
       >
         <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-4 px-5 lg:gap-6 lg:px-8">
-          <Link href="/leads" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
+          <Link href="/taches" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
             CoverSwap
             <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>
           </Link>

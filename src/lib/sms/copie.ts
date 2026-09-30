@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { recalculerMain } from "@/lib/dossiers/main";
+import { retenirContactEcrit } from "@/lib/prospects/contact-ecrit";
 import { relanceDevisFaiteParSms, verifierRelanceParSms } from "@/lib/relances/etape";
 import { CODES_SMS, estRelancePhotos, porteLienEspace, type CodeSms, type RelanceSms } from "./catalogue";
 import { LONGUEUR_MAX_SMS } from "./envoi";
@@ -126,6 +127,8 @@ export async function noterSmsCopie(entree: EntreeCopie, maintenant: Date = new 
   if (!dossierId) {
     const deja = await prisma.interaction.findFirst({ where: { leadId: leadId!, type: "SMS", contenu, createdAt: { gte: depuis } }, select: { id: true } });
     const id = deja?.id ?? (await prisma.interaction.create({ data: { leadId: leadId!, type: "SMS", contenu }, select: { id: true } })).id;
+    // Mission 17 (partie A) : contacté par écrit — il sort d'« À appeler » pour « À rappeler », sans date.
+    if (!deja) await retenirContactEcrit(leadId, maintenant);
     await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
     return { cible: "CONTACT", dossierId: null, leadId, id, deja: Boolean(deja), lien };
   }
@@ -137,6 +140,8 @@ export async function noterSmsCopie(entree: EntreeCopie, maintenant: Date = new 
   const evenement = await prisma.dossierEvenement.create({ data: { dossierId, type: "SMS_COPIE", direction: "SORTANT", contenu, metadata: JSON.stringify(metadata) }, select: { id: true } });
   // Partie 6 : la relance de devis faite par SMS — le dossier passe en « Relance », le mail du même rang ne partira pas.
   if (relance && !estRelancePhotos(relance)) await relanceDevisFaiteParSms({ dossierId, documentId: relance.documentId, rang: relance.rang });
+  // Mission 17 (partie A) : le lead du dossier est contacté par écrit (un lead du simulateur sort d'« À appeler »).
+  await retenirContactEcrit(leadId, maintenant);
   // Un SMS avec le lien passe la main au client ; tout SMS copié répond au message du client qui attendait (R2).
   await recalculerMain(dossierId);
   return { cible: "DOSSIER", dossierId, leadId, id: evenement.id, deja: false, lien };

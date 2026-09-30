@@ -42,8 +42,12 @@ const CLASSE_PUCE_LIEN = cn(
   TRANS
 );
 
-/** Mission 13 (lot 4) : ce qu'un raccourci demande en ouvrant le panneau — une rubrique, ou une étape à passer. */
-export type DemandeOuverture = { rubrique: RubriqueDossier; etape?: EtapeDossier | null; cle: number };
+/**
+ * Mission 13 (lot 4) : ce qu'un raccourci demande en ouvrant le panneau — une rubrique, ou une étape à passer.
+ * Mission 17 (partie A) : `devis` ouvre d'emblée le générateur prérempli (« nouveau ») ou le dépôt d'un PDF (« pdf ») —
+ * le panneau rendu hors de /dossiers (écran Tâches) ne lit pas `?devis=` dans l'adresse.
+ */
+export type DemandeOuverture = { rubrique: RubriqueDossier; etape?: EtapeDossier | null; devis?: "nouveau" | "pdf" | null; cle: number };
 
 export function PanneauDossier({
   dossierId,
@@ -221,7 +225,7 @@ function ContenuPanneau({
   onArchive?: (dossierId: string) => void;
   demande: DemandeOuverture | null;
 }) {
-  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(null);
+  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(() => (demande?.devis === "nouveau" ? { type: "DEVIS", cle: 1 } : null));
   // Mission 13 (lot 4) : les sections ouvertes (ce qui attend un geste d'office), et « Encaisser l'acompte » en un geste.
   const [ouvertes, setOuvertes] = useState(() => sectionsOuvertes(detail, demande));
   const basculer = (section: Sections) => setOuvertes((o) => ({ ...o, [section]: !o[section] }));
@@ -234,10 +238,15 @@ function ContenuPanneau({
       const element = cible.map((id) => document.getElementById(id)).find((e) => e !== null);
       element?.scrollIntoView({ block: "start", behavior: "smooth" });
     }, 350);
-    return () => window.clearTimeout(minuterie);
+    // Mission 17 (partie A) : « Répondre » depuis l'écran Tâches — le fil à l'écran, le curseur dans le champ de réponse.
+    const focus = demande.rubrique === "messages" ? window.setTimeout(() => document.getElementById("reponse-espace")?.focus({ preventScroll: true }), 900) : 0;
+    return () => {
+      window.clearTimeout(minuterie);
+      window.clearTimeout(focus);
+    };
   }, [demande]);
   // Mission 11 : dépôt d'un devis PDF déjà fait (numéro + libellé), proposé au client à côté des autres.
-  const [depotPdf, setDepotPdf] = useState(0);
+  const [depotPdf, setDepotPdf] = useState(() => (demande?.devis === "pdf" ? 1 : 0));
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
   const ajouterDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, variante: true }));
   const deposerPdf = () => setDepotPdf((n) => n + 1);

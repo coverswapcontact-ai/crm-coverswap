@@ -53,11 +53,11 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     // Les leads des deux listes, sans dossier (le dossier a sa propre ligne) : tout rappel daté, quel que soit son âge
     // (un retard reste un retard), et les leads arrivés ou appelés depuis moins de 60 jours. Les rappels d'abord.
     prisma.lead.findMany({
-      where: { AND: [LEAD_SANS_DOSSIER, { OR: [{ rappelLe: { not: null } }, { createdAt: { gte: limiteContacts } }, { dernierAppelLe: { gte: limiteContacts } }] }] },
+      where: { AND: [LEAD_SANS_DOSSIER, { OR: [{ rappelLe: { not: null } }, { createdAt: { gte: limiteContacts } }, { dernierAppelLe: { gte: limiteContacts } }, { dernierContactLe: { gte: limiteContacts } }] }] },
       orderBy: [{ rappelLe: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
       take: 300,
       select: {
-        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, dernierAppelLe: true, tentatives: true, createdAt: true, source: true,
+        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, dernierAppelLe: true, dernierContactLe: true, tentatives: true, createdAt: true, source: true,
         interactions: { where: { archiveLe: null, type: { in: ["APPEL", "SMS", "EMAIL", "NOTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, contenu: true, createdAt: true } },
       },
     }),
@@ -84,8 +84,8 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     const conversation = conversationDe(lead.id, null);
     const premier = lead.interactions[0] ?? null;
     const dernier = premier && !(premier.type === "NOTE" && /^(Lead |Contact saisi|Statut :)/.test(premier.contenu)) ? premier : null;
-    // « À appeler » : jamais appelé, sans rappel daté (même règle que la liste de Leads).
-    const aAppeler = !lead.dernierAppelLe && !lead.rappelLe;
+    // « À appeler » : jamais appelé ni contacté par écrit (mission 17), sans rappel daté (même règle que la liste de Leads).
+    const aAppeler = !lead.dernierAppelLe && !lead.dernierContactLe && !lead.rappelLe;
     const rappelDu = lead.rappelLe !== null && lead.rappelLe <= ceSoir;
     const repondre = conversation?.dernierSens === "ENTRANT" && !conversation.stopLe;
     let groupe: GroupeAffaire;
@@ -95,7 +95,7 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     else if (aAppeler) [groupe, action] = ["RAPPELER", "Appeler : nouveau contact"];
     else if (rappelDu) [groupe, action] = ["RAPPELER", lead.tentatives > 0 ? `Rappeler : ${pluriel(lead.tentatives, "appel")} sans réponse` : "Rappeler (rappel prévu)"];
     else if (lead.rappelLe) [groupe, action] = ["PLUS_TARD", "Rappel prévu"];
-    else [groupe, action] = ["DECIDER", "Appelé, sans rappel daté : envoyer le lien de son espace, dater un rappel, ou classer"];
+    else [groupe, action] = ["DECIDER", `${lead.dernierAppelLe ? "Appelé" : "Contacté"}, sans rappel daté : envoyer le lien de son espace, dater un rappel, ou classer`];
     affaires.push({
       cle: `contact-${lead.id}`,
       genre: "CONTACT",

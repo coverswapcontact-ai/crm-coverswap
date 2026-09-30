@@ -29,6 +29,8 @@ export type EntrantResume = {
   rappelEnRetard: boolean;
   /** Dernier appel noté, quelle qu'en soit l'issue ; null = jamais appelé (« À appeler »). */
   dernierAppelLe: string | null;
+  /** Mission 17 (partie A) : dernier contact écrit (SMS copié, mail parti) ; non nul, il est aussi dans « À rappeler ». */
+  dernierContactLe: string | null;
   /** Appels sans réponse d'affilée depuis le dernier appel abouti. */
   tentatives: number;
 };

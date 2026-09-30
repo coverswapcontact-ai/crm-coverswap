@@ -9,9 +9,11 @@ import { compterMessagesNonLus } from "@/lib/espace/messages";
 import { listerVue } from "@/lib/mail/vues";
 import { FILTRE_DEMANDE_DE_DEVIS, libelleSourceLead } from "@/lib/prospects/constantes";
 import { rappelsDesLeads } from "@/lib/prospects/leads";
+import { listeTaches } from "@/lib/a-faire/lecture";
 import { definirOutil, format, lien } from "../definition";
 import { etatCampagne, santeSysteme } from "./lecture";
-import { heure, jourSemaineHeure, pluriel } from "@/lib/commun/format";
+import { dureeLisible } from "./taches";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Le point du jour (mission 8) : en un appel, tout ce qui a changé depuis le
@@ -42,7 +44,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
   const debutJour = debutDuJourParis(maintenant);
   const finJour = aHeureParis(maintenant, 1, 0);
 
-  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents, duJour] = await Promise.all([
+  const [leads, simulationsEspace, simulationsSite, demandesDevis, accords, paiements, projetsClients, changements, mails, pilotage, rappels, actionsDossiers, campagne, sante, messagesNonLus, propositionsEnAttente, messagesRecents, duJour, taches] = await Promise.all([
     prisma.lead.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true, priorite: true }, orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.simulationEspace.findMany({ where: { createdAt: { gte: depuis }, archiveLe: null }, select: { id: true, source: true, statut: true, createdAt: true, dossierId: true }, take: 50 }),
     prisma.simulationSite.count({ where: { createdAt: { gte: depuis } } }),
@@ -64,6 +66,8 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
     prisma.messageEspace.findMany({ where: { createdAt: { gte: depuis }, auteur: "CLIENT", archiveLe: null }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, texte: true, source: true, createdAt: true, luLe: true, dossier: { select: { id: true, clientNom: true } } } }),
     // Mission 14 (partie 7) : les nombres du jour, comptés comme l'écran Leads.
     resumeDuJour(maintenant),
+    // Mission 17 (partie A) : « ce qui t'attend » vient des tâches de Lucas (a-faire/lecture.ts).
+    listeTaches(maintenant),
   ]);
 
   const nomsDossiers = new Map((await prisma.dossier.findMany({ where: { id: { in: simulationsEspace.map((s) => s.dossierId) } }, select: { id: true, clientNom: true } })).map((d) => [d.id, d.clientNom]));
@@ -95,6 +99,14 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
       rappelsAujourdhui: duJour.rappelsAujourdhui,
       rappelsEnRetard: duJour.rappelsEnRetard,
       relancesProposables: duJour.relancesProposables,
+      taches: {
+        compteurs: taches.compteurs,
+        demain: taches.demain,
+        aujourdhui: taches.aujourdhui.map((t) => ({ id: t.id, titre: t.titre, raison: t.raison, type: t.type, niveau: t.niveau, dureeMin: t.dureeMin, montant: t.montant, revenue: Boolean(t.revenueLe) })),
+        lots: taches.lots,
+        plusTard: taches.plusTard.slice(0, 20).map((t) => ({ id: t.id, titre: t.titre, raison: t.raison, statut: t.statut, plusTardJusqua: t.plusTardJusqua })),
+        faitAujourdhui: taches.faitAujourdhui.map((t) => ({ id: t.id, titre: t.titre, statut: t.statut, reponduParLisible: t.reponduParLisible })),
+      },
     },
     campagne: { enCours: campagne.enCours, jour: campagne.jour, duree: campagne.duree, depenseEstimee: campagne.depenseEstimee, leads: campagne.leads, coutParLead: campagne.coutParLead, regle: campagne.regle },
     alertes: { taches: sante.taches, google: sante.google, meta: sante.meta, ia: sante.ia, disqueLibreMo: sante.disqueLibreMo, disque: sante.disque, coherence: sante.coherence, autres: sante.alertes },
@@ -107,25 +119,42 @@ export const outilPointDuJour = definirOutil({
   nom: "point_du_jour",
   titre: "Le point du jour",
   description:
-    "En un appel, tout ce qui a changé depuis le dernier point (nouveaux leads et leur source, simulations, demandes de devis, devis signés, paiements, projets ouverts par des clients, changements d'étape), ce qui attend Lucas aujourd'hui (rappels, actions planifiées, dossiers où la main est à lui, mails à traiter), l'état de la campagne (jour et règle du protocole) et les alertes système. Données brutes et datées : raconte-les à l'oral selon les consignes (« Bonjour Lucas », 60 à 90 secondes, finir par le jour de campagne et sa règle). L'heure du point est mémorisée.",
+    "En un appel, tout ce qui a changé depuis le dernier point (nouveaux leads et leur source, simulations, demandes de devis, devis signés, paiements, projets ouverts par des clients, changements d'étape), ce qui attend Lucas (sa liste de tâches : le nombre et le temps du jour, chaque tâche par son titre et sa raison, les lots, ce qui revient demain ; puis mails à traiter, messages d'espace, propositions), l'état de la campagne (jour et règle du protocole) et les alertes système. Données brutes et datées : raconte-les à l'oral selon les consignes (« Bonjour Lucas », 60 à 90 secondes, finir par le jour de campagne et sa règle). L'heure du point est mémorisée. Pour le geste prêt et le texte des SMS de chaque tâche : « taches ».",
   niveau: "LECTURE",
   schema: z.object({ depuis_heures: z.number().min(1).max(720).optional().describe("Reprendre depuis N heures au lieu du dernier point mémorisé.") }),
   executer: async ({ depuis_heures }, contexte) => {
     const point = await calculerPointDuJour(contexte.maintenant, { depuis: depuis_heures ? new Date(contexte.maintenant.getTime() - depuis_heures * 3_600_000) : undefined });
     const n = point.nouveautes;
     const a = point.aujourdhui;
-    const retards = a.rappels.filter((r) => r.enRetard).length;
     const texte = [
       `Point du ${format.jour(contexte.maintenant)}, depuis ${point.premierPoint ? "hier (premier point)" : format.jourCourt(point.depuis) + " " + new Date(point.depuis).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })}.`,
       `Nouveau : ${pluriel(n.leads.length, "lead")}${n.leads.length ? ` (${n.leads.slice(0, 6).map((l) => `${l.nom}${l.ville ? `, ${l.ville}` : ""} — ${l.source}`).join(" ; ")})` : ""} ; ${pluriel(n.simulations.site, "simulation")} sur le site, ${n.simulations.espace.length} dans les espaces ; ${pluriel(n.demandesDevis, "demande")} de devis ; ${pluriel(n.devisSignes.length, "devis signé", "devis signés")}${n.devisSignes.length ? ` (${n.devisSignes.map((d) => `${d.client} a choisi le devis ${d.numero ?? "?"}${d.libelle ? ` (${d.libelle})` : ""} : ${format.euros(d.montant)}`).join(" ; ")})` : ""} ; ${pluriel(n.paiements.length, "paiement")}${n.paiements.length ? ` (${n.paiements.map((p) => `${p.client} ${format.euros(p.montant)}`).join(", ")})` : ""} ; ${pluriel(n.projetsClients.length, "projet ouvert", "projets ouverts")} par des clients ; ${pluriel(n.changementsEtape.length, "changement")} d'étape ; ${pluriel(n.messagesEspace.length, "message")} de clients dans leur espace${n.messagesEspace.length ? ` (${n.messagesEspace.slice(0, 4).map((m) => `${m.client} : « ${m.texte.slice(0, 80)} »`).join(" ; ")})` : ""}.`,
-      `Aujourd'hui : ${pluriel(a.rappels.length, "rappel")}${retards ? ` dont ${retards} en retard` : ""}${a.rappels.length ? ` (${a.rappels.map((r) => (r.enRetard ? `${r.nom}, prévu ${jourSemaineHeure(r.a)}` : `${r.nom} à ${heure(r.a)}`)).join(", ")})` : ""},${pluriel(a.actionsDossiers.length, "action planifiée", "actions planifiées")}${a.actionsDossiers.length ? ` (${a.actionsDossiers.map((d) => `${d.client} : ${d.action}`).join(", ")})` : ""}, ${pluriel(a.attendentMoi.length, "dossier")} qui attendent ta réponse${a.attendentMoi.filter((x) => x.enRetard).length ? ` dont ${a.attendentMoi.filter((x) => x.enRetard).length} en retard` : ""}, ${a.chezLeClient} chez le client, ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
+      `Aujourd'hui : ${pluriel(a.mailsATraiter.length, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
       `Rappels : ${a.rappelsAujourdhui} aujourd'hui, ${a.rappelsEnRetard} en retard, ${pluriel(a.relancesProposables, "relance proposable", "relances proposables")}.`,
+      `Ce qui t'attend : ${resumeTaches(a.taches)}`,
       point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
-      `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
+      `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} de fond en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");
     return { texte, donnees: point, liens: [lien("Leads", "/leads"), lien("Mail", "/mail")] };
   },
 });
+
+/**
+ * Mission 17 (partie A) : « ce qui t'attend », tiré de la liste des tâches — le nombre et le temps du jour, les
+ * tâches par titre et raison (sans le geste : c'est « taches » qui le donne), les lots, ce qui est reporté ou fait.
+ */
+function resumeTaches(t: Awaited<ReturnType<typeof calculerPointDuJour>>["aujourdhui"]["taches"]): string {
+  const c = t.compteurs;
+  if (!c.aujourdhui && !c.enLot && !c.plusTard) return `rien dans la liste des tâches${c.faitAujourdhui ? ` (${pluriel(c.faitAujourdhui, "faite", "faites")} aujourd'hui)` : ""}.`;
+  const tete = c.aujourdhui ? `${pluriel(c.aujourdhui, "tâche")} aujourd'hui, environ ${dureeLisible(c.minutesAujourdhui)}` : "rien pour aujourd'hui";
+  const liste = t.aujourdhui.map((x, i) => `${i + 1}. ${x.titre} (${x.raison})${x.revenue ? ", revenue d'un « plus tard »" : ""} [tache:${x.id}]`).join(" ; ");
+  const suite = [
+    t.lots.length ? `en lot : ${t.lots.map((l) => l.libelle).join(", ")}` : null,
+    c.plusTard ? `${c.plusTard} plus tard${t.demain ? ` (${t.demain} ${t.demain > 1 ? "reviennent" : "revient"} demain)` : ""}` : null,
+    c.faitAujourdhui ? `${pluriel(c.faitAujourdhui, "faite", "faites")} aujourd'hui` : null,
+  ].filter(Boolean);
+  return `${tete}${liste ? ` : ${liste}` : ""}.${suite.length ? ` Ensuite : ${suite.join(" ; ")}.` : ""}`;
+}
 
 export function libelleEtapeDossier(etape: string): string {
   return LIBELLES_ETAPE[etape as EtapeDossier] ?? etape;

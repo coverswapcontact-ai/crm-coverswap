@@ -224,9 +224,11 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
               <p className="text-[12.5px] text-[#8B919C]">
                 {detail.dernierAppelLe
                   ? `Dernier appel le ${jourHeure(detail.dernierAppelLe)}${detail.tentatives > 0 ? ` · ${pluriel(detail.tentatives, "tentative")} sans réponse` : ""}. Il est dans « À rappeler ».`
-                  : detail.rappelLe
-                    ? "Pas encore appelé, rappel daté : il est dans « À rappeler »."
-                    : "Jamais appelé : il est dans « À appeler ». Dater un rappel le passe dans « À rappeler »."}
+                  : detail.dernierContactLe
+                    ? `Pas encore appelé, contacté par écrit le ${jourHeure(detail.dernierContactLe)} : il est dans « À rappeler ».`
+                    : detail.rappelLe
+                      ? "Pas encore appelé, rappel daté : il est dans « À rappeler »."
+                      : "Jamais appelé : il est dans « À appeler ». Dater un rappel le passe dans « À rappeler »."}
               </p>
             </div>
           </section>

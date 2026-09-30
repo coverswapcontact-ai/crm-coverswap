@@ -68,7 +68,7 @@ async function refuserAuPlafond(maintenant: Date): Promise<never> {
   const deja = await prisma.appelOutil.count({ where: { statut: "REFUSE", erreur: { startsWith: "Plafond" }, createdAt: { gte: new Date(maintenant.getTime() - 3_600_000) } } });
   if (deja === 0) {
     await alerter(
-      { titre: "Assistant : plafond d'écritures atteint", texte: `Plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude : les suivantes sont refusées jusqu'à la prochaine heure. Vérifier le journal (Tâches de fond → Assistant).`, lien: "/taches", urgence: 4 },
+      { titre: "Assistant : plafond d'écritures atteint", texte: `Plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude : les suivantes sont refusées jusqu'à la prochaine heure. Vérifier le journal (Tâches de fond → Assistant).`, lien: "/taches-de-fond", urgence: 4 },
       { origine: "assistant-plafond" }
     ).catch(() => undefined);
   }

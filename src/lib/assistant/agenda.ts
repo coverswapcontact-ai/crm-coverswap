@@ -120,8 +120,20 @@ export function lireDateDictee(texte: string, maintenant: Date = new Date(), heu
     const annee = enMots[3] ? Number(enMots[3]) : new Date(`${jourDe(anneeCourante)}T12:00:00Z`).getTime() < maintenant.getTime() - 31 * 86_400_000 ? anneeCourante + 1 : anneeCourante;
     return aParis(jourDe(annee));
   }
+  // Mission 17 (partie A) : « le 12 », « le 1er » — le jour du mois seul : ce mois-ci s'il n'est pas passé, sinon le mois suivant.
+  const leJour = /\ble\s+(\d{1,2})(?:er)?\b(?!\s*(?:h\b|:|\/|\d))/.exec(brut);
+  if (leJour) {
+    const numero = Number(leJour[1]);
+    const [annee, moisCourant, jourCourant] = aujourdhui.split("-").map(Number);
+    const decale = numero < jourCourant ? 1 : 0;
+    const anneeVisee = moisCourant + decale > 12 ? annee + 1 : annee;
+    const moisVise = ((moisCourant - 1 + decale) % 12) + 1;
+    const joursDuMois = new Date(Date.UTC(anneeVisee, moisVise, 0)).getUTCDate();
+    if (numero < 1 || numero > joursDuMois) return null;
+    return aParis(`${anneeVisee}-${String(moisVise).padStart(2, "0")}-${String(numero).padStart(2, "0")}`);
+  }
   const plusJours = (n: number) => jourParisDe(new Date(maintenant.getTime() + n * 86_400_000));
-  const dans = /dans\s+(une|un|\d+)\s*(jour|semaine|mois)/.exec(brut);
+  const dans =/dans\s+(une|un|\d+)\s*(jour|semaine|mois)/.exec(brut);
   if (dans) {
     const n = dans[1] === "une" || dans[1] === "un" ? 1 : Number(dans[1]);
     return aParis(plusJours(dans[2] === "semaine" ? 7 * n : dans[2] === "mois" ? 30 * n : n));

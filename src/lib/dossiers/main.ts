@@ -274,7 +274,7 @@ export function estReponse(evenement: EvenementLu): boolean {
 /** Un message du client : un mail rattaché au dossier, ou un message écrit dans son espace. */
 const estMessageEntrant = (evenement: EvenementLu) => (evenement.type === "MAIL_RECU" || evenement.type === "ESPACE_MESSAGE") && evenement.direction === "ENTRANT";
 
-const TYPES_REPONSE = ["MAIL_ENVOYE", "ESPACE_REPONSE", "SMS_ENVOYE", "SMS_COPIE", "APPEL", "PROCHAINE_ACTION_MANUELLE", "REPONSE_INUTILE", "REPONDU_HORS_CRM"];
+export const TYPES_REPONSE = ["MAIL_ENVOYE", "ESPACE_REPONSE", "SMS_ENVOYE", "SMS_COPIE", "APPEL", "PROCHAINE_ACTION_MANUELLE", "REPONSE_INUTILE", "REPONDU_HORS_CRM"];
 const TYPES_LUS = [...new Set([...TYPES_MAIN, ...TYPES_REPONSE])];
 
 /**

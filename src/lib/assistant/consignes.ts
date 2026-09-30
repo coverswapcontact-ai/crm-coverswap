@@ -248,6 +248,14 @@ export const SECTION_MISSION14 = `## Appels, rappels, SMS (mission 14)
 - Quand Lucas dit avoir envoyé un SMS (« c'est envoyé », « je lui ai envoyé le lien »), « noter_sms » avec le code (et le texte s'il l'a modifié) : mêmes effets que « Copier » (trace dans l'histoire, lien communiqué → main au client, relance de devis comptée). Un SMS que tu rédiges pour lui : court, vouvoiement, le lien de l'espace en fin de message, puis « noter_sms » avec ce texte quand il l'a envoyé.
 - « voir_relances » liste les relances à faire (devis : mail à valider et SMS à copier ; espaces sans photo ni simulation) ; « espaces_clients » avec sans_photo_ni_simulation_depuis_jours donne le téléphone et le SMS du lien. Les textes SMS se lisent par « voir_parametres » (groupe SMS) et se changent par « modifier_parametres » (sms_code + sms_texte, sous confirmation).`;
 
+/** Section « Tâches » (mission 17, partie A) : la liste unique de ce que Lucas a à faire ; jointe aux consignes si elles ne l'ont pas. */
+export const SECTION_MISSION17 = `## Tâches (mission 17)
+- Tâches : « qu'est-ce que j'ai à faire ? », « c'est quoi la suite ? » → « taches » ; « j'ai 20 minutes » → « taches » avec minutes ; « c'est fait » → « repondre_tache » FAIT avec l'identifiant de la DERNIÈRE tâche citée ; « plus tard », « demain », « jeudi », « le 12 » → « repondre_tache » PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison ; « annule » → ANNULER ; « ajoute… », « note-moi de… » → « ajouter_tache ».
+- Tu lis le titre et la raison, jamais d'identifiant : « Faire le devis de Bloch, simulation validée le 28 septembre, dix minutes ». Une tâche à la fois quand Lucas travaille : le geste prêt (« appeler le 06… », « ouvrir le devis prérempli ») puis, pour un SMS ou un mail, le texte prêt, lu tel quel.
+- Une tâche désignée par son titre et plusieurs candidats : demande laquelle, ne choisis jamais. « Client perdu » exige le motif de perte ; il passe le contact sans suite ou le dossier perdu : aperçu puis confirmation de Lucas. « Fait » sur une validation qui envoie un mail ou un SMS, ou touche un montant : aperçu puis confirmation.
+- L'effet d'une réponse part 6 secondes après : « annule » tout de suite le rattrape ; plus tard, ANNULER remet la tâche et défait ce qui peut l'être (il dit ce qui ne se défait pas : mail parti, dossier perdu).
+- « ce_qui_m_attend » lit la même liste en entier (aujourd'hui, lots, plus tard, fait) ; « point_du_jour » en donne le résumé.`;
+
 export const lireConsignes = async (): Promise<TexteReglable> => {
   const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
   let texte = t.texte.trim();
@@ -255,6 +263,7 @@ export const lireConsignes = async (): Promise<TexteReglable> => {
   if (!/^## Dossiers, photos, espace/m.test(texte)) texte = `${texte}\n\n${SECTION_ACTIONS}`;
   if (!/^## Devis multiples, contacts, réglages/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION11}`;
   if (!/^## Appels, rappels, SMS/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION14}`;
+  if (!/^## Tâches/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION17}`;
   return texte === t.texte.trim() ? t : { ...t, texte };
 };
 export const enregistrerConsignes = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_CONSIGNES, texte, par, commande);

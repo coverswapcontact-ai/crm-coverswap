@@ -612,11 +612,12 @@ describe("passage complet", () => {
     assert.match(detection.resumePasse(bilan), /1 créée/);
   });
 
-  test("les détecteurs : un par source, vides pour l'instant", async () => {
+  test("les détecteurs : un par source, chacun rend une liste", async () => {
     const sources = detecteurs.DETECTEURS.map((d) => d.source);
     assert.deepEqual([...sources].sort(), [...types.SOURCES_TACHE].sort());
     const contexte = { maintenant: MERCREDI, vigueur: new Map() };
-    for (const d of detecteurs.DETECTEURS) assert.deepEqual(await d.detecter(contexte), []);
+    // Mission 17 (partie A, lot 2) : les détecteurs sont écrits (ils ne sont plus vides) ; chacun est essayé dans son fichier.
+    for (const d of detecteurs.DETECTEURS) assert.ok(Array.isArray(await d.detecter(contexte)), d.source);
     assert.equal(detecteurs.cleTache("REPONDRE", { type: "DOSSIER", id: "d1" }), "REPONDRE:dossier:d1");
     assert.equal(detecteurs.cleTache("SYSTEME", { type: "SYSTEME", id: null }, "jeton-meta"), "SYSTEME:jeton-meta");
   });

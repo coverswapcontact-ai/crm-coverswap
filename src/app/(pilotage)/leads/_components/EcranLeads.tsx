@@ -163,7 +163,7 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
     try {
       await envoyerJson(`/api/prospects/entrants/${lead.id}`, "PATCH", { rappelLe });
       toast.success(rappelLe ? `Rappel déplacé au ${jourSemaineHeure(rappelLe)}` : "Rappel sans date", {
-        description: rappelLe ? lead.nom : lead.dernierAppelLe ? `${lead.nom} reste dans « À rappeler », après les rappels datés.` : `${lead.nom}, jamais appelé, revient dans « À appeler ».`,
+        description: rappelLe ? lead.nom : lead.dernierAppelLe || lead.dernierContactLe ? `${lead.nom} reste dans « À rappeler », après les rappels datés.` : `${lead.nom}, jamais appelé, revient dans « À appeler ».`,
       });
       await rafraichir();
     } catch (erreur) {

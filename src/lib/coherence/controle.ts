@@ -297,6 +297,23 @@ async function deplacer(dossierId: string, vers: EtapeDossier, nature: "AUTOMATI
  * dévalidation tracée) : l'historique du dossier dit « contrôle de cohérence ».
  */
 export async function corrigerIncoherence(cle: string): Promise<{ corrigee: boolean; message: string }> {
+  try {
+    return await corrigerUneIncoherence(cle);
+  } finally {
+    // Mission 17 (partie A) : le détecteur de tâches garde le contrôle une heure ; une correction (ou une incohérence
+    // déjà disparue) le rend périmé, et la tâche « Corriger » doit se cocher tout de suite. Import à l'exécution : le
+    // détecteur importe ce module.
+    try {
+      const [{ invaliderCoherence }, { signalerChangementTaches }] = await Promise.all([import("@/lib/a-faire/detecteurs/coherence"), import("@/lib/a-faire/signal")]);
+      invaliderCoherence();
+      await signalerChangementTaches();
+    } catch (erreur) {
+      console.error("[coherence] tâches non prévenues de la correction :", erreur);
+    }
+  }
+}
+
+async function corrigerUneIncoherence(cle: string): Promise<{ corrigee: boolean; message: string }> {
   const rapport = await controlerCoherence();
   const incoherence = rapport.incoherences.find((i) => i.cle === cle);
   if (!incoherence) return { corrigee: false, message: "Cette incohérence n'existe plus : rien à corriger." };
@@ -392,7 +409,7 @@ export async function controleAutomatique(): Promise<RapportCoherence> {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
     const hautes = rapport.incoherences.filter((i) => i.gravite === "HAUTE").length;
     await alerter(
-      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${pluriel(rapport.incoherences.length - 4, "autre")}.` : ""}`, lien: `${appUrl}/taches`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
+      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${pluriel(rapport.incoherences.length - 4, "autre")}.` : ""}`, lien: `${appUrl}/taches-de-fond`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
       { origine: "coherence", canaux: ["telegram", "ntfy", "pushweb"] }
     ).catch(() => undefined);
   }

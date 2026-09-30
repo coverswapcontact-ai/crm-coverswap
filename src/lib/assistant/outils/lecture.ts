@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { chargerFiche } from "@/lib/clients/fiches";
 import { notesDuLead } from "@/lib/commercial/notes-appel";
-import { pilotageCommercial } from "@/lib/commercial/pilotage";
+import { listeTaches } from "@/lib/a-faire/lecture";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } from "@/lib/dossiers/constants";
@@ -189,7 +189,7 @@ export const outilLireFiche = definirOutil({
 export const outilLeadsAAppeler = definirOutil({
   nom: "leads_a_appeler",
   titre: "Les leads à appeler",
-  description: "La liste « À appeler » de l'écran Leads : les leads jamais appelés, le plus récent en haut (même ordre que l'écran ; les « à écarter » y figurent, avec leur priorité). Rend nom, ville, source, projet, priorité et téléphone. Les leads déjà appelés ou avec un rappel daté sont dans « À rappeler », pas ici. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage.",
+  description: "La liste « À appeler » de l'écran Leads : les leads jamais appelés ni contactés par écrit, le plus récent en haut (même ordre que l'écran ; les « à écarter » y figurent, avec leur priorité). Rend nom, ville, source, projet, priorité et téléphone. Les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté sont dans « À rappeler », pas ici. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage.",
   niveau: "LECTURE",
   schema: z.object({ limite: z.number().int().min(1).max(50).optional() }),
   executer: async ({ limite }) => {
@@ -210,7 +210,7 @@ export const outilLeadsARappeler = definirOutil({
   nom: "leads_a_rappeler",
   titre: "Les leads à rappeler",
   description:
-    "La liste « À rappeler » de l'écran Leads, dans le même ordre : les leads déjà appelés ou avec un rappel daté — d'abord les rappels datés du plus ancien au plus lointain (les retards en tête, marqués EN RETARD), puis les rappels sans date, le plus ancien appel d'abord. Par lead : nom, ville, source, téléphone, tentatives (appels sans réponse d'affilée), le rappel (« jeu. 1 oct. 18:00 » ou « sans date ») et le dernier appel (date, issue). Réponse à « qui dois-je rappeler ? ». Les jamais appelés sont dans « leads_a_appeler ». Pages de 20 (« limite », « page »).",
+    "La liste « À rappeler » de l'écran Leads, dans le même ordre : les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté — d'abord les rappels datés du plus ancien au plus lointain (les retards en tête, marqués EN RETARD), puis les rappels sans date, le plus ancien appel d'abord. Par lead : nom, ville, source, téléphone, tentatives (appels sans réponse d'affilée), le rappel (« jeu. 1 oct. 18:00 » ou « sans date ») et le dernier appel (date, issue). Réponse à « qui dois-je rappeler ? ». Les jamais appelés sont dans « leads_a_appeler ». Pages de 20 (« limite », « page »).",
   niveau: "LECTURE",
   schema: z.object({ limite: z.number().int().min(1).max(50).optional().describe("Lignes par page (20 par défaut)."), page: z.number().int().min(1).optional().describe("Page à lire (1 par défaut).") }),
   executer: async ({ limite, page }, contexte) => {
@@ -223,7 +223,8 @@ export const outilLeadsARappeler = definirOutil({
     const ligne = (l: (typeof liste.lignes)[number]) => {
       const issue = l.dernierAppel ? issueDuContenu(l.dernierAppel.contenu) : null;
       const dernierAppelLe = l.dernierAppelLe ?? l.dernierAppel?.le ?? null;
-      const dernier = dernierAppelLe ? `dernier appel ${jourSemaineHeure(dernierAppelLe)}${issue ? ` (${LIBELLES_ISSUE[issue].toLowerCase()})` : ""}` : "aucun appel noté";
+      // Mission 17 (partie A) : sans appel, le contact écrit (SMS copié, mail parti) qui l'a fait passer ici.
+      const dernier = dernierAppelLe ? `dernier appel ${jourSemaineHeure(dernierAppelLe)}${issue ? ` (${LIBELLES_ISSUE[issue].toLowerCase()})` : ""}` : l.dernierContactLe ? `aucun appel noté, contacté par écrit le ${jourSemaineHeure(l.dernierContactLe)}` : "aucun appel noté";
       const rappel = l.rappelLe ? `rappel ${jourSemaineHeure(l.rappelLe)}${l.enRetard ? " EN RETARD" : ""}` : "rappel sans date";
       return `- ${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.libelleSource}, ${l.telephone ?? "numéro illisible"}, ${pluriel(l.tentatives, "tentative")}, ${rappel}, ${dernier} [lead:${l.id}]`;
     };
@@ -254,21 +255,33 @@ export const outilDossiersParEtape = definirOutil({
 export const outilCeQuiMAttend = definirOutil({
   nom: "ce_qui_m_attend",
   titre: "Ce qui attend une action de Lucas",
-  description: "Tout ce qui attend une action de Lucas aujourd'hui : leads à rappeler, dossiers où la main est à lui (répondre, faire la simulation, le devis, planifier), actions en retard, mails à traiter, propositions à valider. Réponse à « qu'est-ce qui m'attend ? ».",
+  description:
+    "La liste des tâches de Lucas en entier — aujourd'hui (les 10 du jour, avec le geste prêt et le texte des SMS et mails), les lots de ménage, « plus tard » (avec la date de retour) et ce qui est fait aujourd'hui —, puis les mails à traiter, les propositions à valider et les messages d'espace non lus. Réponse à « qu'est-ce qui m'attend ? » ; pour « qu'est-ce que j'ai à faire ? » ou « j'ai 20 minutes », préfère « taches ». Garde l'identifiant [tache:…] de la dernière tâche citée : « c'est fait » → « repondre_tache ».",
   niveau: "LECTURE",
   schema: z.object({}),
-  executer: async () => {
-    const [pilotage, mails, messagesNonLus, propositionsEnAttente] = await Promise.all([pilotageCommercial(), listerVue("A_TRAITER", { limite: 50 }), compterMessagesNonLus(), prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } })]);
-    const aMoi = pilotage.affaires.filter((a) => a.main === "MOI");
-    const enRetard = aMoi.filter((a) => a.enRetard);
-    const parGroupe = new Map<string, typeof aMoi>();
-    for (const a of aMoi) parGroupe.set(a.groupe, [...(parGroupe.get(a.groupe) ?? []), a]);
+  executer: async ({}, contexte) => {
+    // Import à l'appel : « taches » importe « schemaCible » d'ici (pas de cycle au chargement).
+    const { texteListe } = await import("./taches");
+    const [liste, mails, messagesNonLus, propositionsEnAttente] = await Promise.all([listeTaches(contexte.maintenant), listerVue("A_TRAITER", { limite: 50 }), compterMessagesNonLus(), prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } })]);
+    const { texte: texteTaches, aujourdhui } = await texteListe(liste, contexte.maintenant);
     const texte = [
-      `${pluriel(aMoi.length, "affaire")} attendent une action de toi (${enRetard.length} en retard), ${pilotage.compteurs.chezLeClient} chez le client, ${pluriel(mails.compteurs.A_TRAITER, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
-      ...[...parGroupe.entries()].map(([groupe, liste]) => `${groupe} : ${liste.map((a) => `${a.nom}${a.ville ? ` (${a.ville})` : ""} — ${a.action}${a.enRetard ? " (en retard)" : ""}${a.echeance ? ` · ${format.jourCourt(a.echeance)}` : ""} [${a.dossierId ? `dossier:${a.dossierId}` : `lead:${a.leadId}`}]`).join(" · ")}`),
+      texteTaches,
+      `Aussi : ${pluriel(mails.compteurs.A_TRAITER, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
       mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { affaires: aMoi, compteurs: { ...pilotage.compteurs, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente }, mails: mails.lignes.slice(0, 20) }, liens: [lien("Leads", "/leads"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])] };
+    return {
+      texte,
+      donnees: {
+        genereLe: liste.genereLe,
+        compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter: mails.compteurs.A_TRAITER, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
+        aujourdhui,
+        lots: liste.lots,
+        plusTard: liste.plusTard,
+        faitAujourdhui: liste.faitAujourdhui,
+        mails: mails.lignes.slice(0, 20),
+      },
+      liens: [lien("Tâches", "/taches"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])],
+    };
   },
 });
 
@@ -444,7 +457,7 @@ export const outilSanteSysteme = definirOutil({
   executer: async ({}, contexte) => {
     const s = await santeSysteme(contexte.maintenant);
     const texte = [
-      s.taches.enEchec.length ? `${pluriel(s.taches.enEchec.length, "tâche")} en échec : ${s.taches.enEchec.map((t) => `${t.libelle}${t.erreur ? ` (${t.erreur.slice(0, 80)})` : ""}`).join(" · ")}.` : "Aucune tâche en échec.",
+      s.taches.enEchec.length ? `${pluriel(s.taches.enEchec.length, "tâche")} de fond en échec : ${s.taches.enEchec.map((t) => `${t.libelle}${t.erreur ? ` (${t.erreur.slice(0, 80)})` : ""}`).join(" · ")}.` : "Aucune tâche en échec.",
       s.taches.travauxEnEchec.length ? `Travaux périodiques en échec : ${s.taches.travauxEnEchec.map((p) => p.nom).join(", ")}.` : "",
       s.google ? `Google : ${s.google.coupee ? "COUPÉ, reconnecter dans Paramètres" : `jeton ${s.google.niveau.toLowerCase()}`}${s.google.compte ? ` (${s.google.compte})` : ""}.` : s.agendaApi.activee && !s.autresApisNonActivees.length ? "Google : rien à signaler." : "",
       s.agendaApi.activee ? "" : `Google Calendar : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → Google Calendar API) ; les rappels attendent et s'inscriront seuls une fois l'API activée.${s.agendaApi.message ? ` Réponse de Google : ${s.agendaApi.message}` : ""}`,
@@ -456,7 +469,7 @@ export const outilSanteSysteme = definirOutil({
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
       s.alertes.length ? `Alertes : ${s.alertes.map((a) => `[${a.gravite}] ${a.titre} — ${a.detail}`).join(" · ")}` : "Aucune alerte.",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: s, liens: [lien("Tâches de fond", "/taches"), lien("Paramètres", "/parametres")] };
+    return { texte, donnees: s, liens: [lien("Tâches de fond", "/taches-de-fond"), lien("Paramètres", "/parametres")] };
   },
 });
 

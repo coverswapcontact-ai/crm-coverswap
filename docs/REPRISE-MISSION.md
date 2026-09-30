@@ -5313,3 +5313,16 @@ d'elle-même l'ouverture.
   légitime) ou seulement ceux venus de Meta ; fixer la durée de conservation des visites.
 - Noter le solde OpenAI dans Paramètres (les 2,73 $ ont été comptés dans une base d'essai, pas en production).
 - Vérifier « Votre espace est prêt » sur la première vraie demande (non visible en essai local, lien en http).
+
+---
+
+# Mission 17 (30/09/2026) — Tâches, Analytique, contrôle total par le MCP
+
+Énoncé : message de Lucas « Mission 17 : Tâches, Analytique, et contrôle total par le MCP » (trois parties, dans
+l'ordre A, B, C). Session cloud : branche `claude/beautiful-goldberg-lu7keb`, une PR vers `main` par partie.
+Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
+
+## Où on en est
+- [ ] A Tâches (en cours : lecture du code)
+- [ ] B Analytique
+- [ ] C Contrôle total par le MCP

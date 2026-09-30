@@ -5326,10 +5326,13 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 > **Mission 18 en attente** (énoncé complet : `docs/MISSION-18.md`) : à démarrer seulement après la fin complète de la
 > mission 17 (A, B, C, PR, rapport de 5 lignes), sur la même branche.
 
-- [ ] A Tâches — conception écrite (`docs/TACHES.md`, contrat `src/lib/a-faire/types.ts`, schéma : `TacheAFaire`,
-      `RegleTache`, `Lead.dernierContactLe`, `Dossier.prochaineActionManuelle*`) ; lot 1 (cœur) en cours.
-- [ ] B Analytique — lecture du code et des maquettes en cours (notes de travail dans le scratchpad de la session).
-- [ ] C Contrôle total par le MCP — inventaire des actions de l'interface en cours.
+- [ ] A Tâches — écrit et commité : cœur (`src/lib/a-faire/`), 10 détecteurs, écran `/taches` (accueil), routes
+      `/api/a-faire/…`, badges, « Tâches de fond » sur `/taches-de-fond`, créneaux libres, outils MCP `taches`,
+      `repondre_tache`, `ajouter_tache` (83 outils, empreinte `70d9e22b2bfb`), notification du matin (paramètre
+      `NOTIF_TACHES_MATIN`), captures `docs/captures/mission-17/`. 922 tests verts. En cours : migration de mise en
+      route, relecture adverse (moteur/détecteurs ; réponses/écran/MCP), puis corrections, build, PR.
+- [ ] B Analytique — conception écrite (`docs/ANALYTIQUE.md`) ; lecture du code et des maquettes faite.
+- [ ] C Contrôle total par le MCP — inventaire des actions de l'interface fait (notes de travail), tableau à écrire.
 
 ## Décisions (partie A)
 - Noms : `Tache` et `/api/taches` restent la file des tâches de fond ; nouveau modèle `TacheAFaire`, code

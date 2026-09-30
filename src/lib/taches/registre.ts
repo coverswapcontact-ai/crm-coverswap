@@ -8,6 +8,8 @@
 
 /** Erreur après laquelle réessayer ne sert à rien (accès révoqué, donnée invalide). */
 export class ErreurDefinitive extends Error {
+  /** Marqueur lu par `estErreurDefinitive` (voir plus bas : `instanceof` ne suffit pas en production). */
+  readonly erreurDefinitive = true as const;
   constructor(message: string) {
     super(message);
     this.name = "ErreurDefinitive";
@@ -21,6 +23,8 @@ export class ErreurDefinitive extends Error {
  * (reconnexion : les tâches en attente sont réveillées). Aucune action perdue.
  */
 export class AttenteExterne extends Error {
+  /** Marqueur lu par `estAttenteExterne` (voir plus bas). */
+  readonly attenteExterne = true as const;
   constructor(
     message: string,
     readonly reprendreDansMs = 15 * 60_000
@@ -28,6 +32,24 @@ export class AttenteExterne extends Error {
     super(message);
     this.name = "AttenteExterne";
   }
+}
+
+/**
+ * Reconnaissance STRUCTURELLE, pas seulement par classe. En production, le bundle de Next peut porter deux copies de
+ * ce module (instrumentation d'un côté, routes de l'autre) : une erreur levée dans l'une n'est pas `instanceof` la
+ * classe de l'autre. Vu le 30/09/2026 (mission 15) : une `ApiGoogleNonActivee` (une attente de 6 h) a été classée en
+ * échec définitif par l'exécuteur. Le marqueur, lui, voyage avec l'objet.
+ */
+export function estAttenteExterne(erreur: unknown): erreur is AttenteExterne {
+  if (erreur instanceof AttenteExterne) return true;
+  if (typeof erreur !== "object" || erreur === null) return false;
+  const e = erreur as { attenteExterne?: unknown; reprendreDansMs?: unknown };
+  return e.attenteExterne === true && typeof e.reprendreDansMs === "number";
+}
+
+export function estErreurDefinitive(erreur: unknown): erreur is ErreurDefinitive {
+  if (erreur instanceof ErreurDefinitive) return true;
+  return typeof erreur === "object" && erreur !== null && (erreur as { erreurDefinitive?: unknown }).erreurDefinitive === true;
 }
 
 /** Préfixe des tâches en attente d'une ressource extérieure (réveillées ensemble). */

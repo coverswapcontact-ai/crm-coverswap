@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { PHOTO_OCTETS_MAX } from "@/lib/dossiers/constants";
 import { FORMATS_JUSTIFICATIF, enregistrerFichier } from "@/lib/fichiers/stockage";
-import { AttenteExterne, ErreurDefinitive } from "@/lib/taches/registre";
+import { ErreurDefinitive, estAttenteExterne, estErreurDefinitive } from "@/lib/taches/registre";
 import { LIBELLE_BRUIT, libelleGmail, lirePieceGmail, modifierLibellesGmail, type MessageRecu } from "./gmail";
 
 /**
@@ -110,7 +110,7 @@ export async function conserverPieces(messageId: string): Promise<{ conservees: 
       await prisma.pieceMessage.update({ where: { id: piece.id }, data: { statut: "CONSERVEE", fichierId: fichier.id, raison: null } });
       conservees++;
     } catch (erreur) {
-      if (erreur instanceof ErreurDefinitive || erreur instanceof AttenteExterne) {
+      if (estErreurDefinitive(erreur) || estAttenteExterne(erreur)) {
         await prisma.pieceMessage.update({ where: { id: piece.id }, data: { raison: `Non téléchargée : ${erreur.message}` } });
         throw erreur;
       }

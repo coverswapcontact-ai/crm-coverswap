@@ -1,5 +1,5 @@
 import { agentMailActif } from "@/lib/messages/consultation";
-import { AttenteExterne, enregistrerTraitement, enregistrerTravailPeriodique } from "@/lib/taches/registre";
+import { enregistrerTraitement, enregistrerTravailPeriodique, estAttenteExterne } from "@/lib/taches/registre";
 import { ACTEUR_TRI, NOM_SYNCHRO_BOITE, TYPE_TACHE_ETAT_GMAIL, appliquerEtatGmail, synchroniserBoite } from "./boite";
 import { TYPE_TACHE_ENVOI_MAIL, executerEnvoi, noterEchecEnvoi } from "./envoi-crm";
 import { enregistrerTachesRattachement } from "./rattachement";
@@ -47,7 +47,7 @@ export function enregistrerTachesMail(): void {
       try {
         return await executerEnvoi(envoiId);
       } catch (erreur) {
-        if (!(erreur instanceof AttenteExterne) && contexte.tentative >= TENTATIVES_ENVOI) await noterEchecEnvoi(envoiId, erreur instanceof Error ? erreur.message : String(erreur));
+        if (!estAttenteExterne(erreur) && contexte.tentative >= TENTATIVES_ENVOI) await noterEchecEnvoi(envoiId, erreur instanceof Error ? erreur.message : String(erreur));
         throw erreur;
       }
     },

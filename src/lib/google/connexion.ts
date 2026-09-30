@@ -170,7 +170,9 @@ const MOTIF_API_NON_ACTIVEE = /API (.+?) non activée dans le projet Google Clou
  */
 async function apisNonActivees(): Promise<{ api: string; message: string | null }[]> {
   const taches = await prisma.tache.findMany({
-    where: { statut: "EN_ATTENTE", derniereErreur: { startsWith: `${PREFIXE_ATTENTE}${PREFIXE_GOOGLE}API `, contains: MARQUE_API_NON_ACTIVEE } },
+    // En attente (message préfixé) ou déjà en échec pour cette raison (une version d'avant le marqueur structurel) :
+    // dans les deux cas l'API manque, et Paramètres doit le dire.
+    where: { statut: { in: ["EN_ATTENTE", "ECHEC_DEFINITIF"] }, derniereErreur: { contains: MARQUE_API_NON_ACTIVEE } },
     orderBy: { updatedAt: "desc" },
     select: { derniereErreur: true },
   });

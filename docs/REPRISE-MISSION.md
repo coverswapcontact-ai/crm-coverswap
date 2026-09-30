@@ -5323,6 +5323,9 @@ l'ordre A, B, C). Session cloud : branche `claude/beautiful-goldberg-lu7keb`, un
 Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 
 ## Où on en est
+> **Mission 18 en attente** (énoncé complet : `docs/MISSION-18.md`) : à démarrer seulement après la fin complète de la
+> mission 17 (A, B, C, PR, rapport de 5 lignes), sur la même branche.
+
 - [ ] A Tâches — conception écrite (`docs/TACHES.md`, contrat `src/lib/a-faire/types.ts`, schéma : `TacheAFaire`,
       `RegleTache`, `Lead.dernierContactLe`, `Dossier.prochaineActionManuelle*`) ; lot 1 (cœur) en cours.
 - [ ] B Analytique — lecture du code et des maquettes en cours (notes de travail dans le scratchpad de la session).

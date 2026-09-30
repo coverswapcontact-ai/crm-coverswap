@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { completerCoordonnees, rattacherLead } from "@/lib/clients/identification";
 import { formaterTelephone, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
@@ -310,6 +311,7 @@ export async function modifierEntrant(id: string, entree: z.output<typeof schema
   if ((nouvelEmail || nouveauTelephone) && lead.clientId) {
     avertissements.push("Coordonnées ajoutées aussi à la fiche client ; les anciennes y restent, à archiver depuis la fiche si elles sont fausses.");
   }
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return avertissements;
 }
 
@@ -348,6 +350,7 @@ export async function archiverEntrant(id: string, motif: string): Promise<void> 
   if (lead.archiveLe) throw new ErreurMetier("Contact déjà archivé.", 409);
   await prisma.lead.update({ where: { id }, data: { archiveLe: new Date(), archiveMotif: motif } });
   await synchroniserRappel({ type: "LEAD", id });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
 }
 
 export async function restaurerEntrant(id: string): Promise<void> {
@@ -356,6 +359,7 @@ export async function restaurerEntrant(id: string): Promise<void> {
   if (!lead.archiveLe) return;
   await prisma.lead.update({ where: { id }, data: { archiveLe: null, archiveMotif: null } });
   await synchroniserRappel({ type: "LEAD", id });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
 }
 
 export const schemaCreationEntrant = z.object({

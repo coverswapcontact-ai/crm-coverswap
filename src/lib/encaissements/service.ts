@@ -1,4 +1,5 @@
 import prisma, { type Transaction } from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateDepuisJour, formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatCentimes, versCentimes } from "@/lib/dossiers/montants";
@@ -244,6 +245,7 @@ export async function enregistrerEncaissement(entree: EnregistrementPaiement) {
   if (changement) await effetsDuChangementEtape(changement);
   // Mission 7 : « paiement bien reçu », par mail, automatiquement (une fois par paiement).
   if (resultat.dossierId) await (await import("@/lib/mail/notifications")).notifierPaiementsRecents(resultat.dossierId);
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return resultat;
 }
 

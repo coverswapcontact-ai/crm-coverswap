@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { relanceDevisFaiteParSms, verifierRelanceParSms } from "@/lib/relances/etape";
@@ -125,6 +126,7 @@ export async function noterSmsCopie(entree: EntreeCopie, maintenant: Date = new 
   if (!dossierId) {
     const deja = await prisma.interaction.findFirst({ where: { leadId: leadId!, type: "SMS", contenu, createdAt: { gte: depuis } }, select: { id: true } });
     const id = deja?.id ?? (await prisma.interaction.create({ data: { leadId: leadId!, type: "SMS", contenu }, select: { id: true } })).id;
+    await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
     return { cible: "CONTACT", dossierId: null, leadId, id, deja: Boolean(deja), lien };
   }
 

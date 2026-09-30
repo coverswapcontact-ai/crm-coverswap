@@ -5,6 +5,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { resoudreContexte } from "@/lib/journal/acteur";
 import { avecActeur, typeActeur } from "@/lib/journal/contexte";
 import { mettreEnFile, relancerTache } from "@/lib/taches/file";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurDefinitive, type ContexteTraitement, estAttenteExterne, estErreurDefinitive } from "@/lib/taches/registre";
 import { definitionDe } from "./catalogue";
 import { champsDe, estSensible, type DefinitionProposition, type ResultatExecution } from "./definitions";
@@ -274,6 +275,7 @@ export async function validerProposition(id: string, corrections?: Record<string
       await reclamer(tx, id, decision);
       await mettreEnFile({ type: TYPE_TACHE_EXECUTION, cle: `proposition:${id}`, charge: { propositionId: id } }, tx);
     });
+    await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
     return vueProposition(await charger(id));
   }
 
@@ -304,6 +306,7 @@ export async function validerProposition(id: string, corrections?: Record<string
     throw erreur;
   }
   if (apres) await apres().catch((erreur) => console.error("[validation] effets après validation :", erreur));
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return vueProposition(await charger(id));
 }
 
@@ -330,6 +333,7 @@ export async function rejeterProposition(
       commentaireRejet: commentaire?.slice(0, 1000) ?? null,
     })
   );
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return vueProposition(await charger(id));
 }
 

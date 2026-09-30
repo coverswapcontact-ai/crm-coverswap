@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { resoudreContexte } from "@/lib/journal/acteur";
@@ -62,6 +63,7 @@ export async function enregistrerMessageClient(entree: { dossierId: string; espa
   if (!texte) return null;
   try {
     const m = await prisma.messageEspace.create({ data: { dossierId: entree.dossierId, espaceId: entree.espaceId ?? null, auteur: "CLIENT", source: entree.source, texte, simulationId: entree.simulationId ?? null, evenementId: entree.evenementId ?? null } });
+    await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
     return m.id;
   } catch (erreur) {
     console.error("[espace] message du client non rangé dans les messages :", erreur);
@@ -86,6 +88,7 @@ export async function compterMessagesNonLus(): Promise<number> {
 /** Lucas a lu (répondu, ou dit « c'est lu ») : les messages du client de ce dossier sont marqués. */
 export async function marquerMessagesLus(dossierId: string): Promise<number> {
   const { count } = await prisma.messageEspace.updateMany({ where: { dossierId, auteur: "CLIENT", luLe: null }, data: { luLe: new Date() } });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return count;
 }
 

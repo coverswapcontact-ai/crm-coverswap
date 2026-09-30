@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { ficheVivante } from "@/lib/clients/fusion";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -417,6 +418,7 @@ export async function archiverFil(messageId: string, archiver = true): Promise<v
   for (const m of fil) await demanderEtatGmail(m.id);
   // Mission 14 (R2) : traité = « pas de réponse à faire » ; désarchivé = de nouveau à traiter.
   await recalculerMainDesMessages(fil.map((m) => m.id));
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
 }
 
 /** Remonter un mail rangé : il revient, et son expéditeur ne sera plus jamais rangé. */

@@ -285,6 +285,10 @@ export const TYPES_EVENEMENT = [
   "SMS_COPIE",
   // Mission 16 (partie 4) : coordonnées laissées sur le site après une simulation (espace ouvert, lien affiché ou non)
   "ESPACE_DEMANDE_SITE",
+  // Mission 17 (partie A) : prochaine action posée à la main ; réponses données depuis Tâches (message de l'espace)
+  "PROCHAINE_ACTION_MANUELLE",
+  "REPONSE_INUTILE",
+  "REPONDU_HORS_CRM",
 ] as const;
 export type TypeEvenement = (typeof TYPES_EVENEMENT)[number];
 
@@ -337,6 +341,9 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ESPACE_LIEN_COMMUNIQUE: "Lien de l'espace communiqué",
   SMS_COPIE: "SMS copié",
   ESPACE_DEMANDE_SITE: "Demande laissée sur le site",
+  PROCHAINE_ACTION_MANUELLE: "Prochaine action posée à la main",
+  REPONSE_INUTILE: "Pas de réponse à faire",
+  REPONDU_HORS_CRM: "Répondu hors du CRM",
 };
 // Structure du champ metadata d'un CHANGEMENT_ETAPE : voir MetadataChangementEtape (regles.ts).
 

@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import prisma, { type BaseDonnees } from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { lireParametres } from "@/lib/parametres/service";
 import { estDemandeDeDevis } from "./constantes";
 import { lireDepartements, qualifier, type Qualification, type ReponseLue, type ZoneIntervention } from "./priorite";
@@ -91,11 +92,14 @@ export async function classerLead(leadId: string, client: BaseDonnees = prisma, 
 
 /** Classement qui ne doit jamais faire échouer l'arrivée d'un contact. */
 export async function classerLeadSansBloquer(leadId: string): Promise<Qualification | null> {
+  // Mission 17 (partie A) : le point commun des leads qui arrivent (site, simulateur, Meta, mail, saisie) : les tâches suivent.
   try {
     return await classerLead(leadId);
   } catch (erreur) {
     console.error(`[prospects] classement du contact ${leadId} impossible (non bloquant) :`, erreur);
     return null;
+  } finally {
+    await signalerChangementTaches();
   }
 }
 

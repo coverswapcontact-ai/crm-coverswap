@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { GoogleIndisponible } from "@/lib/google/connexion";
@@ -172,6 +173,7 @@ export async function executerEnvoi(envoiId: string): Promise<{ envoye: boolean;
   } else if (envoi.leadId && !automatique) {
     await prisma.interaction.create({ data: { leadId: envoi.leadId, type: "EMAIL", contenu: `Mail envoyé : ${envoi.objet} — ${envoi.texte.slice(0, 300)}` } });
   }
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return { envoye: true, identifiant };
 }
 

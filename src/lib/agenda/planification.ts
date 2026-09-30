@@ -4,6 +4,7 @@ import { noterRapidement } from "@/lib/commercial/appels";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { modifierDossier } from "@/lib/dossiers/dossiers";
+import { noterProchaineActionManuelle } from "@/lib/dossiers/prochaine-action-manuelle";
 import { modifierEntrant } from "@/lib/prospects/entrants";
 import { creerEvenementAgenda } from "@/lib/assistant/agenda";
 import { etatConnexionGoogle } from "@/lib/google/connexion";
@@ -86,9 +87,11 @@ export async function planifierAction(entree: EntreePlanification): Promise<Resu
   if (entree.dossierId) {
     if (estUnRappel) {
       // Un rappel garde son heure : la date dictée (« jeudi 14h ») est l'instant exact, comme après un appel.
-      const dossier = await prisma.dossier.findUnique({ where: { id: entree.dossierId }, select: { id: true } });
+      const dossier = await prisma.dossier.findUnique({ where: { id: entree.dossierId }, select: { id: true, prochaineAction: true } });
       if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
       await prisma.dossier.update({ where: { id: entree.dossierId }, data: { prochaineAction: entree.action.slice(0, 120), prochaineActionDate: entree.debut, prochaineActionInstant: entree.debut } });
+      // Mission 17 (partie A) : planifiée par Lucas ou Claude, c'est une prochaine action manuelle (l'autre branche passe par modifierDossier).
+      await noterProchaineActionManuelle(entree.dossierId, { action: entree.action.slice(0, 120), avant: dossier.prochaineAction, date: entree.debut });
     } else {
       await modifierDossier(entree.dossierId, { prochaineAction: entree.action.slice(0, 120), prochaineActionDate: jourParis(entree.debut) } as Parameters<typeof modifierDossier>[1]);
     }

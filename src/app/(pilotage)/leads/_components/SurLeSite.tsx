@@ -4,8 +4,6 @@ import { useState } from "react";
 import { AlertTriangle, ChevronDown, Globe, ImageOff, Loader2 } from "lucide-react";
 import type { SimulationSiteLigne, SimulationsSiteRecentes } from "@/lib/simulations/site";
 import type { TravailSiteLigne, TravauxSiteRecents } from "@/lib/simulations/travaux-lecture";
-import type { EntonnoirSite } from "@/lib/site/evenements";
-import { CHOIX_ENTONNOIR, etapesDuChoix, type ChoixEntonnoir } from "@/lib/site/familles-source";
 import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Visionneuse";
 import { TRANS } from "@/components/pilotage/ui";
 import { cn } from "@/lib/utils";
@@ -27,62 +25,9 @@ import { pluriel, quand } from "@/lib/commun/format";
  * Mission 16 (partie 4) : visite en tête, estimation vue (facultative) avant le contact.
  * Mission 16 (partie 6) : un sélecteur « Toutes · Meta · Recherche · Direct » (famille de la source de la visite,
  * calculée à la lecture) ; les sources « autres » sont nommées sous « Toutes ».
+ * Mission 17 (partie B) : l'entonnoir quitte cet écran (chiffres : Analytique, onglet Site, « De la visite au lead ») ;
+ * restent les outils de travail : générations en cours ou en échec (visiteur à prévenir) et simulations (lead à ouvrir).
  */
-
-/** Une ligne par étape : le nombre de parcours et, entre parenthèses, ceux de l'étape d'avant qui se sont arrêtés là. */
-export function Entonnoir({ entonnoir, choixInitial = "toutes" }: { entonnoir: EntonnoirSite; choixInitial?: ChoixEntonnoir }) {
-  const [choix, setChoix] = useState<ChoixEntonnoir>(choixInitial);
-  const total = entonnoir.etapes[0]?.parcours ?? 0;
-  if (total === 0) return <p className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-2.5 text-[12.5px] text-[#9CA3AF]">Entonnoir du simulateur : aucun parcours commencé ces {entonnoir.jours} derniers jours.</p>;
-  const etapes = etapesDuChoix(entonnoir, choix);
-  const libelleChoix = CHOIX_ENTONNOIR.find((c) => c.id === choix)?.libelle ?? "";
-  return (
-    <div className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-2.5">
-      <p className="text-[12px] text-[#9CA3AF]">
-        Entonnoir du simulateur · {entonnoir.jours} derniers jours · <span className="text-[#F87171]">(−n)</span> : parcours arrêtés à cette étape
-      </p>
-      {/* Mission 16 (partie 6) : la source de la visite (première provenance connue du parcours). */}
-      {entonnoir.parFamille ? (
-        <div role="group" aria-label="Source des visites" className="mt-1.5 flex flex-wrap gap-1.5">
-          {CHOIX_ENTONNOIR.map((c) => {
-            const visites = etapesDuChoix(entonnoir, c.id)[0]?.parcours ?? 0;
-            return (
-              <button key={c.id} type="button" aria-pressed={choix === c.id} onClick={() => setChoix(c.id)} className={cn("h-11 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, choix === c.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
-                {c.libelle} <span className="text-[#9CA3AF]">{visites}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-      {(etapes[0]?.parcours ?? 0) === 0 ? (
-        <p className="mt-1.5 text-[12.5px] text-[#9CA3AF]">Aucun parcours venu de « {libelleChoix} » ces {entonnoir.jours} derniers jours.</p>
-      ) : (
-        <ol className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px]" aria-label={choix === "toutes" ? "Entonnoir du simulateur" : `Entonnoir du simulateur, visites « ${libelleChoix} »`}>
-          {etapes.map((etape, i) => (
-            <li key={etape.cle} className="flex items-center gap-1.5">
-              {i > 0 ? <span aria-hidden className="text-[#6B7280]">→</span> : null}
-              {/* Mission 16 (partie 4) : une étape facultative (l'estimation) se lit entre parenthèses : on peut la sauter. */}
-              <span className={etape.facultative ? "text-[#9CA3AF]" : "text-[#F2F3F5]"} title={etape.facultative ? "Étape facultative : la demande part aussi sans elle" : undefined}>
-                {etape.facultative ? "(" : null}
-                {etape.libelle} <span className="font-medium">{etape.parcours}</span>
-                {etape.facultative ? ")" : null}
-              </span>
-              {etape.abandons ? (
-                <span className="text-[#F87171]" title={`${pluriel(etape.abandons, "parcours arrêté", "parcours arrêtés")} à cette étape`}>
-                  (−{etape.abandons})<span className="sr-only"> {pluriel(etape.abandons, "parcours arrêté", "parcours arrêtés")} ici</span>
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      )}
-      {choix === "toutes" && entonnoir.autresSources?.length ? (
-        <p className="mt-1 text-[12px] text-[#9CA3AF]">Autres sources : {entonnoir.autresSources.map((s) => `${s.nom} ${s.parcours}`).join(" · ")}</p>
-      ) : null}
-    </div>
-  );
-}
-
 
 function LigneSimulation({ ligne, maintenant, onImage, onLead }: { ligne: SimulationSiteLigne; maintenant: number; onImage: (() => void) | null; onLead: () => void }) {
   const vignette = ligne.image ? (
@@ -156,7 +101,7 @@ function LigneTravail({ ligne, maintenant }: { ligne: TravailSiteLigne; maintena
   );
 }
 
-export function SurLeSite({ resume, travaux, entonnoir, onOuvrirLead }: { resume: SimulationsSiteRecentes; travaux?: TravauxSiteRecents; entonnoir?: EntonnoirSite; onOuvrirLead: (leadId: string) => void }) {
+export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: SimulationsSiteRecentes; travaux?: TravauxSiteRecents; onOuvrirLead: (leadId: string) => void }) {
   const [ouvert, setOuvert] = useState(false);
   const [image, setImage] = useState<number | null>(null);
   const [maintenant] = useState(() => Date.now());
@@ -182,7 +127,6 @@ export function SurLeSite({ resume, travaux, entonnoir, onOuvrirLead }: { resume
         ) : null}
         <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-[#9CA3AF] transition-transform", ouvert && "rotate-180")} />
       </button>
-      {ouvert && entonnoir ? <Entonnoir entonnoir={entonnoir} /> : null}
       {ouvert && lignesTravaux.length > 0 ? (
         <ul className="divide-y-[0.5px] divide-[#2A2D34] border-t-[0.5px] border-[#2A2D34]" aria-label="Générations en cours ou en échec">
           {lignesTravaux.map((ligne) => (

@@ -173,7 +173,7 @@ export type EcranSite = EcranCommun & {
   courbe: Courbe; // visites par jour et par famille
   pagesEntree: { page: string; visites: number; simulations: number; leads: number }[];
   pagesVues: { page: string; vues: number }[];
-  sources: { famille: Famille; nom: string; visites: number; simulations: number; leads: number }[];
+  provenances: { famille: Famille; nom: string; visites: number; simulations: number; leads: number }[];
   appareils: { appareil: string; visites: number }[];
   pays: { pays: string; visites: number }[];
   entonnoir: Tunnel; // visite → simulation lancée → terminée → lead

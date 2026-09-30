@@ -65,8 +65,8 @@ const baseLocale = () => Boolean(process.env.DATABASE_URL?.startsWith("file:")) 
 
 /* ── Tâches de fond en échec définitif ─────────────────────────────────── */
 
-/** SAUVEGARDE_DRIVE a sa propre tâche (SYSTEME:sauvegarde) : pas comptée deux fois. */
-const TYPES_A_PART = ["SAUVEGARDE_DRIVE"];
+/** SAUVEGARDE_DRIVE a sa propre tâche (SYSTEME:sauvegarde), ANALYTIQUE_SYNCHRO la sienne (SYSTEME:synchro-<source>) : pas comptées deux fois. */
+const TYPES_A_PART = ["SAUVEGARDE_DRIVE", "ANALYTIQUE_SYNCHRO"];
 const LIEN_TACHES_DE_FOND = "/taches-de-fond";
 
 const tachesDeFond: Signal = {
@@ -431,6 +431,42 @@ const google: Signal = {
   },
 };
 
+/* ── Synchronisations de l'Analytique ──────────────────────────────────── */
+
+/** `SYSTEME:synchro-meta`, `synchro-search-console`, `synchro-fiche-google`. */
+const codeSynchro = (source: string) => `synchro-${source.toLowerCase().replace(/_/g, "-")}`;
+const ONGLET_SYNCHRO: Record<string, string> = { META: "publicite", GOOGLE_ADS: "publicite", SEARCH_CONSOLE: "seo", FICHE_GOOGLE: "seo" };
+/** Au-delà de 24 h d'échec, la tâche monte au niveau 4. */
+const HEURES_SYNCHRO_URGENTE = 24;
+
+const synchros: Signal = {
+  nom: "synchronisations de l'Analytique",
+  possede: (c) => c.startsWith(cle("synchro-")),
+  async lire(etat) {
+    // Base et variables seulement (etat.ts n'appelle jamais Meta ni Google).
+    const { pannesDeSynchro } = await import("@/lib/analytique/etat");
+    const pannes = await pannesDeSynchro(etat.maintenant);
+    return {
+      detections: pannes.map((p) =>
+        tacheSysteme(etat, {
+          code: codeSynchro(p.source),
+          titre: `Réparer la synchronisation · ${p.libelle}`,
+          raison: `en échec depuis le ${jourMois(p.depuis)}${p.derniereReussite ? ` (dernière réussite le ${jourMois(p.derniereReussite)})` : ""} : ${p.erreur}`,
+          niveau: p.heures > HEURES_SYNCHRO_URGENTE ? 4 : 5,
+          depuis: p.depuis,
+          dureeMin: 5,
+          raccourci: { libelle: "Ouvrir l'Analytique", href: `/analytique?onglet=${ONGLET_SYNCHRO[p.source] ?? "ensemble"}`, marche: p.aFaire || "Lire l'erreur de la synchronisation, régler sa cause, puis « Relancer » depuis l'Analytique." },
+        })
+      ),
+      preuve: async (c) => {
+        const { lireTousLesSuivis } = await import("@/lib/analytique/suivi");
+        const suivi = [...(await lireTousLesSuivis()).values()].find((s) => cle(codeSynchro(s.source)) === c);
+        return suivi?.detail.etat === "A_JOUR" && suivi.derniereReussiteLe ? `synchronisation réussie le ${jourMois(suivi.derniereReussiteLe)}` : suivi && suivi.detail.etat !== "EN_ECHEC" ? "synchronisation plus en échec" : null;
+      },
+    };
+  },
+};
+
 /* ── Disque ────────────────────────────────────────────────────────────── */
 
 export const SEUILS_DISQUE_TACHE = { attention: 70, urgent: 85 } as const;
@@ -461,7 +497,7 @@ const disque: Signal = {
 
 /* ── Le détecteur ──────────────────────────────────────────────────────── */
 
-export const SIGNAUX_SYSTEME: readonly Signal[] = [tachesDeFond, travaux, paiements, jetonMeta, numerotation, creditOpenAI, sauvegarde, google, disque];
+export const SIGNAUX_SYSTEME: readonly Signal[] = [tachesDeFond, travaux, paiements, jetonMeta, numerotation, creditOpenAI, sauvegarde, google, synchros, disque];
 
 type Analyse = { detections: Detection[]; acheves: Achevement[] };
 

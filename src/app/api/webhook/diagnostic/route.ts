@@ -165,8 +165,8 @@ export async function GET(request: NextRequest) {
         "Si vous lisez ce message sur votre téléphone, le canal qui l'a livré fonctionne.",
         `Canaux configurés : ${notifications.canaux.join(", ") || "aucun"}.`,
       ].join("\n\n"),
-      lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/publicite`,
-      libelleLien: "Ouvrir l'écran Publicité",
+      lien: `${(process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "")}/analytique?onglet=publicite`,
+      libelleLien: "Ouvrir la chaîne des leads Meta",
       telephone: "+33612345678",
       urgence: 4,
     }, { origine: "essai" });

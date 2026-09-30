@@ -3,8 +3,6 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { preparerBaseEssai } from "@/test/base-essai";
 
 preparerBaseEssai();
@@ -16,6 +14,8 @@ for (const cle of ["META_PIXEL_ID", "META_ACCESS_TOKEN", "META_APP_SECRET", "MET
  * direct, autre au nom gardé), la famille d'un parcours (sa première source non vide), l'entonnoir emboîté par famille
  * (sept étapes, la somme des familles = le global), la lecture en base (`entonnoirSite`, `syntheseSite`) sans rien
  * réécrire, l'écran Leads (sélecteur Toutes · Meta · Recherche · Direct) et les outils « synthese » / « voir_publicite ».
+ * Mission 17 (partie B) : les familles sont celles de l'Analytique (analytique/sources.ts) — chatgpt.com en IA, un lien
+ * Facebook sans marqueur payant en réseaux sociaux, Google payant en Google Ads ; sélecteur Toutes · Pub Meta · SEO · IA · Direct.
  * `fetch` est remplacé pendant tout le fichier : une requête réseau fait échouer le test. Aucun nom de client.
  */
 
@@ -52,31 +52,39 @@ after(async () => {
 
 const ETAPES = ["PAGE_VUE", "PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU", "ESTIMATION_VUE"] as const;
 
-describe("familleSource : Meta, recherche, direct, autre (nom gardé)", () => {
+describe("familleSource : les familles de l'Analytique (mission 17 : analytique/sources.ts), nom gardé", () => {
   test("les sources telles que le site les envoie (utm_source[/medium] ou domaine référent)", () => {
     const cas: [string | null | undefined, string][] = [
-      // Meta : Facebook, Instagram, Messenger, le raccourci des publicités.
+      // Pub Meta : une source Meta avec un medium payant.
       ["meta/paid", "meta"],
-      ["fb", "meta"],
-      ["facebook.com", "meta"],
-      ["l.facebook.com", "meta"],
-      ["m.facebook.com", "meta"],
-      ["instagram.com", "meta"],
-      ["l.instagram.com", "meta"],
-      ["ig/story", "meta"],
-      ["msg", "meta"],
       ["Meta/Paid", "meta"],
       ["facebook_ads/cpc", "meta"],
-      // Recherche : les moteurs.
-      ["google.com", "recherche"],
-      ["google.fr", "recherche"],
-      ["google/cpc", "recherche"],
-      ["bing.com", "recherche"],
-      ["duckduckgo.com", "recherche"],
-      ["qwant.com", "recherche"],
-      ["ecosia.org", "recherche"],
-      ["fr.search.yahoo.com", "recherche"],
-      ["com.google.android.googlequicksearchbox", "recherche"],
+      ["ig/paid", "meta"],
+      // Réseaux sociaux : Facebook, Instagram, Messenger, X… SANS marqueur payant (mission 17 : plus « Meta »).
+      ["fb", "reseaux"],
+      ["facebook.com", "reseaux"],
+      ["l.facebook.com", "reseaux"],
+      ["m.facebook.com", "reseaux"],
+      ["instagram.com", "reseaux"],
+      ["l.instagram.com", "reseaux"],
+      ["ig/story", "reseaux"],
+      ["msg", "reseaux"],
+      ["t.co", "reseaux"],
+      // SEO : les moteurs sans marqueur payant ; Google payant : Google Ads.
+      ["google.com", "seo"],
+      ["google.fr", "seo"],
+      ["google/cpc", "google-ads"],
+      ["bing.com", "seo"],
+      ["duckduckgo.com", "seo"],
+      ["qwant.com", "seo"],
+      ["ecosia.org", "seo"],
+      ["fr.search.yahoo.com", "seo"],
+      ["com.google.android.googlequicksearchbox", "seo"],
+      // IA : l'hôte complet, testé avant Meta et le SEO (mission 17 : chatgpt.com n'est plus « autre »).
+      ["chatgpt.com", "ia"],
+      ["perplexity.ai", "ia"],
+      ["gemini.google.com", "ia"],
+      ["meta.ai", "ia"],
       // Direct : rien de connu.
       ["", "direct"],
       ["   ", "direct"],
@@ -84,8 +92,6 @@ describe("familleSource : Meta, recherche, direct, autre (nom gardé)", () => {
       [undefined, "direct"],
       ["direct", "direct"],
       // Autre : le reste, un MOT doit correspondre (« metamorphose », « bingo », « googleads » ne sont pas des familles).
-      ["chatgpt.com", "autre"],
-      ["t.co", "autre"],
       ["metamorphose.fr", "autre"],
       ["bingo.fr", "autre"],
       ["googleads.g.doubleclick.net", "autre"],
@@ -97,11 +103,11 @@ describe("familleSource : Meta, recherche, direct, autre (nom gardé)", () => {
   });
 
   test("le nom de la source est gardé (espaces autour retirés) ; vide pour le direct", () => {
-    assert.deepEqual(familles.familleSource(" Chatgpt.com "), { famille: "autre", nom: "Chatgpt.com" });
-    assert.deepEqual(familles.familleSource("l.facebook.com"), { famille: "meta", nom: "l.facebook.com" });
+    assert.deepEqual(familles.familleSource(" Chatgpt.com "), { famille: "ia", nom: "Chatgpt.com" });
+    assert.deepEqual(familles.familleSource("l.facebook.com"), { famille: "reseaux", nom: "l.facebook.com" });
     assert.deepEqual(familles.familleSource(null), { famille: "direct", nom: "" });
-    assert.deepEqual(familles.FAMILLES_SOURCE_SITE, ["meta", "recherche", "direct", "autre"]);
-    assert.deepEqual(familles.CHOIX_ENTONNOIR.map((c) => c.libelle), ["Toutes", "Meta", "Recherche", "Direct"]);
+    assert.deepEqual(familles.FAMILLES_SOURCE_SITE, ["meta", "google-ads", "seo", "fiche-google", "ia", "reseaux", "direct", "autre"]);
+    assert.deepEqual(familles.CHOIX_ENTONNOIR.map((c) => c.libelle), ["Toutes", "Pub Meta", "SEO", "ChatGPT et IA", "Direct"]);
     // `evenements.ts` réexporte la même fonction (conception : « familleSource dans site/evenements »).
     assert.equal(evenements.familleSource, familles.familleSource);
   });
@@ -115,10 +121,12 @@ describe("familleSource : Meta, recherche, direct, autre (nom gardé)", () => {
       { parcoursId: "b", source: "fb" },
       { parcoursId: "c", source: "" },
       { parcoursId: "c", source: null },
-      { parcoursId: "d", source: "t.co" },
+      { parcoursId: "d", source: "metamorphose.fr" },
+      // Mission 17 : la famille calculée à la réception (référent, gclid) prime sur la source brute.
+      { parcoursId: "e", source: null, famille: "ia" },
     ]);
-    assert.deepEqual(Object.fromEntries([...f.entries()].map(([p, s]) => [p, s.famille])), { a: "meta", b: "recherche", c: "direct", d: "autre" });
-    assert.equal(f.get("d")?.nom, "t.co");
+    assert.deepEqual(Object.fromEntries([...f.entries()].map(([p, s]) => [p, s.famille])), { a: "reseaux", b: "seo", c: "direct", d: "autre", e: "ia" });
+    assert.equal(f.get("d")?.nom, "metamorphose.fr");
   });
 });
 
@@ -128,18 +136,19 @@ describe("l'entonnoir par famille (pur)", () => {
   const EVENEMENTS = [
     // Meta : un parcours complet (contact), un qui s'arrête à la visite, un venu direct puis revenu par une publicité.
     ...jusqua("m1", 6, "meta/paid"), e("m1", "RAPPEL_DEMANDE"),
-    ...jusqua("m2", 1, "l.instagram.com"),
-    e("m3", "PAGE_VUE", null), e("m3", "PIECE_CHOISIE", "fb"), e("m3", "PHOTO_CHARGEE"),
+    ...jusqua("m2", 1, "ig/paid"),
+    e("m3", "PAGE_VUE", null), e("m3", "PIECE_CHOISIE", "fb/cpc"), e("m3", "PHOTO_CHARGEE"),
     // Recherche : jusqu'au rendu vu, puis contact sans estimation (facultative).
     ...jusqua("r1", 5, "google.com"), e("r1", "DEVIS_DEMANDE"),
     ...jusqua("r2", 3, "bing.com"),
     // Direct.
     ...jusqua("d1", 2, null),
     ...jusqua("d2", 1, ""),
-    // Autres : noms gardés.
+    // IA, réseaux, autres (noms gardés).
     ...jusqua("a1", 2, "chatgpt.com"),
     ...jusqua("a2", 1, "chatgpt.com"),
     ...jusqua("a3", 1, "t.co"),
+    ...jusqua("a4", 1, "metamorphose.fr"),
   ];
 
   test("sept étapes par famille, emboîtées ; la somme des familles redonne le global, étape par étape", () => {
@@ -155,7 +164,7 @@ describe("l'entonnoir par famille (pur)", () => {
       ["estimation", 1, null],
       ["contact", 1, 0],
     ]);
-    assert.deepEqual(lire(entonnoir.parFamille.recherche), [
+    assert.deepEqual(lire(entonnoir.parFamille.seo), [
       ["visite", 2, null],
       ["piece", 2, 0],
       ["photo", 2, 0],
@@ -173,7 +182,9 @@ describe("l'entonnoir par famille (pur)", () => {
       ["estimation", 0, null],
       ["contact", 0, 0],
     ]);
-    assert.equal(entonnoir.parFamille.autre[0].parcours, 3);
+    assert.equal(entonnoir.parFamille.ia[0].parcours, 2);
+    assert.equal(entonnoir.parFamille.reseaux[0].parcours, 1);
+    assert.equal(entonnoir.parFamille.autre[0].parcours, 1);
     // Un parcours dans une seule famille : les familles s'additionnent en l'entonnoir global.
     entonnoir.etapes.forEach((etape, i) => {
       const somme = familles.FAMILLES_SOURCE_SITE.reduce((total, f) => total + entonnoir.parFamille[f][i].parcours, 0);
@@ -185,7 +196,7 @@ describe("l'entonnoir par famille (pur)", () => {
       obligatoires.forEach((n, i) => assert.ok(i === 0 || n <= obligatoires[i - 1], `${f} : ${obligatoires.join(" → ")}`));
     }
     // Les autres sources, par nom, les plus fréquentes d'abord.
-    assert.deepEqual(entonnoir.autresSources, [{ nom: "chatgpt.com", parcours: 2 }, { nom: "t.co", parcours: 1 }]);
+    assert.deepEqual(entonnoir.autresSources, [{ nom: "metamorphose.fr", parcours: 1 }]);
     // Rien d'autre ne change pour l'entonnoir global (mêmes nombres que `calculerEntonnoir`).
     assert.deepEqual(entonnoir.etapes, evenements.calculerEntonnoir(EVENEMENTS, 7).etapes);
   });
@@ -197,41 +208,22 @@ describe("l'entonnoir par famille (pur)", () => {
     assert.equal(familles.etapesDuChoix({ jours: 7, etapes: entonnoir.etapes }, "meta"), entonnoir.etapes, "sans familles (ancien instantané) : le global");
     assert.equal(familles.texteEtapes(entonnoir.parFamille.meta), "Visite 3 → Pièce choisie 2 → Photo chargée 2 → Génération lancée 1 → Résultat vu 1 → (Estimation vue 1) → Contact ou rappel 1");
     const lignes = familles.texteEntonnoirParFamille(entonnoir);
-    assert.equal(lignes.length, 4);
-    assert.match(lignes[0], /^- Meta : Visite 3 → /);
-    assert.match(lignes[3], /^- Autres \(chatgpt\.com 2, t\.co 1\) : Visite 3 → /);
+    assert.equal(lignes.length, 6);
+    assert.match(lignes[0], /^- Pub Meta : Visite 3 → /);
+    assert.match(lignes[2], /^- ChatGPT et IA : Visite 2 → /);
+    assert.match(lignes[5], /^- Autres \(metamorphose\.fr 1\) : Visite 1 → /);
     // Une famille sans visite n'a pas de ligne.
     const sansDirect = evenements.calculerEntonnoirParFamille(EVENEMENTS.filter((x) => !x.parcoursId.startsWith("d")), 7);
-    assert.deepEqual(familles.texteEntonnoirParFamille(sansDirect).map((l) => l.split(" :")[0]), ["- Meta", "- Recherche", "- Autres (chatgpt.com 2, t.co 1)"]);
+    assert.deepEqual(familles.texteEntonnoirParFamille(sansDirect).map((l) => l.split(" :")[0]), ["- Pub Meta", "- SEO", "- ChatGPT et IA", "- Réseaux sociaux", "- Autres (metamorphose.fr 1)"]);
+    // Un instantané mensuel d'avant la mission 17 (familles meta, recherche, direct, autre) garde ses lignes.
+    const ancien = { jours: 30, etapes: entonnoir.etapes, parFamille: { meta: entonnoir.parFamille.meta, recherche: entonnoir.parFamille.seo, direct: entonnoir.parFamille.direct, autre: entonnoir.parFamille.autre } } as unknown as Parameters<typeof familles.texteEntonnoirParFamille>[0];
+    assert.deepEqual(familles.texteEntonnoirParFamille(ancien).map((l) => l.split(" :")[0].split(" (")[0]), ["- Pub Meta", "- Direct", "- Autres", "- Recherche"]);
+    assert.equal(familles.etapesDuChoix(ancien, "seo"), entonnoir.etapes, "famille absente d'un ancien instantané : le global");
     assert.deepEqual(familles.texteEntonnoirParFamille(evenements.calculerEntonnoir([], 7)), [], "sans familles : rien");
   });
 
-  test("l'écran Leads : sélecteur Toutes · Meta · Recherche · Direct, sept étapes avec les abandons, autres sources nommées", async () => {
-    const { Entonnoir } = await import("@/app/(pilotage)/leads/_components/SurLeSite");
-    const entonnoir = evenements.calculerEntonnoirParFamille(EVENEMENTS, 7);
-    const html = renderToStaticMarkup(createElement(Entonnoir, { entonnoir }));
-    assert.match(html, /role="group" aria-label="Source des visites"/);
-    const boutons = [...html.matchAll(/<button type="button" aria-pressed="(true|false)"[^>]*>([^<]+)<span[^>]*>(\d+)<\/span><\/button>/g)].map((m) => [m[2].trim(), m[1], Number(m[3])]);
-    assert.deepEqual(boutons, [["Toutes", "true", 10], ["Meta", "false", 3], ["Recherche", "false", 2], ["Direct", "false", 2]]);
-    assert.equal((html.match(/<li class="flex items-center gap-1.5">/g) ?? []).length, 7, "sept étapes");
-    assert.match(html, /aria-label="Entonnoir du simulateur"/);
-    assert.match(html, /Autres sources : chatgpt\.com 2 · t\.co 1/);
-    // Choix Meta : ses nombres, ses abandons, pas la ligne des autres sources.
-    const meta = renderToStaticMarkup(createElement(Entonnoir, { entonnoir, choixInitial: "meta" }));
-    assert.match(meta, /aria-pressed="true"[^>]*>Meta /);
-    assert.match(meta, /aria-label="Entonnoir du simulateur, visites « Meta »"/);
-    assert.match(meta, /Visite <span class="font-medium">3<\/span>/);
-    assert.match(meta, /Pièce choisie <span class="font-medium">2<\/span><\/span><span class="text-\[#F87171\]"[^>]*>\(−1\)/);
-    assert.doesNotMatch(meta, /Autres sources/);
-    // Une famille sans visite le dit, sans entonnoir vide.
-    const sansDirect = evenements.calculerEntonnoirParFamille(EVENEMENTS.filter((x) => !x.parcoursId.startsWith("d")), 7);
-    const direct = renderToStaticMarkup(createElement(Entonnoir, { entonnoir: sansDirect, choixInitial: "direct" }));
-    assert.match(direct, /Aucun parcours venu de « Direct » ces 7 derniers jours\./);
-    assert.doesNotMatch(direct, /<ol/);
-    // Un entonnoir sans familles (lecture d'avant) : pas de sélecteur.
-    const ancien = renderToStaticMarkup(createElement(Entonnoir, { entonnoir: evenements.calculerEntonnoir(EVENEMENTS, 7) }));
-    assert.doesNotMatch(ancien, /Source des visites/);
-  });
+  // Mission 17 (partie B) : l'entonnoir du simulateur a quitté l'écran Leads (« Sur le site cette semaine » garde la liste
+  // des simulations, outil de travail) ; le chemin de la visite au lead est dans l'Analytique, onglet Site.
 });
 
 describe("en base : entonnoirSite, syntheseSite, outils de l'assistant", () => {
@@ -239,28 +231,29 @@ describe("en base : entonnoirSite, syntheseSite, outils de l'assistant", () => {
     const maintenant = Date.now();
     const le = (minutes: number) => new Date(maintenant - minutes * 60_000);
     const ecrire = (parcoursId: string, type: string, source: string | null, minutes: number) => prisma.evenementSite.create({ data: { parcoursId, type, page: type === "PAGE_VUE" ? "/" : "/simulateur", source, createdAt: le(minutes) } });
-    // Arrivé sans source, puis revenu par Google : recherche (première source non vide, lue par date).
+    // Arrivé sans source, puis revenu par Google : SEO (première source non vide, lue par date).
     const revenu = parcours();
     await ecrire(revenu, "PAGE_VUE", null, 50);
     await ecrire(revenu, "PIECE_CHOISIE", "google.com", 40);
-    // Arrivé par Facebook, puis Google : Meta (la première source connue décide), jusqu'au rendu vu puis rappel.
+    // Arrivé par une publicité Meta, puis Google : Meta (la première source connue décide), jusqu'au rendu vu puis rappel.
     const meta = parcours();
-    await ecrire(meta, "PAGE_VUE", "l.facebook.com", 30);
-    for (const [i, type] of ["PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU", "RAPPEL_DEMANDE"].entries()) await ecrire(meta, type, i === 2 ? "google.com" : "l.facebook.com", 29 - i);
-    // Une autre source, nom gardé ; une visite d'il y a huit jours (hors fenêtre).
+    await ecrire(meta, "PAGE_VUE", "meta/paid", 30);
+    for (const [i, type] of ["PIECE_CHOISIE", "PHOTO_CHARGEE", "GENERATION_LANCEE", "RESULTAT_VU", "RAPPEL_DEMANDE"].entries()) await ecrire(meta, type, i === 2 ? "google.com" : "meta/paid", 29 - i);
+    // Une visite venue de ChatGPT (IA) ; une visite d'il y a huit jours (hors fenêtre).
     await ecrire(parcours(), "PAGE_VUE", "chatgpt.com", 10);
     await ecrire(parcours(), "PAGE_VUE", "meta/paid", 8 * 24 * 60);
 
     const entonnoir = await evenements.entonnoirSite(7);
     assert.ok(entonnoir.parFamille && entonnoir.autresSources);
     assert.deepEqual(entonnoir.parFamille.meta.map((x) => x.parcours), [1, 1, 1, 1, 1, 0, 1]);
-    assert.deepEqual(entonnoir.parFamille.recherche.map((x) => x.parcours), [1, 1, 0, 0, 0, 0, 0]);
+    assert.deepEqual(entonnoir.parFamille.seo.map((x) => x.parcours), [1, 1, 0, 0, 0, 0, 0]);
     assert.equal(entonnoir.parFamille.direct[0].parcours, 0, "le parcours revenu par Google n'est plus « direct »");
-    assert.deepEqual(entonnoir.autresSources, [{ nom: "chatgpt.com", parcours: 1 }]);
+    assert.equal(entonnoir.parFamille.ia[0].parcours, 1);
+    assert.deepEqual(entonnoir.autresSources, []);
     assert.equal(entonnoir.etapes[0].parcours, 3, "la visite d'il y a huit jours est hors fenêtre");
     // Rien de rétroactif : les lignes gardent leur source brute.
     const brutes = await prisma.evenementSite.findMany({ where: { parcoursId: meta }, orderBy: { createdAt: "asc" }, select: { source: true } });
-    assert.deepEqual(brutes.map((b) => b.source), ["l.facebook.com", "l.facebook.com", "l.facebook.com", "google.com", "l.facebook.com", "l.facebook.com"]);
+    assert.deepEqual(brutes.map((b) => b.source), ["meta/paid", "meta/paid", "meta/paid", "google.com", "meta/paid", "meta/paid"]);
 
     // La synthèse de la période porte le même entonnoir (instantané version 5).
     const jour = new Date().toISOString().slice(0, 10);
@@ -276,8 +269,8 @@ describe("en base : entonnoirSite, syntheseSite, outils de l'assistant", () => {
     const appeler = (nom: string, entree: Record<string, unknown>) => execution.executerOutil(catalogue.outilParNom(nom)!, entree, session);
     const synthese = await appeler("synthese", {});
     // Trente jours : la visite Meta d'il y a huit jours compte ici (pas dans les sept jours de « voir_publicite »).
-    assert.match(synthese.texte, /Entonnoir du site par source \(parcours ; entre parenthèses, l'étape facultative\) :\n- Meta : Visite 2 → Pièce choisie 1 → Photo chargée 1 → Génération lancée 1 → Résultat vu 1 → \(Estimation vue 0\) → Contact ou rappel 1\n- Recherche : Visite 1 → Pièce choisie 1 → Photo chargée 0/);
-    assert.match(synthese.texte, /\n- Autres \(chatgpt\.com 1\) : Visite 1 → Pièce choisie 0/);
+    assert.match(synthese.texte, /Entonnoir du site par source \(parcours ; entre parenthèses, l'étape facultative\) :\n- Pub Meta : Visite 2 → Pièce choisie 1 → Photo chargée 1 → Génération lancée 1 → Résultat vu 1 → \(Estimation vue 0\) → Contact ou rappel 1\n- SEO : Visite 1 → Pièce choisie 1 → Photo chargée 0/);
+    assert.match(synthese.texte, /\n- ChatGPT et IA : Visite 1 → Pièce choisie 0/);
     assert.doesNotMatch(synthese.texte, /- Direct :/, "une famille sans visite n'a pas de ligne");
     const pub = await appeler("voir_publicite", {});
     assert.match(pub.texte, /Sur le site, visites venues de Meta \(7 jours\) : Visite 1 → Pièce choisie 1 → Photo chargée 1 → Génération lancée 1 → Résultat vu 1 → \(Estimation vue 0\) → Contact ou rappel 1\./);

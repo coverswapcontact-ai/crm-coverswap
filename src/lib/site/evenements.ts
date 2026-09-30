@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { FAMILLES_SOURCE_SITE, familleDesParcours, type FamilleSourceSite } from "./familles-source";
 
-// Mission 16 (partie 6) : la famille d'une source (Meta, recherche, direct, autre), calculée à la lecture. Module pur à part : l'écran Leads (client) l'importe sans la base.
+// Mission 16 (partie 6) : la famille d'une source, calculée à la lecture (mission 17 : définition unique de analytique/sources.ts, familles de l'Analytique). Module pur à part : l'écran Leads (client) l'importe sans la base.
 export { FAMILLES_SOURCE_SITE, LIBELLES_FAMILLE_SOURCE_SITE, familleDesParcours, familleSource, type FamilleSourceSite } from "./familles-source";
 
 /**
@@ -57,10 +57,23 @@ export type EntreeEvenementSite = {
   source?: string | null;
   campagne?: string | null;
   meta?: Record<string, unknown> | null;
+  /** Mission 17 (partie B) : calculés par le CRM à la réception (analytique/mesure.ts), jamais l'IP ni le navigateur. */
+  visiteur?: string | null;
+  appareil?: string | null;
+  pays?: string | null;
+  referent?: string | null;
+  famille?: string | null;
 };
 
 export function estTypeEvenementSite(valeur: unknown): valeur is TypeEvenementSite {
   return typeof valeur === "string" && (TYPES_EVENEMENT_SITE as readonly string[]).includes(valeur);
+}
+
+/** Le JSON libre de l'événement, 1 000 caractères au plus — jamais coupé au milieu (un JSON tronqué serait illisible). */
+function metaCourte(meta: Record<string, unknown> | null | undefined): string | null {
+  if (!meta) return null;
+  const texte = JSON.stringify(meta);
+  return texte.length <= 1000 ? texte : JSON.stringify({ tronque: true });
 }
 
 export async function enregistrerEvenementSite(entree: EntreeEvenementSite): Promise<void> {
@@ -71,7 +84,12 @@ export async function enregistrerEvenementSite(entree: EntreeEvenementSite): Pro
       page: entree.page?.slice(0, 200) ?? null,
       source: entree.source?.slice(0, 120) ?? null,
       campagne: entree.campagne?.slice(0, 120) ?? null,
-      meta: entree.meta ? JSON.stringify(entree.meta).slice(0, 1000) : null,
+      meta: metaCourte(entree.meta),
+      visiteur: entree.visiteur ?? null,
+      appareil: entree.appareil ?? null,
+      pays: entree.pays ?? null,
+      referent: entree.referent?.slice(0, 120) ?? null,
+      famille: entree.famille ?? null,
     },
   });
 }
@@ -113,7 +131,7 @@ const estResultat = (type: string) => typeCanonique(type) === "RESULTAT_VU";
 export async function syntheseSite(du: string, au: string): Promise<SyntheseSite> {
   const evenements = await prisma.evenementSite.findMany({
     where: { createdAt: { gte: new Date(du), lte: new Date(`${au}T23:59:59.999Z`) } },
-    select: { parcoursId: true, type: true, page: true, source: true },
+    select: { parcoursId: true, type: true, page: true, source: true, famille: true },
     // Par date : la famille d'un parcours est celle de sa première source (mission 16, partie 6).
     orderBy: { createdAt: "asc" },
   });
@@ -246,7 +264,7 @@ export const AUTRES_SOURCES_MAX = 8;
  * l'ordre chronologique), puis chaque famille a son entonnoir emboîté, calculé comme le global : la somme des familles
  * redonne le global, étape par étape. Rien de rétroactif : la famille se calcule à la lecture. Pur : testable sans base.
  */
-export function calculerEntonnoirParFamille(evenements: readonly { parcoursId: string; type: string; source?: string | null }[], jours = 7): EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">> {
+export function calculerEntonnoirParFamille(evenements: readonly { parcoursId: string; type: string; source?: string | null; famille?: string | null }[], jours = 7): EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">> {
   const familles = familleDesParcours(evenements);
   const parFamille = Object.fromEntries(
     FAMILLES_SOURCE_SITE.map((famille) => [famille, calculerEntonnoir(evenements.filter((e) => familles.get(e.parcoursId)?.famille === famille), jours).etapes])
@@ -266,7 +284,7 @@ export async function entonnoirSite(jours = 7, maintenant: Date = new Date()): P
   const types = ETAPES_ENTONNOIR.flatMap((e) => [...e.types]);
   const evenements = await prisma.evenementSite.findMany({
     where: { createdAt: { gte: depuis }, type: { in: types } },
-    select: { parcoursId: true, type: true, source: true },
+    select: { parcoursId: true, type: true, source: true, famille: true },
     orderBy: { createdAt: "asc" },
   });
   return calculerEntonnoirParFamille(evenements, jours);

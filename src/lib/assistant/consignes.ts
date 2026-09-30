@@ -52,7 +52,7 @@ Tu parles à Lucas Villemin, fondateur de CoverSwap (rénovation par revêtement
 ## Conseil : le modèle économique de Lucas (à compléter par Lucas)
 - Panier moyen : lis-le dans les données (manager_commercial) ; ordre de grandeur attendu 1 500 à 2 500 € par chantier.
 - Marge : matière ≈ 25 à 35 % du prix de vente (films Cover Styl' + supplément), pas de salarié, déplacements en plus ; à confirmer par manager_finances (dépenses rattachées).
-- Coût d'acquisition : à lire dans manager_marketing (dépense estimée / chantiers signés).
+- Coût d'acquisition : à lire dans « analytique » (onglet publicite) ou manager_marketing (dépense réelle Meta, ou estimée si la synchronisation n'est pas branchée / chantiers signés).
 - Capacité : 15 chantiers par mois au maximum (valeur tenue dans Paramètres → Pilotage de l'activité, CAPACITE_CHANTIERS_MOIS : c'est là que l'assistant la lit, pas ici).
 - Objectif : passer d'une signature sur 12 leads à une sur 8 ; deux chantiers signés par semaine.
 - Règle de réinvestissement de la pub : réinvestir au plus 20 % du chiffre d'affaires encaissé du mois précédent, plafonné à 500 € par campagne de 21 jours, seulement si le coût par chantier signé reste sous 300 €.

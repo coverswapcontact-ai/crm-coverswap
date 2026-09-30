@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { resoudreContexte } from "./acteur";
+import { MODELES_PURGEABLES } from "./declencheurs";
 import { InjecteurEcriture, SuppressionInterdite } from "./injection";
 import { traduireRefus } from "./refus";
 
@@ -47,7 +48,16 @@ export const extensionJournal = Prisma.defineExtension({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
-        if (operation === "delete" || operation === "deleteMany") throw new SuppressionInterdite(model);
+        // Seule exception : la purge d'un modèle purgeable (mesures anonymes à durée bornée, MODELES_PURGEABLES), par deleteMany.
+        if (operation === "delete" || (operation === "deleteMany" && !MODELES_PURGEABLES.has(model))) throw new SuppressionInterdite(model);
+        if (operation === "deleteMany") {
+          // La base refuse une ligne trop récente ; le moteur SQLite le rapporte comme une clé étrangère (P2003).
+          try {
+            return await query(args);
+          } catch (erreur) {
+            throw (erreur as { code?: string })?.code === "P2003" ? new SuppressionInterdite(model) : traduireRefus(erreur, model, operation, args);
+          }
+        }
 
         if (OPERATIONS_LISTE.has(operation) && MODELES_ARCHIVABLES.has(model)) {
           const actuels = (args ?? {}) as { where?: Record<string, unknown> };

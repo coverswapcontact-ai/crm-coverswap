@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, Copy, Search, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
-import { Bouton, EnTetePage, EtatVide, ListeDeroulante, Pagination, Pastille, TRANS, TitreSection } from "@/components/pilotage/ui";
+import { Bouton, EnTetePage, EtatVide, ListeDeroulante, Pagination, Pastille, TRANS } from "@/components/pilotage/ui";
 import type { PageClients } from "@/lib/clients/fiches";
-import {
-  FAMILLES_SOURCE,
-  LIBELLES_CATEGORIE_CLIENT,
-  LIBELLES_FAMILLE_SOURCE,
-  LIBELLES_SOURCE_CLIENT,
-  SOURCES_CLIENT,
-  type CategorieClient,
-  type FamilleSource,
-} from "@/lib/clients/constantes";
+import { LIBELLES_CATEGORIE_CLIENT, LIBELLES_SOURCE_CLIENT, SOURCES_CLIENT, type CategorieClient } from "@/lib/clients/constantes";
 import { formaterTelephone } from "@/lib/clients/normalisation";
-import type { LigneAcquisition } from "@/lib/clients/types";
 import { formatDateCourte } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
 import { cn } from "@/lib/utils";
@@ -32,85 +23,11 @@ const FILTRES_CATEGORIE: { valeur: CategorieClient | null; libelle: string }[] =
   { valeur: "DONNEUR_ORDRE", libelle: "Donneurs d'ordre" },
 ];
 
-function Acquisition({ lignes }: { lignes: LigneAcquisition[] }) {
-  const [detail, setDetail] = useState(false);
-  const familles = (Object.keys(FAMILLES_SOURCE) as FamilleSource[])
-    .map((famille) => {
-      const concernees = lignes.filter((ligne) => ligne.famille === famille);
-      return {
-        famille,
-        clients: concernees.reduce((somme, ligne) => somme + ligne.clients, 0),
-        clientsSignes: concernees.reduce((somme, ligne) => somme + ligne.clientsSignes, 0),
-        montantSigne: concernees.reduce((somme, ligne) => somme + ligne.montantSigne, 0),
-        sources: concernees,
-      };
-    })
-    .filter((famille) => famille.clients > 0)
-    .sort((a, b) => b.montantSigne - a.montantSigne || b.clients - a.clients);
-  const totalSigne = familles.reduce((somme, famille) => somme + famille.montantSigne, 0);
-  if (familles.length === 0) return null;
-
-  return (
-    <section className="mt-6 rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
-      <TitreSection
-        action={
-          <button
-            type="button"
-            onClick={() => setDetail((ouvert) => !ouvert)}
-            className={cn("min-h-11 sm:min-h-8 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
-          >
-            {detail ? "Par famille" : "Détail par source"}
-          </button>
-        }
-      >
-        D&apos;où viennent les clients
-      </TitreSection>
-      <ul className="flex flex-col gap-2.5">
-        {familles.map((famille) => {
-          const part = totalSigne > 0 ? famille.montantSigne / totalSigne : 0;
-          return (
-            <li key={famille.famille}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                <span className="text-[13px] text-[#F2F3F5]">{LIBELLES_FAMILLE_SOURCE[famille.famille]}</span>
-                <span className="text-[12px] text-[#9CA3AF] tabular-nums">
-                  {famille.clients} client{famille.clients > 1 ? "s" : ""} · {famille.clientsSignes} signé
-                  {famille.clientsSignes > 1 ? "s" : ""} ·{" "}
-                  <span className="font-medium text-[#F2F3F5]">{formatMontant(famille.montantSigne)}</span>
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#22262D]" aria-hidden>
-                <div className="h-full rounded-full bg-[#1D9E75]" style={{ width: `${Math.round(part * 100)}%` }} />
-              </div>
-              {detail ? (
-                <ul className="mt-1.5 flex flex-col gap-0.5 pl-3">
-                  {famille.sources.map((ligne) => (
-                    <li key={ligne.source} className="flex justify-between gap-3 text-[12px] text-[#9CA3AF] tabular-nums">
-                      <span>{LIBELLES_SOURCE_CLIENT[ligne.source]}</span>
-                      <span>
-                        {ligne.clients} · {ligne.clientsSignes} signé{ligne.clientsSignes > 1 ? "s" : ""} · {formatMontant(ligne.montantSigne)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-      <p className="mt-3 text-[11.5px] text-[#6B7280]">
-        Montant signé : devis acceptés. Les encaissements réels sont dans Finances.
-      </p>
-    </section>
-  );
-}
-
 export default function ListeClients({
   initial,
-  acquisition,
 }: {
   /** Mission 13 (lot 6) : la première page (50), rendue avec l'écran. */
   initial: PageClients;
-  acquisition: LigneAcquisition[];
 }) {
   const router = useRouter();
   const [clients, setClients] = useState(initial.clients);
@@ -159,9 +76,8 @@ export default function ListeClients({
 
   const affiches = filtresActifs || page > 1 ? clients : initial.clients;
   const totalAffiche = filtresActifs || page > 1 ? total : initial.total;
-  // Totaux sur toutes les fiches actives (la liste n'en charge que les plus récentes).
-  const totalClients = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clients, 0), [acquisition]);
-  const totalSignes = useMemo(() => acquisition.reduce((somme, ligne) => somme + ligne.clientsSignes, 0), [acquisition]);
+  // Mission 17 (partie B) : « D'où viennent les clients » est parti dans l'Analytique (qualité par source) ; reste le total.
+  const totalClients = initial.total;
 
   async function chercherDoublons() {
     setRechercheDoublons(true);
@@ -187,7 +103,7 @@ export default function ListeClients({
     <div className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
       <EnTetePage
         titre="Clients"
-        sousTitre={`${totalClients} client${totalClients > 1 ? "s" : ""} · ${totalSignes} avec un devis signé`}
+        sousTitre={`${totalClients} client${totalClients > 1 ? "s" : ""}`}
         actions={
           <>
             <Bouton icone={<Copy size={14} aria-hidden />} chargement={rechercheDoublons} onClick={() => void chercherDoublons()}>
@@ -202,8 +118,6 @@ export default function ListeClients({
           </>
         }
       />
-
-      <Acquisition lignes={acquisition} />
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <label className="relative min-w-[200px] flex-1">

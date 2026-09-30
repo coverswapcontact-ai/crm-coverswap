@@ -94,9 +94,9 @@ after(async () => {
 });
 
 describe("le catalogue expose les deux nouveaux outils", () => {
-  test("83 outils (mission 17 : taches, repondre_tache, ajouter_tache) : « leads_a_rappeler » en lecture, « noter_sms » en écriture réversible ; le serveur MCP les expose tous", async () => {
+  test("84 outils (mission 17 : taches, repondre_tache, ajouter_tache ; partie B : analytique) : « leads_a_rappeler » en lecture, « noter_sms » en écriture réversible ; le serveur MCP les expose tous", async () => {
     const registre = couverture.registreOutils();
-    assert.equal(registre.nombre, 83);
+    assert.equal(registre.nombre, 84);
     const rappeler = registre.outils.find((o) => o.nom === "leads_a_rappeler");
     const noterSms = registre.outils.find((o) => o.nom === "noter_sms");
     assert.deepEqual([rappeler?.niveau, rappeler?.famille, rappeler?.parametres], ["LECTURE", "LECTURE", ["limite", "page"]]);
@@ -113,7 +113,7 @@ describe("le catalogue expose les deux nouveaux outils", () => {
     await client.connect(versClient);
     const outils = await client.listTools();
     assert.deepEqual(couverture.ecartAvecLeServeur(outils.tools.map((t) => t.name)), { manquants: [], enTrop: [] });
-    assert.equal(outils.tools.length, 83);
+    assert.equal(outils.tools.length, 84);
     const niveau = (nom: string) => outils.tools.find((t) => t.name === nom)?.description?.match(/^\[([^\]]+)\]/)?.[1];
     assert.deepEqual([niveau("leads_a_rappeler"), niveau("noter_sms")], ["Lecture", "Écriture réversible"]);
     const ressource = await client.readResource({ uri: "coverswap://consignes" });

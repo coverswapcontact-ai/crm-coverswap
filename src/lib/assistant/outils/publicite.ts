@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { santeMeta } from "@/lib/meta/sante";
 import { definirOutil, format, lien } from "../definition";
-import { etatCampagne } from "./lecture";
+import { etatCampagne, texteDepenseCampagne, textePublicites } from "./lecture";
 import { pluriel } from "@/lib/commun/format";
 import { entonnoirSite } from "@/lib/site/evenements";
 import { texteEntonnoirParFamille } from "@/lib/site/familles-source";
@@ -17,7 +17,7 @@ export const outilVoirPublicite = definirOutil({
   nom: "voir_publicite",
   titre: "L'état de la publicité Meta (réception des leads, campagne)",
   description:
-    "Le voyant honnête de la réception des leads Meta : REÇOIT (des leads sont entrés récemment, avec le dernier et les volumes sur 24 h et 7 jours), PRÊT MAIS SILENCIEUX (configuration complète, aucun lead sur 7 jours), ou NE REÇOIT PAS (ce qui manque). Puis : leads en échec (reçus mais pas dans le CRM), notifications (le téléphone sonne-t-il ?), jeton Meta, conversions renvoyées, résultats par campagne et publicité, campagne en cours (jour, budget, dépense estimée), l'entonnoir du site des visites venues de Meta (7 jours) et les alertes. « interroger_meta: true » vérifie aussi l'abonnement de la page et le jeton auprès de Meta (un appel réseau).",
+    "Le voyant honnête de la réception des leads Meta : REÇOIT (des leads sont entrés récemment, avec le dernier et les volumes sur 24 h et 7 jours), PRÊT MAIS SILENCIEUX (configuration complète, aucun lead sur 7 jours), ou NE REÇOIT PAS (ce qui manque). Puis : leads en échec (reçus mais pas dans le CRM), notifications (le téléphone sonne-t-il ?), jeton Meta, conversions renvoyées, campagne en cours (jour, budget, dépense réelle Meta ou estimée au prorata — dis laquelle, règle du jour), résultats par publicité avec leur propre coût par lead et le verdict du protocole (mêmes calculs que l'onglet Publicité de l'Analytique ; pour l'écran complet : « analytique » onglet publicite), l'entonnoir du site des visites venues de Meta (7 jours) et les alertes. « interroger_meta: true » vérifie aussi l'abonnement de la page et le jeton auprès de Meta (un appel réseau).",
   niveau: "LECTURE",
   schema: z.object({ interroger_meta: z.boolean().optional().describe("Vrai : vérifier l'abonnement de la page et le jeton auprès de Meta (appel réseau)."), jours: z.number().int().min(1).max(90).optional().describe("Fenêtre des résultats (21 par défaut).") }),
   executer: async (e, contexte) => {
@@ -33,12 +33,13 @@ export const outilVoirPublicite = definirOutil({
       `Notifications : ${sante.notifications.canaux.length ? sante.notifications.canaux.join(", ") : "aucun canal"}${sante.notifications.push ? " — le téléphone sonne" : " — AUCUNE notification poussée : le téléphone ne sonne pas"}${sante.notifications.leadsSansPush.length ? ` ; ${pluriel(sante.notifications.leadsSansPush.length, "lead récent", "leads récents")} sans notification poussée` : ""}.`,
       `Jeton Meta : ${sante.jeton.message}`,
       `Conversions renvoyées à Meta : ${sante.conversions.envoyees7j} sur 7 jours${sante.conversions.enEchec ? `, ${sante.conversions.enEchec} en échec` : ""}${sante.conversions.derniereLe ? `, dernière le ${format.jourCourt(new Date(sante.conversions.derniereLe))}` : ""}.`,
-      campagne.debut ? `Campagne : commencée le ${format.jourCourt(campagne.debut)}, ${campagne.enCours ? `jour ${campagne.jour} sur ${campagne.duree}` : "pas en cours"}, budget ${campagne.budget !== null ? format.euros(campagne.budget) : "non renseigné"}${campagne.depenseEstimee !== null ? `, dépense estimée ${format.euros(campagne.depenseEstimee)} (prorata)` : ""}, ${pluriel(campagne.leads, "lead")} Meta${campagne.coutParLead !== null ? `, ≈ ${format.euros(campagne.coutParLead)} par lead` : ""}.` : "Campagne : aucune renseignée (« modifier_parametres » : CAMPAGNE_DEBUT, CAMPAGNE_BUDGET, CAMPAGNE_DUREE_JOURS).",
-      sante.resultats.parPublicite?.length ? `Par publicité (${sante.resultats.jours ?? e.jours ?? 21} jours) : ${sante.resultats.parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}${p.devis !== undefined ? `, ${p.devis} devis` : ""}${p.signes !== undefined ? `, ${pluriel(p.signes, "signé")}` : ""}`).join(" · ")}.` : "",
-      entonnoir ? (surLeSite.length ? `Sur le site, visites venues de Meta (7 jours) : ${surLeSite[0].replace(/^- Meta : /, "")}.` : "Sur le site : aucune visite venue de Meta ces 7 derniers jours.") : "",
+      campagne.debut ? `Campagne : commencée le ${format.jourCourt(campagne.debut)}, ${campagne.enCours ? `jour ${campagne.jour} sur ${campagne.duree}` : "pas en cours"}, budget ${campagne.budget !== null ? format.euros(campagne.budget) : "non renseigné"}, ${texteDepenseCampagne(campagne)}, ${pluriel(campagne.leads, "lead")} Meta${campagne.coutParLead !== null ? `, ${campagne.estimation ? "≈ " : ""}${format.euros(campagne.coutParLead)} par lead` : ""}.${campagne.regle ? ` Règle du jour : ${campagne.regle}` : ""}` : "Campagne : aucune renseignée (« modifier_parametres » : CAMPAGNE_DEBUT, CAMPAGNE_BUDGET, CAMPAGNE_DUREE_JOURS).",
+      // Mission 17 (partie B) : par publicité, les calculs de l'Analytique (attribution par identifiants, dépense propre à chaque publicité, verdict du protocole).
+      campagne.parPublicite.length ? `Par publicité (${pluriel(campagne.fenetreJours, "jour")}) : ${textePublicites(campagne.parPublicite)}.` : sante.resultats.parPublicite?.length ? `Par publicité (${sante.resultats.jours ?? e.jours ?? 21} jours, formulaires reçus) : ${sante.resultats.parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}${p.devis !== undefined ? `, ${p.devis} devis` : ""}${p.signes !== undefined ? `, ${pluriel(p.signes, "signé")}` : ""}`).join(" · ")}.` : "",
+      entonnoir ? (surLeSite.length ? `Sur le site, visites venues de Meta (7 jours) : ${surLeSite[0].replace(/^- [^:]+ : /, "")}.` : "Sur le site : aucune visite venue de Meta ces 7 derniers jours.") : "",
       sante.alertes.length ? `Alertes :\n${sante.alertes.map((a) => `- ${a}`).join("\n")}` : "Aucune alerte.",
     ].filter(Boolean);
-    return { texte: lignes.join("\n"), donnees: { chaine: sante.chaine, voyant: w.recoit, detail: w.recoitDetail, webhook: w, echecs: sante.echecs, notifications: sante.notifications, jeton: sante.jeton, conversions: sante.conversions, resultats: sante.resultats, campagne, alertes: sante.alertes, entonnoirMeta: entonnoir?.parFamille?.meta ?? null }, liens: [lien("Publicité", "/publicite"), lien("Paramètres", "/parametres")] };
+    return { texte: lignes.join("\n"), donnees: { chaine: sante.chaine, voyant: w.recoit, detail: w.recoitDetail, webhook: w, echecs: sante.echecs, notifications: sante.notifications, jeton: sante.jeton, conversions: sante.conversions, resultats: sante.resultats, campagne, alertes: sante.alertes, entonnoirMeta: entonnoir?.parFamille?.meta ?? null }, liens: [lien("Analytique — Publicité", "/analytique?onglet=publicite"), lien("Paramètres", "/parametres")] };
   },
 });
 

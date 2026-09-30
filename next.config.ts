@@ -9,7 +9,12 @@ const ANCIENNES_ADRESSES: { source: string; destination: string }[] = [
   { source: "/leads/nouveau", destination: "/leads" },
   { source: "/leads/:id", destination: "/leads?lead=:id" },
   { source: "/dashboard", destination: "/dossiers" },
-  { source: "/analytics", destination: "/synthese" },
+  // Mission 17 (partie B) : tous les chiffres dans l'Analytique. Les liens déjà envoyés (notifications « Voir l'écran
+  // Publicité », outils de l'assistant vers /synthese?du=&au=) restent joignables ; la requête d'origine suit
+  // (/synthese?du=…&au=… ouvre l'Analytique sur ces dates).
+  { source: "/analytics", destination: "/analytique" },
+  { source: "/synthese", destination: "/analytique" },
+  { source: "/publicite", destination: "/analytique?onglet=publicite" },
   { source: "/assistant", destination: "/dossiers" },
   { source: "/devis/nouveau", destination: "/dossiers" },
   { source: "/devis/:chemin*", destination: "/dossiers" },

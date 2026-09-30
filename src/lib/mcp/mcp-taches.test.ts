@@ -340,10 +340,10 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
 });
 
 describe("le catalogue et un vrai client MCP", () => {
-  test("83 outils : « taches » en lecture, « repondre_tache » et « ajouter_tache » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
+  test("84 outils (partie B : « analytique ») : « taches » en lecture, « repondre_tache » et « ajouter_tache » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
     const { registreOutils } = await import("@/lib/assistant/couverture");
     const registre = registreOutils();
-    assert.equal(registre.nombre, 83);
+    assert.equal(registre.nombre, 84);
     const outil = (nom: string) => registre.outils.find((o) => o.nom === nom);
     assert.deepEqual([outil("taches")?.niveau, outil("taches")?.parametres], ["LECTURE", ["minutes", "vue"]]);
     assert.deepEqual([outil("repondre_tache")?.niveau, outil("repondre_tache")?.parametres], ["REVERSIBLE", ["motif_perte", "precision", "quand", "raison", "reponse", "tache", "texte"]]);

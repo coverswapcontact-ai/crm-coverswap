@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { compterLeadsEnRetard, listerLeads, type VueLeads } from "@/lib/prospects/leads";
 import { simulationsSiteRecentes } from "@/lib/simulations/site";
 import { travauxSiteRecents } from "@/lib/simulations/travaux-lecture";
-import { entonnoirSite } from "@/lib/site/evenements";
 import EcranLeads from "./_components/EcranLeads";
 
 export const metadata: Metadata = {
@@ -21,7 +20,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const vue: VueLeads = demandee ?? ((await compterLeadsEnRetard()) > 0 ? "A_RAPPELER" : "A_APPELER");
   // Mission 13 (B19) : les simulations faites sur le site cette semaine, visibles ici et non plus seulement par l'assistant.
   // Mission 15 (partie 1) : et les générations encore en cours ou en échec, avec la raison.
-  // Mission 15 (partie 4) : et l'entonnoir du simulateur (pièce → photo → génération → résultat vu → coordonnées), avec les abandons.
-  const [initial, site, travaux, entonnoir] = await Promise.all([listerLeads({ vue, page: 1 }), simulationsSiteRecentes(7), travauxSiteRecents(7), entonnoirSite(7)]);
-  return <EcranLeads initial={initial} vueInitiale={vue} siteInitial={site} travauxInitial={travaux} entonnoirInitial={entonnoir} leadInitial={lead} appelsInitial={parametres.appels === "1"} />;
+  // Mission 17 (partie B) : l'entonnoir du simulateur est parti dans l'Analytique (onglet Site).
+  const [initial, site, travaux] = await Promise.all([listerLeads({ vue, page: 1 }), simulationsSiteRecentes(7), travauxSiteRecents(7)]);
+  return <EcranLeads initial={initial} vueInitiale={vue} siteInitial={site} travauxInitial={travaux} leadInitial={lead} appelsInitial={parametres.appels === "1"} />;
 }

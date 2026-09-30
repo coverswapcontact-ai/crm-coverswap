@@ -298,7 +298,8 @@ describe("WHATSAPP_CLIQUE", () => {
       new NextRequest("http://localhost/api/site/evenements", {
         method: "POST",
         body: JSON.stringify({ parcoursId, type: "WHATSAPP_CLIQUE", page: "/", source: "instagram", meta: { depuis: "accueil-final" } }),
-        headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.40" },
+        // Mission 17 (partie B) : un navigateur (sans User-Agent, la mesure y voit un robot et n'enregistre rien).
+        headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.40", "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" },
       })
     );
     assert.equal(reponse.status, 200);

@@ -113,7 +113,7 @@ export async function calculerPointDuJour(maintenant: Date = new Date(), options
         faitAujourdhui: taches.faitAujourdhui.map((t) => ({ id: t.id, titre: t.titre, statut: t.statut, reponduParLisible: t.reponduParLisible })),
       },
     },
-    campagne: { enCours: campagne.enCours, jour: campagne.jour, duree: campagne.duree, depenseEstimee: campagne.depenseEstimee, leads: campagne.leads, coutParLead: campagne.coutParLead, regle: campagne.regle },
+    campagne: { enCours: campagne.enCours, jour: campagne.jour, duree: campagne.duree, depense: campagne.depense, estimation: campagne.estimation, depenseEstimee: campagne.depenseEstimee, leads: campagne.leads, coutParLead: campagne.coutParLead, regle: campagne.regle },
     alertes: { taches: sante.taches, google: sante.google, meta: sante.meta, ia: sante.ia, disqueLibreMo: sante.disqueLibreMo, disque: sante.disque, coherence: sante.coherence, autres: sante.alertes },
   };
   if (options.memoriser !== false) await noterPoint(maintenant);
@@ -137,7 +137,7 @@ export const outilPointDuJour = definirOutil({
       `Aujourd'hui : ${pluriel(a.nombreMailsATraiter, "mail")} à traiter, ${pluriel(a.messagesEspaceNonLus, "message d\'espace non lu", "messages d\'espace non lus")}, ${pluriel(a.propositionsEnAttente, "proposition")} à valider.`,
       `Rappels : ${a.rappelsAujourdhui} aujourd'hui, ${a.rappelsEnRetard} en retard, ${pluriel(a.relancesProposables, "relance proposable", "relances proposables")}.`,
       `Ce qui t'attend : ${resumeTaches(a.taches)}`,
-      point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ≈ ${format.euros(point.campagne.coutParLead)} par lead (dépense estimée)` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
+      point.campagne.enCours ? `Campagne : jour ${point.campagne.jour} sur ${point.campagne.duree}, ${pluriel(point.campagne.leads, "lead")}${point.campagne.coutParLead !== null ? `, ${point.campagne.estimation ? "≈ " : ""}${format.euros(point.campagne.coutParLead)} par lead (${point.campagne.estimation ? "dépense estimée" : "dépense réelle Meta"})` : ""}. Règle : ${point.campagne.regle ?? "aucune règle trouvée pour ce jour"}.` : "Pas de campagne en cours (ou début non renseigné dans Paramètres).",
       `Alertes : ${[point.alertes.taches.enEchec.length ? `${pluriel(point.alertes.taches.enEchec.length, "tâche")} de fond en échec` : null, point.alertes.google?.coupee ? "Google coupé" : point.alertes.google ? `Google : jeton ${point.alertes.google.niveau.toLowerCase()} (reconnecter)` : null, point.alertes.meta && point.alertes.meta.etat !== "COMPLETE" ? `Meta : ${point.alertes.meta.etat}` : null, point.alertes.ia && !point.alertes.ia.active ? "IA inactive" : null, point.alertes.disque && point.alertes.disque.niveau !== "OK" ? `disque : ${point.alertes.disque.pourcentUtilise} % utilisé (${point.alertes.disque.libreMo} Mo libres)` : null, point.alertes.coherence?.incoherences.length ? `${pluriel(point.alertes.coherence.incoherences.length, "incohérence")}` : null, ...point.alertes.autres.filter((x) => x.gravite !== "INFO").map((x) => x.titre)].filter(Boolean).join(", ") || "rien à signaler"}.`,
     ].join("\n");
     return { texte, donnees: point, liens: [lien("Leads", "/leads"), lien("Mail", "/mail")] };

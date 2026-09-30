@@ -5327,11 +5327,8 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 > mission 17 (A, B, C, PR, rapport de 5 lignes), sur la même branche.
 
 - [x] A Tâches — livrée (voir la section « Partie A » plus bas) ; PR vers `main`.
-- [ ] B Analytique — PR A fusionnée (crm-coverswap#1, `efedbe1`). Contrat posé (`src/lib/analytique/types.ts`, schéma
-      `932f005`) ; en cours, quatre lots en parallèle : B1 connecteurs (Meta insights, Search Console, fiche Google par
-      compte de service) et mesure du site ; B2 calculs des écrans, résumé, alertes, outil `analytique` ; B3 écran
-      `/analytique` et retrait des doublons ; B4 balise du site (dépôt coverswap).
-- [ ] C Contrôle total par le MCP — inventaire des actions de l'interface fait (notes de travail), tableau à écrire.
+- [x] B Analytique — livrée (section « Partie B » plus bas) ; PR vers `main` ; site : branche à fusionner après le CRM.
+- [ ] C Contrôle total par le MCP — audit écrit (`docs/MCP-COUVERTURE.md` : 439 actions, 136 manquantes) ; implémentation à faire.
 
 ## Décisions (partie A)
 - Noms : `Tache` et `/api/taches` restent la file des tâches de fond ; nouveau modèle `TacheAFaire`, code
@@ -5394,3 +5391,65 @@ appliquées ou « introuvables »/« ambigus »), puis `taches` vue `PAR_TYPE` (
 sur « Ignorer » une proposition ; une tâche ajoutée pour une date future est « Plus tard » jusqu'à ce jour ; la
 tâche mise en surbrillance au retour est celle qu'on a ouverte si elle reste à faire, sinon la suivante ; les
 rappels du CRM dans l'agenda ne bloquent pas un jour de chantier.
+
+## Mission 17, partie B — Analytique (30/09 → 01/10, terminée)
+
+**Livré** (conception : `docs/ANALYTIQUE.md`, contrat : `src/lib/analytique/types.ts`) :
+- `/analytique` (onglet principal, aussi au téléphone) : Vue d'ensemble (résumé du jour, alertes, 6 tuiles avec
+  sparklines, leads et devis par jour et par source, tunnel visites → … → encaissé, blocs Publicité Meta, SEO, fiche
+  Google, qualité par source, argent et jauge des 20 %, agent et qualité des données), Publicité (vraie dépense Meta par
+  campagne / ensemble / publicité, coûts, retour sur dépense, jour de campagne, règle du jour, verdict ; chaîne des leads
+  Meta ; Google Ads vide), SEO et Google (Search Console, opportunités, alerte www, fiche Google), Site (visites, pages,
+  entrées, sources dont IA, appareils, pays, entonnoir du simulateur en 7 étapes), Argent (12 mois, marge, panier,
+  règle des 20 %, carnet de commandes, URSSAF et seuils, dépenses par catégorie, d'où viennent les clients, mois figés,
+  exports). Période commune, comparaison à la période précédente, filtre par source (8 familles).
+- Connecteurs par la file de tâches (nuit + relance à la main) : Meta Insights, Search Console et fiche Google (compte
+  de service, JWT RS256 maison) ; historique quotidien en base ; état par source, jamais de zéro trompeur.
+- Mesure du site sans cookie : empreinte du jour sur les pages vues seulement (sel en mémoire, jamais en base),
+  appareil, pays déduit du fuseau, IP et navigateur jamais stockés, purge à 25 mois, route publique durcie.
+- Résumé du jour par règles, alertes (aussi dans `sante_systeme`, pannes de synchro en tâches système), cache 1 min
+  vidé à chaque écriture, pré-calcul à 7 h. Outil MCP `analytique` (84 outils) ; `campagne`, `voir_publicite`,
+  `manager_marketing` sur les mêmes calculs.
+- **Retiré du CRM** : écrans `/publicite` (→ `/analytique?onglet=publicite`) et `/synthese` (→ `/analytique`) ; de
+  `/finances` : tuiles, URSSAF, seuils, barres par mois (le travail reste) ; de Leads : l'entonnoir « Sur le site » ;
+  de Clients : « D'où viennent les clients » ; de Dépenses : tuiles et barres par catégorie. Tout est repris dans
+  l'Analytique.
+- Site (dépôt coverswap, branche `claude/beautiful-goldberg-lu7keb`, `dee5f90`) : balise enrichie (référent, fuseau,
+  UTM), opposition « Ne pas compter mes visites » et GPC, parcours du simulateur limité à 7 jours, politique de
+  confidentialité (25 mois). **À déployer après le CRM.**
+- Relecture adverse sous deux angles (25 défauts confirmés, corrigés et testés). Tests : 940 → 1 060. Lint, build.
+- Captures depuis le calcul réel, côte à côte avec la maquette : `docs/captures/mission-17/analytique-*.png`.
+
+**Ce que Lucas fait lui-même (variables Railway du CRM)** :
+| Variable | Rôle |
+|---|---|
+| `META_AD_ACCOUNT_ID` | le compte publicitaire (`act_621595161821553`, avec ou sans « act_ ») |
+| `META_ADS_TOKEN` | jeton d'utilisateur système Meta avec le droit `ads_read` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | contenu du fichier de clé JSON du compte de service Google |
+| `SEARCH_CONSOLE_SITE` | facultative, `sc-domain:coverswap.fr` par défaut |
+| `GOOGLE_BUSINESS_LOCATION` | `locations/<id>` de la fiche Google (après l'accord de Google) |
+| `GOOGLE_BUSINESS_ACCOUNT` | `accounts/<id>`, pour les avis (facultative) |
+
+Étapes :
+1. **Compte de service Google** : console Google Cloud (projet du CRM) → IAM → Comptes de service → Créer (nom
+   « crm-analytique ») → Clés → Ajouter une clé JSON → coller le contenu du fichier dans `GOOGLE_SERVICE_ACCOUNT_JSON`.
+   Activer « Google Search Console API » (API et services). Puis Search Console → propriété `coverswap.fr` →
+   Paramètres → Utilisateurs et autorisations → Ajouter l'adresse du compte de service (…@….iam.gserviceaccount.com),
+   droit « Restreint ».
+2. **API Business Profile** : demander l'accès (formulaire « GBP API contact form », motif « Application access
+   request ») avec le numéro du projet Google Cloud ; après l'accord (quelques jours), activer « My Business Business
+   Information API », « Business Profile Performance API » et « My Business Account Management API », ajouter le compte
+   de service comme gestionnaire de la fiche, poser `GOOGLE_BUSINESS_LOCATION` (et `GOOGLE_BUSINESS_ACCOUNT`).
+3. **Jeton Meta `ads_read`** : Business Manager → Paramètres de l'entreprise → Utilisateurs système → Ajouter
+   (« crm-analytique », Employé) → Attribuer des éléments : le compte publicitaire, droit « Voir les performances » →
+   Générer un jeton pour l'app CoverSwap, droit `ads_read`, expiration « Jamais » → `META_ADS_TOKEN` ; vérifier que le
+   compte publicitaire est en fuseau Europe/Paris et en euros (sinon la synchro le signale).
+4. Poser `utm_source=meta` sur les liens des publicités (déjà demandé mission 16).
+
+**À vérifier en production** : `/analytique` s'ouvre ; « Relancer » Meta après la pose des variables ; le journal de
+la synchro ; puis fusionner la branche du site (Vercel) et vérifier que les visites arrivent (onglet Site).
+
+**Décisions** : empreinte du jour seulement sur les pages vues (aucune ligne ne relie deux jours) ; sel en mémoire (un
+redémarrage coupe une visite en deux) ; pays par le fuseau ; dépense : une seule source par jour (synchro, sinon
+prorata marqué estimation, sinon saisie) ; comparaison arrêtée au dernier jour livré pour Search Console et la fiche ;
+les outils de travail de `/synthese` (exports, mois figés) et de `/finances` (URSSAF, seuils) sont dans l'onglet Argent.

@@ -124,7 +124,7 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
       gravite: "ATTENTION",
       titre: "Les propositions de l'agent sont moins souvent acceptées",
       detail: `${Math.round(tauxRecent)} % acceptées ces 30 derniers jours, contre ${Math.round(tauxAvant)} % avant. Motifs de rejet à regarder dans l'Analytique (Agent et qualité des données).`,
-      lien: "/analytique",
+      lien: "/analytique#agent-qualite",
     });
   }
   const echecs = await prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } });

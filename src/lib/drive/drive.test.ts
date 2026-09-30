@@ -190,7 +190,7 @@ describe("miroir Drive", () => {
     const premier = await miroir.synchroniserMiroir();
     assert.equal(premier.erreurs, 0);
     const code = (await import("@/lib/synthese/references")).pseudonyme(clientId);
-    const mois = new Date().toISOString().slice(0, 7);
+    const mois = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" }).slice(0, 7);
     const attendus = [
       "CoverSwap CRM",
       "CoverSwap CRM/Archives (retirés du CRM)",

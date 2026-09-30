@@ -269,13 +269,13 @@ describe("partie serveur de l'écran", () => {
     assert.ok(e.simulateur.slice(1).every((f) => f.famille !== "toutes" && f.etapes.some((x) => x.parcours > 0)));
   });
 
-  test("point 6 : AGENT_DEGRADE mène à /analytique ; seuils → onglet Argent ; les routes /api/synthese marchent et restent protégées", async () => {
+  test("point 6 : AGENT_DEGRADE mène à /analytique#agent-qualite ; seuils → onglet Argent ; les routes /api/synthese marchent et restent protégées", async () => {
     const { calculerAlertes } = await import("@/lib/synthese/alertes");
     const proposition = (decideLe: Date, statut: string, n: number) => prisma.proposition.create({ data: { type: "RATTACHER_MAIL", statut, auteur: "AGENT:mail", titre: `Essai ${n}`, contenu: "{}", decideLe } });
     for (let n = 0; n < 6; n++) await proposition(new Date(MERCREDI.getTime() - (40 + n) * 86_400_000), "EXECUTEE", n);
     for (let n = 0; n < 6; n++) await proposition(new Date(MERCREDI.getTime() - (2 + n) * 86_400_000), "REJETEE", 10 + n);
     const alertes = await calculerAlertes(MERCREDI);
-    assert.equal(alertes.find((a) => a.code === "AGENT_DEGRADE")?.lien, "/analytique");
+    assert.equal(alertes.find((a) => a.code === "AGENT_DEGRADE")?.lien, "/analytique#agent-qualite");
     for (const a of alertes.filter((x) => x.code.startsWith("SEUIL_") || x.code === "PARAMETRES_SEUILS")) assert.equal(a.lien, "/analytique?onglet=argent");
 
     const { estRoutePublique } = await import("@/lib/acces/routes-publiques");

@@ -66,6 +66,8 @@ model Lead {
   dernierAppelLe   DateTime? // dernier appel noté (fin d'appel, échange d'appel, note d'appel non vide), quelle qu'en soit l'issue
   tentatives       Int               @default(0) // appels SANS RÉPONSE consécutifs depuis le dernier appel abouti
   agendaEvenementId String? // Mission 14 (partie 7) : l'événement Google Agenda de son rappel (agenda/rappels.ts), effacé quand le rappel l'est
+  // Mission 17 (partie A) : dernier contact ÉCRIT sortant (SMS copié, mail parti). Non nul = sorti d'« À appeler », entré dans « À rappeler » (sans date).
+  dernierContactLe DateTime?
   // Doublon probable (même nom, même ville, quelques jours d'écart, autre téléphone et autre e-mail) :
   // signalé, jamais fusionné seul — Lucas fusionne en un clic ou écarte le signalement.
   doublonDe        String? // contact déjà connu qui semble être la même personne
@@ -579,6 +581,11 @@ model Dossier {
   // Mission 14 (partie 7) : l'instant exact d'un rappel choisi à l'heure (appel, planifier, rappel repris d'un lead). Une date
   // à midi UTC (notée au jour, `dateDepuisJour`) n'est « à l'heure » que si elle vaut encore cet instant ; sinon c'est un jour seul.
   prochaineActionInstant DateTime?
+  // Mission 17 (partie A) : la prochaine action posée À LA MAIN (Lucas ou Claude) et son texte d'alors. Tant que
+  // `prochaineAction` vaut ce texte et qu'aucun événement du client n'est arrivé depuis, elle prime (docs/TACHES.md).
+  prochaineActionManuelleLe DateTime?
+  prochaineActionManuelle   String?
+  prochaineActionPar        String? // acteur (HUMAIN:…, ASSISTANT:claude)
   dateChantier          DateTime? // attendue à partir de PLANIFIE (signalée si elle manque)
   // Mission 10 (23/09/2026) : ce que l'assistant modifie à la voix, tracé champ par champ (ModificationDossier).
   dateSouhaitee          DateTime? // date de chantier souhaitée par le client
@@ -2083,4 +2090,70 @@ model VersionTexte {
   ecriture  String?
 
   @@unique([cle, numero])
+}
+
+// ─────────────────────────────────────────────
+// Mission 17 (partie A) : les tâches de Lucas (src/lib/a-faire, docs/TACHES.md). Une clé stable « TYPE:sujet » :
+// une nouvelle détection ne crée jamais de doublon. Trois réponses (Fait, Plus tard, Pas à faire) ; rien ne s'efface.
+// À ne pas confondre avec `Tache` (file des tâches de fond, src/lib/taches).
+// ─────────────────────────────────────────────
+
+model TacheAFaire {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  cle            String    @unique // « TYPE:sujet » (REPONDRE:dossier:<id>, APPELER:lead:<id>, SYSTEME:jeton-meta…)
+  type           String // TypeTache (a-faire/types.ts)
+  source         String // SourceTache : le détecteur qui l'a écrite (MANUELLE pour Lucas)
+  sujetType      String // LEAD | DOSSIER | CLIENT | SYSTEME
+  sujetId        String?
+  leadId         String?
+  dossierId      String?
+  clientId       String?
+  titre          String // « Faire le devis · Bloch »
+  raison         String // « simulation validée le 28/09 »
+  niveau         Int // 1 argent · 2 chaud · 3 production · 4 système urgent · 5 ménage
+  montant        Float?
+  depuis         DateTime // origine du besoin (ancienneté)
+  echeance       DateTime?
+  dureeMin       Int
+  raccourci      String    @default("{}") // JSON Raccourci
+  donnees        String    @default("{}") // JSON du détecteur
+  lot            String?
+  lotLibelle     String?
+  statut         String    @default("A_FAIRE") // A_FAIRE | FAITE | PLUS_TARD | PAS_A_FAIRE
+  reponse        String? // FAIT | PLUS_TARD | PAS_A_FAIRE
+  reponseRaison  String?
+  reponseTexte   String?
+  reponduLe      DateTime?
+  reponduPar     String? // acteur complet (HUMAIN:…, ASSISTANT:claude, SYSTEME:taches-a-faire)
+  plusTardJusqua DateTime?
+  revenueLe      DateTime?
+  precedent      String? // JSON : l'état avant la dernière réponse (« Annuler »)
+  commenceLe     DateTime? // raccourci ouvert : mesure du temps réel
+  dureeReelleSec Int?
+  detecteLe      DateTime  @default(now())
+  archiveLe      DateTime?
+  archiveMotif   String?
+  ecriture       String?
+
+  @@index([statut, niveau])
+  @@index([dossierId])
+  @@index([leadId])
+  @@index([type, reponseRaison, reponduLe])
+}
+
+// « Pas à faire » qui apprend : trois fois la même raison sur le même type en 30 jours → règle proposée (REGLE_TACHE).
+model RegleTache {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  type         String // TypeTache visé
+  raison       String // la raison qui revenait
+  effet        String // ATTENDRE | NE_PLUS_PROPOSER
+  delaiJours   Int?
+  libelle      String
+  par          String
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
 }

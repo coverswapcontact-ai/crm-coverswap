@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { resoudreContexte } from "@/lib/journal/acteur";
@@ -62,6 +63,7 @@ export async function enregistrerMessageClient(entree: { dossierId: string; espa
   if (!texte) return null;
   try {
     const m = await prisma.messageEspace.create({ data: { dossierId: entree.dossierId, espaceId: entree.espaceId ?? null, auteur: "CLIENT", source: entree.source, texte, simulationId: entree.simulationId ?? null, evenementId: entree.evenementId ?? null } });
+    await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
     return m.id;
   } catch (erreur) {
     console.error("[espace] message du client non rangé dans les messages :", erreur);
@@ -69,11 +71,12 @@ export async function enregistrerMessageClient(entree: { dossierId: string; espa
   }
 }
 
-export async function messagesEspace(options: { dossierId?: string | null; nonLus?: boolean; limite?: number } = {}): Promise<MessageEspaceVue[]> {
+/** `limite` : 30 par défaut ; `null` : tous (détecteur des tâches : rien ne doit rester non lu faute d'avoir été lu). */
+export async function messagesEspace(options: { dossierId?: string | null; nonLus?: boolean; limite?: number | null } = {}): Promise<MessageEspaceVue[]> {
   const lignes = await prisma.messageEspace.findMany({
     where: { archiveLe: null, ...(options.dossierId ? { dossierId: options.dossierId } : {}), ...(options.nonLus ? { auteur: "CLIENT", luLe: null } : {}) },
     orderBy: { createdAt: "desc" },
-    take: options.limite ?? 30,
+    take: options.limite === null ? undefined : (options.limite ?? 30),
     include: { dossier: { select: { clientNom: true } } },
   });
   return lignes.map(versVue);
@@ -86,6 +89,7 @@ export async function compterMessagesNonLus(): Promise<number> {
 /** Lucas a lu (répondu, ou dit « c'est lu ») : les messages du client de ce dossier sont marqués. */
 export async function marquerMessagesLus(dossierId: string): Promise<number> {
   const { count } = await prisma.messageEspace.updateMany({ where: { dossierId, auteur: "CLIENT", luLe: null }, data: { luLe: new Date() } });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return count;
 }
 

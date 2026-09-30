@@ -108,6 +108,8 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
       clientEmail: null,
       clientTelephone: EFFACE,
       prochaineAction: null,
+      // Mission 17 (partie A) : le texte de la prochaine action posée à la main (le même que prochaineAction).
+      prochaineActionManuelle: null,
       perteCommentaire: null,
       photos: "[]",
     }),
@@ -164,6 +166,12 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   // Simulateur du CRM (21/09/2026).
   PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null, analyse: null, promptTexte: null, directionArtistique: null, photoEmpreinte: null }), garde: "type de surface, teintes, version du prompt, moteur, score du contrôle, mode et dates (photos, consigne et description de la pièce effacées)" },
   GenerationImage: { conserve: "coût d'une génération d'image : jetons, montant et durée, aucune donnée de la personne" },
+  // Mission 17 (partie A) : les tâches de Lucas (a-faire/). Le titre et la raison nomment le client ; le raccourci porte
+  // son numéro (tel:, SMS) ; les données, ses messages. Type, niveau, dates et réponse restent (la mesure du travail).
+  TacheAFaire: {
+    remplacer: () => ({ titre: EFFACE, raison: EFFACE, raccourci: "{}", donnees: "{}", reponseTexte: null, precedent: null }),
+    garde: "type, source, niveau, montant, dates, statut, réponse et raison codée, durées : la mesure du travail, sans identité",
+  },
   Proposition: {
     remplacer: (ligne): Record<string, string | null> =>
       ligne.type === "ANONYMISATION_CLIENT"

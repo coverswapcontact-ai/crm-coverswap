@@ -28,6 +28,10 @@ import { GROUPES_A_MOI, GROUPES_CLIENT, type Affaire, type GroupeAffaire, type P
  * rappeler ») : à rappeler si le rappel est en retard ou pour aujourd'hui,
  * plus tard s'il est daté après, à décider s'il n'a pas de date. « Aujourd'hui »
  * est la journée de Paris (le serveur tourne en UTC).
+ *
+ * Mission 17 (partie A, relecture) : `sansLimite` (détecteurs des tâches) lit tous les contacts et tous les dossiers —
+ * une liste tronquée ferait cocher « par absence » ce qui n'a simplement pas été lu. Un SMS reçu d'un client qui a
+ * plusieurs dossiers ne rend la main qu'à UN dossier (le plus récent de ses dossiers vivants) : une seule « Répondre ».
  */
 const JOUR_MS = 86_400_000;
 const ETAPES_COMMERCIALES: EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE", "SIGNE"];
@@ -43,7 +47,8 @@ const nomComplet = (prenom: string, nom: string) => {
 
 const villeLisible = (ville: string | null | undefined) => (ville && !/^(non renseign|inconnue?$)/i.test(ville.trim()) ? ville.trim() : null);
 
-export async function pilotageCommercial(maintenant: Date = new Date()): Promise<PilotageCommercial> {
+export async function pilotageCommercial(maintenant: Date = new Date(), options: { sansLimite?: boolean } = {}): Promise<PilotageCommercial> {
+  const limite = options.sansLimite ? undefined : 300;
   const limiteContacts = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   const ceSoir = finDeJournee(maintenant);
   // Dossier en retard = l'échéance était hier ou avant : une action prévue ce matin n'est pas encore un retard.
@@ -53,18 +58,18 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     // Les leads des deux listes, sans dossier (le dossier a sa propre ligne) : tout rappel daté, quel que soit son âge
     // (un retard reste un retard), et les leads arrivés ou appelés depuis moins de 60 jours. Les rappels d'abord.
     prisma.lead.findMany({
-      where: { AND: [LEAD_SANS_DOSSIER, { OR: [{ rappelLe: { not: null } }, { createdAt: { gte: limiteContacts } }, { dernierAppelLe: { gte: limiteContacts } }] }] },
+      where: { AND: [LEAD_SANS_DOSSIER, { OR: [{ rappelLe: { not: null } }, { createdAt: { gte: limiteContacts } }, { dernierAppelLe: { gte: limiteContacts } }, { dernierContactLe: { gte: limiteContacts } }] }] },
       orderBy: [{ rappelLe: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-      take: 300,
+      take: limite,
       select: {
-        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, dernierAppelLe: true, tentatives: true, createdAt: true, source: true,
+        id: true, prenom: true, nom: true, telephone: true, ville: true, statut: true, priorite: true, prioriteMotif: true, rappelLe: true, dernierAppelLe: true, dernierContactLe: true, tentatives: true, createdAt: true, source: true,
         interactions: { where: { archiveLe: null, type: { in: ["APPEL", "SMS", "EMAIL", "NOTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { type: true, contenu: true, createdAt: true } },
       },
     }),
     prisma.dossier.findMany({
       where: { etape: { in: ETAPES_COMMERCIALES } },
       orderBy: { updatedAt: "desc" },
-      take: 300,
+      take: limite,
       select: {
         id: true, leadId: true, clientId: true, clientNom: true, clientVille: true, clientTelephone: true, etape: true, photos: true, prochaineAction: true, prochaineActionDate: true, dateChantier: true, main: true, mainMotif: true, montantEstime: true, updatedAt: true, createdAt: true,
         documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, take: 1, select: { totalHt: true, numero: true, createdAt: true, dateEmission: true } },
@@ -77,6 +82,14 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
   ]);
 
   const conversationDe = (leadId: string | null, clientId: string | null) => conversations.find((c) => (leadId && c.leadId === leadId) || (clientId && c.clientId === clientId)) ?? null;
+  // Une conversation SMS ne se rattache qu'à UN dossier : le plus récent de ceux qu'elle concerne (sinon deux « Répondre »).
+  const dossierDeLaConversation = new Map<string, { id: string; createdAt: Date }>();
+  for (const dossier of dossiers) {
+    const conversation = conversationDe(dossier.leadId, dossier.clientId);
+    if (!conversation) continue;
+    const retenu = dossierDeLaConversation.get(conversation.id);
+    if (!retenu || dossier.createdAt.getTime() > retenu.createdAt.getTime() || (dossier.createdAt.getTime() === retenu.createdAt.getTime() && dossier.id > retenu.id)) dossierDeLaConversation.set(conversation.id, { id: dossier.id, createdAt: dossier.createdAt });
+  }
   const jours = (date: Date) => Math.max(0, Math.floor((maintenant.getTime() - date.getTime()) / JOUR_MS));
   const affaires: Affaire[] = [];
 
@@ -84,8 +97,8 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     const conversation = conversationDe(lead.id, null);
     const premier = lead.interactions[0] ?? null;
     const dernier = premier && !(premier.type === "NOTE" && /^(Lead |Contact saisi|Statut :)/.test(premier.contenu)) ? premier : null;
-    // « À appeler » : jamais appelé, sans rappel daté (même règle que la liste de Leads).
-    const aAppeler = !lead.dernierAppelLe && !lead.rappelLe;
+    // « À appeler » : jamais appelé ni contacté par écrit (mission 17), sans rappel daté (même règle que la liste de Leads).
+    const aAppeler = !lead.dernierAppelLe && !lead.dernierContactLe && !lead.rappelLe;
     const rappelDu = lead.rappelLe !== null && lead.rappelLe <= ceSoir;
     const repondre = conversation?.dernierSens === "ENTRANT" && !conversation.stopLe;
     let groupe: GroupeAffaire;
@@ -95,7 +108,7 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
     else if (aAppeler) [groupe, action] = ["RAPPELER", "Appeler : nouveau contact"];
     else if (rappelDu) [groupe, action] = ["RAPPELER", lead.tentatives > 0 ? `Rappeler : ${pluriel(lead.tentatives, "appel")} sans réponse` : "Rappeler (rappel prévu)"];
     else if (lead.rappelLe) [groupe, action] = ["PLUS_TARD", "Rappel prévu"];
-    else [groupe, action] = ["DECIDER", "Appelé, sans rappel daté : envoyer le lien de son espace, dater un rappel, ou classer"];
+    else [groupe, action] = ["DECIDER", `${lead.dernierAppelLe ? "Appelé" : "Contacté"}, sans rappel daté : envoyer le lien de son espace, dater un rappel, ou classer`];
     affaires.push({
       cle: `contact-${lead.id}`,
       genre: "CONTACT",
@@ -123,7 +136,8 @@ export async function pilotageCommercial(maintenant: Date = new Date()): Promise
   }
 
   for (const dossier of dossiers) {
-    const conversation = conversationDe(dossier.leadId, dossier.clientId);
+    const trouvee = conversationDe(dossier.leadId, dossier.clientId);
+    const conversation = trouvee && dossierDeLaConversation.get(trouvee.id)?.id === dossier.id ? trouvee : null;
     const espace = dossier.espaces[0] ?? null;
     const devis = dossier.documents[0] ?? null;
     const nbPhotos = lirePhotos(dossier.photos).length;

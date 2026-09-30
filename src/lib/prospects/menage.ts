@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { synchroniserRappels } from "@/lib/agenda/rappels";
 import { ACTIONS_LEADS, LIBELLES_MOTIF_ARCHIVAGE, MOTIFS_ARCHIVAGE } from "./menage-constantes";
@@ -44,5 +45,6 @@ export async function appliquerActionLeads(entree: z.output<typeof schemaActionL
   }
   // Mission 14 (partie 7) : un lead archivé perd l'événement de son rappel ; restauré, il le retrouve.
   await synchroniserRappels(changes.map((id) => ({ type: "LEAD" as const, id })));
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return { ids: changes };
 }

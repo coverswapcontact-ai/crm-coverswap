@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, BellOff, ExternalLink, Mail, MailOpen, Paperclip, Search, Send, Sparkles, UserPlus, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -32,6 +32,7 @@ function Redaction({
   ia,
   consigneInitiale = null,
   brouillonInitial = null,
+  auPremierPlan = false,
   onEnvoye,
 }: {
   destinataire: string;
@@ -43,8 +44,19 @@ function Redaction({
   consigneInitiale?: string | null;
   /** Mission 9 : un brouillon déposé par Claude, repris dans la réponse (envoyé avec son identifiant). */
   brouillonInitial?: BrouillonRepris | null;
+  /** Mission 17 (partie A) : ouvert depuis l'écran Tâches (« Répondre ») — le champ défile à l'écran et prend le curseur. */
+  auPremierPlan?: boolean;
   onEnvoye: () => void;
 }) {
+  const champ = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!auPremierPlan) return;
+    const minuterie = window.setTimeout(() => {
+      champ.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      champ.current?.focus({ preventScroll: true });
+    }, 450);
+    return () => window.clearTimeout(minuterie);
+  }, [auPremierPlan]);
   const [a, setA] = useState(brouillonInitial?.a || destinataire);
   const [objet, setObjet] = useState(brouillonInitial?.objet || objetInitial);
   const [texte, setTexte] = useState(brouillonInitial?.texte ?? "");
@@ -120,7 +132,7 @@ function Redaction({
       )}
       {viaAssistant ? <p className="text-[12px] text-[#8B919C]">Dites-le à Claude (« réponds à … que … ») : il dépose le brouillon ici, vous l&apos;envoyez.</p> : !ia.active && ia.raison ? <p className="text-[12px] text-[#8B919C]">IA indisponible : {ia.raison}</p> : null}
 
-      <textarea value={texte} onChange={(e) => setTexte(e.target.value)} rows={10} className={cn(CLASSE_SAISIE, "min-h-[220px] resize-y py-2.5 leading-relaxed")} aria-label="Votre message" placeholder="Votre message…" />
+      <textarea ref={champ} value={texte} onChange={(e) => setTexte(e.target.value)} rows={10} className={cn(CLASSE_SAISIE, "min-h-[220px] resize-y py-2.5 leading-relaxed")} aria-label="Votre message" placeholder="Votre message…" />
 
       {brouillon && (brouillon.manques.length || brouillon.corrections.length) ? (
         <div className="rounded-[10px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] p-2.5 text-[12.5px] text-[#FCD9A0]">
@@ -223,6 +235,7 @@ export function PanneauMail({
   messageId,
   nouveauPour,
   consigneInitiale = null,
+  repondre = false,
   onFermer,
   onChange,
 }: {
@@ -230,6 +243,8 @@ export function PanneauMail({
   /** « client:<id> », « lead:<id> » ou « dossier:<id> » : un nouveau mail pour ce contact. */
   nouveauPour: string | null;
   consigneInitiale?: string | null;
+  /** Mission 17 (partie A) : ouvrir sur la réponse (le champ « Votre message » à l'écran, avec le curseur). */
+  repondre?: boolean;
   onFermer: () => void;
   onChange: () => void;
 }) {
@@ -455,6 +470,7 @@ export function PanneauMail({
                     cible={{ messageId: detail.messageId }}
                     ia={detail.ia}
                     brouillonInitial={reprise}
+                    auPremierPlan={repondre}
                     onEnvoye={() => {
                       void charger();
                       onChange();

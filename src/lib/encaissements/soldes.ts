@@ -64,6 +64,37 @@ export async function piecesDuDossier(lecteur: Transaction, dossierId: string): 
   });
 }
 
+/**
+ * Mission 17 (partie A, relecture) : les restes dus de plusieurs dossiers en trois requêtes (le détecteur des tâches
+ * les lit à chaque passage) — même calcul que `faitsPaiements` (factures actives, affectations actives). Par dossier :
+ * le reste en centimes et la première facture active qui en a un.
+ */
+export async function restesDesFactures(lecteur: Transaction, dossierIds: readonly string[]): Promise<Map<string, { resteCentimes: number; facture: { documentId: string; numero: string; emisLe: Date | null } | null }>> {
+  const sortie = new Map<string, { resteCentimes: number; facture: { documentId: string; numero: string; emisLe: Date | null } | null }>();
+  const ids = [...new Set(dossierIds)];
+  for (let i = 0; i < ids.length; i += 400) {
+    const documents = await lecteur.document.findMany({
+      where: { dossierId: { in: ids.slice(i, i + 400) }, type: "FACTURE", numero: { not: null }, statut: { not: "ANNULEE" } },
+      select: { id: true, dossierId: true, numero: true, totalHt: true, dateEmission: true },
+      orderBy: [{ dateEmission: "asc" }, { createdAt: "asc" }],
+    });
+    const registre = documents.length
+      ? await lecteur.numeroDocument.findMany({ where: { documentId: { in: documents.map((d) => d.id) } }, select: { documentId: true, affectations: { where: { statut: "ACTIVE" }, select: { montant: true } } } })
+      : [];
+    const ligneDe = new Map(registre.map((ligne) => [ligne.documentId, ligne]));
+    for (const document of documents) {
+      const ligne = ligneDe.get(document.id);
+      if (!ligne || !document.numero || !document.dossierId) continue;
+      const reste = Math.max(0, versCentimes(document.totalHt) - centimes(ligne.affectations));
+      const courant = sortie.get(document.dossierId) ?? { resteCentimes: 0, facture: null };
+      courant.resteCentimes += reste;
+      if (reste > 0 && !courant.facture) courant.facture = { documentId: document.id, numero: document.numero, emisLe: document.dateEmission };
+      sortie.set(document.dossierId, courant);
+    }
+  }
+  return sortie;
+}
+
 /** Faits de paiement qui conditionnent les étapes « Signé » et « Encaissé ». */
 export async function faitsPaiements(lecteur: Transaction, dossierId: string) {
   const [valides, pieces] = await Promise.all([

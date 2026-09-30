@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { resoudreContexte } from "@/lib/journal/acteur";
 import { lireListe } from "@/lib/messages/stockage";
@@ -107,11 +108,13 @@ export async function snoozer(messageId: string, jusqua: Date): Promise<void> {
   const acteur = await acteurCourant();
   if (Number.isNaN(jusqua.getTime())) throw new ErreurMetier("Date de retour invalide.", 400);
   await prisma.message.update({ where: { id: messageId }, data: { snoozeJusqua: jusqua, snoozeLe: new Date(), snoozePar: acteur } });
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
 }
 
 export async function annulerSnooze(messageId: string): Promise<void> {
   const fil = await filDe(messageId);
   await prisma.message.updateMany({ where: { id: { in: fil.messages.map((m) => m.id) } }, data: { snoozeJusqua: null } });
+  await signalerChangementTaches(); // Mission 17 (partie A) : le report levé, la tâche « Répondre » revient.
 }
 
 /* ── Ranger à la main (lu + libellé), et le contraire ───────────────── */
@@ -132,6 +135,7 @@ export async function rangerMail(messageId: string, motif = "Rangé à la main")
     const { detecterRegleApprise } = await import("./regles-apprises");
     await detecterRegleApprise(adresse).catch((erreur) => console.error("[mail] règle apprise :", erreur));
   }
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return { ranges: entrants.length, adresse };
 }
 

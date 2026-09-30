@@ -1,30 +1,17 @@
 import type { Metadata } from "next";
-import { sessionsRecentes } from "@/lib/assistant/execution";
-import { auditerConnexions } from "@/lib/audit/connexions";
-import { controlerCoherence } from "@/lib/coherence/controle";
-import { etatDesTaches } from "@/lib/taches/lecture";
-import AuditConnexions from "./_components/AuditConnexions";
-import ControleCoherence from "./_components/ControleCoherence";
-import EtatTaches from "./_components/EtatTaches";
-import SessionsAssistant from "./_components/SessionsAssistant";
+import { listeTaches } from "@/lib/a-faire/lecture";
+import EcranTaches from "./_components/EcranTaches";
 
 export const metadata: Metadata = {
-  title: "Tâches de fond — CoverSwap",
-  description: "File des envois, du miroir Drive, des sauvegardes et de la relève des mails ; contrôle de cohérence ; connexions vérifiées ; sessions de l'assistant Claude.",
+  title: "Tâches — CoverSwap",
+  description: "Ce que Lucas a à faire aujourd'hui, en une liste : une ligne par tâche, l'action prête en un geste, puis Fait, Plus tard ou Pas à faire.",
 };
 
 export const dynamic = "force-dynamic";
 
-// Mission 13 (lot 3) : l'en-tête en haut, les tâches à voir d'abord ; cohérence, audit et sessions à la suite.
+// Mission 17 (partie A) : l'accueil de l'application. La liste est lue ici, en une requête, et rendue d'emblée (aucune
+// attente réseau au premier affichage) ; l'écran se relit ensuite seul (gestes, retour d'onglet, toutes les 20 s).
 export default async function TachesPage() {
-  const [audit, taches, coherence, sessions] = await Promise.all([auditerConnexions(), etatDesTaches(), controlerCoherence(), sessionsRecentes(10)]);
-  return (
-    <EtatTaches initial={taches}>
-      <div className="mt-8">
-        <ControleCoherence initial={coherence} />
-        <AuditConnexions initial={audit} />
-        <SessionsAssistant initial={sessions} />
-      </div>
-    </EtatTaches>
-  );
+  const initiale = await listeTaches(new Date());
+  return <EcranTaches initiale={initiale} />;
 }

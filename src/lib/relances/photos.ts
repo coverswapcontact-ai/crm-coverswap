@@ -63,8 +63,11 @@ function relancePhotos(metadata: string): boolean {
  * Les relances photos proposables aujourd'hui (une par projet d'espace), de la plus ancienne ouverture à la plus
  * récente. `delai` (partie 8, filtre « sans photo ni simulation depuis N jours » de l'assistant) remplace
  * DELAI_RELANCE_PHOTOS : la même règle, avec N à la place du paramètre.
+ * Mission 17 (partie A) : `sms: false` ne prépare pas le SMS (`sms` vaut null). Le détecteur des tâches s'en sert :
+ * `proposerSms` ouvre l'espace s'il le faut (un projet d'avant l'espace permanent, un dossier sans fiche client : il
+ * ÉCRIT), et un détecteur ne doit rien écrire ; le SMS se prépare quand Lucas ouvre le raccourci.
  */
-export async function relancesPhotosProposables(maintenant: Date = new Date(), filtre: { dossierId?: string; delai?: number } = {}): Promise<RelancePhotos[]> {
+export async function relancesPhotosProposables(maintenant: Date = new Date(), filtre: { dossierId?: string; delai?: number; sms?: boolean } = {}): Promise<RelancePhotos[]> {
   const delai = filtre.delai ?? (await lireDelaiRelancePhotos(maintenant)).jours;
   const espaces = await prisma.espaceClient.findMany({
     where: { revoqueLe: null, archiveLe: null, dossier: { archiveLe: null, etape: { in: ETAPES_PHOTOS }, ...(filtre.dossierId ? { id: filtre.dossierId } : {}) } },
@@ -104,10 +107,13 @@ export async function relancesPhotosProposables(maintenant: Date = new Date(), f
     if (maintenant.getTime() - reference.getTime() < delai * JOUR_MS) continue;
 
     const rang = faites.length + 1;
-    const sms = await proposerSms({ action: "RELANCE_PHOTOS", dossierId: d.id, relance: { type: "PHOTOS", rang } }, maintenant).catch((erreur: unknown) => {
-      console.error(`[relances] SMS de relance photos impossible à préparer pour le dossier ${d.id} :`, erreur);
-      return null;
-    });
+    const sms =
+      filtre.sms === false
+        ? null
+        : await proposerSms({ action: "RELANCE_PHOTOS", dossierId: d.id, relance: { type: "PHOTOS", rang } }, maintenant).catch((erreur: unknown) => {
+            console.error(`[relances] SMS de relance photos impossible à préparer pour le dossier ${d.id} :`, erreur);
+            return null;
+          });
     resultat.push({
       dossierId: d.id,
       espaceId: espace.id,

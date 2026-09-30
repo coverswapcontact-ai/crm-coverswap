@@ -6,6 +6,7 @@ import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { pluriel } from "@/lib/commun/format";
 import { synchroniserRappels } from "@/lib/agenda/rappels";
 import { HISTORIQUE_APPELS, suiviDesAppels } from "@/lib/commercial/suivi-appels";
+import { retenirContactEcrit } from "./contact-ecrit";
 
 /**
  * Le même client revenu avec un autre numéro ET une autre adresse e-mail : le
@@ -116,6 +117,8 @@ export async function fusionnerDoublon(leadId: string): Promise<ResultatFusion> 
     if (dernierAppelLe?.getTime() !== ancien.dernierAppelLe?.getTime() || suivi.tentatives !== ancien.tentatives) {
       await tx.lead.update({ where: { id: ancien.id }, data: { dernierAppelLe, tentatives: suivi.tentatives } });
     }
+    // Mission 17 (partie A) : le dernier contact écrit des deux aussi (un doublon déjà contacté par SMS ne revient pas dans « À appeler »).
+    if (nouveau.dernierContactLe) await retenirContactEcrit(ancien.id, nouveau.dernierContactLe, tx);
     // Le dossier ouvert d'office pour le nouveau contact : archivé s'il est resté vide.
     const dossiers = await tx.dossier.findMany({
       where: { leadId: nouveau.id },

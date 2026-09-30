@@ -21,6 +21,8 @@ import {
 import { dateDepuisJour, debutDuJourParis, estJourValide, instantDuJour, jourParis } from "./dates";
 import { ErreurMetier } from "./erreurs";
 import { rappelALOuverture, synchroniserRappel } from "@/lib/agenda/rappels";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
+import { noterProchaineActionManuelle } from "./prochaine-action-manuelle";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
 import {
@@ -682,7 +684,7 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
 export async function modifierDossier(dossierId: string, entree: EntreeModification): Promise<void> {
   const dossier = await prisma.dossier.findUnique({
     where: { id: dossierId },
-    select: { clientId: true, objet: true, prochaineActionDate: true, client: { select: { nom: true } } },
+    select: { clientId: true, objet: true, prochaineAction: true, prochaineActionDate: true, client: { select: { nom: true } } },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
@@ -733,6 +735,12 @@ export async function modifierDossier(dossierId: string, entree: EntreeModificat
   if (prochaineActionDate !== undefined || champs.prochaineAction !== undefined || champs.clientNom !== undefined || champs.clientVille !== undefined || champs.clientTelephone !== undefined) {
     await synchroniserRappel({ type: "DOSSIER", id: dossierId });
   }
+  // Mission 17 (partie A) : une prochaine action changée par Lucas ou Claude est retenue comme manuelle (événement, main).
+  if (champs.prochaineAction !== undefined) {
+    const date = data.prochaineActionDate !== undefined ? (data.prochaineActionDate as Date | null) : dossier.prochaineActionDate;
+    await noterProchaineActionManuelle(dossierId, { action: champs.prochaineAction, avant: dossier.prochaineAction, date });
+  }
+  await signalerChangementTaches();
 }
 
 /* ── Points à compléter masqués ─────────────────────────────────── */

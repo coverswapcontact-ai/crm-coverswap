@@ -1,9 +1,11 @@
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { GoogleIndisponible } from "@/lib/google/connexion";
 import { lireEntetes } from "@/lib/messages/stockage";
 import { lireParametre } from "@/lib/parametres/service";
+import { retenirContactEcrit } from "@/lib/prospects/contact-ecrit";
 import { mettreEnFile } from "@/lib/taches/file";
 import { envoyeurMail } from "./envoi";
 import { recalculerMainDesMessages } from "@/lib/dossiers/main";
@@ -172,6 +174,12 @@ export async function executerEnvoi(envoiId: string): Promise<{ envoye: boolean;
   } else if (envoi.leadId && !automatique) {
     await prisma.interaction.create({ data: { leadId: envoi.leadId, type: "EMAIL", contenu: `Mail envoyé : ${envoi.objet} — ${envoi.texte.slice(0, 300)}` } });
   }
+  // Mission 17 (partie A) : un mail écrit par Lucas (pas une notification) est un contact écrit du lead, ou du lead du dossier.
+  if (!automatique) {
+    const leadId = envoi.leadId ?? (envoi.dossierId ? (await prisma.dossier.findUnique({ where: { id: envoi.dossierId }, select: { leadId: true } }))?.leadId : null);
+    await retenirContactEcrit(leadId, maintenant);
+  }
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return { envoye: true, identifiant };
 }
 

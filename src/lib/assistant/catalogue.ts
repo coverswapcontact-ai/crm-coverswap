@@ -21,6 +21,7 @@ import { OUTILS_MAIL } from "./outils/mail";
 import { OUTILS_REGLAGES_ECRITURE, OUTILS_REGLAGES_LECTURE } from "./outils/reglages";
 import { OUTILS_SIMULATION } from "./outils/simulation";
 import { OUTILS_SMS } from "./outils/sms";
+import { OUTILS_TACHES_ECRITURE, OUTILS_TACHES_LECTURE } from "./outils/taches";
 import { outilPointDuJour } from "./outils/point-du-jour";
 
 /**
@@ -37,6 +38,7 @@ export const OUTILS_ANALYSE: OutilQuelconque[] = [outilManagerCommercial, outilM
 
 export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_LECTURE,
+  ...OUTILS_TACHES_LECTURE,
   ...OUTILS_IMAGES,
   ...OUTILS_SITE,
   ...OUTILS_ESPACE_LECTURE,
@@ -59,6 +61,7 @@ export const CATALOGUE: OutilQuelconque[] = [
   ...OUTILS_REGLAGES_ECRITURE,
   ...OUTILS_PARAMETRES_ECRITURE,
   ...OUTILS_RELANCES_ECRITURE,
+  ...OUTILS_TACHES_ECRITURE,
 ];
 
 const doublons = CATALOGUE.map((o) => o.nom).filter((nom, i, liste) => liste.indexOf(nom) !== i);

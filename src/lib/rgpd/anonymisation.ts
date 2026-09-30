@@ -121,6 +121,9 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     },
   });
 
+  // Mission 17 (partie A) : les tâches de Lucas qui le nomment (titre, raison, raccourci avec son numéro).
+  const tachesAFaire = await client.tacheAFaire.findMany({ where: { ...AVEC_ARCHIVES, ...parContact } });
+
   const cheminsLocaux = (valeur: unknown) => lirePhotos(typeof valeur === "string" ? valeur : "[]").filter((chemin) => !/^[a-z]+:\/\//i.test(chemin));
   const chemins = [
     ...dossiers.flatMap((dossier) => lirePhotos(dossier.photos)),
@@ -187,6 +190,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       BrouillonMail: brouillonsMail,
       InscriptionSequence: inscriptionsSequence,
       Proposition: propositions,
+      TacheAFaire: tachesAFaire,
     } as Record<string, Record<string, unknown>[]>,
   };
 }

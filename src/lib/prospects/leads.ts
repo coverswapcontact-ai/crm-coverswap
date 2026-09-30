@@ -34,6 +34,11 @@ import type { NoteAppelVue } from "@/lib/commercial/notes-constantes";
  * deux endroits ; le premier appel noté (fin d'appel, échange, note d'appel) ou
  * le premier rappel daté le fait sortir vers son dossier — jamais dans « À
  * rappeler » : avec un dossier, le rappel vit sur le dossier.
+ *
+ * Mission 17 (partie A) : un contact ÉCRIT (SMS copié, mail parti, échange SMS
+ * ou mail noté : `dernierContactLe`, prospects/contact-ecrit.ts) vaut un appel
+ * pour ces listes : le lead sort d'« À appeler » et entre dans « À rappeler »
+ * sans date (après les appelés) ; un lead du simulateur sort vers son dossier.
  */
 
 export type ReponseLead = { question: string; reponse: string };
@@ -66,12 +71,14 @@ export type LigneLead = {
   dernierAppel: { le: string; contenu: string } | null;
   /** Dernier appel noté, quelle qu'en soit l'issue ; null = jamais appelé. */
   dernierAppelLe: string | null;
+  /** Mission 17 (partie A) : dernier contact écrit (SMS copié, mail parti) ; non nul, le lead est dans « À rappeler ». */
+  dernierContactLe: string | null;
   /** Appels sans réponse consécutifs depuis le dernier appel abouti. */
   tentatives: number;
   rappelLe: string | null;
   /** Rappel daté et passé : en tête de « À rappeler », en rouge. */
   enRetard: boolean;
-  /** Dans la liste « À appeler » : jamais appelé, sans rappel daté. */
+  /** Dans la liste « À appeler » : jamais appelé ni contacté par écrit, sans rappel daté. */
   aAppeler: boolean;
   conversationId: string | null;
   smsNonLus: number;
@@ -120,6 +127,11 @@ const JOUR_MS = 86_400_000;
 /** Étapes où un dossier ouvert par la simulation attend encore le premier appel. */
 const ETAPES_AVANT_APPEL = ["QUALIFICATION", "SIMULATION"];
 const APPEL = { type: "APPEL", archiveLe: null };
+/**
+ * Mission 17 (partie A) : un contact sur le dossier d'un lead du simulateur — appel, SMS copié ou mail parti. Le premier
+ * le fait sortir d'« À appeler » vers son dossier (le dossier garde la trace ; `dernierContactLe` aussi, depuis).
+ */
+const CONTACT_DOSSIER = { archiveLe: null, type: { in: ["APPEL", "SMS_COPIE", "MAIL_ENVOYE"] } };
 
 const APRES_DEVIS: readonly string[] = STATUTS_LEAD_APRES_DEVIS;
 
@@ -127,17 +139,19 @@ const APRES_DEVIS: readonly string[] = STATUTS_LEAD_APRES_DEVIS;
 export const LEAD_SANS_DOSSIER: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] } };
 
 /**
- * Lead du simulateur, dossier déjà ouvert, jamais appelé (ni appel ni note d'appel retenus, aucun rappel daté), depuis
- * moins de 60 jours (arrivée ou dernière simulation). Il n'est donc jamais que dans « À appeler ».
+ * Lead du simulateur, dossier déjà ouvert, jamais appelé (ni appel ni note d'appel retenus, aucun rappel daté) ni
+ * contacté par écrit (mission 17 : ni `dernierContactLe`, ni SMS copié ni mail parti sur ses dossiers), depuis moins de
+ * 60 jours (arrivée ou dernière simulation). Il n'est donc jamais que dans « À appeler ».
  */
 function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
   const limite = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   return {
     statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
     dernierAppelLe: null,
+    dernierContactLe: null,
     rappelLe: null,
     interactions: { none: APPEL },
-    dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: APPEL } } },
+    dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: CONTACT_DOSSIER } } },
     AND: [
       { OR: [{ source: "SITE_SIMULATEUR" }, { simulations: { some: { archiveLe: null } } }] },
       { OR: [{ createdAt: { gte: limite } }, { simulations: { some: { archiveLe: null, createdAt: { gte: limite } } } }] },
@@ -147,10 +161,10 @@ function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
 
 /** La base commune des deux listes : ni perdu, ni après devis, sans dossier vivant — ou lead du simulateur pas encore appelé (les archivés sont écartés par l'extension du journal). */
 const whereActif = (maintenant: Date): Prisma.LeadWhereInput => ({ OR: [LEAD_SANS_DOSSIER, simulationNonAppelee(maintenant)] });
-/** « À appeler » : jamais appelé, sans rappel daté. */
-const JAMAIS_APPELE: Prisma.LeadWhereInput = { dernierAppelLe: null, rappelLe: null };
-/** « À rappeler » : déjà appelé, ou un rappel daté. */
-const DEJA_APPELE: Prisma.LeadWhereInput = { OR: [{ dernierAppelLe: { not: null } }, { rappelLe: { not: null } }] };
+/** « À appeler » : jamais appelé, jamais contacté par écrit (mission 17 : SMS copié, mail parti), sans rappel daté. */
+const JAMAIS_APPELE: Prisma.LeadWhereInput = { dernierAppelLe: null, dernierContactLe: null, rappelLe: null };
+/** « À rappeler » : déjà appelé, contacté par écrit (sans date : après les rappels datés), ou un rappel daté. */
+const DEJA_APPELE: Prisma.LeadWhereInput = { OR: [{ dernierAppelLe: { not: null } }, { dernierContactLe: { not: null } }, { rappelLe: { not: null } }] };
 
 function whereVue(vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput {
   switch (vue) {
@@ -168,11 +182,11 @@ function whereVue(vue: VueLeads, maintenant: Date): Prisma.LeadWhereInput {
 /**
  * L'ordre de chaque liste, entièrement côté serveur (la pagination est exacte). « À rappeler » : les rappels datés
  * d'abord, du plus ancien au plus lointain (les retards en tête), puis les rappels sans date, le plus ancien appel
- * d'abord ; à égalité, l'arrivée, puis l'identifiant (un ordre total : une ligne ne saute pas d'une page à l'autre).
+ * d'abord, puis (mission 17) le plus ancien contact écrit sans appel ; à égalité, l'arrivée, puis l'identifiant (un ordre total : une ligne ne saute pas d'une page à l'autre).
  */
 const ORDRE: Record<VueLeads, Prisma.LeadOrderByWithRelationInput[]> = {
   A_APPELER: [{ createdAt: "desc" }],
-  A_RAPPELER: [{ rappelLe: { sort: "asc", nulls: "last" } }, { dernierAppelLe: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
+  A_RAPPELER: [{ rappelLe: { sort: "asc", nulls: "last" } }, { dernierAppelLe: { sort: "asc", nulls: "last" } }, { dernierContactLe: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }],
   SANS_SUITE: [{ createdAt: "desc" }],
   ARCHIVES: [{ archiveLe: "desc" }],
 };
@@ -181,7 +195,7 @@ const inclusion = {
   interactions: { where: { archiveLe: null, type: "APPEL" }, orderBy: { createdAt: "desc" }, select: { contenu: true, createdAt: true } },
   metaLeads: { orderBy: { createdAt: "desc" }, take: 1, select: { reponses: true, campagneNom: true, adNom: true, formNom: true } },
   conversationsSms: { where: { archiveLe: null }, orderBy: { dernierMessageLe: "desc" }, take: 1, select: { id: true, nonLus: true } },
-  dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, main: true, mainMotif: true, prochaineActionDate: true, _count: { select: { evenements: { where: APPEL } } } } },
+  dossiers: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { id: true, etape: true, main: true, mainMotif: true, prochaineActionDate: true, _count: { select: { evenements: { where: CONTACT_DOSSIER } } } } },
   simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 3, select: { id: true, createdAt: true, referenceChoisie: true, prixDevis: true, imageBeforePath: true, imageOriginalPath: true, imageAfterPath: true } },
   _count: { select: { photos: true, simulations: { where: { archiveLe: null } } } },
   notesAppel: { where: { archiveLe: null }, orderBy: { appelLe: "desc" }, take: 20 },
@@ -250,9 +264,10 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
   const derniereSimulation = lead.simulations[0]?.createdAt ?? null;
   const arrivee = derniereSimulation && derniereSimulation > lead.createdAt ? derniereSimulation : lead.createdAt;
   // La base des deux listes (même règle que `whereActif`) : avec un dossier (ouvert par la simulation), seulement tant
-  // qu'aucun appel n'est noté, ni sur la fiche ni sur le dossier, ni rappel daté, sur 60 jours, avant le devis.
+  // qu'aucun appel n'est noté, ni sur la fiche ni sur le dossier, ni rappel daté, sur 60 jours, avant le devis. Mission 17 :
+  // un contact écrit (SMS copié, mail parti) vaut un appel pour ces listes.
   const recent = maintenant.getTime() - arrivee.getTime() <= JOURS_A_TRAITER * JOUR_MS;
-  const jamaisAppele = !lead.dernierAppelLe && !lead.rappelLe;
+  const jamaisAppele = !lead.dernierAppelLe && !lead.dernierContactLe && !lead.rappelLe;
   const actif =
     !lead.archiveLe &&
     lead.statut !== "PERDU" &&
@@ -286,6 +301,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     appels: lead.interactions.length,
     dernierAppel: dernier ? { le: dernier.createdAt.toISOString(), contenu: dernier.contenu.slice(0, 200) } : null,
     dernierAppelLe: lead.dernierAppelLe?.toISOString() ?? null,
+    dernierContactLe: lead.dernierContactLe?.toISOString() ?? null,
     tentatives: lead.tentatives,
     rappelLe: lead.rappelLe?.toISOString() ?? null,
     enRetard: actif && Boolean(lead.rappelLe && lead.rappelLe.getTime() < maintenant.getTime()),
@@ -300,7 +316,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     dossierId: dossier?.id ?? null,
     dossierMain: dossier
       ? {
-          main: mainDe({ etape: dossier.etape as EtapeDossier, prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null, main: dossier.main === "MOI" || dossier.main === "CLIENT" ? dossier.main : null }, new Date()),
+          main: mainDe({ etape: dossier.etape as EtapeDossier, prochaineActionDate: dossier.prochaineActionDate?.toISOString() ?? null, main: dossier.main === "MOI" || dossier.main === "CLIENT" ? dossier.main : null }, maintenant),
           motif: dossier.mainMotif && !dossier.mainMotif.startsWith("Étape «") ? dossier.mainMotif : null,
         }
       : null,

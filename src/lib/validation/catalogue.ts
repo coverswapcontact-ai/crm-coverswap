@@ -4,6 +4,7 @@ import {
   propositionProchaineAction,
 } from "@/lib/dossiers/propositions";
 import { propositionFusionClients } from "@/lib/clients/fusion";
+import { propositionRegleTache } from "@/lib/a-faire/propositions";
 import { propositionEnvoiMail } from "@/lib/mail/propositions";
 import { propositionMajDepuisMail, propositionRegleTri } from "@/lib/mail/propositions-maj";
 import {
@@ -35,6 +36,8 @@ const CATALOGUE: readonly DefinitionProposition<never>[] = [
   propositionArchiverMessage,
   propositionClasserMessage,
   propositionAnonymisationClient,
+  // Mission 17 (partie A) : la règle apprise des « Pas à faire » répétés (a-faire/reponses.ts).
+  propositionRegleTache,
 ] as unknown as DefinitionProposition<never>[];
 
 // Types ajoutés à l'exécution (tests).

@@ -382,7 +382,7 @@ export function EspaceDossier({
           )}
           {espace.lien ? (
             <div className="mt-2">
-              <ZoneTexte libelle="" value={reponse} onChange={(e) => setReponse(e.target.value)} rows={2} placeholder="Lui répondre dans son espace (il est prévenu par mail)…" maxLength={2000} />
+              <ZoneTexte id="reponse-espace" libelle="" value={reponse} onChange={(e) => setReponse(e.target.value)} rows={2} placeholder="Lui répondre dans son espace (il est prévenu par mail)…" maxLength={2000} />
               <div className="mt-1.5 flex justify-end">
                 <Bouton taille="sm" variante="primaire" disabled={reponse.trim().length < 2 || occupe !== null} chargement={occupe === "repondre"} onClick={() => void geste({ geste: "repondre", texte: reponse.trim() }, "Réponse envoyée dans son espace").then((ok) => ok && setReponse(""))}>
                   Répondre dans son espace

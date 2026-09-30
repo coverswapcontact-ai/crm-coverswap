@@ -88,8 +88,8 @@ function useGestes(recharger: () => void, apresCopie?: () => void) {
   return { ouvrirSms: setSms, ouvrirMail: setMail, fenetres };
 }
 
-/** La relecture existante d'une proposition de mail (celle de « À valider ») : corriger puis valider. */
-function RelectureMail({ propositionId, dossierId, onFini }: { propositionId: string; dossierId: string; onFini: (fait: boolean) => void }) {
+/** La relecture existante d'une proposition de mail (celle de « À valider ») : corriger puis valider. Mission 17 (partie A) : exportée pour l'écran Tâches (relance par mail). */
+export function RelectureMail({ propositionId, dossierId, onFini }: { propositionId: string; dossierId: string; onFini: (fait: boolean) => void }) {
   const [proposition, setProposition] = useState<PropositionVue | null>(null);
   useEffect(() => {
     let actif = true;
@@ -123,7 +123,7 @@ function RelectureMail({ propositionId, dossierId, onFini }: { propositionId: st
       onValider={async (corrections) => {
         try {
           await envoyerJson(`/api/validation/${proposition.id}/valider`, "POST", { corrections });
-          toast.success("Mail de relance validé : il part", { description: proposition.titre });
+          toast.success("Mail validé : il part", { description: proposition.titre });
           onFini(true);
         } catch (erreur) {
           toast.error("Validation impossible", { description: messageErreur(erreur) });

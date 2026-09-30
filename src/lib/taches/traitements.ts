@@ -1,3 +1,4 @@
+import { enregistrerTachesAFaire } from "@/lib/a-faire/taches";
 import { enregistrerTachesRappels } from "@/lib/agenda/rappels";
 import { enregistrerTachesSauvegardes } from "@/lib/base/taches";
 import { enregistrerTachesClients } from "@/lib/clients/taches";
@@ -40,6 +41,10 @@ import { enregistrerTachesValidation } from "@/lib/validation/taches";
  * bloquer les tâches courtes. Partie 2 : l'analyse d'une photo (ANALYSE_PHOTO),
  * lancée par le site dès la photo chargée, sur la même voie. Partie 3 : les
  * rendus du banc de comparaison (SIMULATION_BANC), même voie, lancés par Lucas.
+ *
+ * Mission 17 (partie A) : les tâches de Lucas — passage des détecteurs après un geste (A_FAIRE_DETECTION), effet
+ * d'une réponse sur sa source (A_FAIRE_EFFET) et passage complet toutes les 15 minutes (« taches-a-faire ») ;
+ * a-faire/taches.ts n'importe les détecteurs qu'à l'exécution (pas de cycle avec taches/lecture.ts).
  */
 export function enregistrerTousLesTraitements(): void {
   enregistrerTachesValidation();
@@ -64,4 +69,5 @@ export function enregistrerTousLesTraitements(): void {
   enregistrerTachesCorbeille();
   enregistrerTachesRedimensionnement();
   enregistrerTachesRappels();
+  enregistrerTachesAFaire();
 }

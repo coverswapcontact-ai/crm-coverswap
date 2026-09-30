@@ -153,6 +153,17 @@ export const DEFINITIONS_PARAMETRES = {
     ],
     groupe: "PILOTAGE",
   },
+  // Mission 17 (partie A) : la notification du matin des tâches (a-faire/matin.ts). Sans valeur saisie : Oui.
+  NOTIF_TACHES_MATIN: {
+    libelle: "Notification du matin : les tâches du jour",
+    aide: "Chaque jour à partir de 8 h, une notification sur le téléphone (Telegram, ntfy, push) dit combien de tâches attendent aujourd'hui et le temps estimé ; rien quand il n'y en a aucune. Oui par défaut. Rien n'est jamais envoyé aux clients.",
+    nature: "choix",
+    options: [
+      { valeur: "OUI", libelle: "Oui" },
+      { valeur: "NON", libelle: "Non" },
+    ],
+    groupe: "PILOTAGE",
+  },
   ZONE_DEPARTEMENTS: {
     libelle: "Zone d'intervention : départements",
     aide: "Numéros des départements où les chantiers se font sans se poser de question, séparés par des virgules (ex. 34). Sert à classer les contacts entrants : hors de la zone et des départements voisins, un contact est « à écarter ».",

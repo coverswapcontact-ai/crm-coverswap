@@ -14,15 +14,15 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v10";
+const VERSION = "v11";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;
 const HORS_LIGNE = "/hors-ligne.html";
 const EN_LOCAL = ["localhost", "127.0.0.1"].includes(self.location.hostname);
 
-// Lectures utiles hors ligne : la liste des leads, les compteurs.
-const DONNEES_GARDEES = [/^\/api\/leads$/, /^\/api\/pilotage\/compteurs$/];
+// Lectures utiles hors ligne : la liste des tâches (mission 17, l'écran d'accueil), la liste des leads, les compteurs.
+const DONNEES_GARDEES = [/^\/api\/a-faire$/, /^\/api\/leads$/, /^\/api\/pilotage\/compteurs$/];
 const JAMAIS = [/^\/api\/auth\//, /^\/auth\//, /^\/api\/webhook/, /^\/api\/espace\//, /^\/_next\/webpack-hmr/, /^\/api\/push\//];
 
 self.addEventListener("install", (evenement) => {

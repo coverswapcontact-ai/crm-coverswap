@@ -1,6 +1,7 @@
 import type { NoteAppel } from "@prisma/client";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { ETIQUETTES_APPEL, LIBELLES_ETIQUETTE_APPEL, type EtiquetteAppel, type NoteAppelVue } from "./notes-constantes";
 
@@ -106,7 +107,9 @@ export async function creerNoteAppel(leadId: string, entree: EntreeNoteAppel): P
     data: { leadId, texte: entree.texte ?? "", etiquettes: JSON.stringify([...new Set(entree.etiquettes ?? [])]), appelLe: appelLe.getTime() > Date.now() ? new Date() : appelLe },
   });
   await retenirAppel(note);
-  return versVueNote(await refleterDansDossier(note));
+  const vue = versVueNote(await refleterDansDossier(note));
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
+  return vue;
 }
 
 export async function modifierNoteAppel(leadId: string, noteId: string, entree: EntreeNoteAppel): Promise<NoteAppelVue> {

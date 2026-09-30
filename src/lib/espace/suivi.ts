@@ -13,6 +13,8 @@ import { figeDuProjet, LIMITE_PROJETS_EN_COURS } from "./projets";
 import { famille, famillesDe, lireSelection } from "@/lib/prestations/prestations";
 import { lireProjet, projetPrecise, resumerProjet } from "./projet";
 import { nomDuProjetClient, photosDuClient } from "./service";
+import { appliquerAuProjet, clesDesProjets, lireVueDesTaches, signalDuClientVisible } from "@/lib/a-faire/vue-espaces";
+import { cleDuSignal } from "@/lib/a-faire/detecteurs/signaux-cles";
 
 /**
  * L'onglet Espaces clients : ce que fait chaque client DE SON CÔTÉ, sans
@@ -43,6 +45,14 @@ function teintesDuChoix(choixJson: string | null, simulations: { id: string; zon
 
 export type FiltreEspaces = { permanentId?: string; permanentIds?: string[]; espaceIds?: string[] };
 
+/**
+ * Mission 17 (partie A) : par défaut, les signaux sont une vue des tâches de Lucas (a-faire/vue-espaces.ts) — un
+ * signal dont la tâche a été écartée est masqué, un dossier dont la prochaine action posée à la main est en vigueur
+ * n'a plus de signal rouge ni ambre et attend le client. `signauxBruts` rend les signaux tels que calculés : le
+ * détecteur SIGNAUX en a besoin (sinon il cocherait les tâches écartées).
+ */
+export type OptionsEspaces = { signauxBruts?: boolean };
+
 /** Les événements du dossier qui disent « lien communiqué » : un SMS copié par Lucas, ou le texte rendu par l'assistant (« lien_espace »). */
 const TYPES_LIEN_COMMUNIQUE = ["SMS_COPIE", "ESPACE_LIEN_COMMUNIQUE"];
 
@@ -63,7 +73,7 @@ export async function liensEnvoyes(contient = "/e/"): Promise<{ texte: string; c
   return [...sms, ...mails, ...communiques].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 }
 
-export async function listerEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}): Promise<LigneEspace[]> {
+export async function listerEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}, options: OptionsEspaces = {}): Promise<LigneEspace[]> {
   const gratuites = await simulationsGratuites();
   const espaces = await prisma.espaceClient.findMany({
     where: filtre.permanentId
@@ -263,8 +273,17 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
     });
   }
 
+  // Mission 17 (partie A) : la vue des tâches (une lecture groupée pour toute la liste), avant le tri (l'attente peut changer).
+  const vues = options.signauxBruts ? lignes : await appliquerLesTaches(lignes, maintenant);
   const poids = (l: LigneEspace) => (l.attente.qui === "MOI" ? 0 : l.attente.qui === "CLIENT" ? 1 : 2);
-  return lignes.sort((a, b) => poids(a) - poids(b) || (b.derniereActivite ?? b.creeLe).localeCompare(a.derniereActivite ?? a.creeLe));
+  return vues.sort((a, b) => poids(a) - poids(b) || (b.derniereActivite ?? b.creeLe).localeCompare(a.derniereActivite ?? a.creeLe));
+}
+
+/** Mission 17 (partie A) : les projets tels que l'écran les montre (a-faire/vue-espaces.ts). */
+async function appliquerLesTaches(lignes: LigneEspace[], maintenant: Date): Promise<LigneEspace[]> {
+  if (lignes.length === 0) return lignes;
+  const vue = await lireVueDesTaches(maintenant, clesDesProjets(lignes), lignes.map((l) => l.dossierId));
+  return lignes.map((l) => appliquerAuProjet(l, vue));
 }
 
 /**
@@ -273,10 +292,20 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
  * donne la main ; ses signaux (nouveau projet ouvert par le client, projet de plus
  * demandé, téléphone à confirmer) s'ajoutent à ceux de ses projets.
  */
-export async function listerClientsEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}): Promise<ClientEspace[]> {
-  const lignes = await listerEspaces(maintenant, filtre);
-  const permanents = await prisma.espacePermanent.findMany({ where: { id: { in: [...new Set(lignes.map((l) => l.permanentId).filter((id): id is string => Boolean(id)))] } } });
+export async function listerClientsEspaces(maintenant: Date = new Date(), filtre: FiltreEspaces = {}, options: OptionsEspaces = {}): Promise<ClientEspace[]> {
+  const bruts = await listerEspaces(maintenant, filtre, { signauxBruts: true });
+  const permanents = await prisma.espacePermanent.findMany({ where: { id: { in: [...new Set(bruts.map((l) => l.permanentId).filter((id): id is string => Boolean(id)))] } } });
   const parId = new Map(permanents.map((p) => [p.id, p]));
+  // Mission 17 (partie A) : la vue des tâches, lue une fois pour les projets ET les signaux des clients.
+  const vue = options.signauxBruts
+    ? null
+    : await lireVueDesTaches(
+        maintenant,
+        [...clesDesProjets(bruts), ...permanents.map((p) => cleDuSignal("PROJET_DEMANDE", { clientId: p.clientId })).filter((c): c is string => Boolean(c))],
+        bruts.map((l) => l.dossierId)
+      );
+  const lignes = vue ? bruts.map((l) => appliquerAuProjet(l, vue)) : bruts;
+  const visible = (clientId: string | null, signal: Signal) => !vue || signalDuClientVisible(vue, clientId, signal);
   const groupes = new Map<string, LigneEspace[]>();
   for (const ligne of lignes) {
     const cle = ligne.permanentId ?? `projet:${ligne.espaceId}`;
@@ -288,11 +317,13 @@ export async function listerClientsEspaces(maintenant: Date = new Date(), filtre
     const permanent = parId.get(cle) ?? null;
     const tete = [...projets].sort((a, b) => poids(a.attente.qui) - poids(b.attente.qui) || (b.derniereActivite ?? b.creeLe).localeCompare(a.derniereActivite ?? a.creeLe))[0];
     const enCours = projets.filter((p) => !p.fige).length;
-    const signaux: Signal[] = [];
+    const signauxDuClient: Signal[] = [];
     const nouveaux = projets.filter((p) => p.creeParLeClient && !p.fige && p.etape === "PHOTOS");
-    if (nouveaux.length) signaux.push({ code: "NOUVEAU_PROJET", libelle: `Nouveau projet ouvert par le client : ${nouveaux.map((p) => p.nomProjet).join(", ")}`, ton: "rouge" });
-    if (permanent?.projetDemandeLe) signaux.push({ code: "PROJET_DEMANDE", libelle: "Demande à ouvrir un projet de plus", ton: "rouge" });
-    if (permanent && confirmationRequise(permanent, maintenant)) signaux.push({ code: "CONFIRMATION_DEMANDEE", libelle: "Plus de 90 jours sans visite : il confirmera son téléphone", ton: "gris" });
+    if (nouveaux.length) signauxDuClient.push({ code: "NOUVEAU_PROJET", libelle: `Nouveau projet ouvert par le client : ${nouveaux.map((p) => p.nomProjet).join(", ")}`, ton: "rouge" });
+    if (permanent?.projetDemandeLe) signauxDuClient.push({ code: "PROJET_DEMANDE", libelle: "Demande à ouvrir un projet de plus", ton: "rouge" });
+    if (permanent && confirmationRequise(permanent, maintenant)) signauxDuClient.push({ code: "CONFIRMATION_DEMANDEE", libelle: "Plus de 90 jours sans visite : il confirmera son téléphone", ton: "gris" });
+    const signaux = signauxDuClient.filter((signal) => visible(permanent?.clientId ?? null, signal));
+    const projetDemande = signaux.some((signal) => signal.code === "PROJET_DEMANDE");
     const activites = projets.map((p) => p.derniereActivite).filter((x): x is string => Boolean(x)).sort();
     clients.push({
       permanentId: permanent?.id ?? cle,
@@ -313,7 +344,7 @@ export async function listerClientsEspaces(maintenant: Date = new Date(), filtre
       limite: LIMITE_PROJETS_EN_COURS + (permanent?.projetsAccordes ?? 0),
       projetDemandeLe: date(permanent?.projetDemandeLe),
       derniereActivite: activites.at(-1) ?? null,
-      attente: permanent?.projetDemandeLe ? { qui: "MOI", libelle: "Accorder un projet de plus, ou l'appeler" } : tete.attente,
+      attente: projetDemande ? { qui: "MOI", libelle: "Accorder un projet de plus, ou l'appeler" } : tete.attente,
       signaux: [...signaux, ...projets.flatMap((p) => p.signaux.map((sig) => (projets.length > 1 ? { ...sig, libelle: `${p.nomProjet} : ${sig.libelle}` } : sig)))],
       // Les projets en cours d'abord, les plus pressés en tête ; les projets passés ensuite.
       projets: [...projets].sort((a, b) => Number(Boolean(a.fige)) - Number(Boolean(b.fige)) || poids(a.attente.qui) - poids(b.attente.qui) || b.creeLe.localeCompare(a.creeLe)),

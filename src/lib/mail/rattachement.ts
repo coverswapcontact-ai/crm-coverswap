@@ -7,6 +7,7 @@ import { recalculerMain, recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { lireFichierConserve } from "@/lib/fichiers/stockage";
 import { conserverPieces, lireListe } from "@/lib/messages/stockage";
 import { decouperNom, retirerCitations, trouverCodePostalVille, trouverTelephone } from "@/lib/messages/texte";
+import { retenirContactEcrit } from "@/lib/prospects/contact-ecrit";
 import { notifierDemandeDuSite } from "@/lib/prospects/notification";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { mettreEnFile } from "@/lib/taches/file";
@@ -67,11 +68,13 @@ export async function tracerMailDansDossier(messageId: string, dossierId: string
 
 /** Un lead sans dossier : le mail dans ses échanges. */
 async function tracerMailSurLeLead(messageId: string, leadId: string): Promise<void> {
-  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { sens: true, objet: true, extrait: true, automatique: true } });
+  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { sens: true, objet: true, extrait: true, automatique: true, recuLe: true } });
   if (!message || message.automatique) return;
   await prisma.interaction.create({
     data: { leadId, type: "EMAIL", contenu: `${message.sens === "ENTRANT" ? "Mail reçu" : "Mail envoyé"} : ${message.objet ?? "(sans objet)"}${message.extrait ? ` — ${message.extrait.slice(0, 300)}` : ""}` },
   });
+  // Mission 17 (partie A) : un mail parti de la boîte (hors CRM) est un contact écrit du lead, à sa date d'envoi.
+  if (message.sens === "SORTANT") await retenirContactEcrit(leadId, message.recuLe);
 }
 
 const TYPES_DEVINES: [RegExp, string][] = [

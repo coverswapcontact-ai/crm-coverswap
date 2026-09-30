@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { synchroniserRappels, type CibleRappel } from "@/lib/agenda/rappels";
 import { changerEtape } from "@/lib/dossiers/transitions";
@@ -197,6 +198,7 @@ export async function noterAppel(entree: EntreeAppel, maintenant: Date = new Dat
     }
   }
 
+  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return {
     cible: dossierId ? "DOSSIER" : "CONTACT",
     dossierId,

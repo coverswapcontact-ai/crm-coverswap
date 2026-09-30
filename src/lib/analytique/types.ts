@@ -109,7 +109,8 @@ export type EcranEnsemble = EcranCommun & {
   filtreSource: Famille | null;
   resume: ResumeDuJour | null;
   indicateurs: Indicateur[]; // 6 tuiles : visites, simulations, leads, devis, signés, coût par chantier signé (ou par lead Meta)
-  courbeLeads: Courbe; // leads et devis par jour, par source
+  courbeLeads: Courbe; // leads par jour, par source
+  courbeDevis: Courbe; // devis par jour, par source (relecture B : les devis découpés par source)
   tunnel: Tunnel; // visites → simulations → leads → appelés → joints → devis → signés → encaissé
   publicite: { jourCampagne: number | null; dureeCampagne: number | null; depense: number | null; budget: number | null; leads: number; coutParLead: number | null; coutParDevis: number | null; publicites: { nom: string; detail: string; verdict: Verdict }[]; estimation: boolean } | null;
   seo: { clics: number | null; impressions: number | null; position: number | null; opportunites: { requete: string; impressions: number; clics: number }[] } | null;
@@ -177,6 +178,9 @@ export type EcranSite = EcranCommun & {
   appareils: { appareil: string; visites: number }[];
   pays: { pays: string; visites: number }[];
   entonnoir: Tunnel; // visite → simulation lancée → terminée → lead
+  /** L'entonnoir du simulateur en sept étapes (pièce → photo → génération → résultat → estimation → contact), avec
+   * abandons, par famille (repris de l'ancien bloc « Sur le site cette semaine » de Leads). */
+  simulateur: { famille: Famille | "toutes"; etapes: { cle: string; libelle: string; parcours: number; abandons: number | null; facultative?: boolean }[] }[];
 };
 
 export type MoisArgent = { mois: string; encaisse: number; signe: number; depensesPub: number; depensesChantier: number };
@@ -187,7 +191,20 @@ export type EcranArgent = EcranCommun & {
   mois: MoisArgent[]; // 12 mois glissants
   regle20: { mois: string; encaissePrecedent: number; depensePub: number; ratio: number | null; plafond: number; depasse: boolean }[];
   carnet: { dossierId: string; client: string; numero: string | null; montant: number; envoyeLe: string | null; relances: number }[];
-  fiscal: { franchiseTva: { plafond: number | null; atteint: number; ratio: number | null } | null; urssaf: { taux: number | null; estime: number | null } | null } | null;
+  fiscal: {
+    /** Seuils de l'année : franchise de TVA, franchise majorée, plafond micro-entreprise, avec la projection au 31/12. */
+    seuils: { cle: string; libelle: string; plafond: number | null; atteint: number; projection: number | null; ratio: number | null }[];
+    /** URSSAF : période en cours et période à déclarer, avec l'échéance et le détail. */
+    urssaf: { enCours: { libelle: string; base: number; montant: number | null } | null; aDeclarer: { libelle: string; base: number; montant: number | null; echeance: string | null; detail: { libelle: string; montant: number }[] } | null } | null;
+    /** Paramètres manquants pour ces calculs (boutons « Renseigner »). */
+    parametresManquants: string[];
+    // Compatibilité : anciens champs.
+    franchiseTva?: { plafond: number | null; atteint: number; ratio: number | null } | null;
+  } | null;
+  /** Dépenses de la période par catégorie (repris de l'écran Dépenses). */
+  depensesParCategorie: { categorie: string; libelle: string; montant: number; nombre: number }[];
+  /** D'où viennent les clients (repris de l'écran Clients) : clients, signés et montant signé par source. */
+  clientsParSource: { source: string; libelle: string; clients: number; signes: number; montantSigne: number }[];
 };
 
 export type EcranAnalytique = EcranEnsemble | EcranPublicite | EcranSeo | EcranSite | EcranArgent;

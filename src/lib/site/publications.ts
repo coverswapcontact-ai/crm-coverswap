@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod/v4";
@@ -5,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { analyser } from "@/lib/commun/api";
 import { estPhotoApres, lirePhotos } from "@/lib/dossiers/stockage";
+import { estRedimensionnable } from "@/lib/fichiers/images";
 import { resolveUploadsDir } from "@/lib/uploads";
 
 /**
@@ -220,5 +222,40 @@ export async function lirePhotoPublique(id: string, quelle: "avant" | "apres"): 
     return { contenu, type: TYPES_MIME[path.extname(chemin).toLowerCase()] ?? "application/octet-stream" };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Mission 16 (partie 3) : la largeur utile d'une photo publiée, pour le `srcset` du site (l'ouverture de l'accueil en
+ * fait son image principale, le LCP) — `?l=480|960|1600` → WebP réduit, jamais agrandi, orientation appliquée. Gardé
+ * en mémoire par empreinte du fichier (une photo remplacée est refaite), 48 versions au plus ; rien d'écrit sur le
+ * volume. Format non décodable ou sharp absent : la photo telle quelle. La visibilité est vérifiée à chaque demande.
+ */
+export const LARGEURS_PHOTO_SITE = [480, 960, 1600] as const;
+const REDUITES_MAX = 48;
+const reduites = new Map<string, Buffer>();
+
+/** La largeur demandée (`?l=`) si c'est une largeur servie, sinon null (la photo telle quelle). */
+export function largeurPhotoSite(valeur: string | null): number | null {
+  const largeur = Number(valeur);
+  return (LARGEURS_PHOTO_SITE as readonly number[]).includes(largeur) ? largeur : null;
+}
+
+export async function lirePhotoPubliqueReduite(id: string, quelle: "avant" | "apres", largeur: number): Promise<{ contenu: Buffer; type: string } | null> {
+  const photo = await lirePhotoPublique(id, quelle);
+  if (!photo || !estRedimensionnable(photo.type)) return photo;
+  const cle = `${createHash("sha1").update(photo.contenu).digest("hex")}:${largeur}`;
+  const enMemoire = reduites.get(cle);
+  if (enMemoire) return { contenu: enMemoire, type: "image/webp" };
+  try {
+    const { default: sharp } = await import("sharp");
+    const contenu = await sharp(photo.contenu, { failOn: "none" }).rotate().resize({ width: largeur, withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
+    const plusAncienne = reduites.keys().next();
+    if (reduites.size >= REDUITES_MAX && !plusAncienne.done) reduites.delete(plusAncienne.value);
+    reduites.set(cle, contenu);
+    return { contenu, type: "image/webp" };
+  } catch (erreur) {
+    console.error("[site/photos] réduction impossible, photo servie telle quelle :", erreur instanceof Error ? erreur.message : erreur);
+    return photo;
   }
 }

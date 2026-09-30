@@ -1932,6 +1932,25 @@ en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/r
   Événements de l'entonnoir (`site/evenements.ts`) : `PIECE_CHOISIE`, `PHOTO_CHARGEE`,
   `GENERATION_LANCEE`, `RESULTAT_VU`, puis `DEVIS_DEMANDE` ; `entonnoirSite()` (emboîté, abandons par
   étape) dans « Sur le site cette semaine ».
+- **Avis Google de l'accueil du site** (mission 16, partie 3, `lib/site/avis-google.ts`) :
+  `GET /api/site/avis-google` (publique, CORS ouvert, cache HTTP d'une heure, 120 appels par IP et par
+  10 min) rend `{ disponible: false }` sans `GOOGLE_PLACES_API_KEY` ou sans `GOOGLE_PLACE_ID` (le site
+  n'affiche alors aucun chiffre) ; sinon Places API (New) `places/<id>?fields=rating,userRatingCount,reviews`
+  (clé dans l'en-tête `X-Goog-Api-Key`, jamais dans une adresse), copie de 24 h sur le volume
+  (`<uploads>/cache/avis-google.json`), une lecture à la fois, une heure de pause après un échec ; une
+  copie de plus de 24 h n'est jamais servie (échec → `{ disponible: false }`) → `{ disponible: true, note,
+  nombre, avis: [{ auteur, lienAuteur, photoAuteur, lienAvis, note, texte ≤ 300, date }] }` (cinq avis au
+  plus, le site en montre trois). Attribution exigée par les règles de la Places API : le nom de l'auteur
+  tel que Google le donne, son profil et son avatar, le lien de l'avis sur Google Maps (`https:`
+  seulement) ; le site ajoute la mention « Google Maps » et l'ordre des avis. La copie sur le volume
+  reste à trancher par Lucas (les conditions de Google n'autorisent à stocker que l'identifiant du lieu).
+  `sante_systeme` dit « Avis Google : non connectés (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID) » ou la
+  dernière lecture.
+  Photos des publications (`/api/site/photos/<id>/<avant|apres>`) : `?l=480|960|1600` rend un WebP
+  réduit (sharp, jamais agrandi, gardé en mémoire), pour le `srcset` du site (ouverture de l'accueil,
+  cartes de réalisation) ; sans `l`, la photo telle quelle.
+  Événement `WHATSAPP_CLIQUE` (« Écrire sur WhatsApp » de l'accueil) : liste blanche, ligne « Clics
+  WhatsApp » de la synthèse, son propre type canonique.
 - **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
   section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
   film, verrous, contrôle final, `{{direction_artistique}}`), planche PNG (grands échantillons

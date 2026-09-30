@@ -20,6 +20,8 @@ export const TYPES_EVENEMENT_SITE = [
   "DEVIS_DEMANDE",
   "CONTACT_ENVOYE",
   "FORMULAIRE_ECHEC",
+  // Mission 16 (partie 3) : « Écrire sur WhatsApp » (dernier appel de l'accueil). Son propre type canonique : ce n'est pas un formulaire envoyé.
+  "WHATSAPP_CLIQUE",
 ] as const;
 export type TypeEvenementSite = (typeof TYPES_EVENEMENT_SITE)[number];
 
@@ -36,6 +38,7 @@ export const LIBELLES_EVENEMENT_SITE: Record<TypeEvenementSite, string> = {
   DEVIS_DEMANDE: "Devis demandés",
   CONTACT_ENVOYE: "Formulaires envoyés",
   FORMULAIRE_ECHEC: "Formulaires en échec",
+  WHATSAPP_CLIQUE: "Clics WhatsApp",
 };
 
 export type EntreeEvenementSite = {
@@ -67,7 +70,9 @@ export async function enregistrerEvenementSite(entree: EntreeEvenementSite): Pro
 /**
  * Les anciens noms (site d'avant la partie 4) rangés sous le nouveau : `parType`
  * a UNE ligne par étape, anciens et nouveaux événements additionnés — la
- * synthèse ne montre jamais « 3 résultats vus · 2 résultats vus ».
+ * synthèse ne montre jamais « 3 résultats vus · 2 résultats vus ». Un type
+ * nouveau (`WHATSAPP_CLIQUE`, mission 16) n'y figure pas : il est son propre
+ * type canonique (`typeCanonique` le rend tel quel) et a sa ligne à lui.
  */
 export const TYPE_CANONIQUE: Partial<Record<TypeEvenementSite, TypeEvenementSite>> = {
   SIMULATION_PHOTO: "PHOTO_CHARGEE",

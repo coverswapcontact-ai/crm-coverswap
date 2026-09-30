@@ -25,6 +25,7 @@ import { relancesPhotosProposables } from "@/lib/relances/photos";
 import { listerSimulationsDossier } from "@/lib/simulations/dossier";
 import { calculerAlertes } from "@/lib/synthese/alertes";
 import { calculerSynthese } from "@/lib/synthese/calcul";
+import { etatAvisGoogle } from "@/lib/site/avis-google";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import { lireConsignes, regleDuJour, sectionProtocole } from "../consignes";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
@@ -371,9 +372,19 @@ export const outilCampagne = definirOutil({
 export const SEUILS_DISQUE = { attention: 70, urgent: 85 } as const;
 export const niveauDisque = (pourcent: number): "OK" | "ATTENTION" | "URGENT" => (pourcent >= SEUILS_DISQUE.urgent ? "URGENT" : pourcent >= SEUILS_DISQUE.attention ? "ATTENTION" : "OK");
 
+/**
+ * La ligne « Avis Google » de `sante_systeme` (mission 16, partie 3) : sans clé ni lieu, le dire avec le NOM des
+ * variables à poser ; connectés, la dernière lecture (note, nombre, date) et sa dernière erreur.
+ */
+export function texteAvisGoogle(e: { connectes: boolean; note: number | null; nombre: number | null; luLe: string | null; erreur: string | null }): string {
+  if (!e.connectes) return "Avis Google : non connectés (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID).";
+  const lecture = e.note !== null && e.nombre !== null && e.luLe ? ` — ${e.note.toLocaleString("fr-FR")} sur 5, ${pluriel(e.nombre, "avis", "avis")} (lus le ${format.jourCourt(e.luLe)})` : e.luLe ? ", mais Google ne donne ni note ni nombre d'avis pour ce lieu : l'accueil n'en montre pas" : ", pas encore lus (première lecture à la prochaine visite de l'accueil)";
+  return `Avis Google : connectés${lecture}${e.erreur ? ` ; dernière lecture en échec : ${e.erreur}` : ""}.`;
+}
+
 /** L'état de santé du système : tâches, connexions, jetons, crédits, disque, cohérence, alertes. */
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, etatGoogle, meta, ia, alertes, coherence] = await Promise.all([
+  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle] = await Promise.all([
     etatDesTaches(),
     rappelConnexionGoogle(maintenant).catch(() => null),
     etatConnexionGoogle().catch(() => null),
@@ -381,6 +392,8 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     etatIa(maintenant, "IA_REDACTION").catch(() => null),
     calculerAlertes(maintenant).catch(() => []),
     controlerCoherence().catch(() => null),
+    // Mission 16 (partie 3) : les avis Google de l'accueil du site (sans appeler Google : la dernière lecture gardée).
+    etatAvisGoogle().catch(() => null),
   ]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
@@ -405,6 +418,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     // Même chose pour Gmail ou Drive (les tâches attendent de la même façon, rien ne les listerait sinon).
     autresApisNonActivees: etatGoogle?.autresApisNonActivees ?? [],
     meta: meta ? { etat: meta.chaine.code, message: meta.chaine.libelle, jeton: meta.jeton.message, echeance: meta.jeton.echeance } : null,
+    avisGoogle,
     ia: ia ? { active: ia.active, raison: ia.raison, cleApi: ia.cleApi, depenseMois: ia.depenseMois, budget: ia.budget } : null,
     disqueLibreMo,
     disque,
@@ -416,7 +430,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
 export const outilSanteSysteme = definirOutil({
   nom: "sante_systeme",
   titre: "Santé du système et alertes",
-  description: "Tâches de fond en échec, connexion Google (jeton qui expire, API Google Calendar à activer dans le projet Google Cloud), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
+  description: "Tâches de fond en échec, connexion Google (jeton qui expire, API Google Calendar à activer dans le projet Google Cloud), avis Google du site (connectés ou non), chaîne Meta (leads reçus, lecture des formulaires, conversions, jeton), IA (clé, budget du mois), place disque, incohérences du contrôle quotidien, alertes du CRM (devis sans réponse, dossiers en retard…). Réponse à « tout va bien ? ».",
   niveau: "LECTURE",
   schema: z.object({}),
   executer: async ({}, contexte) => {
@@ -428,6 +442,7 @@ export const outilSanteSysteme = definirOutil({
       s.agendaApi.activee ? "" : `Google Calendar : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → Google Calendar API) ; les rappels attendent et s'inscriront seuls une fois l'API activée.${s.agendaApi.message ? ` Réponse de Google : ${s.agendaApi.message}` : ""}`,
       ...s.autresApisNonActivees.map((a) => `${a.api} : l'API n'est pas activée dans le projet Google Cloud (console Google Cloud → API et services → ${a.api} API) ; les tâches attendent et repartiront seules une fois l'API activée.${a.message ? ` Réponse de Google : ${a.message}` : ""}`),
       s.meta ? `Meta : ${s.meta.message}` : "",
+      s.avisGoogle ? texteAvisGoogle(s.avisGoogle) : "",
       s.ia ? `IA : ${s.ia.active ? `active, ${format.euros(s.ia.depenseMois)} dépensés ce mois${s.ia.budget !== null ? ` sur ${format.euros(s.ia.budget)}` : ""}` : `inactive (${s.ia.raison ?? "réglages manquants"})`}${s.ia.cleApi ? "" : " ; clé Anthropic absente du serveur"}.` : "",
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",

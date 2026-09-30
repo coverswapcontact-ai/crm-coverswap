@@ -4168,3 +4168,310 @@ Aucun appel OpenAI, aucune image générée, aucun serveur ni build lancé.
 - Originaux PNG convertis en JPEG q90 avant d'entrer dans `public/images/sources/` (105 à 263 Ko) ; `npm run images`
   → 16 images, 108 fichiers produits (AVIF 5 à 56 Ko).
 - CRM 785/785 + build ; site lint, 102/102, build ; 0 appel ntfy réel.
+
+## Mission 16, partie 3 — L'accueil : huit sections, rien d'autre (30/09)
+
+Énoncé § 3 (accueil), § 1 (direction, honnêteté des images), § 4.1 (accueil → simulateur). L'accueil ne garde que
+huit sections — ouverture, essai sur photo, trois faits, matières, réalisations, comment ça marche, confiance, dernier
+appel — et un seul geste, « Simuler ma cuisine ». Les règles d'honnêteté sont CODÉES (fonctions pures testées), pas
+seulement écrites. Le CRM gagne la route publique des avis Google (avec l'attribution exigée par Google),
+l'événement `WHATSAPP_CLIQUE` et des photos publiées réduites (`?l=`) pour le `srcset` du site. Une relecture à trois
+a rendu 13 constats : 12 corrigés, 1 doublon (voir « Relecture »). Aucun appel OpenAI, aucune image générée, aucun
+appel à Google, aucun serveur ni build lancé.
+
+### CRM (à déployer AVANT le site : liste blanche de `WHATSAPP_CLIQUE`, route des avis)
+- **`src/lib/site/avis-google.ts`** (nouveau) : `avisGoogle({ client?, maintenant?, env? })` — sans
+  `GOOGLE_PLACES_API_KEY` ou sans `GOOGLE_PLACE_ID` (vide = absente) : `{ disponible: false }`, aucun appel. Sinon Places
+  API (New) `GET https://places.googleapis.com/v1/places/<id>?fields=rating,userRatingCount,reviews&languageCode=fr`, clé
+  dans l'en-tête `X-Goog-Api-Key` (jamais dans l'adresse ni un journal), délai 8 s. Copie de 24 h en mémoire et sur le
+  volume (`fichierCacheAvis()` = `<uploads>/cache/avis-google.json`, soit `/data/uploads/cache/` en production), liée au
+  lieu (un autre `GOOGLE_PLACE_ID` ne la reprend pas) ; une lecture à la fois (deux demandes simultanées = un appel) ;
+  **une copie de plus de 24 h n'est JAMAIS servie** : un échec (réseau, 403 « API key not valid »…) rend
+  `{ disponible: false }` et ne réessaie pas avant une heure (`PAUSE_APRES_ECHEC_MS`), l'erreur est gardée pour la
+  santé. `normaliserPlaces` : note arrondie à une décimale (1 à 5) et nombre entier ≥ 1, sinon `{ disponible: false }` ;
+  au plus 5 avis `{ auteur, lienAuteur, photoAuteur, lienAvis, note, texte, date }` — **attribution exigée par les
+  règles de la Places API** : `nomAuteur` (le nom TEL QUE Google le donne, espaces resserrés, jamais abrégé),
+  `authorAttribution.uri` / `photoUri` (profil, avatar), `googleMapsUri` de l'avis, tous filtrés par `lienHttps`
+  (`https:` seulement : ni `javascript:`, ni `http:`, ni `data:`) ; `texteCourt` (texte d'origine de préférence,
+  espaces resserrés, coupé au mot sous 300 caractères avec « … »), note d'avis hors 1-5 → null, date ISO ou null ;
+  avis sans auteur ou sans texte écartés. `etatAvisGoogle()` (sans appeler Google), `configurationAvisGoogle`,
+  `urlPlaces`, `oublierAvisGoogleEnMemoire` (essais). Client HTTP injectable (`ClientPlaces`) : aucun essai ne parle à
+  Google.
+- **`src/app/api/site/avis-google/route.ts`** (nouveau) : `GET` → la réponse ci-dessus, 200, `Cache-Control: public,
+  max-age=3600, s-maxage=3600`, CORS `*` (comme les publications) ; 120 demandes par IP et par 10 min
+  (`ipDepasseLaLimite`, comme les événements) → 429 `{ disponible: false }` ; une exception → `{ disponible: false }`
+  en `no-store`.
+- **Photos des publications** : `src/app/api/site/photos/[id]/[quelle]/route.ts` lit `?l=` — `largeurPhotoSite`
+  (480 / 960 / 1600, `LARGEURS_PHOTO_SITE`, toute autre valeur = la photo telle quelle) → `lirePhotoPubliqueReduite`
+  (`src/lib/site/publications.ts`) : WebP qualité 78 réduit à cette largeur par sharp (jamais agrandi, orientation
+  appliquée), gardé en mémoire par empreinte sha1 du fichier (une photo remplacée est refaite ; 48 versions au plus ;
+  rien d'écrit sur le volume) ; format non décodable ou sharp absent : la photo telle quelle. La visibilité est
+  revérifiée à chaque demande (retirée = 404, même réduite).
+- `src/lib/acces/routes-publiques.ts` : `/api/site/avis-google` (exacte, pas de préfixe) avec sa protection ; test mis à
+  jour (joignable ; `/api/site/avis-google/autre` refusé). `/api/site/photos/` (préfixe) inchangé.
+- `src/lib/site/evenements.ts` : **`WHATSAPP_CLIQUE`** dans `TYPES_EVENEMENT_SITE`, libellé « Clics WhatsApp » ; il
+  est son propre type canonique (voir Décisions).
+- `src/lib/assistant/outils/lecture.ts` : `santeSysteme()` rend `avisGoogle` (`etatAvisGoogle`, sans appel réseau) ;
+  **`texteAvisGoogle`** → « Avis Google : non connectés (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID). », ou « Avis Google :
+  connectés — 4,9 sur 5, 23 avis (lus le …) », « …, pas encore lus », « …, mais Google ne donne ni note ni nombre
+  d'avis pour ce lieu », suivi de « ; dernière lecture en échec : … » s'il y a lieu ; description de l'outil complétée.
+- `docs/ARCHITECTURE-PILOTAGE.md` : puce « Avis Google de l'accueil du site » (route, cache jamais servi au-delà de
+  24 h, pause, attribution, copie sur le volume à trancher, santé, événement, photos `?l=`).
+- `src/proxy.ts` : garde locale, non touchée (il lit `routes-publiques.ts` : la route est ouverte d'office).
+
+### Site
+- **`src/app/page.tsx`** réécrit (serveur, `revalidate = 300`) : `sectionsAccueil().map` sur un `Record<IdSectionAccueil,
+  ReactNode>` (une section en plus ou en moins ne compile pas) ; publications et zones chargées une fois
+  (`Promise.all`) ; `BoutonColle mobileSeulement cibles={CIBLES_BOUTON_COLLE}` « Simuler ma cuisine » ; métadonnées :
+  title absolu « CoverSwap — Votre cuisine transformée en une journée, sans travaux », description (151 caractères,
+  `PRIX_PLAGE`, Montpellier), canonical `/`, Open Graph et carte Twitter propres (`og-image.jpg` clair) ; JSON-LD :
+  `ServiceSchema` avec `urlOffre` → `/simulateur` (LocalBusiness + Organization restent dans le gabarit ; le
+  `FAQSchema` part avec la FAQ, il reste sur `/comment-ca-marche`).
+- **`src/components/accueil/`** (nouveau dossier) :
+  - `sections.ts` (pur) : `SECTIONS_ACCUEIL` / `sectionsAccueil()` (8, dans l'ordre), `TITRE_ACCUEIL` (« Votre cuisine,
+    transformée en une journée. », 6 mots, depuis `DUREE_POSE_TEXTE`), `LIGNE_ACCUEIL`, `TITRE_META_ACCUEIL`,
+    `DESCRIPTION_META_ACCUEIL`, `DepuisAccueil`, `lienSimulerCuisine(depuis)` → `/simulateur?projet=cuisine&depuis=…`,
+    `ANCRES_ACCUEIL`, `CIBLES_BOUTON_COLLE` (bouton de l'ouverture, module `#simulation`, bouton des étapes, dernier
+    appel, `#pied-de-page`).
+  - `etudes.ts` (pur) : **`choisirOuverture(realisations, manifeste?)`** — la PREMIÈRE réalisation publiée avec photo
+    avant ET après → « Réalisation, <ville> » (« Réalisation » sans ville), cadre `3 / 2`, sources `sourcesPhotoCrm`
+    (WebP réduits par le CRM : le LCP n'est pas la photo entière) ; sinon la simulation du moteur
+    (`ouverture-cuisine-avant` / `-apres`, `sourcesPhoto`, rapport du manifeste, « Simulation », `ALT_OUVERTURE`
+    « Cuisine simulée après la pose : façades noir mat, plan de travail effet travertin » — l'« après » est lu en
+    premier et seul en plein écran —, `ALT_AVANT_OUVERTURE` « La même cuisine avant la pose ») ; ni l'un ni l'autre →
+    `null` (pas d'image). **`choisirEtudes(realisations, manifeste?)`** — les réalisations publiées avec photo après,
+    3 au plus (« Ils l'ont fait », `versEtudeReelle`) ; sinon trois études SIMULÉES (« Ce que ça donne ») : cuisine =
+    avant / après de l'ouverture (« Simulation »), salle de bain et meubles = `PHOTOS_PIECES` (« Ambiance »), chacune
+    avec son `alt` (« Salle de bain rénovée au film, image d'ambiance »…), prix `fourchette("cuisine" | "sdb" |
+    "meuble")`, durée `DUREE_POSE_TEXTE`, jamais de ville.
+  - `Ouverture.tsx` : `section` `md:min-h-[calc(100svh-60px)]` (jamais `100vh`), grille 5/7 à partir de 768 px ;
+    `AvantApres` `priorite` (l'« avant » en `eager` + `fetchpriority="high"`), `preparees` toujours (`<picture>` :
+    AVIF / WebP / JPEG préparés pour la simulation, WebP 480 / 960 / 1600 du CRM pour une réalisation ; `sizes`
+    `(min-width: 1152px) 672px, (min-width: 768px) 58vw, 100vw`), `outilsMobile="comparer"`, `etiquette` ; largeur de
+    l'image bornée par `calc((100svh − 60px − 5rem − 52px) × rapport)` pour que l'image et ses outils tiennent dans
+    l'écran ; h1 `titre-1`, ligne `texte-2`, un seul `Lien` (`depuis=accueil-ouverture`, `id="ouverture-simuler"`). Le
+    titre et le bouton sont AVANT l'image dans le document (`max-md:order-first` remet l'image en haut sur téléphone).
+  - `TroisFaits.tsx` : `PHRASE_COVERING` (« Le covering, c'est un film adhésif haute résistance appliqué sur vos
+    surfaces. », la seule explication de la page) + `<dl>` de trois colonnes (« Une journée », « Sans travaux »,
+    « Réversible »), sans icône.
+  - `MatieresAccueil.tsx` : 8 `TuileFilm taille="grand"` (vignette CRM `?l=320`, carré réservé, libellé + nom + réf.)
+    → `lienMatiere(ref)` = `/matieres?ref=<ref>` ; « Voir les 497 matières » (`NB_REFERENCES`) en secondaire.
+  - `RealisationsAccueil.tsx` : cartes réelles = **`CarteRealisation`** (la carte de `/realisations`) + « Voir les
+    réalisations » en secondaire ; cartes simulées (`AvantApres` préparé + « Simulation », ou `Photo` + « Ambiance »,
+    `alt` utiles ; « 1 200 € à 3 500 € fourni et posé · pose en une journée ») **sans** bouton vers `/realisations`
+    (qui n'aurait rien à montrer : le « Simuler ma cuisine » de la section 6 suit).
+  - `CommentCaMarche.tsx` (réutilisable en partie 5 : props `titre`, `fond`, `depuis`, `idBouton`) :
+    `etapesCommentCaMarche(manifeste?)` — « Vous photographiez » (`etape-photo`), étape 2, « Nous posons, en une
+    journée » (`etape-pose`) ; une ligne chacune ; « Simuler ma cuisine ». **Étape 2 liée à la capture
+    `etape-simulation`** : sans elle (aujourd'hui) « Vous voyez le rendu » / « Le rendu sur votre photo en environ
+    1 min 30. » sur `PHOTOS_PIECES.cuisine` « Ambiance » ; avec elle (partie 4) « Vous voyez le rendu et
+    l'estimation » / « …, avec une estimation du prix. » « Simulation ». Images décoratives (`alt=""`, étiquette
+    `aria-hidden`).
+  - `Confiance.tsx` : `ContenuConfiance({ avis })` (synchrone, testé) + `Confiance()` (charge) ; bloc « Note Google »
+    (surtitre, « 4,9 sur 5 », « D'après N avis Google. », 3 extraits) SEULEMENT si `blocAvis` rend quelque chose ;
+    chaque extrait (`ExtraitAvis`) : avatar 32 px (`lazy`, `no-referrer`), nom de l'auteur en lien vers son profil,
+    note, mois, « Voir l'avis » vers Google Maps (nouvel onglet, `noopener noreferrer`, `aria-label` « Voir l'avis de …
+    sur Google Maps ») ; sous les extraits, `ORDRE_AVIS` (« Extraits : les avis jugés les plus pertinents par Google,
+    parmi ceux qui ont un texte. ») et la mention « Google Maps » (`font-google text-[14px] font-normal whitespace-nowrap
+    text-google`), même sans extrait ; toujours : « Zone d'intervention : Pérols, Montpellier et l'Hérault » (lien
+    `/zones`) et « Garantie : 10 ans sur la pose et le film » (`GARANTIE_ANS`). Pas de logo.
+  - `DernierAppel.tsx` : `TITRE_ACCUEIL` en h2, « Simuler ma cuisine » (`depuis=accueil-final`), `BoutonWhatsApp`.
+  - `BoutonWhatsApp.tsx` (client) : lien secondaire `lienWhatsApp()` (« Bonjour, je souhaite un devis pour ma
+    cuisine. »), `target="_blank"`, `WHATSAPP_CLIQUE` `{ depuis }` au clic.
+- **Composants partagés** :
+  - **`src/components/CarteRealisation.tsx`** (nouveau) : LA carte d'une réalisation publiée, pour l'accueil et
+    `/realisations` (`CLASSE_CARTE_REALISATION`, `RATIO_CARTE_REALISATION` 4 / 3) — `AvantApres` sans outils en WebP
+    réduit (`sourcesPhotoCrm`), titre, légende, texte (`avecTexte`), matières → `/matieres?ref=`, `lignePrixDuree`.
+  - **`src/components/simulation/ImagePreparee.tsx`** (nouveau) : LE `<picture>` du site (AVIF / WebP en `<source>`
+    s'ils existent, `<img>` avec `srcset` JPEG, `width` / `height` s'ils sont connus) ; `Photo` et `AvantApres`
+    (`ImageCadre`) l'utilisent, plus aucun `<source>` écrit ailleurs.
+  - `AvantApres` — `preparees` (`SourcesImage` : images préparées OU photos du CRM), `priorite`, `outilsMobile`,
+    `etiquette` (en bas à gauche) ; sans ces options, rendu identique (simulateur, espace).
+  - `Etiquette` — prop `muette` (`aria-hidden`) ; `Photo` la pose quand `alt` est vide (plus de mot « Ambiance » lu
+    seul). `TuileFilm` — `taille="grand"` et la prop **`reference`** (équivalent de `ref` pour un composant serveur).
+- **`src/lib/`** : **`etude-de-cas.ts`** (nouveau, pur) : `EtudeReelle`, `versEtudeReelle(p)` (légende, texte,
+  matières, prix / durée publiés, et `prixHabituel` = `fourchette` selon `typeProjet` — CUISINE → cuisine, SDB → sdb,
+  MEUBLES → meuble, rien pour PRO / AUTRE —, `dureeHabituelle` = « une journée » pour CUISINE / SDB seulement),
+  `lignePrixDuree` (« 2 400 € · 1 journée » ; à défaut « Prix habituel : 1 200 € à 3 500 € · pose en une journée en
+  général » ; `null` sans rien) ; `publications.ts` : `matieres?`, `prix?`, `duree?` facultatifs (lus s'ils
+  arrivent), **`LARGEURS_PHOTO_CRM`** et **`sourcesPhotoCrm(url)`** (`webp` = `url?l=480 480w, …960w, …1600w`, `src` =
+  la photo entière) ; `images-preparees.ts` : type `SourcesImage` ; `matieres-vedettes.ts` (8 références,
+  `matieresVedettes()` lit le nom dans `revetements.json`, `lienMatiere`, **`referenceDeLAdresse(ref, catalogue)`**) ;
+  `avis-google.ts` (`chargerAvisGoogle()` → `<CRM>/api/site/avis-google`, `revalidate` 3600 ; `blocAvis` avec
+  `lienAuteur` / `photoAuteur` / `lienAvis` filtrés par `lienHttps`, `ORDRE_AVIS`, `formaterNote`, `formaterMoisAvis`) ;
+  `whatsapp.ts` (`MESSAGE_WHATSAPP_DEVIS`, `lienWhatsApp`) ; `offre.ts` + `DUREE_POSE_TEXTE = "une journée"` ;
+  `evenements-site.ts` + `WHATSAPP_CLIQUE` (→ `whatsapp_clicked` dans le dataLayer ; `VERS_DATALAYER` exporté) ;
+  `simulateur/entonnoir.ts` + `lireDepuis` ; commentaire de `analytics.ts`.
+- `src/app/globals.css` : jetons **`--color-google: #5e5e5e`** et **`--font-google: Roboto, sans-serif`** (la mention
+  « Google Maps » : gris et police imposés par Google, 6:1 sur le fond).
+- `CatalogueClient.tsx` (page `/matieres`) : lit `?ref=` comme `?famille=` (`useSyncExternalStore`, rendu serveur
+  inchangé) → la fiche de la référence s'ouvre UNE fois (état ajusté pendant le rendu, `refOuverte` : fermée, elle ne
+  se rouvre pas au retour d'historique) et sa famille filtre la grille (`?famille=` et un clic sur une famille
+  passent avant).
+- `Realisations.tsx` (`/realisations`) : `CarteRealisation` avec `versEtudeReelle` + `avecTexte` (matières, prix et
+  durée publiés ou habituels) ; la branche `apercu` (ancien accueil, plus d'appelant) est retirée.
+- `HomeClient.tsx` (section 2) : surtitre « Sur votre photo », titre « Essayez sur votre photo », intro « Le rendu sur
+  votre photo en environ 1 min 30. Sans e-mail, sans téléphone, gratuit. » ; les trois étapes et les deux lignes du bas
+  retirées ; h3 du module 22 px → 17 px ; les trois libellés « Pièce · Photo » / « … · Photo prête » en classe
+  `surtitre` (plus de capitales à la main) ; prop `zonesMax` retirée. Logique inchangée.
+- `Simulateur.tsx` : `?depuis=` lu au montage (`lireDepuis`) et ajouté au seul meta de `PIECE_CHOISIE` ; rien d'autre.
+- `PiedDePage.tsx` : `id="pied-de-page"`. `JsonLd.tsx` : `ServiceSchema({ urlOffre })` (défaut `/devis` inchangé pour
+  les pages par pièce). `llms.txt` : « Questions fréquentes » → `/comment-ca-marche#faq` (plus de FAQ sur l'accueil).
+  `src/data/faq.ts` : commentaire « Servies sur /comment-ca-marche (#faq) et dans le balisage FAQPage de cette page ».
+- `docs/SUIVI.md` : `WHATSAPP_CLIQUE`, `depuis` de `PIECE_CHOISIE`, variables `GOOGLE_PLACES_API_KEY` /
+  `GOOGLE_PLACE_ID` (noms), § 8 « L'accueil » (ouverture en WebP réduit, carte commune et prix habituels, `?ref=`
+  relu, attribution Google).
+- Textes retirés de l'accueil (ouverture provisoire, « Ce que ça change », prestations, tarifs et tableau, catalogue à 7
+  familles, zones, FAQ, ancien dernier appel, habillage du module, métadonnées) : copiés dans
+  `scratchpad\m16\textes-accueil-retires.md` avec leur page de reprise (partie 5). `CommentCaSePasse` et
+  `QuestionsFrequentes` restent rendus par `/comment-ca-marche`.
+
+### Décisions
+- **Avis Google : le nom de l'auteur tel que Google le donne, pas « prénom + initiale » : écart à la conception.**
+  Les règles de la Places API (vérifiées le 30/09 sur developers.google.com/maps/documentation/places/web-service/policies)
+  imposent de créditer l'auteur (avatar, nom, lien de profil quand la place le permet), de donner accès à chaque avis
+  sur Google Maps (`googleMapsUri`), d'afficher « Google Maps » près des données montrées sans carte (Roboto ou
+  sans-serif, 400, 12 à 16 px, #1F1F1F ou #5E5E5E, sur une ligne) et de dire comment les avis sont ordonnés et
+  filtrés. Tout est fait ; l'avatar est une image servie par Google (`lh3.googleusercontent.com`), chargée en `lazy`
+  sans referrer, seulement quand les avis sont connectés.
+- **Jamais une note de plus de 24 h** : la copie périmée n'est plus servie quand Google échoue (le bloc disparaît, zone
+  et garantie restent). Les conditions de Google n'autorisent à stocker que l'identifiant du lieu : la copie de 24 h
+  sur le volume (et les caches HTTP d'une heure) restent, à trancher par Lucas.
+- **« Ambiance », pas « Simulation », sur les études salle de bain et meubles : écart à la conception.** Ce sont des
+  images générées (`piece-*`), pas des rendus du moteur ; le brief (« une image générée = ambiance ; un rendu du moteur
+  = Simulation ») prime. La cuisine (avant / après du moteur) est « Simulation ». Chaque image reste étiquetée.
+- **Réalisation publiée sans prix ni durée : la fourchette et la durée habituelles, libellées comme telles**
+  (« Prix habituel : … », « pose en une journée en général ») — l'énoncé demande « prix, durée » (§ 3.5) et « prix
+  réel ou fourchette » (§ 5) ; `PublicationSite` n'a ni prix, ni durée, ni matières (aucune colonne ajoutée) : le site
+  les lit s'ils arrivent. Rien d'habituel pour PRO / AUTRE ; pas de durée habituelle pour un meuble (`offre.ts` n'en
+  dit pas). `/realisations` montre désormais la même ligne (même carte).
+- **L'estimation n'est annoncée qu'avec la capture `etape-simulation`** (partie 4) : le simulateur n'en donne pas
+  aujourd'hui et chaque partie est déployée seule. `npm run images` avec la capture remet « Vous voyez le rendu et
+  l'estimation » d'un coup.
+- **« Voir les réalisations » seulement s'il y a des réalisations publiées** : sinon `/realisations` n'a rien à
+  montrer (une impasse juste après des exemples simulés).
+- **`/matieres?ref=` relu dès cette partie** (fiche ouverte + famille filtrée) plutôt que des tuiles vers
+  `?famille=` : la tuile « Noir mat » mènerait sinon aux 100+ couleurs ; la partie 5 garde ce comportement en
+  rebâtissant la page.
+- **Photos du CRM réduites par le CRM (`?l=`), pas par le site** (`images.unoptimized`, quota Vercel épuisé) ; WebP
+  seul (sharp encode l'AVIF trop lentement pour une demande) ; en mémoire, pas sur le volume (plein). Un CRM pas
+  encore déployé ignore `l` et renvoie la photo entière : rien ne casse, dans aucun ordre de déploiement.
+- **`WHATSAPP_CLIQUE` hors de `TYPE_CANONIQUE` : écart à la conception.** `TYPE_CANONIQUE` range les anciens noms sous
+  les nouveaux et `syntheseSite` n'affiche pas les types qui y figurent ; l'y mettre (vers `CONTACT_ENVOYE`) aurait
+  compté les clics WhatsApp comme des formulaires envoyés. Il a son libellé (`LIBELLES_EVENEMENT_SITE`) et sa ligne ;
+  `typeCanonique` le rend tel quel (testé). L'entonnoir (`ETAPES_ENTONNOIR`) n'est pas touché (partie 6).
+- **Copie des avis sous `<uploads>/cache/`** (la conception : `data/cache/`) : le volume Railway est monté pour
+  `resolveUploadsDir()` (`/data/uploads`), comme les échantillons ; `UPLOADS_DIR` suffit aux essais.
+- **Places API** : `languageCode=fr` ajouté ; le texte d'origine (`originalText`) passe avant la traduction ; cinq avis
+  gardés, le site en montre trois ; une heure de pause après un échec (sinon chaque visite rappellerait Google).
+- **Quatre valeurs de `depuis`**, pas deux : `accueil-ouverture`, `accueil-colle` (bouton collé), `accueil-etapes`
+  (« Comment ça marche »), `accueil-final` ; tout autre texte est ignoré par le simulateur.
+- **Bouton collé** : s'efface aussi sur « Comment ça marche », le dernier appel et le pied de page (un seul bouton
+  principal par écran ; au bas de la page il cachait les liens légaux) → `id="pied-de-page"` sur le pied. Pas de
+  réserve en bas de page (le bouton est masqué là).
+- **`TuileFilm reference`** : React refuse une prop nommée `ref` passée d'un composant serveur à un composant client
+  (« Refs cannot be used in Server Components, nor passed to Client Components », vu dans `react-server-dom-webpack`) ;
+  le simulateur et l'espace gardent `ref`.
+- **Matières vedettes** (réelles, familles du catalogue vérifiées par le test) : bois clair `NF27` American Oak, bois
+  foncé `D1` Classic Walnut, noir mat `K1` Black Mat (celui des façades du rendu de l'ouverture), blanc mat `J3` Ultra
+  White, marbre `NE31` Statuary White, béton `NE24` Raw Grey, métal `Q1` Mat Aluminium, couleur `RM20` Sage Green
+  (libellé « Vert sauge »).
+- **Réalisation publiée = avec photo après** (une réalisation sans photo n'est pas une étude de cas) ; l'ouverture exige
+  avant ET après.
+- **Section 2 allégée** : les trois étapes du module doublaient « Comment ça marche » (section 6) et « Demandez un devis
+  personnalisé » était un troisième geste ; les titres du module à 17 px (deux tailles de titre par page).
+- **Ordre du document de l'ouverture** : titre et bouton d'abord (clavier : premier arrêt après l'en-tête), l'image en
+  haut seulement à l'écran du téléphone.
+- **Garantie** : « 10 ans sur la pose et le film » (ce que dit `offre.ts`) plutôt que « sur le film » seul. Zone :
+  « Pérols, Montpellier et l'Hérault » (ville et département lus dans `ENTREPRISE`).
+- **`ServiceSchema`** : option `urlOffre` (défaut `/devis` gardé pour les pages par pièce jusqu'aux 301 des parties
+  4-5) ; l'accueil passe `/simulateur`.
+- **Fonds alternés** : ouverture `fond`, essai `fond-2`, faits `fond`, matières `fond-2`, réalisations `fond`, étapes
+  `fond-2`, confiance `fond`, dernier appel `fond-2`.
+- **`CatalogueClient`** : la lecture de `?ref=` est placée APRÈS `useState(familleChoisie)` ; placée avant, le React
+  Compiler (`react-hooks/preserve-manual-memoization`) refuse le `useCallback` de `handleFamilleClick`.
+
+### Relecture (13 constats de trois relecteurs, 30/09)
+- Corrigés : prix et durée absents des cartes réelles (important) ; LCP d'une réalisation = JPEG entier du CRM ;
+  commentaire de `faq.ts` périmé ; estimation annoncée avant la partie 4 (important) ; attribution et copie périmée
+  des avis Google (important) ; `/matieres?ref=` non relu (deux constats, le second en doublon) ; carte de réalisation
+  recopiée (+ branche `apercu` retirée) ; `<picture>` écrit deux fois ; capitales à la main dans le module ; `alt=""`
+  sur des images de contenu et « Ambiance » lu seul ; `alt` de l'ouverture qui commençait par « La même cuisine » ;
+  « Voir les réalisations » vers une page vide.
+
+### Vérifié
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 (aucune erreur, pas même le cache `.next/types`) ; `npm test`
+  **133/133** — **`src/components/accueil/accueil.test.ts` 30/30** (8 sections dans l'ordre et la page les rend sans
+  FAQ / tarifs / zones / prestations / `/devis` ; métadonnées ≤ 155 ; titre ≤ 7 mots ; chaque « Simuler » porte son
+  `depuis` et `lireDepuis` le relit ; ouverture : `<picture>` AVIF, UN `fetchpriority="high"`, rien en `lazy`,
+  « Simulation », Plein écran masqué sur téléphone, un seul bouton, titre avant l'image, jamais `100vh`, `alt` de
+  l'« après » lu seul et avant l'« avant » ; AVIF de l'« avant » ≤ 80 Ko sur disque ; réalisation avant + après →
+  « Réalisation, Lattes » en WebP `?l=480 / 960 / 1600` avec `sizes` et une seule image prioritaire ;
+  `sourcesPhotoCrm` exact ; un avis ou une photo seule ne compte pas, manifeste vide → pas d'image ; trois faits sans
+  icône, « film adhésif » expliqué dans `TroisFaits` seul ; 8 vedettes réelles, familles distinctes, famille du
+  catalogue vérifiée, 8 tuiles `/matieres?ref=` carrées, un secondaire ; destination : `referenceDeLAdresse` retrouve
+  chaque vedette et sa famille, rien pour une référence inconnue, `CatalogueClient` lit `ref`, ouvre la fiche, filtre
+  la famille ; études simulées « Simulation, Ambiance, Ambiance », fourchettes d'`offre.ts`, pas de ville, aucun
+  `alt=""`, aucun bouton ; réalisations publiées : 3 au plus, avis et sans-photo écartés, chiffres publiés d'abord,
+  « Prix habituel : … · pose en une journée en général » sinon, WebP du CRM, « Voir les réalisations » ;
+  `lignePrixDuree` (SDB, MEUBLES sans durée, PRO / AUTRE / sans type → rien, prix ≤ 0 ou NaN ignoré) ; une seule carte
+  (`/realisations` l'utilise, plus d'`apercu`, plus de `<source>` hors `ImagePreparee`) ; étapes : sans capture ni
+  « estimation » ni « prix », avec capture l'estimation, étiquettes des images décoratives `aria-hidden` ; `blocAvis`
+  null sans note ET nombre valides (13 cas), trois extraits valides, liens `https:` seulement ; confiance sans avis : ni
+  note ni nombre, zone + garantie, pas de logo ; avec : « 4,9 sur 5 », nombre exact, mois, nom en lien vers le profil,
+  avatar, « Voir l'avis » (`aria-label`), mention « Google Maps » stylée, ordre des avis, jetons dans `globals.css` ;
+  sans lien : nom seul ; sans extrait : la mention reste ; aucun chiffre d'avis écrit dans le code ; dernier appel ;
+  lien WhatsApp exact, `target`, `rel`, `WHATSAPP_CLIQUE → whatsapp_clicked` ; module habillé, `surtitre` ×3, sans
+  capitales à la main ; commentaire de `faq.ts`) ; `src/lib/simulateur/entonnoir.test.ts` +1 (`lireDepuis` : 4 valeurs
+  admises, 9 refusées ; meta de `PIECE_CHOISIE` ; le simulateur ne met `depuis` que là).
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 9 fichiers touchés 0 ;
+  **`src/lib/base/mission-16-partie-3.test.ts` 12/12** (route sans variables : `{ disponible: false }`, 200, cache
+  1 h, CORS, aucun appel, rien d'écrit, une seule variable ne suffit pas ; route avec variables et `fetch` simulé : clé
+  en en-tête, jamais dans l'adresse, seconde demande servie par la copie ; 429 au-delà de 120 ; client Places simulé :
+  note 4,86 → 4,9, 23, auteurs tels que Google les donne (espaces resserrés), profil / avatar / avis en `https:`, rien
+  pour `javascript:` / `http:` / texte, texte d'origine resserré, coupe ≤ 300 avec « … », dates, avis sans auteur /
+  sans texte écartés, copie écrite sous `UPLOADS_DIR`, relue après oubli de la mémoire, Google relu après 24 h ;
+  `nomAuteur`, `lienHttps` (7 refus) ; sans note / sans nombre → indisponible ; copie de 23 h servie sans appel, échec
+  403 à 25 h → `{ disponible: false }` (jamais la copie périmée), pas de nouvel appel avant une heure, erreur gardée
+  sans la clé, Google revenu → la note revient, autre lieu sans copie ; deux demandes simultanées = un appel ;
+  `routes-publiques` ; `sante_systeme` « non connectés (…) » puis « connectés — 4,9 sur 5, 23 avis (lus le …) » et
+  « pas encore lus », sans appel à Places ; `WHATSAPP_CLIQUE` accepté par `POST /api/site/evenements`, enregistré avec
+  son meta, ligne « Clics WhatsApp » de `syntheseSite`, type inconnu refusé ; photos `?l=480` → WebP 480 × 320, plus
+  léger, `?l=1600` jamais agrandi, même octets au second appel, sans `l` / `""` / `500` / `abc` / `-1` → le JPEG tel
+  quel, retirée → 404) ; avec `site/publications`, `site/site`, `acces/routes-publiques`, `mission-13-lot-6`,
+  `mission-16-partie-2`, `mission-15-partie-4` : **53/53**. `fetch` remplacé pendant tout le fichier de la partie 3 :
+  aucune requête réseau.
+- Pas lancé (orchestrateur) : serveur, build, Lighthouse, captures 390 × 660.
+
+### Reste / à savoir
+- **Ordre de déploiement : CRM d'abord.** Avant lui, le site reçoit un 404 sur `/api/site/avis-google` (bloc absent,
+  sans erreur visible) et un 400 sur `WHATSAPP_CLIQUE` (ignoré). Les photos `?l=` tolèrent tout ordre.
+- **Lucas — avis Google** : poser sur Railway `GOOGLE_PLACES_API_KEY` (clé Places API (New), restreinte à cette API et
+  à l'adresse de sortie de Railway si possible) et `GOOGLE_PLACE_ID` (identifiant du lieu de la fiche CoverSwap). Tant
+  qu'elles manquent, `sante_systeme` le dit et l'accueil n'affiche aucune note. Un appel par jour au plus : coût à lire
+  dans la grille Google (Place Details avec avis). **À trancher avant de poser les variables** : garder ou non la copie
+  de 24 h sur le volume (et les caches d'une heure), que les conditions de Google n'autorisent pas en toute rigueur
+  (sans copie : un appel à Google par heure et par instance, au rythme du `revalidate` du site). L'attribution (nom,
+  profil, avatar, lien de l'avis, « Google Maps », ordre) est en place.
+- **Lucas — études de cas** : textes et photos des vraies réalisations (publications « Réalisation » du CRM, avec
+  accord) ; la première avec avant ET après prend l'ouverture d'elle-même, et la section 5 passe à « Ils l'ont fait ».
+  Matières posées, prix réel et durée : à ajouter à `PublicationSite` (et à l'écran Site) si Lucas veut les montrer ;
+  d'ici là, le prix et la durée habituels, libellés comme tels.
+- Partie 4 : `etape-simulation` (capture de l'écran Résultat) → `npm run images` suffit : l'étape 2 prend la capture,
+  passe à « Simulation » et annonce l'estimation (test `etapesCommentCaMarche` à garder).
+- Partie 5 : `/matieres` lit déjà `?ref=` (fiche + famille) — à garder en rebâtissant la page sur `FeuilleCatalogue` ;
+  `/comment-ca-marche` peut rendre `CommentCaMarche` (props `titre`, `fond`, `depuis`, `idBouton`) et reprendre les
+  textes de `textes-accueil-retires.md` ; `/realisations` utilise déjà `CarteRealisation` (plus de branche `apercu`) ;
+  `ServiceSchema` des pages par pièce encore sur `/devis`.
+- À regarder au build à 390 × 660 : l'ouverture tient au premier écran (image 3:2 + « Comparer » + titre sur deux
+  lignes + ligne + bouton ≈ 580 px sous l'en-tête), le bouton collé (absent en haut, présent entre les sections 3 et 5,
+  absent sur le module, les étapes, le dernier appel et le pied), les vignettes des 8 tuiles, le LCP (AVIF 1536 de
+  52 Ko à DPR 3) et le CLS (cadres réservés partout) ; `/matieres?ref=K1` (fiche ouverte après l'hydratation, retour
+  du téléphone qui la ferme sans la rouvrir).
+
+### Vérifié par l'orchestrateur (30/09)
+- CRM 797/797 + build ; site lint, 133/133, build ; 0 appel ntfy réel. Essai `next dev` à 390 × 660 (CRM d'essai) :
+  l'ouverture tient au premier écran (curseur « Simulation », titre, bouton), huit sections dans l'ordre, cartes des
+  pièces en photos « Ambiance », trois faits, huit matières, trois études étiquetées avec la fourchette d'`offre.ts`,
+  étapes, confiance sans avis (Google non connecté : bloc absent), dernier appel avec WhatsApp en second ; le bouton
+  collé apparaît après l'ouverture et s'efface sur le dernier appel ; rien ne déborde.

@@ -32,6 +32,7 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/site/publications", protection: "réalisations et avis publiés avec accord : lecture seule, aucun identifiant de client" },
   { chemin: "/api/site/prestations", protection: "fichier des prestations (familles, sous-parties) : lecture seule, aucun tarif ni donnée de client" },
   { chemin: "/api/site/photos/", prefixe: true, protection: "photos des publications publiées seulement, lues par identifiant de publication" },
+  { chemin: "/api/site/avis-google", protection: "note et avis Google du lieu (Places API) pour l'accueil du site : lecture seule, rien de privé ; la clé reste sur le serveur ; un appel à Google par 24 h au plus (copie sur le volume) ; limite par IP" },
   { chemin: "/api/site/desinscription", protection: "désinscription des séquences de mails : jeton HMAC par adresse vérifié par la route ; n'écrit qu'une désinscription (définitive), ne rend rien de privé" },
   { chemin: "/.well-known/oauth-protected-resource", protection: "métadonnées OAuth de la ressource (RFC 9728) : document public, sans donnée" },
   { chemin: "/.well-known/oauth-protected-resource/api/mcp", protection: "métadonnées OAuth de la ressource, variante par chemin (RFC 9728) : document public, sans donnée" },

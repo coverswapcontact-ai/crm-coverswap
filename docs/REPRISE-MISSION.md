@@ -5323,6 +5323,28 @@ l'ordre A, B, C). Session cloud : branche `claude/beautiful-goldberg-lu7keb`, un
 Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 
 ## Où on en est
-- [ ] A Tâches (en cours : lecture du code)
-- [ ] B Analytique
-- [ ] C Contrôle total par le MCP
+- [ ] A Tâches — conception écrite (`docs/TACHES.md`, contrat `src/lib/a-faire/types.ts`, schéma : `TacheAFaire`,
+      `RegleTache`, `Lead.dernierContactLe`, `Dossier.prochaineActionManuelle*`) ; lot 1 (cœur) en cours.
+- [ ] B Analytique — lecture du code et des maquettes en cours (notes de travail dans le scratchpad de la session).
+- [ ] C Contrôle total par le MCP — inventaire des actions de l'interface en cours.
+
+## Décisions (partie A)
+- Noms : `Tache` et `/api/taches` restent la file des tâches de fond ; nouveau modèle `TacheAFaire`, code
+  `src/lib/a-faire/`, API `/api/a-faire/…`. L'écran `/taches` devient la liste de Lucas (accueil de l'application) ;
+  « Tâches de fond » déménage à `/taches-de-fond`.
+- Détection : détecteurs purs par source + un moteur unique (`reconcilier`) ; passe complète toutes les 15 min et,
+  après chaque geste, une passe dans 3 s (file de fond, clé unique, rejouée une fois au plus). Le contrôle de
+  cohérence, coûteux, au plus une fois par heure.
+- « Événement du client » (réouvre une tâche écartée, lève une prochaine action manuelle) : événements ENTRANTS du
+  dossier (message, photo, première visite, signature, choix, demande…), pas les relectures du devis ni les visites
+  suivantes (sinon une cliente qui fait ses simulations elle-même rouvrirait « Préparer la simulation » à chaque visite).
+- Prochaine action posée à la main : champs `prochaineActionManuelle*` + événement `PROCHAINE_ACTION_MANUELLE` qui
+  compte comme une réponse pour la règle de la main (le plus ancien est traité) et passe la main au client si le
+  texte dit d'attendre.
+- Mail ou SMS à un lead : nouveau champ `Lead.dernierContactLe` (l'appel garde `dernierAppelLe`).
+- Effets d'une réponse sur la source (valider une proposition, archiver un fil…) : mis en file dans 6 s, pour que
+  « Annuler » (5 s) puisse les retirer avant qu'ils partent.
+- « Pas à faire » qui apprend : règle générique « attendre 3 jours avant de proposer ce type » (proposition
+  `REGLE_TACHE`, validée dans À valider) ; pas de règle par condition métier.
+- Migration : les clients du 29/09 sont retrouvés par empreinte de leur nom normalisé (le dépôt est public : aucun nom
+  en clair) ; un seul candidat ou rien.

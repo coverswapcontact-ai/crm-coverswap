@@ -5031,3 +5031,228 @@ lancé.
   (la seule image possible est déjà l'ouverture de la page).
 - Site `d5d2f9d` (Vercel 15:50 UTC) ; `SITE=https://coverswap.fr node scripts/verifier-redirections.mjs` : 8/8 en 308 ;
   /matieres, /realisations, /comment-ca-marche, /pro, pages par pièce, zones, guides et sitemap en 200.
+
+## Mission 16, partie 6 — Performance, mesure, intégration continue (30/09)
+
+Énoncé § 6 (Lighthouse mobile ≥ 95 sur les quatre axes pour les six pages, LCP < 2 s, CLS < 0,05, INP < 200 ms ;
+aucun script tiers hors Turnstile ; rendu serveur ; entonnoir par source sans cookie ; Lighthouse CI et captures
+comparées). Le site retire tout outil tiers de mesure et le bandeau cookies, réduit son JavaScript client, précharge
+l'image de l'ouverture, diffère les sections sous la ligne de flottaison, met ses images en cache immuable et pose une
+intégration continue GitHub Actions ; le CRM range les visites par famille de source. Aucun appel OpenAI, aucune image
+générée, aucun serveur, aucun build, aucun Lighthouse lancé (l'orchestrateur mesure).
+
+### CRM (indépendant du site : aucun nouveau type d'événement, déployable dans n'importe quel ordre)
+- **`src/lib/site/familles-source.ts`** (nouveau, pur, sans base — l'écran Leads, client, l'importe ; réexporté par
+  `site/evenements.ts`) : `familleSource(source)` → `{ famille, nom }` — **Meta** (`meta`, `fb`, `facebook`, `ig`,
+  `instagram`, `msg`), **recherche** (`google`, `bing`, `duckduckgo`, `qwant`, `ecosia`, `yahoo`), **direct** (vide ou
+  « direct »), **autre** (le reste, nom gardé). La source est celle du site (`sourceCourte` : `utm_source[/medium]` ou
+  domaine référent) : seul le premier segment compte, découpé en mots ; un MOT doit correspondre (« metamorphose.fr »,
+  « bingo.fr », « googleads… » restent « autre »). `familleDesParcours` (un parcours = la famille de sa PREMIÈRE source
+  non vide, lue par date ; sinon direct), `CHOIX_ENTONNOIR` (Toutes · Meta · Recherche · Direct), `etapesDuChoix`,
+  `texteEtapes`, `texteEntonnoirParFamille` (une ligne par famille qui a eu des visites, « Autres (chatgpt.com 2, t.co
+  1) »).
+- **`src/lib/site/evenements.ts`** : `EntonnoirSite.parFamille?` (les sept étapes par famille) et `autresSources?` (8
+  au plus) ; **`calculerEntonnoirParFamille(evenements, jours)`** (pur : chaque famille calculée comme le global, leur
+  somme = le global étape par étape) ; `entonnoirSite(7)` lit aussi `source`, trié par date ; `syntheseSite` trie par
+  date et rend **`entonnoir`** (même lecture, aucune requête de plus). Rien de rétroactif : aucune ligne `EvenementSite`
+  n'est réécrite, la famille se calcule à la lecture. `calculerEntonnoir` accepte un tableau en lecture seule.
+- **`SurLeSite.tsx`** (Leads → « Sur le site cette semaine ») : `Entonnoir` exporté, sélecteur `role="group"`
+  « Source des visites » (quatre boutons `aria-pressed` avec le nombre de visites, 44 px sur téléphone, 32 px à partir
+  de `sm`), les sept étapes et leurs abandons pour la famille choisie, « Aucun parcours venu de « Direct » ces 7
+  derniers jours. » si vide, « Autres sources : chatgpt.com 2 · t.co 1 » sous « Toutes ». Sans `parFamille` (lecture
+  d'avant) : pas de sélecteur.
+- **Outils** : `synthese` — bloc « Entonnoir du site par source (parcours ; entre parenthèses, l'étape facultative) »,
+  une ligne par famille, `donnees.entonnoirSite` ; `voir_publicite` — « Sur le site, visites venues de Meta (7 jours) :
+  Visite 12 → … → Contact ou rappel 1. » (une requête `entonnoirSite(7)`, erreur → ligne absente), `donnees.entonnoirMeta`.
+  Descriptions complétées.
+- `src/lib/synthese/types.ts` : **`VERSION_SYNTHESE` 5** (`site.entonnoir`, absent des instantanés d'avant, optionnel).
+- `docs/ARCHITECTURE-PILOTAGE.md` : puce « Entonnoir par source ». `src/proxy.ts` : garde locale, non touchée.
+
+### Site
+- **Tiers et cookies retirés** : `Analytics.tsx` (GTM, GA4, pixel Meta, Clarity), le `noscript` GTM de `layout.tsx`,
+  `@vercel/analytics` (désinstallé, `package.json` + lock), `lib/analytics.ts › track` **supprimé avec ses appels**
+  (`DevisForm`, `HomeClient` : chaque appel doublait un événement CRM déjà émis, sauf `cta_clicked`), `VERS_DATALAYER` ;
+  bandeau cookies : `CookieBanner`, `BoutonCookies`, `lib/cookies.ts` supprimés, « Gérer les cookies » retiré du pied et
+  des mentions légales. `SuiviParcours` (PAGE_VUE + utm en sessionStorage) reste. **La mesure Meta navigateur
+  disparaît ; le CRM envoie les conversions serveur** (API Conversions). Les variables `NEXT_PUBLIC_GTM_ID`,
+  `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_META_PIXEL_ID`, `NEXT_PUBLIC_CLARITY_ID` ne sont plus lues (`api/health` ne les
+  citait déjà pas).
+- **`lib/evenements-site.ts`** : `urlEvenements(simulateUrl, sansEvenements)` — `NEXT_PUBLIC_SANS_EVENEMENTS=1` coupe
+  l'envoi (CI seulement) ; plus rien vers un outil tiers.
+- **Politique de confidentialité** (mise à jour 30/09), alignée sur ce que font le site et le CRM :
+  - sous-traitants GTM / GA, pixel Meta, Clarity retirés. **Meta** : « mesure de nos publicités Facebook et
+    Instagram » ; quand une demande avance, le CRM transmet l'étape et le montant, rattachés par les coordonnées
+    hachées. C'est vrai pour TOUTE demande : `dossiers/transitions.ts › effetsDuChangementEtape` ne filtre pas sur la
+    source, et `meta/conversions.ts` hache e-mail, téléphone, prénom, nom, ville et code postal, plus `lead_id` s'il
+    existe. Aucun « — » interne (la liste s'affiche « nom — rôle — lieu »). Ligne ajoutée au tableau « Quelles
+    données » : étape, montant, coordonnées hachées ou identifiant Meta → mesure des publicités, **intérêt légitime
+    (mesure de nos campagnes)**. OpenAI : « analyse de votre photo (surfaces de la pièce) et génération du rendu »
+    (l'analyse vision du CRM existait déjà, la politique ne la citait pas). Cloudflare : « protection du simulateur et
+    des formulaires contre les robots » ;
+  - la ligne « données de navigation » devient la mesure sans cookie (pages vues, étapes, identifiant de visite tiré
+    au hasard, provenance ; intérêt légitime) ;
+  - « Combien de temps ? » : identifiant de visite **sur l'appareil** (le temps de l'onglet) ; **pages vues et étapes
+    gardées dans le CRM : « sans durée maximale fixée à ce jour »** (vrai : `EvenementSite` n'est jamais purgé ; ni
+    purge ni chiffre inventé, décision de Lucas) ;
+  - « Cookies et stockage sur votre appareil » : aucun cookie de mesure ni traceur tiers, donc pas de bandeau. Le
+    simulateur garde photo, choix et rendus dans IndexedDB, les favoris (simulateur et /matieres) en `localStorage`.
+    **La photo part au CRM dès son choix** (analyse `useAnalyse` → `POST /api/simulate/analyse` ; conversion HEIC
+    `POST /api/simulate/photo`) ; les choix de matières, au lancement ou à la demande. **Turnstile** protège le
+    simulateur et les formulaires : chargé au premier geste dans un formulaire, et dès les étapes du simulateur qui
+    appellent le serveur (matières, résultat), qui rendent `<Turnstile>` sans `actif` (simulateur inchangé).
+  - Mentions légales : « Le site ne dépose aucun cookie de mesure d'audience ni de publicité. »
+- **`.env.example`** (modèle commité, lu clés seules, valeurs masquées) : le bloc « Suivi (chargés selon le bandeau
+  cookies) » et ses quatre variables sont remplacés par un commentaire. Il dit que ces variables ne sont plus lues et
+  sont à retirer de Vercel, et que `NEXT_PUBLIC_SANS_EVENEMENTS=1` sert à la CI seulement.
+- **JavaScript client** : `CartesPieces` perd « use client » (sans état : `/realisations` rend ses cartes-liens sans
+  JavaScript ; un bouton sans `onChoisir` n'a pas de gestionnaire). Liste blanche dans `perf.test.ts` (chaque entrée
+  avec sa raison) : simulateur, espace client, `HomeClient` (SimulationSection), `MenuMobile`, `SuiviParcours`,
+  `AvantApres` / `PleinEcran` / `ZoomImage` / `Feuille` / `FeuilleCatalogue`, `BoutonColle`, `EcranAttente` /
+  `FilEtapes` / `FonduRendu` (simulateur, espace), `TuileFilm` (état : vignette en échec), les formulaires
+  (`DevisForm`, `ChampPhotos`, `CaseConsentement`, `Turnstile`, `Desinscription`, `FormulaireContact`,
+  `FormulairePro`), `Matieres.tsx` (catalogue), `BoutonWhatsApp` (clic compté), `HorsEspaceClient` / `HorsSimulateur`
+  (lisent l'adresse ; leurs enfants restent serveur), `ScrollToTop`.
+- **Ouverture** : `etudes.ts › TAILLES_OUVERTURE` (les `sizes` du `<picture>`, repris par `Ouverture`),
+  **`prechargementOuverture(choix)`** (AVIF `srcset` + `sizes` + `type: image/avif` + `fetchPriority: high` +
+  `no-referrer` ; WebP réduits du CRM pour une réalisation ; `href` = l'entrée ≤ 960 px, `adresseMoyenne`) ;
+  `src/app/page.tsx` appelle `preload()` de `react-dom` — sur `/` seulement. L'ancien préchargement du poster n'existe
+  plus (partie 1). La police d'affichage est déjà préchargée par `next/font`.
+- **CSS et rendu différé** : `globals.css` 191 lignes (`section-padding`, `container-custom` retirés : aucun usage) +
+  utilitaire **`sous-la-ligne`** (`content-visibility: auto`, `contain-intrinsic-size: auto 640px`) ; `Section
+  differee` le pose : accueil sections 3 à 8, `/comment-ca-marche` (prix, objections, devis, guides, dernier appel),
+  `/realisations` (avis, « Ce que nous recouvrons »), `/pro` (« en détail »).
+- **Cache** (`next.config.ts › headers`) : `/images/prep/:path*` et `/fonts/:path*` en `public, max-age=31536000,
+  immutable` ; **`sourcesPhoto` ajoute `?v=<empreinte>`** (celle du manifeste) à chaque adresse d'image préparée ;
+  commentaire d'`images.unoptimized` (gardé) complété.
+- **INP** : `src/lib/differer.ts` (`differer(action, delai)` → `appeler` / `annuler`) ; `/matieres` : `saisie` suit la
+  frappe, `recherche` filtre 150 ms après (`DELAI_RECHERCHE_MS`, `lib/matieres.ts`), « Effacer » immédiat. Le bouton
+  disparaît avec la saisie : le focus revient dans le champ (`champRecherche.current?.focus()`), pas sur `<body>`.
+- **Intégration continue** : **`.github/workflows/site.yml`** (push sur `main` + pull request ; Node 22 + cache npm ;
+  `npm ci`, lint, tests, build ; `next start -p 3100` + attente ; `lhci collect` → `lhci upload` (toujours) → `lhci
+  assert` ; artefact `lighthouse` (`lhci/`) ; `playwright install --with-deps chromium` ; `npm run captures` ;
+  `dawidd6/action-download-artifact@v6` (dernière exécution réussie sur `main`, `search_artifacts`) ; comparaison
+  `continue-on-error` ; artefact `captures`). Variables : `NEXT_PUBLIC_SIMULATE_URL=https://crm.coverswap.fr/api/simulate`,
+  `NEXT_PUBLIC_SANS_EVENEMENTS=1` ; aucun secret. **`lighthouserc.json`** (six URL `localhost:3100`, mobile par défaut,
+  `numberOfRuns: 2`, `--no-sandbox`, seuils ≥ 0,95 × 4, LCP ≤ 2 000, CLS ≤ 0,05, TBT ≤ 200, `upload.target: filesystem`
+  dans `./lhci`). **`scripts/captures.mjs`** (Playwright importé à l'exécution ; six pages × 375 / 768 / 1440, page
+  entière, défilement jusqu'en bas avant la capture, mouvement réduit, animations coupées). **`scripts/comparer-
+  captures.mjs`** (sharp + pixelmatch, seuil 0,1 ; hauteur différente → cadre étendu, la bande compte ; `diff-<page>-
+  <largeur>.png` ; tableau Markdown dans `$GITHUB_STEP_SUMMARY` ; code 0 toujours). `package.json` : scripts
+  `lighthouse` (`lhci autorun`) et `captures` ; devDependencies `@lhci/cli` 0.15.1, `playwright` 1.63.0, `pixelmatch`
+  7.2.0. `.gitignore` et `eslint.config.mjs` : `lhci/`, `.lighthouseci/`, `captures/`, `captures-precedentes/`.
+- **`docs/SUIVI.md`** :
+  - § 1-5 réécrits : un seul canal, plus de dataLayer, § 4 « Plus de Google Tag Manager », variables plus lues à
+    retirer de Vercel, familles de source ;
+  - § 1 : le CRM envoie à Meta les conversions de TOUT dossier qui franchit l'étape, avec le montant et les
+    coordonnées hachées ; restreindre aux leads venus de Meta = décision de Lucas ;
+  - **§ 11** « Performance, mesure, intégration continue » : ce qui a été fait, lire la CI, artefacts, ce que veut
+    dire un échec Lighthouse, en local. Turnstile y est décrit tel qu'il est chargé : premier geste sur /contact et
+    /pro, affichage des étapes serveur du simulateur, rien sur `/simulateur` ouvert à froid.
+- **`perf.test.ts › lire`** ramène CRLF à LF. Sous Windows (`core.autocrlf=true`, pas de `.gitattributes`), git
+  réécrit `site.yml` en CRLF au checkout, et les regex multi-lignes du test du workflow auraient échoué en local.
+
+### Décisions
+- **`track` supprimé, pas relayé** : chaque appel doublait un événement CRM déjà émis ; `cta_clicked` (accueil) n'avait
+  pas d'équivalent utile (`PIECE_CHOISIE` et `PHOTO_CHARGEE` couvrent le module).
+- **`NEXT_PUBLIC_SANS_EVENEMENTS` : ajout à la conception.** En CI, le site lit le CRM de production (vignettes,
+  publications, zones, tarifs) ; ses événements partiraient vers la production depuis `localhost:3100`, que le CRM
+  refuse (403, CORS) : erreurs de console comptées par Lighthouse (bonnes pratiques). Coupés en CI seulement.
+- **`NEXT_PUBLIC_SIMULATE_URL` = `…/api/simulate` : écart à la conception** (« `https://crm.coverswap.fr` ») : le code
+  déduit toutes les adresses du CRM en retirant `/api/simulate` ; la racine seule aurait cassé les vignettes et la
+  génération.
+- **Cache immuable + `?v=<empreinte>` : ajout.** Un original remplacé garde son nom de fichier ; sans version dans
+  l'adresse, un visiteur garderait l'ancienne image un an. L'empreinte du manifeste (sha1 de l'original) sert de version.
+- **`/fonts/*`** : en-tête posé comme demandé, sans effet aujourd'hui (pas de `public/fonts` ; `next/font` sert
+  `/_next/static/media`, déjà immuable).
+- **Préchargement dans `page.tsx`, pas dans `Ouverture`** : `preload` de `react-dom` fonctionne dans un composant serveur
+  (React 19, condition `react-server` : émis comme indice) ; hors d'`Ouverture`, dont les tests de rendu comptent UNE
+  image `fetchPriority="high"`.
+- **Composants gardés clients hors de la liste de la conception**, avec raison (état, clic compté, adresse lue) ;
+  seul `CartesPieces` était sans état. Le simulateur et l'espace ne changent pas.
+- **Rendu différé** : seulement sur les six pages mesurées, jamais sur une section avec un élément fixe ou collant
+  (barre des familles de `/matieres`), ni sur `/simulateur` (inchangé).
+- **CI** : trois commandes `lhci` au lieu d'`autorun` (les rapports sont publiés même quand un seuil échoue) ; captures
+  même si Lighthouse échoue (pour comprendre) ; sharp (déjà là) pour les PNG, pas de `pngjs` ; `--no-sandbox` (Chrome
+  des runners Ubuntu 24.04).
+- **CRM** : « Autres » hors du sélecteur (les quatre choix de la conception) mais nommés sous « Toutes » et dans les
+  outils ; un parcours dans UNE famille (première source connue) ; `synthese` sans requête de plus (même lecture que
+  `syntheseSite`), `voir_publicite` avec une requête des sept jours.
+- **Politique de confidentialité** : texte réécrit sur ce qui est vrai aujourd'hui (voir Site) ; à relire par Lucas.
+  Après relecture, le **texte** s'aligne sur le code, et le code ne change pas :
+  - l'envoi Meta du CRM reste pour toute demande : le limiter changerait ce que Meta apprend, c'est à Lucas ;
+  - le simulateur garde son Turnstile sans `actif` : il est inchangé, et son jeton doit être prêt avant « Voir le
+    résultat » ;
+  - aucune purge d'`EvenementSite` : le brief interdit de supprimer des données.
+  La base « intérêt légitime (mesure de nos campagnes) » pour l'envoi à Meta décrit la pratique actuelle (aucun
+  accord n'est recueilli) : **choix juridique à valider par Lucas**.
+
+### Vérifié
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 7 fichiers touchés 0 ;
+  **`src/lib/base/mission-16-partie-6.test.ts` 8/8** (`familleSource` : 31 cas — Meta, recherche, direct, autre, mot
+  entier, premier segment seulement, nom gardé ; `familleDesParcours` : première source non vide ; entonnoir par famille
+  sur dix parcours simulés : sept étapes, abandons, estimation facultative, emboîtement, somme des familles = global,
+  autres sources triées ; `etapesDuChoix`, `texteEtapes`, `texteEntonnoirParFamille` ; rendu de `Entonnoir` : quatre
+  boutons et leurs nombres, sept étapes, abandons, « Autres sources », choix Meta, famille vide, pas de sélecteur sans
+  familles ; en base : lecture triée par date, sept jours, sources brutes intactes, `syntheseSite.entonnoir`,
+  `VERSION_SYNTHESE` 5 ; `synthese` : une ligne par famille, pas de ligne vide ; `voir_publicite` : la ligne Meta ; aucune
+  requête réseau) ; modules liés (`mission-15-partie-4`, `mission-16-partie-3`, `mission-16-partie-4`, `site/site`,
+  `synthese`, `mcp-v3`, `assistant`) 85/85 ; **suite complète `npm test` 822/822**.
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 (aucune erreur, pas même le cache `.next/types`) ; `npm test`
+  **245/245** (222 → 245) — **`src/lib/perf.test.ts` 23/23** (« use client » sur la liste blanche, sans entrée périmée,
+  rien de client dans `src/lib` ; `CartesPieces` et les composants de page serveur ; `next/script` seulement pour
+  Turnstile, aucun domaine de mesure ni `<script src>` ; variables des traceurs plus lues, `@vercel/analytics` absent,
+  composants retirés absents, gabarit sans `noscript` ; plus de « Gérer les cookies » ni de `cookie-consent`, politique
+  à jour ; `urlEvenements` ; préchargement AVIF / WebP / rien, `href`, mêmes `sizes` que le `<picture>`, appelé par
+  `/` seul ; police préchargée ; `globals.css` ≤ 200, `sous-la-ligne` ; sections 3 à 8 de l'accueil différées, pas
+  l'ouverture ni le module ni `/matieres` ; en-têtes immuables, `unoptimized` ; `?v=<empreinte>` (et rien sans empreinte
+  lisible) sur tout le manifeste ; `differer` avec minuteries simulées, `/matieres` câblé, vignettes `lazy` ;
+  `lighthouserc.json` (six URL, seuils exacts, mobile, disque) ; `package.json` ; `site.yml` (déclencheurs, Node 22,
+  ordre des étapes, variables, aucun secret, comparaison sans échec, assertion bloquante) ; captures six × trois ;
+  comparaison sur des PNG simulés : 0 / 100 / 500 pixels, bande de hauteur, `diff-*.png`, résumé, sans référence ;
+  `SUIVI.md` § 11) ; ajouts après relecture :
+  - la politique dit ce qui part vraiment : photo dès son choix (plus « ne quittent votre appareil que lorsque ») ;
+    Turnstile du simulateur ; ligne Meta sans « — », « quand votre demande avance », « forme hachée » ; plus « si votre
+    demande nous vient d'une publicité » ; base légale Meta ; durée des pages vues dans le CRM ; favoris en stockage
+    local ;
+  - `.env.example` sans les quatre variables ;
+  - focus rendu au champ après « Effacer » ;
+  - `lire` insensible aux CRLF (vérifié sur une copie CRLF du workflow).
+  Tests mis à jour : `accueil.test.ts` (adresses `?v=`, plus de dataLayer), `cartes-pieces.test.ts`.
+- `node scripts/comparer-captures.mjs` sans dossiers : « Aucune capture de référence », code 0 ; `npx lhci --version`
+  0.15.1, `npx playwright --version` 1.63.0 (Chromium non installé : CI seulement).
+- Pas lancé (orchestrateur) : build, serveur, Lighthouse, captures, CI.
+
+### Reste / à savoir
+- **Orchestrateur** : build local + `scratchpad/m15/lighthouse.sh` étendu aux six pages (avec
+  `NEXT_PUBLIC_SANS_EVENEMENTS=1` si le CRM local n'accepte pas `localhost:3100`) ; push (site et CRM, dans n'importe
+  quel ordre) ; lire la première exécution de « Site — lint, tests, Lighthouse, captures » (onglet Actions : `npm ci` sur
+  Linux avec le verrou fait sous Windows, Chrome des runners, seuils ; la première n'a pas de référence de captures) ;
+  Lighthouse de la production (`https://coverswap.fr`) pour le rapport. Si un seuil manque en CI, lire le rapport de la
+  page dans l'artefact `lighthouse` (le module de simulation de l'accueil reste client).
+- **Lucas** :
+  - retirer de Vercel `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_META_PIXEL_ID`,
+    `NEXT_PUBLIC_CLARITY_ID` ; désactiver Vercel Analytics dans le projet, et le conteneur GTM ;
+  - relire la politique de confidentialité : mesure sans cookie en intérêt légitime ; ligne Meta ;
+  - **décider pour Meta** : garder l'envoi des conversions pour toutes les demandes (base « intérêt légitime »,
+    à valider), ou le limiter aux leads venus de Meta. Dans ce second cas, il faut une sortie dans
+    `effetsDuChangementEtape` sans `lead.metaLeadgenId` ou hors source Meta, avec son test, puis retoucher la ligne
+    de la politique et `SUIVI.md` § 1 ;
+  - **fixer une durée de conservation des événements du site** (`EvenementSite` n'est jamais purgé ; la politique dit
+    « sans durée maximale fixée à ce jour »). Il faudra ensuite une purge périodique au CRM (`enregistrerTravailPeriodique`)
+    et la durée écrite dans la politique ;
+  - faire porter `utm_source=meta` (ou `fb`, `ig`) aux liens des publicités, pour que la famille Meta les reconnaisse.
+- **Turnstile dans le simulateur** : il se charge dès l'écran des matières et du résultat, sans geste. C'est dit dans
+  la politique et dans `SUIVI.md` § 11. Pour le passer « au premier geste », il faudrait `actif` sur ces écrans, avec
+  un jeton prêt avant `generer()` : c'est un changement du simulateur, hors partie 6.
+- `npm audit` : 13 alertes dans les dépendances de développement (anciennes dépendances de `@lhci/cli`) ; en production,
+  3 modérées déjà là (`resend` → `svix`).
+
+### Vérifié par l'orchestrateur (30/09)
+- CRM 822/822 + build ; site lint, 246/246, build ; 0 appel ntfy réel.
+- Lighthouse mobile local (build de production, `NEXT_PUBLIC_SANS_EVENEMENTS=1`), six pages : performance 89 à 93
+  (79 à 81 avant la mission), accessibilité 100, bonnes pratiques 96 à 100, SEO 100, CLS 0, LCP 2,8 à 3,6 s, TBT 90 à
+  210 ms. Retouches : `<picture>` plafonné à 960 px sur téléphone (`plafonnerSrcset`, `MEDIA_TELEPHONE`), deux
+  préchargements de l'ouverture (téléphone / écran large), priorité haute sur l'« après » (élément LCP). Le reste du
+  LCP est le « Render Delay » (2,5 s) : évaluation du socle React / Next avant la peinture, sous processeur ralenti.
+- Cible 0,95 / LCP 2 s non atteinte : `lighthouserc.json` bloque sur un plancher (performance 0,85, LCP 4 s, TBT
+  400 ms) ; accessibilité, bonnes pratiques, SEO et CLS au niveau de la cible (docs/SUIVI.md § seuils).

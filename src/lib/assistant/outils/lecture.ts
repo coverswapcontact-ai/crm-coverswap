@@ -26,6 +26,7 @@ import { listerSimulationsDossier } from "@/lib/simulations/dossier";
 import { calculerAlertes } from "@/lib/synthese/alertes";
 import { calculerSynthese } from "@/lib/synthese/calcul";
 import { etatAvisGoogle } from "@/lib/site/avis-google";
+import { texteEntonnoirParFamille } from "@/lib/site/familles-source";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import { lireConsignes, regleDuJour, sectionProtocole } from "../consignes";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
@@ -313,10 +314,15 @@ export const outilMailsATraiter = definirOutil({
   },
 });
 
+/** Le bloc « Entonnoir du site par source » de la synthèse : vide s'il n'y a eu aucune visite. */
+export function ligneEntonnoirSite(lignes: string[]): string {
+  return lignes.length ? `Entonnoir du site par source (parcours ; entre parenthèses, l'étape facultative) :\n${lignes.join("\n")}` : "";
+}
+
 export const outilSynthese = definirOutil({
   nom: "synthese",
   titre: "Synthèse d'une période",
-  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours). La même synthèse que l'écran Synthèse du CRM. Pour des analyses détaillées, préférer les outils « manager_… ».",
+  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). La même synthèse que l'écran Synthèse du CRM. Pour des analyses détaillées, préférer les outils « manager_… ».",
   niveau: "LECTURE",
   schema: schemaPeriode,
   executer: async (entree) => {
@@ -330,8 +336,10 @@ export const outilSynthese = definirOutil({
       `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${pluriel(c.activite.signatures, "signature")} (${format.euros(c.activite.montantSigne)}), ${pluriel(c.activite.facturesEmises, "facture")} (${format.euros(c.activite.montantFacture)}), ${pluriel(c.activite.pertes, "perte")}.`,
       s.finances.encaisse === null ? `Encaissé : paramètres manquants (${s.finances.parametresManquants.join(", ")}).` : `Encaissé ${format.euros(s.finances.encaisse)}, dépenses ${format.euros(s.finances.depenses)}${s.finances.margeBrute !== null ? `, marge brute ${format.euros(s.finances.margeBrute)}` : ""}${s.finances.panierMoyenSigne !== null ? `, panier moyen signé ${format.euros(s.finances.panierMoyenSigne)}` : ""}. En cours de règlement : ${format.euros(s.finances.encours.total)}.`,
       c.pertes.parMotif.length ? `Pertes par motif : ${c.pertes.parMotif.map((p) => `${p.libelle} ${p.valeur}`).join(", ")}.` : "",
+      // Mission 16 (partie 6) : une ligne par famille de source (calculée à la lecture, sans requête de plus).
+      ligneEntonnoirSite(s.site?.entonnoir ? texteEntonnoirParFamille(s.site.entonnoir) : []),
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients }, liens: [lien("Synthèse", `/synthese?du=${periode.du}&au=${periode.au}`)] };
+    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients, entonnoirSite: s.site?.entonnoir ?? null }, liens: [lien("Synthèse", `/synthese?du=${periode.du}&au=${periode.au}`)] };
   },
 });
 

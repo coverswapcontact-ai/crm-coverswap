@@ -12,7 +12,8 @@ import type { SyntheseSite } from "@/lib/site/evenements";
 // 2 : ajout de agent.mails (les instantanés en version 1 n'en ont pas).
 // 3 : ajout de commercial.entrants (absent des instantanés en version 2 ou moins).
 // 4 : ajout de site (audience et entonnoir du site, absent des instantanés en version 3 ou moins).
-export const VERSION_SYNTHESE = 4;
+// 5 : ajout de site.entonnoir (l'entonnoir du site par famille de source, mission 16 partie 6 ; absent en version 4 ou moins).
+export const VERSION_SYNTHESE = 5;
 
 export type Repartition = { cle: string; libelle: string; valeur: number };
 

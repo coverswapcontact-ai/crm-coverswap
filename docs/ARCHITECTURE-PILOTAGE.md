@@ -1984,6 +1984,18 @@ en français : `recherche-teintes.ts`, même logique côté site dans `src/lib/r
   photo → génération → rendu vu → estimation vue → contact ou rappel), l'estimation étant FACULTATIVE
   (sans abandons ; le contact se compte parmi les rendus vus). Doublons : `nomNormalise` garde chaque mot
   une fois (un prénom recopié en nom reste un prénom seul, jamais un doublon probable).
+- **Entonnoir par source** (mission 16, partie 6, `lib/site/familles-source.ts`, pur, réexporté par
+  `site/evenements.ts`) : `familleSource(source)` range la source d'une visite (`utm_source[/medium]` ou
+  domaine référent, premier segment découpé en mots) en Meta (`meta`, `fb`, `facebook`, `ig`,
+  `instagram`, `msg`), recherche (`google`, `bing`, `duckduckgo`, `qwant`, `ecosia`, `yahoo`), direct
+  (vide) ou autre (nom gardé). Calculée à la LECTURE : rien n'est réécrit dans `EvenementSite`. Un parcours
+  prend la famille de sa première source non vide (`familleDesParcours`, lecture par date croissante) ;
+  `calculerEntonnoirParFamille` rend l'entonnoir global, les quatre entonnoirs de famille (leur somme =
+  le global) et les huit premières sources « autres ». `entonnoirSite(7)` (Leads → « Sur le site cette
+  semaine », sélecteur Toutes · Meta · Recherche · Direct) et `syntheseSite` (`site.entonnoir`,
+  `VERSION_SYNTHESE` 5) le rendent ; outils `synthese` (une ligne par famille) et `voir_publicite` (la
+  ligne Meta des 7 derniers jours). Le site ne dépose plus aucun traceur tiers (GTM, GA4, pixel Meta,
+  Clarity, Vercel Analytics retirés) : les conversions Meta passent par l'API Conversions du CRM.
 - **Pour ChatGPT** : prompt de la bibliothèque rempli (désignation « Image 1 / Image 2 », une
   section par zone avec nom, référence, couleur mesurée, motif, sens de pose, finition, méthode du
   film, verrous, contrôle final, `{{direction_artistique}}`), planche PNG (grands échantillons

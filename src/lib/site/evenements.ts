@@ -1,4 +1,8 @@
 import prisma from "@/lib/prisma";
+import { FAMILLES_SOURCE_SITE, familleDesParcours, type FamilleSourceSite } from "./familles-source";
+
+// Mission 16 (partie 6) : la famille d'une source (Meta, recherche, direct, autre), calculée à la lecture. Module pur à part : l'écran Leads (client) l'importe sans la base.
+export { FAMILLES_SOURCE_SITE, LIBELLES_FAMILLE_SOURCE_SITE, familleDesParcours, familleSource, type FamilleSourceSite } from "./familles-source";
 
 /**
  * Événements de parcours envoyés par le site : sans donnée personnelle, un
@@ -96,6 +100,8 @@ export type SyntheseSite = {
   tauxCompletionSimulateur: number | null;
   /** Parcours ayant vu un résultat et demandé un devis, en pourcentage. */
   tauxDevisApresResultat: number | null;
+  /** Mission 16 (partie 6) : l'entonnoir de la période, global et par famille de source (absent des instantanés d'avant la version 5). */
+  entonnoir?: EntonnoirSite;
 };
 
 const libelleSource = (cle: string) => (cle === "direct" ? "Accès direct / inconnu" : cle);
@@ -108,6 +114,8 @@ export async function syntheseSite(du: string, au: string): Promise<SyntheseSite
   const evenements = await prisma.evenementSite.findMany({
     where: { createdAt: { gte: new Date(du), lte: new Date(`${au}T23:59:59.999Z`) } },
     select: { parcoursId: true, type: true, page: true, source: true },
+    // Par date : la famille d'un parcours est celle de sa première source (mission 16, partie 6).
+    orderBy: { createdAt: "asc" },
   });
   const parcours = new Set(evenements.map((e) => e.parcoursId));
   const parType = TYPES_EVENEMENT_SITE.filter((type) => !TYPE_CANONIQUE[type]).map((type) => {
@@ -154,7 +162,14 @@ export async function syntheseSite(du: string, au: string): Promise<SyntheseSite
     parPage,
     tauxCompletionSimulateur: pct([...lancees].filter((p) => resultats.has(p)).length, lancees.size),
     tauxDevisApresResultat: pct([...resultats].filter((p) => devis.has(p)).length, resultats.size),
+    entonnoir: calculerEntonnoirParFamille(evenements, joursDeLaPeriode(du, au)),
   };
+}
+
+/** Le nombre de jours d'une période (bornes incluses), au moins 1. */
+function joursDeLaPeriode(du: string, au: string): number {
+  const jours = Math.round((new Date(`${au}T00:00:00Z`).getTime() - new Date(`${du}T00:00:00Z`).getTime()) / 86_400_000) + 1;
+  return Number.isFinite(jours) && jours > 0 ? jours : 1;
 }
 
 /* ── Entonnoir du simulateur (mission 15, partie 4 ; mission 16, partie 4) ───────────────── */
@@ -185,7 +200,14 @@ export type EtapeEntonnoir = {
   /** Étape qu'on peut sauter (l'estimation) : l'étape suivante se compte sans elle. */
   facultative?: true;
 };
-export type EntonnoirSite = { jours: number; etapes: EtapeEntonnoir[] };
+export type EntonnoirSite = {
+  jours: number;
+  etapes: EtapeEntonnoir[];
+  /** Mission 16 (partie 6) : le même entonnoir pour chaque famille de source (un parcours dans une seule famille). */
+  parFamille?: Record<FamilleSourceSite, EtapeEntonnoir[]>;
+  /** Les sources de la famille « autre », nom gardé, comptées en parcours (les huit premières). */
+  autresSources?: { nom: string; parcours: number }[];
+};
 
 /**
  * L'entonnoir emboîté : un parcours compte à une étape s'il l'a atteinte ET
@@ -194,7 +216,7 @@ export type EntonnoirSite = { jours: number; etapes: EtapeEntonnoir[] };
  * compte parmi les parcours de l'étape d'avant, sans abandons, et ne sert pas
  * d'étape précédente à la suivante. Pur : testable sans base.
  */
-export function calculerEntonnoir(evenements: { parcoursId: string; type: string }[], jours = 7): EntonnoirSite {
+export function calculerEntonnoir(evenements: readonly { parcoursId: string; type: string }[], jours = 7): EntonnoirSite {
   const parType = new Map<string, Set<string>>();
   for (const e of evenements) {
     if (!parType.has(e.type)) parType.set(e.type, new Set());
@@ -215,10 +237,37 @@ export function calculerEntonnoir(evenements: { parcoursId: string; type: string
   return { jours, etapes };
 }
 
-/** L'entonnoir des `jours` derniers jours (rubrique « Sur le site cette semaine »). */
+/** Les sources « autres » gardées par leur nom dans l'entonnoir (les plus fréquentes). */
+export const AUTRES_SOURCES_MAX = 8;
+
+/**
+ * Mission 16 (partie 6) : l'entonnoir global ET par famille de source (Meta, recherche, direct, autre). Chaque parcours
+ * est rangé dans la famille de sa première source non vide (`familleDesParcours` : les événements sont supposés dans
+ * l'ordre chronologique), puis chaque famille a son entonnoir emboîté, calculé comme le global : la somme des familles
+ * redonne le global, étape par étape. Rien de rétroactif : la famille se calcule à la lecture. Pur : testable sans base.
+ */
+export function calculerEntonnoirParFamille(evenements: readonly { parcoursId: string; type: string; source?: string | null }[], jours = 7): EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">> {
+  const familles = familleDesParcours(evenements);
+  const parFamille = Object.fromEntries(
+    FAMILLES_SOURCE_SITE.map((famille) => [famille, calculerEntonnoir(evenements.filter((e) => familles.get(e.parcoursId)?.famille === famille), jours).etapes])
+  ) as Record<FamilleSourceSite, EtapeEntonnoir[]>;
+  const comptes = new Map<string, number>();
+  for (const f of familles.values()) if (f.famille === "autre") comptes.set(f.nom, (comptes.get(f.nom) ?? 0) + 1);
+  const autresSources = [...comptes.entries()]
+    .map(([nom, parcours]) => ({ nom, parcours }))
+    .sort((a, b) => b.parcours - a.parcours || a.nom.localeCompare(b.nom, "fr"))
+    .slice(0, AUTRES_SOURCES_MAX);
+  return { ...calculerEntonnoir(evenements, jours), parFamille, autresSources };
+}
+
+/** L'entonnoir des `jours` derniers jours (rubrique « Sur le site cette semaine »), global et par famille de source. */
 export async function entonnoirSite(jours = 7, maintenant: Date = new Date()): Promise<EntonnoirSite> {
   const depuis = new Date(maintenant.getTime() - jours * 24 * 60 * 60_000);
   const types = ETAPES_ENTONNOIR.flatMap((e) => [...e.types]);
-  const evenements = await prisma.evenementSite.findMany({ where: { createdAt: { gte: depuis }, type: { in: types } }, select: { parcoursId: true, type: true } });
-  return calculerEntonnoir(evenements, jours);
+  const evenements = await prisma.evenementSite.findMany({
+    where: { createdAt: { gte: depuis }, type: { in: types } },
+    select: { parcoursId: true, type: true, source: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return calculerEntonnoirParFamille(evenements, jours);
 }

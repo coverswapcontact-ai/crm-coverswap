@@ -3724,3 +3724,251 @@ jusqu'à 12,08 $ si chaque rendu V2 demande une seconde tentative.
 - Images du banc effacées après 30 jours (ligne, score et prompt gardés) : même règle que le site, à confirmer.
 - Essai sur un vrai iPhone : HEIC réel, pincer-zoom, appareil photo, zone sûre (pas de simulateur iOS ici).
 - Toujours en attente : API Google Calendar, connecteur Claude (80 outils), jeton Meta, dépôts privés.
+
+## Mission 16 — Le site coverswap.fr : un tunnel de vente épuré, haut de gamme (30/09/2026)
+
+Énoncé de Lucas (29/09 au soir) : « moins de choses, mieux montrées, et toujours un seul geste à faire ». Le site
+reprend la direction artistique, les jetons et les composants du simulateur (mission 15) ; six pages (accueil,
+simulateur, matières, réalisations, comment ça marche, pro), quatre entrées de menu, tunnel accueil → simulateur →
+rendu → estimation → devis → espace ouvert → appel ; images d'ambiance générées (12 au plus, étiquetées), avis
+Google seulement par l'API, Lighthouse mobile ≥ 95. Ordre : socle → images → accueil → tunnel → autres pages →
+performance et mesure. Méthode : chaque partie implémentée puis relue sous trois angles et corrigée, vérifiée
+(lint, tests, build, essai à 390 × 660), commitée, déployée (CRM d'abord quand il est touché), section ci-dessous.
+Préparation (hors dépôt) : cartographie, brief, six conceptions.
+
+## Mission 16, partie 1 — Le socle : thème clair partout, composants communs, en-tête et pied (30/09)
+
+Énoncé § 1 (direction artistique), § 2 (menu et pied), § 6 (rendu serveur, pas de bibliothèque d'animation), § 8. Le
+thème clair de la mission 15 devient celui de tout le site ; le thème sombre disparaît (jetons, classes, composants).
+Le site garde toutes ses adresses : aucune redirection créée (parties 4-5), trois pages de transition ajoutées pour les
+entrées du menu. Le CRM n'est pas touché. Aucun appel OpenAI, aucune image générée, aucun serveur ni build lancé.
+Relue par trois relecteurs (27 constats, 21 distincts) : tous vérifiés dans le code, tous corrigés (voir « Relecture »).
+
+### CRM
+- Rien (la partie 1 ne touche que le site). `src/proxy.ts` : garde locale, non touchée.
+
+### Site
+- **Jetons et thème** (`src/app/globals.css`, 190 lignes) : plus de `--color-noir`, `--color-rouge*`, `--color-gris-*`,
+  d'animations `@theme` (`fade-in`, `slide-*`, `count-up`, `pulse` redéfini — celui de Tailwind reste), `ctaPulse`,
+  `slideUpFade`, `borderGlow` / `.glow-border`, `.glass-card`, `btn-primary` / `btn-secondary`, `.reveal*`, `.text-rouge`,
+  `@utility text-balance` (Tailwind l'a). Les règles de `[data-theme="simulation"]` et `html:has([data-page="simulateur"])`
+  sont devenues les règles de base : `html { color-scheme: light; scroll-behavior: auto }`, `body` fond + encre,
+  `::selection` encre, focus `3px solid var(--color-encre)` (a, button, input, select, textarea, summary, [tabindex]),
+  barre de défilement claire, `prefers-reduced-motion` global (transitions ≤ 0,01 ms). L'attribut `data-theme="simulation"`
+  reste accepté et ne change plus rien. Nouveau jeton **`--color-blanc: #ffffff`** (texte posé sur l'encre ou le sombre →
+  `text-blanc`). Typographie dans `:root` (Tailwind n'accepte pas de media query dans `@theme`) : `--titre-1` 34 px /
+  48 px ≥ 768, `--titre-2` 26 / 32 px, `--texte` 17 px, `--texte-2` 15 px, `--surtitre` 13 px ; `--espace-5` = 64 px /
+  96 px ≥ 768 (inutilisé avant). Classes `titre-1`, `titre-2`, `texte`, `texte-2`, `surtitre` (`@layer components`,
+  `text-wrap: balance` sur les titres, capitales + 0,06 em seulement au surtitre). `section-padding` (`--espace-5`,
+  gouttière 16 / 24 px) et `container-custom` (`max-w-6xl`) gardés, réécrits sur les jetons. `lueur-attente` gardée.
+- **`viewport.themeColor`** : `#F5F4F1` (valeur de `--color-fond`) une seule fois dans `layout.tsx` ; retiré de
+  `/simulateur` (qui garde `viewportFit: "cover"`) et de `/desinscription` ; `/e/[jeton]` garde le sien (espace inchangé).
+- **Composants communs** (`src/components/simulation/`) :
+  - `Bouton.tsx` : `classesBouton(variante, plein)` exporté (refactor pur, rendu identique) + type `VarianteBouton` ;
+    **plus de « use client »** (composant partagé, `useId` marche des deux côtés) pour que `classesBouton` reste
+    appelable par les composants serveur.
+  - `Lien.tsx` : `Lien` = le bouton en `next/link` (`principal | secondaire | discret`, `plein`, 48 px), serveur.
+  - `Section.tsx` : `Section({ id, surtitre, titre (h2 titre-2), intro (texte-2), large (max-w-6xl / 3xl), fond
+    (fond | fond-2), className })`, `aria-labelledby` sur le titre.
+  - `Photo.tsx` : `<picture>` AVIF + WebP + JPEG d'après `src/lib/images-manifeste.ts`, `width` / `height`, `alt`,
+    `loading` / `fetchPriority` selon `priorite`, `sizes` par défaut `(min-width: 1024px) 50vw, 100vw`, ratio réservé sur
+    `fond-2`, `etiquette` « Ambiance » | « Simulation ». Type en union : `nom` (manifeste), OU `src` + `largeur` /
+    `hauteur`, OU `src` + `ratio` (une `src` sans rapport ne compile plus : le cadre aurait 0 px). Nom absent du
+    manifeste → place de repli `4 / 3` visible ; sans rapport du tout, l'image reste dans le flux.
+  - `src/lib/images-manifeste.ts` : `MANIFESTE_IMAGES` (vide, format de la partie 2 : `{ [nom]: { largeur, hauteur,
+    largeurs } }`), `DOSSIER_IMAGES = "/images/prep"`, `sourcesPhoto(nom, manifeste?)` (null si inconnu, y compris un
+    nom hérité d'`Object` ; `src` = la plus grande largeur ≤ 960).
+  - `BoutonColle.tsx` (client) : extrait de l'écran des matières ; `fixed`, `env(safe-area-inset-bottom)`, fond `fond`
+    opaque ; `mobileSeulement` (masqué ≥ 768), `cibles` (ids : masqué tant que l'une est visible, masqué au départ,
+    `IntersectionObserver`). La réserve `RESERVE_BOUTON_COLLE` (`pb-28`) / `RESERVE_BOUTON_COLLE_MOBILE` vit dans
+    **`reserve-bouton-colle.ts`** (sans « use client » : une page serveur des parties 3-5 peut l'importer ; exportée
+    d'un module client, elle y deviendrait une référence client, pas une chaîne). `EcranMatieres` l'importe de là.
+  - `Etiquette.tsx` : LA pastille sur image (« Simulation », « Ambiance », « Avant », « Après »), au dessin des
+    pastilles du curseur de la mission 15 (12,5 px, `rounded-[4px]`, sans ombre) ; tons `clair` (blanc 85 %, encre, par
+    défaut) et `sombre` (encre 70 %, blanc). `AvantApres` et `Photo` la rendent : un seul dessin.
+  - `AvantApres.tsx` : `altAvant` facultatif (défaut « Votre pièce aujourd'hui ») pour une réalisation publiée ; avec
+    `ratio`, l'image « après » remplit le cadre comme l'« avant » (`absolute inset-0 object-cover`) : une photo d'un
+    autre format est recadrée pareil des deux côtés (avant : l'après était coupé en bas, l'avant centré). Le simulateur
+    passe le rapport réel du rendu (rendu identique) ; l'espace ne passe pas de rapport (inchangé).
+  - `historique-feuilles.ts` (nouveau, sans React) : la pile des feuilles et le geste retour, extraits de `Feuille.tsx`
+    à l'identique (`entrerFeuille(fermer)` → la fonction de fermeture), plus **`apresHistorique(rappel)`** : lance
+    `rappel` une fois le `history.go(-n)` d'une fermeture fait (après son `popstate`), tout de suite si rien n'est en
+    cours ; filet d'une seconde si le `popstate` ne vient pas.
+  - `Feuille.tsx` : `useRetourNavigateur` passe par `entrerFeuille` (même comportement) ; nouveau **`useLiensDeFeuille
+    (ouverte, fermer)`** pour les liens posés dans une feuille : au clic simple, `preventDefault`, la feuille se ferme
+    (page déverrouillée à sa position), puis `router.push` dans `apresHistorique`. Clic du milieu / Ctrl / Cmd : le
+    navigateur fait comme d'habitude.
+- **Navigation** `src/lib/navigation.ts` (nouveau) : `ENTREES_MENU` (Matières, Réalisations, Comment ça marche, Pro),
+  `LIEN_SIMULER`, `LIEN_CONTACT`, `LIEN_ESPACE_CLIENT` (`/contact#espace`), `LIEN_ZONES`, `LIENS_PIED` : UNE liste lue
+  par l'en-tête, le menu du téléphone et le pied (plus aucune adresse du menu en dur dans ces trois fichiers).
+- **En-tête** `src/components/EnteteSite.tsx` (serveur, remplace `Header.tsx`) : premier arrêt clavier = le lien
+  d'évitement **« Aller au contenu »** → `#main-content` (hors écran, visible au focus, encre, 44 px) ; logo
+  (`Illustrations.Logo`, nom accessible = « CoverSwap » visible, plus d'`aria-label`), à partir de 768 px Matières ·
+  Réalisations · Comment ça marche · Pro + `Lien` « Simuler » → `/simulateur` **en secondaire** ; `sticky top-0`, 60 px,
+  `border-b border-trait`, sans ombre ni flou ni sous-menu. Mobile : « Simuler » + `MenuMobile.tsx` (client, bouton
+  « Menu » 44 px → `Feuille` avec les 4 entrées et Contact ; liens par `useLiensDeFeuille`). `EnteteSite compact` =
+  l'ancien en-tête du simulateur (logo + « Accueil », dans le flux, zone sûre, sans lien d'évitement comme avant) ;
+  `EnteteSimulateur` le rend. `HorsSimulateur` masque toujours l'en-tête du site sur `/simulateur`.
+- **Pied** `src/components/PiedDePage.tsx` (serveur, remplace `Footer.tsx`) : « Une question ? » (texte 17 px
+  semibold) + téléphone (`tel:`) + e-mail (`mailto:`) depuis `ENTREPRISE` ; `LIENS_PIED` (Contact, Espace client, les 4
+  entrées, Zones d'intervention), Instagram / Facebook / TikTok en texte ; © année, Mentions légales, Politique de
+  confidentialité, CGV, « Gérer les cookies » (`BoutonCookies`). Fond `fond-2`, aucun dégradé ni capitale.
+- **Gabarit** `layout.tsx` : `EnteteSite` / `PiedDePage`, `WhatsAppButton` flottant retiré, script `html.js` (reveal)
+  et `suppressHydrationWarning` retirés, `body` `bg-fond text-encre`.
+- **Pages de transition** (textes existants repris tels quels, canonical et Open Graph propres — titre, description,
+  adresse, `og-image.jpg` —, pas encore au sitemap) : `/matieres` (en-tête + `CatalogueClient` dans une `Section` large,
+  textes de `/revetements`) ; `/comment-ca-marche` (`CommentCaSePasse` + `QuestionsFrequentes`, extraits de l'accueil
+  dans `src/components/SectionsCommentCaMarche.tsx`, l'accueil les importe ; puis **« Pour aller plus loin »** : les 7
+  guides `/blog/[slug]`, depuis `data/blog-articles`) ; `/pro` (`ContenuPrestation` avec la prestation
+  « professionnel » : « Demander un devis » → `/contact` en principal, « Simuler sur ma photo » en secondaire).
+  `src/components/ContenuPrestation.tsx` = le gabarit de `/prestations/[slug]` extrait (Service, FAQ, HowTo, fil
+  d'Ariane inchangés) ; `/prestations/[slug]` le rend. Son dernier appel dit le geste du bouton principal : devis en
+  premier (`/pro`, vitrages) → « Recevoir un devis détaillé » + « Envoyez vos photos et vos mesures… » ; sinon
+  « Voir le résultat sur votre propre photo » (texte d'avant).
+- **Passage au clair, page par page** (les réécritures viennent aux parties 3-5) : accueil (ouverture texte provisoire
+  sur `fond-2` : titre et phrase existants, `Lien` « Simuler ma cuisine » → `/simulateur?projet=cuisine`, plus de
+  `preload` du poster), `HomeClient` (module m15 inchangé dans sa logique, habillé par `Section`), réalisations,
+  prestations (index + gabarit), devis (emojis retirés), contact (carte `id="espace"` « Votre espace client » ajoutée,
+  coordonnées et horaires lus dans `ENTREPRISE`), revêtements, blog + guides, zones + 8 pages locales (emojis retirés,
+  JSON-LD inchangé), légales (h2 en `titre-2`), 404, désinscription. `<main>` imbriqués → `div`. `text-white` →
+  `text-blanc` aussi dans `simulation/*` et l'écran du simulateur (rendu identique).
+- **Composants sombres** : supprimés `Header`, `Footer`, `HeroVideo`, `ScrollReveal`, `TextureBackground`,
+  `WhatsAppButton`. `CookieBanner` clair, sans styled-jsx, « Tout refuser » / « Tout accepter » de même poids
+  (secondaires) + « Personnaliser » / « Enregistrer mes choix » discrets. `DevisForm` : champs `CHAMP` du simulateur,
+  `Bouton` (occupé / raison « Photos en préparation… »), `Turnstile theme="light"` (défaut de `Turnstile` passé à
+  `light`), bouton « Retirer la photo » visible 44 px, lien catalogue → `/matieres`, zone photos « Ajoutez vos photos
+  (jusqu'à 4) » qui accepte aussi le dépôt d'un fichier (`onDrop` ; avant, un fichier glissé ouvrait l'image et
+  faisait quitter la page), « Demande envoyée » en `titre-2`. `CatalogueClient` : familles de `lib/familles-matieres`
+  (celles du simulateur, plus de liste locale ni de descriptions), comptes calculés, pastilles `aria-pressed` collées
+  sous l'en-tête (`top-[60px]`), **`?famille=` appliqué** (lu par `useSyncExternalStore` : rendu serveur « Tout », la
+  famille juste après l'hydratation, sans `useSearchParams` ni Suspense qui rendraient tout le catalogue côté client ;
+  inconnue → « Tout »), recherche `CHAMP` en `type="text"` + `inputMode="search"` (une seule croix « Effacer »), carte
+  nom + référence + famille, **fiche dans la `Feuille` commune** (Échap, geste retour, page verrouillée ; focus rendu à
+  la carte à la fermeture ; « Demander un devis avec cette référence » par `useLiensDeFeuille`) à la place de la
+  modale maison, en-tête déplacé dans les pages. `BlogClient` : les vraies catégories (`Array.from(new Set(...))`),
+  `<img>` dimensionnées, `alt=""` (le titre est lu dans le h2 ; idem l'image sous le h1 d'un guide).
+  `ImageReference` : tuile de repli unie `fond-2`. `Realisations` : `Section` + `AvantApres` (`ratio="4 / 3"`,
+  `sansOutils`), titre de carte 17 px, note « Note : n sur 5 » en texte. `CaseConsentement` : un seul rendu clair
+  (`clair` accepté, sans effet). `Breadcrumb` recoloré, liens de 44 px de haut (`mb-8` → `mb-2`, même encombrement).
+  `Desinscription` : `Logo` et `Bouton plein` communs (occupé « Un instant… »), carte `rayon-md` + trait.
+- **Paquet** : `next-seo` retiré (`package.json` + `package-lock.json`, importé nulle part) ; `browserslist`
+  `["chrome 111", "edge 111", "firefox 111", "safari 16.4"]` ; `tsconfig` `target` `ES2022`.
+- **Images de marque** : `scripts/generate-assets.mjs` réécrit en clair (fond `#F5F4F1`, encre `#1A1A1A`, accent
+  `#CC0000`, sans ombre ni dégradé) et lancé (local, sans coût) : `public/logo.png` 512 × 512 (12 Ko), `public/og-image.jpg`
+  1200 × 630 (36 Ko, « CoverSwap — Votre cuisine, transformée en une journée. »), `logo.svg` / `og-image.svg` à côté.
+- **Doc** : `docs/SUIVI.md` (`whatsapp_clicked` n'est plus émis depuis le retrait du bouton flottant) ; commentaire de
+  `lib/analytics.ts` aligné.
+- **Tests** (78, dont 38 nouveaux) : `src/components/simulation/lien.test.ts` 5/5 (`Bouton` et `Lien` rendent les classes
+  de `classesBouton` en principal et secondaire, `plein` + classe en plus, ≥ 44 px sur les trois variantes, aucune
+  couleur hors jetons) ; `src/lib/images-manifeste.test.ts` 4/4 ; `src/app/theme.test.ts` 5/5 (aucun jeton sombre /
+  `backdrop-blur` / `glass-card`, `body` fond + encre, tailles de titre, `themeColor` = jeton de fond une seule fois ;
+  aucun `text-white`, `bg-noir`, `text-gris-`, `bg-rouge`, emoji ou drapeau dans les `.tsx` hors `components/espace/` ;
+  les six composants sombres ne reviennent pas) ; **`src/components/simulation/historique-feuilles.test.ts` 6/6** (faux
+  `history`, `popstate` au tour suivant : ouverte = une entrée avec l'état de Next ; fermée par un bouton = entrée
+  rendue ; **un lien de la feuille navigue APRÈS le retour, historique final [A, B] sans entrée fantôme** ; geste
+  retour ; adresse déjà changée = rien défait ; deux feuilles = un seul `go(-2)`) ;
+  **`src/components/simulation/composants.test.ts` 9/9** (`Photo` : rapport réservé avec `src` + dimensions ou `ratio`,
+  repli `4 / 3` pour un nom inconnu, étiquette = `Etiquette` ; `AvantApres` : avec rapport les deux images en
+  `object-cover`, sans rapport l'après en hauteur naturelle, pastilles = `Etiquette` au dessin m15 ; réserve du bouton
+  collé = chaînes) ; **`src/lib/navigation.test.ts` 6/6** (4 entrées dans l'ordre, pied complet, aucune adresse du menu
+  en dur dans en-tête / menu / pied, espace client absent du menu, liens du menu par `useLiensDeFeuille`, lien
+  d'évitement → `#main-content`) ; **`src/lib/familles-matieres.test.ts` 3/3** (toute référence du catalogue a sa
+  famille, `?famille=` vide / inconnu / `constructor` refusé, libellés du simulateur).
+
+### Relecture (trois relecteurs, 21 constats distincts, tous réels, tous corrigés)
+- Menu du téléphone : `onClick={fermer}` sur les liens → le `history.go(-1)` différé de la feuille arrivait pendant la
+  navigation de Next, qui l'abandonnait au `popstate` (`ACTION_RESTORE` marque l'action en cours `discarded`,
+  `app-router-instance.js`) — ou, navigation déjà validée, une entrée fantôme restait. → `apresHistorique` +
+  `useLiensDeFeuille` (fermer, attendre le retour, puis `router.push`), testé.
+- Lien d'évitement disparu avec `Header.tsx` → remis dans `EnteteSite`.
+- `/blog` et les 7 guides orphelins → liés depuis `/comment-ca-marche` (« Pour aller plus loin ») ; l'index `/blog` est
+  lié par chaque guide.
+- `?famille=` ignoré par le catalogue → appliqué.
+- Familles en double dans `CatalogueClient` (« Couleur » / « Couleurs ») → `lib/familles-matieres`, réexportées par
+  `FeuilleCatalogue`.
+- Entrées du menu écrites trois fois → `lib/navigation`.
+- « Espace client » au menu du téléphone contre l'énoncé § 5 → retiré (voir Décisions).
+- `/comment-ca-marche` et `/matieres` sans Open Graph (héritaient de l'accueil) → Open Graph propre.
+- Réserve du bouton collé exportée d'un module client → `reserve-bouton-colle.ts`.
+- Carte de réalisation : après coupé en bas, avant centré → `AvantApres` avec `ratio` en `object-cover` des deux côtés.
+- Deux boutons principaux au premier écran (en-tête + ouverture) → « Simuler » de l'en-tête en secondaire.
+- Dernier appel de `/pro` : texte de simulation sous un bouton « Demander un devis » → texte selon le bouton principal.
+- Tailles de titre hors jetons (pied 20 px, h2 légaux 20 px) → texte 17 px au pied, `titre-2` aux h2 légaux (et titre
+  de carte de réalisation 17 px, « Demande envoyée » `titre-2`).
+- Fil d'Ariane : liens de 20 px → 44 px.
+- Recherche du catalogue en `type="search"` : deux croix → `type="text"` + `inputMode="search"`.
+- Fiche du catalogue : modale maison `aria-modal` sans focus → `Feuille` commune + focus rendu à la carte.
+- « Cliquez ou glissez » sans dépôt géré (le fichier ouvert faisait quitter la page) → dépôt géré, libellé neutre.
+- Images des guides : `alt` = titre déjà lu → `alt=""`.
+- Désinscription : bouton et logo redessinés → `Bouton` et `Logo` communs.
+- Pastilles « Avant / Après » ≠ `Etiquette` → une seule `Etiquette`, au dessin m15, rendue par `AvantApres`.
+- `Photo` avec `src` sans dimensions : cadre de 0 px → type en union + repli.
+
+### Décisions
+- **Un seul bouton** : `classesBouton` vit dans `Bouton.tsx`, qui perd « use client » (sinon la fonction serait une
+  référence client inappelable côté serveur).
+- **`text-blanc` plutôt que `text-white`** partout hors espace (jeton `--color-blanc`, même `#fff`) : le test « aucun
+  `text-white` hors espace » couvre aussi `simulation/` et le simulateur ; rendu identique.
+- **Bouton collé opaque** (`bg-fond`) : l'ancien `bg-fond/95 backdrop-blur-sm` de l'écran des matières était du verre ;
+  seule différence visuelle du simulateur, imperceptible.
+- **Espace client : écart à la conception, l'énoncé prime.** La conception § 3 le mettait au menu du téléphone ;
+  l'énoncé § 5 dit « lien pied de page et mails, pas au menu » : retiré du menu (Contact y reste, l'en-tête n'en a pas
+  d'autre sur mobile). `/e` n'a pas d'index → le pied mène à `/contact#espace` ; la carte `id="espace"` est posée dès
+  maintenant sur `/contact` (sinon l'ancre ne mène à rien), la partie 4 la reprend.
+- **« Simuler » de l'en-tête en secondaire : écart à la conception** (« le bouton principal Simuler »). Règle de
+  l'énoncé : un seul bouton principal par écran ; celui de la page (« Simuler ma cuisine », « Demander un devis ») l'est.
+- **Liens dans une feuille** : fermer d'abord, naviguer après le retour d'historique (`useLiensDeFeuille`), plutôt que
+  désactiver l'historique du menu (le geste retour du téléphone continue de fermer le menu, comme les autres feuilles)
+  ou fermer après la navigation (la feuille aurait rendu à la nouvelle page la position de défilement de l'ancienne).
+- **Pastilles** : `Etiquette` prend le dessin des pastilles du curseur m15 (et non l'inverse) pour que le simulateur et
+  l'espace ne changent pas ; « Simulation » / « Ambiance » en 12,5 px sur blanc 85 %, pas en surtitre capitales.
+- **Pages de transition** plutôt que des redirections : `/matieres`, `/comment-ca-marche`, `/pro` existent, les anciennes
+  adresses restent en ligne (doublons de contenu assumés quelques jours ; canonical propre à chacune). Le `FAQSchema`
+  de la FAQ générale est sur `/` ET `/comment-ca-marche` jusqu'à ce que la partie 3 retire la FAQ de l'accueil.
+- **Deux tailles de titre** : h1 `titre-1`, h2 `titre-2` (pages légales comprises) ; h3, titres de carte et « Une
+  question ? » du pied à la taille du texte (15-17 px semibold).
+- **Lien d'évitement** : sur l'en-tête du site seulement ; la variante compacte du simulateur n'en avait pas (deux
+  arrêts : logo, « Accueil »), elle reste inchangée.
+- **`browserslist` : écart à la conception.** `["defaults and fully supports es6-module", "not dead"]` se résout en
+  Chrome 109, UC 15.5, QQ 14.9, KaiOS 3 (plus de transpilation, pas moins) ; retenu : la liste moderne documentée par
+  Next (`node_modules/next/dist/docs/03-architecture/supported-browsers.md`), qui est aussi son défaut. Le « legacy
+  JavaScript » de Lighthouse vient donc probablement des polyfills de Next : à mesurer par l'orchestrateur.
+- **Retirés (non SEO, rien à reprendre)** : slogan d'en-tête « Rénovation adhésive premium » ; bande rouge du pied
+  (« Prêt à transformer votre intérieur ? »), phrase de marque, colonnes Prestations / Liens utiles / 8 zones (toutes
+  atteignables par `/prestations` et `/zones`) ; carte de France décorative de `/contact` ; bloc « Restez inspiré » des
+  guides (un champ e-mail et un bouton qui n'envoyaient rien) ; photos de fond (`TextureBackground`) des en-têtes de
+  prestations, zones, catalogue et guides (la photo du guide reste dans l'article) ; bouton secondaire « Demander un
+  devis » et soulignement rouge de l'ouverture de l'accueil ; icônes colorées et emojis ; descriptions des familles du
+  catalogue (plus affichées nulle part).
+- Liens internes repointés vers `/matieres` (accueil, formulaire, guides, zones) ; `/devis`, `/prestations`,
+  `/revetements`, `/blog` gardent leurs liens jusqu'aux 301 (parties 4-5).
+
+### Vérifié
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 (aucune erreur, pas même le cache `.next/types`) ; `npm test`
+  **78/78** (dont 38 nouveaux). `node scripts/generate-assets.mjs` : logo et image de partage relus à l'œil.
+- CRM : non touché (`git status` : `src/proxy.ts` seul, garde locale).
+- Pas lancé (orchestrateur) : serveur, build, Lighthouse, captures 390 × 660.
+
+### Reste / à savoir
+- À regarder au build / en local à 390 × 660 (surtout en `next dev`, sans préchargement) : le menu du téléphone
+  (chaque entrée navigue, un seul « Retour » ramène à la page d'avant, le geste retour ferme le menu), la fiche du
+  catalogue (« Demander un devis avec cette référence » → `/contact?ref=…`), l'en-tête collant, le lien d'évitement
+  (Tab au chargement), le pied, l'ancre `/contact#espace`, la barre des familles collée sous l'en-tête (`top-[60px]`)
+  et `/matieres?famille=bois` (pastille « Bois » active après l'hydratation), l'ouverture provisoire.
+- `Feuille` (m15) donne le focus à la feuille mais ne l'y retient pas (Tab peut sortir vers la page masquée) et ne le
+  rend pas à l'ouvreur : corrigé localement pour la fiche du catalogue, pas dans `Feuille` (partagée avec le simulateur
+  et l'espace, hors partie 1).
+- `sitemap.ts` et `llms.txt` ne citent pas encore `/matieres`, `/comment-ca-marche`, `/pro` ; aucune 301 créée
+  (`/revetements`, `/prestations/professionnel`, `/blog`, `/devis`, `/prestations` : parties 4-5, avec leur test).
+- `/blog` (index) n'est plus lié par le menu ni le pied : seulement par les guides (et le sitemap) jusqu'à sa 301 ;
+  les guides sont liés depuis `/comment-ca-marche`.
+- `public/videos/*` (plus importées) et les fonds Unsplash inutilisés restent dans le dépôt : la partie 2 trie.
+- `whatsapp_clicked` n'a plus d'émetteur : la partie 3 pose `WHATSAPP_CLIQUE` (CRM d'abord).
+- GTM, Vercel Analytics et le bandeau cookies sont toujours montés (partie 6 tranche).
+
+### Vérifié par l'orchestrateur (30/09)
+- Site : lint 0, 78/78 (test de l'historique des feuilles rendu stable sous charge : attente d'une condition au lieu
+  de 20 ms fixes), build. Essai `next dev` à 390 × 660 : thème clair partout, rien ne déborde ; menu du téléphone →
+  « Matières » navigue, une seule entrée d'historique, un retour ramène à l'accueil, corps déverrouillé ;
+  `/matieres?famille=bois` ouvre sur Bois (267) ; `/pro` ; `/contact#espace`. Commit site `91754ea`, Vercel 09:49
+  UTC ; toutes les adresses en 200 (dont `/blog`, `/devis`, `/revetements`, pas encore redirigées).

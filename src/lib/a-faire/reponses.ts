@@ -181,6 +181,14 @@ const propositionDe = (raccourci: Record<string, unknown>, donnees: Record<strin
  * réponse, SMS de relance…) n'est que REJETÉE — « Fait » : déjà fait autrement ; « Pas à faire » : inutile — et le
  * reste des effets (fil archivé, messages lus) s'applique comme sans proposition.
  */
+/** Une proposition déjà décidée ailleurs (validée par l'outil MCP avant la réponse, ou dans « À valider ») : rien à mettre en file. */
+async function sansPropositionsDecidees(effets: Effet[]): Promise<Effet[]> {
+  const ids = effets.flatMap((e) => (e.genre === "PROPOSITION" ? [e.propositionId] : []));
+  if (!ids.length) return effets;
+  const enAttente = new Set((await prisma.proposition.findMany({ where: { id: { in: ids }, statut: "EN_ATTENTE" }, select: { id: true } })).map((p) => p.id));
+  return effets.filter((e) => e.genre !== "PROPOSITION" || enAttente.has(e.propositionId));
+}
+
 function effetsDe(tache: TacheAFaire, decision: Decision): Effet[] {
   const raccourci = lireObjet(tache.raccourci);
   const donnees = lireObjet(tache.donnees);
@@ -502,7 +510,7 @@ export async function repondreTache(id: string, entree: EntreeReponse, maintenan
       break;
     }
   }
-  const { ligne, effet } = await enregistrerReponse(tache, colonnes, effetsDe(tache, decision), acteur, maintenant);
+  const { ligne, effet } = await enregistrerReponse(tache, colonnes, await sansPropositionsDecidees(effetsDe(tache, decision)), acteur, maintenant);
   const regle = decision.reponse === "PAS_A_FAIRE" && decision.raison ? await proposerRegleSiBesoin(type, decision.raison, maintenant) : null;
   await signalerChangementTaches();
   return { tache: versVue(ligne), effet: effet ? { cle: effet.cle, apres: effet.apres.toISOString() } : null, regle };

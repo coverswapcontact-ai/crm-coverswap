@@ -271,8 +271,8 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
         </div>
       ) : null}
 
-      {/* Mission 17 (partie B) : les tuiles et les barres par catégorie sont parties dans l'Analytique (onglet Argent) ;
-          restent le travail — ce qui attend un chantier ou un justificatif — la liste et la saisie. */}
+      {/* Mission 17 (partie B) : les chiffres (total et répartition par catégorie de la période) sont dans l'Analytique,
+          onglet Argent, « Dépenses par catégorie » ; restent le travail — ce qui attend un chantier ou un justificatif — la liste et la saisie. */}
       {aRattacher > 0 || sansJustificatif > 0 ? (
         <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#F5B454]">
           <AlertTriangle size={14} aria-hidden className="shrink-0" />

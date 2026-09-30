@@ -45,6 +45,18 @@ function largeurAxe(lignes: Ligne[], series: Serie[], format: Format): number {
   return Math.max(28, Math.round(graduation(max, format).length * 6.6) + 10);
 }
 
+/** Libellés courts de la légende au téléphone (maquette : « Meta », « Site »), par clé de série. */
+export const LIBELLES_COURTS_SERIE: Record<string, string> = {
+  meta: "Meta",
+  "google-ads": "Google Ads",
+  seo: "SEO",
+  "fiche-google": "Fiche",
+  ia: "IA",
+  reseaux: "Réseaux",
+  direct: "Direct",
+  autre: "Autres",
+};
+
 function Legende({ series, compact }: { series: Serie[]; compact?: boolean }) {
   return (
     <ul className={cn("flex flex-wrap items-center text-[#D1D5DB]", compact ? "gap-x-4 gap-y-1 text-[12px]" : "gap-x-[18px] gap-y-1 text-[13px]")}>
@@ -61,7 +73,7 @@ function Legende({ series, compact }: { series: Serie[]; compact?: boolean }) {
             }
             aria-hidden
           />
-          {serie.libelle}
+          {compact ? (LIBELLES_COURTS_SERIE[serie.cle] ?? serie.libelle) : serie.libelle}
         </li>
       ))}
     </ul>

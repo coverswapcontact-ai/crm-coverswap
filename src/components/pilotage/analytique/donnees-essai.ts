@@ -128,6 +128,14 @@ export const ENSEMBLE_ESSAI: EcranEnsemble = {
     ],
     points: CAMPAGNE.map((jour, i) => ({ jour, valeurs: { meta: LEADS_META[i], site: LEADS_SITE[i], mail: LEADS_MAIL[i] } })),
   },
+  courbeDevis: {
+    titre: "Devis par jour et par source",
+    series: [
+      { cle: "meta", libelle: "Pub Meta", couleur: "#5DCAA5" },
+      { cle: "seo", libelle: "SEO", couleur: "#7AA7FF" },
+    ],
+    points: JOURS.map((jour, i) => ({ jour, valeurs: { meta: i === 24 || i === 28 ? 1 : 0, seo: i === 27 || i === 29 ? 1 : 0 } })),
+  },
   tunnel: {
     etapes: [
       { cle: "visites", libelle: "Visites", valeur: 812, tauxPassage: null, source: "SITE" },
@@ -137,7 +145,7 @@ export const ENSEMBLE_ESSAI: EcranEnsemble = {
       { cle: "joints", libelle: "Joints", valeur: 17, tauxPassage: 17 / 27, source: "CRM" },
       { cle: "devis", libelle: "Devis envoyés", valeur: 4, tauxPassage: 4 / 17, source: "CRM" },
       { cle: "signes", libelle: "Signés", valeur: 0, tauxPassage: 0, source: "CRM" },
-      { cle: "encaisse", libelle: "Encaissés", valeur: 0, tauxPassage: null, source: "CRM" },
+      { cle: "encaisses", libelle: "Encaissés", valeur: 0, tauxPassage: null, source: "CRM" },
     ],
     perteMax: { de: "joints", vers: "devis", libelle: "joint → devis", perdus: 13 },
   },
@@ -416,7 +424,33 @@ export const SITE_ESSAI: EcranSite = {
     ],
     perteMax: { de: "visites", vers: "simulationLancee", libelle: "visite → simulation", perdus: 764 },
   },
+  simulateur: [
+    { famille: "toutes", etapes: etapesSimulateur([812, 71, 55, 48, 30, 22, 17]) },
+    { famille: "meta", etapes: etapesSimulateur([288, 41, 33, 30, 19, 14, 11]) },
+    { famille: "seo", etapes: etapesSimulateur([214, 17, 13, 11, 7, 5, 4]) },
+    { famille: "direct", etapes: etapesSimulateur([198, 9, 6, 5, 3, 2, 1]) },
+  ],
 };
+
+/** Les sept étapes du simulateur ; l'estimation est facultative (on peut la sauter) : ses abandons ne comptent pas. */
+function etapesSimulateur(parcours: number[]): EcranSite["simulateur"][number]["etapes"] {
+  const cles = [
+    ["visite", "Visite"],
+    ["piece", "Pièce choisie"],
+    ["photo", "Photo envoyée"],
+    ["generation", "Génération lancée"],
+    ["resultat", "Résultat vu"],
+    ["estimation", "Estimation vue"],
+    ["contact", "Coordonnées laissées"],
+  ] as const;
+  return cles.map(([cle, libelle], i) => ({
+    cle,
+    libelle,
+    parcours: parcours[i],
+    abandons: i === 0 || cle === "estimation" ? null : cle === "contact" ? parcours[4] - parcours[6] : parcours[i - 1] - parcours[i],
+    facultative: cle === "estimation" || undefined,
+  }));
+}
 
 /* ── Argent ───────────────────────────────────────────────────────────── */
 
@@ -451,7 +485,38 @@ export const ARGENT_ESSAI: EcranArgent = {
     { dossierId: "d5", client: "Sophie Garnier", numero: "D-2026-047", montant: 1020, envoyeLe: "2026-09-29", relances: 0 },
     { dossierId: "d6", client: "Marc Delorme", numero: "D-2026-048", montant: 880, envoyeLe: "2026-09-29", relances: 0 },
   ],
-  fiscal: { franchiseTva: { plafond: 37500, atteint: 21480, ratio: 21480 / 37500 }, urssaf: { taux: 0.212, estime: 426 } },
+  fiscal: {
+    seuils: [
+      { cle: "SEUIL_FRANCHISE_TVA", libelle: "Franchise en base de TVA", plafond: 37500, atteint: 21480, projection: 28640, ratio: 21480 / 37500 },
+      { cle: "SEUIL_FRANCHISE_TVA_MAJORE", libelle: "Franchise de TVA, seuil majoré", plafond: 41250, atteint: 21480, projection: 28640, ratio: 21480 / 41250 },
+      { cle: "PLAFOND_MICRO_ENTREPRISE", libelle: "Plafond de la micro-entreprise", plafond: 83600, atteint: 21480, projection: 28640, ratio: 21480 / 83600 },
+    ],
+    urssaf: {
+      aDeclarer: {
+        libelle: "3e trimestre 2026",
+        base: 8540,
+        montant: 1811,
+        echeance: "31/10/2026",
+        detail: [
+          { libelle: "Cotisations sociales · 21,2 %", montant: 1810 },
+          { libelle: "Formation professionnelle · 0,3 %", montant: 26 },
+        ],
+      },
+      enCours: { libelle: "4e trimestre 2026", base: 0, montant: 0 },
+    },
+    parametresManquants: [],
+  },
+  depensesParCategorie: [
+    { categorie: "MATIERE", libelle: "Matière", montant: 412, nombre: 5 },
+    { categorie: "PUBLICITE", libelle: "Publicité", montant: 201, nombre: 1 },
+    { categorie: "DEPLACEMENT", libelle: "Déplacements", montant: 118, nombre: 4 },
+    { categorie: "OUTILLAGE", libelle: "Outillage", montant: 64, nombre: 2 },
+  ],
+  clientsParSource: [
+    { source: "META_ADS", libelle: "Pub Meta", clients: 3, signes: 0, montantSigne: 0 },
+    { source: "SITE", libelle: "Site", clients: 2, signes: 1, montantSigne: 1480 },
+    { source: "RECOMMANDATION", libelle: "Recommandation", clients: 1, signes: 1, montantSigne: 1000 },
+  ],
 };
 
 export const ECRANS_ESSAI: Record<OngletAnalytique, EcranAnalytique> = {

@@ -76,7 +76,7 @@ export default function ListeClients({
 
   const affiches = filtresActifs || page > 1 ? clients : initial.clients;
   const totalAffiche = filtresActifs || page > 1 ? total : initial.total;
-  // Mission 17 (partie B) : « D'où viennent les clients » est parti dans l'Analytique (qualité par source) ; reste le total.
+  // Mission 17 (partie B) : « D'où viennent les clients » (clients, signés, montant signé par source) est dans l'Analytique, onglet Argent ; reste le total.
   const totalClients = initial.total;
 
   async function chercherDoublons() {

@@ -3,7 +3,7 @@
  * insécables avant « € » et « % »), comparaison à la période précédente (flèche, pourcentage, couleur du sens
  * FAVORABLE de l'indicateur, jamais de rouge) et dates des axes. Pur : importable par les composants et les tests.
  */
-import type { Evolution, Format } from "@/lib/analytique/types";
+import type { Evolution, Format, Periode } from "@/lib/analytique/types";
 
 /** Espace insécable (avant « € », « % », « : »). */
 export const INSECABLE = " ";
@@ -172,4 +172,22 @@ export function pointsSparkline(serie: readonly number[], largeur = 160, hauteur
       return `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`;
     })
     .join(" ");
+}
+
+/** « sur 30 j », « ce mois-ci », « sur 12 mois », « du 01/09 au 15/09 ». */
+export function surLaPeriode(periode: Periode): string {
+  switch (periode.cle) {
+    case "7j":
+      return "sur 7 j";
+    case "30j":
+      return "sur 30 j";
+    case "90j":
+      return "sur 90 j";
+    case "mois":
+      return "ce mois-ci";
+    case "12m":
+      return "sur 12 mois";
+    default:
+      return periode.libelle;
+  }
 }

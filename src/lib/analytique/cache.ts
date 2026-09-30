@@ -4,16 +4,17 @@ import { enregistrerTravailPeriodique } from "@/lib/taches/registre";
 import { alertesAnalytique } from "./alertes";
 import { etatsDesSources } from "./appuis";
 import { ECRANS } from "./ecrans";
-import { memoiser, viderCacheAnalytique } from "./memoire";
+import { memoiser, tamponAnalytique, viderCacheAnalytique } from "./memoire";
 import { PERIODES_STANDARD, resoudrePeriode } from "./periode";
 import { resumeEnregistre } from "./resume";
 import { ONGLETS_ANALYTIQUE, type Alerte, type EcranAnalytique, type Famille, type OngletAnalytique, type Periode } from "./types";
 
 /**
  * Mission 17 (partie B) — l'écran servi : `ecranAnalytique(onglet, période, options, maintenant)`.
- * 1. Cache mémoire de 5 minutes (clé : onglet, période, filtre) — deux ouvertures rapprochées ne recalculent pas.
+ * 1. Cache mémoire d'une minute (clé : onglet, période, filtre) — deux ouvertures rapprochées ne recalculent pas.
  * 2. Périodes standard sans filtre : l'instantané du jour (InstantaneAnalytique « onglet:période:AAAA-MM-JJ »), s'il a
- *    moins d'une heure ; sinon recalcul, et l'instantané est réécrit (upsert).
+ *    moins d'une heure ET porte le tampon courant (memoire.ts : toute écriture qui change les chiffres, synchronisation
+ *    réussie comprise, le périme) ; sinon recalcul, et l'instantané est réécrit (upsert) avec le tampon du calcul.
  * 3. Pré-calcul quotidien : le travail périodique « analytique-du-jour » passe, à partir de 7 h (heure de Paris), une
  *    fois par jour : il calcule les cinq onglets sur les cinq périodes standard et le résumé du jour.
  */
@@ -27,11 +28,16 @@ export type OptionsAnalytique = { source?: Famille | null; recalculer?: boolean 
 export const cleInstantane = (onglet: OngletAnalytique, periode: Periode) => `${onglet}:${periode.cle}:${periode.au}`;
 const estStandard = (periode: Periode) => periode.cle !== "libre";
 
+/** Le contenu d'un instantané : l'écran et le tampon de son calcul (retiré à la lecture). */
+type Enregistre = { tampon: string; ecran: EcranAnalytique };
+
 async function calculerEtEnregistrer(onglet: OngletAnalytique, periode: Periode, source: Famille | null, maintenant: Date): Promise<EcranAnalytique> {
+  // Le tampon est pris AVANT le calcul : une écriture survenue pendant le calcul périme aussitôt l'instantané.
+  const tampon = tamponAnalytique();
   const ecran = await ECRANS[onglet](periode, { source }, maintenant);
   if (estStandard(periode) && !source) {
     const cle = cleInstantane(onglet, periode);
-    const contenu = JSON.stringify(ecran);
+    const contenu = JSON.stringify({ tampon, ecran } satisfies Enregistre);
     await prisma.instantaneAnalytique.upsert({ where: { cle }, create: { cle, calculeLe: maintenant, contenu }, update: { calculeLe: maintenant, contenu } }).catch((erreur) => console.error("[analytique] instantané non écrit :", erreur));
   }
   return ecran;
@@ -50,7 +56,8 @@ export async function ecranAnalytique(onglet: OngletAnalytique, periode: Periode
       const instantane = await prisma.instantaneAnalytique.findUnique({ where: { cle: cleInstantane(onglet, periode) } });
       if (instantane && maintenant.getTime() - instantane.calculeLe.getTime() < DUREE_INSTANTANE_MS && maintenant.getTime() >= instantane.calculeLe.getTime()) {
         try {
-          return JSON.parse(instantane.contenu) as EcranAnalytique;
+          const lu = JSON.parse(instantane.contenu) as Partial<Enregistre>;
+          if (lu.tampon === tamponAnalytique() && lu.ecran) return lu.ecran;
         } catch {
           // instantané illisible : recalcul
         }

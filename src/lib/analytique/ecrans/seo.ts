@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { doublonDesPages } from "../appuis";
-import { decalerMois, joursDe, periodePrecedente } from "../periode";
+import { decalerJour, decalerMois, joursDe, nombreDeJours } from "../periode";
 import { COULEURS_FAMILLE, type EcranSeo, type EtatSource, type Indicateur, type LigneSeo, type Periode } from "../types";
 import { chiffresDisponibles, etatDe, evolutionDe, indicateur, ratio } from "./commun";
 
@@ -53,15 +53,36 @@ export function opportunitesSeo(requetes: readonly LigneSeo[], avant: ReadonlyMa
   };
 }
 
+type Plage = { du: string; au: string };
+
+/**
+ * Relecture B (point 4) : Google livre ses chiffres avec 2 à 3 jours de retard. Les deux périodes comparées s'arrêtent
+ * donc au DERNIER JOUR PRÉSENT en base (pur) : la période en cours est coupée à ce jour, la précédente prend le même
+ * nombre de jours depuis son début — jamais « 27 jours de données contre 30 ». `jusquau` : le dernier jour lu quand la
+ * période a été coupée (l'écran dit « données jusqu'au … »), sinon null.
+ */
+export function periodesAlignees(periode: Pick<Periode, "du" | "au" | "precedente">, dernierJour: string | null): { actuel: Plage; avant: Plage; jusquau: string | null } {
+  const entiere = { actuel: { du: periode.du, au: periode.au }, avant: { ...periode.precedente }, jusquau: null };
+  if (!dernierJour || dernierJour >= periode.au) return entiere;
+  if (dernierJour < periode.du) return { ...entiere, jusquau: dernierJour };
+  const n = nombreDeJours(periode.du, dernierJour);
+  return { actuel: { du: periode.du, au: dernierJour }, avant: { du: periode.precedente.du, au: decalerJour(periode.precedente.du, n - 1) }, jusquau: dernierJour };
+}
+
+const jourCourt = (jour: string) => `${jour.slice(8, 10)}/${jour.slice(5, 7)}`;
+export const texteJusquau = (jour: string | null | undefined) => (jour ? `données jusqu'au ${jourCourt(jour)} (retard de Google)` : null);
+
 async function lire(periode: Pick<Periode, "du" | "au">): Promise<Ligne[]> {
   return prisma.seoJour.findMany({ where: { jour: { gte: periode.du, lte: periode.au } }, select: { jour: true, dimension: true, cle: true, clics: true, impressions: true, position: true } });
 }
 
 export type ChiffresSeo = { clics: number; impressions: number; position: number | null; parJour: Map<string, Agregat>; requetes: LigneSeo[]; pages: LigneSeo[]; avantRequetes: Map<string, Agregat>; opportunites: ReturnType<typeof opportunitesSeo> };
 
-/** Les chiffres Search Console d'une période (et de la précédente, pour les évolutions). */
-export async function chiffresSeo(periode: Periode): Promise<{ actuel: ChiffresSeo; avant: { clics: number; impressions: number; position: number | null } }> {
-  const [lignes, lignesAvant] = await Promise.all([lire(periode), lire(periodePrecedente(periode))]);
+/** Les chiffres Search Console d'une période (et de la précédente, pour les évolutions), alignés sur le dernier jour livré. */
+export async function chiffresSeo(periode: Pick<Periode, "du" | "au" | "precedente">): Promise<{ actuel: ChiffresSeo; avant: { clics: number; impressions: number; position: number | null }; jusquau: string | null }> {
+  const dernier = await prisma.seoJour.findFirst({ where: { dimension: "TOTAL", jour: { lte: periode.au } }, orderBy: { jour: "desc" }, select: { jour: true } });
+  const plages = periodesAlignees(periode, dernier?.jour ?? null);
+  const [lignes, lignesAvant] = await Promise.all([lire(plages.actuel), lire(plages.avant)]);
   const total = (ls: Ligne[]) => {
     const t = agreger(ls.map((l) => ({ ...l, cle: "" })), "TOTAL").get("");
     return { clics: t?.clics ?? 0, impressions: t?.impressions ?? 0, position: position(t) };
@@ -79,7 +100,7 @@ export async function chiffresSeo(periode: Periode): Promise<{ actuel: ChiffresS
     a.impressions += l.impressions;
     parJour.set(l.jour, a);
   }
-  return { actuel: { ...total(lignes), parJour, requetes, pages, avantRequetes: requetesAvant, opportunites: opportunitesSeo(requetes, requetesAvant) }, avant: total(lignesAvant) };
+  return { actuel: { ...total(lignes), parJour, requetes, pages, avantRequetes: requetesAvant, opportunites: opportunitesSeo(requetes, requetesAvant) }, avant: total(lignesAvant), jusquau: plages.jusquau };
 }
 
 /* ── Fiche Google ────────────────────────────────────────────────────────── */
@@ -89,9 +110,12 @@ export const METRIQUES_INTERACTIONS = ["CALL_CLICKS", "WEBSITE_CLICKS", "BUSINES
 
 export type ChiffresFiche = { vues: number; interactions: number; appels: number; clicsSite: number; itineraires: number; parJour: Map<string, { vues: number; interactions: number }>; avis: { nombre: number | null; note: number | null } };
 
-async function lireFiche(periode: Pick<Periode, "du" | "au">): Promise<ChiffresFiche> {
+async function lireFiche(periode: Pick<Periode, "du" | "au">, auAvis: string = periode.au): Promise<ChiffresFiche> {
   const lignes = await prisma.ficheGoogleJour.findMany({ where: { jour: { gte: periode.du, lte: periode.au } }, select: { jour: true, metrique: true, valeur: true } });
-  const avis = await prisma.ficheGoogleJour.findMany({ where: { jour: { lte: periode.au }, metrique: { in: ["AVIS_NOMBRE", "AVIS_NOTE"] } }, orderBy: { jour: "desc" }, take: 2, select: { metrique: true, valeur: true } });
+  // Relecture B (point 14) : le nombre d'avis et la note, chacun à son dernier jour connu (deux lectures : un jour sans note ne masque plus le nombre).
+  const [avisNombre, avisNote] = await Promise.all(
+    ["AVIS_NOMBRE", "AVIS_NOTE"].map((metrique) => prisma.ficheGoogleJour.findFirst({ where: { jour: { lte: auAvis }, metrique }, orderBy: { jour: "desc" }, select: { valeur: true } })),
+  );
   const parJour = new Map<string, { vues: number; interactions: number }>();
   let vues = 0, interactions = 0, appels = 0, clicsSite = 0, itineraires = 0;
   for (const l of lignes) {
@@ -109,12 +133,16 @@ async function lireFiche(periode: Pick<Periode, "du" | "au">): Promise<ChiffresF
     if (l.metrique === "BUSINESS_DIRECTION_REQUESTS") itineraires += l.valeur;
     parJour.set(l.jour, j);
   }
-  return { vues, interactions, appels, clicsSite, itineraires, parJour, avis: { nombre: avis.find((a) => a.metrique === "AVIS_NOMBRE")?.valeur ?? null, note: avis.find((a) => a.metrique === "AVIS_NOTE")?.valeur ?? null } };
+  return { vues, interactions, appels, clicsSite, itineraires, parJour, avis: { nombre: avisNombre?.valeur ?? null, note: avisNote?.valeur ?? null } };
 }
 
-export async function chiffresFiche(periode: Periode) {
-  const [actuel, avant] = await Promise.all([lireFiche(periode), lireFiche(periodePrecedente(periode))]);
-  return { actuel, avant };
+/** La fiche d'une période et de la précédente, alignées sur le dernier jour livré par Google (hors avis). */
+export async function chiffresFiche(periode: Pick<Periode, "du" | "au" | "precedente">) {
+  const dernier = await prisma.ficheGoogleJour.findFirst({ where: { jour: { lte: periode.au }, metrique: { in: [...METRIQUES_VUES, ...METRIQUES_INTERACTIONS] } }, orderBy: { jour: "desc" }, select: { jour: true } });
+  const plages = periodesAlignees(periode, dernier?.jour ?? null);
+  // Les avis sont notés au jour de la synchronisation (après le dernier jour de métriques) : lus jusqu'à la fin de la période.
+  const [actuel, avant] = await Promise.all([lireFiche(plages.actuel, periode.au), lireFiche(plages.avant, periode.precedente.au)]);
+  return { actuel, avant, jusquau: plages.jusquau };
 }
 
 /** Vues de la fiche par mois (les 6 derniers mois jusqu'à `au`). */
@@ -132,22 +160,22 @@ export async function construireEcranSeo(periode: Periode, options: { etats: Eta
   const jours = joursDe(periode);
   const [seo, fiche] = await Promise.all([scOk ? chiffresSeo(periode) : null, ficheOk ? chiffresFiche(periode) : null]);
   const v = <T>(ok: boolean, valeur: T) => (ok ? valeur : null);
+  const jusquauSeo = texteJusquau(seo?.jusquau);
   const indicateurs: Indicateur[] = [
-    indicateur({ cle: "clics", libelle: "Clics", valeur: v(scOk, seo?.actuel.clics ?? 0), precedente: v(scOk, seo?.avant.clics ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => seo?.actuel.parJour.get(j)?.clics ?? 0), source: "SEARCH_CONSOLE" }),
-    indicateur({ cle: "impressions", libelle: "Affichages", valeur: v(scOk, seo?.actuel.impressions ?? 0), precedente: v(scOk, seo?.avant.impressions ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => seo?.actuel.parJour.get(j)?.impressions ?? 0), source: "SEARCH_CONSOLE" }),
-    indicateur({ cle: "ctr", libelle: "CTR", valeur: seo ? ratio(seo.actuel.clics, seo.actuel.impressions, 4) : null, precedente: seo ? ratio(seo.avant.clics, seo.avant.impressions, 4) : null, format: "pourcent", favorable: "hausse", source: "SEARCH_CONSOLE" }),
-    indicateur({ cle: "position", libelle: "Position moyenne", valeur: seo?.actuel.position ?? null, precedente: seo?.avant.position ?? null, format: "position", favorable: "baisse", source: "SEARCH_CONSOLE" }),
+    indicateur({ cle: "clics", libelle: "Clics", valeur: v(scOk, seo?.actuel.clics ?? 0), precedente: v(scOk, seo?.avant.clics ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => seo?.actuel.parJour.get(j)?.clics ?? 0), source: "SEARCH_CONSOLE", detail: jusquauSeo }),
+    indicateur({ cle: "impressions", libelle: "Affichages", valeur: v(scOk, seo?.actuel.impressions ?? 0), precedente: v(scOk, seo?.avant.impressions ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => seo?.actuel.parJour.get(j)?.impressions ?? 0), source: "SEARCH_CONSOLE", detail: jusquauSeo }),
+    indicateur({ cle: "ctr", libelle: "CTR", valeur: seo ? ratio(seo.actuel.clics, seo.actuel.impressions, 4) : null, precedente: seo ? ratio(seo.avant.clics, seo.avant.impressions, 4) : null, format: "pourcent", favorable: "hausse", source: "SEARCH_CONSOLE", detail: jusquauSeo }),
+    indicateur({ cle: "position", libelle: "Position moyenne", valeur: seo?.actuel.position ?? null, precedente: seo?.avant.position ?? null, format: "position", favorable: "baisse", source: "SEARCH_CONSOLE", detail: jusquauSeo }),
   ];
   const courbe = {
     titre: "Clics et affichages par jour",
+    sousTitre: jusquauSeo ? majuscule(jusquauSeo) : undefined,
     series: [
       { cle: "clics", libelle: "Clics", couleur: COULEURS_FAMILLE.seo },
       { cle: "impressions", libelle: "Affichages", couleur: COULEURS_FAMILLE.direct },
     ],
-    points: seo ? jours.map((jour) => ({ jour, valeurs: { clics: seo.actuel.parJour.get(jour)?.clics ?? 0, impressions: seo.actuel.parJour.get(jour)?.impressions ?? 0 } })) : [],
+    points: seo ? jours.filter((jour) => !seo.jusquau || jour <= seo.jusquau).map((jour) => ({ jour, valeurs: { clics: seo.actuel.parJour.get(jour)?.clics ?? 0, impressions: seo.actuel.parJour.get(jour)?.impressions ?? 0 } })) : [],
   };
-  const f = fiche?.actuel;
-  const fa = fiche?.avant;
   return {
     onglet: "seo",
     periode,
@@ -158,23 +186,35 @@ export async function construireEcranSeo(periode: Periode, options: { etats: Eta
     pages: seo?.actuel.pages.slice(0, 50) ?? [],
     opportunites: seo?.actuel.opportunites ?? { sansClic: [], presquePremierePage: [], enHausse: [] },
     doublonWww: seo ? doublonDesPages(seo.actuel.pages.map((p) => ({ page: p.cle, impressions: p.impressions, clics: p.clics }))) : null,
-    fiche: {
-      indicateurs: [
-        indicateur({ cle: "vues", libelle: "Vues de la fiche", valeur: v(ficheOk, f?.vues ?? 0), precedente: v(ficheOk, fa?.vues ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => f?.parJour.get(j)?.vues ?? 0), source: "FICHE_GOOGLE" }),
-        indicateur({ cle: "interactions", libelle: "Interactions", valeur: v(ficheOk, f?.interactions ?? 0), precedente: v(ficheOk, fa?.interactions ?? 0), format: "nombre", favorable: "hausse", serie: jours.map((j) => f?.parJour.get(j)?.interactions ?? 0), source: "FICHE_GOOGLE" }),
-        indicateur({ cle: "appels", libelle: "Appels", valeur: v(ficheOk, f?.appels ?? 0), precedente: v(ficheOk, fa?.appels ?? 0), format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE" }),
-        indicateur({ cle: "clicsSite", libelle: "Clics vers le site", valeur: v(ficheOk, f?.clicsSite ?? 0), precedente: v(ficheOk, fa?.clicsSite ?? 0), format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE" }),
-        indicateur({ cle: "itineraires", libelle: "Itinéraires", valeur: v(ficheOk, f?.itineraires ?? 0), precedente: v(ficheOk, fa?.itineraires ?? 0), format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE" }),
+    donneesJusquau: { seo: seo?.jusquau ?? null, fiche: fiche?.jusquau ?? null },
+    // Relecture B (écran, point 2) : fiche non branchée ou en attente d'accès → null (l'écran affiche ce qu'il faut faire).
+    fiche: fiche ? blocFiche(fiche, jours) : null,
+  };
+}
+
+const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function blocFiche(fiche: Awaited<ReturnType<typeof chiffresFiche>>, jours: string[]): NonNullable<EcranSeo["fiche"]> {
+  const f = fiche.actuel;
+  const fa = fiche.avant;
+  const detail = texteJusquau(fiche.jusquau);
+  return {
+    indicateurs: [
+      indicateur({ cle: "vues", libelle: "Vues de la fiche", valeur: f.vues, precedente: fa.vues, format: "nombre", favorable: "hausse", serie: jours.map((j) => f.parJour.get(j)?.vues ?? 0), source: "FICHE_GOOGLE", detail }),
+      indicateur({ cle: "interactions", libelle: "Interactions", valeur: f.interactions, precedente: fa.interactions, format: "nombre", favorable: "hausse", serie: jours.map((j) => f.parJour.get(j)?.interactions ?? 0), source: "FICHE_GOOGLE", detail }),
+      indicateur({ cle: "appels", libelle: "Appels", valeur: f.appels, precedente: fa.appels, format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE", detail }),
+      indicateur({ cle: "clicsSite", libelle: "Clics vers le site", valeur: f.clicsSite, precedente: fa.clicsSite, format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE", detail }),
+      indicateur({ cle: "itineraires", libelle: "Itinéraires", valeur: f.itineraires, precedente: fa.itineraires, format: "nombre", favorable: "hausse", source: "FICHE_GOOGLE", detail }),
+    ],
+    courbe: {
+      titre: "Vues et interactions de la fiche",
+      sousTitre: detail ? majuscule(detail) : undefined,
+      series: [
+        { cle: "vues", libelle: "Vues", couleur: COULEURS_FAMILLE["fiche-google"] },
+        { cle: "interactions", libelle: "Interactions", couleur: COULEURS_FAMILLE.meta },
       ],
-      courbe: {
-        titre: "Vues et interactions de la fiche",
-        series: [
-          { cle: "vues", libelle: "Vues", couleur: COULEURS_FAMILLE["fiche-google"] },
-          { cle: "interactions", libelle: "Interactions", couleur: COULEURS_FAMILLE.meta },
-        ],
-        points: f ? jours.map((jour) => ({ jour, valeurs: { vues: f.parJour.get(jour)?.vues ?? 0, interactions: f.parJour.get(jour)?.interactions ?? 0 } })) : [],
-      },
-      avis: f ? f.avis : { nombre: null, note: null },
+      points: jours.filter((jour) => !fiche.jusquau || jour <= fiche.jusquau).map((jour) => ({ jour, valeurs: { vues: f.parJour.get(jour)?.vues ?? 0, interactions: f.parJour.get(jour)?.interactions ?? 0 } })),
     },
+    avis: f.avis,
   };
 }

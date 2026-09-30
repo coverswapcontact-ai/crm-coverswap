@@ -72,12 +72,18 @@ async function appeler<T>(chemin: string, parametres: Record<string, string>): P
   return corps as T;
 }
 
+/** Un appel GET unique à l'API Graph (lecture d'un objet : compte publicitaire, publicité…). */
+export function appelerGraph<T>(chemin: string, parametres: Record<string, string>): Promise<T> {
+  return appeler<T>(chemin, parametres);
+}
+
 /** Une page d'une liste de l'API Graph. */
 type PageGraph<T> = { data?: T[]; paging?: { next?: string; cursors?: { after?: string } } };
 
 /**
  * Mission 17 (partie B) — la variante PAGINÉE : suit `paging.next` jusqu'au bout et rend toutes les lignes. `pagesMax`
- * borne la boucle (une réponse qui renverrait toujours un « next » ne tourne pas sans fin).
+ * borne la boucle (une réponse qui renverrait toujours un « next » ne tourne pas sans fin) : atteinte avec une page
+ * suivante encore annoncée, c'est une ERREUR (jamais une liste tronquée rendue comme complète).
  */
 export async function appelerTout<T>(chemin: string, parametres: Record<string, string>, options: { pagesMax?: number } = {}): Promise<T[]> {
   const pagesMax = options.pagesMax ?? 200;
@@ -86,7 +92,9 @@ export async function appelerTout<T>(chemin: string, parametres: Record<string, 
   for (let n = 1; ; n++) {
     lignes.push(...(page.data ?? []));
     const suivante = page.paging?.next;
-    if (!suivante || n >= pagesMax) break;
+    if (!suivante) break;
+    // Relecture B (point 12) : une liste coupée à la limite de pages donnerait des chiffres faux sans le dire.
+    if (n >= pagesMax) throw new ErreurGraph(`Lecture de ${chemin.split("?")[0]} arrêtée à ${pagesMax} pages sans atteindre la fin : chiffres incomplets, rien n'est compté.`, null, null, null, false);
     // L'adresse « next » porte déjà tous les paramètres (jeton compris) et le curseur.
     page = await appeler<PageGraph<T>>(suivante, {});
   }

@@ -127,7 +127,7 @@ describe("rendu serveur des onglets (jeu d'essai de la maquette du 30/09)", () =
   });
   const sansRouge = (html: string) => assert.doesNotMatch(html, /#(EF4444|F87171|DC2626)/i, "jamais de rouge dans l'Analytique");
 
-  test("Vue d'ensemble : résumé, alertes, six tuiles, tunnel des leads aux signés, cartes, qualité, jauge des 20 %", async () => {
+  test("Vue d'ensemble : résumé, alertes, six tuiles, tunnel des visites aux encaissés, cartes, qualité, jauge des 20 %", async () => {
     const { VueEnsemble } = await import("./VueEnsemble");
     const html = rendre(createElement(VueEnsemble, { ecran: ENSEMBLE_ESSAI }));
     assert.match(html, /Résumé du jour/);
@@ -140,7 +140,28 @@ describe("rendu serveur des onglets (jeu d'essai de la maquette du 30/09)", () =
     assert.match(html, /L&#x27;étape qui perd le plus/);
     assert.match(html, /joint → devis/);
     assert.match(html, /13 personnes jointes n&#x27;ont pas reçu de devis\./);
-    assert.doesNotMatch(html.slice(html.indexOf("Tunnel commercial"), html.indexOf("Publicité Meta")), /Encaissés/, "le tunnel s'arrête aux signés");
+    // Relecture B : le tunnel va des visites aux encaissés (le site replié au téléphone), « Devis envoyés », pas de taux sur Signés.
+    const tunnel = html.slice(html.indexOf("Tunnel commercial"), html.indexOf("Publicité Meta"));
+    assert.match(tunnel, /Encaissés/, "le tunnel va jusqu'aux encaissés");
+    assert.match(tunnel, /data-etape="visites"/);
+    assert.match(tunnel, /data-etape="simulations"/);
+    assert.match(tunnel, /Devis envoyés/);
+    assert.match(tunnel, /Depuis les visites/, "au téléphone, la partie du site se replie");
+    assert.match(tunnel, /Toutes sources, 30 derniers jours/);
+    const signes = tunnel.slice(tunnel.indexOf('data-etape="signes"'), tunnel.indexOf('data-etape="encaisses"'));
+    assert.doesNotMatch(signes, /·/, "pas de taux sur Signés (maquette)");
+    // Courbe : leads par source, et les devis par source d'un geste.
+    assert.match(html, /aria-label="Courbe affichée"/);
+    // Résumé raccourci au téléphone : la première phrase seulement.
+    assert.match(html, /<span class="md:hidden">4 devis pour 45 leads, et aucun signé\.<\/span>/);
+    // Téléphone : l'information grise « Clé secrète Meta » est omise de la carte Alertes.
+    const alertesTel = html.slice(html.lastIndexOf(">Alertes<"));
+    assert.doesNotMatch(alertesTel.slice(0, alertesTel.indexOf("</section>")), /Clé secrète Meta/);
+    // Libellés courts des tuiles au téléphone.
+    assert.match(html, /<span class="md:hidden">Coût \/ lead Meta<\/span>/);
+    assert.match(html, /<span class="md:hidden">Signés<\/span>/);
+    // Outils de l'ancienne Synthèse, en bas.
+    assert.match(html, /id="agent-qualite"/);
     assert.match(html, /Claquement de doigt/);
     assert.match(html, /Garder/);
     assert.match(html, /Google Ads&nbsp;: pas encore branché|Google Ads : pas encore branché/);
@@ -152,6 +173,66 @@ describe("rendu serveur des onglets (jeu d'essai de la maquette du 30/09)", () =
     assert.match(html, /plafond 20/);
     assert.match(html, /Encaissé sur 30 j/);
     sansRouge(html);
+  });
+
+  test("Vue d'ensemble : sous-titre du tunnel avec le filtre, première phrase du résumé", async () => {
+    const { sousTitreTunnel, premierePhrase } = await import("./VueEnsemble");
+    assert.equal(sousTitreTunnel({ filtreSource: null, periode: ENSEMBLE_ESSAI.periode }), "Toutes sources, 30 derniers jours");
+    assert.equal(sousTitreTunnel({ filtreSource: "meta", periode: ENSEMBLE_ESSAI.periode }), "Source Pub Meta, 30 derniers jours");
+    assert.equal(premierePhrase("Le prospect Meta coûte 3,91 €, bien sous tes 5 à 8 €. Jour 9 sur 21 de la campagne."), "Le prospect Meta coûte 3,91 €, bien sous tes 5 à 8 €.");
+    assert.equal(premierePhrase("Relancer les 6 devis en attente : 9 060 € en jeu."), "Relancer les 6 devis en attente : 9 060 € en jeu.");
+  });
+
+  test("Vue d'ensemble : SEO et fiche à null rendent l'état vide (ce qu'il faut faire, Relancer), jamais des zéros", async () => {
+    const { VueEnsemble } = await import("./VueEnsemble");
+    const ecran = {
+      ...ENSEMBLE_ESSAI,
+      sources: ENSEMBLE_ESSAI.sources.map((s) => (s.source === "SEARCH_CONSOLE" ? { ...s, etat: "EN_ECHEC" as const, derniereReussite: "2026-09-28T04:40:00.000Z", erreur: "Jeton refusé.", aFaire: "Vérifier le compte de service." } : s)),
+      seo: null,
+      fiche: null,
+    };
+    const html = rendre(createElement(VueEnsemble, { ecran }));
+    const seo = html.slice(html.indexOf(">SEO Google<"), html.indexOf(">Fiche Google<"));
+    assert.match(seo, /data-etat-source="EN_ECHEC"/);
+    assert.match(seo, /Vérifier le compte de service\./);
+    assert.match(seo, />Relancer</);
+    assert.doesNotMatch(seo, />0</);
+    const fiche = html.slice(html.indexOf(">Fiche Google<"), html.indexOf(">SEO et fiche Google<"));
+    assert.match(fiche, /data-etat-source="EN_ATTENTE_ACCES"/);
+    assert.match(fiche, /Google doit ouvrir l&#x27;accès/);
+    assert.match(fiche, />Relancer</);
+    const tel = html.slice(html.indexOf(">SEO et fiche Google<"), html.indexOf(">Qualité par source<"));
+    assert.match(tel, /data-etat-source="EN_ECHEC"/);
+    assert.match(tel, /data-etat-source="EN_ATTENTE_ACCES"/);
+  });
+
+  test("courbe : les devis quittent la courbe des leads ; au téléphone, deux familles", async () => {
+    const { courbesEnsemble, seriesMasqueesTelephone } = await import("./CourbeEnsemble");
+    const ancienne = { titre: "Leads", series: [...ENSEMBLE_ESSAI.courbeLeads.series, { cle: "devis", libelle: "Devis", couleur: "#F2F3F5" }], points: ENSEMBLE_ESSAI.courbeLeads.points.map((p) => ({ jour: p.jour, valeurs: { ...p.valeurs, devis: 1 } })) };
+    const { leads, devis } = courbesEnsemble(ancienne, null);
+    assert.deepEqual(leads.series.map((s) => s.cle), ["meta", "site", "mail"]);
+    assert.ok(leads.points.every((p) => !("devis" in p.valeurs)));
+    assert.deepEqual(devis?.series.map((s) => s.cle), ["devis"]);
+    assert.equal(courbesEnsemble(ENSEMBLE_ESSAI.courbeLeads, ENSEMBLE_ESSAI.courbeDevis).devis, ENSEMBLE_ESSAI.courbeDevis);
+    assert.deepEqual(seriesMasqueesTelephone(leads), ["mail"]);
+  });
+
+  test("Relancer : le message dit que la synchronisation est mise en file, sans promettre une durée", async () => {
+    const { messageRelance, RELECTURES_MS } = await import("./Relancer");
+    assert.match(messageRelance("META"), /mise en file/);
+    assert.doesNotMatch(messageRelance("META"), /dans une minute/);
+    assert.ok(RELECTURES_MS.length >= 2);
+  });
+
+  test("outils de la Synthèse : les routes /api/synthese existantes", async () => {
+    const { routesSynthese } = await import("./OutilsSynthese");
+    assert.equal(routesSynthese.lecture("2026-09-01", "2026-09-30", false), "/api/synthese?du=2026-09-01&au=2026-09-30");
+    assert.equal(routesSynthese.export("2026-09-01", "2026-09-30", "texte", true), "/api/synthese/export?du=2026-09-01&au=2026-09-30&format=texte&anonyme=1");
+    assert.equal(routesSynthese.export("2026-09-01", "2026-09-30", "json", false), "/api/synthese/export?du=2026-09-01&au=2026-09-30&format=json");
+    assert.equal(routesSynthese.instantanes(), "/api/synthese/instantanes");
+    assert.equal(routesSynthese.instantane("2026-08", true), "/api/synthese/instantanes/2026-08?anonyme=1");
+    const racine = "../../../app/api/synthese";
+    for (const route of ["route", "export/route", "instantanes/route", "instantanes/[mois]/route"]) assert.equal(typeof (await import(`${racine}/${route}`)).GET, "function", route);
   });
 
   test("Vue d'ensemble : une source non branchée rend « — » et ce qu'il faut faire", async () => {
@@ -199,15 +280,49 @@ describe("rendu serveur des onglets (jeu d'essai de la maquette du 30/09)", () =
     assert.doesNotMatch(site.slice(site.indexOf("D&#x27;où viennent les visites"), site.indexOf("ChatGPT et IA")), /chatgpt\.com/, "les assistants IA à part");
     assert.match(site, /Déduit du fuseau horaire/);
     assert.match(site, /De la visite au lead/);
+    // Relecture B : l'entonnoir du simulateur en sept étapes, avec les abandons et le choix de la source.
+    const entonnoir = site.slice(site.indexOf("Entonnoir du simulateur"));
+    assert.equal((entonnoir.match(/data-etape-simulateur="/g) ?? []).length, 7);
+    assert.match(entonnoir, /Pièce choisie/);
+    assert.match(entonnoir, /−741/, "abandons entre la visite et la pièce");
+    assert.match(entonnoir, /aria-label="Source des visites"/);
+    assert.match(entonnoir, /Pub Meta/);
     sansRouge(site);
 
     const argent = rendre(createElement(VueArgent, { ecran: ARGENT_ESSAI }));
     assert.match(argent, /Carnet de commandes/);
     assert.match(argent, new RegExp(`9${FINE}060${NBSP}€`));
     assert.match(argent, /Septembre 2026/);
+    // Relecture B : les outils de Finances (URSSAF à déclarer, trois seuils avec projection), Dépenses, Clients et Synthèse.
     assert.match(argent, /Franchise en base de TVA/);
-    assert.match(argent, /URSSAF estimée/);
+    assert.match(argent, /seuil majoré/);
+    assert.match(argent, /Plafond de la micro-entreprise/);
+    assert.equal((argent.match(/data-seuil="/g) ?? []).length, 3);
+    assert.match(argent, /au 31 décembre/);
+    assert.match(argent, new RegExp(`À déclarer${NBSP}: <span[^>]*>3e trimestre 2026`));
+    assert.match(argent, /Échéance de déclaration : 31\/10\/2026/);
+    assert.match(argent, /Cotisations sociales/);
+    assert.match(argent, /période URSSAF \(pas la période choisie/);
+    assert.doesNotMatch(argent, /data-a-parametrer/);
     assert.match(argent, /href="\/finances"/);
+    assert.match(argent, /Dépenses par catégorie/);
+    assert.match(argent, /Matière/);
+    assert.match(argent, /D&#x27;où viennent les clients/);
+    assert.match(argent, /Recommandation/);
+    assert.match(argent, /Mois figés et export/);
+    assert.match(argent, /href="\/api\/synthese\/export\?du=2026-09-01&amp;au=2026-09-30&amp;format=texte"/);
+    assert.match(argent, /href="\/api\/synthese\/export\?du=2026-09-01&amp;au=2026-09-30&amp;format=json"/);
+    assert.match(argent, /Anonymiser/);
+    assert.match(argent, /Version rédigée/);
+    const aRenseigner = rendre(createElement(VueArgent, { ecran: { ...ARGENT_ESSAI, fiscal: { seuils: [], urssaf: null, parametresManquants: ["TAUX_CFP", "SEUIL_FRANCHISE_TVA", "INCONNU"] } } }));
+    assert.match(aRenseigner, /data-a-parametrer="TAUX_CFP"/);
+    assert.match(aRenseigner, /data-a-parametrer="SEUIL_FRANCHISE_TVA"/);
+    assert.equal((aRenseigner.match(/>Renseigner</g) ?? []).length, 2);
+    // Un écran calculé avant la relecture (instantané) ne casse pas l'onglet.
+    const ancien = { ...ARGENT_ESSAI } as Partial<typeof ARGENT_ESSAI>;
+    delete ancien.depensesParCategorie;
+    delete ancien.clientsParSource;
+    assert.match(rendre(createElement(VueArgent, { ecran: ancien as typeof ARGENT_ESSAI })), /Aucune dépense saisie sur la période/);
     sansRouge(argent);
   });
 });

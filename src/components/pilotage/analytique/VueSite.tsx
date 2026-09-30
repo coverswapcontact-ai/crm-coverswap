@@ -1,11 +1,13 @@
 /**
  * Mission 17 (partie B) — onglet Site (mesure maison sans cookie) : visites, pages vues, taux de simulation et
  * simulation → lead, visites par jour et par source, pages d'entrée, pages vues, sources (les assistants IA à part),
- * appareils, pays (déduit du fuseau, approximation volontaire), et le chemin de la visite au lead.
+ * appareils, pays (déduit du fuseau, approximation volontaire), le chemin de la visite au lead, et l'entonnoir du
+ * simulateur en sept étapes avec les abandons et le choix de la source (repris de l'ancien bloc de Leads).
  */
 import { COULEURS_FAMILLE, LIBELLES_FAMILLE, type EcranSite } from "@/lib/analytique/types";
 import { BarresHorizontales, Carte, EtatVideSource, GrilleTuiles, Pastille, Tableau, TunnelBarres, etatDe } from "./base";
 import { formaterValeur } from "./format";
+import { EntonnoirSimulateur } from "./EntonnoirSimulateur";
 import { CourbeTemps, LegendeCourbe } from "./Graphiques";
 
 const nombre = (valeur: number) => formaterValeur(valeur, "nombre");
@@ -170,9 +172,14 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
         </div>
       </div>
 
-      <Carte titre="De la visite au lead" sousTitre="Visite → simulation lancée → terminée → coordonnées laissées">
-        <TunnelBarres tunnel={ecran.entonnoir} />
-      </Carte>
+      <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
+        <Carte titre="De la visite au lead" sousTitre="Visite → simulation lancée → terminée → coordonnées laissées">
+          <TunnelBarres tunnel={ecran.entonnoir} />
+        </Carte>
+        <Carte id="entonnoir-simulateur" titre="Entonnoir du simulateur" sousTitre="Les sept étapes du parcours, avec les abandons, par source de la visite">
+          <EntonnoirSimulateur simulateur={ecran.simulateur ?? []} />
+        </Carte>
+      </div>
     </>
   );
 }

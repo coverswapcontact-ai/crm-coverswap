@@ -46,10 +46,12 @@ export function alerteTrafic(visites: number | null, avant: number | null): Aler
 
 /** Publicités au coût par lead > 2 × la meilleure, sur au moins 5 leads (pur). */
 export function alertesCoutParLead(pubs: readonly { id: string; nom: string; depense: number | null; leads: number }[]): Alerte[] {
-  const meilleur = meilleurCoutParLead(pubs.map((p) => ({ ...p, devis: 0, signes: 0 })));
+  // Seulement les publicités à dépense positive (relecture B, point 2) : une ligne sans dépense rattachée ne fait pas la « meilleure ».
+  const payees = pubs.filter((p) => p.depense !== null && p.depense > 0);
+  const meilleur = meilleurCoutParLead(payees);
   if (meilleur === null) return [];
-  return pubs
-    .filter((p) => p.depense !== null && p.leads >= LEADS_MINIMUM && p.depense / p.leads > MULTIPLE_COUPE * meilleur)
+  return payees
+    .filter((p) => p.leads >= LEADS_MINIMUM && p.depense! / p.leads > MULTIPLE_COUPE * meilleur)
     .map((p) => ({ cle: `PUBLICITE_CPL:${p.id}`, gravite: "ATTENTION" as const, texte: `« ${p.nom} » : ${eur(p.depense! / p.leads)} par lead, plus de 2 × la meilleure (${eur(meilleur)}), sur ${p.leads} leads`, lien: LIEN("publicite"), source: "META" as const }));
 }
 

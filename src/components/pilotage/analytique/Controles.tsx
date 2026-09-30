@@ -270,8 +270,10 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
           <ul className="flex gap-2 md:gap-1 md:rounded-[10px] md:border md:border-[#2A2D34] md:bg-[#1C1F25] md:p-1">
             {PERIODES_BOUTONS.map((bouton) => {
               const actif = periodeActive === bouton.cle;
+              // Téléphone : « Mois en cours » n'est pas dans la maquette (7 j, 30 j, 90 j, 12 mois, Dates) ; il n'apparaît
+              // que choisi, pour que « Dates » tienne dans les 358 px sans défiler.
               return (
-                <li key={bouton.cle} className="shrink-0">
+                <li key={bouton.cle} className={cn("shrink-0", bouton.cle === "mois" && !actif && "max-md:hidden")}>
                   <LienNavigation
                     href={adresseAnalytique({
                       ...requete,

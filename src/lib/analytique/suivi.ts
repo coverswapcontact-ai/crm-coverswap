@@ -53,8 +53,12 @@ export type BilanSynchro = {
   message?: string;
 };
 
+export type Plage = { du: string; au: string };
+
 export type DetailSuivi = {
   etat?: EtatSuivi;
+  /** Relecture B (point 11) : jours déjà lus avec succès, d'un seul tenant (fusion des passages et des tranches). */
+  couverture?: Plage | null;
   /** Premier échec de la série en cours (ISO), effacé à la réussite suivante. */
   echecDepuis?: string | null;
   du?: string;
@@ -103,9 +107,53 @@ async function ecrire(source: SourceSynchronisee, donnees: { dernierEssaiLe: Dat
   await prisma.sourceAnalytique.upsert({ where: { source }, create: { source, ...data }, update: data });
 }
 
+/**
+ * La plage couverte après un passage (pur) : fusionnée avec l'ancienne quand elles se touchent ou se recouvrent ; sinon
+ * la plus récente des deux gardée (un trou ne se couvre pas par supposition).
+ */
+export function fusionnerCouverture(avant: Plage | null | undefined, lue: Plage | null | undefined): Plage | null {
+  if (!lue || lue.du > lue.au) return avant ?? null;
+  if (!avant) return { du: lue.du, au: lue.au };
+  const touche = lue.du <= jourDecale(avant.au, 1) && lue.au >= jourDecale(avant.du, -1);
+  if (touche) return { du: lue.du < avant.du ? lue.du : avant.du, au: lue.au > avant.au ? lue.au : avant.au };
+  return lue.au > avant.au ? { du: lue.du, au: lue.au } : avant;
+}
+
+/**
+ * Le premier jour à relire (pur) : `cible` tant que la couverture ne remonte pas jusque-là (premier passage, ou premier
+ * passage interrompu) ; la fin de la couverture si un trou la sépare des jours récents ; sinon les `recents` derniers
+ * jours (les chiffres récents sont révisés par le fournisseur).
+ */
+export function debutDeReprise(couverture: Plage | null | undefined, cible: string, jusqua: string, recents: number): string {
+  const recent = jourDecale(jusqua, -recents);
+  if (!couverture || couverture.du > cible) return cible < recent ? cible : recent;
+  if (couverture.au < recent) return couverture.au < cible ? cible : couverture.au;
+  return recent;
+}
+
+/** Une tranche déjà couverte et hors des jours récents n'est pas relue (pur). */
+export const trancheDejaCouverte = (couverture: Plage | null | undefined, tranche: Plage, recent: string) => Boolean(couverture && tranche.du >= couverture.du && tranche.au <= couverture.au && tranche.au < recent);
+
 export async function noterReussite(source: SourceSynchronisee, detail: Omit<DetailSuivi, "etat" | "echecDepuis"> = {}, maintenant: Date = new Date()): Promise<void> {
   const avant = await lireSuivi(source);
-  await ecrire(source, { dernierEssaiLe: maintenant, derniereReussiteLe: maintenant, derniereErreur: null, echecsConsecutifs: 0, detail: { ...avant?.detail, ...detail, etat: "A_JOUR", echecDepuis: null } });
+  const couverture = fusionnerCouverture(avant?.detail.couverture, detail.couverture ?? (detail.du && detail.au ? { du: detail.du, au: detail.au } : null));
+  await ecrire(source, { dernierEssaiLe: maintenant, derniereReussiteLe: maintenant, derniereErreur: null, echecsConsecutifs: 0, detail: { ...avant?.detail, ...detail, couverture, etat: "A_JOUR", echecDepuis: null } });
+}
+
+/**
+ * Une tranche lue (et écrite) au milieu d'un passage : la couverture avance tout de suite, sans toucher à l'état ni
+ * aux dates — un passage interrompu (délai, redémarrage) reprend là où il s'est arrêté au passage suivant.
+ */
+export async function noterProgression(source: SourceSynchronisee, tranche: Plage): Promise<void> {
+  const avant = await lireSuivi(source);
+  const couverture = fusionnerCouverture(avant?.detail.couverture, tranche);
+  const detail = JSON.stringify({ ...avant?.detail, couverture });
+  await prisma.sourceAnalytique.upsert({ where: { source }, create: { source, detail }, update: { detail } });
+}
+
+/** Le passage a-t-il été interrompu (délai de la tâche dépassé) ? Alors on s'arrête proprement, la progression est gardée. */
+export function verifierInterruption(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error("Synchronisation interrompue (délai de la tâche dépassé) : elle reprendra là où elle s'est arrêtée.");
 }
 
 /** Un échec : la dernière réussite est gardée, le premier échec de la série daté (pour « en échec depuis plus de 24 h »). */

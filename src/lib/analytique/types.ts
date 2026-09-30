@@ -165,6 +165,9 @@ export type EcranSeo = EcranCommun & {
   pages: LigneSeo[];
   opportunites: { sansClic: LigneSeo[]; presquePremierePage: LigneSeo[]; enHausse: LigneSeo[] };
   doublonWww: { detecte: boolean; exemples: string[] } | null;
+  /** Relecture B : dernier jour livré par Google quand la période a été coupée à ce jour (« données jusqu'au … »), sinon null. */
+  donneesJusquau?: { seo: string | null; fiche: string | null };
+  /** null : fiche non branchée ou en attente d'accès (l'écran affiche `aFaire` de la source et « Relancer »). */
   fiche: { indicateurs: Indicateur[]; courbe: Courbe; avis: { nombre: number | null; note: number | null } } | null;
 };
 

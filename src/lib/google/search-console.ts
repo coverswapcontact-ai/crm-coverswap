@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { jourParis } from "@/lib/dossiers/dates";
-import { jourDecale, moisDecale, suivreSynchro, type BilanSynchro } from "@/lib/analytique/suivi";
+import { debutDeReprise, jourDecale, lireSuivi, moisDecale, noterProgression, suivreSynchro, trancheDejaCouverte, verifierInterruption, type BilanSynchro } from "@/lib/analytique/suivi";
 import { PORTEES_ANALYTIQUE, appelCompteService, configurationCompteService, emailCompteService } from "./compte-service";
 
 /**
@@ -9,8 +9,8 @@ import { PORTEES_ANALYTIQUE, appelCompteService, configurationCompteService, ema
  *   - dimension date → `SeoJour` TOTAL (clé "") : les totaux justes de la propriété (les requêtes anonymisées manquent
  *     dans le détail ; ne jamais additionner les lignes REQUETE pour un total) ;
  *   - date + query → REQUETE ; date + page → PAGE (adresse complète, hôte compris : sert à `doublonWww`).
- * `rowLimit` 25 000 et `startRow` jusqu'à la dernière page. 16 mois au premier passage (base vide), puis les 5 derniers
- * jours chaque nuit (les données Google arrivent avec 2 à 3 jours de retard) ; écrit par upsert. Les jours sont ceux de
+ * `rowLimit` 25 000 et `startRow` jusqu'à la dernière page. 16 mois au premier passage (repris jusqu'à complétude, d'après
+ * la couverture notée dans SourceAnalytique), puis les 5 derniers jours chaque nuit (les données Google arrivent avec 2 à 3 jours de retard) ; écrit par upsert. Les jours sont ceux de
  * Google (heure du Pacifique).
  *
  * Position : la moyenne rendue par Google pour la ligne ; quand deux lignes tombent sur la même clé (adresse avec
@@ -106,15 +106,21 @@ function tranches(du: string, au: string): { du: string; au: string }[] {
 }
 
 /**
- * Synchronise Search Console (jours inclus). Sans période : 16 mois si aucune ligne n'est encore en base, sinon les
- * 5 derniers jours. Sans compte de service : NON_BRANCHEE, aucun appel. Accès pas encore donné : EN_ATTENTE_ACCES.
+ * Synchronise Search Console (jours inclus). Sans période : relecture B (point 11) — tant que la couverture notée dans
+ * `SourceAnalytique.detail` ne remonte pas à 16 mois, le passage reprend depuis là (les tranches déjà lues sont
+ * sautées, chaque tranche lue fait avancer la couverture : un premier passage interrompu reprend où il s'est arrêté) ;
+ * ensuite, les 5 derniers jours. Sans compte de service : NON_BRANCHEE, aucun appel. Accès pas encore donné :
+ * EN_ATTENTE_ACCES. `signal` : délai de la tâche dépassé → arrêt propre entre deux tranches.
  */
-export async function synchroniserSearchConsole(periode: { depuis?: string; jusqua?: string } = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date } = {}): Promise<BilanSynchro> {
+export async function synchroniserSearchConsole(periode: { depuis?: string; jusqua?: string } = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date; signal?: AbortSignal } = {}): Promise<BilanSynchro> {
   const config = configurationSearchConsole(options.env);
   const aujourdhui = jourParis(options.maintenant ?? new Date());
   const jusqua = periode.jusqua ?? aujourdhui;
-  const premierPassage = !periode.depuis && (await prisma.seoJour.count()) === 0;
-  const depuis = periode.depuis ?? (premierPassage ? moisDecale(jusqua, -MOIS_PREMIER_PASSAGE) : jourDecale(jusqua, -JOURS_PASSAGE_NUIT));
+  const cible = moisDecale(jusqua, -MOIS_PREMIER_PASSAGE);
+  const recent = jourDecale(jusqua, -JOURS_PASSAGE_NUIT);
+  const couverture = config.branchee ? ((await lireSuivi("SEARCH_CONSOLE"))?.detail.couverture ?? null) : null;
+  const depuis = periode.depuis ?? debutDeReprise(couverture, cible, jusqua, JOURS_PASSAGE_NUIT);
+  const premierPassage = !periode.depuis && depuis < recent;
   if (!config.branchee) return { source: "SEARCH_CONSOLE", etat: "NON_BRANCHEE", du: depuis, au: jusqua, lignes: 0, appels: 0, message: config.erreur ?? "GOOGLE_SERVICE_ACCOUNT_JSON absente." };
 
   return suivreSynchro("SEARCH_CONSOLE", { du: depuis, au: jusqua }, async () => {
@@ -122,6 +128,8 @@ export async function synchroniserSearchConsole(periode: { depuis?: string; jusq
     let lignes = 0;
     let appels = 0;
     for (const t of tranches(depuis, jusqua)) {
+      if (!periode.depuis && trancheDejaCouverte(couverture, t, recent)) continue;
+      verifierInterruption(options.signal);
       for (const dimension of ["TOTAL", "REQUETE", "PAGE"] as const) {
         const lu = await interroger(config.site, dimension, t.du, t.au, options.env);
         appels += lu.appels;
@@ -131,6 +139,7 @@ export async function synchroniserSearchConsole(periode: { depuis?: string; jusq
           lignes += 1;
         }
       }
+      await noterProgression("SEARCH_CONSOLE", t);
     }
     return { lignes, appels, detail: { site: config.site, premierPassage } };
   });

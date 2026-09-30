@@ -9,7 +9,8 @@ import { appelSansReponse, issueDesMetadonnees, issueDuContenu } from "@/lib/com
 import { categorieDeChantier, CATEGORIES_DEPENSE } from "@/lib/depenses/constantes";
 import { relancesDuDevis } from "@/lib/relances/service";
 import { lireParametres } from "@/lib/parametres/service";
-import { familleDeLead, type ProvenanceParcours } from "./appuis";
+import { familleDeLead, familleDeSource, type ProvenanceParcours } from "./appuis";
+import { lireSuivi } from "./suivi";
 import { bornes, decalerJour, joursDe, nombreDeJours } from "./periode";
 import type { Famille } from "./types";
 
@@ -19,7 +20,8 @@ import type { Famille } from "./types";
  * Jours de Paris partout (`jourParis`, `bornes`) ; montants additionnés en centimes.
  *
  * - lead : `Lead` créé dans la période, archivés compris (une dépense se juge sur tout ce qu'elle a produit),
- *   doublons fusionnés exclus (archivés « Doublon de … », leur historique a rejoint la fiche conservée) ;
+ *   doublons fusionnés exclus (archivés « Doublon de … », leur historique a rejoint la fiche conservée), leads de test
+ *   exclus (archivés « Test », « essai… », `estLeadEcarte`) ;
  * - lead appelé : au moins un appel dans son historique (échange « appel », événement « appel » d'un de ses dossiers,
  *   note d'appel qui dit quelque chose), quelle qu'en soit l'issue ;
  * - lead joint : au moins un appel ABOUTI (`appelSansReponse` faux : issue autre que « pas de réponse », sinon ni
@@ -62,6 +64,15 @@ export const estJoint = (h: HistoriqueContact): boolean => h.appels.some((a) => 
 
 export const estDoublonFusionne = (lead: { archiveLe: Date | null; archiveMotif: string | null }) => Boolean(lead.archiveLe) && /^Doublon\b/i.test(lead.archiveMotif ?? "");
 
+/**
+ * Relecture B (point 10) : un lead ARCHIVÉ comme test ou essai (« Test », « Contact d'essai Zapier… », « … essais »),
+ * en mot entier, sans casse ni accents — même motif que la reprise de la mission 14 (MOTIF_ECARTE de
+ * base/migrations/mission-14-partie-2.ts) — n'est pas un lead ; un doublon fusionné non plus.
+ */
+export const MOTIF_LEAD_ECARTE = /\b(tests?|essais?|doublons?)\b/;
+const aplatir = (texte: string) => texte.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+export const estLeadEcarte = (lead: { archiveLe: Date | null; archiveMotif: string | null }) => estDoublonFusionne(lead) || (Boolean(lead.archiveLe) && MOTIF_LEAD_ECARTE.test(aplatir(lead.archiveMotif ?? "")));
+
 /* ── Famille d'un dossier ────────────────────────────────────────────────── */
 
 const FAMILLE_CLIENT: Record<string, Famille> = { META_ADS: "meta", RESEAUX_SOCIAUX: "reseaux" };
@@ -71,13 +82,27 @@ function familleDuDossier(d: DossierPourFamille, sourcesParcours: Map<string, Pr
   return FAMILLE_CLIENT[d.client?.source ?? ""] ?? "autre";
 }
 
-/** La première visite connue de chaque parcours du site (famille d'un lead du site sans `canal`). */
+/**
+ * La provenance de chaque parcours du site (famille d'un lead du site sans `canal`) : celle du PREMIER événement dont la
+ * famille n'est pas « direct » (relecture B, point 9 : même règle que `familleDesParcours` de l'entonnoir du site —
+ * un parcours arrivé en direct puis revenu par une publicité est rangé en publicité, partout pareil). Rien de non
+ * direct : pas de provenance (le lead retombe sur sa source).
+ */
 export async function sourcesDesParcours(parcoursIds: readonly (string | null | undefined)[]): Promise<Map<string, ProvenanceParcours>> {
   const ids = [...new Set(parcoursIds.filter((id): id is string => Boolean(id)))];
   if (!ids.length) return new Map();
-  const evenements = await prisma.evenementSite.findMany({ where: { parcoursId: { in: ids }, OR: [{ source: { not: null } }, { referent: { not: null } }, { famille: { not: null } }] }, orderBy: { createdAt: "asc" }, select: { parcoursId: true, source: true, referent: true, famille: true, campagne: true } });
+  const evenements = await prisma.evenementSite.findMany({
+    // Famille calculée à la réception et non directe (`notIn` écarte aussi null), ou ancienne ligne sans famille mais avec une source.
+    where: { parcoursId: { in: ids }, OR: [{ famille: { notIn: ["direct"] } }, { famille: null, OR: [{ source: { not: null } }, { referent: { not: null } }] }] },
+    orderBy: { createdAt: "asc" },
+    select: { parcoursId: true, source: true, referent: true, famille: true, campagne: true },
+  });
   const carte = new Map<string, ProvenanceParcours>();
-  for (const e of evenements) if (!carte.has(e.parcoursId)) carte.set(e.parcoursId, { source: e.source, referent: e.referent, famille: e.famille, campagne: e.campagne });
+  for (const e of evenements) {
+    if (carte.has(e.parcoursId)) continue;
+    const famille = e.famille ?? familleDeSource(e.source, e.referent);
+    if (famille !== "direct") carte.set(e.parcoursId, { source: e.source, referent: e.referent, famille, campagne: e.campagne });
+  }
   return carte;
 }
 
@@ -145,7 +170,7 @@ export async function leadsParIds(ids: readonly string[]): Promise<LeadAnalyse[]
 }
 
 async function analyserLeads(where: Prisma.LeadWhereInput): Promise<LeadAnalyse[]> {
-  const bruts = (await prisma.lead.findMany({ where, select: SELECT_LEAD })).filter((l) => !estDoublonFusionne(l));
+  const bruts = (await prisma.lead.findMany({ where, select: SELECT_LEAD })).filter((l) => !estLeadEcarte(l));
   const parcours = await sourcesDesParcours(bruts.map((l) => l.parcoursId));
   return bruts.map((l): LeadAnalyse => {
     const appels: AppelHistorique[] = [
@@ -227,28 +252,45 @@ export async function signaturesDeLaPeriode(periode: Periode, familleFiltre: Fam
   return toutes.filter((s) => dans(s.jour, periode) && (!familleFiltre || s.famille === familleFiltre));
 }
 
+/**
+ * Le jour de signature d'un dossier (pur ; relecture B, point 1) : le premier accord non retiré ou le premier passage
+ * VERS une étape signée (Signé, Planifié, Chantier, Facturé, Encaissé : un dossier qui saute Signé compte quand même) ;
+ * à défaut, la dernière mise à jour du devis accepté ; à défaut, l'arrivée du dossier (repris d'avant le CRM déjà
+ * signé). Un dossier à une étape signée n'est JAMAIS écarté (même règle que `signe` de la cohorte des leads).
+ */
+export function instantDeSignature(d: { creeLe: Date; accords: readonly Date[]; passages: readonly { vers: string | null; le: Date }[]; devisAcceptes: readonly Date[] }): Date {
+  const signees = ETAPES_SIGNEES as readonly string[];
+  const instants = [...d.accords, ...d.passages.filter((p) => p.vers !== null && signees.includes(p.vers)).map((p) => p.le)].sort((a, b) => a.getTime() - b.getTime());
+  if (instants.length) return instants[0];
+  const accepte = [...d.devisAcceptes].sort((a, b) => a.getTime() - b.getTime())[0];
+  return accepte ?? d.creeLe;
+}
+
 /** Toutes les signatures en vigueur (un dossier signé une fois), datées. */
 export async function toutesLesSignatures(): Promise<Signature[]> {
   const dossiers = await prisma.dossier.findMany({
     where: { archiveLe: null, OR: [{ etape: { in: [...ETAPES_SIGNEES] } }, { accords: { some: { retireLe: null } } }] },
     select: {
       id: true,
+      createdAt: true,
+      ouvertLe: true,
       ...SELECT_FAMILLE,
       accords: { where: { retireLe: null }, orderBy: { createdAt: "asc" }, select: { totalHt: true, createdAt: true } },
       evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, survenuLe: true, createdAt: true } },
-      documents: { where: { type: "DEVIS", archiveLe: null }, select: { id: true, statut: true, totalHt: true, dateEmission: true } },
+      documents: { where: { type: "DEVIS", archiveLe: null }, select: { id: true, statut: true, totalHt: true, dateEmission: true, updatedAt: true } },
     },
   });
   const parcours = await sourcesDesParcours(dossiers.map((d) => d.lead?.parcoursId));
-  return dossiers.flatMap((d): Signature[] => {
-    const passages = d.evenements.map((e) => ({ m: lireMetadataChangementEtape(e.metadata), le: e.survenuLe ?? e.createdAt })).filter((p) => p.m?.vers === "SIGNE");
-    const instants = [...d.accords.map((a) => a.createdAt), ...passages.map((p) => p.le)].sort((a, b) => a.getTime() - b.getTime());
-    if (!instants.length) return [];
+  const signees = ETAPES_SIGNEES as readonly string[];
+  return dossiers.map((d): Signature => {
+    const passages = d.evenements.map((e) => ({ m: lireMetadataChangementEtape(e.metadata), le: e.survenuLe ?? e.createdAt }));
+    const acceptes = d.documents.filter((doc) => doc.statut === "ACCEPTE");
+    const instant = instantDeSignature({ creeLe: d.ouvertLe ?? d.createdAt, accords: d.accords.map((a) => a.createdAt), passages: passages.map((p) => ({ vers: p.m?.vers ?? null, le: p.le })), devisAcceptes: acceptes.map((doc) => doc.updatedAt) });
     const dernierAccord = d.accords.at(-1);
-    const accepte = [...d.documents].filter((doc) => doc.statut === "ACCEPTE").sort((a, b) => (b.dateEmission?.getTime() ?? 0) - (a.dateEmission?.getTime() ?? 0))[0];
-    const duPassage = passages.map((p) => p.m?.documentId).filter(Boolean).map((id) => d.documents.find((doc) => doc.id === id)).find(Boolean);
+    const accepte = [...acceptes].sort((a, b) => (b.dateEmission?.getTime() ?? 0) - (a.dateEmission?.getTime() ?? 0))[0];
+    const duPassage = passages.filter((p) => p.m && signees.includes(p.m.vers)).map((p) => p.m?.documentId).filter(Boolean).map((id) => d.documents.find((doc) => doc.id === id)).find(Boolean);
     const montant = dernierAccord?.totalHt ?? accepte?.totalHt ?? duPassage?.totalHt ?? null;
-    return [{ dossierId: d.id, jour: jourParis(instants[0]), montant, famille: familleDuDossier(d, parcours) }];
+    return { dossierId: d.id, jour: jourParis(instant), montant, famille: familleDuDossier(d, parcours) };
   });
 }
 
@@ -309,8 +351,98 @@ export async function carnetDeCommandes(): Promise<LigneCarnet[]> {
 
 /* ── Dépense publicitaire ────────────────────────────────────────────────── */
 
-export type OrigineDepense = "SYNCHRO" | "PRORATA" | "SAISIE" | "INCONNUE";
-export type DepensePub = { total: number | null; parJour: Record<string, number>; origine: OrigineDepense; estimation: boolean };
+/** D'où vient la dépense d'un jour : synchronisée, prorata du budget (estimation), hors campagne (zéro), saisie. */
+export type OrigineDepenseJour = "SYNCHRO" | "PRORATA" | "HORS_CAMPAGNE" | "SAISIE";
+export type OrigineDepense = "SYNCHRO" | "PRORATA" | "SAISIE" | "MIXTE" | "INCONNUE";
+export type DepensePub = {
+  /** Somme des jours connus ; null si aucun jour n'est connu (jamais un zéro trompeur). */
+  total: number | null;
+  /** Les jours CONNUS seulement (un jour inconnu n'a pas de valeur). */
+  parJour: Record<string, number>;
+  origine: OrigineDepense;
+  /** Au moins un jour estimé au prorata du budget. */
+  estimation: boolean;
+  /** Relecture B (point 3) : l'origine de chaque jour de la période (null : couvert par rien). */
+  origineParJour?: Record<string, OrigineDepenseJour | null>;
+  /** Jours de la période sans aucune source (la somme est alors partielle). */
+  joursInconnus?: number;
+  /** Dernier jour couvert par la synchronisation Meta (null sans synchronisation). */
+  synchroniseJusquau?: string | null;
+};
+
+export type SourcesDepensePub = {
+  jours: readonly string[];
+  /** Jours couverts par la synchronisation Meta (du premier jour synchronisé au jour de la dernière réussite). */
+  couverture: { du: string; au: string } | null;
+  synchro: Readonly<Record<string, number>>;
+  /** Prorata du budget sur les jours de campagne déjà commencés (`prorataDuBudget`). */
+  prorata: Readonly<Record<string, number>>;
+  /** Début et budget de campagne connus : hors de la campagne (et hors synchronisation), la dépense est nulle. */
+  campagneConnue: boolean;
+  /** Dépenses « Publicité » saisies, par jour de paiement. */
+  saisies: Readonly<Record<string, number>>;
+};
+
+/**
+ * La dépense pub jour par jour (pur ; relecture B, point 3) — une source par jour, jamais deux additionnées (une
+ * facture Meta saisie et la synchronisation sont la même dépense) :
+ * 1. jour couvert par la synchronisation Meta → la dépense synchronisée (0 si Meta n'a rien rendu ce jour-là) ;
+ * 2. sinon, campagne connue → le prorata du budget les jours de campagne commencés (estimation), 0 en dehors ;
+ * 3. sinon, des dépenses « Publicité » saisies sur la période → la saisie du jour (0 les autres jours) ;
+ * 4. sinon → inconnu (null) : ni zéro, ni estimation.
+ */
+export function combinerDepensePub(s: SourcesDepensePub): DepensePub {
+  const parJour: Record<string, number> = {};
+  const origineParJour: Record<string, OrigineDepenseJour | null> = {};
+  const couvert = (j: string) => Boolean(s.couverture && j >= s.couverture.du && j <= s.couverture.au);
+  const saisiesHorsSynchro = s.jours.some((j) => !couvert(j) && (s.saisies[j] ?? 0) > 0);
+  let centimes = 0;
+  let inconnus = 0;
+  for (const j of s.jours) {
+    let origine: OrigineDepenseJour | null = null;
+    let valeur = 0;
+    if (couvert(j)) [origine, valeur] = ["SYNCHRO", s.synchro[j] ?? 0];
+    else if (s.campagneConnue) [origine, valeur] = j in s.prorata ? ["PRORATA", s.prorata[j]] : ["HORS_CAMPAGNE", 0];
+    else if (saisiesHorsSynchro) [origine, valeur] = ["SAISIE", s.saisies[j] ?? 0];
+    origineParJour[j] = origine;
+    if (origine === null) {
+      inconnus += 1;
+      continue;
+    }
+    parJour[j] = Math.round(valeur * 100) / 100;
+    centimes += versCentimes(valeur);
+  }
+  const connues = Object.values(origineParJour).filter((o): o is OrigineDepenseJour => o !== null);
+  const familles = new Set(connues.map((o) => (o === "HORS_CAMPAGNE" ? "PRORATA" : o)));
+  const origine: OrigineDepense = !connues.length ? "INCONNUE" : familles.size > 1 ? "MIXTE" : ([...familles][0] as OrigineDepense);
+  return {
+    total: connues.length ? centimes / 100 : null,
+    parJour,
+    origine,
+    estimation: connues.includes("PRORATA"),
+    origineParJour,
+    joursInconnus: inconnus,
+    synchroniseJusquau: s.couverture?.au ?? null,
+  };
+}
+
+/**
+ * Les jours couverts par la synchronisation Meta : la plage notée par le connecteur (`couverture`, fusion des passages
+ * réussis), sinon celle du dernier passage, sinon du premier jour synchronisé en base ; jamais au-delà du jour de la
+ * dernière réussite. null : aucune synchronisation réussie.
+ */
+export async function couvertureMeta(): Promise<{ du: string; au: string } | null> {
+  const suivi = await lireSuivi("META");
+  if (!suivi?.derniereReussiteLe) return null;
+  const jourReussite = jourParis(suivi.derniereReussiteLe);
+  const notee = suivi.detail.couverture as { du?: unknown; au?: unknown } | undefined;
+  let du = typeof notee?.du === "string" ? notee.du : typeof suivi.detail.du === "string" ? suivi.detail.du : null;
+  let au = typeof notee?.au === "string" ? notee.au : typeof suivi.detail.au === "string" ? suivi.detail.au : jourReussite;
+  if (!du) du = (await prisma.depensePubJour.findFirst({ where: { plateforme: "META" }, orderBy: { jour: "asc" }, select: { jour: true } }))?.jour ?? null;
+  if (!du) return null;
+  if (au > jourReussite) au = jourReussite;
+  return du <= au ? { du, au } : null;
+}
 
 export type Campagne = { debut: string | null; budget: number | null; duree: number };
 
@@ -352,28 +484,44 @@ export function prorataDuBudget(campagne: Campagne, periode: Periode, maintenant
   return resultat;
 }
 
-/** Dépense pub de la période : synchronisée, sinon prorata (estimation), sinon saisies ; jamais les deux additionnées. */
+/** Dépense pub de la période, jour par jour (`combinerDepensePub`) : synchronisée où Meta couvre, sinon prorata, sinon saisies. */
 export async function depensePubDeLaPeriode(periode: Periode, maintenant: Date, synchroMeta: boolean): Promise<DepensePub> {
   const { debut, fin } = bornes(periode);
-  if (synchroMeta) {
+  const [couverture, campagne, saisiesLues] = await Promise.all([
+    synchroMeta ? couvertureMeta() : Promise.resolve(null),
+    lireCampagne(maintenant),
+    prisma.depense.findMany({ where: { categorie: "PUBLICITE", payeeLe: { gte: debut, lt: fin } }, select: { payeeLe: true, montant: true } }),
+  ]);
+  const synchro: Record<string, number> = {};
+  if (couverture) {
     const lignes = await prisma.depensePubJour.findMany({ where: { jour: { gte: periode.du, lte: periode.au } }, select: { jour: true, depense: true } });
-    const parJour: Record<string, number> = {};
-    for (const l of lignes) parJour[l.jour] = Math.round(((parJour[l.jour] ?? 0) + l.depense) * 100) / 100;
-    return { total: somme(lignes.map((l) => l.depense)), parJour, origine: "SYNCHRO", estimation: false };
+    for (const l of lignes) synchro[l.jour] = (synchro[l.jour] ?? 0) + versCentimes(l.depense);
+    for (const j of Object.keys(synchro)) synchro[j] = synchro[j] / 100;
   }
-  const campagne = await lireCampagne(maintenant);
-  const prorata = prorataDuBudget(campagne, periode, maintenant);
-  if (Object.keys(prorata).length) return { total: somme(Object.values(prorata)), parJour: prorata, origine: "PRORATA", estimation: true };
-  const saisies = await prisma.depense.findMany({ where: { categorie: "PUBLICITE", payeeLe: { gte: debut, lt: fin } }, select: { payeeLe: true, montant: true } });
-  if (saisies.length) {
-    const parJour: Record<string, number> = {};
-    for (const s of saisies) parJour[jourParis(s.payeeLe)] = Math.round(((parJour[jourParis(s.payeeLe)] ?? 0) + s.montant) * 100) / 100;
-    return { total: somme(saisies.map((s) => s.montant)), parJour, origine: "SAISIE", estimation: false };
-  }
-  // Campagne connue mais hors de la période : zéro réel (aucune diffusion), pas « inconnu ».
-  if (campagne.debut && campagne.budget !== null) return { total: 0, parJour: {}, origine: "PRORATA", estimation: true };
-  return { total: null, parJour: {}, origine: "INCONNUE", estimation: false };
+  const saisies: Record<string, number> = {};
+  for (const x of saisiesLues) saisies[jourParis(x.payeeLe)] = Math.round(((saisies[jourParis(x.payeeLe)] ?? 0) + x.montant) * 100) / 100;
+  return combinerDepensePub({ jours: joursDe(periode), couverture, synchro, prorata: prorataDuBudget(campagne, periode, maintenant), campagneConnue: Boolean(campagne.debut && campagne.budget !== null), saisies });
 }
+
+/** Le détail d'une dépense pub pour une tuile (« réel Meta, synchronisé le 28/09 », « estimation… », « partiel… »). */
+export function detailDepensePub(depense: DepensePub, etatMeta: { etat: string; derniereReussite: string | null } | null): string | null {
+  if (depense.total === null) return "Dépense pub inconnue";
+  const morceaux: string[] = [];
+  if (depense.origine === "SYNCHRO" || depense.origine === "MIXTE") morceaux.push(etatMeta?.etat === "EN_ECHEC" && etatMeta.derniereReussite ? `réel Meta, synchronisé le ${jourParis(new Date(etatMeta.derniereReussite)).split("-").reverse().slice(0, 2).join("/")}` : "réel Meta");
+  if (depense.estimation) morceaux.push("estimation : prorata du budget");
+  if (depense.origine === "SAISIE" || (depense.origine === "MIXTE" && Object.values(depense.origineParJour ?? {}).includes("SAISIE"))) morceaux.push("dépenses « Publicité » saisies");
+  if (depense.joursInconnus) morceaux.push(`${depense.joursInconnus} jour${depense.joursInconnus > 1 ? "s" : ""} sans chiffre`);
+  return morceaux.join(", ") || null;
+}
+
+/* ── Leads Meta, coûts (une seule définition : relecture B, point 5) ─────── */
+
+/** Les leads Meta d'une période : les leads de la période (définition ci-dessus) de la famille « meta ». */
+export const leadsMeta = (leads: readonly LeadAnalyse[]) => leads.filter((l) => l.famille === "meta");
+/** Les chantiers signés Meta d'une période : les signatures datées dans la période, de la famille « meta ». */
+export const signesMeta = <T extends { famille: Famille }>(signatures: readonly T[]) => signatures.filter((s) => s.famille === "meta");
+/** Coût par unité (lead, devis, chantier signé) : dépense / nombre, au centime ; null sans dépense connue ou sans unité. */
+export const coutPar = (depense: number | null, nombre: number): number | null => (depense === null || nombre <= 0 ? null : Math.round((depense / nombre) * 100) / 100);
 
 /* ── Règle des 20 % (pure) ───────────────────────────────────────────────── */
 

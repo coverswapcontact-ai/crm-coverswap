@@ -45,15 +45,15 @@ export function lireCharge(charge: unknown): ChargeSynchro {
 }
 
 /** Exécute la synchronisation d'une source (connecteurs importés à l'exécution). */
-export async function synchroniser(charge: ChargeSynchro): Promise<BilanSynchro> {
+export async function synchroniser(charge: ChargeSynchro, signal?: AbortSignal): Promise<BilanSynchro> {
   const periode = { depuis: charge.depuis, jusqua: charge.jusqua };
   switch (charge.source) {
     case "META":
-      return (await import("@/lib/meta/depense")).synchroniserDepenseMeta(periode);
+      return (await import("@/lib/meta/depense")).synchroniserDepenseMeta(periode, { signal });
     case "SEARCH_CONSOLE":
-      return (await import("@/lib/google/search-console")).synchroniserSearchConsole(periode);
+      return (await import("@/lib/google/search-console")).synchroniserSearchConsole(periode, { signal });
     case "FICHE_GOOGLE":
-      return (await import("@/lib/google/fiche")).synchroniserFicheGoogle(periode);
+      return (await import("@/lib/google/fiche")).synchroniserFicheGoogle(periode, { signal });
     case "GOOGLE_ADS":
       return { source: "GOOGLE_ADS", etat: "NON_BRANCHEE", lignes: 0, appels: 0, message: "Aucun connecteur Google Ads : aucune campagne Google Ads ne tourne." };
   }
@@ -111,7 +111,7 @@ export function enregistrerTachesAnalytique(): void {
     acteur: ACTEUR,
     tentativesMax: 4,
     delaiMaxMs: 10 * 60_000,
-    executer: async (charge) => synchroniser(lireCharge(charge)),
+    executer: async (charge, contexte) => synchroniser(lireCharge(charge), contexte?.signal),
   });
   enregistrerTravailPeriodique({
     nom: NOM_TRAVAIL_META_RECENT,

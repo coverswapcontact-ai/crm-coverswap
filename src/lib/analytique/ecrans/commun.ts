@@ -1,4 +1,4 @@
-import { joursDe } from "../periode";
+import { decalerJour, joursDe } from "../periode";
 import type { EtatSource, Evolution, Format, Indicateur, Periode, SourceDonnees } from "../types";
 
 /**
@@ -28,9 +28,28 @@ export function evolutionDe(valeur: number | null, precedente: number | null, fa
   return { precedente, variation, sens, ton: sens === favorable ? "favorable" : "defavorable" };
 }
 
-export function indicateur(p: { cle: string; libelle: string; valeur: number | null; precedente: number | null; format: Format; favorable: Sens; serie?: number[]; source: SourceDonnees; detail?: string | null }): Indicateur {
-  return { cle: p.cle, libelle: p.libelle, valeur: p.valeur, format: p.format, evolution: evolutionDe(p.valeur, p.precedente, p.favorable), detail: p.detail ?? null, serie: p.valeur === null ? [] : p.serie ?? [], source: p.source };
+/**
+ * Une tuile. `comparaison` (facultatif) : les valeurs à comparer quand elles diffèrent de la valeur affichée — relecture
+ * B, point 4 : la période qui finit aujourd'hui compte un jour ENTAMÉ ; l'évolution se calcule alors hors jour en cours
+ * des deux côtés (`jourEntame`), la valeur affichée reste la période entière.
+ */
+export function indicateur(p: { cle: string; libelle: string; valeur: number | null; precedente: number | null; format: Format; favorable: Sens; serie?: number[]; source: SourceDonnees; detail?: string | null; comparaison?: { valeur: number | null; precedente: number | null } | null }): Indicateur {
+  const c = p.comparaison ?? { valeur: p.valeur, precedente: p.precedente };
+  const evolution = p.valeur === null ? evolutionDe(null, p.precedente, p.favorable) : evolutionDe(c.valeur, c.precedente, p.favorable);
+  return { cle: p.cle, libelle: p.libelle, valeur: p.valeur, format: p.format, evolution, detail: p.detail ?? null, serie: p.valeur === null ? [] : p.serie ?? [], source: p.source };
 }
+
+/**
+ * Le jour entamé de la période (pur) : la période finit aujourd'hui (heure de Paris) et compte plus d'un jour → les
+ * comparaisons s'arrêtent la veille, des deux côtés (même nombre de jours complets). null : rien à retirer.
+ */
+export function jourEntame(periode: Pick<Periode, "du" | "au" | "precedente">, aujourdhui: string): { actuel: { du: string; au: string }; avant: { du: string; au: string } } | null {
+  if (periode.au !== aujourdhui || periode.du === periode.au) return null;
+  return { actuel: { du: periode.du, au: decalerJour(periode.au, -1) }, avant: { du: periode.precedente.du, au: decalerJour(periode.precedente.au, -1) } };
+}
+
+/** Compte des éléments datés dans une plage (pur). */
+export const compterDans = (elements: readonly { jour: string }[], plage: { du: string; au: string }) => elements.filter((e) => e.jour >= plage.du && e.jour <= plage.au).length;
 
 /** Une valeur par jour de la période, à partir d'éléments datés (compte ou somme). */
 export function serieParJour<T extends { jour: string }>(periode: Pick<Periode, "du" | "au">, elements: readonly T[], valeur: (e: T) => number = () => 1): number[] {

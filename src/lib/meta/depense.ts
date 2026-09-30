@@ -3,7 +3,7 @@ import { jourParis } from "@/lib/dossiers/dates";
 import { ErreurDefinitive } from "@/lib/taches/registre";
 import { jourDecale, suivreSynchro, type BilanSynchro } from "@/lib/analytique/suivi";
 import { configurationPublicite, variablesPubliciteManquantes } from "./config";
-import { ErreurGraph, appelerTout, estProblemeDeDroits } from "./graph";
+import { ErreurGraph, appelerGraph, appelerTout, estProblemeDeDroits } from "./graph";
 
 /**
  * Mission 17 (partie B) — la VRAIE dépense publicitaire Meta, lue dans l'API Marketing (docs/ANALYTIQUE.md § 3) :
@@ -14,7 +14,8 @@ import { ErreurGraph, appelerTout, estProblemeDeDroits } from "./graph";
  *
  * Variables : META_AD_ACCOUNT_ID (avec ou sans « act_ ») et META_ADS_TOKEN (jeton d'utilisateur système avec `ads_read`,
  * repli META_ACCESS_TOKEN). Sans elles : état NON_BRANCHEE, aucun appel (l'écran garde le prorata du budget, dit
- * « estimation »). Les jours sont ceux du FUSEAU DU COMPTE publicitaire (Europe/Paris attendu).
+ * « estimation »). Les jours sont ceux du FUSEAU DU COMPTE publicitaire : relecture B, le compte est lu d'abord
+ * (`act_<id>?fields=timezone_name,currency`) et la synchronisation est EN ÉCHEC s'il n'est pas en Europe/Paris et en EUR.
  *
  * Leads de la plateforme : `onsite_conversion.lead_grouped` (tous les leads des formulaires instantanés) sinon `lead` —
  * jamais les deux, ils se recouvrent.
@@ -119,12 +120,26 @@ async function lireInsights(compteId: string, jeton: string, depuis: string, jus
 
 export type PeriodeSynchro = { depuis?: string; jusqua?: string };
 
+export const FUSEAU_ATTENDU = "Europe/Paris";
+export const DEVISE_ATTENDUE = "EUR";
+
+/**
+ * Relecture B (point 12) : le compte publicitaire doit compter en jours de Paris et en euros — sinon les jours de
+ * `DepensePubJour` ne seraient pas ceux du CRM, ou les montants pas des euros. Rend le problème en une phrase, ou null.
+ */
+export function problemeDeCompte(compte: { timezone_name?: string; currency?: string }): string | null {
+  const problemes: string[] = [];
+  if (compte.timezone_name !== FUSEAU_ATTENDU) problemes.push(`fuseau ${compte.timezone_name ?? "inconnu"} au lieu de ${FUSEAU_ATTENDU}`);
+  if (compte.currency !== DEVISE_ATTENDUE) problemes.push(`devise ${compte.currency ?? "inconnue"} au lieu de ${DEVISE_ATTENDUE}`);
+  return problemes.length ? `Compte publicitaire Meta en ${problemes.join(" et ")} : la dépense n'est pas lue (jours ou montants faux). Régler le compte dans Meta, ou le signaler.` : null;
+}
+
 /**
  * Synchronise la dépense Meta d'une période (jours inclus ; défaut : les 3 derniers jours jusqu'à aujourd'hui, heure de
  * Paris). Met à jour `SourceAnalytique` META (réussite ou échec). Sans variables : bilan NON_BRANCHEE, rien d'appelé,
  * rien d'écrit. Jeton refusé ou droit manquant : ErreurDefinitive (réessayer ne sert à rien ; tâche système).
  */
-export async function synchroniserDepenseMeta(periode: PeriodeSynchro = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date } = {}): Promise<BilanSynchro> {
+export async function synchroniserDepenseMeta(periode: PeriodeSynchro = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date; signal?: AbortSignal } = {}): Promise<BilanSynchro> {
   const env = options.env ?? process.env;
   const config = configurationPublicite(env);
   const aujourdhui = jourParis(options.maintenant ?? new Date());
@@ -136,7 +151,12 @@ export async function synchroniserDepenseMeta(periode: PeriodeSynchro = {}, opti
   return suivreSynchro("META", { du: depuis, au: jusqua }, async () => {
     let lu: { lignes: LigneInsights[]; appels: number };
     try {
+      const compte = await appelerGraph<{ timezone_name?: string; currency?: string }>(`act_${config.compteId}`, { fields: "timezone_name,currency", access_token: config.jeton });
+      const probleme = problemeDeCompte(compte);
+      if (probleme) throw new ErreurDefinitive(probleme);
+      if (options.signal?.aborted) throw new Error("Synchronisation Meta interrompue (délai de la tâche dépassé).");
       lu = await lireInsights(config.compteId, config.jeton, depuis, jusqua);
+      lu.appels += 1;
     } catch (erreur) {
       if (erreur instanceof ErreurGraph && estProblemeDeDroits(erreur)) {
         throw new ErreurDefinitive(`Meta refuse la lecture de la dépense (code ${erreur.code ?? erreur.statut}) : ${erreur.message}. Vérifier que META_ADS_TOKEN a le droit ads_read sur le compte publicitaire.`);

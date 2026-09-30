@@ -5,7 +5,7 @@
  * et les coupes de la maquette : tuiles en deux colonnes, SEO et fiche fusionnés, alertes en dernier.
  */
 import Link from "next/link";
-import { COULEURS_FAMILLE, type Alerte, type EcranEnsemble, type LigneSource, type Periode } from "@/lib/analytique/types";
+import { COULEURS_FAMILLE, LIBELLES_FAMILLE, type Alerte, type EcranEnsemble, type LigneSource } from "@/lib/analytique/types";
 import { cn } from "@/lib/utils";
 import {
   BadgeVerdict,
@@ -27,12 +27,43 @@ import {
   libelleEtat,
   phrasePerte,
 } from "./base";
-import { GRIS_ABSENT, dateHeureLongue, euros, formaterValeur, momentSynchro, moisCourt } from "./format";
-import { CourbeTemps, LegendeCourbe } from "./Graphiques";
+import { CourbeEnsemble } from "./CourbeEnsemble";
+import { GRIS_ABSENT, dateHeureLongue, euros, formaterValeur, momentSynchro, moisCourt, surLaPeriode } from "./format";
+import { AgentEtQualite } from "./OutilsSynthese";
 import { adresseAnalytique } from "./requete";
 
 /** Ordre des tuiles au téléphone (maquette) : Leads, Coût / lead Meta, Simulations, Devis, Signés, Visites. */
 export const ORDRE_TUILES_TELEPHONE = ["leads", "coutParLead", "coutParLeadMeta", "coutParSigne", "simulations", "devis", "signes", "visites"];
+
+/** Libellés des tuiles au téléphone (maquette). */
+export const LIBELLES_TUILES_TELEPHONE: Record<string, string> = {
+  visites: "Visites",
+  signes: "Signés",
+  coutParLead: "Coût / lead Meta",
+  coutParLeadMeta: "Coût / lead Meta",
+  coutParSigne: "Coût / signé",
+};
+
+/** Le tunnel de la Vue d'ensemble : libellés de l'écran (maquette : « Devis envoyés », « Devis » au téléphone). */
+export const LIBELLES_TUNNEL = {
+  visites: { long: "Visites", court: "Visites" },
+  simulations: { long: "Simulations", court: "Simulations" },
+  devis: { long: "Devis envoyés", court: "Devis" },
+  encaisses: { long: "Encaissés", court: "Encaissés" },
+  encaisse: { long: "Encaissés", court: "Encaissés" },
+};
+
+/** Au téléphone, la première phrase seulement (maquette : « 4 devis pour 45 leads, aucun signé. »). */
+export function premierePhrase(texte: string): string {
+  const coupe = texte.match(/^.+?[.!?](?=\s+[A-ZÀÂÉÈÊÎÔÛÇ0-9«])/u);
+  return coupe ? coupe[0] : texte;
+}
+
+/** Le sous-titre du tunnel : la source filtrée, puis la période. */
+export function sousTitreTunnel(ecran: Pick<EcranEnsemble, "filtreSource" | "periode">): string {
+  const source = ecran.filtreSource ? `Source ${LIBELLES_FAMILLE[ecran.filtreSource]}` : "Toutes sources";
+  return `${source}, ${ecran.periode.libelle.charAt(0).toLowerCase()}${ecran.periode.libelle.slice(1)}`;
+}
 
 // « À faire » : blanc à l'ordinateur, couleur du texte au téléphone (maquette).
 const COULEURS_PHRASE = {
@@ -41,29 +72,15 @@ const COULEURS_PHRASE = {
   A_FAIRE: "md:text-[#F2F3F5]",
 } as const;
 
-/** « sur 30 j », « ce mois-ci », « sur 12 mois », « du 01/09 au 15/09 ». */
-export function surLaPeriode(periode: Periode): string {
-  switch (periode.cle) {
-    case "7j":
-      return "sur 7 j";
-    case "30j":
-      return "sur 30 j";
-    case "90j":
-      return "sur 90 j";
-    case "mois":
-      return "ce mois-ci";
-    case "12m":
-      return "sur 12 mois";
-    default:
-      return periode.libelle;
-  }
-}
+export { surLaPeriode };
 
 function ListeAlertes({ alertes, compact = false }: { alertes: Alerte[]; compact?: boolean }) {
-  if (alertes.length === 0) return <p className="text-[13px] text-[#6B7280]">Rien à signaler.</p>;
+  // Téléphone : les informations sans conséquence (gris) sont omises (maquette).
+  const visibles = compact ? alertes.filter((alerte) => alerte.gravite !== "INFO") : alertes;
+  if (visibles.length === 0) return <p className="text-[13px] text-[#6B7280]">Rien à signaler.</p>;
   return (
     <ul className="flex flex-col gap-2">
-      {alertes.map((alerte) => {
+      {visibles.map((alerte) => {
         const couleur = alerte.gravite === "ATTENTION" ? "#F5B454" : "#9CA3AF";
         const texte = alerte.lien ? (
           <Link href={alerte.lien} className="underline-offset-2 hover:underline" style={{ color: couleur }}>
@@ -102,7 +119,15 @@ function Resume({ ecran }: { ecran: EcranEnsemble }) {
         {resume && resume.phrases.length > 0 ? (
           resume.phrases.map((phrase) => (
             <p key={phrase.genre + phrase.amorce} title={phrase.sources.length > 0 ? `Sources : ${phrase.sources.join(", ")}` : undefined}>
-              <span className={cn("font-semibold", COULEURS_PHRASE[phrase.genre])}>{phrase.amorce}</span> {phrase.texte}
+              <span className={cn("font-semibold", COULEURS_PHRASE[phrase.genre])}>{phrase.amorce}</span>{" "}
+              {premierePhrase(phrase.texte) !== phrase.texte ? (
+                <>
+                  <span className="md:hidden">{premierePhrase(phrase.texte)}</span>
+                  <span className="hidden md:inline">{phrase.texte}</span>
+                </>
+              ) : (
+                phrase.texte
+              )}
             </p>
           ))
         ) : (
@@ -345,6 +370,7 @@ function CarteSeoFicheTelephone({ ecran }: { ecran: EcranEnsemble }) {
           Fiche Google&nbsp;: {TEXTE_ETAT_FICHE[etatDe(ecran.sources, "FICHE_GOOGLE")?.etat ?? "NON_BRANCHEE"]}
         </p>
       ) : null}
+      {!fiche && !seo ? <EtatVideSource etat={etatDe(ecran.sources, "FICHE_GOOGLE")} quoi="Fiche Google" compact /> : null}
     </Carte>
   );
 }
@@ -473,46 +499,29 @@ function CarteArgent({ ecran }: { ecran: EcranEnsemble }) {
 }
 
 export function VueEnsemble({ ecran }: { ecran: EcranEnsemble }) {
-  const { courbeLeads, tunnel, periode } = ecran;
-  // Téléphone : la maquette ne trace que les deux premières séries (Meta et Site).
-  const masqueesTelephone = courbeLeads.series.slice(2).map((serie) => serie.cle);
-  const perte = tunnel.perteMax && tunnel.etapes.findIndex((e) => e.cle === tunnel.perteMax?.vers) > tunnel.etapes.findIndex((e) => e.cle === "leads") ? tunnel.perteMax : null;
+  const { tunnel } = ecran;
   return (
     <>
       <Resume ecran={ecran} />
 
-      <GrilleTuiles indicateurs={ecran.indicateurs} sources={ecran.sources} ordreTelephone={ORDRE_TUILES_TELEPHONE} estimation={Boolean(ecran.publicite?.estimation)} />
+      <GrilleTuiles
+        indicateurs={ecran.indicateurs}
+        sources={ecran.sources}
+        ordreTelephone={ORDRE_TUILES_TELEPHONE}
+        libellesCourts={LIBELLES_TUILES_TELEPHONE}
+        estimation={Boolean(ecran.publicite?.estimation)}
+      />
 
       <div className="grid gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <Carte
-          titre={
-            <>
-              <span className="md:hidden">Leads par jour</span>
-              <span className="hidden md:inline">{courbeLeads.titre || "Leads par jour et par source"}</span>
-            </>
-          }
-          sousTitre={courbeLeads.sousTitre ? <span className="hidden md:inline">{courbeLeads.sousTitre}</span> : undefined}
-          action={
-            <span className="hidden md:block">
-              <LegendeCourbe courbe={courbeLeads} />
-            </span>
-          }
-          gap="gap-3.5 md:gap-5"
-        >
-          <div className="max-md:hidden">
-            <CourbeTemps courbe={courbeLeads} hauteur={260} />
-          </div>
-          <div className="md:hidden">
-            <CourbeTemps courbe={courbeLeads} hauteur={150} compact seriesMasquees={masqueesTelephone} />
-          </div>
-        </Carte>
+        <CourbeEnsemble courbeLeads={ecran.courbeLeads} courbeDevis={ecran.courbeDevis ?? null} />
 
-        <Carte titre="Tunnel commercial" sousTitre={<span className="hidden md:inline">Toutes sources, {periode.libelle}</span>} gap="gap-3 md:gap-[18px]">
-          {/* Maquette : des leads aux signés (l'encaissé est dans Argent, la visite et la simulation dans Site). */}
-          <TunnelBarres tunnel={tunnel} depuis="leads" jusqua="signes" encadre={false} />
-          {perte ? (
+        <Carte titre="Tunnel commercial" sousTitre={<span className="hidden md:inline">{sousTitreTunnel(ecran)}</span>} gap="gap-3 md:gap-[18px]">
+          {/* Des visites aux encaissés : le site (visites, simulations) et le commercial (leads → encaissés), chacun à
+              son échelle ; au téléphone, la partie du site se replie (la maquette commence aux leads). */}
+          <TunnelBarres tunnel={tunnel} groupes={["leads"]} replierAuTelephone sansTaux={["signes"]} libelles={LIBELLES_TUNNEL} encadre={false} />
+          {tunnel.perteMax ? (
             <p className={cn(ENCADRE, "px-3.5 py-3 max-md:hidden")}>
-              L&apos;étape qui perd le plus&nbsp;: <span className="text-[#F5B454]">{perte.libelle}</span>. {phrasePerte(perte)}
+              L&apos;étape qui perd le plus&nbsp;: <span className="text-[#F5B454]">{tunnel.perteMax.libelle}</span>. {phrasePerte(tunnel.perteMax)}
             </p>
           ) : null}
         </Carte>
@@ -534,6 +543,8 @@ export function VueEnsemble({ ecran }: { ecran: EcranEnsemble }) {
         <p className={LBL}>Alertes</p>
         <ListeAlertes alertes={ecran.alertes} compact />
       </Carte>
+
+      <AgentEtQualite du={ecran.periode.du} au={ecran.periode.au} />
     </>
   );
 }

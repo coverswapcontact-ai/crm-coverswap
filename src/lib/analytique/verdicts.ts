@@ -44,11 +44,12 @@ export type EntreeVerdict = { id: string; depense: number | null; leads: number;
 export type ResultatVerdict = { verdict: Verdict | null; raison: string };
 
 const eur = (v: number) => `${Math.round(v * 100) / 100} €`.replace(".", ",");
-const cpl = (l: EntreeVerdict) => (l.depense !== null && l.leads > 0 ? l.depense / l.leads : null);
+/** Coût par lead : seulement avec une dépense réelle POSITIVE (relecture B, point 2 : une publicité sans dépense rattachée n'a pas un coût de 0 €). */
+const cpl = (l: Pick<EntreeVerdict, "depense" | "leads">) => (l.depense !== null && l.depense > 0 && l.leads > 0 ? l.depense / l.leads : null);
 
-/** Le coût par lead de la meilleure publicité (null si aucune n'a de lead ou de dépense connue). */
-export function meilleurCoutParLead(lignes: readonly EntreeVerdict[]): number | null {
-  const avecCout = lignes.map((l) => ({ l, c: cpl(l) })).filter((x): x is { l: EntreeVerdict; c: number } => x.c !== null);
+/** Le coût par lead de la meilleure publicité (null si aucune n'a de lead et de dépense positive). */
+export function meilleurCoutParLead(lignes: readonly Pick<EntreeVerdict, "depense" | "leads">[]): number | null {
+  const avecCout = lignes.map((l) => ({ l, c: cpl(l) })).filter((x): x is { l: Pick<EntreeVerdict, "depense" | "leads">; c: number } => x.c !== null);
   const solides = avecCout.filter((x) => x.l.leads >= LEADS_MINIMUM);
   const base = solides.length ? solides : avecCout;
   return base.length ? Math.min(...base.map((x) => x.c)) : null;
@@ -59,6 +60,7 @@ export function verdictDe(ligne: EntreeVerdict, jour: number | null, meilleur: n
   if (jour <= tranches.apprentissage[1]) return { verdict: "ATTENDRE", raison: `Jour ${jour} : apprentissage, on ne touche à rien.` };
   if (jour <= tranches.lecture[1]) return { verdict: "GARDER", raison: `Jour ${jour} : on lit le coût par lead sans changer le budget.` };
   if (ligne.depense === null) return { verdict: null, raison: "Dépense par publicité inconnue (synchronisation Meta non branchée) : pas de coût par lead propre à cette publicité." };
+  if (ligne.depense <= 0 && ligne.leads > 0) return { verdict: "SURVEILLER", raison: "Des leads mais aucune dépense rattachée à cette publicité : vérifier son rattachement dans Meta avant de juger." };
   if (jour <= tranches.coupe[1]) {
     const c = cpl(ligne);
     if (meilleur === null) return { verdict: ligne.depense > 0 ? "SURVEILLER" : "ATTENDRE", raison: "Aucune publicité n'a encore de lead : pas de meilleure pour comparer." };

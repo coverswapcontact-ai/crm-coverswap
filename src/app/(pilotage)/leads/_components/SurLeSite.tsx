@@ -25,7 +25,8 @@ import { pluriel, quand } from "@/lib/commun/format";
  * Mission 16 (partie 4) : visite en tête, estimation vue (facultative) avant le contact.
  * Mission 16 (partie 6) : un sélecteur « Toutes · Meta · Recherche · Direct » (famille de la source de la visite,
  * calculée à la lecture) ; les sources « autres » sont nommées sous « Toutes ».
- * Mission 17 (partie B) : l'entonnoir quitte cet écran (chiffres : Analytique, onglet Site, « De la visite au lead ») ;
+ * Mission 17 (partie B) : l'entonnoir quitte cet écran (Analytique, onglet Site, « Entonnoir du simulateur » : les sept étapes, les
+ * abandons et le choix de la source) ;
  * restent les outils de travail : générations en cours ou en échec (visiteur à prévenir) et simulations (lead à ouvrir).
  */
 

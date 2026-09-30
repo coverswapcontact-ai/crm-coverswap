@@ -1,14 +1,18 @@
 /**
  * Mission 17 (partie B) — onglet Argent : encaissé, signé, marge estimée, panier moyen, dépense pub et carnet de
  * commandes ; encaissé et signé par mois (12 mois glissants), le mois par mois, la pub face à l'encaissé du mois
- * précédent (règle des 20 %), le carnet de commandes, la franchise de TVA et l'URSSAF (repris de l'ancien écran
- * Finances, qui garde le travail : reste à encaisser, chèques, points à corriger, livre des recettes).
+ * précédent (règle des 20 %), le carnet de commandes ; l'URSSAF à déclarer et les trois seuils de l'année (repris de
+ * l'ancien écran Finances, qui garde le travail : reste à encaisser, chèques, points à corriger, livre des recettes) ;
+ * les dépenses par catégorie (repris de Dépenses), d'où viennent les clients (repris de Clients), et les outils de
+ * l'ancienne Synthèse : export, version rédigée, anonymisation, mois figés.
  */
 import Link from "next/link";
 import type { Courbe, EcranArgent } from "@/lib/analytique/types";
-import { Carte, ENCADRE, GrilleMini, GrilleTuiles, LienDetail, MiniIndicateur, Progression, Tableau } from "./base";
-import { euros, formaterValeur, moisLong } from "./format";
+import { BarresHorizontales, Carte, GrilleTuiles, LienDetail, Progression, Tableau } from "./base";
+import { FiscalArgent } from "./FiscalArgent";
+import { euros, formaterValeur, moisLong, surLaPeriode } from "./format";
 import { CourbeTemps, LegendeCourbe } from "./Graphiques";
+import { MoisFigesEtExport } from "./OutilsSynthese";
 
 export function courbeDesMois(ecran: EcranArgent): Courbe {
   return {
@@ -32,6 +36,10 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
   const regle = [...ecran.regle20].reverse();
   const { fiscal } = ecran;
   const formatsMois = { encaisse: "euros" as const, signe: "euros" as const };
+  // Écran calculé avant la relecture (instantané du jour) : ces blocs arrivent vides plutôt que de casser l'écran.
+  const depenses = [...(ecran.depensesParCategorie ?? [])].sort((a, b) => b.montant - a.montant);
+  const totalDepenses = depenses.reduce((total, ligne) => total + ligne.montant, 0);
+  const clients = ecran.clientsParSource ?? [];
   return (
     <>
       <GrilleTuiles indicateurs={ecran.indicateurs} sources={ecran.sources} />
@@ -180,65 +188,55 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
         </Carte>
       </div>
 
-      <Carte titre="Franchise de TVA et URSSAF" action={<LienDetail href="/finances">Finances →</LienDetail>} gap="gap-4">
-        {!fiscal ? (
-          <p className="text-[13px] text-[#9CA3AF]">À paramétrer : seuils et taux se règlent dans Paramètres (Facturation), la règle de date des chèques dans Finances.</p>
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2 md:gap-8">
-            <div className="flex flex-col gap-2.5">
-              {fiscal.franchiseTva ? (
-                <>
-                  <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="text-[#D1D5DB]">Franchise en base de TVA</span>
-                    <span className="text-[#9CA3AF]">
-                      <span className="font-heading text-[#F2F3F5] tabular-nums">{euros(fiscal.franchiseTva.atteint)}</span>
-                      {fiscal.franchiseTva.plafond ? ` sur ${euros(fiscal.franchiseTva.plafond)}` : ""}
-                      {fiscal.franchiseTva.ratio !== null ? ` · ${formaterValeur(fiscal.franchiseTva.ratio, "pourcent")}` : ""}
-                    </span>
-                  </div>
-                  <Progression
-                    ratio={fiscal.franchiseTva.ratio ?? 0}
-                    hauteur={8}
-                    couleur={(fiscal.franchiseTva.ratio ?? 0) >= 0.8 ? "#F5B454" : "#5DCAA5"}
-                    titre="Chiffre d'affaires encaissé depuis le 1er janvier face au seuil de la franchise"
-                  />
-                  <p className="text-[12px] text-[#6B7280]">Chiffre d&apos;affaires encaissé depuis le 1er janvier (livre des recettes). À vérifier avec le comptable au-delà de 80&nbsp;%.</p>
-                </>
-              ) : (
-                <p className="text-[13px] text-[#9CA3AF]">Seuil de la franchise de TVA à renseigner dans Paramètres.</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-2.5">
-              {fiscal.urssaf ? (
-                <>
-                  <GrilleMini>
-                    <MiniIndicateur libelle="URSSAF estimée" valeur={euros(fiscal.urssaf.estime)} />
-                    <MiniIndicateur
-                      libelle="Taux"
-                      valeur={formaterValeur(fiscal.urssaf.taux, "pourcent", {
-                        decimales: 1,
-                      })}
-                    />
-                    <span />
-                  </GrilleMini>
-                  <p className="text-[12px] text-[#6B7280]">
-                    Sur l&apos;encaissé de la période, aux taux saisis dans les paramètres ; le montant exact est calculé par l&apos;URSSAF sur le chiffre déclaré.
-                  </p>
-                </>
-              ) : (
-                <p className="text-[13px] text-[#9CA3AF]">Taux URSSAF à renseigner dans Paramètres.</p>
-              )}
-            </div>
-          </div>
-        )}
-        <p className={ENCADRE}>
-          Le travail sur l&apos;argent reste dans{" "}
-          <Link href="/finances" className="text-[#5DCAA5] hover:text-[#8FE0C3]">
-            Finances
-          </Link>
-          &nbsp;: reste à encaisser et saisie des paiements, chèques à créditer, points à corriger, livre des recettes et son export.
-        </p>
-      </Carte>
+      <FiscalArgent fiscal={fiscal} />
+
+      <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
+        <Carte
+          titre="Dépenses par catégorie"
+          sousTitre={`Saisies ${surLaPeriode(ecran.periode)} (écran Dépenses)`}
+          action={<LienDetail href="/depenses">Dépenses →</LienDetail>}
+          gap="gap-4"
+        >
+          <BarresHorizontales
+            format="euros"
+            couleur="#F5B454"
+            lignes={depenses.map((ligne) => ({
+              cle: ligne.categorie,
+              libelle: ligne.libelle,
+              valeur: ligne.montant,
+              detail: `${ligne.nombre} dépense${ligne.nombre > 1 ? "s" : ""}`,
+            }))}
+            vide="Aucune dépense saisie sur la période."
+          />
+          {depenses.length > 0 ? (
+            <p className="flex justify-between gap-3 border-t border-[#2A2D34] pt-3 text-[13px] text-[#9CA3AF]">
+              <span>Total</span>
+              <span className="font-heading text-[#F2F3F5] tabular-nums">{euros(totalDepenses)}</span>
+            </p>
+          ) : null}
+        </Carte>
+
+        <Carte titre="D'où viennent les clients" sousTitre={`Clients arrivés ${surLaPeriode(ecran.periode)}, signés et montant signé, par source`} action={<LienDetail href="/clients">Clients →</LienDetail>}>
+          <Tableau
+            largeurMin={420}
+            lignes={clients}
+            cle={(l) => l.source}
+            vide="Aucun nouveau client sur la période."
+            colonnes={[
+              {
+                cle: "source",
+                titre: "Source",
+                rendu: (l) => <span className="text-[#F2F3F5]">{l.libelle}</span>,
+              },
+              { cle: "clients", titre: "Clients", nombre: true, rendu: (l) => formaterValeur(l.clients, "nombre") },
+              { cle: "signes", titre: "Signés", nombre: true, rendu: (l) => <span className={l.signes === 0 ? "text-[#6B7280]" : undefined}>{formaterValeur(l.signes, "nombre")}</span> },
+              { cle: "montant", titre: "Montant signé", nombre: true, rendu: (l) => (l.montantSigne > 0 ? euros(l.montantSigne) : <span className="text-[#6B7280]">—</span>) },
+            ]}
+          />
+        </Carte>
+      </div>
+
+      <MoisFigesEtExport key={`${ecran.periode.du}:${ecran.periode.au}`} du={ecran.periode.du} au={ecran.periode.au} libellePeriode={ecran.periode.libelle} />
     </>
   );
 }

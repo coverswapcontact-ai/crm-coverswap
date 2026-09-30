@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { jourParis } from "@/lib/dossiers/dates";
 import { lireConsignes, regleDuJour, sectionProtocole } from "@/lib/assistant/consignes";
-import { depensePubDeLaPeriode, jourDeCampagne, leadsParIds, lireCampagne, type DepensePub, type LeadAnalyse } from "../calculs";
+import { coutPar, depensePubDeLaPeriode, detailDepensePub, jourDeCampagne, leadsDeLaPeriode, leadsMeta, leadsParIds, lireCampagne, signaturesDeLaPeriode, type DepensePub, type LeadAnalyse, type Signature } from "../calculs";
 import { bornes, decalerJour, joursDe, periodePrecedente } from "../periode";
 import { tranchesDuProtocole, verdictsDesPublicites, type ResultatVerdict } from "../verdicts";
 import { COULEURS_FAMILLE, type EcranPublicite, type EtatSource, type LignePublicite, type Periode } from "../types";
@@ -42,7 +42,12 @@ export type CalculPublicite = {
   depense: DepensePub;
   synchro: boolean;
   lignes: LignePubliciteDetail[];
+  /** Leads rattachés à une publicité par leur formulaire Meta (détail par campagne, ensemble, publicité). */
   leadsCrm: LeadAnalyse[];
+  /** LES leads Meta de la période (définition unique, calculs.ts › leadsMeta) : base des coûts par lead. */
+  leadsMeta: LeadAnalyse[];
+  /** LES chantiers signés Meta de la période (calculs.ts › signesMeta) : base du coût par chantier signé. */
+  signesMeta: Signature[];
   leadsPlateforme: number | null;
   impressions: number | null;
   clics: number | null;
@@ -52,14 +57,48 @@ export type CalculPublicite = {
 const cle = (niveau: Niveau, plateforme: string, id: string) => `${plateforme}:${niveau}:${id}`;
 const inc = (r: Record<string, number>, k: string, v = 1) => (r[k] = Math.round(((r[k] ?? 0) + v) * 100) / 100);
 
+type MetaLeadLu = { leadId: string | null; soumisLe: Date; adId: string | null; adNom: string | null; adsetId: string | null; adsetNom: string | null; campagneId: string | null; campagneNom: string | null };
+
+/**
+ * Relecture B (point 2) : un formulaire Meta sans identifiant (ancien lead, webhook sans ad_id) est rattaché par son
+ * NOM à l'identifiant de la même publicité (ensemble, campagne) dans `DepensePubJour` — jamais une ligne « par nom » à
+ * côté de la ligne « par identifiant », qui partagerait la dépense de l'une et les leads de l'autre. Un nom porté par
+ * deux identifiants reste ambigu : non résolu.
+ */
+export function resoudreParNom<T extends MetaLeadLu>(formulaires: readonly T[], connues: readonly { publiciteId: string; publiciteNom: string | null; ensembleId: string | null; ensembleNom: string | null; campagneId: string; campagneNom: string | null }[]): T[] {
+  const carte = (paires: [string | null, string | null][]) => {
+    const m = new Map<string, string | null>();
+    for (const [nom, id] of paires) if (nom && id) m.set(nom, m.has(nom) && m.get(nom) !== id ? null : id);
+    return m;
+  };
+  const pubs = carte(connues.map((c) => [c.publiciteNom, c.publiciteId]));
+  const ensembles = carte(connues.map((c) => [c.ensembleNom, c.ensembleId]));
+  const campagnes = carte(connues.map((c) => [c.campagneNom, c.campagneId]));
+  return formulaires.map((f) => ({
+    ...f,
+    adId: f.adId ?? (f.adNom ? pubs.get(f.adNom) ?? null : null),
+    adsetId: f.adsetId ?? (f.adsetNom ? ensembles.get(f.adsetNom) ?? null : null),
+    campagneId: f.campagneId ?? (f.campagneNom ? campagnes.get(f.campagneNom) ?? null : null),
+  }));
+}
+
+async function completerIdentifiants<T extends MetaLeadLu>(formulaires: T[]): Promise<T[]> {
+  if (!formulaires.some((f) => (!f.adId && f.adNom) || (!f.adsetId && f.adsetNom) || (!f.campagneId && f.campagneNom))) return formulaires;
+  const connues = await prisma.depensePubJour.findMany({ where: { plateforme: "META" }, distinct: ["publiciteId"], select: { publiciteId: true, publiciteNom: true, ensembleId: true, ensembleNom: true, campagneId: true, campagneNom: true } });
+  return resoudreParNom(formulaires, connues);
+}
+
 /** Le calcul de la publicité sur une période : lignes par campagne, ensemble et publicité, et totaux. */
 export async function calculerPublicite(periode: Pick<Periode, "du" | "au">, maintenant: Date, synchro: boolean): Promise<CalculPublicite> {
   const { debut, fin } = bornes(periode);
-  const [depense, lignesPub, metaLeads] = await Promise.all([
+  const [depense, lignesPub, metaLeadsBruts, cohorteMeta, signesMeta] = await Promise.all([
     depensePubDeLaPeriode(periode, maintenant, synchro),
     synchro ? prisma.depensePubJour.findMany({ where: { jour: { gte: periode.du, lte: periode.au } }, orderBy: { jour: "asc" } }) : Promise.resolve([]),
     prisma.metaLead.findMany({ where: { organique: false, soumisLe: { gte: debut, lt: fin }, leadId: { not: null } }, select: { leadId: true, soumisLe: true, adId: true, adNom: true, adsetId: true, adsetNom: true, campagneId: true, campagneNom: true } }),
+    leadsDeLaPeriode(periode, "meta"),
+    signaturesDeLaPeriode(periode, "meta"),
   ]);
+  const metaLeads = await completerIdentifiants(metaLeadsBruts);
   const groupes = new Map<string, Groupe>();
   const groupe = (niveau: Niveau, plateforme: "META" | "GOOGLE_ADS", id: string, nom: string | null, parentNom: string | null) => {
     const k = cle(niveau, plateforme, id);
@@ -139,6 +178,8 @@ export async function calculerPublicite(periode: Pick<Periode, "du" | "au">, mai
     synchro,
     lignes,
     leadsCrm,
+    leadsMeta: leadsMeta(cohorteMeta),
+    signesMeta,
     leadsPlateforme: synchro ? lignesPub.filter((l) => l.plateforme === "META").reduce((t, l) => t + l.leadsPlateforme, 0) : null,
     impressions: synchro ? lignesPub.reduce((t, l) => t + l.impressions, 0) : null,
     clics: synchro ? lignesPub.reduce((t, l) => t + l.clics, 0) : null,
@@ -184,18 +225,19 @@ export async function construireEcranPublicite(periode: Periode, options: { etat
   }
   const estimation = actuel.depense.estimation;
   const sourceDepense = actuel.depense.origine === "SYNCHRO" ? "META" : "CRM";
-  const signes = (c: CalculPublicite) => c.leadsCrm.filter((l) => l.signe).length;
-  const leadsMeta = (c: CalculPublicite) => (c.synchro ? c.leadsPlateforme : null);
-  const cout = (c: CalculPublicite, n: number) => arrondi2(ratio(c.depense.total, n, 6));
-  const detailDepense = actuel.depense.origine === "PRORATA" ? "estimation : prorata du budget de campagne" : actuel.depense.origine === "SAISIE" ? "dépenses « Publicité » saisies" : actuel.depense.origine === "SYNCHRO" ? `réel Meta${etatMeta.etat === "EN_ECHEC" && etatMeta.derniereReussite ? `, synchronisé le ${jourParis(etatMeta.derniereReussite)}` : ""}` : null;
+  // Une seule définition (relecture B, point 5) : leads Meta et chantiers signés Meta de calculs.ts, pour tous les coûts.
+  const signes = (c: CalculPublicite) => c.signesMeta.length;
+  const leadsPlateforme = (c: CalculPublicite) => (c.synchro ? c.leadsPlateforme : null);
+  const cout = (c: CalculPublicite, n: number) => coutPar(c.depense.total, n);
+  const detailDepense = detailDepensePub(actuel.depense, etatMeta);
   const indicateurs = [
     indicateur({ cle: "depense", libelle: "Dépense", valeur: actuel.depense.total, precedente: avant.depense.total, format: "euros", favorable: "baisse", serie: serieDepuis(periode, actuel.parJour.depense), source: sourceDepense, detail: detailDepense }),
     indicateur({ cle: "impressions", libelle: "Impressions", valeur: actuel.impressions, precedente: avant.impressions, format: "nombre", favorable: "hausse", source: "META" }),
     indicateur({ cle: "clics", libelle: "Clics", valeur: actuel.clics, precedente: avant.clics, format: "nombre", favorable: "hausse", source: "META" }),
     indicateur({ cle: "ctr", libelle: "CTR", valeur: ratio(actuel.clics, actuel.impressions, 4), precedente: ratio(avant.clics, avant.impressions, 4), format: "pourcent", favorable: "hausse", source: "META" }),
     indicateur({ cle: "cpm", libelle: "CPM", valeur: actuel.impressions ? arrondi2(((actuel.depense.total ?? 0) / actuel.impressions) * 1000) : null, precedente: avant.impressions ? arrondi2(((avant.depense.total ?? 0) / avant.impressions) * 1000) : null, format: "euros", favorable: "baisse", source: "META" }),
-    indicateur({ cle: "leadsMeta", libelle: "Leads Meta", valeur: leadsMeta(actuel), precedente: leadsMeta(avant), format: "nombre", favorable: "hausse", serie: serieDepuis(periode, actuel.parJour.leadsPlateforme), source: "META", detail: `${actuel.leadsCrm.length} dans le CRM` }),
-    indicateur({ cle: "coutParLead", libelle: "Coût par lead", valeur: cout(actuel, actuel.leadsCrm.length), precedente: cout(avant, avant.leadsCrm.length), format: "euros", favorable: "baisse", source: sourceDepense, detail: `${actuel.leadsCrm.length} leads Meta dans le CRM${estimation ? ", dépense estimée" : ""}` }),
+    indicateur({ cle: "leadsMeta", libelle: "Leads Meta", valeur: leadsPlateforme(actuel), precedente: leadsPlateforme(avant), format: "nombre", favorable: "hausse", serie: serieDepuis(periode, actuel.parJour.leadsPlateforme), source: "META", detail: `${actuel.leadsMeta.length} dans le CRM` }),
+    indicateur({ cle: "coutParLead", libelle: "Coût par lead Meta", valeur: cout(actuel, actuel.leadsMeta.length), precedente: cout(avant, avant.leadsMeta.length), format: "euros", favorable: "baisse", source: sourceDepense, detail: `${actuel.leadsMeta.length} leads Meta dans le CRM${estimation ? ", dépense estimée" : ""}` }),
     indicateur({ cle: "coutParSigne", libelle: "Coût par chantier signé", valeur: cout(actuel, signes(actuel)), precedente: cout(avant, signes(avant)), format: "euros", favorable: "baisse", source: sourceDepense, detail: signes(actuel) ? `${signes(actuel)} signés` : "aucun chantier signé encore" }),
   ];
   const jours = joursDe(periode);

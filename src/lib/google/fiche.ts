@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { jourParis } from "@/lib/dossiers/dates";
-import { jourDecale, suivreSynchro, type BilanSynchro } from "@/lib/analytique/suivi";
+import { debutDeReprise, jourDecale, lireSuivi, noterProgression, suivreSynchro, verifierInterruption, type BilanSynchro } from "@/lib/analytique/suivi";
 import { PORTEES_ANALYTIQUE, appelCompteService, configurationCompteService, emailCompteService } from "./compte-service";
 
 /**
@@ -98,15 +98,17 @@ async function ecrire(jour: string, metrique: string, valeur: number, synchronis
 }
 
 /**
- * Synchronise la fiche Google (jours inclus). Sans période : 540 jours si rien n'est en base, sinon les 10 derniers
- * jours ; toujours jusqu'à il y a 3 jours. Sans variables : NON_BRANCHEE, aucun appel.
+ * Synchronise la fiche Google (jours inclus). Sans période : 540 jours tant que la couverture notée dans
+ * `SourceAnalytique.detail` n'y remonte pas (relecture B, point 11 : un premier passage interrompu est repris), sinon
+ * les 10 derniers jours ; toujours jusqu'à il y a 3 jours. Sans variables : NON_BRANCHEE, aucun appel.
  */
-export async function synchroniserFicheGoogle(periode: { depuis?: string; jusqua?: string } = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date } = {}): Promise<BilanSynchro> {
+export async function synchroniserFicheGoogle(periode: { depuis?: string; jusqua?: string } = {}, options: { env?: NodeJS.ProcessEnv; maintenant?: Date; signal?: AbortSignal } = {}): Promise<BilanSynchro> {
   const config = configurationFiche(options.env);
   const aujourdhui = jourParis(options.maintenant ?? new Date());
   const jusqua = periode.jusqua ?? jourDecale(aujourdhui, -JOURS_NON_CALCULES_FICHE);
-  const premierPassage = !periode.depuis && (await prisma.ficheGoogleJour.count()) === 0;
-  const depuis = periode.depuis ?? jourDecale(jusqua, -(premierPassage ? JOURS_PREMIER_PASSAGE_FICHE : JOURS_PASSAGE_NUIT_FICHE));
+  const couverture = config.branchee ? ((await lireSuivi("FICHE_GOOGLE"))?.detail.couverture ?? null) : null;
+  const depuis = periode.depuis ?? debutDeReprise(couverture, jourDecale(jusqua, -JOURS_PREMIER_PASSAGE_FICHE), jusqua, JOURS_PASSAGE_NUIT_FICHE);
+  const premierPassage = !periode.depuis && depuis < jourDecale(jusqua, -JOURS_PASSAGE_NUIT_FICHE);
   if (!config.branchee || !config.emplacement) return { source: "FICHE_GOOGLE", etat: "NON_BRANCHEE", du: depuis, au: jusqua, lignes: 0, appels: 0, message: config.erreur ?? `Variables absentes : ${config.manquantes.join(", ")}.` };
   const emplacement = config.emplacement;
 
@@ -120,6 +122,8 @@ export async function synchroniserFicheGoogle(periode: { depuis?: string; jusqua
       await ecrire(l.jour, l.metrique, l.valeur, synchroniseLe);
       lignes += 1;
     }
+    await noterProgression("FICHE_GOOGLE", { du: depuis, au: jusqua });
+    verifierInterruption(options.signal);
     let avis: { nombre: number; note: number | null } | null = null;
     if (config.compteFiche) {
       const repAvis = await appelCompteService(`${API_AVIS}/${config.compteFiche}/${emplacement}/reviews?pageSize=1`, { method: "GET", ...commun });

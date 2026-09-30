@@ -4,6 +4,7 @@ import { resoudreContexte } from "./acteur";
 import { MODELES_PURGEABLES } from "./declencheurs";
 import { InjecteurEcriture, SuppressionInterdite } from "./injection";
 import { traduireRefus } from "./refus";
+import { MODELES_ANALYTIQUE, signalerChangementAnalytique } from "@/lib/analytique/memoire";
 
 const OPERATIONS_ECRITURE = new Set(["create", "createMany", "createManyAndReturn", "update", "updateMany", "upsert"]);
 // findUnique n'y est pas : un lien direct vers un enregistrement archivé doit l'afficher (« archivé le … »).
@@ -70,7 +71,10 @@ export const extensionJournal = Prisma.defineExtension({
         if (!OPERATIONS_ECRITURE.has(operation)) return query(args);
         const ecriture = await ecritureCourante();
         try {
-          return await query(injecteur.injecter(model, operation, args, ecriture) as typeof args);
+          const resultat = await query(injecteur.injecter(model, operation, args, ecriture) as typeof args);
+          // Mission 17 (partie B, relecture) : une écriture qui change les chiffres périme le cache de l'Analytique.
+          if (MODELES_ANALYTIQUE.has(model)) signalerChangementAnalytique();
+          return resultat;
         } catch (erreur) {
           throw traduireRefus(erreur, model, operation, args);
         }

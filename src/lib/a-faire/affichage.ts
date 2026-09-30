@@ -102,7 +102,7 @@ export function texteDemain(nombre: number): string {
   return `Demain : ${nombre} ${accord(nombre, "tâche")} ${nombre > 1 ? "reviennent" : "revient"}`;
 }
 
-/** « Commencer · 7 tâches · environ 45 min » */
+/** « Commencer · 7 tâches · 45 min » (tient sur un téléphone ; le sous-titre dit déjà « environ »). */
 export function libelleCommencer(nombre: number, minutes: number): string {
-  return `Commencer · ${nombre} ${accord(nombre, "tâche")} · environ ${dureeLisible(minutes)}`;
+  return `Commencer · ${nombre} ${accord(nombre, "tâche")} · ${dureeLisible(minutes)}`;
 }

@@ -405,8 +405,8 @@ describe("textes de l'écran", () => {
     assert.deepEqual([5, 45, 60, 75, 125].map(affichage.dureeLisible), ["5 min", "45 min", "1 h", "1 h 15", "2 h 05"]);
     assert.equal(affichage.sousTitreTaches({ aujourdhui: 7, minutesAujourdhui: 45 }), "7 aujourd'hui · environ 45 min");
     assert.equal(affichage.sousTitreTaches({ aujourdhui: 0, minutesAujourdhui: 0 }), "Rien pour aujourd'hui");
-    assert.equal(affichage.libelleCommencer(1, 3), "Commencer · 1 tâche · environ 3 min");
-    assert.equal(affichage.libelleCommencer(7, 45), "Commencer · 7 tâches · environ 45 min");
+    assert.equal(affichage.libelleCommencer(1, 3), "Commencer · 1 tâche · 3 min");
+    assert.equal(affichage.libelleCommencer(7, 45), "Commencer · 7 tâches · 45 min");
     assert.deepEqual([0, 1, 4].map(affichage.texteDemain), ["Rien de prévu pour demain", "Demain : 1 tâche revient", "Demain : 4 tâches reviennent"]);
     assert.deepEqual([5, 15, 30, 60].map(affichage.libelleChoixMinutes), ["5 min", "15 min", "30 min", "1 h"]);
   });

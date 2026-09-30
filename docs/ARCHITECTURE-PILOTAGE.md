@@ -300,7 +300,9 @@ après le lot 7 du 29/09/2026) vivent dans le groupe de routes
   `reponseErreur`, `ErreurMetier`) sont dans `src/lib/commun/`.
 - L'ancien CRM (groupe `(app)`, charte claire) est retiré : voir la section 19
   pour ce qui a été repris et les redirections de ses adresses.
-- **Tâches de fond** (`/taches-de-fond`) : travaux périodiques et leur dernier passage,
+- **Tâches** (`/taches`, accueil depuis la mission 17) : la liste de ce que Lucas a à faire
+  (`src/lib/a-faire/`, routes `/api/a-faire/…`, conception dans `docs/TACHES.md`).
+- **Tâches de fond** (`/taches-de-fond`, anciennement `/taches`) : travaux périodiques et leur dernier passage,
   tâches en échec avec leur erreur, relance et annulation à la main.
 
 ## 5. Validation : « l'agent propose, je valide »

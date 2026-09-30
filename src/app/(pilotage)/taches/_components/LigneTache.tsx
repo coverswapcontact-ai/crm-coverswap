@@ -65,8 +65,8 @@ export function sansRaccourci(tache: TacheVue): boolean {
 const SEUIL_BALAYAGE = 90;
 const BORD_RETOUR = 24;
 
-export const CLASSE_BOUTON_PRINCIPAL = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-50";
-const CLASSE_BOUTON_GRIS = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]";
+export const CLASSE_BOUTON_PRINCIPAL = "flex h-11 w-11 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-50";
+const CLASSE_BOUTON_GRIS = "flex h-11 w-11 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]";
 
 export type ActionsLigne = {
   /** Le raccourci (sauf l'appel, qui est un lien tel:). */
@@ -96,7 +96,7 @@ export function BoutonPrincipal({ tache, actions, grand = false }: { tache: Tach
       <span className="truncate">{libelle}</span>
     </>
   ) : (
-    <Icone size={18} aria-hidden />
+    <Icone size={17} aria-hidden />
   );
   const numero = r.genre === "APPEL" ? numeroDe(tache) : null;
   if (numero) {
@@ -117,6 +117,19 @@ export function BoutonPrincipal({ tache, actions, grand = false }: { tache: Tach
     <button type="button" onClick={() => (vide ? actions.onFait(tache) : actions.onPrincipal(tache))} aria-label={libelle} title={libelle} className={classe}>
       {contenu}
     </button>
+  );
+}
+
+/** « verbe · nom » : sur une ligne étroite, le verbe se raccourcit avant le nom (« Fixer la date du ch… · Petit »). */
+function Titre({ titre }: { titre: string }) {
+  const coupure = titre.indexOf(" · ");
+  const classe = "text-[14.5px] font-medium text-[#F2F3F5]";
+  if (coupure < 0) return <span className={cn("block w-full truncate", classe)}>{titre}</span>;
+  return (
+    <span className={cn("flex w-full min-w-0", classe)} title={titre}>
+      <span className="min-w-0 truncate">{titre.slice(0, coupure)}</span>
+      <span className="max-w-[65%] shrink-0 truncate">{`\u00a0·\u00a0${titre.slice(coupure + 3)}`}</span>
+    </span>
   );
 }
 
@@ -191,8 +204,8 @@ export function LigneTache({ tache, maintenant, surbrillance, occupe, actions }:
         style={{ touchAction: "pan-y", ...(decalage ? { transform: `translateX(${decalage}px)` } : {}) }}
         className={cn("relative flex items-center gap-1 bg-[#1C1F25] pr-1.5", surbrillance && "bg-[#15251F] shadow-[inset_3px_0_0_#1D9E75]")}
       >
-        <button type="button" onClick={() => actions.onOuvrir(tache)} className={cn("flex min-h-[60px] min-w-0 flex-1 flex-col justify-center py-2 pl-3.5 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none sm:min-h-[52px]", TRANS)}>
-          <span className="block w-full truncate text-[14.5px] font-medium text-[#F2F3F5]">{tache.titre}</span>
+        <button type="button" onClick={() => actions.onOuvrir(tache)} className={cn("flex min-h-[60px] min-w-0 flex-1 flex-col justify-center py-2 pl-3.5 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none sm:min-h-[48px]", TRANS)}>
+          <Titre titre={tache.titre} />
           <span className="block w-full truncate text-[12.5px] text-[#8B919C]">{ligneGrise(tache, new Date(maintenant))}</span>
         </button>
         <span className={cn("shrink-0 px-1 text-[12px] text-[#8B919C] tabular-nums", valider && "hidden sm:inline")}>{dureeLisible(tache.dureeMin)}</span>

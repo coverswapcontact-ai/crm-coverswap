@@ -560,6 +560,31 @@ export async function archiverCoordonnee(
 }
 
 /**
+ * Mission 17 (partie C) : remet une coordonnée archivée sur la fiche (inverse d'`archiverCoordonnee`). Elle
+ * redevient principale si la fiche n'en a plus pour cette nature. Refusé si la même valeur est déjà active.
+ */
+export async function restaurerCoordonnee(clientId: string, nature: "email" | "telephone", coordonneeId: string): Promise<void> {
+  await ficheModifiable(clientId);
+  await prisma.$transaction(async (tx) => {
+    if (nature === "email") {
+      const ligne = await tx.clientEmail.findFirst({ where: { ...AVEC_ARCHIVES, id: coordonneeId, clientId } });
+      if (!ligne) throw new ErreurMetier("Adresse introuvable.", 404);
+      if (!ligne.archiveLe) return;
+      if (await tx.clientEmail.findFirst({ where: { clientId, adresse: ligne.adresse, id: { not: ligne.id } } })) throw new ErreurMetier("Cette adresse est déjà sur la fiche.", 409);
+      const principale = await tx.clientEmail.findFirst({ where: { clientId, principale: true } });
+      await tx.clientEmail.update({ where: { id: ligne.id }, data: { archiveLe: null, archiveMotif: null, principale: !principale } });
+    } else {
+      const ligne = await tx.clientTelephone.findFirst({ where: { ...AVEC_ARCHIVES, id: coordonneeId, clientId } });
+      if (!ligne) throw new ErreurMetier("Numéro introuvable.", 404);
+      if (!ligne.archiveLe) return;
+      if (await tx.clientTelephone.findFirst({ where: { clientId, numero: ligne.numero, id: { not: ligne.id } } })) throw new ErreurMetier("Ce numéro est déjà sur la fiche.", 409);
+      const principal = await tx.clientTelephone.findFirst({ where: { clientId, principal: true } });
+      await tx.clientTelephone.update({ where: { id: ligne.id }, data: { archiveLe: null, archiveMotif: null, principal: !principal } });
+    }
+  });
+}
+
+/**
  * Corrige une coordonnée (valeur mal saisie, libellé) sans l'archiver : le
  * journal garde l'ancienne valeur. Une adresse ou un numéro déjà sur la fiche
  * n'est pas dupliqué.

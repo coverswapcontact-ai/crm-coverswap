@@ -21,7 +21,7 @@ export const outilMessagesEspace = definirOutil({
   nom: "messages_espace",
   titre: "Les messages des clients dans leur espace",
   description:
-    "Ce que les clients ont écrit dans leur espace (« Écrire à CoverSwap », commentaire sur une simulation, demande d'autre proposition) et ce qui leur a été répondu. Par défaut : les messages NON LUS, tous clients. Avec une cible (nom ou identifiant) : le fil de ce client, réponses comprises. « marquer_lus » : vrai pour marquer lus les messages du client visé sans lui répondre. Pour répondre : « repondre_espace ».",
+    "Ce que les clients ont écrit dans leur espace (« Écrire à CoverSwap », commentaire sur une simulation, demande d'autre proposition) et ce qui leur a été répondu. Par défaut : les messages NON LUS, tous clients. Avec une cible (nom ou identifiant) : le fil de ce client, réponses comprises. Pour les marquer lus sans répondre : « marquer_messages_lus » (ou « geste_espace » MARQUER_LUS). Pour répondre : « repondre_espace ».",
   niveau: "LECTURE",
   schema: schemaCible.extend({ tout: z.boolean().optional().describe("Vrai : tous les messages récents, lus compris (sans cible)."), limite: z.number().int().min(1).max(60).optional() }),
   executer: async (e) => {

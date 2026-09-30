@@ -207,6 +207,9 @@ export const outilProposerMiseAJour = definirOutil({
   },
 });
 
+/** Types de proposition sans retour : jamais validés sans aperçu ni confirmation, quoi qu'en dise leur définition. */
+const TYPES_TOUJOURS_SENSIBLES = new Set(["FUSION_CLIENTS", "ANONYMISATION_CLIENT"]);
+
 const schemaIds = z.object({ propositionIds: z.array(z.string().max(40)).min(1).max(20).describe("Identifiants rendus par « proposer_mise_a_jour » ou « lire_mail ».") });
 
 async function chargerCartes(ids: string[]) {
@@ -217,20 +220,27 @@ async function chargerCartes(ids: string[]) {
 export const outilValiderProposition = definirOutil({
   nom: "valider_proposition",
   titre: "Valider des cartes (appliquer la mise à jour)",
-  description: "Applique une ou plusieurs cartes en attente (mise à jour depuis un mail, règle de tri) : le dossier, la fiche, le lead ou le projet sont modifiés par le code de la fiche (mêmes règles : qui a la main, étape, contrôle de cohérence), et la chronologie le garde. Sensible quand une carte touche un montant, une adresse ou une date de chantier : aperçu puis confirmation. Plus de trois cartes → confirmation. Corrections possibles (« valeur »).",
+  description: "Applique une ou plusieurs propositions en attente (carte de mise à jour depuis un mail, règle de tri, mail ou SMS proposé, changement d'étape, fusion de clients, anonymisation…) : le dossier, la fiche, le lead ou le projet sont modifiés par le code de la fiche (mêmes règles : qui a la main, étape, contrôle de cohérence), et la chronologie le garde. Sensible — aperçu puis confirmation — dès qu'une proposition l'est par son type (un mail ou un SMS qui part chez le client, un passage à Signé, Facturé, Encaissé ou Perdu, une carte sur un montant, une adresse ou une date de chantier), et toujours pour une fusion de clients ou une anonymisation. Plus de trois propositions → confirmation. « corrections » (une seule proposition) : les champs corrigibles du type (« valeur », l'objet et le texte d'un mail, « conserver » A ou B d'une fusion… : lister PROPOSITIONS avec proposition_id les donne).",
   niveau: "REVERSIBLE",
-  schema: schemaIds.extend({ corrections: z.object({ valeur: z.string().max(4000).optional() }).optional().describe("Pour une seule carte : la valeur corrigée par Lucas.") }),
+  schema: schemaIds.extend({ corrections: z.record(z.string().max(40), z.union([z.string().max(10_000), z.number(), z.boolean(), z.null()])).optional().describe("Pour une seule proposition : les champs corrigés par Lucas (« valeur », « objet », « texte », « conserver »…).") }),
   masse: (e) => e.propositionIds.length,
+  // Mission 17 (partie C, § 3.23) : la sensibilité de la DÉFINITION du type (vueProposition › sensible), plus les types
+  // sans retour (fusion de clients, anonymisation) — et plus seulement les cartes nées d'un mail.
   sensible: async (e) => {
-    const cartes = await prisma.proposition.findMany({ where: { id: { in: e.propositionIds }, type: TYPE_MAJ_DEPUIS_MAIL }, select: { contenu: true } });
-    return cartes.some((c) => {
-      const lu = schemaMaj.safeParse(JSON.parse(c.contenu));
-      return lu.success && estSensibleMaj(lu.data);
-    });
+    const lignes = await prisma.proposition.findMany({ where: { id: { in: e.propositionIds } } });
+    return lignes.some((p) => TYPES_TOUJOURS_SENSIBLES.has(p.type) || vueProposition(p).sensible);
   },
   apercu: async (e) => {
     const cartes = await chargerCartes(e.propositionIds);
-    return `Je vais appliquer ${pluriel(cartes.length, "carte")} :\n${cartes.map((c) => `- ${c.titre}${c.sensible ? " (sensible)" : ""}${c.statut !== "EN_ATTENTE" ? ` — déjà ${c.statut.toLowerCase()}` : ""}`).join("\n")}${e.corrections?.valeur ? `\nValeur corrigée : ${e.corrections.valeur}` : ""}`;
+    const detail = (c: (typeof cartes)[number]) => {
+      const contenu = c.contenu as Record<string, unknown>;
+      if (c.type === "ENVOI_MAIL") return `\n  Mail à ${String(contenu.a ?? "?")} — objet « ${String(e.corrections?.objet ?? contenu.objet ?? "")} » :\n  ${String(e.corrections?.texte ?? contenu.texte ?? "").slice(0, 1200)}`;
+      if (c.type === "FUSION_CLIENTS") return `\n  ${c.resume ?? ""}\n  Fiche conservée : ${String(e.corrections?.conserver ?? contenu.conserver ?? "?")} ; l'autre est archivée, sans « défusion ».`;
+      if (c.type === "ANONYMISATION_CLIENT") return "\n  Anonymisation définitive de la fiche (documents émis et encaissements gardés sous pseudonyme).";
+      return c.resume ? `\n  ${c.resume.slice(0, 300)}` : "";
+    };
+    const corrections = e.corrections && Object.keys(e.corrections).length ? `\nCorrections : ${Object.entries(e.corrections).map(([cle, valeur]) => `${cle} = ${String(valeur).slice(0, 200)}`).join(" ; ")}` : "";
+    return `Je vais valider ${pluriel(cartes.length, "proposition")} :\n${cartes.map((c) => `- ${c.libelleType} : ${c.titre}${c.sensible || TYPES_TOUJOURS_SENSIBLES.has(c.type) ? " (sensible)" : ""}${c.statut !== "EN_ATTENTE" ? ` — déjà ${c.statut.toLowerCase()}` : ""}${detail(c)}`).join("\n")}${corrections}`;
   },
   executer: async (e) => {
     const resultats: { id: string; titre: string; statut: string; erreur: string | null }[] = [];

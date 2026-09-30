@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
-import prisma from "@/lib/prisma";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
 import { EVENEMENTS_NOTIFIES, enregistrerModeleNotification } from "@/lib/mail/notifications";
-import { poserRegle } from "@/lib/mail/boite";
+import { archiverRegle, poserRegle } from "@/lib/mail/boite";
 import { enregistrerGuideStyle } from "@/lib/mail/redaction";
 import { reglagesMail } from "@/lib/mail/reglages-vue";
 
@@ -35,7 +34,7 @@ export async function PATCH(requete: NextRequest) {
       const { evenement, ...modele } = entree.modele;
       await enregistrerModeleNotification(evenement, modele, "LUCAS");
     }
-    if (entree.archiverRegle) await prisma.regleExpediteur.update({ where: { id: entree.archiverRegle }, data: { archiveLe: new Date(), archiveMotif: "Retirée par Lucas (Paramètres)" } });
+    if (entree.archiverRegle) await archiverRegle(entree.archiverRegle, "Retirée par Lucas (Paramètres)");
     if (entree.regle) {
       const cible = entree.regle.cible.toLowerCase();
       if (!cible.includes("@")) return NextResponse.json({ error: "La cible est une adresse (« x@y.fr ») ou un domaine (« @y.fr »)." }, { status: 400 });

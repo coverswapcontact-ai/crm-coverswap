@@ -303,14 +303,14 @@ export const outilEnvoyerDocument = definirOutil({
 export const outilPublierSimulation = definirOutil({
   nom: "publier_simulation",
   titre: "Publier des simulations dans l'espace du client",
-  description: "Publie les simulations en brouillon d'un dossier (toutes, ou celles données) dans l'espace du client, qui reçoit le mail automatique « votre simulation est prête ». Sensible : aperçu puis confirmation. « masquer_simulation » fait l'inverse.",
+  description: "Publie les simulations EN BROUILLON d'un dossier (toutes, ou celles données) dans l'espace du client, qui reçoit le mail automatique « votre simulation est prête ». Une simulation masquée n'est jamais republiée ici (« publier » avec reafficher). Sensible : aperçu puis confirmation. « masquer_simulation » fait l'inverse.",
   niveau: "SENSIBLE",
   schema: schemaCible.extend({ simulationIds: z.array(z.string().max(40)).max(20).optional() }),
   apercu: async (e) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu.texte;
     const { simulations } = await listerSimulationsDossier(exigerDossier(r.ids));
-    const cibles = simulations.filter((s) => s.statut !== "PUBLIEE" && (!e.simulationIds || e.simulationIds.includes(s.id)));
+    const cibles = simulations.filter((s) => s.statut === "BROUILLON" && (!e.simulationIds || e.simulationIds.includes(s.id)));
     return cibles.length ? `Je vais publier ${pluriel(cibles.length, "simulation")} pour ${r.ids.nom} (${cibles.map((s) => s.titre ?? s.id).join(", ")}) ; le client recevra le mail « votre simulation est prête ».` : `Aucune simulation à publier pour ${r.ids.nom}.`;
   },
   executer: async (e) => {
@@ -318,7 +318,7 @@ export const outilPublierSimulation = definirOutil({
     if (r.ambigu) return r.ambigu;
     const dossierId = exigerDossier(r.ids);
     const { simulations } = await listerSimulationsDossier(dossierId);
-    const ids = simulations.filter((s) => s.statut !== "PUBLIEE" && (!e.simulationIds || e.simulationIds.includes(s.id))).map((s) => s.id);
+    const ids = simulations.filter((s) => s.statut === "BROUILLON" && (!e.simulationIds || e.simulationIds.includes(s.id))).map((s) => s.id);
     if (ids.length === 0) return { texte: `Aucune simulation à publier pour ${r.ids.nom}.` };
     const resultat = await publierSimulations(dossierId, ids, { prevenir: false });
     return { texte: `${pluriel(resultat.publiees, "simulation publiée", "simulations publiées")} pour ${r.ids.nom}. ${resultat.mail?.programme ? "Le mail « votre simulation est prête » part." : `Pas de mail : ${resultat.mail?.raison ?? "rien de nouveau"}.`}`, donnees: resultat, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };

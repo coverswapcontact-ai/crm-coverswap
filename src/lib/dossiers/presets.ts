@@ -97,3 +97,11 @@ export async function archiverPreset(presetId: string): Promise<void> {
   await presetActif(presetId);
   await prisma.presetTarif.update({ where: { id: presetId }, data: { actif: false } });
 }
+
+/** Mission 17 (partie C) : un tarif retiré revient dans la liste (inverse d'`archiverPreset`), avec ses sous-parties. */
+export async function restaurerPreset(presetId: string): Promise<PresetVue> {
+  const preset = await prisma.presetTarif.findUnique({ where: { id: presetId } });
+  if (!preset || preset.archiveLe) throw new ErreurMetier("Tarif introuvable.", 404);
+  if (preset.actif) return versVue(preset);
+  return versVue(await prisma.presetTarif.update({ where: { id: presetId }, data: { actif: true } }));
+}

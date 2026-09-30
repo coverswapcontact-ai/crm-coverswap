@@ -10,7 +10,11 @@ import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } f
 import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
 import { mainDe } from "@/lib/dossiers/pilotage";
-import { compterMessagesNonLus } from "@/lib/espace/messages";
+import { compterMessagesNonLus, messagesEspace } from "@/lib/espace/messages";
+import { espaceDuClient } from "@/lib/espace/gestion";
+import { vueEspaceCrm } from "@/lib/espace/vue-crm";
+import { chronologieDuContact } from "@/lib/chronologie/chronologie";
+import { FAMILLES_CHRONOLOGIE } from "@/lib/chronologie/familles";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
@@ -51,12 +55,14 @@ export const outilChercher = definirOutil({
   nom: "chercher",
   titre: "Chercher un client, un lead ou un dossier",
   description:
-    "Cherche par nom (même mal orthographié), téléphone, e-mail, ville, adresse (« 30 boulevard Joliot-Curie ») ou numéro de devis / facture (« 2026-037 »). Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir.",
+    "Cherche par nom (même mal orthographié), téléphone, e-mail, ville, adresse (« 30 boulevard Joliot-Curie ») ou numéro de devis / facture (« 2026-037 »). Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir. « archives: true » cherche aussi les fiches, leads et dossiers archivés (marqués ARCHIVÉ) : c'est ainsi que « restaurer » trouve ce qu'il restaure ; sans lui, un nom qui ne désigne qu'un archivé le rend quand même.",
   niveau: "LECTURE",
-  schema: z.object({ texte: z.string().min(1).max(120).describe("Ce que Lucas a dit : « Rousse », « le dossier Forestier », « 06 12 34 56 78 », « Montpellier »."), limite: z.number().int().min(1).max(20).optional() }),
-  executer: async ({ texte, limite }) => {
-    const candidats = await chercherContacts(texte, { limite: limite ?? 8 });
-    if (candidats.length === 0) return { texte: `Rien trouvé pour « ${texte} » : ni client, ni lead, ni dossier. Vérifie l'orthographe, ou cherche par téléphone.` };
+  schema: z.object({ texte: z.string().min(1).max(120).describe("Ce que Lucas a dit : « Rousse », « le dossier Forestier », « 06 12 34 56 78 », « Montpellier »."), limite: z.number().int().min(1).max(20).optional(), archives: z.boolean().optional().describe("Vrai : les archivés aussi (leads, dossiers, fiches client).") }),
+  executer: async ({ texte, limite, archives }) => {
+    let candidats = await chercherContacts(texte, { limite: limite ?? 8, archives });
+    // Rien parmi les vivants : les archivés (mission 17, partie C : `restaurer` doit pouvoir les trouver).
+    if (candidats.length === 0 && !archives) candidats = await chercherContacts(texte, { limite: limite ?? 8, archives: true });
+    if (candidats.length === 0) return { texte: `Rien trouvé pour « ${texte} » : ni client, ni lead, ni dossier${archives ? ", même archivé" : ""}. Vérifie l'orthographe, ou cherche par téléphone.` };
     return {
       texte: `${candidats.length} candidat${candidats.length > 1 ? "s" : ""} pour « ${texte} » :\n${candidats.map(ligneCandidat).join("\n")}`,
       donnees: candidats,
@@ -98,7 +104,9 @@ export async function resoudreCible(cible: Cible, type?: "CLIENT" | "LEAD" | "DO
     return { dossierId: l.dossiers[0]?.id ?? null, clientId: l.clientId, leadId: l.id, nom: `${l.prenom} ${l.nom}`.trim() };
   }
   if (!cible.nom) throw new Error("Indique le nom, ou un identifiant (rendu par « chercher »).");
-  const resultat = await trouverUnSeul(cible.nom, type);
+  let resultat = await trouverUnSeul(cible.nom, type);
+  // Mission 17 (partie C) : un nom qui ne désigne aucun vivant peut désigner un archivé (restaurer, lire sa fiche).
+  if ("aucun" in resultat) resultat = await trouverUnSeul(cible.nom, type, { archives: true });
   if ("aucun" in resultat) throw new Error(`Aucun contact ne correspond à « ${cible.nom} ».`);
   if ("ambigu" in resultat) throw new CibleAmbigue(resultat.ambigu);
   const t = resultat.trouve;
@@ -121,14 +129,46 @@ function quiALaMain(d: { etape: string; prochaineActionDate: string | null; main
   return main === "AUCUNE" ? "personne" : main === "MOI" ? "à toi" : main === "A_RELANCER" ? "à toi : à relancer" : "chez le client";
 }
 
+const court = (texte: string | null | undefined, n: number) => (!texte ? "" : texte.length > n ? `${texte.slice(0, n)}…` : texte);
+const OUVERTES = ["A_FAIRE", "PLUS_TARD"];
+
+/** Les tâches de Lucas qui portent sur ce contact (dossier, lead ou client) : ouvertes d'abord, puis les dernières réglées. */
+async function tachesDuSujet(ids: { dossierId: string | null; clientId: string | null; leadId: string | null }) {
+  const ou = [...(ids.dossierId ? [{ dossierId: ids.dossierId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : []), ...(ids.clientId ? [{ clientId: ids.clientId }] : [])];
+  if (!ou.length) return [];
+  const lignes = await prisma.tacheAFaire.findMany({ where: { OR: ou }, orderBy: [{ updatedAt: "desc" }], take: 40, select: { id: true, titre: true, raison: true, statut: true, type: true, plusTardJusqua: true, reponduLe: true, reponse: true, reponseRaison: true } });
+  return [...lignes.filter((t) => OUVERTES.includes(t.statut)), ...lignes.filter((t) => !OUVERTES.includes(t.statut)).slice(0, 5)];
+}
+
+/** Mails, messages d'espace et SMS échangés avec ce contact (les plus récents). */
+async function messagesDuSujet(ids: { dossierId: string | null; clientId: string | null; leadId: string | null }, limite: number) {
+  const ou = [...(ids.dossierId ? [{ dossierId: ids.dossierId }] : []), ...(ids.clientId ? [{ clientId: ids.clientId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : [])];
+  const ouSms = [...(ids.clientId ? [{ clientId: ids.clientId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : [])];
+  const [mails, espace, sms] = await Promise.all([
+    ou.length ? prisma.message.findMany({ where: { OR: ou }, orderBy: { recuLe: "desc" }, take: limite, select: { id: true, canal: true, sens: true, de: true, deNom: true, objet: true, extrait: true, recuLe: true, lu: true } }) : Promise.resolve([]),
+    ids.dossierId ? messagesEspace({ dossierId: ids.dossierId, limite }) : Promise.resolve([]),
+    ouSms.length ? prisma.sms.findMany({ where: { conversation: { OR: ouSms } }, orderBy: { createdAt: "desc" }, take: limite, select: { id: true, sens: true, texte: true, statut: true, modele: true, createdAt: true } }) : Promise.resolve([]),
+  ]);
+  return { mails, espace, sms };
+}
+
+const schemaLireFiche = schemaCible.extend({
+  nombre: z.number().int().min(1).max(200).optional().describe("Dossier : événements d'historique rendus (20 par défaut)."),
+  decalage: z.number().int().min(0).max(5000).optional().describe("Dossier : événements à sauter (« voir les plus anciens »)."),
+  chronologie: z.number().int().min(0).max(100).optional().describe("Entrées de la chronologie du contact (mails, appels, espace, dossier, documents, paiements, notes, propositions) ; 0 ou absent : pas de chronologie."),
+  familles: z.array(z.enum(FAMILLES_CHRONOLOGIE)).max(8).optional().describe("Chronologie : filtrer par famille (MAIL, APPEL, ESPACE, DOSSIER, DOCUMENT, PAIEMENT, NOTE, PROPOSITION)."),
+  messages: z.number().int().min(0).max(50).optional().describe("Mails, messages d'espace et SMS rendus par canal (10 par défaut ; 0 : aucun)."),
+});
+
 export const outilLireFiche = definirOutil({
   nom: "lire_fiche",
   titre: "Lire une fiche complète",
   description:
-    "Rend tout ce que le CRM sait d'un dossier (étape, qui a la main, prochaine action, devis et factures, paiements, simulations, notes d'appel, dépenses, historique récent), d'un client (coordonnées, dossiers, leads) ou d'un lead (demande, source, réponses au formulaire, échanges). Utilise-le pour « où en est le dossier X ? ». Donne un identifiant ou un nom.",
+    "Rend TOUT ce que le CRM sait d'un dossier, d'un client ou d'un lead (archivés compris). Dossier : étape, qui a la main (depuis quand, pourquoi), source, ouverture, prochaine action, dates, projet, perte détaillée, points à compléter et masqués, délais, devis et factures (identifiants, PDF), paiements (chacun avec son identifiant), simulations, photos, dépenses, notes, l'espace client (étape du client, reste à faire, projet, choix, favoris, avis, paiement vu, derniers gestes, photos retirées, lien et aperçu « comme le client »), l'historique complet paginé (« nombre », « decalage »). Client : catégorie, SIRET, adresse, provenance, recommandations, passif, consentements, coordonnées avec leur identifiant, état (archivé, fusionné, anonymisé), historique de la fiche, espace permanent. Lead : tous les champs de la fiche (code postal, notes, campagne, publicité, formulaire, prix simulé, style, doublon, tentatives, dernier appel et contact, archivage, ancien CRM), échanges, notes d'appel. Et pour tous : les tâches de Lucas qui le concernent, les mails, messages d'espace et SMS (« messages »), la chronologie filtrable (« chronologie », « familles »). Réponse à « où en est le dossier X ? ». Donne un identifiant ou un nom.",
   niveau: "LECTURE",
-  schema: schemaCible,
-  executer: async (cible, contexte) => {
+  schema: schemaLireFiche,
+  executer: async (entree, contexte) => {
+    const cible = { dossierId: entree.dossierId, clientId: entree.clientId, leadId: entree.leadId, nom: entree.nom };
     let ids;
     try {
       ids = await resoudreCible(cible);
@@ -139,36 +179,75 @@ export const outilLireFiche = definirOutil({
     const liens: LienOutil[] = [];
     const parties: string[] = [];
     const donnees: Record<string, unknown> = {};
+    const nbMessages = entree.messages ?? 10;
     if (ids.dossierId) {
       const d = await chargerDetail(ids.dossierId);
       const simulations = await listerSimulationsDossier(d.id).catch(() => ({ simulations: [] }));
       const depenses = await depensesDuDossier(d.id).catch(() => ({ depenses: [], total: 0 }));
+      const brut = await prisma.dossier.findUnique({ where: { id: d.id }, select: { archiveLe: true, archiveMotif: true, completudeMasquee: true } });
+      const decalage = entree.decalage ?? 0;
+      const nombre = entree.nombre ?? 20;
+      const [evenements, totalEvenements, espace] = await Promise.all([
+        prisma.dossierEvenement.findMany({ where: { dossierId: d.id }, orderBy: { createdAt: "desc" }, skip: decalage, take: nombre, select: { id: true, type: true, direction: true, contenu: true, createdAt: true, survenuLe: true, metadata: true } }),
+        prisma.dossierEvenement.count({ where: { dossierId: d.id } }),
+        vueEspaceCrm(d.id).catch(() => null),
+      ]);
       const devis = d.documents.filter((x) => x.type === "DEVIS");
       const factures = d.documents.filter((x) => x.type === "FACTURE");
+      const avoirs = d.documents.filter((x) => x.type === "AVOIR");
       const main = quiALaMain(d, contexte.maintenant);
+      const masques = (() => {
+        try {
+          return brut?.completudeMasquee ? (JSON.parse(brut.completudeMasquee) as string[]) : [];
+        } catch {
+          return [];
+        }
+      })();
       parties.push(
         `Dossier ${titreDossier(d)} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${main === "personne" ? "à personne" : main}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
+        brut?.archiveLe ? `ARCHIVÉ le ${format.jourCourt(brut.archiveLe)}${brut.archiveMotif ? ` (${brut.archiveMotif})` : ""} : « restaurer » le ramène.` : "",
         d.prochaineAction ? `Prochaine action : ${d.prochaineAction}${d.prochaineActionDate ? ` le ${format.jour(d.prochaineActionDate)}` : ""}.` : "Pas de prochaine action notée.",
         d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
         d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
+        `Source ${d.source}, ouvert le ${format.jourCourt(d.ouvertLe)}${d.mainLe ? `, main rangée le ${format.jourCourt(d.mainLe)}` : ""}${d.origine ? `, né du ${d.origine.type === "LEAD" ? "lead" : "prospect"} ${d.origine.nom} [${d.origine.type.toLowerCase()}:${d.origine.id}]` : ""}${d.client ? `, fiche client ${d.client.nom} [client:${d.client.id}]` : ""}. Coordonnées : ${[d.clientAdresse, d.clientCp, d.clientVille].filter(Boolean).join(" ")}, ${d.clientTelephone || "sans téléphone"}, ${d.clientEmail ?? "sans e-mail"}${d.montantEstime !== null ? ` ; montant estimé ${format.euros(d.montantEstime)}` : ""}.`,
         Object.keys(d.prestations).length ? `Projet : ${resumerSelection(d.prestations)}${Object.keys(d.teintes).length ? ` ; teintes : ${Object.entries(d.teintes).map(([cle, t]) => `${sousPartieDeCle(cle)?.sousPartie.libelle ?? cle} ${t}`).join(", ")}` : ""}.` : "",
-        devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})`).join(", ")}.` : "Aucun devis.",
-        factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "",
-        `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
-        simulations.simulations.length ? `Simulations : ${simulations.simulations.length} (${pluriel(simulations.simulations.filter((s) => s.statut === "PUBLIEE").length, "publiée")}${simulations.simulations.some((s) => s.choisie) ? ", une choisie par le client" : ""}).` : "Aucune simulation.",
-        depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} (${depenses.depenses.length}).` : "",
+        d.perte ? `Perdu${d.motifPerte ? ` (${d.motifPerte})` : ""}${d.perte.le ? ` le ${format.jourCourt(d.perte.le)}` : ""}${d.perte.etape ? ` à l'étape ${ligneEtape(d.perte.etape)}` : ""}${d.perte.concurrent ? `, remporté par ${d.perte.concurrent}${d.perte.montantConcurrent !== null ? ` à ${format.euros(d.perte.montantConcurrent)}` : ""}` : ""}${d.perte.montantPropose !== null ? `, notre prix ${format.euros(d.perte.montantPropose)}` : ""}${d.perte.commentaire ? ` — ${d.perte.commentaire}` : ""}.` : "",
+        devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})${x.dateEmission ? ` émis le ${format.jourCourt(x.dateEmission)}` : ""}${x.origine === "REPRISE" ? ", repris" : ""}${x.pdfUrl ? ", PDF" : ""} [document:${x.id}]`).join(", ")}.` : "Aucun devis.",
+        factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})${x.dateEmission ? ` émise le ${format.jourCourt(x.dateEmission)}` : ""}${x.echeanceLe ? `, échéance ${format.jourCourt(x.echeanceLe)}` : ""} [document:${x.id}]`).join(", ")}.` : "",
+        avoirs.length ? `Avoirs : ${avoirs.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} [document:${x.id}]`).join(", ")}.` : "",
+        `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}${d.paiements.encaissements.length ? ` : ${d.paiements.encaissements.map((e) => `${format.euros(e.montant)} ${e.moyen?.toLowerCase() ?? ""} le ${format.jourCourt(e.recuLe)}${e.statut !== "VALIDE" ? ` (${e.statut.toLowerCase()}${e.motifFin ? ` : ${e.motifFin}` : ""})` : ""}${e.moyen === "CHEQUE" ? (e.crediteLe ? `, crédité le ${format.jourCourt(e.crediteLe)}` : ", pas encore crédité") : ""}${e.reference ? ` réf. ${e.reference}` : ""} [encaissement:${e.id}]`).join(" · ")}` : ""}.`,
+        simulations.simulations.length ? `Simulations : ${simulations.simulations.map((s) => `${s.titre ?? "sans titre"} (${s.statut.toLowerCase()}${s.choisie ? ", choisie par le client" : ""}${s.publieeLe ? `, publiée le ${format.jourCourt(s.publieeLe)}` : ""}) [simulation:${s.id}]`).join(" · ")}.` : "Aucune simulation.",
+        d.photos.length ? `Photos : ${pluriel(d.photos.filter((p) => !p.apres).length, "avant", "avant")}, ${pluriel(d.photos.filter((p) => p.apres).length, "après", "après")} (« voir_photos »).` : "Aucune photo.",
+        depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} — ${depenses.depenses.map((x) => `${x.fournisseur} ${format.euros(x.montant)}${x.justificatif ? " (justificatif)" : " (sans justificatif)"} [depense:${x.id}]`).join(" · ")}.` : "",
         d.completude.length ? `À compléter : ${d.completude.map((p) => p.libelle).join(", ")}.` : "",
-        d.notes.length ? `Dernière note (${format.jourCourt(d.notes[0].createdAt)}) : ${d.notes[0].contenu.slice(0, 200)}` : "",
-        `Derniers événements : ${d.evenements.slice(0, 5).map((e) => `${format.jourCourt(e.date)} ${e.contenu.slice(0, 90)}`).join(" · ")}`
+        masques.length ? `Points masqués : ${masques.join(", ")}.` : "",
+        d.delais && Object.values(d.delais).some((v) => v !== null) ? `Délais : ${[d.delais.ouvertureASignature !== null ? `ouverture → signature ${d.delais.ouvertureASignature} j` : null, d.delais.signatureAChantier !== null ? `signature → chantier ${d.delais.signatureAChantier} j` : null, d.delais.facturationAEncaissement !== null ? `facturation → encaissement ${d.delais.facturationAEncaissement} j` : null, d.delais.boutEnBout !== null ? `bout en bout ${d.delais.boutEnBout} j` : null].filter(Boolean).join(", ")}.` : "",
+        d.notes.length ? `Notes (${d.notes.length}) : ${d.notes.map((n) => `${format.jourCourt(n.createdAt)} [${ligneEtape(n.etape)}] ${court(n.contenu, 200)}`).join(" · ")}` : "",
+        espace ? `Espace client : étape du client « ${espace.etapeLibelle} » ; reste à faire : ${espace.resteAFaire} ; ${espace.revoqueLe ? "lien DÉSACTIVÉ" : espace.premierAccesLe ? `vu ${espace.nbAcces} fois, dernière visite ${format.jourCourt(espace.dernierAccesLe)}` : "jamais ouvert"}${espace.projet ? ` ; projet : ${espace.projet.resume}${espace.projetValide ? ` (validé le ${format.jourCourt(espace.projetValide.le)} par ${espace.projetValide.par.toLowerCase()})` : ""}` : ""}${espace.choix ? ` ; choix : ${espace.choix.mode}${espace.choix.commentaire ? ` « ${court(espace.choix.commentaire, 120)} »` : ""}` : ""}${espace.favoris.length ? ` ; favoris : ${espace.favoris.join(", ")}` : ""}${espace.proposition ? ` ; demande d'autre proposition le ${format.jourCourt(espace.proposition.le)}${espace.proposition.message ? ` « ${court(espace.proposition.message, 120)} »` : ""}` : ""}${espace.accord ? ` ; bon pour accord le ${format.jourCourt(espace.accord.le)} (${espace.accord.nom})` : ""}${espace.paiement ? ` ; paiement vu : ${court(JSON.stringify(espace.paiement), 160)}` : ""}${espace.avis ? ` ; avis ${espace.avis.note}/5 « ${court(espace.avis.texte, 160)} »` : ""} ; simulations : ${espace.creation.faites} faites, ${espace.creation.restantes} restantes${espace.photosRetirees.length ? ` ; ${pluriel(espace.photosRetirees.length, "photo retirée", "photos retirées")} par le client (${espace.photosRetirees.map((p) => p.id).join(", ")})` : ""}${espace.messagesNonLus ? ` ; ${pluriel(espace.messagesNonLus, "message non lu", "messages non lus")}` : ""}.${espace.gestes.length ? ` Derniers gestes : ${espace.gestes.slice(0, 6).map((g) => `${format.jourCourt(g.le)} ${g.auteur === "LUCAS" ? "(Lucas) " : ""}${court(g.contenu, 90)}`).join(" · ")}.` : ""}${espace.lien ? ` Lien : ${espace.lien}` : ""}${espace.apercu ? ` ; voir comme le client : ${espace.apercu}` : ""}` : "Pas d'espace client.",
+        `Historique (${Math.min(decalage + 1, totalEvenements)}–${Math.min(decalage + evenements.length, totalEvenements)} sur ${totalEvenements}${decalage + evenements.length < totalEvenements ? ` ; « decalage: ${decalage + evenements.length} » pour les plus anciens` : ""}) :\n${evenements.map((e) => `- ${format.jourCourt(e.survenuLe ?? e.createdAt)} ${e.type.toLowerCase()} : ${court(e.contenu.replace(/\s+/g, " "), 220)}`).join("\n")}`
       );
-      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, libelle: x.libelleVariante, visibleEspace: x.visibleEspace, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
+      donnees.dossier = { id: d.id, etape: d.etape, source: d.source, ouvertLe: d.ouvertLe, main: d.main, mainLe: d.mainLe, mainMotif: d.mainMotif, archiveLe: brut?.archiveLe ?? null, archiveMotif: brut?.archiveMotif ?? null, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, perte: d.perte, motifPerte: d.motifPerte, completude: d.completude, pointsMasques: masques, delais: d.delais, parcours: d.parcours, ecarts: d.ecarts, origine: d.origine, client: d.client, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, libelle: x.libelleVariante, visibleEspace: x.visibleEspace, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission, origine: x.origine, pdfUrl: x.pdfUrl, echeanceLe: x.echeanceLe })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie, publieeLe: s.publieeLe })), photos: d.photos, depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe, justificatif: x.justificatif })), notes: d.notes, evenements: evenements.map((e) => ({ id: e.id, type: e.type, direction: e.direction, contenu: e.contenu, le: (e.survenuLe ?? e.createdAt).toISOString(), saisiLe: e.createdAt.toISOString() })), totalEvenements, espace, coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
       liens.push(lien("Ouvrir le dossier", `/dossiers?dossier=${d.id}`));
     }
     if (ids.clientId) {
       const c = await chargerFiche(ids.clientId).catch(() => null);
       if (c) {
-        parties.push(`Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${pluriel(c.nbDossiers, "dossier")}, ${format.euros(c.montantSigne)} signés ; source ${c.source}.`);
-        donnees.client = { id: c.id, nom: c.nom, emails: c.emails.map((e) => e.valeur), telephones: c.telephones.map((t) => t.valeur), dossiers: c.dossiers, leads: c.leads, propositionsEnAttente: c.propositionsEnAttente };
+        const coord = (l: typeof c.emails) => l.map((x) => `${x.valeur}${x.libelle ? ` (${x.libelle})` : ""}${x.principale ? " ★" : ""}${x.archiveLe ? " (archivée)" : ""} [coordonnee:${x.id}]`).join(", ");
+        const espacePermanent = await espaceDuClient(c.id).catch(() => null);
+        parties.push(
+          `Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${pluriel(c.nbDossiers, "dossier")}, ${format.euros(c.montantSigne)} signés ; source ${c.source}.`,
+          `Fiche : ${c.categorie.toLowerCase()}${c.raisonSociale ? `, raison sociale ${c.raisonSociale}` : ""}${c.siret ? `, SIRET ${c.siret}` : ""}${c.adresse || c.codePostal ? `, ${[c.adresse, c.codePostal, c.ville].filter(Boolean).join(" ")}` : ""} ; provenance ${c.source}${c.sourceDetail ? ` (${c.sourceDetail})` : ""}${c.campagne ? `, campagne ${c.campagne}` : ""}${c.publicite ? `, publicité ${c.publicite}` : ""}${c.formulaire ? `, formulaire ${c.formulaire}` : ""}, premier contact le ${format.jourCourt(c.premierContactLe)}${c.recommandePar ? ` ; recommandé par ${c.recommandePar.nom} [client:${c.recommandePar.id}]` : c.recommandeParTexte ? ` ; recommandé par ${c.recommandeParTexte}` : ""}${c.recommandations.length ? ` ; a recommandé ${c.recommandations.map((r) => r.nom).join(", ")}` : ""}.`,
+          c.archiveLe || c.fusionneDans || c.anonymiseLe ? `État : ${[c.archiveLe ? `ARCHIVÉE le ${format.jourCourt(c.archiveLe)}${c.archiveMotif ? ` (${c.archiveMotif})` : ""}` : null, c.fusionneDans ? `fusionnée dans ${c.fusionneDans.nom} [client:${c.fusionneDans.id}]` : null, c.anonymiseLe ? `anonymisée le ${format.jourCourt(c.anonymiseLe)}` : null].filter(Boolean).join(", ")}.` : "",
+          `Coordonnées : e-mails ${coord(c.emails) || "aucun"} ; téléphones ${coord(c.telephones) || "aucun"}.`,
+          c.notes ? `Passif : ${court(c.notes, 600)}` : "",
+          c.consentements.length ? `Mails commerciaux : ${c.consentements.map((x) => `${x.statut.toLowerCase()} (${x.moyen}, le ${format.jourCourt(x.recueilliLe)})`).join(" → ")}.` : "Mails commerciaux : aucune réponse enregistrée.",
+          c.dossiers.length ? `Dossiers : ${c.dossiers.map((x) => `${x.objet} (${ligneEtape(x.etape)}${x.archiveLe ? ", archivé" : ""}) [dossier:${x.id}]`).join(" · ")}.` : "",
+          c.leads.length ? `Leads : ${c.leads.map((l) => `${l.source} ${format.jourCourt(l.createdAt)} (${l.statut.toLowerCase()}) [lead:${l.id}]`).join(" · ")}.` : "",
+          c.propositionsEnAttente.length ? `Propositions en attente : ${c.propositionsEnAttente.map((p) => `${p.titre} [proposition:${p.id}]`).join(" · ")}.` : "",
+          espacePermanent?.espace ? `Espace permanent : ${espacePermanent.espace.revoque ? "lien DÉSACTIVÉ" : `vu ${espacePermanent.espace.nbAcces} fois`}, ${pluriel(espacePermanent.espace.projetsEnCours, "projet")} en cours sur ${espacePermanent.espace.limite} [espace:${espacePermanent.espace.permanentId}]${espacePermanent.espace.lien ? ` ; lien ${espacePermanent.espace.lien}` : ""}.` : "",
+          c.historique.length ? `Historique de la fiche : ${c.historique.slice(0, 10).map((h) => `${format.jourCourt(h.horodatage)} ${h.operation.toLowerCase()} par ${h.acteur} : ${court(h.resume, 100)}`).join(" · ")}` : ""
+        );
+        donnees.client = { ...c, espace: espacePermanent };
         liens.push(lien("Fiche client", `/clients/${c.id}`));
       }
     }
@@ -176,15 +255,39 @@ export const outilLireFiche = definirOutil({
       const l = await chargerEntrant(ids.leadId).catch(() => null);
       if (l) {
         const notes = await notesDuLead(l.id).catch(() => []);
+        const brut = await prisma.lead.findUnique({ where: { id: l.id }, select: { doublonDe: true, doublonMotif: true, doublonTraiteLe: true } });
         parties.push(
           `Lead ${l.nom}${l.ville ? ` (${l.ville})` : ""} reçu le ${format.jourCourt(l.recuLe)} par ${l.source} : ${l.typeProjet.toLowerCase()}, statut ${l.statut.toLowerCase()}${l.priorite ? `, priorité ${l.priorite.toLowerCase()}` : ""}${l.rappelLe ? `, rappel prévu le ${format.jour(l.rappelLe)}` : ""}.`,
           l.message ? `Son message : « ${l.message.slice(0, 300)} »` : "",
           [l.occupation ? `Occupation : ${l.occupation.toLowerCase()}` : null, l.delaiProjet ? `Délai du projet : ${l.delaiProjet.toLowerCase()}` : null].filter(Boolean).join(" · "),
-          notes.length ? `Notes d'appel : ${notes.slice(0, 3).map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 120)}`).join(" · ")}` : "Aucune note d'appel."
+          `Fiche : ${l.telephone ?? "sans téléphone"}, ${l.email ?? "sans e-mail"}${l.codePostal ? `, ${l.codePostal}` : ""}${l.campagne ? ` ; campagne ${l.campagne}` : ""}${l.publicite ? `, publicité ${l.publicite}` : ""}${l.formulaire ? `, formulaire ${l.formulaire}` : ""}${l.prixSimule !== null ? ` ; prix simulé ${format.euros(l.prixSimule)}` : ""}${l.styleSouhaite ? ` ; style ${l.styleSouhaite}` : ""}${l.tailleCuisine ? ` ; taille ${l.tailleCuisine}` : ""} ; ${pluriel(l.tentatives, "tentative")}${l.dernierAppelLe ? `, dernier appel ${format.jourCourt(l.dernierAppelLe)}` : ", jamais appelé"}${l.dernierContactLe ? `, dernier contact écrit ${format.jourCourt(l.dernierContactLe)}` : ""}${l.client ? ` ; fiche client ${l.client.nom} [client:${l.client.id}]` : ""}.`,
+          l.notes ? `Notes : ${court(l.notes, 600)}` : "",
+          l.archiveLe ? `ARCHIVÉ le ${format.jourCourt(l.archiveLe)}${l.archiveMotif ? ` (${l.archiveMotif})` : ""} : « restaurer » le ramène.` : "",
+          brut?.doublonDe && !brut.doublonTraiteLe ? `Doublon probable de [lead:${brut.doublonDe}]${brut.doublonMotif ? ` (${brut.doublonMotif})` : ""} : « doublon » FUSIONNER ou ECARTER.` : "",
+          notes.length ? `Notes d'appel : ${notes.map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 160)}`).join(" · ")}` : "Aucune note d'appel.",
+          l.echanges.length ? `Échanges (${l.echanges.length}) : ${l.echanges.map((x) => `${format.jourCourt(x.le)} ${x.type.toLowerCase()} ${court(x.contenu, 120)}`).join(" · ")}` : "",
+          l.photos.length ? `Photos jointes : ${l.photos.length} (« voir_photos »).` : "",
+          l.simulations.length ? `Simulations du site : ${l.simulations.map((s) => `${format.jourCourt(s.le)}${s.reference ? ` ${s.reference}` : ""}${s.prix !== null ? ` ${format.euros(s.prix)}` : ""}`).join(" · ")}.` : "",
+          l.anciensDevis.length || l.ancienChantier ? `Ancien CRM : ${l.anciensDevis.map((d) => `devis ${d.numero} ${format.euros(d.montant)} (${d.statut.toLowerCase()})${d.facture ? `, facture ${d.facture.numero}` : ""}`).join(" · ")}${l.ancienChantier ? ` ; chantier du ${format.jourCourt(l.ancienChantier.dateIntervention)} (${l.ancienChantier.statut.toLowerCase()})` : ""}.` : ""
         );
-        donnees.lead = { id: l.id, nom: l.nom, telephone: l.telephone, email: l.email, ville: l.ville, source: l.source, statut: l.statut, priorite: l.priorite, rappelLe: l.rappelLe, message: l.message, occupation: l.occupation, delaiProjet: l.delaiProjet, echanges: l.echanges.slice(0, 8), notesAppel: notes.slice(0, 8), dossiers: l.dossiers };
+        donnees.lead = { ...l, doublon: brut?.doublonDe ? { de: brut.doublonDe, motif: brut.doublonMotif, traiteLe: brut.doublonTraiteLe } : null, notesAppel: notes };
         liens.push(lien("Fiche du lead", `/leads?lead=${l.id}`));
       }
+    }
+    // Pour tous : les tâches de Lucas, les messages (mails, espace, SMS) et la chronologie.
+    const [taches, messages] = await Promise.all([tachesDuSujet(ids), nbMessages ? messagesDuSujet(ids, nbMessages) : Promise.resolve(null)]);
+    if (taches.length) parties.push(`Tâches de Lucas : ${taches.map((t) => `${t.titre} — ${t.statut === "A_FAIRE" ? "à faire" : t.statut === "PLUS_TARD" ? `plus tard${t.plusTardJusqua ? ` (${format.jourCourt(t.plusTardJusqua)})` : ""}` : `${t.statut.toLowerCase()}${t.reponduLe ? ` le ${format.jourCourt(t.reponduLe)}` : ""}`} [tache:${t.id}]`).join(" · ")}`);
+    if (messages) {
+      if (messages.mails.length) parties.push(`Mails (${messages.mails.length}) : ${messages.mails.map((m) => `${format.jourCourt(m.recuLe)} ${m.sens === "SORTANT" ? "→" : "←"} « ${m.objet ?? "(sans objet)"} »${m.sens === "ENTRANT" && !m.lu ? " (non lu)" : ""} [mail:${m.id}]`).join(" · ")}`);
+      if (messages.espace.length) parties.push(`Messages d'espace (${messages.espace.length}) : ${messages.espace.map((m) => `${format.jourCourt(m.le)} ${m.auteur === "LUCAS" ? "CoverSwap" : m.clientNom}${m.auteur === "CLIENT" && !m.luLe ? " (NON LU)" : ""} : « ${court(m.texte, 140)} »`).join(" · ")}`);
+      if (messages.sms.length) parties.push(`SMS (${messages.sms.length}) : ${messages.sms.map((m) => `${format.jourCourt(m.createdAt)} ${m.sens === "SORTANT" ? "→" : "←"} « ${court(m.texte, 140)} » (${m.statut.toLowerCase()})`).join(" · ")}`);
+    }
+    donnees.taches = taches;
+    donnees.messages = messages;
+    if (entree.chronologie) {
+      const chrono = await chronologieDuContact({ clientId: ids.clientId, leadId: ids.leadId, dossierId: ids.dossierId }, { limite: entree.chronologie, familles: entree.familles });
+      parties.push(`Chronologie (${chrono.entrees.length}/${chrono.total}${entree.familles?.length ? `, ${entree.familles.join(", ")}` : ""}) :\n${chrono.entrees.map((c) => `- ${format.jourCourt(c.le)} [${c.famille}] ${c.titre}${c.texte ? ` — ${court(c.texte.replace(/\s+/g, " "), 160)}` : ""}`).join("\n")}`);
+      donnees.chronologie = chrono;
     }
     return { texte: parties.filter(Boolean).join("\n"), donnees, liens };
   },

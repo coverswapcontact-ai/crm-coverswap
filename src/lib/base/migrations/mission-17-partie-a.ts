@@ -6,6 +6,7 @@ import type { ConditionManuelle } from "@/lib/a-faire/detecteurs/manuelles";
 import { etatDe, type EtatReponse, type Precedent } from "@/lib/a-faire/etat";
 import { DUREES_DEPART, type NiveauTache, type Raccourci, type ReponseTache, type StatutTache, type TypeTache } from "@/lib/a-faire/types";
 import { cleNom } from "@/lib/clients/normalisation";
+import { pluriel } from "@/lib/commun/format";
 import { aHeureParis } from "@/lib/commercial/quand";
 import { estDossierClos } from "@/lib/dossiers/constants";
 import { dateDepuisJour, jourParis } from "@/lib/dossiers/dates";
@@ -264,7 +265,6 @@ async function creerAuStatut(client: BaseDonnees, n: NouvelleTache, r: Reponse, 
 }
 
 type Issue = { appliquee: boolean; creees: number; fils: number } | { ambigu: number } | { introuvable: true };
-const rien = { appliquee: false, creees: 0, fils: 0 };
 
 const nomDuDossier = (d: DossierLu) => d.clientNom.replace(/\s+/g, " ").trim() || "client sans nom";
 
@@ -539,7 +539,7 @@ export async function miseEnRoute(client: BaseDonnees, options: OptionsMiseEnRou
   if (!cloture.ok) c.passeEchouee++;
 
   c.anciensLeads = Math.max(0, (await lotAnciens()) - anciensAvant);
-  journal(`${c.tachesCreees} tâches créées, dont ${c.anciensLeads} anciens leads en lot ; ${c.manuelles} tâches à moi (reprise)`);
+  journal(`${pluriel(c.tachesCreees, "tâche créée", "tâches créées")}, dont ${pluriel(c.anciensLeads, "ancien lead en lot", "anciens leads en lot")} ; ${pluriel(c.manuelles, "tâche à moi", "tâches à moi")} (reprise)`);
   return c;
 }
 

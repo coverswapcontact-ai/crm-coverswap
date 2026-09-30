@@ -3684,3 +3684,43 @@ dépenser, quota d'analyses par dossier, projet figé, aperçu jamais muet, rapp
   HTTP 429, visible dans les journaux depuis la mission 7). `src/test/base-essai.ts › couperCanauxSortants()` pose à
   vide ntfy, Telegram, Resend, VAPID, OVH, Brevo, Meta et Places ; 35 fichiers d'essai posent `""` au lieu de
   `delete`. Après : 0 appel à ntfy.sh sur la suite complète. Règle : jamais `delete process.env.<canal>` dans un test.
+
+## Rapport final — mission 15 (30/09/2026)
+
+Cinq parties livrées, chacune relue sous trois angles, corrigée, testée (suite complète), construite, déployée et
+vérifiée en production. CRM : partie 1 `a46112f`, 2 `6d2727a`, correctif `2ebbd4c`, 3 `56c638d`, 4 `de6c47a`, 5
+`7f78948`. Site : 1 `217b850`, 4 `268e026`, 5 `b52221c`. Tests : CRM 678 → 773, site 0 → 40.
+
+**Fait**
+- 1 Génération asynchrone : la photo va au CRM, réponse immédiate, sondage, écran d'attente en trois étapes, « Me
+  prévenir » par mail (un envoi, à la demande), reprise après fermeture (IndexedDB).
+- 2 Moteur de prompt unique au CRM : analyse de la photo (zones visibles, qualité), planche étiquetée des matières,
+  rendu, contrôle noté sur 10 avec seconde tentative sous le seuil. `SIMULATEUR_MOTEUR` reste V1 en production.
+- Correctif : l'exécuteur des tâches reconnaissait mal une « attente » (deux copies du module dans le bundle) ; les 14
+  rappels d'agenda étaient retombés en échec : remis en attente, Paramètres signale de nouveau l'API Calendar.
+- 3 Banc `/simulateur/banc` : six photos de dossiers × trois variantes (V1 revu, V2 planche, V2 échantillons), coût
+  affiché avant, confirmation, score, coût réel, durée, prompt. Vu en production : 6 photos trouvées, rien lancé.
+- 4 Site en quatre écrans (Pièce, Photo, Matières, Résultat) sur les jetons clairs et des composants partagés ; le
+  site ne construit plus aucun prompt (sélections signées, le CRM relit tout) ; HEIC converti par le CRM ; vignettes
+  du catalogue par le CRM ; entonnoir pièce → photo → génération → résultat → contact dans le CRM ; 497 couleurs
+  mesurées. Lighthouse mobile (build local) : `/simulateur` perf 81 · accessibilité 100 · bonnes pratiques 96 · SEO
+  100 · CLS 0 ; accueil perf 79 · CLS 0.
+- 5 Espace client au même moteur : mêmes écrans et composants, analyse de la photo du dossier, zone non visible
+  refusée avant de payer, écran d'attente commun, contrôle avant publication (sous le seuil : brouillon + alerte à
+  Lucas, quota compté une fois).
+
+**Coût réel** : 0 € de génération pendant la mission (tout sur un faux OpenAI local). En production, l'analyse de
+photo du site coûte environ 0,0025 $ par photo (une vraie visite l'a déjà utilisée le 30/09). La campagne du banc attend Lucas : ≈ 6,82 $,
+jusqu'à 12,08 $ si chaque rendu V2 demande une seconde tentative.
+
+**Trouvé en route** : la suite de tests du CRM envoyait de vraies notifications ntfy avec le sujet du `.env` local
+(depuis la mission 7 au moins, jusqu'au quota quotidien de ntfy.sh). Corrigé : zéro appel réel après correction.
+
+**Reste à Lucas**
+- Lancer la campagne du banc, puis passer `SIMULATEUR_MOTEUR` à V2 si le studio l'emporte. Le « V1 » du banc est le
+  V1 reconstruit par le CRM ; le cas D. est une capture de vidéo (personne dans le miroir) : peu parlant.
+- Photos de réalisation pour les cinq cartes de pièces (aucune dans le dépôt).
+- Clé Turnstile absente en production (captcha inactif, état antérieur).
+- Images du banc effacées après 30 jours (ligne, score et prompt gardés) : même règle que le site, à confirmer.
+- Essai sur un vrai iPhone : HEIC réel, pincer-zoom, appareil photo, zone sûre (pas de simulateur iOS ici).
+- Toujours en attente : API Google Calendar, connecteur Claude (80 outils), jeton Meta, dépôts privés.

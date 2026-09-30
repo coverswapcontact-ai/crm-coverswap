@@ -11,13 +11,14 @@ const schema = z.object({ source: z.enum(SOURCES_SYNCHRONISEES, { error: "Source
 
 /**
  * POST /api/analytique/synchro { source } — « Relancer » la synchronisation d'une source depuis l'écran Analytique :
- * une tâche neuve dans la file (relancerSynchro) ; l'état de la source se met à jour quand elle a tourné.
+ * une tâche neuve dans la file (relancerSynchro) ; l'état de la source se met à jour quand elle a tourné, et sa réussite
+ * périme le cache de l'Analytique (analytique/memoire.ts : toute écriture sur les historiques ou l'état des sources).
  */
 export async function POST(requete: NextRequest) {
   try {
     const { source } = analyser(schema, await lireCorpsJson(requete));
     const tache = await relancerSynchro(source);
-    const reponse: ReponseRelance & { tache: string } = { ok: true, message: `Synchronisation « ${LIBELLES_SOURCE_SYNCHRONISEE[source]} » relancée : les chiffres se mettent à jour dans une minute.`, tache };
+    const reponse: ReponseRelance & { tache: string } = { ok: true, message: `Synchronisation « ${LIBELLES_SOURCE_SYNCHRONISEE[source]} » mise en file : l'état de la source et les chiffres changent dès qu'elle a abouti (quelques minutes au plus ; rouvrir l'onglet pour les voir).`, tache };
     return NextResponse.json(reponse, { status: 202 });
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/analytique/synchro");

@@ -512,7 +512,7 @@ export function VueEnsemble({ ecran }: { ecran: EcranEnsemble }) {
         estimation={Boolean(ecran.publicite?.estimation)}
       />
 
-      <div className="grid gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
         <CourbeEnsemble courbeLeads={ecran.courbeLeads} courbeDevis={ecran.courbeDevis ?? null} />
 
         <Carte titre="Tunnel commercial" sousTitre={<span className="hidden md:inline">{sousTitreTunnel(ecran)}</span>} gap="gap-3 md:gap-[18px]">

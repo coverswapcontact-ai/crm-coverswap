@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { bornes } from "@/lib/analytique/periode";
 import { FAMILLES_SOURCE_SITE, familleDesParcours, type FamilleSourceSite } from "./familles-source";
 
 // Mission 16 (partie 6) : la famille d'une source, calculée à la lecture (mission 17 : définition unique de analytique/sources.ts, familles de l'Analytique). Module pur à part : l'écran Leads (client) l'importe sans la base.
@@ -129,26 +130,32 @@ const estResultat = (type: string) => typeCanonique(type) === "RESULTAT_VU";
 
 /** Entonnoir et audience du site sur la période, par source et par page. */
 export async function syntheseSite(du: string, au: string): Promise<SyntheseSite> {
+  // Jours de Paris (relecture B, point 13) : du premier jour 0 h au lendemain du dernier jour 0 h, heure de Paris.
+  const { debut, fin } = bornes({ du, au });
   const evenements = await prisma.evenementSite.findMany({
-    where: { createdAt: { gte: new Date(du), lte: new Date(`${au}T23:59:59.999Z`) } },
+    where: { createdAt: { gte: debut, lt: fin } },
     select: { parcoursId: true, type: true, page: true, source: true, famille: true },
     // Par date : la famille d'un parcours est celle de sa première source (mission 16, partie 6).
     orderBy: { createdAt: "asc" },
   });
   const parcours = new Set(evenements.map((e) => e.parcoursId));
-  const parType = TYPES_EVENEMENT_SITE.filter((type) => !TYPE_CANONIQUE[type]).map((type) => {
-    const lignes = evenements.filter((e) => typeCanonique(e.type) === type);
-    return { cle: type, libelle: LIBELLES_EVENEMENT_SITE[type], valeur: lignes.length, parcours: new Set(lignes.map((e) => e.parcoursId)).size };
-  }).filter((ligne) => ligne.valeur > 0);
-
+  // Un seul passage par regroupement (relecture B, point 13 : plus de recopie de tableau à chaque événement).
   const groupes = (cle: (e: (typeof evenements)[number]) => string) => {
     const index = new Map<string, (typeof evenements)[number][]>();
     for (const e of evenements) {
       const k = cle(e);
-      index.set(k, [...(index.get(k) ?? []), e]);
+      const liste = index.get(k);
+      if (liste) liste.push(e);
+      else index.set(k, [e]);
     }
     return [...index.entries()];
   };
+  const parTypeCanonique = new Map(groupes((e) => typeCanonique(e.type)));
+  const parType = TYPES_EVENEMENT_SITE.filter((type) => !TYPE_CANONIQUE[type]).map((type) => {
+    const lignes = parTypeCanonique.get(type) ?? [];
+    return { cle: type, libelle: LIBELLES_EVENEMENT_SITE[type], valeur: lignes.length, parcours: new Set(lignes.map((e) => e.parcoursId)).size };
+  }).filter((ligne) => ligne.valeur > 0);
+
   const parSource = groupes((e) => e.source || "direct")
     .map(([cle, lignes]) => ({
       cle,
@@ -199,8 +206,10 @@ function joursDeLaPeriode(du: string, au: string): number {
  * elle n'est pas un passage obligé — comptée parmi les résultats vus, sans abandons, et le contact se compte parmi
  * les résultats vus (pas parmi les estimations vues : sinon une demande sans taille serait un « abandon »).
  */
-export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[]; facultative?: true }[] = [
-  { cle: "visite", libelle: "Visite", types: ["PAGE_VUE"] },
+export const ETAPES_ENTONNOIR: readonly { cle: string; libelle: string; types: readonly TypeEvenementSite[]; facultative?: true; ouverte?: true }[] = [
+  // Mission 17 (relecture B) : une page vue ne porte plus l'identifiant du simulateur (vie privée : route
+  // /api/site/evenements), la visite n'est donc plus un préalable de l'étape suivante (« ouverte ») : elle se compte seule.
+  { cle: "visite", libelle: "Visite", types: ["PAGE_VUE"], ouverte: true },
   { cle: "piece", libelle: "Pièce choisie", types: ["PIECE_CHOISIE"] },
   { cle: "photo", libelle: "Photo chargée", types: ["PHOTO_CHARGEE", "SIMULATION_PHOTO"] },
   { cle: "generation", libelle: "Génération lancée", types: ["GENERATION_LANCEE", "SIMULATION_LANCEE"] },
@@ -241,16 +250,18 @@ export function calculerEntonnoir(evenements: readonly { parcoursId: string; typ
     parType.get(e.type)!.add(e.parcoursId);
   }
   let precedent: Set<string> | null = null;
+  let exige: Set<string> | null = null;
   const etapes: EtapeEntonnoir[] = [];
   for (const etape of ETAPES_ENTONNOIR) {
     const atteint = new Set<string>();
-    for (const type of etape.types) for (const p of parType.get(type) ?? []) if (!precedent || precedent.has(p)) atteint.add(p);
+    for (const type of etape.types) for (const p of parType.get(type) ?? []) if (!exige || exige.has(p)) atteint.add(p);
     if (etape.facultative) {
       etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: null, facultative: true });
       continue;
     }
     etapes.push({ cle: etape.cle, libelle: etape.libelle, parcours: atteint.size, abandons: precedent ? Math.max(0, precedent.size - atteint.size) : null });
     precedent = atteint;
+    exige = etape.ouverte ? null : atteint;
   }
   return { jours, etapes };
 }
@@ -288,4 +299,20 @@ export async function entonnoirSite(jours = 7, maintenant: Date = new Date()): P
     orderBy: { createdAt: "asc" },
   });
   return calculerEntonnoirParFamille(evenements, jours);
+}
+
+/**
+ * Mission 17 (relecture B, écran point 8) : l'entonnoir du simulateur en sept étapes sur une PÉRIODE de l'Analytique
+ * (jours de Paris, bornes incluses), global et par famille — l'ancien bloc « Sur le site cette semaine », repris dans
+ * l'onglet Site pour la période choisie.
+ */
+export async function entonnoirSurPeriode(du: string, au: string): Promise<EntonnoirSite & Required<Pick<EntonnoirSite, "parFamille" | "autresSources">>> {
+  const { debut, fin } = bornes({ du, au });
+  const types = ETAPES_ENTONNOIR.flatMap((e) => [...e.types]);
+  const evenements = await prisma.evenementSite.findMany({
+    where: { createdAt: { gte: debut, lt: fin }, type: { in: types } },
+    select: { parcoursId: true, type: true, source: true, famille: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return calculerEntonnoirParFamille(evenements, joursDeLaPeriode(du, au));
 }

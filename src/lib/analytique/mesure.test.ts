@@ -59,14 +59,20 @@ describe("réception : visiteur du jour, appareil, pays, famille", () => {
     const p = parcours();
     assert.deepEqual(await envoyer({ parcoursId: p, type: "PAGE_VUE", page: "/", referent: "chatgpt.com", fuseau: "Europe/Paris" }), { statut: 200, corps: { ok: true } });
     // Même réseau /24 (le dernier octet change) et même navigateur : même visiteur.
-    await envoyer({ parcoursId: p, type: "PIECE_CHOISIE", page: "/simulateur" }, { ip: "203.0.113.99" });
+    await envoyer({ parcoursId: p, type: "PAGE_VUE", page: "/simulateur" }, { ip: "203.0.113.99" });
     await envoyer({ parcoursId: parcours(), type: "PAGE_VUE", page: "/" }, { ua: WINDOWS });
+    await envoyer({ parcoursId: p, type: "PIECE_CHOISIE", page: "/simulateur" });
     const lignes = await prisma.evenementSite.findMany({ where: { createdAt: { gte: new Date(Date.now() - 60_000) } }, orderBy: { createdAt: "asc" } });
-    assert.equal(lignes.length, 3);
-    const [a, b, c] = lignes;
+    assert.equal(lignes.length, 4);
+    const [a, b, c, d] = lignes;
     assert.match(a.visiteur ?? "", /^[0-9a-f]{16}$/);
     assert.equal(a.visiteur, b.visiteur, "même visiteur du jour");
     assert.notEqual(a.visiteur, c.visiteur, "autre navigateur, autre visiteur");
+    // Relecture B (point 7) : aucune ligne ne relie deux jours — la page vue perd le parcours du simulateur (remplacé par
+    // « v-<empreinte> »), l'étape du simulateur garde son parcours mais n'a pas d'empreinte.
+    assert.deepEqual([a.parcoursId, b.parcoursId], [`v-${a.visiteur}`, `v-${a.visiteur}`]);
+    assert.deepEqual([d.type, d.parcoursId, d.visiteur], ["PIECE_CHOISIE", p, null]);
+    assert.ok(lignes.every((l) => !l.visiteur || l.parcoursId === `v-${l.visiteur}`), "jamais une empreinte du jour à côté d'un parcours durable");
     assert.deepEqual([a.appareil, c.appareil], ["TELEPHONE", "ORDINATEUR"]);
     assert.deepEqual([a.pays, a.referent, a.famille], ["FR", "chatgpt.com", "ia"]);
     // Ni l'IP (même tronquée) ni le navigateur n'apparaissent nulle part dans la ligne.
@@ -76,7 +82,11 @@ describe("réception : visiteur du jour, appareil, pays, famille", () => {
     }
   });
 
-  test("le lendemain (heure de Paris), le même visiteur a une autre empreinte ; un seul sel en base, hors journal", async () => {
+  test("le lendemain (heure de Paris), le même visiteur a une autre empreinte ; le sel en mémoire seulement, jamais en base", async () => {
+    // Un sel laissé en base par la version d'avant est effacé au premier tirage (la table ne supprime rien : écrasé).
+    await prisma.cleInterne.upsert({ where: { nom: mesure.CLE_SEL_DU_JOUR }, create: { nom: mesure.CLE_SEL_DU_JOUR, valeur: JSON.stringify({ jour: "2026-09-29", sel: "a".repeat(64) }) }, update: { valeur: JSON.stringify({ jour: "2026-09-29", sel: "a".repeat(64) }) } });
+    mesure.oublierSelEnMemoire();
+    (globalThis as unknown as Record<string, { ancienEfface?: boolean }>).__coverswapSelDuJour.ancienEfface = false;
     const mercredi = new Date("2026-09-30T20:00:00.000Z"); // 22 h à Paris
     const jeudi = new Date("2026-09-30T22:30:00.000Z"); // 0 h 30 à Paris, le 1er octobre
     const m1 = await mesure.mesurerRequete({ ip: IP, userAgent: IPHONE, maintenant: mercredi });
@@ -86,12 +96,11 @@ describe("réception : visiteur du jour, appareil, pays, famille", () => {
     assert.equal(m1.visiteur, m2.visiteur);
     assert.notEqual(m1.visiteur, m3.visiteur, "jour suivant : autre visiteur");
     const sels = await prisma.cleInterne.findMany({ where: { nom: { contains: "sel" } } });
-    assert.equal(sels.length, 1, "une seule clé, remplacée chaque jour");
-    assert.equal(JSON.parse(sels[0].valeur).jour, "2026-10-01");
-    // Relu en base (mémoire oubliée) : le même sel, donc la même empreinte.
+    assert.ok(sels.every((l) => !/"sel"/.test(l.valeur)), `aucun sel en base : ${JSON.stringify(sels)}`);
+    // Relecture B (point 7) : mémoire oubliée (redémarrage) → un sel neuf, donc une autre empreinte (admis : la visite en cours compte deux fois).
     mesure.oublierSelEnMemoire();
     const m4 = await mesure.mesurerRequete({ ip: IP, userAgent: IPHONE, maintenant: jeudi });
-    assert.ok(!m4.robot && m4.visiteur === m3.visiteur);
+    assert.ok(!m4.robot && !m3.robot && m4.visiteur !== m3.visiteur);
     assert.equal(await prisma.journalModification.count({ where: { modele: "CleInterne" } }), 0, "aucune copie du sel dans le journal");
   });
 
@@ -105,13 +114,14 @@ describe("réception : visiteur du jour, appareil, pays, famille", () => {
 
   test("anciens envois acceptés ; nouveaux champs (utm, gclid) ; sans parcours : l'empreinte en tient lieu ; parcours mal formé refusé", async () => {
     const ancien = parcours();
-    assert.equal((await envoyer({ parcoursId: ancien, type: "PAGE_VUE", page: "/", source: "meta/paid", campagne: "cuisine" }, { ua: WINDOWS })).statut, 200);
-    const l1 = await prisma.evenementSite.findFirstOrThrow({ where: { parcoursId: ancien } });
+    assert.equal((await envoyer({ parcoursId: ancien, type: "PAGE_VUE", page: "/ancien-envoi", source: "meta/paid", campagne: "cuisine" }, { ua: WINDOWS })).statut, 200);
+    const l1 = await prisma.evenementSite.findFirstOrThrow({ where: { page: "/ancien-envoi" } });
     assert.deepEqual([l1.source, l1.campagne, l1.famille, l1.pays, l1.referent], ["meta/paid", "cuisine", "meta", null, null]);
 
     const pub = parcours();
-    await envoyer({ parcoursId: pub, type: "PAGE_VUE", page: "/prestations/cuisine", utmSource: "google", utmMedium: "cpc", utmCampagne: "marque", utmContenu: "annonce-1", gclid: "Cj0KCQjw-abcdef", fuseau: "Europe/Brussels", referent: "https://www.google.com/" });
+    await envoyer({ parcoursId: pub, type: "PIECE_CHOISIE", page: "/prestations/cuisine?utm_source=google&gclid=Cj0#avis", utmSource: "google", utmMedium: "cpc", utmCampagne: "marque", utmContenu: "annonce-1", gclid: "Cj0KCQjw-abcdef", fuseau: "Europe/Brussels", referent: "https://www.google.com/" });
     const l2 = await prisma.evenementSite.findFirstOrThrow({ where: { parcoursId: pub } });
+    assert.equal(l2.page, "/prestations/cuisine", "relecture B (point 8) : ni paramètres ni ancre gardés");
     assert.deepEqual([l2.source, l2.campagne, l2.famille, l2.pays, l2.referent], ["google/cpc", "marque", "google-ads", "BE", "google.com"]);
     assert.deepEqual(JSON.parse(l2.meta ?? "{}"), { utm_content: "annonce-1", gclid: true }, "la valeur du gclid n'est pas gardée");
 
@@ -139,6 +149,41 @@ describe("réception : visiteur du jour, appareil, pays, famille", () => {
     assert.equal(mesure.paysDuFuseau("Indian/Reunion"), "RE");
     assert.equal(mesure.paysDuFuseau("Asia/Nulle_Part"), null);
     assert.equal(mesure.paysDuFuseau(null), null);
+  });
+});
+
+describe("relecture B (point 8) : route publique non abusable", () => {
+  test("IP : l'adresse publique la plus à droite de X-Forwarded-For (celle du proxy), jamais une valeur écrite par le navigateur", async () => {
+    const { ipDuClient, ipDuVisiteur } = await import("@/lib/acces/limite-site");
+    const h = (valeurs: Record<string, string>) => ({ get: (nom: string) => valeurs[nom] ?? null });
+    assert.equal(ipDuClient(h({ "x-forwarded-for": "76.76.21.21, 10.0.0.1" })), "76.76.21.21", "même règle que ipDuVisiteur sur une chaîne honnête");
+    assert.equal(ipDuVisiteur(h({ "x-forwarded-for": "76.76.21.21, 10.0.0.1" })), "76.76.21.21");
+    assert.equal(ipDuClient(h({ "x-forwarded-for": "1.2.3.4, 76.76.21.21, 100.64.0.7" })), "76.76.21.21", "la valeur forgée à gauche est ignorée");
+    assert.equal(ipDuClient(h({ "x-forwarded-for": "10.0.0.1", "x-real-ip": "2001:db8::1" })), "2001:db8::1");
+    assert.equal(ipDuClient(h({ "x-visiteur-ip": "5.6.7.8" })), "inconnue", "X-Visiteur-Ip n'est pas lu (un navigateur pourrait l'écrire)");
+    // Un navigateur qui change la valeur de gauche à chaque envoi reste UN visiteur (même IP réelle).
+    const a = await envoyer({ type: "PAGE_VUE", page: "/forge-a" }, { ip: "9.9.9.1, 203.0.113.7" });
+    const b = await envoyer({ type: "PAGE_VUE", page: "/forge-b" }, { ip: "8.8.8.2, 203.0.113.7" });
+    assert.deepEqual([a.statut, b.statut], [200, 200]);
+    const [la, lb] = await Promise.all(["/forge-a", "/forge-b"].map((page) => prisma.evenementSite.findFirstOrThrow({ where: { page } })));
+    assert.equal(la.visiteur, lb.visiteur);
+  });
+
+  test("corps de plus de 4 Ko refusé (413) ; en production, Origin exigé (403)", async () => {
+    const gros = await route.POST(new NextRequest("http://localhost/api/site/evenements", { method: "POST", body: JSON.stringify({ type: "PAGE_VUE", page: "/", meta: { x: "a".repeat(5000) } }), headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "user-agent": IPHONE, "x-forwarded-for": "203.0.113.8" } }));
+    assert.equal(gros.status, 413);
+    const env = process.env as Record<string, string | undefined>;
+    const avant = env.NODE_ENV;
+    env.NODE_ENV = "production";
+    try {
+      const sansOrigine = await route.POST(new NextRequest("http://localhost/api/site/evenements", { method: "POST", body: JSON.stringify({ type: "PAGE_VUE", page: "/" }), headers: { "content-type": "text/plain", "user-agent": IPHONE, "x-forwarded-for": "203.0.113.8" } }));
+      assert.equal(sansOrigine.status, 403);
+      const etrangere = await route.POST(new NextRequest("http://localhost/api/site/evenements", { method: "POST", body: JSON.stringify({ type: "PAGE_VUE", page: "/" }), headers: { "content-type": "text/plain", origin: "https://exemple.com", "user-agent": IPHONE, "x-forwarded-for": "203.0.113.8" } }));
+      assert.equal(etrangere.status, 403);
+      assert.equal((await envoyer({ type: "PAGE_VUE", page: "/prod-ok" })).statut, 200);
+    } finally {
+      env.NODE_ENV = avant;
+    }
   });
 });
 
@@ -181,6 +226,25 @@ describe("visites : même visiteur du jour, pause de 30 minutes, page d'entrée"
     // Une seule famille.
     const ia = await visites.visitesSurPeriode(jour, jour, { famille: "ia" });
     assert.deepEqual([ia.visites, ia.pagesVues, ia.pagesEntree.map((e) => e.page)], [1, 3, ["/"]]);
+  });
+
+  test("relecture B (point 7) : les étapes du simulateur arrivent sans empreinte — comptées une fois par parcours, jamais comme une visite", async () => {
+    const jour = "2026-06-12";
+    const a = (h: number, m: number) => new Date(`${jour}T${String(h - 2).padStart(2, "0")}:${String(m).padStart(2, "0")}:00.000Z`);
+    const ecrire = (d: Record<string, unknown>) => prisma.evenementSite.create({ data: { type: "PAGE_VUE", ...d } as Parameters<typeof prisma.evenementSite.create>[0]["data"] });
+    await ecrire({ createdAt: a(10, 0), parcoursId: "v-dddddddddddddddd", visiteur: "dddddddddddddddd", page: "/simulateur", source: "meta/paid", famille: "meta" });
+    const sim = "eeeeeeee-0000-4000-8000-000000000001";
+    await ecrire({ createdAt: a(10, 2), parcoursId: sim, type: "GENERATION_LANCEE", page: "/simulateur", source: "meta/paid", famille: "meta" });
+    await ecrire({ createdAt: a(10, 40), parcoursId: sim, type: "GENERATION_LANCEE", page: "/simulateur", source: "meta/paid", famille: "meta" });
+    await ecrire({ createdAt: a(10, 45), parcoursId: sim, type: "RESULTAT_VU", page: "/simulateur", source: "meta/paid", famille: "meta" });
+    await ecrire({ createdAt: a(10, 50), parcoursId: sim, type: "DEVIS_DEMANDE", page: "/simulateur", source: "meta/paid", famille: "meta" });
+    const v = await visites.visitesSurPeriode(jour, jour);
+    assert.equal(v.visites, 1, "le parcours sans page vue n'est pas une visite de plus");
+    assert.deepEqual(v.entonnoir, { visites: 1, simulations: 1, terminees: 1, leads: 1 }, "une simulation par parcours, même relancée après une pause");
+    assert.deepEqual(v.sources.map((x) => [x.famille, x.nom, x.visites, x.simulations, x.leads]), [["meta", "meta/paid", 1, 1, 1]]);
+    assert.deepEqual(v.pagesEntree.map((e) => [e.page, e.visites, e.simulations]), [["/simulateur", 1, 1]]);
+    const autre = await visites.visitesSurPeriode(jour, jour, { famille: "seo" });
+    assert.deepEqual([autre.visites, autre.entonnoir.simulations], [0, 0]);
   });
 });
 

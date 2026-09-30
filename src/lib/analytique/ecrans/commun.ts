@@ -35,7 +35,7 @@ export function evolutionDe(valeur: number | null, precedente: number | null, fa
  */
 export function indicateur(p: { cle: string; libelle: string; valeur: number | null; precedente: number | null; format: Format; favorable: Sens; serie?: number[]; source: SourceDonnees; detail?: string | null; comparaison?: { valeur: number | null; precedente: number | null } | null }): Indicateur {
   const c = p.comparaison ?? { valeur: p.valeur, precedente: p.precedente };
-  const evolution = p.valeur === null ? evolutionDe(null, p.precedente, p.favorable) : evolutionDe(c.valeur, c.precedente, p.favorable);
+  const evolution = p.valeur === null ? evolutionDe(null, p.precedente, p.favorable) : { ...evolutionDe(c.valeur, c.precedente, p.favorable), ...(p.comparaison ? { horsJourEnCours: true } : {}) };
   return { cle: p.cle, libelle: p.libelle, valeur: p.valeur, format: p.format, evolution, detail: p.detail ?? null, serie: p.valeur === null ? [] : p.serie ?? [], source: p.source };
 }
 

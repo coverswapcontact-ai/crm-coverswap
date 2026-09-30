@@ -197,9 +197,9 @@ describe("résumé du jour : trois phrases par règles, aucun chiffre inventé",
     assert.equal(resume.redaction, "REGLES");
     assert.deepEqual(resume.phrases.map((p) => [p.genre, p.amorce]), [["MONTE", "Ça monte."], ["BAISSE", "Ça coince."], ["A_FAIRE", "À faire."]]);
     // Le plus fort mouvement favorable : les leads (+50 %), à égalité avec le coût (−50 %) : le premier des deux.
-    assert.match(resume.phrases[0].texte, /(Les leads montent|Le coût par chantier signé baisse)/);
+    assert.match(resume.phrases[0].texte, /^Sur les 30 derniers jours, (les leads montent|le coût par chantier signé baisse)/, "chaque phrase nomme sa période (relecture B, point 6)");
     assert.match(resume.phrases[0].texte, / Jour 9 sur 21 de la campagne\.$/);
-    assert.match(resume.phrases[1].texte, /^Les devis envoyés baissent : 4 contre 8 sur la période d'avant, −50 % \(CRM\)\. L'étape qui perd le plus : joint → devis, 13 personnes perdues \(CRM\)\.$/);
+    assert.match(resume.phrases[1].texte, /^Sur les 30 derniers jours, les devis envoyés baissent : 4 contre 8 sur la période d'avant, −50 % \(CRM\)\. L'étape qui perd le plus : joint → devis, 13 personnes perdues \(CRM\)\.$/);
     assert.equal(resume.phrases[2].texte, `Relance les 6 devis en attente${NBSP}: 9${NBSP}060${NBSP}€ en jeu (CRM).`);
     for (const p of resume.phrases) {
       assert.ok(p.sources.length > 0);
@@ -215,7 +215,7 @@ describe("résumé du jour : trois phrases par règles, aucun chiffre inventé",
     }
     for (const e of ecran.tunnel.etapes) if (e.valeur !== null) connus.add(e.valeur);
     if (ecran.tunnel.perteMax) connus.add(ecran.tunnel.perteMax.perdus);
-    for (const v of [ecran.publicite.jourCampagne, ecran.publicite.dureeCampagne, ecran.argent.devisEnAttente, ecran.argent.encaisse]) connus.add(v);
+    for (const v of [ecran.publicite.jourCampagne, ecran.publicite.dureeCampagne, ecran.argent.devisEnAttente, ecran.argent.encaisse, ecran.periode.jours]) connus.add(v);
     const texte = resume.phrases.map((p) => p.texte).join(" ");
     for (const m of texte.matchAll(/\d[\d ]*(?:,\d+)?/g)) {
       const n = Number(m[0].replace(/ /g, "").replace(",", "."));
@@ -228,7 +228,7 @@ describe("résumé du jour : trois phrases par règles, aucun chiffre inventé",
     const trop = composerResume({ ...ecran, argent: { ...ecran.argent, ratioPub: 0.3 } }, MERCREDI);
     assert.match(trop.phrases[2].texte, /^Baisse la pub : elle représente 30 % de l'encaissé du mois dernier, pour un plafond de 20 % \(CRM\)\.$/);
     const calme = composerResume({ ...ecran, indicateurs: [], tunnel: { etapes: [], perteMax: null }, publicite: null, argent: { ...ecran.argent, devisEnAttente: 0 } }, MERCREDI);
-    assert.deepEqual(calme.phrases.map((p) => p.texte), ["Rien ne monte nettement sur les 30 derniers jours.", "Rien ne baisse nettement sur les 30 derniers jours.", `Rien d'urgent dans les chiffres${NBSP}: garde le rythme.`]);
+    assert.deepEqual(calme.phrases.map((p) => p.texte), ["Sur les 30 derniers jours, rien ne monte nettement.", "Sur les 30 derniers jours, rien ne baisse nettement.", `Rien d'urgent dans les chiffres${NBSP}: garde le rythme.`]);
   });
 });
 

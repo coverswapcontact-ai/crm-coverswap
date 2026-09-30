@@ -172,7 +172,7 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
+      <div className="grid gap-3 md:gap-4 xl:grid-cols-2 xl:items-start">
         <Carte titre="De la visite au lead" sousTitre="Visite → simulation lancée → terminée → coordonnées laissées">
           <TunnelBarres tunnel={ecran.entonnoir} />
         </Carte>

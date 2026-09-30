@@ -67,6 +67,8 @@ export type Evolution = {
   variation: number | null;
   sens: "hausse" | "baisse" | "stable" | "nouveau" | null;
   ton: "favorable" | "defavorable" | "neutre";
+  /** Relecture B : la période finit aujourd'hui → comparée sur les jours complets (sans le jour en cours, des deux côtés) ; `precedente` est alors celle de ces jours-là. */
+  horsJourEnCours?: boolean;
 };
 
 export type Indicateur = {
@@ -98,6 +100,9 @@ export type ResumeDuJour = {
   phrases: { genre: "MONTE" | "BAISSE" | "A_FAIRE"; amorce: string; texte: string; sources: SourceDonnees[] }[];
   /** Rédigé par un modèle (IA_CRM actif) ou par des règles. */
   redaction: "REGLES" | "IA";
+  /** Relecture B : la période (libellé) et le filtre sur lesquels les phrases ont été composées. */
+  periode?: string;
+  filtreSource?: Famille | null;
 };
 
 export type LigneSource = { famille: Famille; libelle: string; leads: number; joints: number; devis: number; signes: number; tauxDevis: number | null; horsTunnel?: boolean; note?: string | null };
@@ -108,8 +113,8 @@ export type EcranEnsemble = EcranCommun & {
   onglet: "ensemble";
   filtreSource: Famille | null;
   resume: ResumeDuJour | null;
-  indicateurs: Indicateur[]; // 6 tuiles : visites, simulations, leads, devis, signés, coût par chantier signé (ou par lead Meta)
-  courbeLeads: Courbe; // leads par jour, par source
+  indicateurs: Indicateur[]; // 6 tuiles : visites, simulations lancées, leads, devis envoyés, chantiers signés, coût par lead Meta (sparkline ; coût par chantier signé en détail)
+  courbeLeads: Courbe; // leads par jour, par source (plus de série « devis » : voir courbeDevis)
   courbeDevis: Courbe; // devis par jour, par source (relecture B : les devis découpés par source)
   tunnel: Tunnel; // visites → simulations → leads → appelés → joints → devis → signés → encaissé
   publicite: { jourCampagne: number | null; dureeCampagne: number | null; depense: number | null; budget: number | null; leads: number; coutParLead: number | null; coutParDevis: number | null; publicites: { nom: string; detail: string; verdict: Verdict }[]; estimation: boolean } | null;

@@ -73,7 +73,21 @@ function Seuils({ seuils }: { seuils: Fiscal["seuils"] }) {
   );
 }
 
-function Urssaf({ urssaf }: { urssaf: NonNullable<Fiscal["urssaf"]> }) {
+/** « 31/07/2026 » pour une date AAAA-MM-JJ (le texte tel quel sinon). */
+export function dateEcheance(echeance: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(echeance);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : echeance;
+}
+
+/** L'échéance de la déclaration : à venir (ambre), passée (gris : déjà déclarée, ou à régulariser). */
+function TexteEcheance({ echeance, aujourdhui }: { echeance: string | null; aujourdhui: string }) {
+  if (!echeance) return <p className="text-[12px] text-[#9CA3AF]">Échéance à vérifier dans l&apos;espace URSSAF.</p>;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(echeance);
+  if (iso && echeance < aujourdhui) return <p className="text-[12px] text-[#9CA3AF]">Échéance de déclaration passée ({dateEcheance(echeance)})&nbsp;: à vérifier dans l&apos;espace URSSAF.</p>;
+  return <p className="text-[12px] text-[#F5B454]">À déclarer au plus tard le {dateEcheance(echeance)}.</p>;
+}
+
+function Urssaf({ urssaf, aujourdhui }: { urssaf: NonNullable<Fiscal["urssaf"]>; aujourdhui: string }) {
   const { aDeclarer, enCours } = urssaf;
   return (
     <div className="flex flex-col gap-4">
@@ -81,11 +95,11 @@ function Urssaf({ urssaf }: { urssaf: NonNullable<Fiscal["urssaf"]> }) {
         <div className="flex flex-col gap-2" data-urssaf="a-declarer">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
             <p className="text-[14px] font-medium text-[#F2F3F5]">
-              À déclarer&nbsp;: <span className="first-letter:uppercase">{aDeclarer.libelle}</span>
+              À déclarer&nbsp;: <span>{aDeclarer.libelle}</span>
             </p>
-            <span className={cn(NUM, "text-[20px] font-semibold text-[#F5B454]")}>{euros(aDeclarer.montant)}</span>
+            <span className={cn(NUM, "text-[20px] font-semibold", aDeclarer.echeance && aDeclarer.echeance < aujourdhui ? "text-[#F2F3F5]" : "text-[#F5B454]")}>{euros(aDeclarer.montant)}</span>
           </div>
-          <p className="text-[12px] text-[#F5B454]">{aDeclarer.echeance ? `Échéance de déclaration : ${aDeclarer.echeance}` : "Échéance à vérifier dans l'espace URSSAF."}</p>
+          <TexteEcheance echeance={aDeclarer.echeance} aujourdhui={aujourdhui} />
           <dl className="flex flex-col gap-1 text-[13px]">
             <div className="flex justify-between gap-3">
               <dt className="text-[#9CA3AF]">Chiffre d&apos;affaires encaissé sur la période</dt>
@@ -107,7 +121,7 @@ function Urssaf({ urssaf }: { urssaf: NonNullable<Fiscal["urssaf"]> }) {
       {enCours ? (
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-[#2A2D34] pt-3 text-[13px]" data-urssaf="en-cours">
           <span className="text-[#9CA3AF]">
-            En cours&nbsp;: <span className="text-[#D1D5DB] first-letter:uppercase">{enCours.libelle}</span> · {euros(enCours.base)} encaissés
+            En cours&nbsp;: <span className="text-[#D1D5DB]">{enCours.libelle}</span> · {euros(enCours.base)} encaissés
           </span>
           <span className={cn(NUM, "text-[#F2F3F5]")}>{euros(enCours.montant)} estimés</span>
         </div>
@@ -120,7 +134,7 @@ function Urssaf({ urssaf }: { urssaf: NonNullable<Fiscal["urssaf"]> }) {
   );
 }
 
-export function FiscalArgent({ fiscal }: { fiscal: EcranArgent["fiscal"] }) {
+export function FiscalArgent({ fiscal, aujourdhui }: { fiscal: EcranArgent["fiscal"]; aujourdhui: string }) {
   const router = useRouter();
   const { demander, modale } = useParametresExiges();
   const manquants = (fiscal?.parametresManquants ?? []).filter(estCle);
@@ -141,7 +155,7 @@ export function FiscalArgent({ fiscal }: { fiscal: EcranArgent["fiscal"] }) {
           <div className="grid gap-6 md:grid-cols-2 md:gap-8">
             <section className="flex min-w-0 flex-col gap-3" aria-label="URSSAF">
               <p className={LBL}>URSSAF</p>
-              {urssaf && (urssaf.aDeclarer || urssaf.enCours) ? <Urssaf urssaf={urssaf} /> : null}
+              {urssaf && (urssaf.aDeclarer || urssaf.enCours) ? <Urssaf urssaf={urssaf} aujourdhui={aujourdhui} /> : null}
               {manquantsUrssaf.length > 0 ? (
                 <AParametrer manquants={manquantsUrssaf} pourquoi="Pour estimer ce qui est dû à l'URSSAF." onRenseigner={() => renseigner(manquantsUrssaf)} />
               ) : !urssaf || (!urssaf.aDeclarer && !urssaf.enCours) ? (

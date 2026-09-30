@@ -1,6 +1,6 @@
 import { alertesAnalytique } from "../alertes";
 import { etatsDesSources } from "../appuis";
-import { resumeEnregistre } from "../resume";
+import { composerResume, resumeEnregistre } from "../resume";
 import type { Alerte, EcranArgent, EcranEnsemble, EcranPublicite, EcranSeo, EcranSite, EtatSource, Famille, OngletAnalytique, Periode, SourceDonnees } from "../types";
 import { construireEcranArgent } from "./argent";
 import { construireEcranEnsemble } from "./ensemble";
@@ -28,14 +28,23 @@ async function commun(onglet: OngletAnalytique, options: OptionsEcran, maintenan
   return { etats, alertes: filtre ? toutes.filter((a) => filtre.includes(a.source)) : toutes };
 }
 
+/**
+ * La Vue d'ensemble. Le résumé du jour (pré-calculé à 7 h sur les 30 derniers jours, toutes sources) n'est repris que
+ * pour cette vue-là ; pour une autre période ou un filtre par source, il est RECOMPOSÉ par les mêmes règles à partir de
+ * l'écran affiché (relecture B, point 6 : jamais des phrases sur 30 jours sous une période de 7 jours).
+ */
 export async function ecranEnsemble(periode: Periode, options: OptionsEcran = {}, maintenant: Date = new Date()): Promise<EcranEnsemble> {
   const { etats, alertes } = await commun("ensemble", options, maintenant);
-  const resume = await resumeEnregistre(maintenant).catch((erreur) => {
-    console.error("[analytique] résumé du jour illisible :", erreur);
-    return null;
-  });
-  const ecran = await construireEcranEnsemble(periode, { etats, source: options.source ?? null, resume }, maintenant);
-  return { ...ecran, genereLe: maintenant.toISOString(), alertes };
+  const source = options.source ?? null;
+  const vueDuResume = periode.cle === "30j" && !source;
+  const resume = vueDuResume
+    ? await resumeEnregistre(maintenant).catch((erreur) => {
+        console.error("[analytique] résumé du jour illisible :", erreur);
+        return null;
+      })
+    : null;
+  const ecran = await construireEcranEnsemble(periode, { etats, source, resume }, maintenant);
+  return { ...ecran, resume: vueDuResume ? ecran.resume : composerResume(ecran, maintenant), genereLe: maintenant.toISOString(), alertes };
 }
 
 export async function ecranPublicite(periode: Periode, options: OptionsEcran = {}, maintenant: Date = new Date()): Promise<EcranPublicite> {

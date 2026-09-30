@@ -53,9 +53,13 @@ function periode(cle: ClePeriode, du: string, au: string, libelle: string): Peri
 
 export const estClePeriode = (valeur: unknown): valeur is ClePeriode => typeof valeur === "string" && (PERIODES_ANALYTIQUE as readonly string[]).includes(valeur);
 
+/** Relecture B (point 14) : une période libre ne dépasse pas trois ans (écran comme outil MCP : calculs bornés). */
+export const JOURS_LIBRES_MAX = 3 * 366;
+
 /**
  * `?p=7j|30j|90j|mois|12m` ou `?du=&au=` (libre, prioritaire quand les deux dates sont valides ; à l'envers, elles
- * sont remises dans l'ordre ; une date dans le futur est ramenée à aujourd'hui). Rien de valable : 30 jours.
+ * sont remises dans l'ordre ; une date dans le futur est ramenée à aujourd'hui ; plus de trois ans : ramenée aux
+ * `JOURS_LIBRES_MAX` derniers jours avant `au`). Rien de valable : 30 jours.
  */
 export function resoudrePeriode(entree: EntreePeriodeAnalytique = {}, maintenant: Date = new Date()): Periode {
   const aujourdhui = jourParis(maintenant);
@@ -65,6 +69,7 @@ export function resoudrePeriode(entree: EntreePeriodeAnalytique = {}, maintenant
     let [a, b] = du <= au ? [du, au] : [au, du];
     if (b > aujourdhui) b = aujourdhui;
     if (a > b) a = b;
+    if (nombreDeJours(a, b) > JOURS_LIBRES_MAX) a = decalerJour(b, -(JOURS_LIBRES_MAX - 1));
     return periode("libre", a, b, `du ${courte(a)} au ${courte(b)}${a.slice(0, 4) !== aujourdhui.slice(0, 4) ? ` ${a.slice(0, 4)}` : ""}`);
   }
   const cle = estClePeriode(entree.p) && entree.p !== "libre" ? entree.p : "30j";

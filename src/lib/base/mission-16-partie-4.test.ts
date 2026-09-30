@@ -379,7 +379,8 @@ describe("événements : ESTIMATION_VUE, RAPPEL_DEMANDE, entonnoir en sept étap
         new NextRequest("http://localhost/api/site/evenements", {
           method: "POST",
           body: JSON.stringify({ parcoursId: "bbbbbbbb-1604-4000-8000-000000000001", type, page: "/simulateur", meta: { format: "en-l", min: 1500, max: 1900 } }),
-          headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.61" },
+          // Un navigateur (sans User-Agent, la mesure y voit un robot et n'enregistre rien).
+          headers: { "content-type": "text/plain", origin: "https://coverswap.fr", "x-forwarded-for": "203.0.113.61", "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1" },
         })
       );
       assert.equal(reponse.status, 200, type);
@@ -404,7 +405,8 @@ describe("événements : ESTIMATION_VUE, RAPPEL_DEMANDE, entonnoir en sept étap
       ["contact", 3, 0],
     ]);
     assert.equal(entonnoir.etapes.find((x) => x.cle === "estimation")?.facultative, true);
-    const jour = new Date().toISOString().slice(0, 10);
+    // Le jour de Paris (relecture B, point 13 : la synthèse du site lit des jours de Paris ; après 22 h UTC, le jour UTC est la veille).
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date());
     const synthese = await evenements.syntheseSite(jour, jour);
     assert.equal(synthese.parType.find((t) => t.cle === "RAPPEL_DEMANDE")?.libelle, "Rappels demandés");
   });

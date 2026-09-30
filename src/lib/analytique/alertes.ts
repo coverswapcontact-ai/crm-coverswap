@@ -73,8 +73,8 @@ async function calculer(maintenant: Date, etatsFournis?: EtatSource[]): Promise<
   if (chiffresDisponibles(etatDe(etats, "SEARCH_CONSOLE"))) {
     // Les données Google arrivent avec 2 à 3 jours de retard : la semaine se lit jusqu'à J−3.
     const fin = decalerJour(jourParis(maintenant), -3);
-    const semaine = { ...sept, du: decalerJour(fin, -6), au: fin, precedente: { du: decalerJour(fin, -13), au: decalerJour(fin, -7) } };
-    const [seo, mois] = await Promise.all([chiffresSeo(semaine), chiffresSeo({ ...sept, du: decalerJour(fin, -27), au: fin, jours: 28, precedente: { du: decalerJour(fin, -55), au: decalerJour(fin, -28) } })]);
+    const semaine = { du: decalerJour(fin, -6), au: fin, precedente: { du: decalerJour(fin, -13), au: decalerJour(fin, -7) } };
+    const [seo, mois] = await Promise.all([chiffresSeo(semaine), chiffresSeo({ du: decalerJour(fin, -27), au: fin, precedente: { du: decalerJour(fin, -55), au: decalerJour(fin, -28) } })]);
     for (const r of seo.actuel.opportunites.enHausse.slice(0, 2)) {
       const avant = seo.actuel.avantRequetes.get(r.cle)?.impressions ?? 0;
       alertes.push({ cle: `SEO_DECOLLE:${r.cle}`, gravite: "INFO", texte: `« ${r.cle} » décolle : ${nb(r.impressions)} affichages sur 7 jours${avant ? ` contre ${nb(avant)}` : ", nouvelle"}`, lien: LIEN("seo"), source: "SEARCH_CONSOLE" });

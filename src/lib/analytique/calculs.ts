@@ -29,17 +29,21 @@ import type { Famille } from "./types";
  *   d'espace ou événement entrant d'un dossier) ;
  * - devis : dossier (non archivé) avec un devis numéroté, visible dans l'espace, émis dans la période — un dossier
  *   compte une fois (variantes et devis refaits ne se cumulent pas) ;
- * - signé : dossier dont l'accord n'est pas retiré, ou passé Signé (étape Signé et au-delà) ; daté du premier accord
- *   non retiré ou du premier passage à Signé ; montant = accord non retiré le plus récent, sinon devis accepté ;
+ * - signé : dossier dont l'accord n'est pas retiré, ou à une étape signée (Signé et au-delà) ; daté du premier accord
+ *   non retiré ou du premier passage VERS une étape signée (Signé sauté compris), sinon du devis accepté, sinon de
+ *   l'arrivée du dossier (`instantDeSignature` : jamais écarté) ; montant = accord non retiré le plus récent, sinon
+ *   devis accepté ;
  * - encaissé : encaissements VALIDE reçus (`recuLe`) dans la période ; un encaissement annulé ou rejeté ne compte plus ;
  * - marge estimée : encaissé − dépenses de chantier (matière, fournitures, sous-traitance, déplacement) rattachées à un
  *   dossier et payées dans la période ;
  * - panier moyen : montant signé / signatures de montant connu ;
  * - carnet de commandes : devis envoyés (numérotés, en attente, visibles), non signés, dossier ni perdu ni en pause
  *   ni archivé ; un par dossier (le plus récent) ;
- * - dépense pub : la dépense synchronisée (DepensePubJour) quand la synchronisation Meta a réussi au moins une fois ;
- *   sinon le prorata du budget de campagne (CAMPAGNE_*) jour par jour, marqué « estimation » ; sinon les dépenses
- *   « Publicité » saisies. Une dépense saisie ne s'ajoute JAMAIS à la synchronisation (ce serait la même facture) ;
+ * - dépense pub : JOUR PAR JOUR (`combinerDepensePub`, relecture B) — la dépense synchronisée (DepensePubJour) sur
+ *   les jours couverts par la synchronisation Meta ; ailleurs le prorata du budget de campagne (CAMPAGNE_*), marqué
+ *   « estimation », et 0 hors campagne ; sans campagne, les dépenses « Publicité » saisies ; sinon inconnu (null).
+ *   Jamais deux sources additionnées le même jour (une facture saisie et la synchronisation sont la même dépense) ;
+ * - leads Meta, coût par lead Meta, coût par chantier signé : `leadsMeta`, `signesMeta`, `coutPar` (une définition) ;
  * - règle des 20 % : dépense pub du mois ≤ 20 % de l'encaissé du mois précédent.
  */
 

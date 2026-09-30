@@ -496,7 +496,7 @@ export const ARGENT_ESSAI: EcranArgent = {
         libelle: "3e trimestre 2026",
         base: 8540,
         montant: 1811,
-        echeance: "31/10/2026",
+        echeance: "2026-10-31",
         detail: [
           { libelle: "Cotisations sociales · 21,2 %", montant: 1810 },
           { libelle: "Formation professionnelle · 0,3 %", montant: 26 },

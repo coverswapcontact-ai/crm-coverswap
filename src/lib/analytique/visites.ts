@@ -13,6 +13,10 @@ import { familleDe, nomDeProvenance } from "./sources";
  *    référent) ; appareil et pays = ceux de la première page ;
  *  - une visite « simule » si elle lance une génération, « termine » si elle voit un résultat, « demande » si elle
  *    envoie un contact (devis, formulaire, rappel).
+ *  - relecture B (vie privée) : depuis le 30/09/2026, les étapes du simulateur et les demandes arrivent SANS empreinte
+ *    (seules les pages vues la portent, route /api/site/evenements) ; un parcours sans page vue n'est donc pas une
+ *    visite : ses simulations, résultats et demandes sont comptés (une fois par parcours) dans l'entonnoir, sa
+ *    provenance (famille, nom) et sa première page, sans ajouter de visite.
  *
  * Lecture par agrégats : UN passage linéaire sur les événements triés par visiteur puis date (index
  * `[visiteur, createdAt]`), lus par tranches de 5 000 ; chaque compte est un Map incrémenté (jamais de recopie de
@@ -60,6 +64,8 @@ type Visite = {
   dernier: number;
   jour: string;
   entree: string | null;
+  /** La page du premier événement (entrée d'un parcours du simulateur sans page vue). */
+  premierePage: string | null;
   famille: Famille;
   nom: string;
   appareil: string | null;
@@ -116,8 +122,26 @@ export async function visitesSurPeriode(du: string, au: string, options: { famil
   let pagesVues = 0;
   let sansEmpreinte = 0;
 
+  const credites = new Set<string>();
+  /** Un parcours du simulateur sans page vue : ses étapes comptent (une fois par parcours), pas comme une visite. */
+  const crediter = (v: Visite) => {
+    const drapeaux: [keyof CompteVisites, boolean][] = [["simulations", v.simule], ["terminees", v.termine], ["leads", v.demande]];
+    const comptes: CompteVisites[] = [entonnoir];
+    const entree = v.premierePage;
+    if (entree) comptes.push(parEntree.get(entree) ?? (parEntree.set(entree, { page: entree, ...vide() }), parEntree.get(entree)!));
+    comptes.push(parFamille.get(v.famille) ?? (parFamille.set(v.famille, { famille: v.famille, ...vide() }), parFamille.get(v.famille)!));
+    const cleSource = `${v.famille}|${v.nom}`;
+    comptes.push(parSource.get(cleSource) ?? (parSource.set(cleSource, { famille: v.famille, nom: v.nom, ...vide() }), parSource.get(cleSource)!));
+    for (const [drapeau, oui] of drapeaux) {
+      if (!oui || credites.has(`${v.cle}|${drapeau}`)) continue;
+      credites.add(`${v.cle}|${drapeau}`);
+      for (const c of comptes) c[drapeau] += 1;
+    }
+  };
+
   const clore = (v: Visite | null, vues: Map<string, number>) => {
     if (!v || (filtre && v.famille !== filtre)) return;
+    if (!v.aPageVue && v.sansEmpreinte) return crediter(v);
     visites += 1;
     if (v.sansEmpreinte) sansEmpreinte += 1;
     else visiteursParJour.add(`${v.jour}|${v.cle}`);
@@ -180,6 +204,7 @@ export async function visitesSurPeriode(du: string, au: string, options: { famil
         dernier: t,
         jour: jourParis(e.createdAt),
         entree: null,
+        premierePage: e.page || null,
         famille: familleDeLigne(e),
         nom: nomDeProvenance({ source: e.source, referent: e.referent }),
         appareil: e.appareil,

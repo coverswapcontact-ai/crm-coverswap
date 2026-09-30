@@ -66,9 +66,11 @@ describe("l'outil « analytique »", () => {
     assert.deepEqual(e, await ecranAnalytique("ensemble", resoudrePeriode({ p: "30j" }, essai.MERCREDI), {}, essai.MERCREDI), "les données sont celles de l'écran");
     assert.match(r.texte, /^Analytique — Vue d'ensemble, les 30 derniers jours \(2026-09-01 → 2026-09-30, comparé à 2026-08-02 → 2026-08-31\)\./);
     assert.match(r.texte, /\nRésumé du jour \(rédigé par règles, à reformuler sans changer les chiffres\) :\n- Ça monte\. .*\n- Ça coince\. .*\n- À faire\. Relance le devis en attente/);
-    assert.match(r.texte, /\n- Leads : 6 \(période d'avant : 1, \+500 %, favorable\) — dont 3 Meta \[CRM\]/);
-    assert.match(r.texte, /\n- Coût par chantier signé : 151,5 € .*— Coût par lead Meta : 50,5 € \(estimation\) \[CRM\]/);
-    assert.match(r.texte, /\nTunnel : Visites 3 → Simulations 2 \(67 %\) → Leads 6 → Appelés 2 \(33 %\) → Joints 2 \(100 %\) → Devis 2 \(100 %\) → Signés 1 \(50 %\) → Encaissés 1 \(100 %\)\. L'étape qui perd le plus : lead → appel \(4 perdus\)\./);
+    // Relecture B (point 4) : la période finit aujourd'hui → comparée sur les jours complets (le lead du 31/08 à 23 h 30 ne compte pas contre un 30/09 à 10 h).
+    assert.match(r.texte, /\n- Leads : 6 \(période d'avant, jours complets : 0, nouveau, favorable\) — dont 3 Meta \[CRM\]/);
+    // Relecture B (écran, point 5) : 6e tuile « Coût par lead Meta », le coût par chantier signé en détail.
+    assert.match(r.texte, /\n- Coût par lead Meta : 50,5 € — Coût par chantier signé : 151,5 € \(estimation : prorata du budget\) \[CRM\]/);
+    assert.match(r.texte, /\nTunnel : Visites 3 → Simulations lancées 2 \(67 %\) → Leads 6 → Appelés 2 \(33 %\) → Joints 2 \(100 %\) → Devis 2 \(100 %\) → Signés 1 \(50 %\) → Encaissés 1 \(100 %\)\. L'étape qui perd le plus : lead → appel \(4 perdus\)\./);
     assert.match(r.texte, /Sources : CRM à jour · site à jour.* · Meta non branchée \(chiffres estimés\) — à faire : Poser META_AD_ACCOUNT_ID/);
     assert.match(r.texte, /Search Console non branchée — à faire : /);
     assert.deepEqual(r.liens, [{ libelle: "Analytique — Vue d'ensemble", href: "http://localhost:3001/analytique?onglet=ensemble&p=30j" }]);

@@ -8,6 +8,7 @@
  */
 import Link from "next/link";
 import type { Courbe, EcranArgent } from "@/lib/analytique/types";
+import { jourParis } from "@/lib/dossiers/dates";
 import { BarresHorizontales, Carte, GrilleTuiles, LienDetail, Progression, Tableau } from "./base";
 import { FiscalArgent } from "./FiscalArgent";
 import { euros, formaterValeur, moisLong, surLaPeriode } from "./format";
@@ -188,7 +189,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
         </Carte>
       </div>
 
-      <FiscalArgent fiscal={fiscal} />
+      <FiscalArgent fiscal={fiscal} aujourdhui={jourParis(new Date(ecran.genereLe))} />
 
       <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
         <Carte
@@ -216,7 +217,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
           ) : null}
         </Carte>
 
-        <Carte titre="D'où viennent les clients" sousTitre={`Clients arrivés ${surLaPeriode(ecran.periode)}, signés et montant signé, par source`} action={<LienDetail href="/clients">Clients →</LienDetail>}>
+        <Carte titre="D'où viennent les clients" sousTitre="Depuis toujours : clients, clients signés et montant signé, par source (écran Clients)" action={<LienDetail href="/clients">Clients →</LienDetail>}>
           <Tableau
             largeurMin={420}
             lignes={clients}

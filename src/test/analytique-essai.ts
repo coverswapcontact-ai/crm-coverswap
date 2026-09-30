@@ -39,7 +39,7 @@ export async function peuplerAnalytique(prisma: PrismaClient): Promise<IdsEssai>
   const lMeta3 = await lead({ source: "META_ADS", createdAt: le("2026-09-26T10:00:00Z") });
   const lSite = await lead({ source: "SITE_SIMULATEUR", canal: "google", parcoursId: "parcours-essai-1", pageEntree: "/", createdAt: le("2026-09-27T10:05:00Z") });
   await lead({ source: "SITE_DEVIS", createdAt: le("2026-09-20T10:00:00Z"), archiveLe: le("2026-09-21T10:00:00Z"), archiveMotif: "Doublon de Essai : fusionné le 21/09/2026", doublonDe: lMeta1.id, doublonTraiteLe: le("2026-09-21T10:00:00Z") });
-  await lead({ source: "MAIL", createdAt: le("2026-09-21T10:00:00Z"), archiveLe: le("2026-09-22T10:00:00Z"), archiveMotif: "Corbeille — essai" });
+  await lead({ source: "MAIL", createdAt: le("2026-09-21T10:00:00Z"), archiveLe: le("2026-09-22T10:00:00Z"), archiveMotif: "Corbeille — pas intéressé" });
   await lead({ source: "AUTRE", createdAt: le("2026-08-31T22:30:00Z") });
   await lead({ source: "AUTRE", createdAt: le("2026-08-31T21:30:00Z") });
 
@@ -89,11 +89,14 @@ export async function peuplerAnalytique(prisma: PrismaClient): Promise<IdsEssai>
   return { lMeta1: lMeta1.id, lMeta2: lMeta2.id, lMeta3: lMeta3.id, lSite: lSite.id, dA: dA.id, dB: dB.id, dC: dC.id, dD: dD.id, docA1: docA1.id, docB: docB.id };
 }
 
+/** La synchronisation de la nuit a couvert 90 jours (relecture B : la dépense réelle vaut sur les jours couverts). */
+const DETAIL_META = JSON.stringify({ etat: "A_JOUR", couverture: { du: "2026-07-02", au: "2026-09-30" } });
+
 /** Branche la synchronisation Meta (variables + une réussite) et pose la dépense réelle de deux publicités. */
 export async function brancherMeta(prisma: PrismaClient, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   env.META_AD_ACCOUNT_ID = "123456";
   env.META_ADS_TOKEN = "jeton-essai";
-  await prisma.sourceAnalytique.upsert({ where: { source: "META" }, create: { source: "META", dernierEssaiLe: le("2026-09-30T05:00:00Z"), derniereReussiteLe: le("2026-09-30T05:00:00Z"), detail: JSON.stringify({ etat: "A_JOUR" }) }, update: { dernierEssaiLe: le("2026-09-30T05:00:00Z"), derniereReussiteLe: le("2026-09-30T05:00:00Z"), derniereErreur: null, detail: JSON.stringify({ etat: "A_JOUR" }) } });
+  await prisma.sourceAnalytique.upsert({ where: { source: "META" }, create: { source: "META", dernierEssaiLe: le("2026-09-30T05:00:00Z"), derniereReussiteLe: le("2026-09-30T05:00:00Z"), detail: DETAIL_META }, update: { dernierEssaiLe: le("2026-09-30T05:00:00Z"), derniereReussiteLe: le("2026-09-30T05:00:00Z"), derniereErreur: null, detail: DETAIL_META } });
   const ligne = (jour: string, publiciteId: string, publiciteNom: string, depense: number, impressions: number, clics: number, leadsPlateforme: number) =>
     prisma.depensePubJour.create({ data: { plateforme: "META", jour, compteId: "123456", campagneId: "C1", campagneNom: "Cuisine septembre", ensembleId: "S1", ensembleNom: "Montpellier 30 km", publiciteId, publiciteNom, depense, impressions, clics, leadsPlateforme, synchroniseLe: le("2026-09-30T05:00:00Z") } });
   await ligne("2026-09-24", "A1", "Carrousel", 20, 1000, 20, 1);

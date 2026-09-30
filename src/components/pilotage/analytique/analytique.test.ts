@@ -300,7 +300,7 @@ describe("rendu serveur des onglets (jeu d'essai de la maquette du 30/09)", () =
     assert.equal((argent.match(/data-seuil="/g) ?? []).length, 3);
     assert.match(argent, /au 31 décembre/);
     assert.match(argent, new RegExp(`À déclarer${NBSP}: <span[^>]*>3e trimestre 2026`));
-    assert.match(argent, /Échéance de déclaration : 31\/10\/2026/);
+    assert.match(argent, /À déclarer au plus tard le 31\/10\/2026/);
     assert.match(argent, /Cotisations sociales/);
     assert.match(argent, /période URSSAF \(pas la période choisie/);
     assert.doesNotMatch(argent, /data-a-parametrer/);

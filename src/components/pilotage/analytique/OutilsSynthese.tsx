@@ -27,42 +27,80 @@ import { euros, formaterValeur, moisLong } from "./format";
  * Les pourcentages de la synthèse sont déjà en « pour cent » (12,5 = 12,5 %), pas en ratio.
  */
 
-const pct = (valeur: number | null) => (valeur === null ? "—" : `${String(valeur).replace(".", ",")} %`);
+const pct = (valeur: number | null) =>
+  valeur === null ? "—" : `${String(valeur).replace(".", ",")} %`;
 const nombre = (valeur: number) => formaterValeur(valeur, "nombre");
 
-function adresseSynthese(chemin: string, parametres: Record<string, string | null>): string {
+function adresseSynthese(
+  chemin: string,
+  parametres: Record<string, string | null>,
+): string {
   const recherche = new URLSearchParams();
-  for (const [cle, valeur] of Object.entries(parametres)) if (valeur !== null) recherche.set(cle, valeur);
+  for (const [cle, valeur] of Object.entries(parametres))
+    if (valeur !== null) recherche.set(cle, valeur);
   const texte = recherche.toString();
   return texte ? `${chemin}?${texte}` : chemin;
 }
 
 /** Les adresses des routes /api/synthese (pures : testées). */
 export const routesSynthese = {
-  lecture: (du: string, au: string, anonyme: boolean) => adresseSynthese("/api/synthese", { du, au, anonyme: anonyme ? "1" : null }),
-  export: (du: string, au: string, format: "texte" | "json", anonyme: boolean) => adresseSynthese("/api/synthese/export", { du, au, format, anonyme: anonyme ? "1" : null }),
+  lecture: (du: string, au: string, anonyme: boolean) =>
+    adresseSynthese("/api/synthese", { du, au, anonyme: anonyme ? "1" : null }),
+  export: (
+    du: string,
+    au: string,
+    format: "texte" | "json",
+    anonyme: boolean,
+  ) =>
+    adresseSynthese("/api/synthese/export", {
+      du,
+      au,
+      format,
+      anonyme: anonyme ? "1" : null,
+    }),
   instantanes: () => "/api/synthese/instantanes",
-  instantane: (mois: string, anonyme: boolean) => adresseSynthese(`/api/synthese/instantanes/${mois}`, { anonyme: anonyme ? "1" : null }),
+  instantane: (mois: string, anonyme: boolean) =>
+    adresseSynthese(`/api/synthese/instantanes/${mois}`, {
+      anonyme: anonyme ? "1" : null,
+    }),
 };
 
 function copier(texte: string) {
   void navigator.clipboard.writeText(texte).then(
     () => toast.success("Synthèse copiée"),
-    () => toast.error("Copie impossible")
+    () => toast.error("Copie impossible"),
   );
 }
 
-const BOUTON_LIEN = "inline-flex h-11 items-center gap-1.5 rounded-[8px] border border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] transition-colors duration-150 hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-8";
+const BOUTON_LIEN =
+  "inline-flex h-11 items-center gap-1.5 rounded-[8px] border border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] transition-colors duration-150 hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-8";
 
-type InstantaneOuvert = { mois: string; figeLe: string; integre: boolean; ecarts: Ecart[]; synthese: SyntheseLue["synthese"]; redaction: string };
+type InstantaneOuvert = {
+  mois: string;
+  figeLe: string;
+  integre: boolean;
+  ecarts: Ecart[];
+  synthese: SyntheseLue["synthese"];
+  redaction: string;
+};
 
 /* ── Mois figés et export (onglet Argent) ─────────────────────────────── */
 
-export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: string; libellePeriode: string }) {
+export function MoisFigesEtExport({
+  du,
+  au,
+  libellePeriode,
+}: {
+  du: string;
+  au: string;
+  libellePeriode: string;
+}) {
   const [anonyme, setAnonyme] = useState(false);
   const [redaction, setRedaction] = useState<string | null>(null);
   const [chargement, setChargement] = useState<string | null>(null);
-  const [instantanes, setInstantanes] = useState<InstantaneResume[] | null>(null);
+  const [instantanes, setInstantanes] = useState<InstantaneResume[] | null>(
+    null,
+  );
   const [erreurListe, setErreurListe] = useState<string | null>(null);
   const [ouvert, setOuvert] = useState<InstantaneOuvert | null>(null);
 
@@ -79,10 +117,14 @@ export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: 
   async function lireRedaction(pseudonymes: boolean) {
     setChargement("redaction");
     try {
-      const lue = await appelApi<SyntheseLue>(routesSynthese.lecture(du, au, pseudonymes));
+      const lue = await appelApi<SyntheseLue>(
+        routesSynthese.lecture(du, au, pseudonymes),
+      );
       setRedaction(lue.redaction);
     } catch (erreur) {
-      toast.error("Synthèse indisponible", { description: messageErreur(erreur) });
+      toast.error("Synthèse indisponible", {
+        description: messageErreur(erreur),
+      });
     } finally {
       setChargement(null);
     }
@@ -91,10 +133,21 @@ export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: 
   async function ouvrirInstantane(mois: string, pseudonymes: boolean) {
     setChargement(mois);
     try {
-      const lu = await appelApi<Omit<InstantaneOuvert, "mois">>(routesSynthese.instantane(mois, pseudonymes));
-      setOuvert({ mois, figeLe: lu.figeLe, integre: lu.integre, ecarts: lu.ecarts, synthese: lu.synthese, redaction: lu.redaction });
+      const lu = await appelApi<Omit<InstantaneOuvert, "mois">>(
+        routesSynthese.instantane(mois, pseudonymes),
+      );
+      setOuvert({
+        mois,
+        figeLe: lu.figeLe,
+        integre: lu.integre,
+        ecarts: lu.ecarts,
+        synthese: lu.synthese,
+        redaction: lu.redaction,
+      });
     } catch (erreur) {
-      toast.error("Instantané indisponible", { description: messageErreur(erreur) });
+      toast.error("Instantané indisponible", {
+        description: messageErreur(erreur),
+      });
     } finally {
       setChargement(null);
     }
@@ -108,15 +161,32 @@ export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: 
   }
 
   return (
-    <Carte id="mois-figes" titre="Mois figés et export" sousTitre={`Synthèse ${libellePeriode.toLowerCase()} à emporter ; chaque mois écoulé est figé, jamais recalculé.`} gap="gap-4">
+    <Carte
+      id="mois-figes"
+      titre="Mois figés et export"
+      sousTitre={`Synthèse ${libellePeriode.toLowerCase()} à emporter ; chaque mois écoulé est figé, jamais recalculé.`}
+      gap="gap-4"
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <Bouton variante={anonyme ? "primaire" : "secondaire"} taille="sm" icone={<EyeOff size={13} aria-hidden />} onClick={basculerAnonyme} aria-pressed={anonyme}>
+        <Bouton
+          variante={anonyme ? "primaire" : "secondaire"}
+          taille="sm"
+          icone={<EyeOff size={13} aria-hidden />}
+          onClick={basculerAnonyme}
+          aria-pressed={anonyme}
+        >
           {anonyme ? "Anonymisée" : "Anonymiser"}
         </Bouton>
-        <a href={routesSynthese.export(du, au, "texte", anonyme)} className={BOUTON_LIEN}>
+        <a
+          href={routesSynthese.export(du, au, "texte", anonyme)}
+          className={BOUTON_LIEN}
+        >
           <Download size={13} aria-hidden /> Texte
         </a>
-        <a href={routesSynthese.export(du, au, "json", anonyme)} className={BOUTON_LIEN}>
+        <a
+          href={routesSynthese.export(du, au, "json", anonyme)}
+          className={BOUTON_LIEN}
+        >
           <Download size={13} aria-hidden /> Données
         </a>
         <Bouton
@@ -125,42 +195,79 @@ export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: 
           icone={<FileText size={13} aria-hidden />}
           chargement={chargement === "redaction"}
           aria-expanded={redaction !== null}
-          onClick={() => (redaction === null ? void lireRedaction(anonyme) : setRedaction(null))}
+          onClick={() =>
+            redaction === null
+              ? void lireRedaction(anonyme)
+              : setRedaction(null)
+          }
         >
-          {redaction === null ? "Version rédigée" : "Masquer la version rédigée"}
+          {redaction === null
+            ? "Version rédigée"
+            : "Masquer la version rédigée"}
         </Bouton>
       </div>
-      {anonyme ? <p className="text-[12px] text-[#9CA3AF]">Noms remplacés par des pseudonymes stables, dans l&apos;export comme dans la version rédigée.</p> : null}
+      {anonyme ? (
+        <p className="text-[12px] text-[#9CA3AF]">
+          Noms remplacés par des pseudonymes stables, dans l&apos;export comme
+          dans la version rédigée.
+        </p>
+      ) : null}
 
-      {redaction !== null ? <TexteRedige texte={redaction} titre={`Version rédigée, ${libellePeriode.toLowerCase()}`} /> : null}
+      {redaction !== null ? (
+        <TexteRedige
+          texte={redaction}
+          titre={`Version rédigée, ${libellePeriode.toLowerCase()}`}
+        />
+      ) : null}
 
       <div className="flex flex-col gap-2">
         <p className={LBL}>Mois figés</p>
         {erreurListe ? (
-          <p className="text-[13px] text-[#F5B454]">Mois figés illisibles&nbsp;: {erreurListe}</p>
+          <p className="text-[13px] text-[#F5B454]">
+            Mois figés illisibles&nbsp;: {erreurListe}
+          </p>
         ) : instantanes === null ? (
           <p className="text-[13px] text-[#6B7280]">Chargement…</p>
         ) : instantanes.length === 0 ? (
-          <p className="text-[13px] text-[#6B7280]">Aucun mois figé pour l&apos;instant&nbsp;: chaque mois écoulé l&apos;est automatiquement.</p>
+          <p className="text-[13px] text-[#6B7280]">
+            Aucun mois figé pour l&apos;instant&nbsp;: chaque mois écoulé
+            l&apos;est automatiquement.
+          </p>
         ) : (
           <ul className="flex flex-col">
             {instantanes.map((ligne) => (
-              <li key={ligne.mois} className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2A2D34] py-2.5 text-[13px] last:border-b-0" data-mois-fige={ligne.mois}>
-                <span className="min-w-[124px] font-medium text-[#F2F3F5]">{moisLong(ligne.mois)}</span>
-                <span className="text-[#9CA3AF]">
-                  encaissé <span className={cn(NUM, "text-[#D1D5DB]")}>{ligne.encaisse === null ? "—" : euros(ligne.encaisse)}</span>
+              <li
+                key={ligne.mois}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2A2D34] py-2.5 text-[13px] last:border-b-0"
+                data-mois-fige={ligne.mois}
+              >
+                <span className="min-w-[124px] font-medium text-[#F2F3F5]">
+                  {moisLong(ligne.mois)}
                 </span>
                 <span className="text-[#9CA3AF]">
-                  {nombre(ligne.dossiersOuverts)} dossiers · {nombre(ligne.signatures)} signatures
+                  encaissé{" "}
+                  <span className={cn(NUM, "text-[#D1D5DB]")}>
+                    {ligne.encaisse === null ? "—" : euros(ligne.encaisse)}
+                  </span>
                 </span>
-                <span className="text-[12px] text-[#6B7280]">figé le {formatDateCourte(ligne.figeLe)}</span>
+                <span className="text-[#9CA3AF]">
+                  {nombre(ligne.dossiersOuverts)} dossier{ligne.dossiersOuverts > 1 ? "s" : ""} ·{" "}
+                  {nombre(ligne.signatures)} signature{ligne.signatures > 1 ? "s" : ""}
+                </span>
+                <span className="text-[12px] text-[#6B7280]">
+                  figé le {formatDateCourte(ligne.figeLe)}
+                </span>
                 <Bouton
                   taille="sm"
                   variante="fantome"
                   className="ml-auto"
                   chargement={chargement === ligne.mois}
                   aria-expanded={ouvert?.mois === ligne.mois}
-                  onClick={() => (ouvert?.mois === ligne.mois ? setOuvert(null) : void ouvrirInstantane(ligne.mois, anonyme))}
+                  onClick={() =>
+                    ouvert?.mois === ligne.mois
+                      ? setOuvert(null)
+                      : void ouvrirInstantane(ligne.mois, anonyme)
+                  }
                 >
                   {ouvert?.mois === ligne.mois ? "Fermer" : "Voir"}
                 </Bouton>
@@ -179,8 +286,12 @@ export function MoisFigesEtExport({ du, au, libellePeriode }: { du: string; au: 
         <dl className="mt-2 flex flex-col gap-2.5">
           {GUIDE_LECTURE.map((entree) => (
             <div key={entree.titre}>
-              <dt className="text-[13px] font-medium text-[#F2F3F5]">{entree.titre}</dt>
-              <dd className="mt-0.5 text-[12px] leading-[1.45] text-[#9CA3AF]">{entree.texte}</dd>
+              <dt className="text-[13px] font-medium text-[#F2F3F5]">
+                {entree.titre}
+              </dt>
+              <dd className="mt-0.5 text-[12px] leading-[1.45] text-[#9CA3AF]">
+                {entree.texte}
+              </dd>
             </div>
           ))}
         </dl>
@@ -194,11 +305,18 @@ function TexteRedige({ texte, titre }: { texte: string; titre: string }) {
     <div className="flex flex-col gap-2 rounded-[10px] bg-[#16181D] p-3.5">
       <div className="flex items-center justify-between gap-3">
         <p className={LBL}>{titre}</p>
-        <Bouton taille="sm" variante="fantome" icone={<Copy size={13} aria-hidden />} onClick={() => copier(texte)}>
+        <Bouton
+          taille="sm"
+          variante="fantome"
+          icone={<Copy size={13} aria-hidden />}
+          onClick={() => copier(texte)}
+        >
           Copier
         </Bouton>
       </div>
-      <pre className="max-h-[420px] overflow-auto text-[13px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB]">{texte}</pre>
+      <pre className="max-h-[420px] overflow-auto text-[13px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB]">
+        {texte}
+      </pre>
     </div>
   );
 }
@@ -206,23 +324,48 @@ function TexteRedige({ texte, titre }: { texte: string; titre: string }) {
 function InstantaneDetail({ instantane }: { instantane: InstantaneOuvert }) {
   const { synthese } = instantane;
   const chiffres: [string, string][] = [
-    ["Encaissé", synthese.finances.encaisse === null ? "—" : euros(synthese.finances.encaisse)],
+    [
+      "Encaissé",
+      synthese.finances.encaisse === null
+        ? "—"
+        : euros(synthese.finances.encaisse),
+    ],
     ["Dépenses", euros(synthese.finances.depenses)],
-    ["Marge brute", synthese.finances.margeBrute === null ? "—" : euros(synthese.finances.margeBrute)],
+    [
+      "Marge brute",
+      synthese.finances.margeBrute === null
+        ? "—"
+        : euros(synthese.finances.margeBrute),
+    ],
     ["Devis émis", nombre(synthese.commercial.activite.devisEmis)],
-    ["Signatures", `${nombre(synthese.commercial.activite.signatures)} · ${euros(synthese.commercial.activite.montantSigne)}`],
+    [
+      "Signatures",
+      `${nombre(synthese.commercial.activite.signatures)} · ${euros(synthese.commercial.activite.montantSigne)}`,
+    ],
     ["Dossiers ouverts", nombre(synthese.commercial.cohorte.ouverts)],
   ];
   return (
-    <div className="flex flex-col gap-3 rounded-[10px] border border-[#2A2D34] p-3.5" data-instantane={instantane.mois}>
+    <div
+      className="flex flex-col gap-3 rounded-[10px] border border-[#2A2D34] p-3.5"
+      data-instantane={instantane.mois}
+    >
       <p className="flex items-start gap-2 text-[13px] text-[#D1D5DB]">
-        <Lock size={15} aria-hidden className="mt-0.5 shrink-0 text-[#93C5FD]" />
+        <Lock
+          size={15}
+          aria-hidden
+          className="mt-0.5 shrink-0 text-[#93C5FD]"
+        />
         <span>
-          {moisLong(instantane.mois)}, figé le {formatDateCourte(instantane.figeLe)}&nbsp;: ces chiffres ne se recalculent pas.{" "}
+          {moisLong(instantane.mois)}, figé le{" "}
+          {formatDateCourte(instantane.figeLe)}&nbsp;: ces chiffres ne se
+          recalculent pas.{" "}
           {instantane.integre ? (
             <span className="text-[#5DCAA5]">Empreinte conforme.</span>
           ) : (
-            <span className="font-medium text-[#F5B454]">Empreinte non conforme&nbsp;: contenu altéré hors de l&apos;application.</span>
+            <span className="font-medium text-[#F5B454]">
+              Empreinte non conforme&nbsp;: contenu altéré hors de
+              l&apos;application.
+            </span>
           )}
         </span>
       </p>
@@ -235,30 +378,45 @@ function InstantaneDetail({ instantane }: { instantane: InstantaneOuvert }) {
         ))}
       </dl>
       {instantane.ecarts.length === 0 ? (
-        <p className="text-[12px] text-[#6B7280]">Aucun écart avec un recalcul d&apos;aujourd&apos;hui.</p>
+        <p className="text-[12px] text-[#6B7280]">
+          Aucun écart avec un recalcul d&apos;aujourd&apos;hui.
+        </p>
       ) : (
         <div className="flex flex-col gap-1">
-          <p className="text-[12px] text-[#9CA3AF]">Écarts avec un recalcul d&apos;aujourd&apos;hui (saisie tardive ou correction)&nbsp;:</p>
+          <p className="text-[12px] text-[#9CA3AF]">
+            Écarts avec un recalcul d&apos;aujourd&apos;hui (saisie tardive ou
+            correction)&nbsp;:
+          </p>
           <ul className="flex flex-col gap-0.5 text-[12px] text-[#F5B454]">
             {instantane.ecarts.map((ecart) => (
               <li key={ecart.indicateur}>
-                {ecart.indicateur}&nbsp;: figé {ecart.fige ?? "—"}, aujourd&apos;hui {ecart.recalcule ?? "—"}
+                {ecart.indicateur}&nbsp;: figé {ecart.fige ?? "—"},
+                aujourd&apos;hui {ecart.recalcule ?? "—"}
               </li>
             ))}
           </ul>
         </div>
       )}
-      <TexteRedige texte={instantane.redaction} titre={`Version rédigée, ${moisLong(instantane.mois).toLowerCase()} (figé)`} />
+      <TexteRedige
+        texte={instantane.redaction}
+        titre={`Version rédigée, ${moisLong(instantane.mois).toLowerCase()} (figé)`}
+      />
     </div>
   );
 }
 
 /* ── Agent et qualité des données (bas de la Vue d'ensemble) ───────────── */
 
-const COULEURS_ALERTE: Record<AlerteSynthese["gravite"], string> = { URGENT: "#F5B454", ATTENTION: "#F5B454", INFO: "#9CA3AF" };
+const COULEURS_ALERTE: Record<AlerteSynthese["gravite"], string> = {
+  URGENT: "#F5B454",
+  ATTENTION: "#F5B454",
+  INFO: "#9CA3AF",
+};
 
 export function AgentEtQualite({ du, au }: { du: string; au: string }) {
   const [lue, setLue] = useState<SyntheseLue | null>(null);
+  // Téléphone : replié par défaut (la maquette s'arrête aux alertes) ; ordinateur : toujours ouvert.
+  const [ouvertTelephone, setOuvertTelephone] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
@@ -272,14 +430,38 @@ export function AgentEtQualite({ du, au }: { du: string; au: string }) {
   }, [du, au]);
 
   return (
-    <Carte id="agent-qualite" titre="Agent et qualité des données" sousTitre="Propositions de l'agent, points à corriger dans les données, alertes de la synthèse" gap="gap-4">
-      {erreur ? (
-        <p className="text-[13px] text-[#F5B454]">Synthèse illisible&nbsp;: {erreur}</p>
-      ) : !lue ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
-      ) : (
-        <ContenuAgent lue={lue} />
-      )}
+    <Carte
+      id="agent-qualite"
+      titre="Agent et qualité des données"
+      sousTitre="Propositions de l'agent, points à corriger dans les données, alertes de la synthèse"
+      action={
+        <button
+          type="button"
+          aria-expanded={ouvertTelephone}
+          onClick={() => setOuvertTelephone((o) => !o)}
+          className="flex min-h-11 items-center text-[13px] text-[#5DCAA5] md:hidden"
+        >
+          {ouvertTelephone ? "Replier" : "Afficher"}
+        </button>
+      }
+      gap="gap-4"
+    >
+      <div
+        className={cn(
+          "flex flex-col gap-4",
+          !ouvertTelephone && "max-md:hidden",
+        )}
+      >
+        {erreur ? (
+          <p className="text-[13px] text-[#F5B454]">
+            Synthèse illisible&nbsp;: {erreur}
+          </p>
+        ) : !lue ? (
+          <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+        ) : (
+          <ContenuAgent lue={lue} />
+        )}
+      </div>
     </Carte>
   );
 }
@@ -296,27 +478,84 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
           cle={(ligne) => ligne.auteur}
           vide="Aucune proposition sur la période."
           colonnes={[
-            { cle: "auteur", titre: "Auteur", rendu: (ligne) => <span className="text-[#F2F3F5]">{libelleAuteur(ligne.auteur)}</span> },
-            { cle: "proposees", titre: "Proposées", nombre: true, rendu: (ligne) => nombre(ligne.proposees) },
-            { cle: "validees", titre: "Validées", nombre: true, rendu: (ligne) => nombre(ligne.validees) },
-            { cle: "modifiees", titre: "Corrigées", nombre: true, rendu: (ligne) => nombre(ligne.modifiees) },
-            { cle: "rejetees", titre: "Rejetées", nombre: true, rendu: (ligne) => nombre(ligne.rejetees) },
-            { cle: "expirees", titre: "Expirées", nombre: true, rendu: (ligne) => nombre(ligne.expirees) },
-            { cle: "attente", titre: "En attente", nombre: true, rendu: (ligne) => nombre(ligne.enAttente) },
-            { cle: "taux", titre: "Acceptation", nombre: true, rendu: (ligne) => pct(ligne.tauxAcceptation) },
+            {
+              cle: "auteur",
+              titre: "Auteur",
+              rendu: (ligne) => (
+                <span className="text-[#F2F3F5]">
+                  {libelleAuteur(ligne.auteur)}
+                </span>
+              ),
+            },
+            {
+              cle: "proposees",
+              titre: "Proposées",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.proposees),
+            },
+            {
+              cle: "validees",
+              titre: "Validées",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.validees),
+            },
+            {
+              cle: "modifiees",
+              titre: "Corrigées",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.modifiees),
+            },
+            {
+              cle: "rejetees",
+              titre: "Rejetées",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.rejetees),
+            },
+            {
+              cle: "expirees",
+              titre: "Expirées",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.expirees),
+            },
+            {
+              cle: "attente",
+              titre: "En attente",
+              nombre: true,
+              rendu: (ligne) => nombre(ligne.enAttente),
+            },
+            {
+              cle: "taux",
+              titre: "Acceptation",
+              nombre: true,
+              rendu: (ligne) => pct(ligne.tauxAcceptation),
+            },
             {
               cle: "delai",
               titre: "Décision",
               nombre: true,
-              rendu: (ligne) => (ligne.delaiDecisionMedianHeures === null ? "—" : `${String(ligne.delaiDecisionMedianHeures).replace(".", ",")} h`),
+              rendu: (ligne) =>
+                ligne.delaiDecisionMedianHeures === null
+                  ? "—"
+                  : `${String(ligne.delaiDecisionMedianHeures).replace(".", ",")} h`,
             },
           ]}
         />
-        {agent.motifsRejet.length ? <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">Motifs de rejet&nbsp;: {agent.motifsRejet.map((motif) => `${motif.libelle} (${motif.valeur})`).join(", ")}</p> : null}
+        {agent.motifsRejet.length ? (
+          <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">
+            Motifs de rejet&nbsp;:{" "}
+            {agent.motifsRejet
+              .map((motif) => `${motif.libelle} (${motif.valeur})`)
+              .join(", ")}
+          </p>
+        ) : null}
         {agent.mails && agent.mails.recus > 0 ? (
           <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">
-            Mails&nbsp;: {agent.mails.recus} reçus · {agent.mails.rangesSeuls} rangés seuls chez un client ({agent.mails.rangementsCorriges} rangés ailleurs ensuite) · {agent.mails.bruitArchiveSeul}{" "}
-            publicités archivées seules ({agent.mails.bruitAnnule} remises dans la boîte) · {agent.mails.restantATrier} encore à trier · {agent.mails.lecturesIa} lectures par l&apos;IA (
+            Mails&nbsp;: {agent.mails.recus} reçus · {agent.mails.rangesSeuls}{" "}
+            rangés seuls chez un client ({agent.mails.rangementsCorriges} rangés
+            ailleurs ensuite) · {agent.mails.bruitArchiveSeul} publicités
+            archivées seules ({agent.mails.bruitAnnule} remises dans la boîte) ·{" "}
+            {agent.mails.restantATrier} encore à trier ·{" "}
+            {agent.mails.lecturesIa} lectures par l&apos;IA (
             {euros(agent.mails.coutIa, { decimales: 2 })})
           </p>
         ) : null}
@@ -329,9 +568,14 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
           ) : (
             <ul className="flex flex-col">
               {qualite.map((point) => (
-                <li key={point.cle} className="flex items-baseline justify-between gap-3 border-b border-[#2A2D34] py-2 text-[13px] last:border-b-0">
+                <li
+                  key={point.cle}
+                  className="flex items-baseline justify-between gap-3 border-b border-[#2A2D34] py-2 text-[13px] last:border-b-0"
+                >
                   <span className="text-[#D1D5DB]">{point.libelle}</span>
-                  <span className={cn(NUM, "text-[#F5B454]")}>{nombre(point.valeur)}</span>
+                  <span className={cn(NUM, "text-[#F5B454]")}>
+                    {nombre(point.valeur)}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -342,14 +586,24 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
             <p className={LBL}>Alertes de la synthèse</p>
             <ul className="flex flex-col gap-2">
               {lue.alertes.map((alerte) => (
-                <li key={alerte.code} className={cn(ENCADRE, "flex items-start gap-2")} style={{ color: COULEURS_ALERTE[alerte.gravite] }} data-gravite={alerte.gravite}>
+                <li
+                  key={alerte.code}
+                  className={cn(ENCADRE, "flex items-start gap-2")}
+                  style={{ color: COULEURS_ALERTE[alerte.gravite] }}
+                  data-gravite={alerte.gravite}
+                >
                   <span aria-hidden>●</span>
                   <span className="min-w-0 flex-1">
                     <span className="font-medium">{alerte.titre}</span>
-                    <span className="block text-[12px] text-[#9CA3AF]">{alerte.detail}</span>
+                    <span className="block text-[12px] text-[#9CA3AF]">
+                      {alerte.detail}
+                    </span>
                   </span>
                   {alerte.lien ? (
-                    <Link href={alerte.lien} className="shrink-0 text-[12px] text-[#5DCAA5] hover:text-[#8FE0C3]">
+                    <Link
+                      href={alerte.lien}
+                      className="shrink-0 text-[12px] text-[#5DCAA5] hover:text-[#8FE0C3]"
+                    >
                       Voir
                     </Link>
                   ) : null}

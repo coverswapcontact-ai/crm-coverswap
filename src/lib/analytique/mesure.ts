@@ -8,9 +8,12 @@ import { jourParis } from "@/lib/dossiers/dates";
  * ni l'adresse IP ni le navigateur (User-Agent) en clair :
  *
  *  - visiteur du jour = sha256(sel du jour ‖ IP tronquée (/24 en IPv4, /48 en IPv6) ‖ User-Agent ‖ "coverswap.fr"),
- *    tronqué à 16 caractères hexadécimaux. Le sel est tiré au hasard, gardé en mémoire et en base (`CleInterne`, table
- *    HORS journal) sous UNE seule clé, remplacée au premier événement de chaque jour (heure de Paris) : l'ancien sel
- *    disparaît, aucune empreinte ne se relie d'un jour à l'autre, et le journal n'en garde aucune copie ;
+ *    tronqué à 16 caractères hexadécimaux. Le sel est tiré au hasard et gardé EN MÉMOIRE SEULEMENT (relecture B,
+ *    point 7 : jamais en base, donc jamais dans une sauvegarde où l'empreinte se retrouverait par force brute sur les
+ *    IP /24 × navigateurs courants), remplacé au premier événement de chaque jour (heure de Paris). Conséquence admise :
+ *    un redémarrage du CRM tire un sel neuf, une visite en cours à ce moment compte pour deux ;
+ *  - aucune ligne ne relie deux jours : l'empreinte n'est écrite que sur les pages vues, qui ne portent pas
+ *    l'identifiant de parcours du simulateur (route /api/site/evenements) ;
  *  - appareil = classe tirée du User-Agent (TELEPHONE, TABLETTE, ORDINATEUR) ; les robots sont écartés (rien n'est
  *    enregistré) ;
  *  - pays = déduit du fuseau horaire que le navigateur envoie (approximation volontaire : aucune géolocalisation d'IP).
@@ -90,43 +93,38 @@ export function ipTronquee(ip: string | null | undefined): string {
 
 type Sel = { jour: string; sel: string };
 const CLE_MEMOIRE = "__coverswapSelDuJour";
-const memoire = globalThis as unknown as Record<string, { courant: Sel | null; enCours: Promise<Sel> | null } | undefined>;
+const memoire = globalThis as unknown as Record<string, { courant: Sel | null; enCours: Promise<Sel> | null; ancienEfface?: boolean } | undefined>;
 const etatSel = (memoire[CLE_MEMOIRE] ??= { courant: null, enCours: null });
 
-async function chargerSel(jour: string): Promise<Sel> {
-  const ligne = await prisma.cleInterne.findUnique({ where: { nom: CLE_SEL_DU_JOUR } });
-  if (ligne) {
-    try {
-      const lu = JSON.parse(ligne.valeur) as Partial<Sel>;
-      if (lu.jour === jour && typeof lu.sel === "string" && lu.sel.length >= 32) return { jour, sel: lu.sel };
-    } catch {
-      /* valeur illisible : remplacée ci-dessous */
-    }
+/**
+ * Le sel d'un nouveau jour : tiré au hasard, en mémoire seulement. Le sel qu'une version précédente gardait en base
+ * (`CleInterne`) est effacé (écrasé : la table ne supprime rien) au premier tirage du processus.
+ */
+async function nouveauSel(jour: string): Promise<Sel> {
+  if (!etatSel.ancienEfface) {
+    etatSel.ancienEfface = true;
+    await prisma.cleInterne.updateMany({ where: { nom: CLE_SEL_DU_JOUR }, data: { valeur: JSON.stringify({ retire: true }) } }).catch(() => undefined);
   }
-  // Nouveau jour : un sel neuf REMPLACE l'ancien (une seule clé, table hors journal : aucun historique des sels).
-  const sel = { jour, sel: randomBytes(32).toString("hex") };
-  const valeur = JSON.stringify(sel);
-  await prisma.cleInterne.upsert({ where: { nom: CLE_SEL_DU_JOUR }, create: { nom: CLE_SEL_DU_JOUR, valeur }, update: { valeur } });
-  return sel;
+  return { jour, sel: randomBytes(32).toString("hex") };
 }
 
-/** Le sel du jour (heure de Paris) : en mémoire, sinon en base, sinon tiré au hasard et gardé (en remplaçant celui d'hier). */
+/** Le sel du jour (heure de Paris), en mémoire ; tiré au hasard au premier événement du jour (celui d'hier est oublié). */
 export async function selDuJour(maintenant: Date = new Date()): Promise<string> {
   const jour = jourParis(maintenant);
   if (etatSel.courant?.jour === jour) return etatSel.courant.sel;
   // Deux événements simultanés au changement de jour : un seul tirage.
   if (!etatSel.enCours) {
-    etatSel.enCours = chargerSel(jour).finally(() => {
+    etatSel.enCours = nouveauSel(jour).finally(() => {
       etatSel.enCours = null;
     });
   }
   const sel = await etatSel.enCours;
   if (sel.jour !== jour) return selDuJour(maintenant);
-  etatSel.courant = sel;
-  return sel.sel;
+  if (etatSel.courant?.jour !== jour) etatSel.courant = sel;
+  return etatSel.courant.sel;
 }
 
-/** Pour les essais : oublier le sel gardé en mémoire (il sera relu en base). */
+/** Pour les essais : oublier le sel gardé en mémoire (un sel neuf sera tiré). */
 export function oublierSelEnMemoire(): void {
   etatSel.courant = null;
   etatSel.enCours = null;

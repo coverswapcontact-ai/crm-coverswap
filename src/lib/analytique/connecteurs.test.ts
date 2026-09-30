@@ -91,8 +91,10 @@ const ligneInsights = (jour: string, ad: string, spend: string, actions: { actio
   actions,
 });
 
-function serveurMeta(pages: unknown[][]) {
+function serveurMeta(pages: unknown[][], compte: { timezone_name?: string; currency?: string } = { timezone_name: "Europe/Paris", currency: "EUR" }) {
   return (r: Requete): Reponse => {
+    // Relecture B (point 12) : le compte publicitaire est lu d'abord (fuseau et devise).
+    if (new URL(r.url).pathname === "/v26.0/act_1234567890") return { corps: { id: "act_1234567890", ...compte } };
     if (!r.url.includes("/act_1234567890/insights")) return { statut: 404, corps: { error: { message: "inconnu", code: 803 } } };
     const n = Number(new URL(r.url).searchParams.get("after") ?? "0");
     const suivante = n + 1 < pages.length ? `https://graph.facebook.com/v26.0/act_1234567890/insights?access_token=jeton-ads-essai&after=${n + 1}` : undefined;
@@ -126,8 +128,10 @@ describe("Meta : la vraie dépense (insights)", () => {
     repondre = serveurMeta(pages);
     const bilan = await depense.synchroniserDepenseMeta({ depuis: "2026-09-28", jusqua: "2026-09-29" }, { env: ENV_META });
     assert.deepEqual([bilan.etat, bilan.lignes, bilan.du, bilan.au], ["A_JOUR", 3, "2026-09-28", "2026-09-29"]);
-    assert.equal(requetes.length, 2, "deux pages");
-    const premiere = new URL(requetes[0].url);
+    assert.equal(requetes.length, 3, "le compte, puis deux pages");
+    const compte = new URL(requetes[0].url);
+    assert.deepEqual([compte.pathname, compte.searchParams.get("fields")], ["/v26.0/act_1234567890", "timezone_name,currency"]);
+    const premiere = new URL(requetes[1].url);
     assert.equal(premiere.pathname, "/v26.0/act_1234567890/insights");
     assert.deepEqual([premiere.searchParams.get("level"), premiere.searchParams.get("time_increment"), premiere.searchParams.get("access_token")], ["ad", "1", "jeton-ads-essai"]);
     assert.deepEqual(JSON.parse(premiere.searchParams.get("time_range") ?? "{}"), { since: "2026-09-28", until: "2026-09-29" });
@@ -176,6 +180,21 @@ describe("Meta : la vraie dépense (insights)", () => {
     repondre = () => ({ statut: 400, corps: { error: { message: "Invalid OAuth access token", code: 190 } } });
     await assert.rejects(() => depense.synchroniserDepenseMeta({ depuis: "2026-09-28", jusqua: "2026-09-29" }, { env: ENV_META }), (e: unknown) => e instanceof Error && e.name === "ErreurDefinitive" && /ads_read/.test(e.message));
     assert.equal((await suivi.lireSuivi("META"))?.echecsConsecutifs, 2);
+  });
+
+  test("relecture B (point 12) : compte hors Europe/Paris ou hors euros → source en échec, rien d'écrit ; limite de pages atteinte → erreur", async () => {
+    assert.equal(depense.problemeDeCompte({ timezone_name: "Europe/Paris", currency: "EUR" }), null);
+    assert.match(depense.problemeDeCompte({ timezone_name: "America/Los_Angeles", currency: "USD" }) ?? "", /fuseau America\/Los_Angeles au lieu de Europe\/Paris et devise USD au lieu de EUR/);
+    const avant = await prisma.depensePubJour.count();
+    repondre = serveurMeta([[ligneInsights("2026-09-30", "a9", "99.00")]], { timezone_name: "America/Los_Angeles", currency: "EUR" });
+    await assert.rejects(() => depense.synchroniserDepenseMeta({ depuis: "2026-09-30", jusqua: "2026-09-30" }, { env: ENV_META }), (e: unknown) => e instanceof Error && e.name === "ErreurDefinitive" && /fuseau America\/Los_Angeles/.test(e.message));
+    assert.equal(await prisma.depensePubJour.count(), avant, "aucune ligne écrite dans un autre fuseau");
+    const s = await suivi.lireSuivi("META");
+    assert.equal(s?.detail.etat, "EN_ECHEC");
+    assert.match(s?.derniereErreur ?? "", /Europe\/Paris/);
+    // Une liste qui annonce toujours une page suivante : erreur à la limite, jamais une liste tronquée rendue complète.
+    repondre = serveurMeta([[ligneInsights("2026-09-30", "a9", "1")], [ligneInsights("2026-09-30", "a9", "1")], [ligneInsights("2026-09-30", "a9", "1")]]);
+    await assert.rejects(() => graph.appelerTout("act_1234567890/insights", { access_token: "jeton-ads-essai" }, { pagesMax: 2 }), (e: unknown) => e instanceof graph.ErreurGraph && !e.passagere && /arrêtée à 2 pages/.test(e.message));
   });
 });
 
@@ -394,5 +413,42 @@ describe("état des sources, file de tâches, pannes", () => {
     } finally {
       for (const cle of Object.keys(ENV_META)) process.env[cle] = avant[cle] ?? "";
     }
+  });
+});
+
+describe("relecture B (point 11) : reprise d'un premier passage interrompu", () => {
+  test("couverture fusionnée ; début de reprise ; tranches déjà lues sautées", () => {
+    assert.deepEqual(suivi.fusionnerCouverture(null, { du: "2026-09-01", au: "2026-09-10" }), { du: "2026-09-01", au: "2026-09-10" });
+    assert.deepEqual(suivi.fusionnerCouverture({ du: "2026-09-01", au: "2026-09-10" }, { du: "2026-09-11", au: "2026-09-30" }), { du: "2026-09-01", au: "2026-09-30" }, "bout à bout : fusionnées");
+    assert.deepEqual(suivi.fusionnerCouverture({ du: "2026-06-01", au: "2026-06-30" }, { du: "2026-09-25", au: "2026-09-30" }), { du: "2026-09-25", au: "2026-09-30" }, "un trou n'est pas couvert par supposition");
+    assert.equal(suivi.debutDeReprise(null, "2025-05-30", "2026-09-30", 5), "2025-05-30");
+    assert.equal(suivi.debutDeReprise({ du: "2025-07-01", au: "2026-09-30" }, "2025-05-30", "2026-09-30", 5), "2025-05-30", "le premier passage n'a pas remonté jusqu'à la cible");
+    assert.equal(suivi.debutDeReprise({ du: "2025-05-30", au: "2026-08-10" }, "2025-05-30", "2026-09-30", 5), "2026-08-10", "un trou avant les jours récents : repris depuis la fin de la couverture");
+    assert.equal(suivi.debutDeReprise({ du: "2025-05-01", au: "2026-09-29" }, "2025-05-30", "2026-09-30", 5), "2026-09-25");
+  });
+
+  test("Search Console : interrompue après deux tranches, reprise au passage suivant sans relire ce qui est lu, puis les 5 derniers jours", async () => {
+    const avant = await prisma.sourceAnalytique.findUnique({ where: { source: "SEARCH_CONSOLE" } });
+    await prisma.sourceAnalytique.upsert({ where: { source: "SEARCH_CONSOLE" }, create: { source: "SEARCH_CONSOLE", detail: "{}" }, update: { detail: "{}", derniereReussiteLe: null } });
+    const maintenant = new Date("2026-09-30T08:00:00Z");
+    const arret = new AbortController();
+    const appels = () => requetes.filter((r) => r.url.includes("searchAnalytics")).length;
+    const depart = appels();
+    const serveur = serveurSearchConsole({});
+    repondre = (r) => {
+      if (r.url.includes("searchAnalytics") && appels() - depart >= 6) arret.abort();
+      return serveur(r);
+    };
+    await assert.rejects(() => searchConsole.synchroniserSearchConsole({}, { env: ENV_GOOGLE, maintenant, signal: arret.signal }), /interrompue/);
+    const s = await suivi.lireSuivi("SEARCH_CONSOLE");
+    assert.deepEqual(s?.detail.couverture, { du: "2025-05-30", au: "2025-07-29" }, "deux tranches lues et notées");
+    const milieu = appels();
+    const reprise = await searchConsole.synchroniserSearchConsole({}, { env: ENV_GOOGLE, maintenant });
+    assert.deepEqual([reprise.etat, reprise.du], ["A_JOUR", "2025-07-29"], "repris à la fin de ce qui est lu");
+    assert.equal(appels() - milieu, 15 * 3, "les deux tranches déjà lues ne sont pas relues");
+    assert.deepEqual((await suivi.lireSuivi("SEARCH_CONSOLE"))?.detail.couverture, { du: "2025-05-30", au: "2026-09-30" });
+    const nuit = await searchConsole.synchroniserSearchConsole({}, { env: ENV_GOOGLE, maintenant });
+    assert.equal(nuit.du, "2026-09-25", "couverture complète : les 5 derniers jours");
+    if (avant) await prisma.sourceAnalytique.update({ where: { source: "SEARCH_CONSOLE" }, data: { detail: avant.detail, derniereReussiteLe: avant.derniereReussiteLe } });
   });
 });

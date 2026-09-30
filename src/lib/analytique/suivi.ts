@@ -136,7 +136,8 @@ export const trancheDejaCouverte = (couverture: Plage | null | undefined, tranch
 
 export async function noterReussite(source: SourceSynchronisee, detail: Omit<DetailSuivi, "etat" | "echecDepuis"> = {}, maintenant: Date = new Date()): Promise<void> {
   const avant = await lireSuivi(source);
-  const couverture = fusionnerCouverture(avant?.detail.couverture, detail.couverture ?? (detail.du && detail.au ? { du: detail.du, au: detail.au } : null));
+  const lue = (detail.couverture as Plage | null | undefined) ?? (typeof detail.du === "string" && typeof detail.au === "string" ? { du: detail.du, au: detail.au } : null);
+  const couverture = fusionnerCouverture(avant?.detail.couverture, lue);
   await ecrire(source, { dernierEssaiLe: maintenant, derniereReussiteLe: maintenant, derniereErreur: null, echecsConsecutifs: 0, detail: { ...avant?.detail, ...detail, couverture, etat: "A_JOUR", echecDepuis: null } });
 }
 

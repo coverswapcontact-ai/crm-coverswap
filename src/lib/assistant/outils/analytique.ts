@@ -29,7 +29,7 @@ export function valeurLisible(i: Pick<Indicateur, "format" | "valeur">): string 
 
 export function ligneIndicateur(i: Indicateur): string {
   const e = i.evolution;
-  const avant = e.precedente === null ? "" : ` (période d'avant : ${valeurLisible({ format: i.format, valeur: e.precedente })}${e.variation !== null ? `, ${e.variation > 0 ? "+" : ""}${Math.round(e.variation * 100)} %` : e.sens === "nouveau" ? ", nouveau" : ""}${e.ton === "favorable" ? ", favorable" : e.ton === "defavorable" ? ", défavorable" : ""})`;
+  const avant = e.precedente === null ? "" : ` (période d'avant${e.horsJourEnCours ? ", jours complets" : ""} : ${valeurLisible({ format: i.format, valeur: e.precedente })}${e.variation !== null ? `, ${e.variation > 0 ? "+" : ""}${Math.round(e.variation * 100)} %` : e.sens === "nouveau" ? ", nouveau" : ""}${e.ton === "favorable" ? ", favorable" : e.ton === "defavorable" ? ", défavorable" : ""})`;
   return `- ${i.libelle} : ${valeurLisible(i)}${i.valeur === null ? " (source non branchée)" : avant}${i.detail ? ` — ${i.detail}` : ""} [${NOMS_SOURCE[i.source]}]`;
 }
 
@@ -74,8 +74,11 @@ function lignesOnglet(ecran: EcranAnalytique): string[] {
       return [
         dernier ? `Règle des 20 % (${dernier.mois}) : ${format.euros(dernier.depensePub)} de pub pour ${format.euros(dernier.encaissePrecedent)} encaissés le mois d'avant${dernier.ratio !== null ? `, soit ${pct(dernier.ratio)}` : ""}${dernier.depasse ? " — plafond dépassé" : ""}.` : "",
         ecran.carnet.length ? `Carnet de commandes : ${ecran.carnet.length} devis en attente, ${format.euros(ecran.carnet.reduce((t, c) => t + c.montant, 0))} (${ecran.carnet.slice(0, 5).map((c) => `${c.client} ${format.euros(c.montant)}${c.relances ? `, ${c.relances} relance${c.relances > 1 ? "s" : ""}` : ""}`).join(" · ")}).` : "Carnet de commandes vide.",
-        ecran.fiscal?.franchiseTva ? `Franchise de TVA : ${format.euros(ecran.fiscal.franchiseTva.atteint)} sur ${ecran.fiscal.franchiseTva.plafond !== null ? format.euros(ecran.fiscal.franchiseTva.plafond) : "—"}.` : "",
-        ecran.fiscal?.urssaf ? `URSSAF de la période en cours : ${ecran.fiscal.urssaf.estime !== null ? format.euros(ecran.fiscal.urssaf.estime) : "—"}.` : "",
+        ecran.fiscal?.seuils.length ? `Seuils de l'année : ${ecran.fiscal.seuils.map((x) => `${x.libelle} ${format.euros(x.atteint)} sur ${x.plafond !== null ? format.euros(x.plafond) : "—"}${x.projection !== null ? ` (projection au 31/12 : ${format.euros(x.projection)})` : ""}`).join(" · ")}.` : "",
+        ecran.fiscal?.urssaf?.aDeclarer ? `URSSAF à déclarer (${ecran.fiscal.urssaf.aDeclarer.libelle}${ecran.fiscal.urssaf.aDeclarer.echeance ? `, avant le ${format.jourCourt(ecran.fiscal.urssaf.aDeclarer.echeance)}` : ""}) : ${ecran.fiscal.urssaf.aDeclarer.montant !== null ? format.euros(ecran.fiscal.urssaf.aDeclarer.montant) : "—"} sur ${format.euros(ecran.fiscal.urssaf.aDeclarer.base)} de chiffre d'affaires (${ecran.fiscal.urssaf.aDeclarer.detail.map((d) => `${d.libelle} ${format.euros(d.montant)}`).join(", ")}).` : "",
+        ecran.fiscal?.urssaf?.enCours ? `URSSAF de la période en cours (${ecran.fiscal.urssaf.enCours.libelle}) : ${ecran.fiscal.urssaf.enCours.montant !== null ? format.euros(ecran.fiscal.urssaf.enCours.montant) : "—"} à ce jour.` : "",
+        ecran.fiscal?.parametresManquants.length ? `Paramètres à renseigner pour les seuils et l'URSSAF : ${ecran.fiscal.parametresManquants.join(", ")}.` : "",
+        ecran.depensesParCategorie.length ? `Dépenses de la période : ${ecran.depensesParCategorie.map((d) => `${d.libelle} ${format.euros(d.montant)}`).join(", ")}.` : "",
       ];
     }
   }
@@ -87,7 +90,7 @@ export function texteAnalytique(ecran: EcranAnalytique, resume: ResumeDuJour | n
   const etats = ecran.sources;
   return [
     `Analytique — ${LIBELLES_ONGLET[ecran.onglet]}, ${ecran.periode.libelle} (${ecran.periode.du} → ${ecran.periode.au}, comparé à ${ecran.periode.precedente.du} → ${ecran.periode.precedente.au})${filtre}. Calculé le ${format.jour(ecran.genereLe)}.`,
-    resume ? `Résumé du jour (rédigé par règles, à reformuler sans changer les chiffres) :\n${resume.phrases.map((p) => `- ${p.amorce} ${p.texte}`).join("\n")}` : "",
+    resume ? `Résumé du jour${ecran.onglet === "ensemble" ? "" : " (vue d'ensemble, toutes sources)"} (rédigé par règles, à reformuler sans changer les chiffres) :\n${resume.phrases.map((p) => `- ${p.amorce} ${p.texte}`).join("\n")}` : "",
     `Indicateurs :\n${ecran.indicateurs.map(ligneIndicateur).join("\n")}`,
     ...lignesOnglet(ecran),
     etats.length ? `Sources : ${etats.map(ligneSource).join(" · ")}.` : "",

@@ -306,7 +306,8 @@ describe("WHATSAPP_CLIQUE", () => {
     assert.deepEqual(await reponse.json(), { ok: true });
     const ligne = await prisma.evenementSite.findFirstOrThrow({ where: { parcoursId } });
     assert.deepEqual([ligne.type, ligne.page, JSON.parse(ligne.meta ?? "{}")], ["WHATSAPP_CLIQUE", "/", { depuis: "accueil-final" }]);
-    const jour = new Date().toISOString().slice(0, 10);
+    // Le jour de Paris (relecture B, point 13 : la synthèse du site lit des jours de Paris ; après 22 h UTC, le jour UTC est la veille).
+    const jour = (await import("@/lib/dossiers/dates")).jourParis(new Date());
     const synthese = await evenements.syntheseSite(jour, jour);
     assert.deepEqual(synthese.parType.find((t) => t.cle === "WHATSAPP_CLIQUE"), { cle: "WHATSAPP_CLIQUE", libelle: "Clics WhatsApp", valeur: 1, parcours: 1 });
     // Un type inconnu reste refusé.

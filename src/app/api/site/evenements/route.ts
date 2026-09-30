@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enregistrerEvenementSite, estTypeEvenementSite } from "@/lib/site/evenements";
-import { ipDepasseLaLimite } from "@/lib/acces/limite-site";
+import { ipDepasseLaLimite, ipDuClient } from "@/lib/acces/limite-site";
 import { mesurerRequete, paysDuFuseau } from "@/lib/analytique/mesure";
 import { estHoteDuSite, familleDe, hoteDe } from "@/lib/analytique/sources";
 
@@ -19,7 +19,42 @@ import { estHoteDuSite, familleDe, hoteDe } from "@/lib/analytique/sources";
  *   referent (hôte du site d'où vient la visite), fuseau (fuseau IANA du navigateur → pays),
  *   utmSource | utm_source, utmMedium | utm_medium, utmCampagne | utm_campaign, utmContenu | utm_content
  *   (ou un objet utm: { source, medium, campagne, contenu }), gclid (présent : true — la valeur n'est jamais gardée).
+ *
+ * Relecture B :
+ *  - vie privée (point 7) — AUCUNE ligne ne relie deux jours : l'empreinte du jour n'est écrite que sur les PAGE_VUE,
+ *    dont l'identifiant de parcours (qui peut vivre 7 jours dans le simulateur) est REMPLACÉ à la réception par
+ *    « v-<empreinte> » ; les autres événements (étapes du simulateur, demandes) gardent leur parcours et n'ont PAS
+ *    d'empreinte. Sans parcours, l'événement prend « v-<empreinte> » et garde l'empreinte (rien de durable sur la ligne) ;
+ *  - abus (point 8) — IP lue par `ipDuClient` (adresse publique la plus à droite de X-Forwarded-For : celle que le
+ *    proxy de Railway a ajoutée, jamais une valeur écrite par le navigateur) ; en production, l'en-tête Origin est
+ *    EXIGÉ (coverswap.fr ou www) ; corps de plus de 4 Ko refusé (413, Content-Length puis longueur lue) ; la page est
+ *    gardée sans « ?… » ni « #… » (ni paramètres ni ancre : rien de personnel ne s'y glisse).
  */
+const CORPS_MAX_OCTETS = 4096;
+
+/** Le corps, lu au plus `max` octets (null au-delà : la lecture s'arrête, rien n'est gardé). */
+async function lireCorpsBorne(req: NextRequest, max: number): Promise<string | null> {
+  const annonce = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(annonce) && annonce > max) return null;
+  if (!req.body) return "";
+  const lecteur = req.body.getReader();
+  const morceaux: Uint8Array[] = [];
+  let taille = 0;
+  for (;;) {
+    const { done, value } = await lecteur.read();
+    if (done) break;
+    taille += value.byteLength;
+    if (taille > max) {
+      await lecteur.cancel().catch(() => undefined);
+      return null;
+    }
+    morceaux.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(morceaux));
+}
+
+/** L'adresse de la page sans paramètres ni ancre (« /simulateur?ref=…#x » → « /simulateur »). */
+const pageSansParametres = (page: string | null) => (page ? page.split(/[?#]/)[0] || "/" : null);
 const ORIGINES = ["https://coverswap.fr", "https://www.coverswap.fr"];
 const PARCOURS = /^[0-9a-fA-F-]{16,64}$/;
 
@@ -41,17 +76,20 @@ export async function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const entetes = cors(req.headers.get("origin"));
   const origin = req.headers.get("origin");
-  if (origin && !ORIGINES.includes(origin) && process.env.NODE_ENV === "production") {
+  // En production, l'origine est exigée : un appel sans Origin (curl, script) n'est pas un navigateur sur coverswap.fr.
+  if (process.env.NODE_ENV === "production" && (!origin || !ORIGINES.includes(origin))) {
     return NextResponse.json({ ok: false }, { status: 403, headers: entetes });
   }
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "inconnue";
+  const ip = ipDuClient(req.headers);
   // Un visiteur normal émet quelques dizaines d'événements ; 200 par 10 min coupe seulement un robot.
   if (ipDepasseLaLimite(`evt:${ip}`, Date.now(), 200)) return NextResponse.json({ ok: false, raison: "limite" }, { status: 429, headers: entetes });
 
   // Le site envoie en text/plain (requête simple, sans pré-vol, compatible sendBeacon).
   let corps: Record<string, unknown>;
+  const texteCorps = await lireCorpsBorne(req, CORPS_MAX_OCTETS).catch(() => "");
+  if (texteCorps === null) return NextResponse.json({ ok: false, raison: "trop long" }, { status: 413, headers: entetes });
   try {
-    corps = JSON.parse(await req.text());
+    corps = JSON.parse(texteCorps);
     if (!corps || typeof corps !== "object" || Array.isArray(corps)) throw new Error("corps");
   } catch {
     return NextResponse.json({ ok: false }, { status: 400, headers: entetes });
@@ -79,14 +117,16 @@ export async function POST(req: NextRequest) {
     const metaRecue = corps.meta && typeof corps.meta === "object" && !Array.isArray(corps.meta) ? (corps.meta as Record<string, unknown>) : null;
     const complements = { ...(contenu ? { utm_content: contenu } : {}), ...(gclid ? { gclid: true } : {}) };
     const meta = metaRecue || Object.keys(complements).length ? { ...(metaRecue ?? {}), ...complements } : null;
+    // Vie privée : l'empreinte du jour seulement sur une ligne sans parcours durable (voir l'en-tête).
+    const pageVue = type === "PAGE_VUE" || !parcoursId;
     await enregistrerEvenementSite({
-      parcoursId: parcoursId ?? `v-${mesure.visiteur}`,
+      parcoursId: pageVue ? `v-${mesure.visiteur}` : parcoursId,
       type,
-      page: texte(corps.page, 200),
+      page: pageSansParametres(texte(corps.page, 200)),
       source,
       campagne,
       meta,
-      visiteur: mesure.visiteur,
+      visiteur: pageVue ? mesure.visiteur : null,
       appareil: mesure.appareil,
       pays: paysDuFuseau(texte(corps.fuseau, 64)),
       referent,

@@ -314,6 +314,9 @@ const PERDUS: Record<string, (n: number) => string> = {
   joints: (n) => `${n} ${n > 1 ? "personnes appelées n'ont pas été jointes" : "personne appelée n'a pas été jointe"}.`,
   devis: (n) => `${n} ${n > 1 ? "personnes jointes n'ont pas reçu de devis" : "personne jointe n'a pas reçu de devis"}.`,
   signes: (n) => `${n} ${n > 1 ? "devis n'ont pas été signés" : "devis n'a pas été signé"}.`,
+  lancees: (n) => `${n} ${n > 1 ? "visites n'ont pas lancé de simulation" : "visite n'a pas lancé de simulation"}.`,
+  terminees: (n) => `${n} ${n > 1 ? "simulations lancées n'ont pas abouti" : "simulation lancée n'a pas abouti"}.`,
+  encaisses: (n) => `${n} ${n > 1 ? "chantiers signés n'ont encore rien encaissé" : "chantier signé n'a encore rien encaissé"}.`,
   simulations: (n) => `${n} ${n > 1 ? "visites n'ont pas lancé de simulation" : "visite n'a pas lancé de simulation"}.`,
   leads: (n) => `${n} ${n > 1 ? "simulations n'ont pas laissé de coordonnées" : "simulation n'a pas laissé de coordonnées"}.`,
 };

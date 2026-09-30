@@ -4,7 +4,7 @@ import { lireParametres } from "@/lib/parametres/service";
 import { etatsDesSources } from "./appuis";
 import { construireEcranEnsemble } from "./ecrans/ensemble";
 import { resoudrePeriode } from "./periode";
-import type { EcranEnsemble, Indicateur, ResumeDuJour, SourceDonnees } from "./types";
+import { LIBELLES_FAMILLE, type EcranEnsemble, type Indicateur, type ResumeDuJour, type SourceDonnees } from "./types";
 
 /**
  * Mission 17 (partie B) — le résumé du jour (docs/ANALYTIQUE.md § 5) : trois phrases composées par des RÈGLES à partir
@@ -40,24 +40,31 @@ function valeurFr(i: Pick<Indicateur, "format">, v: number): string {
 
 const NOMS: Record<string, { nom: string; pluriel: boolean }> = {
   visites: { nom: "les visites du site", pluriel: true },
-  simulations: { nom: "les simulations", pluriel: true },
+  simulations: { nom: "les simulations lancées", pluriel: true },
   leads: { nom: "les leads", pluriel: true },
   devis: { nom: "les devis envoyés", pluriel: true },
   signes: { nom: "les chantiers signés", pluriel: true },
   coutParSigne: { nom: "le coût par chantier signé", pluriel: false },
+  coutParLeadMeta: { nom: "le coût par lead Meta", pluriel: false },
 };
 const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
-/** « Les leads montent : 18 contre 12 sur la période d'avant, +50 % (CRM). » */
-function phraseEvolution(i: Indicateur): string {
+/**
+ * « Sur les 30 derniers jours, les leads montent : 18 contre 12 sur la période d'avant, +50 % (CRM). » — relecture B
+ * (point 6) : chaque phrase nomme sa période (et le filtre par source), pour ne jamais être lue sous une autre.
+ */
+function phraseEvolution(i: Indicateur, cadre: string): string {
   const n = NOMS[i.cle] ?? { nom: i.libelle.toLowerCase(), pluriel: false };
   const e = i.evolution;
   const verbe = e.sens === "baisse" ? (n.pluriel ? "baissent" : "baisse") : n.pluriel ? "montent" : "monte";
   const source = `(${NOMS_SOURCE[i.source]})`;
-  if (e.sens === "nouveau" || e.precedente === null || e.precedente === 0) return `${majuscule(n.nom)}${NBSP}: ${valeurFr(i, i.valeur ?? 0)}, contre aucun sur la période d'avant ${source}.`;
+  if (e.sens === "nouveau" || e.precedente === null || e.precedente === 0) return `${cadre}, ${n.nom}${NBSP}: ${valeurFr(i, i.valeur ?? 0)}, contre aucun sur la période d'avant ${source}.`;
   const variation = e.variation === null ? "" : `, ${e.variation > 0 ? "+" : "−"}${pourcentFr(Math.abs(e.variation))}`;
-  return `${majuscule(n.nom)} ${verbe}${NBSP}: ${valeurFr(i, i.valeur ?? 0)} contre ${valeurFr(i, e.precedente)} sur la période d'avant${variation} ${source}.`;
+  return `${cadre}, ${n.nom} ${verbe}${NBSP}: ${valeurFr(i, i.valeur ?? 0)} contre ${valeurFr(i, e.precedente)} sur la période d'avant${variation} ${source}.`;
 }
+
+/** « Sur les 30 derniers jours » ; « Sur les 7 derniers jours (source Pub Meta) ». */
+export const cadreDuResume = (ecran: Pick<EcranEnsemble, "periode"> & Partial<Pick<EcranEnsemble, "filtreSource">>) => `Sur ${ecran.periode.libelle}${ecran.filtreSource ? ` (source ${LIBELLES_FAMILLE[ecran.filtreSource]})` : ""}`;
 
 /** Le plus fort mouvement d'un ton donné (les « nouveau » passent après une vraie variation). */
 function plusFort(indicateurs: readonly Indicateur[], ton: "favorable" | "defavorable"): Indicateur | null {
@@ -66,8 +73,9 @@ function plusFort(indicateurs: readonly Indicateur[], ton: "favorable" | "defavo
 }
 
 /** Les trois phrases (pur) : chaque chiffre vient de l'écran. */
-export function composerResume(ecran: Pick<EcranEnsemble, "indicateurs" | "tunnel" | "publicite" | "argent" | "periode">, maintenant: Date): ResumeDuJour {
+export function composerResume(ecran: Pick<EcranEnsemble, "indicateurs" | "tunnel" | "publicite" | "argent" | "periode"> & Partial<Pick<EcranEnsemble, "filtreSource">>, maintenant: Date): ResumeDuJour {
   const phrases: ResumeDuJour["phrases"] = [];
+  const cadre = cadreDuResume(ecran);
   const pub = ecran.publicite;
   const campagneEnCours = pub && pub.jourCampagne !== null && pub.dureeCampagne !== null && pub.jourCampagne >= 1 && pub.jourCampagne <= pub.dureeCampagne;
   const suffixeCampagne = campagneEnCours ? ` Jour ${pub!.jourCampagne} sur ${pub!.dureeCampagne} de la campagne.` : "";
@@ -75,8 +83,8 @@ export function composerResume(ecran: Pick<EcranEnsemble, "indicateurs" | "tunne
   const monte = plusFort(ecran.indicateurs, "favorable");
   phrases.push(
     monte
-      ? { genre: "MONTE", amorce: "Ça monte.", texte: `${phraseEvolution(monte)}${suffixeCampagne}`, sources: [monte.source] }
-      : { genre: "MONTE", amorce: "Ça monte.", texte: `Rien ne monte nettement sur ${ecran.periode.libelle}.${suffixeCampagne}`, sources: ["CRM"] },
+      ? { genre: "MONTE", amorce: "Ça monte.", texte: `${phraseEvolution(monte, cadre)}${suffixeCampagne}`, sources: [monte.source] }
+      : { genre: "MONTE", amorce: "Ça monte.", texte: `${cadre}, rien ne monte nettement.${suffixeCampagne}`, sources: ["CRM"] },
   );
 
   const baisse = plusFort(ecran.indicateurs, "defavorable");
@@ -84,10 +92,10 @@ export function composerResume(ecran: Pick<EcranEnsemble, "indicateurs" | "tunne
   const phrasePerte = perte && perte.perdus > 0 ? `L'étape qui perd le plus${NBSP}: ${perte.libelle}, ${nombreFr(perte.perdus)} ${perte.perdus > 1 ? "personnes perdues" : "personne perdue"} (CRM).` : "";
   phrases.push(
     baisse
-      ? { genre: "BAISSE", amorce: "Ça coince.", texte: [phraseEvolution(baisse), phrasePerte].filter(Boolean).join(" "), sources: [...new Set<SourceDonnees>([baisse.source, ...(phrasePerte ? ["CRM" as const] : [])])] }
+      ? { genre: "BAISSE", amorce: "Ça coince.", texte: [phraseEvolution(baisse, cadre), phrasePerte].filter(Boolean).join(" "), sources: [...new Set<SourceDonnees>([baisse.source, ...(phrasePerte ? ["CRM" as const] : [])])] }
       : phrasePerte
         ? { genre: "BAISSE", amorce: "Ça coince.", texte: phrasePerte, sources: ["CRM"] }
-        : { genre: "BAISSE", amorce: "Ça coince.", texte: `Rien ne baisse nettement sur ${ecran.periode.libelle}.`, sources: ["CRM"] },
+        : { genre: "BAISSE", amorce: "Ça coince.", texte: `${cadre}, rien ne baisse nettement.`, sources: ["CRM"] },
   );
 
   const aCouper = pub?.publicites.find((p) => p.verdict === "COUPER");
@@ -102,7 +110,7 @@ export function composerResume(ecran: Pick<EcranEnsemble, "indicateurs" | "tunne
   else if (jamaisAppeles > 0) phrases.push({ genre: "A_FAIRE", amorce: "À faire.", texte: jamaisAppeles === 1 ? "Appelle le lead jamais appelé (CRM)." : `Appelle les ${nombreFr(jamaisAppeles)} leads jamais appelés (CRM).`, sources: ["CRM"] });
   else phrases.push({ genre: "A_FAIRE", amorce: "À faire.", texte: "Rien d'urgent dans les chiffres : garde le rythme.".replace(" :", `${NBSP}:`), sources: ["CRM"] });
 
-  return { genereLe: maintenant.toISOString(), phrases, redaction: "REGLES" };
+  return { genereLe: maintenant.toISOString(), phrases, redaction: "REGLES", periode: ecran.periode.libelle, filtreSource: ecran.filtreSource ?? null };
 }
 
 /** Le résumé du jour, calculé maintenant (Vue d'ensemble des 30 derniers jours). */

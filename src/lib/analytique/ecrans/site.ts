@@ -6,6 +6,7 @@ import { bornes, joursDe, periodePrecedente } from "../periode";
 import { COULEURS_FAMILLE, FAMILLES, LIBELLES_FAMILLE, type EcranSite, type EtatSource, type Famille, type Periode, type Tunnel } from "../types";
 import { indicateur, ratio, serieParJour } from "./commun";
 import { tunnelDe } from "./tunnel";
+import { entonnoirSurPeriode } from "@/lib/site/evenements";
 
 /**
  * Mission 17 (partie B) — l'onglet Site : la mesure maison sans cookie (`visitesSurPeriode` : visites, pages vues,
@@ -50,11 +51,22 @@ export function entonnoirDuSite(visites: number | null, s: SimulationsSite): Tun
   );
 }
 
+const etapeSimulateur = (e: { cle: string; libelle: string; parcours: number; abandons: number | null; facultative?: true }) => ({ cle: e.cle, libelle: e.libelle, parcours: e.parcours, abandons: e.abandons, ...(e.facultative ? { facultative: true } : {}) });
+
 const APPAREILS: Record<string, string> = { TELEPHONE: "Téléphone", TABLETTE: "Tablette", ORDINATEUR: "Ordinateur" };
 
 export async function construireEcranSite(periode: Periode, options: { etats: EtatSource[] }): Promise<Omit<EcranSite, "genereLe" | "alertes">> {
   const precedente = periodePrecedente(periode);
-  const [visites, visitesAvant, sims, simsAvant] = await Promise.all([visitesDuSite(periode), visitesDuSite(precedente), simulationsDuSite(periode), simulationsDuSite(precedente)]);
+  const [visites, visitesAvant, sims, simsAvant, simulateur] = await Promise.all([
+    visitesDuSite(periode),
+    visitesDuSite(precedente),
+    simulationsDuSite(periode),
+    simulationsDuSite(precedente),
+    entonnoirSurPeriode(periode.du, periode.au).catch((erreur) => {
+      console.error("[analytique] entonnoir du simulateur illisible :", erreur);
+      return null;
+    }),
+  ]);
   const jours = joursDe(periode);
   const tauxSimulation = (v: VisitesAnalyse | null, s: SimulationsSite) => (v ? ratio(s.lancees.length, v.visites) : null);
   const tauxLead = (s: SimulationsSite) => ratio(s.terminees.filter((t) => t.lead).length, s.terminees.length);
@@ -83,5 +95,12 @@ export async function construireEcranSite(periode: Periode, options: { etats: Et
     appareils: (visites?.appareils ?? []).map((a) => ({ appareil: APPAREILS[a.appareil] ?? a.appareil, visites: a.visites })),
     pays: visites?.pays ?? [],
     entonnoir: entonnoirDuSite(visites?.visites ?? null, sims),
+    // L'entonnoir du simulateur en sept étapes, toutes sources puis par famille (celles qui ont eu des parcours).
+    simulateur: simulateur
+      ? [
+          { famille: "toutes" as const, etapes: simulateur.etapes.map(etapeSimulateur) },
+          ...FAMILLES.filter((f) => (simulateur.parFamille[f] ?? []).some((e) => e.parcours > 0)).map((f) => ({ famille: f, etapes: simulateur.parFamille[f].map(etapeSimulateur) })),
+        ]
+      : [],
   };
 }

@@ -107,15 +107,24 @@ describe("écrans sans synchronisation : estimation, sources non branchées → 
     memoire.viderCacheAnalytique();
     const e = await ecrans.ecranEnsemble(trente(), {}, MERCREDI);
     assert.equal(e.onglet, "ensemble");
-    assert.deepEqual(e.indicateurs.map((i) => i.cle), ["visites", "simulations", "leads", "devis", "signes", "coutParSigne"]);
-    assert.deepEqual(e.indicateurs.map((i) => i.valeur), [3, 1, 6, 3, 2, 151.5]);
+    // Relecture B (écran, point 5) : la 6e tuile est le coût par lead Meta (sparkline), le coût par chantier signé en détail ;
+    // (point 5) la tuile Simulations compte les simulations LANCÉES, comme l'étape du tunnel.
+    assert.deepEqual(e.indicateurs.map((i) => i.cle), ["visites", "simulations", "leads", "devis", "signes", "coutParLeadMeta"]);
+    assert.deepEqual(e.indicateurs.map((i) => i.valeur), [3, 2, 6, 3, 2, 50.5]);
+    assert.equal(e.indicateurs[1].libelle, "Simulations lancées");
+    assert.equal(e.indicateurs[5].serie.length, 30, "le coût par lead Meta a sa courbe");
     const leads = e.indicateurs[2];
-    assert.deepEqual([leads.evolution.precedente, leads.evolution.sens, leads.evolution.ton], [1, "hausse", "favorable"]);
+    // Relecture B (point 4) : la période finit aujourd'hui (jour entamé) → comparée hors du 30/09 et hors du 31/08 (le lead
+    // du 31/08 à 23 h 30 ne compte pas contre un 30/09 à 10 h).
+    assert.deepEqual([leads.evolution.precedente, leads.evolution.sens, leads.evolution.ton], [0, "nouveau", "favorable"]);
     assert.equal(leads.serie.length, 30);
     assert.equal(leads.serie.reduce((t, v) => t + v, 0), 6);
-    assert.match(e.indicateurs[1].detail ?? "", /100 % laissent leurs coordonnées/);
+    assert.match(e.indicateurs[1].detail ?? "", /^1 terminée, 100 % laissent leurs coordonnées$/);
     assert.equal(e.indicateurs[4].detail, "900 € en attente (1 devis)");
-    assert.match(e.indicateurs[5].detail ?? "", /^Coût par lead Meta : 50,5 € \(estimation\)$/);
+    assert.equal(e.indicateurs[5].detail, "Coût par chantier signé : 151,5 € (estimation : prorata du budget)");
+    assert.deepEqual(e.courbeLeads.series.map((x) => x.cle), ["meta", "seo", "autre"], "plus de série « devis » mêlée aux leads");
+    assert.deepEqual(e.courbeDevis.series.map((x) => x.cle), ["meta", "seo", "autre"], "les devis découpés par source (A Meta, B SEO, C sans lead)");
+    assert.equal(e.courbeDevis.points.reduce((t, p) => t + Object.values(p.valeurs).reduce((a, b) => a + b, 0), 0), 3);
     assert.deepEqual(e.tunnel.etapes.map((x) => [x.cle, x.valeur, x.tauxPassage]), [["visites", 3, null], ["simulations", 2, 0.667], ["leads", 6, null], ["appeles", 2, 0.333], ["joints", 2, 1], ["devis", 2, 1], ["signes", 1, 0.5], ["encaisses", 1, 1]]);
     assert.deepEqual(e.tunnel.perteMax, { de: "leads", vers: "appeles", libelle: "lead → appel", perdus: 4 });
     assert.deepEqual(e.qualite.map((q) => [q.famille, q.leads, q.joints, q.devis, q.tauxDevis]), [["meta", 3, 1, 1, 0.333], ["autre", 2, 0, 0, 0], ["seo", 1, 1, 1, 1]]);
@@ -124,7 +133,8 @@ describe("écrans sans synchronisation : estimation, sources non branchées → 
     assert.deepEqual([e.publicite?.depense, e.publicite?.budget, e.publicite?.leads, e.publicite?.coutParLead, e.publicite?.estimation], [151.5, 378, 3, 50.5, true]);
     assert.deepEqual(e.publicite?.publicites.map((p) => [p.nom, p.detail, p.verdict]), [["Carrousel", "1 joint sur 2 appelés · dépense par publicité inconnue", "ATTENDRE"], ["Vidéo", "0 joint sur 0 appelé · dépense par publicité inconnue", "ATTENDRE"]]);
     // Sources non branchées : pas de chiffre, leur état et ce qu'il faut faire.
-    assert.deepEqual([e.seo?.clics, e.seo?.impressions, e.fiche?.vues], [null, null, null]);
+    // Relecture B (écran, point 2) : non branchées → null (l'écran affiche ce qu'il faut faire), jamais un bloc de zéros.
+    assert.deepEqual([e.seo, e.fiche], [null, null]);
     const sc = e.sources.find((s) => s.source === "SEARCH_CONSOLE");
     assert.equal(sc?.etat, "NON_BRANCHEE");
     assert.ok(sc?.aFaire);
@@ -135,7 +145,10 @@ describe("écrans sans synchronisation : estimation, sources non branchées → 
   test("filtre par source : seulement la famille demandée", async () => {
     const e = await ecrans.ecranEnsemble(trente(), { source: "meta" }, MERCREDI);
     assert.equal(e.filtreSource, "meta");
-    assert.deepEqual(e.indicateurs.slice(0, 5).map((i) => i.valeur), [1, 0, 3, 1, 1]);
+    assert.deepEqual(e.indicateurs.slice(0, 5).map((i) => i.valeur), [1, 1, 3, 1, 1]);
+    assert.equal(e.resume?.periode, "les 30 derniers jours");
+    assert.equal(e.resume?.filtreSource, "meta", "filtré : le résumé est recomposé pour la vue affichée (relecture B, point 6)");
+    assert.match(e.resume?.phrases[0].texte ?? "", /^Sur les 30 derniers jours \(source Pub Meta\), /);
     assert.deepEqual(e.qualite.map((q) => q.famille), ["meta"]);
   });
   test("Publicité : prorata au niveau de la campagne seulement, aucun coût par publicité inventé", async () => {
@@ -151,8 +164,7 @@ describe("écrans sans synchronisation : estimation, sources non branchées → 
   test("SEO et fiche Google non branchés : valeurs null, listes vides", async () => {
     const e = await ecrans.ecranSeo(trente(), {}, MERCREDI);
     assert.ok(e.indicateurs.every((i) => i.valeur === null && i.serie.length === 0));
-    assert.deepEqual([e.requetes, e.doublonWww, e.fiche?.avis], [[], null, { nombre: null, note: null }]);
-    assert.ok(e.fiche?.indicateurs.every((i) => i.valeur === null));
+    assert.deepEqual([e.requetes, e.doublonWww, e.fiche], [[], null, null]);
   });
   test("Site : visites (mesure maison), simulations lancées → terminées → lead", async () => {
     const e = await ecrans.ecranSite(trente(), {}, MERCREDI);
@@ -174,7 +186,11 @@ describe("écrans sans synchronisation : estimation, sources non branchées → 
     assert.deepEqual(e.regle20.at(-1), { mois: "2026-09", encaissePrecedent: 3000, depensePub: 151.5, ratio: 0.051, plafond: 0.2, depasse: false });
     assert.equal(e.regle20.length, 12);
     assert.deepEqual(e.carnet.map((c) => [c.numero, c.montant, c.relances]), [["2026-903", 900, 1]]);
-    assert.deepEqual(e.fiscal, { franchiseTva: null, urssaf: null });
+    // Sans paramètres fiscaux : rien de supposé, les paramètres manquants sont NOMMÉS (boutons « Renseigner »).
+    assert.deepEqual([e.fiscal?.seuils, e.fiscal?.urssaf, e.fiscal?.franchiseTva], [[], null, null]);
+    assert.ok((e.fiscal?.parametresManquants.length ?? 0) > 0);
+    assert.deepEqual(e.depensesParCategorie.map((d) => [d.categorie, d.montant, d.nombre]), [["MATIERE", 100, 1], ["PUBLICITE", 80, 1], ["OUTILLAGE", 50, 1]]);
+    assert.ok(Array.isArray(e.clientsParSource));
   });
 });
 
@@ -199,7 +215,10 @@ describe("SEO branché (état fourni) : opportunités et doublon www", () => {
     assert.deepEqual(e.opportunites.enHausse.map((r) => r.cle), ["covering meuble montpellier", "renovation cuisine adhesif", "covering cuisine"], "par gain d'affichages : +160, +130, +100 (nouvelle)");
     assert.equal(e.requetes[0].cle, "covering cuisine");
     assert.equal(e.doublonWww?.detecte, true);
-    assert.equal(e.courbe.points.length, 30);
+    // Relecture B (point 4) : Google n'a livré que jusqu'au 20/09 → la période et la précédente s'arrêtent à 20 jours.
+    assert.equal(e.courbe.points.length, 20);
+    assert.equal(e.donneesJusquau?.seo, "2026-09-20");
+    assert.match(e.indicateurs[0].detail ?? "", /^données jusqu'au 20\/09/);
   });
 });
 
@@ -227,7 +246,7 @@ describe("dépense réelle Meta synchronisée", () => {
     assert.equal(e.sources.find((s) => s.source === "GOOGLE_ADS")?.etat, "NON_BRANCHEE");
   });
   test("synchronisation en échec : les derniers chiffres restent, avec la date de dernière réussite, et une alerte", async () => {
-    await prisma.sourceAnalytique.update({ where: { source: "META" }, data: { dernierEssaiLe: new Date("2026-09-30T07:00:00Z"), derniereErreur: "Error validating access token: Session has expired (190)", detail: JSON.stringify({ etat: "EN_ECHEC" }) } });
+    await prisma.sourceAnalytique.update({ where: { source: "META" }, data: { dernierEssaiLe: new Date("2026-09-30T07:00:00Z"), derniereErreur: "Error validating access token: Session has expired (190)", detail: JSON.stringify({ etat: "EN_ECHEC", couverture: { du: "2026-07-02", au: "2026-09-30" } }) } });
     memoire.viderCacheAnalytique();
     const e = await ecrans.ecranPublicite(trente(), {}, MERCREDI);
     const meta = e.sources.find((s) => s.source === "META")!;
@@ -236,7 +255,7 @@ describe("dépense réelle Meta synchronisée", () => {
     assert.ok(e.alertes.some((a) => a.cle === "SYNCHRO_META" && /Jeton Meta expiré/.test(a.texte)));
     const pourSante = await cache.alertesPourSante(MERCREDI);
     assert.ok(pourSante.some((a) => a.cle === "SYNCHRO_META"));
-    await prisma.sourceAnalytique.update({ where: { source: "META" }, data: { derniereErreur: null, detail: JSON.stringify({ etat: "A_JOUR" }) } });
+    await prisma.sourceAnalytique.update({ where: { source: "META" }, data: { derniereErreur: null, detail: JSON.stringify({ etat: "A_JOUR", couverture: { du: "2026-07-02", au: "2026-09-30" } }) } });
     memoire.viderCacheAnalytique();
   });
 });
@@ -250,10 +269,14 @@ describe("cache : mémoire 5 minutes, instantané du jour, pré-calcul de 7 h ; 
     assert.equal(premier, second, "même objet : servi par le cache mémoire");
     const instantane = await prisma.instantaneAnalytique.findUnique({ where: { cle: "argent:30j:2026-09-30" } });
     assert.ok(instantane);
-    await prisma.encaissement.create({ data: { payeur: "Essai cache", montant: 100, recuLe: new Date("2026-09-29T10:00:00Z"), statut: "VALIDE" } });
     memoire.viderCacheAnalytique();
     const depuisInstantane = await cache.ecranAnalytique("argent", p, {}, MERCREDI);
-    assert.equal(valeur(depuisInstantane, "encaisse"), 600, "l'instantané de moins d'une heure sert");
+    assert.notEqual(depuisInstantane, premier, "relu en base");
+    assert.deepEqual(depuisInstantane, premier, "l'instantané de moins d'une heure, au tampon courant, sert");
+    // Relecture B (écran, point 3) : une saisie qui change les chiffres périme le cache mémoire ET l'instantané du jour.
+    await prisma.encaissement.create({ data: { payeur: "Essai cache", montant: 100, recuLe: new Date("2026-09-29T10:00:00Z"), statut: "VALIDE" } });
+    const apresSaisie = await cache.ecranAnalytique("argent", p, {}, MERCREDI);
+    assert.equal(valeur(apresSaisie, "encaisse"), 700, "sans vider le cache à la main : l'écriture l'a périmé");
     const recalcule = await cache.ecranAnalytique("argent", p, { recalculer: true }, MERCREDI);
     assert.equal(valeur(recalcule, "encaisse"), 700);
     // Un filtre par source ou des dates libres ne passent pas par l'instantané.

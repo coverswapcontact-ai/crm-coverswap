@@ -30,6 +30,7 @@ import { etatDesTaches } from "@/lib/taches/lecture";
 import { etatsDesSources } from "@/lib/analytique/appuis";
 import { chiffresDisponibles, etatDe } from "@/lib/analytique/ecrans/commun";
 import { calculerPublicite, campagneAnalytique, verdictsDeLaCampagne } from "@/lib/analytique/ecrans/publicite";
+import { coutPar } from "@/lib/analytique/calculs";
 import { nombreDeJours, resoudrePeriode as resoudrePeriodeAnalytique } from "@/lib/analytique/periode";
 import { LIBELLES_VERDICT } from "@/lib/analytique/types";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
@@ -349,8 +350,9 @@ export const outilSynthese = definirOutil({
   description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). Synthèse historique (mois figés) : l'écran du CRM est désormais l'Analytique — pour ses chiffres exacts (tuiles, tunnel, publicité, SEO, site, argent), préférer « analytique » ; pour des analyses détaillées, les outils « manager_… ».",
   niveau: "LECTURE",
   schema: schemaPeriode,
-  executer: async (entree) => {
-    const { periode } = resoudrePeriode(entree);
+  executer: async (entree, contexte) => {
+    // L'instant de la session (relecture B, point A) : sans lui, la période glissait d'un jour après 22 h UTC.
+    const { periode } = resoudrePeriode(entree, contexte.maintenant);
     const s = await calculerSynthese(periode.du, periode.au);
     const c = s.commercial;
     const texte = [
@@ -382,8 +384,9 @@ export async function etatCampagne(maintenant: Date = new Date()) {
   const calcul = await calculerPublicite(fenetre, maintenant, synchro);
   const { verdicts } = await verdictsDeLaCampagne(campagne, maintenant, synchro, calcul, fenetre);
   const depense = calcul.depense.total;
-  const leads = calcul.leadsCrm.length;
-  const coutParLead = depense !== null && leads > 0 ? Math.round((depense / leads) * 100) / 100 : null;
+  // Une seule définition des leads Meta et du coût par lead (relecture B, point 5 : calculs.ts, comme l'écran Analytique).
+  const leads = calcul.leadsMeta.length;
+  const coutParLead = coutPar(depense, leads);
   const axe = (niveau: "CAMPAGNE" | "PUBLICITE") =>
     calcul.lignes
       .filter((l) => l.niveau === niveau && l.plateforme === "META")
@@ -414,7 +417,7 @@ export async function etatCampagne(maintenant: Date = new Date()) {
 /** « dépense 162 € (estimation : prorata du budget) » / « dépense 158,40 € (réel Meta) ». */
 export function texteDepenseCampagne(e: { depense: number | null; estimation: boolean; origineDepense: string }): string {
   if (e.depense === null) return "dépense inconnue";
-  return `dépense ${format.euros(e.depense)} (${e.estimation ? "estimation : prorata du budget, la synchronisation Meta n'est pas branchée" : e.origineDepense === "SYNCHRO" ? "réel Meta" : "dépenses « Publicité » saisies"})`;
+  return `dépense ${format.euros(e.depense)} (${e.origineDepense === "MIXTE" ? `réel Meta sur les jours synchronisés${e.estimation ? ", estimation (prorata du budget) ailleurs" : ", dépenses saisies ailleurs"}` : e.estimation ? "estimation : prorata du budget, la synchronisation Meta n'est pas branchée" : e.origineDepense === "SYNCHRO" ? "réel Meta" : "dépenses « Publicité » saisies"})`;
 }
 
 /** Une ligne par publicité : leads, devis, signés, coût par lead (réel) et verdict du protocole. */

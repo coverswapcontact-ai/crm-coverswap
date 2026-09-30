@@ -7,7 +7,7 @@ import { definirOutil, format, lien } from "../definition";
 import { etatCampagne } from "../outils/lecture";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { etatsDesSources } from "@/lib/analytique/appuis";
-import { depensePubDeLaPeriode, estDoublonFusionne, type OrigineDepense } from "@/lib/analytique/calculs";
+import { coutPar, depensePubDeLaPeriode, estDoublonFusionne, type OrigineDepense } from "@/lib/analytique/calculs";
 import { chiffresDisponibles, etatDe } from "@/lib/analytique/ecrans/commun";
 import { calculerPublicite } from "@/lib/analytique/ecrans/publicite";
 import { LIBELLES_VERDICT } from "@/lib/analytique/types";
@@ -120,7 +120,7 @@ async function chargerLeads(debut: Date, fin: Date, zone: ZoneIntervention): Pro
 }
 
 /** Origine de la dépense retenue (mission 17 : la dépense réelle Meta passe en premier). */
-const ORIGINES: Record<OrigineDepense, "DEPENSE_META" | "PRORATA_CAMPAGNE" | "DEPENSES_SAISIES" | "INCONNUE"> = { SYNCHRO: "DEPENSE_META", PRORATA: "PRORATA_CAMPAGNE", SAISIE: "DEPENSES_SAISIES", INCONNUE: "INCONNUE" };
+const ORIGINES: Record<OrigineDepense, "DEPENSE_META" | "PRORATA_CAMPAGNE" | "DEPENSES_SAISIES" | "DEPENSE_MIXTE" | "INCONNUE"> = { SYNCHRO: "DEPENSE_META", PRORATA: "PRORATA_CAMPAGNE", SAISIE: "DEPENSES_SAISIES", MIXTE: "DEPENSE_MIXTE", INCONNUE: "INCONNUE" };
 
 export async function analyseMarketing(entree: z.output<typeof schemaPeriode>, maintenant: Date = new Date()) {
   const { periode, precedente } = resoudrePeriode(entree, maintenant);
@@ -143,11 +143,12 @@ export async function analyseMarketing(entree: z.output<typeof schemaPeriode>, m
   // Mission 17 (partie B) : la définition unique de l'Analytique — dépense synchronisée, sinon prorata du budget jour par jour (estimation), sinon dépenses saisies ; jamais les deux additionnées.
   const depenseRetenue = depense.total;
   const origineDepense = ORIGINES[depense.origine];
-  // Payants : les leads de source Meta ET ceux rattachés à un formulaire Meta payé (contact déjà connu : sa source d'origine reste).
-  const idsMeta = new Set(pub.leadsCrm.map((l) => l.id));
-  const idsMetaAvant = new Set(pubAvant.leadsCrm.map((l) => l.id));
-  const payants = leads.filter((l) => l.source === "META_ADS" || idsMeta.has(l.id));
-  const payantsAvant = leadsAvant.filter((l) => l.source === "META_ADS" || idsMetaAvant.has(l.id));
+  // Payants : LES leads Meta de l'Analytique (relecture B, point 5 : une seule définition, calculs.ts › leadsMeta) — même
+  // compte, même coût par lead que l'écran.
+  const idsMeta = new Set(pub.leadsMeta.map((l) => l.id));
+  const idsMetaAvant = new Set(pubAvant.leadsMeta.map((l) => l.id));
+  const payants = leads.filter((l) => idsMeta.has(l.id));
+  const payantsAvant = leadsAvant.filter((l) => idsMetaAvant.has(l.id));
   const verdicts = new Map(campagne.parPublicite.map((p) => [p.id, p]));
   const parLeads = new Map(leads.map((l) => [l.id, l]));
 
@@ -189,10 +190,10 @@ export async function analyseMarketing(entree: z.output<typeof schemaPeriode>, m
     precedente: { du: precedente.du, au: precedente.au },
     definitions: {
       leads: "Leads reçus dans la période, archivés compris pour les coûts (une dépense se juge sur tout ce qu'elle a produit), doublons fusionnés exclus ; les taux excluent les archivés.",
-      depense: origineDepense === "DEPENSE_META" ? "Dépense réelle lue chez Meta (synchronisation des statistiques publicitaires, jour par jour)." : origineDepense === "PRORATA_CAMPAGNE" ? "Estimation : la synchronisation Meta n'est pas branchée, prorata du budget de la campagne jour par jour (le jour en cours au prorata des heures). Ce n'est pas la dépense réelle Meta." : origineDepense === "DEPENSES_SAISIES" ? "Dépenses de catégorie « Publicité » saisies dans le CRM sur la période (ni synchronisation Meta ni campagne en cours)." : "Aucune dépense connue : ni synchronisation Meta, ni campagne, ni dépense « Publicité » saisie. Les coûts par lead ne sont pas calculables.",
+      depense: origineDepense === "DEPENSE_META" ? "Dépense réelle lue chez Meta (synchronisation des statistiques publicitaires, jour par jour)." : origineDepense === "PRORATA_CAMPAGNE" ? "Estimation : la synchronisation Meta n'est pas branchée, prorata du budget de la campagne jour par jour (le jour en cours au prorata des heures). Ce n'est pas la dépense réelle Meta." : origineDepense === "DEPENSES_SAISIES" ? "Dépenses de catégorie « Publicité » saisies dans le CRM sur la période (ni synchronisation Meta ni campagne en cours)." : origineDepense === "DEPENSE_MIXTE" ? "Jour par jour : dépense réelle Meta sur les jours synchronisés, estimation (prorata du budget) ou dépenses saisies sur les autres." : "Aucune dépense connue : ni synchronisation Meta, ni campagne, ni dépense « Publicité » saisie. Les coûts par lead ne sont pas calculables.",
       parAxe: synchro ? "Chaque campagne et chaque publicité a sa propre dépense (Meta) ; leads du CRM attribués par identifiants (formulaire Meta → lead), une personne une fois." : "Sans synchronisation Meta, la dépense d'une campagne ou d'une publicité n'est pas connue : pas de coût par lead par publicité (le budget n'existe qu'en total).",
       verdict: "Verdict du protocole de campagne (consignes), jugé sur la campagne entière : jours 1 à 3 trop tôt, 4 à 7 garder, 8 à 14 couper si le coût par lead dépasse 2 × la meilleure sur au moins 5 leads (surveiller avec moins de 5 leads), 15 et suivants au coût par devis et par chantier signé (300 €).",
-      coutParChantier: "Dépense divisée par le nombre de leads signés (bon pour accord non retiré ou dossier signé et au-delà).",
+      coutParChantier: "Dépense divisée par les chantiers signés Meta de la période (bon pour accord non retiré ou passage à une étape signée, daté dans la période) : la même définition que l'écran Analytique.",
       retourSurDepense: "Encaissé sur les dossiers de ces leads (à ce jour) divisé par la dépense.",
       joignables: "Parmi les leads appelés : au moins une issue autre que « pas de réponse ».",
       zone: "D'après le code postal et la zone d'intervention des paramètres.",
@@ -200,7 +201,7 @@ export async function analyseMarketing(entree: z.output<typeof schemaPeriode>, m
     avertissement: avertissementMinces(payants.length, "leads Meta"),
     depense: { retenue: depenseRetenue, origine: origineDepense, estimation: depense.estimation, saisie: depenseSaisie, saisiePrecedente: depenseSaisieAvant, lignes: depensesPub.filter((d) => d.payeeLe >= periode.debut).map((d) => ({ le: d.payeeLe.toISOString().slice(0, 10), montant: d.montant, fournisseur: d.fournisseur, libelle: d.libelle })) },
     campagne: { debut: campagne.debut, jour: campagne.jour, duree: campagne.duree, enCours: campagne.enCours, budget: campagne.budget, depense: campagne.depense, estimation: campagne.estimation, depenseEstimee: campagne.depenseEstimee, regleDuJour: campagne.regle, leadsMetaSurLaCampagne: campagne.leads },
-    global: { meta: rendementDe(payants, depenseRetenue), metaPrecedent: rendementDe(payantsAvant, depenseAvant.total), evolutionLeadsMeta: evolution(payants.length, payantsAvant.length), tous: rendementDe(leads, null) },
+    global: { meta: { ...rendementDe(payants, depenseRetenue), coutParChantier: coutPar(depenseRetenue, pub.signesMeta.length) }, metaPrecedent: { ...rendementDe(payantsAvant, depenseAvant.total), coutParChantier: coutPar(depenseAvant.total, pubAvant.signesMeta.length) }, evolutionLeadsMeta: evolution(payants.length, payantsAvant.length), tous: rendementDe(leads, null) },
     parCampagne: parAxe("CAMPAGNE"),
     parPublicite: parAxe("PUBLICITE"),
     qualiteParSource: [...grouper(leads, (l) => l.source).entries()].map(([source, groupe]) => ({ source, libelle: libelleSourceLead(source), ...qualiteDe(groupe), devis: groupe.filter((l) => l.devis).length, signes: groupe.filter((l) => l.signe).length })).sort((a, b) => b.leads - a.leads),
@@ -218,7 +219,7 @@ export const outilManagerMarketing = definirOutil({
   executer: async (entree, contexte) => {
     const a = await analyseMarketing(entree, contexte.maintenant);
     const m = a.global.meta;
-    const origine = { DEPENSE_META: "réel Meta", PRORATA_CAMPAGNE: "estimation : prorata du budget de campagne, la synchronisation Meta n'est pas branchée", DEPENSES_SAISIES: "dépenses « Publicité » saisies", INCONNUE: "ni synchronisation Meta, ni campagne, ni dépense saisie" }[a.depense.origine];
+    const origine = { DEPENSE_META: "réel Meta", PRORATA_CAMPAGNE: "estimation : prorata du budget de campagne, la synchronisation Meta n'est pas branchée", DEPENSES_SAISIES: "dépenses « Publicité » saisies", DEPENSE_MIXTE: "réel Meta sur les jours synchronisés, estimation ou saisies ailleurs", INCONNUE: "ni synchronisation Meta, ni campagne, ni dépense saisie" }[a.depense.origine];
     const texte = [
       `Marketing, ${a.periode.libelle} (${a.periode.du} → ${a.periode.au}).${a.avertissement ? ` ${a.avertissement}` : ""}`,
       `Dépense retenue : ${a.depense.retenue !== null ? format.euros(a.depense.retenue) : "inconnue"} (${origine}).`,

@@ -91,6 +91,10 @@ async function telechargerEchantillon(url: string): Promise<Buffer | null> {
 
 async function noter(ligne: {
   origine: "SITE" | "CRM" | "ESPACE";
+  /** `rendu` (défaut) ou `ambiance` (image d'illustration du site, mission 16 : sans photo, sans dossier). */
+  phase?: "rendu" | "ambiance";
+  /** Le modèle noté (défaut : celui des rendus) ; `essai` pour une image unie du mode essai, jamais facturée. */
+  modele?: string;
   statut: "REUSSI" | "ECHEC";
   erreur?: string | null;
   dureeMs: number;
@@ -105,8 +109,8 @@ async function noter(ligne: {
     const creee = await prisma.generationImage.create({
       data: {
         origine: ligne.origine,
-        modele: modeleImage(),
-        phase: "rendu",
+        modele: ligne.modele ?? modeleImage(),
+        phase: ligne.phase ?? "rendu",
         statut: ligne.statut,
         erreur: ligne.erreur?.slice(0, 500) ?? null,
         dureeMs: ligne.dureeMs,
@@ -238,4 +242,78 @@ export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGe
   console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${entree.qualite ?? "medium"}, ${entree.planche ? "planche" : pluriel(jointes.length, "échantillon")}, ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
   const generationId = await noter({ origine: entree.origine, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: jointes.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
   return { ok: true, image, type: typeImage(image), avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId };
+}
+
+/* ── Images d'ambiance du site (mission 16, partie 2) : texte → image, sans photo ni dossier ── */
+
+/** Les trois formats de sortie du modèle. */
+export type FormatAmbiance = TailleSortie;
+
+/** Le corps envoyé à `POST /images/generations`. */
+export type DemandeAmbiance = { model: string; prompt: string; size: FormatAmbiance; quality: Qualite; n: 1; output_format: "png" };
+
+/** La réponse du service d'images : l'image en base64 et les jetons consommés, ou le statut et le corps d'une erreur. */
+export type ReponseAmbiance = { ok: true; b64: string; usage: Usage } | { ok: false; status: number; texte: string };
+
+/** L'appel au service d'images ; remplaçable (le mode `--essai` du script rend une image unie, sans réseau). */
+export type AppelAmbiance = (demande: DemandeAmbiance, signal: AbortSignal) => Promise<ReponseAmbiance>;
+
+export type ResultatAmbiance =
+  | { ok: true; image: Buffer; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null }
+  | ({ ok: false; dureeMs: number } & Omit<Sortie, "raison"> & { raison: RaisonEchec | "no-image-data" | "config" });
+
+/** L'appel réel : `POST <OpenAI>/images/generations` (JSON), sortie PNG en base64 et jetons consommés. */
+async function appelAmbianceOpenAI(demande: DemandeAmbiance, signal: AbortSignal): Promise<ReponseAmbiance> {
+  const reponse = await fetch(`${baseOpenAI()}/images/generations`, { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`, "Content-Type": "application/json" }, body: JSON.stringify(demande), signal });
+  if (!reponse.ok) return { ok: false, status: reponse.status, texte: await reponse.text().catch(() => "") };
+  const donnees = (await reponse.json().catch(() => ({}))) as {
+    data?: { b64_json?: string }[];
+    usage?: { input_tokens_details?: { text_tokens?: number; image_tokens?: number }; input_tokens?: number; output_tokens?: number };
+  };
+  const detail = donnees.usage?.input_tokens_details;
+  const usage: Usage = { texte: detail?.text_tokens ?? (detail ? 0 : (donnees.usage?.input_tokens ?? 0)), image: detail?.image_tokens ?? 0, sortie: donnees.usage?.output_tokens ?? 0 };
+  return { ok: true, b64: donnees.data?.[0]?.b64_json ?? "", usage };
+}
+
+/**
+ * Une image d'ambiance pour le site (mission 16, partie 2) : `gpt-image-1` sur un prompt seul, qualité `high` par
+ * défaut, sortie PNG. Jamais une photo de client, jamais présentée comme un chantier (étiquette « Ambiance » sur le
+ * site). Chaque appel écrit une ligne `GenerationImage` (origine CRM, phase `ambiance`, sans dossier) : le coût se lit
+ * avec les autres dépenses du simulateur. Lancée seulement par `scripts/generer-ambiances.ts`, jamais par un test
+ * (qui passe `appel`).
+ */
+export async function genererAmbiance(entree: { prompt: string; format: FormatAmbiance; qualite?: Qualite; signal?: AbortSignal }, options: { appel?: AppelAmbiance; modele?: string } = {}): Promise<ResultatAmbiance> {
+  const debut = Date.now();
+  if (!options.appel && !process.env.OPENAI_API_KEY) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: "OPENAI_API_KEY absente." };
+  const appel = options.appel ?? appelAmbianceOpenAI;
+  const modele = options.modele ?? modeleImage();
+  const qualite = entree.qualite ?? "high";
+  const echec = async (sortie: Omit<Extract<ResultatAmbiance, { ok: false }>, "ok" | "dureeMs">, detail?: string): Promise<ResultatAmbiance> => {
+    const dureeMs = Date.now() - debut;
+    await noter({ origine: "CRM", phase: "ambiance", modele, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, taille: entree.format, echantillons: 0 });
+    return { ok: false, dureeMs, ...sortie };
+  };
+
+  const controleur = new AbortController();
+  const minuterie = setTimeout(() => controleur.abort(), DELAI_OPENAI_MS);
+  entree.signal?.addEventListener("abort", () => controleur.abort(), { once: true });
+  let reponse: ReponseAmbiance;
+  try {
+    reponse = await appel({ model: modele, prompt: entree.prompt, size: entree.format, quality: qualite, n: 1, output_format: "png" }, controleur.signal);
+  } catch (erreur) {
+    const delai = erreur instanceof Error && (erreur.name === "AbortError" || /aborted/i.test(erreur.message));
+    return echec({ status: delai ? 504 : 502, raison: delai ? "delai" : "surcharge", message: delai ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge }, erreur instanceof Error ? erreur.message.slice(0, 200) : undefined);
+  } finally {
+    clearTimeout(minuterie);
+  }
+  if (!reponse.ok) {
+    const raison = classerErreurOpenAI(reponse.status, reponse.texte);
+    return echec({ status: raison === "service-indisponible" ? 503 : 502, raison, message: MESSAGES_ECHEC[raison] }, `HTTP ${reponse.status} ${reponse.texte.slice(0, 200)}`);
+  }
+  if (!reponse.b64) return echec({ status: 502, raison: "no-image-data", message: "Aucune image générée." });
+  const image = Buffer.from(reponse.b64, "base64");
+  const coutDollars = coutEnDollars(reponse.usage, modele);
+  const dureeMs = Date.now() - debut;
+  const generationId = await noter({ origine: "CRM", phase: "ambiance", modele, statut: "REUSSI", dureeMs, taille: entree.format, echantillons: 0, usage: reponse.usage, coutDollars });
+  return { ok: true, image, dureeMs, usage: reponse.usage, coutDollars, generationId };
 }

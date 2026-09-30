@@ -3972,3 +3972,199 @@ Relue par trois relecteurs (27 constats, 21 distincts) : tous vérifiés dans le
   « Matières » navigue, une seule entrée d'historique, un retour ramène à l'accueil, corps déverrouillé ;
   `/matieres?famille=bois` ouvre sur Bois (267) ; `/pro` ; `/contact#espace`. Commit site `91754ea`, Vercel 09:49
   UTC ; toutes les adresses en 200 (dont `/blog`, `/devis`, `/revetements`, pas encore redirigées).
+
+## Mission 16, partie 2 — Les images : préparation locale, manifeste, ambiances générées (30/09)
+
+Énoncé § 1.1 (images, honnêteté), § 6 (AVIF / WebP, dimensions réservées). Le site prépare ses images en local
+(sharp, sans coût) et les sert par `Photo` ; le CRM porte le script qui produira les images d'ambiance (≤ 12) et le
+rendu « après » de l'ouverture — **écrit et testé, pas lancé** : l'orchestrateur le lance une fois, coût au rapport.
+Aucun appel OpenAI, aucune image générée, aucun serveur ni build lancé.
+
+### CRM
+- **`src/lib/simulations/generation.ts`** : `genererAmbiance({ prompt, format, qualite = "high" }, { appel?, modele? })`
+  = `POST <OpenAI>/images/generations` (JSON, `n: 1`, `output_format: "png"`), délai 180 s, erreurs classées par
+  `classerErreurOpenAI` (crédit épuisé → `service-indisponible`, vu par `consommation().creditEpuise` comme pour les
+  rendus) ; chaque appel écrit une ligne `GenerationImage` **origine CRM, phase `ambiance`, sans dossier**, coût
+  d'après les jetons (`coutEnDollars`). Sans clé et sans `appel` fourni : `config`, aucune ligne. `noter` accepte
+  `phase` (`rendu` par défaut | `ambiance`) et `modele` (défaut `modeleImage()`). Types `FormatAmbiance`,
+  `DemandeAmbiance`, `ReponseAmbiance`, `AppelAmbiance`, `ResultatAmbiance`.
+- **`src/lib/simulations/ambiances.ts`** (nouveau, la logique du script) : `lireListeAmbiances` (zod : 1 à 12 entrées,
+  `{ nom, prompt, format, reserve? }`, noms uniques, aucun emoji), `lireArguments` (`--liste`, `--sortie`, `--max`
+  1-12 défaut 12, `--seulement`, `--sauf`, `--essai`, `--estimer`, `--rendu <photo> --piece <pièce> --zones
+  zone:REF,…` — zones de la pièce, 4 au plus, sans recouvrement ; option inconnue → refus), `choisirAmbiances`
+  (hors réserve par défaut, `--seulement` prend aussi les réserves, nom inconnu → refus), `estimerCoutAmbiances`
+  (grille publique high : 4 160 / 6 240 jetons de sortie + prompt), `nomApres`, `executerAmbiances(argv, journal)`.
+  Modèle forcé `gpt-image-1` (`MODELE_AMBIANCE`), quel que soit `OPENAI_IMAGE_MODEL`. Plan et coût estimé annoncés
+  avant tout appel ; `OPENAI_API_KEY` seulement « présente / absente » (absente hors essai → rien n'est lancé).
+  Une image déjà présente dans la sortie n'est pas refaite ; `--max` compte les appels ; arrêt de la boucle sur
+  `service-indisponible` / `config`. `--rendu` : `genererAvecMoteur` (moteur V2 et planche forcés POUR CET APPEL,
+  sans toucher aux paramètres ; qualité high ; origine CRM ; analyse, contrôle et seconde tentative comme partout),
+  écrit `<nom-avant>` → `<nom>-apres.<ext réelle>` sans jamais écraser (`-apres-2`…) ; si la photo a été recadrée,
+  l'« avant » superposable est écrit à côté (`-cadree.jpg`). `--essai` : images unies, aucune requête vers OpenAI
+  (ambiances : `appel` simulé, lignes au modèle `essai`, 0 $ ; rendu : `definirGenerateurEssai` +
+  `definirVisionEssai`, retirés à la fin, photo réencodée pour que l'analyse simulée ne soit jamais mise en cache sous
+  l'empreinte de la vraie photo). **Coût réel relu en fin de lancement** : `releverCouts(depuis)` lit `GenerationImage`
+  (origine CRM, sans dossier, `createdAt ≥` début du lancement), par phase et statut (`ambiance` ; `rendu`, `analyse`,
+  `controle` pour `--rendu`), rendu dans `BilanAmbiances.releve` et affiché en DERNIÈRE ligne (« Coût réel relu dans
+  GenerationImage (base de DATABASE_URL …) : ambiance 2,31 $ × 11 — total … ») ; `null` pour `--estimer` ou quand rien
+  n'est lancé. C'est le chiffre du rapport (l'outil MCP `depenses` lit les dépenses de chantier, `Depense`, pas ces
+  lignes).
+- **`scripts/generer-ambiances.ts`** (nouveau, `node --import tsx`, depuis la racine du CRM) et
+  **`scripts/ambiances.json`** : les 12 prompts de la conception, en anglais (photographe, lumière naturelle, matières
+  Cover Styl' crédibles, « No people, no hands, no faces, no text, no logos, no brand names, no watermark » dans
+  chacun) ; `ouverture-salle-de-bain-avant` marquée `"reserve": true`.
+- `prisma/schema.prisma` : commentaire de `GenerationImage.phase` complété (`| ambiance`) — commentaire seul, rien à
+  pousser.
+- `src/proxy.ts` : garde locale, non touchée.
+
+### Site
+- **Originaux** `public/images/sources/` : `pro-bureaux.jpg`, `meubles-armoire.jpg`, `mur-salon.jpg` (les trois images
+  de la racine, « illustration, à confirmer par Lucas », « Ambiance » à l'usage), `ouverture-provisoire.jpg` (l'ancienne
+  affiche de la vidéo).
+- **Retirés** : `public/videos/` (les deux `.mp4` ; « vidéo d'ambiance non prouvée, remplacée par une image + curseur »),
+  11 paires de `public/images/fonds/` que plus rien ne servait (les 9 orphelines de la cartographie + 2 devenues
+  orphelines à la partie 1 : fond des pages locales `1556909114…`, texture marbre du catalogue `1618220179428…`). Les 12
+  paires encore servies (guides, pages par pièce, exemple de l'espace) restent : la partie 5 tranche.
+- **`scripts/preparer-images.mjs`** + `npm run images` : largeurs 480 / 960 / 1600 **plafonnées à l'origine** (1536 →
+  480, 960, 1536 ; jamais agrandie), AVIF q50, WebP q78, JPEG mozjpeg q80, fond `--color-fond` sous une éventuelle
+  transparence, orientation EXIF appliquée ; ne fait que ce qui manque (`-- --tout` refait tout), **sauf pour un
+  original remplacé sous le même nom** : chaque entrée du manifeste porte l'empreinte de son original (`empreinte`,
+  sha1 des octets, 12 caractères) ; si elle ne correspond plus (ou manque : manifeste d'avant), TOUTES les sorties de
+  l'image sont refaites (la date de modification n'est pas un signe : une copie par l'Explorateur la garde) ; retire de
+  `prep/` ce qu'aucun original ne demande plus (largeurs d'avant comprises), réécrit le manifeste seulement s'il change ;
+  nom d'original invalide ou en double → arrêt. Exports : `planifierSorties`, `texteManifeste`, `nomSortie`,
+  `listerSources`, `empreinteOriginal`, `lireEmpreintes` (purs) et `preparerImages({ sources, prep, manifeste, tout,
+  journal })` (la préparation, dossiers en paramètre pour les tests). Lancé : 36 fichiers (4 images × 3 largeurs × 3
+  formats, 1,3 Mo) ; relancé après l'ajout des empreintes : 36 refaits une fois (octets identiques, sha1 vérifiés),
+  puis « 0 produit, 36 déjà là, manifeste inchangé ».
+- **`src/lib/images-manifeste.ts`** : désormais ENTIÈREMENT généré (en-tête « FICHIER GÉNÉRÉ … ne pas éditer »,
+  `MANIFESTE_IMAGES` trié, 4 entrées). Les fonctions de la partie 1 (`sourcesPhoto`, `DOSSIER_IMAGES`, types) passent
+  dans **`src/lib/images-preparees.ts`** (écrit à la main, + `imagePreparee(nom)`) ; `Photo` l'importe.
+- **`Photo`** : option `enLigne` (cadre `span` bloc au lieu d'un `div`, pour une photo dans un bouton) ; option
+  `immediat` (une image du premier écran qui n'est pas l'ouverture : `loading="eager"` SANS `fetchpriority`) ; `priorite`
+  reste réservée à l'ouverture (`eager` + `fetchpriority="high"`). `EntreeImage.empreinte?` dans `images-preparees.ts`.
+- **`src/lib/images-pieces.ts`** : `PHOTOS_PIECES` (cuisine → `piece-cuisine`, salle-de-bain → `piece-salle-de-bain`,
+  meubles → `piece-meubles`, mur-plafond → `piece-murs`, professionnel → `piece-pro`), `photoDePiece`, commentaire
+  « INTÉRIM : ambiances, les photos de réalisation des cinq pièces restent à fournir ».
+- **`CartesPieces`** : `photos?: Partial<Record<PieceId, string>>` ; image au manifeste → `Photo` carrée (`1 / 1`,
+  `alt=""`, `sizes` `(min-width: 640px) 240px, 45vw`, en couleur) + `Etiquette` « Ambiance » en bas à gauche
+  (`aria-hidden`) ; sinon le dessin au trait (gris, couleur au choix) comme avant. `EcranPiece` (simulateur) et
+  `SimulationSection` (accueil) passent `PHOTOS_PIECES` ; l'espace client non (dessins inchangés). Tant que les
+  ambiances ne sont pas générées, rien ne change à l'écran. `photosImmediates` (défaut 0) : les N premières cartes
+  chargent leur photo tout de suite ; `EcranPiece` passe `PHOTOS_IMMEDIATES = 3` (l'écran 1 est le premier écran de
+  `/simulateur`, rendu serveur : une carte de ≈ 175 px est le LCP probable à 390 × 660) ; l'accueil garde `lazy`
+  (module sous l'ouverture).
+- `next.config.ts` : commentaire d'`images.unoptimized` à jour. **`docs/SUIVI.md` § 7 « Images »** : originaux,
+  script, manifeste, `Photo`, règle d'honnêteté, cartes de pièces, table des 12 images générées et de leur usage,
+  fonds retirés, vidéo retirée, tests.
+- **Tests** (102, dont 24 nouveaux) : `src/lib/images-manifeste.test.ts` 13/13 (partie 1 + `planifierSorties` : 480 /
+  960 / 1600, plafonnées, sans doublon, croissantes, dimensions invalides refusées ; manifeste trié, même texte quel
+  que soit l'ordre, fichier du dépôt = ce que le script écrirait ; empreinte écrite et relue ; `preparerImages` dans
+  un dossier temporaire : original remplacé sous le même nom À DATE ÉGALE → 9 sorties refaites (la 480 est bien la
+  nouvelle image), largeur d'avant retirée, manifeste réécrit, relancé → rien ; manifeste sans empreinte → refait une
+  fois) ; **`src/lib/images-depot.test.ts` 8/8** (chaque original au manifeste et l'inverse ; **empreinte du manifeste =
+  sha1 de l'original** : un original remplacé sans `npm run images` échoue ici ; largeurs = `planifierSorties` ; 3
+  formats × largeurs présents ; `prep/` sans
+  fichier en trop ni vide ; aucun fond orphelin ; chaque fond cité a ses 800 et 1600 ; pas de `public/videos`, aucune
+  vidéo, aucune image à la racine) ; **`src/components/simulation/cartes-pieces.test.ts` 7/7** (sans photos : 5
+  dessins ; photo préparée → `<picture>` carré « Ambiance » sur SA carte, nom absent du manifeste → dessin ; aucun
+  `div` dans un bouton ; chargement : `lazy` par défaut, `photosImmediates={3}` → eager, eager, eager, lazy, lazy, jamais
+  de `fetchpriority` ; `priorite` → eager + high ; `photoDePiece` refuse `constructor` ; `PHOTOS_PIECES` couvre les 5
+  pièces ; simulateur et accueil passent `PHOTOS_PIECES`, le simulateur seul `photosImmediates`, l'espace non, aucun
+  nom `piece-*` ailleurs).
+
+### Décisions
+- **Largeurs plafonnées plutôt que coupées** : « 480 / 960 / 1600, jamais agrandies » lu comme `min(largeur,
+  origine)` sans doublon — une ambiance de 1536 px garde sa pleine définition (sinon 960 px au plus pour l'ouverture
+  plein écran). Une image de 1024 px sort aussi en 1024 (proche de 960 : quelques Ko de plus, règle unique).
+- **Manifeste entièrement généré** (la conception : « regénéré, en-tête fichier généré ») : les fonctions écrites à la
+  main de la partie 1 déménagent dans `images-preparees.ts` (import de type seulement dans l'autre sens : pas de
+  cycle).
+- **11 fonds retirés, pas 9** : même règle (« jamais servis »), deux paires l'étaient devenues à la partie 1.
+- **Cartes avec photo en couleur**, sans le gris des dessins (une photo grisée sur l'accueil ferait terne) ; la carte
+  choisie se lit au trait d'accent. Étiquette `aria-hidden`, `alt=""` : le libellé du bouton suffit.
+- **`reserve: true`** dans `ambiances.json` : un lancement sans option ne paie jamais la réserve.
+- **`--estimer`** (plan + coût, rien d'autre), **image déjà là jamais refaite**, **rendu jamais écrasé** : rien n'est
+  payé deux fois par erreur.
+- **Rendu écrit à son vrai format** (`ouverture-cuisine-apres.jpg` : le moteur rend du JPEG q90 depuis la mission 15)
+  et non `.png` comme l'écrivait la conception : même nom au manifeste (`ouverture-cuisine-apres`).
+- **Référence noir mat : `K1` « Black Mat »**, pas `AB02` : dans le catalogue, `AB02` est « Creamy » (bois peint crème).
+  Chêne clair = `AA01` « Beige Oak ». La commande documentée utilise `meubles-hauts:K1,meubles-bas:K1,
+  plan-de-travail:MK15` ; l'orchestrateur peut en passer d'autres.
+- **Photo réencodée en essai** : sans cela, un `--essai --rendu` sur la vraie photo aurait mis en cache une analyse
+  factice que le vrai rendu aurait reprise.
+- **Coût réel relu par le script lui-même** (relecture) plutôt qu'une requête SQL à écrire à la main : la base de prod
+  est un SQLite sur le volume Railway, sans client SQL garanti dans le conteneur ; le script relit ses propres lignes
+  par Prisma, dans la base où il les a écrites.
+- **Empreinte au manifeste, pas date de modification** (relecture) : l'Explorateur de Windows garde la date d'un
+  fichier copié ; l'orchestrateur remplacera au moins un original sous le même nom (meilleur des deux rendus renommé,
+  « avant » recadré).
+- **Trois cartes en chargement immédiat, pas deux** (relecture) : le premier rang fait 2 cartes sur téléphone et 3 sur
+  ordinateur ; 3 couvre les deux (sur téléphone, la 3e est au premier écran, en haut du second rang).
+
+### Vérifié
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 (aucune erreur) ; `npm test` **102/102** ; `npm run images`
+  lancé (36 fichiers), puis relancé après l'ajout des empreintes (36 refaits, octets identiques), puis rien.
+- CRM : `npx tsc --noEmit -p .` 0 ; `npx eslint` sur les 4 fichiers touchés 0 ; `node --import tsx --test
+  src/lib/base/mission-16-partie-2.test.ts` **12/12** (liste du dépôt et ≈ 2,34 $ ; liste invalide refusée ; options ;
+  `--essai` : 3 PNG aux bons formats, 3 lignes `ambiance` CRM sans dossier à 0 $, relevé final « ambiance 0,00 $ × 3 »,
+  relancé rien (relevé `null`) ; `--max 2` ; `--estimer` sans fichier ni ligne ni relevé, sans clé rien de lancé ;
+  `--rendu` en essai : moteur V2, image unie aux dimensions de la photo, analyse et contrôle comptés à 0 $ et relevés,
+  remplaçants retirés, `-apres-2` au second passage ; `releverCouts` : lignes CRM sans dossier depuis le début, par
+  phase et statut, ni celles d'avant, ni un dossier, ni le site ; `fetch` remplacé : aucune requête) ; modules
+  touchés : `mission-15-partie-1..5` (+ `2b`), `cadrage`, `moteur`, `simulateur`, `base-essai` + la partie 2 :
+  **127/127**. `node --import tsx scripts/generer-ambiances.ts --estimer` : « 11 à générer, réserve :
+  ouverture-salle-de-bain-avant, ≈ 2,34 $ ».
+- Pas lancé (orchestrateur) : la génération réelle, le rendu, serveur, build, Lighthouse.
+
+### Relecture (3 constats, tous réels, tous corrigés)
+- CRM, procédure du coût : l'outil MCP `depenses` renvoyé par la REPRISE lit `Depense`, pas `GenerationImage` →
+  `releverCouts` + dernière ligne du script, procédure réécrite (base de DATABASE_URL, locale sur le poste, solde à
+  renoter). Test `releverCouts` + relevé vérifié en essai et en rendu.
+- Site, `scripts/preparer-images.mjs` : un original remplacé sous le même nom gardait ses anciennes sorties (« déjà
+  prête ») → empreinte sha1 au manifeste, sorties refaites quand elle change ; test de bout en bout dans un dossier
+  temporaire (date de modification conservée) + garde du dépôt.
+- Site, `CartesPieces` : photos du premier écran de `/simulateur` en `lazy` (LCP retardé dès que les `piece-*`
+  seront préparées) → `Photo immediat` + `photosImmediates={3}` dans `EcranPiece` ; l'accueil reste en `lazy`.
+
+### Coût estimé avant lancement (à confirmer par le coût réel lu dans `GenerationImage`)
+- 11 ambiances hors réserve (6 × 1536 × 1024 ≈ 0,25 $, 5 × 1024 × 1024 ≈ 0,17 $) : **≈ 2,34 $**.
+- Rendu de l'ouverture : ≈ 0,36 $ par tentative (`coutEstime(1, "high")`), 0,72 $ au pire (seconde tentative sous le
+  seuil), + analyse et contrôle ≈ 0,01 $.
+- Total ≈ **2,70 $** (≈ 3,10 $ au pire) ; la réserve, si demandée : + 0,25 $ (+ un second rendu).
+
+### Reste / à savoir
+- **Procédure (orchestrateur)**, dans le CRM : `node --import tsx scripts/generer-ambiances.ts --estimer`, puis
+  `--sortie <dossier>` (11 images), puis `--sortie <dossier> --rendu <dossier>/ouverture-cuisine-avant.png --piece
+  cuisine --zones meubles-hauts:K1,meubles-bas:K1,plan-de-travail:MK15` ; relire les images (aucune personne, aucun
+  texte, aucune marque) ; copier les retenues dans `coverswap/public/images/sources/` ; `npm run images` ; `npm test`
+  (`images-depot` échoue si un original n'est pas préparé, ou remplacé sans être repréparé) ; commiter sources,
+  `prep/` et le manifeste. **Le coût réel** : la DERNIÈRE ligne de chaque lancement du script (« Coût réel relu dans
+  GenerationImage … », par phase : `ambiance` ; `rendu`, `analyse`, `controle` pour le rendu) — additionner les deux
+  lancements. **Pas l'outil MCP `depenses`** : il lit les dépenses de chantier (`Depense`), jamais `GenerationImage`.
+  Les lignes vont dans la base de DATABASE_URL : lancé sur le poste, c'est la base locale (`dev.db`) ; la prod (SQLite
+  sur le volume Railway) ne les voit pas, et son compteur de crédit (`consommation().solde`) surestimera le solde
+  d'autant → après le lancement, noter le solde relevé chez OpenAI dans Paramètres → Crédit OpenAI (ou lancer dans le
+  conteneur Railway et rapatrier les images). Contrôle croisé possible : écart de `mois.crm` de GET
+  `/api/simulateur/consommation` avant / après, sur la base où le script a tourné.
+- Les PNG de `gpt-image-1` pèsent 2 à 3 Mo : dans `public/images/sources/` (conception), ils sont servis par Vercel
+  sans être référencés et alourdissent le dépôt (≈ 30 Mo pour 12). Option : les convertir en JPEG q92 avant de les
+  copier (le script accepte `.jpg`) — à trancher par l'orchestrateur.
+- Photos de réalisation des cinq cartes de pièces : **à fournir par Lucas** (les ambiances sont un intérim, dit dans
+  `images-pieces.ts`). Les trois illustrations de l'ancienne racine (`pro-bureaux`, `meubles-armoire`, `mur-salon`) :
+  origine à confirmer par Lucas ; préparées, utilisées nulle part pour l'instant.
+- Partie 3 : l'ouverture lit `ouverture-cuisine-avant` / `ouverture-cuisine-apres` (même taille 1536 × 1024 : la
+  photo « avant » est déjà au format du modèle, pas de recadrage) ; « Comment ça marche » : `etape-photo`, `piece-cuisine`
+  en attendant `etape-simulation` (partie 4), `etape-pose`. `ouverture-provisoire` reste disponible en repli.
+
+### Lancement et vérification par l'orchestrateur (30/09)
+- Clé : le CRM local n'a pas de clé OpenAI (elle n'est que sur Railway) ; le script a été lancé avec celle de
+  l'environnement local du site, par un lanceur qui ne l'affiche pas, sur la base d'essai (copie) : les lignes
+  `GenerationImage` n'existent que là. Noter le solde relevé chez OpenAI dans Paramètres → Crédit OpenAI.
+- Coût réel relu : 11 ambiances 2,33 $ (0,25 $ la première, 2,08 $ les dix autres) + rendu de l'ouverture 0,40 $
+  (moteur V2, planche, high ; façades K1 noir mat, plan MK15 ; contrôle 8/10 en une tentative) = **2,73 $ pour 12
+  générations**. Réserve `ouverture-salle-de-bain-avant` non générée. Images relues une à une : aucune personne,
+  aucun texte, aucune marque.
+- Originaux PNG convertis en JPEG q90 avant d'entrer dans `public/images/sources/` (105 à 263 Ko) ; `npm run images`
+  → 16 images, 108 fichiers produits (AVIF 5 à 56 Ko).
+- CRM 785/785 + build ; site lint, 102/102, build ; 0 appel ntfy réel.

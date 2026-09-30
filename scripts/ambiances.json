@@ -1,0 +1,63 @@
+[
+  {
+    "nom": "ouverture-cuisine-avant",
+    "format": "1536x1024",
+    "prompt": "Photorealistic photograph of an ordinary French kitchen from the early 2000s, clean and tidy but dated, seen straight on from the doorway at eye level with a 28 mm lens. A continuous run of fitted cabinets: wall units and base units with rustic oak-effect raised-panel doors and small brass-coloured knobs, a beige laminate worktop with a rounded front edge, a white square ceramic tile splashback, a stainless steel sink, a built-in hob and an oven under the worktop. Everyday objects: a kettle, a wooden chopping board and a bowl of lemons on the worktop, a small plant on the window sill. Soft morning daylight from a window on the left, neutral white balance, gentle natural shadows. All cabinet doors are closed and the whole run of wall units, base units and worktop is fully visible and unobstructed. Straight verticals, no wide-angle distortion, true-to-life colours, realistic textures, like a real estate photograph taken with care. No people, no hands, no faces, no text, no logos, no brand names, no signage, no watermark."
+  },
+  {
+    "nom": "piece-cuisine",
+    "format": "1024x1024",
+    "prompt": "Photorealistic interior photograph of a contemporary kitchen, three-quarter view at eye level with a 35 mm lens. Handleless cabinet fronts in a light natural oak wood-grain finish with a fine, realistic grain, a thin matte black worktop, a plain warm white wall, a matte black mixer tap, two stoneware bowls and a sprig of olive branches in a glass vase. Soft natural daylight from a large window on the side, calm and airy atmosphere, true-to-life colours, crisp material textures. Editorial interior-magazine quality, straight verticals. No people, no hands, no faces, no text, no logos, no brand names, no signage, no watermark."
+  },
+  {
+    "nom": "piece-salle-de-bain",
+    "format": "1024x1024",
+    "prompt": "Photorealistic interior photograph of a modern bathroom, three-quarter view at eye level with a 35 mm lens. A wall-hung vanity unit with walnut wood-grain drawer fronts and a white ceramic basin on top, walls finished in a light grey polished-concrete effect, a round frameless mirror, a brushed steel tap, a folded linen towel and a small ceramic soap dish. Soft diffused daylight from a frosted window, calm and bright, true-to-life colours, realistic textures. Editorial interior-magazine quality, straight verticals. No people, no hands, no faces, no text, no logos, no brand names, no signage, no watermark."
+  },
+  {
+    "nom": "piece-meubles",
+    "format": "1024x1024",
+    "prompt": "Photorealistic interior photograph of a long low sideboard in a living room, seen almost straight on at eye level with a 35 mm lens. Four flat doors in a matte white lacquer finish with thin matte black bar handles, standing on a light oak herringbone parquet floor against a plain warm white wall, a stoneware vase with dried grasses and a small ceramic lamp on top. Soft natural daylight from the side, calm and airy, true-to-life colours, realistic textures. Editorial interior-magazine quality, straight verticals. No people, no hands, no faces, no text, no artwork, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "piece-murs",
+    "format": "1024x1024",
+    "prompt": "Photorealistic interior photograph of a living room feature wall clad in white marble with soft grey veining, large continuous slabs, seen straight on at eye level with a 35 mm lens. In front of it a beige boucle sofa with two linen cushions, a low light oak coffee table with a ceramic bowl, a light oak floor. Soft diffused daylight from a window on the side, calm and elegant, true-to-life colours, realistic stone texture with subtle reflections. Editorial interior-magazine quality, straight verticals. No people, no hands, no faces, no text, no artwork, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "piece-pro",
+    "format": "1024x1024",
+    "prompt": "Photorealistic interior photograph of a small hotel reception desk, three-quarter view at eye level with a 35 mm lens. The desk front is clad in a smoked oak wood-grain finish with a fine vertical grain, a matte black top, a brass desk lamp and a small bouquet of white flowers on the counter, a plain light plaster wall behind, a polished concrete floor. Soft natural daylight mixed with warm lamp light, welcoming and refined, true-to-life colours, realistic textures. Editorial interior-magazine quality, straight verticals. No people, no hands, no faces, no text, no signage, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "pro-hotel",
+    "format": "1536x1024",
+    "prompt": "Photorealistic interior photograph of a boutique hotel bedroom, wide view at eye level with a 28 mm lens. A full-height headboard wall and built-in wardrobes in a light oak wood-grain finish with a fine grain, a double bed with crisp white bedding and a folded sand-coloured throw, two slim bedside lamps, a light carpet. Soft morning daylight from a large window with sheer curtains, calm and restful, true-to-life colours, realistic textures. Editorial hospitality-magazine quality, straight verticals. No people, no hands, no faces, no text, no artwork, no signage, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "pro-restaurant",
+    "format": "1536x1024",
+    "prompt": "Photorealistic interior photograph of an empty restaurant dining room before service, wide view at eye level with a 28 mm lens. A long bar counter clad in a walnut wood-grain finish with a dark grey stone-effect top, upholstered banquettes in a deep olive fabric along the wall, small round tables with white tablecloths and glasses, simple globe pendant lights. Warm late-afternoon daylight from large windows, inviting and refined, true-to-life colours, realistic textures. Editorial hospitality-magazine quality, straight verticals. No people, no hands, no faces, no text, no menus, no signage, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "pro-commerce",
+    "format": "1536x1024",
+    "prompt": "Photorealistic interior photograph of a small concept store, wide view at eye level with a 28 mm lens. Display furniture and a sales counter in a matte white lacquer finish combined with light oak wood-grain panels, open shelves with folded linen textiles and handmade ceramics, a light polished concrete floor, plain white walls. Bright natural daylight from the shop window, clean and airy, true-to-life colours, realistic textures. Editorial retail-design-magazine quality, straight verticals. No people, no hands, no faces, no text, no price tags, no signage, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "etape-photo",
+    "format": "1536x1024",
+    "prompt": "Photorealistic photograph of a smartphone standing upright on a small stand on a beige laminate kitchen worktop in the foreground, sharp focus on the phone, with a dated kitchen behind it slightly out of focus: rustic oak-effect cabinet doors and a white tile splashback. The phone screen shows a clear photograph of that same kitchen, with no interface, no icons and no text on the screen. Soft morning daylight, neutral white balance, shallow depth of field, true-to-life colours. No people, no hands, no faces, no text, no logos, no brand names, no watermark, the phone has no visible brand."
+  },
+  {
+    "nom": "etape-pose",
+    "format": "1536x1024",
+    "prompt": "Photorealistic close-up photograph of a kitchen cabinet door being covered with a self-adhesive decorative film in a light oak wood-grain finish: the left half of the flat door is already covered with the smooth oak film, the right half still shows the old plain white door, the white backing paper of the film is peeled back and curls at the edge, and a flat felt-edged plastic squeegee rests on the door. Macro detail of the wood-grain texture and the clean edge of the film, soft natural daylight from the side, true-to-life colours, crisp focus. No people, no hands, no faces, no text, no logos, no brand names, no watermark."
+  },
+  {
+    "nom": "ouverture-salle-de-bain-avant",
+    "format": "1536x1024",
+    "reserve": true,
+    "prompt": "Photorealistic photograph of an ordinary French bathroom from the 1990s, clean and tidy but dated, seen straight on from the doorway at eye level with a 28 mm lens. Beige square ceramic wall tiles with a thin decorative border, a vanity unit with white laminate doors and a beige laminate top with a white ceramic basin, chrome taps, a rectangular mirror with a strip light above, a bath with a tiled panel on the side. A folded towel and a soap dispenser. Soft daylight from a small window, neutral white balance, gentle natural shadows. The vanity unit, its top and the tiled walls are fully visible and unobstructed. Straight verticals, no wide-angle distortion, true-to-life colours, realistic textures, like a real estate photograph taken with care. No people, no hands, no faces, no text, no logos, no brand names, no signage, no watermark."
+  }
+]

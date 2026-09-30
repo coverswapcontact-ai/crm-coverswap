@@ -1672,7 +1672,7 @@ model GenerationImage {
   createdAt     DateTime @default(now())
   origine       String // SITE | CRM | ESPACE
   modele        String
-  phase         String   @default("rendu") // rendu | analyse | controle (mission 15 : les appels vision comptent ici aussi)
+  phase         String   @default("rendu") // rendu | analyse | controle (mission 15 : les appels vision comptent ici aussi) | ambiance (mission 16 : images d'illustration du site, sans dossier)
   statut        String // REUSSI | ECHEC
   erreur        String?
   dureeMs       Int

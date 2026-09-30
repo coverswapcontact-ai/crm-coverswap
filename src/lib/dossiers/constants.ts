@@ -270,6 +270,8 @@ export const TYPES_EVENEMENT = [
   "ESPACE_SIMULATION_SITE",
   "SIMULATION_BROUILLON",
   "ESPACE_SIMULATION_CLIENT",
+  // Mission 15 (partie 5) : simulation du client gardée en brouillon (contrôle automatique sous le seuil)
+  "ESPACE_SIMULATION_RELECTURE",
   "ESPACE_SIMULATIONS_DEMANDEES",
   "ESPACE_SIMULATIONS_ACCORDEES",
   // Notes prises pendant un appel au contact, reprises à leur date (NoteAppel)
@@ -324,6 +326,7 @@ export const LIBELLES_TYPE_EVENEMENT: Record<TypeEvenement, string> = {
   ESPACE_SIMULATION_SITE: "Simulation refaite sur le site",
   SIMULATION_BROUILLON: "Simulation en brouillon",
   ESPACE_SIMULATION_CLIENT: "Simulation faite par le client",
+  ESPACE_SIMULATION_RELECTURE: "Simulation du client à relire",
   ESPACE_SIMULATIONS_DEMANDEES: "Simulations supplémentaires demandées",
   ESPACE_SIMULATIONS_ACCORDEES: "Simulations supplémentaires accordées",
   NOTE_APPEL: "Note d'appel",

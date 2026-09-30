@@ -17,7 +17,7 @@ let catalogue: typeof import("./catalogue");
 
 function reglerEnvironnement(): void {
   // Aucun canal d'alerte réel pendant les essais ; le fournisseur est le simulateur.
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "BREVO_API_KEY", "OVH_APPLICATION_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "BREVO_API_KEY", "OVH_APPLICATION_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.SMS_FOURNISSEUR = "simulateur";
 }
 

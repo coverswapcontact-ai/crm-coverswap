@@ -24,7 +24,7 @@ import { nomDuProjetClient, photosDuClient } from "./service";
 
 export type { ClientEspace, CodeSignal, LigneEspace, Signal } from "./suivi-types";
 import type { ClientEspace, LigneEspace, Signal , PageEspaces } from "./suivi-types";
-import { simulationsGratuites } from "./service";
+import { simulationsGratuites } from "./creation";
 
 const JOUR = 86_400_000;
 const date = (d: Date | null | undefined) => d?.toISOString() ?? null;

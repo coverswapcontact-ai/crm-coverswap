@@ -16,7 +16,7 @@ let recalculerMain: typeof import("@/lib/dossiers/main").recalculerMain;
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   pilotage = await import("./pilotage");
   liens = await import("@/lib/espace/liens");

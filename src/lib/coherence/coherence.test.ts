@@ -49,7 +49,7 @@ async function simulationPubliee(dossierId: string, titre: string) {
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   process.env.SITE_URL = "https://coverswap.fr";
   avecActeur = (await import("@/lib/journal/contexte")).avecActeur;
@@ -127,7 +127,7 @@ describe("quota : 5 offertes, celles du site comptent", () => {
     assert.deepEqual([etat.creation.gratuites, etat.creation.faites, etat.creation.faitesSite, etat.creation.restantes], [5, 2, 2, 3]);
     assert.equal((await suivi.listerEspaces()).find((l) => l.dossierId === c.dossierId)!.faits.simulationsRestantes, 3);
     // Toutes les familles restent proposées, celle de son projet d'abord (ici devinée de sa simulation du site).
-    assert.deepEqual(etat.creation.pieces.map((p) => [p.piece, p.duProjet]), [["CUISINE", true], ["SDB", false], ["MEUBLES", false], ["PRO", false]]);
+    assert.deepEqual(etat.creation.pieces.map((p) => [p.piece, p.duProjet]), [["CUISINE", true], ["SDB", false], ["MEUBLES", false], ["MURS", false], ["PRO", false]]); // mission 15 (partie 5) : les murs sont proposés dans l'espace
     assert.ok(etat.creation.pieces.find((p) => p.piece === "SDB")!.zones.some((z) => z.zone === "carrelage-mural"));
   });
 });

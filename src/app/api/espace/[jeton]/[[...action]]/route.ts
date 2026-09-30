@@ -5,7 +5,7 @@ import type { EspacePermanent } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { analyser } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { ipDepasseLaLimite } from "@/lib/acces/limite-site";
+import { analyseAutorisee, ipDepasseLaLimite, LIMITE_ANALYSES } from "@/lib/acces/limite-site";
 import { accesDuJeton, apercuValide, confirmationRequise, confirmerTelephone } from "@/lib/espace/liens";
 import { alerterConfirmationBloquee, compteEspace, envoyerMessage, noterReponsesVues, noterVisitePermanent, pdfDuProjetPourLeClient, pdfPourLeClient, projetDemande, schemaMessage, type ProjetVisible } from "@/lib/espace/compte";
 import { creerProjetClient, demanderProjetDePlus, figeDuProjet, MESSAGE_FIGE, schemaNouveauProjet } from "@/lib/espace/projets";
@@ -15,9 +15,7 @@ import {
   choisirSimulation,
   commenterSimulation,
   completerCoordonnees,
-  creerSimulationClient,
   demanderProposition,
-  demanderSimulations,
   enregistrerFavoris,
   deposerPhotos,
   donnerAvis,
@@ -35,12 +33,12 @@ import {
   schemaChoix,
   schemaChoixComplet,
   schemaCoordonnees,
-  schemaCreationSimulation,
   schemaFavoris,
   schemaProposition,
-  suivreCreation,
 } from "@/lib/espace/service";
+import { creerSimulationClient, demanderSimulations, schemaCreationSimulation, suivreCreation } from "@/lib/espace/creation";
 import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogue";
+import { demanderAnalyseEspace, schemaAnalyseEspace, suivreAnalyseEspace } from "@/lib/espace/simulateur";
 
 /**
  * API PUBLIQUE de l'espace client — appelée par la page coverswap.fr/e/<jeton>,
@@ -59,8 +57,8 @@ import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogu
  *   PUT    /api/espace/<jeton>/favoris                      ses teintes favorites (catalogue de l'espace)
  *   — et, pour le projet choisi —
  *   GET    /photos/<id> · /simulations/<id>[/avant] · /devis/<id> · /adresse?q=… · /simulations/creation/<id>
- *   GET    /echantillons/<ref> · /portrait
- *   POST   /photos (multipart) · /simulations/creer | demande | vues · /choix · /proposition · /accord · /avis
+ *   GET    /echantillons/<ref> · /portrait · /simulations/analyse/<empreinte> (mission 15, partie 5)
+ *   POST   /photos (multipart) · /simulations/creer | demande | vues | analyse · /choix · /proposition · /accord · /avis
  *   POST   /projet/validation | devalidation · /choix/retrait · /proposition/retrait · /accord/retrait · /photos/<id>/retrait
  *   POST   /devis/<id>/consultation · /simulations/<id>/choix | commentaire (page du 20/09)
  *   PUT    /projet | souhaits · /coordonnees
@@ -204,6 +202,9 @@ export async function GET(requete: NextRequest, contexte: Contexte) {
     if (action.length === 3 && ressource === "simulations" && id === "creation") {
       return NextResponse.json(await suivreCreation(projet, quoi));
     }
+    if (action.length === 3 && ressource === "simulations" && id === "analyse") {
+      return NextResponse.json(await suivreAnalyseEspace(projet, quoi));
+    }
     if (action.length === 2 && ressource === "photos") {
       const { contenu, type } = await photoDeLEspace(projet, id);
       return image(contenu, type);
@@ -295,6 +296,12 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
       }
       const projet = projetDe(acces, true);
       const relu = async () => NextResponse.json(await etatComplet(permanent.id, projet.id));
+      // L'analyse d'une photo du dossier (mission 15, partie 5) : le même moteur que la génération, avant elle ; 202 quand une
+      // tâche part. Un projet figé n'analyse plus (un appel vision coûte) ; au plus LIMITE_ANALYSES.parEspace par dossier et par jour.
+      if (action.length === 2 && ressource === "simulations" && id === "analyse") {
+        const analyse = await demanderAnalyseEspace(projet, analyser(schemaAnalyseEspace, corps), { quota: () => analyseAutorisee(`espace:${projet.dossierId}`, Date.now(), LIMITE_ANALYSES.parEspace) });
+        return NextResponse.json(analyse, { status: analyse.nouvelle ? 202 : 200 });
+      }
       if (action.length === 1 && ressource === "accord") {
         const resultat = await accepterDevis(projet, analyser(schemaAccord, corps), { ip: ipDe(requete), navigateur: requete.headers.get("user-agent") });
         return NextResponse.json({ ...resultat, ...(await etatComplet(permanent.id, projet.id)) });

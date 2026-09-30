@@ -2061,12 +2061,38 @@ mélange zone par zone ; simulateur intégré (`CreationSimulation`, `CatalogueT
 une nouvelle, zones cochées d'après le Projet, une teinte par zone dans les 497 références
 (familles toutes visibles, recherche française, vignettes 320 px servies par le CRM, agrandir,
 favoris gardés et vus par Lucas), même moteur que le site et le CRM (préparation `origine CLIENT`,
-mode API). Garde-fous : `SIMULATEUR_ESPACE_GRATUITES` (3 si vide), « Demander d'autres
+mode API). Garde-fous : `SIMULATEUR_ESPACE_GRATUITES` (5 si vide), « Demander d'autres
 simulations » → Lucas accorde 3 d'un clic (Espaces clients, fiche dossier) ; crédit épuisé : rien
 ne part, message clair, choix gardés, Lucas prévenu (au plus toutes les 3 h) ; coupure réseau
 pendant la génération : elle continue côté serveur, l'écran le dit et la montre au retour.
 Aperçu : chaque geste affiche « rien n'est enregistré » (plus aucun bouton muet). Feuilles plein
 écran (`Feuille`) : bouton de fermeture en bas, glisser vers le bas, geste retour.
+
+Mission 15 (partie 5) — même moteur, même niveau que le site : `CreationSimulation` reprend le
+parcours et les composants du simulateur du site (Pièce · Photo · Matières, `CartesPieces`,
+`FeuilleCatalogue`, `EcranAttente`, `AvantApres` avec « Comparer », plein écran, « Télécharger »,
+« Essayer d'autres matières ») ; `CatalogueTeintes` a disparu. Côté CRM (`src/lib/espace/simulateur.ts`) :
+pièces et zones de la source unique `simulateur/zones.ts` (`piecesPourLeClient` : MURS et
+`tablier-baignoire` proposés, `IDS_FAMILLE` intact, limite `ZONES_MAX` rendue dans `creation.zonesMax` et
+lue aussi par `schemaPreparation`) ; `POST /simulations/analyse { photoId, piece }` et
+`GET /simulations/analyse/<empreinte>` (la photo du dossier cadrée comme pour la génération → même
+empreinte, même cache ; tâche ANALYSE_PHOTO comptée à l'espace sur son dossier, `AnalysePhoto.dossierId` =
+preuve du suivi par jeton ; un projet figé n'analyse plus (409 `fige`) ; au plus `LIMITE_ANALYSES.parEspace`
+analyses par dossier et par jour, comptées seulement quand une tâche part, sous le plafond global du site
+→ 429 « vous pouvez lancer la simulation sans ») ; `POST /simulations/creer` refuse en 409
+`zone-non-visible` une zone que l'analyse connue de la photo cadrée ne voit pas (même phrase que
+`/api/simulate`, jamais à l'aveugle), AVANT de compter ou de lancer. Le bloc « simulations créées par le
+client » (quota, lancement, suivi, demandes et accords) vit dans `src/lib/espace/creation.ts` (réexporté par
+`service.ts`). `GET /simulations/creation/<id>` rend `etape` et `attenteEstimeeS` (médiane des dernières
+générations par l'API), et le statut `RELECTURE` ; `creation.enCours` porte la photo et les teintes (écran
+d'attente sur un autre appareil), `creation.enRelecture` les brouillons qui attendent Lucas. Contrôle
+automatique avant publication (`executerGenerationApi`, origine CLIENT) : score sous
+`SIMULATEUR_SEUIL_CONTROLE` après les deux tentatives du pipeline → `SimulationEspace` source CLIENT en
+BROUILLON (score et défauts dans la fiche, libellé « Faite par le client (espace) »), événement
+`ESPACE_SIMULATION_RELECTURE` (la main revient à Lucas), alerte « Simulation à relire » ; le client lit
+« Votre simulation demande une relecture » et la reçoit quand Lucas la publie (mail « simulation publiée »
+existant ; elle est alors « Nouveau » dans sa galerie jusqu'à sa première visite, `vueLe` posé) — une
+seule ligne, quota compté une fois.
 
 
 ## 24. Cohérence entre les sections (22/09/2026)

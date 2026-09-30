@@ -78,7 +78,7 @@ const session = () => execution.ouvrirSession({ jetonId: null, clientNom: "essai
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.GOOGLE_CLIENT_ID = "client-essai";
   process.env.GOOGLE_CLIENT_SECRET = "secret-essai";
   process.env.GOOGLE_TOKEN_KEY = randomBytes(32).toString("base64");

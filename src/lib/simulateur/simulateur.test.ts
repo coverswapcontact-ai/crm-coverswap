@@ -44,7 +44,7 @@ const REFERENCES = [
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
   sharp = (await import("sharp")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "OPENAI_ADMIN_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "OPENAI_ADMIN_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   process.env.SIMULATE_TOKEN_SECRET = SECRET;
   process.env.OPENAI_API_KEY = "cle-factice";

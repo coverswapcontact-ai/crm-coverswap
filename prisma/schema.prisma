@@ -176,6 +176,8 @@ model AnalysePhoto {
   updatedAt    DateTime  @updatedAt
   piece        String // cuisine | salle-de-bain | meubles | mur-plafond | professionnel
   parcoursId   String?
+  // Mission 15 (partie 5) : analyse demandée depuis l'espace client (photo du dossier, cadrée) — preuve du suivi par jeton.
+  dossierId    String?
   statut       String    @default("EN_COURS") // EN_COURS | PRETE | SAUTEE | ECHEC
   raison       String? // pourquoi elle a été sautée (budget, clé, délai…)
   json         String? // AnalysePhoto
@@ -186,6 +188,7 @@ model AnalysePhoto {
   ecriture     String?
 
   @@index([parcoursId])
+  @@index([dossierId])
   @@index([createdAt])
 }
 

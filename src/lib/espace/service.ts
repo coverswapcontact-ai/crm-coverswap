@@ -1,5 +1,4 @@
 import { promises as fs } from "node:fs";
-import { recalculerMain } from "@/lib/dossiers/main";
 import path from "node:path";
 import type { EspaceClient, EspacePermanent, SimulationEspace } from "@prisma/client";
 import { z } from "zod/v4";
@@ -14,11 +13,10 @@ import { idPhoto, lireLignes, lirePhotos, estPhotoApres } from "@/lib/dossiers/s
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
 import { resolveUploadsDir } from "@/lib/uploads";
-import { libelleZoneClient, lireZones, TYPES_SURFACE_ESPACE, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { libelleZoneClient, lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
-import { famille as familleDuFichier, famillesDe, IDS_FAMILLE, lireSelection, motsDuProjet, phraseFamilles, zonesPourSimulation, type IdFamille, type SelectionPrestations } from "@/lib/prestations/prestations";
-import { creditDisponible } from "@/lib/simulateur/consommation";
-import { lireParametre } from "@/lib/parametres/service";
+import { famillesDe, lireSelection, motsDuProjet, phraseFamilles, type IdFamille } from "@/lib/prestations/prestations";
+import { creationPourLeClient, type CreationClient } from "./creation";
 import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
@@ -26,9 +24,7 @@ import { ACTEUR, prevenir } from "./alertes";
 import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
-import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, restantes, SIMULATIONS_OFFERTES_PAR_DEFAUT, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
-import { AVEC_ARCHIVES } from "@/lib/journal/extension";
-import { pluriel } from "@/lib/commun/format";
+import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
@@ -143,24 +139,8 @@ export type EtatEspace = {
   contact: { nom: string; prenom: string; role: string; telephone: string; telephoneLien: string; portrait: boolean };
   /** Espace v3 : l'espace parle au nom de CoverSwap (le numéro reste celui de Lucas). */
   marque: { nom: string; telephone: string; telephoneLien: string };
-  /** Les simulations que le client crée lui-même : combien il en reste, celles en cours, le crédit. */
-  creation: {
-    gratuites: number;
-    accordees: number;
-    /** Faites dans l'espace + faites sur le site : les deux comptent. */
-    faites: number;
-    faitesSite: number;
-    restantes: number;
-    enCours: { id: string; le: string }[];
-    demandeesLe: string | null;
-    disponible: boolean;
-    /** Zones de son projet (dans l'ordre du simulateur) et celles qu'il a cochées dans son Projet. */
-    zones: { zone: string; libelle: string }[];
-    zonesProjet: string[];
-    /** Toutes les pièces du simulateur du site, avec leurs zones ; `piece` : celle de son projet (proposée d'abord). */
-    piece: string;
-    pieces: { piece: string; libelle: string; aide: string; zones: { zone: string; libelle: string }[]; cochees: string[]; duProjet: boolean }[];
-  };
+  /** Les simulations que le client crée lui-même : combien il en reste, celles en cours, le crédit, les pièces (creation.ts). */
+  creation: CreationClient;
   favoris: string[];
   /** Il peut encore changer de simulation validée : aucun devis n'est émis. */
   choixModifiable: boolean;
@@ -406,7 +386,9 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       zones: lireZones(s.zones).map((z) => ({ ...z, libelle: libelleZoneClient(z.zone, typeProjet) ?? z.libelle })),
       avant: Boolean(s.photoAvant),
       le: (s.publieeLe ?? s.createdAt).toISOString(),
-      nouvelle: s.source !== "SITE" && s.source !== "CLIENT" && (s.publieeLe ?? s.createdAt).getTime() > vuesLe,
+      // « Nouveau » : une simulation de CoverSwap publiée depuis sa dernière visite ; une simulation qu'il a faite lui-même
+      // ne l'est jamais — sauf si elle a attendu la relecture de Lucas (mission 15, partie 5) : il la reçoit à la publication.
+      nouvelle: s.source === "SITE" ? false : s.source === "CLIENT" ? s.vueLe === null : (s.publieeLe ?? s.createdAt).getTime() > vuesLe,
       choisie: Boolean(s.choisieLe),
       commentaire: s.commentaireClient,
     })),
@@ -442,58 +424,8 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
 
 /* ── Simulations créées par le client (espace v3) ─────────────────── */
 
-/** Simulations offertes par espace (paramètre du CRM, 5 si rien n'est saisi). */
-export async function simulationsGratuites(): Promise<number> {
-  const brut = await lireParametre("SIMULATEUR_ESPACE_GRATUITES").catch(() => null);
-  // Rien de saisi : 5 (et non 0 — Number(null) vaut 0).
-  if (brut === null || brut === undefined || String(brut).trim() === "") return SIMULATIONS_OFFERTES_PAR_DEFAUT;
-  const valeur = Number(brut);
-  return Number.isFinite(valeur) && valeur >= 0 ? Math.floor(valeur) : SIMULATIONS_OFFERTES_PAR_DEFAUT;
-}
-
-/**
- * Le compte du client : offertes, accordées en plus, faites (dans l'espace ET sur le site : deux simulations
- * faites sur coverswap.fr avant de recevoir son lien en laissent trois), en cours ; ce qu'il lui reste.
- * Une simulation masquée ou archivée par Lucas reste comptée : elle a coûté.
- */
-export async function quotaSimulations(espace: Pick<EspaceClient, "id" | "dossierId" | "simulationsAccordees">): Promise<{ gratuites: number; accordees: number; faites: number; faitesSite: number; enCours: { id: string; le: string }[]; restantes: number }> {
-  const [gratuites, faitesEspace, faitesSite, enCours] = await Promise.all([
-    simulationsGratuites(),
-    prisma.simulationEspace.count({ where: { ...AVEC_ARCHIVES, espaceId: espace.id, source: "CLIENT" } }),
-    prisma.simulationEspace.count({ where: { ...AVEC_ARCHIVES, espaceId: espace.id, source: "SITE" } }),
-    // Une génération tient une minute ; au-delà d'une demi-heure, elle est tenue pour perdue (elle ne bloque plus rien).
-    prisma.preparationSimulation.findMany({ where: { dossierId: espace.dossierId, origine: "CLIENT", statut: "EN_COURS", createdAt: { gte: new Date(Date.now() - 30 * 60_000) } }, orderBy: { createdAt: "asc" }, select: { id: true, createdAt: true } }),
-  ]);
-  const accordees = espace.simulationsAccordees ?? 0;
-  return { gratuites, accordees, faites: faitesEspace + faitesSite, faitesSite, enCours: enCours.map((p) => ({ id: p.id, le: p.createdAt.toISOString() })), restantes: restantes({ gratuites, accordees, faitesEspace, faitesSite, enCours: enCours.length }) };
-}
-
-async function creationPourLeClient(espace: EspaceClient, familles: IdFamille[], selection: SelectionPrestations, apercu = false): Promise<EtatEspace["creation"]> {
-  const [quota, disponible] = await Promise.all([quotaSimulations(espace), creditDisponible().catch(() => true)]);
-  // Un client tombe sur « momentanément indisponible » : Lucas le sait (au plus une alerte toutes les trois heures).
-  if (!disponible && !apercu) void alerterCreditEpuise(espace.dossierId).catch(() => undefined);
-  // Les pièces : celles de SON projet d'abord (ses familles, sinon celles que laisse deviner sa demande), puis les autres,
-  // que l'écran garde repliées ; les zones : celles de ses sous-parties cochées d'abord (fichier des prestations).
-  const pieces = [...familles, ...IDS_FAMILLE.filter((id) => !familles.includes(id))].map((id) => {
-    const f = familleDuFichier(id);
-    const zones = zonesPourSimulation(id, selection);
-    return { piece: id, libelle: f.libelle, aide: f.aide, zones: zones.map((z) => ({ zone: z.zone, libelle: z.libelle })), cochees: zones.filter((z) => z.cochee).map((z) => z.zone), duProjet: familles.includes(id) };
-  });
-  return {
-    gratuites: quota.gratuites,
-    accordees: quota.accordees,
-    faites: quota.faites,
-    faitesSite: quota.faitesSite,
-    restantes: quota.restantes,
-    enCours: quota.enCours,
-    demandeesLe: espace.simulationsDemandeesLe?.toISOString() ?? null,
-    disponible,
-    zones: pieces[0].zones,
-    zonesProjet: pieces[0].cochees,
-    piece: pieces[0].piece,
-    pieces,
-  };
-}
+// Mission 15 (partie 5) : le bloc vit dans creation.ts (quota, lancement, suivi, accords) ; réexporté pour la route et les tests.
+export { accorderSimulations, creerSimulationClient, demanderSimulations, quotaSimulations, schemaCreationSimulation, simulationsGratuites, suivreCreation, type CreationClient, type SuiviCreation } from "./creation";
 
 function lireFavoris(json: string | null): string[] {
   try {
@@ -502,89 +434,6 @@ function lireFavoris(json: string | null): string[] {
   } catch {
     return [];
   }
-}
-
-export const schemaCreationSimulation = z.object({
-  /** La pièce simulée (toutes celles du site) ; sans elle : celle de son projet. */
-  piece: z.enum(["CUISINE", "SDB", "MEUBLES", "PRO", "MURS"]).optional(),
-  photoId: z.string().min(1, "Choisissez une photo.").max(80),
-  zones: z.array(z.object({ zone: z.string().min(1).max(40), ref: z.string().min(1).max(24) })).min(1, "Choisissez au moins une teinte.").max(4, "Quatre zones au plus par simulation."),
-});
-
-/**
- * Le client lance une simulation depuis son espace : SA photo, les zones de son
- * projet, une teinte par zone. Même chemin que le mode API du CRM (consigne du
- * site, moteur commun) ; le résultat arrive dans sa galerie. Refusé sans rien
- * lancer si ses simulations offertes sont épuisées ou si le crédit est épuisé :
- * ses choix restent dans son téléphone.
- */
-export async function creerSimulationClient(espace: EspaceClient, entree: z.output<typeof schemaCreationSimulation>): Promise<{ preparationId: string; restantes: number }> {
-  const quota = await quotaSimulations(espace);
-  const total = quota.gratuites + quota.accordees;
-  if (quota.restantes <= 0) {
-    if (quota.enCours.length > 0) throw new ErreurMetier("Votre simulation est en cours de création : patientez un instant.", 409, { raison: "en-cours" });
-    throw new ErreurMetier(`${total > 1 ? `Vous avez utilisé vos ${total} simulations.` : "Vous avez utilisé votre simulation."} Demandez-en d'autres à CoverSwap.`, 409, { raison: "quota" });
-  }
-  if (!(await creditDisponible().catch(() => true))) {
-    await alerterCreditEpuise(espace.dossierId);
-    throw new ErreurMetier("La création de simulations est momentanément indisponible. Vos choix sont gardés : réessayez plus tard, CoverSwap est prévenu.", 503, { raison: "credit" });
-  }
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, prestations: true, lead: { select: { typeProjet: true } } } });
-  if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
-  const photos = await photosDuClient(espace.dossierId, dossier.photos);
-  if (!photos.some((p) => p.id === entree.photoId)) throw new ErreurMetier("Cette photo n'est plus dans votre espace : choisissez-en une autre.", 404);
-  // La pièce choisie, sinon la première famille de son projet (cuisine s'il n'en a pas encore).
-  const piece = entree.piece ?? famillesDe(lireSelection(dossier.prestations))[0] ?? "CUISINE";
-  const type = TYPES_SURFACE_ESPACE[piece] ?? TYPES_SURFACE_ESPACE.CUISINE;
-  const { preparerSimulation } = await import("@/lib/simulateur/preparation");
-  const preparation = await avecActeur(ACTEUR, () => preparerSimulation({ dossierId: espace.dossierId, photoId: entree.photoId, typeSurface: type.id, zones: entree.zones, mode: "API" }, { origine: "CLIENT" }));
-  return { preparationId: preparation.id, restantes: Math.max(0, quota.restantes - 1) };
-}
-
-/** Où en est une simulation lancée par le client : en cours, prête (dans sa galerie), ou pas aboutie (dit simplement). */
-export async function suivreCreation(espace: EspaceClient, preparationId: string): Promise<{ statut: "EN_COURS" | "PRETE" | "ECHEC"; simulationId: string | null; message: string | null; raison: "credit" | "echec" | null }> {
-  const p = await prisma.preparationSimulation.findFirst({ where: { id: preparationId, dossierId: espace.dossierId, origine: "CLIENT" }, select: { statut: true, resultatId: true, erreur: true, createdAt: true } });
-  if (!p) throw new ErreurMetier("Simulation introuvable.", 404);
-  if (p.statut === "TERMINEE") return { statut: "PRETE", simulationId: p.resultatId, message: null, raison: null };
-  if (p.statut === "ECHEC" || (p.statut === "EN_COURS" && Date.now() - p.createdAt.getTime() > 30 * 60_000)) {
-    const credit = /crédit|clé refusée/i.test(p.erreur ?? "");
-    return {
-      statut: "ECHEC",
-      simulationId: null,
-      raison: credit ? "credit" : "echec",
-      message: credit ? "La création de simulations est momentanément indisponible. Vos choix sont gardés ; CoverSwap est prévenu." : "Cette simulation n'a pas abouti. Elle ne compte pas : vous pouvez la relancer.",
-    };
-  }
-  return { statut: "EN_COURS", simulationId: null, message: null, raison: null };
-}
-
-let derniereAlerteCredit = 0;
-async function alerterCreditEpuise(dossierId: string): Promise<void> {
-  if (Date.now() - derniereAlerteCredit < 3 * 3_600_000) return;
-  derniereAlerteCredit = Date.now();
-  await prevenir(dossierId, { titre: "Un client ne peut pas créer de simulation", texte: "Crédit OpenAI épuisé (ou clé refusée) : la création de simulations est bloquée dans les espaces clients. Rechargez le crédit, puis notez le nouveau solde dans Paramètres.", urgence: 4, etiquette: "credit-openai-espace" });
-}
-
-/** « Demandez-en d'autres à CoverSwap » : la demande est notée, Lucas prévenu ; il accorde d'un clic depuis le CRM. */
-export async function demanderSimulations(espace: EspaceClient): Promise<void> {
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
-  const quota = await quotaSimulations(espace);
-  await avecActeur(ACTEUR, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsDemandeesLe: new Date() } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_DEMANDEES", direction: "ENTRANT", contenu: `Le client demande d'autres simulations (${quota.faites} faite${quota.faites > 1 ? "s" : ""} sur ${quota.gratuites + quota.accordees}).`, metadata: "{}" } });
-  });
-  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${pluriel(quota.faites, "simulation faite", "simulations faites")} (site et espace). Accordez-en d'autres en un clic depuis Espaces clients.`, urgence: 3, telephone: dossier?.clientTelephone });
-}
-
-/** Lucas accorde des simulations de plus (Espaces clients, dossier) : la demande est close. */
-export async function accorderSimulations(espaceId: string, nombre: number): Promise<{ accordees: number }> {
-  if (!Number.isInteger(nombre) || nombre < 1 || nombre > 20) throw new ErreurMetier("Nombre de simulations invalide (1 à 20).", 400);
-  const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { id: true, dossierId: true } });
-  if (!espace) throw new ErreurMetier("Espace introuvable.", 404);
-  const mis = await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsAccordees: { increment: nombre }, simulationsDemandeesLe: null } });
-  await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_ACCORDEES", direction: "SORTANT", contenu: `${nombre} simulation${nombre > 1 ? "s" : ""} de plus accordée${nombre > 1 ? "s" : ""} au client dans son espace.`, metadata: JSON.stringify({ nombre }) } });
-  await recalculerMain(espace.dossierId);
-  return { accordees: mis.simulationsAccordees };
 }
 
 export const schemaFavoris = z.object({ refs: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,24}$/)).max(60) });

@@ -22,6 +22,7 @@ import { etiquettes, formatDePhoto, rendrePrompt } from "./rendu";
 import { qualitePourOrigine, reglagesSimulateur } from "./reglages";
 import { decrireTeintePourPrompt, resumerTeinte } from "./teintes";
 import { ZONES, estZone, lireZones, typeSurface, type IdZone } from "./types-surface";
+import { ZONES_MAX } from "./zones";
 
 /**
  * Préparer une simulation depuis le CRM — les étapes communes aux deux modes :
@@ -49,7 +50,8 @@ export const schemaPreparation = z.object({
   dossierId: z.string().min(1).max(40),
   photoId: z.string().min(1).max(80),
   typeSurface: z.string().min(1).max(40),
-  zones: z.array(z.object({ zone: z.string().min(1).max(40), ref: z.string().min(1).max(40) })).min(1, "Choisissez au moins une teinte.").max(4, "Quatre zones au plus par simulation."),
+  // La limite vient de la source unique (`simulateur/zones.ts`) : la même que le site et l'espace client.
+  zones: z.array(z.object({ zone: z.string().min(1).max(40), ref: z.string().min(1).max(40) })).min(1, "Choisissez au moins une teinte.").max(ZONES_MAX, `${ZONES_MAX} zones au plus par simulation.`),
   mode: z.enum(["CHATGPT", "API"]),
 });
 
@@ -133,8 +135,12 @@ function versVue(p: PreparationSimulation, seuilControle: number): PreparationVu
   };
 }
 
-/** Photo recadrée au format du modèle (3:2, 2:3 ou carré), à pleine résolution : avant et après se superposent. */
-async function cadrerPhoto(octets: Buffer): Promise<{ image: Buffer; largeur: number; hauteur: number }> {
+/**
+ * Photo recadrée au format du modèle (3:2, 2:3 ou carré), à pleine résolution : avant et après se superposent.
+ * Déterministe : l'espace client (partie 5) cadre de la même façon pour analyser la photo AVANT la génération,
+ * qui retrouve alors l'analyse par empreinte.
+ */
+export async function cadrerPhoto(octets: Buffer): Promise<{ image: Buffer; largeur: number; hauteur: number }> {
   const sharp = (await import("sharp")).default;
   const tournee = sharp(octets).rotate();
   // Une photo HEIC d'iPhone déposée telle quelle (ancien iOS) ne se lit pas ici : on le dit, au lieu d'une erreur muette.
@@ -285,13 +291,20 @@ function traceDe(resultat: Reussite) {
  * dans sa galerie (c'est lui qui l'a faite, rien à relire), rangée dans le
  * dossier (et donc dans Drive), notée dans l'historique ; Lucas est prévenu —
  * un client qui simule se projette.
+ *
+ * Mission 15 (partie 5) — `relecture` : le contrôle automatique est resté sous
+ * le seuil après deux tentatives. La simulation reste alors en BROUILLON
+ * (source CLIENT, score et défauts lisibles dans le CRM) : Lucas la relit et la
+ * publie, ou en refait une ; le client lit « demande une relecture ». Une seule
+ * ligne dans les deux cas : le quota n'est compté qu'une fois.
  */
 async function publierSimulationDuClient(
   p: { id: string; dossierId: string; photoAvant: string | null; typeSurface: string },
   type: NonNullable<ReturnType<typeof typeSurface>>,
   zones: ReturnType<typeof lireZones>,
   resultat: Reussite,
-  clientNom: string
+  clientNom: string,
+  relecture: { seuil: number } | null
 ): Promise<{ simulationId: string | null }> {
   return avecActeur(ACTEUR_ESPACE, async () => {
     const { espace } = await ouvrirEspace(p.dossierId);
@@ -300,19 +313,43 @@ async function publierSimulationDuClient(
     const maintenant = new Date();
     const titre = `Votre simulation — ${zones.map((z) => z.nom).join(", ")}`.slice(0, 80);
     const trace = traceDe(resultat);
+    const teintes = zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ");
+    const cout = `≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10${resultat.tentatives > 1 ? ` en ${resultat.tentatives} essais` : ""}` : ""}`;
     const simulation = await prisma.$transaction(async (tx) => {
       const creee = await tx.simulationEspace.create({
-        data: { espaceId: espace.id, dossierId: p.dossierId, chemin, titre, ordre, source: "CLIENT", statut: "PUBLIEE", publieeLe: maintenant, vueLe: maintenant, photoAvant: p.photoAvant, typeSurface: p.typeSurface, zones: JSON.stringify(zones), promptTexte: resultat.prompt, preparationId: p.id, coutDollars: resultat.coutTotalDollars, ...trace },
+        data: {
+          espaceId: espace.id,
+          dossierId: p.dossierId,
+          chemin,
+          titre,
+          ordre,
+          source: "CLIENT",
+          statut: relecture ? "BROUILLON" : "PUBLIEE",
+          publieeLe: relecture ? null : maintenant,
+          vueLe: relecture ? null : maintenant,
+          photoAvant: p.photoAvant,
+          typeSurface: p.typeSurface,
+          zones: JSON.stringify(zones),
+          promptTexte: resultat.prompt,
+          preparationId: p.id,
+          coutDollars: resultat.coutTotalDollars,
+          ...trace,
+        },
       });
       await tx.preparationSimulation.update({ where: { id: p.id }, data: { statut: "TERMINEE", resultatId: creee.id, promptTexte: resultat.prompt, photoEmpreinte: resultat.empreinte, etape: "rendu", ...trace } });
       await tx.dossierEvenement.create({
-        data: { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ")} (≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10` : ""})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
+        data: relecture
+          ? { dossierId: p.dossierId, type: "ESPACE_SIMULATION_RELECTURE", direction: "INTERNE", contenu: `Simulation du client gardée en brouillon (contrôle sous le seuil de ${relecture.seuil}/10) : ${teintes} (${cout})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id, scoreControle: resultat.scoreControle, seuil: relecture.seuil }) }
+          : { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${teintes} (${cout})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
       });
       return creee;
     });
     await recalculerMain(p.dossierId);
+    const defauts = (resultat.defautsControle ?? []).map((d) => d.detail).filter(Boolean).slice(0, 3).join(" · ");
     await alerter(
-      { titre: `${clientNom} a créé une simulation`, texte: `${type.libelle} : ${zones.map((z) => `${z.libelle} ${z.nom}`).join(", ")}.
+      relecture
+        ? { titre: `Simulation à relire — ${clientNom}`, texte: `${type.libelle} : ${zones.map((z) => `${z.libelle} ${z.nom}`).join(", ")}.\nContrôle ${resultat.scoreControle}/10 sous le seuil (${relecture.seuil}) après ${resultat.tentatives} essai${resultat.tentatives > 1 ? "s" : ""} : gardée en brouillon, le client attend.${defauts ? `\n${defauts}` : ""}`, lien: `${appUrl()}/dossiers?dossier=${p.dossierId}`, libelleLien: "Ouvrir le dossier", urgence: 4, etiquette: `simulation-relecture-${p.dossierId}` }
+        : { titre: `${clientNom} a créé une simulation`, texte: `${type.libelle} : ${zones.map((z) => `${z.libelle} ${z.nom}`).join(", ")}.
 Il se projette : c'est le moment de l'appeler.`, lien: `${appUrl()}/dossiers?dossier=${p.dossierId}`, libelleLien: "Ouvrir le dossier", urgence: 3, etiquette: `simulation-client-${p.dossierId}` },
       { origine: "espace-client", canaux: ["telegram", "ntfy", "pushweb"] }
     ).catch(() => undefined);
@@ -358,7 +395,11 @@ export async function executerGenerationApi(preparationId: string, signal?: Abor
     return echouer(erreur instanceof Error ? erreur.message : "Génération impossible.");
   }
   if (!resultat.ok) return echouer(resultat.raison === "service-indisponible" || resultat.raison === "config" ? CREDIT_EPUISE : resultat.message);
-  if (duClient) return publierSimulationDuClient(p, type, zones, resultat, dossier?.clientNom ?? "Le client");
+  if (duClient) {
+    // Contrôle automatique avant publication : la meilleure des deux tentatives reste sous le seuil → brouillon pour Lucas.
+    const sousSeuil = typeof resultat.scoreControle === "number" && resultat.scoreControle < reglages.seuilControle;
+    return publierSimulationDuClient(p, type, zones, resultat, dossier?.clientNom ?? "Le client", sousSeuil ? { seuil: reglages.seuilControle } : null);
+  }
 
   const trace = traceDe(resultat);
   return avecActeur(ACTEUR_API, async () => {

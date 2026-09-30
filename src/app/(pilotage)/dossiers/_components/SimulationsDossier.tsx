@@ -23,7 +23,7 @@ import { jourHeure } from "@/lib/commun/format";
 type Zone = { zone: string; libelle: string; ref: string; nom: string };
 type Simulation = {
   id: string;
-  source: "SITE" | "API" | "CHATGPT" | "MANUEL";
+  source: "SITE" | "API" | "CHATGPT" | "MANUEL" | "CLIENT";
   statut: "BROUILLON" | "PUBLIEE" | "MASQUEE";
   titre: string | null;
   description: string | null;
@@ -54,6 +54,8 @@ type Donnees = { espace: { id: string; lien: string | null } | null; simulations
 
 const SOURCES: Record<Simulation["source"], { libelle: string; ton: "bleu" | "vert" | "ambre" | "neutre" }> = {
   SITE: { libelle: "Faite par le client (site)", ton: "bleu" },
+  // Mission 15 (partie 5) : en brouillon = le contrôle automatique était sous le seuil, le client attend ta relecture.
+  CLIENT: { libelle: "Faite par le client (espace)", ton: "bleu" },
   API: { libelle: "API", ton: "neutre" },
   CHATGPT: { libelle: "ChatGPT", ton: "neutre" },
   MANUEL: { libelle: "Déposée", ton: "neutre" },

@@ -78,7 +78,7 @@ before(async () => {
   process.env.OPENAI_BASE_URL = "http://127.0.0.1:9/jamais";
   process.env.SITE_URL = "https://coverswap.fr";
   process.env.TACHES_DESACTIVEES = "1";
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "EMAIL_FROM"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "EMAIL_FROM"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   prisma = (await import("@/lib/prisma")).default;
   route = await import("@/app/api/simulate/route");
   routeImage = await import("@/app/api/simulate/image/route");

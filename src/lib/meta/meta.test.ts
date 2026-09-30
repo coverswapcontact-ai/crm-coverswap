@@ -7,9 +7,9 @@ preparerBaseEssai();
 process.env.META_APP_SECRET = "secret-essai-meta";
 process.env.META_VERIFY_TOKEN = "jeton-verification-essai";
 // Aucun canal de notification pendant les essais : rien ne part vers l'extérieur.
-delete process.env.TELEGRAM_BOT_TOKEN;
-delete process.env.NTFY_TOPIC;
-delete process.env.RESEND_API_KEY;
+process.env.TELEGRAM_BOT_TOKEN = "";
+process.env.NTFY_TOPIC = "";
+process.env.RESEND_API_KEY = "";
 
 let prisma: typeof import("@/lib/prisma").default;
 let signature: typeof import("./signature");

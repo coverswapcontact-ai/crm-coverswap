@@ -5,9 +5,9 @@ import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
 import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
 import { entetesCorsSimulateur, ipDuVisiteurSimulateur, origineSimulateurAutorisee, parcoursIdValide, travailIdValide } from "@/lib/site/cors-simulate";
 import { lireSelectionsCorps, resoudreSelections, signatureSelections, signatureValide } from "@/lib/site/contrat-simulate";
-import { zonesNonVisiblesPourPhoto } from "@/lib/simulateur/analyses";
+import { messageZonesNonVisibles, zonesNonVisiblesPourPhoto } from "@/lib/simulateur/analyses";
 import { reglagesSimulateur } from "@/lib/simulateur/reglages";
-import { ZONES_MAX, ZONES_SIMULATEUR, type IdZone } from "@/lib/simulateur/zones";
+import { ZONES_MAX, type IdZone } from "@/lib/simulateur/zones";
 import { creerTravailSimulation, referencesCoherentes, zonesDuTravail } from "@/lib/simulations/travaux";
 import { suivreTravail } from "@/lib/simulations/travaux-lecture";
 
@@ -163,13 +163,7 @@ export async function POST(req: NextRequest) {
   // 3) Une zone choisie que l'analyse connue de la photo ne voit pas : dit avant de dépenser (jamais à l'aveugle).
   if (demande.zones.length > 0) {
     const nonVisibles = await zonesNonVisiblesPourPhoto(photo_base64, demande.zones.map((z) => z.zone)).catch(() => []);
-    if (nonVisibles.length > 0) {
-      const libelles = nonVisibles.map((z) => ZONES_SIMULATEUR[z].libelle);
-      return NextResponse.json(
-        { error: `${libelles.length > 1 ? "Ces zones ne sont pas visibles" : "Cette zone n'est pas visible"} sur votre photo : ${libelles.join(", ")}. Retirez-${libelles.length > 1 ? "les" : "la"}, ou reprenez une photo où ${libelles.length > 1 ? "elles apparaissent" : "elle apparaît"}.`, reason: "zone-non-visible", zones: nonVisibles },
-        { status: 409, headers: cors }
-      );
-    }
+    if (nonVisibles.length > 0) return NextResponse.json({ error: messageZonesNonVisibles(nonVisibles), reason: "zone-non-visible", zones: nonVisibles }, { status: 409, headers: cors });
   }
 
   // 4) Limite quotidienne par IP et globale — APRÈS la signature : une requête forgée ne consomme rien.

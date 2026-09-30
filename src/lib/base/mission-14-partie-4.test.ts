@@ -49,7 +49,7 @@ const CONTEXTE_OUTIL = { sessionId: "essai", commande: null, utilisateur: "essai
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   process.env.SITE_URL = "https://coverswap.fr";
   process.env.TACHES_DESACTIVEES = "1";

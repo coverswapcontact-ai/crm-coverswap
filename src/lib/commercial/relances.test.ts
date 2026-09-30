@@ -28,7 +28,7 @@ const JOUR = 86_400_000;
 const contexte = { tacheId: "essai", tentative: 1, signal: new AbortController().signal };
 
 function reglerEnvironnement(): void {
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.SMS_FOURNISSEUR = "simulateur";
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
 }

@@ -101,7 +101,7 @@ before(async () => {
   process.env.SITE_URL = "http://127.0.0.1:9/jamais-appele";
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   process.env.TACHES_DESACTIVEES = "1";
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "EMAIL_FROM"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY", "EMAIL_FROM"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   prisma = (await import("@/lib/prisma")).default;
   sharp = (await import("sharp")).default;
   route = await import("@/app/api/simulate/route");

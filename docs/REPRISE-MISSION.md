@@ -156,7 +156,7 @@ devis prérempli, conversion HEIC. Le Projet perd les goûts et le délai (le pa
   dossier à l'ouverture (`depuis-lead.ts`), l'issue d'un appel se note sur la note de moins de 3 h. Tests 4/4.
 - Espace v3 serveur : `etapes.ts` (verrous + raisons), `service.ts` (quota, creerSimulationClient, suivreCreation,
   demander/accorder, favoris, choix figé après devis émis), routes `simulations/creer|demande|creation/<id>`,
-  `favoris` ; paramètre `SIMULATEUR_ESPACE_GRATUITES` (3 si vide) ; Drive « Simulations » ; RGPD NoteAppel.
+  `favoris` ; paramètre `SIMULATEUR_ESPACE_GRATUITES` (5 si vide depuis la mission 5 ; 3 à l'origine) ; Drive « Simulations » ; RGPD NoteAppel.
   Tests simulateur 16/16 (dont quota, crédit épuisé, favoris).
 - Reste : interface du site (espace v3), interface CRM (notes, kanban, panneaux, Espaces clients), essais, déploiement.
 - (21/09 soir, suite) Site espace v3 écrit : `EspaceClient.tsx` (barre d'onglets, accueil une phrase + un bouton),
@@ -3455,3 +3455,232 @@ OpenAI, aucun décodage wasm réel (décodeur simulé).
   build (aucun avertissement attendu).
 - `heic-decode` réel jamais exécuté ici (simulé) : un vrai HEIC d'iPhone à passer sur le CRM déployé (orientation `irot`
   appliquée par libheif — à vérifier sur une photo en portrait).
+
+## Partie 5 — L'espace client : même moteur, même niveau (30/09)
+
+Énoncé § 5 et § 2.2 / 2.3 côté espace : « Créer une simulation » dans l'espace reprend le parcours et les composants
+du simulateur du site (Pièce · Photo · Matières, écran d'attente, curseur avant / après), les pièces et zones de la
+source unique du CRM (murs et tablier de baignoire enfin proposés), l'analyse de la photo par le même moteur avant la
+génération, et un contrôle automatique avant publication : sous le seuil après deux tentatives, la simulation reste en
+brouillon pour Lucas au lieu d'être publiée. Rien n'a été généré : OpenAI est simulé (générateur et vision injectés).
+Une seconde passe (relecture à trois, 13 constats) a fermé les trous de garde-fous : zone non visible refusée avant de
+dépenser, quota d'analyses par dossier, projet figé, aperçu jamais muet, rapports d'image réservés.
+
+### CRM
+- **Pièces et zones de l'espace** `src/lib/espace/simulateur.ts › piecesPourLeClient(familles, selection)` : la source
+  unique `simulateur/zones.ts` (`PIECES`, `zonesElementaires`, libellés et descriptions) — les familles du projet
+  d'abord, puis les autres, **MURS compris** (`CODES_PIECES_ESPACE` = CUISINE, SDB, MEUBLES, MURS, PRO) ; dans chaque
+  pièce, les zones cochées dans le Projet d'abord (`zonesPourSimulation` pour les familles ; MURS n'en a pas) ;
+  **`tablier-baignoire`** dans SDB. `IDS_FAMILLE` (devis, tarifs) n'est pas touché. Zones élémentaires seulement
+  (« Façades (toutes) » est une composée du site : dans l'espace, une teinte par zone). `creation` rend en plus
+  `pieces[].id` (pièce du simulateur : dessin de la carte), `pieces[].zones[].description`, **`zonesMax`** (`ZONES_MAX`
+  du CRM : le site et l'espace lisent la même limite ; le schéma `.max(ZONES_MAX)`, **et `schemaPreparation`
+  (route des préparations, outil MCP `preparer_simulation`) la lit aussi : plus de « 4 » en dur**), **`enCours[].photoId`
+  et `zones`** (l'écran d'attente montre la photo et les films, même sur un autre appareil), **`enRelecture`** (les
+  brouillons source CLIENT que Lucas doit relire). `schemaCreationSimulation.piece` accepte les cinq codes.
+- **Bloc « simulations créées par le client » extrait** de `service.ts` (1 177 → 984 lignes) vers
+  **`src/lib/espace/creation.ts`** (déplacement pur : `CreationClient` = type de `EtatEspace.creation`,
+  `simulationsGratuites`, `quotaSimulations`, `creationPourLeClient`, `schemaCreationSimulation`,
+  `creerSimulationClient`, `SuiviCreation`, `suivreCreation`, alerte crédit, `demanderSimulations`,
+  `accorderSimulations`) ; `service.ts` réexporte tout (route, tests, `suivi.ts` importe de `creation.ts`) ;
+  `photosDuClient` reste dans `service.ts` (import dynamique depuis `creation.ts`, comme `simulateur.ts`).
+- **Zone non visible refusée avant de dépenser** (`creerSimulationClient`) : après quota → crédit → photo, la photo est
+  cadrée comme pour la génération (`simulateur.ts › zonesNonVisiblesPourPhotoDuDossier` : même empreinte, cache
+  mémoire) et l'analyse PRETE connue relue ; une zone choisie qu'elle ne voit pas → **409 `{ raison:
+  "zone-non-visible", zones }`** avec la phrase du site (`analyses.ts › messageZonesNonVisibles`, partagée avec
+  `/api/simulate` ; `zonesNonVisiblesPourEmpreinte` partagé aussi). Sans analyse connue : rien ne bloque.
+- **Analyse par jeton** : `POST /api/espace/<jeton>/simulations/analyse { photoId, piece? }` →
+  `demanderAnalyseEspace` : la photo du dossier est **cadrée comme la génération la cadrera** (`preparation.ts ›
+  cadrerPhoto` exporté, déterministe) → même empreinte → `AnalysePhoto` connue et PRETE pour cette pièce = 200 tout de
+  suite ; EN_COURS récente = 200 ; sinon **le quota du dossier est demandé ici et seulement ici** (`options.quota`, comme
+  `demanderAnalyseSite`) : `limite-site.ts › analyseAutorisee("espace:<dossierId>", …, LIMITE_ANALYSES.parEspace)` —
+  **20 analyses par dossier et par jour**, sous le plafond global du site (400) — refusé → **429 `ip-quota` /
+  `global-quota`** « vous pouvez lancer la simulation sans », rien d'écrit ; sinon la photo cadrée est écrite
+  `dossiers/<id>/analyses/<empreinte>.jpg`, la ligne posée avec **`AnalysePhoto.dossierId`** (nouvelle colonne nullable
+  + index : preuve du suivi par jeton) et la tâche `ANALYSE_PHOTO` mise en file → **202** `{ empreinte, statut, analyse,
+  raison, nouvelle }` (même forme que le site : `reduireAnalyse` la lit). **Un projet figé (ENCAISSE, PERDU) n'analyse
+  plus** : la route passe par `projetDe(acces, true)` → 409 `fige`, aucune tâche. `GET /simulations/analyse/<empreinte>`
+  → `suivreAnalyseEspace` : seulement une analyse de CE dossier (sinon 404 sans détail) ; codes de raison comme le site.
+  `executerAnalysePhoto` compte l'appel vision à l'**origine ESPACE sur le dossier** quand `dossierId` est posé (SITE
+  sinon). Cache mémoire des empreintes par `dossier/photo` (500 entrées). La génération qui suit retrouve l'analyse par
+  l'empreinte de la photo cadrée : un contrôle, pas de seconde analyse (vérifié).
+- **Suivi** `creation.ts › suivreCreation` → `SuiviCreation { statut: EN_COURS | PRETE | ECHEC | RELECTURE, etape,
+  attenteEstimeeS, simulationId, message, raison }` : `etape` (null tant que la tâche n'a pas été prise = file
+  d'attente), **`attenteEstimeeS`** = `attenteEstimeeEspaceS()` (médiane des 20 dernières `PreparationSimulation` mode
+  API terminées, `updatedAt − createdAt`, sinon la médiane du site) ; **RELECTURE** quand le résultat est un brouillon
+  (message `MESSAGE_RELECTURE`) ; l'échec « interrompue par une mise à jour » (partie 2) est enfin dit au client
+  (raison `interrompue`). `creerSimulationClient` rend aussi `attenteEstimeeS`.
+- **Contrôle automatique avant publication** (`preparation.ts › executerGenerationApi`, origine CLIENT) : après le
+  pipeline (deux tentatives au plus, la meilleure gardée), `scoreControle < SIMULATEUR_SEUIL_CONTROLE` →
+  `publierSimulationDuClient(…, { seuil })` crée la `SimulationEspace` **source CLIENT en BROUILLON** (`publieeLe` et
+  `vueLe` null, score, défauts, tentatives, prompt), la préparation passe TERMINEE avec `resultatId`, événement
+  **`ESPACE_SIMULATION_RELECTURE`** (INTERNE, `constants.ts` ; `main.ts` : la main revient à Lucas « Simulation du
+  client à relire et publier », `TYPES_MAIN`), alerte « Simulation à relire — <client> » (urgence 4, score, seuil,
+  essais, trois premiers défauts, `etiquette simulation-relecture-<dossier>`, origine `espace-client`). Au-dessus du
+  seuil : PUBLIEE comme avant (`ESPACE_SIMULATION_CLIENT`, alerte « a créé une simulation »). **Une seule ligne dans
+  les deux cas : le quota ne compte qu'une fois** (BROUILLON compté dans `faitesEspace`) ; Lucas publie depuis la
+  fiche (`publierSimulations`, mail « simulation publiée » existant) et le suivi passe PRETE. **« Nouveau » dans la
+  galerie** (`service.ts › etatEspace`) : une simulation CLIENT est nouvelle tant que `vueLe` est null — jamais pour
+  celle publiée directement (vue à la création), oui pour celle relue par Lucas, jusqu'à la première visite
+  (`POST /simulations/vues` → `noterSimulationsVues` pose `vueLe`). `SOURCES_SIMULATION` connaît `CLIENT`
+  (`simulations/dossier.ts`) et la rubrique Simulations l'affiche « Faite par le client (espace) »
+  (`SimulationsDossier.tsx`) avec la pastille de contrôle ambre et les défauts (partie 2).
+- **Route** (`api/espace/[jeton]/[[...action]]/route.ts`) : `POST /simulations/analyse` (derrière le verrou
+  « projet modifiable », avec le quota du dossier ; 202 quand une tâche part), `GET /simulations/analyse/<empreinte>` ;
+  en-tête documentaire à jour. Aucune route publique nouvelle (`/api/espace/` est déjà un préfixe public),
+  `src/proxy.ts` non touché.
+- **Schéma** : `AnalysePhoto.dossierId String?` + `@@index([dossierId])` (ajout compatible `db push`), `npx prisma
+  generate` fait. **Aucune migration de données.** Aucun paramètre nouveau, aucun outil MCP.
+- **Docs** : `docs/REPRISE-MISSION.md` l.159 « (3 si vide) » → « (5 si vide depuis la mission 5 ; 3 à l'origine) » ;
+  `docs/ARCHITECTURE-PILOTAGE.md` : « (5 si vide) » + paragraphe « Mission 15 (partie 5) » dans Espace client (quota
+  d'analyses, projet figé, zone non visible, `creation.ts`, « Nouveau » après relecture).
+- **Tests** `src/lib/base/mission-15-partie-5.test.ts` **8/8** : `piecesPourLeClient` (ordre, MURS, tablier, cochées
+  d'abord, jamais `facades-cuisine`) ; `etatEspace` (zonesMax 4, enRelecture, pièces) + création MURS (`espace-murs`,
+  deux zones) et SDB tablier + `enCours` avec photo et teintes ; route 5 zones → 400 avant tout coût **et
+  `schemaPreparation` refuse 5 zones avec le message `${ZONES_MAX} zones au plus`** ; suivi (EN_COURS sans étape, étape
+  par la route, `attenteEstimeeS`, ECHEC « interrompue ») ; **V2 scores 5 puis 6 → BROUILLON CLIENT, tentatives 2,
+  défaut gardé, événement RELECTURE (pas CLIENT), une alerte, suivi RELECTURE, galerie vide, faites 1 / restantes − 1,
+  fiche du dossier (source CLIENT, sousSeuil, 1 défaut), publication par Lucas → PRETE, quota inchangé, `nouvelle`
+  vrai puis faux après `noterSimulationsVues` (`vueLe` posé)** ; V2 score 8 → PUBLIEE, jamais « Nouveau » ; **analyse
+  par jeton** (202 + tâche, ligne avec dossierId et photo cadrée sur le volume, EN_COURS puis 200 sans seconde tâche,
+  tour de l'exécuteur → PRETE avec zones visibles, photo d'attente effacée, `GenerationImage` phase analyse origine
+  ESPACE sur le dossier, redemande 200 PRETE, **tablier non visible → 409 `zone-non-visible` par le service et par la
+  route, aucune préparation créée**, génération suivante = un seul contrôle et `photoEmpreinte` identique, autre espace
+  404, photo inconnue 404) ; **projet ENCAISSE → 409 `fige` sans tâche ; quota refusé → 429 `ip-quota` sans ligne ni
+  tâche (service) et par la route après `LIMITE_ANALYSES.parEspace` analyses du dossier ; le lancement n'est pas bloqué
+  par l'analyse absente**. Suites des modules touchés : `simulateur.test.ts`, `espace-v2`, `espace`, `permanent`,
+  `devis-multiples`, `mission-15-partie-2`, `routes-publiques`, `mission-14-partie-6`, `mission-14-partie-1`.
+
+### Site
+- **Règles pures** `src/lib/espace/creation.ts` (testé) : `piecesDeCreation` (les pièces du CRM, repli sur un état
+  d'avant), `idDePiece` (dessin de la carte par `id`, sinon par le code), `zonesMaxDe` (4 à défaut), `zonesOrdonnees`,
+  `pieceDesZones` / `choixDepuisSimulation` (« Essayer d'autres matières » : pièce retrouvée d'après les zones, teintes
+  reprises, photo à choisir), les trois écrans (`ECRANS_CREATION`, `ecranAtteignableCreation`, `reduireCreation` :
+  changer de pièce vide SEULEMENT les matières, reprendre la photo les garde, « appliquer le même film à », retour
+  jamais en avant sans photo, rien pendant le lancement, `ecranDeDepart` après un échec), `zonesChoisies`,
+  **`raisonBloque(piece, choix, zonesMax, analyse?)`** (photo → matière → **zone avec teinte que l'analyse ne voit pas :
+  « Retirez-la, ou reprenez une photo » — une teinte reprise après un échec ou d'une autre simulation peut porter sur
+  une zone absente de la nouvelle photo, le CRM la refuserait en 409** → limite du CRM), `filmsChoisis`, `texteQuota`
+  (« Il vous en reste 3 sur 5. », « … 1 sur 5 : c'est la dernière. »), `statutAttente` (EN_ATTENTE sans étape),
+  `reduireSuivi` (prête / relecture / échec / oubliée 404 / hors ligne sur réseau, 5xx, 429).
+- **`CreationSimulation.tsx`** réécrit + **`CreationEcrans.tsx`** (`EcranPieceEspace` avec `CartesPieces` — dessins du
+  site, murs compris, « Votre projet · … » sur ses pièces ; `EcranPhotoEspace` : les photos du dossier en grille
+  `aria-pressed` OU « Prendre une photo » / « Choisir dans mes photos » (labels `FOCUS_FICHIER`, progression de l'envoi,
+  HEIC accepté), « Garder cette photo », **en aperçu les deux boutons restent actifs et disent « rien n'est
+  enregistré » (`onApercu`, `preventDefault` sur le label : plus aucun bouton muet)**, « La photo rejoint votre espace :
+  **CoverSwap** la voit aussi » ; `EcranMatieresEspace` : **la photo dans une boîte `aspect-[4/3] max-h-[46vh]`,
+  `object-contain` (le CRM ne donne pas les dimensions : la place est réservée, rien ne bouge au chargement)** +
+  « Reprendre », état de l'analyse, conseil de qualité (« Reprendre la photo » / « Continuer quand même »), une rangée
+  par zone (`TuileFilm`, Choisir / Modifier / Retirer, zone non visible grisée, plafond `zonesMax`), **bouton collé
+  « Lancer ma simulation »** au-dessus des onglets et de la zone sûre avec la raison lisible (`Bouton raisonDesactive`,
+  analyse comprise) et **le quota dessous**). `FilEtapes` reçoit ses étapes (`etapes` prop, générique) : Pièce · Photo ·
+  Matières. **`FeuilleCatalogue` commune** (vignettes et échantillons par la route de l'espace avec jeton : `api.ts ›
+  vignette / echantillon`, « Appliquer le même film à … »). Choix gardés 6 h après un échec de lancement (inchangé) ;
+  aperçu : chaque geste le dit ; le 409 `zone-non-visible` du CRM s'affiche tel quel dans `lancer()`. **Une photo
+  envoyée sans photo nouvelle en retour** (le CRM répond 400 pour une photo seule refusée — déjà affiché ; garde pour un
+  200 sans arrivée) → « Cette photo n'a pas pu être ajoutée … ». `useAnalyseEspace` : **`POST /simulations/analyse`
+  seulement à l'écran Matières** (photo confirmée ; pas à chaque carte de pièce touchée à l'écran 1 avec une photo
+  déjà choisie), par photo ET pièce, sondage 3 s au plus 2 min, relancé quand la page redevient visible ; **429 (quota du
+  dossier) → analyse SAUTEE sans redemande** (« vous pouvez lancer la simulation sans ») ; jamais bloquant (aperçu,
+  réseau, 404 → sans analyse).
+- **`EtapeSimulations.tsx`** (helpers extraits dans `simulations-outils.ts`) : sondage remplacé par
+  **`useSuiviCreation`** (3 s, `visibilitychange` + `online`, jamais page cachée, **une seule simulation suivie à la
+  fois — la plus ancienne — et un seul sondage par espace** : verrou par racine d'API ; 200 requêtes / 10 min sous la
+  limite de 400) ; la carte « En préparation » (barre fictive) remplacée par **`EcranAttente`** (photo du dossier,
+  films, trois étapes cochées d'après `etape`, `attenteEstimeeS` du CRM sinon celle du lancement sinon 90 s,
+  hors ligne, phrase « Elle vous attendra ici, dans « Mes simulations » » — prop `phraseQuitter`) ; **RELECTURE** →
+  annonce « Votre simulation demande une relecture… » (aussi d'après `creation.enRelecture` au rechargement,
+  effacée quand Lucas a publié) ; **résultat** : `FonduRendu` (`components/simulation/`) — les deux images
+  préchargées **avec leurs dimensions (`precharger` → `{ largeur, hauteur }`), le rapport réservé sur la boîte
+  (`aspectRatio`, 4/3 en attendant) et passé en `ratio` à `AvantApres` (la photo avant est la photo cadrée : même
+  rapport) — rien ne saute dans la feuille de détail ; sans fondu, le rapport est donné au curseur dès qu'il est
+  connu** ; la photo avant fondue dans l'après en 1 s (instantané en reduced-motion), puis `AvantApres` commun
+  (Comparer, plein écran) — **Télécharger**, **Partager** (`components/simulation/fichiers.ts`, extrait
+  d'`EcranResultat`, qui l'importe) et **« Essayer d'autres matières »** (repart de la pièce et des teintes du rendu ;
+  la validation, le mélange et le commentaire existants sont inchangés). `data-theme="simulation"` sur l'onglet ; la
+  promesse dit `DELAI_RENDU` (« environ 1 min 30 »), plus « une minute environ ».
+- **Supprimés** : `espace/CatalogueTeintes.tsx` (→ `FeuilleCatalogue`, y compris le catalogue en consultation de
+  `EspaceCompte`), `espace/AvantApres.tsx` (→ `components/simulation/AvantApres`, `sansOutils` dans le devis) ;
+  `BeforeAfterSlider` l'était déjà (partie 4). **`preparerPhoto` / `reduirePhoto` fusionnés** : `lib/simulateur/photo.ts ›
+  reduirePhoto(file, { coteMax, qualite })` (même décodeur EXIF, même `dimensionsReduites`, JPEG q0,86 ; `COTE_MAX_DOSSIER`
+  = 2 000 px pour les photos du dossier) ; `file-photos.ts` ne garde que la file IndexedDB. Commentaires d'en-tête de
+  `FeuilleCatalogue`, `EcranAttente` et `globals.css` mis à jour (partage avec l'espace depuis la partie 5, thème posé
+  sur l'onglet Simulations de `/e/[jeton]`).
+- **Types** `api.ts` : `Piece.id / zones[].description`, `Creation.enCours[].photoId / zones`, `enRelecture`, `zonesMax`,
+  `SuiviCreation`, `ReponseAnalyse`, `SimulationEnCours`.
+- **Tests site** `src/lib/espace/creation.test.ts` **9/9** (pièces du CRM avec MURS et tablier, état d'avant lisible,
+  zones cochées d'abord, « autres matières », écrans atteignables, gestes, blocages, **zone non visible bloquante
+  seulement avec une analyse PRETE (une, deux zones ; retirée → on lance)**, films et quota, suivi).
+
+### Décisions
+- Liste des pièces de l'espace = `PIECES` de `simulateur/zones.ts` (pas `IDS_FAMILLE`, qui pilote devis et tarifs) ;
+  zones élémentaires seulement (pas de « Façades (toutes) » dans l'espace : `preparerSimulation` n'accepte que des
+  zones élémentaires, et une teinte par zone est plus simple) ; la limite vient du CRM (`creation.zonesMax`) et le
+  schéma des préparations du CRM la lit aussi (une seule source).
+- Le serveur n'impose pas « une génération à la fois » (il compte celle en cours dans le quota, comme avant) : c'est
+  l'écran qui l'impose, et un seul sondage suit la plus ancienne.
+- Analyse de l'espace : **la photo cadrée** (même empreinte que la génération) plutôt que la photo brute ; preuve du
+  suivi = `AnalysePhoto.dossierId` (nouvelle colonne) plutôt que le `parcoursId` du site ; **quota par dossier**
+  (`LIMITE_ANALYSES.parEspace` = 20 / jour, même compteur mémoire que le site, même plafond global) plutôt qu'un
+  compteur en base : un lien d'espace valide ne peut plus consommer le budget IA du mois ; le refus ne bloque jamais le
+  lancement (« vous pouvez lancer la simulation sans ») ; **un projet figé n'analyse plus** (un appel vision coûte :
+  même verrou que `/simulations/creer`). Une ligne `AnalysePhoto` par empreinte : une analyse PRETE d'une autre pièce
+  est réécrite (parité avec le site et `obtenirAnalyse` ; la changer serait un changement de clé, hors partie).
+- **Zone non visible** : refusée côté CRM avant de dépenser (409, même phrase que le site, jamais à l'aveugle) ET
+  bloquante côté écran quand l'analyse est PRETE (le bouton dit pourquoi) — le cas visé : une teinte reprise (échec,
+  « autres matières ») sur une zone absente de la nouvelle photo.
+- Attente estimée de l'espace = médiane des générations API (qualité high, espace et CRM confondus), sinon celle du
+  site ; le suivi la rend à chaque réponse.
+- Sous le seuil = brouillon **source CLIENT** (pas API) : le CRM le distingue (« Faite par le client (espace) »), la
+  main revient à Lucas par un événement propre (`ESPACE_SIMULATION_RELECTURE`), une seule ligne (quota compté une
+  fois), et « publier » depuis la fiche suffit (mail existant) ; **publiée, elle est « Nouveau » pour le client**
+  (`vueLe` null) jusqu'à sa première visite. Pas de seconde génération automatique au-delà des deux tentatives.
+- Statut `RELECTURE` ajouté au suivi (plutôt que PRETE sans simulation visible) ; l'échec « interrompue » est enfin
+  dit au client.
+- **Rapports réservés** : le CRM ne donne pas les dimensions des photos du dossier (les lire à chaque `GET` de l'espace
+  coûterait 40 lectures sharp) → l'écran Matières réserve une boîte 4/3 bornée à 46 vh avec la photo entière dedans ;
+  le rendu (`FonduRendu`) précharge et lit les dimensions, comme l'écran résultat du site.
+- `FonduRendu` est un composant à part (l'écran résultat du site garde sa séquence, couplée aux comparaisons) :
+  petit doublon de la phase de fondu, assumé, à unifier si l'écran du site est retouché.
+- `FilEtapes` générique (étapes injectées) plutôt qu'un second fil ; `EcranAttente.phraseQuitter` plutôt qu'un
+  texte du site dans l'espace. Pas de « Me prévenir » dans l'espace (le client est connu ; le mail de publication
+  existe).
+- `service.ts` reste au-dessus de 600 lignes (984) : la partie n'a extrait que son propre bloc (`creation.ts`) ; le
+  reste (projet, coordonnées, devis, avis, portrait) est d'avant la mission — découpe à part si voulue.
+
+### Vérifié
+- CRM : `.next/dev/types` (cache tronqué d'un ancien `next dev`, ignoré par git) supprimé avant `npx tsc --noEmit -p .`
+  → 0 erreur ; `npx eslint` (10 fichiers touchés) 0 ; `mission-15-partie-5.test.ts` 8/8 ; suites des modules touchés
+  (`mission-15-partie-2`, `simulateur`, `espace-v2`, `espace`, `permanent`, `devis-multiples`, `routes-publiques`,
+  `mission-14-partie-6`, `mission-14-partie-1`) **111/111** ; `npx prisma generate` fait. OpenAI simulé par injection :
+  aucun appel réseau, aucune image générée (la seule sortie réseau des tests est ntfy, déjà en 429 de quota : rien ne
+  part).
+- Site : `npm run lint` 0 ; `npx tsc --noEmit -p .` 0 ; `npm test` 40/40 (dont `creation.test.ts` 9/9).
+
+### Reste / à savoir
+- Rien vu dans un navigateur (ni `next dev`, ni `next build`) : à l'orchestrateur — le parcours de l'espace à
+  390 × 660 (cartes, photos du dossier, feuille catalogue avec jeton, bouton collé au-dessus des onglets, boîte 4/3 de
+  la photo, écran d'attente, fondu à l'arrivée sans saut, Télécharger / Partager, « Essayer d'autres matières »),
+  l'aperçu depuis le CRM (les deux boutons photo disent « rien n'est enregistré »), et une vraie relecture (paramètre
+  `SIMULATEUR_SEUIL_CONTROLE` haut sur la pile d'essai avec le faux OpenAI).
+- Déploiement : **CRM d'abord** (nouveaux champs de `creation`, routes d'analyse, statut RELECTURE, 409
+  `zone-non-visible`, 429 d'analyse), puis le site ; `db push` ajoute `AnalysePhoto.dossierId`. Un site d'avant lit
+  encore le CRM sans mal (champs en plus).
+- L'ancien corps asynchrone de `/api/simulate` (prompt signé, partie 4) reste accepté : à retirer une fois le site
+  déployé (partie 6 ou plus tard).
+- Le quota d'analyses de l'espace vit en mémoire (comme celui du site) : il repart à zéro à chaque redémarrage du
+  CRM ; le plafond global et le budget IA mensuel restent les vrais garde-fous.
+- `.next/dev/types/*.ts` du CRM se régénèrent au prochain `next dev` ; s'ils ressortent tronqués (dev interrompu), les
+  supprimer avant `tsc`.
+
+### Vérifié par l'orchestrateur (30/09)
+- CRM 773/773 (après alignement de `coherence.test.ts` : les murs sont proposés dans l'espace) + build ; site lint,
+  40/40, build. Essai local à 390 × 660 (faux OpenAI, CRM copie, site) : espace d'essai → « Créer une simulation » →
+  Cuisine → photo du dossier → analyse (202 puis « Photo lue ») → feuille catalogue commune (vignettes par le jeton)
+  → « Lancer ma simulation » → écran d'attente du site → rendu publié, « Il vous en reste 3 sur 5 », feuille résultat
+  (avant/après, Comparer, Plein écran, Télécharger, Partager, Essayer d'autres matières).
+- Garde-fou des tests (hors partie, découvert ici) : la suite envoyait de vraies notifications ntfy avec le sujet du
+  `.env` local (Prisma recharge `.env` après un `delete process.env.NTFY_TOPIC` ; quota quotidien de ntfy.sh atteint,
+  HTTP 429, visible dans les journaux depuis la mission 7). `src/test/base-essai.ts › couperCanauxSortants()` pose à
+  vide ntfy, Telegram, Resend, VAPID, OVH, Brevo, Meta et Places ; 35 fichiers d'essai posent `""` au lieu de
+  `delete`. Après : 0 appel à ntfy.sh sur la suite complète. Règle : jamais `delete process.env.<canal>` dans un test.

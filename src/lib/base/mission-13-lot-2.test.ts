@@ -77,7 +77,7 @@ async function fauxGoogle(url: string, init: RequestInit = {}): Promise<Response
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   avecActeur = (await import("@/lib/journal/contexte")).avecActeur;
   secret = await import("@/lib/acces/secret-webhook");
   chiffrement = await import("./chiffrement-sauvegarde.mjs");

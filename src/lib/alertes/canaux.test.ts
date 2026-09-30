@@ -40,10 +40,10 @@ before(async () => {
     serveur.listen(0, "127.0.0.1", () => resoudre((serveur.address() as { port: number }).port));
   });
   process.env.NTFY_SERVEUR = `http://127.0.0.1:${port}`;
-  delete process.env.TELEGRAM_BOT_TOKEN;
-  delete process.env.TELEGRAM_CHAT_ID;
-  delete process.env.RESEND_API_KEY;
-  delete process.env.NTFY_TOPIC;
+  process.env.TELEGRAM_BOT_TOKEN = "";
+  process.env.TELEGRAM_CHAT_ID = "";
+  process.env.RESEND_API_KEY = "";
+  process.env.NTFY_TOPIC = "";
   canaux = await import("./canaux");
 });
 after(async () => {
@@ -64,13 +64,13 @@ describe("état des canaux", () => {
     assert.equal(canaux.pushDisponible(), false);
     process.env.NTFY_TOPIC = "essai-coverswap";
     assert.equal(canaux.pushDisponible(), true);
-    delete process.env.NTFY_TOPIC;
+    process.env.NTFY_TOPIC = "";
   });
 });
 
 describe("compte rendu d'un envoi", () => {
   test("tous les canaux sont rendus, configurés ou non", async () => {
-    delete process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = "";
     const resultats = await canaux.alerter({ titre: "Essai", texte: "corps" });
     assert.deepEqual(
       resultats.map((r) => r.canal),
@@ -105,7 +105,7 @@ describe("compte rendu d'un envoi", () => {
     assert.equal(recues[0].titre, "Nouveau lead Meta - Camille (Ablis)");
     assert.equal(recues[0].priorite, "5");
     assert.match(recues[0].actions ?? "", /tel:\+33612345678/);
-    delete process.env.NTFY_TOPIC;
+    process.env.NTFY_TOPIC = "";
   });
 
   test("un libellé de bouton accentué part en ASCII : ntfy refuse tout en-tête non ASCII (HTTP 400)", async () => {
@@ -113,7 +113,7 @@ describe("compte rendu d'un envoi", () => {
     recues = [];
     await canaux.alerter({ titre: "Essai", texte: "corps", lien: "https://crm.coverswap.fr/publicite", libelleLien: "Ouvrir l'écran Publicité ; vite, svp" });
     assert.equal(recues[0].actions, "view, Ouvrir l'ecran Publicite vite svp, https://crm.coverswap.fr/publicite");
-    delete process.env.NTFY_TOPIC;
+    process.env.NTFY_TOPIC = "";
   });
 
   test("un canal configuré mais refusé est un échec, pas une absence", async () => {
@@ -122,6 +122,6 @@ describe("compte rendu d'un envoi", () => {
     const ntfy = resultats.find((r) => r.canal === "ntfy")!;
     assert.deepEqual([ntfy.ok, ntfy.configure], [false, true]);
     assert.match(ntfy.detail ?? "", /HTTP 403/);
-    delete process.env.NTFY_TOPIC;
+    process.env.NTFY_TOPIC = "";
   });
 });

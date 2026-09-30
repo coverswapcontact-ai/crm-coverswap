@@ -37,7 +37,8 @@ import { lireZones, surfaceDepuisLibelle, typeSurface, type ZoneTeinte } from "@
  * ouvert au premier brouillon — ouvert ne veut pas dire envoyé.
  */
 
-export const SOURCES_SIMULATION = ["SITE", "API", "CHATGPT", "MANUEL"] as const;
+/** `CLIENT` : créée par le client dans son espace (mission 15, partie 5 : en brouillon quand le contrôle est sous le seuil). */
+export const SOURCES_SIMULATION = ["SITE", "API", "CHATGPT", "MANUEL", "CLIENT"] as const;
 export type SourceSimulation = (typeof SOURCES_SIMULATION)[number];
 export const STATUTS_SIMULATION = ["BROUILLON", "PUBLIEE", "MASQUEE"] as const;
 export type StatutSimulation = (typeof STATUTS_SIMULATION)[number];

@@ -108,7 +108,7 @@ const outil = (definition: unknown) => definition as import("@/lib/assistant/def
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
   // Après l'import de Prisma (qui recharge .env) : ni canal d'alerte réel, un Google configuré pour les essais.
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.GOOGLE_CLIENT_ID = "client-essai";
   process.env.GOOGLE_CLIENT_SECRET = "secret-essai";
   process.env.GOOGLE_TOKEN_KEY = randomBytes(32).toString("base64");

@@ -11,10 +11,10 @@ preparerBaseEssai();
  * À appeler APRÈS l'import de Prisma, qui recharge « .env » au chargement.
  */
 function sansCanauxDAlerte(): void {
-  delete process.env.TELEGRAM_BOT_TOKEN;
-  delete process.env.TELEGRAM_CHAT_ID;
-  delete process.env.NTFY_TOPIC;
-  delete process.env.RESEND_API_KEY;
+  process.env.TELEGRAM_BOT_TOKEN = "";
+  process.env.TELEGRAM_CHAT_ID = "";
+  process.env.NTFY_TOPIC = "";
+  process.env.RESEND_API_KEY = "";
 }
 sansCanauxDAlerte();
 

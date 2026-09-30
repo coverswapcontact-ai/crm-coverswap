@@ -145,6 +145,9 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     // Un brouillon de simulation m'attend : à moi de le relire et de le publier.
     case "SIMULATION_BROUILLON":
       return { qui: "MOI", motif: "Brouillon de simulation à publier" };
+    // Mission 15 (partie 5) : sa simulation est restée sous le seuil du contrôle — il l'attend, à moi de la relire.
+    case "ESPACE_SIMULATION_RELECTURE":
+      return { qui: "MOI", motif: "Simulation du client à relire et publier" };
     // Le client agit : la main me revient.
     case "ESPACE_PHOTOS":
       return client ? { qui: "MOI", motif: "Photos reçues dans son espace" } : null;
@@ -188,6 +191,7 @@ export const TYPES_MAIN = [
   "CHANGEMENT_ETAPE",
   "ESPACE_LIEN_CREE",
   "ESPACE_SIMULATION_CLIENT",
+  "ESPACE_SIMULATION_RELECTURE",
   "SIMULATION_BROUILLON",
   "ESPACE_SIMULATION_DEPOSEE",
   "DEVIS_GENERE",

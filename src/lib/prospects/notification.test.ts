@@ -29,7 +29,7 @@ before(async () => {
   });
   await import("@/lib/prisma");
   // Après l'import de Prisma, qui recharge .env (voir la mémoire « Prisma recharge .env »).
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "RESEND_API_KEY"]) process.env[cle] = "";
   process.env.NTFY_SERVEUR = `http://127.0.0.1:${port}`;
   process.env.NTFY_TOPIC = "essai-demandes-du-site";
   process.env.NEXT_PUBLIC_APP_URL = "https://crm.coverswap.fr";

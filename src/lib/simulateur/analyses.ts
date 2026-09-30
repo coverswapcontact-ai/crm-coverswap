@@ -10,7 +10,7 @@ import { enregistrerTraitement } from "@/lib/taches/registre";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { analyserPhoto, zonesNonVisibles } from "./moteur/analyse-photo";
 import type { AnalysePhoto } from "./moteur/types";
-import { estIdPiece, type IdPiece, type IdZone } from "./zones";
+import { estIdPiece, ZONES_SIMULATEUR, type IdPiece, type IdZone } from "./zones";
 
 /**
  * Les analyses de photos (mission 15, partie 2) : une table `AnalysePhoto`
@@ -70,7 +70,7 @@ export async function lireAnalyse(empreinte: string): Promise<EtatAnalyse | null
 }
 
 /** Une analyse EN_COURS depuis plus de deux minutes est tenue pour perdue (processus coupé) : on la refait. */
-const EN_COURS_PERDUE_MS = 2 * 60_000;
+export const EN_COURS_PERDUE_MS = 2 * 60_000;
 
 /**
  * L'analyse de cette photo : celle déjà faite pour la même pièce, sinon un appel
@@ -111,8 +111,21 @@ export async function obtenirAnalyse(photo: Buffer, pieceId: IdPiece, options: {
 export async function zonesNonVisiblesPourPhoto(photoBase64: string, zones: IdZone[]): Promise<IdZone[]> {
   if (zones.length === 0) return [];
   const octets = Buffer.from(photoBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
-  const etat = await lireAnalyse(empreintePhoto(octets)).catch(() => null);
+  return zonesNonVisiblesPourEmpreinte(empreintePhoto(octets), zones);
+}
+
+/** Les zones choisies que l'analyse PRETE de cette empreinte ne voit pas ; sans analyse connue : aucune. */
+export async function zonesNonVisiblesPourEmpreinte(empreinte: string, zones: IdZone[]): Promise<IdZone[]> {
+  if (zones.length === 0) return [];
+  const etat = await lireAnalyse(empreinte).catch(() => null);
   return etat?.statut === "PRETE" && etat.analyse ? zonesNonVisibles(etat.analyse, zones) : [];
+}
+
+/** Le refus 409 « zone-non-visible », dit au visiteur du site comme au client de l'espace (même phrase). */
+export function messageZonesNonVisibles(zones: IdZone[]): string {
+  const libelles = zones.map((z) => ZONES_SIMULATEUR[z].libelle);
+  const plusieurs = libelles.length > 1;
+  return `${plusieurs ? "Ces zones ne sont pas visibles" : "Cette zone n'est pas visible"} sur votre photo : ${libelles.join(", ")}. Retirez-${plusieurs ? "les" : "la"}, ou reprenez une photo où ${plusieurs ? "elles apparaissent" : "elle apparaît"}.`;
 }
 
 /** Attend qu'une analyse en cours se termine (au plus `maxMs`), en relisant la ligne toutes les deux secondes. */
@@ -202,7 +215,8 @@ export async function executerAnalysePhoto(empreinte: string, signal?: AbortSign
   const piece = estIdPiece(ligne.piece) ? ligne.piece : "cuisine";
   // La ligne est EN_COURS : `obtenirAnalyse` ne l'attend que si elle est récente — on la marque perdue avant, pour qu'il analyse tout de suite.
   await prisma.analysePhoto.update({ where: { empreinte }, data: { updatedAt: new Date(Date.now() - EN_COURS_PERDUE_MS - 1000) } });
-  const etat = await obtenirAnalyse(photo, piece, { parcoursId: ligne.parcoursId, origine: "SITE", signal, attendreMs: 0 });
+  // Mission 15 (partie 5) : une analyse demandée depuis l'espace client est comptée à l'espace, sur son dossier.
+  const etat = await obtenirAnalyse(photo, piece, { parcoursId: ligne.parcoursId, dossierId: ligne.dossierId, origine: ligne.dossierId ? "ESPACE" : "SITE", signal, attendreMs: 0 });
   await effacerImage(ligne.photoPath);
   await prisma.analysePhoto.update({ where: { empreinte }, data: { photoPath: null } });
   return { statut: etat.statut };

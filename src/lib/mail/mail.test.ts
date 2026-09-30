@@ -36,7 +36,7 @@ const JOUR = 86_400_000;
 
 before(async () => {
   prisma = (await import("@/lib/prisma")).default;
-  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) delete process.env[cle];
+  for (const cle of ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NTFY_TOPIC", "RESEND_API_KEY"]) process.env[cle] = ""; // vide, pas supprimée : Prisma reprendrait la valeur de .env
   process.env.NEXTAUTH_SECRET = "secret-de-session-pour-les-essais";
   delete process.env.ESPACE_CLIENT_SECRET;
   process.env.SITE_URL = "https://coverswap.fr";

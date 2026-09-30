@@ -5327,7 +5327,10 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 > mission 17 (A, B, C, PR, rapport de 5 lignes), sur la même branche.
 
 - [x] A Tâches — livrée (voir la section « Partie A » plus bas) ; PR vers `main`.
-- [ ] B Analytique — conception écrite (`docs/ANALYTIQUE.md`) ; lecture du code et des maquettes faite.
+- [ ] B Analytique — PR A fusionnée (crm-coverswap#1, `efedbe1`). Contrat posé (`src/lib/analytique/types.ts`, schéma
+      `932f005`) ; en cours, quatre lots en parallèle : B1 connecteurs (Meta insights, Search Console, fiche Google par
+      compte de service) et mesure du site ; B2 calculs des écrans, résumé, alertes, outil `analytique` ; B3 écran
+      `/analytique` et retrait des doublons ; B4 balise du site (dépôt coverswap).
 - [ ] C Contrôle total par le MCP — inventaire des actions de l'interface fait (notes de travail), tableau à écrire.
 
 ## Décisions (partie A)

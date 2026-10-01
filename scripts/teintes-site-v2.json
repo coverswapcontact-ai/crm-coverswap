@@ -1,0 +1,127 @@
+{
+  "seuil_delta_e": 12,
+  "essais_par_image": 3,
+  "blanc_cible": "#F2F2F2",
+  "images": [
+    {
+      "nom": "ouverture-cuisine-apres",
+      "blanc": { "objet": "cadre blanc de la fenêtre", "zone": [5, 46, 12, 3] },
+      "surfaces": [
+        { "surface": "meubles bas et tiroirs", "en": "the lower cabinets and all the drawer fronts", "ref": "RM20", "zones": [[38, 62, 24, 4]] },
+        { "surface": "meubles hauts et colonne", "en": "the wall cabinets above the worktop and the tall column cabinets", "ref": "I14", "prevue": "AG13", "zones": [[27, 8, 46, 20], [83, 10, 10, 25]] },
+        { "surface": "plan de travail", "en": "the worktop", "ref": "NE31", "zones": [[6, 58, 12, 5]] }
+      ]
+    },
+    {
+      "nom": "etude-salle-de-bain-apres",
+      "blanc": { "objet": "vasque blanche", "zone": [32, 44, 10, 5] },
+      "surfaces": [
+        { "surface": "tiroirs", "en": "the vanity drawer fronts", "ref": "K4", "prevue": "NH26", "zones": [[32, 60, 20, 8]] },
+        { "surface": "plan vasque", "en": "the vanity top", "ref": "NE31", "zones": [[45, 51, 18, 1.5]] }
+      ]
+    },
+    {
+      "nom": "etude-meubles-apres",
+      "blanc": { "objet": "lampe en papier", "zone": [92, 27, 6, 12] },
+      "surfaces": [
+        { "surface": "façades", "en": "the cabinet fronts (low unit and both tall columns)", "ref": "NH12", "prevue": "NH12", "zones": [[41, 57, 9, 7], [19, 22, 8, 30]] },
+        { "surface": "dessus", "en": "the top of the low unit", "ref": "AA17", "prevue": "AG13", "zones": [[30, 54.3, 40, 0.7]] }
+      ]
+    },
+    {
+      "nom": "meubles-dressing-apres",
+      "blanc": { "objet": "linge de lit blanc", "zone": [5, 62, 30, 5] },
+      "surfaces": [
+        { "surface": "portes", "en": "the wardrobe doors", "ref": "RM30", "zones": [[33, 22, 12, 25]] }
+      ]
+    },
+    {
+      "nom": "pro-restaurant-apres",
+      "blanc": { "objet": "serviette blanche", "zone": [17, 66, 5, 2] },
+      "surfaces": [
+        { "surface": "façade du bar et arrière-bar", "en": "the bar front and the back-bar cabinets", "ref": "K1", "zones": [[22, 52, 20, 8]] },
+        { "surface": "dessus du bar", "en": "the bar top", "ref": "NF99", "zones": [[25, 46.8, 30, 1.2]] },
+        { "surface": "étagères", "en": "the back-bar shelves and their back panel", "ref": "D1", "zones": [[31, 39.5, 12, 4]] }
+      ]
+    },
+    {
+      "nom": "piece-cuisine",
+      "blanc": { "objet": "suspension en papier", "zone": [47, 8, 12, 8] },
+      "surfaces": [
+        { "surface": "îlot", "en": "the island fronts", "ref": "NH15", "zones": [[42, 70, 16, 8]] },
+        { "surface": "colonnes", "en": "the tall column cabinets along the back wall", "ref": "NH26", "zones": [[62, 15, 16, 20]] },
+        { "surface": "plan et joue", "en": "the island worktop and its waterfall side panel", "ref": "AA14", "prevue": "le chêne le plus proche", "zones": [[74, 60, 5, 20]] }
+      ]
+    },
+    {
+      "nom": "piece-salle-de-bain",
+      "blanc": { "objet": "vasque blanche", "zone": [49, 48, 14, 3] },
+      "surfaces": [
+        { "surface": "tiroirs", "en": "the vanity drawer fronts", "ref": "B4", "prevue": "AG13", "zones": [[32, 58, 40, 7]] },
+        { "surface": "plan", "en": "the vanity top", "ref": "MK15", "zones": [[35, 54, 40, 2.5]] }
+      ]
+    },
+    {
+      "nom": "piece-meubles",
+      "blanc": { "objet": "tranche des livres", "zone": [71, 38.5, 18, 1.5] },
+      "surfaces": [
+        { "surface": "portes", "en": "the sideboard doors", "ref": "RM23", "prevue": "M9", "zones": [[38, 45, 12, 15]] },
+        { "surface": "dessus", "en": "the sideboard top", "ref": "AG13", "zones": [[25, 39.5, 40, 1.2]] }
+      ]
+    },
+    {
+      "nom": "piece-murs",
+      "blanc": { "objet": "couette blanche", "zone": [30, 70, 40, 7] },
+      "surfaces": [
+        { "surface": "mur", "en": "the stone-effect wall behind the bed", "ref": "NF99", "zones": [[35, 10, 40, 25]] }
+      ]
+    },
+    {
+      "nom": "piece-pro",
+      "blanc": { "objet": "mur crème (pas de vrai blanc dans la scène)", "zone": [22, 5, 15, 20], "exposition": false },
+      "surfaces": [
+        { "surface": "façade", "en": "the counter front and sides", "ref": "D1", "zones": [[30, 50, 40, 25]] },
+        { "surface": "dessus", "en": "the counter top", "ref": "RM29", "prevue": "K1", "zones": [[25, 44.2, 50, 1.3]] }
+      ]
+    },
+    {
+      "nom": "pro-hotel",
+      "blanc": { "objet": "oreiller blanc", "zone": [15, 44, 10, 6] },
+      "surfaces": [
+        { "surface": "mur de tête de lit", "en": "the headboard wall panelling", "ref": "D1", "zones": [[15, 5, 28, 22]] },
+        { "surface": "placards", "en": "the wardrobe doors", "ref": "NE55", "prevue": "NH26", "zones": [[50, 10, 14, 30]] }
+      ]
+    },
+    {
+      "nom": "pro-commerce",
+      "blanc": { "objet": "dessus blanc du comptoir", "zone": [22, 48.6, 24, 1.2] },
+      "surfaces": [
+        { "surface": "façades bois", "en": "the wood fronts of the central counter", "ref": "NE68", "prevue": "AG13", "zones": [[20, 53, 26, 20]] },
+        { "surface": "façades blanches", "en": "the white cabinet fronts", "ref": "NH27", "prevue": "le blanc uni le plus proche", "zones": [[51, 52, 8, 11]] }
+      ]
+    },
+    {
+      "nom": "pro-bureaux",
+      "blanc": { "objet": "mur droit", "zone": [90, 48, 8, 15] },
+      "surfaces": [
+        { "surface": "rangements verts", "en": "the green storage fronts", "ref": "RM20", "zones": [[37, 10, 8, 25], [64, 10, 10, 30]] },
+        { "surface": "rangements bois", "en": "the wood storage fronts", "ref": "AL26", "prevue": "AG13", "zones": [[28.5, 10, 5.5, 30], [56, 10, 6, 30]] }
+      ]
+    },
+    {
+      "nom": "mur-salon",
+      "blanc": { "objet": "plafond", "zone": [20, 1, 60, 5] },
+      "surfaces": [
+        { "surface": "mur", "en": "the marble-effect wall", "ref": "NE31", "zones": [[66, 12, 24, 16], [20, 15, 18, 25]] }
+      ]
+    },
+    {
+      "nom": "etape-pose",
+      "fichier": "teintes/etape-pose-teinte-2.png",
+      "blanc": { "objet": "vase crème (pas de blanc franc éclairé)", "zone": [43, 3, 5, 12], "exposition": false },
+      "surfaces": [
+        { "surface": "film posé", "en": "the green film already applied on the drawer fronts (and the peeling sheet)", "ref": "RM20", "zones": [[22, 25, 16, 9]] }
+      ]
+    }
+  ]
+}

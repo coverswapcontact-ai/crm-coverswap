@@ -12,8 +12,20 @@
 export type Qualite = "low" | "medium" | "high";
 export const QUALITES: readonly Qualite[] = ["low", "medium", "high"];
 
+/**
+ * `gpt-image-2` et `gpt-image-2.5` (génération `-flare`, édition `-sunburst`, et leurs alias datés) : page tarifs
+ * d'OpenAI lue le 30/09/2026 — texte 5 $, image 8 $, sortie 30 $ par million de jetons. L'entrée en cache (1,25 $
+ * pour 2.5, 2 $ pour 2) n'est pas utilisée ici : chaque appel du script d'images est compté plein tarif.
+ */
+const PRIX_GPT_IMAGE_2 = { texte: 5, image: 8, sortie: 30 };
+
 export const PRIX: Record<string, { texte: number; image: number; sortie: number }> = {
   "gpt-image-1": { texte: 5, image: 10, sortie: 40 },
+  "gpt-image-2": PRIX_GPT_IMAGE_2,
+  "gpt-image-2.5-flare": PRIX_GPT_IMAGE_2,
+  "gpt-image-2.5-flare-2026-09-08": PRIX_GPT_IMAGE_2,
+  "gpt-image-2.5-sunburst": PRIX_GPT_IMAGE_2,
+  "gpt-image-2.5-sunburst-2026-09-08": PRIX_GPT_IMAGE_2,
   "gpt-image-1-mini": { texte: 2, image: 2.5, sortie: 8 },
   "gpt-4.1-mini": { texte: 0.4, image: 0.4, sortie: 1.6 },
 };

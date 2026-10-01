@@ -1,0 +1,230 @@
+{
+  "essais_par_image": 3,
+  "images": [
+    {
+      "nom": "ouverture-cuisine-apres",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern L-shaped kitchen in a bright apartment in Montpellier, seen from the doorway. A base run with wide deep drawers, a tall oven column and wall units above. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Base units and drawers in a soft sage green matte finish; wall units and the tall column in a light natural oak wood-grain with a fine straight grain; slim brushed stainless steel bar handles. Worktop in a white marble effect with soft grey veining. Splashback in plain warm white rectangular ceramic tiles. Black induction hob, integrated stainless oven, slim stainless extractor hood, undermount sink with a brushed brass tap. Light concrete-look floor tiles, warm white walls, a window on the left with a linen curtain. Styling: a ceramic vase with an olive branch, a wooden chopping board, a bowl of lemons, a pot of basil. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 24 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "ouverture-cuisine-avant",
+      "mode": "edition",
+      "source": "ouverture-cuisine-apres",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Edit this exact photo. Keep everything identical: camera position, lens, framing, light, shadows, walls, floor, window, splashback tiles, appliances, handles, sink, taps and every object. Change only these surfaces: all base unit, drawer, wall unit and column fronts become a glossy honey-orange beech-effect laminate typical of French kitchens from the early 2000s, and the worktop becomes a speckled grey-beige laminate. Door and drawer shapes, edges, gaps and handles stay exactly the same. The new surfaces must look like real ageing laminate from that era, with a slightly dated sheen and a few tiny signs of wear, and must follow the existing light and shadows. No other change."
+    },
+    {
+      "nom": "etude-salle-de-bain-apres",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern bathroom in a French family house, three-quarter view. A wall-hung double vanity about 140 cm wide with two wide drawers. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Drawer fronts in a warm greige matte finish with slim matte black edge pulls. Countertop in a white marble effect with soft grey veining, two white ceramic vessel basins, wall-mounted brushed brass taps. Behind the vanity, large-format warm white wall tiles; a large round mirror with a thin black frame; a walk-in shower with clear glass on the right; light oak-effect floor; a frosted window. Styling: folded linen towels, a eucalyptus branch in a ceramic pot, a stone soap dish. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "etude-salle-de-bain-avant",
+      "mode": "edition",
+      "source": "etude-salle-de-bain-apres",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Edit this exact photo. Keep everything identical: camera position, lens, framing, light, shadows, walls, floor, window, wall tiles, mirror, shower glass, appliances, handles, sink, taps and every object. Change only these surfaces: the vanity drawer fronts become a glossy dark cherry wood-effect laminate typical of the late 1990s, and the countertop becomes a beige marbled laminate. Door and drawer shapes, edges, gaps and handles stay exactly the same. The new surfaces must look like real ageing laminate from that era, with a slightly dated sheen and a few tiny signs of wear, and must follow the existing light and shadows. No other change."
+    },
+    {
+      "nom": "etude-meubles-apres",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern living room in a bright apartment, straight-on view. A long low TV unit with four flat drawers, flanked by two tall cabinets with flat doors, all push-to-open without handles. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Fronts in a soft terracotta matte finish with a subtle mineral stucco texture; top of the TV unit in a light natural oak wood-grain. A large TV on the wall, the edge of a beige bouclé sofa in the foreground, a jute rug, a paper floor lamp, a few books and ceramic objects on the unit, a large window with sheer linen curtains. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "etude-meubles-avant",
+      "mode": "edition",
+      "source": "etude-meubles-apres",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Edit this exact photo. Keep everything identical: camera position, lens, framing, light, shadows, walls, floor, window, TV, sofa, rug, lamp, appliances, handles, sink, taps and every object. Change only these surfaces: all the fronts become a dated glossy white laminate slightly yellowed with age, and the top becomes a dark cherry-effect laminate. Door and drawer shapes, edges, gaps and handles stay exactly the same. The new surfaces must look like real ageing laminate from that era, with a slightly dated sheen and a few tiny signs of wear, and must follow the existing light and shadows. No other change."
+    },
+    {
+      "nom": "meubles-dressing-apres",
+      "mode": "generation",
+      "format": "1024x1536",
+      "etiquette": "Ambiance",
+      "prompt": "A bright bedroom with a floor-to-ceiling built-in wardrobe with four tall flat doors, straight-on view, vertical format. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Doors in a soft pastel olive green matte finish with slim vertical brushed brass bar handles. In the foreground on the left, the corner of a bed with white and sage linen; a light oak floor; a round rattan pendant; a window with linen curtains. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "meubles-dressing-avant",
+      "mode": "edition",
+      "source": "meubles-dressing-apres",
+      "format": "1024x1536",
+      "etiquette": "Ambiance",
+      "prompt": "Edit this exact photo. Keep everything identical: camera position, lens, framing, light, shadows, walls, floor, window, bed, linen, pendant, appliances, handles, sink, taps and every object. Change only these surfaces: the wardrobe doors become a dated orange pine-effect laminate from the 1990s. Door and drawer shapes, edges, gaps and handles stay exactly the same. The new surfaces must look like real ageing laminate from that era, with a slightly dated sheen and a few tiny signs of wear, and must follow the existing light and shadows. No other change."
+    },
+    {
+      "nom": "pro-restaurant-apres",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "An elegant bistro-style restaurant in Montpellier before service, wide view. A long bar counter with a flat front panel and back-bar cabinets with flat doors. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Bar front and back-bar doors in a deep matte black finish; bar top in a grey natural stone effect; walnut wood-grain open shelves with glasses. Opal globe pendant lights, bentwood chairs, small round tables set for service, olive trees in terracotta pots, tall windows with soft afternoon light. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "pro-restaurant-avant",
+      "mode": "edition",
+      "source": "pro-restaurant-apres",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Edit this exact photo. Keep everything identical: camera position, lens, framing, light, shadows, walls, floor, window, shelves, glasses, tables, chairs, pendants, plants, appliances, handles, sink, taps and every object. Change only these surfaces: the bar front panel and the back-bar doors become a dated light pine-effect laminate, and the bar top becomes a beige tile-effect laminate. Door and drawer shapes, edges, gaps and handles stay exactly the same. The new surfaces must look like real ageing laminate from that era, with a slightly dated sheen and a few tiny signs of wear, and must follow the existing light and shadows. No other change."
+    },
+    {
+      "nom": "piece-cuisine",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern kitchen island seen at three-quarter, square format: wide deep drawers with flat fronts in a smoky green matte finish, worktop and waterfall side in a light natural oak wood-grain. Behind it, tall units with flat doors in a warm greyed beige matte finish. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Two paper pendant lights, cane counter stools, a bowl of figs, a linen tea towel. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "piece-salle-de-bain",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A serene modern bathroom corner, square format: a wall-hung vanity with two flat drawers in a light natural oak wood-grain, countertop in a warm travertine stone effect, a round white vessel basin, a brushed nickel wall tap, a pill-shaped mirror, warm white limewash-effect walls, a small olive tree, rolled towels. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "piece-meubles",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern sideboard in a bright dining room, square format: four flat doors in a deep midnight blue matte finish with small brushed brass knobs, top in a light natural oak wood-grain, ceramic vases and a stack of design books on top, a large abstract artwork in earthy tones on the wall, the edge of an oak dining table and a cane chair. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "piece-murs",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A calm modern bedroom, square format, seen straight on: the whole wall behind the bed is covered with large grey natural-stone-effect panels with seamless joints, a low bed with white and sand linen, two wall lights, a small oak bedside table with a ceramic lamp, a window with sheer curtains. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "piece-pro",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A boutique hotel reception desk in a Mediterranean lobby, three-quarter view, square format: the desk front is a flat panel in a walnut wood-grain with a fine vertical grain, a matte black top, a brass table lamp, a bouquet of wild flowers, a small key tray; behind, a warm white wall and an olive tree in a terracotta pot. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "pro-hotel",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A boutique hotel bedroom in the south of France, wide view: a full-height headboard wall in a walnut wood-grain finish, a built-in wardrobe with flat doors in a warm greyed beige matte finish, a bed with crisp white linen and a terracotta throw, two brass wall lights, a small desk, tall windows with linen curtains and Mediterranean light. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "pro-commerce",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A small concept store in the old town of Montpellier, wide view: a sales counter and display units with flat fronts in a light natural oak wood-grain and a matte white finish, curated ceramics, candles and linen on the shelves, a large arched window, terracotta floor tiles, a few green plants. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "pro-bureaux",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern meeting room in a bright office, wide view: a full wall of storage cabinets with flat doors alternating a sage green matte finish and a light natural oak wood-grain, a long oak table with upholstered chairs, a glass partition, a large plant, a screen on the wall switched off. All cabinet doors and drawer fronts are flat slab panels without any moulding or groove, finished with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 28 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "mur-salon",
+      "mode": "generation",
+      "format": "1024x1024",
+      "etiquette": "Ambiance",
+      "prompt": "A modern living room, square format: the TV wall is fully covered with large white marble-effect panels with soft grey veining and seamless joints, a low oak TV unit, a linen sofa in the foreground, a paper floor lamp, a jute rug, soft daylight from the side. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 35 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "etape-photo",
+      "mode": "edition",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Use the kitchen of the reference image as the background, softly out of focus. In the foreground, a hand holding a smartphone upright in portrait orientation, taking a photo of that kitchen; the phone screen shows the same kitchen. Shallow depth of field, focus on the phone, natural light. No face visible. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 50 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets.",
+      "source": "ouverture-cuisine-avant"
+    },
+    {
+      "nom": "etape-pose",
+      "mode": "generation",
+      "format": "1536x1024",
+      "etiquette": "Ambiance",
+      "prompt": "Close-up of an installer's hands applying a sage green matte self-adhesive film onto a flat kitchen drawer front with a felt-edged squeegee: the left half is already covered and perfectly smooth, the right half still shows the old glossy honey beech laminate, the release liner curls away. Precise detail of the film being wrapped around the edge. Shallow depth of field, natural light. Hands only, no face. Editorial interior photograph for a high-end French home magazine, 2026 design trends: warm minimalism, natural textures, soft matte finishes. Shot on a full-frame camera with a 50 mm lens at eye level (about 1.5 m), f/8, perfectly straight verticals, natural perspective, no fisheye distortion. Soft natural daylight from a large side window, bright late-morning Mediterranean light, gentle realistic shadows and reflections, balanced exposure with detail kept in the window. True-to-life colours with a subtle warm grade, crisp detail, real material textures. Styled but lived-in: a few well-chosen objects, never cluttered. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no brand names, no watermark. Avoid: CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, blown-out windows, bent or wavy lines, duplicated or floating handles, extra cabinets."
+    },
+    {
+      "nom": "picto-cuisine",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a small kitchen block: base cabinets with drawers, a worktop with a tiny sink and hob, two wall cabinets above; accent colour: sage green drawer fronts."
+    },
+    {
+      "nom": "picto-salle-de-bain",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a wall-hung vanity with two drawers, a round vessel basin and a round mirror above; accent colour: warm greige fronts."
+    },
+    {
+      "nom": "picto-mobilier",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a low sideboard with four doors on slim legs, a tiny vase on top; accent colour: terracotta fronts."
+    },
+    {
+      "nom": "picto-murs",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a freestanding wall section covered with a large stone-effect panel and a tiny low bench in front; accent colour: soft grey veined stone."
+    },
+    {
+      "nom": "picto-pro",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a small reception counter with a tiny brass lamp and a stool; accent colour: deep matte black front with an oak top."
+    },
+    {
+      "nom": "plan-une-rangee",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base: one straight run of cabinets along a single wall; off-white fronts, oak worktop, one sage green drawer."
+    },
+    {
+      "nom": "plan-en-l",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base: cabinets in an L shape along two walls; off-white fronts, oak worktop, one sage green drawer."
+    },
+    {
+      "nom": "plan-en-u",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base: cabinets in a U shape along three walls; off-white fronts, oak worktop, one sage green drawer."
+    },
+    {
+      "nom": "plan-ilot",
+      "mode": "generation",
+      "format": "1024x1024",
+      "fond": "transparent",
+      "etiquette": "Illustration",
+      "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base: one straight run along the wall plus a central island; off-white fronts, oak worktop, sage green island."
+    }
+  ]
+}

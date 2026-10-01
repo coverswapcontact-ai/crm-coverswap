@@ -16,6 +16,11 @@ process.env.UPLOADS_DIR = mkdtempSync(path.join(tmpdir(), "coverswap-m16-2-"));
  * moteur V2 simulé (`definirGenerateurEssai`, `definirVisionEssai`), le coût d'un échec compté comme le crédit
  * épuisé des rendus, et le coût réel relu dans `GenerationImage` en fin de lancement (`releverCouts` : le chiffre du
  * rapport, par phase). `fetch` est remplacé pendant tout le fichier : une requête réseau fait échouer le test.
+ *
+ * Mission 19 : le script lit désormais par défaut `scripts/photos-site-v2.json`, génère avec `gpt-image-2.5-flare` et
+ * n'a plus de limite de douze images (`--max` n'est plus qu'une limite d'appels, sans plafond). Adapté en conséquence :
+ * `--liste scripts/ambiances.json` passé explicitement aux lancements, la liste de treize et `--max 13` acceptés,
+ * l'estimation recalée sur la grille de gpt-image-2.5 (≈ 1,77 $ au lieu de ≈ 2,3 $). Le reste est inchangé.
  */
 
 let prisma: typeof import("@/lib/prisma").default;
@@ -35,6 +40,7 @@ let requetes: string[] = [];
 let journal: string[] = [];
 const dossier = (nom: string) => mkdtempSync(path.join(tmpdir(), `coverswap-m16-2-${nom}-`));
 const lancer = (argv: string[]) => ambiances.executerAmbiances(argv, (ligne) => journal.push(ligne));
+const ANCIENNE_LISTE = ["--liste", path.join(process.cwd(), "scripts", "ambiances.json")];
 const lignesAmbiance = () => prisma.generationImage.findMany({ where: { phase: "ambiance" }, orderBy: { createdAt: "asc" } });
 
 before(async () => {
@@ -72,9 +78,9 @@ after(async () => {
 });
 
 describe("la liste du dépôt (scripts/ambiances.json)", () => {
-  test("douze entrées au plus, celles de la conception dans l'ordre, une seule réserve ; honnêteté dans chaque prompt ; ≈ 2,3 $", async () => {
+  test("douze entrées, celles de la conception dans l'ordre, une seule réserve ; honnêteté dans chaque prompt ; ≈ 1,8 $ (grille 2.5)", async () => {
     const liste = ambiances.lireListeAmbiances(await fs.readFile(path.join(process.cwd(), "scripts", "ambiances.json"), "utf8"));
-    assert.ok(liste.length <= ambiances.MAX_AMBIANCES);
+    assert.equal(liste.length, 12);
     assert.deepEqual(liste.map((a) => a.nom), NOMS_CONCEPTION);
     assert.deepEqual(liste.filter((a) => a.reserve).map((a) => a.nom), ["ouverture-salle-de-bain-avant"]);
     const carres = liste.filter((a) => a.format === "1024x1024").map((a) => a.nom);
@@ -87,25 +93,25 @@ describe("la liste du dépôt (scripts/ambiances.json)", () => {
     const horsReserve = ambiances.choisirAmbiances(liste, { seulement: null, sauf: [] });
     assert.equal(horsReserve.length, 11);
     const estime = ambiances.estimerCoutAmbiances(horsReserve);
-    assert.ok(estime >= 2.2 && estime <= 2.5, `≈ ${estime} $`);
+    assert.ok(estime >= 1.7 && estime <= 1.9, `≈ ${estime} $`);
   });
 
-  test("une liste invalide est refusée avant tout appel (nom, format, double, plus de douze, emoji)", () => {
+  test("une liste invalide est refusée avant tout appel (nom, format, double, emoji) ; plus de douze : accepté (mission 19)", () => {
     const une = { nom: "piece-essai", format: "1024x1024", prompt: "Photorealistic interior photograph of a room, daylight, no people, no text, no logos, a long enough prompt." };
     assert.equal(ambiances.lireListeAmbiances(JSON.stringify([une])).length, 1);
     assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify([{ ...une, nom: "Pièce Essai" }])));
     assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify([{ ...une, format: "2048x2048" }])));
     assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify([une, une])), /double/);
-    assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify(Array.from({ length: 13 }, (_, i) => ({ ...une, nom: `piece-${i}` })))));
+    assert.equal(ambiances.lireListeAmbiances(JSON.stringify(Array.from({ length: 13 }, (_, i) => ({ ...une, nom: `piece-${i}` })))).length, 13);
     assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify([{ ...une, prompt: `${une.prompt} \u{1F3E0}` }])), /Emoji/);
     assert.throws(() => ambiances.lireListeAmbiances(JSON.stringify([{ ...une, couleur: "rouge" }])));
   });
 });
 
 describe("les options", () => {
-  test("options inconnues, --max hors bornes, zones hors pièce ou qui se recouvrent, --piece sans --rendu : refusés", () => {
+  test("options inconnues, --max à zéro, zones hors pièce ou qui se recouvrent, --piece sans --rendu : refusés", () => {
     assert.throws(() => ambiances.lireArguments(["--vite"]), /inconnue/);
-    assert.throws(() => ambiances.lireArguments(["--max", "13"]), /--max/);
+    assert.equal(ambiances.lireArguments(["--max", "13"]).max, 13);
     assert.throws(() => ambiances.lireArguments(["--max", "0"]), /--max/);
     assert.throws(() => ambiances.lireArguments(["--sortie"]), /valeur/);
     assert.throws(() => ambiances.lireArguments(["--rendu", "a.png", "--piece", "cuisine", "--zones", "meuble-vasque:K1"]), /n'appartient pas/);
@@ -131,7 +137,7 @@ describe("--essai : les ambiances sans réseau", () => {
   test("N fichiers PNG aux formats demandés, N lignes GenerationImage (CRM, ambiance, sans dossier, 0 $) ; relancé : rien refait", async () => {
     const sortie = dossier("essai");
     const avant = (await lignesAmbiance()).length;
-    const bilan = await lancer(["--essai", "--sortie", sortie, "--seulement", "piece-cuisine,pro-hotel,piece-murs"]);
+    const bilan = await lancer([...ANCIENNE_LISTE, "--essai", "--sortie", sortie, "--seulement", "piece-cuisine,pro-hotel,piece-murs"]);
     assert.deepEqual(bilan.ecrites.map((e) => e.nom), ["piece-cuisine", "piece-murs", "pro-hotel"]);
     assert.deepEqual(readdirSync(sortie).sort(), ["piece-cuisine.png", "piece-murs.png", "pro-hotel.png"]);
     const meta = await sharp(path.join(sortie, "pro-hotel.png")).metadata();
@@ -148,7 +154,7 @@ describe("--essai : les ambiances sans réseau", () => {
     assert.deepEqual(bilan.releve, { lignes: 3, totalDollars: 0, parPhase: [{ phase: "ambiance", statut: "REUSSI", lignes: 3, dollars: 0 }] });
     assert.match(journal.at(-1) ?? "", /^Coût réel relu dans GenerationImage \(base de DATABASE_URL.*ambiance 0,00 \$ × 3 — total 0,00 \$\.$/);
 
-    const encore = await lancer(["--essai", "--sortie", sortie, "--seulement", "piece-cuisine,pro-hotel,piece-murs"]);
+    const encore = await lancer([...ANCIENNE_LISTE, "--essai", "--sortie", sortie, "--seulement", "piece-cuisine,pro-hotel,piece-murs"]);
     assert.equal(encore.releve, null, "rien de lancé : rien à relire");
     assert.deepEqual([encore.ecrites.length, encore.sautees.length], [0, 3]);
     assert.ok(encore.sautees.every((s) => s.raison.startsWith("déjà là")));
@@ -158,7 +164,7 @@ describe("--essai : les ambiances sans réseau", () => {
   test("--max coupe : deux appels au plus, les suivantes notées « --max atteint », la réserve jamais", async () => {
     const sortie = dossier("max");
     const avant = (await lignesAmbiance()).length;
-    const bilan = await lancer(["--essai", "--sortie", sortie, "--max", "2"]);
+    const bilan = await lancer([...ANCIENNE_LISTE, "--essai", "--sortie", sortie, "--max", "2"]);
     assert.deepEqual(bilan.ecrites.map((e) => e.nom), ["ouverture-cuisine-avant", "piece-cuisine"]);
     assert.equal(bilan.sautees.length, 9);
     assert.ok(bilan.sautees.every((s) => s.raison === "--max 2 atteint"));
@@ -171,8 +177,8 @@ describe("--essai : les ambiances sans réseau", () => {
   test("--estimer : le plan et le coût, ni dossier, ni fichier, ni ligne ; sans --essai ni clé : rien n'est lancé", async () => {
     const sortie = path.join(dossier("estimer"), "pas-cree");
     const avant = await prisma.generationImage.count();
-    const bilan = await lancer(["--estimer", "--sortie", sortie]);
-    assert.ok(bilan.estimeDollars >= 2.2 && bilan.estimeDollars <= 2.5, `${bilan.estimeDollars}`);
+    const bilan = await lancer([...ANCIENNE_LISTE, "--estimer", "--sortie", sortie]);
+    assert.ok(bilan.estimeDollars >= 1.7 && bilan.estimeDollars <= 1.9, `${bilan.estimeDollars}`);
     assert.equal(bilan.releve, null);
     assert.equal(existsSync(sortie), false);
     assert.ok(journal.some((l) => l.startsWith("Coût estimé")));

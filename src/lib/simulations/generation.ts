@@ -91,8 +91,11 @@ async function telechargerEchantillon(url: string): Promise<Buffer | null> {
 
 async function noter(ligne: {
   origine: "SITE" | "CRM" | "ESPACE";
-  /** `rendu` (défaut) ou `ambiance` (image d'illustration du site, mission 16 : sans photo, sans dossier). */
-  phase?: "rendu" | "ambiance";
+  /**
+   * `rendu` (défaut) ou `ambiance` (image d'illustration du site, mission 16 : sans photo, sans dossier) ou
+   * `ambiance-edition` (mission 19 : une image du site retouchée à partir d'une autre, par `/images/edits`).
+   */
+  phase?: "rendu" | "ambiance" | "ambiance-edition";
   /** Le modèle noté (défaut : celui des rendus) ; `essai` pour une image unie du mode essai, jamais facturée. */
   modele?: string;
   statut: "REUSSI" | "ECHEC";
@@ -249,8 +252,34 @@ export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGe
 /** Les trois formats de sortie du modèle. */
 export type FormatAmbiance = TailleSortie;
 
-/** Le corps envoyé à `POST /images/generations`. */
-export type DemandeAmbiance = { model: string; prompt: string; size: FormatAmbiance; quality: Qualite; n: 1; output_format: "png" };
+/**
+ * Qualités acceptées par les modèles d'image : `low | medium | high` partout, `xhigh` et `max` en plus pour
+ * `gpt-image-2.5` (mission 19 ; le simulateur, lui, reste sur `Qualite`).
+ */
+export type QualiteAmbiance = Qualite | "xhigh" | "max";
+export const QUALITES_AMBIANCE: readonly QualiteAmbiance[] = ["low", "medium", "high", "xhigh", "max"];
+
+/** L'image source d'une édition (mission 19) : envoyée en multipart à `POST /images/edits`. */
+export type SourceEdition = { octets: Buffer; type: TypeImage; nom: string };
+
+/**
+ * Le corps envoyé au service d'images : `POST /images/generations` (JSON) sans `image`, `POST /images/edits`
+ * (multipart) avec. `background: "transparent"` va toujours avec `output_format: "png"` (fond des pictogrammes) ;
+ * `input_fidelity` n'est envoyé que si l'appelant le demande (la documentation de `gpt-image-2.5` ne le mentionne pas).
+ */
+export type DemandeAmbiance = {
+  model: string;
+  prompt: string;
+  size: FormatAmbiance;
+  quality: QualiteAmbiance;
+  n: 1;
+  output_format: "png";
+  background?: "transparent";
+  input_fidelity?: "high";
+  image?: SourceEdition;
+  /** Images de référence envoyées après la source (mission 19, recalage des teintes : les vignettes du catalogue). */
+  references?: SourceEdition[];
+};
 
 /** La réponse du service d'images : l'image en base64 et les jetons consommés, ou le statut et le corps d'une erreur. */
 export type ReponseAmbiance = { ok: true; b64: string; usage: Usage } | { ok: false; status: number; texte: string };
@@ -259,12 +288,21 @@ export type ReponseAmbiance = { ok: true; b64: string; usage: Usage } | { ok: fa
 export type AppelAmbiance = (demande: DemandeAmbiance, signal: AbortSignal) => Promise<ReponseAmbiance>;
 
 export type ResultatAmbiance =
-  | { ok: true; image: Buffer; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null }
+  | { ok: true; image: Buffer; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null; /** `input_fidelity` refusé par le modèle (400) : l'appel a été refait sans. */ fideliteRetiree: boolean }
   | ({ ok: false; dureeMs: number } & Omit<Sortie, "raison"> & { raison: RaisonEchec | "no-image-data" | "config" });
 
-/** L'appel réel : `POST <OpenAI>/images/generations` (JSON), sortie PNG en base64 et jetons consommés. */
-async function appelAmbianceOpenAI(demande: DemandeAmbiance, signal: AbortSignal): Promise<ReponseAmbiance> {
-  const reponse = await fetch(`${baseOpenAI()}/images/generations`, { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}`, "Content-Type": "application/json" }, body: JSON.stringify(demande), signal });
+/* ── Appel d'images remplaçable pour les essais (mission 19 : génération ET édition sans réseau) ── */
+const CLE_APPEL_AMBIANCE = "__coverswapAppelAmbianceEssai";
+const globalAppelEssai = globalThis as unknown as Record<string, AppelAmbiance | null | undefined>;
+
+/** Essais seulement : remplace l'appel au service d'images des ambiances (null : revient au vrai). */
+export function definirAppelAmbianceEssai(appel: AppelAmbiance | null): void {
+  if (appel) globalAppelEssai[CLE_APPEL_AMBIANCE] = appel;
+  else delete globalAppelEssai[CLE_APPEL_AMBIANCE];
+}
+
+/** Lit la réponse JSON du service d'images (génération ou édition) : l'image en base64 et les jetons. */
+async function lireReponseImages(reponse: Response): Promise<ReponseAmbiance> {
   if (!reponse.ok) return { ok: false, status: reponse.status, texte: await reponse.text().catch(() => "") };
   const donnees = (await reponse.json().catch(() => ({}))) as {
     data?: { b64_json?: string }[];
@@ -276,30 +314,76 @@ async function appelAmbianceOpenAI(demande: DemandeAmbiance, signal: AbortSignal
 }
 
 /**
- * Une image d'ambiance pour le site (mission 16, partie 2) : `gpt-image-1` sur un prompt seul, qualité `high` par
- * défaut, sortie PNG. Jamais une photo de client, jamais présentée comme un chantier (étiquette « Ambiance » sur le
- * site). Chaque appel écrit une ligne `GenerationImage` (origine CRM, phase `ambiance`, sans dossier) : le coût se lit
- * avec les autres dépenses du simulateur. Lancée seulement par `scripts/generer-ambiances.ts`, jamais par un test
- * (qui passe `appel`).
+ * L'appel réel : sans image, `POST <OpenAI>/images/generations` (JSON) ; avec une image source (mission 19),
+ * `POST <OpenAI>/images/edits` en multipart (l'image, le prompt, la taille, la qualité, et `background` /
+ * `input_fidelity` seulement s'ils sont demandés). Sortie PNG en base64 et jetons consommés.
  */
-export async function genererAmbiance(entree: { prompt: string; format: FormatAmbiance; qualite?: Qualite; signal?: AbortSignal }, options: { appel?: AppelAmbiance; modele?: string } = {}): Promise<ResultatAmbiance> {
+async function appelAmbianceOpenAI(demande: DemandeAmbiance, signal: AbortSignal): Promise<ReponseAmbiance> {
+  const autorisation = { Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}` };
+  const { image, references, ...champs } = demande;
+  if (!image) {
+    const reponse = await fetch(`${baseOpenAI()}/images/generations`, { method: "POST", headers: { ...autorisation, "Content-Type": "application/json" }, body: JSON.stringify(champs), signal });
+    return lireReponseImages(reponse);
+  }
+  const formulaire = new FormData();
+  for (const [cle, valeur] of Object.entries(champs)) if (valeur !== undefined) formulaire.append(cle, String(valeur));
+  for (const piece of [image, ...(references ?? [])]) formulaire.append("image[]", new Blob([new Uint8Array(piece.octets)], { type: piece.type }), piece.nom);
+  const reponse = await fetch(`${baseOpenAI()}/images/edits`, { method: "POST", headers: autorisation, body: formulaire, signal });
+  return lireReponseImages(reponse);
+}
+
+/** Un 400 qui refuse `input_fidelity` (paramètre inconnu du modèle) : on refait l'appel une fois sans. */
+const refusFidelite = (reponse: ReponseAmbiance) => !reponse.ok && reponse.status === 400 && /input_fidelity/i.test(reponse.texte);
+
+/**
+ * Une image d'ambiance pour le site (mission 16, partie 2) : un modèle d'image sur un prompt seul, qualité `high` par
+ * défaut, sortie PNG. Jamais une photo de client, jamais présentée comme un chantier (étiquette « Ambiance » sur le
+ * site). Mission 19 : avec `source`, une ÉDITION de cette image (`/images/edits`), notée phase `ambiance-edition` ;
+ * `fond: "transparent"` pour les pictogrammes ; `fideliteHaute` envoie `input_fidelity: "high"` (refait une fois sans
+ * si le modèle répond 400 sur ce paramètre, et le journalise) ; `references` ajoute des images après la source (les
+ * vignettes du catalogue du recalage des teintes). Chaque appel écrit une ligne `GenerationImage` (origine
+ * CRM, phase `ambiance` ou `ambiance-edition`, sans dossier) : le coût se lit avec les autres dépenses du simulateur.
+ * Lancée seulement par `scripts/generer-ambiances.ts`, jamais par un test (qui passe `appel` ou pose
+ * `definirAppelAmbianceEssai`).
+ */
+export async function genererAmbiance(
+  entree: { prompt: string; format: FormatAmbiance; qualite?: QualiteAmbiance; source?: SourceEdition | null; references?: SourceEdition[]; fond?: "transparent" | null; fideliteHaute?: boolean; signal?: AbortSignal },
+  options: { appel?: AppelAmbiance; modele?: string; journal?: (ligne: string) => void } = {}
+): Promise<ResultatAmbiance> {
   const debut = Date.now();
-  if (!options.appel && !process.env.OPENAI_API_KEY) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: "OPENAI_API_KEY absente." };
-  const appel = options.appel ?? appelAmbianceOpenAI;
+  const appelEssai = globalAppelEssai[CLE_APPEL_AMBIANCE];
+  if (!options.appel && !appelEssai && !process.env.OPENAI_API_KEY) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: "OPENAI_API_KEY absente." };
+  const appel = options.appel ?? appelEssai ?? appelAmbianceOpenAI;
   const modele = options.modele ?? modeleImage();
   const qualite = entree.qualite ?? "high";
+  const phase = entree.source ? "ambiance-edition" : "ambiance";
+  const echantillons = entree.source ? 1 + (entree.references?.length ?? 0) : 0;
   const echec = async (sortie: Omit<Extract<ResultatAmbiance, { ok: false }>, "ok" | "dureeMs">, detail?: string): Promise<ResultatAmbiance> => {
     const dureeMs = Date.now() - debut;
-    await noter({ origine: "CRM", phase: "ambiance", modele, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, taille: entree.format, echantillons: 0 });
+    await noter({ origine: "CRM", phase, modele, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, taille: entree.format, echantillons });
     return { ok: false, dureeMs, ...sortie };
   };
 
+  const demande: DemandeAmbiance = { model: modele, prompt: entree.prompt, size: entree.format, quality: qualite, n: 1, output_format: "png" };
+  if (entree.fond === "transparent") demande.background = "transparent";
+  if (entree.source) {
+    demande.image = entree.source;
+    if (entree.references?.length) demande.references = entree.references;
+    if (entree.fideliteHaute) demande.input_fidelity = "high";
+  }
   const controleur = new AbortController();
   const minuterie = setTimeout(() => controleur.abort(), DELAI_OPENAI_MS);
   entree.signal?.addEventListener("abort", () => controleur.abort(), { once: true });
   let reponse: ReponseAmbiance;
+  let fideliteRetiree = false;
   try {
-    reponse = await appel({ model: modele, prompt: entree.prompt, size: entree.format, quality: qualite, n: 1, output_format: "png" }, controleur.signal);
+    reponse = await appel(demande, controleur.signal);
+    if (demande.input_fidelity && refusFidelite(reponse)) {
+      options.journal?.(`${modele} refuse input_fidelity (HTTP 400) : appel refait une fois sans ce paramètre.`);
+      fideliteRetiree = true;
+      delete demande.input_fidelity;
+      reponse = await appel(demande, controleur.signal);
+    }
   } catch (erreur) {
     const delai = erreur instanceof Error && (erreur.name === "AbortError" || /aborted/i.test(erreur.message));
     return echec({ status: delai ? 504 : 502, raison: delai ? "delai" : "surcharge", message: delai ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge }, erreur instanceof Error ? erreur.message.slice(0, 200) : undefined);
@@ -314,6 +398,6 @@ export async function genererAmbiance(entree: { prompt: string; format: FormatAm
   const image = Buffer.from(reponse.b64, "base64");
   const coutDollars = coutEnDollars(reponse.usage, modele);
   const dureeMs = Date.now() - debut;
-  const generationId = await noter({ origine: "CRM", phase: "ambiance", modele, statut: "REUSSI", dureeMs, taille: entree.format, echantillons: 0, usage: reponse.usage, coutDollars });
-  return { ok: true, image, dureeMs, usage: reponse.usage, coutDollars, generationId };
+  const generationId = await noter({ origine: "CRM", phase, modele, statut: "REUSSI", dureeMs, taille: entree.format, echantillons, usage: reponse.usage, coutDollars });
+  return { ok: true, image, dureeMs, usage: reponse.usage, coutDollars, generationId, fideliteRetiree };
 }

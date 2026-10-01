@@ -163,6 +163,16 @@ export const CARTE_DONNEES_PERSONNELLES: Readonly<Record<string, RegleAnonymisat
   // Mission 10 (23/09/2026) : ce que l'assistant a modifié (valeurs d'avant et d'après, phrase de Lucas) et les messages de l'espace.
   ModificationDossier: { remplacer: () => ({ champs: "[]", commande: null }), garde: "dates, acteur et annulation : la trace qu'une modification a eu lieu, sans ses valeurs" },
   MessageEspace: { remplacer: () => ({ texte: EFFACE }), garde: "auteur, source, dates (lu, notifié) : la mesure des échanges, sans leur contenu" },
+  // Mission 17 (partie C) : la trace commune des modifications de l'outil « modifier » (valeurs d'avant et d'après, nom de
+  // ce qui a été modifié, phrase de Lucas). Sans colonne de lien : l'anonymisation la retrouve par (entite,
+  // enregistrementId) sur les enregistrements de la personne (lead, dossier, fiche, coordonnées, notes d'appel,
+  // documents, paiements, simulations, publications) et la caviarde comme ModificationDossier.
+  ModificationAssistant: { remplacer: () => ({ champs: "[]", commande: null, nom: null }), garde: "entité, identifiant, dates, acteur et annulation : la trace qu'une modification a eu lieu, sans ses valeurs" },
+  // Mission 17 (partie C) : les fichiers reçus (lien de dépôt, URL, base64, pièce de mail) et rangés sur un dossier, un
+  // lead, une fiche client ; le fichier lui-même (photo, Fichier conservé) est effacé avec les autres.
+  FichierDepose: { remplacer: () => ({ nom: null, origine: null, cibleNom: null, photoChemin: null, archiveMotif: null }), garde: "voie, type, taille, empreinte, cible (identifiant) et dates : la mesure des dépôts, sans nom de fichier ni nom de personne" },
+  // Le lien de dépôt : le nom de la cible s'affiche sur la page (« Photos avant — dossier de Mme Martin »).
+  JetonDepot: { remplacer: () => ({ cibleNom: null, archiveMotif: null }), garde: "empreinte du jeton, cible (identifiant), type, compteurs et dates" },
   // Simulateur du CRM (21/09/2026).
   PreparationSimulation: { remplacer: () => ({ photoSource: EFFACE, photoAvant: null, analyse: null, promptTexte: null, directionArtistique: null, photoEmpreinte: null }), garde: "type de surface, teintes, version du prompt, moteur, score du contrôle, mode et dates (photos, consigne et description de la pièce effacées)" },
   GenerationImage: { conserve: "coût d'une génération d'image : jetons, montant et durée, aucune donnée de la personne" },

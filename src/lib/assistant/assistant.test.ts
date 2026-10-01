@@ -79,12 +79,17 @@ describe("catalogue", () => {
       assert.ok(o.description.length > 40, `${o.nom} : description trop courte`);
       assert.ok(["LECTURE", "REVERSIBLE", "SENSIBLE"].includes(o.niveau));
     }
-    for (const nom of ["envoyer_document", "envoyer_lien_espace", "renouveler_lien", "saisir_encaissement", "annuler_encaissement", "envoyer_mail", "generer_document", "publier_simulation"]) {
+    for (const nom of ["envoyer_document", "envoyer_lien_espace", "saisir_encaissement", "annuler_encaissement", "envoyer_mail", "generer_document"]) {
       assert.equal(catalogue.outilParNom(nom)?.niveau, "SENSIBLE", nom);
     }
+    // Mission 17 (partie C) : l'ex-« renouveler_lien » (geste_espace NOUVEAU_LIEN, avec mail) et l'ex-« publier_simulation »
+    // (publier SIMULATION) restent sensibles, par cas.
+    assert.equal(catalogue.outilParNom("geste_espace")!.sensible!({ geste: "NOUVEAU_LIEN", nom: "X" }), true);
+    assert.equal(catalogue.outilParNom("publier")!.sensible!({ quoi: "SIMULATION", ids: ["x"] }), true);
     const vue = catalogue.catalogueVue();
     assert.equal(vue.filter((o) => o.famille === "ANALYSE").length, 5);
-    assert.ok(vue.filter((o) => o.famille === "LECTURE").length >= 10);
+    // Mission 17 (partie C) : les lectures sont regroupées (lister, etat_crm, voir_fichiers, taches, analytique…).
+    assert.ok(vue.filter((o) => o.famille === "LECTURE").length >= 8);
     assert.ok(vue.filter((o) => o.famille === "ECRITURE").length >= 18);
   });
 });
@@ -115,15 +120,15 @@ describe("recherche, ambiguïté, refus", () => {
     const fiche = await appeler("lire_fiche", { nom: "Rousse" });
     assert.match(fiche.texte, /Plusieurs contacts correspondent/);
     const avant = [await prisma.interaction.count(), await prisma.dossierNote.count(), await prisma.noteAppel.count()];
-    const note = await appeler("ajouter_note", { nom: "Rousse", texte: "Rappelé ce matin", commande: "Mets une note sur Rousse" });
+    const note = await appeler("creer", { entite: "NOTE", cible: { nom: "Rousse" }, champs: { texte: "Rappelé ce matin" }, commande: "Mets une note sur Rousse" });
     assert.match(note.texte, /Plusieurs contacts correspondent/);
     assert.deepEqual([await prisma.interaction.count(), await prisma.dossierNote.count(), await prisma.noteAppel.count()], avant);
-    const journal = await prisma.appelOutil.findFirst({ where: { outil: "ajouter_note", commande: "Mets une note sur Rousse" } });
+    const journal = await prisma.appelOutil.findFirst({ where: { outil: "creer", commande: "Mets une note sur Rousse" } });
     assert.equal(journal?.statut, "FAIT");
   });
 
   test("« Où en est le dossier Forestier ? » : ouverture du dossier puis fiche lisible", async () => {
-    const ouverture = await appeler("ouvrir_dossier", { leadId: forestier.id, commande: "Ouvre le dossier Forestier" });
+    const ouverture = await appeler("creer", { entite: "DOSSIER", cible: { leadId: forestier.id }, champs: {}, commande: "Ouvre le dossier Forestier" });
     dossierForestier = (ouverture.donnees as { dossierId: string }).dossierId;
     assert.ok(dossierForestier);
     const fiche = await appeler("lire_fiche", { nom: "Forestier" });
@@ -134,9 +139,9 @@ describe("recherche, ambiguïté, refus", () => {
   });
 
   test("une note s'écrit avec l'acteur ASSISTANT et la commande d'origine dans le journal", async () => {
-    const r = await appeler("ajouter_note", { nom: "Forestier", texte: "Mesures prises", commande: "Note sur Forestier : mesures prises" });
+    const r = await appeler("creer", { entite: "NOTE", cible: { nom: "Forestier" }, champs: { texte: "Mesures prises" }, commande: "Note sur Forestier : mesures prises" });
     assert.match(r.texte, /Note ajoutée/);
-    const journal = await prisma.appelOutil.findFirst({ where: { outil: "ajouter_note", commande: "Note sur Forestier : mesures prises" } });
+    const journal = await prisma.appelOutil.findFirst({ where: { outil: "creer", commande: "Note sur Forestier : mesures prises" } });
     assert.equal(journal?.statut, "FAIT");
     assert.ok(journal?.resume?.includes("Note ajoutée"));
     const note = await prisma.dossierNote.findFirst({ where: { dossierId: dossierForestier }, orderBy: { createdAt: "desc" } });
@@ -160,7 +165,7 @@ describe("recherche, ambiguïté, refus", () => {
     assert.match(apercu.texte, /Rien n'a été fait/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 0);
     const fait = await appeler("archiver", { leads: ids, motif: "doublon", confirmation: apercu.confirmation!.jeton, commande: "Archive tous ces leads" });
-    assert.match(fait.texte, /5 leads archivés/);
+    assert.match(fait.texte, /Archivé \(motif : doublon\) : 5 leads/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 5);
     const rejoue = await appeler("archiver", { leads: ids, motif: "doublon", confirmation: apercu.confirmation!.jeton });
     assert.match(rejoue.texte, /^Refusé : Ce jeton de confirmation a déjà servi/);
@@ -216,7 +221,7 @@ describe("facture et encaissement", () => {
 
   before(async () => {
     const jean = await lead({ prenom: "Jean-Marc", nom: "Rousseau", email: "jm@exemple.fr" });
-    const ouverture = await appeler("ouvrir_dossier", { leadId: jean.id });
+    const ouverture = await appeler("creer", { entite: "DOSSIER", cible: { leadId: jean.id }, champs: {} });
     dossierId = (ouverture.donnees as { dossierId: string }).dossierId;
     await prisma.dossier.update({ where: { id: dossierId }, data: { clientAdresse: "3 rue des Essais", clientCp: "34970", clientVille: "Lattes" } });
   });
@@ -360,8 +365,16 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
   });
 
   test("les cinq managers et les outils de lecture répondent sans erreur, avec leurs définitions", async () => {
-    for (const nom of ["manager_commercial", "manager_finances", "manager_marketing", "manager_clients", "manager_operations", "synthese", "ce_qui_m_attend", "leads_a_appeler", "leads_a_rappeler", "dossiers_par_etape", "espaces_clients", "mails_a_traiter", "campagne", "sante_systeme"]) {
-      const r = await appeler(nom, {});
+    // Mission 17 (partie C) : les lectures retirées passent par leur remplaçant (synthese → analytique synthese, ce_qui_m_attend
+    // → taches TOUT, leads_a_… / dossiers_par_etape / espaces_clients / mails_a_traiter → lister, campagne → analytique
+    // publicite, sante_systeme → etat_crm SANTE).
+    const lectures: [string, Record<string, unknown>][] = [
+      ["manager_commercial", {}], ["manager_finances", {}], ["manager_marketing", {}], ["manager_clients", {}], ["manager_operations", {}],
+      ["analytique", { synthese: {} }], ["taches", { vue: "TOUT" }], ["lister", { liste: "LEADS", vue: "A_APPELER" }], ["lister", { liste: "LEADS", vue: "A_RAPPELER" }],
+      ["lister", { liste: "DOSSIERS" }], ["lister", { liste: "ESPACES" }], ["lister", { liste: "MAILS" }], ["analytique", { onglet: "publicite" }], ["etat_crm", { partie: "SANTE" }],
+    ];
+    for (const [nom, entree] of lectures) {
+      const r = await appeler(nom, entree);
       assert.ok(r.texte.length > 20, nom);
       assert.doesNotMatch(r.texte, /a échoué|^Refusé|Paramètres invalides/, `${nom} : ${r.texte.slice(0, 200)}`);
     }
@@ -389,8 +402,8 @@ describe("managers : calculs purs face à un calcul indépendant", () => {
 describe("plafond d'écritures", () => {
   test("au-delà de 60 écritures dans l'heure, le serveur refuse et le journal le dit", async () => {
     const forestier = await prisma.lead.findFirstOrThrow({ where: { nom: "Forestier" } });
-    await prisma.appelOutil.createMany({ data: Array.from({ length: 60 }, () => ({ sessionId: session.id, outil: "ajouter_note", niveau: "REVERSIBLE", statut: "FAIT", parametres: "{}", dureeMs: 1 })) });
-    const r = await appeler("ajouter_note", { leadId: forestier.id, texte: "Une de trop" });
+    await prisma.appelOutil.createMany({ data: Array.from({ length: 60 }, () => ({ sessionId: session.id, outil: "creer", niveau: "REVERSIBLE", statut: "FAIT", parametres: "{}", dureeMs: 1 })) });
+    const r = await appeler("creer", { entite: "NOTE", cible: { leadId: forestier.id }, champs: { texte: "Une de trop" } });
     assert.match(r.texte, /^Refusé : Plafond de sécurité/);
     const refus = await prisma.appelOutil.findFirst({ where: { statut: "REFUSE", erreur: { startsWith: "Plafond" } } });
     assert.ok(refus);

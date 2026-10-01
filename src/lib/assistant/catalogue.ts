@@ -4,30 +4,30 @@ import { outilManagerFinances } from "./analyses/finances";
 import { outilManagerMarketing } from "./analyses/marketing";
 import { outilManagerOperations } from "./analyses/operations";
 import { LIBELLES_NIVEAU, type DefinitionOutil, type NiveauOutil } from "./definition";
-import { OUTILS_ACTIONS } from "./outils/actions";
-import { OUTILS_CATALOGUE } from "./outils/catalogue-outils";
-import { OUTILS_CONTACTS } from "./outils/contacts";
-import { OUTILS_DOCUMENTS } from "./outils/documents";
-import { OUTILS_PARAMETRES_ECRITURE, OUTILS_PARAMETRES_LECTURE } from "./outils/parametres";
-import { OUTILS_PUBLICITE } from "./outils/publicite";
 import { OUTILS_ANALYTIQUE } from "./outils/analytique";
-import { OUTILS_RELANCES_ECRITURE, OUTILS_RELANCES_LECTURE } from "./outils/relances";
-import { OUTILS_SITE } from "./outils/site";
-import { OUTILS_DEPENSES } from "./outils/depenses";
+import { OUTILS_DOCUMENTS } from "./outils/documents";
 import { OUTILS_ECRITURE } from "./outils/ecriture";
-import { OUTILS_ESPACE_ECRITURE, OUTILS_ESPACE_LECTURE } from "./outils/espace";
-import { OUTILS_IMAGES } from "./outils/images";
+import { OUTILS_ESPACE_ECRITURE } from "./outils/espace";
+import { OUTILS_ETAT } from "./outils/etat";
+import { OUTILS_FICHIERS } from "./outils/fichiers";
+import { OUTILS_GENERIQUES } from "./outils/generiques";
+import { OUTILS_GESTES } from "./outils/gestes";
 import { OUTILS_LECTURE } from "./outils/lecture";
+import { OUTILS_LISTER } from "./outils/lister";
 import { OUTILS_MAIL } from "./outils/mail";
-import { OUTILS_REGLAGES_ECRITURE, OUTILS_REGLAGES_LECTURE } from "./outils/reglages";
+import { OUTILS_RELANCES_ECRITURE } from "./outils/relances";
 import { OUTILS_SIMULATION } from "./outils/simulation";
 import { OUTILS_SMS } from "./outils/sms";
 import { OUTILS_TACHES_ECRITURE, OUTILS_TACHES_LECTURE } from "./outils/taches";
 import { outilPointDuJour } from "./outils/point-du-jour";
+import { OUTILS_RETIRES } from "./retraits";
 
 /**
  * Le catalogue des outils de l'assistant (mission 8) : lecture, point du
- * jour, écriture, et les cinq « managers » d'analyse. C'est cette liste que
+ * jour, écriture, et les cinq « managers » d'analyse. Mission 17 (partie C) :
+ * les outils génériques (creer, modifier, archiver, restaurer, lister,
+ * etat_crm, fichiers, gestes) remplacent 45 outils d'un seul geste
+ * (correspondance : docs/MCP-COUVERTURE.md § 4.14 et `OUTILS_RETIRES`). C'est cette liste que
  * le serveur MCP expose, et que l'écran Paramètres montre avec le niveau de
  * chacun. Un outil s'ajoute ici et nulle part ailleurs.
  */
@@ -38,33 +38,32 @@ export type OutilQuelconque = DefinitionOutil<any>;
 export const OUTILS_ANALYSE: OutilQuelconque[] = [outilManagerCommercial, outilManagerFinances, outilManagerMarketing, outilManagerClients, outilManagerOperations];
 
 export const CATALOGUE: OutilQuelconque[] = [
-  ...OUTILS_LECTURE,
-  ...OUTILS_TACHES_LECTURE,
-  ...OUTILS_IMAGES,
-  ...OUTILS_SITE,
-  ...OUTILS_ESPACE_LECTURE,
-  ...OUTILS_DEPENSES,
-  ...OUTILS_REGLAGES_LECTURE,
-  ...OUTILS_PARAMETRES_LECTURE,
-  ...OUTILS_RELANCES_LECTURE,
-  ...OUTILS_PUBLICITE,
-  ...OUTILS_ANALYTIQUE,
-  ...OUTILS_CATALOGUE,
+  // Lecture
+  ...OUTILS_LECTURE, // chercher, lire_fiche
+  ...OUTILS_LISTER, // lister
+  ...OUTILS_FICHIERS.filter((o) => o.niveau === "LECTURE"), // voir_fichiers
+  ...OUTILS_ETAT, // etat_crm
+  ...OUTILS_TACHES_LECTURE, // taches
+  ...OUTILS_ANALYTIQUE, // analytique
   outilPointDuJour,
   ...OUTILS_ANALYSE,
   ...OUTILS_MAIL,
+  // Écriture
+  ...OUTILS_GENERIQUES, // creer, modifier, annuler_modification, archiver, restaurer
+  ...OUTILS_FICHIERS.filter((o) => o.niveau !== "LECTURE"), // lien_depot, ajouter_fichier, ranger_fichier
   ...OUTILS_ECRITURE,
   ...OUTILS_SMS,
   ...OUTILS_DOCUMENTS,
-  ...OUTILS_CONTACTS,
-  ...OUTILS_ACTIONS,
+  ...OUTILS_RELANCES_ECRITURE,
   ...OUTILS_ESPACE_ECRITURE,
   ...OUTILS_SIMULATION,
-  ...OUTILS_REGLAGES_ECRITURE,
-  ...OUTILS_PARAMETRES_ECRITURE,
-  ...OUTILS_RELANCES_ECRITURE,
-  ...OUTILS_TACHES_ECRITURE,
+  ...OUTILS_GESTES, // publier, traiter_mail, geste_espace, doublon, anonymiser_client, agir_systeme
+  ...OUTILS_TACHES_ECRITURE, // repondre_tache
 ];
+
+// Mission 17 (partie C) : un outil retiré ne revient jamais sous le même nom (les consignes en base le traduisent).
+const revenus = CATALOGUE.map((o) => o.nom).filter((nom) => nom in OUTILS_RETIRES);
+if (revenus.length) throw new Error(`Catalogue de l'assistant : outils retirés encore exposés (${revenus.join(", ")}).`);
 
 const doublons = CATALOGUE.map((o) => o.nom).filter((nom, i, liste) => liste.indexOf(nom) !== i);
 if (doublons.length) throw new Error(`Catalogue de l'assistant : noms d'outils en double (${doublons.join(", ")}).`);

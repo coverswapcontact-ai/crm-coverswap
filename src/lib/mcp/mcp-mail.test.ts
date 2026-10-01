@@ -126,7 +126,9 @@ describe("les dix phrases du mandat", () => {
   test("les outils du mail sont exposés avec leur niveau ; les consignes portent la section Mail", async () => {
     const outils = await client.listTools();
     const noms = outils.tools.map((t) => t.name);
-    for (const nom of ["lire_mail", "mails_non_classes", "rechercher_mails", "classer_mail", "resumer_fil", "proposer_mise_a_jour", "valider_proposition", "ignorer_proposition", "deposer_brouillon", "snoozer_mail", "rattacher_mail", "ranger_mail", "proposer_regle"]) assert.ok(noms.includes(nom), nom);
+    // Mission 17 (partie C) : mails_non_classes → lister MAILS NON_CLASSES ; snoozer_mail, rattacher_mail, ranger_mail → traiter_mail ;
+    // proposer_regle → creer REGLE_EXPEDITEUR.
+    for (const nom of ["lire_mail", "lister", "rechercher_mails", "classer_mail", "resumer_fil", "proposer_mise_a_jour", "valider_proposition", "ignorer_proposition", "deposer_brouillon", "traiter_mail", "creer"]) assert.ok(noms.includes(nom), nom);
     assert.match(outils.tools.find((t) => t.name === "lire_mail")!.description ?? "", /^\[Lecture\]/);
     assert.match(outils.tools.find((t) => t.name === "classer_mail")!.description ?? "", /^\[Écriture réversible\]/);
     assert.match(outils.tools.find((t) => t.name === "envoyer_mail")!.description ?? "", /^\[Sensible/);
@@ -135,7 +137,7 @@ describe("les dix phrases du mandat", () => {
   });
 
   test("1. « Classe mes mails » : lecture, classement en lot, confirmation au-delà de trois", async () => {
-    const liste = await appeler("mails_non_classes", {});
+    const liste = await appeler("lister", { liste: "MAILS", vue: "NON_CLASSES" });
     const aClasser = idsDe(liste, "mail");
     assert.ok(aClasser.length >= 6, liste.slice(0, 300));
     const mails = aClasser.map((messageId) => ({ messageId, intention: messageId === ids.mailMeta ? "ACTION" : messageId === ids.mailRousse ? "REPONSE" : "REPONSE", attendu: messageId === ids.mailMeta ? "Facture à régler" : "Répondre", ...(messageId === ids.mailThimalu ? { dates: [{ date: "2026-10-02", heure: "14:00", nature: "DISPONIBILITE", passage: "Je serai disponible le 2 octobre à 14h" }] } : {}) }));
@@ -147,11 +149,11 @@ describe("les dix phrases du mandat", () => {
     assert.match(fait, new RegExp(`${aClasser.length} mails classés`));
     assert.equal(await prisma.message.count({ where: { id: { in: aClasser }, intention: { not: null }, intentionPar: "ASSISTANT:claude" } }), aClasser.length);
     assert.equal((await prisma.appelOutil.count({ where: { outil: "classer_mail", statut: "FAIT" } })), 1, "un lot = une écriture");
-    assert.equal(await appeler("mails_non_classes", {}).then((t) => /Aucun mail à classer/.test(t)), true);
+    assert.equal(await appeler("lister", { liste: "MAILS", vue: "NON_CLASSES" }).then((t) => /Aucun mail à classer/.test(t)), true);
   });
 
   test("2. « Qu'est-ce que j'ai à traiter ? » : par priorité, la réclamation en tête, avec intention et attendu", async () => {
-    const t = await appeler("mails_a_traiter", {});
+    const t = await appeler("lister", { liste: "MAILS", vue: "A_TRAITER" });
     const premiere = t.split("\n").find((l) => /^1\. /.test(l)) ?? "";
     assert.match(premiere, /\[Réclamation\]/);
     assert.match(premiere, /Rousse/);
@@ -240,8 +242,8 @@ describe("les dix phrases du mandat", () => {
     assert.ok(idsDe(trouve, "mail").includes(ids.mailMeta), trouve);
     const fil = await appeler("lire_mail", { messageId: ids.mailMeta });
     assert.match(fil, /87,50 €/);
-    const r = await appeler("rattacher_depense", { montant: 87.5, fournisseur: "Meta", categorie: "PUBLICITE", libelle: "Meta Ads — reçu du 21 septembre (FB-2026-0921)", hors_chantier: true, commande: "Le mail de la facture Meta, mets-le en dépense" });
-    assert.match(r, /Dépense enregistrée : 87,5 € chez Meta \(PUBLICITE\), hors chantier/);
+    const r = await appeler("creer", { entite: "DEPENSE", champs: { montant: 87.5, fournisseur: "Meta", categorie: "PUBLICITE", libelle: "Meta Ads — reçu du 21 septembre (FB-2026-0921)", hors_chantier: true }, commande: "Le mail de la facture Meta, mets-le en dépense" });
+    assert.match(r, /Dépense enregistrée : 87,5 € chez Meta \(publicité\), hors chantier/);
     const depense = await prisma.depense.findFirst({ where: { fournisseur: "Meta" } });
     assert.deepEqual([depense?.montant, depense?.categorie, depense?.horsChantier], [87.5, "PUBLICITE", true]);
   });
@@ -255,12 +257,12 @@ describe("les dix phrases du mandat", () => {
   });
 
   test("8. « Ce mail, remets-le-moi lundi » : lundi 9 h Paris, hors d'À traiter jusque-là", async () => {
-    const r = await appeler("snoozer_mail", { messageId: ids.mailKarim, quand: "lundi", commande: "Ce mail, remets-le-moi lundi" });
-    assert.match(r, /^Remis au .* à 09:00/);
+    const r = await appeler("traiter_mail", { geste: "SNOOZER", messageIds: [ids.mailKarim], quand: "lundi", commande: "Ce mail, remets-le-moi lundi" });
+    assert.match(r, /^1 mail : remis au .* à 09:00/);
     const m = await prisma.message.findUniqueOrThrow({ where: { id: ids.mailKarim } });
     assert.equal(m.snoozeJusqua?.toLocaleDateString("fr-FR", { weekday: "long", timeZone: "Europe/Paris" }), "lundi");
     assert.equal(m.snoozePar, "ASSISTANT:claude");
-    assert.doesNotMatch(await appeler("mails_a_traiter", {}), new RegExp(`\\[mail:${ids.mailKarim}\\]`));
+    assert.doesNotMatch(await appeler("lister", { liste: "MAILS", vue: "A_TRAITER" }), new RegExp(`\\[mail:${ids.mailKarim}\\]`));
     const { conversations } = await import("@/lib/mail/vues");
     const revenu = (await conversations(new Date(m.snoozeJusqua!.getTime() + 60_000))).find((l) => l.messageId === ids.mailKarim)!;
     assert.deepEqual([revenu.aTraiter, revenu.mention, revenu.priorite.rang], [true, "Revenu", 0]);
@@ -274,19 +276,19 @@ describe("les dix phrases du mandat", () => {
   });
 
   test("10. « Range tout ce qui vient de TikTok pour toujours » : rangement par expéditeur (aperçu, confirmation), règle proposée puis validée", async () => {
-    const apercu = await appeler("ranger_mail", { expediteur: "@tiktok-mails.com", commande: "Range tout ce qui vient de TikTok pour toujours" });
+    const apercu = await appeler("traiter_mail", { geste: "RANGER", expediteur: "@tiktok-mails.com", commande: "Range tout ce qui vient de TikTok pour toujours" });
     assert.match(apercu, /Je vais ranger 3 fils/);
     assert.equal(await prisma.message.count({ where: { de: "promo@tiktok-mails.com", rangeLe: { not: null } } }), 0, "rien avant confirmation");
-    const fait = await appeler("ranger_mail", { expediteur: "@tiktok-mails.com", confirmation: jetonDe(apercu), commande: "Range tout ce qui vient de TikTok pour toujours" });
+    const fait = await appeler("traiter_mail", { geste: "RANGER", expediteur: "@tiktok-mails.com", confirmation: jetonDe(apercu), commande: "Range tout ce qui vient de TikTok pour toujours" });
     assert.match(fait, /3 mails rangés/);
     assert.equal(await prisma.message.count({ where: { de: "promo@tiktok-mails.com", rangeLe: { not: null }, rangePar: "ASSISTANT", lu: true } }), 3);
     // Trois rangements de la même adresse : le CRM a déjà proposé la règle sur l'adresse ; Claude propose le domaine.
-    const regle = await appeler("proposer_regle", { cible: "@tiktok-mails.com", action: "RANGER", motif: "Lucas ne veut plus voir TikTok", commande: "Range tout ce qui vient de TikTok pour toujours" });
-    const propositionId = /\[proposition:([a-z0-9]+)\]/.exec(regle)?.[1];
-    assert.ok(propositionId, regle);
-    assert.equal(await prisma.regleExpediteur.count({ where: { cible: "@tiktok-mails.com" } }), 0, "pas posée sans validation");
-    const validee = await appeler("valider_proposition", { propositionIds: [propositionId], commande: "oui, pour toujours" });
-    assert.match(validee, /^Appliqué : Toujours ranger les mails de @tiktok-mails.com/);
+    // Mission 17 (partie C) : la règle se pose par « creer » REGLE_EXPEDITEUR, sous confirmation (l'aperçu remplace la carte à valider).
+    const regle = await appeler("creer", { entite: "REGLE_EXPEDITEUR", champs: { cible: "@tiktok-mails.com", action: "RANGER", motif: "Lucas ne veut plus voir TikTok" }, commande: "Range tout ce qui vient de TikTok pour toujours" });
+    assert.ok(jetonDe(regle), regle);
+    assert.equal(await prisma.regleExpediteur.count({ where: { cible: "@tiktok-mails.com" } }), 0, "pas posée sans confirmation");
+    const validee = await appeler("creer", { entite: "REGLE_EXPEDITEUR", champs: { cible: "@tiktok-mails.com", action: "RANGER", motif: "Lucas ne veut plus voir TikTok" }, confirmation: jetonDe(regle), commande: "oui, pour toujours" });
+    assert.doesNotMatch(validee, /^Refusé/, validee);
     assert.equal((await prisma.regleExpediteur.findFirst({ where: { cible: "@tiktok-mails.com", archiveLe: null } }))?.action, "RANGER");
     const apprise = await prisma.proposition.findFirst({ where: { cleUnicite: "regle-tri:promo@tiktok-mails.com:RANGER" } });
     assert.equal(apprise?.statut, "EN_ATTENTE", "la règle apprise sur l'adresse attend Lucas");
@@ -296,7 +298,7 @@ describe("les dix phrases du mandat", () => {
     const { sessionsRecentes } = await import("@/lib/assistant/execution");
     const [session] = await sessionsRecentes(1);
     const outils = new Set(session.derniers.map((a) => a.outil));
-    for (const nom of ["mails_non_classes", "classer_mail", "mails_a_traiter", "lire_mail", "resumer_fil", "proposer_mise_a_jour", "valider_proposition", "ignorer_proposition", "deposer_brouillon", "envoyer_mail", "rattacher_depense", "planifier", "snoozer_mail", "rechercher_mails", "ranger_mail", "proposer_regle"]) assert.ok(outils.has(nom), nom);
+    for (const nom of ["lister", "classer_mail", "lire_mail", "resumer_fil", "proposer_mise_a_jour", "valider_proposition", "ignorer_proposition", "deposer_brouillon", "envoyer_mail", "creer", "planifier", "traiter_mail", "rechercher_mails"]) assert.ok(outils.has(nom), nom);
     assert.ok(session.derniers.some((a) => a.commande === "Classe mes mails"));
     assert.deepEqual(appelsAnthropic, []);
   });

@@ -3,7 +3,8 @@ import { ecranAnalytique } from "@/lib/analytique/cache";
 import { resoudrePeriode } from "@/lib/analytique/periode";
 import { resumeEnregistre } from "@/lib/analytique/resume";
 import { FAMILLES, LIBELLES_FAMILLE, LIBELLES_ONGLET, LIBELLES_VERDICT, ONGLETS_ANALYTIQUE, PERIODES_ANALYTIQUE, type EcranAnalytique, type EtatSource, type Indicateur, type ResumeDuJour, type SourceDonnees } from "@/lib/analytique/types";
-import { definirOutil, format, lien } from "../definition";
+import { ErreurMetier } from "@/lib/commun/erreurs";
+import { definirOutil, format, lien, type ResultatOutil } from "../definition";
 import { pluriel } from "@/lib/commun/format";
 
 /**
@@ -100,11 +101,43 @@ export function texteAnalytique(ecran: EcranAnalytique, resume: ResumeDuJour | n
 
 export const lienAnalytique = (onglet: string, p: { cle: string; du: string; au: string }, source?: string | null) => `/analytique?onglet=${onglet}${p.cle === "libre" ? `&du=${p.du}&au=${p.au}` : `&p=${p.cle}`}${source ? `&source=${source}` : ""}`;
 
+/** « Mois figés et export » (ex-« synthese ») : mêmes fonctions que /api/synthese, /api/synthese/instantanes. */
+async function syntheseAnalytique(e: { anonyme?: boolean; mois_figes?: boolean; mois_fige?: string }, periode: { du: string; au: string; libelle: string }, maintenant: Date): Promise<ResultatOutil> {
+  const liens = [lien("Analytique — Argent", `/analytique?onglet=argent&du=${periode.du}&au=${periode.au}`)];
+  if (e.mois_fige) {
+    const [{ lireInstantane }, { referencesDe }, { redigerSynthese }] = await Promise.all([import("@/lib/synthese/instantanes"), import("@/lib/synthese/references"), import("@/lib/synthese/redaction")]);
+    const lu = await lireInstantane(e.mois_fige, maintenant);
+    if (!lu) throw new ErreurMetier(`Le mois ${e.mois_fige} n'est pas (encore) figé.`, 404);
+    const references = await referencesDe(lu.synthese, Boolean(e.anonyme));
+    const redaction = redigerSynthese(lu.synthese, references);
+    return { texte: `Mois figé ${e.mois_fige} (figé le ${format.jour(lu.figeLe)}, ${lu.integre ? "intègre" : "EMPREINTE ALTÉRÉE"}) ; ${lu.ecarts.length ? `écarts avec un recalcul d'aujourd'hui : ${lu.ecarts.map((x) => `${x.indicateur} figé ${x.fige ?? "—"} → ${x.recalcule ?? "—"}`).join(", ")}` : "aucun écart avec un recalcul d'aujourd'hui"}.\n\n${redaction}`, donnees: { ...lu, references, redaction }, liens };
+  }
+  if (e.mois_figes) {
+    const { listerInstantanes } = await import("@/lib/synthese/instantanes");
+    const mois = await listerInstantanes();
+    return { texte: mois.length ? `${pluriel(mois.length, "mois figé", "mois figés")} : ${mois.map((m) => `${m.mois} (figé le ${format.jourCourt(m.figeLe)} : encaissé ${m.encaisse === null ? "—" : format.euros(m.encaisse)}, ${pluriel(m.signatures, "signature")}, ${pluriel(m.dossiersOuverts, "dossier ouvert", "dossiers ouverts")})`).join(" · ")}. Un mois : synthese.mois_fige.` : "Aucun mois figé pour l'instant.", donnees: mois, liens };
+  }
+  const [{ lireSynthese }, { texteEntonnoirParFamille }, { ligneEntonnoirSite }] = await Promise.all([import("@/lib/synthese/requete"), import("@/lib/site/familles-source"), import("./lecture")]);
+  const lue = await lireSynthese(periode.du, periode.au, Boolean(e.anonyme), maintenant);
+  // Les chiffres clés d'abord (ceux de l'ex-outil « synthese », même calcul), puis la version rédigée de l'écran.
+  const s = lue.synthese;
+  const c = s.commercial;
+  const chiffres = [
+    c.entrants ? `${pluriel(c.entrants.recus, "lead")} reçus (${c.entrants.parSource.map((p) => `${p.libelle} ${p.recus}`).join(", ")}), ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} avec dossier, ${c.entrants.signes} signés.` : "",
+    `${pluriel(c.cohorte.ouverts, "dossier ouvert", "dossiers ouverts")} sur la période : ${c.cohorte.devisEnvoyes} devis envoyés, ${c.cohorte.signes} signés, ${c.cohorte.encaisses} encaissés, ${c.cohorte.perdus} perdus (taux de signature ${format.pourcent(c.cohorte.tauxSignatureDevis)}).`,
+    `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${pluriel(c.activite.signatures, "signature")} (${format.euros(c.activite.montantSigne)}), ${pluriel(c.activite.facturesEmises, "facture")} (${format.euros(c.activite.montantFacture)}), ${pluriel(c.activite.pertes, "perte")}.`,
+    s.finances.encaisse === null ? `Encaissé : paramètres manquants (${s.finances.parametresManquants.join(", ")}).` : `Encaissé ${format.euros(s.finances.encaisse)}, dépenses ${format.euros(s.finances.depenses)}${s.finances.margeBrute !== null ? `, marge brute ${format.euros(s.finances.margeBrute)}` : ""}${s.finances.panierMoyenSigne !== null ? `, panier moyen signé ${format.euros(s.finances.panierMoyenSigne)}` : ""}. En cours de règlement : ${format.euros(s.finances.encours.total)}.`,
+    c.pertes.parMotif.length ? `Pertes par motif : ${c.pertes.parMotif.map((p) => `${p.libelle} ${p.valeur}`).join(", ")}.` : "",
+    ligneEntonnoirSite(s.site?.entonnoir ? texteEntonnoirParFamille(s.site.entonnoir) : []),
+  ].filter(Boolean).join("\n");
+  return { texte: `Synthèse ${periode.libelle} (${periode.du} → ${periode.au})${e.anonyme ? ", pseudonymes" : ""} :\n${chiffres}\n\nVersion rédigée (l'export texte) :\n${lue.redaction}`, donnees: { synthese: lue.synthese, references: lue.references, alertes: lue.alertes }, liens: [...liens, lien("Export texte", `/api/synthese/export?du=${periode.du}&au=${periode.au}${e.anonyme ? "&anonyme=1" : ""}`), lien("Export données", `/api/synthese/export?du=${periode.du}&au=${periode.au}&format=json${e.anonyme ? "&anonyme=1" : ""}`)] };
+}
+
 export const outilAnalytique = definirOutil({
   nom: "analytique",
   titre: "Analytique : un onglet de l'écran, chiffres exacts et résumé du jour",
   description:
-    "N'importe quel onglet de l'écran Analytique pour une période, avec le JSON exact de l'écran (mêmes chiffres, mêmes définitions) : « ensemble » (défaut : visites, simulations lancées, leads, devis envoyés, chantiers signés, coût par lead Meta (coût par chantier signé en détail), tunnel et l'étape qui perd le plus, publicité, SEO, fiche Google, qualité par source, argent), « publicite » (par campagne et publicité : dépense réelle ou estimée, leads Meta et CRM, coûts, verdict du protocole), « seo » (Search Console, opportunités, doublon www, fiche Google), « site » (visites, pages, provenances, appareils, simulations → leads), « argent » (encaissé, signé, marge, 12 mois, règle des 20 %, carnet, seuils fiscaux avec projection au 31/12, URSSAF à déclarer, dépenses par catégorie, clients par source). Période : p = 7j, 30j (défaut), 90j, mois, 12m, ou du/au (AAAA-MM-JJ, heure de Paris) ; chaque indicateur est comparé à la période précédente de même longueur. source = une famille (meta, google-ads, seo, fiche-google, ia, reseaux, direct, autre) pour filtrer la vue d'ensemble. Le texte rend le résumé du jour (trois phrases par règles : reformule-le sans changer un chiffre), les indicateurs avec leur évolution et l'état de chaque source (une source non branchée n'a pas de chiffre, jamais un zéro).",
+    "N'importe quel onglet de l'écran Analytique pour une période, avec le JSON exact de l'écran (mêmes chiffres, mêmes définitions) : « ensemble » (défaut : visites, simulations lancées, leads, devis envoyés, chantiers signés, coût par lead Meta (coût par chantier signé en détail), tunnel et l'étape qui perd le plus, publicité, SEO, fiche Google, qualité par source, argent), « publicite » (par campagne et publicité : dépense réelle ou estimée, leads Meta et CRM, coûts, verdict du protocole), « seo » (Search Console, opportunités, doublon www, fiche Google), « site » (visites, pages, provenances, appareils, simulations → leads), « argent » (encaissé, signé, marge, 12 mois, règle des 20 %, carnet, seuils fiscaux avec projection au 31/12, URSSAF à déclarer, dépenses par catégorie, clients par source). « publicite » rend aussi l'état de la campagne en cours (jour, budget, dépense, coût par lead, verdicts, règle du jour du protocole). « synthese » : la synthèse rédigée de la période (export texte ou données, pseudonymes, agent et qualité des données, alertes) ou les mois figés. Période : p = 7j, 30j (défaut), 90j, mois, 12m, ou du/au (AAAA-MM-JJ, heure de Paris) ; chaque indicateur est comparé à la période précédente de même longueur. source = une famille (meta, google-ads, seo, fiche-google, ia, reseaux, direct, autre) pour filtrer la vue d'ensemble. Le texte rend le résumé du jour (trois phrases par règles : reformule-le sans changer un chiffre), les indicateurs avec leur évolution et l'état de chaque source (une source non branchée n'a pas de chiffre, jamais un zéro).",
   niveau: "LECTURE",
   schema: z.object({
     onglet: z.enum(ONGLETS_ANALYTIQUE).optional().describe("ensemble (défaut), publicite, seo, site, argent."),
@@ -112,12 +145,28 @@ export const outilAnalytique = definirOutil({
     du: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Premier jour AAAA-MM-JJ (avec « au » : remplace p)."),
     au: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Dernier jour inclus AAAA-MM-JJ."),
     source: z.enum(FAMILLES).optional().describe("Filtre de la vue d'ensemble : une famille de source."),
+    synthese: z
+      .object({
+        anonyme: z.boolean().optional().describe("Pseudonymes à la place des noms (« Pseudonymes » de l'écran)."),
+        mois_figes: z.boolean().optional().describe("La liste des mois figés."),
+        mois_fige: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("Un mois figé (AAAA-MM) : figé le, intégrité, écarts avec un recalcul."),
+      })
+      .optional()
+      .describe("« Mois figés et export » de l'onglet Argent : la synthèse de la période (version rédigée à copier = export texte ; données = export structuré ; agent et qualité des données ; alertes), ou les mois figés."),
   }),
   executer: async (entree, contexte) => {
     const onglet = entree.onglet ?? "ensemble";
     const periode = resoudrePeriode({ p: entree.p, du: entree.du, au: entree.au }, contexte.maintenant);
+    if (entree.synthese) return syntheseAnalytique(entree.synthese, periode, contexte.maintenant);
     const ecran = await ecranAnalytique(onglet, periode, { source: entree.source ?? null }, contexte.maintenant);
     const resume = ecran.onglet === "ensemble" ? ecran.resume : await resumeEnregistre(contexte.maintenant).catch(() => null);
+    if (ecran.onglet === "publicite") {
+      // Ex-« campagne » : l'état de la campagne en cours (début, jour, budget, dépense réelle ou estimée, leads Meta, coût
+      // par lead, verdict par publicité, règle du jour), mêmes calculs que l'onglet, sur sa fenêtre à elle.
+      const { etatCampagne, texteEtatCampagne } = await import("./lecture");
+      const campagne = await etatCampagne(contexte.maintenant);
+      return { texte: `${texteAnalytique(ecran, resume)}\nÉtat de la campagne : ${texteEtatCampagne(campagne)}`, donnees: { ...ecran, etatCampagne: campagne }, liens: [lien(`Analytique — ${LIBELLES_ONGLET[onglet]}`, lienAnalytique(onglet, periode, null)), lien("Paramètres", "/parametres")] };
+    }
     return { texte: texteAnalytique(ecran, resume), donnees: ecran, liens: [lien(`Analytique — ${LIBELLES_ONGLET[onglet]}`, lienAnalytique(onglet, periode, onglet === "ensemble" ? entree.source : null))] };
   },
 });

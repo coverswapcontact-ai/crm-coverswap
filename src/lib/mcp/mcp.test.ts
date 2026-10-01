@@ -116,12 +116,12 @@ describe("serveur MCP", () => {
 
   test("« Où en est le dossier Forestier ? » et « Qu'est-ce qui attend une action de ma part aujourd'hui ? »", async () => {
     const forestier = await lead({ prenom: "Paul", nom: "Forestier" });
-    const ouverture = await appeler("ouvrir_dossier", { leadId: forestier.id, commande: "Ouvre un dossier pour Forestier" });
+    const ouverture = await appeler("creer", { entite: "DOSSIER", cible: { leadId: forestier.id }, champs: {}, commande: "Ouvre un dossier pour Forestier" });
     assert.match(ouverture, /Dossier ouvert pour Paul Forestier/);
     const fiche = await appeler("lire_fiche", { nom: "Forestier" });
     assert.match(fiche, /Forestier/);
     assert.match(fiche, /Données exactes \(JSON\)/);
-    const attend = await appeler("ce_qui_m_attend", {});
+    const attend = await appeler("taches", { vue: "TOUT" });
     assert.ok(attend.length > 20 && !/a échoué/.test(attend), attend.slice(0, 200));
     const point = await appeler("point_du_jour", {});
     assert.match(point, /^Point du/);
@@ -130,7 +130,7 @@ describe("serveur MCP", () => {
   test("« Archive tous les leads de la file sauf Stella Estelle » : liste, aperçu, confirmation, état vérifié", async () => {
     const stella = await lead({ prenom: "Stella", nom: "Estelle" });
     const autres = await Promise.all([lead(), lead(), lead(), lead()]);
-    const file = await appeler("leads_a_appeler", {});
+    const file = await appeler("lister", { liste: "LEADS", vue: "A_APPELER" });
     assert.match(file, /Stella Estelle/);
     assert.doesNotMatch(file, /Stella Stella/, "mission 14 : le prénom n'est plus doublé");
     const ids = autres.map((l) => l.id);
@@ -140,7 +140,7 @@ describe("serveur MCP", () => {
     assert.match(apercu, /Rien n'a été fait/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 0);
     const fait = await appeler("archiver", { leads: ids, motif: "nettoyage de la file", confirmation: jeton, commande: "Archive tous les leads de la file sauf Stella Estelle" });
-    assert.match(fait, /4 leads archivés/);
+    assert.match(fait, /Archivé \(motif : nettoyage de la file\) : 4 leads/);
     assert.equal(await prisma.lead.count({ where: { id: { in: ids }, archiveLe: { not: null } } }), 4);
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: stella.id } })).archiveLe, null);
     const journal = await prisma.appelOutil.findMany({ where: { outil: "archiver" }, orderBy: { createdAt: "asc" } });
@@ -159,7 +159,7 @@ describe("serveur MCP", () => {
 
   test("« Génère la facture de Monsieur Rousse, mets-la dans son dossier et son espace, et envoie-lui un mail avec »", async () => {
     const rousse = await lead({ prenom: "Bernard", nom: "Rousse", email: "b.rousse@exemple.fr" });
-    const ouverture = await appeler("ouvrir_dossier", { leadId: rousse.id });
+    const ouverture = await appeler("creer", { entite: "DOSSIER", cible: { leadId: rousse.id }, champs: {} });
     const marque = "Données exactes (JSON) :\n";
     const dossierId = JSON.parse(ouverture.slice(ouverture.indexOf(marque) + marque.length)).dossierId as string;
     await prisma.dossier.update({ where: { id: dossierId }, data: { clientAdresse: "5 rue des Essais" } });

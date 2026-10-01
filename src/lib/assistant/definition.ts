@@ -33,6 +33,9 @@ export type LienOutil = { libelle: string; href: string };
 /** Une image jointe au résultat (mission 10) : rendue à Claude comme un bloc image MCP, jamais seulement un lien. */
 export type ImageOutil = { libelle: string; mimeType: string; base64: string; octets: number };
 
+/** Un document joint au résultat (mission 17, partie C) : un PDF rendu à Claude comme ressource embarquée, lisible sans lien. */
+export type DocumentOutil = { libelle: string; mimeType: string; base64: string; octets: number; uri: string };
+
 /** Ce qu'un outil rend : lisible d'abord (Claude le lit à voix haute), les données à côté. */
 export type ResultatOutil = {
   texte: string;
@@ -40,6 +43,8 @@ export type ResultatOutil = {
   liens?: LienOutil[];
   /** Images à montrer à Claude (photos, simulations), déjà compressées (assistant/images.ts). */
   images?: ImageOutil[];
+  /** Documents (PDF) à montrer à Claude, 9 Mo au plus chacun. */
+  documents?: DocumentOutil[];
   /** Action sensible : l'aperçu a été rendu, rien n'a été fait ; ce jeton confirme au second appel. */
   confirmation?: { jeton: string; expireLe: string };
 };
@@ -65,6 +70,11 @@ export type DefinitionOutil<E = Record<string, unknown>> = {
   masse?: (entree: E) => number;
   /** Sensible selon l'entrée (passer un dossier à « Signé », « Facturé », « Encaissé » ou « Perdu » ; valider une proposition qui touche un montant). */
   sensible?: (entree: E) => boolean | Promise<boolean>;
+  /**
+   * Ce que l'entrée désigne vraiment, quand elle ne le fixe pas (la « dernière » modification, les brouillons d'un
+   * dossier) : résolu à l'aperçu, lié au jeton, revérifié à la confirmation — ce que Lucas confirme est ce qui est fait.
+   */
+  portee?: (entree: E) => Promise<unknown>;
   /** Action sensible : la phrase exacte de ce qui va être fait, rendue avant toute exécution. */
   apercu?: (entree: E, contexte: ContexteOutil) => Promise<string>;
   executer: (entree: E, contexte: ContexteOutil) => Promise<ResultatOutil>;

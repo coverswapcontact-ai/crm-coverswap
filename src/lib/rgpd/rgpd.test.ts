@@ -142,6 +142,13 @@ describe("anonymisation d'un client", () => {
       await prisma.pieceMessage.create({ data: { messageId: message.id, rang: 1, nom: "maison-berenice.jpg", typeMime: "image/jpeg", taille: 12, partie: "1", statut: "CONSERVEE", fichierId: fichier.id } });
       await prisma.analyseMessage.create({ data: { messageId: message.id, methode: "MODELE", raisonnement: "Bérénice Lefèvre envoie des photos", resultat: JSON.stringify({ contact: { prenom: "Bérénice" } }) } });
       await prisma.miroirDrive.create({ data: { cle: `photo:${dossierId}:abc`, nom: "Photo 01.jpg", driveId: "drive-1", etat: "A_JOUR" } });
+      // Mission 17 (partie C) : traces de l'assistant (modification tracée, message d'espace) et fichiers reçus par un lien de dépôt.
+      await prisma.modificationAssistant.create({ data: { entite: "CLIENT", enregistrementId: clientId, nom: "Fiche client Bérénice Lefèvre", champs: JSON.stringify([{ champ: "adresse", avant: "3 rue des Glycines", apres: "12 rue des Glycines" }]), par: "ASSISTANT:claude", commande: "Bérénice a déménagé au 12 rue des Glycines" } });
+      await prisma.modificationDossier.create({ data: { dossierId, champs: JSON.stringify([{ champ: "notes", avant: null, apres: "code portail 4821" }]), par: "ASSISTANT:claude", commande: "note le code portail 4821" } });
+      await prisma.messageEspace.create({ data: { dossierId, auteur: "CLIENT", source: "MESSAGE", texte: "Bonjour, c'est Bérénice, code portail 4821" } });
+      const conserve = await enregistrerFichier("clients", new File([Buffer.from("plan")], "plan de Bérénice Lefèvre.pdf", { type: "application/pdf" }));
+      await prisma.fichierDepose.create({ data: { voie: "BASE64", nom: "plan de Bérénice Lefèvre.pdf", typeMime: "application/pdf", taille: 4, empreinte: "e", type: "PLAN", cibleEntite: "CLIENT", cibleId: clientId, cibleNom: "Bérénice Lefèvre", fichierId: conserve.id } });
+      await prisma.jetonDepot.create({ data: { empreinte: `jeton-${clientId}`, cibleEntite: "DOSSIER", cibleId: dossierId, cibleNom: "Dossier de Bérénice Lefèvre", creePar: "lucas@coverswap.fr", expireLe: new Date() } });
     });
     await avecActeur(AGENT, () =>
       validation.proposer({ type: "NOTE_DOSSIER", titre: "Noter ce que dit Bérénice Lefèvre", contenu: { dossierId, texte: "Bérénice veut du chêne" }, dossierId, clientId })
@@ -152,7 +159,7 @@ describe("anonymisation d'un client", () => {
   test("aperçu : ce qui part, ce qui reste, ce qui est à faire à la main ; un dossier en cours bloque", async () => {
     // Le balayage voit bien l'identité avant l'anonymisation (sinon le test final ne prouverait rien).
     const avant = await tracesIdentite();
-    for (const attendu of ["Client", "JournalModification(Client)", "Lead", "Dossier", "ContenuMessage", "AnalyseMessage", "Proposition", "JournalModification(Encaissement)"]) {
+    for (const attendu of ["Client", "JournalModification(Client)", "Lead", "Dossier", "ContenuMessage", "AnalyseMessage", "Proposition", "JournalModification(Encaissement)", "ModificationAssistant", "ModificationDossier", "MessageEspace", "FichierDepose", "JetonDepot", "Fichier"]) {
       assert.ok(avant.some((trace) => trace.startsWith(`${attendu} :`)), `trace attendue dans ${attendu}`);
     }
     const apercu = await anonymisation.apercuAnonymisation(clientId);

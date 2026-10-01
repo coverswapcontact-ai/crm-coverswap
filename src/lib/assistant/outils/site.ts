@@ -68,4 +68,3 @@ export const outilSimulationsSite = definirOutil({
   },
 });
 
-export const OUTILS_SITE = [outilSimulationsSite];

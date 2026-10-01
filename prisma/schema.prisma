@@ -2060,6 +2060,27 @@ model ModificationDossier {
   @@index([dossierId, createdAt])
 }
 
+// Mission 17 (partie C) : la trace commune des modifications faites par l'outil générique « modifier » de
+// l'assistant, pour toutes les entités hors du cœur du dossier (qui garde ModificationDossier) : lead, client,
+// coordonnée, dépense, encaissement, document, tarif, paramètre, modèles, consignes… Chaque ligne garde les
+// valeurs d'avant et d'après ; « annuler_modification » remet celles d'avant par la même fonction de service.
+model ModificationAssistant {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  entite           String // LEAD | DOSSIER | CLIENT | COORDONNEE | DEPENSE | … (src/lib/assistant/entites.ts)
+  enregistrementId String // identifiant de l'enregistrement modifié (ou sa clé : code, série, type)
+  nom              String? // ce qui a été modifié, en mots (« Lead Marie Dupont »)
+  champs           String // JSON [{ champ, cle, libelle, avant, apres, texteAvant, texteApres }]
+  par              String // acteur (ASSISTANT:claude, HUMAIN:…)
+  commande         String? // la phrase de Lucas, telle que transmise
+  annuleeLe        DateTime?
+  annuleePar       String?
+  ecriture         String?
+
+  @@index([entite, enregistrementId, createdAt])
+  @@index([createdAt])
+}
+
 // Les messages échangés dans l'espace client : ce que le client écrit (« Écrire à CoverSwap », commentaire
 // d'une simulation, demande d'autre proposition) et ce que Lucas lui répond depuis l'assistant ou le CRM.
 // Le client lit les réponses dans l'onglet Contact de son espace ; Lucas lit les messages non lus par
@@ -2247,4 +2268,69 @@ model InstantaneAnalytique {
   calculeLe DateTime
   contenu   String // JSON de l'écran (EcranAnalytique), du résumé du jour, ou le sel du jour
   ecriture  String?
+}
+
+// ─────────────────────────────────────────────
+// Mission 17 (partie C) : les fichiers déposés (lien de dépôt, URL, base64, pièce de mail, fichier conservé).
+// ─────────────────────────────────────────────
+
+// Un lien de dépôt : valable 30 minutes, à usage unique (consommé à la première soumission du formulaire, qui envoie
+// ensuite ses fichiers un par un sous une clé d'envoi remise à cette seule soumission). Le jeton n'est jamais gardé :
+// seule son empreinte SHA-256 l'est. Cible absente : dépôt libre, les fichiers vont dans « À ranger ».
+model JetonDepot {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  empreinte        String    @unique // SHA-256 du jeton remis dans le lien
+  cibleEntite      String? // DOSSIER | LEAD | CLIENT | DEPENSE | PUBLICATION ; null = dépôt libre (« À ranger »)
+  cibleId          String?
+  cibleNom         String? // ce que la page montre (« Dossier de Mme Martin »)
+  type             String? // PHOTO_AVANT | PHOTO_APRES | PLAN | DEVIS | FACTURE | JUSTIFICATIF | AUTRE ; null = selon le fichier
+  creePar          String // l'utilisateur qui a demandé le lien (application Claude)
+  expireLe         DateTime
+  utiliseLe        DateTime? // première soumission : le lien est consommé
+  cleEnvoi         String? // SHA-256 de la clé d'envoi remise à cette soumission
+  envoiExpireLe    DateTime?
+  fichiersAttendus Int       @default(0)
+  octetsAnnonces   Int       @default(0)
+  fichiersRecus    Int       @default(0)
+  octetsRecus      Int       @default(0)
+  termineLe        DateTime?
+  archiveLe        DateTime?
+  archiveMotif     String?
+  ecriture         String?
+
+  @@index([createdAt])
+}
+
+// Un fichier reçu par l'une des cinq voies, et l'endroit où il a été rangé : photo du dossier (chemin), photo d'un
+// lead, document repris, fichier conservé (client, lead, dossier, justificatif, « À ranger »). Retiré : archivé
+// (archiveLe), jamais supprimé ; « remettre » le replace au même endroit.
+model FichierDepose {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  jetonId      String? // lien de dépôt d'origine
+  voie         String // LIEN_DEPOT | URL | BASE64 | PIECE_MAIL | FICHIER | EXISTANT
+  origine      String? // adresse de l'URL, pièce de mail, fichier d'origine
+  nom          String?
+  typeMime     String
+  taille       Int
+  empreinte    String // SHA-256 du contenu
+  type         String? // PHOTO_AVANT | PHOTO_APRES | PLAN | DEVIS | FACTURE | JUSTIFICATIF | AUTRE
+  cibleEntite  String? // null = « À ranger »
+  cibleId      String?
+  cibleNom     String?
+  fichierId    String? // Fichier conservé
+  photoChemin  String? // photo du dossier (Dossier.photos), aussi celle d'une publication
+  photoLeadId  String?
+  documentId   String? // devis ou facture repris
+  evenementId  String? // événement DOCUMENT_DEPOSE du dossier
+  aCompleter   Boolean   @default(false) // devis ou facture reçu sans numéro ni montant
+  rangeLe      DateTime?
+  archiveLe    DateTime?
+  archiveMotif String?
+  ecriture     String?
+
+  @@index([cibleEntite, cibleId])
+  @@index([jetonId])
 }

@@ -20,7 +20,7 @@ let entrants: typeof import("@/lib/prospects/entrants");
 let pilotage: typeof import("@/lib/commercial/pilotage");
 let lecture: typeof import("@/lib/commercial/sans-reponse");
 let migration: typeof import("@/lib/base/migrations/mission-14-partie-3");
-let outils: typeof import("@/lib/assistant/outils/lecture");
+let outils: typeof import("@/lib/assistant/outils/lister");
 let notes: typeof import("@/lib/commercial/notes-appel");
 let doublons: typeof import("@/lib/prospects/doublons");
 let NextRequest: typeof import("next/server").NextRequest;
@@ -50,7 +50,7 @@ before(async () => {
   pilotage = await import("@/lib/commercial/pilotage");
   lecture = await import("@/lib/commercial/sans-reponse");
   migration = await import("@/lib/base/migrations/mission-14-partie-3");
-  outils = await import("@/lib/assistant/outils/lecture");
+  outils = await import("@/lib/assistant/outils/lister");
   notes = await import("@/lib/commercial/notes-appel");
   doublons = await import("@/lib/prospects/doublons");
   NextRequest = (await import("next/server")).NextRequest;
@@ -138,13 +138,13 @@ describe("les deux listes de Leads", () => {
     assert.equal(rappeler[0], hier.id);
   });
 
-  test("l'outil « leads_a_appeler » : la liste « À appeler » seule, sans prénom doublé", async () => {
-    const resultat = await outils.outilLeadsAAppeler.executer({ limite: 50 }, { sessionId: "essai", commande: null, utilisateur: "essai", maintenant: new Date() });
+  test("l'outil « lister » LEADS A_APPELER (ex-« leads_a_appeler ») : la liste « À appeler » seule, sans prénom doublé", async () => {
+    const resultat = await outils.outilLister.executer({ liste: "LEADS", vue: "A_APPELER", par_page: 50 }, { sessionId: "essai", commande: null, utilisateur: "essai", maintenant: new Date() });
     assert.match(resultat.texte, /Jamais Partie Trois/);
     assert.match(resultat.texte, /Traite Partie Trois/);
     assert.doesNotMatch(resultat.texte, /Jamais Jamais|Hier Partie Trois|SansDate Partie Trois/);
-    assert.match(resultat.texte, /dans « À rappeler »/);
-    assert.deepEqual((resultat.donnees as { id: string }[]).map((d) => d.id).filter((id) => [jamais.id, traite.id, hier.id].includes(id)), [jamais.id, traite.id]);
+    assert.match(resultat.texte, /à rappeler \d+/);
+    assert.deepEqual((resultat.donnees as { lignes: { id: string }[] }).lignes.map((d) => d.id).filter((id) => [jamais.id, traite.id, hier.id].includes(id)), [jamais.id, traite.id]);
   });
 
   test("/api/leads : « ACTIFS » (anciens liens, cache) vaut « À appeler » ; /api/leads/actions refuse TRAITER", async () => {

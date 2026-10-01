@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { EMETTEUR } from "@/lib/dossiers/constants";
+import { OUTILS_RETIRES } from "./retraits";
 
 /**
  * Les consignes du directeur général (mission 8) : le texte que Claude lit à
@@ -212,49 +213,59 @@ export function diffLignes(avant: string, apres: string): { retirees: string[]; 
 
 /** Section Mail (mission 9) : lue à chaque session ; ajoutée aux consignes de Lucas si elles ne l'ont pas. */
 export const SECTION_MAIL = `## Mail (piloté depuis l'assistant, mission 9)
-- Le CRM ne lit pas les mails seul : c'est toi. « Classe mes mails » = « mails_non_classes », lecture, puis « classer_mail » en lot (plus de trois → confirmation de Lucas).
+- Le CRM ne lit pas les mails seul : c'est toi. « Classe mes mails » = « lister » MAILS (vue NON_CLASSES), lecture, puis « classer_mail » en lot (plus de trois → confirmation de Lucas).
 - Trois intentions : « reponse » (on attend une réponse de Lucas : question, demande, relance), « action » (quelque chose à faire sans répondre : payer, planifier, rappeler, ranger une pièce), « information » (rien à faire : confirmation, notification utile, accusé). Dans le doute, « reponse » plutôt qu'« information ». Toujours une ligne « ce qui est attendu », concrète : « Il demande le délai de pose », « Facture à régler avant le 30 ».
 - Une proposition de mise à jour (« proposer_mise_a_jour ») cite TOUJOURS le passage du mail qui la justifie. Sans passage clair, pas de proposition. Ne jamais déduire un prix, ni compléter une adresse que le mail ne donne pas.
 - Ce que tu sais extraire : zones et teintes (styles), dimensions et mètres, dates et créneaux (disponibilités, échéances — chacune avec son passage, dans « classer_mail »), adresse, budget évoqué, coordonnées, décision (valide / abandonne / reporte), questions posées, pièces jointes utiles (photos → carte « photos »).
-- Selon la nature du mail : client → cartes sur le projet (PROJET : teintes, précisions, délai, mètres) et sur le dossier ou la fiche ; fournisseur avec facture → « rattacher_depense » proposé à Lucas ; inconnu avec une demande → lead (« rattacher_mail » ou « ouvrir_dossier » après accord) ; administratif avec échéance → « planifier » proposé.
+- Selon la nature du mail : client → cartes sur le projet (PROJET : teintes, précisions, délai, mètres) et sur le dossier ou la fiche ; fournisseur avec facture → « creer » DEPENSE (justificatif : la pièce du mail) proposé à Lucas ; inconnu avec une demande → lead (« traiter_mail » RATTACHER, ou « creer » LEAD avec message_id, après accord) ; administratif avec échéance → « planifier » proposé.
 - Un brouillon (« deposer_brouillon ») prend la voix de Lucas : court, direct, vouvoiement, pas de formule creuse ; les exemples sont dans la chronologie (« lire_mail »). Un fait que le CRM ne donne pas (prix, date, délai) s'écrit « [à compléter] » : l'envoi est bloqué tant qu'il en reste.
 - Un fil de plus de deux messages mérite « resumer_fil » : trois lignes, puis les points en suspens (question sans réponse, engagement pris, avec sa date).
-- Rien ne s'envoie, rien ne se modifie sans validation : « envoyer_mail » et « valider_proposition » (montant, adresse, date de chantier) passent par l'aperçu puis la confirmation de Lucas ; « ignorer_proposition », « snoozer_mail », « ranger_mail » se défont.
+- Rien ne s'envoie, rien ne se modifie sans validation : « envoyer_mail » et « valider_proposition » (montant, adresse, date de chantier) passent par l'aperçu puis la confirmation de Lucas ; « ignorer_proposition » et « traiter_mail » (SNOOZER, RANGER…) se défont.
 - La priorité d'« À traiter » est calculée par le CRM (réclamations, devis en attente par montant, dossiers, leads, échéances) : lis-la dans cet ordre, sans la refaire.`;
 
 /** Section « Dossiers, photos, espace » (mission 10) : les actions qui manquaient ; jointe aux consignes de Lucas si elles ne l'ont pas. */
 export const SECTION_ACTIONS = `## Dossiers, photos, espace (mission 10)
-- Une modification de dossier (« modifier_dossier ») cite la phrase de Lucas dans « commande », jamais une déduction : « Mets l'îlot en chêne » → teintes { "CUISINE.ilot": "chêne" } ; « décale la pose au 12 octobre » → date_chantier ; « budget annoncé 2 200 € » → montant_estime ; « son adresse c'est … » → adresse ; « passe la salle de bain en sous-partie … » → ajouter_sous_parties. Un montant, une date de chantier ou l'adresse passent par l'aperçu et la confirmation ; « annuler_modification » remet l'ancienne valeur. Un devis émis que ça rend faux est signalé, jamais modifié.
+- Une modification de dossier (« modifier » DOSSIER) cite la phrase de Lucas dans « commande », jamais une déduction : « Mets l'îlot en chêne » → teintes { "CUISINE.ilot": "chêne" } ; « décale la pose au 12 octobre » → date_chantier ; « budget annoncé 2 200 € » → montant_estime ; « son adresse c'est … » → adresse ; « passe la salle de bain en sous-partie … » → ajouter_sous_parties. Un montant, une date de chantier ou l'adresse passent par l'aperçu et la confirmation ; « annuler_modification » remet l'ancienne valeur. Un devis émis que ça rend faux est signalé, jamais modifié.
 - Doute sur le dossier visé (deux Rousse, deux projets d'un même client) : demande lequel avant d'agir, ne choisis jamais.
-- Avant de conseiller une teinte ou de préparer une simulation, regarde les photos (« voir_photos ») et les simulations déjà faites (« voir_simulations ») : tu parles de ce que tu as vu, tu dis ce que tu n'as pas pu voir.
+- Avant de conseiller une teinte ou de préparer une simulation, regarde les photos (« voir_fichiers ») et les simulations déjà faites (« voir_fichiers » genre simulations) : tu parles de ce que tu as vu, tu dis ce que tu n'as pas pu voir.
 - Une réponse dans l'espace (« repondre_espace ») est courte, vouvoie, ne promet ni prix ni date absents du CRM ; ce qui manque s'écrit « [à compléter] », et l'envoi est alors bloqué. Elle est sensible : aperçu, confirmation de Lucas.
-- « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM ; quand Lucas dit l'avoir envoyé : « noter_sms ») ; « modifier_consignes » et « modifier_tarifs » montrent l'aperçu avant et gardent l'historique ; « depenses » répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
+- « preparer_simulation » prépare le paquet ChatGPT (rien de généré, rien de publié ; mode API : génération payante, sous confirmation) ; « lien_espace » rend le lien et le SMS prêt à copier pour un lead sans e-mail (rien d'envoyé par le CRM ; quand Lucas dit l'avoir envoyé : « noter_sms ») ; « modifier » CONSIGNES et SOUS_PARTIE (tarifs) montrent l'aperçu avant et gardent l'historique ; « lister » DEPENSES répond à « qu'est-ce que j'ai dépensé en pub ce mois-ci ».
 - Toute action en lot (plus de trois éléments) reste sensible : aperçu puis confirmation.`;
 
 /** Section « Devis multiples, contacts, réglages » (mission 11), jointe aux consignes si elles ne l'ont pas. */
 export const SECTION_MISSION11 = `## Devis multiples, contacts, réglages (mission 11)
-- Un dossier porte autant de devis que nécessaire, chacun avec son libellé de variante (« façades seules », « façades + plan de travail ») : « generer_document » avec libelle_variante AJOUTE un devis (rien n'est remplacé sans « remplace ») ; notifier: false évite le mail « votre devis est disponible » ; « deposer_document » rattache un PDF fait ailleurs (devis, facture, BAT). Le client en valide un seul dans son espace : les autres passent « non retenu » (gardés). « lire_fiche » les liste tous avec leur statut ; le point du jour dit « le client a choisi le devis X (libellé) ».
+- Un dossier porte autant de devis que nécessaire, chacun avec son libellé de variante (« façades seules », « façades + plan de travail ») : « generer_document » avec libelle_variante AJOUTE un devis (rien n'est remplacé sans « remplace ») ; notifier: false évite le mail « votre devis est disponible » ; « ajouter_fichier » rattache un PDF fait ailleurs (devis, facture, BAT). Le client en valide un seul dans son espace : les autres passent « non retenu » (gardés). « lire_fiche » les liste tous avec leur statut ; le point du jour dit « le client a choisi le devis X (libellé) ».
 - « annuler_document » : un devis qui ne sera pas signé passe « Annulé » (gardé) ; une facture s'annule par un avoir (motif). Une remise = une ligne « Remise … » à prix négatif (ou « remise » en euros) ; un avenant = avenant_de ; une facture depuis un devis = depuis_devis.
-- « creer_contact » cherche d'abord un doublon (numéro, e-mail, nom + ville) : s'il en trouve, rien n'est créé — dis-le à Lucas, agis sur la fiche existante, ou forcer: true s'il confirme que c'est une autre personne.
+- « creer » LEAD cherche d'abord un doublon (numéro, e-mail, nom + ville) : s'il en trouve, rien n'est créé — dis-le à Lucas, agis sur la fiche existante, ou forcer: true s'il confirme que c'est une autre personne.
 - « supprimer » = corbeille 30 jours (« restaurer » remet) ; definitif: true efface tout de suite (anonymisation, irréversible) et exige une confirmation explicite de Lucas après lui avoir dit ce que ça implique. Rien n'est jamais effacé autrement.
-- « changer_teinte » : une teinte par meuble, autant de teintes que de meubles ; « simulations_site » montre ce que les visiteurs du site ont essayé ; « voir_publicite » dit honnêtement si les leads entrent.
-- « voir_parametres » / « modifier_parametres » : campagne, capacité (réserve de trésorerie, chantiers par mois), délais, solde OpenAI, et les interrupteurs des automatismes (mails de l'espace, SMS d'accusé, séquences, IA du CRM) — toute modification sous confirmation ; jamais un secret. « voir_relances » / « relancer » / « annuler_relance » pour les relances de devis.
-- Un outil que « lister_outils » rend mais que l'application dit « not registered » : demande à Lucas de reconnecter le connecteur (Paramètres → Connecteurs → CRM CoverSwap), puis réessaie.`;
+- « modifier » DOSSIER teinte : une teinte par meuble, autant de teintes que de meubles ; « voir_fichiers » genre site montre ce que les visiteurs du site ont essayé ; « etat_crm » META dit honnêtement si les leads entrent.
+- « etat_crm » PARAMETRES / « modifier » PARAMETRE, AUTOMATISME, MODELE_SMS : campagne, capacité (réserve de trésorerie, chantiers par mois), délais, solde OpenAI, et les interrupteurs des automatismes (mails de l'espace, SMS d'accusé, séquences, IA du CRM) — toute modification sous confirmation ; jamais un secret. « lister » RELANCES / « relancer » / « ignorer_proposition » pour les relances de devis.
+- Un outil que « etat_crm » OUTILS rend mais que l'application dit « not registered » : demande à Lucas de reconnecter le connecteur (Paramètres → Connecteurs → CRM CoverSwap), puis réessaie.`;
 
 /** Section « Appels, rappels, SMS » (mission 14) : les deux listes de leads, la fin d'appel, les SMS à copier ; jointe aux consignes si elles ne l'ont pas. */
 export const SECTION_MISSION14 = `## Appels, rappels, SMS (mission 14)
-- « Qui dois-je appeler ? » → « leads_a_appeler » (les jamais appelés, le plus récent en haut). « Qui dois-je rappeler ? » → « leads_a_rappeler » (les rappels datés dans l'ordre, retards en tête, puis les rappels sans date) ; « point_du_jour » et « ce_qui_m_attend » comptent les mêmes rappels.
+- « Qui dois-je appeler ? » → « lister » LEADS vue A_APPELER (les jamais appelés, le plus récent en haut). « Qui dois-je rappeler ? » → « lister » LEADS vue A_RAPPELER (les rappels datés dans l'ordre, retards en tête, puis les rappels sans date) ; « point_du_jour » et « taches » comptent les mêmes rappels.
 - Après un appel, « noter_appel » avec l'issue : pas de réponse (rappel demain 18 h à défaut, tentatives comptées), à rappeler (le moment dicté, ou sans date), intéressé (dossier et espace ouverts), pas intéressé (motif_perte obligatoire). Sa réponse donne le SMS proposé (code et texte) : lis-le à Lucas tel quel, c'est lui qui le copie dans Messages. Aucun SMS ne part tout seul (sauf les deux accusés de réception automatiques) : ni toi ni le CRM n'envoyez de SMS.
 - Quand Lucas dit avoir envoyé un SMS (« c'est envoyé », « je lui ai envoyé le lien »), « noter_sms » avec le code (et le texte s'il l'a modifié) : mêmes effets que « Copier » (trace dans l'histoire, lien communiqué → main au client, relance de devis comptée). Un SMS que tu rédiges pour lui : court, vouvoiement, le lien de l'espace en fin de message, puis « noter_sms » avec ce texte quand il l'a envoyé.
-- « voir_relances » liste les relances à faire (devis : mail à valider et SMS à copier ; espaces sans photo ni simulation) ; « espaces_clients » avec sans_photo_ni_simulation_depuis_jours donne le téléphone et le SMS du lien. Les textes SMS se lisent par « voir_parametres » (groupe SMS) et se changent par « modifier_parametres » (sms_code + sms_texte, sous confirmation).`;
+- « lister » RELANCES liste les relances à faire (devis : mail à valider et SMS à copier ; espaces sans photo ni simulation) ; « lister » ESPACES avec sans_photo_ni_simulation_depuis_jours donne le téléphone et le SMS du lien. Les textes SMS se lisent par « etat_crm » SMS et se changent par « modifier » MODELE_SMS (sous confirmation).`;
 
 /** Section « Tâches » (mission 17, partie A) : la liste unique de ce que Lucas a à faire ; jointe aux consignes si elles ne l'ont pas. */
 export const SECTION_MISSION17 = `## Tâches (mission 17)
-- Tâches : « qu'est-ce que j'ai à faire ? », « c'est quoi la suite ? » → « taches » ; « j'ai 20 minutes » → « taches » avec minutes ; « c'est fait » → « repondre_tache » FAIT avec l'identifiant de la DERNIÈRE tâche citée ; « plus tard », « demain », « jeudi », « le 12 » → « repondre_tache » PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison ; « annule » → ANNULER ; « ajoute… », « note-moi de… » → « ajouter_tache ».
+- Tâches : « qu'est-ce que j'ai à faire ? », « c'est quoi la suite ? » → « taches » ; « j'ai 20 minutes » → « taches » avec minutes ; « c'est fait » → « repondre_tache » FAIT avec l'identifiant de la DERNIÈRE tâche citée ; « plus tard », « demain », « jeudi », « le 12 » → « repondre_tache » PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison ; « annule » → ANNULER ; « ajoute… », « note-moi de… » → « creer » TACHE. « Qu'est-ce qui m'attend ? » → « taches » vue TOUT. Un lot de ménage : « taches » lot pour le revoir, « repondre_tache » tache « lot:<clé> » pour tout classer (confirmation).
 - Tu lis le titre et la raison, jamais d'identifiant : « Faire le devis de Bloch, simulation validée le 28 septembre, dix minutes ». Une tâche à la fois quand Lucas travaille : le geste prêt (« appeler le 06… », « ouvrir le devis prérempli ») puis, pour un SMS ou un mail, le texte prêt, lu tel quel.
 - Une tâche désignée par son titre et plusieurs candidats : demande laquelle, ne choisis jamais. « Client perdu » exige le motif de perte ; il passe le contact sans suite ou le dossier perdu : aperçu puis confirmation de Lucas. « Fait » sur une validation qui envoie un mail ou un SMS, ou touche un montant : aperçu puis confirmation.
 - L'effet d'une réponse part 6 secondes après : « annule » tout de suite le rattrape ; plus tard, ANNULER remet la tâche et défait ce qui peut l'être (il dit ce qui ne se défait pas : mail parti, dossier perdu).
-- « ce_qui_m_attend » lit la même liste en entier (aujourd'hui, lots, plus tard, fait) ; « point_du_jour » en donne le résumé.`;
+- « taches » vue TOUT lit la même liste en entier (aujourd'hui, lots, plus tard, fait, puis mails, propositions, messages d'espace) ; « point_du_jour » en donne le résumé.`;
+
+/**
+ * Mission 17 (partie C) : 45 outils d'un seul geste sont remplacés par des outils génériques. Les consignes en base
+ * (Lucas a pu les retoucher) ne sont jamais réécrites : cette section, toujours jointe à la lecture, donne la
+ * correspondance ancien → nouveau pour tout nom retiré qu'elles citeraient encore.
+ */
+export const SECTION_MISSION17C = `## Outils (mission 17, partie C)
+- Un seul outil par geste générique : « creer » (LEAD, DOSSIER, CLIENT, NOTE, DEPENSE, TACHE, REGLE_EXPEDITEUR…), « modifier » (toute entité, champ par champ, tracé, annulable par « annuler_modification »), « archiver » / « restaurer » (toute entité, et les versions des consignes), « lister » (toute liste d'écran), « etat_crm » (système et configuration), « voir_fichiers », « ajouter_fichier », « ranger_fichier », « lien_depot » (fichiers), « publier », « traiter_mail », « geste_espace », « doublon », « anonymiser_client », « agir_systeme » (gestes techniques).
+- Si ces consignes citent un outil qui n'existe plus, utilise son remplaçant :
+${Object.entries(OUTILS_RETIRES).map(([ancien, nouveau]) => `  - « ${ancien} » → ${nouveau}`).join("\n")}`;
 
 export const lireConsignes = async (): Promise<TexteReglable> => {
   const t = await lireTexte(CLE_CONSIGNES, CONSIGNES_DEFAUT);
@@ -264,13 +275,14 @@ export const lireConsignes = async (): Promise<TexteReglable> => {
   if (!/^## Devis multiples, contacts, réglages/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION11}`;
   if (!/^## Appels, rappels, SMS/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION14}`;
   if (!/^## Tâches/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION17}`;
+  if (!/^## Outils \(mission 17, partie C\)/m.test(texte)) texte = `${texte}\n\n${SECTION_MISSION17C}`;
   return texte === t.texte.trim() ? t : { ...t, texte };
 };
 export const enregistrerConsignes = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_CONSIGNES, texte, par, commande);
 export const lirePositionnement = () => lireTexte(CLE_POSITIONNEMENT, POSITIONNEMENT_DEFAUT);
 export const enregistrerPositionnement = (texte: string, par: string, commande?: string | null) => enregistrerTexte(CLE_POSITIONNEMENT, texte, par, commande);
 
-/** Le protocole de campagne tel qu'écrit dans les consignes (section « Protocole »), pour l'outil « campagne ». */
+/** Le protocole de campagne tel qu'écrit dans les consignes (section « Protocole »), pour la règle du jour (analytique, point du jour). */
 export function sectionProtocole(consignes: string): string {
   const debut = consignes.search(/^## .*[Pp]rotocole/m);
   if (debut < 0) return "";

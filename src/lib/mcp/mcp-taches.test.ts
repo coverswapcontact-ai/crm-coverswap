@@ -17,7 +17,7 @@ process.env.TACHES_DESACTIVEES = "1";
 /**
  * Mission 17 (partie A) — les tâches de Lucas depuis l'assistant : « taches » (aujourd'hui, j'ai N minutes, par
  * type), « repondre_tache » (fait, plus tard, pas à faire, annuler ; aperçu et jeton quand l'effet touche le client ;
- * titre approché ambigu → candidats), « ajouter_tache » (avec une cible), « ce_qui_m_attend » qui lit les tâches, et un
+ * titre approché ambigu → candidats), « creer » TACHE (ex-« ajouter_tache », avec une cible), « taches » TOUT (ex-« ce_qui_m_attend ») qui lit les tâches, et un
  * vrai client MCP. Les tâches sont écrites par le moteur (`reconcilier`) à partir de détections construites à la main.
  * Instant fixe injecté ; noms fictifs ; aucun réseau.
  */
@@ -284,10 +284,10 @@ describe("« repondre_tache » : fait, plus tard, pas à faire, annuler", () => 
   });
 });
 
-describe("« ajouter_tache », « ce_qui_m_attend »", () => {
-  test("ajouter_tache avec une cible (nom) et une date dictée : une tâche MANUELLE sur le contact, « Plus tard » jusqu'à jeudi 9 h", async () => {
+describe("« creer » TACHE (ex-« ajouter_tache »), « taches » TOUT (ex-« ce_qui_m_attend »)", () => {
+  test("creer TACHE avec une cible (nom) et une date dictée : une tâche MANUELLE sur le contact, « Plus tard » jusqu'à jeudi 9 h", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Zéphyrin", nom: "Moulard", telephone: "+33612345681", ville: "Castries", source: "META_ADS" } });
-    const r = await appeler("ajouter_tache", { titre: "Passer voir la cuisine de Moulard", quand: "jeudi", cible: { nom: "Moulard" }, commande: "Ajoute : passer voir la cuisine de Moulard jeudi" });
+    const r = await appeler("creer", { entite: "TACHE", champs: { titre: "Passer voir la cuisine de Moulard", quand: "jeudi" }, cible: { nom: "Moulard" }, commande: "Ajoute : passer voir la cuisine de Moulard jeudi" });
     assert.match(r.texte, /^Tâche ajoutée : « Passer voir la cuisine de Moulard » \(Zéphyrin Moulard\), pour jeudi 1er octobre \[tache:\w+\]\./);
     const ajoutee = await prisma.tacheAFaire.findFirstOrThrow({ where: { type: "MANUELLE", titre: "Passer voir la cuisine de Moulard" } });
     // Relecture : datée, elle attend dans « Plus tard » jusqu'au jour dit (9 h) et n'encombre pas « Aujourd'hui ».
@@ -298,13 +298,13 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
     );
     assert.equal((r.donnees as TacheLue).lien, `http://localhost:3001/leads?lead=${lead.id}`);
 
-    const inconnu = await appeler("ajouter_tache", { titre: "Rappeler quelqu'un", cible: { nom: "Xylophène Introuvable" }, commande: "ajoute" });
+    const inconnu = await appeler("creer", { entite: "TACHE", champs: { titre: "Rappeler quelqu'un" }, cible: { nom: "Xylophène Introuvable" }, commande: "ajoute" });
     assert.match(inconnu.texte, /Aucun contact ne correspond/);
   });
 
-  test("ce_qui_m_attend lit la liste des tâches à l'instant du contexte (une tâche reportée à demain revient jeudi)", async () => {
+  test("taches TOUT lit la liste des tâches à l'instant du contexte (une tâche reportée à demain revient jeudi)", async () => {
     const liste = await lecture.listeTaches(MERCREDI);
-    const r = await appeler("ce_qui_m_attend", {});
+    const r = await appeler("taches", { vue: "TOUT" });
     assert.match(r.texte, new RegExp(`^${liste.compteurs.aujourdhui} tâches aujourd'hui, environ `));
     // La reportée à demain et la tâche ajoutée pour jeudi (« Plus tard » jusqu'à jeudi 9 h).
     assert.match(r.texte, /2 reviennent demain/);
@@ -315,7 +315,7 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
     assert.equal(d.compteurs.aujourdhui, liste.compteurs.aujourdhui);
     assert.ok(!d.aujourdhui.some((t) => t.id === ids[`APPELER:lead:${ids.nadia}`]));
 
-    const jeudi = await appeler("ce_qui_m_attend", {}, new Date("2026-10-01T08:00:00.000Z"));
+    const jeudi = await appeler("taches", { vue: "TOUT" }, new Date("2026-10-01T08:00:00.000Z"));
     assert.match(jeudi.texte, /\d+\. Appeler · Nadia Essai — nouveau contact d'hier, 3 min · revenue d'un « plus tard » \[tache:/);
 
     const point = await appeler("point_du_jour", { depuis_heures: 24 });
@@ -323,13 +323,13 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
     assert.match(point.texte, /\nAujourd'hui : 0 mail à traiter, 0 message d'espace non lu, 1 proposition à valider\./);
   });
 
-  test("relecture : un seul compteur de mails — ce_qui_m_attend et point_du_jour disent le nombre de l'onglet Mail (tâches du mail et de l'espace)", async () => {
+  test("relecture : un seul compteur de mails — taches TOUT et point_du_jour disent le nombre de l'onglet Mail (tâches du mail et de l'espace)", async () => {
     const { compterMailATraiter } = await import("@/lib/a-faire/ecran");
     // Une tâche « Répondre » venue du mail (la boîte elle-même est vide dans cet essai : l'ancien compteur disait 0).
     await moteur.reconcilier([detection({ cle: "REPONDRE:fil:essai-compteur", type: "REPONDRE", source: "MAIL", titre: "Répondre · Inconnu", raison: "« Question » · reçu le 30/09 à 9 h", raccourci: { genre: "MAIL", libelle: "Répondre", href: "/mail" } })], { sources: [], maintenant: MERCREDI });
     const nombre = await compterMailATraiter(MERCREDI);
     assert.equal(nombre, 1);
-    const r = await appeler("ce_qui_m_attend", {});
+    const r = await appeler("taches", { vue: "TOUT" });
     assert.match(r.texte, /\nAussi : 1 mail à traiter, /);
     assert.equal((r.donnees as { compteurs: { mailsATraiter: number } }).compteurs.mailsATraiter, nombre);
     const point = await appeler("point_du_jour", { depuis_heures: 24 });
@@ -339,20 +339,49 @@ describe("« ajouter_tache », « ce_qui_m_attend »", () => {
   });
 });
 
+describe("lots de ménage (T33, T34, T35) : revoir, tout classer, annuler — comme les boutons du lot", () => {
+  test("taches lot rend les tâches du lot une par une ; repondre_tache « lot:<clé> » FAIT classe tout (aperçu, jeton), ANNULER le défait", async () => {
+    const LOT = { cle: "essai-lot", libelle: "vieille tâche d'essai|vieilles tâches d'essai" };
+    const detections: Detection[] = [1, 2, 3].map((n) => detection({ cle: `CLASSER_LEAD:systeme:lot-${n}`, type: "CLASSER_LEAD", source: "COHERENCE", niveau: 5, titre: `Classer · essai ${n}`, raison: "vieux contact d'essai", raccourci: { genre: "PAGE", libelle: "Ouvrir", href: "/leads" }, lot: LOT }));
+    await moteur.reconcilier(detections, { sources: ["COHERENCE"], maintenant: MERCREDI });
+    const { tachesDuLot } = await import("@/lib/a-faire/lecture");
+    const ecran = await tachesDuLot("essai-lot", MERCREDI);
+    assert.equal(ecran.length, 3);
+    const revoir = await appeler("taches", { lot: "lot:essai-lot" });
+    assert.match(revoir.texte, /^Lot essai-lot : 3 tâches/);
+    assert.deepEqual((revoir.donnees as { taches: { id: string }[] }).taches.map((t) => t.id), ecran.map((t) => t.id), "même ordre que « Revoir un par un »");
+
+    const apercu = await appeler("repondre_tache", { tache: "lot:essai-lot", reponse: "FAIT" });
+    assert.ok(apercu.confirmation, apercu.texte);
+    assert.match(apercu.texte, /Je vais classer tout le lot essai-lot : 3 tâches passent « pas à faire »/);
+    assert.equal((await tachesDuLot("essai-lot", MERCREDI)).length, 3, "rien avant le jeton");
+    const fait = await appeler("repondre_tache", { tache: "lot:essai-lot", reponse: "FAIT", confirmation: apercu.confirmation!.jeton });
+    assert.match(fait.texte, /^Lot essai-lot classé : 3 tâches classées/);
+    const le = (fait.donnees as { le: string }).le;
+    assert.equal(await prisma.tacheAFaire.count({ where: { lot: "essai-lot", statut: "PAS_A_FAIRE", reponseRaison: "CLASSE_EN_LOT" } }), 3);
+    const annule = await appeler("repondre_tache", { tache: "lot:essai-lot", reponse: "ANNULER", le });
+    assert.match(annule.texte, /^Classement du lot essai-lot annulé : 3 tâches revenues/);
+    assert.equal(await prisma.tacheAFaire.count({ where: { lot: "essai-lot", statut: "PAS_A_FAIRE" } }), 0);
+    const refus = await appeler("repondre_tache", { tache: "lot:essai-lot", reponse: "PLUS_TARD", quand: "demain" });
+    assert.match(refus.texte, /^Refusé : Un lot se classe en entier/);
+    await prisma.tacheAFaire.updateMany({ where: { lot: "essai-lot" }, data: { archiveLe: MERCREDI, archiveMotif: "essai terminé" } });
+  });
+});
+
 describe("le catalogue et un vrai client MCP", () => {
-  test("84 outils (partie B : « analytique ») : « taches » en lecture, « repondre_tache » et « ajouter_tache » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
+  test("53 outils (partie C : outils génériques) : « taches » en lecture, « repondre_tache » et « creer » en écriture réversible ; tools/list les expose ; « taches » répond par le client", async () => {
     const { registreOutils } = await import("@/lib/assistant/couverture");
     const registre = registreOutils();
-    assert.equal(registre.nombre, 84);
+    assert.equal(registre.nombre, 53);
     const outil = (nom: string) => registre.outils.find((o) => o.nom === nom);
-    assert.deepEqual([outil("taches")?.niveau, outil("taches")?.parametres], ["LECTURE", ["minutes", "vue"]]);
-    assert.deepEqual([outil("repondre_tache")?.niveau, outil("repondre_tache")?.parametres], ["REVERSIBLE", ["motif_perte", "precision", "quand", "raison", "reponse", "tache", "texte"]]);
-    assert.deepEqual([outil("ajouter_tache")?.niveau, outil("ajouter_tache")?.parametres], ["REVERSIBLE", ["cible", "quand", "raison", "titre"]]);
+    assert.deepEqual([outil("taches")?.niveau, outil("taches")?.parametres], ["LECTURE", ["lot", "minutes", "vue"]]);
+    assert.deepEqual([outil("repondre_tache")?.niveau, outil("repondre_tache")?.parametres], ["REVERSIBLE", ["le", "motif_perte", "precision", "quand", "raison", "reponse", "tache", "texte"]]);
+    assert.deepEqual([outil("creer")?.niveau, outil("creer")?.parametres], ["REVERSIBLE", ["champs", "cible", "entite"]]);
 
     const outils = await client.listTools();
-    for (const nom of ["taches", "repondre_tache", "ajouter_tache"]) assert.ok(outils.tools.some((t) => t.name === nom), `absent de tools/list : ${nom}`);
+    for (const nom of ["taches", "repondre_tache", "creer"]) assert.ok(outils.tools.some((t) => t.name === nom), `absent de tools/list : ${nom}`);
     const niveau = (nom: string) => outils.tools.find((t) => t.name === nom)?.description?.match(/^\[([^\]]+)\]/)?.[1];
-    assert.deepEqual([niveau("taches"), niveau("repondre_tache"), niveau("ajouter_tache")], ["Lecture", "Écriture réversible", "Écriture réversible"]);
+    assert.deepEqual([niveau("taches"), niveau("repondre_tache"), niveau("creer")], ["Lecture", "Écriture réversible", "Écriture réversible"]);
     const schemaRepondre = outils.tools.find((t) => t.name === "repondre_tache")!.inputSchema as { properties: Record<string, unknown> };
     assert.ok(schemaRepondre.properties.commande && schemaRepondre.properties.confirmation, "commande et confirmation ajoutées aux outils d'écriture");
 

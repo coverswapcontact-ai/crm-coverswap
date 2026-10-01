@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { cleNom, distanceEdition, normaliserEmail, normaliserTelephone } from "@/lib/clients/normalisation";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
@@ -59,8 +60,14 @@ function scoreNom(recherche: string[], nom: string): { score: number; motif: str
   return score >= 0.5 ? { score: Math.min(1, score), motif: proches > 0 ? "nom proche" : "nom" } : null;
 }
 
-export async function chercherContacts(texte: string, options: { limite?: number } = {}): Promise<Candidat[]> {
+/**
+ * `archives` (mission 17, partie C) : lit aussi les fiches, leads et dossiers archivés (AVEC_ARCHIVES ; sans lui, la
+ * couche du journal les cache), pour que « restaurer » trouve ce qu'il restaure. Un candidat archivé le dit dans son état.
+ */
+export async function chercherContacts(texte: string, options: { limite?: number; archives?: boolean } = {}): Promise<Candidat[]> {
   const limite = options.limite ?? 8;
+  const archives = options.archives ? AVEC_ARCHIVES : { archiveLe: null };
+  const archive = (ligne: { archiveLe?: Date | null }) => (ligne.archiveLe ? ` — ARCHIVÉ le ${ligne.archiveLe.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })}` : "");
   const brut = texte.trim();
   if (!brut) return [];
   const telephone = normaliserTelephone(brut);
@@ -70,16 +77,16 @@ export async function chercherContacts(texte: string, options: { limite?: number
 
   const [clients, leads, dossiers] = await Promise.all([
     prisma.client.findMany({
-      where: { archiveLe: null, anonymiseLe: null, fusionneDansId: null },
-      select: { id: true, nom: true, prenom: true, nomFamille: true, raisonSociale: true, ville: true, emails: { where: { archiveLe: null }, select: { adresse: true } }, telephones: { where: { archiveLe: null }, select: { numero: true } }, dossiers: { where: { archiveLe: null }, select: { id: true, etape: true, objet: true } } },
+      where: { ...archives, anonymiseLe: null, fusionneDansId: null },
+      select: { id: true, archiveLe: true, nom: true, prenom: true, nomFamille: true, raisonSociale: true, ville: true, emails: { where: { archiveLe: null }, select: { adresse: true } }, telephones: { where: { archiveLe: null }, select: { numero: true } }, dossiers: { where: { archiveLe: null }, select: { id: true, etape: true, objet: true } } },
       take: 2000,
     }),
     prisma.lead.findMany({
-      where: { archiveLe: null, createdAt: { gte: new Date(Date.now() - 400 * 86_400_000) } },
-      select: { id: true, prenom: true, nom: true, ville: true, email: true, telephone: true, statut: true, clientId: true, dossiers: { where: { archiveLe: null }, select: { id: true }, take: 1 } },
+      where: { ...archives, ...(options.archives ? {} : { createdAt: { gte: new Date(Date.now() - 400 * 86_400_000) } }) },
+      select: { id: true, archiveLe: true, prenom: true, nom: true, ville: true, email: true, telephone: true, statut: true, clientId: true, dossiers: { where: { archiveLe: null }, select: { id: true }, take: 1 } },
       take: 3000,
     }),
-    prisma.dossier.findMany({ where: { archiveLe: null }, select: { id: true, clientNom: true, clientVille: true, clientAdresse: true, clientCp: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true }, take: 3000 }),
+    prisma.dossier.findMany({ where: { ...archives }, select: { id: true, archiveLe: true, clientNom: true, clientVille: true, clientAdresse: true, clientCp: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true }, take: 3000 }),
   ]);
   // Un numéro de devis ou de facture (« 2026-037 », « F-2026-012 ») : le dossier du document (mission 10).
   const numero = /^[A-Z]{0,3}-?\d{4}-\d{2,6}$/i.test(brut) ? brut.toUpperCase() : null;
@@ -97,7 +104,7 @@ export async function chercherContacts(texte: string, options: { limite?: number
   for (const c of clients) {
     const nomComplet = [c.prenom, c.nomFamille ?? c.nom, c.raisonSociale].filter(Boolean).join(" ") || c.nom;
     const etat = c.dossiers.length ? `${c.dossiers.length} dossier${c.dossiers.length > 1 ? "s" : ""} : ${c.dossiers.map((d) => LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape).join(", ")}` : "client sans dossier";
-    const base = { type: "CLIENT" as const, id: c.id, nom: nomComplet, ville: c.ville, etat, clientId: c.id, leadId: null, dossierId: c.dossiers.length === 1 ? c.dossiers[0].id : null, chemin: `/clients/${c.id}` };
+    const base = { type: "CLIENT" as const, id: c.id, nom: nomComplet, ville: c.ville, etat: `${etat}${archive(c)}`, clientId: c.id, leadId: null, dossierId: c.dossiers.length === 1 ? c.dossiers[0].id : null, chemin: `/clients/${c.id}` };
     if (c.telephones.some((t) => memeTelephone(t.numero))) ajouter({ ...base, score: 1, motif: "téléphone" });
     else if (c.emails.some((e) => memeEmail(e.adresse))) ajouter({ ...base, score: 1, motif: "e-mail" });
     else {
@@ -107,7 +114,7 @@ export async function chercherContacts(texte: string, options: { limite?: number
   }
   for (const l of leads) {
     const nomComplet = `${l.prenom} ${l.nom}`.replace(/Inconnu/gi, "").trim() || l.email || "Sans nom";
-    const base = { type: "LEAD" as const, id: l.id, nom: nomComplet, ville: l.ville || null, etat: `lead ${(LIBELLES_STATUT_LEAD[l.statut as StatutLead] ?? l.statut).toLowerCase()}${l.dossiers.length ? " (dossier ouvert)" : ""}`, clientId: l.clientId, leadId: l.id, dossierId: l.dossiers[0]?.id ?? null, chemin: `/leads?lead=${l.id}` };
+    const base = { type: "LEAD" as const, id: l.id, nom: nomComplet, ville: l.ville || null, etat: `lead ${(LIBELLES_STATUT_LEAD[l.statut as StatutLead] ?? l.statut).toLowerCase()}${l.dossiers.length ? " (dossier ouvert)" : ""}${archive(l)}`, clientId: l.clientId, leadId: l.id, dossierId: l.dossiers[0]?.id ?? null, chemin: `/leads?lead=${l.id}` };
     if (memeTelephone(l.telephone)) ajouter({ ...base, score: 1, motif: "téléphone" });
     else if (memeEmail(l.email)) ajouter({ ...base, score: 1, motif: "e-mail" });
     else {
@@ -123,7 +130,7 @@ export async function chercherContacts(texte: string, options: { limite?: number
   const motsAdresse = sansAccents(brut).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((m) => (m.length >= 2 || /^\d+$/.test(m)) && !MOTS_VIDES.has(m));
   const ressembleAUneAdresse = motsAdresse.length >= 2 && /\d/.test(brut) && !telephone;
   for (const d of dossiers) {
-    const base = { type: "DOSSIER" as const, id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
+    const base = { type: "DOSSIER" as const, id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape}${archive(d)}`, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
     if (memeTelephone(d.clientTelephone)) ajouter({ ...base, score: 1, motif: "téléphone" });
     else if (memeEmail(d.clientEmail)) ajouter({ ...base, score: 1, motif: "e-mail" });
     else {
@@ -151,8 +158,8 @@ export async function chercherContacts(texte: string, options: { limite?: number
  * seul et net, sinon la liste des candidats — Claude demande alors à Lucas
  * lequel, au lieu de choisir.
  */
-export async function trouverUnSeul(texte: string, type?: TypeContact): Promise<{ trouve: Candidat } | { ambigu: Candidat[] } | { aucun: true }> {
-  const tous = await chercherContacts(texte, { limite: 12 });
+export async function trouverUnSeul(texte: string, type?: TypeContact, options: { archives?: boolean } = {}): Promise<{ trouve: Candidat } | { ambigu: Candidat[] } | { aucun: true }> {
+  const tous = await chercherContacts(texte, { limite: 12, archives: options.archives });
   const candidats = type ? tous.filter((c) => c.type === type) : tous;
   if (candidats.length === 0) return { aucun: true };
   const [premier, second] = candidats;

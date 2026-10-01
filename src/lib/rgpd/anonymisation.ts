@@ -124,6 +124,35 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
   // Mission 17 (partie A) : les tâches de Lucas qui le nomment (titre, raison, raccourci avec son numéro).
   const tachesAFaire = await client.tacheAFaire.findMany({ where: { ...AVEC_ARCHIVES, ...parContact } });
 
+  // Mission 10 (partie restée hors du périmètre jusqu'ici) et mission 17 (partie C) : traces des modifications de
+  // l'assistant et messages de l'espace, par dossier ; fichiers reçus et liens de dépôt, par cible.
+  const [modificationsDossier, messagesEspace] = await Promise.all([
+    client.modificationDossier.findMany({ where: { dossierId: { in: dossierIds } } }),
+    client.messageEspace.findMany({ where: { ...AVEC_ARCHIVES, dossierId: { in: dossierIds } } }),
+  ]);
+  const documents = await client.document.findMany({ where: { dossierId: { in: dossierIds } }, select: { id: true } });
+  const cibles = [
+    ...(dossierIds.length ? [{ cibleEntite: "DOSSIER", cibleId: { in: dossierIds } }] : []),
+    ...(leadIds.length ? [{ cibleEntite: "LEAD", cibleId: { in: leadIds } }] : []),
+    { cibleEntite: "CLIENT", cibleId: { in: clientIds } },
+  ];
+  const photosLeadIds = photosLead.map((photo) => photo.id);
+  const fichiersDeposes = await client.fichierDepose.findMany({ where: { ...AVEC_ARCHIVES, OR: [...cibles, ...(photosLeadIds.length ? [{ photoLeadId: { in: photosLeadIds } }] : [])] } });
+  const jetonsDepot = await client.jetonDepot.findMany({ where: { ...AVEC_ARCHIVES, OR: cibles } });
+  const fichiersConserves = await client.fichier.findMany({ where: { ...AVEC_ARCHIVES, id: { in: fichiersDeposes.filter((d) => d.cibleEntite !== "DEPENSE").map((d) => d.fichierId).filter((id): id is string => Boolean(id)) } } });
+  const enregistrements: [string, string[]][] = [
+    ["LEAD", leadIds],
+    ["DOSSIER", dossierIds],
+    ["CLIENT", clientIds],
+    ["COORDONNEE", [...emails.map((l) => l.id), ...telephones.map((l) => l.id)]],
+    ["NOTE_APPEL", notesAppel.map((l) => l.id)],
+    ["DOCUMENT", documents.map((l) => l.id)],
+    ["ENCAISSEMENT", encaissements.map((l) => l.id)],
+    ["SIMULATION", simulationsEspace.map((l) => l.id)],
+    ["PUBLICATION", publicationsSite.map((l) => l.id)],
+  ];
+  const modificationsAssistant = await client.modificationAssistant.findMany({ where: { OR: enregistrements.filter(([, ids]) => ids.length).map(([entite, ids]) => ({ entite, enregistrementId: { in: ids } })) } });
+
   const cheminsLocaux = (valeur: unknown) => lirePhotos(typeof valeur === "string" ? valeur : "[]").filter((chemin) => !/^[a-z]+:\/\//i.test(chemin));
   const chemins = [
     ...dossiers.flatMap((dossier) => lirePhotos(dossier.photos)),
@@ -133,6 +162,7 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
     ...travauxSimulation.map((t) => t.photoPath).filter((chemin): chemin is string => Boolean(chemin)),
     ...simulations.flatMap((simulation) => [simulation.imageBeforePath, simulation.imageAfterPath, simulation.imageOriginalPath]).filter((chemin): chemin is string => Boolean(chemin) && !/^[a-z]+:\/\//i.test(chemin!)),
     ...fichiers.map((fichier) => fichier.chemin),
+    ...fichiersConserves.map((fichier) => fichier.chemin),
     ...simulationsEspace.flatMap((simulation) => [simulation.chemin, simulation.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
     ...preparations.flatMap((p) => [p.photoAvant]).filter((chemin): chemin is string => Boolean(chemin) && chemin !== EFFACE),
     ...rendusBanc.map((r) => r.chemin).filter((chemin): chemin is string => Boolean(chemin)),
@@ -178,7 +208,6 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       ContenuMessage: contenus,
       PieceMessage: pieces,
       AnalyseMessage: analyses,
-      Fichier: fichiers,
       ConversationSms: conversationsSms,
       Sms: sms,
       EspaceClient: espaces,
@@ -191,6 +220,12 @@ async function perimetre(client: Transaction | typeof prisma, clientId: string, 
       InscriptionSequence: inscriptionsSequence,
       Proposition: propositions,
       TacheAFaire: tachesAFaire,
+      ModificationDossier: modificationsDossier,
+      MessageEspace: messagesEspace,
+      ModificationAssistant: modificationsAssistant,
+      FichierDepose: fichiersDeposes,
+      JetonDepot: jetonsDepot,
+      Fichier: [...fichiers, ...fichiersConserves.filter((f) => !fichiers.some((g) => g.id === f.id))],
     } as Record<string, Record<string, unknown>[]>,
   };
 }

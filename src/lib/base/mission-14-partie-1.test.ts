@@ -39,7 +39,6 @@ let boite: typeof import("@/lib/mail/boite");
 let v2: typeof import("@/lib/mail/v2");
 let commercial: typeof import("@/lib/commercial/pilotage");
 let execution: typeof import("@/lib/assistant/execution");
-let outilsRelances: typeof import("@/lib/assistant/outils/relances");
 let migration: typeof import("@/lib/base/migrations/mission-14-partie-1");
 
 const LUCAS = { acteur: "HUMAIN:lucas@coverswap.fr" };
@@ -112,7 +111,6 @@ before(async () => {
   v2 = await import("@/lib/mail/v2");
   commercial = await import("@/lib/commercial/pilotage");
   execution = await import("@/lib/assistant/execution");
-  outilsRelances = await import("@/lib/assistant/outils/relances");
   migration = await import("@/lib/base/migrations/mission-14-partie-1");
   await (await import("@/lib/base/preparation")).preparerBase();
 });
@@ -155,7 +153,7 @@ describe("R1 : un devis visible, émis ou déposé, c'est « Devis envoyé »", 
     const document = await prisma.document.findUniqueOrThrow({ where: { id: depose.nature === "DOCUMENT" ? depose.documentId : "" } });
     assert.equal(aRelancer.prochaineProposableLe, new Date(document.createdAt.getTime() + delai * JOUR).toISOString());
     const session = await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" });
-    const vue = await execution.executerOutil(outilsRelances.outilVoirRelances as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, {}, session);
+    const vue = await execution.executerOutil((await import("@/lib/assistant/outils/lister")).outilLister as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, { liste: "RELANCES" }, session);
     assert.match(vue.texte, new RegExp(`${c.nom} : devis ${document.numero} .*pas d'adresse e-mail`));
   });
 

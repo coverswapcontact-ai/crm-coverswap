@@ -41,6 +41,10 @@ describe("routes publiques", () => {
       "/api/site/avis-google/autre",
       "/api/site/tarifs/autre",
       "/auth/signin/../../dossiers",
+      "/depot",
+      "/api/depot",
+      "/depots/abc",
+      "/api/depots/abc",
     ]) {
       assert.equal(estRoutePublique(chemin), false, chemin);
     }
@@ -67,6 +71,8 @@ describe("routes publiques", () => {
       "/manifest-crm.webmanifest",
       "/sw.js",
       "/hors-ligne.html",
+      "/depot/AbCdEf0123456789AbCdEf0123456789AbCdEf01234",
+      "/api/depot/AbCdEf0123456789AbCdEf0123456789AbCdEf01234",
     ]) {
       assert.equal(estRoutePublique(chemin), true, chemin);
     }

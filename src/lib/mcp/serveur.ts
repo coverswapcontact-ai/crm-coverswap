@@ -19,8 +19,11 @@ import type { JetonVerifie } from "@/lib/oauth/serveur";
 export const VERSION_SERVEUR = "1.0.0";
 const DONNEES_MAX = 60_000;
 
-const INSTRUCTIONS = `Tu es l'assistant et le directeur général de CoverSwap, la société de Lucas (rénovation par revêtements adhésifs, Montpellier). Lis d'abord la ressource coverswap://consignes (tarifs, prestations, protocole de campagne, principes de décision, format du point du jour) et, avant toute recherche web, coverswap://positionnement.
-Règles : tu réponds en français, tu tutoies Lucas. Tu passes la phrase de Lucas telle quelle dans le paramètre « commande » de chaque outil d'écriture. Une action sensible rend d'abord un aperçu : lis-le à Lucas, et n'appelle l'outil une seconde fois, avec le jeton « confirmation », que s'il dit oui. Si un outil rend plusieurs candidats, demande lequel, ne choisis jamais. Rien ne se supprime : « supprimer » archive. Dans tes conseils, distingue toujours ce qui vient des données du CRM, ce qui vient du web, et ce que tu déduis ; dis quand les données sont trop minces.`;
+export const INSTRUCTIONS = `Tu es l'assistant et le directeur général de CoverSwap, la société de Lucas (rénovation par revêtements adhésifs, Montpellier). Lis d'abord la ressource coverswap://consignes (tarifs, prestations, protocole de campagne, principes de décision, format du point du jour) et, avant toute recherche web, coverswap://positionnement.
+Règles : tu réponds en français, tu tutoies Lucas. Tu passes la phrase de Lucas telle quelle dans le paramètre « commande » de chaque outil d'écriture. Une action sensible rend d'abord un aperçu : lis-le à Lucas, et n'appelle l'outil une seconde fois, avec le jeton « confirmation », que s'il dit oui. Si un outil rend plusieurs candidats, demande lequel, ne choisis jamais. Rien ne se supprime : une demande de suppression devient « archiver » (réversible) ; « supprimer » (corbeille, effacement au bout de 30 jours) seulement si Lucas dit vouloir effacer. Dans tes conseils, distingue toujours ce qui vient des données du CRM, ce qui vient du web, et ce que tu déduis ; dis quand les données sont trop minces.`;
+
+/** Le prompt « point du matin » : il ne cite que des outils du catalogue (vérifié par mcp-relecture-c.test.ts). */
+export const TEXTE_POINT_DU_MATIN = "Bonjour. Fais-moi le point du matin : appelle « point_du_jour » (mémorise), puis « taches » (vue TOUT) et « analytique » (onglet publicite), lis les consignes, et rends un point de 60 à 90 secondes qui commence par « Bonjour Lucas » et finit par le jour de campagne et la règle du jour.";
 
 /** Le texte que Claude lit : le résultat, ses liens, puis les données exactes en JSON (tronquées au besoin). */
 export function texteDuResultat(resultat: ResultatOutil): string {
@@ -28,6 +31,7 @@ export function texteDuResultat(resultat: ResultatOutil): string {
   if (resultat.liens?.length) parties.push(`Liens : ${resultat.liens.map((l) => `${l.libelle} — ${l.href}`).join(" · ")}`);
   if (resultat.confirmation) parties.push(`Jeton de confirmation : ${resultat.confirmation.jeton} (valable jusqu'à ${resultat.confirmation.expireLe}).`);
   if (resultat.images?.length) parties.push(`Images jointes (dans l'ordre) : ${resultat.images.map((i, n) => `${n + 1}. ${i.libelle}`).join(" · ")}`);
+  if (resultat.documents?.length) parties.push(`Documents joints (dans l'ordre) : ${resultat.documents.map((d, n) => `${n + 1}. ${d.libelle} (${d.mimeType})`).join(" · ")}`);
   if (resultat.donnees !== undefined) {
     let json = JSON.stringify(resultat.donnees);
     if (json.length > DONNEES_MAX) json = `${json.slice(0, DONNEES_MAX)}… [données tronquées : ${json.length} caractères]`;
@@ -54,7 +58,9 @@ export function construireServeur(session: Session) {
         const resultat = await executerOutil(outil, args, session, new Date());
         // Mission 10 : les photos et simulations arrivent en blocs image, après le texte qui les décrit.
         const images = (resultat.images ?? []).map((i) => ({ type: "image" as const, data: i.base64, mimeType: i.mimeType }));
-        return { content: [{ type: "text" as const, text: texteDuResultat(resultat) }, ...images] };
+        // Mission 17 (partie C) : un PDF (devis, facture, justificatif, pièce de mail) arrive en ressource embarquée.
+        const documents = (resultat.documents ?? []).map((d) => ({ type: "resource" as const, resource: { uri: d.uri, mimeType: d.mimeType, blob: d.base64 } }));
+        return { content: [{ type: "text" as const, text: texteDuResultat(resultat) }, ...images, ...documents] };
       }
     );
   }
@@ -67,7 +73,7 @@ export function construireServeur(session: Session) {
   }));
 
   mcp.registerPrompt("point_du_matin", { title: "Le point du matin", description: "Le point du jour de Lucas en 60 à 90 secondes : ce qui s'est passé depuis le dernier point, ce qui l'attend, la campagne et sa règle du jour." }, () => ({
-    messages: [{ role: "user", content: { type: "text", text: "Bonjour. Fais-moi le point du matin : appelle « point_du_jour » (mémorise), puis « ce_qui_m_attend » et « campagne », lis les consignes, et rends un point de 60 à 90 secondes qui commence par « Bonjour Lucas » et finit par le jour de campagne et la règle du jour." } }],
+    messages: [{ role: "user", content: { type: "text", text: TEXTE_POINT_DU_MATIN } }],
   }));
 
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

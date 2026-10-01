@@ -394,6 +394,28 @@ export async function poserRegle(adresse: string, action: ActionRegle, motif: st
   });
 }
 
+/** Mission 17 (partie C) : retirer une règle posée (archivée, jamais effacée) — l'écriture qui vivait dans la route Paramètres → Mail. */
+export async function archiverRegle(id: string, motif = "Retirée par Lucas (Paramètres)"): Promise<void> {
+  const regle = await prisma.regleExpediteur.findFirst({ where: { ...AVEC_ARCHIVES, id }, select: { archiveLe: true } });
+  if (!regle) throw new ErreurMetier("Règle introuvable.", 404);
+  if (regle.archiveLe) throw new ErreurMetier("Cette règle est déjà retirée.", 409);
+  await prisma.regleExpediteur.update({ where: { id }, data: { archiveLe: new Date(), archiveMotif: motif.trim().slice(0, 300) || "Retirée" } });
+}
+
+/** Remet une règle retirée ; la règle contraire en vigueur est retirée à son tour (une adresse n'a qu'une décision). */
+export async function restaurerRegle(id: string): Promise<void> {
+  const regle = await prisma.regleExpediteur.findFirst({ where: { ...AVEC_ARCHIVES, id } });
+  if (!regle) throw new ErreurMetier("Règle introuvable.", 404);
+  if (!regle.archiveLe) return;
+  const contraire = regle.action === "RANGER" ? "NE_JAMAIS_RANGER" : regle.action === "NE_JAMAIS_RANGER" ? "RANGER" : null;
+  await prisma.$transaction(async (tx) => {
+    if (contraire) await tx.regleExpediteur.updateMany({ where: { cible: regle.cible, action: contraire }, data: { archiveLe: new Date(), archiveMotif: "Remplacée : règle contraire restaurée" } });
+    const deja = await tx.regleExpediteur.findFirst({ where: { cible: regle.cible, action: regle.action, id: { not: regle.id } } });
+    if (deja) throw new ErreurMetier("La même règle est déjà en vigueur.", 409);
+    await tx.regleExpediteur.update({ where: { id: regle.id }, data: { archiveLe: null, archiveMotif: null } });
+  });
+}
+
 /* ── Les gestes de Lucas ───────────────────────────────────────────── */
 
 async function messagesDuFil(messageId: string) {

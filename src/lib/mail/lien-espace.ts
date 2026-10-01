@@ -79,6 +79,25 @@ export async function proposerLienParMail(entree: { leadId?: string | null; doss
 }
 
 /**
+ * Mission 17 (partie C) : le même mail proposé, SANS rien ouvrir ni écrire (aperçu d'une action sensible de
+ * l'assistant) : l'espace et le dossier ne s'ouvrent qu'à l'envoi confirmé, par `proposerLienParMail`.
+ */
+export async function apercuLienParMail(entree: { leadId?: string | null; dossierId?: string | null; code: CodeLienMail }): Promise<Omit<PropositionLienMail, "dossierId"> & { dossierId: string | null }> {
+  let dossierId = entree.dossierId ?? null;
+  if (!dossierId && entree.leadId) dossierId = (await prisma.dossier.findFirst({ where: { leadId: entree.leadId, archiveLe: null }, orderBy: { createdAt: "desc" }, select: { id: true } }))?.id ?? null;
+  const base = PROPOSITIONS[entree.code];
+  if (dossierId) {
+    const { a, prenom } = await destinataireDuDossier(dossierId);
+    const avecSimulation = entree.code === "LIEN_ESPACE" && (await simulationDansLEspace(dossierId));
+    return { dossierId, code: entree.code, a, prenom, objet: base.objet, phrase: avecSimulation ? PHRASE_AVEC_SIMULATION : base.phrase, bouton: base.bouton };
+  }
+  if (!entree.leadId) throw new ErreurMetier("Indique le contact ou le dossier.", 400);
+  const lead = await prisma.lead.findUnique({ where: { id: entree.leadId }, select: { prenom: true, nom: true, email: true } });
+  if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
+  return { dossierId: null, code: entree.code, a: normaliserEmail(lead.email) ?? null, prenom: prenomDuContact(null, lead.prenom, `${lead.prenom ?? ""} ${lead.nom ?? ""}`), objet: base.objet, phrase: base.phrase, bouton: base.bouton };
+}
+
+/**
  * Lucas a relu : le mail part, avec le lien du moment (s'il a été régénéré
  * entre-temps, c'est le nouveau). Une fois par ouverture de la fenêtre
  * (`jeton`) : un double clic n'envoie pas deux mails.

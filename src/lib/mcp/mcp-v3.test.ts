@@ -106,18 +106,19 @@ after(async () => {
 });
 
 describe("Mission 11 : libérer le MCP", () => {
-  test("« tools/list » expose exactement le catalogue (registre dérivé du code) ; « lister_outils » et /api/health portent la même empreinte", async () => {
+  test("« tools/list » expose exactement le catalogue (registre dérivé du code) ; « etat_crm » OUTILS (ex-« lister_outils ») et /api/health portent la même empreinte", async () => {
     const { CATALOGUE } = await import("@/lib/assistant/catalogue");
     const { ecartAvecLeServeur, registreOutils } = await import("@/lib/assistant/couverture");
     const outils = await client.listTools();
     const ecart = ecartAvecLeServeur(outils.tools.map((t) => t.name));
     assert.deepEqual(ecart, { manquants: [], enTrop: [] }, `outils manquants ou en trop : ${JSON.stringify(ecart)}`);
     assert.equal(outils.tools.length, CATALOGUE.length);
-    for (const nom of ["creer_contact", "deposer_document", "annuler_document", "presenter_devis", "retirer_accord", "simulations_site", "voir_parametres", "modifier_parametres", "voir_relances", "relancer", "annuler_relance", "changer_teinte", "voir_publicite", "lister_outils", "supprimer", "classer_mail", "rediger_mail", "leads_a_rappeler", "noter_sms"]) {
+    // Mission 17 (partie C) : les outils de la mission 11 passent par leurs remplaçants génériques.
+    for (const nom of ["creer", "ajouter_fichier", "annuler_document", "modifier", "geste_espace", "voir_fichiers", "etat_crm", "lister", "relancer", "ignorer_proposition", "supprimer", "classer_mail", "rediger_mail", "noter_sms"]) {
       assert.ok(outils.tools.some((t) => t.name === nom), `outil absent de tools/list : ${nom}`);
     }
     const registre = registreOutils();
-    const liste = await appeler("lister_outils", {});
+    const liste = await appeler("etat_crm", { partie: "OUTILS" });
     assert.match(liste, new RegExp(`${registre.nombre} outils exposés .* \\(empreinte ${registre.empreinte}\\)`));
     assert.match(liste, /reconnecter le connecteur/);
     const sante = await (await import("@/app/api/health/route")).GET(new NextRequest(new Request("http://localhost:3001/api/health")));
@@ -125,20 +126,20 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.deepEqual(corps.outils, { nombre: registre.nombre, empreinte: registre.empreinte });
   });
 
-  test("« creer_contact » refuse un doublon (même numéro, même nom + ville), crée sinon, et passe outre avec forcer", async () => {
-    const premier = await appeler("creer_contact", { prenom: "Nadia", nom: "Essai", telephone: "06 11 22 33 44", ville: "Pérols", source: "REFERENCE", projet: "Cuisine, façades blanches" });
-    assert.match(premier, /Contact créé : Nadia Essai \(Pérols\)/);
+  test("« creer » LEAD (ex-« creer_contact ») refuse un doublon (même numéro, même nom + ville), crée sinon, et passe outre avec forcer", async () => {
+    const premier = await appeler("creer", { entite: "LEAD", champs: { prenom: "Nadia", nom: "Essai", telephone: "06 11 22 33 44", ville: "Pérols", source: "REFERENCE", projet: "Cuisine, façades blanches" } });
+    assert.match(premier, /Lead créé : Nadia Essai \(Pérols\)/);
     const { leadId } = donneesDe<{ leadId: string }>(premier);
     ids.leadNadia = leadId;
-    const memeNumero = await appeler("creer_contact", { prenom: "Nadia", nom: "Autre", telephone: "0611223344", ville: "Montpellier" });
+    const memeNumero = await appeler("creer", { entite: "LEAD", champs: { prenom: "Nadia", nom: "Autre", telephone: "0611223344", ville: "Montpellier" } });
     assert.match(memeNumero, /Rien n'a été créé/);
     assert.match(memeNumero, /même numéro/);
-    const memeNom = await appeler("creer_contact", { prenom: "Nadia", nom: "Essai", ville: "Perols" });
+    const memeNom = await appeler("creer", { entite: "LEAD", champs: { prenom: "Nadia", nom: "Essai", ville: "Perols" } });
     assert.match(memeNom, /Rien n'a été créé/);
     assert.match(memeNom, /même nom, même ville/);
     assert.equal(await prisma.lead.count({ where: { prenom: "Nadia", nom: "Essai" } }), 1, "aucune fiche créée sur un doublon");
-    const force = await appeler("creer_contact", { prenom: "Nadia", nom: "Essai", ville: "Pérols", forcer: true, ouvrir_dossier: true });
-    assert.match(force, /Contact créé : Nadia Essai \(Pérols\).*dossier ouvert.*malgré 1 doublon/);
+    const force = await appeler("creer", { entite: "LEAD", champs: { prenom: "Nadia", nom: "Essai", ville: "Pérols", forcer: true, ouvrir_dossier: true } });
+    assert.match(force, /Lead créé : Nadia Essai \(Pérols\).*dossier ouvert.*malgré 1 doublon/);
     ids.leadNadiaBis = donneesDe<{ leadId: string }>(force).leadId;
   });
 
@@ -172,10 +173,10 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.deepEqual(etat.devisProposes.map((d) => d.id), [ids.devisB]);
   });
 
-  test("« deposer_document » : un BAT fournisseur en base64 conservé et servi par /api/fichiers ; un devis PDF proposé au client", async () => {
-    const bat = await confirmer("deposer_document", { dossierId: ids.dossierFares, type: "AUTRE", libelle: "BAT fournisseur", source: { contenu_base64: PDF.toString("base64"), nom: "bat-cover-styl.pdf" } });
-    assert.match(bat, /Document « BAT fournisseur » déposé/);
-    const { fichierId } = donneesDe<{ fichierId: string }>(bat);
+  test("« ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en base64 conservé et servi par /api/fichiers ; un devis PDF proposé au client", async () => {
+    const bat = await appeler("ajouter_fichier", { cible: { entite: "DOSSIER", id: ids.dossierFares }, type: "AUTRE", libelle: "BAT fournisseur", source: { base64: PDF.toString("base64"), nom: "bat-cover-styl.pdf" } });
+    assert.match(bat, /bat-cover-styl\.pdf .*document déposé sur le dossier de Fawzia Fares/);
+    const fichierId = donneesDe<{ fichiers: { fichierId: string }[] }>(bat).fichiers[0].fichierId;
     const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: ids.dossierFares, type: "DOCUMENT_DEPOSE" } });
     assert.match(evenement?.contenu ?? "", /BAT fournisseur \(bat-cover-styl.pdf\)/);
     const reponse = await (await import("@/app/api/fichiers/[id]/route")).GET(new NextRequest(new Request(`http://localhost:3001/api/fichiers/${fichierId}`)), { params: Promise.resolve({ id: fichierId }) });
@@ -183,50 +184,51 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.equal(reponse.headers.get("content-type"), "application/pdf");
     assert.equal(Buffer.from(await reponse.arrayBuffer()).toString(), PDF.toString());
 
-    const devis = await confirmer("deposer_document", { dossierId: ids.dossierFares, type: "DEVIS", numero: "2026-990", libelle: "devis papier", montant: 1980, date_emission: "2026-09-20", inscrire_au_registre: true, source: { contenu_base64: PDF.toString("base64"), nom: "devis-990.pdf" } });
-    assert.match(devis, /Devis 2026-990 rattaché .* Proposé dans son espace/);
+    const devis = await confirmer("ajouter_fichier", { cible: { entite: "DOSSIER", id: ids.dossierFares }, type: "DEVIS", numero: "2026-990", libelle: "devis papier", montant: 1980, date_emission: "2026-09-20", inscrire_au_registre: true, source: { base64: PDF.toString("base64"), nom: "devis-990.pdf" } });
+    assert.match(devis, /devis 2026-990 rattaché au dossier de Fawzia Fares/);
     const service = await import("@/lib/espace/service");
     const etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
     assert.deepEqual(etat.devisProposes.map((d) => [d.libelle, d.repris ?? false]), [["façades + plan de travail", false], ["devis papier", true]]);
   });
 
-  test("« presenter_devis » : libellé et visibilité d'un devis émis ; « retirer_accord » refuse sans accord", async () => {
+  test("« modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité d'un devis émis (le rendre visible est sensible) ; « geste_espace » RETIRER_ACCORD refuse sans accord", async () => {
     const service = await import("@/lib/espace/service");
-    const masque = await appeler("presenter_devis", { dossierId: ids.dossierFares, documentId: ids.devisB, visible_espace: false, libelle_variante: "façades + plan (masqué)" });
-    assert.match(masque, /Devis \d{4}-\d{3} : libellé « façades \+ plan \(masqué\) », masqué dans l'espace client/);
+    const masque = await appeler("modifier", { entite: "DOCUMENT", id: ids.devisB, champs: { visible_espace: false, libelle_variante: "façades + plan (masqué)" } });
+    assert.match(masque, /^Modifié sur .*\d{4}-\d{3}.*façades \+ plan \(masqué\)/);
     let etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
     assert.ok(!etat.devisProposes.some((d) => d.id === ids.devisB), "masqué : le client ne le voit plus");
-    await appeler("presenter_devis", { dossierId: ids.dossierFares, documentId: ids.devisB, visible_espace: true, libelle_variante: "façades + plan de travail" });
+    await confirmer("modifier", { entite: "DOCUMENT", id: ids.devisB, champs: { visible_espace: true, libelle_variante: "façades + plan de travail" } });
     etat = await service.etatEspace(await prisma.espaceClient.findUniqueOrThrow({ where: { id: ids.espaceFares } }));
     assert.ok(etat.devisProposes.some((d) => d.id === ids.devisB && d.libelle === "façades + plan de travail"));
-    const refus = await appeler("retirer_accord", { dossierId: ids.dossierFares });
+    const apercuRefus = await appeler("geste_espace", { geste: "RETIRER_ACCORD", dossierId: ids.dossierFares, motif: "essai" });
+    const refus = jetonDe(apercuRefus) ? await appeler("geste_espace", { geste: "RETIRER_ACCORD", dossierId: ids.dossierFares, motif: "essai", confirmation: jetonDe(apercuRefus) }) : apercuRefus;
     assert.match(refus, /Aucun bon pour accord en vigueur/);
   });
 
-  test("« changer_teinte » : une teinte par meuble, plusieurs teintes par projet, candidats en cas de doute", async () => {
-    const ilot = await appeler("changer_teinte", { dossierId: ids.dossierFares, meuble: "îlot", teinte: "chêne clair", commande: "Mets l'îlot en chêne clair" });
-    assert.match(ilot, /Îlot .*→ chêne clair/);
-    const hauts = await appeler("changer_teinte", { dossierId: ids.dossierFares, meuble: "façades hautes", teinte: "blanc mat", commande: "Les façades hautes en blanc mat" });
-    assert.match(hauts, /Teintes du projet : .*CUISINE\.ilot : chêne clair.*CUISINE\.facades-hautes : blanc mat/);
+  test("« modifier » DOSSIER teinte (ex-« changer_teinte ») : une teinte par meuble, plusieurs teintes par projet, candidats en cas de doute", async () => {
+    const ilot = await appeler("modifier", { entite: "DOSSIER", id: ids.dossierFares, champs: { teinte: { meuble: "îlot", teinte: "chêne clair" } }, commande: "Mets l'îlot en chêne clair" });
+    assert.match(ilot, /les teintes passent de .* à .*Îlot : chêne clair/);
+    const hauts = await appeler("modifier", { entite: "DOSSIER", id: ids.dossierFares, champs: { teinte: { meuble: "façades hautes", teinte: "blanc mat" } }, commande: "Les façades hautes en blanc mat" });
+    assert.match(hauts, /Îlot : chêne clair.*Façades hautes : blanc mat|Façades hautes : blanc mat.*Îlot : chêne clair/);
     const { lireTeintes } = await import("@/lib/prestations/prestations");
     assert.deepEqual(lireTeintes((await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierFares } })).teintes), { "CUISINE.ilot": "chêne clair", "CUISINE.facades-hautes": "blanc mat" });
-    const doute = await appeler("changer_teinte", { dossierId: ids.dossierFares, meuble: "façades", teinte: "noir" });
-    assert.match(doute, /Plusieurs meubles peuvent être « façades »|Aucun meuble/);
+    const doute = await appeler("modifier", { entite: "DOSSIER", id: ids.dossierFares, champs: { teinte: { meuble: "façades", teinte: "noir" } } });
+    assert.match(doute, /Plusieurs meubles « façades » correspondent, je ne choisis pas à ta place|Aucun meuble/);
     assert.deepEqual(lireTeintes((await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierFares } })).teintes), { "CUISINE.ilot": "chêne clair", "CUISINE.facades-hautes": "blanc mat" }, "rien n'est choisi à la place de Lucas");
   });
 
-  test("« simulations_site » liste les simulations du site (anonymes ou rattachées) ; « voir_publicite » dit honnêtement l'état de la réception", async () => {
-    const site = await appeler("simulations_site", { jours: 30 });
+  test("« voir_fichiers » site (ex-« simulations_site ») liste les simulations du site (anonymes ou rattachées) ; « etat_crm » META (ex-« voir_publicite ») dit honnêtement l'état de la réception", async () => {
+    const site = await appeler("voir_fichiers", { genre: "site", jours: 30 });
     assert.match(site, /1 simulation sur le site sur 30 jours : 1 anonyme/);
     assert.match(site, /cuisine — Meubles hauts : Statuary White \(NE31\) — anonyme .* page \/simulateur — source meta — campagne Cuisine septembre/);
-    const pub = await appeler("voir_publicite", {});
+    const pub = await appeler("etat_crm", { partie: "META" });
     assert.match(pub, /Réception des leads Meta — NE REÇOIT PAS : Il manque : META_APP_SECRET absente, META_VERIFY_TOKEN absente/);
     assert.match(pub, /Campagne : commencée le 22\/09\/2026, jour \d+ sur 21, budget 378 €/);
     assert.equal(appelsReseau.length, 0, "aucun appel réseau");
   });
 
-  test("« voir_parametres » / « modifier_parametres » : capacité, campagne, interrupteur d'un automatisme (sous confirmation), jamais de secret", async () => {
-    const avant = await appeler("voir_parametres", {});
+  test("« etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-« voir_parametres » / « modifier_parametres ») : capacité, campagne, interrupteur d'un automatisme (sous confirmation), jamais de secret", async () => {
+    const avant = await appeler("etat_crm", { partie: "PARAMETRES" });
     // Mission 12 : la migration « valeurs-lucas-26-09 » pose 3 000 € et 15 chantiers ; l'outil les rend avec leur source.
     assert.match(avant, /Pilotage de l'activité :\n- TRESORERIE_RESERVE — Réserve de trésorerie à garder : 3.000(,00)? € \(depuis le 01\/09\/2026, source : Lucas, mission du 26\/09\/2026/);
     assert.match(avant, /- CAPACITE_CHANTIERS_MOIS — Capacité : chantiers par mois : 15 \(depuis le 01\/09\/2026/);
@@ -234,22 +236,27 @@ describe("Mission 11 : libérer le MCP", () => {
     assert.match(avant, /NOTIF_DEVIS_DISPONIBLE — Mail au client : .* : ACTIF/);
     assert.match(avant, /Aucun secret n'est lu ni rendu/);
     assert.doesNotMatch(avant, /secret-de-session|cle-factice/);
-    const reserve = await confirmer("modifier_parametres", { cle: "TRESORERIE_RESERVE", valeur: 3000, source: "dit par Lucas" });
-    assert.match(reserve, /Réserve de trésorerie à garder : 3.000(,00)? € à partir du/);
-    const capacite = await confirmer("modifier_parametres", { cle: "capacite_chantiers_mois", valeur: "15" });
-    assert.match(capacite, /Capacité : chantiers par mois : 15/);
-    const apercu = await appeler("modifier_parametres", { automatisme: "NOTIF_DEVIS_DISPONIBLE", actif: false });
-    assert.match(apercu, /Je vais désactiver « Mail au client : .* » \(NOTIF_DEVIS_DISPONIBLE\) : actif → inactif/);
-    await appeler("modifier_parametres", { automatisme: "NOTIF_DEVIS_DISPONIBLE", actif: false, confirmation: jetonDe(apercu) });
+    // Même valeur qu'avant : rien à changer, sans jeton ; une autre valeur : aperçu, puis confirmation.
+    const reserve = await appeler("modifier", { entite: "PARAMETRE", id: "TRESORERIE_RESERVE", champs: { valeur: 3000, source: "dit par Lucas" } });
+    assert.match(reserve, /Rien à changer|Réserve de trésorerie à garder/);
+    const reserveBis = await confirmer("modifier", { entite: "PARAMETRE", id: "TRESORERIE_RESERVE", champs: { valeur: 3500, source: "dit par Lucas" } });
+    assert.match(reserveBis, /Réserve de trésorerie à garder \(TRESORERIE_RESERVE\) passe de 3.000(,00)? € à 3.500(,00)? €/);
+    const retour = await confirmer("modifier", { entite: "PARAMETRE", id: "TRESORERIE_RESERVE", champs: { valeur: 3000, source: "dit par Lucas" } });
+    assert.match(retour, /passe de 3.500(,00)? € à 3.000(,00)? €/);
+    const capacite = await appeler("modifier", { entite: "PARAMETRE", id: "capacite_chantiers_mois", champs: { valeur: "15" } });
+    assert.match(capacite, /Rien à changer|Capacité : chantiers par mois/);
+    const apercu = await appeler("modifier", { entite: "AUTOMATISME", id: "NOTIF_DEVIS_DISPONIBLE", champs: { actif: false } });
+    assert.match(apercu, /Je vais modifier .*NOTIF_DEVIS_DISPONIBLE.* : .* passe de actif à (inactif|coupé)/);
+    await appeler("modifier", { entite: "AUTOMATISME", id: "NOTIF_DEVIS_DISPONIBLE", champs: { actif: false }, confirmation: jetonDe(apercu) });
     const { listerAutomatismes } = await import("@/lib/automatismes/interrupteurs");
     assert.equal((await listerAutomatismes()).find((a) => a.code === "NOTIF_DEVIS_DISPONIBLE")?.actif, false);
     const { lireParametre } = await import("@/lib/parametres/service");
     assert.deepEqual([await lireParametre("TRESORERIE_RESERVE"), await lireParametre("CAPACITE_CHANTIERS_MOIS")], [3000, "15"]);
-    await assert.rejects(appelerBrut("modifier_parametres", { cle: "TRESORERIE_RESERVE" }).then((r) => { if (/Donne soit cle/.test(texte(r))) throw new Error(texte(r)); }), /Donne soit cle/);
+    assert.match(await appeler("modifier", { entite: "PARAMETRE", id: "TRESORERIE_RESERVE", champs: {} }), /^Refusé : Aucun champ à modifier/);
   });
 
-  test("« voir_relances » / « relancer » / « annuler_relance » : l'état des relances, une relance envoyée sous confirmation, une proposée annulée", async () => {
-    const vue = await appeler("voir_relances", {});
+  test("« lister » RELANCES / « relancer » / « ignorer_proposition » (ex-« voir_relances » / « annuler_relance ») : l'état des relances, une relance envoyée sous confirmation, une proposée annulée", async () => {
+    const vue = await appeler("lister", { liste: "RELANCES" });
     // Mission 13 (B16) : le délai a une valeur (paramètre posé à 5 jours par la migration, sinon 5 par défaut) : la relance devient proposable à date.
     assert.match(vue, /1 devis en attente de réponse \(délai de relance : 5 jours\)/);
     assert.match(vue, /Fawzia Fares : devis \d{4}-\d{3} de .* 0 relance faite — prochaine relance proposable le \d{2}\/\d{2}\/\d{4}/);
@@ -270,10 +277,10 @@ describe("Mission 11 : libérer le MCP", () => {
     await prisma.dossierEvenement.create({ data: { dossierId: ids.dossierFares, type: "MAIL_ENVOYE", direction: "SORTANT", contenu: "Relance n° 1 envoyée", metadata: JSON.stringify({ motif: "RELANCE_DEVIS", documentIds: [ids.devisB] }) } });
     const proposee = await relancerDevis(ids.dossierFares, { forcer: true, documentId: ids.devisB });
     assert.equal(proposee.rang, 2);
-    const vue2 = await appeler("voir_relances", {});
+    const vue2 = await appeler("lister", { liste: "RELANCES" });
     assert.match(vue2, /relance n° 2 PROPOSÉE, à valider \[proposition:/);
-    const annulee = await appeler("annuler_relance", { propositionId: proposee.propositionId, motif: "il a appelé, il réfléchit" });
-    assert.match(annulee, /Relance annulée : « Relancer Fawzia Fares/);
+    const annulee = await appeler("ignorer_proposition", { propositionIds: [proposee.propositionId], commentaire: "il a appelé, il réfléchit" });
+    assert.match(annulee, /Ignoré : Relancer Fawzia Fares.*\(relance annulée, rien n'est envoyé\)/);
     assert.equal((await prisma.proposition.findUniqueOrThrow({ where: { id: proposee.propositionId } })).statut, "ANNULEE");
   });
 
@@ -308,8 +315,8 @@ describe("Mission 11 : libérer le MCP", () => {
   });
 
   test("le journal porte chaque action de l'assistant, et rien n'est parti sur le réseau", async () => {
-    const appels = await prisma.appelOutil.findMany({ where: { outil: { in: ["creer_contact", "annuler_document", "deposer_document", "changer_teinte", "modifier_parametres", "relancer", "supprimer"] } }, select: { outil: true, statut: true } });
-    for (const outil of ["creer_contact", "annuler_document", "deposer_document", "changer_teinte", "modifier_parametres", "relancer", "supprimer"]) assert.ok(appels.some((a) => a.outil === outil && a.statut === "FAIT"), `appel journalisé manquant : ${outil}`);
+    const appels = await prisma.appelOutil.findMany({ where: { outil: { in: ["creer", "annuler_document", "ajouter_fichier", "modifier", "relancer", "supprimer", "ignorer_proposition"] } }, select: { outil: true, statut: true } });
+    for (const outil of ["creer", "annuler_document", "ajouter_fichier", "modifier", "relancer", "supprimer", "ignorer_proposition"]) assert.ok(appels.some((a) => a.outil === outil && a.statut === "FAIT"), `appel journalisé manquant : ${outil}`);
     assert.deepEqual(appelsReseau, []);
   });
 });

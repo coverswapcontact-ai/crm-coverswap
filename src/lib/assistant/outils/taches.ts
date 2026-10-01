@@ -6,8 +6,8 @@ import { pluriel } from "@/lib/commun/format";
 import { LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, type MotifPerte } from "@/lib/dossiers/constants";
 import { motifPerteDansUnePhrase } from "@/lib/dossiers/perte";
 import { lireObjet, messagesDeLaTache, texteOuNull } from "@/lib/a-faire/json";
-import { listeTaches, planMinutes, versVue } from "@/lib/a-faire/lecture";
-import { DELAI_EFFET_MS, ajouterTache, annulerReponse, repondreTache } from "@/lib/a-faire/reponses";
+import { listeTaches, planMinutes, tachesDuLot, versVue } from "@/lib/a-faire/lecture";
+import { DELAI_EFFET_MS, annulerLot, annulerReponse, classerLot, repondreTache } from "@/lib/a-faire/reponses";
 import {
   GROUPES_TYPE,
   LIBELLES_RAISON_PAS_A_FAIRE,
@@ -25,8 +25,6 @@ import {
 import type { ActionSms, RelanceSms } from "@/lib/sms/catalogue";
 import { lireDateDictee } from "../agenda";
 import { adresseCrm, definirOutil, lien, type ResultatOutil } from "../definition";
-import { cibler } from "./cible";
-import { schemaCible } from "./lecture";
 
 /**
  * Mission 17 (partie A) : les tâches de Lucas, pilotées depuis l'assistant — « qu'est-ce que j'ai à faire ? »
@@ -230,16 +228,53 @@ export async function texteListe(liste: ListeTaches, maintenant: Date, options: 
 
 /* ── taches ────────────────────────────────────────────────────────────── */
 
-export const VUES_TACHES = ["AUJOURDHUI", "PAR_TYPE", "MINUTES", "PLUS_TARD", "FAIT", "LOTS"] as const;
+export const VUES_TACHES = ["AUJOURDHUI", "TOUT", "PAR_TYPE", "MINUTES", "PLUS_TARD", "FAIT", "LOTS"] as const;
+
+/**
+ * Vue TOUT (ex-« ce_qui_m_attend ») : la liste entière des tâches (aujourd'hui avec le geste et le texte prêt, lots,
+ * plus tard, fait aujourd'hui), puis les mails à traiter (le compteur de l'onglet Mail), les propositions à valider et
+ * les messages d'espace non lus.
+ */
+async function vueTout(maintenant: Date): Promise<ResultatOutil> {
+  const [{ listerVue }, { compterMailATraiter }, { compterMessagesNonLus }] = await Promise.all([import("@/lib/mail/vues"), import("@/lib/a-faire/ecran"), import("@/lib/espace/messages")]);
+  const [liste, mails, mailsATraiter, messagesNonLus, propositionsEnAttente] = await Promise.all([
+    listeTaches(maintenant),
+    listerVue("A_TRAITER", { limite: 50 }),
+    compterMailATraiter(maintenant),
+    compterMessagesNonLus(),
+    prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
+  ]);
+  const { texte: texteTaches, aujourdhui } = await texteListe(liste, maintenant);
+  const texte = [
+    texteTaches,
+    `Aussi : ${pluriel(mailsATraiter, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« lister » MESSAGES_ESPACE)" : ""}.`,
+    mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
+  ].filter(Boolean).join("\n");
+  return {
+    texte,
+    donnees: {
+      vue: "TOUT",
+      genereLe: liste.genereLe,
+      compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
+      aujourdhui,
+      lots: liste.lots,
+      plusTard: liste.plusTard,
+      faitAujourdhui: liste.faitAujourdhui,
+      mails: mails.lignes.slice(0, 20),
+    },
+    liens: [lien("Tâches", "/taches"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])],
+  };
+}
 
 export const outilTaches = definirOutil({
   nom: "taches",
   titre: "Les tâches de Lucas (ce qu'il a à faire)",
   description:
-    "La liste unique de ce que Lucas a à faire, dans l'ordre du CRM (argent en jeu, puis chaud, production, système, ménage ; à niveau égal le plus gros montant, puis le plus ancien). Réponse à « qu'est-ce que j'ai à faire ? », « c'est quoi la suite ? », « j'ai 20 minutes, je fais quoi ? » (minutes). Vues : AUJOURDHUI (défaut : les 10 du jour), PAR_TYPE (regroupées : appels, devis…), MINUTES (le meilleur ensemble qui tient dans N minutes : « 3 appels · 10 min »), PLUS_TARD (le reste et les reportées, avec leur retour), FAIT (fait ou écarté aujourd'hui), LOTS (le ménage en lot). Chaque tâche a son identifiant [tache:…], son geste prêt (« appeler le 06… », « ouvrir le devis prérempli : lien ») et, pour un SMS ou un mail, le TEXTE PRÊT à lire tel quel. Lis à Lucas le titre et la raison, jamais l'identifiant ; garde l'identifiant de la dernière tâche citée : « c'est fait » → « repondre_tache » avec cet identifiant.",
+    "La liste unique de ce que Lucas a à faire, dans l'ordre du CRM (argent en jeu, puis chaud, production, système, ménage ; à niveau égal le plus gros montant, puis le plus ancien). Réponse à « qu'est-ce que j'ai à faire ? », « c'est quoi la suite ? », « j'ai 20 minutes, je fais quoi ? » (minutes). Vues : AUJOURDHUI (défaut : les 10 du jour), TOUT (« qu'est-ce qui m'attend ? » : la liste entière — aujourd'hui, lots, plus tard, fait —, puis les mails à traiter, les propositions à valider et les messages d'espace non lus), PAR_TYPE (regroupées : appels, devis…), MINUTES (le meilleur ensemble qui tient dans N minutes : « 3 appels · 10 min »), PLUS_TARD (le reste et les reportées, avec leur retour), FAIT (fait ou écarté aujourd'hui), LOTS (le ménage en lot ; « lot » = sa clé [lot:…] pour « Revoir un par un » : les tâches du lot, chacune avec son identifiant ; « Tout classer » : « repondre_tache » tache « lot:<clé> »). Chaque tâche a son identifiant [tache:…], son geste prêt (« appeler le 06… », « ouvrir le devis prérempli : lien ») et, pour un SMS ou un mail, le TEXTE PRÊT à lire tel quel. Lis à Lucas le titre et la raison, jamais l'identifiant ; garde l'identifiant de la dernière tâche citée : « c'est fait » → « repondre_tache » avec cet identifiant.",
   niveau: "LECTURE",
   schema: z.object({
-    vue: z.enum(VUES_TACHES).optional().describe("AUJOURDHUI (défaut), PAR_TYPE, MINUTES, PLUS_TARD, FAIT ou LOTS."),
+    vue: z.enum(VUES_TACHES).optional().describe("AUJOURDHUI (défaut), TOUT, PAR_TYPE, MINUTES, PLUS_TARD, FAIT ou LOTS."),
+    lot: z.string().max(80).optional().describe("La clé d'un lot de ménage ([lot:…] rendu par la vue LOTS) : ses tâches, une par une."),
     minutes: z.number().int().min(5).max(240).optional().describe("« J'ai N minutes » : le temps dont Lucas dispose (vue MINUTES, implicite si donné seul)."),
   }),
   executer: async (e, contexte) => {
@@ -254,6 +289,13 @@ export const outilTaches = definirOutil({
         : `Rien ne tient en ${dureeLisible(plan.minutes)}${(await listeTaches(maintenant)).compteurs.aujourdhui ? " : la plus courte des tâches du jour prend plus de temps" : " : aucune tâche à faire"}.`;
       return { texte, donnees: { vue, genereLe: maintenant.toISOString(), minutes: plan.minutes, utilisees: plan.utilisees, groupes: plan.groupes, taches }, liens };
     }
+    if (e.lot) {
+      const cle = e.lot.trim().replace(/^\[?lot:/i, "").replace(/\]$/, "");
+      const taches = await Promise.all((await tachesDuLot(cle, maintenant)).map((v) => lireEnMots(v, maintenant, false)));
+      const texte = taches.length ? [`Lot ${cle} : ${pluriel(taches.length, "tâche")} (« repondre_tache » une par une, ou tache « lot:${cle} » FAIT pour tout classer) :`, ...taches.map((t, i) => ligneTache(t, i + 1, maintenant))].join("\n") : `Rien dans le lot ${cle}.`;
+      return { texte, donnees: { vue: "LOTS", lot: cle, taches }, liens };
+    }
+    if (vue === "TOUT") return vueTout(maintenant);
     const liste = await listeTaches(maintenant);
     const base = { vue, genereLe: liste.genereLe, compteurs: liste.compteurs, demain: liste.demain };
     switch (vue) {
@@ -355,13 +397,14 @@ export function lireQuand(quand: string | undefined, maintenant: Date): { quand?
 }
 
 const schemaRepondre = z.object({
-  tache: z.string().min(1).max(200).describe("L'identifiant de la tâche (rendu par « taches » : celui de la dernière tâche citée), ou à défaut son titre tel que Lucas le dit (« le devis Bloch »)."),
+  tache: z.string().min(1).max(200).describe("L'identifiant de la tâche (rendu par « taches » : celui de la dernière tâche citée), ou à défaut son titre tel que Lucas le dit (« le devis Bloch ») ; « lot:<clé> » pour un lot de ménage entier (FAIT = « Tout classer », ANNULER = défaire ce classement)."),
   reponse: z.enum(REPONSES_OUTIL).describe("FAIT, PLUS_TARD, PAS_A_FAIRE, ou ANNULER (défait la dernière réponse et son effet quand c'est possible)."),
   quand: z.string().max(60).optional().describe("PLUS_TARD : CE_SOIR, DEMAIN, LUNDI, SEMAINE, ou une date dictée (« jeudi », « le 12 », « 14 octobre à 14h »)."),
   raison: z.string().max(40).optional().describe(`PLUS_TARD (facultatif) : ${RAISONS_PLUS_TARD.join(", ")}. PAS_A_FAIRE (obligatoire) : ${RAISONS_PAS_A_FAIRE.join(", ")} — selon le type de tâche ; AUTRE avec « texte ».`),
   texte: z.string().max(500).optional().describe("Une précision libre (obligatoire pour la raison AUTRE)."),
   motif_perte: z.enum(MOTIFS_PERTE).optional().describe("CLIENT_PERDU : PRIX, CONCURRENT, SANS_REPONSE, PROJET_ABANDONNE, HORS_ZONE, DELAI, AUTRE (+ precision)."),
   precision: z.string().max(500).optional().describe("Précision du motif de perte (obligatoire pour AUTRE)."),
+  le: z.string().max(40).optional().describe("ANNULER un lot : l'instant du classement rendu par « Tout classer » (à défaut, le dernier classement du lot)."),
 });
 type EntreeRepondre = z.output<typeof schemaRepondre>;
 
@@ -434,22 +477,45 @@ async function effetsEnMots(tache: TacheAFaire, e: EntreeRepondre, jusqua: Date 
   return effets.filter(Boolean);
 }
 
+/** « lot:anciens-leads » → la clé du lot ; sinon null. */
+const cleDuLot = (designation: string) => /^\[?lot:([a-z0-9:_-]{1,80})\]?$/i.exec(designation.trim())?.[1] ?? null;
+
+async function repondreAuLot(cle: string, e: EntreeRepondre, maintenant: Date): Promise<ResultatOutil> {
+  const liens = [lien("Tâches", "/taches")];
+  if (e.reponse === "FAIT") {
+    const r = await classerLot(cle, maintenant);
+    return { texte: `Lot ${cle} classé : ${pluriel(r.classees, "tâche classée", "tâches classées")}${r.effets ? ` (${pluriel(r.effets, "contact classé", "contacts classés")} sans suite, motif « plus de réponse », dans 6 secondes)` : ""}${r.laissees ? ` ; ${pluriel(r.laissees, "laissée", "laissées")} à revoir une par une (contact qui a un dossier)` : ""}. Pour annuler : « repondre_tache » tache « lot:${cle} », reponse ANNULER, le « ${r.le} ».`, donnees: { lot: cle, ...r, annuler: { outil: "repondre_tache", tache: `lot:${cle}`, reponse: "ANNULER", le: r.le } }, liens };
+  }
+  if (e.reponse === "ANNULER") {
+    const r = await annulerLot(cle, maintenant, e.le);
+    return { texte: `Classement du lot ${cle} annulé : ${pluriel(r.restaurees, "tâche revenue", "tâches revenues")}.${r.nonDefaits.length ? ` Pas défait (à reprendre à la main) : ${r.nonDefaits.join(" ; ")}.` : ""}`, donnees: { lot: cle, ...r }, liens };
+  }
+  throw new ErreurMetier("Un lot se classe en entier (FAIT) ou s'annule (ANNULER) ; pour « plus tard » ou « pas à faire », réponds tâche par tâche (« taches » lot).", 400);
+}
+
 const phraseEffets = (effets: string[], quand: string) => (effets.length ? ` ${quand} : ${effets.join(" ; ")}.` : "");
 
 export const outilRepondreTache = definirOutil({
   nom: "repondre_tache",
   titre: "Répondre à une tâche (fait, plus tard, pas à faire, annuler)",
   description:
-    "La réponse de Lucas à une tâche de sa liste. « C'est fait » → FAIT avec l'identifiant de la DERNIÈRE tâche citée (rendu par « taches ») ; « plus tard », « demain », « jeudi », « le 12 » → PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison (DEJA_FAIT, CLIENT_LE_FAIT, PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE pour un mail, CLIENT_PERDU avec motif_perte, AUTRE avec texte) ; « annule » → ANNULER (remet la tâche comme avant et défait l'effet quand c'est possible). Sans identifiant, le titre approché est cherché parmi les tâches ouvertes : plusieurs candidats → demande laquelle, ne choisis jamais. L'effet sur la source part 6 secondes après (proposition validée ou ignorée, fil archivé ou reporté, messages lus, appel noté, prochaine action levée). Sensible (aperçu puis confirmation) quand l'effet touche le client ou l'argent : « Fait » sur une validation qui envoie un mail ou un SMS ou touche un montant, « client perdu » qui passe un contact sans suite ou un dossier perdu.",
+    "La réponse de Lucas à une tâche de sa liste. « C'est fait » → FAIT avec l'identifiant de la DERNIÈRE tâche citée (rendu par « taches ») ; « plus tard », « demain », « jeudi », « le 12 » → PLUS_TARD avec quand ; « pas à faire », « laisse tomber » → PAS_A_FAIRE avec la raison (DEJA_FAIT, CLIENT_LE_FAIT, PAS_PERTINENT, PAS_DE_REPONSE_A_FAIRE pour un mail, CLIENT_PERDU avec motif_perte, AUTRE avec texte) ; « annule » → ANNULER (remet la tâche comme avant et défait l'effet quand c'est possible). Un lot de ménage entier : tache « lot:<clé> », FAIT = « Tout classer » (sensible : aperçu puis confirmation), ANNULER = le défaire. Sans identifiant, le titre approché est cherché parmi les tâches ouvertes : plusieurs candidats → demande laquelle, ne choisis jamais. L'effet sur la source part 6 secondes après (proposition validée ou ignorée, fil archivé ou reporté, messages lus, appel noté, prochaine action levée). Sensible (aperçu puis confirmation) quand l'effet touche le client ou l'argent : « Fait » sur une validation qui envoie un mail ou un SMS ou touche un montant, « client perdu » qui passe un contact sans suite ou un dossier perdu.",
   niveau: "REVERSIBLE",
   schema: schemaRepondre,
   sensible: async (e) => {
+    if (cleDuLot(e.tache)) return e.reponse === "FAIT";
     if (e.reponse !== "FAIT" && e.reponse !== "PAS_A_FAIRE") return false;
     const { tache } = await retrouverTache(e.tache, false);
     if (!tache) return false;
     return e.reponse === "FAIT" ? Boolean(await validationSensible(tache)) : pertePrevue(tache, e);
   },
-  apercu: async (e) => {
+  apercu: async (e, contexte) => {
+    const lot = cleDuLot(e.tache);
+    if (lot) {
+      const taches = await tachesDuLot(lot, contexte.maintenant);
+      const contacts = taches.filter((t) => t.type === "CLASSER_LEAD").length;
+      return `Je vais classer tout le lot ${lot} : ${pluriel(taches.length, "tâche")} passent « pas à faire »${contacts ? `, dont ${pluriel(contacts, "ancien contact classé", "anciens contacts classés")} sans suite (motif « plus de réponse » ; un contact qui a un dossier est laissé)` : ""}. « ANNULER » sur le lot défait ce classement.`;
+    }
     const { tache } = await retrouverTache(e.tache, false);
     if (!tache) return `Je vais répondre « ${e.reponse} » à la tâche « ${e.tache} ».`;
     const effets = await effetsEnMots(tache, e, null);
@@ -459,6 +525,8 @@ export const outilRepondreTache = definirOutil({
   },
   executer: async (e, contexte) => {
     const maintenant = contexte.maintenant;
+    const lot = cleDuLot(e.tache);
+    if (lot) return repondreAuLot(lot, e, maintenant);
     const pourAnnuler = e.reponse === "ANNULER";
     const trouvee = await retrouverTache(e.tache, pourAnnuler);
     if (!trouvee.tache) return texteCandidats(e.tache, trouvee.candidats, pourAnnuler);
@@ -534,47 +602,5 @@ export const outilRepondreTache = definirOutil({
 
 /* ── ajouter_tache ─────────────────────────────────────────────────────── */
 
-export const outilAjouterTache = definirOutil({
-  nom: "ajouter_tache",
-  titre: "Ajouter une tâche à la liste de Lucas",
-  description:
-    "Ajoute une tâche à la liste de Lucas, dite par lui (« ajoute : rappeler le fournisseur jeudi », « note-moi de passer chez Bloch le 12 ») : un titre court qui commence par un verbe, une date dictée facultative (« jeudi », « le 12 », « 14 octobre ») et une cible facultative (nom, leadId, dossierId, clientId : le dossier ou le contact concerné ; plusieurs candidats → demande lequel). Niveau production, 5 minutes ; elle ne se coche jamais seule : Lucas dit « c'est fait » (« repondre_tache »). Se retire par « repondre_tache » PAS_A_FAIRE.",
-  niveau: "REVERSIBLE",
-  schema: z.object({
-    titre: z.string().min(2).max(200).describe("Le texte de Lucas, verbe d'abord : « Rappeler le fournisseur de films »."),
-    quand: z.string().max(60).optional().describe("L'échéance dictée : « jeudi », « demain », « le 12 », « 14 octobre »."),
-    cible: schemaCible.optional().describe("Le dossier ou le contact concerné : identifiant (dossierId, leadId, clientId) ou nom."),
-    raison: z.string().max(300).optional().describe("Pourquoi, en quelques mots (facultatif)."),
-  }),
-  executer: async (e, contexte) => {
-    let ids: { dossierId: string | null; leadId: string | null; clientId: string | null; nom: string } | null = null;
-    if (e.cible && (e.cible.dossierId || e.cible.leadId || e.cible.clientId || e.cible.nom?.trim())) {
-      const r = await cibler(e.cible);
-      if (r.ambigu) return r.ambigu;
-      ids = r.ids;
-    }
-    let echeance: Date | null = null;
-    if (e.quand?.trim()) {
-      echeance = lireDateDictee(e.quand, contexte.maintenant, 9);
-      if (!echeance) throw new ErreurMetier(`Je ne comprends pas la date « ${e.quand} » : dis « jeudi », « demain », « le 12 » ou « 14 octobre ».`, 400);
-    }
-    const v = await ajouterTache(
-      {
-        titre: e.titre,
-        ...(echeance ? { echeance: echeance.toISOString() } : {}),
-        ...(ids?.dossierId ? { dossierId: ids.dossierId } : ids?.leadId ? { leadId: ids.leadId } : ids?.clientId ? { clientId: ids.clientId } : {}),
-        ...(e.raison?.trim() ? { raison: e.raison.trim() } : {}),
-      },
-      contexte.maintenant
-    );
-    const lue = await lireEnMots(v, contexte.maintenant, false);
-    return {
-      texte: `Tâche ajoutée : « ${v.titre} »${ids ? ` (${ids.nom})` : ""}${v.echeance ? `, pour ${retourLisible(v.echeance).replace(/ à \d+ h.*$/, "")}` : ""} [tache:${v.id}]. ${v.statut === "PLUS_TARD" ? "Elle attend dans « Plus tard » et revient en tête de ta liste ce jour-là" : "Elle est dans ta liste"} (${v.dureeMin} min) ; « c'est fait » la coche. Pour la retirer : « repondre_tache » PAS_A_FAIRE (raison PAS_PERTINENT).`,
-      donnees: lue,
-      liens: [lien("Tâches", "/taches"), ...(v.dossierId ? [lien("Dossier", `/dossiers?dossier=${v.dossierId}`)] : v.leadId ? [lien("Contact", `/leads?lead=${v.leadId}`)] : [])],
-    };
-  },
-});
-
 export const OUTILS_TACHES_LECTURE = [outilTaches];
-export const OUTILS_TACHES_ECRITURE = [outilRepondreTache, outilAjouterTache];
+export const OUTILS_TACHES_ECRITURE = [outilRepondreTache];

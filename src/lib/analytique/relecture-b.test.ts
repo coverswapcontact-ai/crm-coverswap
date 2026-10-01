@@ -297,8 +297,9 @@ describe("partie serveur de l'écran", () => {
     const leads = readFileSync(path.join(racine, "src/lib/meta/leads.ts"), "utf8");
     assert.match(leads, /\/analytique\?onglet=publicite#chaine-meta`,\n\s+libelleLien: "Voir la chaîne des leads Meta"/);
     assert.doesNotMatch(leads, /\/publicite`/);
-    const ecriture = readFileSync(path.join(racine, "src/lib/assistant/outils/ecriture.ts"), "utf8");
-    assert.match(ecriture, /rattachée au chantier[\s\S]{0,200}lien\("Dépenses", "\/depenses"\)/);
+    // Mission 17 (partie C) : l'ex-« rattacher_depense » est « creer » DEPENSE (entites/argent.ts).
+    const ecriture = readFileSync(path.join(racine, "src/lib/assistant/entites/argent.ts"), "utf8");
+    assert.match(ecriture, /rattachée au chantier[\s\S]{0,500}lien\("Dépenses", "\/depenses"\)/);
     assert.deepEqual(reseau, []);
   });
 });

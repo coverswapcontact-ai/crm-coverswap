@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { relancesPhotosProposables } from "@/lib/relances/photos";
 import { listerRelances, relancerDevis, type DevisARelancer } from "@/lib/relances/service";
-import { annulerProposition, listerPropositions, validerProposition } from "@/lib/validation/service";
+import { validerProposition } from "@/lib/validation/service";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
@@ -72,7 +72,7 @@ export const outilRelancer = definirOutil({
   nom: "relancer",
   titre: "Relancer un devis par mail, maintenant",
   description:
-    "Envoie la relance du devis d'un dossier par mail, sans attendre le délai : le mail est celui du CRM (relu dans l'aperçu), parti avec le devis en historique. Refusé si le client a refusé les mails, sans adresse (le SMS de relance est alors dans « voir_relances »), si le mail de ce rang a déjà été validé, rejeté, annulé ou a expiré (il n'est jamais reproposé), ou après 2 relances (mail ou SMS). Sensible : aperçu du mail puis confirmation.",
+    "Envoie la relance du devis d'un dossier par mail, sans attendre le délai : le mail est celui du CRM (relu dans l'aperçu), parti avec le devis en historique. Refusé si le client a refusé les mails, sans adresse (le SMS de relance est alors dans « lister » RELANCES), si le mail de ce rang a déjà été validé, rejeté, annulé ou a expiré (il n'est jamais reproposé), ou après 2 relances (mail ou SMS). Sensible : aperçu du mail puis confirmation.",
   niveau: "SENSIBLE",
   schema: schemaCible.extend({ documentId: z.string().max(40).optional().describe("Le devis à relancer ; à défaut le dernier devis envoyé du dossier.") }),
   apercu: async (e, contexte) => {
@@ -92,19 +92,4 @@ export const outilRelancer = definirOutil({
   },
 });
 
-export const outilAnnulerRelance = definirOutil({
-  nom: "annuler_relance",
-  titre: "Annuler une relance proposée",
-  description: "Rejette une relance de devis proposée et pas encore envoyée (identifiant de proposition rendu par « voir_relances »), avec un motif. Rien n'est envoyé ; le mail de ce rang ne sera pas reproposé, mais le SMS de relance reste proposé tant que la relance n'est pas faite.",
-  niveau: "REVERSIBLE",
-  schema: z.object({ propositionId: z.string().max(40), motif: z.string().trim().max(300).optional() }),
-  executer: async (e) => {
-    const p = (await listerPropositions({ statuts: ["EN_ATTENTE"], type: "ENVOI_MAIL", limite: 500 })).find((x) => x.id === e.propositionId && (x.contenu as { motif?: string }).motif === "RELANCE_DEVIS");
-    if (!p) throw new ErreurMetier("Aucune relance proposée en attente avec cet identifiant (« voir_relances » les liste).", 404);
-    await annulerProposition(p.id, e.motif ?? "Annulée depuis l'assistant");
-    return { texte: `Relance annulée : « ${p.titre} ». Rien n'a été envoyé.`, donnees: { propositionId: p.id, dossierId: p.dossierId }, liens: p.dossierId ? [lien("Dossier", `/dossiers?dossier=${p.dossierId}`)] : [] };
-  },
-});
-
-export const OUTILS_RELANCES_LECTURE = [outilVoirRelances];
-export const OUTILS_RELANCES_ECRITURE = [outilRelancer, outilAnnulerRelance];
+export const OUTILS_RELANCES_ECRITURE = [outilRelancer];

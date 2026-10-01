@@ -145,6 +145,14 @@ export async function archiverDepense(id: string, motif: string): Promise<void> 
   if (count !== 1) throw new ErreurMetier("Dépense introuvable ou déjà retirée.", 404);
 }
 
+/** Mission 17 (partie C) : une dépense retirée par erreur revient (inverse d'`archiverDepense`). */
+export async function restaurerDepense(id: string): Promise<void> {
+  const depense = await prisma.depense.findFirst({ where: { ...AVEC_ARCHIVES, id }, select: { archiveLe: true } });
+  if (!depense) throw new ErreurMetier("Dépense introuvable.", 404);
+  if (!depense.archiveLe) return;
+  await prisma.depense.update({ where: { id }, data: { archiveLe: null, archiveMotif: null } });
+}
+
 /** Nouveau justificatif : l'ancien part aux archives, le nouveau prend sa place. */
 export async function remplacerJustificatif(id: string, justificatif: File): Promise<DepenseVue> {
   const actuelle = await prisma.depense.findUnique({ where: { id } });

@@ -2,30 +2,26 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { chargerFiche } from "@/lib/clients/fiches";
 import { notesDuLead } from "@/lib/commercial/notes-appel";
-import { compterMailATraiter } from "@/lib/a-faire/ecran";
-import { listeTaches } from "@/lib/a-faire/lecture";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } from "@/lib/dossiers/constants";
 import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
 import { mainDe } from "@/lib/dossiers/pilotage";
-import { compterMessagesNonLus } from "@/lib/espace/messages";
+import { messagesEspace } from "@/lib/espace/messages";
+import { espaceDuClient } from "@/lib/espace/gestion";
+import { vueEspaceCrm } from "@/lib/espace/vue-crm";
+import { chronologieDuContact } from "@/lib/chronologie/chronologie";
+import { FAMILLES_CHRONOLOGIE } from "@/lib/chronologie/familles";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
-import { listerVue } from "@/lib/mail/vues";
 import { resumeChaineMeta } from "@/lib/meta/sante";
 import { chargerEntrant } from "@/lib/prospects/entrants";
-import { listerLeads } from "@/lib/prospects/leads";
-import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
-import { issueDuContenu } from "@/lib/commercial/sans-reponse";
 import { relancesPhotosProposables } from "@/lib/relances/photos";
 import { listerSimulationsDossier } from "@/lib/simulations/dossier";
 import { calculerAlertes } from "@/lib/synthese/alertes";
-import { calculerSynthese } from "@/lib/synthese/calcul";
 import { etatAvisGoogle } from "@/lib/site/avis-google";
-import { texteEntonnoirParFamille } from "@/lib/site/familles-source";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import { etatsDesSources } from "@/lib/analytique/appuis";
 import { chiffresDisponibles, etatDe } from "@/lib/analytique/ecrans/commun";
@@ -34,10 +30,9 @@ import { coutPar } from "@/lib/analytique/calculs";
 import { nombreDeJours, resoudrePeriode as resoudrePeriodeAnalytique } from "@/lib/analytique/periode";
 import { LIBELLES_VERDICT } from "@/lib/analytique/types";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
-import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
 import { titreDossier } from "@/lib/commun/format";
-import { accord, jourSemaineHeure, pluriel } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils de lecture (mission 8) : trouver, lire, lister ce qui attend,
@@ -51,12 +46,14 @@ export const outilChercher = definirOutil({
   nom: "chercher",
   titre: "Chercher un client, un lead ou un dossier",
   description:
-    "Cherche par nom (même mal orthographié), téléphone, e-mail, ville, adresse (« 30 boulevard Joliot-Curie ») ou numéro de devis / facture (« 2026-037 »). Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir.",
+    "Cherche par nom (même mal orthographié), téléphone, e-mail, ville, adresse (« 30 boulevard Joliot-Curie ») ou numéro de devis / facture (« 2026-037 »). Rend les candidats avec leur type et leur identifiant (client, lead ou dossier) : c'est le point de départ de tout — lire une fiche, noter un appel, envoyer un lien. S'il y a plusieurs candidats pour un nom, demande à Lucas lequel avant d'agir. « archives: true » cherche aussi les fiches, leads et dossiers archivés (marqués ARCHIVÉ) : c'est ainsi que « restaurer » trouve ce qu'il restaure ; sans lui, un nom qui ne désigne qu'un archivé le rend quand même.",
   niveau: "LECTURE",
-  schema: z.object({ texte: z.string().min(1).max(120).describe("Ce que Lucas a dit : « Rousse », « le dossier Forestier », « 06 12 34 56 78 », « Montpellier »."), limite: z.number().int().min(1).max(20).optional() }),
-  executer: async ({ texte, limite }) => {
-    const candidats = await chercherContacts(texte, { limite: limite ?? 8 });
-    if (candidats.length === 0) return { texte: `Rien trouvé pour « ${texte} » : ni client, ni lead, ni dossier. Vérifie l'orthographe, ou cherche par téléphone.` };
+  schema: z.object({ texte: z.string().min(1).max(120).describe("Ce que Lucas a dit : « Rousse », « le dossier Forestier », « 06 12 34 56 78 », « Montpellier »."), limite: z.number().int().min(1).max(20).optional(), archives: z.boolean().optional().describe("Vrai : les archivés aussi (leads, dossiers, fiches client).") }),
+  executer: async ({ texte, limite, archives }) => {
+    let candidats = await chercherContacts(texte, { limite: limite ?? 8, archives });
+    // Rien parmi les vivants : les archivés (mission 17, partie C : `restaurer` doit pouvoir les trouver).
+    if (candidats.length === 0 && !archives) candidats = await chercherContacts(texte, { limite: limite ?? 8, archives: true });
+    if (candidats.length === 0) return { texte: `Rien trouvé pour « ${texte} » : ni client, ni lead, ni dossier${archives ? ", même archivé" : ""}. Vérifie l'orthographe, ou cherche par téléphone.` };
     return {
       texte: `${candidats.length} candidat${candidats.length > 1 ? "s" : ""} pour « ${texte} » :\n${candidats.map(ligneCandidat).join("\n")}`,
       donnees: candidats,
@@ -98,7 +95,9 @@ export async function resoudreCible(cible: Cible, type?: "CLIENT" | "LEAD" | "DO
     return { dossierId: l.dossiers[0]?.id ?? null, clientId: l.clientId, leadId: l.id, nom: `${l.prenom} ${l.nom}`.trim() };
   }
   if (!cible.nom) throw new Error("Indique le nom, ou un identifiant (rendu par « chercher »).");
-  const resultat = await trouverUnSeul(cible.nom, type);
+  let resultat = await trouverUnSeul(cible.nom, type);
+  // Mission 17 (partie C) : un nom qui ne désigne aucun vivant peut désigner un archivé (restaurer, lire sa fiche).
+  if ("aucun" in resultat) resultat = await trouverUnSeul(cible.nom, type, { archives: true });
   if ("aucun" in resultat) throw new Error(`Aucun contact ne correspond à « ${cible.nom} ».`);
   if ("ambigu" in resultat) throw new CibleAmbigue(resultat.ambigu);
   const t = resultat.trouve;
@@ -121,14 +120,46 @@ function quiALaMain(d: { etape: string; prochaineActionDate: string | null; main
   return main === "AUCUNE" ? "personne" : main === "MOI" ? "à toi" : main === "A_RELANCER" ? "à toi : à relancer" : "chez le client";
 }
 
+const court = (texte: string | null | undefined, n: number) => (!texte ? "" : texte.length > n ? `${texte.slice(0, n)}…` : texte);
+const OUVERTES = ["A_FAIRE", "PLUS_TARD"];
+
+/** Les tâches de Lucas qui portent sur ce contact (dossier, lead ou client) : ouvertes d'abord, puis les dernières réglées. */
+async function tachesDuSujet(ids: { dossierId: string | null; clientId: string | null; leadId: string | null }) {
+  const ou = [...(ids.dossierId ? [{ dossierId: ids.dossierId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : []), ...(ids.clientId ? [{ clientId: ids.clientId }] : [])];
+  if (!ou.length) return [];
+  const lignes = await prisma.tacheAFaire.findMany({ where: { OR: ou }, orderBy: [{ updatedAt: "desc" }], take: 40, select: { id: true, titre: true, raison: true, statut: true, type: true, plusTardJusqua: true, reponduLe: true, reponse: true, reponseRaison: true } });
+  return [...lignes.filter((t) => OUVERTES.includes(t.statut)), ...lignes.filter((t) => !OUVERTES.includes(t.statut)).slice(0, 5)];
+}
+
+/** Mails, messages d'espace et SMS échangés avec ce contact (les plus récents). */
+async function messagesDuSujet(ids: { dossierId: string | null; clientId: string | null; leadId: string | null }, limite: number) {
+  const ou = [...(ids.dossierId ? [{ dossierId: ids.dossierId }] : []), ...(ids.clientId ? [{ clientId: ids.clientId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : [])];
+  const ouSms = [...(ids.clientId ? [{ clientId: ids.clientId }] : []), ...(ids.leadId ? [{ leadId: ids.leadId }] : [])];
+  const [mails, espace, sms] = await Promise.all([
+    ou.length ? prisma.message.findMany({ where: { OR: ou }, orderBy: { recuLe: "desc" }, take: limite, select: { id: true, canal: true, sens: true, de: true, deNom: true, objet: true, extrait: true, recuLe: true, lu: true } }) : Promise.resolve([]),
+    ids.dossierId ? messagesEspace({ dossierId: ids.dossierId, limite }) : Promise.resolve([]),
+    ouSms.length ? prisma.sms.findMany({ where: { conversation: { OR: ouSms } }, orderBy: { createdAt: "desc" }, take: limite, select: { id: true, sens: true, texte: true, statut: true, modele: true, createdAt: true } }) : Promise.resolve([]),
+  ]);
+  return { mails, espace, sms };
+}
+
+const schemaLireFiche = schemaCible.extend({
+  nombre: z.number().int().min(1).max(200).optional().describe("Dossier : événements d'historique rendus (20 par défaut)."),
+  decalage: z.number().int().min(0).max(5000).optional().describe("Dossier : événements à sauter (« voir les plus anciens »)."),
+  chronologie: z.number().int().min(0).max(100).optional().describe("Entrées de la chronologie du contact (mails, appels, espace, dossier, documents, paiements, notes, propositions) ; 0 ou absent : pas de chronologie."),
+  familles: z.array(z.enum(FAMILLES_CHRONOLOGIE)).max(8).optional().describe("Chronologie : filtrer par famille (MAIL, APPEL, ESPACE, DOSSIER, DOCUMENT, PAIEMENT, NOTE, PROPOSITION)."),
+  messages: z.number().int().min(0).max(50).optional().describe("Mails, messages d'espace et SMS rendus par canal (10 par défaut ; 0 : aucun)."),
+});
+
 export const outilLireFiche = definirOutil({
   nom: "lire_fiche",
   titre: "Lire une fiche complète",
   description:
-    "Rend tout ce que le CRM sait d'un dossier (étape, qui a la main, prochaine action, devis et factures, paiements, simulations, notes d'appel, dépenses, historique récent), d'un client (coordonnées, dossiers, leads) ou d'un lead (demande, source, réponses au formulaire, échanges). Utilise-le pour « où en est le dossier X ? ». Donne un identifiant ou un nom.",
+    "Rend TOUT ce que le CRM sait d'un dossier, d'un client ou d'un lead (archivés compris). Dossier : étape, qui a la main (depuis quand, pourquoi), source, ouverture, prochaine action, dates, projet, perte détaillée, points à compléter et masqués, délais, devis et factures (identifiants, PDF), paiements (chacun avec son identifiant), simulations, photos, dépenses, notes, l'espace client (étape du client, reste à faire, projet, choix, favoris, avis, paiement vu, derniers gestes, photos retirées, lien et aperçu « comme le client »), l'historique complet paginé (« nombre », « decalage »). Client : catégorie, SIRET, adresse, provenance, recommandations, passif, consentements, coordonnées avec leur identifiant, état (archivé, fusionné, anonymisé), historique de la fiche, espace permanent. Lead : tous les champs de la fiche (code postal, notes, campagne, publicité, formulaire, prix simulé, style, doublon, tentatives, dernier appel et contact, archivage, ancien CRM), échanges, notes d'appel. Et pour tous : les tâches de Lucas qui le concernent, les mails, messages d'espace et SMS (« messages »), la chronologie filtrable (« chronologie », « familles »). Réponse à « où en est le dossier X ? ». Donne un identifiant ou un nom.",
   niveau: "LECTURE",
-  schema: schemaCible,
-  executer: async (cible, contexte) => {
+  schema: schemaLireFiche,
+  executer: async (entree, contexte) => {
+    const cible = { dossierId: entree.dossierId, clientId: entree.clientId, leadId: entree.leadId, nom: entree.nom };
     let ids;
     try {
       ids = await resoudreCible(cible);
@@ -139,36 +170,75 @@ export const outilLireFiche = definirOutil({
     const liens: LienOutil[] = [];
     const parties: string[] = [];
     const donnees: Record<string, unknown> = {};
+    const nbMessages = entree.messages ?? 10;
     if (ids.dossierId) {
       const d = await chargerDetail(ids.dossierId);
       const simulations = await listerSimulationsDossier(d.id).catch(() => ({ simulations: [] }));
       const depenses = await depensesDuDossier(d.id).catch(() => ({ depenses: [], total: 0 }));
+      const brut = await prisma.dossier.findUnique({ where: { id: d.id }, select: { archiveLe: true, archiveMotif: true, completudeMasquee: true } });
+      const decalage = entree.decalage ?? 0;
+      const nombre = entree.nombre ?? 20;
+      const [evenements, totalEvenements, espace] = await Promise.all([
+        prisma.dossierEvenement.findMany({ where: { dossierId: d.id }, orderBy: { createdAt: "desc" }, skip: decalage, take: nombre, select: { id: true, type: true, direction: true, contenu: true, createdAt: true, survenuLe: true, metadata: true } }),
+        prisma.dossierEvenement.count({ where: { dossierId: d.id } }),
+        vueEspaceCrm(d.id).catch(() => null),
+      ]);
       const devis = d.documents.filter((x) => x.type === "DEVIS");
       const factures = d.documents.filter((x) => x.type === "FACTURE");
+      const avoirs = d.documents.filter((x) => x.type === "AVOIR");
       const main = quiALaMain(d, contexte.maintenant);
+      const masques = (() => {
+        try {
+          return brut?.completudeMasquee ? (JSON.parse(brut.completudeMasquee) as string[]) : [];
+        } catch {
+          return [];
+        }
+      })();
       parties.push(
         `Dossier ${titreDossier(d)} (${d.clientVille}) : étape « ${ligneEtape(d.etape)} », la main est ${main === "personne" ? "à personne" : main}${d.mainMotif ? ` (${d.mainMotif})` : ""}.`,
+        brut?.archiveLe ? `ARCHIVÉ le ${format.jourCourt(brut.archiveLe)}${brut.archiveMotif ? ` (${brut.archiveMotif})` : ""} : « restaurer » le ramène.` : "",
         d.prochaineAction ? `Prochaine action : ${d.prochaineAction}${d.prochaineActionDate ? ` le ${format.jour(d.prochaineActionDate)}` : ""}.` : "Pas de prochaine action notée.",
         d.dateChantier ? `Chantier prévu le ${format.jour(d.dateChantier)}${d.dateFinChantier ? `, fin le ${format.jour(d.dateFinChantier)}` : ""}.` : "",
         d.dateSouhaitee ? `Date souhaitée par le client : ${format.jour(d.dateSouhaitee)}.` : "",
+        `Source ${d.source}, ouvert le ${format.jourCourt(d.ouvertLe)}${d.mainLe ? `, main rangée le ${format.jourCourt(d.mainLe)}` : ""}${d.origine ? `, né du ${d.origine.type === "LEAD" ? "lead" : "prospect"} ${d.origine.nom} [${d.origine.type.toLowerCase()}:${d.origine.id}]` : ""}${d.client ? `, fiche client ${d.client.nom} [client:${d.client.id}]` : ""}. Coordonnées : ${[d.clientAdresse, d.clientCp, d.clientVille].filter(Boolean).join(" ")}, ${d.clientTelephone || "sans téléphone"}, ${d.clientEmail ?? "sans e-mail"}${d.montantEstime !== null ? ` ; montant estimé ${format.euros(d.montantEstime)}` : ""}.`,
         Object.keys(d.prestations).length ? `Projet : ${resumerSelection(d.prestations)}${Object.keys(d.teintes).length ? ` ; teintes : ${Object.entries(d.teintes).map(([cle, t]) => `${sousPartieDeCle(cle)?.sousPartie.libelle ?? cle} ${t}`).join(", ")}` : ""}.` : "",
-        devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})`).join(", ")}.` : "Aucun devis.",
-        factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})`).join(", ")}.` : "",
-        `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}.`,
-        simulations.simulations.length ? `Simulations : ${simulations.simulations.length} (${pluriel(simulations.simulations.filter((s) => s.statut === "PUBLIEE").length, "publiée")}${simulations.simulations.some((s) => s.choisie) ? ", une choisie par le client" : ""}).` : "Aucune simulation.",
-        depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} (${depenses.depenses.length}).` : "",
+        d.perte ? `Perdu${d.motifPerte ? ` (${d.motifPerte})` : ""}${d.perte.le ? ` le ${format.jourCourt(d.perte.le)}` : ""}${d.perte.etape ? ` à l'étape ${ligneEtape(d.perte.etape)}` : ""}${d.perte.concurrent ? `, remporté par ${d.perte.concurrent}${d.perte.montantConcurrent !== null ? ` à ${format.euros(d.perte.montantConcurrent)}` : ""}` : ""}${d.perte.montantPropose !== null ? `, notre prix ${format.euros(d.perte.montantPropose)}` : ""}${d.perte.commentaire ? ` — ${d.perte.commentaire}` : ""}.` : "",
+        devis.length ? `Devis (${devis.length}) : ${devis.map((x) => `${x.numero ?? "brouillon"}${x.libelleVariante ? ` « ${x.libelleVariante} »` : ""} ${format.euros(x.totalHt)} (${(LIBELLES_STATUT_DOCUMENT[x.statut] ?? x.statut).toLowerCase()}${x.visibleEspace === false ? ", masqué dans l'espace" : ""})${x.dateEmission ? ` émis le ${format.jourCourt(x.dateEmission)}` : ""}${x.origine === "REPRISE" ? ", repris" : ""}${x.pdfUrl ? ", PDF" : ""} [document:${x.id}]`).join(", ")}.` : "Aucun devis.",
+        factures.length ? `Factures : ${factures.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} (${x.statut.toLowerCase()})${x.dateEmission ? ` émise le ${format.jourCourt(x.dateEmission)}` : ""}${x.echeanceLe ? `, échéance ${format.jourCourt(x.echeanceLe)}` : ""} [document:${x.id}]`).join(", ")}.` : "",
+        avoirs.length ? `Avoirs : ${avoirs.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} [document:${x.id}]`).join(", ")}.` : "",
+        `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}${d.paiements.encaissements.length ? ` : ${d.paiements.encaissements.map((e) => `${format.euros(e.montant)} ${e.moyen?.toLowerCase() ?? ""} le ${format.jourCourt(e.recuLe)}${e.statut !== "VALIDE" ? ` (${e.statut.toLowerCase()}${e.motifFin ? ` : ${e.motifFin}` : ""})` : ""}${e.moyen === "CHEQUE" ? (e.crediteLe ? `, crédité le ${format.jourCourt(e.crediteLe)}` : ", pas encore crédité") : ""}${e.reference ? ` réf. ${e.reference}` : ""} [encaissement:${e.id}]`).join(" · ")}` : ""}.`,
+        simulations.simulations.length ? `Simulations : ${simulations.simulations.map((s) => `${s.titre ?? "sans titre"} (${s.statut.toLowerCase()}${s.choisie ? ", choisie par le client" : ""}${s.publieeLe ? `, publiée le ${format.jourCourt(s.publieeLe)}` : ""}) [simulation:${s.id}]`).join(" · ")}.` : "Aucune simulation.",
+        d.photos.length ? `Photos : ${pluriel(d.photos.filter((p) => !p.apres).length, "avant", "avant")}, ${pluriel(d.photos.filter((p) => p.apres).length, "après", "après")} (« voir_fichiers »).` : "Aucune photo.",
+        depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} — ${depenses.depenses.map((x) => `${x.fournisseur} ${format.euros(x.montant)}${x.justificatif ? " (justificatif)" : " (sans justificatif)"} [depense:${x.id}]`).join(" · ")}.` : "",
         d.completude.length ? `À compléter : ${d.completude.map((p) => p.libelle).join(", ")}.` : "",
-        d.notes.length ? `Dernière note (${format.jourCourt(d.notes[0].createdAt)}) : ${d.notes[0].contenu.slice(0, 200)}` : "",
-        `Derniers événements : ${d.evenements.slice(0, 5).map((e) => `${format.jourCourt(e.date)} ${e.contenu.slice(0, 90)}`).join(" · ")}`
+        masques.length ? `Points masqués : ${masques.join(", ")}.` : "",
+        d.delais && Object.values(d.delais).some((v) => v !== null) ? `Délais : ${[d.delais.ouvertureASignature !== null ? `ouverture → signature ${d.delais.ouvertureASignature} j` : null, d.delais.signatureAChantier !== null ? `signature → chantier ${d.delais.signatureAChantier} j` : null, d.delais.facturationAEncaissement !== null ? `facturation → encaissement ${d.delais.facturationAEncaissement} j` : null, d.delais.boutEnBout !== null ? `bout en bout ${d.delais.boutEnBout} j` : null].filter(Boolean).join(", ")}.` : "",
+        d.notes.length ? `Notes (${d.notes.length}) : ${d.notes.map((n) => `${format.jourCourt(n.createdAt)} [${ligneEtape(n.etape)}] ${court(n.contenu, 200)}`).join(" · ")}` : "",
+        espace ? `Espace client : étape du client « ${espace.etapeLibelle} » ; reste à faire : ${espace.resteAFaire} ; ${espace.revoqueLe ? "lien DÉSACTIVÉ" : espace.premierAccesLe ? `vu ${espace.nbAcces} fois, dernière visite ${format.jourCourt(espace.dernierAccesLe)}` : "jamais ouvert"}${espace.projet ? ` ; projet : ${espace.projet.resume}${espace.projetValide ? ` (validé le ${format.jourCourt(espace.projetValide.le)} par ${espace.projetValide.par.toLowerCase()})` : ""}` : ""}${espace.choix ? ` ; choix : ${espace.choix.mode}${espace.choix.commentaire ? ` « ${court(espace.choix.commentaire, 120)} »` : ""}` : ""}${espace.favoris.length ? ` ; favoris : ${espace.favoris.join(", ")}` : ""}${espace.proposition ? ` ; demande d'autre proposition le ${format.jourCourt(espace.proposition.le)}${espace.proposition.message ? ` « ${court(espace.proposition.message, 120)} »` : ""}` : ""}${espace.accord ? ` ; bon pour accord le ${format.jourCourt(espace.accord.le)} (${espace.accord.nom})` : ""}${espace.paiement ? ` ; paiement vu : ${court(JSON.stringify(espace.paiement), 160)}` : ""}${espace.avis ? ` ; avis ${espace.avis.note}/5 « ${court(espace.avis.texte, 160)} »` : ""} ; simulations : ${espace.creation.faites} faites, ${espace.creation.restantes} restantes${espace.photosRetirees.length ? ` ; ${pluriel(espace.photosRetirees.length, "photo retirée", "photos retirées")} par le client (${espace.photosRetirees.map((p) => p.id).join(", ")})` : ""}${espace.messagesNonLus ? ` ; ${pluriel(espace.messagesNonLus, "message non lu", "messages non lus")}` : ""}.${espace.gestes.length ? ` Derniers gestes : ${espace.gestes.slice(0, 6).map((g) => `${format.jourCourt(g.le)} ${g.auteur === "LUCAS" ? "(Lucas) " : ""}${court(g.contenu, 90)}`).join(" · ")}.` : ""}${espace.lien ? ` Lien : ${espace.lien}` : ""}${espace.apercu ? ` ; voir comme le client : ${espace.apercu}` : ""}` : "Pas d'espace client.",
+        `Historique (${Math.min(decalage + 1, totalEvenements)}–${Math.min(decalage + evenements.length, totalEvenements)} sur ${totalEvenements}${decalage + evenements.length < totalEvenements ? ` ; « decalage: ${decalage + evenements.length} » pour les plus anciens` : ""}) :\n${evenements.map((e) => `- ${format.jourCourt(e.survenuLe ?? e.createdAt)} ${e.type.toLowerCase()} : ${court(e.contenu.replace(/\s+/g, " "), 220)}`).join("\n")}`
       );
-      donnees.dossier = { id: d.id, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, libelle: x.libelleVariante, visibleEspace: x.visibleEspace, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie })), depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe })), notes: d.notes.slice(0, 5), evenements: d.evenements.slice(0, 10), coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
+      donnees.dossier = { id: d.id, etape: d.etape, source: d.source, ouvertLe: d.ouvertLe, main: d.main, mainLe: d.mainLe, mainMotif: d.mainMotif, archiveLe: brut?.archiveLe ?? null, archiveMotif: brut?.archiveMotif ?? null, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, dateChantier: d.dateChantier, dateSouhaitee: d.dateSouhaitee, dateFinChantier: d.dateFinChantier, montantEstime: d.montantEstime, prestations: d.prestations, teintes: d.teintes, perte: d.perte, motifPerte: d.motifPerte, completude: d.completude, pointsMasques: masques, delais: d.delais, parcours: d.parcours, ecarts: d.ecarts, origine: d.origine, client: d.client, documents: d.documents.map((x) => ({ id: x.id, type: x.type, numero: x.numero, libelle: x.libelleVariante, visibleEspace: x.visibleEspace, totalHt: x.totalHt, statut: x.statut, dateEmission: x.dateEmission, origine: x.origine, pdfUrl: x.pdfUrl, echeanceLe: x.echeanceLe })), paiements: d.paiements, simulations: simulations.simulations.map((s) => ({ id: s.id, statut: s.statut, titre: s.titre, choisie: s.choisie, publieeLe: s.publieeLe })), photos: d.photos, depenses: depenses.depenses.map((x) => ({ id: x.id, montant: x.montant, fournisseur: x.fournisseur, categorie: x.categorie, payeeLe: x.payeeLe, justificatif: x.justificatif })), notes: d.notes, evenements: evenements.map((e) => ({ id: e.id, type: e.type, direction: e.direction, contenu: e.contenu, le: (e.survenuLe ?? e.createdAt).toISOString(), saisiLe: e.createdAt.toISOString() })), totalEvenements, espace, coordonnees: { adresse: d.clientAdresse, cp: d.clientCp, ville: d.clientVille, email: d.clientEmail, telephone: d.clientTelephone } };
       liens.push(lien("Ouvrir le dossier", `/dossiers?dossier=${d.id}`));
     }
     if (ids.clientId) {
       const c = await chargerFiche(ids.clientId).catch(() => null);
       if (c) {
-        parties.push(`Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${pluriel(c.nbDossiers, "dossier")}, ${format.euros(c.montantSigne)} signés ; source ${c.source}.`);
-        donnees.client = { id: c.id, nom: c.nom, emails: c.emails.map((e) => e.valeur), telephones: c.telephones.map((t) => t.valeur), dossiers: c.dossiers, leads: c.leads, propositionsEnAttente: c.propositionsEnAttente };
+        const coord = (l: typeof c.emails) => l.map((x) => `${x.valeur}${x.libelle ? ` (${x.libelle})` : ""}${x.principale ? " ★" : ""}${x.archiveLe ? " (archivée)" : ""} [coordonnee:${x.id}]`).join(", ");
+        const espacePermanent = await espaceDuClient(c.id).catch(() => null);
+        parties.push(
+          `Client ${c.nom}${c.ville ? ` (${c.ville})` : ""} : ${c.emails.map((e) => e.valeur).join(", ") || "sans e-mail"}, ${c.telephones.map((t) => t.valeur).join(", ") || "sans téléphone"} ; ${pluriel(c.nbDossiers, "dossier")}, ${format.euros(c.montantSigne)} signés ; source ${c.source}.`,
+          `Fiche : ${c.categorie.toLowerCase()}${c.raisonSociale ? `, raison sociale ${c.raisonSociale}` : ""}${c.siret ? `, SIRET ${c.siret}` : ""}${c.adresse || c.codePostal ? `, ${[c.adresse, c.codePostal, c.ville].filter(Boolean).join(" ")}` : ""} ; provenance ${c.source}${c.sourceDetail ? ` (${c.sourceDetail})` : ""}${c.campagne ? `, campagne ${c.campagne}` : ""}${c.publicite ? `, publicité ${c.publicite}` : ""}${c.formulaire ? `, formulaire ${c.formulaire}` : ""}, premier contact le ${format.jourCourt(c.premierContactLe)}${c.recommandePar ? ` ; recommandé par ${c.recommandePar.nom} [client:${c.recommandePar.id}]` : c.recommandeParTexte ? ` ; recommandé par ${c.recommandeParTexte}` : ""}${c.recommandations.length ? ` ; a recommandé ${c.recommandations.map((r) => r.nom).join(", ")}` : ""}.`,
+          c.archiveLe || c.fusionneDans || c.anonymiseLe ? `État : ${[c.archiveLe ? `ARCHIVÉE le ${format.jourCourt(c.archiveLe)}${c.archiveMotif ? ` (${c.archiveMotif})` : ""}` : null, c.fusionneDans ? `fusionnée dans ${c.fusionneDans.nom} [client:${c.fusionneDans.id}]` : null, c.anonymiseLe ? `anonymisée le ${format.jourCourt(c.anonymiseLe)}` : null].filter(Boolean).join(", ")}.` : "",
+          `Coordonnées : e-mails ${coord(c.emails) || "aucun"} ; téléphones ${coord(c.telephones) || "aucun"}.`,
+          c.notes ? `Passif : ${court(c.notes, 600)}` : "",
+          c.consentements.length ? `Mails commerciaux : ${c.consentements.map((x) => `${x.statut.toLowerCase()} (${x.moyen}, le ${format.jourCourt(x.recueilliLe)})`).join(" → ")}.` : "Mails commerciaux : aucune réponse enregistrée.",
+          c.dossiers.length ? `Dossiers : ${c.dossiers.map((x) => `${x.objet} (${ligneEtape(x.etape)}${x.archiveLe ? ", archivé" : ""}) [dossier:${x.id}]`).join(" · ")}.` : "",
+          c.leads.length ? `Leads : ${c.leads.map((l) => `${l.source} ${format.jourCourt(l.createdAt)} (${l.statut.toLowerCase()}) [lead:${l.id}]`).join(" · ")}.` : "",
+          c.propositionsEnAttente.length ? `Propositions en attente : ${c.propositionsEnAttente.map((p) => `${p.titre} [proposition:${p.id}]`).join(" · ")}.` : "",
+          espacePermanent?.espace ? `Espace permanent : ${espacePermanent.espace.revoque ? "lien DÉSACTIVÉ" : `vu ${espacePermanent.espace.nbAcces} fois`}, ${pluriel(espacePermanent.espace.projetsEnCours, "projet")} en cours sur ${espacePermanent.espace.limite} [espace:${espacePermanent.espace.permanentId}]${espacePermanent.espace.lien ? ` ; lien ${espacePermanent.espace.lien}` : ""}.` : "",
+          c.historique.length ? `Historique de la fiche : ${c.historique.slice(0, 10).map((h) => `${format.jourCourt(h.horodatage)} ${h.operation.toLowerCase()} par ${h.acteur} : ${court(h.resume, 100)}`).join(" · ")}` : ""
+        );
+        donnees.client = { ...c, espace: espacePermanent };
         liens.push(lien("Fiche client", `/clients/${c.id}`));
       }
     }
@@ -176,64 +246,41 @@ export const outilLireFiche = definirOutil({
       const l = await chargerEntrant(ids.leadId).catch(() => null);
       if (l) {
         const notes = await notesDuLead(l.id).catch(() => []);
+        const brut = await prisma.lead.findUnique({ where: { id: l.id }, select: { doublonDe: true, doublonMotif: true, doublonTraiteLe: true } });
         parties.push(
           `Lead ${l.nom}${l.ville ? ` (${l.ville})` : ""} reçu le ${format.jourCourt(l.recuLe)} par ${l.source} : ${l.typeProjet.toLowerCase()}, statut ${l.statut.toLowerCase()}${l.priorite ? `, priorité ${l.priorite.toLowerCase()}` : ""}${l.rappelLe ? `, rappel prévu le ${format.jour(l.rappelLe)}` : ""}.`,
           l.message ? `Son message : « ${l.message.slice(0, 300)} »` : "",
           [l.occupation ? `Occupation : ${l.occupation.toLowerCase()}` : null, l.delaiProjet ? `Délai du projet : ${l.delaiProjet.toLowerCase()}` : null].filter(Boolean).join(" · "),
-          notes.length ? `Notes d'appel : ${notes.slice(0, 3).map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 120)}`).join(" · ")}` : "Aucune note d'appel."
+          `Fiche : ${l.telephone ?? "sans téléphone"}, ${l.email ?? "sans e-mail"}${l.codePostal ? `, ${l.codePostal}` : ""}${l.campagne ? ` ; campagne ${l.campagne}` : ""}${l.publicite ? `, publicité ${l.publicite}` : ""}${l.formulaire ? `, formulaire ${l.formulaire}` : ""}${l.prixSimule !== null ? ` ; prix simulé ${format.euros(l.prixSimule)}` : ""}${l.styleSouhaite ? ` ; style ${l.styleSouhaite}` : ""}${l.tailleCuisine ? ` ; taille ${l.tailleCuisine}` : ""} ; ${pluriel(l.tentatives, "tentative")}${l.dernierAppelLe ? `, dernier appel ${format.jourCourt(l.dernierAppelLe)}` : ", jamais appelé"}${l.dernierContactLe ? `, dernier contact écrit ${format.jourCourt(l.dernierContactLe)}` : ""}${l.client ? ` ; fiche client ${l.client.nom} [client:${l.client.id}]` : ""}.`,
+          l.notes ? `Notes : ${court(l.notes, 600)}` : "",
+          l.archiveLe ? `ARCHIVÉ le ${format.jourCourt(l.archiveLe)}${l.archiveMotif ? ` (${l.archiveMotif})` : ""} : « restaurer » le ramène.` : "",
+          brut?.doublonDe && !brut.doublonTraiteLe ? `Doublon probable de [lead:${brut.doublonDe}]${brut.doublonMotif ? ` (${brut.doublonMotif})` : ""} : « doublon » FUSIONNER ou ECARTER.` : "",
+          notes.length ? `Notes d'appel : ${notes.map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 160)}`).join(" · ")}` : "Aucune note d'appel.",
+          l.echanges.length ? `Échanges (${l.echanges.length}) : ${l.echanges.map((x) => `${format.jourCourt(x.le)} ${x.type.toLowerCase()} ${court(x.contenu, 120)}`).join(" · ")}` : "",
+          l.photos.length ? `Photos jointes : ${l.photos.length} (« voir_fichiers »).` : "",
+          l.simulations.length ? `Simulations du site : ${l.simulations.map((s) => `${format.jourCourt(s.le)}${s.reference ? ` ${s.reference}` : ""}${s.prix !== null ? ` ${format.euros(s.prix)}` : ""}`).join(" · ")}.` : "",
+          l.anciensDevis.length || l.ancienChantier ? `Ancien CRM : ${l.anciensDevis.map((d) => `devis ${d.numero} ${format.euros(d.montant)} (${d.statut.toLowerCase()})${d.facture ? `, facture ${d.facture.numero}` : ""}`).join(" · ")}${l.ancienChantier ? ` ; chantier du ${format.jourCourt(l.ancienChantier.dateIntervention)} (${l.ancienChantier.statut.toLowerCase()})` : ""}.` : ""
         );
-        donnees.lead = { id: l.id, nom: l.nom, telephone: l.telephone, email: l.email, ville: l.ville, source: l.source, statut: l.statut, priorite: l.priorite, rappelLe: l.rappelLe, message: l.message, occupation: l.occupation, delaiProjet: l.delaiProjet, echanges: l.echanges.slice(0, 8), notesAppel: notes.slice(0, 8), dossiers: l.dossiers };
+        donnees.lead = { ...l, doublon: brut?.doublonDe ? { de: brut.doublonDe, motif: brut.doublonMotif, traiteLe: brut.doublonTraiteLe } : null, notesAppel: notes };
         liens.push(lien("Fiche du lead", `/leads?lead=${l.id}`));
       }
     }
+    // Pour tous : les tâches de Lucas, les messages (mails, espace, SMS) et la chronologie.
+    const [taches, messages] = await Promise.all([tachesDuSujet(ids), nbMessages ? messagesDuSujet(ids, nbMessages) : Promise.resolve(null)]);
+    if (taches.length) parties.push(`Tâches de Lucas : ${taches.map((t) => `${t.titre} — ${t.statut === "A_FAIRE" ? "à faire" : t.statut === "PLUS_TARD" ? `plus tard${t.plusTardJusqua ? ` (${format.jourCourt(t.plusTardJusqua)})` : ""}` : `${t.statut.toLowerCase()}${t.reponduLe ? ` le ${format.jourCourt(t.reponduLe)}` : ""}`} [tache:${t.id}]`).join(" · ")}`);
+    if (messages) {
+      if (messages.mails.length) parties.push(`Mails (${messages.mails.length}) : ${messages.mails.map((m) => `${format.jourCourt(m.recuLe)} ${m.sens === "SORTANT" ? "→" : "←"} « ${m.objet ?? "(sans objet)"} »${m.sens === "ENTRANT" && !m.lu ? " (non lu)" : ""} [mail:${m.id}]`).join(" · ")}`);
+      if (messages.espace.length) parties.push(`Messages d'espace (${messages.espace.length}) : ${messages.espace.map((m) => `${format.jourCourt(m.le)} ${m.auteur === "LUCAS" ? "CoverSwap" : m.clientNom}${m.auteur === "CLIENT" && !m.luLe ? " (NON LU)" : ""} : « ${court(m.texte, 140)} »`).join(" · ")}`);
+      if (messages.sms.length) parties.push(`SMS (${messages.sms.length}) : ${messages.sms.map((m) => `${format.jourCourt(m.createdAt)} ${m.sens === "SORTANT" ? "→" : "←"} « ${court(m.texte, 140)} » (${m.statut.toLowerCase()})`).join(" · ")}`);
+    }
+    donnees.taches = taches;
+    donnees.messages = messages;
+    if (entree.chronologie) {
+      const chrono = await chronologieDuContact({ clientId: ids.clientId, leadId: ids.leadId, dossierId: ids.dossierId }, { limite: entree.chronologie, familles: entree.familles });
+      parties.push(`Chronologie (${chrono.entrees.length}/${chrono.total}${entree.familles?.length ? `, ${entree.familles.join(", ")}` : ""}) :\n${chrono.entrees.map((c) => `- ${format.jourCourt(c.le)} [${c.famille}] ${c.titre}${c.texte ? ` — ${court(c.texte.replace(/\s+/g, " "), 160)}` : ""}`).join("\n")}`);
+      donnees.chronologie = chrono;
+    }
     return { texte: parties.filter(Boolean).join("\n"), donnees, liens };
-  },
-});
-
-export const outilLeadsAAppeler = definirOutil({
-  nom: "leads_a_appeler",
-  titre: "Les leads à appeler",
-  description: "La liste « À appeler » de l'écran Leads : les leads jamais appelés ni contactés par écrit, le plus récent en haut (même ordre que l'écran ; les « à écarter » y figurent, avec leur priorité). Rend nom, ville, source, projet, priorité et téléphone. Les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté sont dans « À rappeler », pas ici. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage.",
-  niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional() }),
-  executer: async ({ limite }) => {
-    // Mission 14 (partie 3) : la liste « À appeler » seule, dans l'ordre de l'écran, coupée côté serveur.
-    const liste = await listerLeads({ vue: "A_APPELER", limite: limite ?? 20 });
-    const { aAppeler, aRappeler, enRetard } = liste.compteurs;
-    const ailleurs = `${pluriel(aRappeler, "lead")} dans « À rappeler »${enRetard ? `, dont ${enRetard} en retard` : ""}`;
-    const texte = liste.lignes.length
-      ? `${pluriel(aAppeler, "lead")} à appeler, jamais ${accord(aAppeler, "appelé")} (${ailleurs}). ${liste.lignes.map((l) => `${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}, arrivé le ${format.jourCourt(l.attendDepuis ?? l.recuLe)} [lead:${l.id}]`).join(" · ")}`
-      : aRappeler
-        ? `Personne dans « À appeler » (${ailleurs}).`
-        : "Aucun lead en attente d'appel : « À appeler » et « À rappeler » sont vides.";
-    return { texte, donnees: liste.lignes.map((l) => ({ id: l.id, nom: l.nom, ville: l.ville, source: l.source, projet: l.projet, priorite: l.priorite, telephone: l.telephone, recuLe: l.recuLe, attendDepuis: l.attendDepuis })), liens: [lien("Leads", "/leads?liste=appeler")] };
-  },
-});
-
-export const outilLeadsARappeler = definirOutil({
-  nom: "leads_a_rappeler",
-  titre: "Les leads à rappeler",
-  description:
-    "La liste « À rappeler » de l'écran Leads, dans le même ordre : les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté — d'abord les rappels datés du plus ancien au plus lointain (les retards en tête, marqués EN RETARD), puis les rappels sans date, le plus ancien appel d'abord. Par lead : nom, ville, source, téléphone, tentatives (appels sans réponse d'affilée), le rappel (« jeu. 1 oct. 18:00 » ou « sans date ») et le dernier appel (date, issue). Réponse à « qui dois-je rappeler ? ». Les jamais appelés sont dans « leads_a_appeler ». Pages de 20 (« limite », « page »).",
-  niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional().describe("Lignes par page (20 par défaut)."), page: z.number().int().min(1).optional().describe("Page à lire (1 par défaut).") }),
-  executer: async ({ limite, page }, contexte) => {
-    // Mission 14 (partie 8) : la liste « À rappeler » seule, triée et paginée côté serveur comme l'écran.
-    const liste = await listerLeads({ vue: "A_RAPPELER", page: page ?? 1, parPage: limite ?? 20 }, contexte.maintenant);
-    const { aRappeler, enRetard, aujourdhui } = liste.compteurs;
-    const total = liste.total ?? liste.lignes.length;
-    const pages = Math.max(1, Math.ceil(total / (liste.parPage || 1)));
-    const entete = `${pluriel(aRappeler, "lead")} à rappeler dont ${enRetard} en retard, ${aujourdhui} aujourd'hui${pages > 1 ? ` (page ${liste.page} sur ${pages})` : ""}`;
-    const ligne = (l: (typeof liste.lignes)[number]) => {
-      const issue = l.dernierAppel ? issueDuContenu(l.dernierAppel.contenu) : null;
-      const dernierAppelLe = l.dernierAppelLe ?? l.dernierAppel?.le ?? null;
-      // Mission 17 (partie A) : sans appel, le contact écrit (SMS copié, mail parti) qui l'a fait passer ici.
-      const dernier = dernierAppelLe ? `dernier appel ${jourSemaineHeure(dernierAppelLe)}${issue ? ` (${LIBELLES_ISSUE[issue].toLowerCase()})` : ""}` : l.dernierContactLe ? `aucun appel noté, contacté par écrit le ${jourSemaineHeure(l.dernierContactLe)}` : "aucun appel noté";
-      const rappel = l.rappelLe ? `rappel ${jourSemaineHeure(l.rappelLe)}${l.enRetard ? " EN RETARD" : ""}` : "rappel sans date";
-      return `- ${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.libelleSource}, ${l.telephone ?? "numéro illisible"}, ${pluriel(l.tentatives, "tentative")}, ${rappel}, ${dernier} [lead:${l.id}]`;
-    };
-    const texte = liste.lignes.length ? `${entete} :\n${liste.lignes.map(ligne).join("\n")}` : aRappeler ? `${entete} : cette page est vide.` : "Personne dans « À rappeler ».";
-    return { texte, donnees: { compteurs: liste.compteurs, page: liste.page, pages, total, lignes: liste.lignes }, liens: [lien("Leads", "/leads?liste=rappeler")] };
   },
 });
 
@@ -253,47 +300,6 @@ export const outilDossiersParEtape = definirOutil({
       .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${titreDossier(d)} (${quiALaMain(d, contexte.maintenant)})${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
       .join("\n");
     return { texte: texte || "Aucun dossier.", donnees: dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime })), liens: [lien("Dossiers", "/dossiers")] };
-  },
-});
-
-export const outilCeQuiMAttend = definirOutil({
-  nom: "ce_qui_m_attend",
-  titre: "Ce qui attend une action de Lucas",
-  description:
-    "La liste des tâches de Lucas en entier — aujourd'hui (les 10 du jour, avec le geste prêt et le texte des SMS et mails), les lots de ménage, « plus tard » (avec la date de retour) et ce qui est fait aujourd'hui —, puis les mails à traiter, les propositions à valider et les messages d'espace non lus. Réponse à « qu'est-ce qui m'attend ? » ; pour « qu'est-ce que j'ai à faire ? » ou « j'ai 20 minutes », préfère « taches ». Garde l'identifiant [tache:…] de la dernière tâche citée : « c'est fait » → « repondre_tache ».",
-  niveau: "LECTURE",
-  schema: z.object({}),
-  executer: async ({}, contexte) => {
-    // Import à l'appel : « taches » importe « schemaCible » d'ici (pas de cycle au chargement).
-    const { texteListe } = await import("./taches");
-    // Mission 17 (partie A, relecture) : le nombre de mails à traiter est celui de l'onglet Mail (les tâches du mail et de
-    // l'espace : a-faire/ecran.ts › compterMailATraiter) — un seul compteur partout.
-    const [liste, mails, mailsATraiter, messagesNonLus, propositionsEnAttente] = await Promise.all([
-      listeTaches(contexte.maintenant),
-      listerVue("A_TRAITER", { limite: 50 }),
-      compterMailATraiter(contexte.maintenant),
-      compterMessagesNonLus(),
-      prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
-    ]);
-    const { texte: texteTaches, aujourdhui } = await texteListe(liste, contexte.maintenant);
-    const texte = [
-      texteTaches,
-      `Aussi : ${pluriel(mailsATraiter, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
-      mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
-    ].filter(Boolean).join("\n");
-    return {
-      texte,
-      donnees: {
-        genereLe: liste.genereLe,
-        compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
-        aujourdhui,
-        lots: liste.lots,
-        plusTard: liste.plusTard,
-        faitAujourdhui: liste.faitAujourdhui,
-        mails: mails.lignes.slice(0, 20),
-      },
-      liens: [lien("Tâches", "/taches"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])],
-    };
   },
 });
 
@@ -324,50 +330,10 @@ export const outilEspacesClients = definirOutil({
   },
 });
 
-export const outilMailsATraiter = definirOutil({
-  nom: "mails_a_traiter",
-  titre: "Les mails à traiter",
-  description: "Les conversations de la boîte qui attendent une réponse ou une action (onglet Mail, vue « À traiter »), dans l'ordre de priorité calculé par le CRM (revenus, réclamations, devis en attente par montant, dossiers en cours, leads, échéances, le reste) : qui, objet, pourquoi (attend ta réponse, sans réponse depuis N jours, nouvelle demande, à lire, revenu), intention et ce qui est attendu, cartes en attente, brouillon prêt, contact rattaché. Rend l'identifiant du mail pour « lire_mail », « deposer_brouillon », « envoyer_mail ». Réponse à « qu'est-ce que j'ai à traiter ? » : lis-la dans cet ordre.",
-  niveau: "LECTURE",
-  schema: z.object({ vue: z.enum(["A_TRAITER", "CLIENTS", "ADMINISTRATIF"]).optional(), limite: z.number().int().min(1).max(50).optional() }),
-  executer: async ({ vue, limite }) => {
-    const liste = await listerVue(vue ?? "A_TRAITER", { limite: limite ?? 20 });
-    const texte = liste.lignes.length
-      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif.\n${liste.lignes.map((m, i) => `${i + 1}. ${m.priorite.libelle ? `[${m.priorite.libelle}${m.priorite.montant !== null ? ` ${format.euros(m.priorite.montant)}` : ""}] ` : ""}${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.intention ? ` · ${m.intention.toLowerCase()}${m.attendu ? ` : ${m.attendu}` : ""}` : " · non classé"}${m.propositionsEnAttente ? ` · ${pluriel(m.propositionsEnAttente, "carte")} à valider` : ""}${m.brouillonPret ? " · brouillon prêt" : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join("\n")}`
-      : "Rien à traiter dans la boîte.";
-    return { texte, donnees: { compteurs: liste.compteurs, mails: liste.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant, objet: m.objet, extrait: m.extrait, recuLe: m.recuLe, mention: m.mention, classe: m.classe, contact: m.contact, nonLu: m.nonLu, priorite: m.priorite, intention: m.intention, attendu: m.attendu, propositionsEnAttente: m.propositionsEnAttente, brouillonPret: m.brouillonPret, revenu: m.revenu, snoozeJusqua: m.snoozeJusqua })) }, liens: [lien("Mail", "/mail")] };
-  },
-});
-
 /** Le bloc « Entonnoir du site par source » de la synthèse : vide s'il n'y a eu aucune visite. */
 export function ligneEntonnoirSite(lignes: string[]): string {
   return lignes.length ? `Entonnoir du site par source (parcours ; entre parenthèses, l'étape facultative) :\n${lignes.join("\n")}` : "";
 }
-
-export const outilSynthese = definirOutil({
-  nom: "synthese",
-  titre: "Synthèse d'une période",
-  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). Synthèse historique (mois figés) : l'écran du CRM est désormais l'Analytique — pour ses chiffres exacts (tuiles, tunnel, publicité, SEO, site, argent), préférer « analytique » ; pour des analyses détaillées, les outils « manager_… ».",
-  niveau: "LECTURE",
-  schema: schemaPeriode,
-  executer: async (entree, contexte) => {
-    // L'instant de la session (relecture B, point A) : sans lui, la période glissait d'un jour après 22 h UTC.
-    const { periode } = resoudrePeriode(entree, contexte.maintenant);
-    const s = await calculerSynthese(periode.du, periode.au);
-    const c = s.commercial;
-    const texte = [
-      `Synthèse ${periode.libelle} (${periode.du} → ${periode.au}) :`,
-      c.entrants ? `${pluriel(c.entrants.recus, "lead")} reçus (${c.entrants.parSource.map((p) => `${p.libelle} ${p.recus}`).join(", ")}), ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} avec dossier, ${c.entrants.signes} signés.` : "",
-      `${pluriel(c.cohorte.ouverts, "dossier ouvert", "dossiers ouverts")} sur la période : ${c.cohorte.devisEnvoyes} devis envoyés, ${c.cohorte.signes} signés, ${c.cohorte.encaisses} encaissés, ${c.cohorte.perdus} perdus (taux de signature ${format.pourcent(c.cohorte.tauxSignatureDevis)}).`,
-      `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${pluriel(c.activite.signatures, "signature")} (${format.euros(c.activite.montantSigne)}), ${pluriel(c.activite.facturesEmises, "facture")} (${format.euros(c.activite.montantFacture)}), ${pluriel(c.activite.pertes, "perte")}.`,
-      s.finances.encaisse === null ? `Encaissé : paramètres manquants (${s.finances.parametresManquants.join(", ")}).` : `Encaissé ${format.euros(s.finances.encaisse)}, dépenses ${format.euros(s.finances.depenses)}${s.finances.margeBrute !== null ? `, marge brute ${format.euros(s.finances.margeBrute)}` : ""}${s.finances.panierMoyenSigne !== null ? `, panier moyen signé ${format.euros(s.finances.panierMoyenSigne)}` : ""}. En cours de règlement : ${format.euros(s.finances.encours.total)}.`,
-      c.pertes.parMotif.length ? `Pertes par motif : ${c.pertes.parMotif.map((p) => `${p.libelle} ${p.valeur}`).join(", ")}.` : "",
-      // Mission 16 (partie 6) : une ligne par famille de source (calculée à la lecture, sans requête de plus).
-      ligneEntonnoirSite(s.site?.entonnoir ? texteEntonnoirParFamille(s.site.entonnoir) : []),
-    ].filter(Boolean).join("\n");
-    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients, entonnoirSite: s.site?.entonnoir ?? null }, liens: [lien("Analytique", `/analytique?du=${periode.du}&au=${periode.au}`)] };
-  },
-});
 
 /**
  * L'état de la campagne (mission 17, partie B : mêmes calculs que l'onglet Publicité de l'Analytique) : jour en jours
@@ -425,20 +391,12 @@ export function textePublicites(parPublicite: Awaited<ReturnType<typeof etatCamp
   return parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}, ${p.devis} devis, ${pluriel(p.signes, "signé")}${p.coutParLead !== null ? `, ${format.euros(p.coutParLead)} par lead` : ""}${p.verdict ? ` — ${LIBELLES_VERDICT[p.verdict]}${p.raisonVerdict ? ` (${p.raisonVerdict})` : ""}` : ""}`).join(" · ");
 }
 
-export const outilCampagne = definirOutil({
-  nom: "campagne",
-  titre: "L'état de la campagne publicitaire",
-  description: "Jour de campagne (« jour 3 sur 21 », jours de Paris), dépense (réelle Meta quand la synchronisation est branchée, sinon estimée au prorata du budget — dis lequel), leads Meta reçus dans le CRM, coût par lead, résultats par campagne et par publicité avec leur propre coût par lead et le verdict du protocole (garder, surveiller, couper, trop tôt), et la règle du protocole qui s'applique ce jour (consignes). Mêmes calculs que l'onglet Publicité de l'Analytique. Les paramètres de campagne (début, budget, durée) se posent dans Paramètres → Campagne publicitaire.",
-  niveau: "LECTURE",
-  schema: z.object({}),
-  executer: async ({}, contexte) => {
-    const e = await etatCampagne(contexte.maintenant);
-    const texte = e.debut
-      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}, ${texteDepenseCampagne(e)}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ${e.estimation ? "≈ " : ""}${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${textePublicites(e.parPublicite)}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
-      : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
-    return { texte, donnees: e, liens: [lien("Analytique — Publicité", "/analytique?onglet=publicite"), lien("Paramètres", "/parametres")] };
-  },
-});
+/** L'état de la campagne en une phrase (ex-outil « campagne », repris par « analytique » onglet publicite). */
+export function texteEtatCampagne(e: Awaited<ReturnType<typeof etatCampagne>>): string {
+  return e.debut
+    ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}, ${texteDepenseCampagne(e)}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ${e.estimation ? "≈ " : ""}${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${textePublicites(e.parPublicite)}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
+    : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
+}
 
 /** Seuils du disque (mission 10) : avertir à 70 %, alerter à 85 %. */
 export const SEUILS_DISQUE = { attention: 70, urgent: 85 } as const;
@@ -545,4 +503,4 @@ export const outilSanteSysteme = definirOutil({
   },
 });
 
-export const OUTILS_LECTURE = [outilChercher, outilLireFiche, outilLeadsAAppeler, outilLeadsARappeler, outilDossiersParEtape, outilCeQuiMAttend, outilEspacesClients, outilMailsATraiter, outilSynthese, outilCampagne, outilSanteSysteme];
+export const OUTILS_LECTURE = [outilChercher, outilLireFiche];

@@ -500,6 +500,17 @@ export async function changerStatutSimulation(dossierId: string, simulationId: s
   return versVue(dossierId, modifiee, await seuilControle());
 }
 
+/**
+ * Mission 17 (partie C) : une simulation retirée du dossier (« retirer », archivée) revient, en brouillon : le client
+ * ne la revoit qu'après une nouvelle publication. `changerStatutSimulation(…, "brouillon")` ne lit pas les archivées.
+ */
+export async function restaurerSimulation(dossierId: string, simulationId: string): Promise<SimulationVue> {
+  const simulation = await prisma.simulationEspace.findFirst({ where: { ...AVEC_ARCHIVES, id: simulationId, dossierId } });
+  if (!simulation) throw new ErreurMetier("Simulation introuvable.", 404);
+  const remise = simulation.archiveLe ? await prisma.simulationEspace.update({ where: { id: simulation.id }, data: { archiveLe: null, archiveMotif: null, statut: "BROUILLON", masqueeLe: null } }) : simulation;
+  return versVue(dossierId, remise, await seuilControle());
+}
+
 export async function modifierSimulation(dossierId: string, simulationId: string, entree: { titre?: string | null; description?: string | null }): Promise<SimulationVue> {
   await simulationDuDossier(dossierId, simulationId);
   const modifiee = await prisma.simulationEspace.update({

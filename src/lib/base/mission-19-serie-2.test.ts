@@ -98,29 +98,32 @@ after(async () => {
 });
 
 describe("la liste réelle (scripts/photos-serie-2.json)", () => {
-  test("122 images, 256 essais : 56 générations (22 avants, 12 repères, 10 ambiances, 12 pictos), 66 après à échantillons", async () => {
+  test("v2 (budget 10 $) : 70 images, 140 essais ; priorité 1 les 18 avants et leurs 36 après, 2 les 8 photos utiles, 3 les 8 pictos", async () => {
     const liste = ambiances.lireListeImages(await fs.readFile(LISTE_S2, "utf8"));
     assert.equal(liste.serie, "2");
-    assert.equal(liste.plafond, 20);
-    assert.equal(liste.images.length, 122);
-    assert.equal(liste.images.reduce((t, i) => t + ambiances.essaisDe(i, liste), 0), 256);
-    const par = (serie: string, mode: string) => liste.images.filter((i) => i.serie === serie && i.mode === mode).length;
-    assert.deepEqual([par("quotidien", "generation"), par("quotidien", "edition"), par("reperes", "generation"), par("ambiances", "generation"), par("pictos", "generation")], [22, 66, 12, 10, 12]);
+    assert.equal(liste.plafond, 10);
+    assert.equal(liste.images.length, 70);
+    assert.equal(liste.images.reduce((t, i) => t + ambiances.essaisDe(i, liste), 0), 140);
+    const par = (priorite: number, serie: string, mode: string) => liste.images.filter((i) => i.priorite === priorite && i.serie === serie && i.mode === mode).length;
+    assert.deepEqual([par(1, "quotidien", "generation"), par(1, "quotidien", "edition"), par(2, "enrichissement", "generation"), par(2, "ambiances", "generation"), par(3, "pictos", "generation")], [18, 36, 6, 2, 8]);
     for (const i of liste.images.filter((x) => x.mode === "edition")) {
       assert.ok(i.source?.endsWith("-avant") && i.echantillons?.length, i.nom);
-      assert.deepEqual(Object.values(i.composition ?? {}).filter((r) => i.echantillons!.includes(r)).length > 0, true, `${i.nom} : composition et échantillons`);
+      assert.deepEqual(Object.values(i.composition ?? {}), i.echantillons, `${i.nom} : une vignette par surface, dans l'ordre`);
     }
     assert.ok(liste.images.filter((i) => i.serie === "pictos").every((i) => i.fond === "transparent"));
   });
 
-  test("--estimer : le plan, la sortie de la série et le coût recalé sur le coût réel, sans appel ni fichier", async () => {
+  test("--estimer et --priorite : le plan d'une priorité, la sortie de la série et le coût recalé, sans appel ni fichier", async () => {
     const sortie = dossier("estimer");
     const bilan = await lancer(["--liste", LISTE_S2, "--estimer", "--phase", "1", "--sortie", sortie]);
     assert.equal(demandes.length, 0);
-    assert.ok(journal.some((l) => l.startsWith("Phase 1 (générations) : 56 image(s), 124 appel(s)")), journal.join("\n"));
-    assert.ok(bilan.estimeDollars > 5 && bilan.estimeDollars < 6.5, `${bilan.estimeDollars}`);
-    assert.ok(journal.some((l) => /plafond de la série 20,00 \$, déjà dépensé/.test(l)));
+    assert.ok(journal.some((l) => l.startsWith("Phase 1 (générations) : 34 image(s), 68 appel(s)")), journal.join("\n"));
+    assert.ok(bilan.estimeDollars > 3 && bilan.estimeDollars < 3.3, `${bilan.estimeDollars}`);
+    assert.ok(journal.some((l) => /plafond de la série 10,00 \$, déjà dépensé/.test(l)));
     assert.equal(existsSync(path.join(sortie, "quotidien")), false);
+    journal = [];
+    await lancer(["--liste", LISTE_S2, "--estimer", "--phase", "1", "--priorite", "3", "--sortie", sortie]);
+    assert.ok(journal.some((l) => l.startsWith("Phase 1 (générations) : 8 image(s), 16 appel(s)")), journal.join("\n"));
   });
 });
 
@@ -181,5 +184,41 @@ describe("le lancement d'une série", () => {
     assert.throws(() => ambiances.lireListeImages(JSON.stringify({ serie: 2, images: [{ ...base, essais: 2, echantillons: ["K1"] }] })), /échantillons/);
     assert.throws(() => ambiances.lireListeImages(JSON.stringify({ serie: 2, images: [base] })), /essais/);
     assert.equal(ambiances.lireListeImages(JSON.stringify({ serie: 2, images: [{ ...base, essais: 2 }] })).essais, 2);
+  });
+});
+
+describe("la bibliothèque (calage, teintes, réétiquetage)", () => {
+  test("mesure d'une composition : fidèle, réétiquetée vers la plus proche de la même famille, ou teinte non garantie", async () => {
+    const bibliotheque = await import("@/lib/simulations/bibliotheque");
+    const racine = dossier("biblio");
+    // Haut blanc (le blanc de la scène), gauche vert sauge exact, droite un vert bien plus clair, bas un rose vif.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="100" fill="#F2F2F2"/><rect y="100" width="200" height="100" fill="#616A57"/><rect x="200" y="100" width="200" height="100" fill="#9DAA90"/><rect y="200" width="400" height="100" fill="#FF00AA"/></svg>`;
+    const fichier = path.join(racine, "essai.png");
+    await sharp(Buffer.from(svg)).png().toFile(fichier);
+    const catalogue = new Map(
+      [
+        { id: "RM20", nom: "Sage Green", famille: "couleur", image: "x", hex: "#616A57" },
+        { id: "RM30", nom: "Pastel Olive Green", famille: "couleur", image: "x", hex: "#A4A38F" },
+        { id: "NH12", nom: "Terracotta Stucco", famille: "beton", image: "x", hex: "#AF9584" },
+      ].map((r) => [r.id, r])
+    );
+    const mesure = { blanc: { objet: "haut", zone: [10, 5, 80, 20] as [number, number, number, number] }, surfaces: { gauche: [[5, 40, 40, 20]] as [number, number, number, number][], droite: [[55, 40, 40, 20]] as [number, number, number, number][], bas: [[10, 72, 80, 20]] as [number, number, number, number][] } };
+    const r = await bibliotheque.mesurerComposition(fichier, { gauche: "RM20", droite: "RM20", bas: "NH12" }, mesure, catalogue, 12, "#F2F2F2");
+    assert.equal(r.gauche.statut, "fidele");
+    assert.ok(r.gauche.deltaE < 1);
+    assert.equal(r.droite.statut, "reetiquetee");
+    assert.equal(r.droite.ref, "RM30", "la plus proche de la même famille");
+    assert.ok(r.droite.deltaEAffichee <= 12 && r.droite.deltaE > 12);
+    assert.equal(r.bas.statut, "teinte non garantie", "aucune référence du béton n'en est proche");
+  });
+
+  test("l'essai retenu : sans rejet, puis le moins de surfaces non garanties, de réétiquetages, puis le plus petit pire ΔE", async () => {
+    const { meilleurEssai } = await import("@/lib/simulations/bibliotheque");
+    const s = (statut: "fidele" | "reetiquetee" | "teinte non garantie", d: number) => ({ prevue: "A", ref: "A", nom: "a", deltaE: d, deltaEAffichee: d, mesure: "#000000", statut });
+    const e = (essai: number, rejet: string | null, ...surfaces: ReturnType<typeof s>[]) => ({ essai, fichier: `${essai}.png`, ecartContours: 5, rejet, surfaces: Object.fromEntries(surfaces.map((x, i) => [`s${i}`, x])) });
+    assert.equal(meilleurEssai([e(1, "calage", s("fidele", 1)), e(2, null, s("reetiquetee", 4))])?.essai, 2);
+    assert.equal(meilleurEssai([e(1, null, s("teinte non garantie", 20)), e(2, null, s("reetiquetee", 9))])?.essai, 2);
+    assert.equal(meilleurEssai([e(1, null, s("fidele", 9)), e(2, null, s("fidele", 3))])?.essai, 2);
+    assert.equal(meilleurEssai([e(1, "calage")]), null);
   });
 });

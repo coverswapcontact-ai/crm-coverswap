@@ -1,0 +1,796 @@
+{
+ "seuil_delta_e": 12,
+ "seuil_calage": 15,
+ "blanc_cible": "#F2F2F2",
+ "choix": {
+  "buffet-salle-a-manger-avant": 2,
+  "cuisine-blanche-jaunie-avant": 1,
+  "cuisine-bordeaux-brillante-avant": 2,
+  "cuisine-couloir-avant": 1,
+  "cuisine-grise-brillante-avant": 1,
+  "cuisine-ilot-maison-avant": 2,
+  "cuisine-kitchenette-studio-avant": 1,
+  "cuisine-l-hetre-avant": 2,
+  "cuisine-maison-de-village-avant": 1,
+  "cuisine-merisier-avant": 2,
+  "cuisine-ouverte-bar-avant": 2,
+  "cuisine-u-pavillon-avant": 1,
+  "placard-coulissant-chambre-avant": 2,
+  "portes-couloir-avant": 2,
+  "pro-comptoir-accueil-avant": 2,
+  "sdb-baignoire-tablier-avant": 1,
+  "sdb-double-vasque-wenge-avant": 2,
+  "sdb-petit-meuble-vasque-avant": 1,
+  "detail-chant": 2,
+  "pose-mains": 2,
+  "echantillons-table": 1,
+  "mesure-visite": 1,
+  "usure-detail": 1,
+  "outils-pose": 2,
+  "amb-cuisine-familiale": 1,
+  "amb-couloir-portes": 1,
+  "picto-porte-interieure": 1,
+  "picto-placard-coulissant": 1,
+  "picto-plan-de-travail": 1,
+  "picto-commode": 1,
+  "picto-meuble-vasque": 1,
+  "picto-porte-entree": 1,
+  "picto-refrigerateur": 2,
+  "picto-plan-parallele": 2
+ },
+ "rejets": {},
+ "mesures": {
+  "cuisine-bordeaux-brillante-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     60,
+     3,
+     18,
+     6
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      45,
+      61,
+      8,
+      10
+     ],
+     [
+      56,
+      62,
+      6,
+      10
+     ]
+    ],
+    "plan": [
+     [
+      46,
+      53,
+      12,
+      2.5
+     ]
+    ]
+   }
+  },
+  "cuisine-blanche-jaunie-avant": {
+   "blanc": {
+    "objet": "réfrigérateur blanc",
+    "zone": [
+     90,
+     50,
+     8,
+     25
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      30,
+      52,
+      8,
+      22
+     ],
+     [
+      41,
+      12,
+      9,
+      18
+     ]
+    ],
+    "plan": [
+     [
+      68,
+      62.5,
+      18,
+      2.5
+     ]
+    ]
+   }
+  },
+  "cuisine-kitchenette-studio-avant": {
+   "blanc": {
+    "objet": "réfrigérateur blanc",
+    "zone": [
+     19,
+     60,
+     14,
+     25
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      37,
+      57,
+      7,
+      16
+     ],
+     [
+      46,
+      57,
+      5,
+      16
+     ]
+    ],
+    "plan": [
+     [
+      29,
+      48.5,
+      14,
+      2.5
+     ]
+    ]
+   }
+  },
+  "cuisine-l-hetre-avant": {
+   "blanc": {
+    "objet": "réfrigérateur blanc",
+    "zone": [
+     79,
+     22,
+     14,
+     25
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "bas": [
+     [
+      46,
+      52,
+      8,
+      18
+     ]
+    ],
+    "hauts": [
+     [
+      22,
+      3,
+      7,
+      22
+     ]
+    ],
+    "plan": [
+     [
+      12,
+      54,
+      15,
+      3
+     ]
+    ]
+   }
+  },
+  "cuisine-u-pavillon-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     37,
+     9.5,
+     22,
+     3
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      40,
+      55,
+      8,
+      14
+     ],
+     [
+      57,
+      55,
+      7,
+      14
+     ]
+    ],
+    "plan": [
+     [
+      10,
+      55,
+      15,
+      3
+     ]
+    ]
+   }
+  },
+  "cuisine-couloir-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     37,
+     13.5,
+     24,
+     2
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      77,
+      66,
+      10,
+      16
+     ],
+     [
+      10,
+      12,
+      12,
+      20
+     ]
+    ],
+    "plan": [
+     [
+      79,
+      61,
+      8,
+      4
+     ],
+     [
+      64,
+      50.5,
+      4,
+      2.5
+     ]
+    ]
+   }
+  },
+  "cuisine-ouverte-bar-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     80,
+     3,
+     15,
+     5
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      27,
+      48,
+      7,
+      9
+     ],
+     [
+      34,
+      17,
+      10,
+      10
+     ]
+    ],
+    "plan": [
+     [
+      50,
+      43.2,
+      14,
+      1.2
+     ]
+    ]
+   }
+  },
+  "cuisine-merisier-avant": {
+   "blanc": {
+    "objet": "réfrigérateur blanc",
+    "zone": [
+     1,
+     40,
+     9,
+     30
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      16,
+      62,
+      13,
+      18
+     ],
+     [
+      20,
+      3,
+      9,
+      22
+     ]
+    ],
+    "plan": [
+     [
+      16,
+      55,
+      25,
+      1.5
+     ]
+    ]
+   }
+  },
+  "cuisine-grise-brillante-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     13,
+     6,
+     22,
+     3
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      10,
+      57,
+      11,
+      12
+     ]
+    ],
+    "plan": [
+     [
+      46,
+      48.5,
+      14,
+      1.5
+     ]
+    ]
+   }
+  },
+  "cuisine-maison-de-village-avant": {
+   "blanc": {
+    "objet": "façade de la cuisinière",
+    "zone": [
+     76,
+     62,
+     14,
+     4
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      47.5,
+      54,
+      5,
+      18
+     ],
+     [
+      54,
+      10,
+      7,
+      18
+     ]
+    ],
+    "plan": [
+     [
+      56,
+      50,
+      12,
+      2.5
+     ]
+    ]
+   }
+  },
+  "cuisine-ilot-maison-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     71,
+     10,
+     18,
+     3
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      5,
+      46,
+      5,
+      9
+     ],
+     [
+      10,
+      5,
+      7,
+      22
+     ]
+    ],
+    "ilot": [
+     [
+      34,
+      55,
+      15,
+      20
+     ]
+    ],
+    "plan": [
+     [
+      45,
+      44,
+      12,
+      2
+     ]
+    ]
+   }
+  },
+  "sdb-petit-meuble-vasque-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     63,
+     7,
+     16,
+     4
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "meuble": [
+     [
+      23,
+      68,
+      10,
+      18
+     ]
+    ]
+   }
+  },
+  "sdb-double-vasque-wenge-avant": {
+   "blanc": {
+    "objet": "bord de la vasque",
+    "zone": [
+     12,
+     58,
+     12,
+     2.5
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "meuble": [
+     [
+      18,
+      70,
+      14,
+      7
+     ]
+    ]
+   }
+  },
+  "sdb-baignoire-tablier-avant": {
+   "blanc": {
+    "objet": "dessus blanc du meuble vasque",
+    "zone": [
+     60,
+     58,
+     8,
+     2
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "meuble": [
+     [
+      57,
+      62,
+      12,
+      18
+     ]
+    ],
+    "tablier": [
+     [
+      32,
+      68,
+      15,
+      18
+     ]
+    ]
+   }
+  },
+  "placard-coulissant-chambre-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     18,
+     12,
+     17,
+     4
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "portes": [
+     [
+      53,
+      25,
+      11,
+      30
+     ]
+    ]
+   }
+  },
+  "portes-couloir-avant": {
+   "blanc": {
+    "objet": "plafond",
+    "zone": [
+     20,
+     10,
+     15,
+     4
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "portes": [
+     [
+      40,
+      30,
+      14,
+      22
+     ],
+     [
+      84,
+      22,
+      8,
+      30
+     ]
+    ]
+   }
+  },
+  "buffet-salle-a-manger-avant": {
+   "blanc": {
+    "objet": "cadre blanc de la fenêtre",
+    "zone": [
+     85.5,
+     12,
+     2,
+     30
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      26,
+      47,
+      8,
+      10
+     ],
+     [
+      63,
+      47,
+      6,
+      10
+     ]
+    ],
+    "dessus": [
+     [
+      40,
+      45.3,
+      20,
+      1.2
+     ]
+    ]
+   }
+  },
+  "pro-comptoir-accueil-avant": {
+   "blanc": {
+    "objet": "caisson du volet roulant",
+    "zone": [
+     21,
+     8.5,
+     22,
+     3
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facade": [
+     [
+      50,
+      55,
+      22,
+      18
+     ]
+    ],
+    "dessus": [
+     [
+      52,
+      44,
+      8,
+      0.8
+     ],
+     [
+      62,
+      45,
+      8,
+      0.8
+     ]
+    ]
+   }
+  },
+  "detail-chant": {
+   "blanc": {
+    "objet": "poignée inox (aucun blanc dans le cadre)",
+    "zone": [
+     72,
+     37,
+     5,
+     6
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "facades": [
+     [
+      48,
+      45,
+      15,
+      20
+     ],
+     [
+      45,
+      75,
+      10,
+      10
+     ]
+    ]
+   }
+  },
+  "pose-mains": {
+   "blanc": {
+    "objet": "porte blanche voisine",
+    "zone": [
+     76,
+     40,
+     7,
+     20
+    ],
+    "exposition": true
+   },
+   "surfaces": {
+    "facades": [
+     [
+      57,
+      6,
+      12,
+      10
+     ],
+     [
+      32,
+      48,
+      22,
+      8
+     ]
+    ]
+   }
+  },
+  "amb-cuisine-familiale": {
+   "blanc": {
+    "objet": "réfrigérateur",
+    "zone": [
+     83,
+     44,
+     10,
+     8
+    ],
+    "exposition": true
+   },
+   "surfaces": {
+    "bas": [
+     [
+      41,
+      57,
+      6,
+      12
+     ],
+     [
+      63,
+      58,
+      12,
+      6
+     ]
+    ],
+    "hauts": [
+     [
+      50,
+      12,
+      9,
+      14
+     ],
+     [
+      64,
+      10,
+      9,
+      14
+     ]
+    ],
+    "plan": [
+     [
+      36,
+      50.5,
+      10,
+      0.8
+     ],
+     [
+      65,
+      52.5,
+      8,
+      1
+     ]
+    ]
+   }
+  },
+  "amb-couloir-portes": {
+   "blanc": {
+    "objet": "mur du fond",
+    "zone": [
+     52,
+     18,
+     10,
+     5
+    ],
+    "exposition": false
+   },
+   "surfaces": {
+    "portes": [
+     [
+      8,
+      20,
+      12,
+      25
+     ],
+     [
+      58,
+      28,
+      12,
+      12
+     ]
+    ]
+   }
+  }
+ },
+ "calages_vus": {
+  "cuisine-blanche-jaunie-apres-couleur-1": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "cuisine-blanche-jaunie-apres-couleur-2": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "cuisine-u-pavillon-apres-neutre-1": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "cuisine-u-pavillon-apres-neutre-2": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "portes-couloir-apres-bois-1": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "portes-couloir-apres-bois-2": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "portes-couloir-apres-couleur-1": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte",
+  "portes-couloir-apres-couleur-2": "fondu à 50 % net : aucun meuble, poignée ou objet déplacé ; écart gonflé par le changement de teinte"
+ }
+}

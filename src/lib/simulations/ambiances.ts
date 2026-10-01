@@ -123,6 +123,8 @@ const schemaImageSite = z
     echantillons: z.array(z.string().regex(/^[A-Za-z0-9-]{1,20}$/)).min(1).max(4).optional(),
     /** Surface → référence (relevé des teintes, bibliothèque). */
     composition: z.record(z.string(), z.string()).optional(),
+    /** Ordre de génération quand le budget se resserre (série 2 v2) : 1 les avant/après, 2 les photos utiles, 3 les pictos. */
+    priorite: z.number().int().min(1).max(9).optional(),
   })
   .strict();
 const schemaListeSite = z
@@ -132,6 +134,8 @@ const schemaListeSite = z
     serie: z.union([z.number().int().positive(), schemaNom]).optional(),
     /** Plafond de la série, compté à part dans GenerationImage. */
     plafond_dollars: z.number().positive().optional(),
+    /** Version de la liste (série 2 v2). */
+    version: z.number().int().positive().optional(),
     images: z.array(schemaImageSite).min(1),
   })
   .strict();
@@ -192,6 +196,8 @@ export type OptionsAmbiances = {
   /** Limite d'appels du lancement (aucune par défaut). */
   max: number | null;
   seulement: string[] | null;
+  /** `--priorite N` : seulement les images de cette priorité (série 2). */
+  priorite: number | null;
   sauf: string[];
   essai: boolean;
   estimer: boolean;
@@ -262,6 +268,7 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
     sortie: sortieParDefaut(),
     max: null,
     seulement: null,
+    priorite: null,
     sauf: [],
     essai: false,
     estimer: false,
@@ -279,7 +286,7 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
     vignettes: path.join(sortieParDefaut(), "vignettes"),
   };
   const valeurs = new Map<string, string>();
-  const AVEC_VALEUR = new Set(["--liste", "--sortie", "--max", "--seulement", "--sauf", "--rendu", "--piece", "--zones", "--phase", "--choix", "--essais", "--qualite", "--plafond", "--catalogue", "--vignettes"]);
+  const AVEC_VALEUR = new Set(["--liste", "--sortie", "--max", "--seulement", "--sauf", "--rendu", "--piece", "--zones", "--phase", "--choix", "--essais", "--qualite", "--plafond", "--catalogue", "--vignettes", "--priorite"]);
   for (let i = 0; i < argv.length; i++) {
     const [cle, egal] = argv[i].includes("=") ? [argv[i].slice(0, argv[i].indexOf("=")), argv[i].slice(argv[i].indexOf("=") + 1)] : [argv[i], undefined];
     if (cle === "--essai") options.essai = true;
@@ -301,6 +308,7 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
   if (valeurs.has("--vignettes")) options.vignettes = path.resolve(valeurs.get("--vignettes")!);
   if (valeurs.has("--max")) options.max = entierBorne("--max", valeurs.get("--max")!, 1, 10_000);
   if (valeurs.has("--seulement")) options.seulement = liste(valeurs.get("--seulement")!);
+  if (valeurs.has("--priorite")) options.priorite = entierBorne("--priorite", valeurs.get("--priorite")!, 1, 9);
   if (valeurs.has("--sauf")) options.sauf = liste(valeurs.get("--sauf")!);
   if (valeurs.has("--phase")) options.phase = entierBorne("--phase", valeurs.get("--phase")!, 1, 2) as 1 | 2;
   if (valeurs.has("--choix")) options.choix = lireChoix(valeurs.get("--choix")!);
@@ -348,10 +356,10 @@ function profondeur(image: ImageSite, parNom: Map<string, ImageSite>): number {
  * profondeur égale). Sans phase (ancienne liste seulement) : tout. Puis `--seulement` / `--sauf` (et les réserves de
  * l'ancienne liste).
  */
-export function imagesDeLaPhase(liste: ListeImages, options: Pick<OptionsAmbiances, "phase" | "seulement" | "sauf">): { images: ImageSite[]; horsPhase: string[] } {
+export function imagesDeLaPhase(liste: ListeImages, options: Pick<OptionsAmbiances, "phase" | "seulement" | "sauf"> & { priorite?: number | null }): { images: ImageSite[]; horsPhase: string[] } {
   const parNom = new Map(liste.images.map((i) => [i.nom, i]));
   const dansLaPhase = (i: ImageSite) => options.phase === null || (options.phase === 1 ? i.mode === "generation" && !i.source : i.mode === "edition");
-  const choisies = choisirAmbiances(liste.images, options);
+  const choisies = choisirAmbiances(liste.images, options).filter((i) => !options.priorite || i.priorite === options.priorite);
   const images = choisies
     .filter(dansLaPhase)
     .map((image, rang) => ({ image, rang, profondeur: profondeur(image, parNom) }))

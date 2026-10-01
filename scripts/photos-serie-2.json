@@ -1,36 +1,39 @@
 {
  "serie": 2,
- "plafond_dollars": 20,
+ "version": 2,
+ "plafond_dollars": 10,
  "images": [
   {
-   "nom": "cuisine-kitchenette-studio-avant",
+   "nom": "cuisine-bordeaux-brillante-avant",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A small one-wall kitchenette about 2.4 m long in a student studio flat in Montpellier, three-quarter view. Base units with two doors and a drawer, two wall units, an under-counter fridge, a two-zone ceramic hob, a small stainless steel sink. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in glossy white laminate slightly yellowed with age, chrome bar handles; worktop in a pale beech-effect laminate with a worn front edge; splashback of small white 10 cm square tiles; light grey vinyl floor; white walls; a sofa bed corner visible on the right. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "An L-shaped kitchen in a 2000s apartment, three-quarter view from the doorway. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in high-gloss burgundy red laminate, very typical of French kitchens of the 2000s, with long brushed aluminium handles, a few doors slightly faded by the sun; light grey speckled laminate worktop; white 20 cm tiles on the splashback; grey floor tiles; a window with a roller shutter. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
-   "nom": "cuisine-kitchenette-studio-apres-neutre",
+   "nom": "cuisine-bordeaux-brillante-apres-neutre",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
-   "source": "cuisine-kitchenette-studio-avant",
+   "priorite": 1,
+   "source": "cuisine-bordeaux-brillante-avant",
    "echantillons": [
-    "NH22",
-    "AA17"
+    "NE56",
+    "AA14"
    ],
    "composition": {
-    "facades": "NH22",
-    "plan": "AA17"
+    "facades": "NE56",
+    "plan": "AA14"
    },
    "etiquette": "Ambiance",
    "usages": [
@@ -40,12 +43,115 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
+   "nom": "cuisine-bordeaux-brillante-apres-couleur",
+   "serie": "quotidien",
+   "piece": "cuisine",
+   "mode": "edition",
+   "format": "1536x1024",
+   "essais": 2,
+   "priorite": 1,
+   "source": "cuisine-bordeaux-brillante-avant",
+   "echantillons": [
+    "NF13",
+    "AG13"
+   ],
+   "composition": {
+    "facades": "NF13",
+    "plan": "AG13"
+   },
+   "etiquette": "Ambiance",
+   "usages": [
+    "avant-apres",
+    "inspirations"
+   ],
+   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+  },
+  {
+   "nom": "cuisine-blanche-jaunie-avant",
+   "serie": "quotidien",
+   "piece": "cuisine",
+   "mode": "generation",
+   "format": "1536x1024",
+   "essais": 2,
+   "priorite": 1,
+   "etiquette": "Ambiance",
+   "usages": [
+    "avant-apres",
+    "simulateur-exemple"
+   ],
+   "prompt": "A one-wall kitchen with wall units in a 1980s apartment, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in white laminate that has turned yellowish-cream with age, the tone slightly uneven from one door to the next, thin brown edge strips and small round knobs; brown wood-effect laminate worktop; beige wall tiles with a brown decorative frieze; brown floor tiles. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+  },
+  {
+   "nom": "cuisine-blanche-jaunie-apres-bois",
+   "serie": "quotidien",
+   "piece": "cuisine",
+   "mode": "edition",
+   "format": "1536x1024",
+   "essais": 2,
+   "priorite": 1,
+   "source": "cuisine-blanche-jaunie-avant",
+   "echantillons": [
+    "AG13",
+    "U50"
+   ],
+   "composition": {
+    "facades": "AG13",
+    "plan": "U50"
+   },
+   "etiquette": "Ambiance",
+   "usages": [
+    "avant-apres",
+    "inspirations"
+   ],
+   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles and frieze, floor tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+  },
+  {
+   "nom": "cuisine-blanche-jaunie-apres-couleur",
+   "serie": "quotidien",
+   "piece": "cuisine",
+   "mode": "edition",
+   "format": "1536x1024",
+   "essais": 2,
+   "priorite": 1,
+   "source": "cuisine-blanche-jaunie-avant",
+   "echantillons": [
+    "M9",
+    "AA14"
+   ],
+   "composition": {
+    "facades": "M9",
+    "plan": "AA14"
+   },
+   "etiquette": "Ambiance",
+   "usages": [
+    "avant-apres",
+    "inspirations"
+   ],
+   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles and frieze, floor tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+  },
+  {
+   "nom": "cuisine-kitchenette-studio-avant",
+   "serie": "quotidien",
+   "piece": "cuisine",
+   "mode": "generation",
+   "format": "1536x1024",
+   "essais": 2,
+   "priorite": 1,
+   "etiquette": "Ambiance",
+   "usages": [
+    "avant-apres",
+    "simulateur-exemple"
+   ],
+   "prompt": "A small one-wall kitchenette about 2.4 m long in a student studio flat in Montpellier, three-quarter view. Base units with two doors and a drawer, two wall units, an under-counter fridge, a two-zone ceramic hob, a small stainless steel sink. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in glossy white laminate slightly yellowed with age, chrome bar handles; worktop in a pale beech-effect laminate with a worn front edge; splashback of small white 10 cm square tiles; light grey vinyl floor; white walls; a sofa bed corner visible on the right. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+  },
+  {
    "nom": "cuisine-kitchenette-studio-apres-bois",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-kitchenette-studio-avant",
    "echantillons": [
     "AG13",
@@ -69,6 +175,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-kitchenette-studio-avant",
    "echantillons": [
     "NH21",
@@ -92,37 +199,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "An L-shaped kitchen in a 1970s apartment building in a French city, three-quarter view from the doorway. Base units, a drawer stack, wall units above. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in honey beech-effect laminate with brushed metal D handles; worktop in a grey speckled laminate; splashback of beige 20 cm wall tiles; beige floor tiles; a freestanding white fridge-freezer; a window with a roller shutter and a net curtain. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "cuisine-l-hetre-apres-neutre",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-l-hetre-avant",
-   "echantillons": [
-    "NE56",
-    "NE56",
-    "AA14"
-   ],
-   "composition": {
-    "bas": "NE56",
-    "hauts": "NE56",
-    "plan": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles, fridge, appliances, sink, taps, handles and every object. Change only these surfaces: the base unit and drawer fronts → material sample in image 2; the wall unit and tall column fronts → material sample in image 3; the worktop → material sample in image 4. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "An L-shaped kitchen in a 1970s apartment building in a French city, three-quarter view from the doorway. Base units, a drawer stack, wall units above. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in honey beech-effect laminate with brushed metal D handles; worktop in a grey speckled laminate; splashback of beige 20 cm wall tiles; beige floor tiles; a freestanding white fridge-freezer; a window with a roller shutter and a net curtain. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-l-hetre-apres-bois",
@@ -131,6 +214,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-l-hetre-avant",
    "echantillons": [
     "RM23",
@@ -156,6 +240,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-l-hetre-avant",
    "echantillons": [
     "NE83",
@@ -181,12 +266,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A U-shaped kitchen in a 1990s single-storey suburban house near Montpellier, view from the open side. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in a golden oak-effect laminate with dark brown bar handles; worktop in a dark green granite-effect laminate; splashback of beige tiles with a decorative frieze; terracotta-coloured floor tiles; a window over the sink looking onto a garden; a built-in oven under the hob. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A U-shaped kitchen in a 1990s single-storey suburban house near Montpellier, view from the open side. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in a golden oak-effect laminate with dark brown bar handles; worktop in a dark green granite-effect laminate; splashback of beige tiles with a decorative frieze; terracotta-coloured floor tiles; a window over the sink looking onto a garden; a built-in oven under the hob. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-u-pavillon-apres-neutre",
@@ -195,6 +281,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-u-pavillon-avant",
    "echantillons": [
     "NH26",
@@ -218,6 +305,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-u-pavillon-avant",
    "echantillons": [
     "AA17",
@@ -235,41 +323,19 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles and frieze, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-u-pavillon-apres-couleur",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-u-pavillon-avant",
-   "echantillons": [
-    "NF13",
-    "AG13"
-   ],
-   "composition": {
-    "facades": "NF13",
-    "plan": "AG13"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles and frieze, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-couloir-avant",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "generation",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A narrow galley kitchen with units on both sides in an old city-centre apartment with a high ceiling and a tall window at the far end, vertical format. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in white melamine with slightly worn edges and simple chrome handles; dark grey laminate worktops; white wall tiles; old patterned cement floor tiles. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A narrow galley kitchen with units on both sides in an old city-centre apartment with a high ceiling and a tall window at the far end, vertical format. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in white melamine with slightly worn edges and simple chrome handles; dark grey laminate worktops; white wall tiles; old patterned cement floor tiles. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-couloir-apres-neutre",
@@ -278,6 +344,7 @@
    "mode": "edition",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-couloir-avant",
    "echantillons": [
     "RM02",
@@ -295,35 +362,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles, floor tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-couloir-apres-bois",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "cuisine-couloir-avant",
-   "echantillons": [
-    "B4",
-    "NE31"
-   ],
-   "composition": {
-    "facades": "B4",
-    "plan": "NE31"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles, floor tiles, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-couloir-apres-couleur",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-couloir-avant",
    "echantillons": [
     "M6",
@@ -347,35 +392,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "An open-plan kitchen with a small peninsula bar in a 2010s new-build apartment, seen from the living room. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Base fronts in glossy taupe laminate with long horizontal stainless handles, glossy white wall units, black laminate worktop, integrated appliances, two simple bar stools, grey 60 cm floor tiles, a balcony window. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "cuisine-ouverte-bar-apres-neutre",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-ouverte-bar-avant",
-   "echantillons": [
-    "NE78",
-    "NE31"
-   ],
-   "composition": {
-    "facades": "NE78",
-    "plan": "NE31"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, bar stools, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "An open-plan kitchen with a small peninsula bar in a 2010s new-build apartment, seen from the living room. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Base fronts in glossy taupe laminate with long horizontal stainless handles, glossy white wall units, black laminate worktop, integrated appliances, two simple bar stools, grey 60 cm floor tiles, a balcony window. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-ouverte-bar-apres-bois",
@@ -384,6 +407,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-ouverte-bar-avant",
    "echantillons": [
     "AA14",
@@ -407,6 +431,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-ouverte-bar-avant",
    "echantillons": [
     "RM19",
@@ -430,12 +455,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A one-wall kitchen with wall units in a 1990s family apartment, three-quarter view, a small table with two chairs in the foreground. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in a cherry wood-effect laminate with curved brass-coloured handles; beige marbled laminate worktop; white tiled splashback with a few blue decorative tiles; an older white fridge. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A one-wall kitchen with wall units in a 1990s family apartment, three-quarter view, a small table with two chairs in the foreground. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in a cherry wood-effect laminate with curved brass-coloured handles; beige marbled laminate worktop; white tiled splashback with a few blue decorative tiles; an older white fridge. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-merisier-apres-neutre",
@@ -444,6 +470,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-merisier-avant",
    "echantillons": [
     "RM01",
@@ -461,35 +488,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles, table and chairs, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-merisier-apres-bois",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-merisier-avant",
-   "echantillons": [
-    "AG13",
-    "NH40"
-   ],
-   "composition": {
-    "facades": "AG13",
-    "plan": "NH40"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, splashback tiles, table and chairs, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-merisier-apres-couleur",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-merisier-avant",
    "echantillons": [
     "NF02",
@@ -513,35 +518,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "An L-shaped kitchen in a 2012 house, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in high-gloss anthracite grey laminate showing fingerprints and fine scratches, long stainless handles; white laminate worktop; a glass splashback; a stainless chimney hood; light grey floor tiles. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "cuisine-grise-brillante-apres-neutre",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-grise-brillante-avant",
-   "echantillons": [
-    "RM14",
-    "NE31"
-   ],
-   "composition": {
-    "facades": "RM14",
-    "plan": "NE31"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, glass splashback, hood, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "An L-shaped kitchen in a 2012 house, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in high-gloss anthracite grey laminate showing fingerprints and fine scratches, long stainless handles; white laminate worktop; a glass splashback; a stainless chimney hood; light grey floor tiles. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-grise-brillante-apres-bois",
@@ -550,6 +533,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-grise-brillante-avant",
    "echantillons": [
     "AL28",
@@ -573,6 +557,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-grise-brillante-avant",
    "echantillons": [
     "NF14",
@@ -590,101 +575,19 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, glass splashback, hood, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-location-avant",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "simulateur-exemple"
-   ],
-   "prompt": "A basic small L-shaped kitchen in a rented two-room flat, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Cheap white laminate fronts with plain chrome handles; light grey laminate worktop; white tiles; a freestanding cooker; a washing machine under the worktop; a PVC window. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "cuisine-location-apres-neutre",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-location-avant",
-   "echantillons": [
-    "NE79",
-    "AA14"
-   ],
-   "composition": {
-    "facades": "NE79",
-    "plan": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, tiles, cooker, washing machine, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "cuisine-location-apres-bois",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-location-avant",
-   "echantillons": [
-    "AA17",
-    "NE31"
-   ],
-   "composition": {
-    "facades": "AA17",
-    "plan": "NE31"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, tiles, cooker, washing machine, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "cuisine-location-apres-couleur",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-location-avant",
-   "echantillons": [
-    "NH05",
-    "AG13"
-   ],
-   "composition": {
-    "facades": "NH05",
-    "plan": "AG13"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, tiles, cooker, washing machine, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-maison-de-village-avant",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A kitchen in an old stone village house in the Hérault: thick walls, a small deep window, hexagonal terracotta tomette floor, exposed ceiling beams. One-wall kitchen. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in an orange pine-effect laminate with wooden knob handles; pine-effect laminate worktop; a freestanding cooker; a stone sink-side wall. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A kitchen in an old stone village house in the Hérault: thick walls, a small deep window, hexagonal terracotta tomette floor, exposed ceiling beams. One-wall kitchen. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in an orange pine-effect laminate with wooden knob handles; pine-effect laminate worktop; a freestanding cooker; a stone sink-side wall. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-maison-de-village-apres-neutre",
@@ -693,6 +596,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-maison-de-village-avant",
    "echantillons": [
     "M10",
@@ -710,35 +614,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, beams, tomette floor, cooker, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-maison-de-village-apres-bois",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-maison-de-village-avant",
-   "echantillons": [
-    "AL25",
-    "NG04"
-   ],
-   "composition": {
-    "facades": "AL25",
-    "plan": "NG04"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, beams, tomette floor, cooker, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the worktop → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-maison-de-village-apres-couleur",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-maison-de-village-avant",
    "echantillons": [
     "RM21",
@@ -762,12 +644,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A family kitchen in a 2000s suburban house with a simple island with a breakfast overhang, view from the dining area. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Perimeter and island fronts in glossy beige laminate with bar handles; brown speckled granite-effect laminate worktop; two pendant lights over the island; beige floor tiles; a French window onto the garden. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A family kitchen in a 2000s suburban house with a simple island with a breakfast overhang, view from the dining area. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Perimeter and island fronts in glossy beige laminate with bar handles; brown speckled granite-effect laminate worktop; two pendant lights over the island; beige floor tiles; a French window onto the garden. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "cuisine-ilot-maison-apres-neutre",
@@ -776,6 +659,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-ilot-maison-avant",
    "echantillons": [
     "NE56",
@@ -795,37 +679,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, pendant lights, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the island fronts and side panels → material sample in image 3; the worktop → material sample in image 4. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "cuisine-ilot-maison-apres-bois",
-   "serie": "quotidien",
-   "piece": "cuisine",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "cuisine-ilot-maison-avant",
-   "echantillons": [
-    "AA06",
-    "AA06",
-    "NE31"
-   ],
-   "composition": {
-    "facades": "AA06",
-    "ilot": "AA06",
-    "plan": "NE31"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, pendant lights, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the island fronts and side panels → material sample in image 3; the worktop → material sample in image 4. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "cuisine-ilot-maison-apres-couleur",
    "serie": "quotidien",
    "piece": "cuisine",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "cuisine-ilot-maison-avant",
    "echantillons": [
     "NH26",
@@ -851,33 +711,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A small apartment bathroom of about 4 m², three-quarter view. An 80 cm vanity unit with two doors. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Vanity fronts in glossy white laminate; white resin basin top; a mirror cabinet above; beige wall tiles up to the ceiling; a bathtub with a shower screen; a towel radiator. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "sdb-petit-meuble-vasque-apres-neutre",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "sdb-petit-meuble-vasque-avant",
-   "echantillons": [
-    "NH26"
-   ],
-   "composition": {
-    "meuble": "NH26"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, basin top, mirror cabinet, wall tiles, bathtub, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "A small apartment bathroom of about 4 m², three-quarter view. An 80 cm vanity unit with two doors. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Vanity fronts in glossy white laminate; white resin basin top; a mirror cabinet above; beige wall tiles up to the ceiling; a bathtub with a shower screen; a towel radiator. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "sdb-petit-meuble-vasque-apres-bois",
@@ -886,6 +726,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-petit-meuble-vasque-avant",
    "echantillons": [
     "AA14"
@@ -907,6 +748,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-petit-meuble-vasque-avant",
    "echantillons": [
     "NE83"
@@ -928,12 +770,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A family bathroom in a 2000s house, three-quarter view. A 120 cm vanity with four drawers. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Drawer fronts in a dark wenge-effect laminate with long chrome handles; white ceramic top with two basins; a large mirror with a light bar; grey-beige tiles; a walk-in shower. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 28 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A family bathroom in a 2000s house, three-quarter view. A 120 cm vanity with four drawers. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Drawer fronts in a dark wenge-effect laminate with long chrome handles; white ceramic top with two basins; a large mirror with a light bar; grey-beige tiles; a walk-in shower. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 28 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "sdb-double-vasque-wenge-apres-neutre",
@@ -942,6 +785,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-double-vasque-wenge-avant",
    "echantillons": [
     "RM26"
@@ -963,6 +807,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-double-vasque-wenge-avant",
    "echantillons": [
     "AG13"
@@ -978,116 +823,19 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, ceramic top, mirror, tiles, shower, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "sdb-double-vasque-wenge-apres-couleur",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "sdb-double-vasque-wenge-avant",
-   "echantillons": [
-    "RM25"
-   ],
-   "composition": {
-    "meuble": "RM25"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, ceramic top, mirror, tiles, shower, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "sdb-salle-d-eau-colonne-avant",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "simulateur-exemple"
-   ],
-   "prompt": "A small shower room with a vanity and a tall storage column, vertical format. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Fronts in beech-effect laminate with small chrome handles; white basin top; white tiles; a shower cubicle with a clear screen. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "sdb-salle-d-eau-colonne-apres-neutre",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "sdb-salle-d-eau-colonne-avant",
-   "echantillons": [
-    "RM27"
-   ],
-   "composition": {
-    "meuble": "RM27"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, basin top, tiles, shower, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "sdb-salle-d-eau-colonne-apres-bois",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "sdb-salle-d-eau-colonne-avant",
-   "echantillons": [
-    "AL14"
-   ],
-   "composition": {
-    "meuble": "AL14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, basin top, tiles, shower, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "sdb-salle-d-eau-colonne-apres-couleur",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "sdb-salle-d-eau-colonne-avant",
-   "echantillons": [
-    "RM23"
-   ],
-   "composition": {
-    "meuble": "RM23"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, basin top, tiles, shower, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "sdb-baignoire-tablier-avant",
    "serie": "quotidien",
    "piece": "salle-de-bain",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A bathroom with a built-in bathtub enclosed by a flat front panel, and a vanity unit next to it, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Bath panel in plain white; vanity fronts in maple-effect laminate; pale blue-grey wall tiles; a shower screen on the bathtub. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A bathroom with a built-in bathtub enclosed by a flat front panel, and a vanity unit next to it, three-quarter view. All cabinet doors and drawer fronts are flat panels without moulding or frame, with straight or slightly rounded edges, as in typical laminate furniture of that era. Bath panel in plain white; vanity fronts in maple-effect laminate; pale blue-grey wall tiles; a shower screen on the bathtub. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "sdb-baignoire-tablier-apres-neutre",
@@ -1096,6 +844,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-baignoire-tablier-avant",
    "echantillons": [
     "NH22",
@@ -1113,35 +862,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles, bathtub, shower screen, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2; the flat bath panel → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "sdb-baignoire-tablier-apres-bois",
-   "serie": "quotidien",
-   "piece": "salle-de-bain",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "sdb-baignoire-tablier-avant",
-   "echantillons": [
-    "AA17",
-    "AA17"
-   ],
-   "composition": {
-    "meuble": "AA17",
-    "tablier": "AA17"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, wall tiles, bathtub, shower screen, appliances, sink, taps, handles and every object. Change only these surfaces: the vanity unit fronts → material sample in image 2; the flat bath panel → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "sdb-baignoire-tablier-apres-couleur",
    "serie": "quotidien",
    "piece": "salle-de-bain",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "sdb-baignoire-tablier-avant",
    "echantillons": [
     "NF13",
@@ -1165,33 +892,13 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A bedroom in a 1990s apartment with a built-in wardrobe closed by three flat sliding doors in white melamine framed by thin aluminium profiles, straight-on three-quarter view; the corner of a bed with plain bedding; a laminate floor; a ceiling light. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "placard-coulissant-chambre-apres-neutre",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "placard-coulissant-chambre-avant",
-   "echantillons": [
-    "NE78"
-   ],
-   "composition": {
-    "portes": "NE78"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, aluminium profiles, bed, appliances, sink, taps, handles and every object. Change only these surfaces: the door panels → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "A bedroom in a 1990s apartment with a built-in wardrobe closed by three flat sliding doors in white melamine framed by thin aluminium profiles, straight-on three-quarter view; the corner of a bed with plain bedding; a laminate floor; a ceiling light. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "placard-coulissant-chambre-apres-bois",
@@ -1200,6 +907,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "placard-coulissant-chambre-avant",
    "echantillons": [
     "AA14"
@@ -1221,6 +929,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "placard-coulissant-chambre-avant",
    "echantillons": [
     "NH28"
@@ -1242,33 +951,13 @@
    "mode": "generation",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "An apartment hallway with three flat interior doors and a cupboard door, vertical format. The doors are flat panels painted white, slightly yellowed, with chrome lever handles; a laminate floor; a ceiling light; a small console. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "portes-couloir-apres-neutre",
-   "serie": "quotidien",
-   "piece": "portes",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "portes-couloir-avant",
-   "echantillons": [
-    "RM03"
-   ],
-   "composition": {
-    "portes": "RM03"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, door frames, handles, console, appliances, sink, taps, handles and every object. Change only these surfaces: the door panels → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "An apartment hallway with three flat interior doors and a cupboard door, vertical format. The doors are flat panels painted white, slightly yellowed, with chrome lever handles; a laminate floor; a ceiling light; a small console. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 20 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "portes-couloir-apres-bois",
@@ -1277,6 +966,7 @@
    "mode": "edition",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "source": "portes-couloir-avant",
    "echantillons": [
     "D1"
@@ -1298,6 +988,7 @@
    "mode": "edition",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 1,
    "source": "portes-couloir-avant",
    "echantillons": [
     "NF04"
@@ -1313,95 +1004,19 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, door frames, handles, console, appliances, sink, taps, handles and every object. Change only these surfaces: the door panels → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "porte-entree-avant",
-   "serie": "quotidien",
-   "piece": "portes",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "simulateur-exemple"
-   ],
-   "prompt": "Inside view of an apartment entrance door, vertical format. The door is a flat panel in a dated dark brown wood-effect with a chrome handle and a peephole; a coat rack, a small shoe cabinet and a mirror beside it; tiled floor. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "porte-entree-apres-neutre",
-   "serie": "quotidien",
-   "piece": "portes",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "porte-entree-avant",
-   "echantillons": [
-    "K7"
-   ],
-   "composition": {
-    "porte": "K7"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, frame, handle, peephole, coat rack, shoe cabinet, mirror, appliances, sink, taps, handles and every object. Change only these surfaces: the door panel (frame and handle unchanged) → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "porte-entree-apres-bois",
-   "serie": "quotidien",
-   "piece": "portes",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "porte-entree-avant",
-   "echantillons": [
-    "AA17"
-   ],
-   "composition": {
-    "porte": "AA17"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, frame, handle, peephole, coat rack, shoe cabinet, mirror, appliances, sink, taps, handles and every object. Change only these surfaces: the door panel (frame and handle unchanged) → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "porte-entree-apres-couleur",
-   "serie": "quotidien",
-   "piece": "portes",
-   "mode": "edition",
-   "format": "1024x1536",
-   "essais": 2,
-   "source": "porte-entree-avant",
-   "echantillons": [
-    "M9"
-   ],
-   "composition": {
-    "porte": "M9"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, frame, handle, peephole, coat rack, shoe cabinet, mirror, appliances, sink, taps, handles and every object. Change only these surfaces: the door panel (frame and handle unchanged) → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "buffet-salle-a-manger-avant",
    "serie": "quotidien",
    "piece": "meubles",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "A dining room in a family house: a long low sideboard with flat doors and drawers in a 1970s orange teak-effect finish with recessed finger pulls, straight-on view; a dining table and chairs in the foreground; a framed picture without text above; a window on the side. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 35 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
+   "prompt": "A dining room in a family house: a long low sideboard with flat doors and drawers in a 1970s orange teak-effect finish with recessed finger pulls, straight-on view; a dining table and chairs in the foreground; a framed picture without text above; a window on the side. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 35 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "buffet-salle-a-manger-apres-neutre",
@@ -1410,6 +1025,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "buffet-salle-a-manger-avant",
    "echantillons": [
     "NH29",
@@ -1427,35 +1043,13 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, picture, table, chairs, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the top surface → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "buffet-salle-a-manger-apres-bois",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "buffet-salle-a-manger-avant",
-   "echantillons": [
-    "AL25",
-    "AL25"
-   ],
-   "composition": {
-    "facades": "AL25",
-    "dessus": "AL25"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, picture, table, chairs, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the top surface → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "buffet-salle-a-manger-apres-couleur",
    "serie": "quotidien",
    "piece": "meubles",
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "buffet-salle-a-manger-avant",
    "echantillons": [
     "RM16",
@@ -1473,195 +1067,19 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, picture, table, chairs, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2; the top surface → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "meuble-tv-salon-avant",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "simulateur-exemple"
-   ],
-   "prompt": "An ordinary apartment living room, straight-on view of a low TV unit with flat drawers and two flat doors in glossy white laminate; a TV on top; a grey fabric sofa in the foreground; a simple rug; a window with white curtains. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 35 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "meuble-tv-salon-apres-neutre",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "meuble-tv-salon-avant",
-   "echantillons": [
-    "NE80"
-   ],
-   "composition": {
-    "facades": "NE80"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, TV, sofa, rug, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "meuble-tv-salon-apres-bois",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "meuble-tv-salon-avant",
-   "echantillons": [
-    "AA14"
-   ],
-   "composition": {
-    "facades": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, TV, sofa, rug, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "meuble-tv-salon-apres-couleur",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "meuble-tv-salon-avant",
-   "echantillons": [
-    "NF09"
-   ],
-   "composition": {
-    "facades": "NF09"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, TV, sofa, rug, appliances, sink, taps, handles and every object. Change only these surfaces: all cabinet door and drawer fronts → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "table-a-manger-avant",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "simulateur-exemple"
-   ],
-   "prompt": "A family kitchen-diner: a rectangular table with a worn white melamine top chipped on the edges, four simple chairs, three-quarter view from slightly above; a fruit bowl on the table; the kitchen visible in the background. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 35 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "table-a-manger-apres-neutre",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "table-a-manger-avant",
-   "echantillons": [
-    "NH47"
-   ],
-   "composition": {
-    "plateau": "NH47"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, chairs, fruit bowl, kitchen in the background, appliances, sink, taps, handles and every object. Change only these surfaces: the table top → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "table-a-manger-apres-bois",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "table-a-manger-avant",
-   "echantillons": [
-    "B8"
-   ],
-   "composition": {
-    "plateau": "B8"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, chairs, fruit bowl, kitchen in the background, appliances, sink, taps, handles and every object. Change only these surfaces: the table top → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "table-a-manger-apres-couleur",
-   "serie": "quotidien",
-   "piece": "meubles",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "table-a-manger-avant",
-   "echantillons": [
-    "NF97"
-   ],
-   "composition": {
-    "plateau": "NF97"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, chairs, fruit bowl, kitchen in the background, appliances, sink, taps, handles and every object. Change only these surfaces: the table top → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
    "nom": "pro-comptoir-accueil-avant",
    "serie": "quotidien",
    "piece": "pro",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "etiquette": "Ambiance",
    "usages": [
     "avant-apres",
     "simulateur-exemple"
    ],
-   "prompt": "The reception area of a small office or practice: a reception desk with a flat front panel in a dated beech-effect laminate and a grey laminate top, a few waiting chairs, a plant, plain walls with no signage or text. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "pro-comptoir-accueil-apres-neutre",
-   "serie": "quotidien",
-   "piece": "pro",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "pro-comptoir-accueil-avant",
-   "echantillons": [
-    "NE24",
-    "AA14"
-   ],
-   "composition": {
-    "facade": "NE24",
-    "dessus": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, chairs, plant, appliances, sink, taps, handles and every object. Change only these surfaces: the counter front panel → material sample in image 2; the top surface → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+   "prompt": "The reception area of a small office or practice: a reception desk with a flat front panel in a dated beech-effect laminate and a grey laminate top, a few waiting chairs, a plant, plain walls with no signage or text. Ultra-realistic photograph of a real, ordinary French home: a pleasant, well-kept, bright space with good proportions, the kind of apartment or house seen in a good real-estate listing in Montpellier, nothing luxurious. Taken by a professional interior photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Soft natural daylight from the existing window, gentle realistic shadows, true-to-life colours with a very light warm grade, crisp detail and real material textures. Standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy, genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant), nothing staged. Indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: luxury magazine styling, designer furniture, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
   },
   {
    "nom": "pro-comptoir-accueil-apres-bois",
@@ -1670,6 +1088,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "pro-comptoir-accueil-avant",
    "echantillons": [
     "D1",
@@ -1693,6 +1112,7 @@
    "mode": "edition",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 1,
    "source": "pro-comptoir-accueil-avant",
    "echantillons": [
     "RM20",
@@ -1710,255 +1130,100 @@
    "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, chairs, plant, appliances, sink, taps, handles and every object. Change only these surfaces: the counter front panel → material sample in image 2; the top surface → material sample in image 3. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
   },
   {
-   "nom": "pro-snack-comptoir-avant",
-   "serie": "quotidien",
-   "piece": "pro",
+   "nom": "detail-chant",
+   "serie": "enrichissement",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "etiquette": "Ambiance",
+   "priorite": 2,
+   "etiquette": "Illustration",
    "usages": [
-    "avant-apres",
-    "simulateur-exemple"
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
-   "prompt": "A small bakery-café counter: a long counter with a flat front panel in a dated red laminate, a stainless steel top, a glass display case with pastries, a coffee machine, tiled floor, no signage, no menu board, no text. Realistic photograph of an ordinary, lived-in French home, the kind of room most people actually live in. Taken by a real-estate photographer with a full-frame camera and a 24 mm lens at about 1.5 m height, perfectly straight verticals, natural perspective, no fisheye. Ordinary daylight from the existing window mixed with the room's own ceiling light, true-to-life neutral colours, no colour grading, everyday exposure. Average-sized room with standard-quality fittings: ordinary ceiling, white sockets and switches, a radiator, PVC or painted wooden windows with a roller-shutter box. Clean and tidy but genuinely lived-in: a few everyday objects (a kettle, a tea towel, a fruit bowl, a plant, a dish rack), nothing staged, nothing luxurious, no designer furniture. Photorealistic, indistinguishable from a real photograph. No people, no text, no readable labels, no logos, no brand names, no watermark. Avoid: magazine styling, dramatic light, CGI or 3D-render look, plastic-looking surfaces, oversaturated colours, HDR halos, bent or wavy lines, duplicated or floating handles, dirt or mess."
-  },
-  {
-   "nom": "pro-snack-comptoir-apres-neutre",
-   "serie": "quotidien",
-   "piece": "pro",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "pro-snack-comptoir-avant",
-   "echantillons": [
-    "NH54"
-   ],
+   "prompt": "Close-up of the corner of a kitchen drawer front covered with a sage green matte self-adhesive architectural film, wrapped tightly around the edge: perfectly smooth, no bubble, a crisp clean corner, next to a light oak wood-grain wall unit edge and a brushed stainless handle. Proof of a perfect finish. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation.",
    "composition": {
-    "facade": "NH54"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, stainless top, display case, coffee machine, appliances, sink, taps, handles and every object. Change only these surfaces: the counter front panel → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+    "facades": "RM20"
+   }
   },
   {
-   "nom": "pro-snack-comptoir-apres-bois",
-   "serie": "quotidien",
-   "piece": "pro",
-   "mode": "edition",
+   "nom": "pose-mains",
+   "serie": "enrichissement",
+   "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "source": "pro-snack-comptoir-avant",
-   "echantillons": [
-    "AA17"
+   "priorite": 2,
+   "etiquette": "Illustration",
+   "usages": [
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
+   "prompt": "In an ordinary home kitchen, the hands of an installer applying a light oak wood-grain self-adhesive film onto a flat cabinet door with a felt squeegee: the film is half applied, the backing paper peeling off, the old glossy white door still visible on the remaining part. Hands and forearms only. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation.",
    "composition": {
-    "facade": "AA17"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, stainless top, display case, coffee machine, appliances, sink, taps, handles and every object. Change only these surfaces: the counter front panel → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
+    "facades": "AG13"
+   }
   },
   {
-   "nom": "pro-snack-comptoir-apres-couleur",
-   "serie": "quotidien",
-   "piece": "pro",
-   "mode": "edition",
-   "format": "1536x1024",
-   "essais": 2,
-   "source": "pro-snack-comptoir-avant",
-   "echantillons": [
-    "O8"
-   ],
-   "composition": {
-    "facade": "O8"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "avant-apres",
-    "inspirations"
-   ],
-   "prompt": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, ceiling, window, stainless top, display case, coffee machine, appliances, sink, taps, handles and every object. Change only these surfaces: the counter front panel → material sample in image 2. Each new surface reproduces its material sample exactly (colour, pattern, grain direction and texture at a realistic scale), as a premium self-adhesive architectural film applied over the existing panels: perfectly smooth, tight wrapped edges, realistic sheen, following the existing light, shadows and reflections. Door and drawer shapes, gaps, edges and handles stay exactly the same. No other change."
-  },
-  {
-   "nom": "repere-cuisine-lineaire-blanche",
-   "serie": "reperes",
+   "nom": "echantillons-table",
+   "serie": "enrichissement",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "etiquette": "Exemple",
+   "priorite": 2,
+   "etiquette": "Illustration",
    "usages": [
-    "simulateur-exemple",
-    "guide-photo"
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchen: a one-wall run of base and wall units with flat glossy white laminate fronts and chrome bar handles, grey laminate worktop, white tiles, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
+   "prompt": "On the kitchen table of an ordinary French home, a fan of real material samples (light oak, walnut, white marble effect, sage green matte, terracotta stucco, black matte) laid out next to a closed tape measure and a pencil; the dated beech kitchen softly out of focus in the background. A home visit to choose the materials. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation."
   },
   {
-   "nom": "repere-cuisine-lineaire-hetre",
-   "serie": "reperes",
+   "nom": "mesure-visite",
+   "serie": "enrichissement",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "etiquette": "Exemple",
+   "priorite": 2,
+   "etiquette": "Illustration",
    "usages": [
-    "simulateur-exemple",
-    "guide-photo"
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchen: a one-wall run of base and wall units with flat honey beech-effect laminate fronts and metal D handles, speckled laminate worktop, beige tiles, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
+   "prompt": "The hands of a craftsman measuring the width of a dated cherry-effect kitchen cabinet door with a yellow tape measure, the numbers out of focus, in an ordinary kitchen. Hands only. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation."
   },
   {
-   "nom": "repere-cuisine-l-chene",
-   "serie": "reperes",
+   "nom": "usure-detail",
+   "serie": "enrichissement",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "etiquette": "Exemple",
+   "priorite": 2,
+   "etiquette": "Illustration",
    "usages": [
-    "simulateur-exemple",
-    "guide-photo"
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
-   "prompt": "Plain reference photo of an ordinary, typical French L-shaped kitchen, seen from the opposite corner so both runs are visible: flat golden oak-effect laminate fronts, granite-effect laminate worktop, beige tiles, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
+   "prompt": "Close-up of the corner of an old white laminate kitchen door that has turned yellowish with age: the edge strip slightly peeling, small chips and fine scratches, a dated plastic handle. The kind of wear that makes people want to renovate. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation."
   },
   {
-   "nom": "repere-cuisine-merisier",
-   "serie": "reperes",
+   "nom": "outils-pose",
+   "serie": "enrichissement",
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
-   "etiquette": "Exemple",
+   "priorite": 2,
+   "etiquette": "Illustration",
    "usages": [
-    "simulateur-exemple",
-    "guide-photo"
+    "comment-ca-marche",
+    "pages",
+    "blog"
    ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchen: a one-wall run with flat cherry wood-effect laminate fronts and curved brass handles, beige laminate worktop, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-cuisine-grise-brillante",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchen: a one-wall run with flat high-gloss anthracite fronts and long stainless handles, white worktop, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-kitchenette",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchenette 1.8 m long in a studio flat: flat white fronts, an under-counter fridge, two hob zones, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-cuisine-ilot",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French kitchen with a simple island in front of the main run: flat beige gloss fronts, brown granite-effect worktop, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-meuble-vasque",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French bathroom vanity unit with two drawers in flat white gloss laminate, white basin top, mirror above, beige tiles, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-placard-coulissant",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French built-in wardrobe with three flat white sliding doors framed by thin aluminium profiles, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-porte-interieure",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French flat interior door painted white with a chrome lever handle, in a hallway, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-buffet",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French low sideboard with flat doors and drawers in a dated teak-effect finish, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "repere-comptoir-pro",
-   "serie": "reperes",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "etiquette": "Exemple",
-   "usages": [
-    "simulateur-exemple",
-    "guide-photo"
-   ],
-   "prompt": "Plain reference photo of an ordinary, typical French shop or reception counter with a flat front panel in a dated beech-effect laminate, taken straight on, facing the units, from the middle of the room, camera at 1.4 m height with a 26 mm smartphone-like perspective, perfectly straight verticals. The whole element is visible from the floor to its top with a small margin around it, nothing hides the fronts, almost nothing on the worktop. Even, soft daylight, neutral true-to-life colours, no grading. Ordinary room, standard fittings, honest and simple. Photorealistic, like a good photo a homeowner would take to ask for a quote. No people, no text, no logos, no watermark. Avoid: decoration, styling, dramatic light, CGI look, distortion, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-studio-kitchenette",
-   "serie": "ambiances",
-   "piece": "cuisine",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "facades": "RM14",
-    "plan": "AA17"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "A refreshed one-wall kitchenette in a small studio flat: flat fronts in a warm mushroom brown-grey matte finish, worktop in a light natural oak wood-grain with a fine line structure, white square tiles, a small fridge, a sofa bed corner on the right. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
+   "prompt": "Flat lay seen from above on a wooden workbench: the tools to install self-adhesive architectural film — felt squeegee, snap-off cutter, heat gun, small rollers — with a roll of light oak wood-grain film and offcuts of sage green matte and white marble-effect film. No brand names. Ultra-realistic close-up photograph taken with a full-frame camera and a 90 mm macro lens, soft natural side daylight, shallow depth of field, true-to-life colours, real material textures, in an ordinary French home. No faces, no text, no readable numbers, no logos, no brand names, no watermark. Avoid: CGI look, plastic surfaces, oversaturation."
   },
   {
    "nom": "amb-cuisine-familiale",
@@ -1967,6 +1232,7 @@
    "mode": "generation",
    "format": "1536x1024",
    "essais": 2,
+   "priorite": 2,
    "composition": {
     "bas": "M9",
     "hauts": "AG13",
@@ -1980,64 +1246,13 @@
    "prompt": "An L-shaped family kitchen in a 1970s apartment, refreshed: base fronts in a very dark midnight blue matte finish, wall units in a pale light oak wood-grain, worktop in a white marble effect with soft grey veining, existing beige tiles, a white fridge with a child's drawing held by a magnet, a fruit bowl. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
   },
   {
-   "nom": "amb-cuisine-maison-village",
-   "serie": "ambiances",
-   "piece": "cuisine",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "facades": "RM21",
-    "plan": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "A kitchen in an old stone village house in the Hérault with tomette floor and beams, refreshed: fronts in a deep army green matte finish with wooden knobs, worktop in a warm mid-brown natural oak wood-grain, a freestanding cooker. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-salle-d-eau",
-   "serie": "ambiances",
-   "piece": "salle-de-bain",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "composition": {
-    "meuble": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "A small refreshed shower room, vertical format: vanity and tall column fronts in a warm mid-brown natural oak wood-grain, white basin top, white tiles, a clear shower screen, a folded towel. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-chambre-placard",
-   "serie": "ambiances",
-   "piece": "meubles",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "portes": "NH26"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "A bedroom in a 1990s apartment, refreshed: three sliding wardrobe doors in a soft greige matte finish within thin aluminium profiles, a bed with linen bedding, laminate floor. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
    "nom": "amb-couloir-portes",
    "serie": "ambiances",
    "piece": "portes",
    "mode": "generation",
    "format": "1024x1536",
    "essais": 2,
+   "priorite": 2,
    "composition": {
     "portes": "NF13"
    },
@@ -2049,85 +1264,13 @@
    "prompt": "An apartment hallway, refreshed, vertical format: three flat interior doors in a deep dark green matte finish with brushed brass lever handles, white walls and frames, laminate floor, a small console with keys bowl. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 20 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
   },
   {
-   "nom": "amb-salon-meuble-tv",
-   "serie": "ambiances",
-   "piece": "meubles",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "facades": "NH12",
-    "dessus": "AA17"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "An ordinary apartment living room: the existing low TV unit refreshed with fronts in a soft terracotta matte finish with a subtle mineral stucco texture and a top in a light oak wood-grain with a fine line structure, a TV, a grey sofa, a simple rug. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 35 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-cuisine-ouverte-bar",
-   "serie": "ambiances",
-   "piece": "cuisine",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "facades": "NE78",
-    "ilot": "D1",
-    "plan": "U50"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "An open-plan kitchen with a small peninsula in a 2010s new-build apartment, refreshed: fronts in a warm light taupe-grey matte finish, the peninsula side and back panel in a dark walnut wood-grain, worktop in a deep black marble effect with fine white veining, two bar stools, grey floor tiles. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-coin-bureau",
-   "serie": "ambiances",
-   "piece": "meubles",
-   "mode": "generation",
-   "format": "1536x1024",
-   "essais": 2,
-   "composition": {
-    "facades": "AG13",
-    "dessus": "K1"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "A home office corner in a spare bedroom: a simple desk and a low cabinet with flat fronts in a pale light oak wood-grain, the desk top in a deep matte black, a laptop, a desk lamp, a plant, a window. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 35 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
-   "nom": "amb-entree",
-   "serie": "ambiances",
-   "piece": "portes",
-   "mode": "generation",
-   "format": "1024x1536",
-   "essais": 2,
-   "composition": {
-    "porte": "M9",
-    "facades": "AA14"
-   },
-   "etiquette": "Ambiance",
-   "usages": [
-    "inspirations",
-    "pages"
-   ],
-   "prompt": "Inside view of an apartment entrance, vertical format: the entrance door refreshed in a very dark midnight blue matte finish, a small shoe cabinet with flat fronts in a warm natural oak wood-grain, a coat rack, a round mirror, tiled floor. Bright, honest interior photograph of a recently refreshed ordinary French apartment or house: attainable, mid-range, real proportions (a small to average room), standard appliances, ordinary ceiling, radiator, PVC or wooden windows, white sockets and switches. Taken with a full-frame camera and a 24 mm lens at eye level, straight verticals, natural daylight from the window, a light warm grade. Tidy and pleasant with a few everyday objects, nothing luxurious, no designer pieces. The renovated surfaces are flat panels covered with a premium self-adhesive architectural film: perfectly smooth, tight clean edges, realistic sheen and texture. Photorealistic, indistinguishable from a real photograph. No people, no text, no logos, no watermark. Avoid: luxury magazine look, oversized rooms, CGI look, plastic surfaces, oversaturation, bent lines, duplicated or floating handles."
-  },
-  {
    "nom": "picto-porte-interieure",
    "serie": "pictos",
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2141,7 +1284,8 @@
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2155,7 +1299,8 @@
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2164,40 +1309,13 @@
    "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a single kitchen worktop slab resting on two small blocks, the top in a white marble effect with fine grey veining"
   },
   {
-   "nom": "picto-credence",
-   "serie": "pictos",
-   "mode": "generation",
-   "format": "1024x1024",
-   "fond": "transparent",
-   "essais": 3,
-   "etiquette": "Illustration",
-   "usages": [
-    "simulateur",
-    "choix-projet"
-   ],
-   "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a short piece of kitchen wall with a splashback panel above a worktop, the splashback in soft terracotta"
-  },
-  {
-   "nom": "picto-table",
-   "serie": "pictos",
-   "mode": "generation",
-   "format": "1024x1024",
-   "fond": "transparent",
-   "essais": 3,
-   "etiquette": "Illustration",
-   "usages": [
-    "simulateur",
-    "choix-projet"
-   ],
-   "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a small rectangular dining table on four legs, the table top in light oak"
-  },
-  {
    "nom": "picto-commode",
    "serie": "pictos",
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2211,7 +1329,8 @@
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2220,26 +1339,13 @@
    "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a small wall-hung bathroom vanity with one wide drawer and a white basin, the drawer front in light oak"
   },
   {
-   "nom": "picto-meuble-tv",
-   "serie": "pictos",
-   "mode": "generation",
-   "format": "1024x1024",
-   "fond": "transparent",
-   "essais": 3,
-   "etiquette": "Illustration",
-   "usages": [
-    "simulateur",
-    "choix-projet"
-   ],
-   "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a long low TV unit with two flat drawers, the fronts in soft sage green, the top in light oak"
-  },
-  {
    "nom": "picto-porte-entree",
    "serie": "pictos",
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2253,7 +1359,8 @@
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
@@ -2267,27 +1374,14 @@
    "mode": "generation",
    "format": "1024x1024",
    "fond": "transparent",
-   "essais": 3,
+   "essais": 2,
+   "priorite": 3,
    "etiquette": "Illustration",
    "usages": [
     "simulateur",
     "choix-projet"
    ],
    "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a tiny galley kitchen with two facing runs of flat units, fronts in soft sage green, worktops in light oak"
-  },
-  {
-   "nom": "picto-plan-kitchenette",
-   "serie": "pictos",
-   "mode": "generation",
-   "format": "1024x1024",
-   "fond": "transparent",
-   "essais": 3,
-   "etiquette": "Illustration",
-   "usages": [
-    "simulateur",
-    "choix-projet"
-   ],
-   "prompt": "A single miniature 3D object in the style of a handmade architectural scale model: matte off-white ceramic and fine light oak, with one soft accent colour, rounded softened edges, three-quarter view from slightly above, soft diffuse studio light from the top left, a subtle soft contact shadow, centred with a generous empty margin around it. Transparent background. Calm, premium and consistent with a series of pictograms. No text, no people, no logo. Subject: a tiny one-wall kitchenette with three base units and two wall units, fronts in light oak, a small hob"
   }
  ]
 }

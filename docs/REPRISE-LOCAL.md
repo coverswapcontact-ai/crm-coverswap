@@ -152,3 +152,27 @@ Bibliothèque seulement : rien ne va sur le site.
   fixé par l'énoncé : **ARRÊT avant toute génération**, décision de Lucas. Rien n'a été dépensé pour la série 2.
 - Pour lancer ensuite (lanceur `scratchpad/m19/lancer.cjs`, clé du site, base d'essai) :
   `--liste scripts/photos-serie-2.json --phase 1`, choix des avants (`--planches --phase 1`), puis `--phase 2 --choix …`.
+
+### Série 2, version 2 : budget strict de 10 $ (01/10/2026)
+
+Liste remplacée par la v2 de Lucas (70 images, 140 essais, champ `priorite`, plafond 10 $) ; direction artistique v2
+copiée dans `coverswap/docs/direction-artistique-serie-2.md`. `--priorite N` filtre une priorité.
+- `--estimer` : 8,29 $ (≤ 9 $) → lancé sans attendre, dans l'ordre 1 (18 avants × 2 puis 36 après × 2), 2 (6 photos
+  utiles + 2 ambiances), 3 (8 pictos). **Coût réel relu dans GenerationImage : 8,10 $ pour 140 appels, aucun échec**
+  (serie-2 : 68 générations, 3,07 $ ; serie-2-edition : 72 éditions, 5,03 $). Aucune nouvelle tentative : aucun
+  avant raté.
+- Bibliothèque : `node --import tsx scripts/bibliotheque-serie-2.ts` (aucun appel payant). Logique dans
+  `src/lib/simulations/bibliotheque.ts`, zones et choix à l'œil dans `scripts/zones-serie-2.json`. Sorties :
+  `~/coverswap-photos/serie-2/bibliotheque.json` (70 lignes) et `planches/` (une par pièce, `serie-enrichissement`,
+  `serie-ambiances`, `serie-pictos` avec les 9 pictos de la série 1 en référence). Les `*-avant.jpg` du même dossier
+  sont les planches de choix des avants (`--planches --phase 1`).
+- Mesure des teintes : `exposition: false` par défaut (dominance seule) : les blancs de ces scènes (caissons de volet,
+  frigos) sont à l'ombre, la normalisation complète surexposait tout. Contrepartie : une surface claire à l'ombre
+  lit plus foncée. Exceptions : `amb-cuisine-familiale` et `pose-mains`, où le blanc (frigo, porte) est en pleine
+  lumière → `exposition: true` (le plan Statuary White passait sinon pour un gris). Zones déplacées sur des parties
+  éclairées : dessus du comptoir pro (le chant à l'ombre faisait réétiqueter le marbre blanc en gris), hauts de la
+  cuisine ouverte (la colonne à l'ombre tirait l'olive vers le brun).
+- Calage : seuil 15 sur `ecartContours` ; 4 après au-dessus (blanche-jaunie couleur, u-pavillon neutre, portes-couloir
+  bois et couleur) vérifiés en fondu à 50 % : rien n'a bougé, l'écart vient du changement de teinte → `calages_vus`.
+- Défaut des prompts, signalé sans les réécrire : le style commun des avants demande « a kettle, a tea towel, a fruit
+  bowl » → bouilloires en salle de bain, chambre, couloir et accueil pro. Essais choisis pour le limiter.

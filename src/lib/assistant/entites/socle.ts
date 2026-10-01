@@ -96,6 +96,8 @@ export type DefinitionModification = {
   texte?: Record<string, (valeur: unknown) => string>;
   /** Champs que l'annulation ne sait pas remettre, avec la raison. */
   irreversibles?: Record<string, string>;
+  /** Ce que l'annulation remet mais dont un effet de bord reste (à dire à Lucas à l'aperçu et au résultat de « annuler_modification »). */
+  annulationPartielle?: (changements: Changement[]) => string | null;
   /** Une phrase ajoutée à l'aperçu (effet de bord à connaître). */
   note?: (apres: Valeurs, avant: Valeurs, cible: Resolu) => Promise<string | null> | string | null;
 };

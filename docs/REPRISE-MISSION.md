@@ -5328,7 +5328,8 @@ Maquettes de la partie B rangées dans `docs/maquettes/` (premier commit).
 
 - [x] A Tâches — livrée (voir la section « Partie A » plus bas) ; PR vers `main`.
 - [x] B Analytique — livrée (section « Partie B » plus bas) ; PR vers `main` ; site : branche à fusionner après le CRM.
-- [ ] C Contrôle total par le MCP — audit écrit (`docs/MCP-COUVERTURE.md` : 439 actions, 136 manquantes) ; implémentation à faire.
+- [x] C Contrôle total par le MCP — livrée (section « Partie C » plus bas) ; PR vers `main`.
+- [ ] Mission 18 — à démarrer (énoncé : `docs/MISSION-18.md`).
 
 ## Décisions (partie A)
 - Noms : `Tache` et `/api/taches` restent la file des tâches de fond ; nouveau modèle `TacheAFaire`, code
@@ -5453,3 +5454,26 @@ la synchro ; puis fusionner la branche du site (Vercel) et vérifier que les vis
 redémarrage coupe une visite en deux) ; pays par le fuseau ; dépense : une seule source par jour (synchro, sinon
 prorata marqué estimation, sinon saisie) ; comparaison arrêtée au dernier jour livré pour Search Console et la fiche ;
 les outils de travail de `/synthese` (exports, mois figés) et de `/finances` (URSSAF, seuils) sont dans l'onglet Argent.
+
+## Mission 17, partie C — Contrôle total par le MCP (01/10, terminée)
+
+- Audit (`docs/MCP-COUVERTURE.md`, tenu à jour) : 439 actions de l'interface, dont 37 sans objet (tel:, presse-papiers,
+  OAuth du navigateur…) ; **402 couvertes sur 402, 0 manquante**, chaque ligne avec son test.
+- **Outils : 80 au début de la mission (`ef81342ae27b`), 84 après A et B, 53 après C (`040d6c7aa53c`)** :
+  génériques `modifier` (21 entités) / `creer` (13) / `archiver` / `restaurer` (versions comprises) /
+  `annuler_modification` (toutes les entités tracées : `ModificationAssistant`) — toujours par la fonction de service
+  de l'écran ; fichiers `lien_depot` (page `/depot/<jeton>`, 30 min, usage unique, photos compressées sur le téléphone,
+  dépôt libre « À ranger »), `ajouter_fichier` (lien de dépôt, URL publique ou Drive avec protection contre les
+  adresses internes, base64, pièce de mail, fichier conservé), `ranger_fichier`, `voir_fichiers` ; `lister` (toutes les
+  listes des écrans), `etat_crm` (tout ce qui est ouvert en un appel, ou une partie : santé, paramètres, outils…),
+  `publier`, `traiter_mail`, `geste_espace`, `doublon`, `anonymiser_client`, `agir_systeme` ; `lire_fiche` et
+  `chercher` complets (archivés compris). Les 45 outils retirés et leur remplaçant : `src/lib/assistant/retraits.ts`
+  (les consignes en base reçoivent une section de correspondance, la version de Lucas n'est pas réécrite).
+- Règles gardées : phrase de Lucas dans `commande`, aperçu puis jeton (consommé de façon atomique, lié à ce que
+  l'aperçu a montré) pour toute action sensible (63 cas testés), « via Claude » dans l'historique, rien d'effacé hors
+  `supprimer` (inchangé).
+- Relecture adverse : 13 défauts corrigés (jeton, régressions de sensibilité, écriture brute, annulations partielles,
+  données personnelles de la page de dépôt, lecture avant vérification). Tests : 1 060 → 1 239. Lint, build.
+- Décision à valider par Lucas : « pas intéressé » dans `noter_appel` demande désormais une confirmation (comme les
+  autres passages en Perdu).
+- **Reconnecter le connecteur Claude** (la liste des outils a changé).

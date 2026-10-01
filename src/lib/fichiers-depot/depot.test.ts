@@ -233,4 +233,53 @@ describe("route publique POST /api/depot/[jeton]", () => {
     const inconnu = await appeler("AbCdEf0123456789AbCdEf0123456789AbCdEf01234", JSON.stringify({ tailles: [10] }), { "content-type": "application/json" });
     assert.equal(inconnu.status, 404);
   });
+
+  test("relecture adverse : un envoi sans clé valide est refusé AVANT de lire son corps (pas de 9 Mo lus pour rien)", async () => {
+    const lien = await jetons.creerLienDepot({ cible: { entite: "DOSSIER", id: ids.dossier }, type: "PHOTO_AVANT", creePar: "lucas@coverswap.fr" });
+    await jetons.ouvrirDepot(lien.jeton, { tailles: [JPEG.length] });
+    let lus = 0;
+    const corps = new ReadableStream<Uint8Array>({
+      pull(controleur) {
+        lus += 1;
+        if (lus > 20) controleur.close();
+        else controleur.enqueue(new Uint8Array(1024 * 1024));
+      },
+    });
+    const envoi = await route.POST(new NextRequest(new Request(`http://localhost:3001/api/depot/${lien.jeton}`, { method: "POST", body: corps, duplex: "half", headers: { "x-forwarded-for": "203.0.113.10", "content-type": "application/octet-stream", "x-cle-depot": "une-cle-inventee" } } as RequestInit)), { params: Promise.resolve({ jeton: lien.jeton }) });
+    assert.equal(envoi.status, 410, "clé fausse : « déjà servi », pas « trop lourd »");
+    assert.match(((await envoi.json()) as { error: string }).error, /déjà servi/);
+    assert.ok(lus <= 2, `corps lu avant la vérification (${lus} Mo)`);
+  });
+});
+
+describe("relecture adverse : la page publique et un envoi qui échoue", () => {
+  test("la page ne montre que le strict nécessaire de la cible : prénom et initiale, ni objet, ni montant", async () => {
+    const dossier = await jetons.creerLienDepot({ cible: { entite: "DOSSIER", id: ids.dossier }, type: "PHOTO_AVANT", creePar: "lucas@coverswap.fr" });
+    const etat = await jetons.etatLien(dossier.jeton);
+    assert.equal(etat.etat, "valide");
+    if (etat.etat !== "valide") return;
+    assert.match(etat.titre, /Hélène G\./);
+    assert.doesNotMatch(etat.titre, /Garcia|Recouvrement|façades/);
+    assert.equal(dossier.cible?.nom, "Hélène Garcia (Recouvrement façades de cuisine)", "l'assistant, lui, garde le nom complet");
+    const lead = await jetons.etatLien((await jetons.creerLienDepot({ cible: { entite: "LEAD", id: ids.lead }, type: null, creePar: "lucas@coverswap.fr" })).jeton);
+    assert.ok(lead.etat === "valide" && /Paul R\./.test(lead.titre) && !/Roux/.test(lead.titre), JSON.stringify(lead));
+    const depense = await jetons.etatLien((await jetons.creerLienDepot({ cible: { entite: "DEPENSE", id: ids.depense }, type: "JUSTIFICATIF", creePar: "lucas@coverswap.fr" })).jeton);
+    assert.ok(depense.etat === "valide" && /Leroy Merlin/.test(depense.titre) && !/84|€/.test(depense.titre), JSON.stringify(depense));
+    assert.equal(jetons.nomAbrege("  "), null);
+  });
+
+  test("un fichier que le service refuse après réservation (cible archivée entre-temps) rend sa place : le dépôt n'est pas clos à vide", async () => {
+    const d = await prisma.dossier.create({ data: { clientNom: "Ines Archivee", clientAdresse: "2 rue des Essais", clientCp: "34000", clientVille: "Montpellier", clientTelephone: "0600000093", objet: "Cuisine", source: "ENTRANT" } });
+    const lien = await jetons.creerLienDepot({ cible: { entite: "DOSSIER", id: d.id }, type: "PHOTO_AVANT", creePar: "lucas@coverswap.fr" });
+    const { cle } = await jetons.ouvrirDepot(lien.jeton, { tailles: [JPEG.length] });
+    await prisma.dossier.update({ where: { id: d.id }, data: { archiveLe: new Date() } });
+    await assert.rejects(jetons.recevoirFichier(lien.jeton, cle, { contenu: JPEG, nom: "a.jpg" }), refus(/archivé/));
+    const ligne = await prisma.jetonDepot.findUniqueOrThrow({ where: { id: lien.id } });
+    assert.equal(ligne.fichiersRecus, 0, "la place est rendue");
+    assert.equal(ligne.octetsRecus, 0);
+    assert.equal(ligne.termineLe, null, "le dépôt reste ouvert");
+    await prisma.dossier.update({ where: { id: d.id }, data: { archiveLe: null } });
+    const recu = await jetons.recevoirFichier(lien.jeton, cle, { contenu: JPEG, nom: "a.jpg" });
+    assert.match(recu.destination, /photo avant/);
+  });
 });

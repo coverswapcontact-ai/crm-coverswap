@@ -230,6 +230,22 @@ export async function rattacherALaMain(messageId: string, clientId: string, doss
   return { dossierId: cible };
 }
 
+/**
+ * Rattacher à la main un fil à un LEAD sans fiche client (geste « Rattacher » de l'assistant, ex-« rattacher_mail ») :
+ * le fil entier rejoint le lead, classé client, remis « à trier » ; la main des dossiers où il était tracé est relue.
+ */
+export async function rattacherAuLead(messageId: string, leadId: string): Promise<{ messages: number }> {
+  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { id: true, canal: true, filCanal: true, dossierId: true } });
+  if (!message) throw new ErreurMetier("Mail introuvable.", 404);
+  const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true } });
+  if (!lead) throw new ErreurMetier("Lead introuvable.", 404);
+  const fil = message.filCanal ? await prisma.message.findMany({ where: { canal: message.canal, filCanal: message.filCanal }, select: { id: true, dossierId: true } }) : [{ id: message.id, dossierId: message.dossierId }];
+  const { count } = await prisma.message.updateMany({ where: { id: { in: fil.map((m) => m.id) } }, data: { leadId, classe: "CLIENT", classeMotif: "Rattaché au lead à la main.", classePar: "LUCAS", statut: "A_TRIER", rangeLe: null, rangePar: null } });
+  await recalculerMainDesMessages(fil.map((m) => m.id));
+  for (const ancien of new Set(fil.map((m) => m.dossierId))) if (ancien) await recalculerMain(ancien);
+  return { messages: count };
+}
+
 export function enregistrerTachesRattachement(enregistrer: (type: string, traitement: { libelle: string; acteur: string; delaiMaxMs?: number; executer: (charge: unknown) => Promise<unknown> }) => void): void {
   enregistrer(TYPE_TACHE_PIECES_DOSSIER, {
     libelle: "Photos et plans reçus par mail, rangés dans le dossier du client (et dans Drive)",

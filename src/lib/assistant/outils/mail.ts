@@ -5,7 +5,7 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { appliquerProposition } from "@/lib/mail/appliquer";
 import { detailMail } from "@/lib/mail/detail";
 import { CHAMPS_MAJ, CIBLES_MAJ, TYPE_MAJ_DEPUIS_MAIL, champDe, estSensibleMaj, schemaMaj, verifierValeur } from "@/lib/mail/propositions-maj";
-import { rattacherALaMain } from "@/lib/mail/rattachement";
+import { rattacherALaMain, rattacherAuLead } from "@/lib/mail/rattachement";
 import { INTENTIONS, LIBELLES_INTENTION, classerIntention, deposerBrouillon, derangerMail, mailsNonClasses, rangerMail, rechercherMails, resumerFil } from "@/lib/mail/v2";
 import { annulerProposition, proposer, reessayerExecution, rejeterProposition, validerEnLot, vueProposition } from "@/lib/validation/service";
 import { lireObjet } from "@/lib/a-faire/json";
@@ -356,10 +356,8 @@ export const outilRattacherMail = definirOutil({
       return { texte: `Fil rattaché à ${r.ids.nom}${fait.dossierId ? ", tracé dans son dossier" : ""} ; son adresse est sur la fiche : ses prochains mails seront reconnus seuls.`, donnees: { clientId, dossierId: fait.dossierId }, liens: [lien("Fiche client", `/clients/${clientId}`), ...(fait.dossierId ? [lien("Dossier", `/dossiers?dossier=${fait.dossierId}`)] : [])] };
     }
     if (r.ids.leadId) {
-      const message = await prisma.message.findUnique({ where: { id: e.messageId }, select: { id: true, canal: true, filCanal: true } });
-      if (!message) throw new ErreurMetier("Mail introuvable.", 404);
-      const fil = message.filCanal ? { canal: message.canal, filCanal: message.filCanal } : { id: message.id };
-      const { count } = await prisma.message.updateMany({ where: fil, data: { leadId: r.ids.leadId, classe: "CLIENT", classeMotif: "Rattaché au lead à la main.", classePar: "LUCAS", statut: "A_TRIER", rangeLe: null, rangePar: null } });
+      // Par la fonction de service (main relue), jamais par une écriture brute.
+      const { messages: count } = await rattacherAuLead(e.messageId, r.ids.leadId);
       return { texte: `${pluriel(count, "message rattaché", "messages rattachés")} au lead ${r.ids.nom}.`, donnees: { leadId: r.ids.leadId }, liens: [lien("Lead", `/leads?lead=${r.ids.leadId}`)] };
     }
     throw new ErreurMetier(`${r.ids.nom} n'a ni fiche client ni lead.`, 409);

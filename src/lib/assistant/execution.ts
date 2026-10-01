@@ -45,7 +45,18 @@ export async function ouvrirSession(entree: { jetonId: string | null; clientNom:
   return { id: session.id, utilisateur: entree.utilisateur };
 }
 
-const empreinteDe = (outil: string, entree: unknown) => createHash("sha256").update(`${outil}\n${JSON.stringify(entree)}`).digest("hex");
+/** L'empreinte que porte un jeton : l'outil, l'entrée validée et, quand l'outil en déclare une, la portée résolue à l'aperçu. */
+const empreinteDe = (outil: string, entree: unknown, portee?: unknown) => createHash("sha256").update(`${outil}\n${JSON.stringify(entree)}${portee === undefined ? "" : `\n${JSON.stringify(portee)}`}`).digest("hex");
+
+/** Ce que l'entrée désigne vraiment (outil à portée implicite) ; une erreur de résolution donne null, l'exécution la redira. */
+async function porteeDe<E>(definition: DefinitionOutil<E>, entree: E): Promise<unknown> {
+  if (!definition.portee) return undefined;
+  try {
+    return (await definition.portee(entree)) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function tronquer(valeur: unknown): string {
   const json = JSON.stringify(valeur ?? {});
@@ -107,7 +118,7 @@ export async function executerOutil<E extends Record<string, unknown>>(definitio
       const apercu = definition.apercu ? await definition.apercu(entree, contexte) : `Je vais exécuter « ${definition.titre} » avec ces paramètres : ${JSON.stringify(entree)}.`;
       const jeton = randomBytes(9).toString("base64url");
       const expireLe = new Date(maintenant.getTime() + CONFIRMATION_MINUTES * 60_000);
-      await prisma.confirmationAssistant.create({ data: { id: jeton, outil: definition.nom, empreinte: empreinteDe(definition.nom, entree), apercu: apercu.slice(0, 4000), expireLe, sessionId: session.id } });
+      await prisma.confirmationAssistant.create({ data: { id: jeton, outil: definition.nom, empreinte: empreinteDe(definition.nom, entree, await porteeDe(definition, entree)), apercu: apercu.slice(0, 4000), expireLe, sessionId: session.id } });
       const texte = `${apercu}\n\nRien n'a été fait. Si Lucas confirme, rappelle « ${definition.nom} » avec les mêmes paramètres et confirmation = « ${jeton} » (valable ${CONFIRMATION_MINUTES} minutes).`;
       await journaliser(session, definition.nom, definition.niveau, entree, commande, "APERCU", apercu, null, debut, ecriture);
       return { texte, confirmation: { jeton, expireLe: expireLe.toISOString() } };
@@ -117,8 +128,14 @@ export async function executerOutil<E extends Record<string, unknown>>(definitio
       if (!ligne || ligne.outil !== definition.nom) throw new ErreurMetier("Jeton de confirmation inconnu pour cet outil : refais l'aperçu.", 400);
       if (ligne.utiliseLe) throw new ErreurMetier("Ce jeton de confirmation a déjà servi : refais l'aperçu.", 409);
       if (ligne.expireLe < maintenant) throw new ErreurMetier("Jeton de confirmation expiré (15 minutes) : refais l'aperçu.", 409);
-      if (ligne.empreinte !== empreinteDe(definition.nom, entree)) throw new ErreurMetier("Les paramètres ont changé depuis l'aperçu : refais l'aperçu avec les nouveaux.", 409);
-      await prisma.confirmationAssistant.update({ where: { id: ligne.id }, data: { utiliseLe: maintenant } });
+      if (ligne.empreinte !== empreinteDe(definition.nom, entree)) {
+        // Mêmes paramètres, mais ce qu'ils désignent a changé depuis l'aperçu (la « dernière » modification, les brouillons d'un dossier…).
+        const portee = await porteeDe(definition, entree);
+        if (portee === undefined || ligne.empreinte !== empreinteDe(definition.nom, entree, portee)) throw new ErreurMetier(portee === undefined ? "Les paramètres ont changé depuis l'aperçu : refais l'aperçu avec les nouveaux." : "Ce que l'action vise a changé depuis l'aperçu (ce n'est plus ce que Lucas a confirmé) : refais l'aperçu.", 409);
+      }
+      // Consommation atomique : deux appels simultanés avec le même jeton, un seul passe.
+      const { count } = await prisma.confirmationAssistant.updateMany({ where: { id: ligne.id, utiliseLe: null }, data: { utiliseLe: maintenant } });
+      if (count !== 1) throw new ErreurMetier("Ce jeton de confirmation a déjà servi : refais l'aperçu.", 409);
     }
     if (ecriture && (await ecrituresDeLHeure(maintenant)) >= PLAFOND_ECRITURES_PAR_HEURE) await refuserAuPlafond(maintenant);
 

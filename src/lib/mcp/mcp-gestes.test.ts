@@ -182,8 +182,9 @@ describe("« geste_espace » : les gestes du panneau Espace, même état que l'�
     const permanent = (id: string) => prisma.espacePermanent.findUniqueOrThrow({ where: { id } });
     assert.equal((await permanent(o.permanentId)).projetsAccordes, (await permanent(e.permanentId)).projetsAccordes);
     await route("@/app/api/espaces/[id]/route", "POST", `/api/espaces/${e.permanentId}`, { action: "regenerer", mail: false }, { id: e.permanentId });
-    const lien = await executer(gestes.outilGesteEspace, { geste: "NOUVEAU_LIEN", dossierId: o.dossierId, mail: false });
-    assert.ok(!lien.confirmation, "sans mail : pas de confirmation");
+    // Relecture adverse : même sans mail, l'ancien lien meurt (le client perd l'accès) — sensible, comme l'ex-« renouveler_lien ».
+    const { apercu: lien } = await confirmer(gestes.outilGesteEspace, { geste: "NOUVEAU_LIEN", dossierId: o.dossierId, mail: false }, /rien ne lui sera envoyé : sans le nouveau lien, il n'a plus accès à son espace/);
+    assert.ok(lien.confirmation, "sans mail : confirmation quand même");
     assert.equal((await permanent(o.permanentId)).version, (await permanent(e.permanentId)).version);
     for (const x of [e, o]) await prisma.messageEspace.create({ data: { dossierId: x.dossierId, espaceId: x.espaceId, auteur: "CLIENT", source: "MESSAGE", texte: "Bonjour, une question." } });
     await route("@/app/api/dossiers/[id]/espace/route", "POST", `/api/dossiers/${e.dossierId}/espace`, { geste: "repondre", texte: "Bonjour, je vous rappelle." }, { id: e.dossierId }).catch(() => undefined);
@@ -201,7 +202,10 @@ describe("« geste_espace » : les gestes du panneau Espace, même état que l'�
     assert.ok((await permanent(o.permanentId)).revoqueLe && (await permanent(e.permanentId)).revoqueLe);
     const types = async (dossierId: string) => (await prisma.dossierEvenement.findMany({ where: { dossierId }, select: { type: true } })).map((x) => x.type).sort();
     assert.deepEqual(await types(o.dossierId), await types(e.dossierId));
-    await executer(gestes.outilGesteEspace, { geste: "REACTIVER", dossierId: o.dossierId });
+    const reactiver = await executer(gestes.outilGesteEspace, { geste: "REACTIVER", dossierId: o.dossierId });
+    assert.ok(reactiver.confirmation, "REACTIVER émet un nouveau lien : confirmation");
+    assert.ok((await permanent(o.permanentId)).revoqueLe, "sans jeton, rien n'est fait : le lien reste désactivé");
+    await confirmer(gestes.outilGesteEspace, { geste: "REACTIVER", dossierId: o.dossierId }, /nouveau lien d'espace pour Oriane Outil/);
     await route("@/app/api/espaces/[id]/route", "POST", `/api/espaces/${e.permanentId}`, { action: "regenerer", mail: false }, { id: e.permanentId });
     assert.equal((await permanent(o.permanentId)).revoqueLe, null);
     assert.equal((await permanent(o.permanentId)).version, (await permanent(e.permanentId)).version);

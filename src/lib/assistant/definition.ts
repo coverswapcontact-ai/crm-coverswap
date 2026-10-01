@@ -70,6 +70,11 @@ export type DefinitionOutil<E = Record<string, unknown>> = {
   masse?: (entree: E) => number;
   /** Sensible selon l'entrée (passer un dossier à « Signé », « Facturé », « Encaissé » ou « Perdu » ; valider une proposition qui touche un montant). */
   sensible?: (entree: E) => boolean | Promise<boolean>;
+  /**
+   * Ce que l'entrée désigne vraiment, quand elle ne le fixe pas (la « dernière » modification, les brouillons d'un
+   * dossier) : résolu à l'aperçu, lié au jeton, revérifié à la confirmation — ce que Lucas confirme est ce qui est fait.
+   */
+  portee?: (entree: E) => Promise<unknown>;
   /** Action sensible : la phrase exacte de ce qui va être fait, rendue avant toute exécution. */
   apercu?: (entree: E, contexte: ContexteOutil) => Promise<string>;
   executer: (entree: E, contexte: ContexteOutil) => Promise<ResultatOutil>;

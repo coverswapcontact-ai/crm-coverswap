@@ -98,6 +98,8 @@ export const outilPublier = definirOutil({
   niveau: "REVERSIBLE",
   schema: schemaPublier,
   masse: (e) => e.ids?.length ?? 0,
+  // Sans ids, « les brouillons du dossier » se résolvent à l'aperçu : le jeton ne vaut que pour ceux-là.
+  portee: async (e) => (e.ids?.length ? null : [...(await idsVises(e)).ids].sort()),
   sensible: (e) => !e.retirer,
   apercu: async (entree) => {
     const vises = await idsVises(entree);
@@ -284,7 +286,8 @@ const schemaGesteEspace = schemaCible.extend({
 });
 type EntreeGesteEspace = z.output<typeof schemaGesteEspace>;
 
-const GESTES_SENSIBLES_ESPACE: readonly string[] = ["DESACTIVER", "REINITIALISER", "RETIRER_ACCORD"];
+// NOUVEAU_LIEN et REACTIVER émettent un nouveau lien : l'ancien meurt, le client perd l'accès qu'il a (comme l'ex-« renouveler_lien », toujours sensible).
+const GESTES_SENSIBLES_ESPACE: readonly string[] = ["DESACTIVER", "REACTIVER", "NOUVEAU_LIEN", "REINITIALISER", "RETIRER_ACCORD"];
 
 async function espaceCible(e: EntreeGesteEspace) {
   const r = await cibler(e);
@@ -308,10 +311,10 @@ export const outilGesteEspace = definirOutil({
   nom: "geste_espace",
   titre: "Les gestes de Lucas sur l'espace client",
   description:
-    "Tous les gestes du panneau Espace (dossier) et de l'écran Espaces, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » : sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
+    "Tous les gestes du panneau Espace (dossier) et de l'écran Espaces, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail ; sensible) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » ; sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
   niveau: "REVERSIBLE",
   schema: schemaGesteEspace,
-  sensible: (e) => GESTES_SENSIBLES_ESPACE.includes(e.geste) || (e.geste === "NOUVEAU_LIEN" && e.mail !== false) || (e.geste === "ACCORDER_SIMULATIONS" && (e.nombre ?? 3) > 3),
+  sensible: (e) => GESTES_SENSIBLES_ESPACE.includes(e.geste) || (e.geste === "ACCORDER_SIMULATIONS" && (e.nombre ?? 3) > 3),
   apercu: async (e) => {
     const c = await espaceCible(e);
     if ("ambigu" in c) return c.ambigu!.texte;
@@ -319,8 +322,11 @@ export const outilGesteEspace = definirOutil({
     switch (e.geste) {
       case "DESACTIVER":
         return `Je vais désactiver le lien de l'espace de ${nom} (tous ses projets) : il lira « lien désactivé ». Rien n'est effacé ; un nouveau lien le rouvre.${e.motif ? ` Motif : ${e.motif}.` : ""}`;
-      case "NOUVEAU_LIEN":
-        return `Je vais émettre un nouveau lien d'espace pour ${nom} (l'ancien ne fonctionnera plus)${e.mail !== false ? ` et le lui envoyer par mail${e.texte ? ` avec la phrase : « ${e.texte} »` : ""}` : ""}.`;
+      case "REACTIVER":
+      case "NOUVEAU_LIEN": {
+        const mail = e.geste === "NOUVEAU_LIEN" && e.mail !== false;
+        return `Je vais émettre un nouveau lien d'espace pour ${nom} (l'ancien ne fonctionnera plus)${mail ? ` et le lui envoyer par mail${e.texte ? ` avec la phrase : « ${e.texte} »` : ""}` : " ; rien ne lui sera envoyé : sans le nouveau lien, il n'a plus accès à son espace"}.`;
+      }
       case "ACCORDER_SIMULATIONS": {
         const nombre = e.nombre ?? 3;
         return `Je vais accorder ${nombre} simulations de plus à ${nom} (≈ ${(nombre * 0.2).toFixed(2).replace(".", ",")} $ d'images si elles sont toutes faites).`;
@@ -543,12 +549,12 @@ export const outilAgirSysteme = definirOutil({
   nom: "agir_systeme",
   titre: "Les gestes techniques (tâches de fond, cohérence, synchronisations, Meta, banc, accès)",
   description:
-    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous : sensible, des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible). Les états se lisent par « etat_crm ».",
+    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous ; toujours sensible : des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible). Les états se lisent par « etat_crm ».",
   niveau: "REVERSIBLE",
   schema: schemaAgirSysteme,
   sensible: async (e) => {
-    if (["ANNULER_TACHE", "LANCER_BANC", "REVOQUER_ACCES", "DECONNECTER_GOOGLE"].includes(e.action)) return true;
-    if (e.action === "REJOUER_META") return !e.leadgen_id;
+    // REJOUER_META, même pour un seul lead : son SMS d'accusé peut partir chez le client (envoi au client → sensible).
+    if (["ANNULER_TACHE", "LANCER_BANC", "REVOQUER_ACCES", "DECONNECTER_GOOGLE", "REJOUER_META"].includes(e.action)) return true;
     if (e.action === "CORRIGER_INCOHERENCE" && e.cle) {
       const i = (await controlerCoherence()).incoherences.find((x) => x.cle === e.cle);
       return Boolean(i && CORRECTIONS_SENSIBLES.has(i.code));
@@ -566,6 +572,7 @@ export const outilAgirSysteme = definirOutil({
         return i ? `Je vais corriger l'incohérence « ${i.constat} » (${i.client}) : ${i.correction ?? "à régler à la main (refusé)"}.` : "Cette incohérence n'existe plus : rien ne sera fait.";
       }
       case "REJOUER_META": {
+        if (e.leadgen_id) return `Je vais rejouer le lead Meta ${e.leadgen_id} (reçu mais pas dans le CRM) : il entre dans le CRM, et son SMS d'accusé de réception peut partir chez le client.`;
         const sante = await santeMeta({ interrogerMeta: false });
         return `Je vais rejouer ${pluriel(sante.echecs.leads.length, "lead Meta en attente", "leads Meta en attente")} (reçus mais pas dans le CRM). Un SMS d'accusé de réception peut partir pour chacun.`;
       }

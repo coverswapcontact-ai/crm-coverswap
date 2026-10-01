@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
-import { enregistrerFichierRecu, lireCible, verifierCompatibilite, verifierFichier, type CibleFichier, type ResultatEnregistrement } from "./enregistrement";
+import { enregistrerFichierRecu, lireCible, verifierCompatibilite, verifierFichier, type CibleFichier, type CibleLue, type ResultatEnregistrement } from "./enregistrement";
 import { fichiersMaxPour, libelleDepot, MINUTES_ENVOI, MINUTES_VALIDITE_LIEN, OCTETS_MAX_DEPOT, OCTETS_MAX_FICHIER, type EntiteCible, type TypeFichier } from "./types";
 
 /**
@@ -30,6 +30,35 @@ export const ACTEUR_DEPOT = "EXTERNE:lien-depot";
 const empreinteDe = (secret: string) => createHash("sha256").update(secret).digest("hex");
 const FORMAT_JETON = /^[A-Za-z0-9_-]{32,64}$/;
 
+/** « Hélène Garcia » → « Hélène G. » : le prénom, puis l'initiale de chaque autre mot. */
+export function nomAbrege(nom: string | null | undefined): string | null {
+  const mots = (nom ?? "").trim().split(/\s+/).filter(Boolean);
+  if (mots.length === 0) return null;
+  return [mots[0], ...mots.slice(1).map((m) => `${m.charAt(0).toUpperCase()}.`)].join(" ");
+}
+
+/**
+ * Ce que la page publique montre de la cible : le strict nécessaire pour que Lucas reconnaisse où vont ses fichiers,
+ * sans donnée personnelle complète (quiconque tient le lien voit la page) — un prénom et une initiale, jamais l'objet
+ * du projet, une adresse ni un montant ; le fournisseur d'une dépense ; le titre (déjà public) d'une réalisation.
+ */
+export async function nomPublicDeLaCible(cible: CibleLue): Promise<string | null> {
+  switch (cible.entite) {
+    case "DOSSIER":
+      return nomAbrege((await prisma.dossier.findUnique({ where: { id: cible.id }, select: { clientNom: true } }))?.clientNom);
+    case "LEAD": {
+      const l = await prisma.lead.findUnique({ where: { id: cible.id }, select: { prenom: true, nom: true } });
+      return nomAbrege(l ? `${l.prenom} ${l.nom}` : null);
+    }
+    case "CLIENT":
+      return nomAbrege((await prisma.client.findUnique({ where: { id: cible.id }, select: { nom: true } }))?.nom);
+    case "DEPENSE":
+      return (await prisma.depense.findUnique({ where: { id: cible.id }, select: { fournisseur: true } }))?.fournisseur ?? null;
+    case "PUBLICATION":
+      return cible.nom;
+  }
+}
+
 export type LienDepotCree = { id: string; jeton: string; chemin: string; expireLe: Date; cible: { entite: EntiteCible; id: string; nom: string } | null; type: TypeFichier | null; fichiersMax: number };
 
 /** Crée un lien de dépôt (cible absente : dépôt libre). La cible est vérifiée tout de suite. */
@@ -43,7 +72,7 @@ export async function creerLienDepot(entree: { cible: CibleFichier | null; type:
   const jeton = randomBytes(32).toString("base64url");
   const expireLe = new Date(maintenant.getTime() + MINUTES_VALIDITE_LIEN * 60_000);
   const ligne = await prisma.jetonDepot.create({
-    data: { empreinte: empreinteDe(jeton), cibleEntite: lue?.entite ?? null, cibleId: lue?.id ?? null, cibleNom: lue?.nom ?? null, type: entree.type, creePar: entree.creePar.slice(0, 200), expireLe },
+    data: { empreinte: empreinteDe(jeton), cibleEntite: lue?.entite ?? null, cibleId: lue?.id ?? null, cibleNom: lue ? await nomPublicDeLaCible(lue) : null, type: entree.type, creePar: entree.creePar.slice(0, 200), expireLe },
   });
   return { id: ligne.id, jeton, chemin: `/depot/${jeton}`, expireLe, cible: lue ? { entite: lue.entite, id: lue.id, nom: lue.nom } : null, type: entree.type, fichiersMax: fichiersMaxPour(lue?.entite ?? null) };
 }
@@ -107,12 +136,21 @@ export async function ouvrirDepot(jeton: string, annonce: { tailles: number[] },
  * Un fichier de la soumission : vérifié (octets magiques, taille), compté dans ce qui a été annoncé, puis enregistré
  * sur la cible du lien. Une clé fausse, un envoi fini ou expiré : refusé, rien n'est écrit.
  */
-export async function recevoirFichier(jeton: string, cle: string, fichier: { contenu: Buffer; nom: string | null }, maintenant: Date = new Date()): Promise<ResultatEnregistrement> {
+/**
+ * L'envoi est-il ouvert pour cette clé ? Vérifié par la route AVANT de lire le corps (jusqu'à 9 Mo) : sans jeton ni clé
+ * valides, rien n'est lu ni écrit. Revérifié par `recevoirFichier`.
+ */
+export async function verifierEnvoiOuvert(jeton: string, cle: string, maintenant: Date = new Date()) {
   const ligne = await ligneDuJeton(jeton);
   if (!ligne || ligne.archiveLe) throw new ErreurMetier(MESSAGES_LIEN.inconnu, 404);
   if (!ligne.utiliseLe || !ligne.cleEnvoi || !cle || ligne.cleEnvoi !== empreinteDe(cle)) throw new ErreurMetier(ligne.utiliseLe ? MESSAGES_LIEN.utilise : "Envoi non ouvert : soumets le formulaire de dépôt.", ligne.utiliseLe ? 410 : 400);
   if (ligne.termineLe) throw new ErreurMetier("Ce dépôt est terminé : tous les fichiers annoncés sont arrivés.", 410);
   if (!ligne.envoiExpireLe || ligne.envoiExpireLe <= maintenant) throw new ErreurMetier("Le temps d'envoi est écoulé (20 minutes) : demande un nouveau lien.", 410);
+  return ligne;
+}
+
+export async function recevoirFichier(jeton: string, cle: string, fichier: { contenu: Buffer; nom: string | null }, maintenant: Date = new Date()): Promise<ResultatEnregistrement> {
+  const ligne = await verifierEnvoiOuvert(jeton, cle, maintenant);
 
   // Vérifié AVANT d'être compté : un fichier refusé (format, taille) n'entame rien.
   const verifie = await verifierFichier(fichier);
@@ -130,6 +168,10 @@ export async function recevoirFichier(jeton: string, cle: string, fichier: { con
     if (count !== 1) throw new ErreurMetier("Ce fichier dépasse ce que le formulaire a annoncé : rien de plus n'est accepté.", 413);
     try {
       return await enregistrerFichierRecu(ligne.cibleEntite && ligne.cibleId ? { entite: entite!, id: ligne.cibleId } : null, type, verifie, { voie: "LIEN_DEPOT", jetonId: ligne.id, origine: `lien de dépôt ${ligne.id}` });
+    } catch (erreur) {
+      // Rien d'enregistré (cible archivée entre-temps, refus du service) : la place réservée est rendue, le dépôt n'est pas clos à vide.
+      await prisma.jetonDepot.updateMany({ where: { id: ligne.id, termineLe: null }, data: { fichiersRecus: { decrement: 1 }, octetsRecus: { decrement: taille } } });
+      throw erreur;
     } finally {
       const apres = await prisma.jetonDepot.findUnique({ where: { id: ligne.id }, select: { fichiersRecus: true, fichiersAttendus: true } });
       if (apres && apres.fichiersRecus >= apres.fichiersAttendus) await prisma.jetonDepot.updateMany({ where: { id: ligne.id, termineLe: null }, data: { termineLe: new Date() } });

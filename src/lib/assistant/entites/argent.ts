@@ -53,6 +53,8 @@ export const DOCUMENT: DefinitionEntite = {
     sensible: (apres, avant) => CHAMPS_REPRIS.some((c) => c in apres && JSON.stringify(apres[c]) !== JSON.stringify(avant[c])) || (apres.visibleEspace === true && avant.visibleEspace !== true),
     pretraiter: (e, contexte) => datesDictees(e, ["dateEmission"], contexte.maintenant),
     note: (apres, avant) => (apres.visibleEspace === true && avant.visibleEspace !== true ? "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas." : null),
+    // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste, et l'étape ne revient pas d'elle-même.
+    annulationPartielle: (changements) => (changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true) ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant." : null),
     lire: async (cible) => {
       const d = await prisma.document.findUniqueOrThrow({ where: { id: cible.id } });
       return { dateEmission: jour(d.dateEmission), montant: d.totalHt, objet: d.objet, statut: d.statut, acomptePct: d.acomptePct, libelleVariante: d.libelleVariante, visibleEspace: d.visibleEspace };
@@ -281,16 +283,32 @@ export const SOUS_PARTIE: DefinitionEntite = {
       return { prixUnitaire: l.prixUnitaire, unite: l.unite, designation: l.designation, presetId: l.explicite ? l.presetId : null };
     },
     appliquer: async (cible, valeurs) => {
-      if ("presetId" in valeurs) await attribuerTarif(cible.id, (valeurs.presetId as string | null) ?? null);
-      const { prixUnitaire, unite, designation } = valeurs as { prixUnitaire?: number | null; unite?: (typeof UNITES)[number]; designation?: string };
-      if (prixUnitaire === undefined && unite === undefined && designation === undefined) return;
-      if (typeof prixUnitaire === "number") {
-        await modifierTarifSousPartie(cible.id, { prixUnitaire, unite, designation });
+      const { prixUnitaire, unite, designation } = valeurs as { prixUnitaire?: number | null; unite?: (typeof UNITES)[number] | null; designation?: string | null };
+      if ("presetId" in valeurs) {
+        const avant = await ligneDe(cible.id);
+        await attribuerTarif(cible.id, (valeurs.presetId as string | null) ?? null);
+        // Retour à « aucun tarif » (l'annulation d'un prix posé sur une sous-partie qui n'en avait pas) : le tarif créé pour
+        // elle seule est retiré, sinon il resterait actif et la mots-clés le rattacheraient encore (annulation de façade).
+        if (valeurs.presetId === null && prixUnitaire === null && avant.explicite && avant.presetId) {
+          const partage = (await tarifsDesPrestations()).some((l) => l.cle !== cible.id && l.presetId === avant.presetId && l.explicite);
+          if (!partage) {
+            await archiverPreset(avant.presetId);
+            return [`Le tarif « ${avant.designation} » qui chiffrait cette sous-partie est retiré (archivé ; « restaurer » TARIF le remet).`];
+          }
+        }
+      }
+      if (prixUnitaire === undefined && !unite && !designation) return;
+      // Un prix, sans changer l'attribution : le geste de l'écran (crée le tarif s'il manque, l'attribue).
+      if (typeof prixUnitaire === "number" && !("presetId" in valeurs)) {
+        await modifierTarifSousPartie(cible.id, { prixUnitaire, unite: unite ?? undefined, designation: designation ?? undefined });
         return;
       }
       const l = await ligneDe(cible.id);
-      if (!l.presetId) throw new ErreurMetier("Cette sous-partie n'a pas de tarif : donne son prix unitaire pour en créer un.", 409);
-      await modifierPreset(l.presetId, { ...(prixUnitaire === null ? { prixUnitaire: null } : {}), ...(unite ? { unite } : {}), ...(designation ? { designation } : {}) });
+      if (!l.presetId) {
+        if (prixUnitaire === null || prixUnitaire === undefined) return;
+        throw new ErreurMetier("Cette sous-partie n'a pas de tarif : donne son prix unitaire pour en créer un.", 409);
+      }
+      await modifierPreset(l.presetId, { ...(prixUnitaire !== undefined ? { prixUnitaire } : {}), ...(unite ? { unite } : {}), ...(designation ? { designation } : {}) });
     },
   },
 };

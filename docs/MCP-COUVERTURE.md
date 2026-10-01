@@ -170,8 +170,8 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | FA2 | « Intéressé » (dossier et espace ouverts, SMS proposé) | POST /api/commercial/appels {INTERESSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
 | FA3 | « À rappeler » : raccourcis, Autre…, Sans date | … {A_RAPPELER, rappelLe} | R | noter_appel (rappel) | couvert | `mission-14-partie-8.test.ts` › « un rappel de dossier noté au jour seul se dit par son jour (« jeudi »)… » |
 | FA4 | « Pas de réponse » et rappel (demain 18 h par défaut) | … {PAS_DE_REPONSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
-| FA5 | « Classer sans suite — plus de réponse » (3ᵉ tentative) | … {PAS_INTERESSE, SANS_REPONSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
-| FA6 | « Pas intéressé » + motif (+ précision) | … {PAS_INTERESSE, motifPerte} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA5 | « Classer sans suite — plus de réponse » (3ᵉ tentative) | … {PAS_INTERESSE, SANS_REPONSE} | S-perte (relecture adverse) | noter_appel | couvert | `mcp-relecture-c.test.ts` › « sans jeton rien n'est fait ; sans motif, pas d'aperçu… » ; `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA6 | « Pas intéressé » + motif (+ précision) | … {PAS_INTERESSE, motifPerte} | S-perte (relecture adverse) | noter_appel | couvert | `mcp-relecture-c.test.ts` › « sans jeton rien n'est fait ; sans motif, pas d'aperçu… » ; `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | FA7 | « Plus tard » | — | — | — | sans objet | — |
 | FA8 | SMS proposé → « Copier » | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | FA9 | Carte « Suivant » | GET /api/leads/suivant | L | lister LEADS (A_RAPPELER / A_APPELER) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » |
@@ -485,7 +485,7 @@ de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
 | A16 | Chaîne Meta › « Refaire sans notification » | POST /api/meta/essai {notifier:false} | R | agir_systeme (ESSAI_META, notifier: false) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
 | A17 | Chaîne Meta › « Tester la notification » | POST /api/meta/notification | R (vers Lucas) | agir_systeme (TESTER_NOTIFICATION) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
 | A18 | Chaîne Meta › « Tout rejouer » | POST /api/meta/rejouer {} | R masse (peut envoyer un SMS d'accusé : S-client) | agir_systeme (REJOUER_META, tous) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
-| A19 | Chaîne Meta › « Rejouer » un `leadgen_id` | POST /api/meta/rejouer {leadgenId} | R | agir_systeme (REJOUER_META, leadgen_id) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| A19 | Chaîne Meta › « Rejouer » un `leadgen_id` | POST /api/meta/rejouer {leadgenId} | S-client (un SMS d'accusé peut partir ; relecture adverse) | agir_systeme (REJOUER_META, leadgen_id) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
 | A20 | Chaîne Meta › « Détail » (dépli) | — | — | — | sans objet | — |
 | A21 | Vue d'ensemble › courbe : choix de la série (leads, devis) | local | — | analytique (données) | sans objet | — |
 | A22 | Site › « Entonnoir du simulateur » : les étapes, les abandons, le choix de la source | local, données de l'écran | L | analytique (site : `simulateur` dans le JSON de l'écran) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
@@ -1164,7 +1164,7 @@ par expéditeur, ou plus de 3 fils.
 |---|---|---|---|
 | OUVRIR (sans rien noter) | `espace/liens.ts › ouvrirEspace` / `ouvrirEspaceDuContact` | R | DP28, LF8 |
 | DESACTIVER | `espace/gestion.ts › desactiverLien` ; pour un dossier : `espace/liens.ts › revoquerEspace` | S (coupe l'accès du client) | DP33, E10 |
-| NOUVEAU_LIEN (mail, texte) | `espace/gestion.ts › regenererLien` (ex-`renouveler_lien`) | S si mail | DP34, E9 |
+| NOUVEAU_LIEN (mail, texte), REACTIVER (sans mail) | `espace/gestion.ts › regenererLien` (ex-`renouveler_lien`) | S toujours (l'ancien lien meurt : le client perd l'accès, avec ou sans mail — comme l'ex-`renouveler_lien`) | DP34, E9 |
 | ACCORDER_SIMULATIONS (nombre) | `espace/creation.ts › accorderSimulations` (ex-`accorder_simulations`) | R ; S au-delà de 3 | — |
 | ACCORDER_PROJET (1 à 5) | `espace/projets.ts › accorderProjets` | R | E6, C22 |
 | VALIDER_PROJET, DEVALIDER_PROJET | `gesteDeLucas` | R | DP37, DP38 |
@@ -1210,7 +1210,7 @@ par expéditeur, ou plus de 3 fils.
 | RELEVER_MAILS | `messages/taches.ts › demanderReleve` | R | PA10 |
 | ESSAI_META (notifier) | `meta/essai.ts › lancerEssaiMeta` | R (crée un contact ESSAI) | A15, A16 |
 | TESTER_NOTIFICATION (canal : alertes ou appareil) | `alertes/canaux.ts › alerter` ; `alertes/pushweb.ts › envoyerPushWeb` | R | A17, L28 |
-| REJOUER_META (leadgen_id, ou tous) | `meta/leads.ts › rejouerLeadMeta` | R ; S pour « tous » (des SMS d'accusé peuvent partir) | A18, A19 |
+| REJOUER_META (leadgen_id, ou tous) | `meta/leads.ts › rejouerLeadMeta` | S toujours (un SMS d'accusé peut partir, même pour un seul lead) | A18, A19 |
 | LANCER_BANC (cas, variante) | `simulateur/banc/banc.ts › lancerBanc` (aperçu = `estimerCampagne`) | S-€ | S16 |
 | REVOQUER_ACCES (application, jeton, tout) | `oauth/serveur.ts › revoquerClient` / `revoquerJeton` / `revoquerTout` | S-sécu (« tout » coupe aussi la session qui l'appelle : l'aperçu le dit) | PC3–PC5 |
 | DECONNECTER_GOOGLE | `google/connexion.ts › deconnecterGoogle` | S-sécu | PA6 |
@@ -1337,3 +1337,33 @@ par expéditeur, ou plus de 3 fils.
   cas sensible n'y a pas son entrée), et des jumeaux ajoutés dans `mcp-gestes.test.ts` (projet, simulation et demande
   de l'espace ; Drive, relevé, relecture de la boîte, essai Meta) et `mcp-lister-etat.test.ts` (inactifs masqués).
 
+### 4.18 Relecture adverse (01/10/2026)
+
+Défauts confirmés après l'intégration du catalogue, corrigés, chacun avec son test (`src/lib/mcp/mcp-relecture-c.test.ts`,
+`src/lib/mcp/mcp-sensibles.test.ts`, `src/lib/mcp/mcp-gestes.test.ts`, `src/lib/fichiers-depot/depot.test.ts`). Le
+catalogue ne change pas : **53 outils**, mêmes paramètres, empreinte **`040d6c7aa53c`**.
+
+- **Jeton de confirmation.** La consommation est atomique (`updateMany … utiliseLe: null`) : deux confirmations
+  simultanées avec le même jeton n'exécutent plus deux fois. Un outil à portée implicite déclare `portee` : ce que
+  l'aperçu a résolu entre dans l'empreinte du jeton et est revérifié à la confirmation — `annuler_modification` sans
+  `modification_id` (« la dernière ») et `publier` sans `ids` (« les brouillons du dossier ») refusent si la cible a
+  changé entre l'aperçu et le « oui » de Lucas.
+- **Sensibilités manquantes.** `geste_espace` NOUVEAU_LIEN sans mail et REACTIVER (l'ancien lien meurt ; régression par
+  rapport à l'ex-`renouveler_lien`, toujours sensible) ; `agir_systeme` REJOUER_META d'un seul lead (SMS d'accusé) ;
+  `noter_appel` PAS_INTERESSE (perte : même règle que `changer_etape` PERDU, `modifier` LEAD PERDU et la tâche
+  « client perdu ») ; `archiver` / `restaurer` d'un TARIF ou d'une REGLE_EXPEDITEUR (DP72 S-suppr, PM8 S-param, que le
+  code ne suivait pas).
+- **Écriture brute.** `traiter_mail` RATTACHER à un lead passe par `mail/rattachement.ts › rattacherAuLead` (la main
+  des dossiers où le fil était tracé est relue), au lieu d'un `message.updateMany` dans l'outil.
+- **Annulation de façade.** `annuler_modification` d'un prix posé sur une SOUS_PARTIE sans tarif retire (archive) le
+  tarif que la modification avait créé ; avant, il restait actif et rattaché par mots-clés. Défaire « rendre un devis
+  visible » dit ce qui reste (l'envoi au journal, l'étape « Devis envoyé ») : `annulationPartielle` du registre.
+- **Lien de dépôt.** La page publique ne montre plus que le strict nécessaire de la cible (« Hélène G. », le
+  fournisseur d'une dépense, le titre public d'une réalisation ; ni objet du projet, ni montant) ; la route vérifie le
+  jeton et la clé d'envoi AVANT de lire le corps (9 Mo) ; un fichier refusé par le service après réservation rend sa
+  place (le dépôt n'est plus clos à vide).
+- **Choix du bon outil.** Les instructions du serveur ne disent plus « « supprimer » archive » (faux depuis la
+  corbeille de la mission 11) : une demande de suppression devient `archiver`, `supprimer` seulement pour effacer ;
+  `modifier` renvoie vers `changer_etape`, `noter_appel` et `geste_espace` ; `etat_crm` sans partie renvoie vers
+  `point_du_jour` et `taches`. Le prompt « point du matin » et les instructions ne citent que des outils du catalogue
+  (testé).

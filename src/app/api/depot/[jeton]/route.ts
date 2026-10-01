@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
 import { analyser, reponseErreur } from "@/lib/commun/api";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { ouvrirDepot, recevoirFichier } from "@/lib/fichiers-depot/jetons";
+import { ouvrirDepot, recevoirFichier, verifierEnvoiOuvert } from "@/lib/fichiers-depot/jetons";
 import { FICHIERS_MAX_DEPOT, OCTETS_MAX_FICHIER } from "@/lib/fichiers-depot/types";
 import { adresseIp, autoriserAppel } from "@/lib/oauth/limite";
 
@@ -71,6 +71,8 @@ export async function POST(requete: NextRequest, { params }: { params: Promise<{
     } catch {
       nom = null;
     }
+    // Jeton et clé vérifiés AVANT de lire le corps : un envoi sans lien valide ne fait lire aucun octet.
+    await verifierEnvoiOuvert(jeton, cle);
     const contenu = await corpsBorne(requete, OCTETS_MAX_FICHIER);
     const recu = await recevoirFichier(jeton, cle, { contenu, nom });
     return NextResponse.json({ ok: true, nom: recu.nom, destination: recu.destination, avertissements: recu.avertissements }, { headers: ENTETES });

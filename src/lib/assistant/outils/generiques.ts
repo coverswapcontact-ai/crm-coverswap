@@ -186,7 +186,7 @@ function champsDe(code: Entite): string[] {
 }
 
 const descriptionModifier = () =>
-  `Change des champs d'UNE entité du CRM par la même fonction que l'écran (mêmes règles : étapes, relances, main, historique). Seuls les champs donnés changent ; null efface un champ effaçable ; les dates se donnent en AAAA-MM-JJ ou comme dictées. Chaque modification est tracée avant → après ; « annuler_modification » la défait. Sensible par cas (le client, l'argent, un paramètre) : aperçu précis (« le montant estimé passe de 5 000 € à 6 200 € »), puis confirmation par jeton. Plusieurs candidats → demande lequel. Entités (désignation : champs) :\n${ENTITES_MODIFIABLES.map((code) => `- ${code} (${REGISTRE_ENTITES[code].designation}) : ${champsDe(code).join(", ")}`).join("\n")}\nRaccourcis : DOSSIER teinte {meuble, teinte} (une teinte par meuble), points_masques / points_reaffiches, passage {evenement_id, survenu_le} ; LEAD rappel_le null = sans date, statut PERDU exige motif_perte ; DEPENSE dossier_id rattache une dépense EXISTANTE à un chantier ; COORDONNEE principale: true ; MODELE_SMS defaut: true (texte de départ) ; CONSIGNES / POSITIONNEMENT mode + section + contenu, ou defaut: true ; GUIDE_STYLE tirer_des_mails: true (coût d'IA) ; PARAMETRE id = la clé + valeur, ou saisies [{cle, valeur, valable_du, source}] (lot).`;
+  `Change des champs d'UNE entité du CRM par la même fonction que l'écran (mêmes règles : étapes, relances, main, historique). Seuls les champs donnés changent ; null efface un champ effaçable ; les dates se donnent en AAAA-MM-JJ ou comme dictées. Chaque modification est tracée avant → après ; « annuler_modification » la défait. Sensible par cas (le client, l'argent, un paramètre) : aperçu précis (« le montant estimé passe de 5 000 € à 6 200 € »), puis confirmation par jeton. Plusieurs candidats → demande lequel. Pas ici : l'étape d'un dossier (« changer_etape »), un appel avec son issue (« noter_appel »), un geste sur l'espace client (« geste_espace »). Entités (désignation : champs) :\n${ENTITES_MODIFIABLES.map((code) => `- ${code} (${REGISTRE_ENTITES[code].designation}) : ${champsDe(code).join(", ")}`).join("\n")}\nRaccourcis : DOSSIER teinte {meuble, teinte} (une teinte par meuble), points_masques / points_reaffiches, passage {evenement_id, survenu_le} ; LEAD rappel_le null = sans date, statut PERDU exige motif_perte ; DEPENSE dossier_id rattache une dépense EXISTANTE à un chantier ; COORDONNEE principale: true ; MODELE_SMS defaut: true (texte de départ) ; CONSIGNES / POSITIONNEMENT mode + section + contenu, ou defaut: true ; GUIDE_STYLE tirer_des_mails: true (coût d'IA) ; PARAMETRE id = la clé + valeur, ou saisies [{cle, valeur, valable_du, source}] (lot).`;
 
 export const outilModifier = definirOutil({
   nom: "modifier",
@@ -328,15 +328,20 @@ async function resoudreElements(entree: { elements?: { entite: Entite; id?: stri
   return vises;
 }
 
+/** Retirer ou remettre un tarif (les prix du générateur) ou une règle d'expéditeur (un réglage de la boîte) : sensible, comme les créer ou les modifier. */
+const ARCHIVAGE_SENSIBLE: readonly Entite[] = ["TARIF", "REGLE_EXPEDITEUR"];
+const archivageSensible = (e: { elements?: { entite: Entite }[] }) => (e.elements ?? []).some((x) => ARCHIVAGE_SENSIBLE.includes(x.entite));
+
 const nomsDe = (vises: Vise[]) => vises.map((v) => `${v.cible.nom}${v.numero ? ` (version ${v.numero})` : ""}`).join(", ");
 
 export const outilArchiver = definirOutil({
   nom: "archiver",
   titre: "Archiver (leads, dossiers, fiches, coordonnées, dépenses, tarifs, règles, simulations)",
-  description: `Archive (retire) des éléments avec un motif : rien ne se supprime, « restaurer » les remet. elements: [{ entite, id }] pour ${ENTITES_ARCHIVABLES.join(", ")} ; raccourcis leads / dossiers (identifiants). Un seul lead : motif libre, gardé tel quel ; plusieurs : ramené à un code (doublon, test, hors cible, autre). Un dossier qui porte un document émis, un paiement ou un accord ne s'archive pas (le passer en « Perdu »). Au-delà de trois éléments : aperçu de la liste, puis confirmation. Pour « tous sauf X » : liste d'abord (lis toutes les pages), retire X, puis donne les identifiants restants ; dis à Lucas ce que tes listes ne couvraient pas.`,
+  description: `Archive (retire) des éléments avec un motif : rien ne se supprime, « restaurer » les remet. elements: [{ entite, id }] pour ${ENTITES_ARCHIVABLES.join(", ")} ; raccourcis leads / dossiers (identifiants). Un seul lead : motif libre, gardé tel quel ; plusieurs : ramené à un code (doublon, test, hors cible, autre). Un dossier qui porte un document émis, un paiement ou un accord ne s'archive pas (le passer en « Perdu »). Au-delà de trois éléments, ou pour un tarif ou une règle d'expéditeur : aperçu, puis confirmation. Pour « tous sauf X » : liste d'abord (lis toutes les pages), retire X, puis donne les identifiants restants ; dis à Lucas ce que tes listes ne couvraient pas.`,
   niveau: "REVERSIBLE",
   schema: schemaArchiver,
   masse: (e) => (e.leads?.length ?? 0) + (e.dossiers?.length ?? 0) + (e.elements?.length ?? 0),
+  sensible: archivageSensible,
   apercu: async (e) => {
     const r = await avecAmbiguite(() => resoudreElements(e));
     return estResultat(r) ? r.texte : `Je vais archiver ${pluriel(r.length, "élément")} : ${nomsDe(r)} — motif « ${e.motif} ». Réversible (« restaurer »).`;
@@ -392,10 +397,11 @@ const elementRestaurer = z.object({ entite: z.enum(ENTITES_RESTAURABLES), id: z.
 export const outilRestaurer = definirOutil({
   nom: "restaurer",
   titre: "Restaurer des éléments archivés, ou une version d'un texte",
-  description: `Remet des éléments archivés, retirés ou mis à la corbeille (inverse d'« archiver » et de « supprimer », tant que l'effacement n'a pas eu lieu) : elements: [{ entite, id }] pour ${ENTITES_RESTAURABLES.filter((c) => REGISTRE_ENTITES[c].restaurer).join(", ")} ; raccourcis leads / dossiers. Remet aussi une VERSION d'un texte : { entite: CONSIGNES | POSITIONNEMENT, numero } ou { entite: PROMPT_SIMULATION, id: le type, numero } — la restauration crée elle-même une version, rien n'est perdu. Les archivés se retrouvent par « lister » (vue ARCHIVES) ou « chercher » (archives: true). Au-delà de trois éléments : aperçu, puis confirmation.`,
+  description: `Remet des éléments archivés, retirés ou mis à la corbeille (inverse d'« archiver » et de « supprimer », tant que l'effacement n'a pas eu lieu) : elements: [{ entite, id }] pour ${ENTITES_RESTAURABLES.filter((c) => REGISTRE_ENTITES[c].restaurer).join(", ")} ; raccourcis leads / dossiers. Remet aussi une VERSION d'un texte : { entite: CONSIGNES | POSITIONNEMENT, numero } ou { entite: PROMPT_SIMULATION, id: le type, numero } — la restauration crée elle-même une version, rien n'est perdu. Les archivés se retrouvent par « lister » (vue ARCHIVES) ou « chercher » (archives: true). Au-delà de trois éléments, ou pour un tarif ou une règle d'expéditeur : aperçu, puis confirmation.`,
   niveau: "REVERSIBLE",
   schema: z.object({ elements: z.array(elementRestaurer).max(200).optional(), leads: z.array(z.string().max(40)).max(200).optional(), dossiers: z.array(z.string().max(40)).max(50).optional() }),
   masse: (e) => (e.leads?.length ?? 0) + (e.dossiers?.length ?? 0) + (e.elements?.length ?? 0),
+  sensible: archivageSensible,
   apercu: async (e) => {
     const r = await avecAmbiguite(() => resoudreElements(e));
     return estResultat(r) ? r.texte : `Je vais restaurer ${pluriel(r.length, "élément")} : ${nomsDe(r)}.`;
@@ -507,6 +513,11 @@ export const outilAnnulerModification = definirOutil({
     "Remet chaque champ d'une modification faite par « modifier » (ou l'ancien « modifier_dossier », « changer_teinte ») à sa valeur d'avant, par la même fonction de service. modification_id = celle rendue par « modifier » ; sinon la dernière non annulée de l'entité désignée (entite + id, ou un contact : dossierId, leadId, clientId, nom — DOSSIER par défaut) ; sans rien, la toute dernière. La trace reste, marquée annulée. Défaire ce qui touchait l'argent, un paramètre ou le client est sensible : aperçu, puis confirmation.",
   niveau: "REVERSIBLE",
   schema: schemaAnnuler,
+  // Sans modification_id, « la dernière » peut changer entre l'aperçu et la confirmation : le jeton vaut pour celle de l'aperçu.
+  portee: async (e) => {
+    const v = await trouverVisee(e);
+    return "genre" in v ? v.modification.id : null;
+  },
   sensible: async (e) => {
     try {
       const v = await trouverVisee(e);
@@ -519,7 +530,8 @@ export const outilAnnulerModification = definirOutil({
     const v = await trouverVisee(e);
     if (!("genre" in v)) return v.texte;
     const lignes = v.genre === "DOSSIER" ? v.modification.changements.map((c) => phraseCoeur({ ...c, texteAvant: c.texteApres, texteApres: c.texteAvant })) : retours(v.modification.changements).map(phraseChangement);
-    return `Je vais annuler la modification ${v.modification.id} (${format.jourCourt(v.modification.le)}${v.modification.commande ? `, « ${v.modification.commande} »` : ""}) : ${lignes.join(" ; ")}.`;
+    const partielle = v.genre === "GENERIQUE" ? definitionDe(v.modification.entite).modifier?.annulationPartielle?.(v.modification.changements) : null;
+    return `Je vais annuler la modification ${v.modification.id} (${format.jourCourt(v.modification.le)}${v.modification.commande ? `, « ${v.modification.commande} »` : ""}) : ${lignes.join(" ; ")}.${partielle ? `\n${partielle}` : ""}`;
   },
   executer: async (e, contexteOutil) => {
     const v = await trouverVisee(e);
@@ -540,7 +552,7 @@ export const outilAnnulerModification = definirOutil({
     const avertissements = (await d.modifier.appliquer(cible, valeurs, contexte)) ?? [];
     const annulee = await marquerAnnulee(m.id);
     return {
-      texte: [`Modification annulée sur ${cible.nom} : ${retours(m.changements).map(phraseChangement).join(" ; ")}.`, avertissements.join(" "), `(modification ${m.id}, faite le ${format.jourCourt(m.le)}${m.commande ? ` sur « ${m.commande} »` : ""})`].filter(Boolean).join("\n"),
+      texte: [`Modification annulée sur ${cible.nom} : ${retours(m.changements).map(phraseChangement).join(" ; ")}.`, avertissements.join(" "), d.modifier.annulationPartielle?.(m.changements) ?? "", `(modification ${m.id}, faite le ${format.jourCourt(m.le)}${m.commande ? ` sur « ${m.commande} »` : ""})`].filter(Boolean).join("\n"),
       donnees: { modification: annulee },
       liens: cheminDe(d, cible),
     };

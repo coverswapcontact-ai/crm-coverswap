@@ -137,7 +137,7 @@ export const outilNoterAppel = definirOutil({
   nom: "noter_appel",
   titre: "Noter un appel",
   description:
-    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte, le lien de l'espace compris pour « intéressé ») : rien n'est envoyé, lis-le à Lucas, il le copie dans Messages ; quand il dit l'avoir envoyé, « noter_sms » avec ce code.",
+    "Note un appel avec son issue (INTERESSE, A_RAPPELER, PAS_DE_REPONSE, PAS_INTERESSE), un texte, des étiquettes (TROP_CHER, VEUT_REFLECHIR, LOCATAIRE, PROJET_LOINTAIN, COMPARE_DEVIS, VEUT_UN_RENDU, DEJA_DECIDE, PAS_JOIGNABLE) et, pour « à rappeler » ou « pas de réponse », le moment du rappel (« jeudi 14h », « demain » ; sans moment : demain 18 h pour « pas de réponse », sans date pour « à rappeler »). « Intéressé » ouvre son dossier et son espace ; « pas intéressé » exige motif_perte (le lead passe sans suite, ou le dossier perdu : sensible, aperçu puis confirmation, comme « changer_etape » Perdu). Écrit sur le dossier s'il existe, sinon sur le lead. La réponse donne le SMS proposé (code et texte, le lien de l'espace compris pour « intéressé ») : rien n'est envoyé, lis-le à Lucas, il le copie dans Messages ; quand il dit l'avoir envoyé, « noter_sms » avec ce code.",
   niveau: "REVERSIBLE",
   schema: schemaCible.extend({
     issue: z.enum(ISSUES_APPEL),
@@ -146,6 +146,17 @@ export const outilNoterAppel = definirOutil({
     rappel: z.string().max(60).optional().describe("Quand rappeler, tel que dicté : « jeudi 14h », « demain 10h », « 2026-09-25 14:00 »."),
     motif_perte: z.enum(MOTIFS_PERTE).optional().describe("Obligatoire pour PAS_INTERESSE : PRIX (trop cher), CONCURRENT, SANS_REPONSE (plus de réponse), PROJET_ABANDONNE, HORS_ZONE, DELAI (délai trop long), AUTRE (précisé dans « texte »)."),
   }),
+  // « Pas intéressé » passe le dossier en Perdu (ou le lead sans suite) : la même perte que « changer_etape » PERDU,
+  // « modifier » LEAD statut PERDU ou la tâche « client perdu », toutes sensibles — pas de chemin sans confirmation.
+  sensible: (e) => e.issue === "PAS_INTERESSE",
+  apercu: async (e) => {
+    const r = await cibler(e);
+    if (r.ambigu) return r.ambigu.texte;
+    if (!e.motif_perte) throw new ErreurMetier(`« Pas intéressé » exige un motif (motif_perte) : ${MOTIFS_PERTE.filter((m) => m !== "AUTRE").map((m) => `${m} (${LIBELLES_MOTIF_PERTE[m].toLowerCase()})`).join(", ")}, ou AUTRE avec la précision dans « texte ». Demande-le à Lucas.`, 400);
+    verifierMotifPerte(e.motif_perte, e.texte);
+    const motif = LIBELLES_MOTIF_PERTE[e.motif_perte].toLowerCase();
+    return `Je vais noter l'appel « pas intéressé » de ${r.ids.nom} (${motif}${e.texte ? `, « ${e.texte.slice(0, 120)} »` : ""}) : ${r.ids.dossierId ? "son dossier passe en « Perdu »" : "le lead passe sans suite"}, et la perte compte dans manager_commercial.`;
+  },
   executer: async (e, contexte) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu;

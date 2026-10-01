@@ -246,7 +246,7 @@ export function mailDejaTraite(rang: number, numero: string, statut: string): st
   if (statut === "EXECUTEE") return `${mail} est déjà parti : la relance est faite.`;
   if (statut === "ECHEC") return `${mail} n'est pas parti (échec) : le réessayer depuis « À valider », ou copier le SMS de relance (qui l'annule).`;
   const participe = statut === "REJETEE" ? "rejeté" : statut === "EXPIREE" ? "expiré" : "annulé";
-  return `${mail} a été ${participe} : il ne sera pas reproposé ; la relance reste possible par SMS (« voir_relances »).`;
+  return `${mail} a été ${participe} : il ne sera pas reproposé ; la relance reste possible par SMS (« lister » RELANCES).`;
 }
 
 export type RelanceProposee = { propositionId: string; creee: boolean; rang: number; numero: string; documentId: string; a: string; objet: string; texte: string };

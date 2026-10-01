@@ -113,7 +113,7 @@ describe("l'outil « analytique »", () => {
     const outils = await client.listTools();
     const outil = outils.tools.find((t) => t.name === "analytique");
     assert.match(outil?.description ?? "", /^\[Lecture\]/);
-    assert.deepEqual(Object.keys((outil?.inputSchema as { properties: Record<string, unknown> }).properties).sort(), ["au", "du", "onglet", "p", "source"]);
+    assert.deepEqual(Object.keys((outil?.inputSchema as { properties: Record<string, unknown> }).properties).sort(), ["au", "du", "onglet", "p", "source", "synthese"]);
     const resultat = (await client.callTool({ name: "analytique", arguments: { onglet: "argent" } })) as { content: { type: string; text?: string }[] };
     const texte = resultat.content.map((c) => c.text ?? "").join("\n");
     assert.match(texte, /^Analytique — Argent/);
@@ -123,16 +123,16 @@ describe("l'outil « analytique »", () => {
   });
 });
 
-describe("campagne, voir_publicite, manager_marketing : les mêmes calculs", () => {
+describe("analytique publicite (ex-« campagne »), etat_crm META (ex-« voir_publicite »), manager_marketing : les mêmes calculs", () => {
   test("sans synchronisation : dépense estimée, aucun coût par publicité (plus de coût identique pour toutes)", async () => {
     const m = (await appeler("manager_marketing")).donnees as Awaited<ReturnType<typeof import("@/lib/assistant/analyses/marketing").analyseMarketing>>;
     assert.deepEqual([m.depense.retenue, m.depense.origine, m.depense.estimation], [151.5, "PRORATA_CAMPAGNE", true]);
     assert.deepEqual(m.parPublicite.map((p) => [p.nom, p.leads, p.coutParLead]), [["Carrousel", 2, null], ["Vidéo", 1, null]]);
     assert.equal(m.global.meta.leads, 3);
-    const campagne = await appeler("campagne");
-    assert.match(campagne.texte, /jour 9 sur 21\. Budget 378 €, dépense 151,5 € \(estimation : prorata du budget/);
+    const campagne = await appeler("analytique", { onglet: "publicite" });
+    assert.match(campagne.texte, /État de la campagne : Campagne commencée le .*jour 9 sur 21\. Budget 378 €, dépense 151,5 € \(estimation : prorata du budget/);
     assert.match(campagne.texte, /3 leads Meta sur 9 jours, soit ≈ 50,5 € par lead/);
-    assert.equal(campagne.liens?.[0].href, "http://localhost:3001/analytique?onglet=publicite");
+    assert.ok(campagne.liens?.[0].href.startsWith("http://localhost:3001/analytique?onglet=publicite"), campagne.liens?.[0].href);
   });
   test("avec la dépense réelle : un coût par lead par publicité et le verdict du protocole", async () => {
     await essai.brancherMeta(prisma);
@@ -140,10 +140,10 @@ describe("campagne, voir_publicite, manager_marketing : les mêmes calculs", () 
     const m = (await appeler("manager_marketing")).donnees as Awaited<ReturnType<typeof import("@/lib/assistant/analyses/marketing").analyseMarketing>>;
     assert.deepEqual([m.depense.retenue, m.depense.origine], [130, "DEPENSE_META"]);
     assert.deepEqual(m.parPublicite.map((p) => [p.nom, p.depense, p.coutParLead, p.verdict]), [["Carrousel", 40, 20, "GARDER"], ["Vidéo", 90, 90, "SURVEILLER"]]);
-    const campagne = await appeler("campagne");
+    const campagne = await appeler("analytique", { onglet: "publicite" });
     assert.match(campagne.texte, /dépense 130 € \(réel Meta\)/);
     assert.match(campagne.texte, /Par publicité : Carrousel 2 leads, 1 devis, 1 signé, 20 € par lead — Garder \(.*\) · Vidéo 1 lead, 0 devis, 0 signé, 90 € par lead — Surveiller/);
-    const pub = await appeler("voir_publicite");
+    const pub = await appeler("etat_crm", { partie: "META" });
     assert.match(pub.texte, /Campagne : commencée le 22\/09\/2026, jour 9 sur 21, budget 378 €, dépense 130 € \(réel Meta\), 3 leads Meta, 43,33 € par lead\./);
     assert.match(pub.texte, /\nPar publicité \(9 jours\) : Carrousel 2 leads/);
     assert.equal(pub.liens?.[0].href, "http://localhost:3001/analytique?onglet=publicite");
@@ -151,11 +151,11 @@ describe("campagne, voir_publicite, manager_marketing : les mêmes calculs", () 
     memoire.viderCacheAnalytique();
   });
   test("les liens de l'assistant pointent vers /analytique (plus /synthese ni /publicite)", async () => {
-    const synthese = await appeler("synthese");
-    assert.match(synthese.liens?.[0].href ?? "", /\/analytique\?du=2026-09-01&au=2026-09-30$/);
+    const synthese = await appeler("analytique", { synthese: {} });
+    assert.match(synthese.liens?.[0].href ?? "", /\/analytique\?onglet=argent&du=2026-09-01&au=2026-09-30$/);
     const commercial = await appeler("manager_commercial");
     assert.ok(commercial.liens?.some((l) => /\/analytique\?du=/.test(l.href)));
-    const site = await appeler("simulations_site", { jours: 30 });
+    const site = await appeler("voir_fichiers", { genre: "site", jours: 30 });
     assert.equal(site.liens?.[0].href, "http://localhost:3001/analytique?onglet=site");
     assert.deepEqual(reseau, []);
   });

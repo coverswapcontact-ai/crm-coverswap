@@ -1,11 +1,11 @@
 import { z } from "zod/v4";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { A_COMPLETER, compterMessagesNonLus, LIBELLES_SOURCE_MESSAGE, marquerMessagesLus, messagesEspace, repondreDansLEspace } from "@/lib/espace/messages";
+import { A_COMPLETER, compterMessagesNonLus, LIBELLES_SOURCE_MESSAGE, messagesEspace, repondreDansLEspace } from "@/lib/espace/messages";
 import { CODES_LIEN_MAIL, proposerLienParSms } from "@/lib/mail/lien-espace";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
-import { accord, pluriel } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * L'espace client depuis l'assistant (mission 10) : lire ce que les clients
@@ -21,7 +21,7 @@ export const outilMessagesEspace = definirOutil({
   nom: "messages_espace",
   titre: "Les messages des clients dans leur espace",
   description:
-    "Ce que les clients ont écrit dans leur espace (« Écrire à CoverSwap », commentaire sur une simulation, demande d'autre proposition) et ce qui leur a été répondu. Par défaut : les messages NON LUS, tous clients. Avec une cible (nom ou identifiant) : le fil de ce client, réponses comprises. Pour les marquer lus sans répondre : « marquer_messages_lus » (ou « geste_espace » MARQUER_LUS). Pour répondre : « repondre_espace ».",
+    "Ce que les clients ont écrit dans leur espace (« Écrire à CoverSwap », commentaire sur une simulation, demande d'autre proposition) et ce qui leur a été répondu. Par défaut : les messages NON LUS, tous clients. Avec une cible (nom ou identifiant) : le fil de ce client, réponses comprises. Pour les marquer lus sans répondre : « geste_espace » MARQUER_LUS. Pour répondre : « repondre_espace ».",
   niveau: "LECTURE",
   schema: schemaCible.extend({ tout: z.boolean().optional().describe("Vrai : tous les messages récents, lus compris (sans cible)."), limite: z.number().int().min(1).max(60).optional() }),
   executer: async (e) => {
@@ -42,21 +42,6 @@ export const outilMessagesEspace = definirOutil({
   },
 });
 
-export const outilMarquerMessagesLus = definirOutil({
-  nom: "marquer_messages_lus",
-  titre: "Marquer lus les messages d'espace d'un client",
-  description: "Marque lus les messages qu'un client a écrits dans son espace, sans lui répondre (Lucas l'a appelé, ou a répondu autrement). Réversible par nature : ils restent dans le fil.",
-  niveau: "REVERSIBLE",
-  schema: schemaCible,
-  executer: async (e) => {
-    const r = await cibler(e);
-    if (r.ambigu) return r.ambigu;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
-    const n = await marquerMessagesLus(r.ids.dossierId);
-    return { texte: n ? `${pluriel(n, "message")} de ${r.ids.nom} ${accord(n, "marqué lu", "marqués lus")}.` : `Aucun message non lu chez ${r.ids.nom}.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
-  },
-});
-
 export const outilRepondreEspace = definirOutil({
   nom: "repondre_espace",
   titre: "Répondre à un client dans son espace",
@@ -74,7 +59,7 @@ export const outilRepondreEspace = definirOutil({
   executer: async (e, contexte) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ni d'espace : ouvre-les d'abord (« ouvrir_dossier », « lien_espace »).`, 409);
+    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ni d'espace : ouvre-les d'abord (« creer » DOSSIER, « lien_espace »).`, 409);
     const envoi = await repondreDansLEspace(r.ids.dossierId, e.texte, { commande: contexte.commande });
     return {
       texte: `Réponse envoyée dans l'espace de ${envoi.clientNom} : « ${envoi.message.texte} ». ${envoi.notification.programme ? "Notification par mail programmée." : `Pas de notification par mail : ${envoi.notification.raison ?? "raison inconnue"} — dis-le à Lucas (un SMS ou un appel peut prendre le relais).`}${envoi.messagesLus ? ` ${pluriel(envoi.messagesLus, "message du client marqué lu", "messages du client marqués lus")}.` : ""}`,
@@ -103,5 +88,4 @@ export const outilLienEspace = definirOutil({
   },
 });
 
-export const OUTILS_ESPACE_LECTURE = [outilMessagesEspace];
-export const OUTILS_ESPACE_ECRITURE = [outilMarquerMessagesLus, outilRepondreEspace, outilLienEspace];
+export const OUTILS_ESPACE_ECRITURE = [outilRepondreEspace, outilLienEspace];

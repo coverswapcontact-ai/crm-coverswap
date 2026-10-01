@@ -1,15 +1,9 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, MOTIFS_AVOIR, type EtapeDossier } from "@/lib/dossiers/constants";
-import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
-import { estEtape } from "@/lib/dossiers/regles";
-import { deposerDocument, schemaDepotDocument } from "@/lib/dossiers/depot-document";
-import { annulerDevis, genererAvoir, modifierPresentationDevis } from "@/lib/dossiers/documents";
-import { retirerAccord } from "@/lib/espace/validations";
+import { LIBELLES_STATUT_DOCUMENT, MOTIFS_AVOIR } from "@/lib/dossiers/constants";
+import { annulerDevis, genererAvoir } from "@/lib/dossiers/documents";
 import { definirOutil, format, lien } from "../definition";
-import { cibler } from "./cible";
-import { schemaCible } from "./lecture";
 
 /**
  * Les documents (mission 11) : annuler un devis ou une facture, déposer un PDF
@@ -66,92 +60,4 @@ export const outilAnnulerDocument = definirOutil({
   },
 });
 
-export const outilDeposerDocument = definirOutil({
-  nom: "deposer_document",
-  titre: "Déposer un PDF fait ailleurs (devis, facture, BAT…)",
-  description:
-    "Rattache à un dossier un document fait hors du CRM : un devis ou une facture (PDF, numéro, montant HT, date ; un devis reçoit un libellé de variante et est proposé au client dans son espace à côté des autres devis ; aucun mail n'est envoyé, mais un devis visible, émis ou envoyé, vaut devis envoyé : le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance, la main passe au client et le délai de relance court à partir du dépôt), ou tout autre document (BAT fournisseur, plan, attestation : type AUTRE, conservé et lisible depuis le dossier). Le fichier vient d'une pièce jointe conservée d'un mail (message_id + piece_id, voir « lire_mail »), d'un fichier déjà conservé (fichier_id) ou de son contenu en base64. Sensible : aperçu puis confirmation.",
-  niveau: "SENSIBLE",
-  schema: schemaCible.extend(schemaDepotDocument.shape),
-  apercu: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu.texte;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (« ouvrir_dossier »).`, 409);
-    const origine = e.source.fichier_id ? `fichier conservé ${e.source.fichier_id}` : e.source.piece_id ? `pièce ${e.source.piece_id} du mail ${e.source.message_id}` : `contenu fourni (${e.source.nom ?? "document.pdf"})`;
-    if (e.type === "AUTRE") return `Je vais déposer sur le dossier de ${r.ids.nom} le document « ${e.libelle ?? e.source.nom ?? "document"} » (${origine}). Il sera conservé et lisible depuis le dossier ; rien n'est envoyé au client.`;
-    // Mission 14 (R1) : un devis visible, émis ou envoyé, fait passer le dossier en « Devis envoyé » — l'aperçu le dit.
-    const dossier = await prisma.dossier.findUnique({ where: { id: r.ids.dossierId }, select: { etape: true } });
-    const vers = e.type === "DEVIS" && e.visible_espace !== false && (e.statut ?? "ENVOYE") === "ENVOYE" && dossier && estEtape(dossier.etape) ? etapeApresGeneration("DEVIS", dossier.etape) : null;
-    const passage = vers && dossier ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.` : "";
-    return `Je vais rattacher au dossier de ${r.ids.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero ?? "(numéro manquant)"}${e.libelle ? ` « ${e.libelle} »` : ""} : ${e.montant !== undefined ? format.euros(e.montant) : "(montant manquant)"} HT, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
-  },
-  executer: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (« ouvrir_dossier »).`, 409);
-    const { dossierId: _d, clientId: _c, leadId: _l, nom: _n, ...entree } = e;
-    void _d;
-    void _c;
-    void _l;
-    void _n;
-    const resultat = await deposerDocument(r.ids.dossierId, entree);
-    if (resultat.nature === "FICHIER") {
-      return { texte: `Document « ${resultat.libelle} » déposé sur le dossier de ${r.ids.nom} (${resultat.nom}, ${Math.round(resultat.octets / 1024)} Ko). Lisible depuis le dossier ; rien n'est envoyé au client.`, donnees: { fichierId: resultat.fichierId, dossierId: r.ids.dossierId, nom: resultat.nom, typeMime: resultat.typeMime }, liens: [lien("Le document", `/api/fichiers/${resultat.fichierId}`), lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
-    }
-    return {
-      texte: `${resultat.type === "DEVIS" ? "Devis" : "Facture"} ${resultat.numero} rattaché${resultat.type === "FACTURE" ? "e" : ""} au dossier de ${r.ids.nom} avec son PDF (${Math.round(resultat.octets / 1024)} Ko).${resultat.type === "DEVIS" ? ` ${entree.visible_espace === false ? "Masqué dans son espace." : "Proposé dans son espace, à côté des autres devis."}` : ""}${resultat.changements.map((c) => ` Le dossier passe de « ${LIBELLES_ETAPE[c.de]} » à « ${LIBELLES_ETAPE[c.vers]} » : la main passe au client, le délai de relance court à partir d'aujourd'hui.`).join("")}${resultat.avertissements.length ? ` ${resultat.avertissements.join(" ")}` : ""}`,
-      donnees: { documentId: resultat.documentId, numero: resultat.numero, dossierId: r.ids.dossierId, avertissements: resultat.avertissements, etape: resultat.changements.at(-1)?.vers ?? null },
-      liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)],
-    };
-  },
-});
-
-/** Mission 11 : l'interrupteur « visible dans l'espace » et le libellé d'un devis émis, comme dans le panneau du dossier. */
-export const outilPresenterDevis = definirOutil({
-  nom: "presenter_devis",
-  titre: "Libellé et visibilité d'un devis émis",
-  description:
-    "Change la présentation d'un devis déjà émis (généré ou repris), jamais son contenu : son libellé de variante (« façades seules ») et sa visibilité dans l'espace client (masqué : le client ne le voit plus, il reste dans le dossier). C'est l'interrupteur du panneau « Devis et accord ». Le libellé et le masquage se défont (remettre l'ancienne valeur). Attention : rendre visible un devis masqué (émis ou envoyé) vaut envoi — le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance, la main passe au client et le délai de relance court ; le remasquer ensuite ne fait pas reculer l'étape.",
-  niveau: "REVERSIBLE",
-  schema: z.object({
-    dossierId: z.string().max(40),
-    documentId: z.string().max(40),
-    libelle_variante: z.string().trim().max(80).nullable().optional().describe("Nouveau libellé ; null l'efface."),
-    visible_espace: z.boolean().optional(),
-  }),
-  executer: async (e) => {
-    if (e.libelle_variante === undefined && e.visible_espace === undefined) throw new ErreurMetier("Rien à changer : donne libelle_variante et/ou visible_espace.", 400);
-    const r = await modifierPresentationDevis(e.dossierId, e.documentId, { libelleVariante: e.libelle_variante, visibleEspace: e.visible_espace });
-    const passage = r.passage ? ` Le dossier passe de « ${LIBELLES_ETAPE[r.passage.de]} » à « ${LIBELLES_ETAPE[r.passage.vers]} » : la main passe au client, le délai de relance court.` : "";
-    return { texte: `Devis ${r.numero} : libellé ${r.libelleVariante ? `« ${r.libelleVariante} »` : "aucun"}, ${r.visibleEspace ? "visible dans l'espace client" : "masqué dans l'espace client"}.${passage}`, donnees: r, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
-  },
-});
-
-/** Mission 11 : retirer un bon pour accord à la place du client (le geste du panneau) ; les autres devis proposés redeviennent au choix. */
-export const outilRetirerAccord = definirOutil({
-  nom: "retirer_accord",
-  titre: "Retirer le bon pour accord d'un dossier",
-  description:
-    "Retire l'accord donné sur le devis d'un dossier (le client a changé d'avis, erreur) : la preuve reste gardée, le dossier revient à « Devis envoyé », le devis redevient un devis émis et les autres devis proposés redeviennent au choix dans l'espace. Refusé si un paiement est déjà engagé. Sensible : aperçu puis confirmation.",
-  niveau: "SENSIBLE",
-  schema: schemaCible.extend({ motif: z.string().trim().max(500).optional() }),
-  apercu: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu.texte;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
-    const accord = await prisma.accordDevis.findFirst({ where: { dossierId: r.ids.dossierId, retireLe: null }, orderBy: { createdAt: "desc" } });
-    if (!accord) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${r.ids.nom}.`, 409);
-    return `Je vais retirer le bon pour accord de ${r.ids.nom} sur le devis ${accord.numeroDevis ?? ""} (donné le ${format.jourCourt(accord.createdAt)} par ${accord.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; le dossier revient à « Devis envoyé » ; les autres devis proposés redeviennent au choix.`;
-  },
-  executer: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu;
-    if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
-    const espace = await prisma.espaceClient.findFirst({ where: { dossierId: r.ids.dossierId, archiveLe: null }, orderBy: { createdAt: "desc" } });
-    if (!espace) throw new ErreurMetier(`${r.ids.nom} n'a pas d'espace client : l'accord ne vient pas de l'espace.`, 409);
-    await retirerAccord(espace, "LUCAS", e.motif ?? "");
-    return { texte: `Bon pour accord retiré chez ${r.ids.nom} : preuve gardée, dossier revenu à « Devis envoyé », devis proposés de nouveau au choix.`, donnees: { dossierId: r.ids.dossierId }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
-  },
-});
-
-export const OUTILS_DOCUMENTS = [outilAnnulerDocument, outilDeposerDocument, outilPresenterDevis, outilRetirerAccord];
+export const OUTILS_DOCUMENTS = [outilAnnulerDocument];

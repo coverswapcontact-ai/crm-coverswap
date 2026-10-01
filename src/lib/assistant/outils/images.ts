@@ -114,4 +114,3 @@ export const outilVoirSimulations = definirOutil({
   },
 });
 
-export const OUTILS_IMAGES = [outilVoirPhotos, outilVoirSimulations];

@@ -2,15 +2,13 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { chargerFiche } from "@/lib/clients/fiches";
 import { notesDuLead } from "@/lib/commercial/notes-appel";
-import { compterMailATraiter } from "@/lib/a-faire/ecran";
-import { listeTaches } from "@/lib/a-faire/lecture";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { depensesDuDossier } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_STATUT_DOCUMENT, type EtapeDossier } from "@/lib/dossiers/constants";
 import { resumerSelection, sousPartieDeCle } from "@/lib/prestations/prestations";
 import { chargerDetail, listerDossiers } from "@/lib/dossiers/dossiers";
 import { mainDe } from "@/lib/dossiers/pilotage";
-import { compterMessagesNonLus, messagesEspace } from "@/lib/espace/messages";
+import { messagesEspace } from "@/lib/espace/messages";
 import { espaceDuClient } from "@/lib/espace/gestion";
 import { vueEspaceCrm } from "@/lib/espace/vue-crm";
 import { chronologieDuContact } from "@/lib/chronologie/chronologie";
@@ -18,18 +16,12 @@ import { FAMILLES_CHRONOLOGIE } from "@/lib/chronologie/familles";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
 import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
-import { listerVue } from "@/lib/mail/vues";
 import { resumeChaineMeta } from "@/lib/meta/sante";
 import { chargerEntrant } from "@/lib/prospects/entrants";
-import { listerLeads } from "@/lib/prospects/leads";
-import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
-import { issueDuContenu } from "@/lib/commercial/sans-reponse";
 import { relancesPhotosProposables } from "@/lib/relances/photos";
 import { listerSimulationsDossier } from "@/lib/simulations/dossier";
 import { calculerAlertes } from "@/lib/synthese/alertes";
-import { calculerSynthese } from "@/lib/synthese/calcul";
 import { etatAvisGoogle } from "@/lib/site/avis-google";
-import { texteEntonnoirParFamille } from "@/lib/site/familles-source";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import { etatsDesSources } from "@/lib/analytique/appuis";
 import { chiffresDisponibles, etatDe } from "@/lib/analytique/ecrans/commun";
@@ -38,10 +30,9 @@ import { coutPar } from "@/lib/analytique/calculs";
 import { nombreDeJours, resoudrePeriode as resoudrePeriodeAnalytique } from "@/lib/analytique/periode";
 import { LIBELLES_VERDICT } from "@/lib/analytique/types";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
-import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
 import { titreDossier } from "@/lib/commun/format";
-import { accord, jourSemaineHeure, pluriel } from "@/lib/commun/format";
+import { pluriel } from "@/lib/commun/format";
 
 /**
  * Les outils de lecture (mission 8) : trouver, lire, lister ce qui attend,
@@ -217,7 +208,7 @@ export const outilLireFiche = definirOutil({
         avoirs.length ? `Avoirs : ${avoirs.map((x) => `${x.numero ?? "brouillon"} ${format.euros(x.totalHt)} [document:${x.id}]`).join(", ")}.` : "",
         `Paiements : ${pluriel(d.paiements.encaissements.filter((e) => e.statut === "VALIDE").length, "encaissement")}, reste dû ${format.euros(d.paiements.resteDu)}${d.paiements.acompteEnregistre ? ", acompte reçu" : ", acompte pas encore reçu"}${d.paiements.encaissements.length ? ` : ${d.paiements.encaissements.map((e) => `${format.euros(e.montant)} ${e.moyen?.toLowerCase() ?? ""} le ${format.jourCourt(e.recuLe)}${e.statut !== "VALIDE" ? ` (${e.statut.toLowerCase()}${e.motifFin ? ` : ${e.motifFin}` : ""})` : ""}${e.moyen === "CHEQUE" ? (e.crediteLe ? `, crédité le ${format.jourCourt(e.crediteLe)}` : ", pas encore crédité") : ""}${e.reference ? ` réf. ${e.reference}` : ""} [encaissement:${e.id}]`).join(" · ")}` : ""}.`,
         simulations.simulations.length ? `Simulations : ${simulations.simulations.map((s) => `${s.titre ?? "sans titre"} (${s.statut.toLowerCase()}${s.choisie ? ", choisie par le client" : ""}${s.publieeLe ? `, publiée le ${format.jourCourt(s.publieeLe)}` : ""}) [simulation:${s.id}]`).join(" · ")}.` : "Aucune simulation.",
-        d.photos.length ? `Photos : ${pluriel(d.photos.filter((p) => !p.apres).length, "avant", "avant")}, ${pluriel(d.photos.filter((p) => p.apres).length, "après", "après")} (« voir_photos »).` : "Aucune photo.",
+        d.photos.length ? `Photos : ${pluriel(d.photos.filter((p) => !p.apres).length, "avant", "avant")}, ${pluriel(d.photos.filter((p) => p.apres).length, "après", "après")} (« voir_fichiers »).` : "Aucune photo.",
         depenses.total ? `Dépenses rattachées : ${format.euros(depenses.total)} — ${depenses.depenses.map((x) => `${x.fournisseur} ${format.euros(x.montant)}${x.justificatif ? " (justificatif)" : " (sans justificatif)"} [depense:${x.id}]`).join(" · ")}.` : "",
         d.completude.length ? `À compléter : ${d.completude.map((p) => p.libelle).join(", ")}.` : "",
         masques.length ? `Points masqués : ${masques.join(", ")}.` : "",
@@ -266,7 +257,7 @@ export const outilLireFiche = definirOutil({
           brut?.doublonDe && !brut.doublonTraiteLe ? `Doublon probable de [lead:${brut.doublonDe}]${brut.doublonMotif ? ` (${brut.doublonMotif})` : ""} : « doublon » FUSIONNER ou ECARTER.` : "",
           notes.length ? `Notes d'appel : ${notes.map((n) => `${format.jourCourt(n.appelLe)}${n.issue ? ` (${n.issue.toLowerCase()})` : ""}${n.etiquettes.length ? ` [${n.etiquettes.join(", ")}]` : ""} ${n.texte.slice(0, 160)}`).join(" · ")}` : "Aucune note d'appel.",
           l.echanges.length ? `Échanges (${l.echanges.length}) : ${l.echanges.map((x) => `${format.jourCourt(x.le)} ${x.type.toLowerCase()} ${court(x.contenu, 120)}`).join(" · ")}` : "",
-          l.photos.length ? `Photos jointes : ${l.photos.length} (« voir_photos »).` : "",
+          l.photos.length ? `Photos jointes : ${l.photos.length} (« voir_fichiers »).` : "",
           l.simulations.length ? `Simulations du site : ${l.simulations.map((s) => `${format.jourCourt(s.le)}${s.reference ? ` ${s.reference}` : ""}${s.prix !== null ? ` ${format.euros(s.prix)}` : ""}`).join(" · ")}.` : "",
           l.anciensDevis.length || l.ancienChantier ? `Ancien CRM : ${l.anciensDevis.map((d) => `devis ${d.numero} ${format.euros(d.montant)} (${d.statut.toLowerCase()})${d.facture ? `, facture ${d.facture.numero}` : ""}`).join(" · ")}${l.ancienChantier ? ` ; chantier du ${format.jourCourt(l.ancienChantier.dateIntervention)} (${l.ancienChantier.statut.toLowerCase()})` : ""}.` : ""
         );
@@ -293,53 +284,6 @@ export const outilLireFiche = definirOutil({
   },
 });
 
-export const outilLeadsAAppeler = definirOutil({
-  nom: "leads_a_appeler",
-  titre: "Les leads à appeler",
-  description: "La liste « À appeler » de l'écran Leads : les leads jamais appelés ni contactés par écrit, le plus récent en haut (même ordre que l'écran ; les « à écarter » y figurent, avec leur priorité). Rend nom, ville, source, projet, priorité et téléphone. Les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté sont dans « À rappeler », pas ici. Sert à « qui dois-je appeler ? » et, avec « archiver », à faire le ménage.",
-  niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional() }),
-  executer: async ({ limite }) => {
-    // Mission 14 (partie 3) : la liste « À appeler » seule, dans l'ordre de l'écran, coupée côté serveur.
-    const liste = await listerLeads({ vue: "A_APPELER", limite: limite ?? 20 });
-    const { aAppeler, aRappeler, enRetard } = liste.compteurs;
-    const ailleurs = `${pluriel(aRappeler, "lead")} dans « À rappeler »${enRetard ? `, dont ${enRetard} en retard` : ""}`;
-    const texte = liste.lignes.length
-      ? `${pluriel(aAppeler, "lead")} à appeler, jamais ${accord(aAppeler, "appelé")} (${ailleurs}). ${liste.lignes.map((l) => `${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.projet}, ${l.libelleSource}${l.priorite ? `, ${l.priorite.toLowerCase()}` : ""}${l.telephone ? `, ${l.telephone}` : ""}, arrivé le ${format.jourCourt(l.attendDepuis ?? l.recuLe)} [lead:${l.id}]`).join(" · ")}`
-      : aRappeler
-        ? `Personne dans « À appeler » (${ailleurs}).`
-        : "Aucun lead en attente d'appel : « À appeler » et « À rappeler » sont vides.";
-    return { texte, donnees: liste.lignes.map((l) => ({ id: l.id, nom: l.nom, ville: l.ville, source: l.source, projet: l.projet, priorite: l.priorite, telephone: l.telephone, recuLe: l.recuLe, attendDepuis: l.attendDepuis })), liens: [lien("Leads", "/leads?liste=appeler")] };
-  },
-});
-
-export const outilLeadsARappeler = definirOutil({
-  nom: "leads_a_rappeler",
-  titre: "Les leads à rappeler",
-  description:
-    "La liste « À rappeler » de l'écran Leads, dans le même ordre : les leads déjà appelés, contactés par écrit (SMS copié, mail parti) ou avec un rappel daté — d'abord les rappels datés du plus ancien au plus lointain (les retards en tête, marqués EN RETARD), puis les rappels sans date, le plus ancien appel d'abord. Par lead : nom, ville, source, téléphone, tentatives (appels sans réponse d'affilée), le rappel (« jeu. 1 oct. 18:00 » ou « sans date ») et le dernier appel (date, issue). Réponse à « qui dois-je rappeler ? ». Les jamais appelés sont dans « leads_a_appeler ». Pages de 20 (« limite », « page »).",
-  niveau: "LECTURE",
-  schema: z.object({ limite: z.number().int().min(1).max(50).optional().describe("Lignes par page (20 par défaut)."), page: z.number().int().min(1).optional().describe("Page à lire (1 par défaut).") }),
-  executer: async ({ limite, page }, contexte) => {
-    // Mission 14 (partie 8) : la liste « À rappeler » seule, triée et paginée côté serveur comme l'écran.
-    const liste = await listerLeads({ vue: "A_RAPPELER", page: page ?? 1, parPage: limite ?? 20 }, contexte.maintenant);
-    const { aRappeler, enRetard, aujourdhui } = liste.compteurs;
-    const total = liste.total ?? liste.lignes.length;
-    const pages = Math.max(1, Math.ceil(total / (liste.parPage || 1)));
-    const entete = `${pluriel(aRappeler, "lead")} à rappeler dont ${enRetard} en retard, ${aujourdhui} aujourd'hui${pages > 1 ? ` (page ${liste.page} sur ${pages})` : ""}`;
-    const ligne = (l: (typeof liste.lignes)[number]) => {
-      const issue = l.dernierAppel ? issueDuContenu(l.dernierAppel.contenu) : null;
-      const dernierAppelLe = l.dernierAppelLe ?? l.dernierAppel?.le ?? null;
-      // Mission 17 (partie A) : sans appel, le contact écrit (SMS copié, mail parti) qui l'a fait passer ici.
-      const dernier = dernierAppelLe ? `dernier appel ${jourSemaineHeure(dernierAppelLe)}${issue ? ` (${LIBELLES_ISSUE[issue].toLowerCase()})` : ""}` : l.dernierContactLe ? `aucun appel noté, contacté par écrit le ${jourSemaineHeure(l.dernierContactLe)}` : "aucun appel noté";
-      const rappel = l.rappelLe ? `rappel ${jourSemaineHeure(l.rappelLe)}${l.enRetard ? " EN RETARD" : ""}` : "rappel sans date";
-      return `- ${l.nom}${l.ville ? ` (${l.ville})` : ""} — ${l.libelleSource}, ${l.telephone ?? "numéro illisible"}, ${pluriel(l.tentatives, "tentative")}, ${rappel}, ${dernier} [lead:${l.id}]`;
-    };
-    const texte = liste.lignes.length ? `${entete} :\n${liste.lignes.map(ligne).join("\n")}` : aRappeler ? `${entete} : cette page est vide.` : "Personne dans « À rappeler ».";
-    return { texte, donnees: { compteurs: liste.compteurs, page: liste.page, pages, total, lignes: liste.lignes }, liens: [lien("Leads", "/leads?liste=rappeler")] };
-  },
-});
-
 export const outilDossiersParEtape = definirOutil({
   nom: "dossiers_par_etape",
   titre: "Les dossiers, par étape",
@@ -356,47 +300,6 @@ export const outilDossiersParEtape = definirOutil({
       .map(([e, liste]) => `${ligneEtape(e)} (${liste.length}) : ${liste.map((d) => `${titreDossier(d)} (${quiALaMain(d, contexte.maintenant)})${d.prochaineAction ? ` → ${d.prochaineAction}` : ""} [dossier:${d.id}]`).join(" · ")}`)
       .join("\n");
     return { texte: texte || "Aucun dossier.", donnees: dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime })), liens: [lien("Dossiers", "/dossiers")] };
-  },
-});
-
-export const outilCeQuiMAttend = definirOutil({
-  nom: "ce_qui_m_attend",
-  titre: "Ce qui attend une action de Lucas",
-  description:
-    "La liste des tâches de Lucas en entier — aujourd'hui (les 10 du jour, avec le geste prêt et le texte des SMS et mails), les lots de ménage, « plus tard » (avec la date de retour) et ce qui est fait aujourd'hui —, puis les mails à traiter, les propositions à valider et les messages d'espace non lus. Réponse à « qu'est-ce qui m'attend ? » ; pour « qu'est-ce que j'ai à faire ? » ou « j'ai 20 minutes », préfère « taches ». Garde l'identifiant [tache:…] de la dernière tâche citée : « c'est fait » → « repondre_tache ».",
-  niveau: "LECTURE",
-  schema: z.object({}),
-  executer: async ({}, contexte) => {
-    // Import à l'appel : « taches » importe « schemaCible » d'ici (pas de cycle au chargement).
-    const { texteListe } = await import("./taches");
-    // Mission 17 (partie A, relecture) : le nombre de mails à traiter est celui de l'onglet Mail (les tâches du mail et de
-    // l'espace : a-faire/ecran.ts › compterMailATraiter) — un seul compteur partout.
-    const [liste, mails, mailsATraiter, messagesNonLus, propositionsEnAttente] = await Promise.all([
-      listeTaches(contexte.maintenant),
-      listerVue("A_TRAITER", { limite: 50 }),
-      compterMailATraiter(contexte.maintenant),
-      compterMessagesNonLus(),
-      prisma.proposition.count({ where: { statut: "EN_ATTENTE", archiveLe: null } }),
-    ]);
-    const { texte: texteTaches, aujourdhui } = await texteListe(liste, contexte.maintenant);
-    const texte = [
-      texteTaches,
-      `Aussi : ${pluriel(mailsATraiter, "mail")} à traiter, ${pluriel(propositionsEnAttente, "proposition")} à valider (cartes de mise à jour, relances, règles), ${pluriel(messagesNonLus, "message d'espace non lu", "messages d'espace non lus")}${messagesNonLus ? " (« messages_espace »)" : ""}.`,
-      mails.lignes.length ? `Mails à traiter : ${mails.lignes.slice(0, 8).map((m) => `${m.correspondant.nom ?? m.correspondant.adresse} — ${m.objet ?? "(sans objet)"}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}`).join(" · ")}` : "",
-    ].filter(Boolean).join("\n");
-    return {
-      texte,
-      donnees: {
-        genereLe: liste.genereLe,
-        compteurs: { ...liste.compteurs, demain: liste.demain, mailsATraiter, messagesEspaceNonLus: messagesNonLus, propositionsEnAttente },
-        aujourdhui,
-        lots: liste.lots,
-        plusTard: liste.plusTard,
-        faitAujourdhui: liste.faitAujourdhui,
-        mails: mails.lignes.slice(0, 20),
-      },
-      liens: [lien("Tâches", "/taches"), lien("Mail", "/mail"), ...(propositionsEnAttente ? [lien("À valider", "/validation")] : [])],
-    };
   },
 });
 
@@ -427,50 +330,10 @@ export const outilEspacesClients = definirOutil({
   },
 });
 
-export const outilMailsATraiter = definirOutil({
-  nom: "mails_a_traiter",
-  titre: "Les mails à traiter",
-  description: "Les conversations de la boîte qui attendent une réponse ou une action (onglet Mail, vue « À traiter »), dans l'ordre de priorité calculé par le CRM (revenus, réclamations, devis en attente par montant, dossiers en cours, leads, échéances, le reste) : qui, objet, pourquoi (attend ta réponse, sans réponse depuis N jours, nouvelle demande, à lire, revenu), intention et ce qui est attendu, cartes en attente, brouillon prêt, contact rattaché. Rend l'identifiant du mail pour « lire_mail », « deposer_brouillon », « envoyer_mail ». Réponse à « qu'est-ce que j'ai à traiter ? » : lis-la dans cet ordre.",
-  niveau: "LECTURE",
-  schema: z.object({ vue: z.enum(["A_TRAITER", "CLIENTS", "ADMINISTRATIF"]).optional(), limite: z.number().int().min(1).max(50).optional() }),
-  executer: async ({ vue, limite }) => {
-    const liste = await listerVue(vue ?? "A_TRAITER", { limite: limite ?? 20 });
-    const texte = liste.lignes.length
-      ? `${liste.compteurs.A_TRAITER} à traiter, ${liste.compteurs.CLIENTS} clients, ${liste.compteurs.ADMINISTRATIF} administratif.\n${liste.lignes.map((m, i) => `${i + 1}. ${m.priorite.libelle ? `[${m.priorite.libelle}${m.priorite.montant !== null ? ` ${format.euros(m.priorite.montant)}` : ""}] ` : ""}${m.correspondant.nom ?? m.correspondant.adresse} — « ${m.objet ?? "(sans objet)"} » ${format.jourCourt(m.recuLe)}${m.mention ? ` (${m.mention.toLowerCase()})` : ""}${m.intention ? ` · ${m.intention.toLowerCase()}${m.attendu ? ` : ${m.attendu}` : ""}` : " · non classé"}${m.propositionsEnAttente ? ` · ${pluriel(m.propositionsEnAttente, "carte")} à valider` : ""}${m.brouillonPret ? " · brouillon prêt" : ""}${m.contact ? ` · ${m.contact.nom}` : ""} [mail:${m.messageId}]`).join("\n")}`
-      : "Rien à traiter dans la boîte.";
-    return { texte, donnees: { compteurs: liste.compteurs, mails: liste.lignes.map((m) => ({ messageId: m.messageId, de: m.correspondant, objet: m.objet, extrait: m.extrait, recuLe: m.recuLe, mention: m.mention, classe: m.classe, contact: m.contact, nonLu: m.nonLu, priorite: m.priorite, intention: m.intention, attendu: m.attendu, propositionsEnAttente: m.propositionsEnAttente, brouillonPret: m.brouillonPret, revenu: m.revenu, snoozeJusqua: m.snoozeJusqua })) }, liens: [lien("Mail", "/mail")] };
-  },
-});
-
 /** Le bloc « Entonnoir du site par source » de la synthèse : vide s'il n'y a eu aucune visite. */
 export function ligneEntonnoirSite(lignes: string[]): string {
   return lignes.length ? `Entonnoir du site par source (parcours ; entre parenthèses, l'étape facultative) :\n${lignes.join("\n")}` : "";
 }
-
-export const outilSynthese = definirOutil({
-  nom: "synthese",
-  titre: "Synthèse d'une période",
-  description: "Leads reçus, dossiers ouverts, devis émis et signés, chiffre d'affaires encaissé, dépenses, pertes et délais sur une période (défaut : 30 derniers jours), et l'entonnoir du site par source (Meta, recherche, direct, autres : visite → pièce → photo → génération → rendu vu → estimation → contact ou rappel, en parcours). Synthèse historique (mois figés) : l'écran du CRM est désormais l'Analytique — pour ses chiffres exacts (tuiles, tunnel, publicité, SEO, site, argent), préférer « analytique » ; pour des analyses détaillées, les outils « manager_… ».",
-  niveau: "LECTURE",
-  schema: schemaPeriode,
-  executer: async (entree, contexte) => {
-    // L'instant de la session (relecture B, point A) : sans lui, la période glissait d'un jour après 22 h UTC.
-    const { periode } = resoudrePeriode(entree, contexte.maintenant);
-    const s = await calculerSynthese(periode.du, periode.au);
-    const c = s.commercial;
-    const texte = [
-      `Synthèse ${periode.libelle} (${periode.du} → ${periode.au}) :`,
-      c.entrants ? `${pluriel(c.entrants.recus, "lead")} reçus (${c.entrants.parSource.map((p) => `${p.libelle} ${p.recus}`).join(", ")}), ${c.entrants.contactes} contactés, ${c.entrants.avecDossier} avec dossier, ${c.entrants.signes} signés.` : "",
-      `${pluriel(c.cohorte.ouverts, "dossier ouvert", "dossiers ouverts")} sur la période : ${c.cohorte.devisEnvoyes} devis envoyés, ${c.cohorte.signes} signés, ${c.cohorte.encaisses} encaissés, ${c.cohorte.perdus} perdus (taux de signature ${format.pourcent(c.cohorte.tauxSignatureDevis)}).`,
-      `Activité : ${c.activite.devisEmis} devis émis (${format.euros(c.activite.montantDevis)}), ${pluriel(c.activite.signatures, "signature")} (${format.euros(c.activite.montantSigne)}), ${pluriel(c.activite.facturesEmises, "facture")} (${format.euros(c.activite.montantFacture)}), ${pluriel(c.activite.pertes, "perte")}.`,
-      s.finances.encaisse === null ? `Encaissé : paramètres manquants (${s.finances.parametresManquants.join(", ")}).` : `Encaissé ${format.euros(s.finances.encaisse)}, dépenses ${format.euros(s.finances.depenses)}${s.finances.margeBrute !== null ? `, marge brute ${format.euros(s.finances.margeBrute)}` : ""}${s.finances.panierMoyenSigne !== null ? `, panier moyen signé ${format.euros(s.finances.panierMoyenSigne)}` : ""}. En cours de règlement : ${format.euros(s.finances.encours.total)}.`,
-      c.pertes.parMotif.length ? `Pertes par motif : ${c.pertes.parMotif.map((p) => `${p.libelle} ${p.valeur}`).join(", ")}.` : "",
-      // Mission 16 (partie 6) : une ligne par famille de source (calculée à la lecture, sans requête de plus).
-      ligneEntonnoirSite(s.site?.entonnoir ? texteEntonnoirParFamille(s.site.entonnoir) : []),
-    ].filter(Boolean).join("\n");
-    return { texte, donnees: { periode, commercial: s.commercial, finances: s.finances, clients: s.clients, entonnoirSite: s.site?.entonnoir ?? null }, liens: [lien("Analytique", `/analytique?du=${periode.du}&au=${periode.au}`)] };
-  },
-});
 
 /**
  * L'état de la campagne (mission 17, partie B : mêmes calculs que l'onglet Publicité de l'Analytique) : jour en jours
@@ -528,20 +391,12 @@ export function textePublicites(parPublicite: Awaited<ReturnType<typeof etatCamp
   return parPublicite.map((p) => `${p.nom} ${pluriel(p.leads, "lead")}, ${p.devis} devis, ${pluriel(p.signes, "signé")}${p.coutParLead !== null ? `, ${format.euros(p.coutParLead)} par lead` : ""}${p.verdict ? ` — ${LIBELLES_VERDICT[p.verdict]}${p.raisonVerdict ? ` (${p.raisonVerdict})` : ""}` : ""}`).join(" · ");
 }
 
-export const outilCampagne = definirOutil({
-  nom: "campagne",
-  titre: "L'état de la campagne publicitaire",
-  description: "Jour de campagne (« jour 3 sur 21 », jours de Paris), dépense (réelle Meta quand la synchronisation est branchée, sinon estimée au prorata du budget — dis lequel), leads Meta reçus dans le CRM, coût par lead, résultats par campagne et par publicité avec leur propre coût par lead et le verdict du protocole (garder, surveiller, couper, trop tôt), et la règle du protocole qui s'applique ce jour (consignes). Mêmes calculs que l'onglet Publicité de l'Analytique. Les paramètres de campagne (début, budget, durée) se posent dans Paramètres → Campagne publicitaire.",
-  niveau: "LECTURE",
-  schema: z.object({}),
-  executer: async ({}, contexte) => {
-    const e = await etatCampagne(contexte.maintenant);
-    const texte = e.debut
-      ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}, ${texteDepenseCampagne(e)}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ${e.estimation ? "≈ " : ""}${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${textePublicites(e.parPublicite)}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
-      : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
-    return { texte, donnees: e, liens: [lien("Analytique — Publicité", "/analytique?onglet=publicite"), lien("Paramètres", "/parametres")] };
-  },
-});
+/** L'état de la campagne en une phrase (ex-outil « campagne », repris par « analytique » onglet publicite). */
+export function texteEtatCampagne(e: Awaited<ReturnType<typeof etatCampagne>>): string {
+  return e.debut
+    ? `Campagne commencée le ${format.jourCourt(e.debut)} : ${e.enCours ? `jour ${e.jour} sur ${e.duree}` : e.jour !== null && e.jour > e.duree ? `terminée (jour ${e.jour}, durée ${e.duree})` : "pas encore commencée"}. Budget ${e.budget !== null ? format.euros(e.budget) : "non renseigné"}, ${texteDepenseCampagne(e)}. ${pluriel(e.leads, "lead")} Meta sur ${pluriel(e.fenetreJours, "jour")}${e.coutParLead !== null ? `, soit ${e.estimation ? "≈ " : ""}${format.euros(e.coutParLead)} par lead` : ""}. ${e.parPublicite.length ? `Par publicité : ${textePublicites(e.parPublicite)}.` : ""} ${e.regle ? `Règle du jour : ${e.regle}` : "Aucune règle trouvée pour ce jour dans le protocole des consignes."}`
+    : `Aucune campagne renseignée (Paramètres → Campagne publicitaire : début, budget, durée). Sur 7 jours : ${pluriel(e.leads, "lead")} Meta${e.parPublicite.length ? ` (${e.parPublicite.map((p) => `${p.nom} ${p.leads}`).join(", ")})` : ""}.`;
+}
 
 /** Seuils du disque (mission 10) : avertir à 70 %, alerter à 85 %. */
 export const SEUILS_DISQUE = { attention: 70, urgent: 85 } as const;
@@ -648,4 +503,4 @@ export const outilSanteSysteme = definirOutil({
   },
 });
 
-export const OUTILS_LECTURE = [outilChercher, outilLireFiche, outilLeadsAAppeler, outilLeadsARappeler, outilDossiersParEtape, outilCeQuiMAttend, outilEspacesClients, outilMailsATraiter, outilSynthese, outilCampagne, outilSanteSysteme];
+export const OUTILS_LECTURE = [outilChercher, outilLireFiche];

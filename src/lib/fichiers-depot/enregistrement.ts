@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateCourte, euros } from "@/lib/commun/format";
 import { deposerDocument, type EntreeDepotDocument } from "@/lib/dossiers/depot-document";
+import { importerPdfDocument } from "@/lib/dossiers/documents-existants";
+import { deposerSimulationDossier } from "@/lib/simulations/dossier";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
 import { idPhoto, lireFichier, lirePhotos } from "@/lib/dossiers/stockage";
 import type { ChangementEtape } from "@/lib/dossiers/transitions";
@@ -50,11 +52,17 @@ export type FichierVerifie = { contenu: Buffer; nom: string; format: FormatPermi
 /** Champs d'un devis ou d'une facture repris (ceux de deposer_document). */
 export type ChampsDocument = Partial<Omit<EntreeDepotDocument, "type" | "source">>;
 
+/** Une simulation déposée (image de ChatGPT ou autre) : les champs de « Déposer une simulation » de l'écran. */
+export type ChampsSimulation = { titre?: string | null; description?: string | null; source?: "CHATGPT" | "MANUEL"; preparationId?: string | "auto" | null };
+
 export type OptionsEnregistrement = {
   voie: VoieFichier;
   origine?: string | null;
   jetonId?: string | null;
   document?: ChampsDocument;
+  simulation?: ChampsSimulation;
+  /** PDF_DOCUMENT : le document repris (Document.id) dont c'est le PDF. */
+  documentRepris?: string | null;
 };
 
 export type ResultatEnregistrement = {
@@ -152,6 +160,8 @@ export function verifierCompatibilite(entite: EntiteCible | null, type: TypeFich
   if (TYPES_PHOTO.includes(type) && !format.image) throw new ErreurMetier(`Une ${LIBELLES_TYPE_FICHIER[type]} doit être une image (JPEG, PNG, WebP, HEIC), pas un PDF.`, 400);
   if (entite === "LEAD" && type === "PHOTO_APRES") throw new ErreurMetier("Une photo après chantier va sur le dossier, pas sur le lead.", 400);
   if (entite === "DEPENSE" && type !== "JUSTIFICATIF") throw new ErreurMetier("Une dépense ne reçoit que son justificatif (type JUSTIFICATIF).", 400);
+  if (type === "SIMULATION" && (entite !== "DOSSIER" || !format.image)) throw new ErreurMetier("Une simulation est une image (JPEG, PNG, WebP) déposée sur un dossier.", 400);
+  if (type === "PDF_DOCUMENT" && (entite !== "DOSSIER" || format.typeMime !== "application/pdf")) throw new ErreurMetier("Le PDF d'un document repris est un PDF, déposé sur son dossier (avec document_id).", 400);
   if (entite === "PUBLICATION") {
     if (!TYPES_PHOTO.includes(type)) throw new ErreurMetier("Une réalisation du site reçoit une photo avant ou après (PHOTO_AVANT, PHOTO_APRES).", 400);
     if (cible && !cible.dossierId) throw new ErreurMetier("Cette réalisation n'est rattachée à aucun dossier : une photo publiée vient toujours d'un dossier. Rattache-la d'abord.", 409);
@@ -262,6 +272,20 @@ export async function enregistrerFichierRecu(cible: CibleFichier | null, typeDem
         const ligne = await prisma.fichierDepose.create({ data: { ...base, photoChemin: chemin } });
         return resultat(ligne, `${LIBELLES_TYPE_FICHIER[type]} ajoutée au dossier de ${lue.nom}${type === "PHOTO_AVANT" ? " (proposée au simulateur)" : ""}`, { photoId: photo.id });
       }
+      if (type === "SIMULATION") {
+        // Mission 17 (partie C) : « Déposer une simulation » de l'écran (brouillon ; préparation reprise).
+        const s = options.simulation ?? {};
+        const simulation = await deposerSimulationDossier(lue.id, versFile(fichierPourFile), { titre: s.titre ?? null, description: s.description ?? null, source: s.source ?? "MANUEL", preparationId: s.preparationId ?? "auto" });
+        const ligne = await prisma.fichierDepose.create({ data: { ...base } });
+        return resultat(ligne, `simulation « ${simulation.titre ?? fichier.nom} » déposée en brouillon sur le dossier de ${lue.nom} (le client ne la voit pas : « publier » ensuite) [simulation:${simulation.id}]`);
+      }
+      if (type === "PDF_DOCUMENT") {
+        // « importer le PDF » d'un document repris (même fonction que l'écran).
+        if (!options.documentRepris) throw new ErreurMetier("Donne le document repris (document_id, rendu par « lire_fiche » ou « voir_fichiers » documents).", 400);
+        await importerPdfDocument(lue.id, options.documentRepris, versFile(fichierPourFile));
+        const ligne = await prisma.fichierDepose.create({ data: { ...base, documentId: options.documentRepris } });
+        return resultat(ligne, `PDF importé pour le document repris ${options.documentRepris} du dossier de ${lue.nom} (l'ancien PDF, s'il y en avait un, reste aux archives)`, { documentId: options.documentRepris });
+      }
       const champs = options.document ?? {};
       const source = { contenu_base64: fichier.contenu.toString("base64"), nom: fichier.nom, type_mime: fichier.format.typeMime };
       if ((type === "DEVIS" || type === "FACTURE") && fichier.format.typeMime === "application/pdf" && champs.numero && champs.montant) {
@@ -348,6 +372,7 @@ export async function retirerFichierDepose(id: string, motif: string): Promise<L
   const ligne = await lireLigneDepot(id);
   if (ligne.archiveLe) throw new ErreurMetier("Ce fichier est déjà retiré.", 409);
   if (ligne.documentId) throw new ErreurMetier("Un devis ou une facture repris ne se retire pas ici : il s'annule (« annuler_document »).", 409);
+  if (ligne.type === "SIMULATION") throw new ErreurMetier("Une simulation se retire par « archiver » (entite SIMULATION) ou se masque par « publier » (retirer).", 409);
   if (ligne.photoChemin && ligne.cibleEntite === "DOSSIER" && ligne.cibleId) await retirerDuDossier(ligne.cibleId, ligne.photoChemin);
   if (ligne.photoChemin && ligne.cibleEntite === "PUBLICATION" && ligne.cibleId) {
     const p = await prisma.publicationSite.findUnique({ where: { id: ligne.cibleId }, select: { photoAvant: true, photoApres: true, dossierId: true } });
@@ -388,14 +413,14 @@ export async function remettreFichierDepose(id: string): Promise<LigneDepot> {
  * est posé à sa nouvelle place, puis retiré de l'ancienne, gardé). Un devis « à compléter » devient un devis repris
  * quand `document` porte son numéro et son montant.
  */
-export async function rangerFichierDepose(id: string, cible: CibleFichier, type: TypeFichier | null, document?: ChampsDocument): Promise<ResultatEnregistrement> {
+export async function rangerFichierDepose(id: string, cible: CibleFichier, type: TypeFichier | null, document?: ChampsDocument, autres: Pick<OptionsEnregistrement, "simulation" | "documentRepris"> = {}): Promise<ResultatEnregistrement> {
   const ligne = await lireLigneDepot(id);
   if (ligne.archiveLe && !ligne.rangeLe) throw new ErreurMetier("Ce fichier est retiré : remets-le d'abord (remettre: true).", 409);
   if (ligne.rangeLe) throw new ErreurMetier("Ce fichier est déjà rangé ailleurs.", 409);
   if (ligne.documentId) throw new ErreurMetier("Un devis ou une facture repris ne se déplace pas : annule-le (« annuler_document ») et dépose-le de nouveau.", 409);
   const contenu = await octetsDuDepot(ligne);
   if (!contenu) throw new ErreurMetier("Le fichier n'est plus lisible sur le serveur.", 404);
-  const nouveau = await enregistrerFichierRecu(cible, type ?? (ligne.type as TypeFichier | null), { contenu, nom: ligne.nom }, { voie: ligne.voie as VoieFichier, origine: ligne.origine, jetonId: ligne.jetonId, document });
+  const nouveau = await enregistrerFichierRecu(cible, type ?? (ligne.type as TypeFichier | null), { contenu, nom: ligne.nom }, { voie: ligne.voie as VoieFichier, origine: ligne.origine, jetonId: ligne.jetonId, document, ...autres });
   const motif = `Rangé : ${LIBELLES_ENTITE[cible.entite]} ${nouveau.cible?.nom ?? cible.id} (${nouveau.id})`;
   if (ligne.cibleEntite) await retirerFichierDepose(id, motif);
   else await prisma.fichierDepose.update({ where: { id }, data: { archiveLe: new Date(), archiveMotif: motif.slice(0, 300) } });

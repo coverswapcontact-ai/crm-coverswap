@@ -140,7 +140,7 @@ describe("l'API Google Calendar n'est pas activée dans le projet Google Cloud",
     assert.deepEqual(sante.agendaApi, { activee: false, message: MESSAGE_GOOGLE });
     assert.equal(sante.taches.enEchec.length, 0);
     const s = await session();
-    const texte = (await execution.executerOutil(outil(lecture.outilSanteSysteme), {}, s)).texte;
+    const texte = (await execution.executerOutil(outil((await import("@/lib/assistant/outils/etat")).outilEtatCrm), { partie: "SANTE" }, s)).texte;
     assert.match(texte, /^Aucune tâche en échec\.$/m);
     assert.match(texte, /^Google Calendar : l'API n'est pas activée dans le projet Google Cloud \(console Google Cloud → API et services → Google Calendar API\) ; les rappels attendent et s'inscriront seuls une fois l'API activée\. Réponse de Google : Google Calendar API has not been used in project 123456789/m);
     assert.doesNotMatch(texte, /Google : rien à signaler/);
@@ -164,7 +164,7 @@ describe("l'API Google Calendar n'est pas activée dans le projet Google Cloud",
     assert.ok((await leadDe(alice.id)).agendaEvenementId);
     const apres = await google.etatConnexionGoogle();
     assert.deepEqual([apres.agendaApiActivee, apres.agendaApiMessage], [true, null], "plus aucune tâche n'attend : rien à dire");
-    assert.match((await execution.executerOutil(outil(lecture.outilSanteSysteme), {}, s)).texte, /^Google : rien à signaler\.$/m);
+    assert.match((await execution.executerOutil(outil((await import("@/lib/assistant/outils/etat")).outilEtatCrm), { partie: "SANTE" }, s)).texte, /^Google : rien à signaler\.$/m);
   });
 
   test("appelGoogle : « SERVICE_DISABLED » seul attend aussi (6 h) ; un autre 403 reste définitif ; le nom de l'API suit l'adresse", async () => {
@@ -207,13 +207,13 @@ describe("l'API Google Calendar n'est pas activée dans le projet Google Cloud",
     assert.deepEqual([etat.agendaApiActivee, etat.agendaApiMessage, etat.autresApisNonActivees], [true, null, [{ api: "Gmail", message: reponse }]]);
     const sante = await lecture.santeSysteme();
     assert.deepEqual([sante.agendaApi, sante.autresApisNonActivees, sante.taches.enEchec.length], [{ activee: true, message: null }, [{ api: "Gmail", message: reponse }], 0]);
-    const texte = (await execution.executerOutil(outil(lecture.outilSanteSysteme), {}, await session())).texte;
+    const texte = (await execution.executerOutil(outil((await import("@/lib/assistant/outils/etat")).outilEtatCrm), { partie: "SANTE" }, await session())).texte;
     assert.match(texte, /^Gmail : l'API n'est pas activée dans le projet Google Cloud \(console Google Cloud → API et services → Gmail API\) ; les tâches attendent et repartiront seules une fois l'API activée\. Réponse de Google : Gmail API has not been used in project 123456789/m);
     assert.doesNotMatch(texte, /Google : rien à signaler|Google Calendar : l'API/);
 
     await prisma.tache.update({ where: { id: tache.id }, data: { statut: "TERMINEE", termineLe: new Date() } });
     assert.deepEqual((await google.etatConnexionGoogle()).autresApisNonActivees, [], "plus aucune tâche n'attend : rien à dire");
-    assert.match((await execution.executerOutil(outil(lecture.outilSanteSysteme), {}, await session())).texte, /^Google : rien à signaler\.$/m);
+    assert.match((await execution.executerOutil(outil((await import("@/lib/assistant/outils/etat")).outilEtatCrm), { partie: "SANTE" }, await session())).texte, /^Google : rien à signaler\.$/m);
   });
 });
 

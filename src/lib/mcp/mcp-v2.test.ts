@@ -157,25 +157,25 @@ describe("Mission 10 : les actions qui manquaient", () => {
   test("les nouveaux outils sont exposés avec leur niveau ; les consignes portent la section « Dossiers, photos, espace »", async () => {
     const outils = await client.listTools();
     const niveau = (nom: string) => outils.tools.find((t) => t.name === nom)?.description?.match(/^\[([^\]]+)\]/)?.[1];
-    assert.equal(niveau("modifier_dossier"), "Écriture réversible");
+    // Mission 17 (partie C) : modifier_dossier, modifier_consignes, modifier_tarifs → « modifier » (sensible par cas) ;
+    // voir_photos, voir_simulations → « voir_fichiers » ; messages_espace, depenses → « lister » ; restaurer_consignes → « restaurer ».
+    assert.equal(niveau("modifier"), "Écriture réversible");
     assert.equal(niveau("annuler_modification"), "Écriture réversible");
-    assert.equal(niveau("voir_photos"), "Lecture");
-    assert.equal(niveau("voir_simulations"), "Lecture");
-    assert.equal(niveau("messages_espace"), "Lecture");
+    assert.equal(niveau("voir_fichiers"), "Lecture");
+    assert.equal(niveau("lister"), "Lecture");
     assert.equal(niveau("repondre_espace"), "Sensible (confirmation)");
     assert.equal(niveau("preparer_simulation"), "Écriture réversible");
-    assert.equal(niveau("modifier_consignes"), "Sensible (confirmation)");
-    assert.equal(niveau("restaurer_consignes"), "Écriture réversible");
-    assert.equal(niveau("modifier_tarifs"), "Sensible (confirmation)");
-    assert.equal(niveau("depenses"), "Lecture");
+    assert.equal(niveau("restaurer"), "Écriture réversible");
     assert.equal(niveau("lien_espace"), "Écriture réversible");
+    const modifier = (await import("@/lib/assistant/catalogue")).outilParNom("modifier")!;
+    assert.equal(await modifier.sensible!({ entite: "CONSIGNES", champs: { mode: "completer_section", section: "Principes de Lucas", contenu: "- x" } }), true, "modifier CONSIGNES : sensible");
     const consignes = await client.readResource({ uri: "coverswap://consignes" });
     assert.match((consignes.contents[0] as { text: string }).text, /## Dossiers, photos, espace/);
   });
 
   test("« Mets l'îlot de Thimalu en chêne » : tracé avec l'ancienne valeur, devis signalé ; « annuler_modification » remet", async () => {
-    const fait = await appeler("modifier_dossier", { nom: "Thimalu", teintes: { ilot: "chêne" }, commande: "Mets l'îlot de Thimalu en chêne" });
-    assert.match(fait, /^Dossier de Anaïs Thimalu(?: — [^:]+?)? modifié : teintes par sous-partie : aucune → Cuisine › Îlot : chêne\./);
+    const fait = await appeler("modifier", { entite: "DOSSIER", cible: { nom: "Thimalu" }, champs: { teintes: { ilot: "chêne" } }, commande: "Mets l'îlot de Thimalu en chêne" });
+    assert.match(fait, /^Modifié sur Anaïs Thimalu(?: — [^:]+?)? : les teintes passent de aucune à Cuisine › Îlot : chêne ;/);
     assert.match(fait, new RegExp(`Le devis ${ids.numeroDevis} ne correspond plus : à régénérer`));
     assert.doesNotMatch(fait, /Jeton de confirmation/);
     const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierThimalu } });
@@ -187,42 +187,42 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.deepEqual(changements.map((c) => c.champ), ["teintes"]);
     assert.deepEqual(changements[0].avant, {});
     assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: ids.dossierThimalu, type: "DOSSIER_MODIFIE" } }), 1);
-    const appel = await prisma.appelOutil.findFirstOrThrow({ where: { outil: "modifier_dossier", statut: "FAIT" } });
+    const appel = await prisma.appelOutil.findFirstOrThrow({ where: { outil: "modifier", statut: "FAIT" } });
     assert.equal(appel.commande, "Mets l'îlot de Thimalu en chêne");
     // Annulation : par le même chemin, la trace reste (marquée annulée).
     const annule = await appeler("annuler_modification", { nom: "Thimalu", commande: "Annule, remets comme avant" });
-    assert.match(annule, /Modification annulée chez Anaïs Thimalu(?: — [^:]+?)? : teintes par sous-partie : Cuisine › Îlot : chêne → aucune/);
+    assert.match(annule, /Modification annulée chez Anaïs Thimalu(?: — [^:]+?)? : les teintes passent de Cuisine › Îlot : chêne à aucune/);
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierThimalu } })).teintes, null);
     assert.ok((await prisma.modificationDossier.findUniqueOrThrow({ where: { id: trace.id } })).annuleeLe);
     assert.match(await appeler("annuler_modification", { nom: "Thimalu", commande: "Annule encore" }), /déjà annulées|Aucune modification/);
   });
 
   test("« Décale la pose de Rousse au 12 octobre » : aperçu, confirmation exigée, puis la date change", async () => {
-    const apercu = await appeler("modifier_dossier", { nom: "Rousse", date_chantier: "12 octobre", commande: "Décale la pose de Rousse au 12 octobre" });
-    assert.match(apercu, /Je vais modifier le dossier de Bernard Rousse(?: — [^:]+?)? : date de pose : 5 octobre 2026 → 12 octobre 2026\./);
+    const apercu = await appeler("modifier", { entite: "DOSSIER", cible: { nom: "Rousse" }, champs: { date_chantier: "12 octobre" }, commande: "Décale la pose de Rousse au 12 octobre" });
+    assert.match(apercu, /Je vais modifier Bernard Rousse(?: — [^:]+?)? : la date de pose passe de 5 octobre 2026 à 12 octobre 2026\./);
     assert.match(apercu, /Rien n'a été fait/);
     const jeton = jetonDe(apercu);
     assert.ok(jeton);
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierRousse } })).dateChantier?.toISOString(), "2026-10-05T12:00:00.000Z");
-    const fait = await appeler("modifier_dossier", { nom: "Rousse", date_chantier: "12 octobre", confirmation: jeton, commande: "Décale la pose de Rousse au 12 octobre" });
-    assert.match(fait, /Dossier de Bernard Rousse(?: — [^:]+?)? modifié : date de pose : 5 octobre 2026 → 12 octobre 2026\./);
+    const fait = await appeler("modifier", { entite: "DOSSIER", cible: { nom: "Rousse" }, champs: { date_chantier: "12 octobre" }, confirmation: jeton, commande: "Décale la pose de Rousse au 12 octobre" });
+    assert.match(fait, /Modifié sur Bernard Rousse(?: — [^:]+?)? : la date de pose passe de 5 octobre 2026 à 12 octobre 2026\./);
     assert.doesNotMatch(fait, /ne correspond plus/, "aucun devis émis chez Rousse");
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierRousse } })).dateChantier?.toISOString(), "2026-10-12T12:00:00.000Z");
   });
 
   test("« Passe la salle de bain en sous-partie douche » : refusé avec les sous-parties possibles ; « plan vasque » passe", async () => {
-    const refus = await appeler("modifier_dossier", { nom: "Thimalu", ajouter_sous_parties: ["SDB.douche"], commande: "Passe la salle de bain en sous-partie douche" });
+    const refus = await appeler("modifier", { entite: "DOSSIER", cible: { nom: "Thimalu" }, champs: { ajouter_sous_parties: ["SDB.douche"] }, commande: "Passe la salle de bain en sous-partie douche" });
     assert.match(refus, /^Refusé : « SDB\.douche » n'est pas une sous-partie connue\. Possibles : Salle de bain › Meuble vasque, Salle de bain › Plan vasque/);
-    const fait = await appeler("modifier_dossier", { nom: "Thimalu", ajouter_sous_parties: ["plan vasque"], commande: "Ajoute le plan vasque de la salle de bain" });
-    assert.match(fait, /familles et sous-parties : Cuisine : façades hautes, façades basses, îlot → Cuisine : façades hautes, façades basses, îlot · Salle de bain : plan vasque/);
+    const fait = await appeler("modifier", { entite: "DOSSIER", cible: { nom: "Thimalu" }, champs: { ajouter_sous_parties: ["plan vasque"] }, commande: "Ajoute le plan vasque de la salle de bain" });
+    assert.match(fait, /les familles et sous-parties passent de Cuisine : façades hautes, façades basses, îlot à Cuisine : façades hautes, façades basses, îlot · Salle de bain : plan vasque/);
     assert.match(fait, /ne correspond plus/);
     const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: ids.dossierThimalu } });
     assert.deepEqual(JSON.parse(dossier.prestations ?? "{}"), { CUISINE: ["facades-hautes", "facades-basses", "ilot"], SDB: ["plan-vasque"] });
     assert.equal(dossier.prestationsPar, "LUCAS");
   });
 
-  test("« voir_photos » : de vraies images MCP, compressées, avec date et origine", async () => {
-    const r = await appelerBrut("voir_photos", { nom: "Thimalu" });
+  test("« voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP, compressées, avec date et origine", async () => {
+    const r = await appelerBrut("voir_fichiers", { genre: "photos", cible: { nom: "Thimalu" } });
     const t = texte(r);
     assert.match(t, /Anaïs Thimalu(?: — [^:]+?)? : 2 photos avant chantier ; 2 jointes/);
     assert.match(t, /déposée dans le CRM/);
@@ -236,13 +236,13 @@ describe("Mission 10 : les actions qui manquaient", () => {
       const meta = await sharp(octets).metadata();
       assert.ok((meta.width ?? 0) <= 1024 && (meta.height ?? 0) <= 1024, `${meta.width}x${meta.height}`);
     }
-    const une = await appelerBrut("voir_photos", { dossierId: ids.dossierThimalu, nombre: 1, decalage: 1 });
+    const une = await appelerBrut("voir_fichiers", { genre: "photos", cible: { entite: "DOSSIER", id: ids.dossierThimalu }, nombre: 1, decalage: 1 });
     assert.equal(images(une).length, 1);
     assert.match(texte(une), /Photo 2/);
   });
 
-  test("« voir_simulations » : l'après en image, les teintes, le statut, vue ou non par le client", async () => {
-    const r = await appelerBrut("voir_simulations", { nom: "Thimalu" });
+  test("« voir_fichiers » simulations (ex-« voir_simulations ») : l'après en image, les teintes, le statut, vue ou non par le client", async () => {
+    const r = await appelerBrut("voir_fichiers", { genre: "simulations", cible: { nom: "Thimalu" } });
     const t = texte(r);
     assert.match(t, /1 simulation ;/);
     assert.match(t, /« Chêne clair »/);
@@ -253,9 +253,9 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.equal(images(r)[0].mimeType, "image/jpeg");
   });
 
-  test("« messages_espace » puis « repondre_espace » : « [à compléter] » bloque ; sinon aperçu, confirmation, message dans l'espace, notification, lu", async () => {
+  test("« lister » MESSAGES_ESPACE (ex-« messages_espace ») puis « repondre_espace » : « [à compléter] » bloque ; sinon aperçu, confirmation, message dans l'espace, notification, lu", async () => {
     await compte.envoyerMessage(permanentThimalu, projetThimalu, "Bonjour, est-ce que le chêne va avec un plan noir ?");
-    const nonLus = await appeler("messages_espace", {});
+    const nonLus = await appeler("lister", { liste: "MESSAGES_ESPACE" });
     assert.match(nonLus, /1 message non lu/);
     assert.match(nonLus, /Anaïs Thimalu \(message, NON LU\) : « Bonjour, est-ce que le chêne va avec un plan noir \? »/);
     const bloque = await appeler("repondre_espace", { nom: "Thimalu", texte: "Bonjour, oui, le chêne clair se marie bien avec un plan noir. Comptez [à compléter] € pour l'îlot.", commande: "Réponds-lui que oui" });
@@ -290,8 +290,8 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.equal(vueClient.reponsesNonVues, 1);
     assert.equal(await compte.noterReponsesVues(permanentThimalu), 1);
     assert.equal((await compte.compteEspace(await prisma.espacePermanent.findUniqueOrThrow({ where: { id: permanentThimalu.id } }))).reponsesNonVues, 0);
-    assert.match(await appeler("messages_espace", { nom: "Thimalu" }), /2 messages avec Anaïs Thimalu/);
-    assert.match(await appeler("messages_espace", {}), /Aucun message d'espace non lu/);
+    assert.match(await appeler("lister", { liste: "MESSAGES_ESPACE", filtres: { nom: "Thimalu" } }), /2 messages avec Anaïs Thimalu/);
+    assert.match(await appeler("lister", { liste: "MESSAGES_ESPACE" }), /Aucun message d'espace non lu/);
   });
 
   test("« Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot bois » : paquet ChatGPT complet, rien généré ni publié", async () => {
@@ -317,24 +317,24 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.match(ambigu, /2 teintes correspondent : demande à Lucas laquelle — Ultra White \(J3/);
   });
 
-  test("« modifier_consignes » : diff en aperçu, confirmation, version restaurable ; « versions_consignes » et « restaurer_consignes »", async () => {
-    const apercu = await appeler("modifier_consignes", { texte: "consignes", mode: "completer_section", section: "Principes de Lucas", contenu: "- Un chantier ne se planifie jamais un lundi matin.", commande: "Ajoute aux principes : jamais de chantier le lundi matin" });
-    assert.match(apercu, /Je vais modifier les consignes \(completer section « Principes de Lucas »\)\. Lignes ajoutées \(1\) :\n\+ - Un chantier ne se planifie jamais un lundi matin\./);
+  test("« modifier » CONSIGNES (ex-« modifier_consignes ») : diff en aperçu, confirmation, version restaurable ; « etat_crm » CONSIGNES_VERSIONS et « restaurer » CONSIGNES", async () => {
+    const apercu = await appeler("modifier", { entite: "CONSIGNES", champs: { mode: "completer_section", section: "Principes de Lucas", contenu: "- Un chantier ne se planifie jamais un lundi matin." }, commande: "Ajoute aux principes : jamais de chantier le lundi matin" });
+    assert.match(apercu, /Je vais modifier les consignes de Claude : le texte passe de [\d\s\u202f\u00a0]+ caractères à [\d\s\u202f\u00a0]+ caractères\.\nLignes ajoutées \(1\) :\n\+ - Un chantier ne se planifie jamais un lundi matin\./);
     assert.doesNotMatch(apercu, /Lignes retirées/);
     assert.equal(await prisma.versionTexte.count(), 0);
-    const fait = await appeler("modifier_consignes", { texte: "consignes", mode: "completer_section", section: "Principes de Lucas", contenu: "- Un chantier ne se planifie jamais un lundi matin.", confirmation: jetonDe(apercu), commande: "Ajoute aux principes : jamais de chantier le lundi matin" });
-    assert.match(fait, /Consignes modifié\(es\), version 2 enregistrée/);
+    const fait = await appeler("modifier", { entite: "CONSIGNES", champs: { mode: "completer_section", section: "Principes de Lucas", contenu: "- Un chantier ne se planifie jamais un lundi matin." }, confirmation: jetonDe(apercu), commande: "Ajoute aux principes : jamais de chantier le lundi matin" });
+    assert.match(fait, /Consignes : version 2 enregistrée/);
     const consignes = await client.readResource({ uri: "coverswap://consignes" });
     const texteConsignes = (consignes.contents[0] as { text: string }).text;
     assert.match(texteConsignes, /## Principes de Lucas\n(- .*\n)*- Un chantier ne se planifie jamais un lundi matin\./);
     assert.match(texteConsignes, /## Mail/);
-    const versions = await appeler("versions_consignes", { texte: "consignes" });
+    const versions = await appeler("etat_crm", { partie: "CONSIGNES_VERSIONS", texte: "consignes" });
     assert.match(versions, /v2 — .* — ASSISTANT:claude — « Ajoute aux principes : jamais de chantier le lundi matin » — \d+ caractères \(courante\)/);
     assert.match(versions, /v1 — .* — DEFAUT — « État d'avant la première modification »/);
-    const restaure = await appeler("restaurer_consignes", { texte: "consignes", numero: 1, commande: "Reviens à la version d'avant" });
+    const restaure = await appeler("restaurer", { elements: [{ entite: "CONSIGNES", numero: 1 }], commande: "Reviens à la version d'avant" });
     assert.match(restaure, /version 1 restaurée \(enregistrée comme version 3\)/);
     assert.doesNotMatch((await client.readResource({ uri: "coverswap://consignes" })).contents[0] && ((await client.readResource({ uri: "coverswap://consignes" })).contents[0] as { text: string }).text, /lundi matin/);
-    const inconnue = await appeler("modifier_consignes", { texte: "consignes", mode: "remplacer_section", section: "Section qui n'existe pas", contenu: "- rien" });
+    const inconnue = await appeler("modifier", { entite: "CONSIGNES", champs: { mode: "remplacer_section", section: "Section qui n'existe pas", contenu: "- rien" } });
     assert.match(inconnue, /^Refusé : Section « Section qui n'existe pas » introuvable ou ambiguë\. Sections : /);
   });
 
@@ -356,26 +356,26 @@ describe("Mission 10 : les actions qui manquaient", () => {
   });
 
   test("« Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie, rattaché ou non", async () => {
-    const pub = await appeler("depenses", { periode: "mois_en_cours", categorie: "PUBLICITE" });
+    const pub = await appeler("lister", { liste: "DEPENSES", filtres: { periode: "mois_en_cours", categorie: "PUBLICITE" } });
     assert.match(pub, /Dépenses le mois en cours, publicité : 87,5 € en 1 dépense\./);
     assert.match(pub, /hors chantier : 87,5 € \(1\)/);
-    const tout = await appeler("depenses", {});
+    const tout = await appeler("lister", { liste: "DEPENSES", filtres: { periode: "mois_en_cours" } });
     assert.match(tout, /: 222,5 € en 3 dépenses/);
     assert.match(tout, /Rattachées à un chantier : 120 € \(1\) ; hors chantier : 87,5 € \(1\) ; pas encore rattachées : 15 € \(1\)/);
     assert.match(tout, /À rattacher \(ou à marquer hors chantier\) : .*Leroy Merlin.*NON RATTACHÉE/);
-    const non = await appeler("depenses", { rattachement: "non_rattachees" });
+    const non = await appeler("lister", { liste: "DEPENSES", filtres: { rattachement: "non_rattachees" } });
     assert.match(non, /15 € en 1 dépense/);
   });
 
-  test("« modifier_tarifs » : aperçu avec l'ancien prix et les sous-parties qui partagent le tarif, confirmation ; les devis émis ne bougent pas", async () => {
-    const avant = await appeler("tarifs", { sous_partie: "ilot" });
+  test("« modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec l'ancien prix et les sous-parties qui partagent le tarif, confirmation ; les devis émis ne bougent pas", async () => {
+    const avant = await appeler("lister", { liste: "TARIFS", filtres: { sous_partie: "ilot" } });
     assert.match(avant, /Cuisine › Îlot \(CUISINE\.ilot\) : 110 € \/ ml — tarif « Revêtement adhésif — cuisine \/ façades » \(par mots-clés\)/);
-    const apercu = await appeler("modifier_tarifs", { sous_partie: "ilot", prix_unitaire: 95, commande: "Passe l'îlot à 95 euros le mètre" });
-    assert.match(apercu, /Je vais modifier le tarif « Revêtement adhésif — cuisine \/ façades » \(trouvé par mots-clés, il sera attribué à cette sous-partie\) pour Cuisine › Îlot : 110 € \/ ml → 95 € \/ ml\. Ce tarif sert aussi à : Cuisine › Façades hautes/);
+    const apercu = await appeler("modifier", { entite: "SOUS_PARTIE", id: "ilot", champs: { prix_unitaire: 95 }, commande: "Passe l'îlot à 95 euros le mètre" });
+    assert.match(apercu, /Je vais modifier Cuisine › Îlot : le prix unitaire passe de 110 € à 95 €\.\nTarif concerné : « Revêtement adhésif — cuisine \/ façades » \(ml\), trouvé par mots-clés : il sera attribué à cette sous-partie\. Ce tarif sert aussi à : Cuisine › Façades hautes/);
     assert.match(apercu, /Les devis déjà émis ne changent pas/);
     const devisAvant = await prisma.document.findFirstOrThrow({ where: { numero: ids.numeroDevis } });
-    const fait = await appeler("modifier_tarifs", { sous_partie: "ilot", prix_unitaire: 95, confirmation: jetonDe(apercu), commande: "Passe l'îlot à 95 euros le mètre" });
-    assert.match(fait, /Tarif modifié pour Cuisine › Îlot : 110 € \/ ml → 95 € \/ ml/);
+    const fait = await appeler("modifier", { entite: "SOUS_PARTIE", id: "ilot", champs: { prix_unitaire: 95 }, confirmation: jetonDe(apercu), commande: "Passe l'îlot à 95 euros le mètre" });
+    assert.match(fait, /Modifié sur Cuisine › Îlot : le prix unitaire passe de 110 € à 95 €/);
     const { tarifsDesPrestations } = await import("@/lib/prestations/tarifs");
     const ilot = (await tarifsDesPrestations()).find((l) => l.cle === "CUISINE.ilot")!;
     assert.equal(ilot.prixUnitaire, 95);
@@ -399,19 +399,19 @@ describe("Mission 10 : les actions qui manquaient", () => {
     assert.match(parNumero[0].etat, new RegExp(`devis ${ids.numeroDevis}`));
   });
 
-  test("« ce_qui_m_attend » et « point_du_jour » comptent les messages d'espace non lus et les propositions en attente", async () => {
+  test("« taches » TOUT (ex-« ce_qui_m_attend ») et « point_du_jour » comptent les messages d'espace non lus et les propositions en attente", async () => {
     await compte.envoyerMessage(permanentThimalu, projetThimalu, "Et pour la crédence, vous conseillez quoi ?");
-    const attend = await appeler("ce_qui_m_attend", {});
-    assert.match(attend, /1 message d'espace non lu \(« messages_espace »\)/);
+    const attend = await appeler("taches", { vue: "TOUT" });
+    assert.match(attend, /1 message d'espace non lu \(« lister » MESSAGES_ESPACE\)/);
     assert.match(attend, /\d+ propositions? à valider \(cartes de mise à jour, relances, règles\)/);
     const point = await appeler("point_du_jour", {});
     assert.match(point, /2 messages de clients dans leur espace \(Anaïs Thimalu : « Et pour la crédence/);
     assert.match(point, /1 message d'espace non lu, \d+ propositions? à valider\./);
-    assert.match(await appeler("marquer_messages_lus", { nom: "Thimalu", commande: "C'est lu, je l'appelle" }), /1 message de Anaïs Thimalu(?: — [^:]+?)? marqué lu/);
+    assert.match(await appeler("geste_espace", { geste: "MARQUER_LUS", nom: "Thimalu", commande: "C'est lu, je l'appelle" }), /1 message de Anaïs Thimalu(?: — [^:]+?)? marqué lu/);
   });
 
   test("journal : chaque écriture porte la phrase de Lucas ; aucun appel Anthropic, aucun réseau sorti", async () => {
-    const ecritures = await prisma.appelOutil.findMany({ where: { niveau: { not: "LECTURE" }, statut: "FAIT", outil: { in: ["modifier_dossier", "annuler_modification", "repondre_espace", "preparer_simulation", "modifier_consignes", "restaurer_consignes", "lien_espace", "modifier_tarifs", "marquer_messages_lus"] } } });
+    const ecritures = await prisma.appelOutil.findMany({ where: { niveau: { not: "LECTURE" }, statut: "FAIT", outil: { in: ["modifier", "annuler_modification", "repondre_espace", "preparer_simulation", "restaurer", "lien_espace", "geste_espace"] } } });
     assert.ok(ecritures.length >= 9, String(ecritures.length));
     for (const e of ecritures) assert.ok(e.commande, `${e.outil} sans commande`);
     const session = await prisma.sessionAssistant.findFirstOrThrow();

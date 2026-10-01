@@ -8,9 +8,15 @@
 - **Date** : 30/09/2026. Code audité : branche de la mission 17, commit `62e73bc` (fin de la partie B : `/taches`,
   `/taches-de-fond`, `/analytique` ; `/publicite` et `/synthese` redirigés ; `/finances` allégé ; blocs retirés de
   Leads (entonnoir), Clients (« D'où viennent les clients ») et Dépenses (tuiles par catégorie)).
-- **Catalogue audité** : **84 outils**, empreinte du registre **`3db5c223f5bb`**. Valeur relevée par
+- **Catalogue audité** : **84 outils**, empreinte du registre **`3db5c223f5bb`** (avant la partie C). Au début de la
+  mission 17, le catalogue comptait **80 outils**, empreinte **`ef81342ae27b`**. Valeurs relevées par
   `registreOutils()` (`src/lib/assistant/couverture.ts`) avec un petit script `tsx`. C'est la même empreinte que celle
-  de `/api/health` et de `lister_outils`.
+  de `/api/health` et de `etat_crm` OUTILS.
+- **Après la partie C (01/10/2026)** : **53 outils**, empreinte **`040d6c7aa53c`** (16 de lecture, 27 d'écriture
+  réversible, 10 sensibles). Les 45 outils retirés et leur remplaçant sont dans `src/lib/assistant/retraits.ts`
+  (`OUTILS_RETIRES`) ; le catalogue refuse de démarrer s'il en expose un. **Toutes les lignes des tableaux de la
+  section 2 sont couvertes** (0 partielle, 0 manquante), hors gestes `sans objet`. Chaque ligne cite le test qui la
+  vérifie (colonne **Test** : fichier › nom du test).
 - **Règle** : **zéro action manquante**. Toute action de l'interface a son outil MCP, avec les mêmes paramètres, la
   même fonction de service et la même sensibilité. Les seules exceptions sont les gestes « sans objet » listés comme
   tels : appel téléphonique `tel:`, presse-papiers, tri local, consentement OAuth dans le navigateur, abonnement push de
@@ -34,11 +40,15 @@
   - `S-param` : sensible, paramètres et réglages globaux.
   - `S-sécu` : sensible, accès et connexions.
   - `—` : geste local, sans serveur.
-- **Statut** :
+- **Statut** (après la partie C ; les statuts de l'audit sont résumés en 2.17) :
   - `couvert` : l'outil fait la même chose, avec les mêmes paramètres.
   - `partiel : …` : l'outil existe, mais il manque ce qui est dit.
   - `manquant` : aucun outil ne le fait.
   - `sans objet` : geste qu'un assistant ne fait pas (voir la règle ci-dessus).
+- **Test** : le test qui vérifie la ligne, en général en rejouant le geste de l'écran (sa route) sur un jumeau et en
+  comparant l'état en base. Toute action sensible est en plus vérifiée par
+  `src/lib/mcp/mcp-sensibles.test.ts` : aperçu, jeton, et **aucune écriture métier** tant que le jeton n'est pas
+  rendu (journal des modifications vide hors tables mécaniques).
 
 ## 2. Inventaire par écran
 
@@ -46,447 +56,447 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 
 ### 2.1 Tâches (`/taches`, partie A)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| T1 | Liste « Aujourd'hui » : les 10 du jour, titre, raison, durée, geste prêt, compteurs, minutes du jour | GET /api/a-faire | L | taches (AUJOURDHUI) | couvert |
-| T2 | Relecture automatique (20 s, retour sur l'onglet, après un geste) | GET /api/a-faire | L | taches | couvert |
-| T3 | « Actualiser » : une passe de tous les détecteurs, avec les tâches nouvelles et celles cochées par le CRM | POST /api/a-faire/detecter | R | — | manquant |
-| T4 | « J'ai N minutes » : le plan regroupé (« 3 appels · 10 min ») | GET /api/a-faire/minutes?m= | L | taches (MINUTES, minutes) | couvert |
-| T5 | « Commencer » / lancer un groupe du plan : série plein écran, Passer, Quitter | — | — | taches (l'ordre suffit) | sans objet |
-| T6 | Bouton principal APPEL (`tel:`, puis fin d'appel) | tel: ; POST /api/commercial/appels | R | taches (numéro) + noter_appel | couvert |
-| T7 | Bouton principal SMS : écran SMS, texte prêt, « Copier » | POST /api/sms/copie | S-client | taches (texte prêt) + noter_sms | couvert |
-| T8 | Bouton principal MAIL : panneau du fil ouvert sur « Répondre » | GET /api/mail/:id ; POST /api/mail/envoyer | S-client | lire_mail + deposer_brouillon / envoyer_mail | couvert |
-| T9 | Bouton principal ESPACE : fil des messages de l'espace, réponse | POST /api/dossiers/:id/espace {geste:repondre} | S-client | repondre_espace | couvert |
-| T10 | Bouton principal DEVIS : générateur prérempli d'après l'espace, ou dépôt d'un PDF | GET /api/dossiers/:id/devis-propose ; POST …/documents | S | generer_document / deposer_document | partiel : les lignes préremplies (`devisProposeDuDossier`) ne sont pas exposées |
-| T11 | Bouton principal ENCAISSER | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement | partiel : ni pièce réglée, ni payeur, ni date de crédit (voir DP9) |
-| T12 | PLANIFIER : les jours libres des 10 prochains jours ouvrés (agenda Google) | GET /api/a-faire/creneaux?dossierId= | L | — | manquant |
-| T13 | PLANIFIER : poser la date du chantier | PATCH /api/dossiers/:id {dateChantier} | R | modifier_dossier (date_chantier) | couvert |
-| T14 | Bouton principal SIMULATEUR | nav /simulateur | R | preparer_simulation | couvert |
-| T15 | RELANCE_MAIL : relire, corriger, valider le mail de relance | POST /api/validation/:id/valider {corrections} | S-client | valider_proposition / relancer | partiel : seule la correction `valeur` passe ; l'objet et le texte du mail ne se corrigent pas |
-| T16 | « Valider » dans la ligne (proposition non sensible) | POST /api/a-faire/:id/reponse {FAIT} | R | repondre_tache (FAIT) | couvert |
-| T17 | « Relire et valider » (proposition sensible → `/validation?proposition=`) | GET/POST /api/validation | S | repondre_tache (aperçu) / valider_proposition | partiel : valider_proposition ne calcule pas la sensibilité du type (voir V4) |
-| T18 | COHERENCE : « Corriger » | POST /api/coherence/corriger {cle} | R / S | — | manquant |
-| T19 | Toucher la ligne : fiche du dossier ou du contact | GET /api/dossiers/:id, /api/prospects/entrants/:id | L | lire_fiche | couvert |
-| T20 | PAGE : lien vers un écran du CRM ou une page externe | — | — | — | sans objet |
-| T21 | « Fait » (bouton, balayage à droite, mode Commencer) | POST /api/a-faire/:id/reponse {FAIT} | R (S si l'effet part chez le client ou touche l'argent) | repondre_tache (FAIT) | couvert |
-| T22 | « Plus tard » : Ce soir / Demain / Lundi / Dans une semaine, raison facultative (dont « J'attends le client ») | … {PLUS_TARD, quand, raison} | R | repondre_tache (PLUS_TARD, quand, raison) | couvert |
-| T23 | « Plus tard » › « Une date… » | … {PLUS_TARD, date} | R | repondre_tache (quand = date dictée) | couvert |
-| T24 | « Pas à faire » : raison selon le type (déjà fait, le client le fait, pas pertinent, pas de réponse à faire…) | … {PAS_A_FAIRE, raison} | R | repondre_tache (PAS_A_FAIRE, raison) | couvert |
-| T25 | « Pas à faire » › « Client perdu » : motif, précision si Autre | … {raison CLIENT_PERDU, motifPerte, precisionPerte} | S (perte) | repondre_tache (motif_perte, precision) | couvert |
-| T26 | « Pas à faire » › « Autre » : texte | … {raison AUTRE, texte} | R | repondre_tache (AUTRE, texte) | couvert |
-| T27 | « Ignorer » dans la ligne (proposition) | … {PAS_A_FAIRE, PAS_PERTINENT} | R | repondre_tache | couvert |
-| T28 | « Annuler » dans le message (5 s) | POST /api/a-faire/:id/annuler | R | repondre_tache (ANNULER) | couvert |
-| T29 | Section « Plus tard » : les reportées et leur date de retour | GET /api/a-faire | L | taches (PLUS_TARD) | couvert |
-| T30 | Section « Fait aujourd'hui » | GET /api/a-faire | L | taches (FAIT) | couvert |
-| T31 | « Demain : N » (ce qui revient) | GET /api/a-faire | L | taches (demain) | couvert |
-| T32 | Lots de ménage : la liste | GET /api/a-faire | L | taches (LOTS) | couvert |
-| T33 | Lot › « Revoir un par un » : les tâches du lot | GET /api/a-faire/lots/:lot | L | — | manquant (LOTS ne rend que le libellé et la clé) |
-| T34 | Lot › « Tout classer » | POST /api/a-faire/lots/:lot/classer | R (masse) | — | manquant |
-| T35 | Lot › « Annuler » ce classement | POST /api/a-faire/lots/:lot/annuler {le} | R | — | manquant |
-| T36 | Ajouter une tâche : titre, date facultative, « pour qui ? » (recherche dossier, lead, client) | POST /api/a-faire/ajouter | R | ajouter_tache (titre, quand, cible, raison) | couvert |
-| T37 | Mesure « commencer » (temps réel passé) | POST /api/a-faire/:id/commencer | — | — | sans objet |
-| T38 | Hors ligne : liste servie depuis le cache | service worker | — | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| T1 | Liste « Aujourd'hui » : les 10 du jour, titre, raison, durée, geste prêt, compteurs, minutes du jour | GET /api/a-faire | L | taches (AUJOURDHUI) | couvert | `mcp-taches.test.ts` › « aujourd'hui : le nombre et le temps, chaque tâche avec son identifiant… » |
+| T2 | Relecture automatique (20 s, retour sur l'onglet, après un geste) | GET /api/a-faire | L | taches | couvert | `mcp-taches.test.ts` › « aujourd'hui : le nombre et le temps, chaque tâche avec son identifiant… » |
+| T3 | « Actualiser » : une passe de tous les détecteurs, avec les tâches nouvelles et celles cochées par le CRM | POST /api/a-faire/detecter | R | agir_systeme (DETECTER_TACHES) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| T4 | « J'ai N minutes » : le plan regroupé (« 3 appels · 10 min ») | GET /api/a-faire/minutes?m= | L | taches (MINUTES, minutes) | couvert | `mcp-taches.test.ts` › « « j'ai 15 minutes » : le plan du moteur, regroupé (« 2 appels · 6 min… » |
+| T5 | « Commencer » / lancer un groupe du plan : série plein écran, Passer, Quitter | — | — | taches (l'ordre suffit) | sans objet | — |
+| T6 | Bouton principal APPEL (`tel:`, puis fin d'appel) | tel: ; POST /api/commercial/appels | R | taches (numéro) + noter_appel | couvert | `mcp-taches.test.ts` › « aujourd'hui : le nombre et le temps, chaque tâche avec son identifiant… » ; `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| T7 | Bouton principal SMS : écran SMS, texte prêt, « Copier » | POST /api/sms/copie | S-client | taches (texte prêt) + noter_sms | couvert | `mcp-taches.test.ts` › « aujourd'hui : le nombre et le temps, chaque tâche avec son identifiant… » ; `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
+| T8 | Bouton principal MAIL : panneau du fil ouvert sur « Répondre » | GET /api/mail/:id ; POST /api/mail/envoyer | S-client | lire_mail + deposer_brouillon / envoyer_mail | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| T9 | Bouton principal ESPACE : fil des messages de l'espace, réponse | POST /api/dossiers/:id/espace {geste:repondre} | S-client | repondre_espace | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » ; `mcp-sensibles.test.ts` › « repondre_espace — répondre dans l'espace : aperçu et jeton, aucune écriture » |
+| T10 | Bouton principal DEVIS : générateur prérempli d'après l'espace, ou dépôt d'un PDF | GET /api/dossiers/:id/devis-propose ; POST …/documents | S | generer_document (depuis_espace) / ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » ; `mcp-fichiers.test.ts` › « devis visible : aperçu + jeton (étape annoncée), puis document repris… » |
+| T11 | Bouton principal ENCAISSER | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement (piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
+| T12 | PLANIFIER : les jours libres des 10 prochains jours ouvrés (agenda Google) | GET /api/a-faire/creneaux?dossierId= | L | lister CRENEAUX (dossier) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| T13 | PLANIFIER : poser la date du chantier | PATCH /api/dossiers/:id {dateChantier} | R | modifier DOSSIER (date_chantier) | couvert | `mcp-v2.test.ts` › « « Décale la pose de Rousse au 12 octobre » : aperçu, confirmation… » |
+| T14 | Bouton principal SIMULATEUR | nav /simulateur | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| T15 | RELANCE_MAIL : relire, corriger, valider le mail de relance | POST /api/validation/:id/valider {corrections} | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
+| T16 | « Valider » dans la ligne (proposition non sensible) | POST /api/a-faire/:id/reponse {FAIT} | R | repondre_tache (FAIT) | couvert | `mcp-taches.test.ts` › « réponse sensible : « Fait » sur une validation qui envoie un mail →… » |
+| T17 | « Relire et valider » (proposition sensible → `/validation?proposition=`) | GET/POST /api/validation | S | repondre_tache (aperçu) / valider_proposition (sensibilité du type) | couvert | `mcp-taches.test.ts` › « réponse sensible : « Fait » sur une validation qui envoie un mail →… » ; `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » |
+| T18 | COHERENCE : « Corriger » | POST /api/coherence/corriger {cle} | R / S | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| T19 | Toucher la ligne : fiche du dossier ou du contact | GET /api/dossiers/:id, /api/prospects/entrants/:id | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| T20 | PAGE : lien vers un écran du CRM ou une page externe | — | — | — | sans objet | — |
+| T21 | « Fait » (bouton, balayage à droite, mode Commencer) | POST /api/a-faire/:id/reponse {FAIT} | R (S si l'effet part chez le client ou touche l'argent) | repondre_tache (FAIT) | couvert | `mcp-taches.test.ts` › « FAIT par identifiant, puis ANNULER : l'effet (appel noté) est annulé… » |
+| T22 | « Plus tard » : Ce soir / Demain / Lundi / Dans une semaine, raison facultative (dont « J'attends le client ») | … {PLUS_TARD, quand, raison} | R | repondre_tache (PLUS_TARD, quand, raison) | couvert | `mcp-taches.test.ts` › « PLUS_TARD DEMAIN (9 h, heure de Paris) ; PLUS_TARD « le 12 » (date… » |
+| T23 | « Plus tard » › « Une date… » | … {PLUS_TARD, date} | R | repondre_tache (quand = date dictée) | couvert | `mcp-taches.test.ts` › « PLUS_TARD DEMAIN (9 h, heure de Paris) ; PLUS_TARD « le 12 » (date… » |
+| T24 | « Pas à faire » : raison selon le type (déjà fait, le client le fait, pas pertinent, pas de réponse à faire…) | … {PAS_A_FAIRE, raison} | R | repondre_tache (PAS_A_FAIRE, raison) | couvert | `mcp-taches.test.ts` › « PAS_A_FAIRE exige une raison adaptée au type ; avec PAS_PERTINENT, la… » |
+| T25 | « Pas à faire » › « Client perdu » : motif, précision si Autre | … {raison CLIENT_PERDU, motifPerte, precisionPerte} | S (perte) | repondre_tache (motif_perte, precision) | couvert | `mcp-taches.test.ts` › « réponse sensible : « client perdu » → aperçu (contact classé sans… » |
+| T26 | « Pas à faire » › « Autre » : texte | … {raison AUTRE, texte} | R | repondre_tache (AUTRE, texte) | couvert | `mcp-taches.test.ts` › « PAS_A_FAIRE exige une raison adaptée au type ; avec PAS_PERTINENT, la… » |
+| T27 | « Ignorer » dans la ligne (proposition) | … {PAS_A_FAIRE, PAS_PERTINENT} | R | repondre_tache | couvert | `mcp-taches.test.ts` › « PAS_A_FAIRE exige une raison adaptée au type ; avec PAS_PERTINENT, la… » |
+| T28 | « Annuler » dans le message (5 s) | POST /api/a-faire/:id/annuler | R | repondre_tache (ANNULER) | couvert | `mcp-taches.test.ts` › « FAIT par identifiant, puis ANNULER : l'effet (appel noté) est annulé… » |
+| T29 | Section « Plus tard » : les reportées et leur date de retour | GET /api/a-faire | L | taches (PLUS_TARD) | couvert | `mcp-taches.test.ts` › « taches TOUT lit la liste des tâches à l'instant du contexte (une tâche… » |
+| T30 | Section « Fait aujourd'hui » | GET /api/a-faire | L | taches (FAIT) | couvert | `mcp-taches.test.ts` › « aujourd'hui : le nombre et le temps, chaque tâche avec son identifiant… » |
+| T31 | « Demain : N » (ce qui revient) | GET /api/a-faire | L | taches (demain) | couvert | `mcp-taches.test.ts` › « taches TOUT lit la liste des tâches à l'instant du contexte (une tâche… » |
+| T32 | Lots de ménage : la liste | GET /api/a-faire | L | taches (LOTS) | couvert | `mcp-taches.test.ts` › « taches lot rend les tâches du lot une par une ; repondre_tache «… » |
+| T33 | Lot › « Revoir un par un » : les tâches du lot | GET /api/a-faire/lots/:lot | L | taches (lot) | couvert | `mcp-taches.test.ts` › « taches lot rend les tâches du lot une par une ; repondre_tache «… » |
+| T34 | Lot › « Tout classer » | POST /api/a-faire/lots/:lot/classer | R (masse) | repondre_tache (tache « lot:<clé> », FAIT) | couvert | `mcp-taches.test.ts` › « taches lot rend les tâches du lot une par une ; repondre_tache «… » |
+| T35 | Lot › « Annuler » ce classement | POST /api/a-faire/lots/:lot/annuler {le} | R | repondre_tache (tache « lot:<clé> », ANNULER, le) | couvert | `mcp-taches.test.ts` › « taches lot rend les tâches du lot une par une ; repondre_tache «… » |
+| T36 | Ajouter une tâche : titre, date facultative, « pour qui ? » (recherche dossier, lead, client) | POST /api/a-faire/ajouter | R | creer TACHE (titre, quand, cible, raison) | couvert | `mcp-taches.test.ts` › « creer TACHE avec une cible (nom) et une date dictée : une tâche… » |
+| T37 | Mesure « commencer » (temps réel passé) | POST /api/a-faire/:id/commencer | — | — | sans objet | — |
+| T38 | Hors ligne : liste servie depuis le cache | service worker | — | — | sans objet | — |
 
 ### 2.2 Leads (`/leads`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| L1 | En-tête › « Nouveau » : prénom, nom, téléphone, e-mail, ville, code postal, source, projet, notes | POST /api/prospects/entrants | R | creer_contact | couvert (le MCP ajoute l'anti-doublon et `ouvrir_dossier`) |
-| L2 | Rafraîchir | GET /api/leads | L | leads_a_appeler / leads_a_rappeler | couvert |
-| L3 | Puce « À appeler » (compteur, pages) | GET /api/leads?vue=A_APPELER&page= | L | leads_a_appeler (limite ≤ 50) | partiel : ni page, ni source, ni recherche |
-| L4 | Puce « À rappeler » (« dont N en retard ») | GET /api/leads?vue=A_RAPPELER | L | leads_a_rappeler (limite, page) | partiel : ni source, ni recherche |
-| L5 | Puce « Sans suite » | GET /api/leads?vue=SANS_SUITE | L | — | manquant |
-| L6 | Puce « Archivés » | GET /api/leads?vue=ARCHIVES | L | — | manquant (`chercher` exclut aussi les archivés) |
-| L7 | Filtre « Source » | GET /api/leads?source= | L | — | manquant |
-| L8 | Recherche « Nom, téléphone, ville, campagne » | GET /api/leads?q= | L | chercher | partiel : pas de recherche par campagne, clients, leads et dossiers mélangés |
-| L9 | « Enchaîner les appels · N » (la file) | GET /api/leads/suivant?apres= | L | leads_a_rappeler + leads_a_appeler | couvert |
-| L10 | Mode appels › « Passer » / « Quitter » | — | — | — | sans objet |
-| L11 | Mode appels › « Noter sans appeler » | POST /api/commercial/appels | R | noter_appel | couvert |
-| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » | POST /api/leads/:id/dossier | R | ouvrir_dossier | couvert |
-| L13 | Ligne › téléphone (`tel:`) | — | — | — | sans objet |
-| L14 | Ligne › puce du rappel : déplacer | PATCH /api/prospects/entrants/:id {rappelLe} | R | planifier | partiel : crée en plus un événement Google Calendar, avec un texte d'action imposé |
-| L15 | Ligne › puce du rappel : « Sans date » | PATCH … {rappelLe:null} | R | — | manquant |
-| L16 | « Sélectionner » / « Tout (n) » / désélectionner | — | — | — | sans objet |
-| L17 | Sélection › « Archiver » + motif (Test, Doublon, Hors cible, Autre) | POST /api/leads/actions {ARCHIVER} | S-suppr (masse) | archiver (leads, motif) | couvert |
-| L18 | Sélection (Archivés) › « Restaurer » | POST /api/leads/actions {RESTAURER} | R | restaurer (leads) | partiel : le MCP ne trouve pas les identifiants des archivés (aucune liste ne les donne) |
-| L19 | Message « Annuler » (action inverse) | POST /api/leads/actions | R | archiver / restaurer | couvert |
-| L20 | Ligne du jour : « N rappels aujourd'hui · N en retard » | GET /api/leads | L | leads_a_rappeler | couvert |
-| L21 | Ligne du jour › « N relances proposables » → feuille Relances | GET /api/relances | L | voir_relances | couvert |
-| L22 | Relances › « SMS » (texte modifiable) → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | voir_relances + noter_sms | couvert |
-| L23 | Relances › « Relire le mail » → corriger → valider | POST /api/validation/:id/valider | S-client | valider_proposition / relancer | partiel : l'objet et le texte ne se corrigent pas |
-| L24 | Sur le site › simulations des 7 derniers jours, avec images | SSR `simulationsSiteRecentes(7)` | L | simulations_site | couvert |
-| L25 | Sur le site › générations en cours ou en échec, avec la raison | SSR `travauxSiteRecents(7)` | L | — | manquant |
-| L26 | Sur le site › ouvrir le lead | — | L | lire_fiche | couvert |
-| L27 | Notifications de l'appareil : activer, désactiver | POST /api/push/abonnement | — | — | sans objet (PushManager du navigateur) |
-| L28 | Notification d'essai | POST /api/push/essai | R | — | manquant |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| L1 | En-tête › « Nouveau » : prénom, nom, téléphone, e-mail, ville, code postal, source, projet, notes | POST /api/prospects/entrants | R | creer LEAD | couvert | `mcp-v3.test.ts` › « « creer » LEAD (ex-« creer_contact ») refuse un doublon (même numéro… » |
+| L2 | Rafraîchir | GET /api/leads | L | lister LEADS | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » |
+| L3 | Puce « À appeler » (compteur, pages) | GET /api/leads?vue=A_APPELER&page= | L | lister LEADS (vue A_APPELER, source, recherche, page) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » ; `mcp-lister-etat.test.ts` › « LEADS : filtre source, recherche (campagne comprise) et pages, comme… » |
+| L4 | Puce « À rappeler » (« dont N en retard ») | GET /api/leads?vue=A_RAPPELER | L | lister LEADS (vue A_RAPPELER, source, recherche, page) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » ; `mcp-lister-etat.test.ts` › « LEADS : filtre source, recherche (campagne comprise) et pages, comme… » |
+| L5 | Puce « Sans suite » | GET /api/leads?vue=SANS_SUITE | L | lister LEADS (vue SANS_SUITE) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » |
+| L6 | Puce « Archivés » | GET /api/leads?vue=ARCHIVES | L | lister LEADS (vue ARCHIVES) ; chercher (archives: true) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » ; `mcp-lister-etat.test.ts` › « « chercher » : archives: true rend le lead, le dossier et la fiche… » |
+| L7 | Filtre « Source » | GET /api/leads?source= | L | lister LEADS (source) | couvert | `mcp-lister-etat.test.ts` › « LEADS : filtre source, recherche (campagne comprise) et pages, comme… » |
+| L8 | Recherche « Nom, téléphone, ville, campagne » | GET /api/leads?q= | L | lister LEADS (recherche, campagne comprise) ; chercher | couvert | `mcp-lister-etat.test.ts` › « LEADS : filtre source, recherche (campagne comprise) et pages, comme… » ; `mcp-lister-etat.test.ts` › « « chercher » : archives: true rend le lead, le dossier et la fiche… » |
+| L9 | « Enchaîner les appels · N » (la file) | GET /api/leads/suivant?apres= | L | lister LEADS (A_RAPPELER puis A_APPELER) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » |
+| L10 | Mode appels › « Passer » / « Quitter » | — | — | — | sans objet | — |
+| L11 | Mode appels › « Noter sans appeler » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| L13 | Ligne › téléphone (`tel:`) | — | — | — | sans objet | — |
+| L14 | Ligne › puce du rappel : déplacer | PATCH /api/prospects/entrants/:id {rappelLe} | R | modifier LEAD (rappel_le) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| L15 | Ligne › puce du rappel : « Sans date » | PATCH … {rappelLe:null} | R | modifier LEAD (rappel_le: null) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| L16 | « Sélectionner » / « Tout (n) » / désélectionner | — | — | — | sans objet | — |
+| L17 | Sélection › « Archiver » + motif (Test, Doublon, Hors cible, Autre) | POST /api/leads/actions {ARCHIVER} | S-suppr (masse) | archiver (leads, motif) | couvert | `mcp.test.ts` › « « Archive tous les leads de la file sauf Stella Estelle » : liste… » ; `mcp-generiques.test.ts` › « raccourcis leads / dossiers (comportement de l'ancien « archiver »)… » |
+| L18 | Sélection (Archivés) › « Restaurer » | POST /api/leads/actions {RESTAURER} | R | lister LEADS (vue ARCHIVES) + restaurer (leads) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » ; `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| L19 | Message « Annuler » (action inverse) | POST /api/leads/actions | R | archiver / restaurer | couvert | `mcp-generiques.test.ts` › « raccourcis leads / dossiers (comportement de l'ancien « archiver »)… » |
+| L20 | Ligne du jour : « N rappels aujourd'hui · N en retard » | GET /api/leads | L | lister LEADS (vue A_RAPPELER) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » |
+| L21 | Ligne du jour › « N relances proposables » → feuille Relances | GET /api/relances | L | lister RELANCES | couvert | `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
+| L22 | Relances › « SMS » (texte modifiable) → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| L23 | Relances › « Relire le mail » → corriger → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
+| L24 | Sur le site › simulations des 7 derniers jours, avec images | SSR `simulationsSiteRecentes(7)` | L | voir_fichiers (site) | couvert | `mcp-v3.test.ts` › « « voir_fichiers » site (ex-« simulations_site ») liste les simulations… » |
+| L25 | Sur le site › générations en cours ou en échec, avec la raison | SSR `travauxSiteRecents(7)` | L | voir_fichiers (site : générations en cours ou en échec, avec la raison) | couvert | `mcp-partie-c.test.ts` › « pièce jointe d'un mail (M15), rendu du banc (S17), générations du site… » |
+| L26 | Sur le site › ouvrir le lead | — | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| L27 | Notifications de l'appareil : activer, désactiver | POST /api/push/abonnement | — | — | sans objet (PushManager du navigateur) | — |
+| L28 | Notification d'essai | POST /api/push/essai | R | agir_systeme (TESTER_NOTIFICATION, canal APPAREIL) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
 
 #### Fiche d'un lead (`PanneauEntrant`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| LF1 | Ouvrir la fiche (et la marquer vue) | GET /api/prospects/entrants/:id | L | lire_fiche (leadId) | partiel : ne rend ni les notes, ni le code postal, ni campagne / publicité / formulaire, ni le prix simulé, le style, les réponses au formulaire, le doublon, les tentatives, le dernier appel, l'archivage, l'ancien CRM |
-| LF2 | Doublon › « Fusionner avec X » | POST /api/leads/:id/doublon {fusionner} | S-suppr | — | manquant |
-| LF3 | Doublon › « Ce n'est pas la même personne » | POST /api/leads/:id/doublon {ecarter} | R | — | manquant |
-| LF4 | « Ouvrir un dossier » | POST /api/leads/:id/dossier | R | ouvrir_dossier | couvert |
-| LF5 | Liens « Dossier · étape » / « Fiche client » | — | L | lire_fiche | couvert |
-| LF6 | Téléphone (`tel:`) | — | — | — | sans objet |
-| LF7 | « Noter l'appel » → feuille de fin d'appel | POST /api/commercial/appels | R | noter_appel | couvert |
-| LF8 | « Lien espace client » : ouvre le dossier et l'espace, copie le lien | POST /api/prospects/entrants/:id/espace | R | lien_espace | partiel : `lien_espace` note « lien communiqué par SMS » et passe la main au client ; il ne sait pas ouvrir l'espace sans rien noter |
-| LF9 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lien_espace + noter_sms | couvert |
-| LF10 | « Écrire un mail » | écran Mail | S-client | rediger_mail / deposer_brouillon / envoyer_mail | couvert |
-| LF11 | Rappel › poser ou déplacer | PATCH … {rappelLe} | R | planifier | partiel : crée en plus un événement dans l'agenda |
-| LF12 | Rappel › « Retirer la date » | PATCH … {rappelLe:null} | R | — | manquant |
-| LF13 | Notes d'appel › saisie (enregistrée à la frappe) et étiquettes | POST / PUT /api/leads/:id/notes-appel | R | noter_appel (texte, etiquettes) | partiel : l'issue est obligatoire (le MCP note aussi un appel) ; une note existante ne se complète pas |
-| LF14 | Notes d'appel › « Nouvel appel » | POST /api/leads/:id/notes-appel | R | noter_appel | partiel : mêmes limites que LF13 |
-| LF15 | Notes d'appel › historique | GET /api/leads/:id/notes-appel | L | lire_fiche | couvert |
-| LF16 | Priorité de rappel : Prioritaire, Standard, Secondaire, À écarter, « Recalculer » | PATCH … {priorite} | R | — | manquant |
-| LF17 | Statut : Nouveau, Devis demandé, Contacté | PATCH … {statut} | R | — | manquant |
-| LF18 | « Classer sans suite » (motif, précision) et retour du « sans suite » | PATCH … {statut PERDU, motifPerte, motif} | R | noter_appel (PAS_INTERESSE) / repondre_tache (CLIENT_PERDU) | partiel : passe forcément par un appel ou une tâche ; un « sans suite » ne se rouvre pas |
-| LF19 | « Noter un échange » : Appel, SMS, E-mail ou Note, avec un texte | POST /api/prospects/entrants/:id/echanges | R | ajouter_note / noter_sms / noter_appel | partiel : un e-mail, ou un appel sans issue, ne se note pas |
-| LF20 | Échanges (liste) | GET entrant | L | lire_fiche | couvert |
-| LF21 | Sa demande, photos jointes (visionneuse) | GET entrant | L | voir_photos (leadId) | couvert |
-| LF22 | Simulations du lead : avant, après, PDF | GET entrant | L | simulations_site (lead_id) / voir_simulations | partiel : le PDF de la simulation n'est pas lisible |
-| LF23 | Demande › « Corriger » : prénom, nom, téléphone, e-mail, ville, code postal, projet | PATCH /api/prospects/entrants/:id | R | proposer_mise_a_jour (LEAD) + valider_proposition | partiel : exige un mail source |
-| LF24 | Notes › « Enregistrer les notes » | PATCH … {notes} | R | — | manquant |
-| LF25 | Ancien CRM : devis, factures PDF, chantier | GET entrant | L | — | manquant |
-| LF26 | « Archiver le contact » (motif libre) | POST /api/prospects/entrants/:id/archiver | S-suppr | archiver (leads, motif) | partiel : le motif libre est ramené à quatre codes |
-| LF27 | « Restaurer le contact » | POST /api/prospects/entrants/:id/restaurer | R | restaurer (leads) | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| LF1 | Ouvrir la fiche (et la marquer vue) | GET /api/prospects/entrants/:id | L | lire_fiche (lead : tous les champs) | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| LF2 | Doublon › « Fusionner avec X » | POST /api/leads/:id/doublon {fusionner} | S-suppr | doublon (LEAD, FUSIONNER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
+| LF3 | Doublon › « Ce n'est pas la même personne » | POST /api/leads/:id/doublon {ecarter} | R | doublon (LEAD, ECARTER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
+| LF4 | « Ouvrir un dossier » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| LF5 | Liens « Dossier · étape » / « Fiche client » | — | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| LF6 | Téléphone (`tel:`) | — | — | — | sans objet | — |
+| LF7 | « Noter l'appel » → feuille de fin d'appel | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| LF8 | « Lien espace client » : ouvre le dossier et l'espace, copie le lien | POST /api/prospects/entrants/:id/espace | R | geste_espace (OUVRIR) ; lien_espace | couvert | `mcp-gestes.test.ts` › « OUVRIR sans rien noter ni envoyer : même espace que « Lien espace… » |
+| LF9 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lien_espace + noter_sms | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » ; `mcp-v2.test.ts` › « « lien_espace » sur un lead Meta sans e-mail : espace créé, lien et SMS… » |
+| LF10 | « Écrire un mail » | écran Mail | S-client | rediger_mail / deposer_brouillon / envoyer_mail | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| LF11 | Rappel › poser ou déplacer | PATCH … {rappelLe} | R | modifier LEAD (rappel_le) ; planifier | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » ; `mcp.test.ts` › « « Planifie un rappel de Madame Piketty jeudi 14h » » |
+| LF12 | Rappel › « Retirer la date » | PATCH … {rappelLe:null} | R | modifier LEAD (rappel_le: null) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF13 | Notes d'appel › saisie (enregistrée à la frappe) et étiquettes | POST / PUT /api/leads/:id/notes-appel | R | creer NOTE_APPEL / modifier NOTE_APPEL (texte, etiquettes) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » ; `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| LF14 | Notes d'appel › « Nouvel appel » | POST /api/leads/:id/notes-appel | R | creer NOTE_APPEL (sans issue) / noter_appel (avec issue) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » ; `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| LF15 | Notes d'appel › historique | GET /api/leads/:id/notes-appel | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| LF16 | Priorité de rappel : Prioritaire, Standard, Secondaire, À écarter, « Recalculer » | PATCH … {priorite} | R | modifier LEAD (priorite) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF17 | Statut : Nouveau, Devis demandé, Contacté | PATCH … {statut} | R | modifier LEAD (statut) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF18 | « Classer sans suite » (motif, précision) et retour du « sans suite » | PATCH … {statut PERDU, motifPerte, motif} | R | modifier LEAD (statut PERDU + motif_perte ; retour : statut) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF19 | « Noter un échange » : Appel, SMS, E-mail ou Note, avec un texte | POST /api/prospects/entrants/:id/echanges | R | creer NOTE (lead : type APPEL, SMS, EMAIL, NOTE) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| LF20 | Échanges (liste) | GET entrant | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| LF21 | Sa demande, photos jointes (visionneuse) | GET entrant | L | voir_fichiers (photos, lead) | couvert | `mcp-v2.test.ts` › « « voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP… » |
+| LF22 | Simulations du lead : avant, après, PDF | GET entrant | L | voir_fichiers (site, simulations ; documents : PDF des simulations du lead) | couvert | `mcp-partie-c.test.ts` › « documents d'un lead : PDF de ses simulations du site (LF22) et devis de… » |
+| LF23 | Demande › « Corriger » : prénom, nom, téléphone, e-mail, ville, code postal, projet | PATCH /api/prospects/entrants/:id | R | modifier LEAD (prenom, nom_famille, telephone, email, ville, code_postal, type_projet) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF24 | Notes › « Enregistrer les notes » | PATCH … {notes} | R | modifier LEAD (notes) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
+| LF25 | Ancien CRM : devis, factures PDF, chantier | GET entrant | L | voir_fichiers (documents, lead : devis et factures de l'ancien CRM) ; lire_fiche | couvert | `mcp-partie-c.test.ts` › « documents d'un lead : PDF de ses simulations du site (LF22) et devis de… » ; `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| LF26 | « Archiver le contact » (motif libre) | POST /api/prospects/entrants/:id/archiver | S-suppr | archiver (elements LEAD, motif libre) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| LF27 | « Restaurer le contact » | POST /api/prospects/entrants/:id/restaurer | R | restaurer (leads) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 
 #### Feuille de fin d'appel (`FinAppel`, montée partout)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| FA1 | Contexte : nom, source, tentatives | GET /api/commercial/appels/contexte | L | lire_fiche | couvert |
-| FA2 | « Intéressé » (dossier et espace ouverts, SMS proposé) | POST /api/commercial/appels {INTERESSE} | R | noter_appel | couvert |
-| FA3 | « À rappeler » : raccourcis, Autre…, Sans date | … {A_RAPPELER, rappelLe} | R | noter_appel (rappel) | couvert |
-| FA4 | « Pas de réponse » et rappel (demain 18 h par défaut) | … {PAS_DE_REPONSE} | R | noter_appel | couvert |
-| FA5 | « Classer sans suite — plus de réponse » (3ᵉ tentative) | … {PAS_INTERESSE, SANS_REPONSE} | R | noter_appel | couvert |
-| FA6 | « Pas intéressé » + motif (+ précision) | … {PAS_INTERESSE, motifPerte} | R | noter_appel | couvert |
-| FA7 | « Plus tard » | — | — | — | sans objet |
-| FA8 | SMS proposé → « Copier » | POST /api/sms/copie | S-client | noter_sms | couvert |
-| FA9 | Carte « Suivant » | GET /api/leads/suivant | L | leads_a_rappeler / leads_a_appeler | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| FA1 | Contexte : nom, source, tentatives | GET /api/commercial/appels/contexte | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
+| FA2 | « Intéressé » (dossier et espace ouverts, SMS proposé) | POST /api/commercial/appels {INTERESSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
+| FA3 | « À rappeler » : raccourcis, Autre…, Sans date | … {A_RAPPELER, rappelLe} | R | noter_appel (rappel) | couvert | `mission-14-partie-8.test.ts` › « un rappel de dossier noté au jour seul se dit par son jour (« jeudi »)… » |
+| FA4 | « Pas de réponse » et rappel (demain 18 h par défaut) | … {PAS_DE_REPONSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA5 | « Classer sans suite — plus de réponse » (3ᵉ tentative) | … {PAS_INTERESSE, SANS_REPONSE} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA6 | « Pas intéressé » + motif (+ précision) | … {PAS_INTERESSE, motifPerte} | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA7 | « Plus tard » | — | — | — | sans objet | — |
+| FA8 | SMS proposé → « Copier » | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| FA9 | Carte « Suivant » | GET /api/leads/suivant | L | lister LEADS (A_RAPPELER / A_APPELER) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » |
 
 ### 2.3 Dossiers (`/dossiers`) — liste, création, reprise
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| D1 | Liste « En cours » et compteurs (à faire, en retard, sorties, inactifs) | GET /api/dossiers?page&vue&q&inactifs | L | dossiers_par_etape | partiel : ni pages, ni recherche, ni compteurs |
-| D2 | Onglet « À faire » (la main est à Lucas) | GET /api/dossiers?vue=A_FAIRE | L | taches / ce_qui_m_attend | couvert |
-| D3 | Kanban / Liste, tri | — | — | — | sans objet |
-| D4 | Recherche « Client, ville, objet » | GET /api/dossiers?q= | L | chercher | partiel : la recherche par objet n'est pas garantie |
-| D5 | « Perdus et en pause » | GET /api/dossiers?vue=TOUS | L | dossiers_par_etape (PERDU, EN_PAUSE) | couvert |
-| D6 | « Masquer les inactifs » | ?inactifs=0 | L | — | manquant |
-| D7 | « Archivés » (les 200 derniers) | GET /api/dossiers/archives | L | — | manquant |
-| D8 | Archivés › « Restaurer » | POST /api/dossiers/:id/archivage {restaurer} | R | restaurer (dossiers) | partiel : le MCP ne trouve pas les identifiants des archivés |
-| D9 | « Légende » | — | — | — | sans objet |
-| D10 | Pastille « N à valider » | GET /api/validation?statut=EN_ATTENTE | L | ce_qui_m_attend (nombre) | couvert |
-| D11 | Raccourcis de carte (photos, messages, devis, encaisser, étape suivante) | — | — | voir le panneau (DP) | sans objet |
-| D12 | Création › « Depuis un lead » : recherche | GET /api/dossiers/leads?q= | L | chercher | couvert |
-| D13 | Création › formulaire prérempli (lead, client ou prospect) : nom, téléphone, e-mail, adresse, code postal, ville, objet, source, montant estimé, prochaine action et date, étape de départ, date de chantier, photos (au moins une) | POST /api/dossiers (multipart) ; POST /api/dossiers/:id/photos | R | ouvrir_dossier / creer_contact (ouvrir_dossier) | partiel : aucun de ces champs, ni étape de départ, ni date de chantier, ni photos ; pas de dossier depuis une fiche client |
-| D14 | Création › « Direct » : même formulaire + type de client (particulier ou entreprise, SIRET, sous-traitance) | POST /api/dossiers | R | creer_contact (ouvrir_dossier) | partiel : mêmes limites que D13, plus catégorie et SIRET |
-| D15 | Création › annuaire des entreprises | GET /api/clients/annuaire?q= | L | — | manquant |
-| D16 | « Reprise » d'un dossier commencé avant le CRM : fiche, étape actuelle, dates des jalons, date d'ouverture, documents émis (numéro, date, montant, statut, registre), paiements reçus, puis les PDF un par un | GET /api/numeros?libres=1 ; POST /api/dossiers/reprise ; POST …/documents/:docId/pdf | S-€ | — | manquant (le détour creer_contact + changer_etape + deposer_document + saisir_encaissement n'est pas atomique et perd les dates des jalons) |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| D1 | Liste « En cours » et compteurs (à faire, en retard, sorties, inactifs) | GET /api/dossiers?page&vue&q&inactifs | L | lister DOSSIERS (vue EN_COURS ; compteurs, recherche, page) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » |
+| D2 | Onglet « À faire » (la main est à Lucas) | GET /api/dossiers?vue=A_FAIRE | L | taches (TOUT) / lister DOSSIERS (vue A_FAIRE) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » ; `mcp-taches.test.ts` › « taches TOUT lit la liste des tâches à l'instant du contexte (une tâche… » |
+| D3 | Kanban / Liste, tri | — | — | — | sans objet | — |
+| D4 | Recherche « Client, ville, objet » | GET /api/dossiers?q= | L | lister DOSSIERS (recherche) ; chercher (objet) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » ; `mcp-lister-etat.test.ts` › « « chercher » : archives: true rend le lead, le dossier et la fiche… » |
+| D5 | « Perdus et en pause » | GET /api/dossiers?vue=TOUS | L | lister DOSSIERS (vue PAR_ETAPE : PERDU, EN_PAUSE) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » ; `mission-14-partie-8.test.ts` › « un dossier perdu (main nulle) n'est ni « à toi » ni « chez le client »… » |
+| D6 | « Masquer les inactifs » | ?inactifs=0 | L | lister DOSSIERS (filtres.masquer_inactifs) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » |
+| D7 | « Archivés » (les 200 derniers) | GET /api/dossiers/archives | L | lister DOSSIERS (vue ARCHIVES) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » |
+| D8 | Archivés › « Restaurer » | POST /api/dossiers/:id/archivage {restaurer} | R | lister DOSSIERS (vue ARCHIVES) + restaurer (dossiers) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) =… » ; `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| D9 | « Légende » | — | — | — | sans objet | — |
+| D10 | Pastille « N à valider » | GET /api/validation?statut=EN_ATTENTE | L | lister PROPOSITIONS / taches (TOUT, nombre) | couvert | `mcp-lister-etat.test.ts` › « PROPOSITIONS : les onglets de « À valider », et une proposition lue en… » ; `mcp-v2.test.ts` › « « taches » TOUT (ex-« ce_qui_m_attend ») et « point_du_jour » comptent… » |
+| D11 | Raccourcis de carte (photos, messages, devis, encaisser, étape suivante) | — | — | voir le panneau (DP) | sans objet | — |
+| D12 | Création › « Depuis un lead » : recherche | GET /api/dossiers/leads?q= | L | chercher | couvert | `assistant.test.ts` › « « chercher » tolère une faute et rend les deux Rousse » |
+| D13 | Création › formulaire prérempli (lead, client ou prospect) : nom, téléphone, e-mail, adresse, code postal, ville, objet, source, montant estimé, prochaine action et date, étape de départ, date de chantier, photos (au moins une) | POST /api/dossiers (multipart) ; POST /api/dossiers/:id/photos | R | creer DOSSIER (lead_id, client_id ou rien ; champs du formulaire, etape, date_chantier) + ajouter_fichier (photos) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-fichiers.test.ts` › « dossier (par le nom), lead, client, dépense, réalisation non publiée » |
+| D14 | Création › « Direct » : même formulaire + type de client (particulier ou entreprise, SIRET, sous-traitance) | POST /api/dossiers | R | creer DOSSIER (client_categorie, client_siret) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| D15 | Création › annuaire des entreprises | GET /api/clients/annuaire?q= | L | lister ENTREPRISES | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| D16 | « Reprise » d'un dossier commencé avant le CRM : fiche, étape actuelle, dates des jalons, date d'ouverture, documents émis (numéro, date, montant, statut, registre), paiements reçus, puis les PDF un par un | GET /api/numeros?libres=1 ; POST /api/dossiers/reprise ; POST …/documents/:docId/pdf | S-€ | creer REPRISE + ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 
 ### 2.4 Dossier — le panneau et ses rubriques (`PanneauDossier`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| DP1 | Ouverture, relue toutes les 30 s | GET /api/dossiers/:id | L | lire_fiche (dossierId) | partiel : manquent la source, la date d'ouverture, `mainLe`, les points masqués, la perte détaillée, les photos, les délais, l'historique complet |
-| DP2 | En-tête › téléphone → feuille de fin d'appel sur le dossier | POST /api/commercial/appels {dossierId} | R | noter_appel (dossierId) | couvert |
-| DP3 | En-tête › e-mail (`mailto:`), « Contact : lead » | — | — | envoyer_mail / lire_fiche | sans objet |
-| DP4 | À compléter › croix « masquer ce point pour ce dossier » | PATCH /api/dossiers/:id/completude {code, masque:true} | R | — | manquant |
-| DP5 | À compléter › « Réafficher » un point masqué | PATCH … {masque:false} | R | — | manquant |
-| DP6 | Prochaine action : texte et date (Aujourd'hui, Demain, Dans 3 j, Dans 1 sem.) › « Enregistrer » ou vider | PATCH /api/dossiers/:id {prochaineAction, prochaineActionDate} | R | modifier_dossier (prochaine_action, prochaine_action_date) / planifier | couvert |
-| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | voir_relances + noter_sms | couvert |
-| DP8 | Relance proposable › « Relire le mail » → valider | POST /api/validation/:id/valider | S-client | valider_proposition / relancer | partiel : l'objet et le texte ne se corrigent pas |
-| DP9 | Encaisser l'acompte ou le solde : montant, date, moyen, référence, pièce réglée (automatique ou choisie) | POST /api/dossiers/:id/encaissements {paiement, numeroDocumentId} | S-€ | saisir_encaissement | partiel : ni pièce réglée, ni date de crédit, ni payeur |
-| DP10 | Étape › bouton d'étape suivante, « Reprendre en … » | POST /api/dossiers/:id/etape {vers} | R ; S vers Signé, Facturé, Encaissé, Perdu | changer_etape | couvert |
-| DP11 | « Mettre en pause » | … {vers:EN_PAUSE} | R | changer_etape | couvert |
-| DP12 | « Passer à une autre étape… » (avancer, revenir, sortir) | … {vers} | R | changer_etape | couvert |
-| DP13 | Fenêtre › « Date du passage » (jour réel, passé) | … {survenuLe} | R | — | manquant |
-| DP14 | Fenêtre › « Marquer perdu » : motif, « Remporté par », « Son prix », précision | … {motifPerte, perteConcurrent, perteMontantConcurrent, perteCommentaire} | S | changer_etape (motif_perte, commentaire) | partiel : ni le concurrent, ni son prix |
-| DP15 | → Signé : case « bon pour accord » (hors espace) | … {confirmations} | S | changer_etape (accord_confirme) | couvert |
-| DP16 | → Signé : choix du devis accepté (plusieurs devis) | … {devisAccepteId} | S | — | manquant |
-| DP17 | → Signé : acompte reçu, dans la même transaction | … {acompte} (`changerEtapeAvecPaiement`) | S-€ | changer_etape + saisir_encaissement | partiel : deux appels, non atomique (l'outil appelle `changerEtape`) |
-| DP18 | → Signé : « sans acompte » + motif + précision | … {sansAcompte} | S | — | manquant |
-| DP19 | → Planifié : date de chantier | … {dateChantier} | R | changer_etape (date_chantier) | couvert |
-| DP20 | → Encaissé : « solde reçu » + paiement | … {solde} | S-€ | saisir_encaissement + changer_etape | partiel : deux appels, non atomique |
-| DP21 | Photos › voir, visionneuse (avant, après) | GET /api/dossiers/:id/photos/:photoId | L | voir_photos | couvert |
-| DP22 | Photos › « Ajouter » / « Prendre une photo » (avant) | POST /api/dossiers/:id/photos | R | — | manquant |
-| DP23 | Photos › « Photos après » (portfolio) | POST … {apres:1} | R | — | manquant |
-| DP24 | Photos › visionneuse › « Supprimer la photo » | DELETE /api/dossiers/:id/photos/:photoId | S-suppr | — | manquant |
-| DP25 | Historique › liste et « Voir les N plus anciens » | GET /api/dossiers/:id | L | lire_fiche | partiel : 5 événements en texte, 10 en données, pas de page |
-| DP26 | Historique › « Lire le mail » de l'événement | GET /api/messages/:id | L | lire_mail | couvert |
-| DP27 | Espace client › la vue : les 5 étapes du client, reste à faire, visites, projet, choix, favoris, avis, paiement vu, gestes, photos retirées | GET /api/dossiers/:id/espace | L | espaces_clients / messages_espace / voir_simulations | partiel : aucune vue de l'espace d'un dossier |
-| DP28 | Espace › « Ouvrir l'espace client » | POST /api/dossiers/:id/espace {ouvrir} | R | lien_espace / envoyer_lien_espace | partiel : ces deux outils ouvrent l'espace en notant un envoi |
-| DP29 | Espace › « Copier » le lien | — | L | espaces_clients (donnees.lien) | couvert |
-| DP30 | Espace › « Voir comme le client » | lien d'aperçu signé | L | — | manquant |
-| DP31 | Espace › « Envoyer le lien par mail » (à, objet, phrase) | POST /api/mail/lien-espace | S-client | envoyer_lien_espace (code, phrase, a) | partiel : l'objet ne se modifie pas |
-| DP32 | Espace › « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert |
-| DP33 | Espace › « Désactiver le lien » (tous ses projets) | POST /api/dossiers/:id/espace {revoquer} | S | — | manquant |
-| DP34 | Espace › « Nouveau lien », avec ou sans mail, avec un texte | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | renouveler_lien (envoyer_par_mail) | partiel : le texte du mail ne se personnalise pas |
-| DP35 | Espace › photos retirées par le client : les voir | GET /api/dossiers/:id/espace/photos-retirees/:photoId | L | — | manquant |
-| DP36 | Espace › « Remettre » une photo retirée | POST …/espace {geste:remettre-photo} | R | — | manquant |
-| DP37 | Espace › Projet › « Valider à sa place » | … {geste:valider-projet} | R | — | manquant |
-| DP38 | Espace › Projet › « Dévalider » | … {geste:devalider-projet} | R | — | manquant |
-| DP39 | Espace › Projet › « Modifier taille et note » | … {geste:modifier-projet} | R | modifier_dossier (dimensions, notes_projet) | couvert |
-| DP40 | Espace › Projet › « Réinitialiser » l'étape | … {geste:reinitialiser, PROJET} | R (efface la saisie du client) | — | manquant |
-| DP41 | Espace › Simulations › « Retirer la demande » | … {geste:retirer-demande} | R | — | manquant |
-| DP42 | Espace › Simulations › « Valider » à sa place | … {geste:valider-simulation} | R | — | manquant |
-| DP43 | Espace › Simulations › « Dévalider » | … {geste:devalider-simulation} | R | — | manquant |
-| DP44 | Espace › Simulations › « Masquer » | PATCH /api/dossiers/:id/simulations/:sid {masquer} | R | masquer_simulation | couvert |
-| DP45 | Espace › Simulations › « Afficher » (republier, mail automatique) | … {afficher} | S-client | publier_simulation | couvert |
-| DP46 | Espace › Simulations › « Accorder 3 simulations » | … {geste:accorder, nombre} | S-€ (≈ 0,20 $ l'image) | accorder_simulations | couvert |
-| DP47 | Espace › Simulations › « Réinitialiser » l'étape | … {geste:reinitialiser, SIMULATIONS} | R | — | manquant |
-| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} | R / S-client | presenter_devis (visible_espace) | couvert |
-| DP49 | Espace › Devis › « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | générateur / dépôt | S | generer_document / deposer_document | couvert |
-| DP50 | Espace › Devis › « Retirer son accord » | … {geste:retirer-accord} | S | retirer_accord | couvert |
-| DP51 | Espace › Paiement (ce qu'il voit), « Son avis » (note, texte, publication) | GET …/espace | L | manager_clients (agrégé) | partiel : rien par dossier |
-| DP52 | Espace › Messages › le fil | GET …/espace | L | messages_espace | couvert |
-| DP53 | Espace › Messages › « Répondre dans son espace » | … {geste:repondre} | S-client | repondre_espace | couvert |
-| DP54 | Espace › « Ses derniers gestes » | GET …/espace | L | — | manquant |
-| DP55 | Documents › « Générer un devis » | POST /api/dossiers/:id/documents | S | generer_document | partiel : les lignes SECTION ne se dictent pas |
-| DP56 | Documents › « Générer une facture » | … {type:FACTURE} | S-€ | generer_document (FACTURE, depuis_devis) | couvert |
-| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | deposer_document | partiel : le PDF est obligatoire ; les numéros libres ne sont pas lisibles |
-| DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | — | manquant |
-| DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | presenter_devis (libellé, visibilité) | partiel : ni date, ni montant, ni objet, ni statut, ni acompte, ni PDF |
-| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert |
-| DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert |
-| DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert |
-| DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation | S | annuler_document | couvert |
-| DP64 | Générateur › tarifs disponibles (presets) | GET /api/dossiers/presets | L | tarifs | partiel : ne rend pas la liste des presets avec leur identifiant |
-| DP65 | Générateur › lignes préremplies d'après l'espace (choix, mètres, tarifs) | GET /api/dossiers/:id/devis-propose | L | — | manquant |
-| DP66 | Générateur › numéro à venir | GET /api/dossiers/numerotation?type= | L | voir_parametres (numérotation) | couvert |
-| DP67 | Générateur › lignes : prestation ou section, monter, descendre, supprimer, choisir un tarif | — | — | generer_document (lignes) | partiel : pas de SECTION |
-| DP68 | Générateur › objet, acompte %, mention ml, libellé de variante, « prévenir le client » | POST …/documents | S | generer_document (objet, acompte_pct, note_ml, libelle_variante, notifier) | couvert |
-| DP69 | Générateur › paramètres légaux manquants → saisie | POST /api/parametres | S-param | modifier_parametres | couvert |
-| DP70 | Tarifs › modifier un tarif (désignation, unité, prix) | PATCH /api/dossiers/presets/:id | S-param | modifier_tarifs (sous_partie) | partiel : par sous-partie, pas par tarif |
-| DP71 | Tarifs › « Nouveau tarif » | POST /api/dossiers/presets | S-param | modifier_tarifs | partiel : crée seulement pour une sous-partie sans tarif |
-| DP72 | Tarifs › « Retirer » un tarif | DELETE /api/dossiers/presets/:id | S-suppr | — | manquant |
-| DP73 | Tarifs › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | — | manquant |
-| DP74 | Paiements › liste, reste dû | GET /api/dossiers/:id | L | lire_fiche | couvert |
-| DP75 | Paiements › « Ajouter un paiement » | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement | partiel : ni pièce, ni date de crédit, ni payeur |
-| DP76 | Paiements › « Corriger » (montant, date, moyen, référence) | PATCH /api/encaissements/:id | S-€ | — | manquant |
-| DP77 | Paiements › « Chèque crédité » (date du relevé) | POST /api/encaissements/:id/credit | S-€ | — | manquant |
-| DP78 | Paiements › « Chèque rejeté » (date, motif, précision) | POST /api/encaissements/:id/rejet | S-€ | — | manquant |
-| DP79 | Paiements › « Annuler ce paiement » (motif, précision) | POST /api/encaissements/:id/annulation | S-€ | annuler_encaissement | couvert |
-| DP80 | Simulations › liste, visionneuse (avant, après, direction artistique, prompt) | GET /api/dossiers/:id/simulations | L | voir_simulations | couvert |
-| DP81 | Simulations › « Préparer » (→ simulateur) | nav | R | preparer_simulation | couvert |
-| DP82 | Simulations › « Déposer une simulation » : image, titre, description, préparation liée, source | POST /api/dossiers/:id/simulations (multipart) | R (brouillon) | — | manquant |
-| DP83 | Simulations › « Publier » (sélection ou tous les brouillons) | POST …/simulations/publier | S-client | publier_simulation | couvert |
-| DP84 | Simulations › « Masquer » / « Afficher » | PATCH …/simulations/:sid | R / S-client | masquer_simulation / publier_simulation | couvert |
-| DP85 | Simulations › « Repasser en brouillon » | … {brouillon} | R | — | manquant |
-| DP86 | Simulations › « Retirer » (archivée) | … {retirer, motif} | S-suppr | — | manquant |
-| DP87 | Simulations › modifier titre et description (route sans bouton) | … {modifier} | R | — | manquant |
-| DP88 | Le reste › Familles : cocher ou décocher familles et sous-parties | PATCH /api/dossiers/:id/prestations | R | modifier_dossier (familles, sous-parties) | couvert |
-| DP89 | Le reste › Délais et écarts : corriger la date réelle d'un passage d'étape | PATCH /api/dossiers/:id/evenements/:evenementId {survenuLe} | R | — | manquant |
-| DP90 | Le reste › Délais et écarts : lecture | GET /api/dossiers/:id | L | manager_commercial (agrégé) | partiel : rien par dossier |
-| DP91 | Le reste › Dépenses : liste, total, justificatif | GET /api/dossiers/:id/depenses | L | lire_fiche / depenses | partiel : le justificatif n'est pas lisible |
-| DP92 | Le reste › « Nouvelle dépense » | → /depenses/nouvelle?dossier= | R | rattacher_depense | partiel : sans justificatif |
-| DP93 | Le reste › Étapes et notes : note à une étape choisie | POST /api/dossiers/:id/notes {etape, contenu} | R | ajouter_note | partiel : toujours l'étape courante |
-| DP94 | Le reste › Coordonnées : nom du client, téléphone, e-mail, adresse, code postal, ville, objet, source, montant estimé, dates (chantier, souhaitée, fin) | PATCH /api/dossiers/:id | R (S pour montant, dates de chantier, adresse) | modifier_dossier | partiel : ni le nom du client, ni la source |
-| DP95 | Le reste › Coordonnées › « Changer de fiche client » | GET /api/clients ; PATCH /api/dossiers/:id {clientId} | S | — | manquant |
-| DP96 | Le reste › Chronologie du client : familles filtrables, « tout voir » | GET /api/chronologie | L | lire_mail (chronologie) | partiel : seulement en partant d'un mail, sans filtre par famille |
-| DP97 | Le reste › « Archiver le dossier » (motif) | POST /api/dossiers/:id/archivage {archiver} | S-suppr | archiver (dossiers, motif) | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| DP1 | Ouverture, relue toutes les 30 s | GET /api/dossiers/:id | L | lire_fiche (dossier : source, ouverture, mainLe, points masqués, perte détaillée, délais) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP2 | En-tête › téléphone → feuille de fin d'appel sur le dossier | POST /api/commercial/appels {dossierId} | R | noter_appel (dossierId) | couvert | `mission-14-partie-8.test.ts` › « un rappel de dossier noté au jour seul se dit par son jour (« jeudi »)… » |
+| DP3 | En-tête › e-mail (`mailto:`), « Contact : lead » | — | — | envoyer_mail / lire_fiche | sans objet | — |
+| DP4 | À compléter › croix « masquer ce point pour ce dossier » | PATCH /api/dossiers/:id/completude {code, masque:true} | R | modifier DOSSIER (points_masques) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP5 | À compléter › « Réafficher » un point masqué | PATCH … {masque:false} | R | modifier DOSSIER (points_reaffiches) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP6 | Prochaine action : texte et date (Aujourd'hui, Demain, Dans 3 j, Dans 1 sem.) › « Enregistrer » ou vider | PATCH /api/dossiers/:id {prochaineAction, prochaineActionDate} | R | modifier DOSSIER (prochaine_action, prochaine_action_date) / planifier | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » ; `mcp.test.ts` › « « Planifie un rappel de Madame Piketty jeudi 14h » » |
+| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| DP8 | Relance proposable › « Relire le mail » → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
+| DP9 | Encaisser l'acompte ou le solde : montant, date, moyen, référence, pièce réglée (automatique ou choisie) | POST /api/dossiers/:id/encaissements {paiement, numeroDocumentId} | S-€ | saisir_encaissement (montant, recu_le, moyen, reference, piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
+| DP10 | Étape › bouton d'étape suivante, « Reprendre en … » | POST /api/dossiers/:id/etape {vers} | R ; S vers Signé, Facturé, Encaissé, Perdu | changer_etape | couvert | `assistant.test.ts` › « passer un dossier à « perdu » est sensible (aperçu puis confirmation)… » |
+| DP11 | « Mettre en pause » | … {vers:EN_PAUSE} | R | changer_etape | couvert | `assistant.test.ts` › « passer un dossier à « perdu » est sensible (aperçu puis confirmation)… » |
+| DP12 | « Passer à une autre étape… » (avancer, revenir, sortir) | … {vers} | R | changer_etape | couvert | `assistant.test.ts` › « passer un dossier à « perdu » est sensible (aperçu puis confirmation)… » |
+| DP13 | Fenêtre › « Date du passage » (jour réel, passé) | … {survenuLe} | R | changer_etape (survenu_le) | couvert | `mcp-partie-c.test.ts` › « Signé sans acompte (motif), Encaissé avec le solde, jour réel du… » |
+| DP14 | Fenêtre › « Marquer perdu » : motif, « Remporté par », « Son prix », précision | … {motifPerte, perteConcurrent, perteMontantConcurrent, perteCommentaire} | S | changer_etape (motif_perte, perte_concurrent, perte_montant_concurrent) | couvert | `mcp-partie-c.test.ts` › « Signé sans acompte (motif), Encaissé avec le solde, jour réel du… » |
+| DP15 | → Signé : case « bon pour accord » (hors espace) | … {confirmations} | S | changer_etape (accord_confirme) | couvert | `mcp-partie-c.test.ts` › « Signé avec le devis accepté (plusieurs devis) et l'acompte reçu, dans… » |
+| DP16 | → Signé : choix du devis accepté (plusieurs devis) | … {devisAccepteId} | S | changer_etape (devis_accepte_id) | couvert | `mcp-partie-c.test.ts` › « Signé avec le devis accepté (plusieurs devis) et l'acompte reçu, dans… » |
+| DP17 | → Signé : acompte reçu, dans la même transaction | … {acompte} (`changerEtapeAvecPaiement`) | S-€ | changer_etape (acompte, dans la même opération) | couvert | `mcp-partie-c.test.ts` › « Signé avec le devis accepté (plusieurs devis) et l'acompte reçu, dans… » |
+| DP18 | → Signé : « sans acompte » + motif + précision | … {sansAcompte} | S | changer_etape (sans_acompte : motif, precision) | couvert | `mcp-partie-c.test.ts` › « Signé sans acompte (motif), Encaissé avec le solde, jour réel du… » |
+| DP19 | → Planifié : date de chantier | … {dateChantier} | R | changer_etape (date_chantier) | couvert | `mcp-partie-c.test.ts` › « Signé avec le devis accepté (plusieurs devis) et l'acompte reçu, dans… » |
+| DP20 | → Encaissé : « solde reçu » + paiement | … {solde} | S-€ | changer_etape (ENCAISSE, solde) | couvert | `mcp-partie-c.test.ts` › « Signé sans acompte (motif), Encaissé avec le solde, jour réel du… » |
+| DP21 | Photos › voir, visionneuse (avant, après) | GET /api/dossiers/:id/photos/:photoId | L | voir_fichiers (photos) | couvert | `mcp-v2.test.ts` › « « voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP… » |
+| DP22 | Photos › « Ajouter » / « Prendre une photo » (avant) | POST /api/dossiers/:id/photos | R | ajouter_fichier (DOSSIER › PHOTO_AVANT) ; lien_depot | couvert | `mcp-fichiers.test.ts` › « dossier (par le nom), lead, client, dépense, réalisation non publiée » ; `mcp-fichiers.test.ts` › « rend un lien absolu, 30 minutes, rattaché au dossier ; le dépôt arrive… » |
+| DP23 | Photos › « Photos après » (portfolio) | POST … {apres:1} | R | ajouter_fichier (DOSSIER › PHOTO_APRES) | couvert | `mcp-fichiers.test.ts` › « dossier (par le nom), lead, client, dépense, réalisation non publiée » |
+| DP24 | Photos › visionneuse › « Supprimer la photo » | DELETE /api/dossiers/:id/photos/:photoId | S-suppr | ranger_fichier (retirer) | couvert | `mcp-fichiers.test.ts` › « une photo déjà dans le dossier (pas passée par un dépôt) se retire et… » |
+| DP25 | Historique › liste et « Voir les N plus anciens » | GET /api/dossiers/:id | L | lire_fiche (dossier : historique paginé, nombre, decalage) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP26 | Historique › « Lire le mail » de l'événement | GET /api/messages/:id | L | lire_mail | couvert | `mcp-mail.test.ts` › « 4. « Qu'est-ce que le mail de Thimalu change dans son dossier ? »… » |
+| DP27 | Espace client › la vue : les 5 étapes du client, reste à faire, visites, projet, choix, favoris, avis, paiement vu, gestes, photos retirées | GET /api/dossiers/:id/espace | L | lire_fiche (dossier, espace: true) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP28 | Espace › « Ouvrir l'espace client » | POST /api/dossiers/:id/espace {ouvrir} | R | geste_espace (OUVRIR) | couvert | `mcp-gestes.test.ts` › « OUVRIR sans rien noter ni envoyer : même espace que « Lien espace… » |
+| DP29 | Espace › « Copier » le lien | — | L | lister ESPACES (lien) / lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| DP30 | Espace › « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (dossier, espace: true : lien d'aperçu « comme le client ») | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP31 | Espace › « Envoyer le lien par mail » (à, objet, phrase) | POST /api/mail/lien-espace | S-client | envoyer_lien_espace (a, objet, phrase) | couvert | `mcp-partie-c.test.ts` › « objet remplacé ; code par défaut selon l'étape de l'espace ; l'aperçu… » |
+| DP32 | Espace › « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
+| DP33 | Espace › « Désactiver le lien » (tous ses projets) | POST /api/dossiers/:id/espace {revoquer} | S | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
+| DP34 | Espace › « Nouveau lien », avec ou sans mail, avec un texte | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| DP35 | Espace › photos retirées par le client : les voir | GET /api/dossiers/:id/espace/photos-retirees/:photoId | L | voir_fichiers (photos, retirees: true) | couvert | `mcp-fichiers.test.ts` › « une photo déjà dans le dossier (pas passée par un dépôt) se retire et… » |
+| DP36 | Espace › « Remettre » une photo retirée | POST …/espace {geste:remettre-photo} | R | ranger_fichier (remettre) / geste_espace (REMETTRE_PHOTO) | couvert | `mcp-fichiers.test.ts` › « une photo déjà dans le dossier (pas passée par un dépôt) se retire et… » |
+| DP37 | Espace › Projet › « Valider à sa place » | … {geste:valider-projet} | R | geste_espace (VALIDER_PROJET) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
+| DP38 | Espace › Projet › « Dévalider » | … {geste:devalider-projet} | R | geste_espace (DEVALIDER_PROJET) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
+| DP39 | Espace › Projet › « Modifier taille et note » | … {geste:modifier-projet} | R | modifier DOSSIER (dimensions, notes_projet) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP40 | Espace › Projet › « Réinitialiser » l'étape | … {geste:reinitialiser, PROJET} | R (efface la saisie du client) | geste_espace (REINITIALISER, etape PROJET) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
+| DP41 | Espace › Simulations › « Retirer la demande » | … {geste:retirer-demande} | R | geste_espace (RETIRER_DEMANDE) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
+| DP42 | Espace › Simulations › « Valider » à sa place | … {geste:valider-simulation} | R | geste_espace (VALIDER_SIMULATION, simulation_id) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
+| DP43 | Espace › Simulations › « Dévalider » | … {geste:devalider-simulation} | R | geste_espace (DEVALIDER_SIMULATION) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
+| DP44 | Espace › Simulations › « Masquer » | PATCH /api/dossiers/:id/simulations/:sid {masquer} | R | publier (SIMULATION, retirer) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| DP45 | Espace › Simulations › « Afficher » (republier, mail automatique) | … {afficher} | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| DP46 | Espace › Simulations › « Accorder 3 simulations » | … {geste:accorder, nombre} | S-€ (≈ 0,20 $ l'image) | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| DP47 | Espace › Simulations › « Réinitialiser » l'étape | … {geste:reinitialiser, SIMULATIONS} | R | geste_espace (REINITIALISER, etape SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
+| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP49 | Espace › Devis › « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | générateur / dépôt | S | generer_document / ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » ; `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » |
+| DP50 | Espace › Devis › « Retirer son accord » | … {geste:retirer-accord} | S | geste_espace (RETIRER_ACCORD) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP51 | Espace › Paiement (ce qu'il voit), « Son avis » (note, texte, publication) | GET …/espace | L | lire_fiche (dossier, espace: true : paiement vu, avis) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP52 | Espace › Messages › le fil | GET …/espace | L | lister MESSAGES_ESPACE | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
+| DP53 | Espace › Messages › « Répondre dans son espace » | … {geste:repondre} | S-client | repondre_espace | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
+| DP54 | Espace › « Ses derniers gestes » | GET …/espace | L | lire_fiche (dossier, espace: true : derniers gestes) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP55 | Documents › « Générer un devis » | POST /api/dossiers/:id/documents | S | generer_document (lignes SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
+| DP56 | Documents › « Générer une facture » | … {type:FACTURE} | S-€ | generer_document (FACTURE, depuis_devis) | couvert | `mcp.test.ts` › « « Génère la facture de Monsieur Rousse, mets-la dans son dossier et son… » ; `assistant.test.ts` › « sur un dossier signé, la facture s'émet, puis l'encaissement (sensible)… » |
+| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | voir_fichiers (documents, document_id : PDF joint) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
+| DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | modifier DOCUMENT (date_emission, montant, objet, statut, acompte_pct) ; ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
+| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » |
+| DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
+| DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert | `mcp-sensibles.test.ts` › « annuler_document — annuler un devis : aperçu et jeton, aucune écriture » |
+| DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation | S | annuler_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
+| DP64 | Générateur › tarifs disponibles (presets) | GET /api/dossiers/presets | L | lister TARIFS (presets avec identifiant) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| DP65 | Générateur › lignes préremplies d'après l'espace (choix, mètres, tarifs) | GET /api/dossiers/:id/devis-propose | L | generer_document (depuis_espace: true) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
+| DP66 | Générateur › numéro à venir | GET /api/dossiers/numerotation?type= | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| DP67 | Générateur › lignes : prestation ou section, monter, descendre, supprimer, choisir un tarif | — | — | generer_document (lignes, dont SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » ; `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
+| DP68 | Générateur › objet, acompte %, mention ml, libellé de variante, « prévenir le client » | POST …/documents | S | generer_document (objet, acompte_pct, note_ml, libelle_variante, notifier) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
+| DP69 | Générateur › paramètres légaux manquants → saisie | POST /api/parametres | S-param | modifier PARAMETRE | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| DP70 | Tarifs › modifier un tarif (désignation, unité, prix) | PATCH /api/dossiers/presets/:id | S-param | modifier TARIF (designation, unite, prix_unitaire) / modifier SOUS_PARTIE | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-v2.test.ts` › « « modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec… » |
+| DP71 | Tarifs › « Nouveau tarif » | POST /api/dossiers/presets | S-param | creer TARIF | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| DP72 | Tarifs › « Retirer » un tarif | DELETE /api/dossiers/presets/:id | S-suppr | archiver / restaurer (TARIF) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » |
+| DP73 | Tarifs › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | modifier SOUS_PARTIE (preset_id, ou null = automatique) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| DP74 | Paiements › liste, reste dû | GET /api/dossiers/:id | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP75 | Paiements › « Ajouter un paiement » | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement (piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
+| DP76 | Paiements › « Corriger » (montant, date, moyen, référence) | PATCH /api/encaissements/:id | S-€ | modifier ENCAISSEMENT (montant, recu_le, moyen, reference) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
+| DP77 | Paiements › « Chèque crédité » (date du relevé) | POST /api/encaissements/:id/credit | S-€ | modifier ENCAISSEMENT (credite_le) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
+| DP78 | Paiements › « Chèque rejeté » (date, motif, précision) | POST /api/encaissements/:id/rejet | S-€ | annuler_encaissement (nature REJETER : le, motif, precision) | couvert | `mcp-partie-c.test.ts` › « annuler_encaissement REJETER : chèque impayé, comme « Chèque rejeté »… » |
+| DP79 | Paiements › « Annuler ce paiement » (motif, précision) | POST /api/encaissements/:id/annulation | S-€ | annuler_encaissement | couvert | `mcp-sensibles.test.ts` › « annuler_encaissement — annuler un paiement : aperçu et jeton, aucune écriture » |
+| DP80 | Simulations › liste, visionneuse (avant, après, direction artistique, prompt) | GET /api/dossiers/:id/simulations | L | voir_fichiers (simulations) | couvert | `mcp-v2.test.ts` › « « voir_fichiers » simulations (ex-« voir_simulations ») : l'après en… » |
+| DP81 | Simulations › « Préparer » (→ simulateur) | nav | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| DP82 | Simulations › « Déposer une simulation » : image, titre, description, préparation liée, source | POST /api/dossiers/:id/simulations (multipart) | R (brouillon) | ajouter_fichier (DOSSIER › SIMULATION : titre, description, origine_simulation, preparation_id) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
+| DP83 | Simulations › « Publier » (sélection ou tous les brouillons) | POST …/simulations/publier | S-client | publier (SIMULATION, cible : tous les brouillons ou ids) | couvert | `mcp-gestes.test.ts` › « « publier » SIMULATION sur un dossier (ex-« publier_simulation ») : les… » |
+| DP84 | Simulations › « Masquer » / « Afficher » | PATCH …/simulations/:sid | R / S-client | publier (SIMULATION, publier ou retirer) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| DP85 | Simulations › « Repasser en brouillon » | … {brouillon} | R | modifier SIMULATION (statut BROUILLON) | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| DP86 | Simulations › « Retirer » (archivée) | … {retirer, motif} | S-suppr | archiver / restaurer (SIMULATION) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| DP87 | Simulations › modifier titre et description (route sans bouton) | … {modifier} | R | modifier SIMULATION (titre, description) | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| DP88 | Le reste › Familles : cocher ou décocher familles et sous-parties | PATCH /api/dossiers/:id/prestations | R | modifier DOSSIER (familles, ajouter_sous_parties, retirer_sous_parties) | couvert | `mcp-v2.test.ts` › « « Passe la salle de bain en sous-partie douche » : refusé avec les… » |
+| DP89 | Le reste › Délais et écarts : corriger la date réelle d'un passage d'étape | PATCH /api/dossiers/:id/evenements/:evenementId {survenuLe} | R | modifier DOSSIER (passage : evenement_id, survenu_le) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP90 | Le reste › Délais et écarts : lecture | GET /api/dossiers/:id | L | lire_fiche (dossier : délais et écarts) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP91 | Le reste › Dépenses : liste, total, justificatif | GET /api/dossiers/:id/depenses | L | voir_fichiers (documents : justificatif) ; lister DEPENSES | couvert | `mcp-fichiers.test.ts` › « voir_fichiers : justificatif d'une dépense en image ou en lien… » |
+| DP92 | Le reste › « Nouvelle dépense » | → /depenses/nouvelle?dossier= | R | creer DEPENSE (avec justificatif, dossier_id) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » |
+| DP93 | Le reste › Étapes et notes : note à une étape choisie | POST /api/dossiers/:id/notes {etape, contenu} | R | creer NOTE (dossier, etape) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| DP94 | Le reste › Coordonnées : nom du client, téléphone, e-mail, adresse, code postal, ville, objet, source, montant estimé, dates (chantier, souhaitée, fin) | PATCH /api/dossiers/:id | R (S pour montant, dates de chantier, adresse) | modifier DOSSIER (client_nom, source, coordonnées) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP95 | Le reste › Coordonnées › « Changer de fiche client » | GET /api/clients ; PATCH /api/dossiers/:id {clientId} | S | modifier DOSSIER (client_id) | couvert | `mcp-sensibles.test.ts` › « modifier DOSSIER — changer de fiche client : aperçu et jeton, aucune écriture » ; `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
+| DP96 | Le reste › Chronologie du client : familles filtrables, « tout voir » | GET /api/chronologie | L | lire_fiche (chronologie : familles) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| DP97 | Le reste › « Archiver le dossier » (motif) | POST /api/dossiers/:id/archivage {archiver} | S-suppr | archiver (dossiers, motif) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 
 ### 2.5 Espaces clients (`/espaces`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| E1 | Charger, rafraîchir, pages de 50 clients | GET /api/espaces?page= | L | espaces_clients | partiel : pas de page ; au-delà de 50 clients, invisibles |
-| E2 | Onglets À moi / Chez le client / Signaux / Tous / Désactivés (compteurs) | filtre local | L | espaces_clients | partiel : aucun filtre |
-| E3 | Sélecteur « Étape », tri (main, activité, lien récent) | filtre local | L | espaces_clients | partiel : ni filtre par étape, ni tri |
-| E4 | Déplier la carte : lien, visites, projets, faits, signaux | données chargées | L | espaces_clients | partiel : ni les faits par projet, ni l'aperçu |
-| E5 | Raccourcis Photos / Messages / Devis / Encaisser | nav | — | voir_photos, messages_espace, lire_fiche, saisir_encaissement | couvert |
-| E6 | « Accorder un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | — | manquant |
-| E7 | « Voir comme le client » | lien d'aperçu signé | L | — | manquant |
-| E8 | « Copier son lien » | — | L | espaces_clients (donnees.lien) | couvert |
-| E9 | « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | renouveler_lien | partiel : la phrase ne se modifie pas |
-| E10 | « Désactiver » | POST /api/espaces/:permanentId {desactiver} | R | — | manquant |
-| E11 | « Accorder 3 simulations » | POST /api/dossiers/:id/espace {accorder} | S-€ léger | accorder_simulations | couvert |
-| E12 | « Faire le devis » / « Ajouter un devis » | nav | S | generer_document | couvert |
-| E13 | « Déposer un devis PDF » | nav | S | deposer_document | couvert |
-| E14 | « Simulateur » | nav | R | preparer_simulation | couvert |
-| E15 | Geste « Publier » | nav | S-client | publier_simulation | couvert |
-| E16 | Geste « Appeler » (`tel:`) | — | — | noter_appel ensuite | sans objet |
-| E17 | « Dossier » | nav | L | lire_fiche | couvert |
-| E18 | « Ce projet, comme lui » (aperçu par projet) | lien d'aperçu signé | L | — | manquant |
-| E19 | « Envoyer le lien par mail » : À, Objet, Phrase ; code LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL | POST /api/mail/lien-espace | S-client | envoyer_lien_espace | partiel : l'objet ne se modifie pas ; le code n'est pas choisi selon l'étape |
-| E20 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| E1 | Charger, rafraîchir, pages de 50 clients | GET /api/espaces?page= | L | lister ESPACES (page) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| E2 | Onglets À moi / Chez le client / Signaux / Tous / Désactivés (compteurs) | filtre local | L | lister ESPACES (vue MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| E3 | Sélecteur « Étape », tri (main, activité, lien récent) | filtre local | L | lister ESPACES (etape, tri) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| E4 | Déplier la carte : lien, visites, projets, faits, signaux | données chargées | L | lister ESPACES (faits par projet) ; lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| E5 | Raccourcis Photos / Messages / Devis / Encaisser | nav | — | voir_fichiers, lister MESSAGES_ESPACE, lire_fiche, saisir_encaissement | couvert | `mcp-v2.test.ts` › « « voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP… » ; `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
+| E6 | « Accorder un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | geste_espace (ACCORDER_PROJET) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| E7 | « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (espace: true : lien d'aperçu) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| E8 | « Copier son lien » | — | L | lister ESPACES (lien) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| E9 | « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| E10 | « Désactiver » | POST /api/espaces/:permanentId {desactiver} | R | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
+| E11 | « Accorder 3 simulations » | POST /api/dossiers/:id/espace {accorder} | S-€ léger | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| E12 | « Faire le devis » / « Ajouter un devis » | nav | S | generer_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
+| E13 | « Déposer un devis PDF » | nav | S | ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-fichiers.test.ts` › « devis visible : aperçu + jeton (étape annoncée), puis document repris… » |
+| E14 | « Simulateur » | nav | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| E15 | Geste « Publier » | nav | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| E16 | Geste « Appeler » (`tel:`) | — | — | noter_appel ensuite | sans objet | — |
+| E17 | « Dossier » | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| E18 | « Ce projet, comme lui » (aperçu par projet) | lien d'aperçu signé | L | lire_fiche (espace: true : aperçu par projet) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| E19 | « Envoyer le lien par mail » : À, Objet, Phrase ; code LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL | POST /api/mail/lien-espace | S-client | envoyer_lien_espace (a, objet, phrase ; code selon l'étape) | couvert | `mcp-partie-c.test.ts` › « objet remplacé ; code par défaut selon l'étape de l'espace ; l'aperçu… » |
+| E20 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
 
 ### 2.6 Mail (`/mail`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| M1 | Relire la boîte (à l'ouverture et bouton « Relire ») | POST /api/mail/synchroniser | R | — | manquant |
-| M2 | Onglets À traiter, Clients, Administratif (compteurs) | GET /api/mail?vue= | L | mails_a_traiter | couvert |
-| M3 | « Rangés » (repli en bas de page) | GET /api/mail?vue=RANGES | L | mails_a_traiter | partiel : la vue `RANGES` n'est pas dans l'enum |
-| M4 | Recherche « Nom, adresse, objet… » dans la vue | GET /api/mail?vue&recherche | L | rechercher_mails | partiel : autre moteur, qui ne filtre pas dans une vue |
-| M5 | Bloc « Messages de l'espace client » | GET /api/mail | L | messages_espace | couvert |
-| M6 | « Tout nettoyer » (confirmation) | POST /api/mail/nettoyer | R (masse) | — | manquant |
-| M7 | Lu / Non lu | POST /api/mail/:id/action {LU, NON_LU} | R | — | manquant |
-| M8 | Archiver / Désarchiver (sort d'« À traiter ») | … {ARCHIVER, DESARCHIVER} | R | repondre_tache (quand le fil est une tâche) | partiel : seulement par une tâche ; `ranger_mail` range, il n'archive pas |
-| M9 | « Remonter » un mail rangé (l'expéditeur ne sera plus rangé) | … {REMONTER} | R | ranger_mail (annuler) + proposer_regle + valider_proposition | partiel : trois appels ; ni `remonteLe` ni reclassement |
-| M10 | « Ne plus me montrer cet expéditeur » | … {NE_PLUS_MONTRER} | R (pour toujours) | ranger_mail (expediteur) + proposer_regle | partiel : trois appels, sans la garde « adresse d'un client » |
-| M11 | « Ranger » | … {RANGER} | R | ranger_mail | couvert |
-| M12 | « Déranger » (route) | … {DERANGER} | R | ranger_mail (annuler) | couvert |
-| M13 | Classer à la main CLIENT / ADMINISTRATIF / HUMAIN (route sans bouton) | … {CLASSER} | R | — | manquant |
-| M14 | Ouvrir un mail : fil, pièces, contexte, cartes, brouillons, envois | GET /api/mail/:id | L | lire_mail | couvert |
-| M15 | Pièce jointe (image, fichier) | GET /api/messages/:id/pieces/:pieceId | L | lire_mail | partiel : les noms seulement, pas le contenu |
-| M16 | Lien « Gmail » | nav externe | L | lire_mail (lienGmail) | couvert |
-| M17 | Intention et « ce qui est attendu » | POST /api/mail/:id/intention | R | classer_mail | couvert |
-| M18 | Résumé du fil | — | L | lire_mail / resumer_fil | couvert |
-| M19 | Carte « Ce que ce mail change » › « Valider » | POST /api/mail/propositions/:id {valider} | R / S | valider_proposition | couvert |
-| M20 | Carte › « Ignorer » | … {ignorer} | R | ignorer_proposition | couvert |
-| M21 | Date extraite › « Planifier » | POST /api/mail/:id/planifier | R | planifier | partiel : cible le contact, pas le mail |
-| M22 | « Plus tard » (Demain 9 h, Lundi 9 h, Dans une semaine, Une autre date), « annuler » | POST /api/mail/:id/snooze | R | snoozer_mail | couvert |
-| M23 | « Qui est-ce ? » : chercher un client, « Rattacher » | GET /api/clients ; POST /api/mail/:id/rattacher | R | chercher + rattacher_mail | couvert |
-| M24 | « C'est une nouvelle demande : créer un lead » | POST /api/mail/:id/lead | R | creer_contact + rattacher_mail | partiel : les coordonnées sont à recopier ; ni la source « mail », ni le fil, en un geste |
-| M25 | Reprendre un brouillon déposé par Claude | — | — | envoyer_mail (brouillonId) | couvert |
-| M26 | « Rédiger avec l'IA » / « Réécrire » (consigne) | POST /api/mail/brouillon | S-€ (≈ 0,015 €) | rediger_mail | couvert |
-| M27 | « Envoyer » (À, Objet, texte) | POST /api/mail/envoyer | S-client | envoyer_mail | couvert |
-| M28 | Nouveau mail pour un contact (`?client=`, `?lead=`, `?dossier=`) | GET /api/mail/contexte | L | lire_fiche + rediger_mail | couvert |
-| M29 | Contexte › Appeler, Fiche, Dossier | nav | — | lire_fiche | couvert |
-| M30 | Bilan du tri (route sans écran) | GET /api/mail/bilan | L | — | manquant |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| M1 | Relire la boîte (à l'ouverture et bouton « Relire ») | POST /api/mail/synchroniser | R | traiter_mail (RELIRE_BOITE) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| M2 | Onglets À traiter, Clients, Administratif (compteurs) | GET /api/mail?vue= | L | lister MAILS | couvert | `mcp-lister-etat.test.ts` › « MAILS : listerVue par vue (rangés compris), recherche dans la vue… » ; `mcp-mail.test.ts` › « 2. « Qu'est-ce que j'ai à traiter ? » : par priorité, la réclamation en… » |
+| M3 | « Rangés » (repli en bas de page) | GET /api/mail?vue=RANGES | L | lister MAILS (vue RANGES) | couvert | `mcp-lister-etat.test.ts` › « MAILS : listerVue par vue (rangés compris), recherche dans la vue… » |
+| M4 | Recherche « Nom, adresse, objet… » dans la vue | GET /api/mail?vue&recherche | L | lister MAILS (recherche dans la vue) ; rechercher_mails | couvert | `mcp-lister-etat.test.ts` › « MAILS : listerVue par vue (rangés compris), recherche dans la vue… » ; `mcp-mail.test.ts` › « 9. « Retrouve le client qui voulait du marbre sur l'îlot » » |
+| M5 | Bloc « Messages de l'espace client » | GET /api/mail | L | lister MESSAGES_ESPACE | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
+| M6 | « Tout nettoyer » (confirmation) | POST /api/mail/nettoyer | R (masse) | traiter_mail (TOUT_NETTOYER) | couvert | `mcp-gestes.test.ts` › « RATTACHER à un client (même état que « Rattacher ») ; plus de trois… » |
+| M7 | Lu / Non lu | POST /api/mail/:id/action {LU, NON_LU} | R | traiter_mail (LU, NON_LU) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » |
+| M8 | Archiver / Désarchiver (sort d'« À traiter ») | … {ARCHIVER, DESARCHIVER} | R | traiter_mail (ARCHIVER, DESARCHIVER) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » |
+| M9 | « Remonter » un mail rangé (l'expéditeur ne sera plus rangé) | … {REMONTER} | R | traiter_mail (REMONTER) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » |
+| M10 | « Ne plus me montrer cet expéditeur » | … {NE_PLUS_MONTRER} | R (pour toujours) | traiter_mail (NE_PLUS_MONTRER) | couvert | `mcp-gestes.test.ts` › « NE_PLUS_MONTRER (définitif) : aperçu et jeton, puis le même état que… » |
+| M11 | « Ranger » | … {RANGER} | R | traiter_mail (RANGER) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » ; `mcp-mail.test.ts` › « 10. « Range tout ce qui vient de TikTok pour toujours » : rangement par… » |
+| M12 | « Déranger » (route) | … {DERANGER} | R | traiter_mail (DERANGER) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » |
+| M13 | Classer à la main CLIENT / ADMINISTRATIF / HUMAIN (route sans bouton) | … {CLASSER} | R | traiter_mail (CLASSER : classe, pour_l_expediteur) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » |
+| M14 | Ouvrir un mail : fil, pièces, contexte, cartes, brouillons, envois | GET /api/mail/:id | L | lire_mail | couvert | `mcp-mail.test.ts` › « 4. « Qu'est-ce que le mail de Thimalu change dans son dossier ? »… » |
+| M15 | Pièce jointe (image, fichier) | GET /api/messages/:id/pieces/:pieceId | L | voir_fichiers (piece_mail : message_id, piece) | couvert | `mcp-partie-c.test.ts` › « pièce jointe d'un mail (M15), rendu du banc (S17), générations du site… » |
+| M16 | Lien « Gmail » | nav externe | L | lire_mail (lienGmail) | couvert | `mcp-mail.test.ts` › « 4. « Qu'est-ce que le mail de Thimalu change dans son dossier ? »… » |
+| M17 | Intention et « ce qui est attendu » | POST /api/mail/:id/intention | R | classer_mail | couvert | `mcp-mail.test.ts` › « 1. « Classe mes mails » : lecture, classement en lot, confirmation… » |
+| M18 | Résumé du fil | — | L | lire_mail / resumer_fil | couvert | `mcp-mail.test.ts` › « 3. « Résume-moi le fil avec Rousse » : lecture par le nom, résumé posé » |
+| M19 | Carte « Ce que ce mail change » › « Valider » | POST /api/mail/propositions/:id {valider} | R / S | valider_proposition | couvert | `mcp-mail.test.ts` › « 4. « Qu'est-ce que le mail de Thimalu change dans son dossier ? »… » |
+| M20 | Carte › « Ignorer » | … {ignorer} | R | ignorer_proposition | couvert | `mcp-sensibles.test.ts` › « ignorer_proposition — plus de trois propositions : aperçu et jeton, aucune écriture » |
+| M21 | Date extraite › « Planifier » | POST /api/mail/:id/planifier | R | planifier (message_id) | couvert | `mcp-partie-c.test.ts` › « planifier avec message_id : l'action va sur le lead du mail, comme le… » ; `mcp-mail.test.ts` › « 7. « Il dit qu'il est dispo mardi 14h, planifie » : rappel du lead un… » |
+| M22 | « Plus tard » (Demain 9 h, Lundi 9 h, Dans une semaine, Une autre date), « annuler » | POST /api/mail/:id/snooze | R | traiter_mail (SNOOZER, ANNULER_SNOOZE) | couvert | `mcp-gestes.test.ts` › « LU, NON_LU, ARCHIVER, DESARCHIVER, RANGER, DERANGER, REMONTER, CLASSER… » ; `mcp-mail.test.ts` › « 8. « Ce mail, remets-le-moi lundi » : lundi 9 h Paris, hors d'À traiter… » |
+| M23 | « Qui est-ce ? » : chercher un client, « Rattacher » | GET /api/clients ; POST /api/mail/:id/rattacher | R | chercher + traiter_mail (RATTACHER) | couvert | `mcp-gestes.test.ts` › « RATTACHER à un client (même état que « Rattacher ») ; plus de trois… » |
+| M24 | « C'est une nouvelle demande : créer un lead » | POST /api/mail/:id/lead | R | creer LEAD (message_id) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| M25 | Reprendre un brouillon déposé par Claude | — | — | envoyer_mail (brouillonId) | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| M26 | « Rédiger avec l'IA » / « Réécrire » (consigne) | POST /api/mail/brouillon | S-€ (≈ 0,015 €) | rediger_mail | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| M27 | « Envoyer » (À, Objet, texte) | POST /api/mail/envoyer | S-client | envoyer_mail | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| M28 | Nouveau mail pour un contact (`?client=`, `?lead=`, `?dossier=`) | GET /api/mail/contexte | L | lire_fiche + rediger_mail | couvert | `mcp-mail.test.ts` › « 5. « Réponds à Maud que la date de pose sera fixée dès réception des… » |
+| M29 | Contexte › Appeler, Fiche, Dossier | nav | — | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| M30 | Bilan du tri (route sans écran) | GET /api/mail/bilan | L | etat_crm (MAIL : bilan du tri) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 
 ### 2.7 Clients (`/clients`, fiche, fusion)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| C1 | Liste paginée (50), recherche « Nom, ville, e-mail, téléphone… » | GET /api/clients?recherche&page | L | chercher | partiel : pas de liste ni de pages (20 au plus, tout mélangé) |
-| C2 | Filtres Catégorie, Source, « Fiches archivées » | GET /api/clients?categorie&source&archives | L | — | manquant |
-| C3 | Nombre total de clients (la provenance est partie dans l'Analytique) | SSR | L | analytique (qualité par source) / manager_clients | couvert |
-| C4 | « Chercher les doublons » | POST /api/clients/doublons | R (propose seulement) | — | manquant |
-| C5 | « Nouveau client » / « Nouveau client pro » : prénom, nom ou raison sociale, SIRET, sous-traitance, téléphone, e-mail, adresse, code postal, ville, source et précision, recommandé par | POST /api/clients | R | creer_contact | partiel : crée un lead qui entre dans « À appeler » ; ni catégorie, ni raison sociale, SIRET, adresse, source client, recommandeur |
-| C6 | « Créer quand même » (doublon) | POST /api/clients {forcer} | R | creer_contact (forcer) | couvert (dans les limites de creer_contact) |
-| C7 | Annuaire des entreprises (nom, SIREN, SIRET) | GET /api/clients/annuaire | L | — | manquant |
-| C8 | Choisir le recommandeur | GET /api/clients?recherche | L | chercher | couvert |
-| C9 | Lire la fiche : identité, catégorie, SIRET, provenance, recommandations, coordonnées (archivées comprises), consentements, dossiers, leads, passif, historique, fusion, anonymisation, propositions | GET /api/clients/:id | L | lire_fiche (clientId) | partiel : manquent catégorie, SIRET, adresse, provenance, recommandations, passif, consentements, historique, état (archivé, fusionné, anonymisé), identifiants des coordonnées |
-| C10 | « Ouvrir un dossier » (→ `/dossiers?client=`) | POST /api/dossiers {clientId} | R | ouvrir_dossier | partiel : seulement en partant d'un lead |
-| C11 | « Modifier » : catégorie, prénom, nom, raison sociale, SIRET, adresse, code postal, ville, source, précision, campagne, publicité, formulaire, premier contact, recommandeur | PATCH /api/clients/:id | R | proposer_mise_a_jour (CLIENT) + valider_proposition | partiel : exige un mail et ne couvre que prénom, nom, raison sociale, adresse, code postal, ville, notes, e-mail, téléphone |
-| C12 | « Archiver » (motif ; dossiers en cours signalés) | POST /api/clients/:id/archiver | S-suppr | — | manquant |
-| C13 | « Restaurer » | POST /api/clients/:id/restaurer | R | — | manquant |
-| C14 | « Anonymiser » (RGPD) : aperçu (effacé, gardé, bloquants), motif, confirmation | GET / POST /api/clients/:id/anonymisation | S-suppr (irréversible) | — | manquant |
-| C15 | Coordonnées › « + Téléphone » / « + E-mail » (valeur, libellé) | POST /api/clients/:id/coordonnees | R | rattacher_mail / proposer_mise_a_jour | partiel : pas d'ajout direct |
-| C16 | Coordonnées › « Corriger » (valeur, libellé) | POST …/coordonnees/:id {modifier} | R | — | manquant |
-| C17 | Coordonnées › « Rendre principale » | … {principale} | R | — | manquant |
-| C18 | Coordonnées › « Archiver » (motif) | … {archiver} | S-suppr | — | manquant |
-| C19 | Mails commerciaux › enregistrer une réponse : statut, moyen, date, preuve | POST /api/clients/:id/consentements | R (preuve légale) | — | manquant (ni lecture ni écriture) |
-| C20 | Passif › « Enregistrer » | PATCH /api/clients/:id {notes} | R | proposer_mise_a_jour (notes) | partiel : seulement à partir d'un mail |
-| C21 | Espace client de la fiche : lien, visites, projets, SMS prêt | GET /api/clients/:id/espace | L | espaces_clients / lien_espace | partiel : pas de lecture pour un client donné |
-| C22 | Espace › « Permettre un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | — | manquant |
-| C23 | Chronologie du contact (familles, « tout voir ») | GET /api/chronologie?client= | L | lire_mail (nom, chronologie) | partiel : seulement en partant d'un mail, sans filtre |
-| C24 | Messages du client (30, tous statuts) | GET /api/messages?clientId= | L | rechercher_mails / lire_mail (nom) | partiel : seulement le dernier fil |
-| C25 | Historique de la fiche (résumé, date, auteur) | GET /api/clients/:id | L | — | manquant |
-| C26 | Bandeau « proposition en attente » → `/validation` | nav | L | lire_fiche (propositionsEnAttente) | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| C1 | Liste paginée (50), recherche « Nom, ville, e-mail, téléphone… » | GET /api/clients?recherche&page | L | lister CLIENTS (recherche, page) | couvert | `mcp-lister-etat.test.ts` › « CLIENTS : pageClients, avec catégorie, source, recherche et fiches… » |
+| C2 | Filtres Catégorie, Source, « Fiches archivées » | GET /api/clients?categorie&source&archives | L | lister CLIENTS (categorie, source, vue ARCHIVES) | couvert | `mcp-lister-etat.test.ts` › « CLIENTS : pageClients, avec catégorie, source, recherche et fiches… » |
+| C3 | Nombre total de clients (la provenance est partie dans l'Analytique) | SSR | L | analytique (qualité par source) / manager_clients | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| C4 | « Chercher les doublons » | POST /api/clients/doublons | R (propose seulement) | doublon (CLIENT, CHERCHER) | couvert | `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » |
+| C5 | « Nouveau client » / « Nouveau client pro » : prénom, nom ou raison sociale, SIRET, sous-traitance, téléphone, e-mail, adresse, code postal, ville, source et précision, recommandé par | POST /api/clients | R | creer CLIENT (categorie, raison_sociale, siret, adresse, source…) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| C6 | « Créer quand même » (doublon) | POST /api/clients {forcer} | R | creer CLIENT / LEAD (forcer) | couvert | `mcp-v3.test.ts` › « « creer » LEAD (ex-« creer_contact ») refuse un doublon (même numéro… » |
+| C7 | Annuaire des entreprises (nom, SIREN, SIRET) | GET /api/clients/annuaire | L | lister ENTREPRISES | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| C8 | Choisir le recommandeur | GET /api/clients?recherche | L | chercher | couvert | `assistant.test.ts` › « « chercher » tolère une faute et rend les deux Rousse » |
+| C9 | Lire la fiche : identité, catégorie, SIRET, provenance, recommandations, coordonnées (archivées comprises), consentements, dossiers, leads, passif, historique, fusion, anonymisation, propositions | GET /api/clients/:id | L | lire_fiche (client : fiche complète) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C10 | « Ouvrir un dossier » (→ `/dossiers?client=`) | POST /api/dossiers {clientId} | R | creer DOSSIER (client_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| C11 | « Modifier » : catégorie, prénom, nom, raison sociale, SIRET, adresse, code postal, ville, source, précision, campagne, publicité, formulaire, premier contact, recommandeur | PATCH /api/clients/:id | R | modifier CLIENT | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| C12 | « Archiver » (motif ; dossiers en cours signalés) | POST /api/clients/:id/archiver | S-suppr | archiver (CLIENT, motif) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| C13 | « Restaurer » | POST /api/clients/:id/restaurer | R | restaurer (CLIENT) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| C14 | « Anonymiser » (RGPD) : aperçu (effacé, gardé, bloquants), motif, confirmation | GET / POST /api/clients/:id/anonymisation | S-suppr (irréversible) | anonymiser_client (motif, commentaire) | couvert | `mcp-gestes.test.ts` › « « anonymiser_client » : toujours un aperçu (effacé, gardé, bloquants)… » |
+| C15 | Coordonnées › « + Téléphone » / « + E-mail » (valeur, libellé) | POST /api/clients/:id/coordonnees | R | creer COORDONNEE (nature, valeur, libelle) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| C16 | Coordonnées › « Corriger » (valeur, libellé) | POST …/coordonnees/:id {modifier} | R | modifier COORDONNEE (valeur, libelle) | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| C17 | Coordonnées › « Rendre principale » | … {principale} | R | modifier COORDONNEE (principale: true) | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| C18 | Coordonnées › « Archiver » (motif) | … {archiver} | S-suppr | archiver / restaurer (COORDONNEE) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » |
+| C19 | Mails commerciaux › enregistrer une réponse : statut, moyen, date, preuve | POST /api/clients/:id/consentements | R (preuve légale) | creer CONSENTEMENT (statut, moyen, recueilli_le, preuve) ; lire_fiche (client) | couvert | `mcp-generiques.test.ts` › « LEAD, CLIENT, COORDONNEE, CONSENTEMENT, NOTE (dossier et lead)… » |
+| C20 | Passif › « Enregistrer » | PATCH /api/clients/:id {notes} | R | modifier CLIENT (notes) | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » |
+| C21 | Espace client de la fiche : lien, visites, projets, SMS prêt | GET /api/clients/:id/espace | L | lire_fiche (client : espace permanent) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C22 | Espace › « Permettre un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | geste_espace (ACCORDER_PROJET) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| C23 | Chronologie du contact (familles, « tout voir ») | GET /api/chronologie?client= | L | lire_fiche (chronologie : familles) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C24 | Messages du client (30, tous statuts) | GET /api/messages?clientId= | L | lire_fiche (messages) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C25 | Historique de la fiche (résumé, date, auteur) | GET /api/clients/:id | L | lire_fiche (client : historique) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C26 | Bandeau « proposition en attente » → `/validation` | nav | L | lire_fiche (propositionsEnAttente) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
 Les boutons « Copier », « Voir comme le client », « Nouveau lien… » et « Désactiver » de la fiche client sont ceux
 de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
 
 ### 2.8 Simulateur (`/simulateur`), banc (`/simulateur/banc`), prompts (`/simulateur/prompts`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| S1 | En-tête : coût et solde OpenAI | GET /api/simulateur/consommation | L | voir_parametres (SIMULATEUR) | partiel : ni coût par nombre d'échantillons, ni état de la clé |
-| S2 | 1. Client › chercher un dossier | GET /api/simulateur/dossiers?q= | L | chercher | couvert |
-| S3 | 1. Client › choisir (photos avant, type suggéré, goûts, préparations récentes) | GET /api/simulateur/dossiers/:id | L | voir_photos + lire_fiche | partiel : ni type suggéré, ni préparations récentes |
-| S4 | 2. Photo › choisir la photo avant | — | — | preparer_simulation (photo_id) | couvert |
-| S5 | 3. Type de surface | — | — | preparer_simulation (type_surface) | couvert |
-| S6 | 4. Teintes › catalogue (goûts, famille, recherche) et échantillons | GET /api/simulateur/catalogue ; GET …/echantillons/:ref | L | preparer_simulation (résolution par mots) | partiel : le catalogue ne se liste pas, les échantillons ne se voient pas |
-| S7 | 4. Teintes › une teinte par zone | — | — | preparer_simulation (teintes) | couvert |
-| S8 | « Préparer pour ChatGPT » | POST /api/simulateur/preparations {mode:CHATGPT} | R | preparer_simulation | couvert |
-| S9 | « Générer par l'API » (image OpenAI) | POST /api/simulateur/preparations {mode:API} | S-€ | — | manquant (l'outil force CHATGPT) |
-| S10 | Suivre la génération | GET /api/simulateur/preparations/:id | L | voir_simulations (après coup) | partiel : pas l'état d'une préparation en cours |
-| S11 | Rouvrir une préparation (`?preparation=`) | GET /api/simulateur/preparations/:id | L | preparer_simulation (lien) | partiel : lien seulement |
-| S12 | Partager, télécharger la photo et la planche, copier le prompt, ouvrir ChatGPT | GET …/photo, …/planche | — | — | sans objet |
-| S13 | « Déposer l'image de ChatGPT » (brouillon, préparation reprise) | POST /api/dossiers/:id/simulations | R | — | manquant |
-| S14 | Voir le rendu, aller au dossier | GET /api/dossiers/:id/simulations/:sid/image | L | voir_simulations | couvert |
-| S15 | Banc › état : cas, variantes V1/V2, rendus, estimation du coût | GET /api/simulateur/banc | L | — | manquant |
-| S16 | Banc › lancer la campagne, une variante ou un cas (fenêtre de coût) | POST /api/simulateur/banc | S-€ | — | manquant |
-| S17 | Banc › voir un rendu, la photo, copier le prompt | GET /api/simulateur/banc/:id/image | L | — | manquant |
-| S18 | Prompts › lister par type | GET /api/simulateur/prompts | L | — | manquant |
-| S19 | Prompts › un type : version en service et historique | GET /api/simulateur/prompts/:type | L | — | manquant |
-| S20 | Prompts › lire une ancienne version | GET …/:type?version=N | L | — | manquant |
-| S21 | Prompts › « Vérifier » (contrôles, aperçu du rendu ; rien n'est écrit) | POST …/:type {verifier} | L | — | manquant |
-| S22 | Prompts › « Enregistrer » (nouvelle version en service, note) | POST …/:type {enregistrer} | S-param | — | manquant |
-| S23 | Prompts › « Restaurer » une version | POST …/:type {restaurer} | R | — | manquant |
-| S24 | Prompts › annuler la saisie | — | — | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| S1 | En-tête : coût et solde OpenAI | GET /api/simulateur/consommation | L | etat_crm (CONSOMMATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| S2 | 1. Client › chercher un dossier | GET /api/simulateur/dossiers?q= | L | chercher | couvert | `assistant.test.ts` › « « chercher » tolère une faute et rend les deux Rousse » |
+| S3 | 1. Client › choisir (photos avant, type suggéré, goûts, préparations récentes) | GET /api/simulateur/dossiers/:id | L | voir_fichiers (photos) + lire_fiche ; voir_fichiers (preparations : préparations récentes) | couvert | `mcp-partie-c.test.ts` › « mode API : l'aperçu dit le coût et n'écrit rien ; confirmé, la… » |
+| S4 | 2. Photo › choisir la photo avant | — | — | preparer_simulation (photo_id) | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| S5 | 3. Type de surface | — | — | preparer_simulation (type_surface) | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| S6 | 4. Teintes › catalogue (goûts, famille, recherche) et échantillons | GET /api/simulateur/catalogue ; GET …/echantillons/:ref | L | lister TEINTES (styles, famille, recherche ; lien de l'échantillon) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| S7 | 4. Teintes › une teinte par zone | — | — | preparer_simulation (teintes) | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| S8 | « Préparer pour ChatGPT » | POST /api/simulateur/preparations {mode:CHATGPT} | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
+| S9 | « Générer par l'API » (image OpenAI) | POST /api/simulateur/preparations {mode:API} | S-€ | preparer_simulation (mode API) | couvert | `mcp-partie-c.test.ts` › « mode API : l'aperçu dit le coût et n'écrit rien ; confirmé, la… » |
+| S10 | Suivre la génération | GET /api/simulateur/preparations/:id | L | voir_fichiers (preparations : état d'une préparation) | couvert | `mcp-partie-c.test.ts` › « mode API : l'aperçu dit le coût et n'écrit rien ; confirmé, la… » |
+| S11 | Rouvrir une préparation (`?preparation=`) | GET /api/simulateur/preparations/:id | L | voir_fichiers (preparations, preparation_id) ; preparer_simulation (lien) | couvert | `mcp-partie-c.test.ts` › « mode API : l'aperçu dit le coût et n'écrit rien ; confirmé, la… » |
+| S12 | Partager, télécharger la photo et la planche, copier le prompt, ouvrir ChatGPT | GET …/photo, …/planche | — | — | sans objet | — |
+| S13 | « Déposer l'image de ChatGPT » (brouillon, préparation reprise) | POST /api/dossiers/:id/simulations | R | ajouter_fichier (DOSSIER › SIMULATION, origine_simulation CHATGPT, preparation_id) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
+| S14 | Voir le rendu, aller au dossier | GET /api/dossiers/:id/simulations/:sid/image | L | voir_fichiers (simulations) | couvert | `mcp-v2.test.ts` › « « voir_fichiers » simulations (ex-« voir_simulations ») : l'après en… » |
+| S15 | Banc › état : cas, variantes V1/V2, rendus, estimation du coût | GET /api/simulateur/banc | L | etat_crm (BANC) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| S16 | Banc › lancer la campagne, une variante ou un cas (fenêtre de coût) | POST /api/simulateur/banc | S-€ | agir_systeme (LANCER_BANC : cas, variante) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| S17 | Banc › voir un rendu, la photo, copier le prompt | GET /api/simulateur/banc/:id/image | L | voir_fichiers (banc : rendu, photo, prompt) | couvert | `mcp-partie-c.test.ts` › « pièce jointe d'un mail (M15), rendu du banc (S17), générations du site… » |
+| S18 | Prompts › lister par type | GET /api/simulateur/prompts | L | etat_crm (PROMPTS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| S19 | Prompts › un type : version en service et historique | GET /api/simulateur/prompts/:type | L | etat_crm (PROMPTS, type) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| S20 | Prompts › lire une ancienne version | GET …/:type?version=N | L | etat_crm (PROMPTS, type, numero) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| S21 | Prompts › « Vérifier » (contrôles, aperçu du rendu ; rien n'est écrit) | POST …/:type {verifier} | L | modifier PROMPT_SIMULATION (aperçu = « Vérifier », rien n'est écrit) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| S22 | Prompts › « Enregistrer » (nouvelle version en service, note) | POST …/:type {enregistrer} | S-param | modifier PROMPT_SIMULATION (texte, note) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| S23 | Prompts › « Restaurer » une version | POST …/:type {restaurer} | R | restaurer (PROMPT_SIMULATION, numero) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
+| S24 | Prompts › annuler la saisie | — | — | — | sans objet | — |
 
 ### 2.9 Site (`/site` — réalisations et avis publiés sur coverswap.fr)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| W1 | Liste des publications et des dossiers qui ont des photos après | GET /api/publications | L | — | manquant (`simulations_site` parle d'autre chose) |
-| W2 | Fenêtre › choisir le dossier → photos proposées | GET /api/publications/_?dossier= | L | voir_photos (apres) | partiel : ne rend pas les chemins que demandent `photoAvant` / `photoApres` |
-| W3 | « Nouvelle publication » : type (réalisation ou avis), titre, ville, type de projet, auteur, note, texte, photos avant et après, accord du client et sa date | POST /api/publications | R (brouillon) | — | manquant |
-| W4 | « Modifier » | PATCH /api/publications/:id {contenu} | R ; S-client si déjà publiée | — | manquant |
-| W5 | « Publier » (exige l'accord écrit, une photo après ou un texte) | PATCH … {publier} | S-client (site public) | — | manquant |
-| W6 | « Retirer » du site | PATCH … {retirer} | R | — | manquant |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| W1 | Liste des publications et des dossiers qui ont des photos après | GET /api/publications | L | lister PUBLICATIONS | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| W2 | Fenêtre › choisir le dossier → photos proposées | GET /api/publications/_?dossier= | L | lister PUBLICATIONS (dossier : photos proposées avec leur chemin) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| W3 | « Nouvelle publication » : type (réalisation ou avis), titre, ville, type de projet, auteur, note, texte, photos avant et après, accord du client et sa date | POST /api/publications | R (brouillon) | creer PUBLICATION ; ajouter_fichier (PUBLICATION › PHOTO_AVANT, PHOTO_APRES) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-fichiers.test.ts` › « dossier (par le nom), lead, client, dépense, réalisation non publiée » |
+| W4 | « Modifier » | PATCH /api/publications/:id {contenu} | R ; S-client si déjà publiée | modifier PUBLICATION | couvert | `mcp-generiques.test.ts` › « CLIENT, COORDONNEE (principale + libellé), NOTE_APPEL, SIMULATION… » ; `mcp-fichiers.test.ts` › « une réalisation déjà publiée : aperçu + jeton, rien n'est posé avant la… » |
+| W5 | « Publier » (exige l'accord écrit, une photo après ou un texte) | PATCH … {publier} | S-client (site public) | publier (PUBLICATION) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
+| W6 | « Retirer » du site | PATCH … {retirer} | R | publier (PUBLICATION, retirer) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
 
 ### 2.10 Finances (`/finances`, allégé en partie B)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| F1 | Tableau de l'année : factures à encaisser (numéro, retard), chèques à créditer, points à corriger ; année −1 / +1 | GET /api/finances?annee= | L | manager_finances / analytique (argent) | partiel : ni la liste des factures à encaisser, ni les chèques avec leur identifiant, ni les points qualité |
-| F2 | Lien « les chiffres sont dans l'Analytique » | nav | L | analytique (argent) | couvert |
-| F3 | « Renseigner » les paramètres manquants (en lot) | POST /api/parametres {saisies[]} | S-param | modifier_parametres (un par un) | couvert |
-| F4 | Encours › « + » paiement reçu pour la facture N : montant, moyen, date, référence, date de crédit, note ; pièce = cette facture ; payeur = le client | POST /api/encaissements {paiement, numeroDocumentId, payeur} | S-€ | saisir_encaissement | partiel : ni pièce, ni payeur, ni date de crédit ; exige un dossier (une facture hors CRM est impossible) |
-| F5 | Chèques › « Crédité » (date) | POST /api/encaissements/:id/credit | S-€ | — | manquant |
-| F6 | Chèques › « Rejeté » (date, motif, précision) | POST /api/encaissements/:id/rejet | S-€ | — | manquant |
-| F7 | Qualité › liens vers les points à corriger | nav | — | — | sans objet |
-| F8 | Livre des recettes de l'année (par mois, mouvements) | GET /api/finances?annee= | L | — | manquant |
-| F9 | « Exporter (CSV) » | GET /api/finances/livre?annee= | L | — | manquant |
-| F10 | Lien vers le dossier d'une facture | nav | L | lire_fiche | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| F1 | Tableau de l'année : factures à encaisser (numéro, retard), chèques à créditer, points à corriger ; année −1 / +1 | GET /api/finances?annee= | L | lister ENCOURS, CHEQUES, QUALITE_FINANCES | couvert | `mcp-lister-etat.test.ts` › « ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE… » |
+| F2 | Lien « les chiffres sont dans l'Analytique » | nav | L | analytique (argent) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| F3 | « Renseigner » les paramètres manquants (en lot) | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (saisies[], en lot) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| F4 | Encours › « + » paiement reçu pour la facture N : montant, moyen, date, référence, date de crédit, note ; pièce = cette facture ; payeur = le client | POST /api/encaissements {paiement, numeroDocumentId, payeur} | S-€ | saisir_encaissement (piece : numéro de facture, avec ou sans dossier ; payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
+| F5 | Chèques › « Crédité » (date) | POST /api/encaissements/:id/credit | S-€ | modifier ENCAISSEMENT (credite_le) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
+| F6 | Chèques › « Rejeté » (date, motif, précision) | POST /api/encaissements/:id/rejet | S-€ | annuler_encaissement (nature REJETER) | couvert | `mcp-partie-c.test.ts` › « annuler_encaissement REJETER : chèque impayé, comme « Chèque rejeté »… » |
+| F7 | Qualité › liens vers les points à corriger | nav | — | — | sans objet | — |
+| F8 | Livre des recettes de l'année (par mois, mouvements) | GET /api/finances?annee= | L | lister LIVRE (annee) | couvert | `mcp-lister-etat.test.ts` › « ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE… » |
+| F9 | « Exporter (CSV) » | GET /api/finances/livre?annee= | L | lister LIVRE (lien du CSV) | couvert | `mcp-lister-etat.test.ts` › « ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE… » |
+| F10 | Lien vers le dossier d'une facture | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
 ### 2.11 Dépenses (`/depenses`, `/depenses/nouvelle`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| X1 | Liste de l'année (« à traiter » : sans chantier, sans justificatif), année −1 / +1 | GET /api/depenses?annee= | L | depenses | couvert (par période ; les dépenses retirées n'apparaissent pas) |
-| X2 | File hors ligne › « Abandonner cette saisie » | IndexedDB | — | — | sans objet |
-| X3 | Fiche › voir le justificatif | GET /api/depenses/:id/justificatif | L | — | manquant |
-| X4 | Fiche › « Modifier » : montant, date, fournisseur, catégorie, moyen, libellé, note, chantier ou hors chantier | PATCH /api/depenses/:id | R | — | manquant (impossible de rattacher une dépense existante à un chantier) |
-| X5 | Fiche › remplacer le justificatif | POST /api/depenses/:id/justificatif | R | — | manquant |
-| X6 | Fiche › « Retirer » (motif) | POST /api/depenses/:id/archive | S-suppr | — | manquant |
-| X7 | Nouvelle › suggestions (chantiers en cours, chantier proposé, fournisseurs récents) | GET /api/depenses/suggestions | L | chercher / dossiers_par_etape | partiel : ni chantier proposé, ni fournisseurs récents |
-| X8 | Nouvelle › photo du ticket (caméra, galerie) | — | — | — | sans objet (la photo part avec X9) |
-| X9 | Nouvelle › « Enregistrer la dépense » (justificatif, reprise hors ligne) | POST /api/depenses (multipart) | R | rattacher_depense | partiel : ni justificatif, ni note, ni `forcer` |
-| X10 | « Enregistrer quand même » (justificatif déjà reçu) | POST /api/depenses {forcer} | R | — | manquant |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| X1 | Liste de l'année (« à traiter » : sans chantier, sans justificatif), année −1 / +1 | GET /api/depenses?annee= | L | lister DEPENSES (annee ou periode, categorie, rattachement ; vue ARCHIVEES) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » ; `mcp-v2.test.ts` › « « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie… » |
+| X2 | File hors ligne › « Abandonner cette saisie » | IndexedDB | — | — | sans objet | — |
+| X3 | Fiche › voir le justificatif | GET /api/depenses/:id/justificatif | L | voir_fichiers (documents, cible DEPENSE : justificatif) | couvert | `mcp-fichiers.test.ts` › « voir_fichiers : justificatif d'une dépense en image ou en lien… » |
+| X4 | Fiche › « Modifier » : montant, date, fournisseur, catégorie, moyen, libellé, note, chantier ou hors chantier | PATCH /api/depenses/:id | R | modifier DEPENSE (montant, payee_le, fournisseur, categorie, moyen, libelle, note, dossier_id, hors_chantier) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
+| X5 | Fiche › remplacer le justificatif | POST /api/depenses/:id/justificatif | R | ajouter_fichier (DEPENSE › JUSTIFICATIF) | couvert | `mcp-fichiers.test.ts` › « dossier (par le nom), lead, client, dépense, réalisation non publiée » |
+| X6 | Fiche › « Retirer » (motif) | POST /api/depenses/:id/archive | S-suppr | archiver / restaurer (DEPENSE) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » |
+| X7 | Nouvelle › suggestions (chantiers en cours, chantier proposé, fournisseurs récents) | GET /api/depenses/suggestions | L | lister DEPENSES (vue SUGGESTIONS) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » |
+| X8 | Nouvelle › photo du ticket (caméra, galerie) | — | — | — | sans objet (la photo part avec X9) | — |
+| X9 | Nouvelle › « Enregistrer la dépense » (justificatif, reprise hors ligne) | POST /api/depenses (multipart) | R | creer DEPENSE (justificatif, note, forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » ; `mcp-mail.test.ts` › « 6. « Le mail de la facture Meta, mets-le en dépense » : lecture… » |
+| X10 | « Enregistrer quand même » (justificatif déjà reçu) | POST /api/depenses {forcer} | R | creer DEPENSE (forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » |
 
 ### 2.12 Analytique (`/analytique`, partie B)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| A1 | Onglet « Vue d'ensemble » : tuiles, tunnel, publicité, SEO, fiche Google, qualité par source, argent | GET /api/analytique?onglet=ensemble | L | analytique (ensemble) | couvert |
-| A2 | Onglet « Publicité » : par campagne et par publicité, verdict du protocole | … onglet=publicite | L | analytique (publicite) | couvert |
-| A3 | Onglet « SEO et Google » | … onglet=seo | L | analytique (seo) | couvert |
-| A4 | Onglet « Site » | … onglet=site | L | analytique (site) | couvert |
-| A5 | Onglet « Argent » (règle des 20 %, carnet, TVA, URSSAF) | … onglet=argent | L | analytique (argent) | couvert |
-| A6 | Période : 7 j, 30 j, 90 j, mois, 12 mois | ?p= | L | analytique (p) | couvert |
-| A7 | Dates libres (du, au) | ?du&au | L | analytique (du, au) | couvert |
-| A8 | Filtre par source (famille) de la vue d'ensemble | ?source= | L | analytique (source) | couvert |
-| A9 | Panneau des sources : état, dernière synchronisation, erreur, « à faire » | GET /api/analytique | L | analytique (Sources) / sante_systeme | couvert |
-| A10 | « Relancer » la synchronisation d'une source (Meta, Google Ads, Search Console, fiche Google) | POST /api/analytique/synchro {source} | R (tâche de fond) | — | manquant |
-| A11 | Résumé du jour et alertes | GET /api/analytique | L | analytique | couvert |
-| A12 | Liens de détail (indicateur → onglet, carnet → dossier, → Finances) | nav | — | — | sans objet |
-| A13 | Onglet Publicité › chaîne des leads Meta, lue en base | SSR `santeMeta` | L | voir_publicite | couvert |
-| A14 | Chaîne Meta › « Vérifier » (interroge Meta) | GET /api/meta/sante | L (réseau) | voir_publicite (interroger_meta) | couvert |
-| A15 | Chaîne Meta › « Lancer un essai » (faux lead ESSAI, avec notification) | POST /api/meta/essai {notifier:true} | R (crée un contact ESSAI) | — | manquant |
-| A16 | Chaîne Meta › « Refaire sans notification » | POST /api/meta/essai {notifier:false} | R | — | manquant |
-| A17 | Chaîne Meta › « Tester la notification » | POST /api/meta/notification | R (vers Lucas) | — | manquant |
-| A18 | Chaîne Meta › « Tout rejouer » | POST /api/meta/rejouer {} | R masse (peut envoyer un SMS d'accusé : S-client) | — | manquant |
-| A19 | Chaîne Meta › « Rejouer » un `leadgen_id` | POST /api/meta/rejouer {leadgenId} | R | — | manquant |
-| A20 | Chaîne Meta › « Détail » (dépli) | — | — | — | sans objet |
-| A21 | Vue d'ensemble › courbe : choix de la série (leads, devis) | local | — | analytique (données) | sans objet |
-| A22 | Site › « Entonnoir du simulateur » : les étapes, les abandons, le choix de la source | local, données de l'écran | L | analytique (site : `simulateur` dans le JSON de l'écran) | couvert |
-| A23 | Argent › fiscal › « Renseigner » les paramètres manquants | POST /api/parametres | S-param | modifier_parametres | couvert |
-| A24 | Argent › « Mois figés et export » › « Pseudonymes » (anonymiser) | GET /api/synthese?anonyme=1 | L | — | manquant |
-| A25 | Argent › export « Texte » / « Données » de la période | GET /api/synthese/export?format= | L | synthese | partiel : chiffres de `calculerSynthese` seulement ; ni le texte d'export, ni les pseudonymes, ni l'agent et la qualité |
-| A26 | Argent › « Version rédigée » (à copier) | GET /api/synthese (rédaction) | L | — | manquant |
-| A27 | Argent › mois figés : la liste | GET /api/synthese/instantanes | L | — | manquant |
-| A28 | Argent › ouvrir un mois figé (figé le, intégrité, écarts avec un recalcul) | GET /api/synthese/instantanes/:mois | L | — | manquant |
-| A29 | Argent › guide de lecture | texte fixe | — | — | sans objet |
-| A30 | Vue d'ensemble › « Agent et qualité des données » : alertes de la synthèse, propositions de l'agent par auteur (acceptation, délai de décision, motifs de rejet, agent mail), points de qualité | GET /api/synthese | L | — | manquant (`synthese` ne rend ni l'agent ni la qualité) |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| A1 | Onglet « Vue d'ensemble » : tuiles, tunnel, publicité, SEO, fiche Google, qualité par source, argent | GET /api/analytique?onglet=ensemble | L | analytique (ensemble) | couvert | `mcp-analytique.test.ts` › « vue d'ensemble par défaut : JSON exact de l'écran, résumé du jour… » |
+| A2 | Onglet « Publicité » : par campagne et par publicité, verdict du protocole | … onglet=publicite | L | analytique (publicite) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » ; `mcp-analytique.test.ts` › « avec la dépense réelle : un coût par lead par publicité et le verdict… » |
+| A3 | Onglet « SEO et Google » | … onglet=seo | L | analytique (seo) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A4 | Onglet « Site » | … onglet=site | L | analytique (site) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A5 | Onglet « Argent » (règle des 20 %, carnet, TVA, URSSAF) | … onglet=argent | L | analytique (argent) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A6 | Période : 7 j, 30 j, 90 j, mois, 12 mois | ?p= | L | analytique (p) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A7 | Dates libres (du, au) | ?du&au | L | analytique (du, au) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A8 | Filtre par source (famille) de la vue d'ensemble | ?source= | L | analytique (source) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A9 | Panneau des sources : état, dernière synchronisation, erreur, « à faire » | GET /api/analytique | L | analytique (Sources) / etat_crm (SANTE) | couvert | `mcp-analytique.test.ts` › « vue d'ensemble par défaut : JSON exact de l'écran, résumé du jour… » |
+| A10 | « Relancer » la synchronisation d'une source (Meta, Google Ads, Search Console, fiche Google) | POST /api/analytique/synchro {source} | R (tâche de fond) | agir_systeme (RELANCER_SYNCHRO) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| A11 | Résumé du jour et alertes | GET /api/analytique | L | analytique | couvert | `mcp-analytique.test.ts` › « vue d'ensemble par défaut : JSON exact de l'écran, résumé du jour… » |
+| A12 | Liens de détail (indicateur → onglet, carnet → dossier, → Finances) | nav | — | — | sans objet | — |
+| A13 | Onglet Publicité › chaîne des leads Meta, lue en base | SSR `santeMeta` | L | etat_crm (META) | couvert | `mcp-analytique.test.ts` › « sans synchronisation : dépense estimée, aucun coût par publicité (plus… » |
+| A14 | Chaîne Meta › « Vérifier » (interroge Meta) | GET /api/meta/sante | L (réseau) | etat_crm (META, interroger_meta) | couvert | `mcp-analytique.test.ts` › « sans synchronisation : dépense estimée, aucun coût par publicité (plus… » |
+| A15 | Chaîne Meta › « Lancer un essai » (faux lead ESSAI, avec notification) | POST /api/meta/essai {notifier:true} | R (crée un contact ESSAI) | agir_systeme (ESSAI_META) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| A16 | Chaîne Meta › « Refaire sans notification » | POST /api/meta/essai {notifier:false} | R | agir_systeme (ESSAI_META, notifier: false) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| A17 | Chaîne Meta › « Tester la notification » | POST /api/meta/notification | R (vers Lucas) | agir_systeme (TESTER_NOTIFICATION) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| A18 | Chaîne Meta › « Tout rejouer » | POST /api/meta/rejouer {} | R masse (peut envoyer un SMS d'accusé : S-client) | agir_systeme (REJOUER_META, tous) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| A19 | Chaîne Meta › « Rejouer » un `leadgen_id` | POST /api/meta/rejouer {leadgenId} | R | agir_systeme (REJOUER_META, leadgen_id) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| A20 | Chaîne Meta › « Détail » (dépli) | — | — | — | sans objet | — |
+| A21 | Vue d'ensemble › courbe : choix de la série (leads, devis) | local | — | analytique (données) | sans objet | — |
+| A22 | Site › « Entonnoir du simulateur » : les étapes, les abandons, le choix de la source | local, données de l'écran | L | analytique (site : `simulateur` dans le JSON de l'écran) | couvert | `mcp-analytique.test.ts` › « chaque onglet, une période, des dates libres, un filtre par source » |
+| A23 | Argent › fiscal › « Renseigner » les paramètres manquants | POST /api/parametres | S-param | modifier PARAMETRE | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| A24 | Argent › « Mois figés et export » › « Pseudonymes » (anonymiser) | GET /api/synthese?anonyme=1 | L | analytique (synthese : anonyme) | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
+| A25 | Argent › export « Texte » / « Données » de la période | GET /api/synthese/export?format= | L | analytique (synthese : chiffres clés, texte et données, liens d'export) | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
+| A26 | Argent › « Version rédigée » (à copier) | GET /api/synthese (rédaction) | L | analytique (synthese : version rédigée) | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
+| A27 | Argent › mois figés : la liste | GET /api/synthese/instantanes | L | analytique (synthese : mois_figes) | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
+| A28 | Argent › ouvrir un mois figé (figé le, intégrité, écarts avec un recalcul) | GET /api/synthese/instantanes/:mois | L | analytique (synthese : mois_fige « AAAA-MM ») | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
+| A29 | Argent › guide de lecture | texte fixe | — | — | sans objet | — |
+| A30 | Vue d'ensemble › « Agent et qualité des données » : alertes de la synthèse, propositions de l'agent par auteur (acceptation, délai de décision, motifs de rejet, agent mail), points de qualité | GET /api/synthese | L | analytique (synthese : agent et qualité des données) | couvert | `mcp-partie-c.test.ts` › « la synthèse de la période (chiffres clés et version rédigée), en… » |
 
 Les anciennes adresses `/publicite` et `/synthese` redirigent vers l'Analytique. Les outils `synthese`, `campagne` et
 `voir_publicite` restent au catalogue, mais leurs chiffres sont ceux de l'Analytique (voir 4.14).
@@ -499,156 +509,155 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 #### Activité
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…) | — | — | — | sans objet |
-| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | voir_parametres (groupe) | couvert |
-| PA3 | « Historique » d'un paramètre | page | L | voir_parametres (5 dernières valeurs) | partiel : historique tronqué |
-| PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier_parametres (cle, valeur, valable_du, source) | couvert (une clé par appel) |
-| PA5 | Connexions › « Connecter » / « Reconnecter » le compte Google | GET /api/google/connexion | S-sécu | — | sans objet (consentement dans le navigateur) |
-| PA6 | Connexions › Google › « Déconnecter » | POST /api/google/deconnexion | S-sécu | — | manquant |
-| PA7 | Connexions › état Google, miroir Drive, agent mail | GET /api/connexions | L | sante_systeme | partiel : ni le miroir Drive, ni l'agent mail |
-| PA8 | Drive › « Synchroniser maintenant » | POST /api/drive/synchroniser {} | R (tâche de fond) | — | manquant |
-| PA9 | Drive › « Vérifier Drive » | POST /api/drive/synchroniser {verifier:true} | R | — | manquant |
-| PA10 | Agent mail › « Relever maintenant » | POST /api/messages/relever | R | — | manquant |
-| PA11 | Marque de l'espace client (rien à régler) | — | L | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…) | — | — | — | sans objet | — |
+| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » |
+| PA3 | « Historique » d'un paramètre | page | L | etat_crm (PARAMETRES : historique complet) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (cle, valeur, valable_du, source ; ou saisies[]) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PA5 | Connexions › « Connecter » / « Reconnecter » le compte Google | GET /api/google/connexion | S-sécu | — | sans objet (consentement dans le navigateur) | — |
+| PA6 | Connexions › Google › « Déconnecter » | POST /api/google/deconnexion | S-sécu | agir_systeme (DECONNECTER_GOOGLE) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| PA7 | Connexions › état Google, miroir Drive, agent mail | GET /api/connexions | L | etat_crm (CONNEXIONS : Google, miroir Drive, agent mail) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PA8 | Drive › « Synchroniser maintenant » | POST /api/drive/synchroniser {} | R (tâche de fond) | agir_systeme (SYNCHRONISER_DRIVE) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| PA9 | Drive › « Vérifier Drive » | POST /api/drive/synchroniser {verifier:true} | R | agir_systeme (VERIFIER_DRIVE) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| PA10 | Agent mail › « Relever maintenant » | POST /api/messages/relever | R | agir_systeme (RELEVER_MAILS) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
+| PA11 | Marque de l'espace client (rien à régler) | — | L | — | sans objet | — |
 
 #### Facturation
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| PF1 | « Nouvelle valeur » : encaissements, factures aux professionnels ; Avancé : seuils fiscaux, cotisations | POST /api/parametres | S-param | modifier_parametres | couvert |
-| PF2 | Déplier « Avancé » | — | — | — | sans objet |
-| PF3 | Numérotation › prochain numéro de devis et de facture | GET /api/numeros/compteurs | L | voir_parametres | couvert |
-| PF4 | Numérotation › « Faire repartir à… » | PATCH /api/numeros/compteurs {serie, prochain} | S-param | modifier_parametres (COMPTEUR_DEVIS / COMPTEUR_FACTURE) | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| PF1 | « Nouvelle valeur » : encaissements, factures aux professionnels ; Avancé : seuils fiscaux, cotisations | POST /api/parametres | S-param | modifier PARAMETRE | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PF2 | Déplier « Avancé » | — | — | — | sans objet | — |
+| PF3 | Numérotation › prochain numéro de devis et de facture | GET /api/numeros/compteurs | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PF4 | Numérotation › « Faire repartir à… » | PATCH /api/numeros/compteurs {serie, prochain} | S-param | modifier COMPTEUR (serie, prochain) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 
 #### Mail
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| PM1 | Lire le guide de style, les modèles de notification, les règles d'expéditeur, les règles proposées | GET /api/mail/reglages | L | voir_parametres (NOTIF_* : actif seulement) | partiel : ni guide, ni textes des modèles, ni règles |
-| PM2 | Guide › « Enregistrer » / « Annuler » | PATCH /api/mail/reglages {guide} | S-param | — | manquant |
-| PM3 | Guide › « Tirer de mes mails envoyés » (IA) | POST /api/mail/reglages/guide | S-param + S-€ | — | manquant |
-| PM4 | **Modèle de mail** › « Couper » / « Réactiver » | PATCH /api/mail/reglages {modele…actif} | S-param | modifier_parametres (automatisme NOTIF_<EVT>) | couvert |
-| PM5 | **Modèle de mail** › Objet, Phrase, Bouton › « Enregistrer » | PATCH /api/mail/reglages {modele} | S-param (texte envoyé aux clients) | — | manquant |
-| PM6 | Règles proposées › « Valider » / « Ignorer » | POST /api/mail/propositions/:id | S-param | valider_proposition / ignorer_proposition | couvert |
-| PM7 | « Ajouter la règle » (adresse ou @domaine ; RANGER, NE_JAMAIS_RANGER, ADMINISTRATIF) | PATCH /api/mail/reglages {regle} | S-param | proposer_regle + valider_proposition | partiel : en deux temps, jamais directement |
-| PM8 | « Retirer » une règle | PATCH /api/mail/reglages {archiverRegle} | S-param | — | manquant (et les règles posées ne se lisent pas) |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| PM1 | Lire le guide de style, les modèles de notification, les règles d'expéditeur, les règles proposées | GET /api/mail/reglages | L | etat_crm (MAIL : guide, modèles complets, règles posées et proposées) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PM2 | Guide › « Enregistrer » / « Annuler » | PATCH /api/mail/reglages {guide} | S-param | modifier GUIDE_STYLE (texte) ; annuler_modification | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PM3 | Guide › « Tirer de mes mails envoyés » (IA) | POST /api/mail/reglages/guide | S-param + S-€ | modifier GUIDE_STYLE (tirer_des_mails: true) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PM4 | **Modèle de mail** › « Couper » / « Réactiver » | PATCH /api/mail/reglages {modele…actif} | S-param | modifier AUTOMATISME (code NOTIF_<EVT>, actif) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » |
+| PM5 | **Modèle de mail** › Objet, Phrase, Bouton › « Enregistrer » | PATCH /api/mail/reglages {modele} | S-param (texte envoyé aux clients) | modifier MODELE_MAIL (evenement, objet, phrase, bouton) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mcp-sensibles.test.ts` › « modifier MODELE_MAIL — phrase d'un mail : aperçu et jeton, aucune écriture » |
+| PM6 | Règles proposées › « Valider » / « Ignorer » | POST /api/mail/propositions/:id | S-param | valider_proposition / ignorer_proposition | couvert | `mcp-mail.test.ts` › « 10. « Range tout ce qui vient de TikTok pour toujours » : rangement par… » |
+| PM7 | « Ajouter la règle » (adresse ou @domaine ; RANGER, NE_JAMAIS_RANGER, ADMINISTRATIF) | PATCH /api/mail/reglages {regle} | S-param | creer REGLE_EXPEDITEUR (cible, action, motif) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-sensibles.test.ts` › « creer REGLE_EXPEDITEUR — règle d'expéditeur : aperçu et jeton, aucune écriture » |
+| PM8 | « Retirer » une règle | PATCH /api/mail/reglages {archiverRegle} | S-param | archiver / restaurer (REGLE_EXPEDITEUR) ; etat_crm (MAIL : règles posées) | couvert | `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » ; `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 
 #### SMS
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| PS1 | Fournisseur, expéditeur, variables à poser | page (`etatFournisseur`) | L | — | manquant |
-| PS2 | Catalogue par groupe (texte, usage, longueur) | page (`listerCatalogue`) | L | voir_parametres (groupe SMS) | couvert |
-| PS3 | **Modèle de SMS** › « Enregistrer » un texte | PATCH /api/sms/modeles/:id {texte} | S-param | modifier_parametres (sms_code, sms_texte) | couvert |
-| PS4 | **Modèle de SMS** › « Couper l'envoi automatique » / « Réactiver » (accusés) | PATCH … {actif} | S-param | modifier_parametres (automatisme SMS_ACCUSE_*) | couvert |
-| PS5 | **Modèle de SMS** › « Revenir au texte de départ » | PATCH … {texte} | S-param | modifier_parametres | partiel : le texte de départ n'est pas lisible |
-| PS6 | « Simplifier les accents », « Annuler » | local | — | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| PS1 | Fournisseur, expéditeur, variables à poser | page (`etatFournisseur`) | L | etat_crm (SMS : fournisseur, expéditeur, variables) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PS2 | Catalogue par groupe (texte, usage, longueur) | page (`listerCatalogue`) | L | etat_crm (SMS) | couvert | `mission-14-partie-8.test.ts` › « « groupe: SMS » rend le seul catalogue, par groupe, CODE — libellé : «… » |
+| PS3 | **Modèle de SMS** › « Enregistrer » un texte | PATCH /api/sms/modeles/:id {texte} | S-param | modifier MODELE_SMS (code, texte) | couvert | `mission-14-partie-8.test.ts` › « modifier MODELE_SMS (ex-« modifier_parametres » sms_code + sms_texte)… » |
+| PS4 | **Modèle de SMS** › « Couper l'envoi automatique » / « Réactiver » (accusés) | PATCH … {actif} | S-param | modifier AUTOMATISME (code SMS_ACCUSE_*, actif) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PS5 | **Modèle de SMS** › « Revenir au texte de départ » | PATCH … {texte} | S-param | modifier MODELE_SMS (defaut: true) ; etat_crm (SMS : texte de départ) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PS6 | « Simplifier les accents », « Annuler » | local | — | — | sans objet | — |
 
 #### Assistant
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| PC1 | Adresse MCP › « Copier » | — | — | — | sans objet |
-| PC2 | Applications et jetons connectés | GET /api/assistant/acces | L | — | manquant |
-| PC3 | « Tout révoquer » | DELETE /api/assistant/acces {tout} | S-sécu | — | manquant |
-| PC4 | « Révoquer l'application » | DELETE … {clientId} | S-sécu | — | manquant |
-| PC5 | « Révoquer » un jeton | DELETE … {jetonId} | S-sécu | — | manquant |
-| PC6 | **Consignes** / Positionnement : lire le texte et les versions | GET /api/assistant/consignes | L | ressource coverswap://consignes + versions_consignes | couvert |
-| PC7 | Consignes › « Enregistrer » (texte entier) | PATCH /api/assistant/consignes | S-param | modifier_consignes | couvert |
-| PC8 | Consignes › « Revenir au défaut » | PATCH {consignes: défaut} | S-param | modifier_consignes | partiel : le texte par défaut n'est pas lisible |
-| PC9 | Consignes › « Restaurer » une version | PATCH {restaurer} | R | restaurer_consignes | couvert |
-| PC10 | Outils par famille et niveau | page (`catalogueVue`) | L | lister_outils | couvert |
-| PC11 | Groupe « Agent mail et IA » (IA_*, MAIL_*, budget) | POST /api/parametres | S-param | modifier_parametres | couvert |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| PC1 | Adresse MCP › « Copier » | — | — | — | sans objet | — |
+| PC2 | Applications et jetons connectés | GET /api/assistant/acces | L | etat_crm (ACCES) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PC3 | « Tout révoquer » | DELETE /api/assistant/acces {tout} | S-sécu | agir_systeme (REVOQUER_ACCES, tout) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| PC4 | « Révoquer l'application » | DELETE … {clientId} | S-sécu | agir_systeme (REVOQUER_ACCES, application_id) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| PC5 | « Révoquer » un jeton | DELETE … {jetonId} | S-sécu | agir_systeme (REVOQUER_ACCES, jeton_id) | couvert | `mcp-gestes.test.ts` › « sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE… » |
+| PC6 | **Consignes** / Positionnement : lire le texte et les versions | GET /api/assistant/consignes | L | ressource coverswap://consignes + etat_crm (CONSIGNES, CONSIGNES_VERSIONS) | couvert | `mcp-v2.test.ts` › « « modifier » CONSIGNES (ex-« modifier_consignes ») : diff en aperçu… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PC7 | Consignes › « Enregistrer » (texte entier) | PATCH /api/assistant/consignes | S-param | modifier CONSIGNES / POSITIONNEMENT | couvert | `mcp-v2.test.ts` › « « modifier » CONSIGNES (ex-« modifier_consignes ») : diff en aperçu… » ; `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+| PC8 | Consignes › « Revenir au défaut » | PATCH {consignes: défaut} | S-param | modifier CONSIGNES (defaut: true) ; etat_crm (CONSIGNES : texte par défaut) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| PC9 | Consignes › « Restaurer » une version | PATCH {restaurer} | R | restaurer (CONSIGNES, numero) | couvert | `mcp-v2.test.ts` › « « modifier » CONSIGNES (ex-« modifier_consignes ») : diff en aperçu… » |
+| PC10 | Outils par famille et niveau | page (`catalogueVue`) | L | etat_crm (OUTILS) | couvert | `mcp-v3.test.ts` › « « tools/list » expose exactement le catalogue (registre dérivé du code)… » |
+| PC11 | Groupe « Agent mail et IA » (IA_*, MAIL_*, budget) | POST /api/parametres | S-param | modifier PARAMETRE / AUTOMATISME | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 
 ### 2.14 À valider (`/validation`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| V1 | Onglets « À valider », « En cours ou en échec », « Historique » | GET /api/validation?statut=&limite= | L | ce_qui_m_attend (nombre), voir_relances, lire_mail, lire_fiche (morceaux) | manquant (aucune liste générale) |
-| V2 | Filtre par type | filtre local | L | — | manquant |
-| V3 | Ouvrir une proposition précise (`?proposition=`, depuis Tâches) | SSR | L | — | manquant (hors cartes de mail, le contenu d'une proposition ne se lit pas) |
-| V4 | « Valider » telle quelle | POST /api/validation/:id/valider | selon le type : R, S-client (mail, SMS), S-€ (étape), S-suppr (fusion, anonymisation) | valider_proposition | partiel : la sensibilité ne tient compte que des cartes MAJ_DEPUIS_MAIL |
-| V5 | « Corriger » puis valider (champs du type : fiche à conserver, texte du mail, date…) | … {corrections} | selon le type | valider_proposition (corrections.valeur) | partiel : seule la clé `valeur` passe |
-| V6 | « Rejeter » (motif de la liste, commentaire) | POST /api/validation/:id/rejeter | R | ignorer_proposition | couvert |
-| V7 | « Réessayer » une exécution en échec | POST /api/validation/:id/reessayer | selon le type | — | manquant |
-| V8 | « Tout valider (n) » (seulement les types en lot) | POST /api/validation/lot | R masse | valider_proposition (≤ 20) | partiel : ne respecte pas `validationGroupee` |
-| V9 | Fusion de clients › « Valider » | POST /api/validation/:id/valider | S-suppr (pas de « défusion ») | valider_proposition | partiel : pas de confirmation |
-| V10 | Fusion de clients › choisir la fiche à conserver (A ou B) | … {corrections:{conserver}} | S-suppr | — | manquant |
-| V11 | Liens de la carte (fiches, dossier, message) | nav | — | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| V1 | Onglets « À valider », « En cours ou en échec », « Historique » | GET /api/validation?statut=&limite= | L | lister PROPOSITIONS (vue EN_ATTENTE, ECHEC, HISTORIQUE) | couvert | `mcp-lister-etat.test.ts` › « PROPOSITIONS : les onglets de « À valider », et une proposition lue en… » |
+| V2 | Filtre par type | filtre local | L | lister PROPOSITIONS (type) | couvert | `mcp-lister-etat.test.ts` › « PROPOSITIONS : les onglets de « À valider », et une proposition lue en… » |
+| V3 | Ouvrir une proposition précise (`?proposition=`, depuis Tâches) | SSR | L | lister PROPOSITIONS (proposition_id) | couvert | `mcp-lister-etat.test.ts` › « PROPOSITIONS : les onglets de « À valider », et une proposition lue en… » |
+| V4 | « Valider » telle quelle | POST /api/validation/:id/valider | selon le type : R, S-client (mail, SMS), S-€ (étape), S-suppr (fusion, anonymisation) | valider_proposition (sensibilité du type) | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » |
+| V5 | « Corriger » puis valider (champs du type : fiche à conserver, texte du mail, date…) | … {corrections} | selon le type | valider_proposition (corrections : champs corrigibles du type) | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » |
+| V6 | « Rejeter » (motif de la liste, commentaire) | POST /api/validation/:id/rejeter | R | ignorer_proposition | couvert | `mcp-sensibles.test.ts` › « ignorer_proposition — plus de trois propositions : aperçu et jeton, aucune écriture » |
+| V7 | « Réessayer » une exécution en échec | POST /api/validation/:id/reessayer | selon le type | valider_proposition (reessayer: true) | couvert | `mcp-partie-c.test.ts` › « en_lot : seules les propositions validables en lot passent (comme «… » |
+| V8 | « Tout valider (n) » (seulement les types en lot) | POST /api/validation/lot | R masse | valider_proposition (en_lot: true, garde validationGroupee) | couvert | `mcp-partie-c.test.ts` › « en_lot : seules les propositions validables en lot passent (comme «… » |
+| V9 | Fusion de clients › « Valider » | POST /api/validation/:id/valider | S-suppr (pas de « défusion ») | doublon (CLIENT, FUSIONNER) / valider_proposition (sensible) | couvert | `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » ; `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » |
+| V10 | Fusion de clients › choisir la fiche à conserver (A ou B) | … {corrections:{conserver}} | S-suppr | doublon (CLIENT, FUSIONNER, conserver A ou B ; ECARTER, motif) | couvert | `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » |
+| V11 | Liens de la carte (fiches, dossier, message) | nav | — | — | sans objet | — |
 
 ### 2.15 Tâches de fond (`/taches-de-fond`)
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| B1 | État des tâches : compteurs, file, planifications ; « Recharger », pages | GET /api/taches | L | sante_systeme | partiel : ni identifiants, ni file complète |
-| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | — | manquant |
-| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | — | manquant |
-| B4 | Cohérence › rapport, « Relancer le contrôle » | GET /api/coherence | L | sante_systeme | partiel : ni clé, ni correction proposée |
-| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | — | manquant |
-| B6 | Audit des connexions › « Relancer » | GET /api/audit/connexions | L | — | manquant |
-| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | — | manquant |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| B1 | État des tâches : compteurs, file, planifications ; « Recharger », pages | GET /api/taches | L | etat_crm (TACHES_DE_FOND) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | agir_systeme (RELANCER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | agir_systeme (ANNULER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B4 | Cohérence › rapport, « Relancer le contrôle » | GET /api/coherence | L | etat_crm (COHERENCE : clé, correction proposée) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| B6 | Audit des connexions › « Relancer » | GET /api/audit/connexions | L | etat_crm (AUDIT) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | etat_crm (SESSIONS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 
 ### 2.16 Navigation et application
 
-| # | Action | Route | Nature | Outil MCP | Statut |
-|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Espaces, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » | — | — | — | sans objet |
-| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / sante_systeme | couvert |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés | — | — | — | sans objet |
-| N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert |
-| N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert |
-| N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet |
-| N7 | Pastille des propositions en attente | GET /api/validation?statut=EN_ATTENTE | L | ce_qui_m_attend | couvert |
-| N8 | Connexion (identifiant, mot de passe) | NextAuth | S-sécu | — | sans objet (le MCP a son propre OAuth) |
-| N9 | `/oauth/autoriser` › « Accorder » / « Refuser » | POST /api/oauth/autoriser | S-sécu | — | sans objet |
-| N10 | Hors ligne (service worker) | — | — | — | sans objet |
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| N1 | Barre : Tâches, Leads, Dossiers, Espaces, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » | — | — | — | sans objet | — |
+| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés | — | — | — | sans objet | — |
+| N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
+| N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
+| N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
+| N7 | Pastille des propositions en attente | GET /api/validation?statut=EN_ATTENTE | L | lister PROPOSITIONS / taches (TOUT) | couvert | `mcp-v2.test.ts` › « « taches » TOUT (ex-« ce_qui_m_attend ») et « point_du_jour » comptent… » |
+| N8 | Connexion (identifiant, mot de passe) | NextAuth | S-sécu | — | sans objet (le MCP a son propre OAuth) | — |
+| N9 | `/oauth/autoriser` › « Accorder » / « Refuser » | POST /api/oauth/autoriser | S-sécu | — | sans objet | — |
+| N10 | Hors ligne (service worker) | — | — | — | sans objet | — |
 
 ### 2.17 Bilan chiffré
 
-Comptes faits sur les tableaux ci-dessus (une ligne = une action). Détail par écran :
+Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » : statuts relevés avant la partie C
+(84 outils) ; « Après » : statuts après la partie C (53 outils).
 
-| Écran | Actions | Couvert | Partiel | Manquant | Sans objet |
-|---|---|---|---|---|---|
-| Tâches | 38 | 24 | 4 | 6 | 4 |
-| Leads (liste) | 28 | 12 | 6 | 6 | 4 |
-| Leads (fiche) | 27 | 9 | 10 | 7 | 1 |
-| Fin d'appel | 9 | 8 | 0 | 0 | 1 |
-| Dossiers (liste, création, reprise) | 16 | 4 | 5 | 4 | 3 |
-| Dossier (panneau et rubriques) | 97 | 37 | 26 | 33 | 1 |
-| Espaces clients | 20 | 9 | 6 | 4 | 1 |
-| Mail | 30 | 17 | 8 | 5 | 0 |
-| Clients | 26 | 4 | 10 | 12 | 0 |
-| Simulateur, banc, prompts | 24 | 6 | 5 | 11 | 2 |
-| Site | 6 | 0 | 1 | 5 | 0 |
-| Finances | 10 | 3 | 2 | 4 | 1 |
-| Dépenses | 10 | 1 | 2 | 5 | 2 |
-| Analytique | 30 | 14 | 1 | 11 | 4 |
-| Paramètres › Activité | 11 | 2 | 2 | 4 | 3 |
-| Paramètres › Facturation | 4 | 3 | 0 | 0 | 1 |
-| Paramètres › Mail | 8 | 2 | 2 | 4 | 0 |
-| Paramètres › SMS | 6 | 3 | 1 | 1 | 1 |
-| Paramètres › Assistant | 11 | 5 | 1 | 4 | 1 |
-| À valider | 11 | 1 | 4 | 5 | 1 |
-| Tâches de fond | 7 | 0 | 2 | 5 | 0 |
-| Navigation et application | 10 | 4 | 0 | 0 | 6 |
-| **Total** | **439** | **168** | **98** | **136** | **37** |
+| Écran | Actions | Audit : couvert | Audit : partiel | Audit : manquant | Après : couvert | Sans objet |
+|---|---|---|---|---|---|---|
+| Tâches | 38 | 24 | 4 | 6 | 34 | 4 |
+| Leads (liste) | 28 | 12 | 6 | 6 | 24 | 4 |
+| Leads (fiche) | 27 | 9 | 10 | 7 | 26 | 1 |
+| Fin d'appel | 9 | 8 | 0 | 0 | 8 | 1 |
+| Dossiers (liste, création, reprise) | 16 | 4 | 5 | 4 | 13 | 3 |
+| Dossier (panneau et rubriques) | 97 | 37 | 26 | 33 | 96 | 1 |
+| Espaces clients | 20 | 9 | 6 | 4 | 19 | 1 |
+| Mail | 30 | 17 | 8 | 5 | 30 | 0 |
+| Clients | 26 | 4 | 10 | 12 | 26 | 0 |
+| Simulateur, banc, prompts | 24 | 6 | 5 | 11 | 22 | 2 |
+| Site | 6 | 0 | 1 | 5 | 6 | 0 |
+| Finances | 10 | 3 | 2 | 4 | 9 | 1 |
+| Dépenses | 10 | 1 | 2 | 5 | 8 | 2 |
+| Analytique | 30 | 14 | 1 | 11 | 26 | 4 |
+| Paramètres › Activité | 11 | 2 | 2 | 4 | 8 | 3 |
+| Paramètres › Facturation | 4 | 3 | 0 | 0 | 3 | 1 |
+| Paramètres › Mail | 8 | 2 | 2 | 4 | 8 | 0 |
+| Paramètres › SMS | 6 | 3 | 1 | 1 | 5 | 1 |
+| Paramètres › Assistant | 11 | 5 | 1 | 4 | 10 | 1 |
+| À valider | 11 | 1 | 4 | 5 | 10 | 1 |
+| Tâches de fond | 7 | 0 | 2 | 5 | 7 | 0 |
+| Navigation et application | 10 | 4 | 0 | 0 | 4 | 6 |
+| **Total** | **439** | **168** | **98** | **136** | **402** | **37** |
 
-Hors gestes sans objet, **402 actions** relèvent du MCP :
+Hors gestes sans objet, **402 actions** relèvent du MCP.
 
-- 168 sont couvertes (42 %) ;
-- 98 sont partielles (24 %) ;
-- 136 manquent (34 %).
-
-Les écrans neufs des parties A et B sont les mieux couverts : Tâches, 24 lignes sur 34 ; Analytique, 14 sur 26.
-Les trous se concentrent dans le panneau du dossier, les clients, le simulateur, le site, les dépenses et le
-système.
+- À l'audit : 168 couvertes (42 %), 98 partielles (24 %), 136 manquantes (34 %).
+- Après la partie C : **402 couvertes (100 %)**, 0 partielle, 0 manquante. Les 37 gestes `sans objet` sont ceux de
+  la règle de l'en-tête : `tel:`, presse-papiers, tri ou dépli local, consentement dans le navigateur, abonnement push
+  de l'appareil, hors ligne, liens de navigation.
 
 ## 3. Les manques, par domaine
 
-Un manque est une ligne `manquant`, ou ce qui manque à une ligne `partiel`. Pour chacun : les repères du tableau,
-puis l'outil qui le ferme (section 4).
+Un manque est une ligne `manquant`, ou ce qui manque à une ligne `partiel`, **à l'audit** (avant la partie C). Pour
+chacun : les repères du tableau, puis l'outil qui le ferme (section 4). Cette section est gardée comme trace : tous
+ces manques sont fermés, et la colonne « Outil MCP » de la section 2 dit par quel outil.
 
 ### 3.1 Entités et champs non modifiables
 
@@ -876,7 +885,10 @@ la date du chantier, reflétés dans Google Calendar.
     Déjà inscrit dans la mission 18, partie B, point 2.
 12. `noter_appel` sur un lead fait deux écritures (note d'appel, puis appel). L'écran permet la note seule.
 
-## 4. Proposition d'outillage : tous les manques fermés, 53 outils au lieu de 84
+## 4. Outillage : tous les manques fermés, 53 outils au lieu de 84
+
+Cette section était la proposition de l'audit ; elle est **réalisée** (partie C). Les écarts avec la proposition sont
+dits en 4.17.
 
 ### 4.1 Principes
 
@@ -985,10 +997,10 @@ effaçable.
   | LEAD | lot : `prospects/menage.ts › appliquerActionLeads` ; un seul, motif libre : `prospects/entrants.ts › archiverEntrant` | `appliquerActionLeads` (RESTAURER) / `restaurerEntrant` | L17, L18, LF26, LF27 |
   | DOSSIER | `dossiers/archivage.ts › archiverDossier` | `restaurerDossier` | DP97, D8 |
   | CLIENT | `clients/fiches.ts › archiverClient` | `restaurerClient` | C12, C13 |
-  | COORDONNEE | `clients/fiches.ts › archiverCoordonnee` | à écrire (`restaurerCoordonnee`, même module) | C18 |
-  | DEPENSE | `depenses/service.ts › archiverDepense` | à écrire (`restaurerDepense`) | X6 |
-  | TARIF | `dossiers/presets.ts › archiverPreset` | à écrire (`restaurerPreset`) | DP72 |
-  | REGLE_EXPEDITEUR | à déplacer de la route vers `mail/boite.ts › archiverRegle` | à écrire (`restaurerRegle`) | PM8 |
+  | COORDONNEE | `clients/fiches.ts › archiverCoordonnee` | `restaurerCoordonnee` (écrit en partie C) | C18 |
+  | DEPENSE | `depenses/service.ts › archiverDepense` | `restaurerDepense` (écrit en partie C) | X6 |
+  | TARIF | `dossiers/presets.ts › archiverPreset` | `restaurerPreset` (écrit en partie C) | DP72 |
+  | REGLE_EXPEDITEUR | `mail/boite.ts › archiverRegle` (descendu de la route) | `restaurerRegle` (écrit en partie C) | PM8 |
   | SIMULATION | `simulations/dossier.ts › changerStatutSimulation(…, "retirer", motif)` | `changerStatutSimulation(…, "brouillon")` | DP86 |
 
 - **`restaurer`** reçoit aussi les **versions** : `{entite: CONSIGNES | POSITIONNEMENT, numero}` passe par
@@ -1066,7 +1078,7 @@ Schéma : `{ partie, … }`. Lecture seule, jamais de secret.
 | DOSSIER › DEVIS, FACTURE, AUTRE (champs de l'ex-`deposer_document`) | `dossiers/depot-document.ts › deposerDocument` ; sans fichier : `dossiers/documents-existants.ts › enregistrerDocumentExistant` | S (un devis visible vaut envoi) | DP57, DP49 (repris) |
 | DOCUMENT › PDF_DOCUMENT (PDF d'un document repris) | `dossiers/documents-existants.ts › importerPdfDocument` | S-€ | DP59 |
 | DEPENSE › JUSTIFICATIF | `depenses/service.ts › remplacerJustificatif` (à la création : `creer DEPENSE`) | R | X5, X9, DP92 |
-| PUBLICATION › PHOTO_AVANT, PHOTO_APRES | `fichiers/stockage.ts › enregistrerFichier`, puis `site/publications.ts › modifierPublication` (chemin). Petite fonction `photoDePublication` à écrire | R (S-client si déjà publiée) | W3, W4 |
+| PUBLICATION › PHOTO_AVANT, PHOTO_APRES | `fichiers/stockage.ts › enregistrerFichier`, puis `site/publications.ts › modifierPublication` (chemin), dans `fichiers-depot/enregistrement.ts` | R (S-client si déjà publiée) | W3, W4 |
 
 **`ranger_fichier`** `{ fichier, action }` :
 
@@ -1094,10 +1106,10 @@ aujourd'hui). Un PDF est rendu comme ressource embarquée (moins de 9 Mo), avec 
 **`lien_depot`** `{ cible, role, expire_dans? }` : un lien signé, court (24 h, usage limité), que Lucas ouvre sur son
 téléphone pour prendre ou choisir des fichiers.
 
-- À écrire :
-  - `src/lib/fichiers/depot.ts` (jeton, cible, rôle, expiration) ;
+- Écrits :
+  - `src/lib/fichiers-depot/` (jetons, types, source commune, enregistrement par cible) ;
   - la page publique `/depot/[jeton]` ;
-  - la route `POST /api/depot/[jeton]`, à inscrire dans `lib/acces/routes-publiques.ts`.
+  - la route `POST /api/depot/[jeton]`, inscrite dans `lib/acces/routes-publiques.ts` (30 minutes, usage unique).
 - La route appelle **la même fonction de service** que `ajouter_fichier` pour la cible.
 - Niveau R. Le lien est remis à Lucas ; l'envoyer à un client passe par `envoyer_mail` ou un SMS, qui restent
   sensibles.
@@ -1267,24 +1279,24 @@ par expéditeur, ou plus de 3 fils.
 
 ### 4.15 Compte final
 
-- Aujourd'hui : **84** outils.
+- Avant la partie C : **84** outils (empreinte `3db5c223f5bb`) ; au début de la mission 17 : 80 (`ef81342ae27b`).
 - Retirés par fusion : **45**, dont 21 de lecture et 24 d'écriture (table 4.14).
 - Ajoutés : **14** : lister, etat_crm, voir_fichiers, creer, modifier, ajouter_fichier, ranger_fichier, lien_depot,
   publier, traiter_mail, geste_espace, doublon, anonymiser_client, agir_systeme.
-- **Total : 84 − 45 + 14 = 53 outils**, sous la limite de 100. Il reste 46 places pour les écrans à venir, dont la
-  mission 18.
+- **Total : 84 − 45 + 14 = 53 outils**, sous la limite de 100, relevé par `registreOutils()` : **53**, empreinte
+  **`040d6c7aa53c`**. Il reste 47 places pour les écrans à venir, dont la mission 18.
 - Les 53 :
-  - **Lecture (16)** : chercher, lire_fiche, lister, voir_fichiers, etat_crm, taches, analytique, point_du_jour,
-    manager_commercial, manager_finances, manager_marketing, manager_clients, manager_operations, lire_mail,
-    rechercher_mails, rediger_mail.
-  - **Écriture (37)** : creer, modifier, annuler_modification, archiver, restaurer, supprimer, anonymiser_client,
-    ajouter_fichier, ranger_fichier, lien_depot, changer_etape, noter_appel, noter_sms, planifier, generer_document,
-    envoyer_document, annuler_document, relancer, saisir_encaissement, annuler_encaissement, publier,
-    preparer_simulation, geste_espace, lien_espace, envoyer_lien_espace, repondre_espace, traiter_mail,
-    classer_mail, resumer_fil, proposer_mise_a_jour, valider_proposition, ignorer_proposition, deposer_brouillon,
-    envoyer_mail, repondre_tache, doublon, agir_systeme.
-- Une fois cet outillage en place, chaque ligne `manquant` ou `partiel` des tableaux de la section 2 renvoie à un cas
-  des sections 4.3 à 4.13. **Zéro action manquante** ; restent les seuls gestes `sans objet`.
+  - **Lecture (16)** : analytique, chercher, etat_crm, lire_fiche, lire_mail, lister, manager_clients,
+    manager_commercial, manager_finances, manager_marketing, manager_operations, point_du_jour, rechercher_mails,
+    rediger_mail, taches, voir_fichiers.
+  - **Écriture réversible (27, sensible par cas)** : agir_systeme, ajouter_fichier, annuler_modification, archiver,
+    changer_etape, classer_mail, creer, deposer_brouillon, doublon, geste_espace, ignorer_proposition, lien_depot,
+    lien_espace, modifier, noter_appel, noter_sms, planifier, preparer_simulation, proposer_mise_a_jour, publier,
+    ranger_fichier, repondre_tache, restaurer, resumer_fil, supprimer, traiter_mail, valider_proposition.
+  - **Sensibles (10)** : annuler_document, annuler_encaissement, anonymiser_client, envoyer_document,
+    envoyer_lien_espace, envoyer_mail, generer_document, relancer, repondre_espace, saisir_encaissement.
+- Cet outillage en place, chaque ligne `manquant` ou `partiel` de l'audit renvoie à un cas des sections 4.3 à 4.13,
+  et la section 2 le dit ligne par ligne. **Zéro action manquante** ; restent les seuls gestes `sans objet`.
 
 ### 4.16 Ordre de réalisation proposé
 
@@ -1299,3 +1311,29 @@ par expéditeur, ou plus de 3 fils.
 5. **Configuration et système** : `etat_crm`, `agir_systeme`, modèles de mail, guide, prompts, tarifs, `publier`,
    Site.
 6. **Retraits**, nouvelle version des consignes, tests, ce document (statuts et nouvelle empreinte).
+
+### 4.17 Réalisation (partie C) : ce qui a changé par rapport à la proposition
+
+- **Retraits.** Les 45 outils de la table 4.14 sont retirés du catalogue. Leurs définitions ne restent que lorsqu'un
+  nouvel outil les appelle (par exemple l'ex-`dossiers_par_etape` derrière `lister` DOSSIERS PAR_ETAPE, ou
+  l'ex-`ranger_mail` derrière `traiter_mail`) ; le reste est supprimé. La table ancien → nouveau est dans
+  `src/lib/assistant/retraits.ts` et dans une section « Outils (mission 17, partie C) » ajoutée à la lecture des
+  consignes (jamais réécrite en base ; la version de Lucas reste la sienne).
+- **Noms réels des parties et genres.** `etat_crm` : SANTE, META ou PUBLICITE, PARAMETRES, NUMEROTATION, SMS, MAIL,
+  CONSIGNES, CONSIGNES_VERSIONS, OUTILS, TACHES_DE_FOND, COHERENCE, AUDIT, SESSIONS, CONNEXIONS, ACCES, PROMPTS, BANC,
+  CONSOMMATION. `voir_fichiers` : photos, simulations, documents (dont le PDF joint d'un document, le justificatif, les
+  documents d'un lead : PDF des simulations du site, devis et factures de l'ancien CRM), a_ranger, site (avec les
+  générations en cours ou en échec), preparations, banc, piece_mail. Un PDF est rendu comme ressource embarquée.
+- **Fonctions ajoutées pour ne jamais écrire en brut** : `agenda/depuis-mail.ts › planifierDepuisMail` (la route
+  `/api/mail/[id]/planifier` l'appelle aussi), `mail/lien-espace.ts › apercuLienParMail` (aperçu sans rien ouvrir),
+  `simulateur/preparation-assistant.ts › resoudrePreparation` (aperçu du mode API sans écrire), `restaurerCoordonnee`,
+  `restaurerDepense`, `restaurerPreset`, `archiverRegle` / `restaurerRegle`.
+- **Défauts corrigés au passage** : `geste_espace` RETIRER_ACCORD refuse sans accord en vigueur (l'ex-`retirer_accord`
+  passait le dossier à « Devis envoyé » quand même) ; `annuler_encaissement` rend le bon dossier ; `valider_proposition`
+  calcule la sensibilité par type ; l'anonymisation RGPD couvre aussi `FichierDepose`, `JetonDepot`,
+  `ModificationAssistant`, `ModificationDossier` et `MessageEspace` (`src/lib/rgpd/carte.ts`, `anonymisation.ts`).
+- **Tests.** `src/lib/mcp/mcp-partie-c.test.ts` (les extensions de la section 4.9), `src/lib/mcp/mcp-sensibles.test.ts`
+  (chaque outil ou cas sensible du catalogue : aperçu, jeton, rien d'écrit sans le jeton ; un test échoue si un nouveau
+  cas sensible n'y a pas son entrée), et des jumeaux ajoutés dans `mcp-gestes.test.ts` (projet, simulation et demande
+  de l'espace ; Drive, relevé, relecture de la boîte, essai Meta) et `mcp-lister-etat.test.ts` (inactifs masqués).
+

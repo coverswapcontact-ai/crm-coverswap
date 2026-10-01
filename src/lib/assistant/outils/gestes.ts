@@ -52,13 +52,25 @@ import { outilRattacherMail, outilRangerMail } from "./mail";
 
 const schemaPublier = z.object({
   quoi: z.enum(["SIMULATION", "PUBLICATION"]).describe("SIMULATION : dans l'espace du client. PUBLICATION : une réalisation ou un avis sur coverswap.fr."),
-  ids: z.array(z.string().min(1).max(40)).min(1).max(20).describe("Identifiants des simulations (lire_fiche, voir_simulations) ou des publications (lister PUBLICATIONS)."),
+  ids: z.array(z.string().min(1).max(40)).min(1).max(20).optional().describe("Identifiants des simulations (lire_fiche, voir_fichiers simulations) ou des publications (lister PUBLICATIONS)."),
+  cible: schemaCible.optional().describe("SIMULATION sans ids : le dossier (identifiant ou nom) — toutes ses simulations en brouillon."),
   retirer: z.boolean().optional().describe("Vrai : retirer (simulation masquée au client ; publication retirée du site). Réversible."),
   reafficher: z.boolean().optional().describe("SIMULATION : vrai pour réafficher aussi les simulations MASQUÉES demandées (le mail automatique part). Sans lui, seules les simulations en brouillon sont publiées."),
   sms: z.boolean().optional().describe("SIMULATION : prévenir aussi par SMS « vos simulations sont prêtes » (le SMS part)."),
   texte_sms: z.string().max(918).optional().describe("SIMULATION, avec sms : le texte relu par Lucas (à défaut, celui du catalogue)."),
 });
 type EntreePublier = z.output<typeof schemaPublier>;
+
+/** Les identifiants visés : ceux donnés, ou (SIMULATION + cible) les brouillons du dossier, comme l'ex-« publier_simulation ». */
+async function idsVises(e: EntreePublier): Promise<{ ids: string[]; ambigu?: ResultatOutil }> {
+  if (e.ids?.length) return { ids: e.ids };
+  if (e.quoi !== "SIMULATION" || !e.cible) throw new ErreurMetier("Donne les identifiants (ids), ou pour des simulations le dossier (cible).", 400);
+  const r = await cibler(e.cible, "DOSSIER");
+  if (r.ambigu) return { ids: [], ambigu: r.ambigu };
+  if (!r.ids.dossierId) throw new ErreurMetier(`${r.ids.nom} n'a pas de dossier.`, 409);
+  const statuts = e.retirer ? ["BROUILLON", "PUBLIEE"] : ["BROUILLON"];
+  return { ids: (await prisma.simulationEspace.findMany({ where: { dossierId: r.ids.dossierId, statut: { in: statuts } }, orderBy: { ordre: "asc" }, select: { id: true } })).map((x) => x.id) };
+}
 
 async function simulationsDemandees(ids: string[]) {
   const brutes = await prisma.simulationEspace.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, dossierId: true, statut: true, titre: true } });
@@ -68,7 +80,7 @@ async function simulationsDemandees(ids: string[]) {
   return { lignes, inconnues };
 }
 
-async function planPublication(e: EntreePublier) {
+async function planPublication(e: EntreePublier & { ids: string[] }) {
   const { lignes, inconnues } = await simulationsDemandees(e.ids);
   const brouillons = lignes.filter((l) => l.statut === "BROUILLON");
   const masquees = lignes.filter((l) => l.statut === "MASQUEE");
@@ -82,12 +94,16 @@ export const outilPublier = definirOutil({
   nom: "publier",
   titre: "Publier ou retirer (simulations, site)",
   description:
-    "SIMULATION : publie dans l'espace du client les simulations EN BROUILLON demandées (le client reçoit le mail « votre simulation est prête » ; « sms » : le SMS aussi) — une simulation masquée n'est jamais republiée sans « reafficher: true », une déjà publiée est ignorée ; « retirer » la masque au client (elle reste dans le dossier). PUBLICATION : publie sur coverswap.fr une réalisation ou un avis (refusé sans l'accord écrit du client, sans photo après pour une réalisation, sans texte pour un avis) ; « retirer » l'enlève du site. Publier est sensible (part chez le client ou sur le site public) : aperçu, puis confirmation. Retirer est réversible.",
+    "SIMULATION : publie dans l'espace du client les simulations EN BROUILLON demandées (le client reçoit le mail « votre simulation est prête » ; « sms » : le SMS aussi) — une simulation masquée n'est jamais republiée sans « reafficher: true », une déjà publiée est ignorée ; « retirer » la masque au client (elle reste dans le dossier) ; sans ids, « cible » = le dossier : toutes ses simulations en brouillon. PUBLICATION : publie sur coverswap.fr une réalisation ou un avis (refusé sans l'accord écrit du client, sans photo après pour une réalisation, sans texte pour un avis) ; « retirer » l'enlève du site. Publier est sensible (part chez le client ou sur le site public) : aperçu, puis confirmation. Retirer est réversible.",
   niveau: "REVERSIBLE",
   schema: schemaPublier,
-  masse: (e) => e.ids.length,
+  masse: (e) => e.ids?.length ?? 0,
   sensible: (e) => !e.retirer,
-  apercu: async (e) => {
+  apercu: async (entree) => {
+    const vises = await idsVises(entree);
+    if (vises.ambigu) return vises.ambigu.texte;
+    const e = { ...entree, ids: vises.ids };
+    if (!e.ids.length) return "Aucune simulation en brouillon dans ce dossier : rien ne partira.";
     if (e.quoi === "PUBLICATION") {
       const lignes = await prisma.publicationSite.findMany({ where: { id: { in: e.ids } }, select: { id: true, titre: true, type: true, accordClientLe: true, photoApres: true, texte: true } });
       return `Je vais ${e.retirer ? "retirer du site" : "publier sur coverswap.fr"} : ${lignes.map((p) => `${p.type === "AVIS" ? "l'avis" : "la réalisation"} « ${p.titre} »${!e.retirer && !p.accordClientLe ? " (REFUSÉE : pas d'accord écrit du client)" : ""}`).join(", ") || "aucune publication connue"}.`;
@@ -102,7 +118,11 @@ export const outilPublier = definirOutil({
       p.inconnues.length ? `Inconnues : ${p.inconnues.join(", ")}.` : "",
     ].filter(Boolean).join("\n");
   },
-  executer: async (e) => {
+  executer: async (entree) => {
+    const vises = await idsVises(entree);
+    if (vises.ambigu) return vises.ambigu;
+    const e = { ...entree, ids: vises.ids };
+    if (!e.ids.length) return { texte: "Aucune simulation à publier." };
     if (e.quoi === "PUBLICATION") {
       const faites: string[] = [];
       for (const id of e.ids) {
@@ -309,7 +329,8 @@ export const outilGesteEspace = definirOutil({
         return `Je vais réinitialiser l'étape « ${e.etape ?? "?"} » de l'espace de ${nom} : le client la refera (ce qu'il avait saisi reste gardé dans l'historique).`;
       case "RETIRER_ACCORD": {
         const acc = c.ids.dossierId ? await prisma.accordDevis.findFirst({ where: { dossierId: c.ids.dossierId, retireLe: null }, orderBy: { createdAt: "desc" } }) : null;
-        return acc ? `Je vais retirer le bon pour accord de ${nom} sur le devis ${acc.numeroDevis ?? ""} (donné le ${format.jourCourt(acc.createdAt)} par ${acc.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; le dossier revient à « Devis envoyé ».` : `Aucun bon pour accord en vigueur chez ${nom} : rien ne sera fait.`;
+        if (!acc) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom} : rien à retirer.`, 409);
+        return `Je vais retirer le bon pour accord de ${nom} sur le devis ${acc.numeroDevis ?? ""} (donné le ${format.jourCourt(acc.createdAt)} par ${acc.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; le dossier revient à « Devis envoyé ».`;
       }
       default:
         return `Je vais faire « ${e.geste} » sur l'espace de ${nom}.`;
@@ -360,8 +381,12 @@ export const outilGesteEspace = definirOutil({
       case "REINITIALISER":
         if (!e.etape) throw new ErreurMetier("Quelle étape ? (PROJET, SIMULATIONS, DEVIS)", 400);
         return geste({ geste: "reinitialiser", etape: e.etape }, `Étape « ${e.etape} » de l'espace de ${nom} réinitialisée : le client la refait.`);
-      case "RETIRER_ACCORD":
+      case "RETIRER_ACCORD": {
+        // Comme l'ex-« retirer_accord » : sans accord en vigueur, rien n'est fait (et le dossier ne bouge pas).
+        const acc = await prisma.accordDevis.findFirst({ where: { dossierId: exigerDossier(ids), retireLe: null }, select: { id: true } });
+        if (!acc) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom} : rien à retirer.`, 409);
         return geste({ geste: "retirer-accord", motif: e.motif ?? "" }, `Bon pour accord retiré chez ${nom} : preuve gardée, dossier revenu à « Devis envoyé ».`);
+      }
       case "MARQUER_LUS": {
         const n = await marquerMessagesLus(exigerDossier(ids));
         return { texte: n ? `${pluriel(n, "message")} de ${nom} ${accord(n, "marqué lu", "marqués lus")}.` : `Aucun message non lu chez ${nom}.`, donnees: { marques: n }, liens: liensDossier };

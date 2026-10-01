@@ -131,7 +131,7 @@ describe("« lister » : le même contenu que la fonction de l'écran", () => {
     assert.match((await listerAvec({ liste: "LEADS", vue: "NIMPORTE" })).texte, /^Refusé : Vue inconnue pour LEADS/);
   });
 
-  test("DOSSIERS : En cours, À faire, Tous = pageDossiers ; Archivés = dossiersArchives ; par étape = l'ex-« dossiers_par_etape »", async () => {
+  test("DOSSIERS : En cours, À faire, Tous (inactifs masqués ou non) = pageDossiers ; Archivés = dossiersArchives ; par étape = l'ex-« dossiers_par_etape »", async () => {
     const { pageDossiers } = await import("@/lib/dossiers/dossiers");
     const { dossiersArchives } = await import("@/lib/dossiers/archivage");
     for (const vue of ["EN_COURS", "A_FAIRE", "TOUS"] as const) {
@@ -140,6 +140,10 @@ describe("« lister » : le même contenu que la fonction de l'écran", () => {
       assert.deepEqual(idsDe((r.donnees as { dossiers: { id: string }[] }).dossiers), idsDe(ecran.dossiers), vue);
       assert.deepEqual((r.donnees as { compteurs: unknown }).compteurs, ecran.compteurs);
     }
+    // « Masquer les inactifs » (D6) : le même filtre que la case de l'écran.
+    const actifs = await listerAvec({ liste: "DOSSIERS", vue: "TOUS", filtres: { masquer_inactifs: true } });
+    assert.deepEqual(idsDe((actifs.donnees as { dossiers: { id: string }[] }).dossiers), idsDe((await pageDossiers({ vue: "TOUS", masquerInactifs: true, page: 1, parPage: 20 })).dossiers));
+    assert.match(actifs.texte, /inactifs masqués/);
     const recherche = await listerAvec({ liste: "DOSSIERS", recherche: "Salle de bain" });
     assert.deepEqual(idsDe((recherche.donnees as { dossiers: { id: string }[] }).dossiers), idsDe((await pageDossiers({ recherche: "Salle de bain", page: 1, parPage: 20 })).dossiers));
     const archives = await listerAvec({ liste: "DOSSIERS", vue: "ARCHIVES" });

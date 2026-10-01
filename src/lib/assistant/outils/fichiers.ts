@@ -6,6 +6,7 @@ import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { schemaDepotDocument } from "@/lib/dossiers/depot-document";
 import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
 import { estEtape } from "@/lib/dossiers/regles";
+import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { idPhoto, lireFichier } from "@/lib/dossiers/stockage";
 import { gesteDeLucas } from "@/lib/espace/vue-crm";
 import { lirePhotosRetirees } from "@/lib/espace/validations";
@@ -24,9 +25,9 @@ import {
 } from "@/lib/fichiers-depot/enregistrement";
 import { creerLienDepot } from "@/lib/fichiers-depot/jetons";
 import { lignesDuLien, lireSourceFichier, schemaSourceFichier } from "@/lib/fichiers-depot/source";
-import { ENTITES_CIBLE, LIBELLES_ENTITE, LIBELLES_TYPE_FICHIER, MINUTES_VALIDITE_LIEN, TYPES_FICHIER, type EntiteCible, type TypeFichier } from "@/lib/fichiers-depot/types";
+import { ENTITES_CIBLE, LIBELLES_ENTITE, LIBELLES_TYPE_FICHIER, MINUTES_VALIDITE_LIEN, TYPES_FICHIER, TYPES_FICHIER_LIEN, type EntiteCible, type TypeFichier } from "@/lib/fichiers-depot/types";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
-import { adresseCrm, definirOutil, format, lien, type ContexteOutil, type ImageOutil, type LienOutil, type ResultatOutil } from "../definition";
+import { adresseCrm, definirOutil, format, lien, type ContexteOutil, type DocumentOutil, type ImageOutil, type LienOutil, type ResultatOutil } from "../definition";
 import { IMAGES_MAX_PAR_RESULTAT, imagePourResultat, ko } from "../images";
 import { cibler } from "./cible";
 import { outilVoirPhotos, outilVoirSimulations } from "./images";
@@ -98,7 +99,7 @@ export const outilLienDepot = definirOutil({
   niveau: "REVERSIBLE",
   schema: z.object({
     cible: schemaCibleFichier.optional().describe("Où iront les fichiers ; absente : dépôt libre (« À ranger »)."),
-    type: z.enum(TYPES_FICHIER).optional(),
+    type: z.enum(TYPES_FICHIER_LIEN).optional(),
   }),
   // Une réalisation déjà publiée : la photo déposée changera le site public.
   sensible: async (e) => (e.cible?.entite === "PUBLICATION" && e.cible.id ? publicationPubliee({ entite: "PUBLICATION", id: e.cible.id }) : false),
@@ -127,13 +128,19 @@ const schemaChampsDocument = schemaDepotDocument.omit({ type: true, source: true
 
 const schemaAjouterFichier = z.object({
   cible: schemaCibleFichier,
-  type: z.enum(TYPES_FICHIER).describe("PHOTO_AVANT, PHOTO_APRES (photos du dossier ; réalisation du site), PLAN, DEVIS, FACTURE (dossier : numéro et montant pour un document repris), JUSTIFICATIF (dépense), AUTRE."),
+  type: z.enum(TYPES_FICHIER).describe("PHOTO_AVANT, PHOTO_APRES (photos du dossier ; réalisation du site), PLAN, DEVIS, FACTURE (dossier : numéro et montant pour un document repris), JUSTIFICATIF (dépense), AUTRE, SIMULATION (image rendue, déposée en brouillon sur le dossier), PDF_DOCUMENT (le PDF d'un document repris : document_id)."),
   source: schemaSourceFichier,
   ...schemaChampsDocument.shape,
+  titre: z.string().trim().max(120).optional().describe("SIMULATION : son titre."),
+  description: z.string().trim().max(1000).optional().describe("SIMULATION : sa description."),
+  origine_simulation: z.enum(["CHATGPT", "MANUEL"]).optional().describe("SIMULATION : CHATGPT (rendu d'une préparation) ou MANUEL (défaut)."),
+  preparation_id: z.string().max(40).optional().describe("SIMULATION : la préparation d'où vient l'image (« auto » par défaut : la dernière préparation ChatGPT du dossier, 72 h)."),
+  document_id: z.string().max(40).optional().describe("PDF_DOCUMENT : le document repris dont c'est le PDF ([document:…] de voir_fichiers documents)."),
 });
 type EntreeAjouter = z.output<typeof schemaAjouterFichier>;
 
-const estDocumentRepris = (e: EntreeAjouter) => (e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant);
+const estDocumentRepris = (e: EntreeAjouter) => ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant)) || e.type === "PDF_DOCUMENT";
+const optionsSimulation = (e: EntreeAjouter) => ({ simulation: { titre: e.titre ?? null, description: e.description ?? null, source: e.origine_simulation ?? "MANUEL", preparationId: e.preparation_id ?? "auto" }, documentRepris: e.document_id ?? null });
 const champsDocument = (e: EntreeAjouter): ChampsDocument => ({ numero: e.numero, libelle: e.libelle, montant: e.montant, date_emission: e.date_emission, statut: e.statut, acompte_pct: e.acompte_pct, objet: e.objet, visible_espace: e.visible_espace, inscrire_au_registre: e.inscrire_au_registre });
 
 function origineLisible(s: EntreeAjouter["source"]): string {
@@ -157,7 +164,7 @@ export const outilAjouterFichier = definirOutil({
   nom: "ajouter_fichier",
   titre: "Ajouter un fichier (photo, plan, devis, facture, justificatif…)",
   description:
-    "Ajoute un fichier sur une cible — dossier, lead, client, dépense, réalisation du site — par l'une des cinq voies de « source » : lien_depot (ce qu'un lien de dépôt a reçu), url (lien public ou lien de partage Google Drive : le CRM le télécharge, 9 Mo au plus, photo ou PDF ; adresses internes refusées), base64 (+ nom), piece_mail { message_id, piece } (« lire_mail » liste les pièces), fichier_id (fichier déjà conservé). Selon la cible et le type : DOSSIER › PHOTO_AVANT / PHOTO_APRES → photos du dossier (proposées au simulateur) ; DOSSIER › DEVIS / FACTURE avec numero et montant → document repris, comme l'ancien « deposer_document » (un devis visible, émis ou envoyé, vaut devis envoyé : le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance) — sans numéro ni montant, il est gardé « à compléter » ; DOSSIER › PLAN / JUSTIFICATIF / AUTRE → document du dossier ; LEAD › photo → photo du lead, autre → document rattaché ; CLIENT → document rattaché ; DEPENSE › JUSTIFICATIF → justificatif (l'ancien part aux archives) ; PUBLICATION › PHOTO_AVANT / PHOTO_APRES → photo de la réalisation (prise dans son dossier). Le type du fichier est vérifié par son contenu (JPEG, PNG, WebP, HEIC converti, PDF). Réversible (« ranger_fichier » retirer: true) ; sensible — aperçu puis confirmation — quand un devis ou une facture repris devient visible du client ou change l'étape, ou quand la réalisation est déjà publiée.",
+    "Ajoute un fichier sur une cible — dossier, lead, client, dépense, réalisation du site — par l'une des cinq voies de « source » : lien_depot (ce qu'un lien de dépôt a reçu), url (lien public ou lien de partage Google Drive : le CRM le télécharge, 9 Mo au plus, photo ou PDF ; adresses internes refusées), base64 (+ nom), piece_mail { message_id, piece } (« lire_mail » liste les pièces), fichier_id (fichier déjà conservé). Selon la cible et le type : DOSSIER › PHOTO_AVANT / PHOTO_APRES → photos du dossier (proposées au simulateur) ; DOSSIER › DEVIS / FACTURE avec numero et montant → document repris, comme le dépôt d'un document repris (un devis visible, émis ou envoyé, vaut devis envoyé : le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance) — sans numéro ni montant, il est gardé « à compléter » ; DOSSIER › PLAN / JUSTIFICATIF / AUTRE → document du dossier ; LEAD › photo → photo du lead, autre → document rattaché ; CLIENT → document rattaché ; DOSSIER › SIMULATION → simulation déposée en brouillon (« Déposer une simulation » : titre, description, origine_simulation, preparation_id ; l'image de ChatGPT après « preparer_simulation ») ; DOSSIER › PDF_DOCUMENT + document_id → PDF d'un devis ou d'une facture repris (« importer le PDF ») ; DEPENSE › JUSTIFICATIF → justificatif (l'ancien part aux archives) ; PUBLICATION › PHOTO_AVANT / PHOTO_APRES → photo de la réalisation (prise dans son dossier). Le type du fichier est vérifié par son contenu (JPEG, PNG, WebP, HEIC converti, PDF). Réversible (« ranger_fichier » retirer: true) ; sensible — aperçu puis confirmation — quand un devis ou une facture repris devient visible du client ou change l'étape, ou quand la réalisation est déjà publiée.",
   niveau: "REVERSIBLE",
   schema: schemaAjouterFichier,
   sensible: async (e) => {
@@ -171,12 +178,18 @@ export const outilAjouterFichier = definirOutil({
     const origine = origineLisible(e.source);
     if (lue.entite === "PUBLICATION") return `Je vais poser une ${LIBELLES_TYPE_FICHIER[e.type]} (${origine}) sur la réalisation ${lue.nom}, déjà publiée : elle sera visible tout de suite sur coverswap.fr.`;
     if (lue.entite !== "DOSSIER") throw new ErreurMetier(`Un ${LIBELLES_TYPE_FICHIER[e.type]} repris (numéro, montant) va sur un dossier.`, 400);
+    if (e.type === "PDF_DOCUMENT") {
+      const d = e.document_id ? await prisma.document.findFirst({ where: { id: e.document_id, dossierId: lue.id }, select: { type: true, numero: true, totalHt: true, pdfPath: true } }) : null;
+      if (!d) throw new ErreurMetier("Document repris introuvable dans ce dossier (document_id, rendu par « voir_fichiers » documents).", 404);
+      return `Je vais importer le PDF (${origine}) du ${d.type === "DEVIS" ? "devis" : "document"} repris ${d.numero ?? ""} (${format.euros(d.totalHt)} HT) du dossier de ${lue.nom}${d.pdfPath ? " ; l'ancien PDF reste aux archives" : ""}. C'est ce PDF que le client et les exports verront.`;
+    }
     const dossier = await prisma.dossier.findUnique({ where: { id: lue.id }, select: { etape: true } });
     const vers = e.type === "DEVIS" && e.visible_espace !== false && (e.statut ?? "ENVOYE") === "ENVOYE" && dossier && estEtape(dossier.etape) ? etapeApresGeneration("DEVIS", dossier.etape) : null;
     const passage = vers && dossier ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.` : "";
     return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${format.euros(e.montant!)} HT, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
   },
   executer: async (e) => {
+    if (e.type === "PDF_DOCUMENT" && !e.document_id) throw new ErreurMetier("PDF_DOCUMENT : donne document_id (le document repris).", 400);
     if ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero) !== Boolean(e.montant)) throw new ErreurMetier(`Un ${LIBELLES_TYPE_FICHIER[e.type]} repris demande son numéro ET son montant HT (sans les deux, il est gardé « à compléter »).`, 400);
     const r = await resoudreCibleFichier(e.cible);
     if (r.ambigu) return r.ambigu;
@@ -187,10 +200,10 @@ export const outilAjouterFichier = definirOutil({
       if (lignes.length === 0) throw new ErreurMetier("Aucun fichier reçu par ce lien qui reste à placer (déjà rangés ou retirés) : « voir_fichiers » pour les voir.", 409);
       if (estDocumentRepris(e) && lignes.length > 1) throw new ErreurMetier("Plusieurs fichiers reçus par ce lien : désigne le devis ou la facture par l'identifiant du fichier reçu.", 409);
       resultats = [];
-      for (const ligne of lignes) resultats.push(await rangerFichierDepose(ligne.id, r.cible, e.type, document));
+      for (const ligne of lignes) resultats.push(await rangerFichierDepose(ligne.id, r.cible, e.type, document, optionsSimulation(e)));
     } else {
       const source = await lireSourceFichier(e.source);
-      resultats = [await enregistrerFichierRecu(r.cible, e.type, { contenu: source.contenu, nom: source.nom }, { voie: source.voie, origine: source.origine, document })];
+      resultats = [await enregistrerFichierRecu(r.cible, e.type, { contenu: source.contenu, nom: source.nom }, { voie: source.voie, origine: source.origine, document, ...optionsSimulation(e) })];
     }
     const cible = resultats[0].cible!;
     return {
@@ -283,10 +296,10 @@ export const outilRangerFichier = definirOutil({
 
 /* ── voir_fichiers ─────────────────────────────────────────────── */
 
-const GENRES = ["photos", "simulations", "documents", "a_ranger", "site"] as const;
+const GENRES = ["photos", "simulations", "documents", "a_ranger", "site", "preparations", "banc", "piece_mail"] as const;
 
 const schemaVoir = z.object({
-  genre: z.enum(GENRES).optional().describe("photos (défaut) : photos avant / après d'un dossier ou d'un lead ; simulations : simulations d'un dossier (avant / après) ; documents : devis, factures, documents déposés, justificatif ; a_ranger : la boîte des dépôts libres ; site : simulations faites sur coverswap.fr."),
+  genre: z.enum(GENRES).optional().describe("photos (défaut) : photos avant / après d'un dossier ou d'un lead ; simulations : simulations d'un dossier (avant / après) ; documents : devis, factures, documents déposés, justificatif, documents d'un lead (ancien CRM, PDF des simulations du site) ; a_ranger : la boîte des dépôts libres ; site : simulations faites sur coverswap.fr et générations en cours ou en échec ; preparations : le simulateur d'un dossier (type suggéré, photos avant, préparations récentes) ou une préparation (preparation_id : état, prompt, photo) ; banc : un rendu du banc (rendu_id) ; piece_mail : une pièce jointe (message_id, piece)."),
   cible: schemaCibleFichier.optional().describe("Le dossier, lead, client, dépense ou réalisation (pas pour a_ranger ni site)."),
   nombre: z.number().int().min(1).max(IMAGES_MAX_PAR_RESULTAT).optional().describe("Combien d'éléments (photos : 6 par défaut, 12 au plus ; simulations : 4, 8 au plus)."),
   decalage: z.number().int().min(0).max(200).optional().describe("photos, a_ranger : sauter les N plus récents (déjà vus)."),
@@ -300,6 +313,11 @@ const schemaVoir = z.object({
   rattachees: z.boolean().optional().describe("site : vrai, celles rattachées à un lead ; faux, les anonymes."),
   lead_id: z.string().max(40).optional().describe("site : celles d'un lead."),
   sans_images: z.boolean().optional().describe("site, documents, a_ranger : description seule, aucune image."),
+  document_id: z.string().max(80).optional().describe("documents : le document à ouvrir, joint en entier (PDF) — l'identifiant entre crochets de la liste ([document:…], [fichier:…], [ancien_devis:…], [ancienne_facture:…], [simulation_pdf:…])."),
+  preparation_id: z.string().max(40).optional().describe("preparations : une préparation (état de la génération, étape, erreur, prompt, photo cadrée)."),
+  rendu_id: z.string().max(40).optional().describe("banc : un rendu du banc (image, photo d'origine, prompt)."),
+  message_id: z.string().max(40).optional().describe("piece_mail : le mail (rendu par « lire_mail »)."),
+  piece: z.string().max(80).optional().describe("piece_mail : l'identifiant de la pièce (« lire_mail » les liste)."),
 });
 type EntreeVoir = z.output<typeof schemaVoir>;
 
@@ -312,12 +330,49 @@ async function cibleAncienne(c: CibleOutil | undefined): Promise<{ dossierId?: s
   return { dossierId: c.id };
 }
 
-type Element = { libelle: string; octets: () => Promise<Buffer | null>; typeMime: string; lien: string | null };
+/** `cle` : l'identifiant que « document_id » désigne pour joindre le fichier entier (PDF). */
+type Element = { libelle: string; octets: () => Promise<Buffer | null>; typeMime: string; lien: string | null; cle?: string };
+
+const OCTETS_MAX_DOCUMENT = 9 * 1024 * 1024;
+
+/** Un document entier (PDF), joint comme ressource embarquée ; null s'il ne se lit pas ou dépasse 9 Mo. */
+async function documentJoint(el: Element): Promise<DocumentOutil | null> {
+  const contenu = await el.octets().catch(() => null);
+  if (!contenu || contenu.length > OCTETS_MAX_DOCUMENT) return null;
+  return { libelle: el.libelle, mimeType: el.typeMime, base64: contenu.toString("base64"), octets: contenu.length, uri: el.lien ? `${adresseCrm()}${el.lien}` : `coverswap://fichier/${el.cle ?? "document"}` };
+}
+
+/**
+ * Un PDF que l'écran produit dans sa route (PDF d'une simulation du site, devis et facture de l'ancien CRM) : la même
+ * route est appelée ici, en lecture, et son contenu rendu tel quel.
+ */
+async function contenuDeLaRoute(module: "simulation" | "ancien-devis" | "ancienne-facture", id: string): Promise<{ contenu: Buffer; typeMime: string } | null> {
+  const { NextRequest } = await import("next/server");
+  const route = module === "simulation" ? await import("@/app/api/simulations/[id]/pdf/route") : module === "ancien-devis" ? await import("@/app/api/pdf/devis/[id]/route") : await import("@/app/api/pdf/facture/[id]/route");
+  const chemin = module === "simulation" ? `/api/simulations/${id}/pdf` : module === "ancien-devis" ? `/api/pdf/devis/${id}` : `/api/pdf/facture/${id}`;
+  const reponse = await route.GET(new NextRequest(`${adresseCrm()}${chemin}`), { params: Promise.resolve({ id }) });
+  if (!reponse.ok) return null;
+  return { contenu: Buffer.from(await reponse.arrayBuffer()), typeMime: (reponse.headers.get("content-type") ?? "application/pdf").split(";")[0] };
+}
 
 async function rendreElements(titre: string, elements: Element[], e: EntreeVoir, donnees: unknown, liens: LienOutil[]): Promise<ResultatOutil> {
   const images: ImageOutil[] = [];
+  const documents: DocumentOutil[] = [];
   const lignes: string[] = [];
   for (const el of elements) {
+    if (e.document_id && el.cle === e.document_id.replace(/^\[|\]$/g, "")) {
+      if (el.typeMime === "text/html") {
+        const html = (await el.octets().catch(() => null))?.toString("utf8") ?? "";
+        lignes.push(`${el.libelle} — contenu :\n${html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, 6000)}`);
+        continue;
+      }
+      const joint = el.typeMime.startsWith("image/") ? null : await documentJoint(el);
+      if (joint) {
+        documents.push(joint);
+        lignes.push(`${el.libelle} (document joint en entier, ${ko(joint.octets)})`);
+        continue;
+      }
+    }
     const estImage = el.typeMime.startsWith("image/");
     if (estImage && !e.sans_images && images.length < IMAGES_MAX_PAR_RESULTAT) {
       const image = await imagePourResultat(await el.octets().catch(() => null), el.libelle);
@@ -331,7 +386,8 @@ async function rendreElements(titre: string, elements: Element[], e: EntreeVoir,
     }
     lignes.push(`${el.libelle}${el.lien ? ` — ${adresseCrm()}${el.lien}` : ""}`);
   }
-  return { texte: [titre, ...lignes].join("\n"), images, donnees, liens };
+  if (e.document_id && documents.length === 0 && !lignes.some((l) => l.includes("contenu :")) && !elements.some((el) => el.cle === e.document_id && el.typeMime.startsWith("image/"))) lignes.push(`Document ${e.document_id} introuvable ou illisible ici : reprends l'identifiant entre crochets de la liste.`);
+  return { texte: [titre, ...lignes].join("\n"), images, documents, donnees, liens };
 }
 
 async function voirDocuments(e: EntreeVoir): Promise<ResultatOutil> {
@@ -346,7 +402,7 @@ async function voirDocuments(e: EntreeVoir): Promise<ResultatOutil> {
 
   if (lue.entite === "DOSSIER") {
     const documents = await prisma.document.findMany({ where: { dossierId: lue.id, numero: { not: null } }, orderBy: { createdAt: "desc" } });
-    for (const d of documents) elements.push({ libelle: `${d.type === "DEVIS" ? "Devis" : d.type === "FACTURE" ? "Facture" : d.type} ${d.numero}${d.libelleVariante ? ` « ${d.libelleVariante} »` : ""} — ${format.euros(d.totalHt)} HT — ${d.statut.toLowerCase()} — ${format.jourCourt(d.createdAt)}${d.pdfPath ? "" : " (sans PDF)"} [document:${d.id}]`, octets: async () => null, typeMime: "application/pdf", lien: d.pdfPath ? `/api/dossiers/${lue.id}/documents/${d.id}/pdf` : null });
+    for (const d of documents) elements.push({ libelle: `${d.type === "DEVIS" ? "Devis" : d.type === "FACTURE" ? "Facture" : d.type} ${d.numero}${d.libelleVariante ? ` « ${d.libelleVariante} »` : ""} — ${format.euros(d.totalHt)} HT — ${d.statut.toLowerCase()} — ${format.jourCourt(d.createdAt)}${d.pdfPath || d.origine !== "REPRISE" ? "" : " (PDF non importé : ajouter_fichier PDF_DOCUMENT)"} [document:${d.id}]`, octets: async () => (await lirePdfDocument(lue.id, d.id)).contenu, typeMime: "application/pdf", lien: `/api/dossiers/${lue.id}/documents/${d.id}/pdf`, cle: `document:${d.id}` });
     const evenements = await prisma.dossierEvenement.findMany({ where: { dossierId: lue.id, type: "DOCUMENT_DEPOSE" }, orderBy: { createdAt: "desc" } });
     for (const ev of evenements) {
       let meta: { fichierId?: string; typeMime?: string; libelle?: string; nom?: string } = {};
@@ -357,19 +413,30 @@ async function voirDocuments(e: EntreeVoir): Promise<ResultatOutil> {
       }
       if (!meta.fichierId) continue;
       const depot = parFichier.get(meta.fichierId);
-      elements.push({ libelle: `${meta.libelle ?? meta.nom ?? "Document"}${meta.nom && meta.nom !== meta.libelle ? ` (${meta.nom})` : ""} — déposé le ${format.jourCourt(ev.createdAt)}${depot?.aCompleter ? " — À COMPLÉTER (numéro, montant : ajouter_fichier source.lien_depot)" : ""}${depot ? ` [fichier:${depot.id}]` : ""}`, octets: deFichier(meta.fichierId), typeMime: meta.typeMime ?? "application/pdf", lien: `/api/fichiers/${meta.fichierId}` });
+      elements.push({ libelle: `${meta.libelle ?? meta.nom ?? "Document"}${meta.nom && meta.nom !== meta.libelle ? ` (${meta.nom})` : ""} — déposé le ${format.jourCourt(ev.createdAt)}${depot?.aCompleter ? " — À COMPLÉTER (numéro, montant : ajouter_fichier source.lien_depot)" : ""} [${depot ? `fichier:${depot.id}` : `fichier_conserve:${meta.fichierId}`}]`, octets: deFichier(meta.fichierId), typeMime: meta.typeMime ?? "application/pdf", lien: `/api/fichiers/${meta.fichierId}`, cle: depot ? `fichier:${depot.id}` : `fichier_conserve:${meta.fichierId}` });
     }
   } else if (lue.entite === "DEPENSE") {
     const d = await prisma.depense.findUnique({ where: { id: lue.id }, select: { justificatifId: true, justificatif: { select: { typeMime: true } } } });
-    if (d?.justificatifId) elements.push({ libelle: `Justificatif de la dépense ${lue.nom}${parFichier.get(d.justificatifId) ? ` [fichier:${parFichier.get(d.justificatifId)!.id}]` : ""}`, octets: deFichier(d.justificatifId), typeMime: d.justificatif?.typeMime ?? "application/pdf", lien: `/api/depenses/${lue.id}/justificatif` });
+    if (d?.justificatifId) elements.push({ libelle: `Justificatif de la dépense ${lue.nom} [${parFichier.get(d.justificatifId) ? `fichier:${parFichier.get(d.justificatifId)!.id}` : "justificatif"}]`, octets: deFichier(d.justificatifId), typeMime: d.justificatif?.typeMime ?? "application/pdf", lien: `/api/depenses/${lue.id}/justificatif`, cle: parFichier.get(d.justificatifId) ? `fichier:${parFichier.get(d.justificatifId)!.id}` : "justificatif" });
   } else if (lue.entite === "PUBLICATION") {
     const p = await prisma.publicationSite.findUnique({ where: { id: lue.id }, select: { photoAvant: true, photoApres: true } });
     for (const [quelle, chemin] of [["avant", p?.photoAvant], ["après", p?.photoApres]] as const) if (chemin) elements.push({ libelle: `Photo ${quelle} de la réalisation ${lue.nom} [photo:${idPhoto(chemin)}]`, octets: () => lireFichier(chemin), typeMime: "image/jpeg", lien: null });
   }
   if (lue.entite === "LEAD" || lue.entite === "CLIENT") {
-    for (const d of depots.filter((x) => x.fichierId)) elements.push({ libelle: `${d.nom ?? "Fichier"} — ${d.type ? LIBELLES_TYPE_FICHIER[d.type as TypeFichier] : "document"} — déposé le ${format.jourCourt(d.createdAt)} [fichier:${d.id}]`, octets: deFichier(d.fichierId!), typeMime: d.typeMime, lien: `/api/fichiers/${d.fichierId}` });
+    for (const d of depots.filter((x) => x.fichierId)) elements.push({ libelle: `${d.nom ?? "Fichier"} — ${d.type ? LIBELLES_TYPE_FICHIER[d.type as TypeFichier] : "document"} — déposé le ${format.jourCourt(d.createdAt)} [fichier:${d.id}]`, octets: deFichier(d.fichierId!), typeMime: d.typeMime, lien: `/api/fichiers/${d.fichierId}`, cle: `fichier:${d.id}` });
   }
-  const choisis = elements.slice(e.decalage ?? 0, (e.decalage ?? 0) + (e.nombre ?? 12));
+  if (lue.entite === "LEAD") {
+    // La fiche du lead (LF22, LF25) : le PDF « avant / après » de ses simulations du site, et les devis, factures et
+    // chantier de l'ancien CRM — les mêmes PDF que les liens de la fiche.
+    const lead = await prisma.lead.findUnique({ where: { id: lue.id }, select: { simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, select: { id: true, createdAt: true, referenceChoisie: true, prixDevis: true } }, devis: { orderBy: { createdAt: "desc" }, select: { id: true, numero: true, statut: true, prixVente: true, createdAt: true, facture: { select: { id: true, numero: true, statut: true } } } }, chantier: { select: { dateIntervention: true, statut: true, adresse: true } } } });
+    for (const sim of lead?.simulations ?? []) elements.push({ libelle: `PDF avant / après de la simulation du ${format.jourCourt(sim.createdAt)}${sim.referenceChoisie ? ` (teinte ${sim.referenceChoisie})` : ""}${sim.prixDevis ? `, prix simulé ${format.euros(sim.prixDevis)}` : ""} [simulation_pdf:${sim.id}]`, octets: async () => (await contenuDeLaRoute("simulation", sim.id))?.contenu ?? null, typeMime: "application/pdf", lien: `/api/simulations/${sim.id}/pdf`, cle: `simulation_pdf:${sim.id}` });
+    for (const dv of lead?.devis ?? []) {
+      elements.push({ libelle: `Ancien CRM — devis ${dv.numero}, ${format.euros(dv.prixVente)} (${dv.statut.toLowerCase()}), du ${format.jourCourt(dv.createdAt)} [ancien_devis:${dv.id}]`, octets: async () => (await contenuDeLaRoute("ancien-devis", dv.id))?.contenu ?? null, typeMime: "application/pdf", lien: `/api/pdf/devis/${dv.id}`, cle: `ancien_devis:${dv.id}` });
+      if (dv.facture) elements.push({ libelle: `Ancien CRM — facture ${dv.facture.numero} (${dv.facture.statut.toLowerCase()}) [ancienne_facture:${dv.facture.id}]`, octets: async () => (await contenuDeLaRoute("ancienne-facture", dv.facture!.id))?.contenu ?? null, typeMime: "text/html", lien: `/api/pdf/facture/${dv.facture.id}`, cle: `ancienne_facture:${dv.facture.id}` });
+    }
+    if (lead?.chantier) elements.push({ libelle: `Ancien CRM — chantier du ${format.jourCourt(lead.chantier.dateIntervention)} (${lead.chantier.statut.toLowerCase()})${lead.chantier.adresse ? `, ${lead.chantier.adresse}` : ""}`, octets: async () => null, typeMime: "text/plain", lien: null });
+  }
+  const choisis = e.document_id ? elements.filter((el) => el.cle === e.document_id!.replace(/^\[|\]$/g, "")) : elements.slice(e.decalage ?? 0, (e.decalage ?? 0) + (e.nombre ?? 12));
   const titre = elements.length === 0 ? `Aucun document pour ${LIBELLES_ENTITE[lue.entite]} ${lue.nom}.` : `${LIBELLES_ENTITE[lue.entite].charAt(0).toUpperCase()}${LIBELLES_ENTITE[lue.entite].slice(1)} ${lue.nom} : ${pluriel(elements.length, "document")}${choisis.length < elements.length ? ` (${choisis.length} ici)` : ""}.`;
   return rendreElements(titre, choisis, e, { total: elements.length, cible: { entite: lue.entite, id: lue.id } }, [lienCible(lue)]);
 }
@@ -391,16 +458,93 @@ async function photosRetirees(dossierId: string): Promise<Element[]> {
   return [...parClient, ...parOutil.map((d) => ({ libelle: `Photo retirée le ${format.jourCourt(d.archiveLe!)}${d.archiveMotif ? ` (${d.archiveMotif})` : ""} [fichier:${d.id}]`, octets: () => lireFichier(d.photoChemin!), typeMime: d.typeMime, lien: null }))];
 }
 
+/** S3, S10, S11 : le simulateur d'un dossier (type suggéré, photos avant, préparations récentes), ou une préparation. */
+async function voirPreparations(e: EntreeVoir): Promise<ResultatOutil> {
+  const { lirePreparation, photoDePreparation, photosAvantDuDossier, preparationsRecentes } = await import("@/lib/simulateur/preparation");
+  const lignePreparation = (p: Awaited<ReturnType<typeof lirePreparation>>) => `${p.mode === "API" ? "Génération par l'API" : "Paquet ChatGPT"} du ${format.jourCourt(p.le)} — ${p.typeLibelle} — ${p.zones.map((z) => `${z.libelle} → ${z.nom} (${z.ref})`).join(", ")} — ${p.statut.toLowerCase()}${p.etape ? ` (étape ${p.etape})` : ""}${p.erreur ? ` — erreur : ${p.erreur}` : ""}${p.resultatId ? ` — rendu : simulation ${p.resultatId} (brouillon)` : ""}${p.scoreControle !== null ? ` — contrôle ${p.scoreControle}/100${p.sousSeuil ? " (sous le seuil)" : ""}` : ""} [preparation:${p.id}]`;
+  if (e.preparation_id) {
+    const p = await lirePreparation(e.preparation_id);
+    const photo = e.sans_images ? null : await imagePourResultat((await photoDePreparation(p.id).catch(() => null))?.contenu ?? null, "Photo cadrée de la préparation");
+    return { texte: [lignePreparation(p), p.prompt ? `Prompt${p.promptVersion ? ` (version ${p.promptVersion})` : ""} :\n${p.prompt}` : "", p.directionArtistique ? `Direction artistique : ${p.directionArtistique}` : ""].filter(Boolean).join("\n"), images: photo ? [photo] : [], donnees: p, liens: [lien("Rouvrir dans le simulateur", `/simulateur?dossier=${p.dossierId}&preparation=${p.id}`)] };
+  }
+  if (!e.cible) throw new ErreurMetier("Donne le dossier (cible), ou preparation_id.", 400);
+  const r = await resoudreCibleFichier({ ...e.cible, entite: e.cible.entite ?? "DOSSIER" });
+  if (r.ambigu) return r.ambigu;
+  if (r.cible.entite !== "DOSSIER") throw new ErreurMetier("Le simulateur travaille sur un dossier.", 400);
+  const dossierId = r.cible.id;
+  const [{ repererTypeSurface }, { lireProjet }, { famillesDe, lireSelection }] = await Promise.all([import("@/lib/simulateur/preparation-assistant"), import("@/lib/espace/projet"), import("@/lib/prestations/prestations")]);
+  const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId }, select: { clientNom: true, prestations: true, lead: { select: { typeProjet: true } }, espaces: { take: 1, select: { souhaits: true } } } });
+  const selection = lireSelection(dossier.prestations);
+  const projet = lireProjet(dossier.espaces[0]?.souhaits ?? null, selection, dossier.lead?.typeProjet);
+  const type = (() => {
+    try {
+      return repererTypeSurface(null, famillesDe(selection)[0] ?? dossier.lead?.typeProjet ?? "CUISINE", projet?.zones ?? []);
+    } catch {
+      return null;
+    }
+  })();
+  const [photos, preparations] = await Promise.all([photosAvantDuDossier(dossierId), preparationsRecentes(dossierId)]);
+  const texte = [
+    `Simulateur — ${dossier.clientNom} : type suggéré ${type ? `${type.libelle} (${type.id})` : "à choisir"}${projet?.zones?.length ? ` ; zones du projet : ${projet.zones.join(", ")}` : ""} ; ${pluriel(photos.length, "photo avant")}${photos.length ? ` (${photos.slice(0, 6).map((p) => p.id).join(", ")})` : ""}.`,
+    preparations.length ? `Préparations des deux dernières semaines :\n${preparations.map((p) => `- ${lignePreparation(p)}`).join("\n")}` : "Aucune préparation récente.",
+  ].join("\n");
+  return { texte, donnees: { dossierId, typeSuggere: type?.id ?? null, zonesProjet: projet?.zones ?? [], photos, preparations }, liens: [lien("Simulateur", `/simulateur?dossier=${dossierId}`)] };
+}
+
+/** S17 : un rendu du banc — l'image, la photo d'origine du cas, le prompt. */
+async function voirRenduBanc(e: EntreeVoir): Promise<ResultatOutil> {
+  if (!e.rendu_id) throw new ErreurMetier("Donne rendu_id (« etat_crm » BANC liste les rendus).", 400);
+  const { imageRenduBanc } = await import("@/lib/simulateur/banc/banc");
+  const r = await prisma.renduBanc.findUnique({ where: { id: e.rendu_id }, select: { id: true, cas: true, variante: true, statut: true, moteur: true, qualite: true, score: true, defauts: true, coutDollars: true, dureeMs: true, promptTexte: true, directionArtistique: true, erreur: true, dossierId: true, photoId: true, termineLe: true } });
+  if (!r) throw new ErreurMetier("Rendu du banc introuvable.", 404);
+  const images: ImageOutil[] = [];
+  if (!e.sans_images) {
+    const rendu = r.statut === "PRET" ? await imagePourResultat((await imageRenduBanc(r.id).catch(() => null))?.contenu ?? null, `Rendu ${r.cas} / ${r.variante}`) : null;
+    if (rendu) images.push(rendu);
+    const d = await prisma.dossier.findUnique({ where: { id: r.dossierId }, select: { photos: true } });
+    const chemin = (await import("@/lib/dossiers/stockage")).lirePhotos(d?.photos ?? "[]").find((c) => idPhoto(c) === r.photoId);
+    const photo = chemin ? await imagePourResultat(await lireFichier(chemin), `Photo d'origine du cas ${r.cas}`) : null;
+    if (photo) images.push(photo);
+  }
+  return { texte: [`Banc — cas ${r.cas}, variante ${r.variante}, ${r.statut.toLowerCase()}${r.moteur ? `, moteur ${r.moteur}` : ""}${r.qualite ? `, qualité ${r.qualite}` : ""}${r.score !== null ? `, contrôle ${r.score}/100` : ""}${r.coutDollars !== null ? `, ${r.coutDollars.toFixed(3)} $` : ""}${r.erreur ? ` — erreur : ${r.erreur}` : ""}.`, r.promptTexte ? `Prompt :\n${r.promptTexte}` : "", r.directionArtistique ? `Direction artistique : ${r.directionArtistique}` : ""].filter(Boolean).join("\n"), images, donnees: r, liens: [lien("Banc", "/simulateur/banc")] };
+}
+
+/** M15 : une pièce jointe d'un mail — image montrée, PDF joint en entier. */
+async function voirPieceMail(e: EntreeVoir): Promise<ResultatOutil> {
+  if (!e.message_id || !e.piece) throw new ErreurMetier("Donne message_id et piece (« lire_mail » liste les pièces).", 400);
+  const { lirePieceMessage } = await import("@/lib/messages/consultation");
+  const p = await lirePieceMessage(e.message_id, e.piece);
+  const el: Element = { libelle: `Pièce « ${p.nom} » (${p.typeMime})`, octets: async () => p.contenu, typeMime: p.typeMime, lien: `/api/messages/${e.message_id}/pieces/${e.piece}`, cle: "piece" };
+  if (p.typeMime.startsWith("image/")) return rendreElements(`Pièce jointe du mail ${e.message_id} :`, [el], e, { nom: p.nom, typeMime: p.typeMime, octets: p.contenu.length }, [lien("Mail", "/mail")]);
+  return rendreElements(`Pièce jointe du mail ${e.message_id} :`, [el], { ...e, document_id: "piece" }, { nom: p.nom, typeMime: p.typeMime, octets: p.contenu.length }, [lien("Mail", "/mail")]);
+}
+
+/** L25 : les générations du site des N derniers jours encore en cours ou en échec, avec la raison. */
+async function texteTravauxSite(jours: number, maintenant: Date): Promise<{ texte: string; donnees: unknown }> {
+  const { travauxSiteRecents } = await import("@/lib/simulations/travaux-lecture");
+  const t = await travauxSiteRecents(jours, maintenant);
+  if (!t.lignes.length) return { texte: `Générations du site : aucune en cours ni en échec sur ${pluriel(jours, "jour")}.`, donnees: t };
+  return { texte: `Générations du site sur ${pluriel(jours, "jour")} : ${t.enCours} en cours, ${pluriel(t.enEchec, "en échec", "en échec")} :\n${t.lignes.map((l) => `- ${format.jourCourt(l.le)} ${l.projetLibelle} (${l.teintes}) — ${l.statut.toLowerCase()}${l.erreurRaison ? ` : ${l.erreurRaison}${l.erreurMessage ? ` (${l.erreurMessage})` : ""}` : ""}${l.prevenir ? ` — le visiteur veut être prévenu${l.notifie ? " (prévenu)" : ""}` : ""}`).join("\n")}`, donnees: t };
+}
+
 export const outilVoirFichiers = definirOutil({
   nom: "voir_fichiers",
   titre: "Voir les fichiers : photos, simulations, documents, À ranger, site",
   description:
-    "Rend les fichiers du CRM comme de vraies images (blocs image, compressées), les PDF en liste avec leur lien. genre photos (défaut) : les photos d'un dossier ou d'un lead avec date, origine et zone — 6 plus récentes, « nombre » (12 au plus), « decalage », « apres » (photos après chantier), « photo_id », « retirees » (photos retirées par le client ou par ranger_fichier, à remettre) ; à regarder AVANT de conseiller une teinte ou de préparer une simulation (ex-voir_photos). genre simulations : les simulations d'un dossier, après puis avant, teintes, statut, vue ou choisie par le client, contrôle — « nombre » (8 au plus), « simulation_id », « sans_avant », « avec_prompt » (ex-voir_simulations). genre documents : devis et factures (lien du PDF), documents déposés (plans, BAT, devis à compléter), justificatif d'une dépense, photos d'une réalisation, documents rattachés à un lead ou un client. genre a_ranger : les fichiers des dépôts libres, à classer avec « ranger_fichier ». genre site : les simulations faites sur coverswap.fr, anonymes ou rattachées — « jours », « rattachees », « lead_id », « nombre », « sans_images » (ex-simulations_site). Chaque fichier porte son identifiant entre crochets ([photo:…], [fichier:…]) pour « ranger_fichier ».",
+    "Rend les fichiers du CRM comme de vraies images (blocs image, compressées), les PDF en liste avec leur lien. genre photos (défaut) : les photos d'un dossier ou d'un lead avec date, origine et zone — 6 plus récentes, « nombre » (12 au plus), « decalage », « apres » (photos après chantier), « photo_id », « retirees » (photos retirées par le client ou par ranger_fichier, à remettre) ; à regarder AVANT de conseiller une teinte ou de préparer une simulation (ex-voir_photos). genre simulations : les simulations d'un dossier, après puis avant, teintes, statut, vue ou choisie par le client, contrôle — « nombre » (8 au plus), « simulation_id », « sans_avant », « avec_prompt » (ex-voir_simulations). genre documents : devis et factures (lien du PDF), documents déposés (plans, BAT, devis à compléter), justificatif d'une dépense, photos d'une réalisation, documents rattachés à un lead ou un client. genre a_ranger : les fichiers des dépôts libres, à classer avec « ranger_fichier ». genre site : les simulations faites sur coverswap.fr, anonymes ou rattachées — « jours », « rattachees », « lead_id », « nombre », « sans_images » (ex-simulations_site) — et les générations en cours ou en échec avec leur raison. genre documents avec document_id : le document entier joint (PDF d'un devis ou d'une facture, justificatif, document déposé, PDF d'une simulation du site, devis et factures de l'ancien CRM d'un lead). genre preparations : le simulateur d'un dossier (type suggéré, photos avant, préparations récentes) ou une préparation (preparation_id : état d'une génération par l'API, prompt, photo). genre banc : un rendu du banc (rendu_id : image, photo d'origine, prompt). genre piece_mail : une pièce jointe (message_id, piece). Chaque fichier porte son identifiant entre crochets ([photo:…], [fichier:…]) pour « ranger_fichier ».",
   niveau: "LECTURE",
   schema: schemaVoir,
   executer: async (e, contexte: ContexteOutil) => {
     const genre = e.genre ?? "photos";
-    if (genre === "site") return outilSimulationsSite.executer({ jours: e.jours, rattachees: e.rattachees, lead_id: e.lead_id ?? (e.cible?.entite === "LEAD" ? e.cible.id : undefined), nombre: e.nombre ? Math.min(e.nombre, 8) : undefined, sans_images: e.sans_images }, contexte);
+    if (genre === "site") {
+      const r = await outilSimulationsSite.executer({ jours: e.jours, rattachees: e.rattachees, lead_id: e.lead_id ?? (e.cible?.entite === "LEAD" ? e.cible.id : undefined), nombre: e.nombre ? Math.min(e.nombre, 8) : undefined, sans_images: e.sans_images }, contexte);
+      if (e.lead_id || e.cible) return r;
+      const travaux = await texteTravauxSite(e.jours ?? 7, contexte.maintenant);
+      return { ...r, texte: `${r.texte}\n${travaux.texte}`, donnees: { ...(r.donnees as object), travaux: travaux.donnees } };
+    }
+    if (genre === "preparations") return voirPreparations(e);
+    if (genre === "banc") return voirRenduBanc(e);
+    if (genre === "piece_mail") return voirPieceMail(e);
     if (genre === "a_ranger") return voirARanger(e);
     if (genre === "documents") return voirDocuments(e);
     if (genre === "simulations") return outilVoirSimulations.executer({ ...(await cibleAncienne(e.cible)), nombre: e.nombre ? Math.min(e.nombre, 8) : undefined, simulation_id: e.simulation_id, sans_avant: e.sans_avant, avec_prompt: e.avec_prompt }, contexte);

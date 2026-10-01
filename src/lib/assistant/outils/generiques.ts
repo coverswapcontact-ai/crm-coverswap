@@ -172,7 +172,7 @@ async function executerModifier(e: EntreeModifier, contexteOutil: ContexteOutil)
   if (ids.length === 0) return { texte: `Rien à changer sur ${plan.cible.nom} : les valeurs données sont déjà les siennes.`, donnees, liens: cheminDe(plan.definition, plan.cible) };
   const irreversibles = plan.generique ? Object.keys(plan.generique.modification.irreversibles ?? {}).filter((c) => plan.generique!.changements.some((x) => x.cle === c)) : [];
   return {
-    texte: [`Modifié sur ${plan.cible.nom} : ${lignes.join(" ; ")}.`, `Pour défaire : « annuler_modification » avec modification_id = ${ids.join(" puis ")}.${irreversibles.length ? ` (${irreversibles.map((c) => plan.generique!.modification.irreversibles![c]).join(" ")})` : ""}`].join("\n"),
+    texte: [`Modifié sur ${plan.cible.nom} : ${lignes.map((l) => l.replace(/\.$/, "")).join(" ; ")}.`, `Pour défaire : « annuler_modification » avec modification_id = ${ids.join(" puis ")}.${irreversibles.length ? ` (${irreversibles.map((c) => plan.generique!.modification.irreversibles![c]).join(" ")})` : ""}`].join("\n"),
     donnees: { ...donnees, modifications: ids },
     liens: cheminDe(plan.definition, plan.cible),
   };
@@ -263,7 +263,7 @@ function champsCreation(code: Entite): string[] {
 export const outilCreer = definirOutil({
   nom: "creer",
   titre: "Créer une entité",
-  description: `Crée UNE entité par la même fonction que l'écran (même schéma, mêmes contrôles : anti-doublon d'un lead ou d'un client, justificatif, registre). Sensible par cas (dossier créé à « Signé » ou au-delà, reprise, tarif, règle d'expéditeur) : aperçu, puis confirmation. Plusieurs contacts pour la cible → demande lequel. Entités (champs, en snake_case) :\n${ENTITES_CREABLES.map((code) => `- ${code}${REGISTRE_ENTITES[code].creer?.cible ? ` [cible ${REGISTRE_ENTITES[code].creer?.cible === "EXIGEE" ? "exigée" : "facultative"}]` : ""} : ${champsCreation(code).join(", ")}`).join("\n")}\nDEPENSE crée une NOUVELLE dépense (pour rattacher une dépense existante : « modifier » DEPENSE dossier_id). DOSSIER avec cible = un lead et aucun champ : l'ouverture qui reprend tout (ex-« ouvrir_dossier »). LEAD avec message_id : le lead d'un mail entrant. Photos, justificatifs, PDF : « ajouter_fichier » ensuite.`,
+  description: `Crée UNE entité par la même fonction que l'écran (même schéma, mêmes contrôles : anti-doublon d'un lead ou d'un client, justificatif, registre). Sensible par cas (dossier créé à « Signé » ou au-delà, reprise, tarif, règle d'expéditeur) : aperçu, puis confirmation. Plusieurs contacts pour la cible → demande lequel. Entités (champs, en snake_case) :\n${ENTITES_CREABLES.map((code) => `- ${code}${REGISTRE_ENTITES[code].creer?.cible ? ` [cible ${REGISTRE_ENTITES[code].creer?.cible === "EXIGEE" ? "exigée" : "facultative"}]` : ""} : ${champsCreation(code).join(", ")}`).join("\n")}\nDEPENSE crée une NOUVELLE dépense (pour rattacher une dépense existante : « modifier » DEPENSE dossier_id). DOSSIER avec cible = un lead et aucun champ : l'ouverture qui reprend tout (ex-« ouvrir_dossier »). LEAD avec message_id : le lead d'un mail entrant. DEPENSE justificatif : { url | base64 + nom | piece_mail | fichier_id | lien_depot } (forcer : enregistrer malgré un justificatif déjà vu). Photos et PDF : « ajouter_fichier » ensuite.`,
   niveau: "REVERSIBLE",
   schema: schemaCreer,
   sensible: async (e) => {

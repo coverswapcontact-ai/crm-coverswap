@@ -31,7 +31,6 @@ let simulations: typeof import("@/lib/simulations/dossier");
 let main: typeof import("@/lib/dossiers/main");
 let migration: typeof import("@/lib/base/migrations/mission-14-partie-6");
 let execution: typeof import("@/lib/assistant/execution");
-let outilsRelances: typeof import("@/lib/assistant/outils/relances");
 let NextRequest: typeof import("next/server").NextRequest;
 
 const JOUR = 86_400_000;
@@ -70,7 +69,7 @@ const dossierDe = (id: string) => prisma.dossier.findUniqueOrThrow({ where: { id
 const ligneEspace = async (dossierId: string) => (await suivi.listerEspaces()).find((l) => l.dossierId === dossierId)!;
 const texteVoirRelances = async () => {
   const session = await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" });
-  return (await execution.executerOutil(outilsRelances.outilVoirRelances as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, {}, session)).texte;
+  return (await execution.executerOutil((await import("@/lib/assistant/outils/lister")).outilLister as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, { liste: "RELANCES" }, session)).texte;
 };
 /** Copie le SMS proposé, tel quel (l'écran SMS envoie la relance rendue par la proposition). */
 const copier = (sms: import("@/lib/sms/catalogue").PropositionSms, dossierId: string, maintenant = new Date()) =>
@@ -94,7 +93,6 @@ before(async () => {
   main = await import("@/lib/dossiers/main");
   migration = await import("@/lib/base/migrations/mission-14-partie-6");
   execution = await import("@/lib/assistant/execution");
-  outilsRelances = await import("@/lib/assistant/outils/relances");
   NextRequest = (await import("next/server")).NextRequest;
   await (await import("@/lib/base/preparation")).preparerBase();
 });
@@ -253,7 +251,7 @@ describe("relance de devis : le SMS à copier (toujours), le mail s'il y a une a
     const tot = await dossierAvecDevis("Bouvier Tom", { email: null, jours: 2 });
     const espace = await contact("Solal", 4);
     const session = await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" });
-    const { texte } = await execution.executerOutil(outilsRelances.outilVoirRelances as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, {}, session);
+    const { texte } = await execution.executerOutil((await import("@/lib/assistant/outils/lister")).outilLister as unknown as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>, { liste: "RELANCES" }, session);
     assert.match(texte, new RegExp(`Bouvier Léna : devis ${pret.numero} .* — relance n° 1 proposable\\. SMS \\(RELANCE_DEVIS_1\\) : « Bonjour, c'est Lucas de CoverSwap\\. Avez-vous pu regarder votre devis \\?[^»]*»\\. Pas de mail : pas d'adresse e-mail, le SMS suffit \\[dossier:${pret.dossierId}\\]`));
     assert.match(texte, new RegExp(`Bouvier Tom : devis ${tot.numero} .* — prochaine relance proposable le \\d{2}/\\d{2}/\\d{4} \\(par SMS : pas d'adresse e-mail\\) \\[dossier:${tot.dossierId}\\]`));
     assert.match(texte, /relances? photos proposables? :/);

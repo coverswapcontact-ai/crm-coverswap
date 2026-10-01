@@ -143,7 +143,7 @@ export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: Simulatio
             {resume.lignes.map((ligne) => (
               <LigneSimulation key={ligne.id} ligne={ligne} maintenant={maintenant} onImage={indexImage.has(ligne.id) ? () => setImage(indexImage.get(ligne.id)!) : null} onLead={() => ligne.leadId && onOuvrirLead(ligne.leadId)} />
             ))}
-            {resume.total > resume.lignes.length ? <li className="px-3.5 py-2 text-[12px] text-[#6B7280]">… et {resume.total - resume.lignes.length} de plus (l&apos;assistant les lit toutes : « simulations_site »).</li> : null}
+            {resume.total > resume.lignes.length ? <li className="px-3.5 py-2 text-[12px] text-[#6B7280]">… et {resume.total - resume.lignes.length} de plus (l&apos;assistant les lit toutes : « voir_fichiers », genre site).</li> : null}
           </ul>
         )
       ) : null}

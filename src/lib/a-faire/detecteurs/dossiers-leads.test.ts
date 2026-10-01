@@ -334,8 +334,9 @@ describe("détecteurs DOSSIERS et LEADS", () => {
     assert.equal(affaire?.groupe, "DECIDER");
     assert.match(affaire?.action ?? "", /^Contacté, sans rappel daté/);
     // L'outil de Claude le dit aussi : pas d'appel, mais un contact écrit.
-    const { outilLeadsARappeler } = await import("@/lib/assistant/outils/lecture");
-    const outil = await outilLeadsARappeler.executer({ limite: 50 }, { sessionId: "essai", commande: null, utilisateur: "essai@local", maintenant: instant });
+    // Mission 17 (partie C) : l'ex-« leads_a_rappeler » est « lister » LEADS vue A_RAPPELER.
+    const { outilLister } = await import("@/lib/assistant/outils/lister");
+    const outil = await outilLister.executer({ liste: "LEADS", vue: "A_RAPPELER", par_page: 50 }, { sessionId: "essai", commande: null, utilisateur: "essai@local", maintenant: instant });
     assert.match(outil.texte, /- Nouveau Essai .*rappel sans date, aucun appel noté, contacté par écrit le mar\. 29 sept\. 14:00/);
 
     await passe(plus(instant, H));

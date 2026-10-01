@@ -1,0 +1,55 @@
+/**
+ * Mission 17 (partie C) : les 45 outils d'un seul geste retirés du catalogue, et l'outil qui fait la même chose
+ * (docs/MCP-COUVERTURE.md § 4.14). Lu par la section « Outils (mission 17, partie C) » des consignes (une version déjà
+ * en base qui cite un ancien nom reste juste), par le test qui vérifie qu'aucun outil retiré n'est exposé, et par le
+ * document de couverture. Aucune dépendance : ce module ne fait que nommer.
+ */
+export const OUTILS_RETIRES = {
+  leads_a_appeler: "lister LEADS (vue A_APPELER)",
+  leads_a_rappeler: "lister LEADS (vue A_RAPPELER)",
+  dossiers_par_etape: "lister DOSSIERS (etape)",
+  espaces_clients: "lister ESPACES",
+  mails_a_traiter: "lister MAILS (vue A_TRAITER)",
+  mails_non_classes: "lister MAILS (vue NON_CLASSES)",
+  messages_espace: "lister MESSAGES_ESPACE",
+  voir_relances: "lister RELANCES",
+  depenses: "lister DEPENSES",
+  tarifs: "lister TARIFS",
+  ce_qui_m_attend: "taches (vue TOUT)",
+  synthese: "analytique (synthese ; manager_… pour l'analyse)",
+  campagne: "analytique (onglet publicite)",
+  sante_systeme: "etat_crm SANTE",
+  voir_parametres: "etat_crm PARAMETRES / NUMEROTATION / SMS",
+  versions_consignes: "etat_crm CONSIGNES_VERSIONS",
+  lister_outils: "etat_crm OUTILS",
+  voir_publicite: "etat_crm META (chaîne des leads) + analytique (chiffres)",
+  voir_photos: "voir_fichiers (genre photos)",
+  voir_simulations: "voir_fichiers (genre simulations)",
+  simulations_site: "voir_fichiers (genre site)",
+  modifier_dossier: "modifier DOSSIER",
+  changer_teinte: "modifier DOSSIER (teinte)",
+  presenter_devis: "modifier DOCUMENT",
+  modifier_tarifs: "modifier SOUS_PARTIE",
+  modifier_parametres: "modifier PARAMETRE / COMPTEUR / AUTOMATISME / MODELE_SMS",
+  modifier_consignes: "modifier CONSIGNES / POSITIONNEMENT",
+  restaurer_consignes: "restaurer CONSIGNES / POSITIONNEMENT (numero)",
+  creer_contact: "creer LEAD",
+  ouvrir_dossier: "creer DOSSIER (lead_id)",
+  ajouter_note: "creer NOTE",
+  rattacher_depense: "creer DEPENSE (ou modifier DEPENSE pour la rattacher)",
+  ajouter_tache: "creer TACHE",
+  proposer_regle: "creer REGLE_EXPEDITEUR",
+  deposer_document: "ajouter_fichier (DOSSIER › DEVIS, FACTURE, AUTRE)",
+  publier_simulation: "publier (SIMULATION)",
+  masquer_simulation: "publier (SIMULATION, retirer)",
+  ranger_mail: "traiter_mail RANGER / DERANGER",
+  snoozer_mail: "traiter_mail SNOOZER",
+  rattacher_mail: "traiter_mail RATTACHER",
+  renouveler_lien: "geste_espace NOUVEAU_LIEN",
+  accorder_simulations: "geste_espace ACCORDER_SIMULATIONS",
+  marquer_messages_lus: "geste_espace MARQUER_LUS",
+  retirer_accord: "geste_espace RETIRER_ACCORD",
+  annuler_relance: "ignorer_proposition",
+} as const;
+
+export type OutilRetire = keyof typeof OUTILS_RETIRES;

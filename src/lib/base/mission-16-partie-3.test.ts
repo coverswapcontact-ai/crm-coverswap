@@ -263,7 +263,7 @@ describe("routes publiques", () => {
 
 describe("sante_systeme : les avis Google", () => {
   const outil = (definition: unknown) => definition as import("@/lib/assistant/definition").DefinitionOutil<Record<string, unknown>>;
-  const texte = async () => (await execution.executerOutil(outil(lecture.outilSanteSysteme), {}, await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" }))).texte;
+  const texte = async () => (await execution.executerOutil(outil((await import("@/lib/assistant/outils/etat")).outilEtatCrm), { partie: "SANTE" }, await execution.ouvrirSession({ jetonId: null, clientNom: "essai", utilisateur: "essai" }))).texte;
 
   test("sans clé ni lieu : « non connectés », avec le nom des variables", async () => {
     assert.equal(lecture.texteAvisGoogle({ connectes: false, note: null, nombre: null, luLe: null, erreur: null }), "Avis Google : non connectés (GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID).");

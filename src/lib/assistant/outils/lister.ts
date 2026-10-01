@@ -376,7 +376,7 @@ async function listerLesCreneaux(e: EntreeLister, contexte: Contexte): Promise<R
   const texte = [
     `Jours libres des 10 prochains jours ouvrés${c.agenda ? " (agenda Google lu)" : ` (agenda non lu : ${c.message ?? "raison inconnue"} — ce sont les jours ouvrés)`} : ${c.libres.map((j) => `${j.libelle} (${j.jour})`).join(", ") || "aucun"}.`,
     c.occupes.length ? `Occupés : ${c.occupes.map((j) => j.libelle).join(", ")}.` : "",
-    dossier ? `Dossier ${dossier.clientNom} : date posée ${dossier.dateChantier ?? "aucune"}, date souhaitée par le client ${dossier.dateSouhaitee ?? "aucune"}. Pour poser la date : « modifier_dossier » (date_chantier).` : "",
+    dossier ? `Dossier ${dossier.clientNom} : date posée ${dossier.dateChantier ?? "aucune"}, date souhaitée par le client ${dossier.dateSouhaitee ?? "aucune"}. Pour poser la date : « modifier » DOSSIER (date_chantier).` : "",
   ].filter(Boolean).join("\n");
   return { texte, donnees: { ...c, dossier }, liens: dossier ? [lien("Dossier", `/dossiers?dossier=${dossier.id}`)] : [] };
 }

@@ -265,7 +265,8 @@ function texteAssistant(code: "CONSIGNES" | "POSITIONNEMENT"): DefinitionEntite 
       },
       note: (apres, avant) => `${texteDiff(avant.texte as string, apres.texte as string)}\nUne version est gardée : l'ancienne se restaure.`,
       appliquer: async (_cible, valeurs, contexte) => {
-        await enregistrer(valeurs.texte as string, ACTEUR_ASSISTANT, contexte.commande);
+        const v = await enregistrer(valeurs.texte as string, ACTEUR_ASSISTANT, contexte.commande);
+        return [`${consignes ? "Consignes" : "Positionnement"} : version ${v.numero} enregistrée (lue dès la prochaine session ; « restaurer » avec numero pour revenir en arrière).`];
       },
     },
     restaurerVersion: async (_cible, numero, contexte) => {

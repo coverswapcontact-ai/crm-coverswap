@@ -15,7 +15,7 @@ export const outilDepenses = definirOutil({
   nom: "depenses",
   titre: "Les dépenses d'une période",
   description:
-    "Les dépenses payées sur une période (défaut : le mois en cours), avec le total, le détail par catégorie (matière, fournitures, sous-traitance, déplacement, outillage, publicité, logiciels, assurance, banque, formation, autre), et la part rattachée à un chantier, hors chantier, ou pas encore rattachée (à traiter : « rattacher_depense »). « categorie » pour une seule ; « rattachement » pour filtrer.",
+    "Les dépenses payées sur une période (défaut : le mois en cours), avec le total, le détail par catégorie (matière, fournitures, sous-traitance, déplacement, outillage, publicité, logiciels, assurance, banque, formation, autre), et la part rattachée à un chantier, hors chantier, ou pas encore rattachée (à traiter : « modifier » DEPENSE dossier_id). « categorie » pour une seule ; « rattachement » pour filtrer.",
   niveau: "LECTURE",
   schema: schemaPeriode.extend({
     categorie: z.enum(CODES_CATEGORIE).optional(),
@@ -50,4 +50,3 @@ export const outilDepenses = definirOutil({
   },
 });
 
-export const OUTILS_DEPENSES = [outilDepenses];

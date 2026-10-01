@@ -2,35 +2,32 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { noterAppel } from "@/lib/commercial/appels";
-import { noterRapidement } from "@/lib/commercial/appels";
 import { ISSUES_APPEL } from "@/lib/commercial/constantes";
 import { creerNoteAppel } from "@/lib/commercial/notes-appel";
 import { ETIQUETTES_APPEL } from "@/lib/commercial/notes-constantes";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { etatIa } from "@/lib/ia/modele";
-import { CATEGORIES_DEPENSE, MOYENS_DEPENSE } from "@/lib/depenses/constantes";
-import { creerDepense } from "@/lib/depenses/service";
 import { ETAPES, LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, UNITES, type EtapeDossier } from "@/lib/dossiers/constants";
 import { verifierMotifPerte } from "@/lib/dossiers/perte";
 import { jourParis } from "@/lib/dossiers/dates";
-import { ouvrirDossierDuLead } from "@/lib/dossiers/depuis-lead";
 import { genererDocument } from "@/lib/dossiers/documents";
 import { lireLignes } from "@/lib/dossiers/stockage";
-import { changerEtape } from "@/lib/dossiers/transitions";
-import { MOTIFS_ANNULATION, MOYENS_PAIEMENT } from "@/lib/encaissements/constantes";
-import { annulerEncaissement, enregistrerEncaissement } from "@/lib/encaissements/service";
-import { regenererLien } from "@/lib/espace/gestion";
-import { accorderSimulations } from "@/lib/espace/service";
+import { devisProposeDuDossier } from "@/lib/espace/devis-propose";
+import { analyser } from "@/lib/commun/api";
+import { LIBELLES_MOYEN, libelleMotif, MOTIFS_ANNULATION, MOTIFS_REJET, MOTIFS_SANS_ACOMPTE, MOYENS_PAIEMENT } from "@/lib/encaissements/constantes";
+import { schemaAnnulation, schemaEncaissement, schemaPaiement, schemaRejet, type EntreePaiement } from "@/lib/encaissements/schemas";
+import { annulerEncaissement, changerEtapeAvecPaiement, enregistrerEncaissement, rejeterEncaissement } from "@/lib/encaissements/service";
+import { schemaChangementEtape } from "@/lib/dossiers/transitions";
 import { envoyerDepuisLOnglet } from "@/lib/mail/detail";
-import { CODES_LIEN_MAIL, envoyerLienParMail, proposerLienParMail } from "@/lib/mail/lien-espace";
+import { apercuLienParMail, CODES_LIEN_MAIL, envoyerLienParMail, proposerLienParMail } from "@/lib/mail/lien-espace";
 import { redigerBrouillon } from "@/lib/mail/redaction";
 import { brouillonEnvoiDocument, envoyerDocumentParMail } from "@/lib/mail/service";
-import { changerStatutSimulation, listerSimulationsDossier, publierSimulations } from "@/lib/simulations/dossier";
 import { validerProposition } from "@/lib/validation/service";
 import { planifierAction } from "@/lib/agenda/planification";
+import { planifierDepuisMail } from "@/lib/agenda/depuis-mail";
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien } from "../definition";
-import { outilArchiver, outilRestaurer, outilSupprimer } from "./menage";
+import { outilSupprimer } from "./menage";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
 import { pluriel } from "@/lib/commun/format";
@@ -46,72 +43,93 @@ const ETAPES_SENSIBLES: EtapeDossier[] = ["SIGNE", "FACTURE", "ENCAISSE", "PERDU
 const ETAPES_FACTURABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"];
 
 const exigerDossier = (ids: { dossierId: string | null; nom: string }) => {
-  if (!ids.dossierId) throw new ErreurMetier(`${ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (outil « ouvrir_dossier »).`, 409);
+  if (!ids.dossierId) throw new ErreurMetier(`${ids.nom} n'a pas de dossier ouvert : ouvre-le d'abord (« creer » DOSSIER).`, 409);
   return ids.dossierId;
 };
 
-export const outilOuvrirDossier = definirOutil({
-  nom: "ouvrir_dossier",
-  titre: "Ouvrir un dossier depuis un lead",
-  description: "Ouvre le dossier d'un lead (coordonnées, projet, photos et simulations repris). Réversible : « archiver » le referme. Si le lead a déjà un dossier, rien n'est créé et l'outil le dit.",
-  niveau: "REVERSIBLE",
-  schema: schemaCible,
-  executer: async (cible) => {
-    const r = await cibler(cible, cible.leadId ? undefined : "LEAD");
-    if (r.ambigu) return r.ambigu;
-    if (!r.ids.leadId) throw new ErreurMetier("Ce contact n'est pas un lead : un dossier s'ouvre depuis un lead.", 400);
-    if (r.ids.dossierId) return { texte: `${r.ids.nom} a déjà un dossier ouvert.`, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`)] };
-    const ouverture = await ouvrirDossierDuLead(r.ids.leadId, { motif: "BOUTON" });
-    return { texte: `Dossier ${ouverture.cree ? "ouvert" : "retrouvé"} pour ${r.ids.nom}${ouverture.photosRangees ? `, ${pluriel(ouverture.photosRangees, "photo rangée", "photos rangées")}` : ""}${ouverture.simulationsRangees ? `, ${pluriel(ouverture.simulationsRangees, "simulation rangée", "simulations rangées")}` : ""}.`, donnees: { dossierId: ouverture.dossierId, cree: ouverture.cree }, liens: [lien("Ouvrir le dossier", `/dossiers?dossier=${ouverture.dossierId}`)] };
-  },
+/** Un paiement dicté (acompte, solde, encaissement), traduit en snake_case du schéma de l'écran (`schemaPaiement`). */
+export const schemaPaiementOutil = z.object({
+  montant: z.number().positive().max(1_000_000),
+  moyen: z.enum(MOYENS_PAIEMENT).optional().describe("VIREMENT, CHEQUE, ESPECES, CARTE, AUTRE."),
+  recu_le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("AAAA-MM-JJ, aujourd'hui par défaut."),
+  reference: z.string().max(120).optional(),
+  credite_le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Chèque déjà crédité : le jour du crédit."),
+  note: z.string().max(500).optional(),
 });
+type PaiementOutil = z.output<typeof schemaPaiementOutil>;
+
+/** Le paiement au format du service, validé par le même schéma que l'écran. */
+export function paiementDuService(p: PaiementOutil, maintenant: Date): EntreePaiement {
+  return analyser(schemaPaiement, { montant: p.montant, moyen: p.moyen ?? null, recuLe: p.recu_le ?? jourParis(maintenant), reference: p.reference ?? null, crediteLe: p.credite_le ?? null, note: p.note ?? null });
+}
+
+const paiementEnMots = (p: PaiementOutil, maintenant: Date) => `${format.euros(p.montant)}${p.moyen ? ` par ${LIBELLES_MOYEN[p.moyen].toLowerCase()}` : ""} reçu le ${format.jour(p.recu_le ?? jourParis(maintenant))}${p.reference ? ` (référence ${p.reference})` : ""}${p.credite_le ? `, crédité le ${format.jour(p.credite_le)}` : ""}`;
+
+const schemaChangerEtapeOutil = schemaCible.extend({
+  vers: z.enum(ETAPES).describe("L'étape visée."),
+  motif_perte: z.enum(MOTIFS_PERTE).optional().describe("Obligatoire pour « perdu »."),
+  commentaire: z.string().max(2000).optional().describe("Perdu : la précision (obligatoire pour AUTRE)."),
+  perte_concurrent: z.string().max(160).optional().describe("Perdu : « Remporté par » (le concurrent)."),
+  perte_montant_concurrent: z.number().min(0).max(10_000_000).optional().describe("Perdu : son prix, en euros."),
+  date_chantier: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("AAAA-MM-JJ, pour « planifié »."),
+  accord_confirme: z.boolean().optional().describe("Vrai si Lucas confirme que le bon pour accord a été donné hors espace (passage à « signé » sans accord en ligne)."),
+  devis_accepte_id: z.string().max(40).optional().describe("Signé : le devis accepté, quand le dossier en porte plusieurs (identifiant rendu par « lire_fiche »)."),
+  acompte: schemaPaiementOutil.optional().describe("Signé : l'acompte reçu, enregistré dans la même opération que la signature."),
+  sans_acompte: z.object({ motif: z.enum(MOTIFS_SANS_ACOMPTE.map((m) => m.code) as [string, ...string[]]), precision: z.string().max(300).optional() }).optional().describe(`Signé sans acompte : motif ${MOTIFS_SANS_ACOMPTE.map((m) => m.code).join(", ")} (+ precision pour AUTRE).`),
+  solde: schemaPaiementOutil.optional().describe("Encaissé : le paiement du solde, enregistré dans la même opération."),
+  survenu_le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Jour réel du passage, s'il a eu lieu avant aujourd'hui (AAAA-MM-JJ)."),
+});
+type EntreeChangerEtape = z.output<typeof schemaChangerEtapeOutil>;
+
+/** L'entrée de l'écran (`schemaChangementEtape`), validée par le même schéma. */
+function entreeChangementEtape(e: EntreeChangerEtape, maintenant: Date) {
+  return analyser(schemaChangementEtape, {
+    vers: e.vers,
+    ...(e.motif_perte ? { motifPerte: e.motif_perte } : {}),
+    ...(e.commentaire ? { perteCommentaire: e.commentaire } : {}),
+    ...(e.perte_concurrent ? { perteConcurrent: e.perte_concurrent } : {}),
+    ...(e.perte_montant_concurrent !== undefined ? { perteMontantConcurrent: e.perte_montant_concurrent } : {}),
+    ...(e.date_chantier ? { dateChantier: e.date_chantier } : {}),
+    ...(e.accord_confirme ? { confirmations: { BON_POUR_ACCORD: true } } : {}),
+    ...(e.devis_accepte_id ? { devisAccepteId: e.devis_accepte_id } : {}),
+    ...(e.acompte ? { acompte: paiementDuService(e.acompte, maintenant) } : {}),
+    ...(e.sans_acompte ? { sansAcompte: e.sans_acompte } : {}),
+    ...(e.solde ? { solde: paiementDuService(e.solde, maintenant) } : {}),
+    ...(e.survenu_le ? { survenuLe: e.survenu_le } : {}),
+  });
+}
 
 export const outilChangerEtape = definirOutil({
   nom: "changer_etape",
   titre: "Changer l'étape d'un dossier",
   description:
-    "Passe un dossier à une autre étape (qualification, simulation, devis envoyé, relance, signé, planifié, chantier, facturé, encaissé, perdu, en pause). Le CRM vérifie les conditions et refuse avec la raison (devis manquant, accord manquant…). Passer à « signé », « facturé », « encaissé » ou « perdu » demande une confirmation. « Perdu » exige un motif (motif_perte : PRIX = trop cher, CONCURRENT, SANS_REPONSE = plus de réponse, PROJET_ABANDONNE, HORS_ZONE, DELAI, AUTRE + commentaire) ; il remonte dans manager_commercial.",
+    "Passe un dossier à une autre étape (qualification, simulation, devis envoyé, relance, signé, planifié, chantier, facturé, encaissé, perdu, en pause), par la même fonction que la fenêtre de l'écran : le CRM vérifie les conditions et refuse avec la raison (devis manquant, accord manquant…). Signé : devis_accepte_id (plusieurs devis), acompte (reçu, enregistré dans la même opération) ou sans_acompte (motif), accord_confirme (bon pour accord hors espace). Encaissé : solde (le paiement, dans la même opération). Perdu : motif_perte obligatoire (PRIX, CONCURRENT, SANS_REPONSE, PROJET_ABANDONNE, HORS_ZONE, DELAI, AUTRE + commentaire), perte_concurrent et perte_montant_concurrent ; il remonte dans manager_commercial. survenu_le : jour réel d'un passage déjà fait. Signé, facturé, encaissé, perdu, ou tout passage avec un paiement : aperçu puis confirmation.",
   niveau: "REVERSIBLE",
-  sensible: (e) => ETAPES_SENSIBLES.includes(e.vers),
-  schema: schemaCible.extend({
-    vers: z.enum(ETAPES).describe("L'étape visée."),
-    motif_perte: z.enum(MOTIFS_PERTE).optional().describe("Obligatoire pour « perdu »."),
-    commentaire: z.string().max(500).optional(),
-    date_chantier: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("AAAA-MM-JJ, pour « planifié »."),
-    accord_confirme: z.boolean().optional().describe("Vrai si Lucas confirme que le bon pour accord a été donné hors espace (passage à « signé » sans accord en ligne)."),
-  }),
-  apercu: async (e) => {
+  sensible: (e) => ETAPES_SENSIBLES.includes(e.vers) || Boolean(e.acompte || e.solde),
+  schema: schemaChangerEtapeOutil,
+  apercu: async (e, contexte) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu.texte;
-    return `Je vais passer le dossier de ${r.ids.nom} à « ${LIBELLES_ETAPE[e.vers]} »${e.motif_perte ? ` (motif : ${e.motif_perte})` : ""}${e.date_chantier ? `, chantier le ${format.jour(e.date_chantier)}` : ""}.`;
+    const details = [
+      e.motif_perte ? `motif : ${LIBELLES_MOTIF_PERTE[e.motif_perte].toLowerCase()}${e.commentaire ? ` (${e.commentaire})` : ""}` : null,
+      e.perte_concurrent ? `remporté par ${e.perte_concurrent}${e.perte_montant_concurrent !== undefined ? ` à ${format.euros(e.perte_montant_concurrent)}` : ""}` : null,
+      e.date_chantier ? `chantier le ${format.jour(e.date_chantier)}` : null,
+      e.devis_accepte_id ? `devis accepté ${e.devis_accepte_id}` : null,
+      e.acompte ? `acompte de ${paiementEnMots(e.acompte, contexte.maintenant)}, enregistré avec la signature` : null,
+      e.sans_acompte ? `sans acompte (${libelleMotif(MOTIFS_SANS_ACOMPTE, e.sans_acompte.motif, e.sans_acompte.precision).toLowerCase()})` : null,
+      e.solde ? `solde de ${paiementEnMots(e.solde, contexte.maintenant)}, enregistré avec le passage ; le client reçoit le mail « paiement reçu »` : null,
+      e.survenu_le ? `passage daté du ${format.jour(e.survenu_le)}` : null,
+    ].filter(Boolean);
+    return `Je vais passer le dossier de ${r.ids.nom} à « ${LIBELLES_ETAPE[e.vers]} »${details.length ? ` : ${details.join(" ; ")}` : ""}.`;
   },
-  executer: async (e) => {
+  executer: async (e, contexte) => {
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu;
     const dossierId = exigerDossier(r.ids);
     if (e.vers === "PERDU" && !e.motif_perte) throw new ErreurMetier("« Perdu » exige un motif (motif_perte) : PRIX (trop cher), CONCURRENT, SANS_REPONSE (plus de réponse), PROJET_ABANDONNE, HORS_ZONE, DELAI, ou AUTRE avec un commentaire. Demande-le à Lucas.", 400);
-    const changement = await changerEtape(dossierId, {
-      vers: e.vers,
-      ...(e.motif_perte ? { motifPerte: e.motif_perte } : {}),
-      ...(e.commentaire ? { perteCommentaire: e.commentaire } : {}),
-      ...(e.date_chantier ? { dateChantier: e.date_chantier } : {}),
-      ...(e.accord_confirme ? { confirmations: { BON_POUR_ACCORD: true } } : {}),
-    } as Parameters<typeof changerEtape>[1]);
-    return { texte: `Dossier de ${r.ids.nom} passé de « ${LIBELLES_ETAPE[changement.de as EtapeDossier] ?? changement.de} » à « ${LIBELLES_ETAPE[e.vers]} ».`, donnees: changement, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
-  },
-});
-
-export const outilAjouterNote = definirOutil({
-  nom: "ajouter_note",
-  titre: "Ajouter une note",
-  description: "Écrit une note sur un dossier (ou sur le lead s'il n'a pas de dossier). Pour une note d'appel avec issue et étiquettes, utiliser « noter_appel ».",
-  niveau: "REVERSIBLE",
-  schema: schemaCible.extend({ texte: z.string().min(1).max(4000) }),
-  executer: async (e) => {
-    const r = await cibler(e);
-    if (r.ambigu) return r.ambigu;
-    const resultat = await noterRapidement(r.ids.dossierId ? { dossierId: r.ids.dossierId, contenu: e.texte } : { leadId: r.ids.leadId ?? undefined, contenu: e.texte });
-    return { texte: `Note ajoutée ${resultat.cible === "DOSSIER" ? "au dossier" : "à la fiche"} de ${r.ids.nom}.`, liens: [r.ids.dossierId ? lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`) : lien("Lead", `/leads?lead=${r.ids.leadId}`)] };
+    const changement = await changerEtapeAvecPaiement(dossierId, entreeChangementEtape(e, contexte.maintenant) as Parameters<typeof changerEtapeAvecPaiement>[1]);
+    const paiement = e.acompte ? ` Acompte de ${format.euros(e.acompte.montant)} enregistré.` : e.solde ? ` Solde de ${format.euros(e.solde.montant)} enregistré.` : "";
+    return { texte: `Dossier de ${r.ids.nom} passé de « ${LIBELLES_ETAPE[changement.de as EtapeDossier] ?? changement.de} » à « ${LIBELLES_ETAPE[e.vers]} ».${paiement}${changement.avertissements?.length ? ` ${changement.avertissements.join(" ")}` : ""}`, donnees: changement, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
   },
 });
 
@@ -161,19 +179,29 @@ export const outilNoterAppel = definirOutil({
 export const outilPlanifier = definirOutil({
   nom: "planifier",
   titre: "Planifier un rappel ou une action",
-  description: "Planifie un rappel (lead) ou la prochaine action d'un dossier à un moment donné (« jeudi 14h », « demain 10h30 », « 2026-09-25 14:00 »), et l'inscrit dans Google Calendar si le droit est accordé (sinon l'outil le dit : rien n'est perdu, l'action est dans le CRM). Réversible : replanifier remplace.",
+  description: "Planifie un rappel (lead) ou la prochaine action d'un dossier à un moment donné (« jeudi 14h », « demain 10h30 », « 2026-09-25 14:00 »), et l'inscrit dans Google Calendar si le droit est accordé (sinon l'outil le dit : rien n'est perdu, l'action est dans le CRM). message_id : depuis un mail (le bouton « Planifier » d'une date extraite) — l'action va sur le dossier du mail, sinon son lead. Réversible : replanifier remplace ; pour poser ou effacer la seule date de rappel d'un lead, sans agenda : « modifier » LEAD rappel_le.",
   niveau: "REVERSIBLE",
-  schema: schemaCible.extend({ action: z.string().min(1).max(200).describe("« Rappeler », « Passer prendre les mesures »…"), quand: z.string().min(1).max(60), duree_minutes: z.number().int().min(5).max(480).optional().describe("Durée d'une action de dossier (30 min à défaut) ; un rappel dure toujours 15 minutes.") }),
+  schema: schemaCible.extend({ action: z.string().min(1).max(200).describe("« Rappeler », « Passer prendre les mesures »…"), quand: z.string().min(1).max(60), duree_minutes: z.number().int().min(5).max(480).optional().describe("Durée d'une action de dossier (30 min à défaut) ; un rappel dure toujours 15 minutes."), message_id: z.string().max(40).optional().describe("Le mail d'où vient la date (rendu par « lire_mail ») : la cible est celle du mail.") }),
   executer: async (e, contexte) => {
-    const r = await cibler(e);
-    if (r.ambigu) return r.ambigu;
     const debut = lireDateDictee(e.quand, contexte.maintenant);
     if (!debut) throw new ErreurMetier(`Je n'ai pas compris « ${e.quand} » : donne un jour et une heure.`, 400);
-    const p = await planifierAction({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, nom: r.ids.nom, action: e.action, debut, dureeMinutes: e.duree_minutes, origine: contexte.commande ? `« ${contexte.commande} » (application Claude)` : "application Claude" });
+    const origine = contexte.commande ? `« ${contexte.commande} » (application Claude)` : "application Claude";
+    let p: Awaited<ReturnType<typeof planifierAction>>;
+    let ids: { dossierId: string | null; leadId: string | null };
+    if (e.message_id) {
+      const r = await planifierDepuisMail(e.message_id, { debut, action: e.action, dureeMinutes: e.duree_minutes, origine: `${origine}, date lue dans un mail` });
+      p = r;
+      ids = { dossierId: r.dossierId, leadId: r.leadId };
+    } else {
+      const r = await cibler(e);
+      if (r.ambigu) return r.ambigu;
+      p = await planifierAction({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, nom: r.ids.nom, action: e.action, debut, dureeMinutes: e.duree_minutes, origine });
+      ids = r.ids;
+    }
     return {
       texte: p.texte,
-      donnees: { debut: p.debut, fin: p.fin, agenda: p.agenda },
-      liens: [...(p.agenda?.lien ? [{ libelle: "Événement Google Calendar", href: p.agenda.lien }] : []), r.ids.dossierId ? lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`) : lien("Lead", `/leads?lead=${r.ids.leadId}`)],
+      donnees: { debut: p.debut, fin: p.fin, agenda: p.agenda, dossierId: ids.dossierId, leadId: ids.leadId },
+      liens: [...(p.agenda?.lien ? [{ libelle: "Événement Google Calendar", href: p.agenda.lien }] : []), ids.dossierId ? lien("Dossier", `/dossiers?dossier=${ids.dossierId}`) : lien("Lead", `/leads?lead=${ids.leadId}`)],
     };
   },
 });
@@ -188,7 +216,21 @@ const schemaLigne = z.object({
 
 type LignePrestation = { type: "PRESTATION"; designation: string; sousDesignation: string | undefined; quantite: number; unite: (typeof UNITES)[number]; prixUnitaire: number };
 type LigneDocument = LignePrestation | { type: "SECTION"; libelle: string };
-type EntreeGeneration = { type: "DEVIS" | "FACTURE"; objet: string; lignes?: z.output<typeof schemaLigne>[]; remise?: number; depuis_devis?: string; avenant_de?: string; remplace?: string };
+/** Une ligne de section (titre qui regroupe les prestations qui suivent, comme dans le générateur de l'écran). */
+const schemaSection = z.object({ section: z.string().trim().min(1).max(200).describe("Titre de section (« Cuisine », « Salle de bain »).") });
+const schemaLigneOuSection = z.union([schemaSection, schemaLigne]);
+type LigneDictee = z.output<typeof schemaLigneOuSection>;
+type EntreeGeneration = { type: "DEVIS" | "FACTURE"; objet: string; lignes?: LigneDictee[]; remise?: number; depuis_devis?: string; avenant_de?: string; remplace?: string; depuis_espace?: boolean };
+
+/** Les lignes préremplies d'après l'espace du client (`devisProposeDuDossier`, comme le bouton DEVIS de l'écran). */
+async function lignesDeLEspace(dossierId: string): Promise<{ lignes: LigneDocument[]; resume: string }> {
+  const propose = await devisProposeDuDossier(dossierId);
+  if (!propose) throw new ErreurMetier("L'espace du client ne dit encore rien à chiffrer (aucune prestation cochée, aucune simulation validée) : dicte les lignes.", 409);
+  const aSaisir = propose.lignes.filter((l) => l.quantite === null || l.prixUnitaire === null);
+  const enMots = propose.lignes.map((l) => `${l.designation}${l.sousDesignation ? ` (${l.sousDesignation})` : ""} : ${l.quantite ?? "quantité à saisir"} ${l.unite} × ${l.prixUnitaire === null ? "prix à saisir" : format.euros(l.prixUnitaire)}`).join(" ; ");
+  if (aSaisir.length) throw new ErreurMetier(`${propose.resume} Lignes préremplies : ${enMots}. ${pluriel(aSaisir.length, "ligne n'a pas", "lignes n'ont pas")} sa quantité ou son prix : demande-les à Lucas, puis redonne toutes les lignes dans « lignes » (sans depuis_espace).`, 409);
+  return { lignes: propose.lignes.map((l) => ({ type: "PRESTATION" as const, designation: l.designation, sousDesignation: l.sousDesignation || undefined, quantite: l.quantite!, unite: l.unite, prixUnitaire: l.prixUnitaire! })), resume: propose.resume };
+}
 
 /**
  * Mission 11 : les lignes du document à émettre — celles dictées, ou celles du devis
@@ -210,10 +252,11 @@ async function composerGeneration(dossierId: string, e: EntreeGeneration): Promi
     if (d.statut === "ACCEPTE") throw new ErreurMetier(`Le devis ${d.numero} est accepté : il ne se remplace pas (retirer l'accord d'abord).`, 409);
     remplace = { id: d.id, numero: d.numero };
   }
-  const dictees: LigneDocument[] = (e.lignes ?? []).map((l) => ({ type: "PRESTATION" as const, designation: l.designation, sousDesignation: l.sous_designation, quantite: l.quantite, unite: l.unite, prixUnitaire: l.prix_unitaire }));
-  const lignes: LigneDocument[] = dictees.length ? dictees : origine ? origine.lignes.map((l) => (l.type === "PRESTATION" ? { ...l, sousDesignation: l.sousDesignation ?? undefined } : l)) : [];
+  const dictees: LigneDocument[] = (e.lignes ?? []).map((l) => ("section" in l ? { type: "SECTION" as const, libelle: l.section } : { type: "PRESTATION" as const, designation: l.designation, sousDesignation: l.sous_designation, quantite: l.quantite, unite: l.unite, prixUnitaire: l.prix_unitaire }));
+  const deLEspace = !dictees.length && !origine && e.depuis_espace ? (await lignesDeLEspace(dossierId)).lignes : [];
+  const lignes: LigneDocument[] = dictees.length ? dictees : origine ? origine.lignes.map((l) => (l.type === "PRESTATION" ? { ...l, sousDesignation: l.sousDesignation ?? undefined } : l)) : deLEspace;
   if (e.remise && e.remise > 0) lignes.push({ type: "PRESTATION", designation: "Remise commerciale", sousDesignation: undefined, quantite: 1, unite: "forfait", prixUnitaire: -e.remise });
-  if (!lignes.some((l) => l.type === "PRESTATION")) throw new ErreurMetier("Aucune ligne : donne les lignes, ou depuis_devis / avenant_de pour reprendre celles d'un devis.", 400);
+  if (!lignes.some((l) => l.type === "PRESTATION")) throw new ErreurMetier("Aucune ligne : donne les lignes, depuis_devis / avenant_de pour reprendre celles d'un devis, ou depuis_espace pour les lignes préremplies d'après l'espace du client.", 400);
   const type = e.depuis_devis ? "FACTURE" : e.type;
   const objet = e.avenant_de && origine ? `Avenant au devis ${origine.numero} — ${e.objet || origine.objet}`.slice(0, 160) : e.objet || origine?.objet || "";
   if (!objet) throw new ErreurMetier("L'objet du document manque.", 400);
@@ -227,12 +270,13 @@ export const outilGenererDocument = definirOutil({
   nom: "generer_document",
   titre: "Générer un devis ou une facture",
   description:
-    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire ; une ligne « Remise … » peut avoir un prix négatif, ou donne « remise » en euros), sur un dossier existant. Un dossier porte autant de devis que nécessaire : un nouveau devis S'AJOUTE aux devis proposés (libelle_variante : « façades seules », « façades + plan de travail » ; le client en choisira un dans son espace) — il ne remplace un devis existant que si « remplace » (identifiant) le dit. notifier: false évite le mail automatique « votre devis est disponible » (vrai par défaut). depuis_devis (identifiant) fait la facture à partir des lignes du devis (lignes facultatives) ; avenant_de (identifiant) émet un avenant (objet préfixé, lignes du devis reprises ou dictées). Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier. Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
+    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire ; lignes de section pour regrouper ; une ligne « Remise … » peut avoir un prix négatif, ou donne « remise » en euros), sur un dossier existant. depuis_espace: true préremplit les lignes d'après l'espace du client (le bouton DEVIS des tâches) : l'aperçu les montre avant tout. Un dossier porte autant de devis que nécessaire : un nouveau devis S'AJOUTE aux devis proposés (libelle_variante : « façades seules », « façades + plan de travail » ; le client en choisira un dans son espace) — il ne remplace un devis existant que si « remplace » (identifiant) le dit. notifier: false évite le mail automatique « votre devis est disponible » (vrai par défaut). depuis_devis (identifiant) fait la facture à partir des lignes du devis (lignes facultatives) ; avenant_de (identifiant) émet un avenant (objet préfixé, lignes du devis reprises ou dictées). Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier. Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
   niveau: "SENSIBLE",
   schema: schemaCible.extend({
     type: z.enum(["DEVIS", "FACTURE"]),
     objet: z.string().max(160).optional().describe("Obligatoire, sauf depuis_devis / avenant_de (repris du devis)."),
-    lignes: z.array(schemaLigne).max(40).optional().describe("Obligatoires, sauf depuis_devis / avenant_de (les lignes du devis sont reprises)."),
+    lignes: z.array(schemaLigneOuSection).max(60).optional().describe("Les lignes, dans l'ordre : prestation { designation, sous_designation, quantite, unite, prix_unitaire } ou section { section } (titre qui regroupe les suivantes). Obligatoires, sauf depuis_devis / avenant_de / depuis_espace."),
+    depuis_espace: z.boolean().optional().describe("Devis prérempli d'après l'espace du client (prestations cochées, teintes de la simulation validée, métré donné, tarifs du CRM) : l'aperçu montre les lignes ; une quantité ou un prix manquant est demandé à Lucas."),
     acompte_pct: z.number().int().min(0).max(100).optional().describe("Devis : pourcentage d'acompte (30 par défaut)."),
     note_ml: z.boolean().optional().describe("Mention « mètre linéaire » sur le document (vrai par défaut)."),
     libelle_variante: z.string().trim().max(80).optional().describe("Devis : le libellé de la variante, visible par le client (« façades seules »)."),
@@ -246,7 +290,7 @@ export const outilGenererDocument = definirOutil({
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu.texte;
     const dossierId = exigerDossier(r.ids);
-    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace });
+    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace, depuis_espace: e.depuis_espace });
     const proposes = c.type === "DEVIS" && !c.remplace ? await prisma.document.findMany({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { numero: true, libelleVariante: true } }) : [];
     return `Je vais émettre ${c.type === "DEVIS" ? "un devis" : "une facture"} « ${c.objet} »${e.libelle_variante ? ` (variante « ${e.libelle_variante} »)` : ""} pour ${r.ids.nom} : ${c.lignes.map(ligneEnMots).join(" ; ")} — total ${format.euros(totalDe(c.lignes))}${c.type === "DEVIS" ? `, acompte ${e.acompte_pct ?? 30} %` : ""}.${c.remplace ? ` Il remplace le devis ${c.remplace.numero} (qui passe « Remplacé »).` : ""}${c.origine ? ` ${e.depuis_devis ? "Fait d'après" : "Avenant au"} devis ${c.origine.numero}.` : ""}${proposes.length ? ` Il s'ajoute ${proposes.length > 1 ? `aux ${proposes.length} devis déjà proposés` : `au devis ${proposes[0].numero} déjà proposé`} : le client en choisira un.` : ""} Le document sera numéroté et figé${c.type === "DEVIS" ? (e.notifier === false ? " ; aucun mail ne partira (notifier: false)" : ", et le client recevra le mail « votre devis est disponible » s'il a une adresse") : ""}.`;
   },
@@ -254,7 +298,7 @@ export const outilGenererDocument = definirOutil({
     const r = await cibler(e, "DOSSIER");
     if (r.ambigu) return r.ambigu;
     const dossierId = exigerDossier(r.ids);
-    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace });
+    const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace, depuis_espace: e.depuis_espace });
     if (c.type === "FACTURE") {
       const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId }, select: { etape: true } });
       if (!ETAPES_FACTURABLES.includes(dossier.etape as EtapeDossier)) throw new ErreurMetier(`Une facture ne se génère que sur un dossier signé ; celui de ${r.ids.nom} est à « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier] ?? dossier.etape} ».`, 409);
@@ -300,168 +344,116 @@ export const outilEnvoyerDocument = definirOutil({
   },
 });
 
-export const outilPublierSimulation = definirOutil({
-  nom: "publier_simulation",
-  titre: "Publier des simulations dans l'espace du client",
-  description: "Publie les simulations EN BROUILLON d'un dossier (toutes, ou celles données) dans l'espace du client, qui reçoit le mail automatique « votre simulation est prête ». Une simulation masquée n'est jamais republiée ici (« publier » avec reafficher). Sensible : aperçu puis confirmation. « masquer_simulation » fait l'inverse.",
-  niveau: "SENSIBLE",
-  schema: schemaCible.extend({ simulationIds: z.array(z.string().max(40)).max(20).optional() }),
-  apercu: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu.texte;
-    const { simulations } = await listerSimulationsDossier(exigerDossier(r.ids));
-    const cibles = simulations.filter((s) => s.statut === "BROUILLON" && (!e.simulationIds || e.simulationIds.includes(s.id)));
-    return cibles.length ? `Je vais publier ${pluriel(cibles.length, "simulation")} pour ${r.ids.nom} (${cibles.map((s) => s.titre ?? s.id).join(", ")}) ; le client recevra le mail « votre simulation est prête ».` : `Aucune simulation à publier pour ${r.ids.nom}.`;
-  },
-  executer: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu;
-    const dossierId = exigerDossier(r.ids);
-    const { simulations } = await listerSimulationsDossier(dossierId);
-    const ids = simulations.filter((s) => s.statut === "BROUILLON" && (!e.simulationIds || e.simulationIds.includes(s.id))).map((s) => s.id);
-    if (ids.length === 0) return { texte: `Aucune simulation à publier pour ${r.ids.nom}.` };
-    const resultat = await publierSimulations(dossierId, ids, { prevenir: false });
-    return { texte: `${pluriel(resultat.publiees, "simulation publiée", "simulations publiées")} pour ${r.ids.nom}. ${resultat.mail?.programme ? "Le mail « votre simulation est prête » part." : `Pas de mail : ${resultat.mail?.raison ?? "rien de nouveau"}.`}`, donnees: resultat, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
-  },
-});
-
-export const outilMasquerSimulation = definirOutil({
-  nom: "masquer_simulation",
-  titre: "Masquer une simulation",
-  description: "Retire une simulation de la vue du client (elle reste dans le dossier). Réversible par « publier_simulation ».",
-  niveau: "REVERSIBLE",
-  schema: z.object({ dossierId: z.string().max(40), simulationId: z.string().max(40) }),
-  executer: async (e) => {
-    await changerStatutSimulation(e.dossierId, e.simulationId, "masquer");
-    return { texte: "Simulation masquée : le client ne la voit plus.", liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
-  },
-});
+/**
+ * Le code par défaut, comme l'écran : LIEN_ESPACE tant que le projet en est aux photos (rien dans l'espace), sinon
+ * LIEN_ESPACE_RAPPEL (projet, simulations, devis ou accord déjà là).
+ */
+export async function codeLienParDefaut(dossierId: string | null): Promise<(typeof CODES_LIEN_MAIL)[number]> {
+  if (!dossierId) return "LIEN_ESPACE";
+  const espace = await prisma.espaceClient.findUnique({ where: { dossierId }, select: { souhaits: true, choix: true, _count: { select: { simulations: true } } } });
+  if (!espace) return "LIEN_ESPACE";
+  const devis = await prisma.document.count({ where: { dossierId, type: "DEVIS", archiveLe: null, visibleEspace: true, numero: { not: null } } });
+  return espace.souhaits || espace.choix || espace._count.simulations > 0 || devis > 0 ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE";
+}
 
 export const outilEnvoyerLienEspace = definirOutil({
   nom: "envoyer_lien_espace",
   titre: "Envoyer le lien de l'espace client par mail",
-  description: "Ouvre l'espace du client s'il ne l'est pas (et son dossier) et lui envoie par mail le lien, avec la phrase adaptée : LIEN_ESPACE (après un appel intéressé : déposer les photos), INJOIGNABLE_LIEN (« j'ai essayé de vous joindre »), LIEN_ESPACE_RAPPEL (renvoyer le lien d'un projet en cours). Sensible : aperçu puis confirmation.",
+  description: "Ouvre l'espace du client s'il ne l'est pas (et son dossier) et lui envoie par mail le lien, avec la phrase adaptée : LIEN_ESPACE (déposer les photos), INJOIGNABLE_LIEN (« j'ai essayé de vous joindre »), LIEN_ESPACE_RAPPEL (renvoyer le lien d'un projet en cours). Sans code : LIEN_ESPACE tant que l'espace est vide, sinon LIEN_ESPACE_RAPPEL (la règle de l'écran). a, objet et phrase remplacent ceux proposés. Sensible : aperçu puis confirmation.",
   niveau: "SENSIBLE",
-  schema: schemaCible.extend({ code: z.enum(CODES_LIEN_MAIL).optional(), phrase: z.string().max(600).optional().describe("Remplace la phrase proposée."), a: z.email().optional() }),
+  schema: schemaCible.extend({ code: z.enum(CODES_LIEN_MAIL).optional(), objet: z.string().trim().min(2).max(150).optional().describe("Remplace l'objet proposé."), phrase: z.string().trim().min(10).max(600).optional().describe("Remplace la phrase proposée."), a: z.email().optional() }),
   apercu: async (e) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu.texte;
-    const p = await proposerLienParMail({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, code: e.code ?? "LIEN_ESPACE" });
-    return `Je vais envoyer à ${e.a ?? p.a ?? "(adresse manquante)"} le mail « ${p.objet} » : « Bonjour${p.prenom ? ` ${p.prenom}` : ""}, ${e.phrase ?? p.phrase} » avec le bouton « ${p.bouton} » vers son espace.`;
+    const p = await apercuLienParMail({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, code: e.code ?? (await codeLienParDefaut(r.ids.dossierId)) });
+    return `${p.dossierId ? "" : "J'ouvrirai son dossier et son espace, puis j"}${p.dossierId ? "Je" : "e"} vais envoyer à ${e.a ?? p.a ?? "(adresse manquante)"} le mail « ${e.objet ?? p.objet} » (${p.code}) : « Bonjour${p.prenom ? ` ${p.prenom}` : ""}, ${e.phrase ?? p.phrase} » avec le bouton « ${p.bouton} » vers son espace.`;
   },
   executer: async (e) => {
     const r = await cibler(e);
     if (r.ambigu) return r.ambigu;
-    const p = await proposerLienParMail({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, code: e.code ?? "LIEN_ESPACE" });
+    const p = await proposerLienParMail({ dossierId: r.ids.dossierId, leadId: r.ids.leadId, code: e.code ?? (await codeLienParDefaut(r.ids.dossierId)) });
     const a = e.a ?? p.a;
     if (!a) throw new ErreurMetier("Aucune adresse e-mail pour ce contact : indique-la (paramètre « a »).", 409);
-    const envoi = await envoyerLienParMail({ dossierId: p.dossierId, code: p.code, a, objet: p.objet, phrase: e.phrase ?? p.phrase, jeton: randomBytes(6).toString("hex") });
-    return { texte: `Mail avec le lien de l'espace ${envoi.deja ? "déjà parti" : "envoyé"} à ${a} (${r.ids.nom}).`, donnees: { dossierId: p.dossierId, envoiId: envoi.envoiId }, liens: [lien("Dossier", `/dossiers?dossier=${p.dossierId}`)] };
+    const envoi = await envoyerLienParMail({ dossierId: p.dossierId, code: p.code, a, objet: e.objet ?? p.objet, phrase: e.phrase ?? p.phrase, jeton: randomBytes(6).toString("hex") });
+    return { texte: `Mail avec le lien de l'espace ${envoi.deja ? "déjà parti" : "envoyé"} à ${a} (${r.ids.nom}, ${p.code}).`, donnees: { dossierId: p.dossierId, envoiId: envoi.envoiId, code: p.code }, liens: [lien("Dossier", `/dossiers?dossier=${p.dossierId}`)] };
   },
 });
 
-export const outilRenouvelerLien = definirOutil({
-  nom: "renouveler_lien",
-  titre: "Renouveler le lien de l'espace d'un client",
-  description: "Émet un nouveau lien (l'ancien cesse de fonctionner, pour tous ses projets) et l'envoie par mail au client. Sensible : aperçu puis confirmation.",
-  niveau: "SENSIBLE",
-  schema: schemaCible.extend({ envoyer_par_mail: z.boolean().optional().describe("Vrai par défaut.") }),
-  apercu: async (e) => {
-    const r = await cibler(e);
-    if (r.ambigu) return r.ambigu.texte;
-    return `Je vais émettre un nouveau lien d'espace pour ${r.ids.nom} (l'ancien ne fonctionnera plus)${e.envoyer_par_mail === false ? "" : " et le lui envoyer par mail"}.`;
-  },
-  executer: async (e) => {
-    const r = await cibler(e);
-    if (r.ambigu) return r.ambigu;
-    if (!r.ids.clientId) throw new ErreurMetier("Ce contact n'a pas de fiche client, donc pas d'espace permanent.", 409);
-    const permanent = await prisma.espacePermanent.findUnique({ where: { clientId: r.ids.clientId }, select: { id: true } });
-    if (!permanent) throw new ErreurMetier(`${r.ids.nom} n'a pas encore d'espace : « envoyer_lien_espace » l'ouvre.`, 409);
-    const resultat = await regenererLien(permanent.id, { mail: e.envoyer_par_mail !== false });
-    return { texte: `Nouveau lien émis pour ${r.ids.nom}${resultat.mail ? ", mail envoyé" : ""}. L'ancien ne fonctionne plus.`, donnees: { lien: resultat.lien, mail: resultat.mail }, liens: [lien("Espaces clients", "/espaces")] };
-  },
-});
+/** La pièce réglée, dite par son numéro (« F-2026-012 », « 2026-038 ») ou l'identifiant du registre : la ligne du registre. */
+async function pieceDuRegistre(piece: string): Promise<{ id: string; numero: string; type: string; documentId: string | null }> {
+  const brut = piece.trim();
+  const ligne = (await prisma.numeroDocument.findUnique({ where: { id: brut }, select: { id: true, numero: true, type: true, documentId: true } })) ?? (await prisma.numeroDocument.findFirst({ where: { numero: brut }, orderBy: { createdAt: "desc" }, select: { id: true, numero: true, type: true, documentId: true } }));
+  if (!ligne) throw new ErreurMetier(`Pièce « ${piece} » introuvable au registre : donne le numéro tel qu'imprimé (« lister » ENCOURS ou « etat_crm » NUMEROTATION).`, 404);
+  return ligne;
+}
 
 export const outilSaisirEncaissement = definirOutil({
   nom: "saisir_encaissement",
   titre: "Saisir un encaissement",
-  description: "Enregistre un paiement reçu sur un dossier (montant, moyen, date de réception, référence), imputé sur ses factures ; le dossier suit (acompte reçu, soldé). Le client reçoit le mail automatique « paiement reçu ». Sensible : aperçu puis confirmation. Une facture acquittée exige cet encaissement.",
+  description:
+    "Enregistre un paiement reçu (montant, moyen, date de réception, référence, date de crédit d'un chèque, note), par la même fonction que l'écran. piece = le numéro du devis (acompte) ou de la facture réglée ; sans pièce, imputation automatique sur les pièces du dossier. Une facture hors CRM (sans dossier) se règle avec piece seule. payeur : le nom du payeur s'il n'est pas le client. Le dossier suit (acompte reçu, soldé) ; le client reçoit le mail « paiement reçu ». Pour signer ou passer « encaissé » avec le paiement dans la même opération : « changer_etape » (acompte, solde). Sensible : aperçu puis confirmation.",
   niveau: "SENSIBLE",
-  schema: schemaCible.extend({ montant: z.number().positive(), moyen: z.enum(MOYENS_PAIEMENT).optional(), recu_le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("AAAA-MM-JJ, aujourd'hui par défaut."), reference: z.string().max(120).optional(), note: z.string().max(500).optional() }),
+  schema: schemaCible.partial().extend({
+    ...schemaPaiementOutil.shape,
+    piece: z.string().max(40).optional().describe("Numéro du devis ou de la facture réglé (ou identifiant du registre)."),
+    payeur: z.string().max(160).optional().describe("Nom du payeur, s'il n'est pas le client."),
+  }),
   apercu: async (e, contexte) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu.texte;
-    return `Je vais enregistrer un encaissement de ${format.euros(e.montant)}${e.moyen ? ` par ${e.moyen.toLowerCase()}` : ""} reçu le ${format.jour(e.recu_le ?? jourParis(contexte.maintenant))} sur le dossier de ${r.ids.nom}${e.reference ? ` (référence ${e.reference})` : ""}.`;
+    const piece = e.piece ? await pieceDuRegistre(e.piece) : null;
+    let nom = "";
+    if (e.dossierId || e.clientId || e.leadId || e.nom) {
+      const r = await cibler({ dossierId: e.dossierId, clientId: e.clientId, leadId: e.leadId, nom: e.nom }, "DOSSIER");
+      if (r.ambigu) return r.ambigu.texte;
+      nom = r.ids.nom;
+    }
+    return `Je vais enregistrer un encaissement de ${paiementEnMots(e, contexte.maintenant)}${nom ? ` sur le dossier de ${nom}` : ""}${piece ? `, imputé sur ${piece.type === "DEVIS" ? "le devis" : "la facture"} ${piece.numero}` : ", imputé automatiquement"}${e.payeur ? `, payé par ${e.payeur}` : ""}. Le client recevra le mail « paiement reçu ».`;
   },
-  executer: async (e, contexte) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu;
-    const dossierId = exigerDossier(r.ids);
-    const resultat = (await enregistrerEncaissement({ paiement: { montant: e.montant, moyen: e.moyen ?? null, recuLe: e.recu_le ?? jourParis(contexte.maintenant), reference: e.reference ?? null, note: e.note ?? null }, dossierId })) as { encaissement?: { id: string } } | unknown;
-    const id = (resultat as { encaissement?: { id: string } })?.encaissement?.id ?? null;
-    return { texte: `Encaissement de ${format.euros(e.montant)} enregistré sur le dossier de ${r.ids.nom}.`, donnees: { encaissementId: id, dossierId }, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
-  },
-});
-
-export const outilAnnulerEncaissement = definirOutil({
-  nom: "annuler_encaissement",
-  titre: "Annuler un encaissement",
-  description: "Annule un encaissement saisi par erreur (motif : ERREUR_MONTANT, ERREUR_DATE, ERREUR_PIECE, DOUBLON, AUTRE). L'encaissement reste dans l'historique, marqué annulé. Sensible : aperçu puis confirmation.",
-  niveau: "SENSIBLE",
-  schema: z.object({ encaissementId: z.string().max(40), motif: z.enum(MOTIFS_ANNULATION.map((m) => m.code) as [string, ...string[]]), precision: z.string().max(300).optional() }),
-  apercu: async (e) => {
-    const enc = await prisma.encaissement.findUnique({ where: { id: e.encaissementId }, select: { montant: true, payeur: true, recuLe: true, statut: true } });
-    if (!enc) return "Encaissement introuvable.";
-    return `Je vais annuler l'encaissement de ${format.euros(enc.montant)} (${enc.payeur}, reçu le ${format.jour(enc.recuLe)}) pour le motif ${e.motif}.`;
-  },
-  executer: async (e) => {
-    const message = await annulerEncaissement(e.encaissementId, { motif: e.motif, precision: e.precision });
-    return { texte: message ? `Encaissement annulé. ${message}` : "Encaissement annulé.", liens: [lien("Finances", "/finances")] };
-  },
-});
-
-export const outilRattacherDepense = definirOutil({
-  nom: "rattacher_depense",
-  titre: "Rattacher une dépense",
-  description: "Enregistre une dépense (montant, fournisseur, catégorie : MATIERE, FOURNITURES, SOUS_TRAITANCE, DEPLACEMENT, OUTILLAGE, PUBLICITE, LOGICIELS, ASSURANCE, BANQUE, FORMATION, AUTRE), rattachée à un chantier ou hors chantier. Réversible (archivable dans Dépenses).",
-  niveau: "REVERSIBLE",
-  schema: schemaCible.partial().extend({ montant: z.number().positive(), fournisseur: z.string().min(1).max(120), categorie: z.enum(CATEGORIES_DEPENSE.map((c) => c.code) as [string, ...string[]]), payee_le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), libelle: z.string().max(200).optional(), moyen: z.enum(MOYENS_DEPENSE).optional(), hors_chantier: z.boolean().optional() }),
   executer: async (e, contexte) => {
     let dossierId: string | null = null;
     let nom: string | null = null;
     if (e.dossierId || e.clientId || e.leadId || e.nom) {
       const r = await cibler({ dossierId: e.dossierId, clientId: e.clientId, leadId: e.leadId, nom: e.nom }, "DOSSIER");
       if (r.ambigu) return r.ambigu;
-      dossierId = r.ids.dossierId;
+      dossierId = exigerDossier(r.ids);
       nom = r.ids.nom;
     }
-    const { depense, dejaRecue } = await creerDepense({ payeeLe: e.payee_le ?? jourParis(contexte.maintenant), montant: e.montant, fournisseur: e.fournisseur, categorie: e.categorie as (typeof CATEGORIES_DEPENSE)[number]["code"], libelle: e.libelle ?? null, moyen: e.moyen ?? null, dossierId, horsChantier: e.hors_chantier ?? !dossierId, note: null }, null);
-    return { texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${format.euros(depense.montant)} chez ${depense.fournisseur} (${depense.categorie})${nom ? `, rattachée au chantier de ${nom}` : ", hors chantier"}.`, donnees: { depenseId: depense.id }, liens: [lien("Dépenses", "/depenses")] };
+    const piece = e.piece ? await pieceDuRegistre(e.piece) : null;
+    if (!dossierId && !piece) throw new ErreurMetier("Donne le dossier, ou la pièce réglée (numéro de la facture) pour une facture hors CRM.", 400);
+    const entree = analyser(schemaEncaissement, { paiement: paiementDuService(e, contexte.maintenant), numeroDocumentId: piece?.id ?? null, payeur: e.payeur ?? null });
+    const resultat = await enregistrerEncaissement({ ...entree, dossierId });
+    const cible = resultat.dossierId ?? dossierId;
+    return { texte: `Encaissement de ${format.euros(e.montant)} enregistré${nom ? ` sur le dossier de ${nom}` : ""}${piece ? ` (${piece.numero})` : ""}.`, donnees: { encaissementId: resultat.encaissement.id, dossierId: cible, piece: piece?.numero ?? null }, liens: [cible ? lien("Dossier", `/dossiers?dossier=${cible}`) : lien("Finances", "/finances")] };
   },
 });
 
-export const outilAccorderSimulations = definirOutil({
-  nom: "accorder_simulations",
-  titre: "Accorder des simulations supplémentaires",
-  description: "Offre au client des simulations de plus dans son espace (au-delà du nombre gratuit). Chaque simulation faite coûte ≈ 0,20 $ d'images : au-delà de 3 d'un coup, aperçu puis confirmation. Réversible en pratique (quota).",
-  niveau: "REVERSIBLE",
-  // Mission 13 (lot 2) : au-delà de 3, ça engage de l'argent (images OpenAI) → sensible.
-  sensible: (e) => (e.nombre ?? 3) > 3,
-  schema: schemaCible.extend({ nombre: z.number().int().min(1).max(20).optional() }),
+export const outilAnnulerEncaissement = definirOutil({
+  nom: "annuler_encaissement",
+  titre: "Annuler un encaissement, ou rejeter un chèque",
+  description:
+    "Deux gestes de l'écran sur un paiement enregistré (identifiant rendu par « lire_fiche » ou « lister » CHEQUES). nature ANNULER (défaut) : saisi par erreur (motif ERREUR_MONTANT, ERREUR_DATE, ERREUR_PIECE, DOUBLON, AUTRE). nature REJETER : chèque revenu impayé (motif SANS_PROVISION, OPPOSITION, IRREGULIER, AUTRE ; le = jour du rejet) ; le dossier recule si l'acompte ou le solde n'est plus réglé. L'encaissement reste dans l'historique, marqué annulé ou rejeté. Pour corriger un montant ou une date sans annuler : « modifier » ENCAISSEMENT. Sensible : aperçu puis confirmation.",
+  niveau: "SENSIBLE",
+  schema: z.object({
+    encaissementId: z.string().max(40),
+    nature: z.enum(["ANNULER", "REJETER"]).optional().describe("ANNULER (défaut) ou REJETER (chèque impayé)."),
+    motif: z.enum([...new Set([...MOTIFS_ANNULATION, ...MOTIFS_REJET].map((m) => m.code))] as [string, ...string[]]),
+    precision: z.string().max(300).optional(),
+    le: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("REJETER : le jour du rejet (aujourd'hui par défaut)."),
+  }),
   apercu: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu.texte;
-    const nombre = e.nombre ?? 3;
-    return `Je vais accorder ${nombre} simulations de plus à ${r.ids.nom} (≈ ${(nombre * 0.2).toFixed(2).replace(".", ",")} $ d'images si elles sont toutes faites).`;
+    const enc = await prisma.encaissement.findUnique({ where: { id: e.encaissementId }, select: { montant: true, payeur: true, recuLe: true, moyen: true } });
+    if (!enc) return "Encaissement introuvable.";
+    if (e.nature === "REJETER") return `Je vais marquer rejeté le chèque de ${format.euros(enc.montant)} (${enc.payeur}, reçu le ${format.jour(enc.recuLe)}) : ${libelleMotif(MOTIFS_REJET, e.motif, e.precision).toLowerCase()}, le ${format.jour(e.le ?? jourParis(new Date()))}. Le dossier recule si ce paiement réglait l'acompte ou le solde.`;
+    return `Je vais annuler l'encaissement de ${format.euros(enc.montant)} (${enc.payeur}, reçu le ${format.jour(enc.recuLe)}) pour le motif ${libelleMotif(MOTIFS_ANNULATION, e.motif, e.precision).toLowerCase()}.`;
   },
-  executer: async (e) => {
-    const r = await cibler(e, "DOSSIER");
-    if (r.ambigu) return r.ambigu;
-    const dossierId = exigerDossier(r.ids);
-    const espace = await prisma.espaceClient.findUnique({ where: { dossierId }, select: { id: true } });
-    if (!espace) throw new ErreurMetier(`${r.ids.nom} n'a pas encore d'espace ouvert.`, 409);
-    const resultat = await accorderSimulations(espace.id, e.nombre ?? 3);
-    return { texte: `${pluriel(e.nombre ?? 3, "simulation accordée", "simulations accordées")} à ${r.ids.nom} (${resultat.accordees} en tout).`, liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)] };
+  executer: async (e, contexte) => {
+    if (e.nature === "REJETER") {
+      const entree = analyser(schemaRejet, { motif: e.motif, precision: e.precision, le: e.le ?? jourParis(contexte.maintenant) });
+      const dossierId = await rejeterEncaissement(e.encaissementId, entree);
+      return { texte: "Chèque marqué rejeté : il reste dans l'historique, le dossier suit.", donnees: { dossierId }, liens: [dossierId ? lien("Dossier", `/dossiers?dossier=${dossierId}`) : lien("Finances", "/finances")] };
+    }
+    const entree = analyser(schemaAnnulation, { motif: e.motif, precision: e.precision });
+    const dossierId = await annulerEncaissement(e.encaissementId, entree);
+    return { texte: "Encaissement annulé : il reste dans l'historique, marqué annulé ; le dossier suit.", donnees: { dossierId }, liens: [dossierId ? lien("Dossier", `/dossiers?dossier=${dossierId}`) : lien("Finances", "/finances")] };
   },
 });
 
@@ -470,7 +462,7 @@ export const outilRedigerMail = definirOutil({
   titre: "Rédiger un mail avec l'IA du CRM",
   description: "Demande au CRM un brouillon de mail à un client (réponse à un mail reçu, ou nouveau mail à un contact), rédigé par l'IA avec tout le contexte du dossier et une garde qui remplace par « [à compléter] » tout prix, date ou délai absent du CRM. Coût ≈ 0,015 € par brouillon. Rien n'est envoyé : relis, puis « envoyer_mail ».",
   niveau: "LECTURE",
-  schema: schemaCible.partial().extend({ messageId: z.string().max(40).optional().describe("Le mail reçu auquel répondre (rendu par « mails_a_traiter »)."), consigne: z.string().max(500).optional() }),
+  schema: schemaCible.partial().extend({ messageId: z.string().max(40).optional().describe("Le mail reçu auquel répondre (rendu par « lister » MAILS ou « lire_mail »)."), consigne: z.string().max(500).optional() }),
   executer: async (e) => {
     let clientId = e.clientId ?? null;
     let leadId = e.leadId ?? null;
@@ -512,4 +504,4 @@ export const outilEnvoyerMail = definirOutil({
   },
 });
 
-export const OUTILS_ECRITURE = [outilOuvrirDossier, outilChangerEtape, outilAjouterNote, outilNoterAppel, outilPlanifier, outilGenererDocument, outilEnvoyerDocument, outilPublierSimulation, outilMasquerSimulation, outilEnvoyerLienEspace, outilRenouvelerLien, outilSaisirEncaissement, outilAnnulerEncaissement, outilRattacherDepense, outilArchiver, outilSupprimer, outilRestaurer, outilAccorderSimulations, outilRedigerMail, outilEnvoyerMail];
+export const OUTILS_ECRITURE = [outilChangerEtape, outilNoterAppel, outilPlanifier, outilGenererDocument, outilEnvoyerDocument, outilEnvoyerLienEspace, outilSaisirEncaissement, outilAnnulerEncaissement, outilSupprimer, outilRedigerMail, outilEnvoyerMail];

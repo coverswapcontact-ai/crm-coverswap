@@ -265,14 +265,14 @@ describe("en base : entonnoirSite, syntheseSite, outils de l'assistant", () => {
     assert.equal(VERSION_SYNTHESE, 5);
   });
 
-  test("« synthese » : une ligne par famille ; « voir_publicite » : la ligne des visites venues de Meta", async () => {
+  test("« analytique » synthese (ex-« synthese ») : une ligne par famille ; « etat_crm » META (ex-« voir_publicite ») : la ligne des visites venues de Meta", async () => {
     const appeler = (nom: string, entree: Record<string, unknown>) => execution.executerOutil(catalogue.outilParNom(nom)!, entree, session);
-    const synthese = await appeler("synthese", {});
+    const synthese = await appeler("analytique", { synthese: {} });
     // Trente jours : la visite Meta d'il y a huit jours compte ici (pas dans les sept jours de « voir_publicite »).
     assert.match(synthese.texte, /Entonnoir du site par source \(parcours ; entre parenthèses, l'étape facultative\) :\n- Pub Meta : Visite 2 → Pièce choisie 1 → Photo chargée 1 → Génération lancée 1 → Résultat vu 1 → \(Estimation vue 0\) → Contact ou rappel 1\n- SEO : Visite 1 → Pièce choisie 1 → Photo chargée 0/);
     assert.match(synthese.texte, /\n- ChatGPT et IA : Visite 1 → Pièce choisie 0/);
     assert.doesNotMatch(synthese.texte, /- Direct :/, "une famille sans visite n'a pas de ligne");
-    const pub = await appeler("voir_publicite", {});
+    const pub = await appeler("etat_crm", { partie: "META" });
     assert.match(pub.texte, /Sur le site, visites venues de Meta \(7 jours\) : Visite 1 → Pièce choisie 1 → Photo chargée 1 → Génération lancée 1 → Résultat vu 1 → \(Estimation vue 0\) → Contact ou rappel 1\./);
     assert.equal(requetesReseau.length, 0, "aucune requête réseau");
   });

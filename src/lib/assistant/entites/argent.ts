@@ -109,12 +109,33 @@ export const ENCAISSEMENT: DefinitionEntite = {
 
 /* ── Dépense ────────────────────────────────────────────────────────── */
 
+/**
+ * La création d'une dépense accepte son justificatif dans le même geste (« Enregistrer la dépense » de l'écran, champ
+ * `justificatif` du formulaire) : une des voies d'« ajouter_fichier », lue puis passée à `creerDepense` comme le fichier
+ * du formulaire (même contrôle de doublon ; `forcer` = « Enregistrer quand même »).
+ */
+const schemaJustificatif = z
+  .object({ lienDepot: z.string().max(40).optional(), url: z.string().max(2000).optional(), base64: z.string().max(13_000_000).optional(), nom: z.string().max(200).optional(), pieceMail: z.object({ messageId: z.string().max(40), piece: z.string().max(40) }).optional(), fichierId: z.string().max(40).optional() })
+  .refine((j) => [j.lienDepot, j.url, j.base64, j.pieceMail, j.fichierId].filter(Boolean).length === 1, { message: "justificatif : UNE source (lien_depot, url, base64 + nom, piece_mail { message_id, piece }, fichier_id)." });
+const schemaCreationDepenseOutil = z
+  .object({ ...(schemaCreationDepense as unknown as z.ZodObject<typeof schemaCreationDepense.shape>).shape, justificatif: schemaJustificatif.optional() })
+  .refine((e) => !(e.dossierId && e.horsChantier), { message: "Une dépense est rattachée à un chantier ou hors chantier, pas les deux.", path: ["hors_chantier"] });
+
+async function justificatifDe(j: z.output<typeof schemaJustificatif> | undefined): Promise<File | null> {
+  if (!j) return null;
+  const { lireSourceFichier } = await import("@/lib/fichiers-depot/source");
+  const { verifierFichier } = await import("@/lib/fichiers-depot/enregistrement");
+  const brut = await lireSourceFichier({ lien_depot: j.lienDepot, url: j.url, base64: j.base64, nom: j.nom, piece_mail: j.pieceMail ? { message_id: j.pieceMail.messageId, piece: j.pieceMail.piece } : undefined, fichier_id: j.fichierId });
+  const f = await verifierFichier({ contenu: brut.contenu, nom: brut.nom });
+  return new File([new Uint8Array(f.contenu)], f.nom, { type: f.format.typeMime });
+}
+
 export const DEPENSE: DefinitionEntite = {
   code: "DEPENSE",
   libelle: "la dépense",
-  designation: "id de la dépense (rendu par « depenses » ou « lister » DEPENSES)",
+  designation: "id de la dépense (rendu par « lister » DEPENSES)",
   resoudre: async (r) => {
-    const id = exigerId(r, "la dépense", "« depenses »");
+    const id = exigerId(r, "la dépense", "« lister » DEPENSES");
     const d = await prisma.depense.findFirst({ where: { ...AVEC_ARCHIVES, id }, select: { id: true, montant: true, fournisseur: true, payeeLe: true, archiveLe: true } });
     if (!d) throw new ErreurMetier(`Dépense introuvable : ${id}.`, 404);
     return { id, nom: `la dépense du ${dateCourte(d.payeeLe)} (${euros(d.montant)} chez ${d.fournisseur})`, archive: Boolean(d.archiveLe), contexte: {} };
@@ -144,17 +165,18 @@ export const DEPENSE: DefinitionEntite = {
     },
   },
   creer: {
-    schema: schemaCreationDepense as unknown as z.ZodType<Valeurs>,
+    schema: schemaCreationDepenseOutil as unknown as z.ZodType<Valeurs>,
     cible: "FACULTATIVE",
     typeCible: "DOSSIER",
     pretraiter: (e, contexte) => datesDictees({ payeeLe: jourParis(contexte.maintenant), ...e }, ["payeeLe"], contexte.maintenant),
-    apercu: async (e, cible) => `Je vais enregistrer une dépense de ${euros(e.montant as number)} chez ${String(e.fournisseur)} (${libelleCategorie(e.categorie as string).toLowerCase()})${cible ? `, rattachée au chantier de ${cible.nom}` : ""}.`,
+    apercu: async (e, cible) => `Je vais enregistrer une dépense de ${euros(e.montant as number)} chez ${String(e.fournisseur)} (${libelleCategorie(e.categorie as string).toLowerCase()})${cible ? `, rattachée au chantier de ${cible.nom}` : ""}${e.justificatif ? ", avec son justificatif" : ""}.`,
     executer: async (e, cible) => {
       const dossierId = (e.dossierId as string | null | undefined) ?? ((cible?.contexte.dossierId as string | null | undefined) || null);
       if (cible && !dossierId) throw new ErreurMetier(`${cible.nom} n'a pas de dossier : une dépense se rattache à un chantier.`, 409);
-      const { depense, dejaRecue } = await creerDepense({ ...(e as z.output<typeof schemaCreationDepense>), dossierId }, null);
+      const { justificatif, ...valeurs } = e as z.output<typeof schemaCreationDepenseOutil>;
+      const { depense, dejaRecue } = await creerDepense({ ...(valeurs as z.output<typeof schemaCreationDepense>), dossierId }, await justificatifDe(justificatif));
       return {
-        texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${euros(depense.montant)} chez ${depense.fournisseur} (${libelleCategorie(depense.categorie).toLowerCase()})${depense.dossier ? `, rattachée au chantier de ${depense.dossier.clientNom}` : depense.horsChantier ? ", hors chantier" : ", pas encore rattachée"} [depense:${depense.id}]. Le justificatif s'ajoute par « ajouter_fichier ».`,
+        texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${euros(depense.montant)} chez ${depense.fournisseur} (${libelleCategorie(depense.categorie).toLowerCase()})${depense.dossier ? `, rattachée au chantier de ${depense.dossier.clientNom}` : depense.horsChantier ? ", hors chantier" : ", pas encore rattachée"} [depense:${depense.id}].${depense.justificatif ? " Justificatif attaché." : " Le justificatif s'ajoute ici (justificatif) ou ensuite par « ajouter_fichier »."}`,
         donnees: { depenseId: depense.id, depense },
         liens: [lien("Dépenses", "/depenses")],
       };
@@ -167,7 +189,7 @@ export const DEPENSE: DefinitionEntite = {
 /* ── Tarif (preset du générateur) ───────────────────────────────────── */
 
 async function resoudreTarif(r: { id?: string | null }): Promise<Resolu> {
-  const texte = exigerId(r, "le tarif", "« tarifs » ou « lister » TARIFS (identifiant, ou des mots de sa désignation)");
+  const texte = exigerId(r, "le tarif", "« lister » TARIFS (identifiant, ou des mots de sa désignation)");
   const direct = await prisma.presetTarif.findUnique({ where: { id: texte } });
   const trouves = direct ? [direct] : await prisma.presetTarif.findMany({ where: { designation: { contains: texte } }, orderBy: [{ actif: "desc" }, { ordre: "asc" }], take: 6 });
   if (trouves.length === 0) throw new ErreurMetier(`Tarif introuvable : « ${texte} ».`, 404);
@@ -236,7 +258,7 @@ export const SOUS_PARTIE: DefinitionEntite = {
   libelle: "le tarif de la sous-partie",
   designation: "la sous-partie en mots ou par sa clé (« ilot », « SDB.plan-vasque »)",
   resoudre: async (r) => {
-    const texte = exigerId(r, "la sous-partie", "« tarifs » (« ilot », « SDB.plan-vasque »)");
+    const texte = exigerId(r, "la sous-partie", "« lister » TARIFS (« ilot », « SDB.plan-vasque »)");
     const trouve = repererSousPartie(texte);
     if ("candidats" in trouve) throw ambiguite(trouve.candidats.map((c) => ({ id: c.cle, nom: libelleReperee(c) })), "sous-parties");
     if ("aucune" in trouve) throw new ErreurMetier(`« ${texte} » n'est pas une sous-partie connue. Possibles : ${trouve.proposees.map((p) => `${p.famille.libelle} › ${p.sousPartie.libelle}`).join(", ")}.`, 404);
@@ -251,7 +273,8 @@ export const SOUS_PARTIE: DefinitionEntite = {
     note: async (_apres, _avant, cible) => {
       const l = await ligneDe(cible.id);
       const partagees = l.presetId ? (await tarifsDesPrestations()).filter((x) => x.presetId === l.presetId && x.cle !== l.cle) : [];
-      return `${partagees.length ? `Ce tarif sert aussi à : ${partagees.map((p) => `${p.familleLibelle} › ${p.libelle}`).join(", ")} — leur prix changera aussi. ` : ""}Les devis déjà émis ne changent pas.`;
+      const tarif = l.presetId ? `Tarif concerné : « ${l.designation} » (${l.unite})${l.explicite ? "" : ", trouvé par mots-clés : il sera attribué à cette sous-partie"}. ` : `Aucun tarif encore : un nouveau tarif « Revêtement adhésif — ${l.libelle.toLowerCase()} » sera créé et attribué à cette sous-partie. `;
+      return `${tarif}${partagees.length ? `Ce tarif sert aussi à : ${partagees.map((p) => `${p.familleLibelle} › ${p.libelle}`).join(", ")} — leur prix changera aussi. ` : ""}Les devis déjà émis ne changent pas.`;
     },
     lire: async (cible) => {
       const l = await ligneDe(cible.id);

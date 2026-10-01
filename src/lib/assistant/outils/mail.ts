@@ -4,12 +4,12 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { appliquerProposition } from "@/lib/mail/appliquer";
 import { detailMail } from "@/lib/mail/detail";
-import { CHAMPS_MAJ, CIBLES_MAJ, TYPE_MAJ_DEPUIS_MAIL, TYPE_REGLE_TRI, champDe, estSensibleMaj, schemaMaj, verifierValeur } from "@/lib/mail/propositions-maj";
+import { CHAMPS_MAJ, CIBLES_MAJ, TYPE_MAJ_DEPUIS_MAIL, champDe, estSensibleMaj, schemaMaj, verifierValeur } from "@/lib/mail/propositions-maj";
 import { rattacherALaMain } from "@/lib/mail/rattachement";
-import { INTENTIONS, LIBELLES_INTENTION, annulerSnooze, classerIntention, deposerBrouillon, derangerMail, mailsNonClasses, rangerMail, rechercherMails, resumerFil, snoozer } from "@/lib/mail/v2";
-import { proposer, rejeterProposition, vueProposition } from "@/lib/validation/service";
-import { lireDateDictee } from "../agenda";
-import { definirOutil, format, lien, type ResultatOutil } from "../definition";
+import { INTENTIONS, LIBELLES_INTENTION, classerIntention, deposerBrouillon, derangerMail, mailsNonClasses, rangerMail, rechercherMails, resumerFil } from "@/lib/mail/v2";
+import { annulerProposition, proposer, reessayerExecution, rejeterProposition, validerEnLot, vueProposition } from "@/lib/validation/service";
+import { lireObjet } from "@/lib/a-faire/json";
+import { definirOutil, lien, type ResultatOutil } from "../definition";
 import { CibleAmbigue, resoudreCible, schemaCible, texteAmbigu } from "./lecture";
 import { accord, pluriel, jourHeureCourt } from "@/lib/commun/format";
 
@@ -49,7 +49,7 @@ export const outilLireMail = definirOutil({
   nom: "lire_mail",
   titre: "Lire un mail ou un fil complet",
   description:
-    "Le fil complet d'un mail (identifiant rendu par « mails_a_traiter », « mails_non_classes » ou « rechercher_mails »), ou le dernier fil échangé avec un contact (par son nom). Rend : chaque message avec son texte et ses pièces, l'intention et ce qui est attendu, le résumé de fil et ses points en suspens, les dates extraites, les cartes de mise à jour en attente, les brouillons déposés, la fiche du client ou du lead, ses projets, et la chronologie du contact (mails, appels, espace, dossier, propositions validées). À appeler avant de résumer, de proposer une mise à jour, de déposer un brouillon.",
+    "Le fil complet d'un mail (identifiant rendu par « lister » MAILS ou « rechercher_mails »), ou le dernier fil échangé avec un contact (par son nom). Rend : chaque message avec son texte et ses pièces, l'intention et ce qui est attendu, le résumé de fil et ses points en suspens, les dates extraites, les cartes de mise à jour en attente, les brouillons déposés, la fiche du client ou du lead, ses projets, et la chronologie du contact (mails, appels, espace, dossier, propositions validées). À appeler avant de résumer, de proposer une mise à jour, de déposer un brouillon.",
   niveau: "LECTURE",
   schema: z.object({ messageId: z.string().max(40).optional(), nom: z.string().max(120).optional().describe("À défaut d'identifiant : le contact, tel que dit (« Rousse »)."), chronologie: z.number().int().min(0).max(60).optional().describe("Nombre d'entrées de chronologie (30 par défaut).") }),
   executer: async (e) => {
@@ -71,7 +71,7 @@ export const outilLireMail = definirOutil({
       `Fil (${d.fil.length}) :\n${d.fil.map((m) => `[${jourHeureCourt(m.recuLe)}] ${m.sens === "SORTANT" ? (m.automatique ? "CoverSwap (automatique)" : "Lucas") : (m.deNom ?? m.de)} : ${court(m.texte.replace(/\s+/g, " ").trim(), 1200)}${m.pieces.length ? ` (pièces : ${m.pieces.map((p) => p.nom).join(", ")})` : ""} [message:${m.id}]`).join("\n")}`,
       d.propositions.length ? `Cartes en attente (${d.propositions.length}) : ${d.propositions.map((p) => `[proposition:${p.id}] ${p.titre}${p.sensible ? " (sensible : confirmation)" : ""}`).join(" · ")}` : "Aucune carte en attente.",
       d.brouillons.filter((b) => b.statut === "BROUILLON").length ? `Brouillons prêts : ${d.brouillons.filter((b) => b.statut === "BROUILLON").map((b) => `[brouillon:${b.id}] « ${b.objet ?? ""} » (${b.source === "ASSISTANT" ? "déposé par toi" : "IA du CRM"}) : ${court((b.texte ?? "").replace(/\s+/g, " "), 200)}`).join(" · ")}` : "",
-      d.contexte ? `Contact : ${d.contexte.contact.nom} (${d.contexte.contact.type === "CLIENT" ? `client [client:${d.contexte.contact.clientId}]` : d.contexte.contact.type === "LEAD" ? `lead [lead:${d.contexte.contact.leadId}]` : "inconnu"})${d.contexte.contact.ville ? `, ${d.contexte.contact.ville}` : ""}${d.contexte.projets.length ? ` — projets : ${d.contexte.projets.map((p) => `${p.nom} (${p.etapeLibelle}, main : ${p.main}${p.devis ? `, devis ${p.devis.numero} ${p.devis.totalTtc} €` : ""}) [dossier:${p.dossierId}]`).join(" ; ")}` : " — aucun dossier"}` : "Contact inconnu (« rattacher_mail », ou lead à créer).",
+      d.contexte ? `Contact : ${d.contexte.contact.nom} (${d.contexte.contact.type === "CLIENT" ? `client [client:${d.contexte.contact.clientId}]` : d.contexte.contact.type === "LEAD" ? `lead [lead:${d.contexte.contact.leadId}]` : "inconnu"})${d.contexte.contact.ville ? `, ${d.contexte.contact.ville}` : ""}${d.contexte.projets.length ? ` — projets : ${d.contexte.projets.map((p) => `${p.nom} (${p.etapeLibelle}, main : ${p.main}${p.devis ? `, devis ${p.devis.numero} ${p.devis.totalTtc} €` : ""}) [dossier:${p.dossierId}]`).join(" ; ")}` : " — aucun dossier"}` : "Contact inconnu (« traiter_mail » RATTACHER, ou « creer » LEAD avec message_id).",
       chrono.length ? `Chronologie (${chrono.length}/${d.chronologie.length}) :\n${chrono.map((c) => `${jourHeureCourt(c.le)} · ${c.titre}${c.texte ? ` — ${court(c.texte.replace(/\s+/g, " "), 160)}` : ""}`).join("\n")}` : "",
     ].filter(Boolean).join("\n");
     return { texte: lignes, donnees: { ...d, fil: d.fil.map((m) => ({ ...m, texte: court(m.texte, 4000) })), chronologie: chrono }, liens: [lien("Ouvrir le mail", `/mail?mail=${d.messageId}`), ...(d.contexte?.projets[0] ? [lien("Dossier", `/dossiers?dossier=${d.contexte.projets[0].dossierId}`)] : [])] };
@@ -220,18 +220,25 @@ async function chargerCartes(ids: string[]) {
 export const outilValiderProposition = definirOutil({
   nom: "valider_proposition",
   titre: "Valider des cartes (appliquer la mise à jour)",
-  description: "Applique une ou plusieurs propositions en attente (carte de mise à jour depuis un mail, règle de tri, mail ou SMS proposé, changement d'étape, fusion de clients, anonymisation…) : le dossier, la fiche, le lead ou le projet sont modifiés par le code de la fiche (mêmes règles : qui a la main, étape, contrôle de cohérence), et la chronologie le garde. Sensible — aperçu puis confirmation — dès qu'une proposition l'est par son type (un mail ou un SMS qui part chez le client, un passage à Signé, Facturé, Encaissé ou Perdu, une carte sur un montant, une adresse ou une date de chantier), et toujours pour une fusion de clients ou une anonymisation. Plus de trois propositions → confirmation. « corrections » (une seule proposition) : les champs corrigibles du type (« valeur », l'objet et le texte d'un mail, « conserver » A ou B d'une fusion… : lister PROPOSITIONS avec proposition_id les donne).",
+  description: "Applique une ou plusieurs propositions en attente (carte de mise à jour depuis un mail, règle de tri, mail ou SMS proposé, changement d'étape, fusion de clients, anonymisation…) : le dossier, la fiche, le lead ou le projet sont modifiés par le code de la fiche (mêmes règles : qui a la main, étape, contrôle de cohérence), et la chronologie le garde. Sensible — aperçu puis confirmation — dès qu'une proposition l'est par son type (un mail ou un SMS qui part chez le client, un passage à Signé, Facturé, Encaissé ou Perdu, une carte sur un montant, une adresse ou une date de chantier), et toujours pour une fusion de clients ou une anonymisation. Plus de trois propositions → confirmation. en_lot: true = « Tout valider » de l'écran (seuls les types permis en lot). reessayer: true = relancer une exécution en échec. « corrections » (une seule proposition) : les champs corrigibles du type (« valeur », l'objet et le texte d'un mail, « conserver » A ou B d'une fusion… : lister PROPOSITIONS avec proposition_id les donne).",
   niveau: "REVERSIBLE",
-  schema: schemaIds.extend({ corrections: z.record(z.string().max(40), z.union([z.string().max(10_000), z.number(), z.boolean(), z.null()])).optional().describe("Pour une seule proposition : les champs corrigés par Lucas (« valeur », « objet », « texte », « conserver »…).") }),
+  schema: schemaIds.extend({
+    corrections: z.record(z.string().max(40), z.union([z.string().max(10_000), z.number(), z.boolean(), z.null()])).optional().describe("Pour une seule proposition : les champs corrigés par Lucas (« valeur », « objet », « texte », « conserver »…)."),
+    en_lot: z.boolean().optional().describe("« Tout valider » de l'écran : seules les propositions dont le type permet la validation en lot passent (jamais une sensible), les autres sont rendues avec la raison."),
+    reessayer: z.boolean().optional().describe("« Réessayer » : relance l'exécution d'une proposition déjà validée dont l'exécution a échoué (statut ECHEC, « lister » PROPOSITIONS statut ECHEC)."),
+  }),
   masse: (e) => e.propositionIds.length,
   // Mission 17 (partie C, § 3.23) : la sensibilité de la DÉFINITION du type (vueProposition › sensible), plus les types
   // sans retour (fusion de clients, anonymisation) — et plus seulement les cartes nées d'un mail.
   sensible: async (e) => {
+    // « Tout valider » ne valide jamais une proposition sensible (validationGroupee) : seul le nombre peut l'être.
+    if (e.en_lot) return false;
     const lignes = await prisma.proposition.findMany({ where: { id: { in: e.propositionIds } } });
     return lignes.some((p) => TYPES_TOUJOURS_SENSIBLES.has(p.type) || vueProposition(p).sensible);
   },
   apercu: async (e) => {
     const cartes = await chargerCartes(e.propositionIds);
+    if (e.reessayer) return `Je vais relancer l'exécution de ${pluriel(cartes.length, "proposition")} en échec :\n${cartes.map((c) => `- ${c.libelleType} : ${c.titre} — ${c.statut === "ECHEC" ? `échec : ${c.erreurExecution ?? "?"}` : `statut ${c.statut.toLowerCase()} (seule une exécution en échec se relance)`}`).join("\n")}`;
     const detail = (c: (typeof cartes)[number]) => {
       const contenu = c.contenu as Record<string, unknown>;
       if (c.type === "ENVOI_MAIL") return `\n  Mail à ${String(contenu.a ?? "?")} — objet « ${String(e.corrections?.objet ?? contenu.objet ?? "")} » :\n  ${String(e.corrections?.texte ?? contenu.texte ?? "").slice(0, 1200)}`;
@@ -243,6 +250,23 @@ export const outilValiderProposition = definirOutil({
     return `Je vais valider ${pluriel(cartes.length, "proposition")} :\n${cartes.map((c) => `- ${c.libelleType} : ${c.titre}${c.sensible || TYPES_TOUJOURS_SENSIBLES.has(c.type) ? " (sensible)" : ""}${c.statut !== "EN_ATTENTE" ? ` — déjà ${c.statut.toLowerCase()}` : ""}${detail(c)}`).join("\n")}${corrections}`;
   },
   executer: async (e) => {
+    if (e.reessayer) {
+      const faits: string[] = [];
+      const refus: string[] = [];
+      for (const id of e.propositionIds) {
+        try {
+          const p = await reessayerExecution(id);
+          faits.push(`${p.titre} (${p.statut.toLowerCase()})`);
+        } catch (erreur) {
+          refus.push(`${id} : ${erreur instanceof Error ? erreur.message : String(erreur)}`);
+        }
+      }
+      return { texte: [faits.length ? `Relancé : ${faits.join(" · ")}. L'exécution repart en tâche de fond.` : "", refus.length ? `Pas relancé : ${refus.map((r) => r.replace(/\.$/, "")).join(" · ")}.` : ""].filter(Boolean).join("\n") || "Rien à faire.", donnees: { faits, refus }, liens: [lien("À valider", "/validation")] };
+    }
+    if (e.en_lot) {
+      const lot = await validerEnLot(e.propositionIds);
+      return { texte: [lot.validees.length ? `${pluriel(lot.validees.length, "proposition validée", "propositions validées")} en lot.` : "", lot.ignorees.length ? `Laissées (à valider une par une) : ${lot.ignorees.map((i) => `${i.id} (${i.raison})`).join(" · ")}.` : ""].filter(Boolean).join("\n") || "Rien à faire.", donnees: lot, liens: [lien("À valider", "/validation")] };
+    }
     const resultats: { id: string; titre: string; statut: string; erreur: string | null }[] = [];
     for (const id of e.propositionIds) {
       try {
@@ -263,7 +287,7 @@ export const outilValiderProposition = definirOutil({
 export const outilIgnorerProposition = definirOutil({
   nom: "ignorer_proposition",
   titre: "Ignorer des cartes",
-  description: "Écarte une ou plusieurs cartes en attente sans rien modifier (motif : MAL_LU, DEJA_A_JOUR, PAS_MAINTENANT, INUTILE, INEXACT…). Réversible en pratique : la carte reste lisible, rien n'est effacé ; une nouvelle carte identique n'est pas reproposée.",
+  description: "Écarte une ou plusieurs propositions en attente sans rien modifier (motif : MAL_LU, DEJA_A_JOUR, PAS_MAINTENANT, INUTILE, INEXACT…) : cartes de mise à jour, règles, mails ou SMS proposés — et les relances de devis proposées (« lister » RELANCES) : rien n'est envoyé, le mail de ce rang n'est pas reproposé, le SMS de relance reste proposé tant que la relance n'est pas faite. Réversible en pratique : la carte reste lisible, rien n'est effacé ; une nouvelle carte identique n'est pas reproposée.",
   niveau: "REVERSIBLE",
   schema: schemaIds.extend({ motif: z.string().max(60).optional(), commentaire: z.string().max(300).optional() }),
   masse: (e) => e.propositionIds.length,
@@ -272,6 +296,13 @@ export const outilIgnorerProposition = definirOutil({
     const refus: string[] = [];
     for (const id of e.propositionIds) {
       try {
+        // Une relance de devis proposée s'annule (ex-« annuler_relance ») : même geste que l'écran Relances.
+        const ligne = await prisma.proposition.findUnique({ where: { id }, select: { type: true, statut: true, titre: true, contenu: true } });
+        if (ligne?.statut === "EN_ATTENTE" && ligne.type === "ENVOI_MAIL" && lireObjet(ligne.contenu).motif === "RELANCE_DEVIS") {
+          await annulerProposition(id, e.commentaire?.trim() || e.motif || "Annulée depuis l'assistant");
+          faits.push(`${ligne.titre} (relance annulée, rien n'est envoyé)`);
+          continue;
+        }
         const p = await rejeterProposition(id, { motif: e.motif ?? "INUTILE", commentaire: e.commentaire ?? null });
         faits.push(p.titre);
       } catch (erreur) {
@@ -309,26 +340,6 @@ export const outilDeposerBrouillon = definirOutil({
   },
 });
 
-export const outilSnoozerMail = definirOutil({
-  nom: "snoozer_mail",
-  titre: "Remettre un mail à plus tard",
-  description: "Sort un mail d'« À traiter » jusqu'au moment dicté (« demain 9h », « lundi », « dans une semaine », « 2026-10-01 14:00 » ; sans heure : 9 h) ; il revient alors en tête, marqué « Revenu ». Réversible (annuler = true).",
-  niveau: "REVERSIBLE",
-  schema: z.object({ messageId: z.string().max(40), quand: z.string().max(60).optional(), annuler: z.boolean().optional() }),
-  executer: async (e, contexte) => {
-    if (e.annuler) {
-      await annulerSnooze(e.messageId);
-      return { texte: "Remise à plus tard annulée : le mail revient dans « À traiter » s'il attend quelque chose.", liens: [lien("Ouvrir le mail", `/mail?mail=${e.messageId}`)] };
-    }
-    if (!e.quand) throw new ErreurMetier("Quand ? (« demain 9h », « lundi », « dans une semaine »).", 400);
-    const jusqua = lireDateDictee(e.quand, contexte.maintenant, 9);
-    if (!jusqua) throw new ErreurMetier(`Je n'ai pas compris « ${e.quand} ».`, 400);
-    if (jusqua <= contexte.maintenant) throw new ErreurMetier(`« ${e.quand} » est déjà passé.`, 400);
-    await snoozer(e.messageId, jusqua);
-    return { texte: `Remis au ${format.jour(jusqua)} à ${jusqua.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" })} : il reviendra en tête d'« À traiter », marqué « Revenu ».`, donnees: { jusqua: jusqua.toISOString() }, liens: [lien("Ouvrir le mail", `/mail?mail=${e.messageId}`)] };
-  },
-});
-
 export const outilRattacherMail = definirOutil({
   nom: "rattacher_mail",
   titre: "Rattacher un mail à un client ou un dossier",
@@ -358,7 +369,7 @@ export const outilRattacherMail = definirOutil({
 export const outilRangerMail = definirOutil({
   nom: "ranger_mail",
   titre: "Ranger des mails (lu + libellé)",
-  description: "Range un ou plusieurs fils à la main : lus, libellé « CoverSwap/Rangé », hors de la boîte (dans Gmail aussi si le rangement est actif). Réversible (annuler = true). Par identifiants, ou par expéditeur (adresse exacte ou « @domaine ») : alors aperçu puis confirmation. Trois rangements de la même adresse → le CRM propose une règle (« proposer_regle » pour la poser tout de suite).",
+  description: "Range un ou plusieurs fils à la main : lus, libellé « CoverSwap/Rangé », hors de la boîte (dans Gmail aussi si le rangement est actif). Réversible (annuler = true). Par identifiants, ou par expéditeur (adresse exacte ou « @domaine ») : alors aperçu puis confirmation. Trois rangements de la même adresse → le CRM propose une règle (« creer » REGLE_EXPEDITEUR pour la poser tout de suite).",
   niveau: "REVERSIBLE",
   schema: z.object({ messageIds: z.array(z.string().max(40)).max(100).optional(), expediteur: z.string().max(160).optional(), motif: z.string().max(200).optional(), annuler: z.boolean().optional() }),
   masse: (e) => e.messageIds?.length ?? 0,
@@ -372,7 +383,7 @@ export const outilRangerMail = definirOutil({
     if (!cibles.length) return { texte: "Rien à ranger : aucun mail ne correspond (ou déjà rangés)." };
     let total = 0;
     for (const m of cibles) total += e.annuler ? (await derangerMail(m.id)).remis : (await rangerMail(m.id, e.motif ?? (e.expediteur ? `Rangé à la main : ${e.expediteur}` : "Rangé à la main"))).ranges;
-    return { texte: `${pluriel(total, "mail")} ${e.annuler ? "remis dans la boîte" : `${accord(total, "rangé")} (lus, libellé CoverSwap/Rangé)`} sur ${pluriel(cibles.length, "fil")}. ${e.annuler ? "" : "Réversible : « ranger_mail » avec annuler = true."}`, donnees: { fils: cibles.map((m) => m.id), messages: total }, liens: [lien("Mail", "/mail")] };
+    return { texte: `${pluriel(total, "mail")} ${e.annuler ? "remis dans la boîte" : `${accord(total, "rangé")} (lus, libellé CoverSwap/Rangé)`} sur ${pluriel(cibles.length, "fil")}. ${e.annuler ? "" : "Réversible : « traiter_mail » DERANGER."}`, donnees: { fils: cibles.map((m) => m.id), messages: total }, liens: [lien("Mail", "/mail")] };
   },
 });
 
@@ -390,26 +401,6 @@ async function ciblesRangement(e: { messageIds?: string[]; expediteur?: string; 
   return [...parFil.values()];
 }
 
-export const outilProposerRegle = definirOutil({
-  nom: "proposer_regle",
-  titre: "Proposer une règle de tri",
-  description: "Dépose une règle d'expéditeur à valider par Lucas (adresse exacte ou « @domaine ») : RANGER (toujours rangé, jamais un client), NE_JAMAIS_RANGER, ADMINISTRATIF. Rien n'est posé tant qu'elle n'est pas validée (dans l'onglet Mail, Paramètres → Mail, ou « valider_proposition »). Pour « range tout ce qui vient de TikTok pour toujours » : « ranger_mail » avec l'expéditeur, puis cette règle.",
-  niveau: "REVERSIBLE",
-  schema: z.object({ cible: z.string().min(3).max(160), action: z.enum(["RANGER", "NE_JAMAIS_RANGER", "ADMINISTRATIF"]), motif: z.string().min(2).max(300) }),
-  executer: async (e, contexte) => {
-    const cible = e.cible.trim().toLowerCase();
-    if (!cible.includes("@")) throw new ErreurMetier("La cible est une adresse (« x@y.fr ») ou un domaine (« @y.fr »).", 400);
-    const { id, creee } = await proposer({
-      type: TYPE_REGLE_TRI,
-      titre: `${e.action === "RANGER" ? "Toujours ranger" : e.action === "ADMINISTRATIF" ? "Toujours classer en administratif" : "Ne jamais ranger"} les mails de ${cible}`,
-      resume: `${e.motif}${contexte.commande ? ` — demandé : « ${contexte.commande} »` : ""}`,
-      contenu: { cible, action: e.action, motif: e.motif, origine: "ASSISTANT" },
-      cleUnicite: `regle-tri:${cible}:${e.action}`,
-    });
-    return { texte: creee ? `Règle proposée [proposition:${id}] : ${e.action} pour ${cible}. Elle attend la validation de Lucas (onglet Mail, Paramètres → Mail) ; si Lucas l'a déjà dite, « valider_proposition ».` : `Cette règle est déjà proposée ou déjà décidée [proposition:${id}].`, donnees: { propositionId: id, creee }, liens: [lien("Paramètres → Mail", "/parametres#mail")] };
-  },
-});
-
-export const OUTILS_MAIL = [outilLireMail, outilMailsNonClasses, outilRechercherMails, outilClasserMail, outilResumerFil, outilProposerMiseAJour, outilValiderProposition, outilIgnorerProposition, outilDeposerBrouillon, outilSnoozerMail, outilRattacherMail, outilRangerMail, outilProposerRegle];
+export const OUTILS_MAIL = [outilLireMail, outilRechercherMails, outilClasserMail, outilResumerFil, outilProposerMiseAJour, outilValiderProposition, outilIgnorerProposition, outilDeposerBrouillon];
 
 export { CHAMPS_MAJ };

@@ -67,9 +67,9 @@ export const PUBLICATION: DefinitionEntite = {
 export const SIMULATION: DefinitionEntite = {
   code: "SIMULATION",
   libelle: "la simulation",
-  designation: "id de la simulation (rendu par « voir_simulations »)",
+  designation: "id de la simulation (rendu par « voir_fichiers » simulations ou « lire_fiche »)",
   resoudre: async (r) => {
-    const id = exigerId(r, "la simulation", "« voir_simulations »");
+    const id = exigerId(r, "la simulation", "« voir_fichiers » (genre simulations)");
     const s = await prisma.simulationEspace.findFirst({ where: { ...AVEC_ARCHIVES, id }, select: { id: true, titre: true, dossierId: true, archiveLe: true } });
     if (!s) throw new ErreurMetier(`Simulation introuvable : ${id}.`, 404);
     const d = await prisma.dossier.findUnique({ where: { id: s.dossierId }, select: { clientNom: true } });

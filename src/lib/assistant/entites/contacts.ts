@@ -88,11 +88,17 @@ export const LEAD: DefinitionEntite = {
       const r = await creerContactAssistant(e as z.output<typeof schemaCreationContact>);
       if (!r.cree) {
         return {
-          texte: `Rien n'a été créé : ${r.doublons.length > 1 ? "des fiches existent déjà" : "une fiche existe déjà"} pour ce contact.\n${r.doublons.map((d) => `- ${d.type === "CLIENT" ? "Client" : "Lead"} ${d.nom}${d.ville ? ` (${d.ville})` : ""} : ${d.motif} [${d.type.toLowerCase()}:${d.id}]`).join("\n")}\nSi Lucas confirme que c'est une autre personne, relance avec forcer: true.`,
+          texte: `Rien n'a été créé : ${r.doublons.length > 1 ? "des fiches existent déjà" : "une fiche existe déjà"} pour ce contact.\n${r.doublons.map((d) => `- ${d.type === "CLIENT" ? "Client" : "Lead"} ${d.nom}${d.ville ? ` (${d.ville})` : ""} : ${d.motif} [${d.type.toLowerCase()}:${d.id}]`).join("\n")}\nÀ faire : lire la fiche existante (« lire_fiche »), y noter l'appel (« creer » NOTE) ou ouvrir son dossier (« creer » DOSSIER). Si Lucas confirme que c'est une autre personne, relance avec forcer: true.`,
           donnees: { cree: false, doublons: r.doublons },
+          liens: r.doublons.map((d) => lien(d.type === "CLIENT" ? `Client ${d.nom}` : `Lead ${d.nom}`, d.type === "CLIENT" ? `/clients?client=${d.id}` : `/leads?lead=${d.id}`)),
         };
       }
-      return { texte: `Lead créé : ${r.cree.nom || "sans nom"}${r.cree.dossierId ? ", dossier ouvert" : ", dans « À appeler »"} [lead:${r.cree.leadId}].`, donnees: { cree: true, ...r.cree }, liens: [lien("Fiche du lead", `/leads?lead=${r.cree.leadId}`)] };
+      const c = r.cree;
+      return {
+        texte: `Lead créé : ${c.nom || "sans nom"}${e.ville ? ` (${String(e.ville)})` : ""}, source ${String(e.source ?? "AUTRE")}, projet ${String(e.type_projet ?? "CUISINE")}${c.dossierId ? ", dossier ouvert : il vit dans Dossiers" : ", dans « À appeler » (Leads)"} [lead:${c.leadId}].${r.doublons.length ? ` Créé malgré ${pluriel(r.doublons.length, "doublon probable", "doublons probables")}, sur ta demande.` : ""}`,
+        donnees: { cree: true, leadId: c.leadId, clientId: c.clientId, dossierId: c.dossierId, nom: c.nom, doublonsIgnores: r.doublons },
+        liens: [lien("Fiche du lead", `/leads?lead=${c.leadId}`), ...(c.dossierId ? [lien("Dossier", `/dossiers?dossier=${c.dossierId}`)] : [])],
+      };
     },
   },
   archiver: async (cible, motif) => archiverEntrant(cible.id, motif),
@@ -347,7 +353,7 @@ export const NOTE: DefinitionEntite = {
       if (!leadId) throw new ErreurMetier(`${cible?.nom ?? "Ce contact"} n'a ni dossier ni lead : une note se pose sur l'un ou l'autre.`, 409);
       const type = (e.type as (typeof TYPES_ECHANGE)[number] | undefined) ?? "NOTE";
       await ajouterEchange(leadId, { type, contenu: e.texte as string });
-      return { texte: `${type === "NOTE" ? "Note" : `Échange (${type.toLowerCase()})`} noté sur la fiche de ${cible?.nom}.`, liens: [lien("Lead", `/leads?lead=${leadId}`)] };
+      return { texte: `${type === "NOTE" ? "Note ajoutée à" : `Échange (${type.toLowerCase()}) noté sur`} la fiche de ${cible?.nom}.`, liens: [lien("Lead", `/leads?lead=${leadId}`)] };
     },
   },
 };
@@ -410,7 +416,14 @@ export const TACHE: DefinitionEntite = {
       const leadId = idDe(cible, "leadId");
       const clientId = idDe(cible, "clientId");
       const v = await ajouterTache({ titre: e.titre as string, ...(echeance ? { echeance: echeance.toISOString() } : {}), ...(dossierId ? { dossierId } : leadId ? { leadId } : clientId ? { clientId } : {}), ...(typeof e.raison === "string" && e.raison.trim() ? { raison: e.raison.trim() } : {}) }, contexte.maintenant);
-      return { texte: `Tâche ajoutée : « ${v.titre} »${cible ? ` (${cible.nom})` : ""} [tache:${v.id}].`, donnees: { tache: v }, liens: [lien("Tâches", "/taches")] };
+      // Import à l'appel : outils/taches importe le socle des entités (pas de cycle au chargement).
+      const { lireEnMots, retourLisible } = await import("../outils/taches");
+      const lue = await lireEnMots(v, contexte.maintenant, false);
+      return {
+        texte: `Tâche ajoutée : « ${v.titre} »${cible ? ` (${cible.nom})` : ""}${v.echeance ? `, pour ${retourLisible(v.echeance).replace(/ à \d+ h.*$/, "")}` : ""} [tache:${v.id}]. ${v.statut === "PLUS_TARD" ? "Elle attend dans « Plus tard » et revient en tête de ta liste ce jour-là" : "Elle est dans ta liste"} (${v.dureeMin} min) ; « c'est fait » la coche. Pour la retirer : « repondre_tache » PAS_A_FAIRE (raison PAS_PERTINENT).`,
+        donnees: lue,
+        liens: [lien("Tâches", "/taches"), ...(v.dossierId ? [lien("Dossier", `/dossiers?dossier=${v.dossierId}`)] : v.leadId ? [lien("Contact", `/leads?lead=${v.leadId}`)] : [])],
+      };
     },
   },
 };

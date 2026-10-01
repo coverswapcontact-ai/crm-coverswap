@@ -9,7 +9,9 @@
 export const ENTITES_CIBLE = ["DOSSIER", "LEAD", "CLIENT", "DEPENSE", "PUBLICATION"] as const;
 export type EntiteCible = (typeof ENTITES_CIBLE)[number];
 
-export const TYPES_FICHIER = ["PHOTO_AVANT", "PHOTO_APRES", "PLAN", "DEVIS", "FACTURE", "JUSTIFICATIF", "AUTRE"] as const;
+export const TYPES_FICHIER = ["PHOTO_AVANT", "PHOTO_APRES", "PLAN", "DEVIS", "FACTURE", "JUSTIFICATIF", "AUTRE", "SIMULATION", "PDF_DOCUMENT"] as const;
+/** Les types qu'un lien de dépôt peut fixer (une simulation ou le PDF d'un document repris se désignent depuis l'assistant). */
+export const TYPES_FICHIER_LIEN = ["PHOTO_AVANT", "PHOTO_APRES", "PLAN", "DEVIS", "FACTURE", "JUSTIFICATIF", "AUTRE"] as const;
 export type TypeFichier = (typeof TYPES_FICHIER)[number];
 
 export const VOIES_FICHIER = ["LIEN_DEPOT", "URL", "BASE64", "PIECE_MAIL", "FICHIER", "EXISTANT"] as const;
@@ -23,6 +25,8 @@ export const LIBELLES_TYPE_FICHIER: Record<TypeFichier, string> = {
   FACTURE: "facture",
   JUSTIFICATIF: "justificatif",
   AUTRE: "document",
+  SIMULATION: "simulation (image rendue)",
+  PDF_DOCUMENT: "PDF d'un document repris",
 };
 
 export const LIBELLES_ENTITE: Record<EntiteCible, string> = {

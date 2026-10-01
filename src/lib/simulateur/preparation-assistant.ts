@@ -105,12 +105,24 @@ export async function resoudreTeinte(texte: string): Promise<ResolutionTeinte> {
   return { candidats: retenus.slice(0, 8).map((r) => ({ ref: r.id, nom: r.nom, famille: r.famille, resume: resumes.get(r.id) ?? "" })) };
 }
 
-export type DemandePreparation = { dossierId: string; photoId?: string | null; typeSurface?: string | null; zones: ZoneDemandee[] };
+export type DemandePreparation = { dossierId: string; photoId?: string | null; typeSurface?: string | null; zones: ZoneDemandee[]; mode?: "CHATGPT" | "API" };
+/** Mission 17 (partie C) : tout résolu, rien d'écrit (aperçu d'une génération par l'API, payante). */
+export type EssaiPreparation = { photoId: string; type: TypeSurface; teintes: PreparationAssistant["teintes"] };
 export type PreparationAssistant = { preparation: PreparationVue; photoId: string; type: TypeSurface; teintes: { zone: IdZone; libelle: string; ref: string; nom: string; dit: string }[] };
 export type BlocagePreparation = { zone: string; teinte: string; candidats?: TeinteCandidate[]; probleme: string };
 
 /** Résout tout, puis prépare (mode ChatGPT). Une ambiguïté ou une zone inconnue bloque AVANT de préparer : rien n'est écrit. */
 export async function preparerDepuisLAssistant(demande: DemandePreparation): Promise<{ ok: true; resultat: PreparationAssistant } | { ok: false; blocages: BlocagePreparation[]; type: TypeSurface }> {
+  const resolu = await resoudrePreparation(demande);
+  if (!resolu.ok) return resolu;
+  const { photoId, type, teintes } = resolu.essai;
+  // Mode API (mission 17, partie C) : la génération part en tâche de fond, comme le bouton « Générer par l'API » de l'écran.
+  const preparation = await preparerSimulation({ dossierId: demande.dossierId, photoId, typeSurface: type.id, zones: teintes.map((t) => ({ zone: t.zone, ref: t.ref })), mode: demande.mode ?? "CHATGPT" }, { origine: "CRM" });
+  return { ok: true, resultat: { preparation, photoId, type, teintes } };
+}
+
+/** Résout la photo, le type et les teintes, sans rien écrire (préparation ou aperçu). */
+export async function resoudrePreparation(demande: DemandePreparation): Promise<{ ok: true; essai: EssaiPreparation } | { ok: false; blocages: BlocagePreparation[]; type: TypeSurface }> {
   const dossier = await prisma.dossier.findUnique({ where: { id: demande.dossierId }, select: { id: true, archiveLe: true, prestations: true, lead: { select: { typeProjet: true } }, espaces: { where: { archiveLe: null }, take: 1, select: { souhaits: true } } } });
   if (!dossier || dossier.archiveLe) throw new ErreurMetier("Dossier introuvable ou archivé.", 404);
   const selection = lireSelection(dossier.prestations);
@@ -121,7 +133,7 @@ export async function preparerDepuisLAssistant(demande: DemandePreparation): Pro
   const photos = await photosAvantDuDossier(demande.dossierId);
   const photoId = demande.photoId ?? photos[0]?.id ?? null;
   if (!photoId) throw new ErreurMetier("Aucune photo « avant » du client dans ce dossier : demande-lui des photos (ou dépose-les) avant de préparer une simulation.", 409);
-  if (demande.photoId && !photos.some((p) => p.id === demande.photoId)) throw new ErreurMetier(`La photo « ${demande.photoId} » n'est pas une photo avant de ce dossier (voir « voir_photos »).`, 404);
+  if (demande.photoId && !photos.some((p) => p.id === demande.photoId)) throw new ErreurMetier(`La photo « ${demande.photoId} » n'est pas une photo avant de ce dossier (voir « voir_fichiers »).`, 404);
 
   const blocages: BlocagePreparation[] = [];
   const teintes: PreparationAssistant["teintes"] = [];
@@ -142,6 +154,5 @@ export async function preparerDepuisLAssistant(demande: DemandePreparation): Pro
   }
   if (blocages.length) return { ok: false, blocages, type };
   if (teintes.length === 0) throw new ErreurMetier("Indique au moins une zone et sa teinte.", 400);
-  const preparation = await preparerSimulation({ dossierId: demande.dossierId, photoId, typeSurface: type.id, zones: teintes.map((t) => ({ zone: t.zone, ref: t.ref })), mode: "CHATGPT" }, { origine: "CRM" });
-  return { ok: true, resultat: { preparation, photoId, type, teintes } };
+  return { ok: true, essai: { photoId, type, teintes } };
 }

@@ -42,7 +42,7 @@ export default function AssistantClaude({ initialAcces, initialConsignes }: { in
       <TitreSection>Assistant Claude</TitreSection>
       <div className="space-y-3">
         <CarteConnexion acces={acces} onMaj={setAcces} />
-        {consignes ? <CarteTexte cle="consignes" titre="Consignes" aide="Ce que Claude lit à chaque session : tarifs, prestations, conditions, protocole de campagne, principes de décision, format du point du jour. Écris-les comme tu les dirais à un directeur général. Claude peut les modifier à ta demande (« modifier_consignes », avec ta confirmation) : chaque enregistrement garde une version." texte={consignes.consignes} defaut={consignes.defauts.consignes} versions={consignes.versions?.consignes ?? []} onMaj={setConsignes} /> : null}
+        {consignes ? <CarteTexte cle="consignes" titre="Consignes" aide="Ce que Claude lit à chaque session : tarifs, prestations, conditions, protocole de campagne, principes de décision, format du point du jour. Écris-les comme tu les dirais à un directeur général. Claude peut les modifier à ta demande (« modifier » CONSIGNES, avec ta confirmation) : chaque enregistrement garde une version." texte={consignes.consignes} defaut={consignes.defauts.consignes} versions={consignes.versions?.consignes ?? []} onMaj={setConsignes} /> : null}
         {consignes ? <CarteTexte cle="positionnement" titre="Positionnement (contexte marché)" aide="Le cadre des recherches web de Claude : ce que vend CoverSwap, à qui, contre qui, à quels prix." texte={consignes.positionnement} defaut={consignes.defauts.positionnement} versions={consignes.versions?.positionnement ?? []} onMaj={setConsignes} /> : null}
         <CarteOutils outils={acces.outils} />
       </div>

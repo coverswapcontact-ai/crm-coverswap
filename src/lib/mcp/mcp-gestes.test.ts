@@ -217,6 +217,52 @@ describe("« geste_espace » : les gestes du panneau Espace, même état que l'�
   });
 });
 
+describe("« geste_espace » : le projet, la simulation, la demande — à la place du client (DP37, DP38, DP41, DP42, DP43)", () => {
+  test("VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION, DEVALIDER_SIMULATION, RETIRER_DEMANDE : jumeau par jumeau", async () => {
+    const service = await import("@/lib/espace/service");
+    const e = await ouvrirEspace("Eve", "Ecran");
+    const o = await ouvrirEspace("Odile", "Outil");
+    const espace = (id: string) => prisma.espaceClient.findUniqueOrThrow({ where: { id } });
+    const etat = async (x: { espaceId: string; dossierId: string }) => {
+      const es = await espace(x.espaceId);
+      const d = await prisma.dossier.findUniqueOrThrow({ where: { id: x.dossierId }, select: { etape: true } });
+      const types = (await prisma.dossierEvenement.findMany({ where: { dossierId: x.dossierId }, select: { type: true } })).map((t) => t.type).sort();
+      return { projet: es.projetValidePar, choix: Boolean(es.choixLe), demande: Boolean(es.propositionDemandeeLe), etape: d.etape, types };
+    };
+    const simulations: Record<string, string> = {};
+    for (const x of [e, o]) {
+      await service.enregistrerProjet(await espace(x.espaceId), { zones: ["plan-de-travail"], styles: [], propositions: false, metres: 4, repere: null, delai: null, precisions: "" });
+      simulations[x.dossierId] = (await prisma.simulationEspace.create({ data: { espaceId: x.espaceId, dossierId: x.dossierId, chemin: `dossiers/${x.dossierId}/simulations/s.png`, source: "CRM", statut: "PUBLIEE", publieeLe: new Date(), titre: "Chêne clair" } })).id;
+    }
+    const ecran = (corps: Record<string, unknown>) => route("@/app/api/dossiers/[id]/espace/route", "POST", `/api/dossiers/${e.dossierId}/espace`, corps, { id: e.dossierId });
+    const outil = (entree: Record<string, unknown>) => executer(gestes.outilGesteEspace, { dossierId: o.dossierId, ...entree });
+
+    await ecran({ geste: "valider-projet" });
+    assert.match((await outil({ geste: "VALIDER_PROJET" })).texte, /Projet de Odile Outil validé à sa place/);
+    assert.deepEqual(await etat(o), await etat(e));
+    assert.equal((await etat(o)).projet, "LUCAS");
+    await ecran({ geste: "devalider-projet" });
+    await outil({ geste: "DEVALIDER_PROJET" });
+    assert.deepEqual(await etat(o), await etat(e));
+    assert.equal((await etat(o)).projet, null);
+
+    await ecran({ geste: "valider-simulation", simulationId: simulations[e.dossierId] });
+    await outil({ geste: "VALIDER_SIMULATION", simulation_id: simulations[o.dossierId] });
+    assert.deepEqual(await etat(o), await etat(e));
+    assert.equal((await etat(o)).choix, true);
+    await ecran({ geste: "devalider-simulation" });
+    await outil({ geste: "DEVALIDER_SIMULATION" });
+    assert.deepEqual(await etat(o), await etat(e));
+    assert.equal((await etat(o)).choix, false);
+
+    for (const x of [e, o]) await prisma.espaceClient.update({ where: { id: x.espaceId }, data: { propositionDemandeeLe: new Date(), propositionMessage: "Plus foncé, svp." } });
+    await ecran({ geste: "retirer-demande" });
+    await outil({ geste: "RETIRER_DEMANDE" });
+    assert.deepEqual(await etat(o), await etat(e));
+    assert.equal((await etat(o)).demande, false);
+  });
+});
+
 describe("« doublon » et « anonymiser_client »", () => {
   test("LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les boutons de la fiche", async () => {
     const paire = async (nom: string) => {
@@ -326,7 +372,7 @@ describe("« publier » : les brouillons seulement, aperçu et jeton quand un ma
     assert.ok(reaffiche.confirmation, "réafficher : un mail part");
   });
 
-  test("l'ancien « publier_simulation » ne republie plus une simulation masquée", async () => {
+  test("« publier » SIMULATION sur un dossier (ex-« publier_simulation ») : les brouillons seulement, jamais une simulation masquée", async () => {
     const e = await ouvrirEspace("Quentin", "Ancien");
     const { deposerSimulationDossier, changerStatutSimulation, publierSimulations } = await import("@/lib/simulations/dossier");
     const s = await avecActeur(LUCAS, async () => (await deposerSimulationDossier(e.dossierId, await image({ r: 10, g: 20, b: 30 }), { titre: "Masquée", source: "MANUEL" })).id);
@@ -334,9 +380,15 @@ describe("« publier » : les brouillons seulement, aperçu et jeton quand un ma
       await publierSimulations(e.dossierId, [s], { prevenir: false });
       await changerStatutSimulation(e.dossierId, s, "masquer");
     });
-    const { outilPublierSimulation } = await import("@/lib/assistant/outils/ecriture");
-    const r = await executer(outilPublierSimulation, { dossierId: e.dossierId });
-    assert.match(r.texte, /Aucune simulation à publier/);
+    const statut = async (id: string) => (await prisma.simulationEspace.findUniqueOrThrow({ where: { id } })).statut;
+    const r = await executer(gestes.outilPublier, { quoi: "SIMULATION", cible: { dossierId: e.dossierId } });
+    assert.match(r.texte, /Aucune simulation en brouillon dans ce dossier : rien ne partira\./);
+    assert.equal(await statut(s), "MASQUEE");
+    // Un brouillon s'ajoute : il est publié (aperçu, puis jeton), la masquée reste masquée.
+    const b = await avecActeur(LUCAS, async () => (await deposerSimulationDossier(e.dossierId, await image({ r: 40, g: 50, b: 60 }), { titre: "Brouillon", source: "MANUEL" })).id);
+    const { fait } = await confirmer(gestes.outilPublier, { quoi: "SIMULATION", cible: { dossierId: e.dossierId } }, /publier 1 simulation dans l'espace du client : Brouillon/);
+    assert.match(fait.texte, /1 simulation publiée/);
+    assert.deepEqual([await statut(b), await statut(s)], ["PUBLIEE", "MASQUEE"]);
   });
 
   test("PUBLICATION : publier sur le site (sensible) comme « Publier » de l'écran Site ; sans accord écrit, refusé ; retirer sans confirmation", async () => {
@@ -391,6 +443,45 @@ describe("« agir_systeme » : les gestes techniques", () => {
     assert.match(disparue.texte, /n'existe plus/);
     const detecte = await executer(gestes.outilAgirSysteme, { action: "DETECTER_TACHES" });
     assert.match(detecte.texte, /^Tâches actualisées/);
+  });
+
+  test("SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META, traiter_mail RELIRE_BOITE : comme les boutons de Paramètres, de l'Analytique et du Mail (PA8, PA9, PA10, A15, A16, M1)", async () => {
+    const tacheDrive = async () => {
+      const t = await prisma.tache.findFirstOrThrow({ where: { cle: "synchro-drive" }, orderBy: { updatedAt: "desc" } });
+      return { type: t.type, statut: t.statut, charge: t.charge };
+    };
+    for (const verifier of [false, true]) {
+      await route("@/app/api/drive/synchroniser/route", "POST", "/api/drive/synchroniser", { verifier });
+      const parEcran = await tacheDrive();
+      const r = await executer(gestes.outilAgirSysteme, { action: verifier ? "VERIFIER_DRIVE" : "SYNCHRONISER_DRIVE" });
+      assert.ok(!r.confirmation, r.texte);
+      assert.deepEqual(await tacheDrive(), parEcran);
+      assert.match(JSON.stringify(parEcran.charge), new RegExp(`verifier[^,}]*${verifier}`));
+    }
+
+    // Sans compte Google : l'écran refuse, l'outil aussi, avec la même raison ; rien n'est mis en file.
+    const handlers = (await import("@/app/api/messages/relever/route")) as unknown as { POST: () => Promise<Response> };
+    const reponse = await avecActeur(LUCAS, () => handlers.POST());
+    const refusEcran = ((await reponse.json()) as { erreur?: string; error?: string; message?: string });
+    assert.equal(reponse.status, 409);
+    const releve = await executer(gestes.outilAgirSysteme, { action: "RELEVER_MAILS" });
+    assert.match(releve.texte, /Agent mail inactif/);
+    assert.ok(JSON.stringify(refusEcran).includes("Agent mail inactif"), JSON.stringify(refusEcran));
+    assert.equal(await prisma.tache.count({ where: { cle: "releve-boite" } }), 0);
+
+    const boiteEcran = (await route("@/app/api/mail/synchroniser/route", "POST", "/api/mail/synchroniser", undefined)) as { bilan: unknown };
+    const boite = await executer(gestes.outilTraiterMail, { geste: "RELIRE_BOITE" });
+    assert.deepEqual(boite.donnees, boiteEcran.bilan);
+
+    const { AVEC_ARCHIVES } = await import("@/lib/journal/extension");
+    const essais = () => prisma.lead.count({ where: { ...AVEC_ARCHIVES, archiveMotif: "Contact d'essai de l'intégration Meta" } });
+    const avant = await essais();
+    const essaiEcran = (await route("@/app/api/meta/essai/route", "POST", "/api/meta/essai", { notifier: false })) as { rapport: { etapes: { etape: string; ok: boolean }[] } };
+    const essai = await executer(gestes.outilAgirSysteme, { action: "ESSAI_META", notifier: false });
+    const etapes = (x: { etapes: { etape: string; ok: boolean }[] }) => x.etapes.map((t) => [t.etape, t.ok]);
+    assert.deepEqual(etapes(essai.donnees as { etapes: { etape: string; ok: boolean }[] }), etapes(essaiEcran.rapport));
+    assert.ok(!etapes(essaiEcran.rapport).some(([t]) => t === "Notification"), "sans notification : l'étape n'est pas tentée");
+    assert.equal(await essais(), avant + 2, "un contact d'essai par essai, archivé ensuite, comme l'écran");
   });
 
   test("sensibles : LANCER_BANC (coût), REJOUER_META tous, DECONNECTER_GOOGLE — aperçu et jeton ; REVOQUER_ACCES confirmé = l'écran", async () => {

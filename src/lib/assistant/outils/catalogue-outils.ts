@@ -33,4 +33,3 @@ export const outilListerOutils = definirOutil({
   },
 });
 
-export const OUTILS_CATALOGUE = [outilListerOutils];

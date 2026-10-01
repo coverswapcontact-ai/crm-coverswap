@@ -5,6 +5,7 @@ import { genererAmbiance, typeImage, type AppelAmbiance, type FormatAmbiance, ty
 import { JETONS_IMAGE_EDITION, estimerAppel, lireChoix, modeleEdition, releverCouts, sortieParDefaut, PLAFOND_DEFAUT } from "./ambiances";
 import { ecartContours } from "./planches";
 import { PRIX } from "./prix";
+import { CATALOGUE_DEFAUT, lireCatalogue, vignetteLocale, type Revetement } from "./vignettes";
 
 /**
  * Les teintes fidèles des photos du site (mission 19, complément du 01/10/2026) — `scripts/teintes-ambiances.ts`.
@@ -34,7 +35,7 @@ import { PRIX } from "./prix";
  */
 
 export const LISTE_TEINTES_DEFAUT = () => path.resolve(process.cwd(), "scripts", "teintes-site-v2.json");
-export const CATALOGUE_DEFAUT = () => path.resolve(process.cwd(), "..", "coverswap", "src", "data", "revetements.json");
+export { CATALOGUE_DEFAUT } from "./vignettes";
 /** Début de la mission 19 (les lignes GenerationImage d'avant sont la mission 16). */
 export const DEBUT_MISSION_19 = "2026-09-30T18:00:00Z";
 
@@ -168,13 +169,7 @@ export function lireListeTeintes(texte: string): ListeTeintes {
   return liste;
 }
 
-export type Revetement = { id: string; nom: string; famille: string; image: string; hex: string; tags?: string[] };
-
-export function lireCatalogue(texte: string): Revetement[] {
-  const brut = JSON.parse(texte) as unknown;
-  const liste = Array.isArray(brut) ? brut : Object.values(brut as Record<string, unknown>).flat();
-  return z.array(z.object({ id: z.string(), nom: z.string(), famille: z.string(), image: z.string(), hex, tags: z.array(z.string()).optional() }).passthrough()).parse(liste) as Revetement[];
-}
+export { lireCatalogue, type Revetement } from "./vignettes";
 
 /** Le filtre `plus_proche` : la famille, un mot du nom ou des tags, une teinte claire (L* ≥ 80, C* ≤ 12). */
 export function dansLeFiltre(r: Revetement, filtre: NonNullable<SurfaceTeinte["plus_proche"]>): boolean {
@@ -385,18 +380,8 @@ export type BilanTeintes = { images: ResultatImage[]; estimeDollars: number; dep
 const arrondi = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
 const dollars = (n: number) => `${n.toFixed(2).replace(".", ",")} $`;
 
-/** Télécharge (une fois) la vignette réelle d'une référence dans `<sortie>/vignettes/<id>.<ext>`. */
-async function vignette(ref: Revetement, sortie: string): Promise<string> {
-  const dossier = path.join(sortie, "vignettes");
-  const ext = path.extname(new URL(ref.image).pathname) || ".jpg";
-  const fichier = path.join(dossier, `${ref.id}${ext}`);
-  if (existsSync(fichier)) return fichier;
-  await fs.mkdir(dossier, { recursive: true });
-  const reponse = await fetch(ref.image);
-  if (!reponse.ok) throw new Error(`Vignette ${ref.id} introuvable (HTTP ${reponse.status}).`);
-  await fs.writeFile(fichier, Buffer.from(await reponse.arrayBuffer()));
-  return fichier;
-}
+/** La vignette réelle d'une référence dans `<sortie>/vignettes/<id>.<ext>` (téléchargée une fois). */
+const vignette = (ref: Revetement, sortie: string) => vignetteLocale(ref, path.join(sortie, "vignettes"));
 
 /** Une image unie (mode `--essai`) à la place d'une édition : aucune requête réseau. */
 const appelEssai: AppelAmbiance = async (demande) => {

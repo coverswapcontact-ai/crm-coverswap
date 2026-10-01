@@ -116,3 +116,39 @@ Choix 2 de Lucas : `~/coverswap-photos/choix-2.txt` (mes recommandations) ; piec
   droit à revoir pour le curseur), paire du restaurant sur /pro + hôtel/commerce/bureaux étiquetés, dressing sur
   Prestations › Meubles, pictos à la place de DessinFamille/PlanCuisine, alt restants, Lighthouse, retrait des images
   inutilisées (ouverture-provisoire ?), captures 390/1440, commit + push des deux dépôts.
+
+### Fin de l'intégration de la mission 19 (01/10/2026)
+
+Lucas a validé la planche des étiquettes (titres descriptifs, Statuary White ramené sur la crédence). Intégration faite et
+poussée : site 522889a, 7deb2a9, 6c11dee ; CRM 5ab25e9.
+- Études de l'accueil en paires avant / après étiquetées ; /pro : la paire du bar (« Ambiance · avant / après ») puis
+  l'hôtel, la boutique et les bureaux, sans lien vers le simulateur (le test /pro de la mission 17 l'interdit et compte
+  trois « Ambiance ») ; Prestations › Meubles : le dressing ; ouverture des pages par pièce étiquetée.
+- Pictos : `public/images/pictos/` (`npm run pictos`, AVIF + WebP 128 / 256 px), `DessinFamille` et `PlanCuisine` à
+  64 px au moins ; dans l'estimation du simulateur, `enSvg` (un test de la mission 17 compte des `<svg>`).
+- Retirée : `ouverture-provisoire` (plus référencée). Les fonds du blog et des prestations servent tous.
+- Lighthouse mobile en production (meilleur de 3 passages ; les passages suivants varient de 10 à 20 points sur ce poste,
+  y compris sur des pages non touchées) : accueil 90 / 100 / 100 / 100, LCP 3,1 s (mission 16 : 93, 2,8 s) ; simulateur
+  93 (94) ; matières 96 (97) ; réalisations 90 (97) ; comment ça marche 95 (96) ; pro 94 (98) ; inspirations 91, LCP 2,3 s ;
+  prestations/meubles 95. CLS 0 partout. Corrigés en route : cibles tactiles de la légende (accessibilité 97 → 100),
+  premières photos de /inspirations différées (LCP 4,8 s → 2,3 s).
+- Coût de la mission 19 relu dans GenerationImage : 6,51 $ (base d'essai, pas la production).
+- Pièges : CRLF de la copie de travail après un rebase (les tests qui lisent le source échouent localement, pas en CI) ;
+  `perf.test.ts` et `tunnel.test.ts` appartiennent à la mission 17.
+
+## Photos, série 2 : des intérieurs comme chez les gens (01/10/2026)
+
+Énoncé : `~/coverswap-photos/serie-2/prompt-photos-serie-2.md` ; liste `scripts/photos-serie-2.json` (122 images, 256
+essais, prompts non réécrits) ; direction artistique copiée dans `coverswap/docs/direction-artistique-serie-2.md`.
+Bibliothèque seulement : rien ne va sur le site.
+
+- Script : celui de la mission 19, plus `essais` par entrée, `echantillons` (vignettes réelles jointes après la source,
+  `src/lib/simulations/vignettes.ts`), sortie `~/coverswap-photos/serie-2/<sous-série>/`, phases `serie-2` /
+  `serie-2-edition` et plafond de la série (20 $) compté à part (`depenseDeLaSerie`). Tests :
+  `src/lib/base/mission-19-serie-2.test.ts`.
+- Estimation recalée sur le coût réel de la mission 19 (1 372 jetons de sortie en 1536x1024 high, 1 756 en 1024x1024 ;
+  source 1 536 jetons, 1 024 par échantillon) : l'ancienne grille (gpt-image-1) surestimait d'environ 4 fois.
+- **`--estimer` : 15,03 $** (phase 1 : 124 appels, 5,83 $ ; phase 2 : 132 éditions, 9,20 $), au-dessus du seuil de 12 $
+  fixé par l'énoncé : **ARRÊT avant toute génération**, décision de Lucas. Rien n'a été dépensé pour la série 2.
+- Pour lancer ensuite (lanceur `scratchpad/m19/lancer.cjs`, clé du site, base d'essai) :
+  `--liste scripts/photos-serie-2.json --phase 1`, choix des avants (`--planches --phase 1`), puis `--phase 2 --choix …`.

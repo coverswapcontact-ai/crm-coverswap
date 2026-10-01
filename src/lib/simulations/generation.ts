@@ -93,9 +93,10 @@ async function noter(ligne: {
   origine: "SITE" | "CRM" | "ESPACE";
   /**
    * `rendu` (défaut) ou `ambiance` (image d'illustration du site, mission 16 : sans photo, sans dossier) ou
-   * `ambiance-edition` (mission 19 : une image du site retouchée à partir d'une autre, par `/images/edits`).
+   * `ambiance-edition` (mission 19 : une image du site retouchée à partir d'une autre, par `/images/edits`) ; série 2 :
+   * `serie-2` et `serie-2-edition` (comptées à part, avec leur propre plafond).
    */
-  phase?: "rendu" | "ambiance" | "ambiance-edition";
+  phase?: "rendu" | "ambiance" | "ambiance-edition" | (string & {});
   /** Le modèle noté (défaut : celui des rendus) ; `essai` pour une image unie du mode essai, jamais facturée. */
   modele?: string;
   statut: "REUSSI" | "ECHEC";
@@ -348,7 +349,7 @@ const refusFidelite = (reponse: ReponseAmbiance) => !reponse.ok && reponse.statu
  */
 export async function genererAmbiance(
   entree: { prompt: string; format: FormatAmbiance; qualite?: QualiteAmbiance; source?: SourceEdition | null; references?: SourceEdition[]; fond?: "transparent" | null; fideliteHaute?: boolean; signal?: AbortSignal },
-  options: { appel?: AppelAmbiance; modele?: string; journal?: (ligne: string) => void } = {}
+  options: { appel?: AppelAmbiance; modele?: string; journal?: (ligne: string) => void; /** Préfixe de la phase notée dans GenerationImage (défaut « ambiance » ; série 2 : « serie-2 »). */ phase?: string } = {}
 ): Promise<ResultatAmbiance> {
   const debut = Date.now();
   const appelEssai = globalAppelEssai[CLE_APPEL_AMBIANCE];
@@ -356,7 +357,7 @@ export async function genererAmbiance(
   const appel = options.appel ?? appelEssai ?? appelAmbianceOpenAI;
   const modele = options.modele ?? modeleImage();
   const qualite = entree.qualite ?? "high";
-  const phase = entree.source ? "ambiance-edition" : "ambiance";
+  const phase = `${options.phase ?? "ambiance"}${entree.source ? "-edition" : ""}`;
   const echantillons = entree.source ? 1 + (entree.references?.length ?? 0) : 0;
   const echec = async (sortie: Omit<Extract<ResultatAmbiance, { ok: false }>, "ok" | "dureeMs">, detail?: string): Promise<ResultatAmbiance> => {
     const dureeMs = Date.now() - debut;

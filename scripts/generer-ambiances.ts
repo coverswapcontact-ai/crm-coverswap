@@ -1,3 +1,7 @@
+// Série 2 (01/10/2026, liste scripts/photos-serie-2.json, avec --liste) : essais par entrée, échantillons (vignettes
+// réelles jointes après la source, dans l'ordre ; --catalogue, --vignettes), sortie ~/coverswap-photos/serie-2/<sous-série>/,
+// coûts notés serie-2 / serie-2-edition dans GenerationImage, plafond de la série (20 $) compté à part.
+//
 // Les photos du site coverswap.fr — mission 19 : refaites avec GPT Image 2.5 (liste scripts/photos-site-v2.json :
 // générations par gpt-image-2.5-flare, éditions par gpt-image-2.5-sunburst, trois essais par image) ; les options de la
 // mission 16 (ancienne liste scripts/ambiances.json, --rendu) restent. Lancé à la main par l'orchestrateur — jamais par

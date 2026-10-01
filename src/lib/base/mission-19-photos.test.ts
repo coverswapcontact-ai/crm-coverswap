@@ -336,10 +336,10 @@ describe("le plafond de dépense", () => {
   test("estimation de l'appel au-dessus du plafond : arrêt net AVANT l'appel", async () => {
     simuler();
     const sortie = dossier("plafond-0");
-    const bilan = await lancer(["--phase", "1", "--sortie", sortie, "--seulement", "piece-cuisine", "--plafond", "0.1"]);
+    const bilan = await lancer(["--phase", "1", "--sortie", sortie, "--seulement", "piece-cuisine", "--plafond", "0.05"]);
     assert.equal(demandes.length, 0);
     assert.equal(bilan.plafondAtteint, true);
-    assert.ok(journal.some((l) => /^PLAFOND : 0,00 \$ déjà dépensés \+ ≈ 0,13 \$ pour piece-cuisine-1 dépasseraient 0,10 \$ — arrêt net, 3 appel\(s\) non lancé\(s\)/.test(l)), journal.join("\n"));
+    assert.ok(journal.some((l) => /^PLAFOND : 0,00 \$ déjà dépensés \+ ≈ 0,06 \$ pour piece-cuisine-1 dépasseraient 0,05 \$ — arrêt net, 3 appel\(s\) non lancé\(s\)/.test(l)), journal.join("\n"));
     assert.equal(readdirSync(sortie).length, 0);
   });
 
@@ -364,7 +364,7 @@ describe("--estimer", () => {
     assert.equal(existsSync(sortie), false);
     assert.equal(await prisma.generationImage.count(), avant);
     assert.equal(bilan.releve, null);
-    assert.ok(bilan.estimeDollars > 10.5 && bilan.estimeDollars < 11.2, `${bilan.estimeDollars}`);
+    assert.ok(bilan.estimeDollars > 3.5 && bilan.estimeDollars < 3.8, `${bilan.estimeDollars} (recalé sur le coût réel : la phase 1 a coûté 3,57 $)`);
     assert.ok(journal.some((l) => l.startsWith("Phase 1 (générations) : 24 image(s), 72 appel(s) (gpt-image-2.5-flare, qualité high)")));
     assert.ok(journal.some((l) => l === "Formats : 1536x1024 × 24, 1024x1536 × 3, 1024x1024 × 45."));
     assert.ok(journal.some((l) => l.startsWith("Hypothèses de l'estimation")));
@@ -392,10 +392,13 @@ describe("prix de gpt-image-2.5", () => {
       assert.deepEqual(prix.PRIX[modele], { texte: 5, image: 8, sortie: 30 });
     }
     assert.notEqual(prix.coutEnDollars(usage, "gpt-image-1"), attendu);
-    // Estimation d'un appel : high 1536x1024 ≈ 6 240 jetons de sortie + 500 de texte (+ 1 500 d'image en édition).
-    assert.equal(Math.round(ambiances.estimerAppel({ mode: "generation", format: "1536x1024" }) * 10_000) / 10_000, 0.1897);
-    assert.equal(Math.round(ambiances.estimerAppel({ mode: "edition", format: "1536x1024" }) * 10_000) / 10_000, 0.2017);
-    assert.equal(Math.round(ambiances.estimerAppel({ mode: "generation", format: "1024x1024" }) * 10_000) / 10_000, 0.1273);
+    // Estimation d'un appel (recalée sur le coût réel de la mission 19) : high 1536x1024 ≈ 1 372 jetons de sortie +
+    // 500 de texte (+ 1 536 d'image pour la source d'une édition, + 1 024 par échantillon joint).
+    const appel = (i: Parameters<typeof ambiances.estimerAppel>[0]) => Math.round(ambiances.estimerAppel(i) * 10_000) / 10_000;
+    assert.equal(appel({ mode: "generation", format: "1536x1024" }), 0.0437);
+    assert.equal(appel({ mode: "edition", format: "1536x1024" }), 0.0559);
+    assert.equal(appel({ mode: "edition", format: "1536x1024", echantillons: ["NH22", "AA17"] }), 0.0723);
+    assert.equal(appel({ mode: "generation", format: "1024x1024" }), 0.0552);
   });
 });
 

@@ -78,7 +78,7 @@ after(async () => {
 });
 
 describe("la liste du dépôt (scripts/ambiances.json)", () => {
-  test("douze entrées, celles de la conception dans l'ordre, une seule réserve ; honnêteté dans chaque prompt ; ≈ 1,8 $ (grille 2.5)", async () => {
+  test("douze entrées, celles de la conception dans l'ordre, une seule réserve ; honnêteté dans chaque prompt ; ≈ 0,55 $ (grille 2.5 recalée sur le coût réel)", async () => {
     const liste = ambiances.lireListeAmbiances(await fs.readFile(path.join(process.cwd(), "scripts", "ambiances.json"), "utf8"));
     assert.equal(liste.length, 12);
     assert.deepEqual(liste.map((a) => a.nom), NOMS_CONCEPTION);
@@ -93,7 +93,7 @@ describe("la liste du dépôt (scripts/ambiances.json)", () => {
     const horsReserve = ambiances.choisirAmbiances(liste, { seulement: null, sauf: [] });
     assert.equal(horsReserve.length, 11);
     const estime = ambiances.estimerCoutAmbiances(horsReserve);
-    assert.ok(estime >= 1.7 && estime <= 1.9, `≈ ${estime} $`);
+    assert.ok(estime >= 0.5 && estime <= 0.6, `≈ ${estime} $`);
   });
 
   test("une liste invalide est refusée avant tout appel (nom, format, double, emoji) ; plus de douze : accepté (mission 19)", () => {
@@ -178,7 +178,7 @@ describe("--essai : les ambiances sans réseau", () => {
     const sortie = path.join(dossier("estimer"), "pas-cree");
     const avant = await prisma.generationImage.count();
     const bilan = await lancer([...ANCIENNE_LISTE, "--estimer", "--sortie", sortie]);
-    assert.ok(bilan.estimeDollars >= 1.7 && bilan.estimeDollars <= 1.9, `${bilan.estimeDollars}`);
+    assert.ok(bilan.estimeDollars >= 0.5 && bilan.estimeDollars <= 0.6, `${bilan.estimeDollars}`);
     assert.equal(bilan.releve, null);
     assert.equal(existsSync(sortie), false);
     assert.ok(journal.some((l) => l.startsWith("Coût estimé")));

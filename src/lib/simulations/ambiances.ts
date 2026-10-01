@@ -12,6 +12,7 @@ import { QUALITES_AMBIANCE, definirGenerateurEssai, extensionDe, genererAmbiance
 import { genererAvecMoteur } from "./pipeline";
 import { plancheContours, planche } from "./planches";
 import { PRIX, coutEstime } from "./prix";
+import { CATALOGUE_DEFAUT, lireCatalogue, vignetteEnEntree, vignetteLocale, type Revetement } from "./vignettes";
 
 /**
  * Les images du site — la logique de `scripts/generer-ambiances.ts`, lancé à la main par l'orchestrateur (jamais par
@@ -70,6 +71,15 @@ export const JETONS_SORTIE: Record<QualiteAmbiance, Record<FormatAmbiance, numbe
 };
 export const JETONS_TEXTE_PROMPT = 500;
 export const JETONS_IMAGE_EDITION = 1500;
+/**
+ * gpt-image-2.5, recalé sur le coût réel de la mission 19 (GenerationImage, 120 images en high) : jetons de sortie
+ * 1 756 en 1024x1024, 1 372 en 1536x1024 et 1024x1536 ; image d'entrée d'une édition 1 536 jetons (la source), plus
+ * 1 024 par échantillon joint (vignette de 512 px). Les autres qualités : au prorata de la grille de gpt-image-1.
+ */
+export const JETONS_SORTIE_25_HIGH: Record<FormatAmbiance, number> = { "1024x1024": 1756, "1536x1024": 1372, "1024x1536": 1372 };
+export const JETONS_SOURCE_25 = 1536;
+export const JETONS_ECHANTILLON_25 = 1024;
+const est25 = (modele: string) => modele.startsWith("gpt-image-2.5");
 /** Extensions reconnues d'une image déjà présente dans la sortie. */
 const EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
 
@@ -102,12 +112,44 @@ const schemaImageSite = z
     fond: z.literal("transparent").optional(),
     etiquette: z.string().trim().min(1).max(40),
     prompt: schemaPrompt,
+    /* Série 2 : */
+    /** Essais de cette image (à la place de `essais_par_image`). */
+    essais: z.number().int().min(1).max(ESSAIS_MAX).optional(),
+    /** La sous-série (quotidien, reperes, ambiances, pictos) : le sous-dossier de sortie. */
+    serie: schemaNom.optional(),
+    piece: z.string().trim().min(1).max(40).optional(),
+    usages: z.array(z.string().trim().min(1).max(40)).optional(),
+    /** Édition : les références dont la vignette réelle est jointe après la source, dans l'ordre (images 2, 3…). */
+    echantillons: z.array(z.string().regex(/^[A-Za-z0-9-]{1,20}$/)).min(1).max(4).optional(),
+    /** Surface → référence (relevé des teintes, bibliothèque). */
+    composition: z.record(z.string(), z.string()).optional(),
   })
   .strict();
-const schemaListeSite = z.object({ essais_par_image: z.number().int().min(1).max(ESSAIS_MAX), images: z.array(schemaImageSite).min(1) }).strict();
+const schemaListeSite = z
+  .object({
+    essais_par_image: z.number().int().min(1).max(ESSAIS_MAX).optional(),
+    /** Série 2 : le numéro de série (sortie `~/coverswap-photos/serie-<n>/<sous-série>/`, coûts notés `serie-<n>`). */
+    serie: z.union([z.number().int().positive(), schemaNom]).optional(),
+    /** Plafond de la série, compté à part dans GenerationImage. */
+    plafond_dollars: z.number().positive().optional(),
+    images: z.array(schemaImageSite).min(1),
+  })
+  .strict();
 
 export type ImageSite = z.infer<typeof schemaImageSite> & { reserve?: boolean };
-export type ListeImages = { essais: number; images: ImageSite[]; /** Ancienne liste (mission 16) : un essai nommé `<nom>.png`. */ ancienFormat: boolean };
+export type ListeImages = {
+  /** Essais par image par défaut (série 2 : le plus grand des essais par entrée). */
+  essais: number;
+  images: ImageSite[];
+  /** Ancienne liste (mission 16) : un essai nommé `<nom>.png`. */
+  ancienFormat: boolean;
+  /** Série 2 : le numéro de série, et son plafond. */
+  serie?: string | null;
+  plafond?: number | null;
+};
+
+/** Les essais d'une image : `--essais`, sinon ceux de l'entrée (série 2), sinon ceux de la liste. */
+export const essaisDe = (image: Pick<ImageSite, "essais">, liste: Pick<ListeImages, "essais">, forces: number | null = null) => forces ?? image.essais ?? liste.essais;
 
 /**
  * La liste des images, validée strictement avant tout appel : noms uniques, aucun emoji ; une édition a une source,
@@ -120,9 +162,10 @@ export function lireListeImages(texte: string): ListeImages {
   const brut: unknown = JSON.parse(texte);
   if (Array.isArray(brut)) {
     const images = lireListeAmbiances(texte).map((a): ImageSite => ({ nom: a.nom, mode: "generation", format: a.format, etiquette: "Ambiance", prompt: a.prompt, ...(a.reserve ? { reserve: true } : {}) }));
-    return { essais: 1, images, ancienFormat: true };
+    return { essais: 1, images, ancienFormat: true, serie: null, plafond: null };
   }
   const liste = schemaListeSite.parse(brut);
+  if (liste.essais_par_image === undefined && liste.images.some((i) => i.essais === undefined)) throw new Error("Liste : `essais_par_image`, ou `essais` sur chaque image.");
   const vus = new Map<string, ImageSite>();
   for (const image of liste.images) {
     if (vus.has(image.nom)) throw new Error(`Image en double : ${image.nom}.`);
@@ -135,9 +178,11 @@ export function lireListeImages(texte: string): ListeImages {
         throw new Error(`${image.nom} : source ${image.source} ${plusBas ? "déclarée plus bas dans la liste (elle doit la précéder)" : "inconnue"}.`);
       }
     } else if (image.source) throw new Error(`${image.nom} : une génération n'a pas de source (mode edition ?).`);
+    if (image.echantillons && image.mode !== "edition") throw new Error(`${image.nom} : des échantillons ne se joignent qu'à une édition.`);
     vus.set(image.nom, image);
   }
-  return { essais: liste.essais_par_image, images: liste.images, ancienFormat: false };
+  const essais = liste.essais_par_image ?? Math.max(...liste.images.map((i) => i.essais ?? 1));
+  return { essais, images: liste.images, ancienFormat: false, serie: liste.serie === undefined ? null : String(liste.serie), plafond: liste.plafond_dollars ?? null };
 }
 
 export type ZoneRendu = { zone: IdZone; ref: string };
@@ -159,6 +204,13 @@ export type OptionsAmbiances = {
   plafond: number;
   planches: boolean;
   fideliteHaute: boolean;
+  /** `--sortie` donnée (sinon, pour une série : `~/coverswap-photos/serie-<n>`). */
+  sortieDonnee: boolean;
+  /** `--plafond` donné (sinon, pour une série : son `plafond_dollars`). */
+  plafondDonne: boolean;
+  /** Le catalogue du site (vignettes des échantillons) et le dossier où elles sont gardées. */
+  catalogue: string;
+  vignettes: string;
 };
 
 const liste = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
@@ -221,9 +273,13 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
     plafond: PLAFOND_DEFAUT,
     planches: false,
     fideliteHaute: false,
+    sortieDonnee: false,
+    plafondDonne: false,
+    catalogue: CATALOGUE_DEFAUT(),
+    vignettes: path.join(sortieParDefaut(), "vignettes"),
   };
   const valeurs = new Map<string, string>();
-  const AVEC_VALEUR = new Set(["--liste", "--sortie", "--max", "--seulement", "--sauf", "--rendu", "--piece", "--zones", "--phase", "--choix", "--essais", "--qualite", "--plafond"]);
+  const AVEC_VALEUR = new Set(["--liste", "--sortie", "--max", "--seulement", "--sauf", "--rendu", "--piece", "--zones", "--phase", "--choix", "--essais", "--qualite", "--plafond", "--catalogue", "--vignettes"]);
   for (let i = 0; i < argv.length; i++) {
     const [cle, egal] = argv[i].includes("=") ? [argv[i].slice(0, argv[i].indexOf("=")), argv[i].slice(argv[i].indexOf("=") + 1)] : [argv[i], undefined];
     if (cle === "--essai") options.essai = true;
@@ -237,7 +293,12 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
     } else throw new Error(`Option inconnue : ${argv[i]}.`);
   }
   if (valeurs.has("--liste")) options.liste = path.resolve(valeurs.get("--liste")!);
-  if (valeurs.has("--sortie")) options.sortie = path.resolve(valeurs.get("--sortie")!);
+  if (valeurs.has("--sortie")) {
+    options.sortie = path.resolve(valeurs.get("--sortie")!);
+    options.sortieDonnee = true;
+  }
+  if (valeurs.has("--catalogue")) options.catalogue = path.resolve(valeurs.get("--catalogue")!);
+  if (valeurs.has("--vignettes")) options.vignettes = path.resolve(valeurs.get("--vignettes")!);
   if (valeurs.has("--max")) options.max = entierBorne("--max", valeurs.get("--max")!, 1, 10_000);
   if (valeurs.has("--seulement")) options.seulement = liste(valeurs.get("--seulement")!);
   if (valeurs.has("--sauf")) options.sauf = liste(valeurs.get("--sauf")!);
@@ -253,6 +314,7 @@ export function lireArguments(argv: string[]): OptionsAmbiances {
     const plafond = Number(valeurs.get("--plafond")!.replace(",", "."));
     if (!Number.isFinite(plafond) || plafond <= 0) throw new Error("--plafond : un montant en dollars, positif.");
     options.plafond = plafond;
+    options.plafondDonne = true;
   }
   if (valeurs.has("--rendu")) {
     const piece = valeurs.get("--piece") ?? "";
@@ -303,8 +365,13 @@ export function imagesDeLaPhase(liste: ListeImages, options: Pick<OptionsAmbianc
 export const modeleDe = (image: Pick<ImageSite, "mode">) => (image.mode === "edition" ? modeleEdition() : modeleGeneration());
 
 /** Coût estimé d'UN appel, en dollars non arrondis (hypothèses en tête de fichier). */
-export function estimerAppel(image: Pick<ImageSite, "mode" | "format">, qualite: QualiteAmbiance = "high", modele = modeleDe(image)): number {
+export function estimerAppel(image: Pick<ImageSite, "mode" | "format"> & { echantillons?: string[] }, qualite: QualiteAmbiance = "high", modele = modeleDe(image)): number {
   const prix = PRIX[modele] ?? PRIX["gpt-image-1"];
+  if (est25(modele)) {
+    const sortie = Math.round((JETONS_SORTIE_25_HIGH[image.format] * JETONS_SORTIE[qualite][image.format]) / JETONS_SORTIE.high[image.format]);
+    const entree = image.mode === "edition" ? JETONS_SOURCE_25 + JETONS_ECHANTILLON_25 * (image.echantillons?.length ?? 0) : 0;
+    return (sortie * prix.sortie + JETONS_TEXTE_PROMPT * prix.texte + entree * prix.image) / 1_000_000;
+  }
   const jetons = JETONS_SORTIE[qualite][image.format] * prix.sortie + JETONS_TEXTE_PROMPT * prix.texte + (image.mode === "edition" ? JETONS_IMAGE_EDITION * prix.image : 0);
   return jetons / 1_000_000;
 }
@@ -316,8 +383,15 @@ export function estimerCoutAmbiances(images: (Pick<ImageSite, "format"> & { mode
 }
 
 /** Le texte des hypothèses d'estimation (affiché par `--estimer`). */
-export function hypothesesEstimation(qualite: QualiteAmbiance): string {
+export function hypothesesEstimation(qualite: QualiteAmbiance, modele = modeleGeneration()): string {
   const j = JETONS_SORTIE[qualite];
+  if (est25(modele)) {
+    const g = (format: FormatAmbiance) => Math.round((JETONS_SORTIE_25_HIGH[format] * JETONS_SORTIE[qualite][format]) / JETONS_SORTIE.high[format]).toLocaleString("fr-FR").replace(/\s/g, " ");
+    return (
+      `Hypothèses de l'estimation (gpt-image-2.5, recalées sur le coût réel de la mission 19) : jetons de sortie en qualité ${qualite} — 1024x1024 ≈ ${g("1024x1024")}, 1536x1024 et 1024x1536 ≈ ${g("1536x1024")} ` +
+      `(30 $/M) ; + ~${JETONS_TEXTE_PROMPT} jetons de texte (5 $/M) ; + pour une édition ~${JETONS_SOURCE_25} jetons pour la source et ~${JETONS_ECHANTILLON_25} par échantillon joint (8 $/M).`
+    );
+  }
   const f = (n: number) => n.toLocaleString("fr-FR").replace(/\s/g, " ");
   return (
     `Hypothèses de l'estimation : jetons de sortie par image en qualité ${qualite} — 1024x1024 ≈ ${f(j["1024x1024"])}, 1536x1024 et 1024x1536 ≈ ${f(j["1536x1024"])} ` +
@@ -403,6 +477,17 @@ export async function releverCouts(depuis: Date): Promise<ReleveCouts> {
   const ordre = ["ambiance", "ambiance-edition", "rendu", "analyse", "controle"];
   const parPhase = [...groupes.values()].sort((a, b) => (ordre.indexOf(a.phase) + 1 || 99) - (ordre.indexOf(b.phase) + 1 || 99) || a.statut.localeCompare(b.statut));
   return { lignes: lignes.length, totalDollars: Math.round(parPhase.reduce((s, g) => s + g.dollars, 0) * 10_000) / 10_000, parPhase };
+}
+
+/** Le coût déjà compté pour une série (phases `serie-<n>` et `serie-<n>-edition`, origine CRM, sans dossier) : son plafond est à part. */
+export async function depenseDeLaSerie(prefixe: string): Promise<number> {
+  const lignes = await prisma.generationImage.findMany({ where: { origine: "CRM", dossierId: null, phase: { in: [prefixe, `${prefixe}-edition`] } }, select: { coutDollars: true } });
+  return Math.round(lignes.reduce((t, l) => t + (l.coutDollars ?? 0), 0) * 10_000) / 10_000;
+}
+
+/** Où sont les fichiers d'une image : la sortie, et pour une série son sous-dossier (`quotidien`, `reperes`…). */
+export function dossierDe(image: Pick<ImageSite, "serie"> | undefined, racine: string, liste: Pick<ListeImages, "serie">): string {
+  return liste.serie && image?.serie ? path.join(racine, image.serie) : racine;
 }
 
 export type BilanAmbiances = {
@@ -492,19 +577,20 @@ function verifierChoix(liste: ListeImages, choix: Map<string, number>, essais: n
 type Appel = { image: ImageSite; essai: number; /** L'essai choisi de la source (édition) : son nom de fichier sans extension. */ source: string | null };
 
 /** Les planches de choix de la phase (et les contours des paires avant/après), sans aucun appel payant. */
-async function executerPlanches(images: ImageSite[], liste: ListeImages, essais: number, options: OptionsAmbiances, bilan: BilanAmbiances, journal: (ligne: string) => void): Promise<BilanAmbiances> {
+async function executerPlanches(images: ImageSite[], liste: ListeImages, essaisForces: number | null, options: OptionsAmbiances, bilan: BilanAmbiances, journal: (ligne: string) => void): Promise<BilanAmbiances> {
   const parNom = new Map(liste.images.map((i) => [i.nom, i]));
-  const sansSuffixe = liste.ancienFormat && essais === 1;
+  const sansSuffixe = liste.ancienFormat && essaisDe({}, liste, essaisForces) === 1;
+  const dans = (image: ImageSite | undefined) => dossierDe(image, options.sortie, liste);
   const dossier = path.join(options.sortie, "planches");
   journal(`Planches de choix (aucun appel payant) : ${images.length} image(s), essais lus dans ${options.sortie}, planches écrites dans ${dossier}.`);
   for (const image of images) {
-    const presents = Array.from({ length: essais }, (_, i) => ({ numero: i + 1, fichier: dejaLa(options.sortie, nomEssai(image.nom, i + 1, sansSuffixe)) })).filter((e): e is { numero: number; fichier: string } => e.fichier !== null);
+    const presents = Array.from({ length: essaisDe(image, liste, essaisForces) }, (_, i) => ({ numero: i + 1, fichier: dejaLa(dans(image), nomEssai(image.nom, i + 1, sansSuffixe)) })).filter((e): e is { numero: number; fichier: string } => e.fichier !== null);
     if (presents.length === 0) {
       journal(`${image.nom} : aucun essai dans la sortie, pas de planche.`);
       continue;
     }
     const numeroSource = image.source ? options.choix.get(image.source) : undefined;
-    const source = image.source && numeroSource ? dejaLa(options.sortie, nomEssai(image.source, numeroSource)) : null;
+    const source = image.source && numeroSource ? dejaLa(dans(parNom.get(image.source)), nomEssai(image.source, numeroSource)) : null;
     if (image.mode === "edition" && !source) journal(`${image.nom} : source ${image.source} ${numeroSource ? `choisie (${numeroSource}) mais absente de la sortie` : "non choisie (--choix)"} — planche sans la source.`);
     const tuiles = [...(source ? [{ fichier: source, etiquette: "source" }] : []), ...presents.map((e) => ({ fichier: e.fichier, etiquette: String(e.numero) }))];
     const fichier = path.join(dossier, `${image.nom}.jpg`);
@@ -542,13 +628,22 @@ export async function executerAmbiances(argv: string[], journal: (ligne: string)
 
   const lue = lireListeImages(await fs.readFile(options.liste, "utf8"));
   if (!lue.ancienFormat && options.phase === null) throw new Error("--phase 1 (générations) ou --phase 2 (éditions) : obligatoire avec cette liste.");
+  // Série 2 : sortie `~/coverswap-photos/serie-<n>/<sous-série>/`, coûts notés `serie-<n>`, plafond de la liste.
+  const prefixe = lue.serie ? `serie-${lue.serie}` : "ambiance";
+  if (lue.serie && !options.sortieDonnee) options.sortie = path.join(options.sortie, `serie-${lue.serie}`);
+  if (lue.plafond && !options.plafondDonne) options.plafond = lue.plafond;
+  const dans = (image: ImageSite | undefined) => dossierDe(image, options.sortie, lue);
   const essais = options.essais ?? lue.essais;
   const sansSuffixe = lue.ancienFormat && essais === 1;
   const essaisSource = Math.max(lue.essais, essais);
   verifierChoix(lue, options.choix, essaisSource);
   const { images, horsPhase } = imagesDeLaPhase(lue, options);
+  const parNom = new Map(lue.images.map((i) => [i.nom, i]));
   if (horsPhase.length > 0) journal(`Hors de la phase ${options.phase} (ignorées) : ${horsPhase.join(", ")}.`);
-  if (options.planches) return executerPlanches(images, lue, essais, options, bilan, journal);
+  if (options.planches) return executerPlanches(images, lue, options.essais, options, bilan, journal);
+  // Les échantillons : chaque référence doit exister au catalogue du site (sa vignette réelle est jointe).
+  const catalogue = images.some((i) => i.echantillons?.length) ? new Map<string, Revetement>(lireCatalogue(await fs.readFile(options.catalogue, "utf8")).map((r) => [r.id, r])) : new Map<string, Revetement>();
+  for (const image of images) for (const ref of image.echantillons ?? []) if (!catalogue.has(ref)) throw new Error(`${image.nom} : échantillon ${ref} absent du catalogue (${options.catalogue}).`);
 
   // Le plan : chaque essai de chaque image, sauf ceux déjà là ; une édition sans source choisie n'est pas lancée.
   const aFaire: Appel[] = [];
@@ -562,8 +657,8 @@ export async function executerAmbiances(argv: string[], journal: (ligne: string)
       }
       source = nomEssai(image.source, n);
     }
-    for (let k = 1; k <= essais; k++) {
-      const present = dejaLa(options.sortie, nomEssai(image.nom, k, sansSuffixe));
+    for (let k = 1; k <= essaisDe(image, lue, options.essais); k++) {
+      const present = dejaLa(dans(image), nomEssai(image.nom, k, sansSuffixe));
       if (present) bilan.sautees.push({ nom: image.nom, essai: k, raison: `déjà là (${path.basename(present)})` });
       else if (options.max !== null && aFaire.length >= options.max) bilan.sautees.push({ nom: image.nom, essai: k, raison: `--max ${options.max} atteint` });
       else aFaire.push({ image, essai: k, source });
@@ -574,12 +669,12 @@ export async function executerAmbiances(argv: string[], journal: (ligne: string)
   const modeles = [...new Set(aFaire.map((a) => modeleDe(a.image)))];
   const libellePhase = options.phase === null ? "Ancienne liste (mission 16)" : options.phase === 1 ? "Phase 1 (générations)" : "Phase 2 (éditions)";
   const nbImages = new Set(aFaire.map((a) => a.image.nom)).size;
-  journal(`Liste : ${options.liste} — ${lue.images.length} image(s), ${essais} essai(s) par image${options.essais ? " (--essais)" : ""}.`);
+  journal(`Liste : ${options.liste} — ${lue.images.length} image(s), ${lue.images.some((i) => i.essais) && !options.essais ? "essais par image (de 1 à " + lue.essais + ")" : `${essais} essai(s) par image`}${options.essais ? " (--essais)" : ""}${lue.serie ? `, série ${lue.serie} (coûts « ${prefixe} », plafond ${dollars(options.plafond)})` : ""}.`);
   journal(`${libellePhase} : ${nbImages} image(s), ${aFaire.length} appel(s) (${options.essai ? "essai" : modeles.join(", ") || modeleDe({ mode: options.phase === 2 ? "edition" : "generation" })}, qualité ${options.qualite}) ; sortie : ${options.sortie}.`);
   for (const image of images) {
     const appels = aFaire.filter((a) => a.image === image);
     if (appels.length === 0) continue;
-    const details = [image.format, image.fond === "transparent" ? "fond transparent" : null, image.etiquette, appels[0].source ? `source ${appels[0].source}` : null].filter(Boolean).join(", ");
+    const details = [image.format, image.fond === "transparent" ? "fond transparent" : null, image.etiquette, appels[0].source ? `source ${appels[0].source}` : null, image.echantillons?.length ? `échantillons ${image.echantillons.join(" ")}` : null].filter(Boolean).join(", ");
     journal(`  - ${image.nom} (${details}) : essai(s) ${appels.map((a) => a.essai).join(", ")}`);
   }
   const parFormat = FORMATS_AMBIANCE.map((f) => [f, aFaire.filter((a) => a.image.format === f).length] as const).filter(([, n]) => n > 0);
@@ -588,36 +683,46 @@ export async function executerAmbiances(argv: string[], journal: (ligne: string)
   if (reserves.length) journal(`En réserve : ${reserves.join(", ")}.`);
   if (bilan.sautees.length) journal(`Sautées : ${bilan.sautees.map((s) => `${sansSuffixe ? s.nom : nomEssai(s.nom, s.essai ?? 1)} (${s.raison})`).join(", ")}.`);
   for (const b of bilan.bloquees) journal(`Non lancée : ${b.nom} — ${b.raison}.`);
-  journal(`Coût estimé : ≈ ${dollars(bilan.estimeDollars)} (${aFaire.length} appel(s)) ; plafond du lancement ${dollars(options.plafond)}${bilan.estimeDollars > options.plafond ? " — le plan le DÉPASSE : arrêt net avant l'appel qui le franchirait" : ""}.`);
+  // Une série a son plafond à part : ce qui est déjà compté pour elle dans GenerationImage s'y ajoute.
+  const deja = lue.serie ? await depenseDeLaSerie(prefixe) : 0;
+  const reste = Math.round((options.plafond - deja) * 100) / 100;
+  journal(`Coût estimé : ≈ ${dollars(bilan.estimeDollars)} (${aFaire.length} appel(s)) ; ${lue.serie ? `plafond de la série ${dollars(options.plafond)}, déjà dépensé ${dollars(deja)}, reste ${dollars(reste)}` : `plafond du lancement ${dollars(options.plafond)}`}${bilan.estimeDollars > reste ? " — le plan le DÉPASSE : arrêt net avant l'appel qui le franchirait" : ""}.`);
   journal(hypothesesEstimation(options.qualite));
   if (options.estimer || aFaire.length === 0) return bilan;
-  await fs.mkdir(options.sortie, { recursive: true });
+  for (const a of aFaire) await fs.mkdir(dans(a.image), { recursive: true });
 
   let fideliteHaute = options.fideliteHaute;
-  let depense = 0;
+  let depense = deja;
   for (const [i, a] of aFaire.entries()) {
     const etiquette = `[${i + 1}/${aFaire.length}] ${nomEssai(a.image.nom, a.essai, sansSuffixe)}`;
     const estime = estimerAppel(a.image, options.qualite);
     if (depense + estime > options.plafond) {
       bilan.plafondAtteint = true;
-      journal(`PLAFOND : ${dollars(depense)} déjà dépensés + ≈ ${dollars(estime)} pour ${nomEssai(a.image.nom, a.essai, sansSuffixe)} dépasseraient ${dollars(options.plafond)} — arrêt net, ${aFaire.length - i} appel(s) non lancé(s) (--plafond pour le relever).`);
+      journal(`PLAFOND : ${dollars(depense)} déjà dépensés${lue.serie ? ` pour la série ${lue.serie}` : ""} + ≈ ${dollars(estime)} pour ${nomEssai(a.image.nom, a.essai, sansSuffixe)} dépasseraient ${dollars(options.plafond)} — arrêt net, ${aFaire.length - i} appel(s) non lancé(s) (--plafond pour le relever).`);
       break;
     }
     let source: { octets: Buffer; type: ReturnType<typeof typeImage>; nom: string } | null = null;
     if (a.source) {
-      const fichierSource = dejaLa(options.sortie, a.source);
+      const dossierSource = dans(a.image.source ? parNom.get(a.image.source) : undefined);
+      const fichierSource = dejaLa(dossierSource, a.source);
       if (!fichierSource) {
-        bilan.bloquees.push({ nom: a.image.nom, raison: `essai choisi ${a.source} absent de ${options.sortie}` });
+        bilan.bloquees.push({ nom: a.image.nom, raison: `essai choisi ${a.source} absent de ${dossierSource}` });
         journal(`${etiquette} : non lancée, l'essai choisi ${a.source} est absent de la sortie.`);
         continue;
       }
       const octets = await fs.readFile(fichierSource);
       source = { octets, type: typeImage(octets), nom: path.basename(fichierSource) };
     }
+    // Série 2 : les vignettes réelles des échantillons, après la source, dans l'ordre de la liste (images 2, 3…).
+    const references = [];
+    for (const ref of a.image.echantillons ?? []) {
+      const octets = await vignetteEnEntree(await vignetteLocale(catalogue.get(ref)!, options.vignettes));
+      references.push({ octets, type: "image/png" as const, nom: `${ref}.png` });
+    }
     const modele = options.essai ? "essai" : modeleDe(a.image);
     const resultat = await genererAmbiance(
-      { prompt: a.image.prompt, format: a.image.format, qualite: options.qualite, source, fond: a.image.fond ?? null, fideliteHaute },
-      options.essai ? { appel: appelEssai, modele, journal } : { modele, journal }
+      { prompt: a.image.prompt, format: a.image.format, qualite: options.qualite, source, ...(references.length ? { references } : {}), fond: a.image.fond ?? null, fideliteHaute },
+      options.essai ? { appel: appelEssai, modele, journal, phase: prefixe } : { modele, journal, phase: prefixe }
     );
     bilan.appels += 1;
     if (!resultat.ok) {
@@ -631,13 +736,13 @@ export async function executerAmbiances(argv: string[], journal: (ligne: string)
       fideliteHaute = false;
       journal(`input_fidelity n'est plus envoyé pour la suite du lancement (refusé par ${modele}).`);
     }
-    const fichier = path.join(options.sortie, `${nomEssai(a.image.nom, a.essai, sansSuffixe)}.${extensionDe(typeImage(resultat.image))}`);
+    const fichier = path.join(dans(a.image), `${nomEssai(a.image.nom, a.essai, sansSuffixe)}.${extensionDe(typeImage(resultat.image))}`);
     await fs.writeFile(fichier, resultat.image);
     bilan.ecrites.push({ nom: a.image.nom, essai: a.essai, fichier, coutDollars: resultat.coutDollars });
     depense = Math.round((depense + resultat.coutDollars) * 10_000) / 10_000;
-    bilan.totalDollars = depense;
-    journal(`${etiquette} (${a.image.format}${a.source ? `, depuis ${a.source}` : ""}) : ${fichier} — ${dollars(resultat.coutDollars)} en ${Math.round(resultat.dureeMs / 1000)} s (cumul ${dollars(depense)}).`);
+    bilan.totalDollars = Math.round((depense - deja) * 10_000) / 10_000;
+    journal(`${etiquette} (${a.image.format}${a.source ? `, depuis ${a.source}` : ""}) : ${fichier} — ${dollars(resultat.coutDollars)} en ${Math.round(resultat.dureeMs / 1000)} s (cumul ${dollars(bilan.totalDollars)}${lue.serie ? `, série ${dollars(depense)}` : ""}).`);
   }
-  journal(`Total : ${dollars(bilan.totalDollars)} pour ${bilan.ecrites.length} image(s)${bilan.echecs.length ? `, ${bilan.echecs.length} échec(s)` : ""}${bilan.plafondAtteint ? ", arrêté au plafond" : ""} — lignes GenerationImage (origine CRM, phases ambiance / ambiance-edition).`);
+  journal(`Total : ${dollars(bilan.totalDollars)} pour ${bilan.ecrites.length} image(s)${bilan.echecs.length ? `, ${bilan.echecs.length} échec(s)` : ""}${bilan.plafondAtteint ? ", arrêté au plafond" : ""} — lignes GenerationImage (origine CRM, phases ${prefixe} / ${prefixe}-edition).`);
   return avecReleve(bilan, debut, journal);
 }

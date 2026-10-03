@@ -2302,10 +2302,34 @@ un texte est proposé, puis le lead suivant (`GET /api/leads/suivant`).
   `LIEN_ESPACE` si le lien n'a jamais été communiqué) ; deux au plus ; une simulation faite
   sur le site compte (`espace/simulations-faites.ts`, règle unique « a fait une
   simulation »).
+- **Demande d'avis** (mission 18, A4, `relances/avis.ts`) : chantier fini (« Facturé » ou
+  « Encaissé ») sans avis dans l'espace, `DELAI_RELANCE_AVIS` jours (7 au départ) après le
+  mail « Projet terminé » parti, sinon après le passage en Facturé depuis une étape en cours
+  (ni retour, ni reprise) : SMS `DEMANDE_AVIS` avec le lien de l'espace (`#apres`), une
+  seule fois, plus rien après 60 jours ; jamais vers un numéro en STOP. Le mail « Projet
+  terminé » reste l'automatisme existant, avec son interrupteur.
+- **Réactivation à 6 mois** (mission 18, A4, `relances/reactivation.ts`) : contact « sans
+  suite » depuis 180 jours (date de la perte : `Lead.perteLe`, sinon celle de son dossier
+  perdu ; jamais `updatedAt`), dont la dernière déclaration est l'accord aux messages
+  commerciaux et dont aucune adresse n'est désinscrite (`relances/accord-commercial.ts`,
+  règle partagée par la liste, la proposition du SMS et sa copie) ; ni dossier vivant ni
+  autre contact actif pour son client ; un client, une réactivation. SMS `REACTIVATION`
+  sans lien, une fois, tracé sur le lead (« SMS REACTIVATION copié : … »), même s'il garde
+  un dossier perdu.
+- **Plus de séquences de mails** (mission 18, A4) : `mail/sequences.ts`, ses quatre
+  interrupteurs `SEQUENCE_*`, le travail `sequences-mail` et le paramètre `MAIL_EXPEDITEUR`
+  sont retirés ; les modèles `SequenceMail`, `EtapeSequence`, `InscriptionSequence` et leurs
+  lignes restent en base (`db push` au démarrage). La désinscription reste
+  (`mail/desinscription.ts`, route `api/site/desinscription` appelée par le site).
 - **Source unique** : `relances/proposables.ts › relancesProposables` → `GET /api/relances`,
   la feuille Relances de l'écran Leads (`FeuilleRelances.tsx`), la rubrique de la fiche
-  du dossier, `voir_relances`, `manager_operations`, la ligne du jour. Tout est proposé,
-  rien n'est envoyé. L'ancien circuit `relances-sms` est **retiré** (section 20 ;
+  du dossier, `voir_relances`, `manager_operations`, la ligne du jour, le détecteur de
+  tâches RELANCES (RELANCER_DEVIS, RELANCER_PHOTOS, RELANCER_AVIS, REACTIVER). Elle rend
+  `{ devis, photos, avis, reactivations, total }` ; la fiche d'un dossier n'a pas de
+  réactivation (elle porte sur un contact). La feuille Relances a une section par type.
+  Chaque relance a son discriminant (`estRelanceDevis`, `estRelancePhotos`,
+  `estRelanceAvis`, `estRelanceReactivation`) : aucune n'est « un devis par défaut ». Tout
+  est proposé, rien n'est envoyé. L'ancien circuit `relances-sms` est **retiré** (section 20 ;
   migration `relances-un-circuit-14-6` : modèles archivés, délai photos posé, mains
   relues).
 

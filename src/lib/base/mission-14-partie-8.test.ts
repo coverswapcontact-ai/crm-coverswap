@@ -340,7 +340,8 @@ describe("etat_crm PARAMETRES / modifier MODELE_SMS (ex-« voir_parametres » / 
     assert.match(sms.texte, /\nEspace client :\n- LIEN_ESPACE — Lien de l'espace \(premier envoi\) : « Bonjour \{prenom\}, c'est Lucas de CoverSwap\. Comme convenu, voici votre espace personnel pour votre projet : vous pouvez y déposer 2 ou 3 photos quand vous voulez\. \{lien\} »/);
     assert.match(sms.texte, /\nRelances :\n- RELANCE_DEVIS_1 — Relance du devis \(1re\) : « Bonjour, c'est Lucas de CoverSwap\. Avez-vous pu regarder votre devis \?/);
     assert.doesNotMatch(sms.texte, /TRESORERIE_RESERVE|Numérotation|Automatismes \(|Solde OpenAI/);
-    assert.equal((sms.donnees as { sms: unknown[] }).sms.length, 14);
+    // Mission 18 (A4) : 16 codes — DEMANDE_AVIS et REACTIVATION rejoignent les relances.
+    assert.equal((sms.donnees as { sms: unknown[] }).sms.length, 16);
 
     const tout = await appeler("etat_crm", { partie: "PARAMETRES" });
     const [groupes, bloc, numerotation, automatismes] = [tout.texte.indexOf("Pilotage de l'activité :\n- TRESORERIE_RESERVE"), tout.texte.indexOf("Catalogue SMS ("), tout.texte.indexOf("Numérotation (Paramètres → Numérotation des documents)"), tout.texte.indexOf("Automatismes (")];

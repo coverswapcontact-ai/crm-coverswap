@@ -20,6 +20,8 @@ export const TYPES_TACHE = [
   "DEVIS",
   "ENVOYER_LIEN",
   "RELANCER_PHOTOS",
+  "RELANCER_AVIS",
+  "REACTIVER",
   "DECIDER",
   "MANUELLE",
   "SYSTEME",
@@ -65,6 +67,8 @@ export const DUREES_DEPART: Record<TypeTache, number> = {
   DEVIS: 10,
   ENVOYER_LIEN: 1,
   RELANCER_PHOTOS: 1,
+  RELANCER_AVIS: 1,
+  REACTIVER: 1,
   DECIDER: 2,
   MANUELLE: 5,
   SYSTEME: 5,
@@ -91,6 +95,8 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
   DEVIS: ["devis", "devis"],
   ENVOYER_LIEN: ["SMS", "SMS"],
   RELANCER_PHOTOS: ["SMS", "SMS"],
+  RELANCER_AVIS: ["SMS", "SMS"],
+  REACTIVER: ["SMS", "SMS"],
   DECIDER: ["lead à trancher", "leads à trancher"],
   MANUELLE: ["tâche à moi", "tâches à moi"],
   SYSTEME: ["réglage", "réglages"],
@@ -100,7 +106,7 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
 };
 
 /** Les types regroupés sous « appels » dans « j'ai N minutes » (un même geste : tel:). */
-export const FAMILLE_GROUPE: Partial<Record<TypeTache, string>> = { HESITE: "APPELS", RAPPELER: "APPELS", APPELER: "APPELS", ENVOYER_LIEN: "SMS", RELANCER_PHOTOS: "SMS" };
+export const FAMILLE_GROUPE: Partial<Record<TypeTache, string>> = { HESITE: "APPELS", RAPPELER: "APPELS", APPELER: "APPELS", ENVOYER_LIEN: "SMS", RELANCER_PHOTOS: "SMS", RELANCER_AVIS: "SMS", REACTIVER: "SMS" };
 
 /* ── Raccourci : l'action prête à faire (un seul bouton principal) ─────────── */
 
@@ -219,6 +225,10 @@ function raisonsDuType(type: TypeTache): RaisonPasAFaire[] {
     case "RELANCER_PHOTOS":
     case "ENVOYER_LIEN":
       return ["DEJA_FAIT", "CLIENT_PERDU", "PAS_PERTINENT", "AUTRE"];
+    // Mission 18 (A4) : un chantier fini, un contact déjà perdu — « client perdu » n'a pas de sens ici.
+    case "RELANCER_AVIS":
+    case "REACTIVER":
+      return ["DEJA_FAIT", "PAS_PERTINENT", "AUTRE"];
     case "DATE_CHANTIER":
     case "ENCAISSER":
     case "DEMANDE_CLIENT":

@@ -131,6 +131,13 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "jours",
     groupe: "COMMERCIAL",
   },
+  // Mission 18 (A4) : la demande d'avis après chantier, un type de relance (relances/avis.ts).
+  DELAI_RELANCE_AVIS: {
+    libelle: "Délai avant de demander un avis après le chantier",
+    aide: "Nombre de jours après la fin du chantier (le mail « projet terminé », sinon le passage en Facturé ou Encaissé) sans avis dans son espace avant que le CRM propose le SMS de demande d'avis, avec le lien de son espace, à copier. Rien ne part tout seul ; une seule demande par projet, plus rien après 60 jours. Sans valeur : 7 jours.",
+    nature: "jours",
+    groupe: "COMMERCIAL",
+  },
   TRESORERIE_RESERVE: {
     libelle: "Réserve de trésorerie à garder",
     aide: "En euros : le matelas sous lequel la trésorerie ne doit pas descendre (3 000 € au départ). L'assistant s'en sert pour dire si une dépense ou une campagne est raisonnable ; il ne décide jamais seul.",
@@ -226,12 +233,6 @@ export const DEFINITIONS_PARAMETRES = {
       { valeur: "ACTIF", libelle: "Actif" },
       { valeur: "INACTIF", libelle: "Inactif" },
     ],
-    groupe: "AGENT",
-  },
-  MAIL_EXPEDITEUR: {
-    libelle: "Adresse d'expédition des séquences",
-    aide: "Adresse qui enverra les séquences le jour où elles seront activées (aujourd'hui la boîte Gmail connectée ; demain une adresse de votre domaine, avec un service d'envoi dédié). Vide : la boîte Gmail connectée.",
-    nature: "texte",
     groupe: "AGENT",
   },
   IA_MODELE: {

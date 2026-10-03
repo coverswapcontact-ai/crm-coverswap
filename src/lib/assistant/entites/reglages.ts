@@ -117,7 +117,7 @@ export const COMPTEUR: DefinitionEntite = {
 export const AUTOMATISME: DefinitionEntite = {
   code: "AUTOMATISME",
   libelle: "l'automatisme",
-  designation: "id = le code (NOTIF_…, SMS_ACCUSE_…, SEQUENCE_…, IA_CRM, MAIL_RANGEMENT_GMAIL)",
+  designation: "id = le code (NOTIF_…, SMS_ACCUSE_…, IA_CRM, MAIL_RANGEMENT_GMAIL)",
   resoudre: async (r) => {
     const code = exigerId(r, "l'automatisme", "« etat_crm » PARAMETRES").toUpperCase();
     const tous = await listerAutomatismes();

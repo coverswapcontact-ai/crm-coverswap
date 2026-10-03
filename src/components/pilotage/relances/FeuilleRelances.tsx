@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { BellRing, Mail, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/evenements";
 import { ModaleCorrection } from "@/components/pilotage/Propositions";
 import { EcranSms, type DemandeEcranSms } from "@/components/pilotage/sms/EcranSms";
-import { Bouton, CARTE, EtatVide, Modale, TRANS } from "@/components/pilotage/ui";
-import { euros, pluriel } from "@/lib/commun/format";
+import { Bouton, CARTE, EtatVide, Modale, TitreSection, TRANS } from "@/components/pilotage/ui";
+import { dateCourte, euros, pluriel } from "@/lib/commun/format";
+import type { RelanceAvis } from "@/lib/relances/avis";
 import type { RelancePhotos } from "@/lib/relances/photos";
 import type { RelancesProposables } from "@/lib/relances/proposables";
+import type { RelanceReactivation } from "@/lib/relances/reactivation";
 import type { DevisARelancer } from "@/lib/relances/service";
 import type { PropositionSms } from "@/lib/sms/catalogue";
 import type { PropositionVue } from "@/lib/validation/types";
@@ -28,6 +30,10 @@ import { cn } from "@/lib/utils";
  * L'écran SMS et la relecture du mail s'ouvrent DANS la feuille (ou la fiche du
  * dossier) : des fenêtres imbriquées, qui ne ferment pas celle d'où elles
  * viennent. Un client qui a répondu STOP n'a pas de bouton « SMS ».
+ *
+ * Mission 18 (A4) : un seul système de relance, une section par type — devis,
+ * photos, demandes d'avis après chantier (SMS avec le lien de l'espace),
+ * réactivations à 6 mois (SMS sans lien, contacts d'accord seulement).
  */
 
 type OuvertureSms = { proposition?: PropositionSms; demande?: DemandeEcranSms };
@@ -54,6 +60,8 @@ function useRelances(dossierId: string | null, cle = "") {
 const smsDuDevis = (d: DevisARelancer): OuvertureSms =>
   d.sms ? { proposition: d.sms } : { demande: { action: "RELANCE_DEVIS", dossierId: d.dossierId, relance: { documentId: d.documentId, rang: d.rang } } };
 const smsDesPhotos = (p: RelancePhotos): OuvertureSms => (p.sms ? { proposition: p.sms } : { demande: { action: "RELANCE_PHOTOS", dossierId: p.dossierId, relance: { type: "PHOTOS", rang: p.rang } } });
+const smsDeLAvis = (a: RelanceAvis): OuvertureSms => (a.sms ? { proposition: a.sms } : { demande: { action: "RELANCE_AVIS", dossierId: a.dossierId, relance: { type: "AVIS", rang: a.rang } } });
+const smsDeReactivation = (r: RelanceReactivation): OuvertureSms => (r.sms ? { proposition: r.sms } : { demande: { action: "REACTIVATION", leadId: r.leadId, relance: { type: "REACTIVATION", rang: r.rang } } });
 
 /**
  * Les fenêtres ouvertes depuis une ligne : l'écran SMS, la relecture du mail. Rechargent la liste après un geste ;
@@ -180,40 +188,83 @@ export function texteRelancePhotos(p: RelancePhotos): string {
   return `espace ouvert il y a ${pluriel(p.joursDepuisOuverture, "jour")}, ni photo ni simulation`;
 }
 
-/** La feuille « Relances » : toutes les relances proposables, une ligne chacune. */
+/** « {nom} — chantier terminé le 12/09/2026, pas encore d'avis ». */
+export function texteRelanceAvis(a: RelanceAvis): string {
+  return `chantier terminé le ${dateCourte(a.termineLe)}, pas encore d'avis`;
+}
+
+/** « {nom} — sans suite depuis le 03/04/2026, d'accord pour les messages commerciaux ». */
+export function texteReactivation(r: RelanceReactivation): string {
+  return `sans suite depuis le ${dateCourte(r.perduLe)}, d'accord pour les messages commerciaux`;
+}
+
+/** Une section de la feuille : son titre et ses lignes, rien quand elle est vide. */
+function SectionRelances({ titre, nombre, children }: { titre: string; nombre: number; children: ReactNode }) {
+  if (nombre === 0) return null;
+  return (
+    <section>
+      <TitreSection>
+        {titre} · {nombre}
+      </TitreSection>
+      <ul className={cn(CARTE, "divide-y-[0.5px] divide-[#2A2D34] overflow-hidden")}>{children}</ul>
+    </section>
+  );
+}
+
+/** Une ligne de la feuille : le nom, le texte, une note facultative, les gestes. */
+function LigneRelance({ nom, texte, note, children }: { nom: string; texte: string; note?: string | null; children: ReactNode }) {
+  return (
+    <li className={CLASSE_LIGNE}>
+      <p className="min-w-0 text-[13.5px] leading-snug text-[#D1D5DB]">
+        <span className="font-medium text-[#F2F3F5]">{nom}</span> — {texte}
+        {note ? <span className="block text-[12px] text-[#8B919C]">{note}</span> : null}
+      </p>
+      {children}
+    </li>
+  );
+}
+
+/** La feuille « Relances » : toutes les relances proposables, une section par type, une ligne chacune. */
 export function FeuilleRelances({ donnees, onRecharger, onFermer }: { donnees: RelancesProposables | null; onRecharger: () => void; onFermer: () => void }) {
   const { ouvrirSms, ouvrirMail, fenetres } = useGestes(onRecharger);
   const total = donnees?.total ?? 0;
   return (
-    <Modale ouverte onFermer={onFermer} titre={total > 0 ? `Relances proposables · ${total}` : "Relances"} description="Copier le SMS vaut relance (deux au plus). Rien ne part tout seul.">
+    <Modale ouverte onFermer={onFermer} titre={total > 0 ? `Relances proposables · ${total}` : "Relances"} description="Copier le SMS vaut relance. Rien ne part tout seul.">
       {!donnees ? (
         <p className="text-[13px] text-[#9CA3AF]">Lecture des relances…</p>
       ) : total === 0 ? (
-        <EtatVide titre="Plus aucune relance à faire" texte="Un devis sans réponse ou un espace sans photo reviendra ici une fois le délai passé." />
+        <EtatVide titre="Plus aucune relance à faire" texte="Un devis sans réponse, un espace sans photo, un chantier fini sans avis ou un ancien contact à reprendre reviendra ici une fois le délai passé." />
       ) : (
-        <ul className={cn(CARTE, "divide-y-[0.5px] divide-[#2A2D34] overflow-hidden")}>
-          {donnees.devis.map((d) => {
-            const note = noteRelanceDevis(d);
-            return (
-              <li key={`devis:${d.documentId}`} className={CLASSE_LIGNE}>
-                <p className="min-w-0 text-[13.5px] leading-snug text-[#D1D5DB]">
-                  <span className="font-medium text-[#F2F3F5]">{d.clientNom}</span> — {texteRelanceDevis(d)}
-                  {note ? <span className="block text-[12px] text-[#8B919C]">{note}</span> : null}
-                </p>
+        <div className="space-y-5">
+          <SectionRelances titre="Devis sans réponse" nombre={donnees.devis.length}>
+            {donnees.devis.map((d) => (
+              <LigneRelance key={`devis:${d.documentId}`} nom={d.clientNom} texte={texteRelanceDevis(d)} note={noteRelanceDevis(d)}>
                 <BoutonsRelance {...gestesDuDevis(d, ouvrirSms, ouvrirMail)} />
-              </li>
-            );
-          })}
-          {donnees.photos.map((p) => (
-            <li key={`photos:${p.espaceId}`} className={CLASSE_LIGNE}>
-              <p className="min-w-0 text-[13.5px] leading-snug text-[#D1D5DB]">
-                <span className="font-medium text-[#F2F3F5]">{p.clientNom}</span> — {texteRelancePhotos(p)}
-                {p.rang > 1 ? <span className="block text-[12px] text-[#8B919C]">Relance photos {p.rang}/2</span> : null}
-              </p>
-              <BoutonsRelance onSms={() => ouvrirSms(smsDesPhotos(p))} />
-            </li>
-          ))}
-        </ul>
+              </LigneRelance>
+            ))}
+          </SectionRelances>
+          <SectionRelances titre="Espaces sans photo" nombre={donnees.photos.length}>
+            {donnees.photos.map((p) => (
+              <LigneRelance key={`photos:${p.espaceId}`} nom={p.clientNom} texte={texteRelancePhotos(p)} note={p.rang > 1 ? `Relance photos ${p.rang}/2` : null}>
+                <BoutonsRelance onSms={() => ouvrirSms(smsDesPhotos(p))} />
+              </LigneRelance>
+            ))}
+          </SectionRelances>
+          <SectionRelances titre="Demandes d'avis" nombre={donnees.avis.length}>
+            {donnees.avis.map((a) => (
+              <LigneRelance key={`avis:${a.espaceId}`} nom={a.clientNom} texte={texteRelanceAvis(a)} note={a.mailParti ? "Le mail « projet terminé » est parti : ce SMS le rappelle, une seule fois." : "Une seule demande, avec le lien de son espace."}>
+                <BoutonsRelance onSms={() => ouvrirSms(smsDeLAvis(a))} />
+              </LigneRelance>
+            ))}
+          </SectionRelances>
+          <SectionRelances titre="Réactivations à 6 mois" nombre={donnees.reactivations.length}>
+            {donnees.reactivations.map((r) => (
+              <LigneRelance key={`reactivation:${r.leadId}`} nom={r.nom} texte={texteReactivation(r)} note="Une seule fois.">
+                <BoutonsRelance onSms={() => ouvrirSms(smsDeReactivation(r))} />
+              </LigneRelance>
+            ))}
+          </SectionRelances>
+        </div>
       )}
       {fenetres}
     </Modale>
@@ -296,6 +347,12 @@ export function RelancesDuDossier({ dossierId, cle, onCopie }: { dossierId: stri
               Relance proposable : {texteRelancePhotos(p)} ({p.rang}/2)
             </p>
             <BoutonsRelance onSms={() => ouvrirSms(smsDesPhotos(p))} />
+          </li>
+        ))}
+        {donnees.avis.map((a) => (
+          <li key={`avis:${a.espaceId}`} className={CLASSE_LIGNE}>
+            <p className="text-[13px] text-[#F5B454]">Demande d&apos;avis proposable : {texteRelanceAvis(a)}</p>
+            <BoutonsRelance onSms={() => ouvrirSms(smsDeLAvis(a))} />
           </li>
         ))}
       </ul>

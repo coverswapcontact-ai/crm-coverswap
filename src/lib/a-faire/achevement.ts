@@ -54,8 +54,11 @@ const smsSortant = (contenu: string) => SMS_COPIE.test(contenu) || contenu.start
 const mailSortant = (contenu: string) => contenu.startsWith("Mail envoyé");
 const appelAbouti = (contenu: string) => !/pas de réponse|messagerie/i.test(contenu);
 
-/** Le sujet a-t-il disparu ? Rend la raison lisible (« dossier perdu »), ou null. Un dossier l'emporte sur son lead. */
-export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierId">): Promise<string | null> {
+/**
+ * Le sujet a-t-il disparu ? Rend la raison lisible (« dossier perdu »), ou null. Un dossier l'emporte sur son lead.
+ * Mission 18 (A4) : la réactivation (REACTIVER) porte justement sur un contact sans suite — il n'a pas disparu pour elle.
+ */
+export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierId"> & { type?: string }): Promise<string | null> {
   if (tache.dossierId) {
     const dossier = await prisma.dossier.findUnique({ where: { id: tache.dossierId }, select: { archiveLe: true, etape: true } });
     if (!dossier) return "dossier introuvable";
@@ -67,7 +70,7 @@ export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierI
     const lead = await prisma.lead.findUnique({ where: { id: tache.leadId }, select: { archiveLe: true, statut: true } });
     if (!lead) return "contact introuvable";
     if (lead.archiveLe) return "contact archivé";
-    if (lead.statut === "PERDU") return "contact sans suite";
+    if (lead.statut === "PERDU" && tache.type !== "REACTIVER") return "contact sans suite";
   }
   return null;
 }
@@ -274,16 +277,25 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       return encaissement ? `encaissement de ${euros(encaissement.montant)} saisi` : null;
     }
     case "RELANCER_DEVIS":
-    case "RELANCER_PHOTOS": {
-      // La relance faite : un SMS de relance copié, ou le mail de relance parti (docs/TACHES.md § 5).
+    case "RELANCER_PHOTOS":
+    case "RELANCER_AVIS": {
+      // La relance faite : un SMS de relance DE CE TYPE copié, ou le mail de relance du devis parti (docs/TACHES.md § 5).
+      // Mission 18 (A4) : le type de la relance est lu — un SMS d'avis ne coche pas la relance d'un devis.
       if (!tache.dossierId) return null;
+      const sms = tache.type === "RELANCER_DEVIS" ? '"relance":{"documentId"' : tache.type === "RELANCER_PHOTOS" ? '"type":"PHOTOS"' : '"type":"AVIS"';
       const trace = await prisma.dossierEvenement.findFirst({
-        where: { dossierId: tache.dossierId, createdAt: { gt: depuis }, OR: [{ type: "SMS_COPIE", metadata: { contains: '"relance"' } }, { type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } }] },
+        where: { dossierId: tache.dossierId, createdAt: { gt: depuis }, OR: [{ type: "SMS_COPIE", metadata: { contains: sms } }, ...(tache.type === "RELANCER_DEVIS" ? [{ type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } }] : [])] },
         orderBy: { createdAt: "desc" },
         select: { type: true, createdAt: true },
       });
       if (!trace) return null;
-      return `${trace.type === "SMS_COPIE" ? "SMS de relance copié" : "mail de relance parti"} ${leOuA(trace.createdAt, maintenant)}`;
+      return `${trace.type === "SMS_COPIE" ? (tache.type === "RELANCER_AVIS" ? "SMS de demande d'avis copié" : "SMS de relance copié") : "mail de relance parti"} ${leOuA(trace.createdAt, maintenant)}`;
+    }
+    case "REACTIVER": {
+      // Mission 18 (A4) : la réactivation copiée se trace sur le lead (relances/reactivation.ts).
+      if (!tache.leadId) return null;
+      const trace = await prisma.interaction.findFirst({ where: { leadId: tache.leadId, type: "SMS", contenu: { startsWith: "SMS REACTIVATION copié" }, createdAt: { gt: depuis } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+      return trace ? `SMS de réactivation copié ${leOuA(trace.createdAt, maintenant)}` : null;
     }
     case "VALIDER": {
       const propositionId = texteOuNull(donnees.propositionId) ?? texteOuNull(raccourci.propositionId);

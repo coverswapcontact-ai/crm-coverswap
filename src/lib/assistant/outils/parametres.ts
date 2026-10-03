@@ -14,7 +14,7 @@ import { pluriel } from "@/lib/commun/format";
  * dans Paramètres — campagne (début, budget, durée), capacité (réserve de
  * trésorerie, chantiers par mois), délais, RGPD, solde OpenAI relevé et
  * estimé — et les interrupteurs des automatismes (mails de l'espace, SMS
- * d'accusé, séquences, IA du CRM). « modifier_parametres » change UNE valeur
+ * d'accusé, IA du CRM ; mission 18, A4 : plus de séquences de mails). « modifier_parametres » change UNE valeur
  * ou UN interrupteur, sous confirmation, avec la date d'effet et la source ;
  * l'historique reste. Mission 14 (partie 8) : le catalogue SMS (Paramètres →
  * SMS) se lit en bloc (« groupe: SMS ») et se réécrit texte par texte
@@ -39,7 +39,7 @@ export const outilVoirParametres = definirOutil({
   nom: "voir_parametres",
   titre: "Les paramètres, les automatismes et le catalogue SMS",
   description:
-    "Rend les paramètres du CRM par groupe (campagne : début, budget, durée ; pilotage : réserve de trésorerie, chantiers par mois ; commercial : délai de relance, zone ; RGPD ; facturation ; simulateur : solde OpenAI relevé et estimé) avec la valeur en vigueur et depuis quand, le catalogue SMS (chaque code avec son libellé et son texte en vigueur), la numérotation (prochain numéro de devis et de facture), et les interrupteurs des automatismes (mails automatiques de l'espace client, SMS d'accusé de réception, séquences de mails, IA appelée par le CRM, rangement Gmail) avec leur état. Jamais de secret (clés, jetons). « groupe » pour n'en lire qu'un (« SMS » : le seul catalogue SMS) ; « automatismes: true » pour les seuls interrupteurs.",
+    "Rend les paramètres du CRM par groupe (campagne : début, budget, durée ; pilotage : réserve de trésorerie, chantiers par mois ; commercial : délais de relance (devis, photos, avis), zone ; RGPD ; facturation ; simulateur : solde OpenAI relevé et estimé) avec la valeur en vigueur et depuis quand, le catalogue SMS (chaque code avec son libellé et son texte en vigueur), la numérotation (prochain numéro de devis et de facture), et les interrupteurs des automatismes (mails automatiques de l'espace client, SMS d'accusé de réception, IA appelée par le CRM, rangement Gmail) avec leur état. Jamais de secret (clés, jetons). « groupe » pour n'en lire qu'un (« SMS » : le seul catalogue SMS) ; « automatismes: true » pour les seuls interrupteurs.",
   niveau: "LECTURE",
   schema: z.object({
     groupe: z.enum(GROUPES_VUE).optional().describe("Un groupe de paramètres, ou « SMS » pour le seul catalogue SMS."),

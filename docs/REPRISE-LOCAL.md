@@ -400,3 +400,86 @@ Tests : 1 303 → 1 311 verts.
 
 Reste :
 - A6 : `ARCHITECTURE-PILOTAGE.md` §4 et §21 (navigation finale) et la `VERSION` de `public/sw.js`.
+
+### Mission 18, A4 — un seul système de relance
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Séquences de mails retirées du code** : `src/lib/mail/sequences.ts` est supprimé, avec les quatre interrupteurs
+  `SEQUENCE_*` (`automatismes/interrupteurs.ts` : un code `SEQUENCE_…` répond « Automatisme inconnu », et lister les
+  automatismes ne crée plus de lignes `SequenceMail`), le travail périodique `sequences-mail` (`mail/taches.ts`), les
+  champs `sequences*` de `manager_operations` et le paramètre `MAIL_EXPEDITEUR` (définition et branche d'`envoi-crm`).
+  Les modèles `SequenceMail`, `EtapeSequence`, `InscriptionSequence` et `Desinscription` sont gardés, lignes comprises
+  (`db push` au démarrage) ; `"SEQUENCE"` reste dans `NATURES_ENVOI` pour relire d'anciens envois ; le RGPD est
+  inchangé.
+- **Désinscription gardée** dans `mail/desinscription.ts` (`jetonDesinscription`, `lienDesinscription`, `desinscrire`,
+  signatures inchangées, sans l'arrêt des inscriptions) ; la route `api/site/desinscription` (appelée par le site) n'a
+  changé que d'import.
+- **Demande d'avis après chantier** (`relances/avis.ts`) : dossier Facturé ou Encaissé non archivé, espace actif, sans
+  avis ; le délai `DELAI_RELANCE_AVIS` (nouveau paramètre, Suivi commercial, 7 jours par défaut) court depuis le mail
+  « Projet terminé » parti, sinon depuis le passage en Facturé (ou Encaissé) depuis une étape en cours. SMS
+  `DEMANDE_AVIS` (groupe Relances) avec le lien de l'espace `#apres`, une seule fois, jamais en STOP.
+- **Réactivation à 6 mois** (`relances/reactivation.ts`) : lead sans suite depuis 180 jours, d'après `Lead.perteLe`
+  ou le `perteLe` de son dossier perdu (jamais `updatedAt`). Conditions : dernière déclaration `ACCORDE`, aucune
+  adresse désinscrite (`relances/accord-commercial.ts`, règle partagée par la liste, la proposition et la copie), ni
+  dossier vivant ni autre contact actif pour le client. Un client, une réactivation. SMS `REACTIVATION` sans lien, avec
+  « STOP pour ne plus en recevoir », une fois. La copie se trace toujours sur le lead (« SMS REACTIVATION copié : … »),
+  même s'il garde un dossier perdu.
+- `relancesProposables` rend `{ devis, photos, avis, reactivations, total }` (la fiche d'un dossier n'a pas de
+  réactivation). L'utilisent `GET /api/relances`, la ligne du jour, le point du jour, `manager_operations` (avis et
+  réactivations dus) et le détecteur de tâches RELANCES. Ce dernier ajoute les types `RELANCER_AVIS` « Demander un
+  avis · Nom » et `REACTIVER` « Reprendre contact · Nom » (sur le lead), niveau 3, 1 min, groupe SMS.
+- SMS : actions `RELANCE_AVIS` et `REACTIVATION`, vrais discriminants (`estRelanceDevis`, `estRelanceAvis`,
+  `estRelanceReactivation`) à la place du « sinon c'est un devis » de `copie.ts` et `proposition.ts` ;
+  `schemaRelanceSms` garde `rang ≤ 2`. La coche des tâches lit le type de la relance (un SMS d'avis ne coche ni
+  `RELANCER_DEVIS` ni `RELANCER_PHOTOS`) ; un contact sans suite n'est pas un « sujet disparu » pour `REACTIVER`. Le
+  pré-filtre des relances photos lit `"type":"PHOTOS"`.
+- Écran : `FeuilleRelances` a une section par type (devis, photos, demandes d'avis, réactivations) ; la rubrique de
+  la fiche du dossier montre aussi la demande d'avis.
+- MCP : `lister` RELANCES rend les blocs avis et réactivation, y compris dans le retour « Aucun devis en attente ».
+  `noter_sms` compte `DEMANDE_AVIS` et `REACTIVATION` quand la liste les propose. `taches` prépare le texte de la
+  réactivation. Les descriptions de `voir_parametres`, `etat_crm` et `AUTOMATISME` ne citent plus les séquences ;
+  `manager_clients` parle de la relance d'avis. Aucun outil ni paramètre ne change : empreinte `040d6c7aa53c`
+  (53 outils). Les descriptions changent : **reconnecter le connecteur**.
+- Textes : consignes par défaut (sections mission 11 et 14 ; la version de Lucas en base n'est pas réécrite),
+  `routes-publiques.ts`, `ReglagesMail.tsx`, `envoi.ts`, `mime.ts`. `JOURS_REACTIVATION` n'existe plus qu'à un seul
+  endroit (`relances/reactivation.ts`, réexporté par `analyses/clients.ts`).
+- Docs : `MCP-COUVERTURE.md` (en-tête, L21, L22, DP7, PA2, AUTOMATISME en 4.3, RELANCES en 4.6, `noter_sms` en 4.9,
+  bilan inchangé à 427 actions, 391 couvertes, 36 sans objet), `ARCHITECTURE-PILOTAGE.md` §25 et `TACHES.md` (§ 3 et § 5).
+
+Décisions prises seul (solution la plus simple) :
+- Avis et réactivation sont des **SMS à copier**, comme les autres relances : pas de nouveau motif de mail, rien ne
+  part seul. Le mail « Projet terminé » reste l'automatisme existant (avec son interrupteur) ; le SMS le rappelle une
+  seule fois, et pas au-delà de 60 jours (la fenêtre de l'ancienne séquence).
+- Réactivation = la règle de la séquence (lead perdu avec accord), pas `aReactiver` de `manager_clients` (clients
+  terminés), qui reste une lecture d'analyse. Sans date de perte connue, pas de réactivation. Le lead a bien un
+  `perteLe` : la carte disait le contraire.
+- La copie d'une réactivation est refusée sans accord ou après une désinscription (comme la proposition) : c'est une
+  prospection.
+- La réactivation n'apparaît pas dans la fiche d'un dossier (elle porte sur un contact) ; la tâche est sur le lead.
+- `desinscrire` n'arrête plus d'inscriptions (aucune ne peut plus être active) ; la preuve devient « Lien de
+  désinscription d'un mail commercial ».
+- La ligne `Planification` « sequences-mail » et d'éventuels paramètres `MAIL_EXPEDITEUR` restent en base, ignorés
+  (vérifié : `parametresPourEcran` ne lit que les clés définies).
+
+Tests : 1 311 → 1 320 verts (3 tests de séquences retirés de `mail.test.ts`, 12 ajoutés).
+- Nouveau `src/lib/base/mission-18-a4.test.ts`. Il couvre :
+  - plus de séquences : automatismes, aucune ligne créée, code `SEQUENCE_` inconnu, plus de travail, aucun appel
+    restant dans `src`, modèles gardés ;
+  - `MAIL_EXPEDITEUR` ignoré en base et la route de désinscription ;
+  - l'avis : délai, fenêtre, lien `#apres`, copie comptée une fois, origine mail puis passage, reprise et ouverture
+    exclues, avis donné, STOP, espace désactivé ;
+  - la tâche d'avis et la coche par type (un SMS d'avis ne coche ni devis ni photos) ;
+  - la réactivation : accord (proposition et copie refusées sans lui), retrait, désinscription, STOP, date de la perte
+    (lead, dossier, jamais `updatedAt`), client revenu, un par client ;
+  - la tâche « Reprendre contact » : tracée sur le lead, cochée « faite » ;
+  - `relancesProposables`, `GET /api/relances` et le point du jour ;
+  - les jumeaux MCP : `lister` RELANCES (et par dossier), `noter_sms` DEMANDE_AVIS et REACTIVATION, `etat_crm`
+    PARAMETRES, `manager_operations`, le délai paramétré.
+- Adaptés, même intention : `mail.test.ts` (désinscription par le nouveau module, sans inscription de séquence) et
+  `mission-14-partie-8.test.ts` (le catalogue SMS compte 16 codes).
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres.
+
+Reste :
+- Rappeler à Lucas de reconnecter le connecteur (descriptions changées).
+- Les consignes de Lucas en base peuvent encore citer les séquences : à lui de les relire (non réécrites, règle de la
+  mission 17).

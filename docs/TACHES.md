@@ -157,6 +157,8 @@ Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les d
 | DEVIS | Faire le devis · Nom | 3 | 10 | DOSSIERS | devis prérempli, ou « déposer un PDF » |
 | ENVOYER_LIEN | Envoyer le lien · Nom | 3 | 1 | SIGNAUX | SMS LIEN_ESPACE à copier |
 | RELANCER_PHOTOS | Relancer pour les photos · Nom | 3 | 1 | RELANCES | SMS à copier |
+| RELANCER_AVIS | Demander un avis · Nom (chantier fini sans avis, mission 18 A4) | 3 | 1 | RELANCES | SMS DEMANDE_AVIS à copier (lien de l'espace) |
+| REACTIVER | Reprendre contact · Nom (sur le lead : sans suite depuis 6 mois, d'accord pour les messages commerciaux, mission 18 A4) | 3 | 1 | RELANCES | SMS REACTIVATION à copier |
 | DECIDER | Décider · Nom (appelé, sans rappel daté) | 3 | 2 | LEADS | fiche du lead |
 | MANUELLE | le texte de Lucas | 3 | 5 | MANUELLE | aucun (ou la cible) |
 | SYSTEME | (verbe) · (quoi) | 4 si urgent, sinon 5 | 5 | SYSTEME | la bonne page + marche à suivre |
@@ -206,6 +208,10 @@ raccourci → « Fait » ou coche du CRM dans l'heure), bornée entre la moitié
 | APPELER | lead contacté par Lucas (appel, SMS copié ou envoyé, mail parti ; jamais un message reçu ni l'accusé automatique) ; lead qui a écrit | « SMS copié le 29/09 », « il a écrit : à lui répondre » |
 | DATE_CHANTIER | `dateChantier` posée | « date posée au 12/10 » |
 | ENCAISSER | un encaissement VALIDE | « encaissement de 1 200 € saisi » |
+| RELANCER_DEVIS | un SMS de relance de devis copié (`relance.documentId`) ou le mail de relance parti | « SMS de relance copié à 10:12 » |
+| RELANCER_PHOTOS | un SMS de relance photos copié (`relance.type` PHOTOS) | « SMS de relance copié le 29/09 » |
+| RELANCER_AVIS | un SMS de demande d'avis copié (`relance.type` AVIS) ; un SMS d'avis ne coche aucune autre relance | « SMS de demande d'avis copié le 29/09 » |
+| REACTIVER | la réactivation copiée, tracée sur le lead (« SMS REACTIVATION copié : … ») ; un contact sans suite n'est pas un sujet disparu pour elle | « SMS de réactivation copié le 29/09 » |
 | VALIDER | proposition décidée | « proposition validée » |
 
 ## 6. Mise en route (migration `taches-a-faire-17-a`)

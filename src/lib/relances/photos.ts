@@ -87,7 +87,8 @@ export async function relancesPhotosProposables(maintenant: Date = new Date(), f
   const [avecSimulation, estEnStop, relances, liens] = await Promise.all([
     dossiersAvecSimulation(candidats.map((e) => e.dossier)),
     lecteurDuStop(candidats.flatMap((e) => [e.dossier.lead?.telephone, e.dossier.clientTelephone])),
-    prisma.dossierEvenement.findMany({ where: { dossierId: { in: dossierIds }, type: "SMS_COPIE", metadata: { contains: "PHOTOS" } }, orderBy: { createdAt: "desc" }, select: { dossierId: true, metadata: true, createdAt: true } }),
+    // Mission 18 (A4) : le pré-filtre lit le type de la relance, pas un mot qu'un SMS pourrait contenir.
+    prisma.dossierEvenement.findMany({ where: { dossierId: { in: dossierIds }, type: "SMS_COPIE", metadata: { contains: '"type":"PHOTOS"' } }, orderBy: { createdAt: "desc" }, select: { dossierId: true, metadata: true, createdAt: true } }),
     liensEnvoyes(),
   ]);
 

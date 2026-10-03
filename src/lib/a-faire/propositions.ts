@@ -33,6 +33,8 @@ export const ACTIONS_TYPE: Record<TypeTache, string> = {
   DEVIS: "Faire le devis",
   ENVOYER_LIEN: "Envoyer le lien",
   RELANCER_PHOTOS: "Relancer pour les photos",
+  RELANCER_AVIS: "Demander un avis",
+  REACTIVER: "Reprendre contact avec un ancien contact",
   DECIDER: "Décider d'un contact",
   MANUELLE: "Une tâche à moi",
   SYSTEME: "Un réglage du CRM",

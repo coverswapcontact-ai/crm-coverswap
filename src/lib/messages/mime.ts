@@ -17,7 +17,7 @@ export type MailMime = {
   texte: string;
   /** Version mise en page (notifications de l'espace) : envoyée avec le texte, en « multipart/alternative ». */
   html?: string | null;
-  /** En-têtes ajoutés tels quels (désinscription d'une séquence : List-Unsubscribe). */
+  /** En-têtes ajoutés tels quels (désinscription d'un mail commercial : List-Unsubscribe). */
   entetesSupplementaires?: Record<string, string>;
   repondreA?: string | null;
   enReponseA?: string | null;

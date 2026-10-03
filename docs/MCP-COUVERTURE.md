@@ -43,6 +43,14 @@
   passent en 2.10 ; les liens des outils (`lister` DEPENSES, `creer` / `modifier` / `archiver` DEPENSE,
   `ajouter_fichier` sur une dépense) mènent à la section. Ni outil ni paramètre ne change : empreinte
   **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, A4 (03/10/2026)** : un seul système de relance. Les séquences de mails sont retirées (code,
+  interrupteurs `SEQUENCE_*`, travail `sequences-mail`, paramètre `MAIL_EXPEDITEUR` ; lignes gardées en base) : la
+  ligne AUTOMATISME de 4.3 ne les cite plus. La demande d'avis après chantier et la réactivation à 6 mois deviennent
+  des types de relance : mêmes écrans (feuille Relances avec une section par type, fiche du dossier pour l'avis,
+  tâches RELANCER_AVIS et REACTIVER), mêmes outils (`lister` RELANCES les rend, `noter_sms` DEMANDE_AVIS ou
+  REACTIVATION les compte) : L21, L22, DP7, PA2 et 4.6 sont mis à jour, sans ligne nouvelle (bilan inchangé). Ni outil
+  ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils). Des descriptions changent (`lister`, `noter_sms`,
+  `voir_parametres` via `etat_crm`, `manager_operations`) : reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -139,8 +147,8 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | L18 | Sélection (Archivés) › « Restaurer » | POST /api/leads/actions {RESTAURER} | R | lister LEADS (vue ARCHIVES) + restaurer (leads) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » ; `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 | L19 | Message « Annuler » (action inverse) | POST /api/leads/actions | R | archiver / restaurer | couvert | `mcp-generiques.test.ts` › « raccourcis leads / dossiers (comportement de l'ancien « archiver »)… » |
 | L20 | Ligne du jour : « N rappels aujourd'hui · N en retard » | GET /api/leads | L | lister LEADS (vue A_RAPPELER) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » |
-| L21 | Ligne du jour › « N relances proposables » → feuille Relances | GET /api/relances | L | lister RELANCES | couvert | `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
-| L22 | Relances › « SMS » (texte modifiable) → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| L21 | Ligne du jour › « N relances proposables » → feuille Relances (une section par type depuis la mission 18, A4 : devis, photos, demandes d'avis, réactivations) | GET /api/relances | L | lister RELANCES | couvert | `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » ; `mission-18-a4.test.ts` › « relancesProposables : devis, photos, avis, réactivations, et le total ; la… » |
+| L22 | Relances › « SMS » (texte modifiable) → « Copier » : devis, photos, demande d'avis (DEMANDE_AVIS), réactivation (REACTIVATION, tracée sur le lead) | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » ; `mission-18-a4.test.ts` › « « lister » RELANCES rend les demandes d'avis et les réactivations, même… » |
 | L23 | Relances › « Relire le mail » → corriger → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
 | L24 | Sur le site › simulations des 7 derniers jours, avec images | SSR `simulationsSiteRecentes(7)` | L | voir_fichiers (site) | couvert | `mcp-v3.test.ts` › « « voir_fichiers » site (ex-« simulations_site ») liste les simulations… » |
 | L25 | Sur le site › générations en cours ou en échec, avec la raison | SSR `travauxSiteRecents(7)` | L | voir_fichiers (site : générations en cours ou en échec, avec la raison) | couvert | `mcp-partie-c.test.ts` › « pièce jointe d'un mail (M15), rendu du banc (S17), générations du site… » |
@@ -238,7 +246,7 @@ projet le plus récent.
 | DP4 | À compléter › croix « masquer ce point pour ce dossier » | PATCH /api/dossiers/:id/completude {code, masque:true} | R | modifier DOSSIER (points_masques) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
 | DP5 | À compléter › « Réafficher » un point masqué | PATCH … {masque:false} | R | modifier DOSSIER (points_reaffiches) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
 | DP6 | Prochaine action : texte et date (Aujourd'hui, Demain, Dans 3 j, Dans 1 sem.) › « Enregistrer » ou vider | PATCH /api/dossiers/:id {prochaineAction, prochaineActionDate} | R | modifier DOSSIER (prochaine_action, prochaine_action_date) / planifier | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » ; `mcp.test.ts` › « « Planifie un rappel de Madame Piketty jeudi 14h » » |
-| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » ; « Demande d'avis proposable » › « SMS » (mission 18, A4) | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | lister RELANCES (dossier_id) + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » ; `mission-18-a4.test.ts` › « « lister » RELANCES rend les demandes d'avis et les réactivations, même… » |
 | DP8 | Relance proposable › « Relire le mail » → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
 | DP9 | Encaisser l'acompte ou le solde : montant, date, moyen, référence, pièce réglée (automatique ou choisie) | POST /api/dossiers/:id/encaissements {paiement, numeroDocumentId} | S-€ | saisir_encaissement (montant, recu_le, moyen, reference, piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
 | DP10 | Étape › bouton d'étape suivante, « Reprendre en … » | POST /api/dossiers/:id/etape {vers} | R ; S vers Signé, Facturé, Encaissé, Perdu | changer_etape | couvert | `assistant.test.ts` › « passer un dossier à « perdu » est sensible (aperçu puis confirmation)… » |
@@ -563,7 +571,7 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
 | PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…) | — | — | — | sans objet | — |
-| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » |
+| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance, `DELAI_RELANCE_AVIS` compris depuis la mission 18, A4), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » ; `mission-18-a4.test.ts` › « « etat_crm » PARAMETRES : plus d'interrupteur de séquence ; le délai… » |
 | PA3 | « Historique » d'un paramètre | page | L | etat_crm (PARAMETRES : historique complet) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (cle, valeur, valable_du, source ; ou saisies[]) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 | PA5 | Connexions › « Connecter » / « Reconnecter » le compte Google | GET /api/google/connexion | S-sécu | — | sans objet (consentement dans le navigateur) | — |
@@ -710,6 +718,9 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - **Après la mission 18, A3 (03/10/2026)** : l'écran Dépenses devient la section « Dépenses » de Finances (X1–X10 en
   2.10) : la ligne Dépenses sort du compte, Finances passe à 20 actions (17 couvertes, 3 sans objet). Total inchangé :
   **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
+- **Après la mission 18, A4 (03/10/2026)** : les séquences n'avaient plus d'écran depuis la mission 13 ; l'avis et la
+  réactivation passent par les gestes existants des relances (L21, L22, DP7). Total inchangé : **427 actions, 391
+  couvertes, 36 sans objet**, 0 partielle, 0 manquante.
 
 ## 3. Les manques, par domaine
 
@@ -1021,7 +1032,7 @@ effaçable.
 | PUBLICATION | `site/publications.ts › modifierPublication` (`schemaPublication`) | type, titre, texte, ville, type_projet, note, auteur, dossier_id, client_id, photo_avant, photo_apres, accord_client_le, ordre | R en brouillon ; S-client si déjà publiée | W4 |
 | PARAMETRE | `parametres/service.ts › enregistrerParametre` | cle, valeur, valable_du, source ; ou `saisies[]` (lot, comme `POST /api/parametres`) | S-param | PA4, F3 (en lot) |
 | COMPTEUR | `dossiers/compteurs.ts › poserCompteur` | serie (DEVIS, FACTURE), prochain | S-param | PF4 (repris) |
-| AUTOMATISME | `automatismes/interrupteurs.ts › reglerAutomatisme` | code (NOTIF_*, SMS_ACCUSE_*, SEQUENCE_*, IA_CRM, MAIL_RANGEMENT_GMAIL…), actif | S-param | PM4, PS4 (repris) |
+| AUTOMATISME | `automatismes/interrupteurs.ts › reglerAutomatisme` | code (NOTIF_*, SMS_ACCUSE_*, IA_CRM, MAIL_RANGEMENT_GMAIL…), actif. Mission 18 (A4) : plus de `SEQUENCE_*` (inconnu, 404) — `mission-18-a4.test.ts` › « les automatismes n'ont plus de séquence (aucune ligne SequenceMail créée)… » | S-param | PM4, PS4 (repris) |
 | MODELE_SMS | `sms/modeles.ts › modifierModele` | code, texte, actif, libelle ; `defaut: true` (revient au texte de départ) | S-param | PS3, PS5 |
 | MODELE_MAIL | `mail/notifications.ts › enregistrerModeleNotification` (le modèle entier est relu puis réécrit ; `actif` est gardé) | evenement, objet, phrase, bouton, actif | S-param (texte envoyé aux clients) | PM5 |
 | GUIDE_STYLE | `mail/redaction.ts › enregistrerGuideStyle` ; `genererGuideStyle` | texte ; ou `tirer_des_mails: true` (coût d'IA) | S-param | PM2, PM3 |
@@ -1081,7 +1092,7 @@ outils d'écriture.
 | ESPACES | `espace/suivi.ts › pageClientsEspaces` ; `relances/photos.ts › relancesPhotosProposables` | qui (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES), etape, tri, page, sans_photo_ni_simulation_depuis_jours ; faits par projet. Mission 18 (A1) : plus d'écran, liste par client gardée pour l'assistant | C27 (lien) |
 | MAILS | `mail/vues.ts › listerVue` ; vue NON_CLASSES = ex-`mails_non_classes` | vue A_TRAITER, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES ; recherche dans la vue | M3, M4 |
 | MESSAGES_ESPACE | `espace/messages.ts › messagesEspace` | cible, tout, limite | (ex-`messages_espace`) |
-| RELANCES | `relances/service.ts › listerRelances` + `relancesPhotosProposables` | dossier | (ex-`voir_relances`) |
+| RELANCES | `relances/service.ts › listerRelances` + `relancesPhotosProposables` ; mission 18 (A4) : `relances/avis.ts › relancesAvisProposables` et `relances/reactivation.ts › relancesReactivationProposables` (blocs rendus aussi sans devis en attente) | dossier (la réactivation porte sur un contact : aucune dans la liste d'un dossier) | (ex-`voir_relances`) |
 | PROPOSITIONS | `validation/service.ts › listerPropositions` | statut (EN_ATTENTE, ECHEC, HISTORIQUE), type, dossier, client, message, proposition_id (lecture d'une seule) ; rend `sensible`, `validationGroupee`, champs corrigibles, motifs de rejet | V1–V3 |
 | DEPENSES | `depenses/service.ts › listerDepenses` ; `suggestionsSaisie` | annee ou periode, categorie, rattachement, archivees ; suggestions | X1, X7 |
 | ENCOURS, CHEQUES, QUALITE_FINANCES | `finances/tableau.ts › chargerTableauFinances` | annee ; identifiants de registre et d'encaissement | F1 |
@@ -1191,10 +1202,11 @@ téléphone pour prendre ou choisir des fichiers.
 | envoyer_lien_espace | `objet` ; code par défaut selon l'étape (LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL) | DP31, E19 |
 | valider_proposition | sensibilité = celle de la définition du type (FUSION_CLIENTS et ANONYMISATION_CLIENT toujours sensibles) ; `corrections` = les champs corrigibles du type (objet et texte d'un mail, `conserver` A ou B…) ; en lot, `validerEnLot` (garde `validationGroupee`) ; `reessayer: true` → `reessayerExecution` | T15, T17, L23, DP8, V4, V5, V7–V10 |
 | ignorer_proposition | accepte les relances de devis (`annulerProposition`, ex-`annuler_relance`) | — |
+| noter_sms | mission 18 (A4) : `code` DEMANDE_AVIS compte la demande d'avis du dossier, REACTIVATION la réactivation du contact (tracée sur le lead, refusée sans son accord), quand `lister` RELANCES les propose ; paramètres inchangés | L22, DP7 |
 | annuler_modification | toutes les entités tracées par `modifier` | — |
 
 Gardés sans changement : point_du_jour, les cinq manager_*, lire_mail, rechercher_mails, rediger_mail, supprimer,
-noter_appel, noter_sms, envoyer_document, annuler_document, relancer, lien_espace, repondre_espace, classer_mail,
+noter_appel, envoyer_document, annuler_document, relancer, lien_espace, repondre_espace, classer_mail,
 resumer_fil, proposer_mise_a_jour, deposer_brouillon, envoyer_mail.
 
 ### 4.10 `traiter_mail` : les gestes de la boîte

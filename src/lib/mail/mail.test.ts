@@ -14,8 +14,7 @@ process.env.UPLOADS_DIR = mkdtempSync(path.join(tmpdir(), "coverswap-mail-"));
  * Mission 7 (22/09/2026) : l'onglet Mail. Ce qui est rangé sans que Lucas le
  * voie, ce qui reste sous ses yeux ; la garde qui empêche l'IA d'inventer un
  * prix ou une date ; les notifications de l'espace, parties une seule fois ;
- * les séquences, prêtes mais inactives, qui s'arrêtent d'elles-mêmes ; la
- * désinscription, définitive.
+ * la désinscription, définitive (mission 18, A4 : plus de séquences de mails).
  */
 
 let prisma: typeof import("@/lib/prisma").default;
@@ -25,7 +24,7 @@ let notifications: typeof import("./notifications");
 let envoiCrm: typeof import("./envoi-crm");
 let envoi: typeof import("./envoi");
 let vues: typeof import("./vues");
-let sequences: typeof import("./sequences");
+let desinscription: typeof import("./desinscription");
 let liens: typeof import("@/lib/espace/liens");
 let main: typeof import("@/lib/dossiers/main");
 let registre: typeof import("@/lib/taches/registre");
@@ -47,7 +46,7 @@ before(async () => {
   envoiCrm = await import("./envoi-crm");
   envoi = await import("./envoi");
   vues = await import("./vues");
-  sequences = await import("./sequences");
+  desinscription = await import("./desinscription");
   liens = await import("@/lib/espace/liens");
   main = await import("@/lib/dossiers/main");
   registre = await import("@/lib/taches/registre");
@@ -336,88 +335,22 @@ describe("les vues de l'onglet Mail", () => {
   });
 });
 
-describe("les séquences : tout est prêt, rien n'est actif", () => {
-  let leadId: string;
-
-  before(async () => {
-    const lead = await prisma.lead.create({ data: { prenom: "Claire", nom: "Injoignable", email: "claire@exemple.fr", telephone: "+33699887766", ville: "Lunel", codePostal: "34400", source: "SITE_WEB", statut: "NOUVEAU" } });
-    leadId = lead.id;
-    await prisma.noteAppel.create({ data: { leadId, issue: "PAS_DE_REPONSE", appelLe: new Date(Date.now() - 2 * JOUR) } });
-    await prisma.noteAppel.create({ data: { leadId, issue: "PAS_DE_REPONSE", appelLe: new Date(Date.now() - JOUR) } });
-  });
-
-  test("quatre séquences livrées inactives, en mode validation, plafonnées ; le moteur ne fait rien", async () => {
-    await sequences.assurerSequences();
-    const toutes = await prisma.sequenceMail.findMany({ orderBy: { code: "asc" } });
-    assert.deepEqual(toutes.map((s) => s.code), ["AVIS", "DEVIS_NON_SIGNE", "INJOIGNABLE", "REACTIVATION"]);
-    assert.ok(toutes.every((s) => !s.active && s.mode === "VALIDATION" && s.plafondJour === 10));
-    assert.equal(await sequences.sequencesActives(), false);
-    assert.deepEqual(await sequences.avancerSequences(), { inscrits: 0, arretes: 0, prepares: 0, programmes: 0 });
-  });
-
-  test("activée en mode validation : le mail attend mon clic, porte la désinscription, et la séquence s'arrête quand le client répond", async () => {
-    await prisma.sequenceMail.update({ where: { code: "INJOIGNABLE" }, data: { active: true } });
-    try {
-      const bilan = await sequences.avancerSequences();
-      assert.equal(bilan.inscrits, 1);
-      assert.equal(bilan.prepares, 1);
-      assert.equal(bilan.programmes, 0, "rien ne part seul en mode validation");
-      const inscription = await prisma.inscriptionSequence.findUniqueOrThrow({ where: { cle: `INJOIGNABLE:lead:${leadId}` } });
-      assert.equal(inscription.statut, "EN_VALIDATION");
-
-      const apercu = await sequences.apercuEtape("INJOIGNABLE", 1, inscription.cle);
-      assert.equal(apercu.candidat?.adresse, "claire@exemple.fr");
-      assert.match(apercu.texte, /^Bonjour Claire,/);
-      assert.match(apercu.texte, /désinscription en un clic : https:\/\/coverswap\.fr\/desinscription\?e=/i);
-
-      const { envoiId } = await sequences.envoyerEtape(inscription.id);
-      const ligne = await prisma.envoiMail.findUniqueOrThrow({ where: { id: envoiId } });
-      assert.equal(ligne.nature, "SEQUENCE");
-      assert.match(ligne.entetes ?? "", /List-Unsubscribe/);
-      const suite = await prisma.inscriptionSequence.findUniqueOrThrow({ where: { id: inscription.id } });
-      assert.deepEqual([suite.etapeFaite, suite.statut], [1, "EN_COURS"]);
-
-      // Le client répond : au passage suivant, la séquence s'arrête.
-      await prisma.message.create({ data: { canal: "EMAIL", compte: "coverswap.contact@gmail.com", identifiantCanal: "reponse-claire", sens: "ENTRANT", de: "claire@exemple.fr", recuLe: new Date(), classe: "CLIENT" } });
-      await prisma.inscriptionSequence.update({ where: { id: inscription.id }, data: { prochainEnvoiLe: new Date(Date.now() - 1000) } });
-      assert.equal((await sequences.avancerSequences()).arretes, 1);
-      assert.deepEqual(
-        await prisma.inscriptionSequence.findUniqueOrThrow({ where: { id: inscription.id }, select: { statut: true, arretMotif: true } }),
-        { statut: "ARRETEE", arretMotif: "Le client a répondu" }
-      );
-    } finally {
-      await prisma.sequenceMail.update({ where: { code: "INJOIGNABLE" }, data: { active: false } });
-    }
-  });
-
-  test("réactivation à 6 mois : seulement avec l'accord aux e-mails commerciaux", async () => {
-    const lead = await prisma.lead.create({ data: { prenom: "Denis", nom: "Perdu", email: "denis@exemple.fr", telephone: "+33612121212", ville: "Mauguio", codePostal: "34130", source: "SITE_WEB" } });
-    const { dossierId } = await liens.ouvrirEspaceDuContact(lead.id);
-    const clientId = (await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } })).clientId!;
-    await prisma.dossier.update({ where: { id: dossierId }, data: { archiveLe: new Date() } });
-    await prisma.$executeRawUnsafe(`UPDATE "Lead" SET "statut" = 'PERDU', "updatedAt" = ? WHERE "id" = ?`, Date.now() - 185 * JOUR, lead.id);
-    const cles = async () => (await sequences.apercuEtape("REACTIVATION", 1)).candidats.map((c) => c.cle);
-    assert.equal((await cles()).includes(`REACTIVATION:lead:${lead.id}`), false, "sans accord : jamais");
-    await prisma.consentementMail.create({ data: { clientId, statut: "ACCORDE", moyen: "FORMULAIRE_SITE", recueilliLe: new Date(Date.now() - 200 * JOUR) } });
-    assert.equal((await cles()).includes(`REACTIVATION:lead:${lead.id}`), true);
-  });
-
-  test("désinscription : jeton vérifié, définitive, séquences arrêtées, retrait de l'accord noté sur la fiche", async () => {
+// Mission 18 (A4) : les séquences de mails sont retirées (un seul système de relance, `relances/`) ; la désinscription
+// reste, dans son propre module.
+describe("la désinscription des mails commerciaux, définitive", () => {
+  test("désinscription : jeton vérifié, définitive, retrait de l'accord noté sur la fiche", async () => {
     const lead = await prisma.lead.create({ data: { prenom: "Emma", nom: "Stop", email: "emma@exemple.fr", telephone: "+33634343434", ville: "Lattes", codePostal: "34970", source: "SITE_WEB" } });
     const { dossierId } = await liens.ouvrirEspaceDuContact(lead.id);
     const clientId = (await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } })).clientId!;
-    const sequence = await prisma.sequenceMail.findUniqueOrThrow({ where: { code: "DEVIS_NON_SIGNE" } });
-    await prisma.inscriptionSequence.create({ data: { sequenceId: sequence.id, cle: `DEVIS_NON_SIGNE:dossier:${dossierId}`, adresse: "emma@exemple.fr", dossierId, prochainEnvoiLe: new Date() } });
 
-    const lien = new URL(sequences.lienDesinscription("Emma@Exemple.fr"));
+    const lien = new URL(desinscription.lienDesinscription("Emma@Exemple.fr"));
     const e = lien.searchParams.get("e")!;
-    await assert.rejects(() => sequences.desinscrire(e, "jeton-faux-0123456789"), /invalide/);
+    await assert.rejects(() => desinscription.desinscrire(e, "jeton-faux-0123456789"), /invalide/);
     assert.equal(await prisma.desinscription.count({ where: { adresse: "emma@exemple.fr" } }), 0);
 
-    await sequences.desinscrire(e, lien.searchParams.get("j")!);
-    await sequences.desinscrire(e, lien.searchParams.get("j")!);
+    await desinscription.desinscrire(e, lien.searchParams.get("j")!);
+    await desinscription.desinscrire(e, lien.searchParams.get("j")!);
     assert.equal(await prisma.desinscription.count({ where: { adresse: "emma@exemple.fr" } }), 1);
-    assert.equal((await prisma.inscriptionSequence.findUniqueOrThrow({ where: { cle: `DEVIS_NON_SIGNE:dossier:${dossierId}` } })).statut, "ARRETEE");
     const consentements = await prisma.consentementMail.findMany({ where: { clientId } });
     assert.deepEqual(consentements.map((c) => c.statut), ["RETIRE"], "une seule déclaration, même cliqué deux fois");
   });

@@ -4,7 +4,6 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { normaliserEmail } from "@/lib/clients/normalisation";
 import { GoogleIndisponible } from "@/lib/google/connexion";
 import { lireEntetes } from "@/lib/messages/stockage";
-import { lireParametre } from "@/lib/parametres/service";
 import { retenirContactEcrit } from "@/lib/prospects/contact-ecrit";
 import { mettreEnFile } from "@/lib/taches/file";
 import { envoyeurMail } from "./envoi";
@@ -24,6 +23,7 @@ import { tracerMailDansDossier } from "./rattachement";
  */
 
 export const TYPE_TACHE_ENVOI_MAIL = "MAIL_ENVOI";
+/** « SEQUENCE » reste pour relire d'anciennes lignes : depuis la mission 18 (A4), plus aucun envoi de cette nature. */
 export const NATURES_ENVOI = ["NOTIFICATION", "REPONSE", "NOUVEAU", "SEQUENCE", "ESSAI"] as const;
 export type NatureEnvoi = (typeof NATURES_ENVOI)[number];
 
@@ -101,10 +101,7 @@ export async function executerEnvoi(envoiId: string): Promise<{ envoye: boolean;
 
   const recu = envoi.enReponseA ? await prisma.message.findUnique({ where: { id: envoi.enReponseA }, include: { contenu: { select: { entetes: true } } } }) : null;
   const entetesRecu = recu ? lireEntetes(recu.contenu?.entetes) : {};
-  // Séquences : l'adresse d'expédition paramétrée (Paramètres → Agent mail et IA), pour passer un jour sur son domaine.
-  const expediteur = envoi.nature === "SEQUENCE" ? ((await lireParametre("MAIL_EXPEDITEUR")) as string | null) : null;
   const realise = await envoyeur.envoyer({
-    de: expediteur,
     a: envoi.a,
     objet: envoi.objet,
     texte: envoi.texte,

@@ -23,7 +23,7 @@ type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
 export { EVENEMENT_COMPTEURS, rafraichirCompteurs } from "./evenements";
 
-type Entree = {
+export type Entree = {
   href: string;
   libelle: string;
   /** Libellé court de la barre du bas (téléphone). */
@@ -52,23 +52,29 @@ type Entree = {
 // Mission 18 (A3) : « Dépenses » devient une section de Finances (/depenses y redirige) ; la saisie /depenses/nouvelle
 // (raccourci de l'application installée) reste et allume Finances.
 // Mission 18 (A5) : « Tâches de fond » devient l'onglet Système de Paramètres (/taches-de-fond y redirige), sans badge.
-const PRINCIPALES: Entree[] = [
+// Mission 18 (A6) : les tarifs passent dans Paramètres (onglet Tarifs). Navigation cible, 10 onglets : principaux Tâches,
+// Leads, Dossiers, Mail, Clients, Analytique ; secondaires Simulateur, Site, Finances, Paramètres. Barre du bas inchangée
+// (Tâches, Leads, Dossiers, Mail, Analytique, puis Plus) ; « Plus » : Clients, puis Simulateur, Site, Finances, Paramètres.
+export const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
-  { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/analytique", libelle: "Analytique", icone: ChartLine, mobile: true },
-  { href: "/finances", libelle: "Finances", icone: Wallet, aussi: ["/depenses/nouvelle"] },
 ];
 
-// Écrans secondaires : petites icônes à droite, menu « Plus » sur téléphone.
-const SECONDAIRES: Entree[] = [
+// Écrans secondaires : petites icônes à droite (libellés sur très grand écran), menu « Plus » sur téléphone.
+export const SECONDAIRES: Entree[] = [
+  { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   { href: "/site", libelle: "Site", icone: Globe },
+  { href: "/finances", libelle: "Finances", icone: Wallet, aussi: ["/depenses/nouvelle"] },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
+
+/** Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires. */
+export const DANS_LE_MENU: Entree[] = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
 
 function estActive(pathname: string, entree: Entree): boolean {
   return [entree.href, ...(entree.aussi ?? [])].some((href) => pathname === href || pathname.startsWith(`${href}/`));
@@ -135,8 +141,6 @@ export function Navigation() {
     setMenuOuvert(false);
   }
 
-  // Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires.
-  const DANS_LE_MENU = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
   const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree));
   const alerteMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "rouge" ? compteurs[entree.compteur] : 0), 0);
   const aTraiterMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "vert" ? compteurs[entree.compteur] : 0), 0);

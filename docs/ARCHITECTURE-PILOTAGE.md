@@ -308,20 +308,24 @@ tâches par jour.
 
 ## 4. Interface : un gabarit commun aux écrans de pilotage
 
-Le pilotage est le seul point d'entrée du CRM. Ses écrans (Leads, Dossiers,
-Espaces clients, Simulateur, Mail, Clients, Finances, puis Site, Publicité,
-Tâches de fond, Dépenses, Paramètres ; À valider et Synthèse restent joignables
-par leur adresse seulement — `src/components/pilotage/Navigation.tsx`, état
-après le lot 7 du 29/09/2026) vivent dans le groupe de routes
-`src/app/(pilotage)` : une charte sombre, une seule navigation. La connexion
-(`/auth/signin`) suit la même charte.
+Le pilotage est le seul point d'entrée du CRM. Ses écrans vivent dans le groupe
+de routes `src/app/(pilotage)` : une charte sombre, une seule navigation
+(`src/components/pilotage/Navigation.tsx`). Depuis la mission 18 (partie A,
+03/10/2026), **10 onglets** : principaux Tâches, Leads, Dossiers, Mail, Clients,
+Analytique ; secondaires Simulateur, Site, Finances, Paramètres. Espaces clients
+est devenu la colonne et le filtre « Espace » de Dossiers, Dépenses une section de
+Finances, Tâches de fond et les tarifs des devis des onglets de Paramètres
+(« Système », « Tarifs ») ; leurs anciennes adresses redirigent
+(`next.config.ts`). À valider reste joignable par son adresse seulement. La
+connexion (`/auth/signin`) suit la même charte.
 
 - **Ordinateur** : barre du haut, compteurs à côté des entrées (rappels de
   leads en retard, en rouge ; mails à traiter ; tâches du jour — les tâches de
   fond en échec n'ont plus de badge depuis la mission 18, A5).
-- **Téléphone** : barre du bas au pouce, cinq écrans (Leads, Dossiers, Espaces,
-  Mail, Clients) et « Plus » pour le reste ; le contenu réserve la hauteur de la
-  barre (et la zone de sécurité de l'iPhone).
+- **Téléphone** : barre du bas au pouce, cinq écrans (Tâches, Leads, Dossiers,
+  Mail, Analytique) et « Plus » pour le reste (Clients, Simulateur, Site,
+  Finances, Paramètres) ; le contenu réserve la hauteur de la barre (et la zone
+  de sécurité de l'iPhone).
 - **Primitives partagées** : `src/components/pilotage/ui.tsx` (boutons, champs à
   16 px sur mobile pour éviter le zoom de Safari, modale plein écran sur
   téléphone, puces de choix rapide, pastilles) et `client.ts` (appels d'API aux
@@ -337,6 +341,12 @@ après le lot 7 du 29/09/2026) vivent dans le groupe de routes
   les sessions de l'assistant. L'onglet lit chaque bloc par sa route à son ouverture (`SectionSysteme.tsx`), pas avec
   la page. Plus de badge des échecs dans la navigation : un échec remonte comme tâche système dans Tâches
   (« Relancer N tâches de fond en échec », clé `SYSTEME:taches-de-fond`), un seul compteur.
+- **Tarifs** : depuis la mission 18 (A6), l'onglet « Tarifs » de Paramètres (`/parametres?section=tarifs`, ancre
+  `#tarifs`) : les tarifs des devis (presets : désignation, unité, prix HT, retrait) et le tarif de chaque prestation
+  (`GestionTarifs.tsx`, déplacé de Dossiers). Ce n'est plus un sous-mode du générateur de documents : le générateur
+  propose toujours les tarifs ligne par ligne, et son lien « Gérer les tarifs » ouvre l'onglet dans un autre onglet du
+  navigateur (le document en cours n'est pas perdu ; la liste se relit au retour). Les outils de l'assistant (`lister`
+  TARIFS, `creer` / `modifier` / `archiver` TARIF et SOUS_PARTIE) rendent un lien vers l'onglet.
 
 ## 5. Validation : « l'agent propose, je valide »
 
@@ -1733,6 +1743,11 @@ ont répondu jusqu'au lot 7 de la mission 13 (29/09/2026), qui a retiré pour de
 écrans sans usage — `/commercial`, `/prospects`, `/messages`, `/numeros`, `/journal`,
 `/sms`, `/messagerie` (404 aujourd'hui, sans redirection ; les données restent en base).
 Seuls `/validation` et `/synthese` répondent encore par leur adresse.
+
+> **Depuis la mission 18 (partie A, 03/10/2026)**, la navigation compte 10 onglets (voir §4) : Tâches, Leads,
+> Dossiers, Mail, Clients, Analytique ; Simulateur, Site, Finances, Paramètres. `/espaces`, `/depenses` et
+> `/taches-de-fond` redirigent (`next.config.ts`), les tarifs sont dans Paramètres › Tarifs. Ce qui suit décrit l'état
+> du 21/09/2026.
 
 ### Navigation (`src/components/pilotage/Navigation.tsx`)
 

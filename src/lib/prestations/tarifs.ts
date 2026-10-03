@@ -8,7 +8,7 @@ import { libelleReperee, repererSousPartie } from "./reperage";
 
 /**
  * Le tarif de chaque sous-partie : celui que Lucas lui a attribué dans ses tarifs
- * (Dossiers → Tarifs → « Tarif de chaque prestation »), sinon le premier de ses
+ * (Paramètres › Tarifs → « Tarif de chaque prestation »), sinon le premier de ses
  * tarifs dont la désignation contient les mots de la sous-partie (fichier des
  * prestations), sinon aucun : le prix reste à saisir, rien n'est inventé.
  */

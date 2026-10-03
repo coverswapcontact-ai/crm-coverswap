@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { vueAcces, vueConsignes } from "@/lib/assistant/vues-parametres";
 import { lireCompteurs } from "@/lib/dossiers/compteurs";
+import { listerPresets } from "@/lib/dossiers/presets";
 import { etatMiroir } from "@/lib/drive/synchronisation";
 import { etatConnexionGoogle } from "@/lib/google/connexion";
 import { reglagesMail } from "@/lib/mail/reglages-vue";
@@ -12,7 +13,7 @@ import OngletsParametres from "./_components/OngletsParametres";
 
 export const metadata: Metadata = {
   title: "Paramètres — CoverSwap",
-  description: "Activité, facturation (seuils et taux datés, numérotation), mail, SMS, assistant Claude, système (tâches de fond, cohérence, connexions, sessions de l'assistant), en six onglets ; ?section= ouvre un onglet.",
+  description: "Activité, facturation (seuils et taux datés, numérotation), tarifs des devis, mail, SMS, assistant Claude, système (tâches de fond, cohérence, connexions, sessions de l'assistant), en sept onglets ; ?section= ouvre un onglet.",
 };
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ export const dynamic = "force-dynamic";
 // Mission 13 (lot 3) : toutes les sections sont lues par le serveur, en une fois ; plus de « Chargement… » à l'arrivée.
 // Mission 18 (A5) : sauf l'onglet Système, lu par ses propres routes quand on l'ouvre (le contrôle de cohérence parcourt
 // tous les dossiers : il ne ralentit pas la page). `?section=systeme` (où mène /taches-de-fond) ouvre cet onglet.
+// Mission 18 (A6) : les tarifs des devis (presets) sont lus avec le reste, pour l'onglet Tarifs (`?section=tarifs`).
 export default async function ParametresPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parametres = await searchParams;
   const texte = (cle: string) => (typeof parametres[cle] === "string" ? (parametres[cle] as string) : null);
-  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs] = await Promise.all([
+  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs, presets] = await Promise.all([
     parametresPourEcran(),
     etatConnexionGoogle(),
     etatMiroir(),
@@ -33,6 +35,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
     vueAcces(),
     vueConsignes(),
     lireCompteurs(),
+    listerPresets(),
   ]);
   return (
     <OngletsParametres
@@ -44,6 +47,7 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
       acces={acces}
       consignes={consignes}
       compteurs={compteurs}
+      presets={presets}
       section={texte("section")}
     />
   );

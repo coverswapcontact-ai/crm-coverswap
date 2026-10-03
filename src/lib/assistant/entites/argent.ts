@@ -14,6 +14,7 @@ import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constant
 import { schemaCorrectionEncaissement } from "@/lib/encaissements/schemas";
 import { crediterCheque, modifierEncaissement } from "@/lib/encaissements/service";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { ADRESSE_TARIFS } from "@/lib/parametres/sections";
 import { libelleReperee, repererSousPartie } from "@/lib/prestations/reperage";
 import { attribuerTarif, modifierTarifSousPartie, tarifsDesPrestations } from "@/lib/prestations/tarifs";
 import { lien } from "../definition";
@@ -206,7 +207,7 @@ export const TARIF: DefinitionEntite = {
   libelle: "le tarif",
   designation: "id du tarif (preset), ou des mots de sa désignation",
   resoudre: resoudreTarif,
-  chemin: () => "/dossiers",
+  chemin: () => ADRESSE_TARIFS,
   modifier: {
     schema: objet(schemaPreset.partial()),
     libelles: { designation: "la désignation", unite: "l'unité", prixUnitaire: "le prix unitaire" },
@@ -239,7 +240,7 @@ export const TARIF: DefinitionEntite = {
       }
       const cree = await creerPreset(preset as z.output<typeof schemaPreset>);
       if (cle) await attribuerTarif(cle, cree.id);
-      return { texte: `Tarif créé : « ${cree.designation} », ${cree.prixUnitaire === null ? "prix à saisir" : euros(cree.prixUnitaire)} / ${cree.unite}${cle ? `, attribué à ${cle}` : ""} [tarif:${cree.id}].`, donnees: { tarif: cree }, liens: [lien("Dossiers → Tarifs", "/dossiers")] };
+      return { texte: `Tarif créé : « ${cree.designation} », ${cree.prixUnitaire === null ? "prix à saisir" : euros(cree.prixUnitaire)} / ${cree.unite}${cle ? `, attribué à ${cle}` : ""} [tarif:${cree.id}].`, donnees: { tarif: cree }, liens: [lien("Paramètres › Tarifs", ADRESSE_TARIFS)] };
     },
   },
   archiver: async (cible) => archiverPreset(cible.id),
@@ -267,7 +268,7 @@ export const SOUS_PARTIE: DefinitionEntite = {
     if ("aucune" in trouve) throw new ErreurMetier(`« ${texte} » n'est pas une sous-partie connue. Possibles : ${trouve.proposees.map((p) => `${p.famille.libelle} › ${p.sousPartie.libelle}`).join(", ")}.`, 404);
     return { id: trouve.trouvee.cle, nom: `${trouve.trouvee.famille.libelle} › ${trouve.trouvee.sousPartie.libelle}`, archive: false, contexte: {} };
   },
-  chemin: () => "/dossiers",
+  chemin: () => ADRESSE_TARIFS,
   modifier: {
     schema: objet(z.object({ prixUnitaire: z.number().min(0).max(1_000_000).nullable(), unite: z.enum(UNITES), designation: z.string().trim().min(1).max(200), presetId: z.string().max(40).nullable() }).partial()),
     libelles: { prixUnitaire: "le prix unitaire", unite: "l'unité", designation: "la désignation du tarif", presetId: "le tarif attribué" },

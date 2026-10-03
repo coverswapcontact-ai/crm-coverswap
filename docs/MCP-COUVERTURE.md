@@ -58,6 +58,12 @@
   « Relancer N tâches de fond en échec » mènent à l'onglet. Un seul compteur dans la barre (N2) : le badge des tâches
   de fond en échec disparaît, l'échec remonte comme tâche système dans Tâches. Ni outil, ni paramètre, ni description
   ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, A6 (03/10/2026)** : les tarifs des devis (presets, tarif de chaque prestation) ne sont plus un
+  sous-mode du générateur de Dossiers mais l'onglet « Tarifs » de Paramètres (`/parametres?section=tarifs`) : DP64 et
+  DP70–DP73 passent en 2.13 › Tarifs. Les liens de `lister` TARIFS, de l'outil des tarifs et des entités TARIF et
+  SOUS_PARTIE (`creer`, `modifier`, `archiver`) mènent à l'onglet. Navigation à 10 onglets (N1), anciennes adresses
+  vérifiées (N3). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à
+  reconnecter pour ce lot.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -245,6 +251,10 @@ projet le plus récent.
 
 ### 2.4 Dossier — le panneau et ses rubriques (`PanneauDossier`)
 
+Mission 18 (A6) : les tarifs (DP64, DP70–DP73) ne sont plus un sous-mode du générateur mais l'onglet « Tarifs » de
+Paramètres : leurs lignes sont en 2.13 › Tarifs. Le générateur garde la liste « Ajouter depuis un tarif… » (DP67) et
+un lien « Gérer les tarifs » vers l'onglet.
+
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
 | DP1 | Ouverture, relue toutes les 30 s | GET /api/dossiers/:id | L | lire_fiche (dossier : source, ouverture, mainLe, points masqués, perte détaillée, délais) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
@@ -310,16 +320,11 @@ projet le plus récent.
 | DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert | `mcp-sensibles.test.ts` › « annuler_document — annuler un devis : aperçu et jeton, aucune écriture » |
 | DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation | S | annuler_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
-| DP64 | Générateur › tarifs disponibles (presets) | GET /api/dossiers/presets | L | lister TARIFS (presets avec identifiant) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
 | DP65 | Générateur › lignes préremplies d'après l'espace (choix, mètres, tarifs) | GET /api/dossiers/:id/devis-propose | L | generer_document (depuis_espace: true) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
 | DP66 | Générateur › numéro à venir | GET /api/dossiers/numerotation?type= | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | DP67 | Générateur › lignes : prestation ou section, monter, descendre, supprimer, choisir un tarif | — | — | generer_document (lignes, dont SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » ; `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP68 | Générateur › objet, acompte %, mention ml, libellé de variante, « prévenir le client » | POST …/documents | S | generer_document (objet, acompte_pct, note_ml, libelle_variante, notifier) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP69 | Générateur › paramètres légaux manquants → saisie | POST /api/parametres | S-param | modifier PARAMETRE | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
-| DP70 | Tarifs › modifier un tarif (désignation, unité, prix) | PATCH /api/dossiers/presets/:id | S-param | modifier TARIF (designation, unite, prix_unitaire) / modifier SOUS_PARTIE | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-v2.test.ts` › « « modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec… » |
-| DP71 | Tarifs › « Nouveau tarif » | POST /api/dossiers/presets | S-param | creer TARIF | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
-| DP72 | Tarifs › « Retirer » un tarif | DELETE /api/dossiers/presets/:id | S-suppr | archiver / restaurer (TARIF) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » |
-| DP73 | Tarifs › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | modifier SOUS_PARTIE (preset_id, ou null = automatique) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 | DP74 | Paiements › liste, reste dû | GET /api/dossiers/:id | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP75 | Paiements › « Ajouter un paiement » | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement (piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
 | DP76 | Paiements › « Corriger » (montant, date, moyen, référence) | PATCH /api/encaissements/:id | S-€ | modifier ENCAISSEMENT (montant, recu_le, moyen, reference) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
@@ -577,7 +582,7 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…, `?section=` depuis la mission 18, A5) | — | — | — | sans objet | — |
+| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…, `?section=` depuis la mission 18, A5 ; onglet Tarifs depuis A6) | — | — | — | sans objet | — |
 | PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance, `DELAI_RELANCE_AVIS` compris depuis la mission 18, A4), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » ; `mission-18-a4.test.ts` › « « etat_crm » PARAMETRES : plus d'interrupteur de séquence ; le délai… » |
 | PA3 | « Historique » d'un paramètre | page | L | etat_crm (PARAMETRES : historique complet) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (cle, valeur, valable_du, source ; ou saisies[]) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
@@ -597,6 +602,21 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | PF2 | Déplier « Avancé » | — | — | — | sans objet | — |
 | PF3 | Numérotation › prochain numéro de devis et de facture | GET /api/numeros/compteurs | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PF4 | Numérotation › « Faire repartir à… » | PATCH /api/numeros/compteurs {serie, prochain} | S-param | modifier COMPTEUR (serie, prochain) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+
+#### Tarifs (ex-sous-mode du générateur de Dossiers, mission 18 A6)
+
+`/parametres?section=tarifs` (ancre `#tarifs`) : les tarifs des devis et le tarif de chaque prestation
+(`GestionTarifs.tsx`, déplacé de Dossiers). Les presets sont lus par la page avec les autres réglages ; le générateur
+de documents les propose toujours ligne par ligne (DP67) et son lien « Gérer les tarifs » ouvre l'onglet. Les outils
+rendent un lien vers l'onglet (`mission-18-a6.test.ts` › « lister TARIFS, l'outil des tarifs (une sous-partie ou toutes), et le… »). Pas d'ancienne adresse : c'était un sous-mode, sans URL.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| DP64 | Lire les tarifs (presets : désignation, unité, prix) et le tarif de chaque prestation ; le générateur les propose | page (`listerPresets`) ; GET /api/dossiers/presets ; GET /api/prestations/tarifs | L | lister TARIFS (sous-parties et presets avec identifiant) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » ; `mission-18-a6.test.ts` › « lister TARIFS, l'outil des tarifs (une sous-partie ou toutes), et le… » |
+| DP70 | Modifier un tarif (désignation, unité, prix) › « Enregistrer » | PATCH /api/dossiers/presets/:id | S-param | modifier TARIF (designation, unite, prix_unitaire) / modifier SOUS_PARTIE | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-v2.test.ts` › « « modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP71 | « Ajouter » un tarif | POST /api/dossiers/presets | S-param | creer TARIF | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP72 | « Retirer » un tarif (archivé, jamais effacé) | DELETE /api/dossiers/presets/:id | S-suppr | archiver / restaurer (TARIF) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP73 | « Tarif de chaque prestation » › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | modifier SOUS_PARTIE (preset_id, ou null = automatique) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
 
 #### Mail
 
@@ -681,9 +701,9 @@ et liens : `mission-18-a5.test.ts`). Elles ne sont plus comptées ici en 2.17, m
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Paramètres ; menu « Plus » (mission 18 : Espaces clients retiré en A1, Dépenses en A3 ; la saisie `/depenses/nouvelle` allume Finances ; Tâches de fond retiré en A5, onglet Système de Paramètres) | — | — | — | sans objet | — |
+| N1 | Barre à 10 onglets (mission 18, A6) : Tâches, Leads, Dossiers, Mail, Clients, Analytique ; Simulateur, Site, Finances, Paramètres. Téléphone : Tâches, Leads, Dossiers, Mail, Analytique, puis « Plus » (Clients, Simulateur, Site, Finances, Paramètres). Espaces clients retiré en A1, Dépenses en A3 (la saisie `/depenses/nouvelle` allume Finances), Tâches de fond en A5 (onglet Système de Paramètres), les tarifs dans Paramètres en A6 | — | — | — | sans objet | — |
 | N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter (mission 18, A5 : plus de badge des tâches de fond en échec, un seul compteur : l'échec est une tâche système de Tâches ; la route garde la clé `tachesEnEchec`) | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses`, `/taches-de-fond` → `/parametres?section=systeme` (mission 18) | — | — | — | sans objet | — |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses`, `/taches-de-fond` → `/parametres?section=systeme` (mission 18 ; 307 sans chaîne, vers un écran qui existe : `mission-18-a6.test.ts`) ; service worker en `v12` | — | — | — | sans objet | — |
 | N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
 | N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
@@ -704,7 +724,7 @@ Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » :
 | Leads (fiche) | 27 | 9 | 10 | 7 | 26 | 1 |
 | Fin d'appel | 9 | 8 | 0 | 0 | 8 | 1 |
 | Dossiers (liste, création, reprise) | 16 | 4 | 5 | 4 | 13 | 3 |
-| Dossier (panneau et rubriques) | 97 | 37 | 26 | 33 | 96 | 1 |
+| Dossier (panneau et rubriques) | 92 | 37 | 23 | 31 | 91 | 1 |
 | Espaces clients | 20 | 9 | 6 | 4 | 19 | 1 |
 | Mail | 30 | 17 | 8 | 5 | 30 | 0 |
 | Clients | 26 | 4 | 10 | 12 | 26 | 0 |
@@ -715,6 +735,7 @@ Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » :
 | Analytique | 30 | 14 | 1 | 11 | 26 | 4 |
 | Paramètres › Activité | 11 | 2 | 2 | 4 | 8 | 3 |
 | Paramètres › Facturation | 4 | 3 | 0 | 0 | 3 | 1 |
+| Paramètres › Tarifs (ex-générateur de Dossiers) | 5 | 0 | 3 | 2 | 5 | 0 |
 | Paramètres › Mail | 8 | 2 | 2 | 4 | 8 | 0 |
 | Paramètres › SMS | 6 | 3 | 1 | 1 | 5 | 1 |
 | Paramètres › Assistant | 11 | 5 | 1 | 4 | 10 | 1 |
@@ -742,6 +763,9 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - **Après la mission 18, A5 (03/10/2026)** : Tâches de fond devient l'onglet « Système » de Paramètres (B1–B7 en
   2.13) : la ligne change de nom, pas de compte. Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0
   partielle, 0 manquante.
+- **Après la mission 18, A6 (03/10/2026)** : les tarifs passent dans Paramètres › Tarifs (DP64, DP70–DP73 en 2.13) :
+  le panneau du dossier passe à 92 actions (91 couvertes, 1 sans objet), Paramètres › Tarifs compte 5 actions (5
+  couvertes). Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
 
 ## 3. Les manques, par domaine
 

@@ -21,9 +21,9 @@ Trois règles tiennent l'ensemble :
 Légende de la colonne « Vérifié » : **T** = essai automatique (`src/lib/coherence/coherence.test.ts`, sauf mention),
 **L** = parcours complet en local sur un écran d'iPhone, **P** = constaté en production (lecture seule).
 
-## 1. Espace client → Dossier, Espaces clients, Leads, Finances
+## 1. Espace client → Dossier, colonne Espace de Dossiers (ex-Espaces clients), Leads, Finances
 
-| Geste du client | Dossier | Espaces clients / bloc du dossier | Leads | Retour en arrière | Vérifié |
+| Geste du client | Dossier | Colonne Espace de Dossiers (ex-Espaces clients) / bloc du dossier | Leads | Retour en arrière | Vérifié |
 |---|---|---|---|---|---|
 | Ouvre son espace pour la 1re fois | Événement « espace ouvert », alerte | Visites comptées, « jamais ouvert » disparaît | — | — | T (espace.test) |
 | Dépose des photos | Événement (un par dépôt), prochaine action « préparer la simulation » si rien d'autre | Compteur de photos, vignettes | — | **Retire une photo** : elle sort de la liste du dossier, de son espace et du simulateur ; événement « photo retirée » ; le fichier reste, visible dans « photos retirées », bouton *Remettre* | T, L |
@@ -32,7 +32,7 @@ Légende de la colonne « Vérifié » : **T** = essai automatique (`src/lib/coh
 | Crée une simulation (quota : 5, celles du site comptent) | Événement avec zones et teintes, image dans le dossier et Drive, alerte | « n faites sur 5 (dont n sur le site) · n restantes » | — | — (elle a coûté : elle reste comptée même masquée) | T, L |
 | Demande d'autres simulations | Événement, alerte | Signal rouge, bouton *Accorder 3* | — | Accorder clôt la demande | T (simulateur.test) |
 | **Valide une simulation** (ou un mélange) | Prochaine action « Préparer le devis » ; événement avec les TEINTES zone par zone ; alerte forte | « Validée », teintes affichées ; onglet Devis déverrouillé | — | **Annule sa validation** (tant qu'aucun devis n'est émis) : choix vidé, événement, prochaine action retirée, onglet Devis reverrouillé. En valider une autre remplace la première. | T, L |
-| Demande une autre proposition, avec un mot | Prochaine action « Préparer une autre proposition — « son mot » » ; événement ; alerte | **Son mot ENTIER** dans le bloc du dossier et dans Espaces clients (avant : seulement dans l'historique) | — | **Retire sa demande** : événement (le mot y reste), prochaine action rendue à l'état précédent | T, L |
+| Demande une autre proposition, avec un mot | Prochaine action « Préparer une autre proposition — « son mot » » ; événement ; alerte | **Son mot ENTIER** dans le bloc du dossier (et dans l'ex-onglet Espaces clients, retiré par la mission 18) (avant : seulement dans l'historique) | — | **Retire sa demande** : événement (le mot y reste), prochaine action rendue à l'état précédent | T, L |
 | Complète ses coordonnées | Fiche du dossier mise à jour, événement | — | — | Se corrige en les ressaisissant | T (espace.test) |
 | Lit son devis | Événement (compteur), alertes à la 1re et 3e lecture | « Devis lu n fois », signal « hésite » | — | — | T (espace-v2.test) |
 | **Donne son bon pour accord** (+ signature) | `→ Signé`, devis « accepté », preuve (date, IP, navigateur, signature), alerte maximale | « Bon pour accord », onglet Paiement ouvert | Lead « SIGNE » ; conversion Meta | **Retire son accord** (tant que rien n'est encaissé et que le chantier n'est pas planifié) : preuve gardée et annotée, `Signé → Devis envoyé`, devis « émis », lead « DEVIS_ENVOYE », alerte maximale. Il peut resigner : nouvelle preuve. | T |

@@ -14,7 +14,8 @@
  * qui n'est pas une lecture (GET). Une réponse qui redirige vers la page de
  * connexion n'est jamais gardée.
  */
-const VERSION = "v11";
+// v12 (mission 18, partie A) : les écrans retirés (Espaces clients, Dépenses, Tâches de fond) ne restent pas servis hors ligne.
+const VERSION = "v12";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;

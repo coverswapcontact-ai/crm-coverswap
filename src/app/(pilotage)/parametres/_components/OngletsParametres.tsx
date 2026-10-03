@@ -5,12 +5,14 @@ import { ChevronDown } from "lucide-react";
 import { EnTetePage, TRANS } from "@/components/pilotage/ui";
 import type { VueAccesAssistant, VueConsignesAssistant } from "@/lib/assistant/vues-parametres";
 import type { CompteurVue } from "@/lib/dossiers/compteurs";
+import type { PresetVue } from "@/lib/dossiers/types";
 import type { ReglagesMailVue } from "@/lib/mail/reglages-vue";
 import type { GroupeParametre, ParametreVue } from "@/lib/parametres/definitions";
 import { cn } from "@/lib/utils";
 import AssistantClaude from "./AssistantClaude";
 import Connexions, { type EtatConnexions } from "./Connexions";
 import GroupesParametres from "./EcranParametres";
+import { GestionTarifs } from "./GestionTarifs";
 import MarqueEspace from "./MarqueEspace";
 import MessagerieSms, { type ReponseSms } from "./MessagerieSms";
 import Numerotation from "./Numerotation";
@@ -30,12 +32,18 @@ import SectionSysteme from "./SectionSysteme";
  * lu à l'ouverture de l'onglet par ses propres routes. `?section=` (passé par la
  * page) ouvre un onglet comme une ancre : /taches-de-fond redirige vers
  * /parametres?section=systeme.
+ *
+ * Mission 18 (A6) : septième onglet, « Tarifs », après Facturation (les tarifs
+ * des devis et le tarif de chaque prestation, qui étaient un sous-mode du
+ * générateur de Dossiers) : /parametres?section=tarifs ou #tarifs. Les presets
+ * sont lus par la page et gardés ici, comme les paramètres.
  */
 
-type Onglet = "activite" | "facturation" | "mail" | "sms" | "assistant" | "systeme";
+type Onglet = "activite" | "facturation" | "tarifs" | "mail" | "sms" | "assistant" | "systeme";
 const ONGLETS: { valeur: Onglet; libelle: string }[] = [
   { valeur: "activite", libelle: "Activité" },
   { valeur: "facturation", libelle: "Facturation" },
+  { valeur: "tarifs", libelle: "Tarifs" },
   { valeur: "mail", libelle: "Mail" },
   { valeur: "sms", libelle: "SMS" },
   { valeur: "assistant", libelle: "Assistant" },
@@ -43,7 +51,7 @@ const ONGLETS: { valeur: Onglet; libelle: string }[] = [
 ];
 const CLE_MEMOIRE = "parametres-onglet";
 // Les groupes de l'onglet Activité ont chacun leur ancre (`id` posé par GroupesParametres) : `/parametres#simulateur` depuis le banc.
-const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", mail: "mail", sms: "sms", assistant: "assistant", systeme: "systeme", "taches-de-fond": "systeme", coherence: "systeme", audit: "systeme", sessions: "systeme" };
+const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", tarifs: "tarifs", mail: "mail", sms: "sms", assistant: "assistant", systeme: "systeme", "taches-de-fond": "systeme", coherence: "systeme", audit: "systeme", sessions: "systeme" };
 /** L'onglet d'une ancre ou d'une section (propriétés propres seulement : « toString » n'est pas un onglet). */
 const ongletDe = (nom: string | null): Onglet | null => (nom && Object.prototype.hasOwnProperty.call(ANCRES, nom) ? ANCRES[nom] : null);
 const GROUPES_ACTIVITE: readonly GroupeParametre[] = ["PILOTAGE", "COMMERCIAL", "PUBLICITE", "SIMULATEUR", "RGPD"];
@@ -76,6 +84,7 @@ export default function OngletsParametres({
   acces,
   consignes,
   compteurs,
+  presets: presetsInitiaux,
   section = null,
 }: {
   parametres: ParametreVue[];
@@ -86,10 +95,13 @@ export default function OngletsParametres({
   acces: VueAccesAssistant;
   consignes: VueConsignesAssistant;
   compteurs: CompteurVue[];
+  /** Les tarifs des devis (presets actifs), lus par la page. */
+  presets: PresetVue[];
   /** `?section=` de l'adresse (un nom d'onglet ou une ancre de la table ANCRES). */
   section?: string | null;
 }) {
   const [parametres, setParametres] = useState(initiaux);
+  const [presets, setPresets] = useState(presetsInitiaux);
   // L'ancre (#mail, #sms…) l'emporte quand elle change ; un onglet choisi à la main l'emporte tant que l'ancre ne bouge pas ;
   // puis la section de l'adresse (?section=systeme, rendue telle quelle par le serveur) ; sinon la mémoire.
   const ancre = useSyncExternalStore(surChangementAncre, lireAncre, () => "");
@@ -97,7 +109,7 @@ export default function OngletsParametres({
   const [choix, setChoix] = useState<{ valeur: Onglet; ancre: string } | null>(null);
   const onglet: Onglet = choix && choix.ancre === ancre ? choix.valeur : (ongletDe(ancre) ?? ongletDe(section) ?? memorise);
   const [avance, setAvance] = useState(false);
-  // Six onglets débordent sur téléphone (la liste défile) : l'onglet ouvert, par exemple Système depuis ?section=, reste en vue.
+  // Sept onglets débordent sur téléphone (la liste défile) : l'onglet ouvert, par exemple Système depuis ?section=, reste en vue.
   const liste = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const boite = liste.current;
@@ -170,6 +182,7 @@ export default function OngletsParametres({
         </>
       ) : null}
 
+      {onglet === "tarifs" ? <GestionTarifs presets={presets} setPresets={setPresets} /> : null}
       {onglet === "mail" ? <ReglagesMail initial={mail} /> : null}
       {onglet === "sms" ? <MessagerieSms initial={sms} /> : null}
       {onglet === "assistant" ? (

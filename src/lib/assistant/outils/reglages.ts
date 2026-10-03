@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { ADRESSE_TARIFS } from "@/lib/parametres/sections";
 import { tarifsDesPrestations, type LigneTarifPrestation } from "@/lib/prestations/tarifs";
 import { libelleReperee, repererSousPartie } from "@/lib/prestations/reperage";
 import { CLES_TEXTE, lireConsignes, lirePositionnement, listerVersions, titresDesSections, type CleTexte } from "../consignes";
@@ -52,10 +53,10 @@ export const outilTarifs = definirOutil({
   executer: async (e) => {
     if (e.sous_partie) {
       const l = await ligneDe(e.sous_partie);
-      return { texte: ligneTarif(l), donnees: l, liens: [lien("Dossiers → Tarifs", "/dossiers")] };
+      return { texte: ligneTarif(l), donnees: l, liens: [lien("Paramètres › Tarifs", ADRESSE_TARIFS)] };
     }
     const lignes = await tarifsDesPrestations();
-    return { texte: lignes.map(ligneTarif).join("\n"), donnees: lignes, liens: [lien("Dossiers → Tarifs", "/dossiers")] };
+    return { texte: lignes.map(ligneTarif).join("\n"), donnees: lignes, liens: [lien("Paramètres › Tarifs", ADRESSE_TARIFS)] };
   },
 });
 

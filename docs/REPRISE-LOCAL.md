@@ -552,3 +552,63 @@ Tests : 1 320 → 1 331 verts (11 ajoutés).
 Reste :
 - A6 : l'onglet Tarifs, la navigation à 10 onglets et `VERSION` de `sw.js`.
 - Rien à reconnecter pour ce lot. Le rappel général de reconnexion des lots A1, A2 et A4 tient toujours.
+
+### Mission 18, A6 — les tarifs dans Paramètres › Tarifs, navigation à 10 onglets
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Onglet « Tarifs » de Paramètres** (septième onglet, après Facturation ; `/parametres?section=tarifs`, ancre
+  `#tarifs`) : les tarifs des devis (presets : désignation, unité, prix HT, ajout, retrait) et « Tarif de chaque
+  prestation ». `GestionTarifs.tsx` passe de `dossiers/_components` à `parametres/_components` (renommé dans git) ;
+  plus de bouton « Retour au document » (`onRetour` retiré), une section titrée « Tarifs des devis ».
+- `parametres/page.tsx` lit les presets actifs (`listerPresets`) avec les autres réglages ; `OngletsParametres` les
+  garde dans son état (comme les paramètres) : revenir sur l'onglet ne perd pas ce qui vient d'être changé.
+- **Générateur de documents** : plus de sous-mode des tarifs. Il garde la liste « Ajouter depuis un tarif… » ; « Gérer
+  les tarifs » devient un lien vers l'onglet, ouvert dans un autre onglet du navigateur pour ne pas perdre le document
+  en cours, et la liste des tarifs se relit au retour sur la fenêtre (`focus`, sans message d'erreur à ce moment-là).
+- Adresse unique `ADRESSE_TARIFS` (`src/lib/parametres/sections.ts`), utilisée par le générateur et par les liens de
+  l'assistant : outil des tarifs (`reglages.ts`, donc `lister` TARIFS), `creer` TARIF, chemin des entités TARIF et
+  SOUS_PARTIE (`modifier`, `archiver`). Les commentaires « Dossiers → Tarifs » de `prestations/` sont corrigés.
+- **Navigation à 10 onglets** (`Navigation.tsx`) : principaux Tâches, Leads, Dossiers, Mail, Clients, Analytique ;
+  secondaires Simulateur, Site, Finances (allumé aussi par `/depenses/nouvelle`), Paramètres. Barre du bas inchangée :
+  Tâches, Leads, Dossiers, Mail, Analytique, puis « Plus » (Clients, Simulateur, Site, Finances, Paramètres).
+  `PRINCIPALES`, `SECONDAIRES` et `DANS_LE_MENU` sont exportés pour le test. Les icônes `Smartphone`, `Workflow`,
+  `Receipt` et le type des compteurs étaient déjà retirés par A1, A3 et A5.
+- **Anciennes adresses** : `/espaces`, `/depenses`, `/taches-de-fond` (déjà dans `next.config.ts`) sont vérifiées
+  ensemble : 307, sans chaîne, vers un écran qui existe, écran d'origine retiré ; les raccourcis du manifeste mènent à
+  des écrans. `public/sw.js` passe en `VERSION = "v12"` : les écrans retirés ne restent pas servis hors ligne.
+- MCP : aucun outil, paramètre ni description ne change (seuls les liens rendus changent). L'empreinte reste
+  `040d6c7aa53c` (53 outils) : rien à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête, note en 2.4, DP64 et DP70–DP73 en 2.13 › Tarifs avec le nouveau test, PA1,
+  N1, N3, bilan : panneau 92 actions, ligne « Paramètres › Tarifs » de 5 actions, total inchangé à 427 dont 391
+  couvertes et 36 sans objet), `ARCHITECTURE-PILOTAGE.md` (§4 réécrit : 10 onglets, barre du bas, puce Tarifs ; note
+  en tête de §21, qui décrivait l'état du 21/09), `COHERENCE.md` (§1 : colonne Espace au lieu d'Espaces clients).
+  `TACHES.md` §0 était déjà à jour (A5).
+
+Décisions prises seul (solution la plus simple) :
+- Tarifs placé juste après Facturation (l'argent ensemble), pas en fin de liste.
+- Presets lus par le serveur avec la page, comme les autres onglets (pas de « Chargement… ») : `listerPresets` est
+  une petite lecture ; seul l'onglet Système reste lu à la demande.
+- « Gérer les tarifs » ouvre un autre onglet du navigateur plutôt que de quitter la modale : un devis à moitié saisi
+  ne se perd pas. La liste du générateur se relit au retour.
+- Pas de nouvelle redirection : les tarifs n'avaient pas d'adresse (sous-mode d'une modale). Les redirections restent
+  en 307 (`analytique.test.ts` exige `permanent: false`), comme en A1, A3 et A5.
+- DP64 (lire les tarifs) suit DP70–DP73 dans l'onglet, comme le prévoyait le plan : le générateur ne fait plus que les
+  proposer (DP67 reste dans le panneau).
+
+Tests : 1 331 → 1 341 verts (10 ajoutés).
+- Nouveau `src/lib/base/mission-18-a6.test.ts`. Il couvre :
+  - l'adresse de l'onglet, la page qui lit les tarifs actifs et passe `?section=tarifs` ;
+  - l'ordre des sept onglets, l'ancre `#tarifs`, les tarifs gardés par les onglets ;
+  - `GestionTarifs` déplacé sans « Retour », le générateur sans sous-mode, avec sa liste et son lien ;
+  - les gestes de l'onglet (POST, PATCH, attribution, DELETE) et les outils jumeaux (`creer`, `modifier`, `modifier`
+    SOUS_PARTIE, `archiver`) : même état en base, tarif archivé jamais effacé, liens vers l'onglet ;
+  - les liens de `lister` TARIFS, de l'outil des tarifs et le chemin des entités TARIF et SOUS_PARTIE ;
+  - la navigation à 10 onglets (chaque onglet mène à un écran existant), la barre du bas et le menu « Plus » ;
+  - les trois anciennes adresses, les raccourcis du manifeste et la version du service worker.
+- Aucun test existant n'a eu à changer (`mission-18-a3.test.ts` lit toujours l'entrée Finances telle quelle).
+- `tsc`, `eslint` sur les fichiers touchés (2 avertissements anciens de `sw.js`, hors de mes lignes) et
+  `npm run build` : propres.
+
+Reste :
+- Partie A terminée (A1 à A6). Rien à reconnecter pour ce lot ; le rappel de reconnexion des lots A1, A2 et A4 tient
+  toujours.

@@ -22,7 +22,7 @@
 // `mainSelonFaits` est pure ; `recalculerMain` l'applique au dossier et range
 // le résultat dans `Dossier.main / mainLe / mainMotif`, relus par les écrans.
 
-import { prisma } from "@/lib/prisma";
+import { prisma, type Transaction } from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { porteLienEspace } from "@/lib/sms/catalogue";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
@@ -382,10 +382,10 @@ const devisEnAttente = (document: { type: string; statut: string; visibleEspace:
  * Les faits de la règle pour un dossier, lus en base (événements non archivés, mails et devis relus) : la même
  * lecture pour la main (`calculerMain`) et pour le contrôle de cohérence (message du client sans réponse).
  */
-export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { messageSansReponse: MessageSansReponse | null }) | null> {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true, clientNom: true } });
+export async function lireFaitsMain(dossierId: string, client: Transaction = prisma): Promise<(FaitsMain & { messageSansReponse: MessageSansReponse | null }) | null> {
+  const dossier = await client.dossier.findUnique({ where: { id: dossierId }, select: { etape: true, clientNom: true } });
   if (!dossier) return null;
-  const lus = await prisma.dossierEvenement.findMany({
+  const lus = await client.dossierEvenement.findMany({
     where: { dossierId, archiveLe: null, type: { in: TYPES_LUS } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 60,
@@ -396,13 +396,13 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
   // ou déplacé dans un autre dossier ne compte plus.
   const idsMessages = evenements.filter((e) => e.type === "MAIL_RECU").map(idMessage).filter(nonNul);
   const messages = idsMessages.length
-    ? await prisma.message.findMany({ where: { id: { in: idsMessages }, archiveLe: null }, select: { id: true, dossierId: true, automatique: true, rangeLe: true, traiteLe: true, canal: true, filCanal: true, recuLe: true } })
+    ? await client.message.findMany({ where: { id: { in: idsMessages }, archiveLe: null }, select: { id: true, dossierId: true, automatique: true, rangeLe: true, traiteLe: true, canal: true, filCanal: true, recuLe: true } })
     : [];
   const parId = new Map(messages.map((m) => [m.id, m]));
   // Mission 14 : un devis masqué, annulé, accepté, refusé ou archivé depuis ne dit plus « en attente de sa réponse ».
   const idsDocuments = evenements.filter((e) => TYPES_DEVIS.includes(e.type)).map(idDocument).filter(nonNul);
   const documents = idsDocuments.length
-    ? await prisma.document.findMany({ where: { id: { in: idsDocuments }, ...AVEC_ARCHIVES }, select: { id: true, type: true, statut: true, visibleEspace: true, archiveLe: true } })
+    ? await client.document.findMany({ where: { id: { in: idsDocuments }, ...AVEC_ARCHIVES }, select: { id: true, type: true, statut: true, visibleEspace: true, archiveLe: true } })
     : [];
   const documentsParId = new Map(documents.map((d) => [d.id, d]));
   const retenus = evenements.filter((e) => {
@@ -420,7 +420,7 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
   const repondu = async (e: EvenementLu) => {
     const message = e.type === "MAIL_RECU" ? parId.get(idMessage(e) ?? "") : undefined;
     if (!message?.filCanal) return false;
-    const reponse = await prisma.message.findFirst({ where: { canal: message.canal, filCanal: message.filCanal, sens: "SORTANT", automatique: false, archiveLe: null, recuLe: { gt: message.recuLe } }, select: { id: true } });
+    const reponse = await client.message.findFirst({ where: { canal: message.canal, filCanal: message.filCanal, sens: "SORTANT", automatique: false, archiveLe: null, recuLe: { gt: message.recuLe } }, select: { id: true } });
     return reponse !== null;
   };
   return {
@@ -432,9 +432,20 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
 }
 
 /** La main telle que la règle la donne aujourd'hui, sans rien écrire (contrôle de cohérence, migration). */
-export async function calculerMain(dossierId: string): Promise<MainCalculee | null> {
-  const faits = await lireFaitsMain(dossierId);
+export async function calculerMain(dossierId: string, client: Transaction = prisma): Promise<MainCalculee | null> {
+  const faits = await lireFaitsMain(dossierId, client);
   return faits ? mainSelonFaits(faits) : null;
+}
+
+/**
+ * Mission 18 (B0) : la main calculée et écrite DANS la transaction de l'appelant (`dossiers/synchro.ts`), sans signal
+ * des tâches (il part après la transaction, jamais dedans). Rend la valeur retenue.
+ */
+export async function ecrireMain(tx: Transaction, dossierId: string): Promise<MainCalculee | null> {
+  const calcul = await calculerMain(dossierId, tx);
+  if (!calcul) return null;
+  await tx.dossier.update({ where: { id: dossierId }, data: { main: calcul.qui, mainLe: calcul.le, mainMotif: calcul.motif } });
+  return calcul;
 }
 
 /** Mission 14 (R2) : des mails rangés, traités, archivés ou remis « à traiter » — la main de leurs dossiers est relue. Jamais bloquant. */

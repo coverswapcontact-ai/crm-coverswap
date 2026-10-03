@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { recalculerMain } from "./main";
+import { appliquerEvenementDossier } from "./synchro";
 import prisma, { type Transaction } from "@/lib/prisma";
 import {
   imputerSurFacture,
@@ -18,8 +19,6 @@ import {
   type EtapeDossier,
   type LigneDocument,
   type TypeDocument,
-  PROCHAINE_ACTION_APRES_DEVIS,
-  PROCHAINE_ACTION_PREPARER_DEVIS,
 } from "./constants";
 import { ErreurMetier } from "./erreurs";
 import { mentionsLegales, type CategorieDestinataire } from "./mentions";
@@ -311,13 +310,9 @@ async function emettre(emission: Emission) {
         // Facture déjà couverte par les acomptes : le dossier est encaissé.
         const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
         if (solde) changements.push(solde);
-        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste.
-        if (emission.type === "DEVIS") {
-          await tx.dossier.updateMany({
-            where: { id: emission.dossierId, prochaineAction: { startsWith: PROCHAINE_ACTION_PREPARER_DEVIS } },
-            data: { prochaineAction: PROCHAINE_ACTION_APRES_DEVIS, prochaineActionDate: null },
-          });
-        }
+        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste
+        // (mission 18 : par le point d'entrée, qui range une tâche à la place et écrit la main dans la transaction).
+        if (emission.type === "DEVIS") await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id });
         return { document, changements };
       },
       { maxWait: 10_000, timeout: 30_000 }

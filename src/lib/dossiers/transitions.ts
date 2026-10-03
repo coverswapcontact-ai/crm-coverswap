@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import { recalculerMain } from "./main";
+import { ecrireMain, recalculerMain } from "./main";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
+import { ecrireStatutLead, STATUT_LEAD_PAR_ETAPE } from "./statut-lead";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
@@ -290,7 +292,7 @@ export async function changerEtapeDansTransaction(
     }
   }
 
-  return appliquerChangementEtape(tx, {
+  const changement = await appliquerChangementEtape(tx, {
     dossierId,
     de: faits.etape,
     vers: entree.vers,
@@ -300,7 +302,19 @@ export async function changerEtapeDansTransaction(
     etapeReference: avantSortie,
     avertissements: verification.avertissements.map((avertissement) => avertissement.message),
   });
+  // Mission 18 (B0) : la main et le statut du lead suivent DANS la transaction ; les effets d'après ne les refont pas.
+  await ecrireMain(tx, dossierId);
+  await ecrireStatutLead(tx, dossierId, changement.vers);
+  SYNCHRONISES.add(changement);
+  return changement;
 }
+
+/**
+ * Mission 18 (B0) : les changements dont la main et le statut du lead sont déjà écrits dans leur transaction
+ * (`changerEtapeDansTransaction`). Un ensemble faible plutôt qu'un champ : le changement rendu à l'écran, à l'assistant
+ * ou à une proposition garde sa forme ; une copie (`{ ...changement }`) retombe sur le chemin complet, sans risque.
+ */
+const SYNCHRONISES = new WeakSet<ChangementEtape>();
 
 /** Changement d'étape demandé depuis l'interface. */
 export async function changerEtape(dossierId: string, entree: EntreeChangementEtape): Promise<ChangementEtape> {
@@ -309,31 +323,20 @@ export async function changerEtape(dossierId: string, entree: EntreeChangementEt
   return changement;
 }
 
-// Statut du lead B2C (écran /leads) qui reflète l'étape du dossier.
-// EN_PAUSE ne change rien.
-const STATUT_LEAD_PAR_ETAPE: Partial<Record<EtapeDossier, string>> = {
-  QUALIFICATION: "CONTACTE",
-  SIMULATION: "CONTACTE",
-  DEVIS_ENVOYE: "DEVIS_ENVOYE",
-  RELANCE: "DEVIS_ENVOYE",
-  SIGNE: "SIGNE",
-  PLANIFIE: "CHANTIER_PLANIFIE",
-  CHANTIER: "CHANTIER_PLANIFIE",
-  FACTURE: "TERMINE",
-  ENCAISSE: "TERMINE",
-  PERDU: "PERDU",
-};
-
 /**
  * Effets hors transaction d'un changement d'étape, jamais bloquants :
- * - le statut du lead B2C d'origine suit l'étape du dossier ;
+ * - la main et le statut du lead B2C d'origine suivent l'étape du dossier (sauf s'ils sont déjà écrits dans la
+ *   transaction : `changerEtapeDansTransaction`, mission 18) ; l'agenda suit ; un chantier terminé prévient le client ;
  * - Meta Conversions API reçoit « SubmitApplication » (devis envoyé) et
  *   « Purchase » (signé, avec le montant du devis accepté), comme le faisait
  *   l'ancien écran /devis. Sans META_PIXEL_ID ni META_ACCESS_TOKEN, rien ne part.
  */
 export async function effetsDuChangementEtape(changement: ChangementEtape): Promise<void> {
-  // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts).
-  await recalculerMain(changement.dossierId);
+  const synchronise = SYNCHRONISES.has(changement);
+  // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts). Déjà écrite dans la
+  // transaction d'un changement passé par `changerEtapeDansTransaction` (mission 18) : seules les tâches sont prévenues.
+  if (synchronise) await signalerChangementTaches();
+  else await recalculerMain(changement.dossierId);
   // Mission 14 (partie 7) : perdu ou encaissé, le rappel du dossier quitte l'agenda ; repris, il y revient.
   await synchroniserRappel({ type: "DOSSIER", id: changement.dossierId });
   // Mission 7 : chantier terminé (facturé ou encaissé) → merci et invitation à laisser un avis, par mail, une fois.
@@ -359,7 +362,7 @@ export async function effetsDuChangementEtape(changement: ChangementEtape): Prom
     if (!lead) return;
 
     const statut = STATUT_LEAD_PAR_ETAPE[changement.vers];
-    if (statut && statut !== lead.statut) {
+    if (!synchronise && statut && statut !== lead.statut) {
       await prisma.lead.update({ where: { id: lead.id }, data: { statut } });
     }
 

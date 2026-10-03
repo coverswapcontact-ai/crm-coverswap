@@ -10,7 +10,7 @@ import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, resumerProjet, type ProjetClient } from "./projet";
 import { lireSelection } from "@/lib/prestations/prestations";
-import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { appliquerEvenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
 
 /**
  * Valider, dévalider, revalider — et tout ce qui se défait dans l'espace client.
@@ -85,18 +85,19 @@ export async function validerProjet(espace: EspaceClient, auteur: Auteur): Promi
   if (manque) throw new ErreurMetier(manque, 400, { raison: "incomplet" });
   if (espace.projetValideLe) return;
   const maintenant = new Date();
-  await ecrire(auteur, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: maintenant, projetValidePar: auteur } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
-    if (!dossier.prochaineAction || /attendre (les photos|qu'il|le projet)/i.test(dossier.prochaineAction)) {
-      await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Suivre ses simulations, ou lui en préparer une (projet validé)", prochaineActionDate: maintenant } });
-    }
-    // Mission 13 (B3) : un dossier ouvert sans objet ni source le reçoit du projet validé — ce que le client veut rénover,
-    // venu de son espace. Une source déjà écrite ne bouge pas.
-    // Mission 14 (R3) : l'objet suit la famille validée (même s'il venait du lead), sauf si Lucas l'a écrit à la main.
-    const complement = { ...complementDuDossier(dossier, projet), ...objetSuivi(dossier, projet) };
-    if (Object.keys(complement).length) await prisma.dossier.update({ where: { id: espace.dossierId }, data: complement });
-  });
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: maintenant, projetValidePar: auteur } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
+      // Mission 13 (B3) : un dossier ouvert sans objet ni source le reçoit du projet validé — ce que le client veut rénover,
+      // venu de son espace. Une source déjà écrite ne bouge pas.
+      // Mission 14 (R3) : l'objet suit la famille validée (même s'il venait du lead), sauf si Lucas l'a écrit à la main.
+      const complement = { ...complementDuDossier(dossier, projet), ...objetSuivi(dossier, projet) };
+      if (Object.keys(complement).length) await tx.dossier.update({ where: { id: espace.dossierId }, data: complement });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROJET_VALIDE" }, maintenant);
+    })
+  );
+  await suitesEvenementDossier(suites);
   if (dossier.etape === "QUALIFICATION") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "QUALIFICATION", "SIMULATION", "AUTOMATIQUE", RAISON_PROJET_VALIDE));
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet), 3, dossier.clientTelephone);
 }
@@ -121,14 +122,15 @@ export function complementDuDossier(dossier: { objet: string; source: string }, 
 export async function devaliderProjet(espace: EspaceClient, auteur: Auteur, motif = "pour le modifier"): Promise<void> {
   if (!espace.projetValideLe) return;
   const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: null, projetValidePar: null } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_DEVALIDE", direction: direction(auteur), contenu: `Projet dévalidé ${par(auteur)} (${motif})`, metadata: JSON.stringify({ auteur }) } });
-    // La prochaine action posée par la validation ne vaut plus.
-    if (dossier.prochaineAction && /\(projet validé\)/i.test(dossier.prochaineAction)) {
-      await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Attendre qu'il valide son projet (il le modifie)", prochaineActionDate: null } });
-    }
-  });
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: null, projetValidePar: null } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_DEVALIDE", direction: direction(auteur), contenu: `Projet dévalidé ${par(auteur)} (${motif})`, metadata: JSON.stringify({ auteur }) } });
+      // La prochaine action posée par la validation ne vaut plus.
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROJET_DEVALIDE" });
+    })
+  );
+  await suitesEvenementDossier(suites);
   // Recul : seulement si le dossier est encore là où la validation l'avait mis, et que rien d'autre ne l'y retient.
   if (dossier.etape === "SIMULATION" && !espace.choixLe) {
     const mouvement = await dernierMouvement(espace.dossierId);
@@ -151,14 +153,15 @@ export async function devaliderChoix(espace: EspaceClient, auteur: Auteur): Prom
     throw new ErreurMetier("Votre devis est déjà établi sur la simulation validée. Pour en changer, appelez CoverSwap : nous l'ajustons avec vous.", 409, { raison: "devis-emis" });
   }
   const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.$transaction([
-      prisma.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } }),
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null }) } }),
-      ...(dossier.prochaineAction && /préparer le devis \(simulation/i.test(dossier.prochaineAction) ? [prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Attendre qu'il valide une simulation (il a dévalidé la sienne)", prochaineActionDate: null } })] : []),
-    ]);
-  });
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } });
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_DEVALIDE" });
+    })
+  );
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Simulation dévalidée — ${dossier.clientNom}`, "Le client est revenu sur la simulation qu'il avait validée. Le devis n'est plus attendu pour l'instant.", 3, dossier.clientTelephone);
 }
 
@@ -166,16 +169,15 @@ export async function devaliderChoix(espace: EspaceClient, auteur: Auteur): Prom
 
 export async function retirerDemandeProposition(espace: EspaceClient, auteur: Auteur): Promise<void> {
   if (!espace.propositionDemandeeLe) return;
-  const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.$transaction([
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: null, propositionMessage: null, propositionSimulationId: null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROPOSITION_RETIREE", direction: direction(auteur), contenu: `Demande d'autre proposition retirée ${par(auteur)}${espace.propositionMessage ? ` (elle disait : « ${espace.propositionMessage} »)` : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, message: espace.propositionMessage ?? null }) } }),
-      ...(dossier.prochaineAction && /autre proposition/i.test(dossier.prochaineAction)
-        ? [prisma.dossier.update({ where: { id: espace.dossierId }, data: espace.choixLe ? { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: new Date() } : { prochaineAction: null, prochaineActionDate: null } })]
-        : []),
-    ]);
-  });
+  await dossierDe(espace.dossierId);
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: null, propositionMessage: null, propositionSimulationId: null } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROPOSITION_RETIREE", direction: direction(auteur), contenu: `Demande d'autre proposition retirée ${par(auteur)}${espace.propositionMessage ? ` (elle disait : « ${espace.propositionMessage} »)` : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, message: espace.propositionMessage ?? null }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROPOSITION_RETIREE", choixValide: Boolean(espace.choixLe) });
+    })
+  );
+  await suitesEvenementDossier(suites);
 }
 
 /* ── Les photos ────────────────────────────────────────────────────── */
@@ -254,16 +256,18 @@ export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif 
     }
   }
   const maintenant = new Date();
-  await ecrire(auteur, async () => {
-    await prisma.accordDevis.update({ where: { id: accord.id }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
-    // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
-    const rendus = await prisma.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
-    await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: auteur === "CLIENT" ? "Appeler : il a retiré son bon pour accord" : "Refaire signer le devis", prochaineActionDate: maintenant } });
-  });
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.accordDevis.update({ where: { id: accord.id }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
+      // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
+      const rendus = await tx.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "ACCORD_RETIRE", auteur }, maintenant);
+    })
+  );
   if (dossier.etape === "SIGNE") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "SIGNE", "DEVIS_ENVOYE", "RETOUR", `${RAISON_ACCORD_RETIRE} ${par(auteur)}`));
-  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit.
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit (mission 18 : les suites).
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `ACCORD RETIRÉ — ${dossier.clientNom}`, `Le client a retiré son bon pour accord sur le devis ${accord.numeroDevis ?? ""}${motif ? ` : « ${motif} »` : ""}.\nÀ vous : l'appeler.`, 5, dossier.clientTelephone);
   return { retire: true };
 }

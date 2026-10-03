@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { recalculerMain } from "@/lib/dossiers/main";
+import { appliquerEvenementDossier } from "@/lib/dossiers/synchro";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { SimulationEspace } from "@prisma/client";
@@ -415,9 +416,9 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
   const aPublier = lignes.filter((s) => s.statut !== "PUBLIEE");
   let mail: ResultatPublication["mail"];
   if (aPublier.length > 0) {
-    await prisma.$transaction([
-      ...aPublier.map((s) => prisma.simulationEspace.update({ where: { id: s.id }, data: { statut: "PUBLIEE", publieeLe: s.publieeLe ?? maintenant, masqueeLe: null } })),
-      prisma.dossierEvenement.create({
+    await prisma.$transaction(async (tx) => {
+      for (const s of aPublier) await tx.simulationEspace.update({ where: { id: s.id }, data: { statut: "PUBLIEE", publieeLe: s.publieeLe ?? maintenant, masqueeLe: null } });
+      await tx.dossierEvenement.create({
         data: {
           dossierId,
           type: "ESPACE_SIMULATION_DEPOSEE",
@@ -425,9 +426,10 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
           contenu: `${aPublier.length > 1 ? `${aPublier.length} simulations publiées` : "Simulation publiée"} dans l'espace du client${aPublier.length === 1 && aPublier[0].titre ? ` : ${aPublier[0].titre}` : ""}`,
           metadata: JSON.stringify({ simulations: aPublier.map((s) => s.id) }),
         },
-      }),
-      prisma.dossier.update({ where: { id: dossierId }, data: { prochaineAction: "Attendre le retour du client sur la simulation", prochaineActionDate: null } }),
-    ]);
+      });
+      // Mission 18 (B0) : la prochaine action par le point d'entrée (une action posée à la main reste, une tâche le dit).
+      return appliquerEvenementDossier(tx, dossierId, { type: "SIMULATION_PUBLIEE", simulationIds: aPublier.map((s) => s.id) }, maintenant);
+    });
     const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
     if (dossier?.etape === "QUALIFICATION") await changerEtape(dossierId, { vers: "SIMULATION" }).catch((erreur) => console.error("[simulations] passage en Simulation (non bloquant) :", erreur));
     // Publiée : la main passe au client, partout (dossiers/main.ts).

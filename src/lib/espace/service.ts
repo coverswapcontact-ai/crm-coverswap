@@ -11,6 +11,7 @@ import { ajouterPhoto } from "@/lib/dossiers/dossiers";
 import { montantsDocument } from "@/lib/dossiers/montants";
 import { idPhoto, lireLignes, lirePhotos, estPhotoApres } from "@/lib/dossiers/stockage";
 import { changerEtape } from "@/lib/dossiers/transitions";
+import { appliquerEvenementDossier, evenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { libelleZoneClient, lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
@@ -25,7 +26,6 @@ import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
-import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -480,7 +480,7 @@ export async function noterVisite(espace: EspaceClient): Promise<void> {
 
 export async function deposerPhotos(espace: EspaceClient, fichiers: File[]): Promise<{ deposees: number; refusees: string[] }> {
   if (fichiers.length === 0) throw new ErreurMetier("Aucune photo reçue.", 400);
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, etape: true, prochaineAction: true } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, etape: true } });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
   const dejaLa = lirePhotos(dossier.photos).length;
   if (dejaLa + fichiers.length > PHOTOS_MAX_PAR_DOSSIER) throw new ErreurMetier(`Vous avez déjà déposé beaucoup de photos (${dejaLa}). Quelques-unes suffisent : appelez-nous si besoin.`, 413);
@@ -499,17 +499,18 @@ export async function deposerPhotos(espace: EspaceClient, fichiers: File[]): Pro
       }
     }
     if (deposees > 0) {
-      // Le téléphone envoie les photos une à une : un dépôt en plusieurs envois reste UN événement.
-      const recent = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", createdAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { createdAt: "desc" } });
-      const deja = recent ? Number((JSON.parse(recent.metadata || "{}") as { nombre?: number }).nombre) || 0 : 0;
-      const total = deja + deposees;
-      const contenu = `${total} photo${total > 1 ? "s" : ""} déposée${total > 1 ? "s" : ""} par le client dans son espace`;
-      if (recent) await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu, metadata: JSON.stringify({ nombre: total }) } });
-      else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ nombre: total }) } });
-      // La balle passe dans le camp de Lucas.
-      if (!dossier.prochaineAction || /attendre les photos/i.test(dossier.prochaineAction)) {
-        await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer la simulation (photos reçues)", prochaineActionDate: new Date() } });
-      }
+      const suites = await prisma.$transaction(async (tx) => {
+        // Le téléphone envoie les photos une à une : un dépôt en plusieurs envois reste UN événement.
+        const recent = await tx.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", createdAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { createdAt: "desc" } });
+        const deja = recent ? Number((JSON.parse(recent.metadata || "{}") as { nombre?: number }).nombre) || 0 : 0;
+        const total = deja + deposees;
+        const contenu = `${total} photo${total > 1 ? "s" : ""} déposée${total > 1 ? "s" : ""} par le client dans son espace`;
+        if (recent) await tx.dossierEvenement.update({ where: { id: recent.id }, data: { contenu, metadata: JSON.stringify({ nombre: total }) } });
+        else await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ nombre: total }) } });
+        // La balle passe dans le camp de Lucas (mission 18 : une action posée à la main reste, une tâche le dit).
+        return appliquerEvenementDossier(tx, espace.dossierId, { type: "PHOTOS_RECUES" });
+      });
+      await suitesEvenementDossier(suites);
       // Une seule alerte pour un dépôt en plusieurs envois : elle part deux minutes après le premier.
       await mettreEnFile({ type: TACHE_ALERTE_PHOTOS, cle: `espace-photos:${espace.id}:${Math.floor(Date.now() / 300_000)}`, charge: { espaceId: espace.id, dossierId: espace.dossierId }, apres: new Date(Date.now() + 120_000), priorite: 6 });
     }
@@ -751,17 +752,17 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   const zonesValidees = choix.mode === "COMPOSITE" ? choix.zones : lireZones((await prisma.simulationEspace.findUnique({ where: { id: impliquees[0] }, select: { zones: true } }))?.zones ?? null);
   const ecrire = <T,>(travail: () => Promise<T>) => (auteur === "LUCAS" ? travail() : avecActeur(ACTEUR, travail));
-  await ecrire(async () => {
-    await prisma.$transaction([
-      prisma.simulationEspace.updateMany({ where: { espaceId: espace.id, id: { notIn: impliquees }, choisieLe: { not: null } }, data: { choisieLe: null } }),
-      ...impliquees.map((id) => prisma.simulationEspace.update({ where: { id }, data: { choisieLe: maintenant, ...(entree.commentaire && choix.mode === "UNE" ? { commentaireClient: entree.commentaire, commenteeLe: maintenant } : {}) } })),
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { choix: JSON.stringify(choix), choixLe: maintenant } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: auteur === "LUCAS" ? "INTERNE" : "ENTRANT", contenu: `${texte}${choix.mode === "UNE" && zonesValidees.length ? ` — ${zonesValidees.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}` : ""}`.slice(0, 1500), metadata: JSON.stringify({ simulations: impliquees, mode: choix.mode, auteur, zones: zonesValidees }) } }),
-      prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: maintenant } }),
-    ]);
-  });
-  // Mission 14 (partie 7) : la prochaine action remplacée (un rappel peut-être) → l'agenda suit.
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  const suites = await ecrire(() =>
+    prisma.$transaction(async (tx) => {
+      await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, id: { notIn: impliquees }, choisieLe: { not: null } }, data: { choisieLe: null } });
+      for (const id of impliquees) await tx.simulationEspace.update({ where: { id }, data: { choisieLe: maintenant, ...(entree.commentaire && choix.mode === "UNE" ? { commentaireClient: entree.commentaire, commenteeLe: maintenant } : {}) } });
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: JSON.stringify(choix), choixLe: maintenant } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: auteur === "LUCAS" ? "INTERNE" : "ENTRANT", contenu: `${texte}${choix.mode === "UNE" && zonesValidees.length ? ` — ${zonesValidees.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}` : ""}`.slice(0, 1500), metadata: JSON.stringify({ simulations: impliquees, mode: choix.mode, auteur, zones: zonesValidees }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_VALIDE" }, maintenant);
+    })
+  );
+  // Mission 14 (partie 7) : la prochaine action remplacée (un rappel peut-être) → l'agenda suit (mission 18 : les suites).
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, { titre: `Simulation validée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer le devis.`, urgence: 5, telephone: dossier?.clientTelephone });
   return choix;
 }
@@ -796,17 +797,18 @@ export async function demanderProposition(espace: EspaceClient, entree: z.output
   const maintenant = new Date();
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   const texte = `Le client demande une autre proposition${simulation?.titre ? ` (après « ${simulation.titre} »)` : ""}${entree.commentaire ? ` : « ${entree.commentaire} »` : ""}`;
-  await avecActeur(ACTEUR, async () => {
-    const [, evenement] = await prisma.$transaction([
+  const suites = await avecActeur(ACTEUR, async () => {
+    const { evenement, suites } = await prisma.$transaction(async (tx) => {
       // Son mot est gardé entier sur l'espace : il s'affiche dans le dossier et dans Espaces clients, pas seulement dans l'historique.
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: maintenant, propositionMessage: entree.commentaire || null, propositionSimulationId: simulation?.id ?? null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_NOUVELLE_PROPOSITION", direction: "ENTRANT", contenu: texte.slice(0, 1500), metadata: JSON.stringify({ simulationId: simulation?.id ?? null }) } }),
-      prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: `Préparer une autre proposition${entree.commentaire ? ` — « ${entree.commentaire.slice(0, 120)} »` : " (demande du client)"}`, prochaineActionDate: maintenant } }),
-      ...(simulation && entree.commentaire ? [prisma.simulationEspace.update({ where: { id: simulation.id }, data: { commentaireClient: entree.commentaire, commenteeLe: maintenant } })] : []),
-    ]);
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: maintenant, propositionMessage: entree.commentaire || null, propositionSimulationId: simulation?.id ?? null } });
+      const evenement = await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_NOUVELLE_PROPOSITION", direction: "ENTRANT", contenu: texte.slice(0, 1500), metadata: JSON.stringify({ simulationId: simulation?.id ?? null }) } });
+      if (simulation && entree.commentaire) await tx.simulationEspace.update({ where: { id: simulation.id }, data: { commentaireClient: entree.commentaire, commenteeLe: maintenant } });
+      return { evenement, suites: await appliquerEvenementDossier(tx, espace.dossierId, { type: "PROPOSITION_DEMANDEE", commentaire: entree.commentaire }, maintenant) };
+    });
     await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "PROPOSITION", texte: entree.commentaire || texte, simulationId: simulation?.id ?? null, evenementId: evenement.id });
+    return suites;
   });
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  await suitesEvenementDossier(suites);
   await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone, rubrique: "messages" });
 }
 
@@ -917,9 +919,9 @@ export async function accepterDevis(espace: EspaceClient, entree: z.output<typeo
     } else if (devis.statut !== "ACCEPTE") {
       await prisma.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
     }
-    await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Appeler le client : fixer la date du chantier, suivre l'acompte", prochaineActionDate: new Date() } });
+    // Mission 18 (B0) : la prochaine action par le point d'entrée (une action posée à la main reste, une tâche le dit).
+    await evenementDossier(espace.dossierId, { type: "DEVIS_ACCEPTE", documentId: devis.id });
   });
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
 
   await prevenir(
     espace.dossierId,

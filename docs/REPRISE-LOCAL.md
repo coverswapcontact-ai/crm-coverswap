@@ -688,3 +688,62 @@ Tests : 1 341 → 1 353 verts (12 ajoutés).
 Reste :
 - Rien pour Lucas sur ce lot.
 - Si le filtre « Espaces » rame un jour avec beaucoup d'espaces, poser un cache court sur `espacesDesDossiers`.
+
+### Mission 18, B0 — le point d'entrée unique et docs/SYNCHRO.md
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **`src/lib/dossiers/synchro.ts`** : union `EvenementDossier` (13 événements : photos reçues, projet validé ou
+  dévalidé, choix validé ou dévalidé, autre proposition demandée ou retirée, accord donné ou retiré, simulation
+  publiée, devis généré, devis déposé, acompte rejeté), `prochaineActionDe` (la matrice des prochaines actions, textes
+  et conditions d'avant à l'identique), `appliquerEvenementDossier(tx, …)` (prochaine action, puis la main écrite en
+  dernier, dans la transaction de l'appelant), `suitesEvenementDossier` (effets des changements d'étape, agenda si la
+  prochaine action a changé, signal des tâches ; jamais bloquant), `evenementDossier` (les deux, transaction propre).
+- **`src/lib/dossiers/prochaine-action-auto.ts › ecrireProchaineActionAuto`** : une prochaine action posée à la main
+  (trio `prochaineActionManuelle*`, texte inchangé) n'est jamais écrasée ni effacée ; une tâche MANUELLE de clé
+  `MANUELLE:synchro:<dossierId>:<code>` est rangée à la place (« ‹ texte › · ‹ client › », raison « ta prochaine
+  action « … » est gardée »). Rejouée : la même tâche ; répondue puis nouvel événement : elle revient ; « Plus tard » et
+  archivée : pas touchée.
+- **Branchés** (écritures automatiques de prochaine action, désormais dans une transaction interactive avec l'écriture
+  du geste) : `espace/service.ts` (`deposerPhotos`, `choisir`, `demanderProposition`, `accepterDevis`),
+  `espace/validations.ts` (`validerProjet`, `devaliderProjet`, `devaliderChoix`, `retirerDemandeProposition`,
+  `retirerAccord`), `simulations/dossier.ts › publierSimulations`, `documents.ts › emettre`,
+  `documents-existants.ts › rattacherDocumentExistant` (après l'événement `DOCUMENT_REPRIS`, pour que la main le lise),
+  `encaissements/service.ts › terminerEncaissement`. Les gestes de Lucas (appel, rappel, planifier, modifier le
+  dossier) restent tels quels.
+- **La main dans la transaction** : `main.ts` gagne `lireFaitsMain(id, client)`, `calculerMain(id, client)` et
+  `ecrireMain(tx, id)` (sans signal) ; `recalculerMain` reste pour les appels hors module.
+- **`changerEtapeDansTransaction`** écrit la main et le statut du lead dans sa transaction (nouveau
+  `dossiers/statut-lead.ts`, la table d'avant déplacée) ; `effetsDuChangementEtape` ne refait alors ni l'un ni l'autre
+  (un `WeakSet` des changements synchronisés : la forme du changement rendu ne change pas, une copie retombe sur le
+  chemin complet). Les autres chemins (`appliquerChangementEtape` seul) gardent le recalcul d'après.
+- **Helper d'essai `src/test/etat-dossier.ts › etatDesDeuxCotes`** : étape, main écrite et calculée, prochaine action
+  et action manuelle en place, statut du lead, étape de l'espace (`chargerProjet` + `etapeEspace`), relances
+  proposables et à venir, tâches ouvertes du dossier après une passe complète de réconciliation.
+- **`docs/SYNCHRO.md`** : principe, règle des actions manuelles, matrice des 13 événements (fonction d'origine, étape,
+  main, prochaine action, espace, relances, tâches, historique, lead, effets externes ; ce qui reste écrit hors de la
+  transaction est marqué avec son lot), tableau des écarts B1-B13 pas encore branchés, ce qui ne passe pas par le module.
+
+Décisions prises seul (solution la plus simple) :
+- L'étape ne passe pas encore par le module : les gestes l'écrivent comme avant (`deplacerDossier`, `changerEtape`,
+  `appliquerChangementEtape`) ; chaque lot B1-B13 la rapatrie avec son écart (livraison progressive).
+- La condition d'une écriture automatique (« si vide ou « attendre les photos » »…) est relue dans la transaction, et
+  plus sur la lecture faite avant : même résultat, sans course.
+- Une action posée à la main que l'événement voudrait effacer, ou qui dit déjà le même texte : rien n'est rangé.
+- Niveau de la tâche rangée : 2 (geste du client), 1 pour l'argent (accord donné ou retiré, chèque rejeté), 3 pour la
+  production (simulation publiée, devis émis ou déposé) ; durée : celle de départ des tâches MANUELLE (5 min).
+- Une tâche répondue (Fait, Pas à faire) revient à faire au prochain événement du même code : c'est un nouveau besoin.
+- `accepterDevis` pose sa prochaine action par `evenementDossier` (troisième transaction, comme avant) : B8 réunira
+  accord, étape et prochaine action.
+- Outils MCP : aucun changement (mêmes fonctions de service) ; empreinte de la liste inchangée (`040d6c7aa53c`,
+  53 outils) ; `docs/MCP-COUVERTURE.md` inchangé.
+
+Tests : 1 353 → 1 360 verts. Nouveau `src/lib/dossiers/synchro.test.ts` (7 essais, état des deux côtés) : photos sans
+action manuelle (texte écrit, main à moi, espace qui avance) ; action manuelle puis photos deux fois (texte gardé, une
+seule tâche, revenue après « Fait » et de nouvelles photos) ; devis émis sur « Préparer le devis » posé par l'espace
+(remplacé) ou à la main (gardé, tâche « Attendre l'accord… ») ; règles fines (condition, effacement, même texte, « Plus
+tard », archivée) ; main et statut du lead lus DANS la transaction d'un changement d'étape ; `evenementDossier` ; chaque
+événement présent dans `docs/SYNCHRO.md`. Aucun test existant à adapter (les cas « vigueur levée par une écriture
+automatique » annoncés par le plan n'existent pas dans `moteur.test.ts` : la vigueur y tombe par un geste du client).
+`tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+
+Reste : B1-B13 (étape, notification, relances et statut du lead par le module, écart par écart) ; rien pour Lucas.

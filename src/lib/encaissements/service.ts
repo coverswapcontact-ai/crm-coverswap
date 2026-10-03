@@ -15,6 +15,7 @@ import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET, libelleMotif, type Moy
 import type { CorrectionEncaissement, EntreePaiement } from "./schemas";
 import { faitsPaiements, piecesDuDossier } from "./soldes";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { appliquerEvenementDossier } from "@/lib/dossiers/synchro";
 
 /**
  * Encaissements : l'argent reçu, distinct de ce qui est facturé.
@@ -321,15 +322,10 @@ async function terminerEncaissement(
         metadata: JSON.stringify({ encaissementId: id }),
       },
     });
-    // Un acompte qui revient impayé est à réclamer : c'est la prochaine action.
+    // Un acompte qui revient impayé est à réclamer : c'est la prochaine action (mission 18 : par le point d'entrée ; une
+    // action posée à la main reste, une tâche le dit).
     if (fin.statut === "REJETE" && liberees.some((affectation) => affectation.numeroDocument.type === "DEVIS")) {
-      await tx.dossier.update({
-        where: { id: encaissement.dossierId },
-        data: {
-          prochaineAction: "Chèque d'acompte rejeté : réclamer un nouveau paiement",
-          prochaineActionDate: dateDepuisJour(jourParis(new Date())),
-        },
-      });
+      await appliquerEvenementDossier(tx, encaissement.dossierId, { type: "ACOMPTE_REJETE", encaissementId: id });
     }
     return (
       (await suivreSoldeDossier(

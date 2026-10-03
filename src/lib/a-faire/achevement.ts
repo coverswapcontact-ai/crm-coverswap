@@ -171,7 +171,9 @@ async function dernierContact(tache: Tache, apres: Date, maintenant: Date): Prom
     ajouter(echanges.find((e) => e.type === "EMAIL" && mailSortant(e.contenu))?.createdAt, "mail parti");
     const contactLe = lead?.dernierContactLe;
     if (contactLe && !candidats.some((c) => Math.abs(c.le.getTime() - contactLe.getTime()) < 60_000)) ajouter(contactLe, "contacté");
-    ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert");
+    // Le dossier ouvert clôt une tâche du LEAD (il vit désormais dans son dossier) ; pour une tâche du dossier lui-même,
+    // ouvrir n'est pas appeler (mission 18, A2 : le dossier s'ouvre tout seul, « Appeler · Nom » reste à faire).
+    if (!tache.dossierId) ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert");
     rappelLe = lead?.rappelLe ?? null;
   }
   if (tache.dossierId) {

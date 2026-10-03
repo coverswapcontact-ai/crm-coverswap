@@ -33,6 +33,18 @@ export type EtapeDossier = (typeof ETAPES)[number];
 export const ETAPES_CLOSES: EtapeDossier[] = ["PERDU", "ENCAISSE"];
 export const estDossierClos = (etape: string): boolean => (ETAPES_CLOSES as string[]).includes(etape);
 
+/**
+ * Mission 18 (A2) : la prochaine action d'un dossier ouvert tout seul par le site (`dossiers/depuis-lead.ts`), pour
+ * aujourd'hui — le premier appel, qu'une tâche « Appeler · Nom » porte. Un appel noté « Intéressé » y répond (il
+ * s'efface, `commercial/appels.ts`). Les textes ne changent pas sans les regex qui les lisent (« appeler », « rappel »).
+ */
+export const ACTIONS_OUVERTURE_AUTO = {
+  SIMULATION: "Appeler : simulation faite sur le site",
+  DEMANDE: "Appeler : demande de devis",
+} as const;
+export type MotifOuvertureAuto = keyof typeof ACTIONS_OUVERTURE_AUTO;
+export const estActionOuvertureAuto = (action: string | null | undefined): boolean => (Object.values(ACTIONS_OUVERTURE_AUTO) as string[]).includes((action ?? "").trim());
+
 export const LIBELLES_ETAPE: Record<EtapeDossier, string> = {
   QUALIFICATION: "Qualification",
   SIMULATION: "Simulation",

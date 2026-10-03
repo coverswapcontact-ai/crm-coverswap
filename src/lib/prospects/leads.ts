@@ -4,7 +4,7 @@ import type { EtapeDossier } from "@/lib/dossiers/constants";
 import prisma from "@/lib/prisma";
 import { tranche } from "@/lib/commun/pagination";
 import { formaterTelephone, normaliserTelephone } from "@/lib/clients/normalisation";
-import { JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, libelleSourceLead } from "./constantes";
+import { FILTRE_DEMANDE_DE_DEVIS, JOURS_A_TRAITER, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, estDemandeDeDevis, libelleSourceLead } from "./constantes";
 import { versVueNote } from "@/lib/commercial/notes-appel";
 import { aHeureParis } from "@/lib/commercial/quand";
 import type { NoteAppelVue } from "@/lib/commercial/notes-constantes";
@@ -139,11 +139,12 @@ const APRES_DEVIS: readonly string[] = STATUTS_LEAD_APRES_DEVIS;
 export const LEAD_SANS_DOSSIER: Prisma.LeadWhereInput = { dossiers: { none: { archiveLe: null } }, statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] } };
 
 /**
- * Lead du simulateur, dossier déjà ouvert, jamais appelé (ni appel ni note d'appel retenus, aucun rappel daté) ni
- * contacté par écrit (mission 17 : ni `dernierContactLe`, ni SMS copié ni mail parti sur ses dossiers), depuis moins de
- * 60 jours (arrivée ou dernière simulation). Il n'est donc jamais que dans « À appeler ».
+ * Lead du site — simulateur, simulation ou demande de devis (mission 18, A2 : son dossier s'ouvre tout seul) —,
+ * dossier déjà ouvert, jamais appelé (ni appel ni note d'appel retenus, aucun rappel daté) ni contacté par écrit
+ * (mission 17 : ni `dernierContactLe`, ni SMS copié ni mail parti sur ses dossiers), depuis moins de 60 jours (arrivée
+ * ou dernière simulation). Il n'est donc jamais que dans « À appeler » : la file des appels le garde.
  */
-function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
+function siteNonAppele(maintenant: Date): Prisma.LeadWhereInput {
   const limite = new Date(maintenant.getTime() - JOURS_A_TRAITER * JOUR_MS);
   return {
     statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
@@ -153,14 +154,14 @@ function simulationNonAppelee(maintenant: Date): Prisma.LeadWhereInput {
     interactions: { none: APPEL },
     dossiers: { some: { archiveLe: null, etape: { in: ETAPES_AVANT_APPEL } }, none: { archiveLe: null, evenements: { some: CONTACT_DOSSIER } } },
     AND: [
-      { OR: [{ source: "SITE_SIMULATEUR" }, { simulations: { some: { archiveLe: null } } }] },
+      { OR: [{ source: "SITE_SIMULATEUR" }, { simulations: { some: { archiveLe: null } } }, ...FILTRE_DEMANDE_DE_DEVIS.OR] },
       { OR: [{ createdAt: { gte: limite } }, { simulations: { some: { archiveLe: null, createdAt: { gte: limite } } } }] },
     ],
   };
 }
 
-/** La base commune des deux listes : ni perdu, ni après devis, sans dossier vivant — ou lead du simulateur pas encore appelé (les archivés sont écartés par l'extension du journal). */
-const whereActif = (maintenant: Date): Prisma.LeadWhereInput => ({ OR: [LEAD_SANS_DOSSIER, simulationNonAppelee(maintenant)] });
+/** La base commune des deux listes : ni perdu, ni après devis, sans dossier vivant — ou lead du site pas encore appelé (les archivés sont écartés par l'extension du journal). */
+const whereActif = (maintenant: Date): Prisma.LeadWhereInput => ({ OR: [LEAD_SANS_DOSSIER, siteNonAppele(maintenant)] });
 /** « À appeler » : jamais appelé, jamais contacté par écrit (mission 17 : SMS copié, mail parti), sans rappel daté. */
 const JAMAIS_APPELE: Prisma.LeadWhereInput = { dernierAppelLe: null, dernierContactLe: null, rappelLe: null };
 /** « À rappeler » : déjà appelé, contacté par écrit (sans date : après les rappels datés), ou un rappel daté. */
@@ -260,10 +261,13 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
   const dernier = lead.interactions[0] ?? null;
   const dossier = lead.dossiers[0] ?? null;
   const simulation = lead.source === "SITE_SIMULATEUR" || lead._count.simulations > 0;
+  // Mission 18 (A2) : un lead du site (simulateur, simulation, demande de devis : les photos arrivent avec elle) dont le
+  // dossier s'est ouvert tout seul.
+  const duSite = simulation || estDemandeDeDevis(lead);
   // Un lead revenu faire une simulation « arrive » à sa dernière simulation.
   const derniereSimulation = lead.simulations[0]?.createdAt ?? null;
   const arrivee = derniereSimulation && derniereSimulation > lead.createdAt ? derniereSimulation : lead.createdAt;
-  // La base des deux listes (même règle que `whereActif`) : avec un dossier (ouvert par la simulation), seulement tant
+  // La base des deux listes (même règle que `whereActif`) : avec un dossier (ouvert tout seul par le site), seulement tant
   // qu'aucun appel n'est noté, ni sur la fiche ni sur le dossier, ni rappel daté, sur 60 jours, avant le devis. Mission 17 :
   // un contact écrit (SMS copié, mail parti) vaut un appel pour ces listes.
   const recent = maintenant.getTime() - arrivee.getTime() <= JOURS_A_TRAITER * JOUR_MS;
@@ -272,7 +276,7 @@ function versLigne(lead: LeadCharge, maintenant: Date): LigneLead {
     !lead.archiveLe &&
     lead.statut !== "PERDU" &&
     !APRES_DEVIS.includes(lead.statut) &&
-    (!dossier || (simulation && jamaisAppele && lead.interactions.length === 0 && dossier._count.evenements === 0 && recent && ETAPES_AVANT_APPEL.includes(dossier.etape)));
+    (!dossier || (duSite && jamaisAppele && lead.interactions.length === 0 && dossier._count.evenements === 0 && recent && ETAPES_AVANT_APPEL.includes(dossier.etape)));
   const aAppeler = actif && jamaisAppele;
   const conversation = lead.conversationsSms[0] ?? null;
   const meta = lead.metaLeads[0] ?? null;

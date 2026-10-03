@@ -274,3 +274,70 @@ propres. Vérifié à l'œil sur une base d'essai jetable (port 3007) : redirect
 Reste : mettre à jour `docs/ARCHITECTURE-PILOTAGE.md` (§4, §21 : navigation) et `docs/COHERENCE.md` (tableau §1)
 avec la navigation finale en A6 ; reconnecter le connecteur MCP après la mise en ligne (descriptions de `lister` et
 `geste_espace` changées).
+
+### Mission 18, A2 — le dossier s'ouvre tout seul (photos, simulation, demande de devis)
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **`dossiers/depuis-lead.ts › ouvrirDossierAutomatique(leadId, { demande })`** (remplace `assurerDossierDeSimulation`) :
+  un contact qui envoie des photos, fait une simulation ou demande un devis sur le site a son dossier ouvert tout
+  seul, en Qualification, avec « Appeler : simulation faite sur le site » ou « Appeler : demande de devis » pour
+  aujourd'hui (« Rappeler » à l'heure demandée s'il a demandé un rappel), la note de reprise du bouton, ses images et
+  ses photos rangées. S'il a déjà un dossier vivant (le sien ou celui de son client), tout y est rangé — photos de
+  toute source désormais, plus seulement celles du simulateur. Appelée par le webhook du site (simulation, photos, ou
+  `estDemandeDeDevis` : /devis, /pro, /contact avec un projet), par la fin d'une simulation du site
+  (`simulations/travaux.ts`), par la correction de cohérence `SIMULATIONS_HORS_DOSSIER` et par le filet de 15 min.
+  Aucun mail ni SMS de plus (seul l'accusé de réception habituel d'un nouveau contact).
+- **Webhook** : l'ouverture passe avant le tunnel du simulateur (comme le rangement d'avant) ; `contactNeuf` est lu
+  AVANT elle et passé à `ouvrirEspaceALEnvoi({ neuf })`, sinon le lien de l'espace ne s'afficherait plus au contact
+  neuf (le dossier qu'on vient d'ouvrir le rendait « connu »). Le lien « Voir dans le CRM » du mail et du push mène au
+  dossier.
+- **Filet** `rattraperSimulationsSansDossier` (libellé de la tâche de fond mis à jour) : en plus du rangement dans le
+  dossier vivant, il ouvre le dossier d'un contact qui n'en a JAMAIS eu (archivés compris : un dossier archivé par
+  Lucas ne se rouvre pas seul), dont le client n'en a pas de vivant, ni perdu, ni après devis, ni hors zone, avec un
+  fait du site de moins de deux jours et postérieur à `DEBUT_OUVERTURE_AUTO` (03/10/2026 0 h, Paris).
+- **Tâches** : « Appeler · Nom » (type RAPPELER, niveau 2, raison « demande de devis, prévu le jj/mm ») sur le dossier
+  remplace « Appeler » du lead (détecteur DOSSIERS : une action « Appeler : … » est un premier appel). Un appel noté
+  « Intéressé » efface l'action automatique (`commercial/appels.ts`, `estActionOuvertureAuto`) et la tâche est cochée
+  « appel noté » ; une action écrite par Lucas ne bouge pas. La coche « dossier ouvert » ne vaut plus pour une tâche
+  du dossier lui-même (`a-faire/achevement.ts`) : ouvrir n'est pas appeler.
+- **Leads** : un lead du site (simulateur, simulation, demande de devis) dont le dossier s'est ouvert reste dans
+  « À appeler » et dans la file des appels jusqu'au premier appel (règle de la mission 17, `siteNonAppele`, étendue
+  des simulations aux demandes de devis).
+- « Ouvrir un dossier » (fiche du lead) : infobulle « Pour un contact qualifié au téléphone… » ; description de
+  `creer` (MCP) : DOSSIER depuis un lead = lead qualifié au téléphone. Paramètres inchangés, empreinte
+  `040d6c7aa53c` (53 outils).
+- Docs : `MCP-COUVERTURE.md` (en-tête, L12, LF4, §4.4), `COHERENCE.md` §4, `TACHES.md` §3,
+  `ARCHITECTURE-PILOTAGE.md` (simulation → dossier, lead du simulateur). Audit des connexions : textes du maillon
+  « simulation → dossier » mis à jour.
+
+Décisions prises seul (solution la plus simple) :
+- `DEBUT_OUVERTURE_AUTO` = 03/10/2026 (jour du lot), la date du déploiement n'étant pas connue ; comme le filet ne
+  regarde que deux jours, la mise en ligne n'ouvre jamais le stock, seulement les contacts du site des deux derniers
+  jours (ceux qu'une ouverture au webhook aurait eus).
+- Hors zone (« À écarter ») : pas d'ouverture automatique, il reste « Classer · Nom (hors zone) » dans Leads (le bouton
+  reste). Le tunnel du simulateur n'a pas changé (il ouvrait déjà l'espace, donc le dossier, même hors zone).
+- Lead Meta : rien ne s'ouvre tant qu'il ne fait rien sur le site ; s'il y fait ensuite une simulation, c'est un fait
+  du site : son dossier s'ouvre.
+- Espace client : rien à changer — tout s'y passe déjà dans un dossier (un projet créé par le client ouvre le sien,
+  mission 5 ; photos, simulations et demande de devis vont au dossier du projet).
+- Contact dont le dossier est clos (perdu ou encaissé) : un nouveau fait du site ouvre un nouveau dossier, comme le
+  bouton. Des photos seules (sans demande) : motif « demande de devis » (elles arrivent avec un formulaire) ; la photo
+  d'une génération échouée (lead du simulateur) : motif « simulation ».
+- Statut du lead : inchangé ici (NOUVEAU → CONTACTE comme toute ouverture, DEVIS_DEMANDE gardé) ; la table complète
+  vient en B12.
+- Date réelle d'un dossier rangé après coup : celle de la simulation la plus récente (et plus la première), et seulement
+  s'il y en a une — un contact revenu simuler aujourd'hui n'ouvre pas un dossier daté de sa première visite.
+- Un rappel demandé passe avant « Appeler : … » (texte « Rappeler », pour que `rappelALOuverture` le pose à l'heure
+  exacte ; avant, une simulation avec rappel gardait « Appeler : simulation… » et perdait l'heure).
+
+Tests : 1 294 → 1 303 verts. Nouveau `src/lib/base/mission-18-a2.test.ts` (webhook : demande de devis sans photo,
+tâche « Appeler · Nom » sur le dossier puis cochée par l'appel, simulation sans tunnel, photos jointes, rappel à l'heure,
+tunnel avec lien affiché au contact neuf, rien pour un lead Meta, un simple message ou un ancien lead). Réécrits :
+`dossiers/depuis-lead.test.ts` (« une simulation seule n'ouvre plus de dossier » → ouverture automatique, demande de
+devis, rien de nouveau → rien, filet : fenêtre, stock, dossier archivé) et `prospects/doublons.test.ts` (le doublon
+ouvre un second dossier, que la fusion archive). `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+
+Reste :
+- Reconnecter le connecteur MCP après la mise en ligne (description de `creer`).
+- B12 : statut du lead d'un dossier ouvert tout seul (CONTACTE), et l'alignement complet lead ↔ étape.
+- L'audit des connexions ne signale pas une simulation récente restée sans dossier : le filet la rattrape en 15 min.

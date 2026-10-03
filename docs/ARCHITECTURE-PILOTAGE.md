@@ -1772,12 +1772,13 @@ photos du dossier. L'espace client passe par la même porte (`dossierDuContact`)
 
 ### Simulation du site → dossier
 
-(Depuis le 22/09/2026, section 24 : une simulation du site reste sur le lead, sans
-dossier d'office ; ce qui suit vaut pour le rangement dans un dossier déjà ouvert et pour
-le rattrapage de l'existant.)
+(Du 22/09 au 03/10/2026, section 24 : une simulation du site restait sur le lead, sans
+dossier d'office. Mission 18, A2 : le dossier s'ouvre de nouveau tout seul, pour une
+simulation, des photos ou une demande de devis venues du site (`ouvrirDossierAutomatique`,
+faits postérieurs au 03/10/2026 seulement, hors zone exclu ; voir `docs/REPRISE-LOCAL.md`).)
 
 Coordonnées + photo = dossier. Une simulation rattachée à un contact (webhook du site,
-`/api/simulate`) ouvre son dossier toute seule (`assurerDossierDeSimulation`), photo avant
+`/api/simulate`) ouvre son dossier toute seule (`ouvrirDossierAutomatique`), photo avant
 et chaque rendu dans les photos de chantier — donc dans Drive, le miroir les recopie.
 Plusieurs simulations : le même dossier, la photo avant une seule fois. Un dossier vivant
 existe déjà pour ce client (ni perdu ni encaissé) : on range dedans. Génération échouée
@@ -1805,7 +1806,7 @@ Depuis le 22/09/2026 sa simulation reste sur sa fiche (section 24 : plus de doss
 d'office) ; s'il a déjà un dossier (ouvert par Lucas, ou rangé dans le dossier vivant de
 son client), il reste dans **« À appeler »** — et en tête de la file d'appels — tant
 qu'aucun appel ni aucune note d'appel n'est retenu et qu'aucun rappel n'est daté
-(`simulationNonAppelee`, `src/lib/prospects/leads.ts` ; mission 14, partie 3). Même contact,
+(`siteNonAppele`, `src/lib/prospects/leads.ts` ; mission 14, partie 3 ; mission 18 : demandes de devis comprises). Même contact,
 même dossier : deux vues, aucun doublon. Conditions : 60 jours depuis son arrivée ou sa
 dernière simulation, dossier encore en Qualification ou Simulation. Le premier appel noté
 (ou le premier rappel daté) l'y fait sortir vers son dossier, où vit son rappel ; il n'est

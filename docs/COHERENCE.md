@@ -66,8 +66,8 @@ Légende de la colonne « Vérifié » : **T** = essai automatique (`src/lib/coh
 
 | Geste | Leads | Dossiers | Vérifié |
 |---|---|---|---|
-| Simulation faite sur le site | **Un lead**, avec ses photos et simulations sur sa fiche, Prioritaire. *Plus de dossier ouvert d'office (règle du 22/09/2026).* | Rien — sauf si le contact a déjà un dossier vivant : la simulation y est rangée et rejoint son espace | T (depuis-lead.test) |
-| « Ouvrir un dossier » / envoi du lien de l'espace | Le lead sort de Leads | Dossier créé avec tout ce qu'on sait ; ses images et ses notes d'appel suivent | T |
+| Simulation, photos ou demande de devis venues du site (mission 18, A2 ; faits postérieurs au 03/10/2026) | Le lead, Prioritaire, reste dans « À appeler » jusqu'au premier appel (puis sort vers son dossier). Hors zone, lead Meta, simple message : il reste un lead, sans dossier | **Dossier ouvert tout seul** en Qualification, « Appeler : simulation faite sur le site » ou « Appeler : demande de devis » pour aujourd'hui (tâche « Appeler · Nom »), ou « Rappeler » à l'heure demandée ; images et photos rangées. Un contact qui a déjà un dossier vivant : tout y est rangé et rejoint son espace | T (depuis-lead.test, mission-18-a2.test) |
+| « Ouvrir un dossier » (lead qualifié au téléphone) / envoi du lien de l'espace | Le lead sort de Leads | Dossier créé avec tout ce qu'on sait ; ses images et ses notes d'appel suivent | T |
 | Dossier archivé | **Le lead revient**, ses simulations et photos détachées du dossier (rangées à nouveau s'il en rouvre un) | Sorti des listes ; restaurable (ce qui avait été détaché est rattaché) ; refusé s'il porte document, paiement, dépense ou accord | T |
 | Dossier restauré | Le lead ressort | Revient ; refusé si le contact a un autre dossier vivant (jamais de doublon) | T |
 | Changement d'étape du dossier | Statut du lead aligné (devis envoyé, signé, planifié, terminé, perdu), y compris en arrière | — | T |

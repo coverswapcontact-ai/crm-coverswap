@@ -148,7 +148,7 @@ Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les d
 | DEMANDE_CLIENT | Préparer une autre proposition · Nom (ou « Accorder des simulations », « Ouvrir un nouveau projet ») | 1 | 5 | SIGNAUX | dossier |
 | RELANCER_DEVIS | Relancer le devis · Nom | 2 | 2 | RELANCES | aperçu du mail de relance, ou SMS à copier |
 | HESITE | Appeler · Nom (devis relu 4 fois) | 2 | 3 | SIGNAUX | tel: |
-| RAPPELER | Rappeler · Nom | 2 | 3 | LEADS / DOSSIERS | tel: puis fin d'appel |
+| RAPPELER | Rappeler · Nom (« Appeler · Nom » quand l'action du dossier est « Appeler : … » : premier appel d'un dossier ouvert tout seul, mission 18 A2) | 2 | 3 | LEADS / DOSSIERS | tel: puis fin d'appel |
 | APPELER | Appeler · Nom | 2 (< 24 h) sinon 3 | 3 | LEADS | tel: puis fin d'appel |
 | PROCHAINE_ACTION | (texte de l'action) · Nom | 2 | 3 | DOSSIERS | dossier |
 | VALIDER | Valider · (titre de la proposition) | 2 relance, 3 carte, 5 règle | 1 | PROPOSITIONS | Valider / Ignorer dans la ligne |

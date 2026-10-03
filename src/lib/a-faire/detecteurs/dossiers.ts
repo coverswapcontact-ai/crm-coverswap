@@ -24,7 +24,8 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  *   `REPONDRE:dossier:<id>`, la même clé que MAIL et ESPACE_MESSAGES (le moteur fusionne) ;
  * - PLANIFIER (signé sans date de chantier) → DATE_CHANTIER ;
  * - RAPPELER (rappel du dossier échu ce soir au plus tard) → RAPPELER. Une relance d'un devis en attente (« Relancer :
- *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS) ;
+ *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS). Mission 18 (A2) : « Appeler : … » (premier appel, posé à
+ *   l'ouverture automatique du dossier ou d'un nouveau projet de l'espace) s'intitule « Appeler · Nom », raison = le motif ;
  * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN.
  * Deux lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
  * - ENCAISSER : SIGNE, PLANIFIE ou CHANTIER sans encaissement VALIDE ni « sans acompte » motivé (« Acompte promis, pas
@@ -52,6 +53,8 @@ const LIBELLE_ACOMPTE_A_VENIR = MOTIFS_SANS_ACOMPTE.find((m) => m.code === "ACOM
 const ETAPES_ACOMPTE = ["SIGNE", "PLANIFIE", "CHANTIER"];
 const ETAPES_RELANCE_DEVIS = ["DEVIS_ENVOYE", "RELANCE"];
 const LONGUEUR_ACTION = 60;
+/** « Appeler : demande de devis » : un premier appel (ouverture automatique, nouveau projet), son motif après les deux-points. */
+const PREMIER_APPEL = /^\s*appeler\s*:\s*(\S[\s\S]*)/i;
 
 /** « prévu le 28/09 à 14 h », « prévu le 28/09 » (jour seul). Toujours absolu. */
 function quandPrevu(date: Date, instant: Date | null, feminin = false): string {
@@ -64,6 +67,12 @@ function actionCourte(texte: string): string {
   const ligne = texte.split("\n")[0].replace(/\s+/g, " ").trim();
   const courte = ligne.length > LONGUEUR_ACTION ? `${ligne.slice(0, LONGUEUR_ACTION - 1).trimEnd()}…` : ligne;
   return courte.charAt(0).toUpperCase() + courte.slice(1);
+}
+
+/** « demande de devis » : le motif d'un premier appel, en minuscule et court (raison de la tâche). */
+function motifDuPremierAppel(texte: string): string {
+  const court = actionCourte(texte);
+  return court.charAt(0).toLowerCase() + court.slice(1);
 }
 
 const plusRecent = (dates: (Date | null | undefined)[]): Date | null => dates.reduce<Date | null>((max, d) => (d && (!max || d.getTime() > max.getTime()) ? d : max), null);
@@ -197,15 +206,18 @@ function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
       const relance = a.action.startsWith("Relancer");
       // La relance d'un devis en attente : le détecteur RELANCES la propose (RELANCER_DEVIS), pas de doublon ici.
       if (relance && ETAPES_RELANCE_DEVIS.includes(d.etape)) return null;
+      // Mission 18 (A2) : « Appeler : demande de devis » — un premier appel, pas un rappel ; la raison dit pourquoi.
+      const premier = !relance ? PREMIER_APPEL.exec(a.action) : null;
+      const verbe = relance ? "Relancer" : premier ? "Appeler" : "Rappeler";
       // Sans date (main « à relancer ») : l'origine du besoin reste fixe d'un passage à l'autre.
       const date = d.prochaineActionDate ?? d.mainLe ?? d.updatedAt;
       return surLeDossier(d, "RAPPELER", {
-        titre: `${relance ? "Relancer" : "Rappeler"} · ${d.nom}`,
-        raison: d.prochaineActionDate ? `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, relance)}` : relance ? "relance à faire" : "rappel à faire",
+        titre: `${verbe} · ${d.nom}`,
+        raison: premier ? `${motifDuPremierAppel(premier[1])}${d.prochaineActionDate ? `, ${quandPrevu(date, d.prochaineActionInstant)}` : ""}` : d.prochaineActionDate ? `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, relance)}` : relance ? "relance à faire" : "rappel à faire",
         niveau: 2,
         depuis: date,
         echeance: d.prochaineActionDate,
-        raccourci: { genre: "APPEL", libelle: relance ? "Relancer" : "Rappeler", telephone, dossierId: d.id, leadId: d.leadId, href: telephone ? `tel:${telephone}` : null },
+        raccourci: { genre: "APPEL", libelle: verbe, telephone, dossierId: d.id, leadId: d.leadId, href: telephone ? `tel:${telephone}` : null },
         donnees: {
           ...(d.prochaineAction ? { action: d.prochaineAction } : {}),
           ...(d.prochaineActionDate ? { occurrence: `${d.prochaineActionDate.toISOString()}|${d.prochaineAction ?? ""}` } : {}),

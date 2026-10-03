@@ -10,6 +10,10 @@ import { cn } from "@/lib/utils";
 
 /** Mission 13 (lot 7) — « Ouvrir son dossier » : tout ce qu'on sait du contact passe dans le dossier ; extrait de PanneauEntrant. */
 
+/** Le bouton ne sert plus qu'à un lead qualifié au téléphone : le reste s'ouvre tout seul (mission 18, A2). */
+const AIDE =
+  "Pour un contact qualifié au téléphone. Le dossier s'ouvre déjà tout seul quand le contact envoie des photos, fait une simulation ou demande un devis sur le site.";
+
 /** Un clic : le dossier s'ouvre avec tout ce qu'on sait du contact (coordonnées, réponses, photos, simulations), et on y arrive. */
 export function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: string }) {
   const routeur = useRouter();
@@ -29,6 +33,7 @@ export function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: stri
     <button
       type="button"
       disabled={envoi}
+      title={AIDE}
       onClick={() => void ouvrir()}
       className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] disabled:opacity-60 sm:h-8", TRANS)}
     >

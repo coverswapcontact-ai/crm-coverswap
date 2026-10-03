@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { momentDuRappel } from "@/lib/commercial/quand";
 import { dossierVivant } from "@/lib/dossiers/depuis-lead";
+import { ACTIONS_OUVERTURE_AUTO } from "@/lib/dossiers/constants";
 import { avecActeur } from "@/lib/journal/contexte";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 
@@ -12,7 +13,8 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 
 const ACTEUR_TUNNEL = { acteur: "SYSTEME:site-tunnel", origine: "Coordonnées laissées après un rendu du simulateur du site" };
 
-export const ACTION_SANS_RAPPEL = "Appeler : simulation faite sur le site";
+/** La même que l'ouverture automatique du dossier après une simulation (mission 18, A2), qui passe en premier. */
+export const ACTION_SANS_RAPPEL = ACTIONS_OUVERTURE_AUTO.SIMULATION;
 export const ACTION_AVEC_RAPPEL = "Rappeler";
 
 /** L'événement du dossier qui dit la demande du site (main à Lucas) et, en metadata, à quel parcours le lien a été affiché. */
@@ -61,9 +63,10 @@ async function refusDOuverture(leadId: string): Promise<"limite" | "desactive" |
 /**
  * Un contact NEUF : rien de lui n'existait avant cette demande — pas d'autre fiche (archivées comprises), pas de dossier,
  * pas d'espace. Seul un contact neuf voit le lien de son espace s'afficher : sinon, quiconque connaît le téléphone ou
- * l'e-mail d'un client ouvrirait son espace (projets, devis, adresse) depuis le site.
+ * l'e-mail d'un client ouvrirait son espace (projets, devis, adresse) depuis le site. Mission 18 (A2) : le webhook le lit
+ * AVANT l'ouverture automatique du dossier (qui le rendrait « connu ») et le passe à `ouvrirEspaceALEnvoi`.
  */
-async function contactNeuf(leadId: string): Promise<boolean> {
+export async function contactNeuf(leadId: string): Promise<boolean> {
   const lead = await prisma.lead.findFirst({ where: { ...AVEC_ARCHIVES, id: leadId }, select: { clientId: true } });
   if (!lead) return false;
   const [autresLeads, dossiers, espace] = await Promise.all([
@@ -95,10 +98,11 @@ async function dejaAfficheA(dossierId: string, parcoursId: string | undefined): 
  * parcours qui l'a déjà reçu (idempotent : un second envoi rend le même lien) ; à un contact déjà connu, jamais.
  * Un événement `ESPACE_DEMANDE_SITE` (entrant) le dit au dossier et rend la main à Lucas (il rappelle) ; quand le lien
  * est affiché, il rappelle aussi que le téléphone n'est pas vérifié (`AVERTISSEMENT_TELEPHONE_NON_VERIFIE`).
- * Appelé par le webhook seulement quand le site va AFFICHER le lien (`afficherLienEspace`, formulaire après un rendu).
- * Ne lève jamais : sans espace, le lead reste créé (lien null, raison au journal).
+ * Appelé par le webhook seulement quand le site va AFFICHER le lien (`afficherLienEspace`, formulaire après un rendu),
+ * APRÈS l'ouverture automatique du dossier (mission 18, A2) : `neuf`, lu par le webhook avant elle, dit si le contact
+ * était neuf (sans lui, il est lu ici). Ne lève jamais : sans espace, le lead reste créé (lien null, raison au journal).
  */
-export async function ouvrirEspaceALEnvoi(leadId: string, options: { rappel: boolean; nouveau: boolean; parcoursId?: string }): Promise<EspaceALEnvoi> {
+export async function ouvrirEspaceALEnvoi(leadId: string, options: { rappel: boolean; nouveau: boolean; parcoursId?: string; neuf?: boolean }): Promise<EspaceALEnvoi> {
   try {
     if (!(await aDeQuoiRemplirLEspace(leadId))) return { lien: null, dossierId: null, raison: "sans-simulation" };
     const refus = await refusDOuverture(leadId);
@@ -106,8 +110,8 @@ export async function ouvrirEspaceALEnvoi(leadId: string, options: { rappel: boo
       console.warn(`[webhook] espace du lead ${leadId} non ouvert par le site : ${refus === "limite" ? "au-delà de deux projets en cours, c'est Lucas qui ouvre" : "lien du client désactivé"}`);
       return { lien: null, dossierId: null, raison: refus };
     }
-    // Lu AVANT l'ouverture (qui crée dossier et espace).
-    const neuf = options.nouveau && (await contactNeuf(leadId));
+    // Lu AVANT l'ouverture (qui crée dossier et espace) : par le webhook, avant même l'ouverture automatique du dossier.
+    const neuf = options.nouveau && (options.neuf ?? (await contactNeuf(leadId)));
     const { ouvrirEspaceDuContact } = await import("@/lib/espace/liens");
     return await avecActeur(ACTEUR_TUNNEL, async () => {
       const ouvert = await ouvrirEspaceDuContact(leadId, { prochaineAction: options.rappel ? ACTION_AVEC_RAPPEL : ACTION_SANS_RAPPEL });

@@ -109,9 +109,9 @@ function dossiersDepuisLeads() {
 
 /** Simulation du site : le dossier existe, la photo avant et le rendu sont dans ses photos (donc dans Drive). */
 function simulations() {
-  // Règle du 22/09/2026 : une simulation seule n'ouvre plus de dossier (elle reste sur la fiche du lead).
-  // Ce qui est vérifié : celles d'un contact qui A un dossier vivant y sont bien rangées, photos comprises.
-  return maillon("simulation-dossier", "Simulation du site → fiche du lead, ou dossier du contact s'il en a un", async (): Promise<Resultat> => {
+  // Mission 18 (A2) : une simulation du site ouvre le dossier toute seule (depuis le 03/10/2026) ; celles d'avant restent sur
+  // la fiche du lead. Ce qui est vérifié : celles d'un contact qui A un dossier vivant y sont bien rangées, photos comprises.
+  return maillon("simulation-dossier", "Simulation du site → dossier du contact (ouvert tout seul depuis le 03/10/2026)", async (): Promise<Resultat> => {
     const avecImage = { OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] };
     const [total, sansDossier, surLeurLead, rangees] = await Promise.all([
       prisma.simulation.count({ where: { ...avecImage, lead: { archiveLe: null } } }),
@@ -137,7 +137,7 @@ function simulations() {
     return {
       etat: ok ? "OK" : "ALERTE",
       constat: ok
-        ? `${pluriel(total, "simulation")} avec image : ${surLeurLead} sur la fiche de leur lead (pas de dossier : normal), les autres rangées dans le dossier du contact, photos comprises.${imagesPerdues ? ` (${pluriel(imagesPerdues, "rendu")} d'origine absents des téléversements : dit sur le dossier.)` : ""}`
+        ? `${pluriel(total, "simulation")} avec image : ${surLeurLead} sur la fiche de leur lead (sans dossier : d'avant l'ouverture automatique du 03/10/2026, ou contact hors zone), les autres rangées dans le dossier du contact, photos comprises.${imagesPerdues ? ` (${pluriel(imagesPerdues, "rendu")} d'origine absents des téléversements : dit sur le dossier.)` : ""}`
         : `${pluriel(sansDossier, "simulation")} hors du dossier que leur contact a pourtant (reprises au prochain passage, toutes les 15 min) ; ${pluriel(photosManquantes, "dossier")} avec moins de photos qu'attendu ; ${pluriel(fichiersAbsents, "fichier absent", "fichiers absents")} du disque.`,
       chiffres: { simulations: total, surLaFicheDuLead: surLeurLead, sansDossier, dossiersVerifies: dossiers.length, photosManquantes, fichiersAbsents, rendusDOrigineAbsents: imagesPerdues },
     };

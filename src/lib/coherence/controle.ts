@@ -378,8 +378,8 @@ async function corrigerUneIncoherence(cle: string): Promise<{ corrigee: boolean;
       await prisma.espaceClient.updateMany({ where: { dossierId: dossierId!, revoqueLe: null }, data: { revoqueLe: new Date() } });
       break;
     case "SIMULATIONS_HORS_DOSSIER": {
-      const { assurerDossierDeSimulation } = await import("@/lib/dossiers/depuis-lead");
-      await assurerDossierDeSimulation(incoherence.leadId!);
+      const { ouvrirDossierAutomatique } = await import("@/lib/dossiers/depuis-lead");
+      await ouvrirDossierAutomatique(incoherence.leadId!);
       break;
     }
     case "PROJETS_AU_DELA_DE_LA_LIMITE": {

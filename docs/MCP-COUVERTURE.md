@@ -31,6 +31,12 @@
   du lien de la fiche client deviennent C27–C30. `lister` gagne le filtre imbriqué `filtres.espace` (DOSSIERS) : les
   paramètres de premier niveau ne changent pas, l'empreinte reste **`040d6c7aa53c`** (53 outils). Des descriptions
   changent (`lister`, `geste_espace`) : reconnecter le connecteur.
+- **Mission 18, A2 (03/10/2026)** : le dossier s'ouvre tout seul dès qu'un contact envoie des photos, fait une
+  simulation ou demande un devis sur le site (webhook, fin d'une simulation du site, filet de 15 min :
+  `dossiers/depuis-lead.ts › ouvrirDossierAutomatique`). Ce n'est pas un geste de l'interface : aucune ligne nouvelle.
+  « Ouvrir un dossier » (L12, LF4) et `creer DOSSIER (lead_id)` ne servent plus qu'à un lead qualifié au téléphone ;
+  la description de `creer` le dit. Paramètres inchangés, empreinte **`040d6c7aa53c`** (53 outils) : reconnecter le
+  connecteur pour la nouvelle description.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -118,7 +124,7 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | L9 | « Enchaîner les appels · N » (la file) | GET /api/leads/suivant?apres= | L | lister LEADS (A_RAPPELER puis A_APPELER) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » |
 | L10 | Mode appels › « Passer » / « Quitter » | — | — | — | sans objet | — |
 | L11 | Mode appels › « Noter sans appeler » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
-| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » (lead qualifié au téléphone : un lead du site a déjà le sien, mission 18 A2) | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
 | L13 | Ligne › téléphone (`tel:`) | — | — | — | sans objet | — |
 | L14 | Ligne › puce du rappel : déplacer | PATCH /api/prospects/entrants/:id {rappelLe} | R | modifier LEAD (rappel_le) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
 | L15 | Ligne › puce du rappel : « Sans date » | PATCH … {rappelLe:null} | R | modifier LEAD (rappel_le: null) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
@@ -143,7 +149,7 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | LF1 | Ouvrir la fiche (et la marquer vue) | GET /api/prospects/entrants/:id | L | lire_fiche (lead : tous les champs) | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
 | LF2 | Doublon › « Fusionner avec X » | POST /api/leads/:id/doublon {fusionner} | S-suppr | doublon (LEAD, FUSIONNER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
 | LF3 | Doublon › « Ce n'est pas la même personne » | POST /api/leads/:id/doublon {ecarter} | R | doublon (LEAD, ECARTER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
-| LF4 | « Ouvrir un dossier » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| LF4 | « Ouvrir un dossier » (lead qualifié au téléphone ; simulation, photos ou demande de devis du site : déjà ouvert tout seul, mission 18 A2) | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
 | LF5 | Liens « Dossier · étape » / « Fiche client » | — | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | LF6 | Téléphone (`tel:`) | — | — | — | sans objet | — |
 | LF7 | « Noter l'appel » → feuille de fin d'appel | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
@@ -1005,7 +1011,7 @@ effaçable.
 | Entité | Fonction de service | Champs permis | Niveau | Ferme |
 |---|---|---|---|---|
 | LEAD | `prospects/creation-assistant.ts › creerContactAssistant` (anti-doublon) ; avec `message_id` : `mail/rattachement.ts › creerLeadDepuisMail` | prenom, nom, telephone, email, ville, code_postal, source, type_projet, projet, ouvrir_dossier, forcer ; message_id | R | L1, M24 |
-| DOSSIER | Depuis un lead : `dossiers/depuis-lead.ts › ouvrirDossierDuLead` (ex-`ouvrir_dossier`). Sinon : `dossiers/dossiers.ts › creerDossier` (`schemaCreation`) | lead_id, ou client_id, ou rien ; client_nom, client_adresse, client_cp, client_ville, client_telephone, client_email, objet, source, montant_estime, prochaine_action, prochaine_action_date, etape, date_chantier, client_categorie, client_siret. Photos ensuite par `ajouter_fichier` | R ; S si etape ≥ SIGNE | D13, D14, C10 |
+| DOSSIER | Depuis un lead (qualifié au téléphone ; mission 18 A2 : un lead du site a déjà le sien, ouvert par `ouvrirDossierAutomatique`) : `dossiers/depuis-lead.ts › ouvrirDossierDuLead` (ex-`ouvrir_dossier`). Sinon : `dossiers/dossiers.ts › creerDossier` (`schemaCreation`) | lead_id, ou client_id, ou rien ; client_nom, client_adresse, client_cp, client_ville, client_telephone, client_email, objet, source, montant_estime, prochaine_action, prochaine_action_date, etape, date_chantier, client_categorie, client_siret. Photos ensuite par `ajouter_fichier` | R ; S si etape ≥ SIGNE | D13, D14, C10 |
 | REPRISE | `dossiers/reprise.ts › reprendreDossier` (`schemaReprise`) | fiche client, étape actuelle, dates des jalons, ouvert_le, documents émis (numéro, date, montant, statut, registre), paiements reçus ; les PDF ensuite par `ajouter_fichier` (PDF_DOCUMENT) | S-€ | D16 |
 | CLIENT | `clients/fiches.ts › creerClientManuel` (`schemaCreationClient`) ; le 409 doublon rend les candidats | champs de `champsClient` + telephone, email, forcer | R | C5, C6 |
 | COORDONNEE | `clients/fiches.ts › ajouterCoordonnee` | client, nature, valeur, libelle | R | C15 |

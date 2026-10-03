@@ -2056,6 +2056,11 @@ Chaque version affiche ses résultats (simulations, publiées, masquées, choisi
 
 ### Espaces clients (`/espaces`, `src/lib/espace/suivi.ts`)
 
+> Mission 18 (A1, 03/10/2026) : l'onglet est retiré. L'état de l'espace est la colonne « Espace » et le filtre
+> « Espaces » de Dossiers (`/dossiers?espace=TOUS`, où `/espaces` redirige ; `suivi.ts › espacesDesDossiers`) ; les
+> gestes restent dans le bloc Espace du panneau du dossier et dans la fiche client. La description ci-dessous est
+> celle de l'ancien onglet.
+
 Une carte par espace : étape, ce qui est fait, dernière visite, qui a la main (moi / client) ;
 signaux (photos sans simulation, autre proposition demandée, brouillons, devis relu sans
 signature, lien jamais ouvert après 48 h, lien qui expire, date à fixer) ; tri « à moi d'abord » ;

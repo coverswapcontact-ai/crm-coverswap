@@ -14,6 +14,7 @@ import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { accorderProjets, desactiverLien, regenererLien } from "@/lib/espace/gestion";
 import { ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { marquerMessagesLus } from "@/lib/espace/messages";
+import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
 import { gesteDeLucas, type GesteEspace } from "@/lib/espace/vue-crm";
 import { deconnecterGoogle } from "@/lib/google/connexion";
 import { archiverFil, classerALaMain, marquerLu, nePlusMontrer, remonter, synchroniserBoite } from "@/lib/mail/boite";
@@ -311,7 +312,7 @@ export const outilGesteEspace = definirOutil({
   nom: "geste_espace",
   titre: "Les gestes de Lucas sur l'espace client",
   description:
-    "Tous les gestes du panneau Espace (dossier) et de l'écran Espaces, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail ; sensible) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » ; sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
+    "Tous les gestes du bloc Espace du dossier et de l'espace de la fiche client, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail ; sensible) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » ; sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
   niveau: "REVERSIBLE",
   schema: schemaGesteEspace,
   sensible: (e) => GESTES_SENSIBLES_ESPACE.includes(e.geste) || (e.geste === "ACCORDER_SIMULATIONS" && (e.nombre ?? 3) > 3),
@@ -347,7 +348,8 @@ export const outilGesteEspace = definirOutil({
     if ("ambigu" in c) return c.ambigu!;
     const { ids } = c;
     const nom = ids.nom;
-    const liensDossier = ids.dossierId ? [lien("Dossier", `/dossiers?dossier=${ids.dossierId}`)] : [lien("Espaces clients", "/espaces")];
+    // Mission 18 (A1) : sans dossier, la fiche du client (les gestes de son espace y sont), sinon le filtre « Espaces » de Dossiers.
+    const liensDossier = ids.dossierId ? [lien("Dossier", `/dossiers?dossier=${ids.dossierId}`)] : ids.clientId ? [lien("Fiche client", `/clients/${ids.clientId}`)] : [lien("Espaces clients", ADRESSE_ESPACES)];
     const geste = async (g: GesteEspace, texte: string): Promise<ResultatOutil> => {
       await gesteDeLucas(exigerDossier(ids), g);
       return { texte, liens: liensDossier };

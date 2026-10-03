@@ -17,15 +17,18 @@ import { appliquerAuProjet, clesDesProjets, lireVueDesTaches, signalDuClientVisi
 import { cleDuSignal } from "@/lib/a-faire/detecteurs/signaux-cles";
 
 /**
- * L'onglet Espaces clients : ce que fait chaque client DE SON CÔTÉ, sans
- * ouvrir les dossiers (Dossiers montre le tunnel de l'affaire ; ici, l'espace).
- * Qui a la main (moi ou le client), l'étape où il en est, ce qu'il a fait, sa
- * dernière visite, et les signaux qui demandent un geste : photos reçues sans
- * simulation, devis relu sans signature, lien jamais ouvert, lien qui expire.
+ * Le suivi des espaces clients : ce que fait chaque client DE SON CÔTÉ (Dossiers
+ * montre le tunnel de l'affaire ; ici, l'espace). Qui a la main (moi ou le
+ * client), l'étape où il en est, ce qu'il a fait, sa dernière visite, et les
+ * signaux qui demandent un geste : photos reçues sans simulation, devis relu
+ * sans signature, lien jamais ouvert, lien qui expire. Mission 18 (A1) : l'onglet
+ * Espaces clients n'existe plus ; c'est la colonne et le filtre « Espaces » de
+ * Dossiers (`espacesDesDossiers`), le détecteur des tâches (SIGNAUX), la fiche
+ * client et l'outil « lister » ESPACES (par client) qui lisent ce module.
  */
 
 export type { ClientEspace, CodeSignal, LigneEspace, Signal } from "./suivi-types";
-import type { ClientEspace, LigneEspace, Signal , PageEspaces } from "./suivi-types";
+import { CODES_SIGNAL_CLIENT, type ClientEspace, type EspaceResume, type LigneEspace, type Signal, type PageEspaces } from "./suivi-types";
 import { simulationsGratuites } from "./creation";
 
 const JOUR = 86_400_000;
@@ -287,7 +290,7 @@ async function appliquerLesTaches(lignes: LigneEspace[], maintenant: Date): Prom
 }
 
 /**
- * L'onglet Espaces clients, PAR CLIENT (mission 5) : un client, son lien, ses
+ * Les espaces clients, PAR CLIENT (mission 5) : un client, son lien, ses
  * visites, ses projets et où il en est dans chacun. Le plus pressé de ses projets
  * donne la main ; ses signaux (nouveau projet ouvert par le client, projet de plus
  * demandé, téléphone à confirmer) s'ajoutent à ceux de ses projets.
@@ -374,4 +377,55 @@ export async function pageClientsEspaces(maintenant: Date = new Date(), options:
   const espaceIds = tranchee.filter((cle) => cle.startsWith("projet:")).map((cle) => cle.slice("projet:".length));
   const clients = tranchee.length > 0 ? await listerClientsEspaces(maintenant, { permanentIds, espaceIds }) : [];
   return { clients, total, page, parPage };
+}
+
+/** Le résumé d'un projet pour la colonne « Espace » de Dossiers. */
+function resumeDuProjet(projet: LigneEspace, signauxDuClient: Signal[], attente: LigneEspace["attente"]): EspaceResume {
+  const f = projet.faits;
+  return {
+    espaceId: projet.espaceId,
+    etape: projet.etape,
+    etapeLibelle: projet.etapeLibelle,
+    fige: projet.fige,
+    revoque: projet.revoque,
+    lienEnvoyeLe: projet.lienEnvoyeLe,
+    premierAccesLe: projet.premierAccesLe,
+    dernierAccesLe: projet.dernierAccesLe,
+    nbAcces: projet.nbAcces,
+    creeLe: projet.creeLe,
+    derniereActivite: projet.derniereActivite,
+    photos: f.photos,
+    simulations: f.simulationsPubliees + f.simulationsClient + f.simulationsSite,
+    devis: f.devis ? { numero: f.devis.numero, consultations: f.devis.consultations } : null,
+    accord: Boolean(f.accord),
+    attente,
+    signaux: [...signauxDuClient, ...projet.signaux],
+  };
+}
+
+/**
+ * Mission 18 (A1) — l'état de l'espace de ces dossiers (la colonne et le filtre « Espaces » de Dossiers), par la même
+ * lecture que l'ancien onglet (`listerClientsEspaces` : vue des tâches comprise). Les projets de leurs clients sont lus
+ * en entier : les signaux du client (projet de plus demandé, nouveau projet, téléphone à confirmer) et sa demande
+ * d'un projet de plus (« à moi ») vont à son projet le plus récent. Un dossier sans espace n'est pas dans la table.
+ */
+export async function espacesDesDossiers(maintenant: Date, dossierIds: readonly string[]): Promise<Map<string, EspaceResume>> {
+  const resultat = new Map<string, EspaceResume>();
+  if (dossierIds.length === 0) return resultat;
+  const projets = await prisma.espaceClient.findMany({ where: { dossierId: { in: [...dossierIds] } }, select: { id: true, permanentId: true } });
+  if (projets.length === 0) return resultat;
+  const permanentIds = [...new Set(projets.map((p) => p.permanentId).filter((id): id is string => Boolean(id)))];
+  const espaceIds = projets.filter((p) => !p.permanentId).map((p) => p.id);
+  const voulus = new Set(dossierIds);
+  for (const client of await listerClientsEspaces(maintenant, { permanentIds, espaceIds })) {
+    const recent = [...client.projets].sort((a, b) => b.creeLe.localeCompare(a.creeLe))[0];
+    const signauxDuClient = client.signaux.filter((s) => CODES_SIGNAL_CLIENT.includes(s.code));
+    const projetDemande = signauxDuClient.some((s) => s.code === "PROJET_DEMANDE");
+    for (const projet of client.projets) {
+      if (!voulus.has(projet.dossierId)) continue;
+      const deTete = projet.espaceId === recent?.espaceId;
+      resultat.set(projet.dossierId, resumeDuProjet(projet, deTete ? signauxDuClient : [], deTete && projetDemande ? client.attente : projet.attente));
+    }
+  }
+  return resultat;
 }

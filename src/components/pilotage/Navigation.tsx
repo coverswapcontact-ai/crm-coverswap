@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -43,11 +43,12 @@ type Entree = {
 // Mission 17 (partie B) : « Analytique » (tous les chiffres) rejoint les écrans principaux, sur téléphone aussi : la barre
 // du bas devient Tâches, Leads, Dossiers, Mail, Analytique, puis Plus (Espaces clients y passe). « Publicité » et
 // « Synthèse » ont disparu (leurs chiffres sont dans l'Analytique ; la chaîne des leads Meta en bas de son onglet Publicité).
+// Mission 18 (A1) : l'onglet « Espaces clients » disparaît : l'état de l'espace est une colonne et un filtre de Dossiers
+// (/espaces y redirige), le bloc Espace du panneau du dossier et la fiche client gardent les gestes.
 const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
-  { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone },
   { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },

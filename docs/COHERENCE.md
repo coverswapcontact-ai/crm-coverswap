@@ -7,8 +7,9 @@ Trois règles tiennent l'ensemble :
 
 1. **Une seule lecture des faits.** Le devis en vigueur et ses montants (devis repris compris), l'accord, les
    paiements et le quota de simulations se lisent à UN endroit : `src/lib/espace/faits.ts`. L'espace du client,
-   l'onglet Espaces clients, le bloc « Espace client » du dossier et le contrôle de cohérence y lisent tous. Deux
-   écrans ne peuvent plus dire deux choses différentes (c'était la cause du « 0 € »).
+   la colonne « Espace » de Dossiers (ex-onglet Espaces clients, mission 18), le bloc « Espace client » du dossier
+   et le contrôle de cohérence y lisent tous. Deux écrans ne peuvent plus dire deux choses différentes (c'était la
+   cause du « 0 € »).
 2. **Tout geste se défait, par le client ou par Lucas, de la même façon.** `src/lib/espace/validations.ts` porte
    chaque geste avec son auteur (`CLIENT` ou `LUCAS`). Le mouvement du dossier porte une *raison* écrite dans
    l'événement : c'est elle qui permet de défaire exactement ce mouvement-là, et pas un autre que Lucas aurait

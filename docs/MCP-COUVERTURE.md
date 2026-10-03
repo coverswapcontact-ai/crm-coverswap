@@ -25,6 +25,12 @@
   ajoute ou corrige la ligne de l'écran et l'outil qui la couvre, puis on relève la nouvelle empreinte. La mission 18
   (retrait de l'onglet Espaces, Dépenses dans Finances, Tâches de fond et Tarifs dans Paramètres) devra mettre ces
   tableaux à jour, comme le prévoit `docs/MISSION-18.md`.
+- **Mission 18, A1 (03/10/2026)** : l'onglet Espaces clients est retiré (`/espaces` redirige vers
+  `/dossiers?espace=TOUS`). Ses lignes de liste E1–E4 sont en 2.3 (colonne et filtre « Espaces » de Dossiers) ; ses
+  gestes E5–E20 n'existent plus que dans le bloc Espace du panneau et dans la fiche client (2.5 dit où) ; les boutons
+  du lien de la fiche client deviennent C27–C30. `lister` gagne le filtre imbriqué `filtres.espace` (DOSSIERS) : les
+  paramètres de premier niveau ne changent pas, l'empreinte reste **`040d6c7aa53c`** (53 outils). Des descriptions
+  changent (`lister`, `geste_espace`) : reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -197,6 +203,19 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | D15 | Création › annuaire des entreprises | GET /api/clients/annuaire?q= | L | lister ENTREPRISES | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
 | D16 | « Reprise » d'un dossier commencé avant le CRM : fiche, étape actuelle, dates des jalons, date d'ouverture, documents émis (numéro, date, montant, statut, registre), paiements reçus, puis les PDF un par un | GET /api/numeros?libres=1 ; POST /api/dossiers/reprise ; POST …/documents/:docId/pdf | S-€ | creer REPRISE + ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 
+#### Colonne et filtre « Espaces » (ex-onglet Espaces clients, mission 18 A1)
+
+Les dates affichées sont celles du projet (son espace dans l'espace permanent du client) ; « désactivé » = lien du
+client révoqué ; les signaux du client (projet de plus demandé, nouveau projet, téléphone à confirmer) vont à son
+projet le plus récent.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| E1 | Colonne « Espace » (liste), ligne du téléphone, pastille du kanban : étape de l'espace, lien envoyé, dernière visite, photos, simulations, devis relu, signal | GET /api/dossiers | L | lister DOSSIERS (« espace : … » sur chaque ligne, `espace` dans les données) ; lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » ; `espaces-colonne.test.ts` › « un dossier avec un espace porte son état (dates du projet, photos… » |
+| E2 | « Espaces », puis pastilles À moi / Chez le client / Signaux / Tous / Désactivés, compteurs exacts sur tous les espaces, pages de 50 | GET /api/dossiers?espace=&page= | L | lister DOSSIERS (filtres.espace, page) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » ; `espaces-colonne.test.ts` › « À moi, Chez le client, Signaux, Désactivés, Tous : exacts au-delà de 50… » |
+| E3 | Sélecteur « Étape de l'espace » | GET /api/dossiers?espace=&etapeEspace= | L | lister DOSSIERS (filtres.etape_espace) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » |
+| E4 | Ordre du filtre : à moi d'abord, puis dernière activité ; perdus, en pause et terminés compris | GET /api/dossiers?espace= | L | lister DOSSIERS (filtres.espace : même ordre) | couvert | `espaces-colonne.test.ts` › « ordre : à moi d'abord, puis chez le client, puis personne (perdu)… » |
+
 ### 2.4 Dossier — le panneau et ses rubriques (`PanneauDossier`)
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
@@ -299,30 +318,31 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | DP96 | Le reste › Chronologie du client : familles filtrables, « tout voir » | GET /api/chronologie | L | lire_fiche (chronologie : familles) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP97 | Le reste › « Archiver le dossier » (motif) | POST /api/dossiers/:id/archivage {archiver} | S-suppr | archiver (dossiers, motif) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 
-### 2.5 Espaces clients (`/espaces`)
+### 2.5 Espaces clients (`/espaces`) — retiré par la mission 18 (A1)
 
-| # | Action | Route | Nature | Outil MCP | Statut | Test |
-|---|---|---|---|---|---|---|
-| E1 | Charger, rafraîchir, pages de 50 clients | GET /api/espaces?page= | L | lister ESPACES (page) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E2 | Onglets À moi / Chez le client / Signaux / Tous / Désactivés (compteurs) | filtre local | L | lister ESPACES (vue MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E3 | Sélecteur « Étape », tri (main, activité, lien récent) | filtre local | L | lister ESPACES (etape, tri) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E4 | Déplier la carte : lien, visites, projets, faits, signaux | données chargées | L | lister ESPACES (faits par projet) ; lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E5 | Raccourcis Photos / Messages / Devis / Encaisser | nav | — | voir_fichiers, lister MESSAGES_ESPACE, lire_fiche, saisir_encaissement | couvert | `mcp-v2.test.ts` › « « voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP… » ; `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
-| E6 | « Accorder un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | geste_espace (ACCORDER_PROJET) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E7 | « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (espace: true : lien d'aperçu) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E8 | « Copier son lien » | — | L | lister ESPACES (lien) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E9 | « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E10 | « Désactiver » | POST /api/espaces/:permanentId {desactiver} | R | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
-| E11 | « Accorder 3 simulations » | POST /api/dossiers/:id/espace {accorder} | S-€ léger | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E12 | « Faire le devis » / « Ajouter un devis » | nav | S | generer_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
-| E13 | « Déposer un devis PDF » | nav | S | ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-fichiers.test.ts` › « devis visible : aperçu + jeton (étape annoncée), puis document repris… » |
-| E14 | « Simulateur » | nav | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
-| E15 | Geste « Publier » | nav | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
-| E16 | Geste « Appeler » (`tel:`) | — | — | noter_appel ensuite | sans objet | — |
-| E17 | « Dossier » | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E18 | « Ce projet, comme lui » (aperçu par projet) | lien d'aperçu signé | L | lire_fiche (espace: true : aperçu par projet) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E19 | « Envoyer le lien par mail » : À, Objet, Phrase ; code LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL | POST /api/mail/lien-espace | S-client | envoyer_lien_espace (a, objet, phrase ; code selon l'étape) | couvert | `mcp-partie-c.test.ts` › « objet remplacé ; code par défaut selon l'étape de l'espace ; l'aperçu… » |
-| E20 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
+L'onglet n'existe plus : `/espaces` redirige vers le filtre « Espaces » de Dossiers (E1–E4, en 2.3). Ses gestes E5–E20
+ne sont plus des gestes d'écran ; chacun reste dans le bloc Espace du panneau du dossier (DP) ou dans la fiche client
+(C), avec son outil et son test. La colonne « Aujourd'hui » dit où vit le geste (l'ancien tableau est dans
+l'historique git) ; ces lignes ne sont plus comptées en 2.17. La liste par client reste pour l'assistant : `lister`
+ESPACES.
+
+| # | Action (ancien onglet) | Aujourd'hui |
+|---|---|---|
+| E5 | Raccourcis Photos / Messages / Devis / Encaisser | raccourcis de la ligne de Dossiers (D11) |
+| E6 | « Accorder un projet de plus » | fiche client (C22) |
+| E7 | « Voir comme le client » | fiche client (C28), panneau (DP30) |
+| E8 | « Copier son lien » | fiche client (C27), panneau (DP29) |
+| E9 | « Nouveau lien… » | fiche client (C29), panneau (DP34) |
+| E10 | « Désactiver » | fiche client (C30), panneau (DP33) |
+| E11 | « Accorder 3 simulations » | panneau (DP46) |
+| E12, E13 | « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | panneau (DP49) |
+| E14 | « Simulateur » | écran Simulateur depuis le panneau (`/simulateur?dossier=`) |
+| E15 | Geste « Publier » | panneau (DP45) |
+| E16 | Geste « Appeler » (`tel:`) | sans objet (noter_appel ensuite) |
+| E17 | « Dossier » | la ligne ouvre le panneau |
+| E18 | « Ce projet, comme lui » | panneau (DP30) |
+| E19 | « Envoyer le lien par mail » | panneau (DP31) |
+| E20 | « SMS avec le lien » → « Copier » | panneau (DP32) |
 
 ### 2.6 Mail (`/mail`)
 
@@ -390,8 +410,15 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | C25 | Historique de la fiche (résumé, date, auteur) | GET /api/clients/:id | L | lire_fiche (client : historique) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | C26 | Bandeau « proposition en attente » → `/validation` | nav | L | lire_fiche (propositionsEnAttente) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
-Les boutons « Copier », « Voir comme le client », « Nouveau lien… » et « Désactiver » de la fiche client sont ceux
-de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
+Mission 18 (A1) : les boutons du lien de la fiche client étaient comptés avec l'onglet Espaces (E7 à E10) ; l'onglet
+retiré, ils ont leurs lignes.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| C27 | Espace › « Copier » le lien du client | — | L | lister ESPACES (lien) / lire_fiche (client : espace permanent) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| C28 | Espace › « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (espace: true : lien d'aperçu) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C29 | Espace › « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| C30 | Espace › « Désactiver le lien » | POST /api/espaces/:permanentId {desactiver} | R | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
 
 ### 2.8 Simulateur (`/simulateur`), banc (`/simulateur/banc`), prompts (`/simulateur/prompts`)
 
@@ -604,9 +631,9 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Espaces, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » | — | — | — | sans objet | — |
+| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » (mission 18, A1 : Espaces clients retiré) | — | — | — | sans objet | — |
 | N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés | — | — | — | sans objet | — |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS` (mission 18) | — | — | — | sans objet | — |
 | N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
 | N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
@@ -652,6 +679,10 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - Après la partie C : **402 couvertes (100 %)**, 0 partielle, 0 manquante. Les 37 gestes `sans objet` sont ceux de
   la règle de l'en-tête : `tel:`, presse-papiers, tri ou dépli local, consentement dans le navigateur, abonnement push
   de l'appareil, hors ligne, liens de navigation.
+- **Après la mission 18, A1 (03/10/2026)** : l'onglet Espaces clients sort du compte (20 actions : 19 couvertes, 1
+  sans objet) ; Dossiers passe à 20 actions (E1–E4 : 17 couvertes, 3 sans objet) ; Clients à 30 (C27–C30, 30
+  couvertes). Total : **427 actions, 391 couvertes (100 % hors gestes sans objet), 36 sans objet**, 0 partielle, 0
+  manquante.
 
 ## 3. Les manques, par domaine
 
@@ -1017,9 +1048,9 @@ outils d'écriture.
 | Liste | Fonction de service | Vues et filtres (ceux de l'écran) | Ferme |
 |---|---|---|---|
 | LEADS | `prospects/leads.ts › listerLeads` (+ `AVEC_ARCHIVES` pour ARCHIVES) | vue A_APPELER, A_RAPPELER, SANS_SUITE, ARCHIVES ; source ; recherche (campagne comprise) ; page | L3–L8, L18 |
-| DOSSIERS | `dossiers/dossiers.ts › pageDossiers` ; `listerDossiers` (par étape) ; `dossiers/archivage.ts › dossiersArchives` | vue EN_COURS, A_FAIRE, TOUS, ARCHIVES ; etape ; recherche ; masquer_inactifs ; page ; compteurs | D1, D4, D6–D8 |
+| DOSSIERS | `dossiers/dossiers.ts › pageDossiers` ; `listerDossiers` (par étape) ; `dossiers/archivage.ts › dossiersArchives` | vue EN_COURS, A_FAIRE, TOUS, ARCHIVES ; etape ; recherche ; masquer_inactifs ; page ; compteurs ; mission 18 (A1) : `espace` (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES) et `etape_espace` — le filtre « Espaces », état de l'espace par ligne (`espace/suivi.ts › espacesDesDossiers`) | D1, D4, D6–D8, E1–E4 |
 | CLIENTS | `clients/fiches.ts › pageClients` | recherche, categorie, source, archives, page | C1, C2 |
-| ESPACES | `espace/suivi.ts › pageClientsEspaces` ; `relances/photos.ts › relancesPhotosProposables` | qui (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES), etape, tri, page, sans_photo_ni_simulation_depuis_jours ; faits par projet | E1–E4 |
+| ESPACES | `espace/suivi.ts › pageClientsEspaces` ; `relances/photos.ts › relancesPhotosProposables` | qui (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES), etape, tri, page, sans_photo_ni_simulation_depuis_jours ; faits par projet. Mission 18 (A1) : plus d'écran, liste par client gardée pour l'assistant | C27 (lien) |
 | MAILS | `mail/vues.ts › listerVue` ; vue NON_CLASSES = ex-`mails_non_classes` | vue A_TRAITER, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES ; recherche dans la vue | M3, M4 |
 | MESSAGES_ESPACE | `espace/messages.ts › messagesEspace` | cible, tout, limite | (ex-`messages_espace`) |
 | RELANCES | `relances/service.ts › listerRelances` + `relancesPhotosProposables` | dossier | (ex-`voir_relances`) |

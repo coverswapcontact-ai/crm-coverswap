@@ -227,3 +227,50 @@ de la phase A, CRM d'abord ; puis branche `site-3-0` (site) fusionnée à la fin
 - Base de départ : CRM 1 283 tests verts, site 284 tests verts, lint propre.
 - Plan d'implémentation (cartographie par 8 lecteurs + synthèse) : lots A1-A6, B0-B13, mise en route ; décisions
   « solution la plus simple » listées en fin de phase.
+
+### Mission 18, A1 — l'onglet Espaces devient une colonne et un filtre de Dossiers
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Colonne « Espace »** dans la liste de Dossiers (bureau), une ligne de plus sur le téléphone, une icône teintée
+  par le signal sur la carte du kanban (le détail en infobulle) : étape de l'espace, lien envoyé ou dernière visite
+  (avec le nombre de visites), photos, simulations, devis relu (ou accord), le signal rouge ou ambre s'il y en a un.
+  Calculée par `espace/suivi.ts › espacesDesDossiers` (la même lecture que l'ancien onglet, vue des tâches
+  comprise), pour la page seulement ; textes communs dans `espace/colonne-espace.ts` (écran et assistant).
+- **Filtre « Espaces »** (bouton dans la barre de Dossiers) : pastilles À moi, Chez le client, Signaux, Tous,
+  Désactivés avec leurs compteurs, et l'étape de l'espace. `pageDossiers({ espace, etapeEspace })` calcule TOUS les
+  espaces (recherche comprise), filtre et trie en mémoire (à moi d'abord, puis dernière activité), puis découpe la
+  page : les compteurs et les signaux sont exacts au-delà de 50 (l'ancien onglet ne filtrait que la page chargée).
+  `/api/dossiers?espace=&etapeEspace=`, `/dossiers?espace=` lu par la page et gardé dans l'adresse.
+- `/espaces` redirige vers `/dossiers?espace=TOUS` (`next.config.ts`) ; l'écran `src/app/(pilotage)/espaces/` est
+  supprimé, l'onglet retiré de la navigation (12 onglets en attendant A3-A6). Gardés : `/api/espaces/*`, `suivi.ts`,
+  `suivi-types.ts`, `NouveauLien`, `LienParMail`, le bloc Espace du panneau et le résumé de la fiche client.
+- En passant : `/dossiers?archives=1` (lien de l'assistant) ouvre les dossiers archivés.
+- Liens : tâche « projet de plus demandé » (et « nouveau projet » sans projet trouvé) → fiche du client, où vit
+  « Permettre un projet de plus » ; assistant (`manager_clients`, `lister` ESPACES et MESSAGES_ESPACE,
+  `espaces_clients`, `geste_espace` sans dossier) → `/dossiers?espace=TOUS` (constante `ADRESSE_ESPACES`).
+- MCP : `lister` DOSSIERS gagne `filtres.espace` et `filtres.etape_espace` (imbriqués : empreinte inchangée,
+  `040d6c7aa53c`, 53 outils) et l'état de l'espace sur chaque ligne ; `lister` ESPACES (par client) est gardé pour
+  l'assistant. `docs/MCP-COUVERTURE.md` : E1–E4 en 2.3, E5–E20 renvoyés vers le panneau et la fiche client (2.5),
+  C27–C30 ajoutés (boutons du lien de la fiche client), N1, N3, bilan (427 actions, 391 couvertes, 36 sans objet).
+
+Décisions prises seul (solution la plus simple) :
+- Dates de la colonne = celles du PROJET (`EspaceClient`) ; « Désactivé » = lien du client révoqué ; les signaux du
+  client (projet de plus demandé, nouveau projet, téléphone à confirmer) et « à moi : accorder un projet de plus »
+  vont à son projet le plus récent.
+- Sous le filtre « Espaces », la vue (« Tous / À faire »), « Perdus et en pause » et les inactifs ne jouent plus
+  (masqués) : tous les dossiers qui ont un espace, perdus, en pause et terminés compris, comme l'ancien onglet. Les
+  compteurs des pastilles suivent la recherche et l'étape choisies. Le tri de l'ancien onglet (activité, lien récent)
+  n'est pas repris : l'ordre du serveur (à moi d'abord) découpe les pages, le tri local de la liste s'applique dessus.
+- Redirection en 307 (`permanent: false`) comme toutes les anciennes adresses : le test « rien de figé dans le
+  navigateur » l'exige, et une 308 resterait en cache si l'adresse devait encore changer en A6.
+- `public/sw.js` non touché : les écrans sont servis réseau d'abord ; le changement de `VERSION` est prévu en A6.
+
+Tests : 1 283 → 1 294 verts (nouveau `src/lib/dossiers/espaces-colonne.test.ts` : colonne, signaux du client,
+filtre exact sur 56 espaces, ordre, vue par défaut inchangée, route, règles pures, redirection, aucun lien vers
+`/espaces` dans le code ; jumeau MCP dans `mcp-lister-etat.test.ts` ; lien de `manager_clients` dans
+`mcp-analytique.test.ts`). Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` :
+propres. Vérifié à l'œil sur une base d'essai jetable (port 3007) : redirection, colonne, pastilles, téléphone.
+
+Reste : mettre à jour `docs/ARCHITECTURE-PILOTAGE.md` (§4, §21 : navigation) et `docs/COHERENCE.md` (tableau §1)
+avec la navigation finale en A6 ; reconnecter le connecteur MCP après la mise en ligne (descriptions de `lister` et
+`geste_espace` changées).

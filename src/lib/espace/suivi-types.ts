@@ -1,6 +1,9 @@
 import type { EtapeEspace, progression } from "./etapes";
 
-/** Types de l'onglet Espaces clients, partagés par l'écran (sans dépendance serveur). */
+/**
+ * Types du suivi des espaces clients, partagés par les écrans (sans dépendance serveur). Mission 18 (A1) : l'onglet
+ * Espaces clients est devenu la colonne et le filtre « Espaces » de Dossiers.
+ */
 export type CodeSignal = "PHOTOS_SANS_SIMULATION" | "PROPOSITION_DEMANDEE" | "SIMULATIONS_DEMANDEES" | "BROUILLONS" | "HESITE" | "JAMAIS_OUVERT" | "EXPIRE_BIENTOT" | "EXPIRE" | "NON_ENVOYE" | "DATE_A_FIXER" | "NOUVEAU_PROJET" | "PROJET_DEMANDE" | "CONFIRMATION_DEMANDEE";
 export type Signal = { code: CodeSignal; libelle: string; ton: "rouge" | "ambre" | "gris" };
 
@@ -98,3 +101,59 @@ export type ClientEspace = {
 
 /** Mission 13 (lot 6) : une page de clients (50) avec le total. */
 export type PageEspaces = { clients: ClientEspace[]; total: number; page: number; parPage: number };
+
+/* ── Mission 18 (A1) : l'onglet Espaces clients devient une colonne et un filtre de Dossiers ─────── */
+
+/** Les signaux du client (son espace permanent), rattachés à son projet le plus récent dans la colonne de Dossiers. */
+export const CODES_SIGNAL_CLIENT: readonly CodeSignal[] = ["NOUVEAU_PROJET", "PROJET_DEMANDE", "CONFIRMATION_DEMANDEE"];
+
+/** L'adresse du filtre « Espaces » de Dossiers (là où mène l'ancienne adresse /espaces, et les liens de l'assistant). */
+export const ADRESSE_ESPACES = "/dossiers?espace=TOUS";
+
+/** Le filtre « Espaces » de Dossiers : les pastilles de l'ancien onglet Espaces clients. */
+export const FILTRES_ESPACE = ["MOI", "CLIENT", "SIGNAUX", "TOUS", "DESACTIVES"] as const;
+export type FiltreEspace = (typeof FILTRES_ESPACE)[number];
+export const LIBELLES_FILTRE_ESPACE: Record<FiltreEspace, string> = { MOI: "À moi", CLIENT: "Chez le client", SIGNAUX: "Signaux", TOUS: "Tous", DESACTIVES: "Désactivés" };
+export const estFiltreEspace = (valeur: unknown): valeur is FiltreEspace => typeof valeur === "string" && (FILTRES_ESPACE as readonly string[]).includes(valeur);
+/** Les compteurs des pastilles, sur tous les espaces (pas seulement la page). */
+export type CompteursEspaces = Record<FiltreEspace, number>;
+
+/**
+ * L'état de l'espace d'un dossier, tel que la colonne « Espace » de Dossiers le montre : les dates sont celles du
+ * PROJET (son espace dans l'espace permanent du client) ; « désactivé » = lien du client révoqué. Les signaux du client
+ * (projet de plus demandé, nouveau projet, téléphone à confirmer) sont portés par son projet le plus récent.
+ */
+export type EspaceResume = {
+  espaceId: string;
+  etape: EtapeEspace;
+  etapeLibelle: string;
+  fige: LigneEspace["fige"];
+  revoque: boolean;
+  lienEnvoyeLe: string | null;
+  premierAccesLe: string | null;
+  dernierAccesLe: string | null;
+  nbAcces: number;
+  creeLe: string;
+  derniereActivite: string | null;
+  photos: number;
+  /** Simulations publiées par Lucas, faites par le client dans son espace ou sur le site. */
+  simulations: number;
+  devis: { numero: string; consultations: number } | null;
+  accord: boolean;
+  attente: LigneEspace["attente"];
+  signaux: Signal[];
+};
+
+/** Un signal qui demande un geste (rouge ou ambre) : le gris (« lien pas encore envoyé ») n'en est pas un. */
+export const aDesSignauxActifs = (espace: Pick<EspaceResume, "signaux">) => espace.signaux.some((s) => s.ton !== "gris");
+
+/** La règle des pastilles de l'ancien onglet Espaces, par dossier : désactivés à part, puis qui a la main, signaux, étape. */
+export function espaceDansLeFiltre(espace: Pick<EspaceResume, "revoque" | "attente" | "signaux" | "etape">, filtre: FiltreEspace, etape?: EtapeEspace | null): boolean {
+  if (etape && espace.etape !== etape) return false;
+  if (filtre === "DESACTIVES") return espace.revoque;
+  if (espace.revoque) return false;
+  if (filtre === "MOI") return espace.attente.qui === "MOI";
+  if (filtre === "CLIENT") return espace.attente.qui === "CLIENT";
+  if (filtre === "SIGNAUX") return aDesSignauxActifs(espace);
+  return true;
+}

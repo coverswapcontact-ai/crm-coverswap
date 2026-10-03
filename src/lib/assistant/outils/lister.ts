@@ -16,8 +16,10 @@ import { anneeParis, jourParis } from "@/lib/dossiers/dates";
 import { pageDossiers } from "@/lib/dossiers/dossiers";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import { listerPresets } from "@/lib/dossiers/presets";
+import { descriptionEspace } from "@/lib/espace/colonne-espace";
+import { ETAPES_ESPACE, LIBELLES_ETAPE_ESPACE, estEtapeEspace } from "@/lib/espace/etapes";
 import { pageClientsEspaces } from "@/lib/espace/suivi";
-import type { ClientEspace } from "@/lib/espace/suivi-types";
+import { ADRESSE_ESPACES, FILTRES_ESPACE, LIBELLES_FILTRE_ESPACE, type ClientEspace } from "@/lib/espace/suivi-types";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
 import { chargerLivre } from "@/lib/finances/livre";
 import { listerVue, VUES_MAIL, type VueMail } from "@/lib/mail/vues";
@@ -70,7 +72,8 @@ const schemaFiltres = z
   .object({
     source: z.string().max(40).optional().describe("LEADS : source (META_ADS, SITE_SIMULATEUR…) ; CLIENTS : source client."),
     etape: z.enum(ETAPES).optional().describe("DOSSIERS : une étape (vue PAR_ETAPE, comme l'ex-« dossiers_par_etape ») ; ESPACES : étape d'un projet d'espace (PHOTOS, PROJET…)."),
-    etape_espace: z.string().max(30).optional().describe("ESPACES : l'étape d'espace d'un projet (sélecteur « Étape » de l'écran)."),
+    etape_espace: z.string().max(30).optional().describe("ESPACES, et DOSSIERS avec « espace » : l'étape d'espace d'un projet (PHOTOS, PROJET, ATTENTE_SIMULATION, SIMULATIONS, ATTENTE_DEVIS, DEVIS, ACOMPTE, CHANTIER, TERMINE)."),
+    espace: z.enum(FILTRES_ESPACE).optional().describe("DOSSIERS : le filtre « Espaces » de l'écran (ex-onglet Espaces clients) — MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES : les dossiers qui ont un espace (perdus, en pause et terminés compris), à moi d'abord ; avec etape_espace ; compteurs exacts."),
     masquer_inactifs: z.boolean().optional().describe("DOSSIERS : « Masquer les inactifs »."),
     categorie: z.string().max(40).optional().describe("CLIENTS : PARTICULIER, PROFESSIONNEL, DONNEUR_ORDRE ; DEPENSES : catégorie de dépense."),
     tri: z.enum(["MAIN", "ACTIVITE", "CREATION"]).optional().describe("ESPACES : ce qui m'attend d'abord (défaut), dernière activité, lien récent."),
@@ -179,7 +182,7 @@ function quiALaMain(d: { etape: string; prochaineActionDate: string | null; main
 
 async function listerLesDossiers(e: EntreeLister, vue: string, contexte: Contexte): Promise<ResultatOutil> {
   const f = e.filtres ?? {};
-  if (vue === "PAR_ETAPE" || (f.etape && vue === "EN_COURS" && !e.recherche)) return outilDossiersParEtape.executer({ etape: f.etape }, contexte);
+  if (vue === "PAR_ETAPE" || (f.etape && vue === "EN_COURS" && !e.recherche && !f.espace)) return outilDossiersParEtape.executer({ etape: f.etape }, contexte);
   if (vue === "ARCHIVES") {
     const recherche = e.recherche?.trim().toLowerCase();
     const tous = (await dossiersArchives()).filter((d) => !recherche || `${d.clientNom} ${d.objet}`.toLowerCase().includes(recherche));
@@ -187,16 +190,23 @@ async function listerLesDossiers(e: EntreeLister, vue: string, contexte: Context
     const texte = p.total ? `${pluriel(p.total, "dossier archivé", "dossiers archivés")} (les 200 derniers)${textePage(p)} — « restaurer » les ramène :\n${p.lignes.map((d) => `- ${titreDossier(d)} — ${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape}, archivé le ${format.jourCourt(d.archiveLe)}${d.archiveMotif ? ` (${d.archiveMotif})` : ""} [dossier:${d.id}]`).join("\n")}` : "Aucun dossier archivé.";
     return { texte, donnees: { vue, ...p }, liens: [lien("Dossiers archivés", "/dossiers?archives=1")] };
   }
-  const page = await pageDossiers({ vue: vue as "EN_COURS" | "A_FAIRE" | "TOUS", recherche: e.recherche, masquerInactifs: f.masquer_inactifs, page: e.page ?? 1, parPage: e.par_page ?? 20 }, contexte.maintenant);
+  // Mission 18 (A1) : le filtre « Espaces » de l'écran (ex-onglet Espaces clients), avec son étape.
+  const etapeLue = f.etape_espace?.toUpperCase();
+  if (etapeLue && !estEtapeEspace(etapeLue)) throw new ErreurMetier(`Étape d'espace inconnue : ${f.etape_espace}. Possibles : ${ETAPES_ESPACE.join(", ")}.`, 400);
+  const etapeEspace = estEtapeEspace(etapeLue) ? etapeLue : undefined;
+  const page = await pageDossiers({ vue: vue as "EN_COURS" | "A_FAIRE" | "TOUS", recherche: e.recherche, masquerInactifs: f.masquer_inactifs, espace: f.espace, etapeEspace: f.espace ? etapeEspace : undefined, page: e.page ?? 1, parPage: e.par_page ?? 20 }, contexte.maintenant);
   const pages = Math.max(1, Math.ceil(page.total / page.parPage));
   const c = page.compteurs;
   const libelle = vue === "A_FAIRE" ? "à faire (la main est à toi)" : vue === "TOUS" ? "en tout (perdus et en pause compris)" : "en cours";
-  const entete = `${pluriel(page.total, "dossier")} ${libelle}${e.recherche ? ` pour « ${e.recherche} »` : ""}${f.masquer_inactifs ? ", inactifs masqués" : ""}${textePage({ page: page.page, pages })}. Compteurs : en cours ${c.enCours}, à faire ${c.aFaire}, en retard ${c.enRetard}, sortis ${c.sorties}, inactifs ${c.inactifs}.`;
-  const lignes = page.dossiers.map((d) => `- ${titreDossier(d)} (${d.clientVille}) — ${LIBELLES_ETAPE[d.etape] ?? d.etape}, ${quiALaMain(d, contexte.maintenant)}${d.prochaineAction ? ` → ${d.prochaineAction}${d.prochaineActionDate ? ` (${format.jourCourt(d.prochaineActionDate)})` : ""}` : ""}${d.montantDernierDevis ?? d.montantEstime ? `, ${format.euros((d.montantDernierDevis ?? d.montantEstime)!)}` : ""} [dossier:${d.id}]`);
+  const s = page.espaces;
+  const entete = f.espace
+    ? `${pluriel(page.total, "dossier")} avec un espace client, filtre « ${LIBELLES_FILTRE_ESPACE[f.espace]} »${etapeEspace ? `, étape « ${LIBELLES_ETAPE_ESPACE[etapeEspace]} »` : ""}${e.recherche ? ` pour « ${e.recherche} »` : ""}${textePage({ page: page.page, pages })}.${s ? ` Compteurs des espaces : à moi ${s.MOI}, chez le client ${s.CLIENT}, signaux ${s.SIGNAUX}, tous ${s.TOUS}, désactivés ${s.DESACTIVES}.` : ""}`
+    : `${pluriel(page.total, "dossier")} ${libelle}${e.recherche ? ` pour « ${e.recherche} »` : ""}${f.masquer_inactifs ? ", inactifs masqués" : ""}${textePage({ page: page.page, pages })}. Compteurs : en cours ${c.enCours}, à faire ${c.aFaire}, en retard ${c.enRetard}, sortis ${c.sorties}, inactifs ${c.inactifs}.`;
+  const lignes = page.dossiers.map((d) => `- ${titreDossier(d)} (${d.clientVille}) — ${LIBELLES_ETAPE[d.etape] ?? d.etape}, ${quiALaMain(d, contexte.maintenant)}${d.prochaineAction ? ` → ${d.prochaineAction}${d.prochaineActionDate ? ` (${format.jourCourt(d.prochaineActionDate)})` : ""}` : ""}${d.montantDernierDevis ?? d.montantEstime ? `, ${format.euros((d.montantDernierDevis ?? d.montantEstime)!)}` : ""}${d.espace ? ` ; espace : ${descriptionEspace(d.espace, contexte.maintenant)}` : ""} [dossier:${d.id}]`);
   return {
     texte: lignes.length ? `${entete}\n${lignes.join("\n")}` : `${entete}\nAucun dossier sur cette page.`,
-    donnees: { vue, compteurs: c, page: page.page, pages, total: page.total, dossiers: page.dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime, ouvertLe: d.ouvertLe })) },
-    liens: [lien("Dossiers", "/dossiers")],
+    donnees: { vue, ...(f.espace ? { espace: f.espace, etapeEspace: etapeEspace ?? null, compteursEspaces: s ?? null } : {}), compteurs: c, page: page.page, pages, total: page.total, dossiers: page.dossiers.map((d) => ({ id: d.id, clientNom: d.clientNom, objet: d.objet, ville: d.clientVille, etape: d.etape, main: d.main, mainMotif: d.mainMotif, prochaineAction: d.prochaineAction, prochaineActionDate: d.prochaineActionDate, montant: d.montantDernierDevis ?? d.montantEstime, ouvertLe: d.ouvertLe, espace: d.espace ?? null })) },
+    liens: [lien("Dossiers", f.espace ? `/dossiers?espace=${f.espace}${etapeEspace ? `&etapeEspace=${etapeEspace}` : ""}` : "/dossiers")],
   };
 }
 
@@ -217,7 +227,11 @@ async function listerLesClients(e: EntreeLister, vue: string): Promise<ResultatO
 
 const aDesSignaux = (c: ClientEspace) => c.signaux.some((s) => s.ton !== "gris");
 
-/** Le filtre et le tri de l'écran Espaces (EcranEspaces.tsx), appliqués à la page lue. */
+/**
+ * Le filtre et le tri de l'ancien onglet Espaces clients, PAR CLIENT, appliqués à la page lue. Mission 18 (A1) : l'onglet
+ * est devenu le filtre « Espaces » de Dossiers (par dossier : « lister » DOSSIERS filtres.espace) ; cette liste par
+ * client reste pour l'assistant (lien, visites et signaux du client, projets en un coup d'œil).
+ */
 export function filtrerEspaces(clients: ClientEspace[], qui: string, etape: string | undefined, tri: string | undefined): ClientEspace[] {
   const filtres = clients.filter((c) => {
     if (qui === "DESACTIVES") return c.revoque;
@@ -245,7 +259,7 @@ async function listerLesEspaces(e: EntreeLister, qui: string, contexte: Contexte
   return {
     texte: visibles.length ? `${entete}\n${visibles.map(ligne).join("\n")}` : `${entete}\nAucun client dans cette vue.`,
     donnees: { vue: qui, compteurs, page: page.page, pages, total: page.total, clients: visibles.map((c) => ({ clientId: c.clientId, permanentId: c.permanentId, nom: c.clientNom, ville: c.ville, telephone: c.telephone, email: c.email, lien: c.lien, apercu: c.apercu, revoque: c.revoque, nbAcces: c.nbAcces, dernierAccesLe: c.dernierAccesLe, projetsEnCours: c.projetsEnCours, limite: c.limite, attente: c.attente, signaux: c.signaux, projets: c.projets.map((p) => ({ dossierId: p.dossierId, espaceId: p.espaceId, nom: p.nomProjet, etape: p.etape, fige: p.fige, faits: p.faits, attente: p.attente, signaux: p.signaux })) })) },
-    liens: [lien("Espaces clients", "/espaces")],
+    liens: [lien("Espaces clients", ADRESSE_ESPACES)],
   };
 }
 
@@ -408,7 +422,7 @@ export const outilLister = definirOutil({
   nom: "lister",
   titre: "Lister (toutes les listes des écrans)",
   description:
-    "Toute liste d'un écran du CRM, avec ses vues, filtres, recherche et pages, par la même fonction que l'écran ; chaque ligne porte l'identifiant utile aux outils d'écriture. LEADS (vues A_APPELER : jamais appelés, le plus récent en haut ; A_RAPPELER : rappels datés, retards EN RETARD en tête, tentatives, dernier appel ; SANS_SUITE ; ARCHIVES — filtres source, recherche nom/téléphone/ville/campagne). DOSSIERS (EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE avec filtres.etape — qui a la main, prochaine action ; recherche client/ville/objet ; masquer_inactifs ; compteurs). CLIENTS (ACTIFS, ARCHIVES ; categorie, source, recherche). ESPACES (TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES ; etape_espace, tri ; faits par projet ; filtres.sans_photo_ni_simulation_depuis_jours : projets sans photo ni simulation, avec téléphone et SMS du lien prêt à copier). MAILS (A_TRAITER dans l'ordre de priorité, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES avec leur texte à classer ; recherche dans la vue). MESSAGES_ESPACE (non lus par défaut ; cible : le fil d'un client ; tout). RELANCES (devis sans réponse : SMS prêt à copier et mail proposé ; relances photos). PROPOSITIONS (EN_ATTENTE, ECHEC, HISTORIQUE ; type, dossier_id, message_id ; proposition_id pour une seule, avec sensibilité, champs corrigibles et motifs de rejet). DEPENSES (ANNEE, ARCHIVEES, SUGGESTIONS ; ou periode/du/au, categorie, rattachement). ENCOURS, CHEQUES, QUALITE_FINANCES, LIVRE (annee ; lien CSV). TARIFS (sous-parties et presets avec identifiant). PUBLICATIONS (site ; dossier_id : photos proposées avec leur chemin). CRENEAUX (jours libres pour un chantier ; dossier). TEINTES (styles, famille, recherche). ENTREPRISES (annuaire : recherche nom, SIREN, SIRET). Rien n'est écrit.",
+    "Toute liste d'un écran du CRM, avec ses vues, filtres, recherche et pages, par la même fonction que l'écran ; chaque ligne porte l'identifiant utile aux outils d'écriture. LEADS (vues A_APPELER : jamais appelés, le plus récent en haut ; A_RAPPELER : rappels datés, retards EN RETARD en tête, tentatives, dernier appel ; SANS_SUITE ; ARCHIVES — filtres source, recherche nom/téléphone/ville/campagne). DOSSIERS (EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE avec filtres.etape — qui a la main, prochaine action, état de l'espace client ; recherche client/ville/objet ; masquer_inactifs ; filtres.espace MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES et etape_espace : le filtre « Espaces » de l'écran ; compteurs). CLIENTS (ACTIFS, ARCHIVES ; categorie, source, recherche). ESPACES, par client (TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES ; etape_espace, tri ; faits par projet ; filtres.sans_photo_ni_simulation_depuis_jours : projets sans photo ni simulation, avec téléphone et SMS du lien prêt à copier). MAILS (A_TRAITER dans l'ordre de priorité, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES avec leur texte à classer ; recherche dans la vue). MESSAGES_ESPACE (non lus par défaut ; cible : le fil d'un client ; tout). RELANCES (devis sans réponse : SMS prêt à copier et mail proposé ; relances photos). PROPOSITIONS (EN_ATTENTE, ECHEC, HISTORIQUE ; type, dossier_id, message_id ; proposition_id pour une seule, avec sensibilité, champs corrigibles et motifs de rejet). DEPENSES (ANNEE, ARCHIVEES, SUGGESTIONS ; ou periode/du/au, categorie, rattachement). ENCOURS, CHEQUES, QUALITE_FINANCES, LIVRE (annee ; lien CSV). TARIFS (sous-parties et presets avec identifiant). PUBLICATIONS (site ; dossier_id : photos proposées avec leur chemin). CRENEAUX (jours libres pour un chantier ; dossier). TEINTES (styles, famille, recherche). ENTREPRISES (annuaire : recherche nom, SIREN, SIRET). Rien n'est écrit.",
   niveau: "LECTURE",
   schema: schemaLister,
   executer: async (e, contexte) => {

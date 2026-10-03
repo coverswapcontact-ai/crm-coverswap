@@ -21,6 +21,9 @@ const ANCIENNES_ADRESSES: { source: string; destination: string }[] = [
   { source: "/factures", destination: "/finances" },
   { source: "/chantiers/:chemin*", destination: "/dossiers" },
   { source: "/commandes", destination: "/dossiers" },
+  // Mission 18 (A1) : l'onglet Espaces clients est devenu le filtre « Espaces » de Dossiers (tâches, notifications et
+  // favoris qui menaient à /espaces y arrivent).
+  { source: "/espaces", destination: "/dossiers?espace=TOUS" },
 ];
 
 const nextConfig: NextConfig = {

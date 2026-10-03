@@ -114,6 +114,10 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
   return ETAPES_PROGRESSION.map((e) => ({ cle: e.cle, libelle: e.libelle, fait: fait[e.cle], courante: e.cle === courante, verrouillee: verrouillee[e.cle], raison: verrouillee[e.cle] ? (RAISONS_VERROU[e.cle] ?? null) : null }));
 }
 
+/** Les étapes de l'espace dans l'ordre du parcours (le sélecteur « Étape » du filtre Espaces de Dossiers). */
+export const ETAPES_ESPACE: readonly EtapeEspace[] = ["PHOTOS", "PROJET", "ATTENTE_SIMULATION", "SIMULATIONS", "ATTENTE_DEVIS", "DEVIS", "ACOMPTE", "CHANTIER", "TERMINE"];
+export const estEtapeEspace = (valeur: unknown): valeur is EtapeEspace => typeof valeur === "string" && (ETAPES_ESPACE as readonly string[]).includes(valeur);
+
 export const LIBELLES_ETAPE_ESPACE: Record<EtapeEspace, string> = {
   PHOTOS: "Photos attendues",
   PROJET: "Projet à valider",

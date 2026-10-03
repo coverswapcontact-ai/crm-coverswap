@@ -78,7 +78,7 @@ async function relanceDuDossier(ids: Ids, maintenant: Date): Promise<RelanceDevi
 /**
  * La relance photos que ce SMS de lien fait : le dossier est de ceux que « voir_relances » propose de relancer
  * aujourd'hui (espace ouvert sans photo ni simulation, délai écoulé, moins de deux relances), avec son rang. Sinon
- * rien : un lien envoyé hors relance n'en compte pas une (comme l'écran Espaces).
+ * rien : un lien envoyé hors relance n'en compte pas une (comme la colonne Espace de Dossiers).
  */
 async function relancePhotosDuDossier(ids: Ids, maintenant: Date): Promise<RelancePhotosSms | null> {
   if (!ids.dossierId) return null;

@@ -10,6 +10,7 @@ import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
 import { ChipsFamilles } from "./FamillesDossier";
+import { IconeEspace, LigneEspaceCourte } from "./EspaceColonne";
 import { PastilleEtape, TRANS } from "@/components/pilotage/ui";
 
 /** Pastille rouge : prochaine action dépassée. */
@@ -156,6 +157,8 @@ export function CarteDossier({
         ) : null}
       </span>
       <ProchaineActionResume dossier={dossier} maintenant={maintenant} className="mt-3" />
+      {/* Mission 18 (A1) : l'état de l'espace client (l'ancien onglet Espaces clients). */}
+      {dossier.espace ? <LigneEspaceCourte espace={dossier.espace} maintenant={maintenant} className="mt-2.5" /> : null}
       <BarreProgression etape={dossier.etape} etapeAvantSortie={dossier.etapeAvantSortie} className="mt-3" />
     </button>
   );
@@ -185,6 +188,8 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
       <Lisere couleur={couleurLisere(dossier, maintenant)} />
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
+        {/* Mission 18 (A1) : la pastille de l'espace client (teintée par son signal), le détail en infobulle. */}
+        {dossier.espace ? <IconeEspace espace={dossier.espace} maintenant={maintenant} /> : null}
         {enRetard ? <PastilleRetard /> : null}
         {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} motif={dossier.mainMotif} className="px-1.5 py-0 text-[10.5px]" /> : null}
       </span>
@@ -265,6 +270,7 @@ export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
             </span>
             {signal ? <span className={cn("shrink-0 font-medium", signal.ton)}>· {signal.texte}</span> : null}
           </span>
+          {dossier.espace ? <LigneEspaceCourte espace={dossier.espace} maintenant={maintenant} className="mt-0.5" /> : null}
         </span>
         {echeance === "retard" ? <PastilleRetard /> : null}
         <ChevronRight size={16} aria-hidden className="shrink-0 text-[#4B5563]" />

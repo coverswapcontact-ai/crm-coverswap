@@ -18,6 +18,7 @@ import type { PaiementsDossier } from "@/lib/encaissements/types";
 import type { PointACompleter } from "./completude";
 import type { FaitsDossier } from "./regles";
 import type { DelaisCles, EcartsPrix, PassageEtape } from "./delais";
+import type { EspaceResume } from "@/lib/espace/suivi-types";
 
 export type DossierResume = {
   id: string;
@@ -48,6 +49,11 @@ export type DossierResume = {
   prestations: SelectionPrestations;
   /** Mission 10 : la teinte retenue par sous-partie (« CUISINE.ilot » → « chêne »), dite à l'assistant ou saisie. */
   teintes: Record<string, string>;
+  /**
+   * Mission 18 (A1) : l'état de son espace client (colonne et filtre « Espaces » de la liste) ; null sans espace,
+   * absent quand la liste ne l'a pas calculé (résumé refait depuis le panneau : l'écran garde le précédent).
+   */
+  espace?: EspaceResume | null;
 };
 
 export type PhotoVue = { id: string; url: string; /** Mission 13 (lot 6) : la vignette 320 px, pour les listes. */ vignette: string; type: string; /** Après chantier (portfolio). */ apres: boolean };

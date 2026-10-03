@@ -8,7 +8,7 @@ import { actionsManuellesEnVigueur } from "./vigueur";
 
 /**
  * Mission 17 (partie A) : les signaux des espaces clients deviennent une VUE de la même source que les tâches
- * (espace/suivi.ts : écran Espaces, outil « espaces_clients », espace du client dans le CRM). Deux règles :
+ * (espace/suivi.ts : colonne et filtre « Espaces » de Dossiers, « lister » ESPACES, espace du client dans le CRM). Deux règles :
  * 1. un dossier dont la prochaine action posée à la main est en vigueur (vigueur.ts, cas « j'attends sa modification
  *    visuelle ») n'a plus de signal rouge ni ambre, et il attend le client, sur le texte de cette action (plus de
  *    « Répondre à … », plus de « date du chantier à fixer ») ;
@@ -80,7 +80,7 @@ const signalVisible = (vue: VueTachesEspaces, projet: Pick<LigneEspace, "dossier
   return !cle || !vue.ecartee(cle, occurrenceDuSignal(s.code, projet));
 };
 
-/** Le projet tel que l'écran Espaces le montre : signaux des tâches écartées masqués, prochaine action manuelle respectée. */
+/** Le projet tel que Dossiers le montre (colonne Espace) : signaux des tâches écartées masqués, prochaine action manuelle respectée. */
 export function appliquerAuProjet<L extends Pick<LigneEspace, "dossierId" | "signaux" | "attente" | "creeLe" | "lienEnvoyeLe" | "expireLe">>(ligne: L, vue: VueTachesEspaces): L {
   const action = vue.vigueur.get(ligne.dossierId);
   const signaux = ligne.signaux.filter(signalVisible(vue, ligne)).filter((s) => !action || s.ton === "gris");

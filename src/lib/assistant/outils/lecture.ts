@@ -14,6 +14,7 @@ import { vueEspaceCrm } from "@/lib/espace/vue-crm";
 import { chronologieDuContact } from "@/lib/chronologie/chronologie";
 import { FAMILLES_CHRONOLOGIE } from "@/lib/chronologie/familles";
 import { listerClientsEspaces } from "@/lib/espace/suivi";
+import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
 import { etatConnexionGoogle, rappelConnexionGoogle } from "@/lib/google/connexion";
 import { etatIa } from "@/lib/ia/modele";
 import { resumeChaineMeta } from "@/lib/meta/sante";
@@ -320,13 +321,13 @@ export const outilEspacesClients = definirOutil({
       const ligne = (p: (typeof projets)[number]) =>
         `- ${p.clientNom} : espace ouvert il y a ${pluriel(p.joursDepuisOuverture, "jour")}, ni photo ni simulation${p.lienCommunique ? "" : " (lien jamais envoyé)"}, ${p.sms?.telephone ?? "numéro inconnu"} — ${p.sms ? `SMS (${p.sms.code}) : « ${p.sms.texte} »` : "SMS indisponible (voir la fiche du dossier)"} [dossier:${p.dossierId}]`;
       const texte = projets.length ? `${pluriel(projets.length, "projet d'espace", "projets d'espace")} sans photo ni simulation depuis ${pluriel(jours, "jour")} (rien n'est envoyé : Lucas copie le SMS, puis « noter_sms ») :\n${projets.map(ligne).join("\n")}` : `Aucun projet d'espace sans photo ni simulation depuis ${pluriel(jours, "jour")}.`;
-      return { texte, donnees: projets, liens: [lien("Espaces clients", "/espaces")] };
+      return { texte, donnees: projets, liens: [lien("Espaces clients", ADRESSE_ESPACES)] };
     }
     const clients = (await listerClientsEspaces(contexte.maintenant)).slice(0, limite ?? 30);
     const texte = clients.length
       ? clients.map((c) => `${c.clientNom}${c.ville ? ` (${c.ville})` : ""} : ${c.revoque ? "lien désactivé" : c.premierAccesLe ? `vu ${c.nbAcces} fois, dernière visite ${format.jourCourt(c.dernierAccesLe)}` : "jamais ouvert"} ; ${pluriel(c.projetsEnCours, "projet")} en cours ; ${c.attente.qui === "MOI" ? "attend Lucas" : c.attente.qui === "CLIENT" ? "attend le client" : "rien en attente"} — ${c.attente.libelle}${c.signaux.length ? ` ; signaux : ${c.signaux.map((s) => s.libelle).join(", ")}` : ""} [client:${c.clientId}]`).join("\n")
       : "Aucun espace client ouvert.";
-    return { texte, donnees: clients.map((c) => ({ clientId: c.clientId, nom: c.clientNom, ville: c.ville, lien: c.lien, revoque: c.revoque, nbAcces: c.nbAcces, dernierAccesLe: c.dernierAccesLe, attente: c.attente, signaux: c.signaux, projets: c.projets.map((p) => ({ dossierId: p.dossierId, nom: p.nomProjet, etape: p.etape, fige: p.fige })) })), liens: [lien("Espaces clients", "/espaces")] };
+    return { texte, donnees: clients.map((c) => ({ clientId: c.clientId, nom: c.clientNom, ville: c.ville, lien: c.lien, revoque: c.revoque, nbAcces: c.nbAcces, dernierAccesLe: c.dernierAccesLe, attente: c.attente, signaux: c.signaux, projets: c.projets.map((p) => ({ dossierId: p.dossierId, nom: p.nomProjet, etape: p.etape, fige: p.fige })) })), liens: [lien("Espaces clients", ADRESSE_ESPACES)] };
   },
 });
 

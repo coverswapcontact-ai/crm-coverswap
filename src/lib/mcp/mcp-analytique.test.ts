@@ -157,6 +157,10 @@ describe("analytique publicite (ex-« campagne »), etat_crm META (ex-« voir_pu
     assert.ok(commercial.liens?.some((l) => /\/analytique\?du=/.test(l.href)));
     const site = await appeler("voir_fichiers", { genre: "site", jours: 30 });
     assert.equal(site.liens?.[0].href, "http://localhost:3001/analytique?onglet=site");
+    // Mission 18 (A1) : plus de lien vers l'onglet Espaces clients retiré ; le filtre « Espaces » de Dossiers à la place.
+    const clients = await appeler("manager_clients");
+    assert.ok(clients.liens?.some((l) => l.href === "http://localhost:3001/dossiers?espace=TOUS"), JSON.stringify(clients.liens));
+    for (const l of clients.liens ?? []) assert.doesNotMatch(l.href, /\/espaces(\?|$)/);
     assert.deepEqual(reseau, []);
   });
 });

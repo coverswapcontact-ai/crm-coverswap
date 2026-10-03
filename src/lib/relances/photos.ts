@@ -17,7 +17,7 @@ import { proposerSms } from "@/lib/sms/proposition";
  * deux au plus par projet.
  *
  * Une simulation compte d'où qu'elle vienne (`dossiersAvecSimulation`, la règle
- * partagée avec le libellé de l'écran Espaces) : celui qui en a fait une n'est
+ * partagée avec le libellé de la colonne Espace) : celui qui en a fait une n'est
  * jamais relancé pour ses photos, ni dit « en attente de ses photos ». Un
  * numéro qui a répondu STOP n'a pas de relance photos (ce n'est qu'un SMS).
  */

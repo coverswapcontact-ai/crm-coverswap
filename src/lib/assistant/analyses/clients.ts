@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { LIBELLES_SOURCE_CLIENT, type SourceClient } from "@/lib/clients/constantes";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
 import { definirOutil, format, lien } from "../definition";
 import { avertissementMinces, familleDuDossier, joursEntre, libelleFamille, repartir, somme } from "./commun";
 import { pluriel } from "@/lib/commun/format";
@@ -137,6 +138,6 @@ export const outilManagerClients = definirOutil({
       `Espaces : ${a.espaces.ouverts} ouverts, ${a.espaces.jamaisOuverts} jamais ouverts, ${a.espaces.actifsSemaine} actifs cette semaine, ${a.espaces.sansEspace} clients sans espace.`,
       a.recommandeurs.length ? `Recommandent : ${a.recommandeurs.map((r) => `${r.nom} (${r.recommandations})`).join(", ")}.` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: a, liens: [lien("Clients", "/clients"), lien("Espaces", "/espaces")] };
+    return { texte, donnees: a, liens: [lien("Clients", "/clients"), lien("Espaces", ADRESSE_ESPACES)] };
   },
 });

@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
  * espace (toute source, non archivée), rangée dans le dossier, portée par le lead du dossier ou par un lead de son
  * client (même sans rendu, même pas encore rangée), ou faite sur le site et rattachée à l'un de ces leads.
  *
- * Une seule règle pour deux lecteurs : la relance photos l'écarte (`relances/photos.ts`), et l'écran Espaces ne le
+ * Une seule règle pour deux lecteurs : la relance photos l'écarte (`relances/photos.ts`), et la colonne Espace ne le
  * dit jamais « en attente de ses photos » (`espace/suivi.ts`, `attenteDuClient`). L'étape de l'espace
  * (`etapeEspace`), elle, ne compte que ce que le client voit dans son espace : elle peut rester « Photos » pour un
  * client qui a fait une simulation pas encore publiée chez lui.

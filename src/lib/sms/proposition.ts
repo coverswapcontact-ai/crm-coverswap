@@ -165,12 +165,13 @@ async function espaceEtLien(contact: Contact): Promise<{ dossierId: string; lien
  *  - RELANCE_DEVIS { documentId, rang } → RELANCE_DEVIS_1 ou RELANCE_DEVIS_2, pour un devis que le client attend
  *    dans son espace (`devisARelancer`), du dossier visé ;
  *  - RELANCE_AVIS (mission 18, A4 : chantier fini, pas d'avis) → DEMANDE_AVIS, le lien de son espace sur la rubrique
- *    « Après le chantier » (`#apres`), pour un dossier (jamais un espace ouvert pour l'occasion) ;
+ *    « Après le chantier » (`#apres`), pour un dossier qui a déjà son espace (jamais un espace ouvert pour l'occasion :
+ *    refus 409 sans espace, ou lien désactivé) ;
  *  - REACTIVATION (mission 18, A4 : contact perdu depuis 6 mois) → REACTIVATION, sans lien ; refusé sans accord aux
  *    messages commerciaux ou après une désinscription (`refusReactivation`).
  * Une relance d'avis ou de réactivation suit toujours le SMS (rang 1 à défaut) : c'est la copie qui la compte.
  * LIEN_ESPACE_SIMULATION suppose une simulation du site déjà dans l'espace (`simulationDansLEspace`).
- * Les actions avec le lien ouvrent l'espace s'il le faut ; aucune n'écrit d'événement.
+ * Les actions avec le lien ouvrent l'espace s'il le faut (sauf la demande d'avis) ; aucune n'écrit d'événement.
  */
 export async function proposerSms(entree: DemandeSms, maintenant: Date = new Date()): Promise<PropositionSms> {
   let dossierIdDemande = entree.dossierId ?? null;
@@ -209,8 +210,11 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
     }
     case "RELANCE_AVIS": {
       if (!dossierId) throw new ErreurMetier("La demande d'avis se fait sur le dossier du chantier : ce contact n'en a pas.", 409);
-      const espace = await espaceEtLien(contact);
-      lien = `${espace.lien}#apres`;
+      // Relecture de la partie A : l'espace EXISTANT du dossier, jamais ouvert pour l'occasion (pas d'écriture en base).
+      const existant = await prisma.espaceClient.findUnique({ where: { dossierId } });
+      const lienAvis = existant && !existant.archiveLe && !existant.revoqueLe ? await lienPourLeProjet(existant) : null;
+      if (!lienAvis) throw new ErreurMetier("Ce dossier n'a pas d'espace client ouvert (ou son lien est désactivé) : la demande d'avis passe par son espace, qui ne s'ouvre pas pour l'occasion.", 409);
+      lien = `${lienAvis}#apres`;
       variables.lien = lien;
       code = "DEMANDE_AVIS";
       break;

@@ -239,3 +239,65 @@ describe("ouvrir un dossier depuis un lead, en un bouton", () => {
     await assert.rejects(() => depuisLead.ouvrirDossierDuLead(contact.id), /archivé/);
   });
 });
+
+describe("relecture de la partie A : ce qui n'ouvre pas, ce qui ne revient pas, une ouverture à la fois", () => {
+  test("une photo déposée par Lucas sur un lead Meta n'ouvre aucun dossier (webhook ni filet) ; elle se range dans le dossier vivant", async () => {
+    const meta = await lead({ source: "META_ADS", typeProjet: "CUISINE" });
+    await prisma.photoLead.create({ data: { leadId: meta.id, chemin: image(`${meta.id}/photos/depot.jpg`, 13), origine: "DEPOT_CRM" } });
+    assert.equal(await depuisLead.ouvrirDossierAutomatique(meta.id), null, "la photo de Lucas n'est pas un geste du contact");
+    await depuisLead.rattraperSimulationsSansDossier();
+    assert.equal(await prisma.dossier.count({ where: { leadId: meta.id } }), 0, "le filet ne l'ouvre pas non plus");
+    // Le même contact, qualifié au téléphone : la photo suit dans son dossier.
+    const ouvert = await depuisLead.ouvrirDossierDuLead(meta.id, { motif: "BOUTON" });
+    assert.deepEqual([ouvert.cree, ouvert.photosRangees], [true, 1]);
+    // Une photo de plus, déposée par Lucas maintenant qu'il a un dossier vivant : elle y entre.
+    await prisma.photoLead.create({ data: { leadId: meta.id, chemin: image(`${meta.id}/photos/depot-2.jpg`, 17), origine: "DEPOT_CRM" } });
+    const suite = await depuisLead.ouvrirDossierAutomatique(meta.id);
+    assert.deepEqual([suite?.dossierId, suite?.cree, suite?.photosRangees], [ouvert.dossierId, false, 1]);
+  });
+
+  test("dossier archivé par Lucas : pas rouvert sur un fait déjà connu, rouvert sur un fait postérieur à l'archivage", async () => {
+    const contact = await lead();
+    const ancienne = await simulation(contact.id, "after");
+    const { archiverDossier } = await import("./archivage");
+    const premier = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    await archiverDossier(premier.dossierId, "Essai : jamais traité");
+    // Archivé il y a une minute ; la simulation qui l'avait ouvert date d'avant.
+    await prisma.dossier.update({ where: { id: premier.dossierId }, data: { archiveLe: new Date(Date.now() - 60_000) } });
+    await prisma.simulation.update({ where: { id: ancienne.id }, data: { createdAt: new Date(Date.now() - 120_000) } });
+    assert.equal(await depuisLead.ouvrirDossierAutomatique(contact.id), null, "le fait était connu à l'archivage");
+    assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 0);
+    // Il revient simuler : c'est un fait nouveau, le dossier s'ouvre.
+    await simulation(contact.id, "nouvelle");
+    const rouvert = await depuisLead.ouvrirDossierAutomatique(contact.id);
+    assert.ok(rouvert?.cree);
+    assert.notEqual(rouvert.dossierId, premier.dossierId);
+  });
+
+  test("photo introuvable sur le serveur : tentée une fois, le filet n'y revient plus", async () => {
+    const contact = await lead({ source: "SITE_CONTACT", typeProjet: "AUTRE" });
+    const ouvert = await depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" });
+    const perdue = await prisma.photoLead.create({ data: { leadId: contact.id, chemin: `${contact.id}/photos/perdue.jpg` } });
+    const premier = await depuisLead.rattraperSimulationsSansDossier();
+    assert.ok(premier.contacts >= 1, JSON.stringify(premier));
+    const lue = await prisma.photoLead.findUniqueOrThrow({ where: { id: perdue.id } });
+    assert.deepEqual([lue.dossierId, lue.rangeeLe !== null], [null, true], "marquée tentée, pas rangée");
+    assert.equal((await photosDe(ouvert.dossierId)).length, 0);
+    const second = await depuisLead.rattraperSimulationsSansDossier();
+    assert.equal(second.contacts, 0, JSON.stringify(second));
+  });
+
+  test("quatre ouvertures en même temps (webhook, fin de simulation, deux clics) : un seul dossier", async () => {
+    const contact = await lead();
+    await simulation(contact.id, "after");
+    const resultats = await Promise.all([
+      depuisLead.ouvrirDossierAutomatique(contact.id),
+      depuisLead.ouvrirDossierAutomatique(contact.id, { demande: true }),
+      depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" }),
+      depuisLead.ouvrirDossierDuLead(contact.id, { motif: "BOUTON" }),
+    ]);
+    assert.equal(await prisma.dossier.count({ where: { leadId: contact.id } }), 1);
+    assert.equal(new Set(resultats.map((r) => r?.dossierId)).size, 1);
+    assert.equal(resultats.filter((r) => r?.cree).length, 1);
+  });
+});

@@ -259,7 +259,7 @@ async function listerLesEspaces(e: EntreeLister, qui: string, contexte: Contexte
   return {
     texte: visibles.length ? `${entete}\n${visibles.map(ligne).join("\n")}` : `${entete}\nAucun client dans cette vue.`,
     donnees: { vue: qui, compteurs, page: page.page, pages, total: page.total, clients: visibles.map((c) => ({ clientId: c.clientId, permanentId: c.permanentId, nom: c.clientNom, ville: c.ville, telephone: c.telephone, email: c.email, lien: c.lien, apercu: c.apercu, revoque: c.revoque, nbAcces: c.nbAcces, dernierAccesLe: c.dernierAccesLe, projetsEnCours: c.projetsEnCours, limite: c.limite, attente: c.attente, signaux: c.signaux, projets: c.projets.map((p) => ({ dossierId: p.dossierId, espaceId: p.espaceId, nom: p.nomProjet, etape: p.etape, fige: p.fige, faits: p.faits, attente: p.attente, signaux: p.signaux })) })) },
-    liens: [lien("Espaces clients", ADRESSE_ESPACES)],
+    liens: [lien("Dossiers › Espaces", ADRESSE_ESPACES)],
   };
 }
 

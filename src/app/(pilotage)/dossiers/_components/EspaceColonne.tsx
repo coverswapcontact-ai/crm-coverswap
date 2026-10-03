@@ -3,24 +3,37 @@
 import { Smartphone } from "lucide-react";
 import { descriptionEspace, faitsEspace, signalPrincipal, visiteEspace } from "@/lib/espace/colonne-espace";
 import { ETAPES_ESPACE, LIBELLES_ETAPE_ESPACE, type EtapeEspace } from "@/lib/espace/etapes";
-import { FILTRES_ESPACE, LIBELLES_FILTRE_ESPACE, type CompteursEspaces, type EspaceResume, type FiltreEspace } from "@/lib/espace/suivi-types";
+import { FILTRES_ESPACE, LIBELLES_FILTRE_ESPACE, LIBELLES_TRI_ESPACE, TRIS_ESPACE, type CompteursEspaces, type EspaceResume, type FiltreEspace, type TriEspace } from "@/lib/espace/suivi-types";
 import { cn } from "@/lib/utils";
 import { TRANS } from "@/components/pilotage/ui";
 
 /**
  * Mission 18 (A1) — l'ancien onglet Espaces clients, dans Dossiers : la colonne « Espace » (étape de l'espace, lien et
  * dernière visite, photos, simulations, devis relu, le signal qui demande un geste) et le filtre « Espaces » (À moi,
- * Chez le client, Signaux, Tous, Désactivés, étape). Les gestes restent dans le bloc Espace du panneau du dossier, et
- * ceux du client (lien, projet de plus) dans sa fiche.
+ * Chez le client, Signaux, Tous, Désactivés, étape, tri). Les gestes restent dans le bloc Espace du panneau du dossier,
+ * et ceux du client (lien, projet de plus) dans sa fiche.
  */
 
 const couleurSignal = (ton: "rouge" | "ambre" | "gris") => (ton === "rouge" ? "text-[#F87171]" : ton === "ambre" ? "text-[#F5B454]" : "text-[#9CA3AF]");
 
-/** L'icône de l'espace, teintée par le signal le plus pressant (rouge, ambre), grise sinon. */
-export function IconeEspace({ espace, maintenant, className }: { espace: EspaceResume; maintenant: Date; className?: string }) {
+/**
+ * L'icône de l'espace, teintée par le signal le plus pressant (rouge, ambre), grise sinon. Relecture de la partie A :
+ * `libelle` — « detaille » (cellule du tableau : la description entière), « court » (carte compacte, où l'icône est seule :
+ * « Espace : » et le signal ou l'étape, pour ne pas allonger le nom du bouton), « aucun » (un texte visible la suit).
+ */
+export function IconeEspace({ espace, maintenant, className, libelle = "detaille" }: { espace: EspaceResume; maintenant: Date; className?: string; libelle?: "detaille" | "court" | "aucun" }) {
   const signal = signalPrincipal(espace);
+  const couleur = cn("inline-flex shrink-0", signal ? couleurSignal(signal.ton) : espace.revoque ? "text-[#4B5563]" : "text-[#8B919C]", className);
+  if (libelle === "aucun") {
+    return (
+      <span aria-hidden className={couleur}>
+        <Smartphone size={12} />
+      </span>
+    );
+  }
+  const texte = libelle === "court" ? `Espace : ${espace.revoque ? "lien désactivé" : (signal?.libelle ?? espace.etapeLibelle)}` : `Espace : ${descriptionEspace(espace, maintenant)}`;
   return (
-    <span role="img" aria-label={`Espace : ${descriptionEspace(espace, maintenant)}`} title={descriptionEspace(espace, maintenant)} className={cn("inline-flex shrink-0", signal ? couleurSignal(signal.ton) : espace.revoque ? "text-[#4B5563]" : "text-[#8B919C]", className)}>
+    <span role="img" aria-label={texte} title={descriptionEspace(espace, maintenant)} className={couleur}>
       <Smartphone size={12} aria-hidden />
     </span>
   );
@@ -52,7 +65,7 @@ export function LigneEspaceCourte({ espace, maintenant, className }: { espace: E
   const signal = signalPrincipal(espace);
   return (
     <span className={cn("flex min-w-0 items-center gap-1.5 text-[12px]", className)} title={descriptionEspace(espace, maintenant)}>
-      <IconeEspace espace={espace} maintenant={maintenant} />
+      <IconeEspace espace={espace} maintenant={maintenant} libelle="aucun" />
       <span className="min-w-0 truncate text-[#9CA3AF]">
         {espace.revoque ? "Lien désactivé" : espace.etapeLibelle}
         <span className={signal ? couleurSignal(signal.ton) : "text-[#6B7280]"}> · {ligneCourte(espace, maintenant)}</span>
@@ -63,29 +76,35 @@ export function LigneEspaceCourte({ espace, maintenant, className }: { espace: E
 
 const CLASSE_PASTILLE = "h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8 sm:text-[12.5px]";
 
-/** Le filtre « Espaces » : les pastilles de l'ancien onglet (compteurs exacts, sur tous les espaces) et l'étape. */
+/**
+ * Le filtre « Espaces » : les pastilles de l'ancien onglet (compteurs exacts, sur tous les espaces), l'étape et le tri
+ * (fait par le serveur : l'écran garde son ordre). Des boutons de filtre (`aria-pressed`), pas des onglets.
+ */
 export function FiltreEspaces({
   filtre,
   etape,
+  tri,
   compteurs,
   onFiltre,
   onEtape,
+  onTri,
 }: {
   filtre: FiltreEspace;
   etape: EtapeEspace | null;
+  tri: TriEspace;
   compteurs: CompteursEspaces | undefined;
   onFiltre: (filtre: FiltreEspace) => void;
   onEtape: (etape: EtapeEspace | null) => void;
+  onTri: (tri: TriEspace) => void;
 }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filtre des espaces">
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtre des espaces">
         {FILTRES_ESPACE.map((valeur) => (
           <button
             key={valeur}
             type="button"
-            role="tab"
-            aria-selected={filtre === valeur}
+            aria-pressed={filtre === valeur}
             onClick={() => onFiltre(valeur)}
             className={cn(CLASSE_PASTILLE, filtre === valeur ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
           >
@@ -104,6 +123,18 @@ export function FiltreEspaces({
         {ETAPES_ESPACE.map((e) => (
           <option key={e} value={e}>
             {LIBELLES_ETAPE_ESPACE[e]}
+          </option>
+        ))}
+      </select>
+      <select
+        aria-label="Tri des espaces"
+        value={tri}
+        onChange={(evenement) => onTri(evenement.target.value as TriEspace)}
+        className="h-11 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8"
+      >
+        {TRIS_ESPACE.map((t) => (
+          <option key={t} value={t}>
+            {LIBELLES_TRI_ESPACE[t]}
           </option>
         ))}
       </select>

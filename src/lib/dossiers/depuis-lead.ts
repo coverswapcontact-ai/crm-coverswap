@@ -26,7 +26,9 @@ import { synchroniserRappel } from "@/lib/agenda/rappels";
  *    projet créé par le client ouvre le sien, mission 5). Seuls les faits
  *    postérieurs à `DEBUT_OUVERTURE_AUTO` ouvrent : le stock reste dans Leads.
  *    Un contact hors zone (« À écarter ») reste un lead ; un lead Meta aussi,
- *    tant qu'il ne fait rien sur le site.
+ *    tant qu'il ne fait rien sur le site (une photo que Lucas lui dépose depuis
+ *    le CRM n'ouvre rien). Un dossier archivé par Lucas ne se rouvre que sur un
+ *    fait postérieur à son archivage. Une ouverture à la fois par contact.
  *  - « Ouvrir un dossier » depuis un lead : UN bouton, qui ne sert plus que pour
  *    un lead qualifié au téléphone. Coordonnées, projet, source, campagne,
  *    réponses au formulaire, message, montant simulé, rappel prévu, photos
@@ -61,6 +63,15 @@ const FENETRE_DU_FILET_MS = 2 * 86_400_000;
 
 /** Une simulation qui a une image : photo avant, rendu ou photo d'origine. */
 const AVEC_IMAGE: Prisma.SimulationWhereInput[] = [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }];
+
+/**
+ * Relecture de la partie A : une photo que Lucas dépose lui-même sur un lead (lien de dépôt, « ajouter_fichier » :
+ * origine DEPOT_CRM) n'est pas un geste du contact. Elle se range dans son dossier vivant, mais n'en ouvre jamais un.
+ */
+const PHOTO_DU_CONTACT: Prisma.PhotoLeadWhereInput = { origine: { not: "DEPOT_CRM" } };
+
+/** Une photo pas encore rangée ni déjà tentée en vain (fichier absent du volume : `rangeeLe` posé sans dossier). */
+const PHOTO_A_RANGER: Prisma.PhotoLeadWhereInput = { archiveLe: null, dossierId: null, rangeeLe: null };
 
 const LIBELLES_OCCUPATION: Record<string, string> = { PROPRIETAIRE: "propriétaire", LOCATAIRE: "locataire" };
 const LIBELLES_ECHANGE: Record<string, string> = { APPEL: "Appel", SMS: "SMS", EMAIL: "E-mail", NOTE: "Note" };
@@ -129,12 +140,14 @@ function noteDeReprise(lead: {
 
 /**
  * Range dans le dossier les photos du lead et ses simulations pas encore rangées.
- * Une image absente du disque n'arrête rien : la suivante est tentée, et la
- * ligne reste « à ranger » pour le passage suivant.
+ * Une image absente du disque n'arrête rien : la suivante est tentée. Une photo
+ * introuvable (fichier absent ou vide) est marquée tentée (`rangeeLe` sans
+ * dossier) : le filet n'y revient plus, comme pour une simulation sans images.
+ * Une erreur d'écriture (volume plein) la laisse « à ranger » pour le passage suivant.
  */
 export async function rangerImagesDuLead(leadId: string, dossierId: string, options: { silencieux?: boolean } = {}): Promise<{ photos: number; simulations: number }> {
   const [photos, simulations] = await Promise.all([
-    prisma.photoLead.findMany({ where: { leadId, dossierId: null }, orderBy: { createdAt: "asc" } }),
+    prisma.photoLead.findMany({ where: { leadId, ...PHOTO_A_RANGER }, orderBy: { createdAt: "asc" } }),
     prisma.simulation.findMany({ where: { leadId, dossierId: null, OR: AVEC_IMAGE }, orderBy: { createdAt: "asc" } }),
   ]);
   let photosRangees = 0;
@@ -155,6 +168,10 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
       if (await recopierDansLeDossier(dossierId, photo.chemin, `photo-${photo.id}${path.extname(photo.chemin) || ".jpg"}`)) {
         await prisma.photoLead.update({ where: { id: photo.id }, data: { dossierId, rangeeLe: new Date() } });
         photosRangees++;
+      } else {
+        // Rien sur le disque : tentée une fois, on n'y revient pas (la ligne reste sur le lead, sans dossier).
+        await prisma.photoLead.update({ where: { id: photo.id }, data: { rangeeLe: new Date() } });
+        console.warn(`[dossiers] photo ${photo.id} du contact ${leadId} introuvable sur le serveur : non rangée, plus retentée`);
       }
     } catch (erreur) {
       console.error(`[dossiers] photo ${photo.id} du contact ${leadId} non rangée :`, erreur);
@@ -207,8 +224,31 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
   return { photos: photosRangees, simulations: simulationsRangees };
 }
 
+/**
+ * Relecture de la partie A : l'ouverture d'un dossier se fait une à la fois par contact. Le webhook, la fin d'une
+ * simulation, le filet et le bouton peuvent arriver ensemble ; sans cela, deux appels liraient « pas de dossier
+ * vivant » avant que l'un ne le crée, et ouvriraient deux dossiers. Le serveur est un seul processus : une file de
+ * promesses par contact suffit.
+ */
+const ouverturesEnCours = new Map<string, Promise<unknown>>();
+
+async function unParContact<T>(leadId: string, travail: () => Promise<T>): Promise<T> {
+  const precedente = ouverturesEnCours.get(leadId) ?? Promise.resolve();
+  const suite = precedente.catch(() => undefined).then(travail);
+  const fin = suite.catch(() => undefined);
+  ouverturesEnCours.set(leadId, fin);
+  void fin.then(() => {
+    if (ouverturesEnCours.get(leadId) === fin) ouverturesEnCours.delete(leadId);
+  });
+  return suite;
+}
+
 /** Ouvre le dossier d'un contact (ou retrouve le sien), reprend tout ce qu'on sait, range ses images. */
 export async function ouvrirDossierDuLead(leadId: string, options: Options = {}): Promise<OuvertureDepuisLead> {
+  return unParContact(leadId, () => ouvrirSansFile(leadId, options));
+}
+
+async function ouvrirSansFile(leadId: string, options: Options): Promise<OuvertureDepuisLead> {
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, include: { simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { prixDevis: true } } } });
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
 
@@ -282,24 +322,29 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
 
 type LeadLu = { id: string; clientId: string | null; source: string; typeProjet: string; createdAt: Date; archiveLe: Date | null };
 
-/** Ce que le contact a fait sur le site, depuis une date (ou depuis toujours) : une simulation avec image, une photo, une demande de devis. */
-async function faitsDuSite(lead: LeadLu, depuis: Date | null): Promise<{ simulation: boolean; photos: boolean; demande: boolean }> {
+/**
+ * Ce que le contact a fait sur le site, depuis une date (ou depuis toujours) : une simulation avec image, une photo, une
+ * demande de devis. `seulementDuContact` : les photos déposées par Lucas (DEPOT_CRM) ne comptent pas (elles n'ouvrent
+ * jamais un dossier, mais se rangent dans le dossier vivant).
+ */
+async function faitsDuSite(lead: LeadLu, depuis: Date | null, seulementDuContact = false): Promise<{ simulation: boolean; photos: boolean; demande: boolean }> {
   const quand = depuis ? { createdAt: { gte: depuis } } : {};
   const [simulations, photos] = await Promise.all([
     prisma.simulation.count({ where: { leadId: lead.id, ...quand, OR: AVEC_IMAGE } }),
-    prisma.photoLead.count({ where: { leadId: lead.id, ...quand } }),
+    prisma.photoLead.count({ where: { leadId: lead.id, ...quand, ...(seulementDuContact ? PHOTO_DU_CONTACT : {}) } }),
   ]);
   return { simulation: simulations > 0, photos: photos > 0, demande: estDemandeDeDevis(lead) && (!depuis || lead.createdAt.getTime() >= depuis.getTime()) };
 }
 
 /**
- * Ce qui ouvre le dossier tout seul, d'après les seuls faits postérieurs à `DEBUT_OUVERTURE_AUTO` : la demande de devis
- * qui arrive (ou le formulaire qui a créé le lead), sinon une simulation (ou la photo d'une simulation échouée), sinon
- * des photos jointes à une demande. null : rien de nouveau, le contact reste un lead.
+ * Ce qui ouvre le dossier tout seul, d'après les seuls faits postérieurs à `depuis` (`DEBUT_OUVERTURE_AUTO`, ou
+ * l'archivage de son dernier dossier) : la demande de devis qui arrive (ou le formulaire qui a créé le lead), sinon une
+ * simulation (ou la photo d'une simulation échouée), sinon des photos jointes à une demande — envoyées par le contact,
+ * jamais déposées par Lucas. null : rien de nouveau, le contact reste un lead.
  */
-async function motifDOuverture(lead: LeadLu, demande: boolean): Promise<MotifOuvertureAuto | null> {
+async function motifDOuverture(lead: LeadLu, demande: boolean, depuis: Date): Promise<MotifOuvertureAuto | null> {
   if (demande) return "DEMANDE";
-  const recents = await faitsDuSite(lead, DEBUT_OUVERTURE_AUTO);
+  const recents = await faitsDuSite(lead, depuis, true);
   if (recents.simulation || (recents.photos && lead.source === "SITE_SIMULATEUR")) return "SIMULATION";
   if (recents.photos || recents.demande) return "DEMANDE";
   return null;
@@ -319,21 +364,31 @@ export async function ouvrirDossierAutomatique(leadId: string, options: { demand
     if (!lead) return null;
     // Il a vu sa pièce rénovée, ou il demande un devis : sa classe est relue (Prioritaire d'office, sauf hors zone), dossier ou pas.
     await classerLeadSansBloquer(leadId);
-    let motif: MotifOuvertureAuto;
-    if (await dossierVivant(lead)) {
-      // Un dossier vivant : ce qui n'y est pas encore rangé y entre ; jamais de second dossier.
-      const faits = await faitsDuSite(lead, null);
-      if (!faits.simulation && !faits.photos && !options.demande) return null;
-      motif = options.demande ? "DEMANDE" : "SIMULATION";
-    } else {
-      if (lead.archiveLe) return null;
-      // Hors zone : il reste dans Leads (« Classer · … (hors zone) ») ; « Ouvrir un dossier » le reprend si Lucas le traite quand même.
-      if ((await prisma.lead.findUnique({ where: { id: leadId }, select: { priorite: true } }))?.priorite === "A_ECARTER") return null;
-      const trouve = await motifDOuverture(lead, options.demande === true);
-      if (!trouve) return null;
-      motif = trouve;
-    }
-    const resultat = await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirDossierDuLead(leadId, { motif }));
+    // Relecture de la partie A : la décision (dossier vivant ou non) et l'ouverture se font d'un bloc, un appel à la fois
+    // par contact (`unParContact`) — jamais deux dossiers ouverts ensemble par le webhook, la simulation et le filet.
+    const ouvert = await unParContact(leadId, async (): Promise<{ motif: MotifOuvertureAuto; resultat: OuvertureDepuisLead } | null> => {
+      let motif: MotifOuvertureAuto;
+      if (await dossierVivant(lead)) {
+        // Un dossier vivant : ce qui n'y est pas encore rangé y entre ; jamais de second dossier.
+        const faits = await faitsDuSite(lead, null);
+        if (!faits.simulation && !faits.photos && !options.demande) return null;
+        motif = options.demande ? "DEMANDE" : "SIMULATION";
+      } else {
+        if (lead.archiveLe) return null;
+        // Hors zone : il reste dans Leads (« Classer · … (hors zone) ») ; « Ouvrir un dossier » le reprend si Lucas le traite quand même.
+        if ((await prisma.lead.findUnique({ where: { id: leadId }, select: { priorite: true } }))?.priorite === "A_ECARTER") return null;
+        // Un dossier archivé par Lucas ne se rouvre pas sur un fait qu'il connaissait déjà : seuls comptent les faits
+        // postérieurs à son archivage (une nouvelle simulation, une nouvelle demande l'ouvrent, comme pour un nouveau contact).
+        const archive = await prisma.dossier.findFirst({ where: { leadId, archiveLe: { not: null } }, orderBy: { archiveLe: "desc" }, select: { archiveLe: true } });
+        const depuis = new Date(Math.max(DEBUT_OUVERTURE_AUTO.getTime(), archive?.archiveLe?.getTime() ?? 0));
+        const trouve = await motifDOuverture(lead, options.demande === true, depuis);
+        if (!trouve) return null;
+        motif = trouve;
+      }
+      return { motif, resultat: await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirSansFile(leadId, { motif })) };
+    });
+    if (!ouvert) return null;
+    const { motif, resultat } = ouvert;
     if (resultat.cree || resultat.simulationsRangees + resultat.photosRangees > 0) {
       console.log(`[dossiers] ${motif === "DEMANDE" ? "demande de devis" : "simulation"} du site → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${pluriel(resultat.simulationsRangees, "simulation")}, ${pluriel(resultat.photosRangees, "photo")}`);
     }
@@ -361,8 +416,8 @@ export async function rattraperSimulationsSansDossier(limite = 200, maintenant: 
           dossiers: { some: { archiveLe: null, etape: { notIn: ETAPES_CLOSES } } },
           OR: [
             { simulations: { some: { archiveLe: null, dossierId: null, OR: AVEC_IMAGE } } },
-            { source: "SITE_SIMULATEUR", photos: { some: { archiveLe: null, dossierId: null } } },
-            { photos: { some: { archiveLe: null, dossierId: null, createdAt: { gte: DEBUT_OUVERTURE_AUTO } } } },
+            { source: "SITE_SIMULATEUR", photos: { some: PHOTO_A_RANGER } },
+            { photos: { some: { ...PHOTO_A_RANGER, createdAt: { gte: DEBUT_OUVERTURE_AUTO } } } },
           ],
         },
         {
@@ -375,7 +430,8 @@ export async function rattraperSimulationsSansDossier(limite = 200, maintenant: 
             {
               OR: [
                 { simulations: { some: { archiveLe: null, dossierId: null, createdAt: { gte: depuis }, OR: AVEC_IMAGE } } },
-                { photos: { some: { archiveLe: null, dossierId: null, createdAt: { gte: depuis } } } },
+                // Une photo envoyée par le contact : celle que Lucas dépose (DEPOT_CRM) n'ouvre rien.
+                { photos: { some: { ...PHOTO_A_RANGER, ...PHOTO_DU_CONTACT, createdAt: { gte: depuis } } } },
                 { createdAt: { gte: depuis }, ...FILTRE_DEMANDE_DE_DEVIS },
               ],
             },

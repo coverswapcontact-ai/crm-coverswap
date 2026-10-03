@@ -45,7 +45,15 @@ export function trierDossiers(dossiers: DossierResume[], tri: Tri): DossierResum
   });
 }
 
-function EnteteTriable({ cle, tri, onTrier, className }: { cle: CleTri; tri: Tri; onTrier: (cle: CleTri) => void; className?: string }) {
+function EnteteTriable({ cle, tri, onTrier, className }: { cle: CleTri; tri: Tri | null; onTrier: (cle: CleTri) => void; className?: string }) {
+  // Sous le filtre « Espaces », l'ordre est celui du serveur (relecture de la partie A) : un simple titre de colonne.
+  if (!tri) {
+    return (
+      <th scope="col" className={cn("px-3 py-2.5 font-medium", className)}>
+        {cle === "prochaineAction" ? "Prochaine action" : LIBELLES_TRI[cle]}
+      </th>
+    );
+  }
   const actif = tri.cle === cle;
   const Icone = !actif ? ArrowUpDown : tri.sens === "asc" ? ArrowUp : ArrowDown;
   return (
@@ -70,12 +78,13 @@ export function VueListe({
   onOuvrir,
 }: {
   dossiers: DossierResume[];
-  tri: Tri;
+  /** null : l'ordre du serveur est gardé (filtre « Espaces », dont la page est découpée et triée par le serveur). */
+  tri: Tri | null;
   onTrier: (cle: CleTri) => void;
   maintenant: Date;
   onOuvrir: (id: string, demande?: DemandeRaccourci) => void;
 }) {
-  const tries = trierDossiers(dossiers, tri);
+  const tries = tri ? trierDossiers(dossiers, tri) : dossiers;
 
   return (
     <>

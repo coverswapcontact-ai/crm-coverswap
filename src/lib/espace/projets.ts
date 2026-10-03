@@ -172,7 +172,7 @@ export async function demanderProjetDePlus(permanent: EspacePermanent): Promise<
     await prisma.espacePermanent.update({ where: { id: permanent.id }, data: { projetDemandeLe: new Date() } });
     if (dossier) await prisma.dossierEvenement.create({ data: { dossierId: dossier.id, type: "ESPACE_PROJET_DEMANDE", direction: "ENTRANT", contenu: "Le client demande à ouvrir un projet de plus dans son espace (il en a déjà deux en cours).", metadata: JSON.stringify({ permanentId: permanent.id }) } });
   });
-  if (dossier) await prevenir(dossier.id, { titre: `${dossier.clientNom} voudrait un projet de plus`, texte: "Il a déjà deux projets en cours dans son espace. Accordez-en un de plus en un clic (fiche client ou Espaces clients), ou appelez-le.", urgence: 4, telephone: dossier.clientTelephone, etiquette: `projet-demande-${permanent.id}` });
+  if (dossier) await prevenir(dossier.id, { titre: `${dossier.clientNom} voudrait un projet de plus`, texte: "Il a déjà deux projets en cours dans son espace. Accordez-en un de plus en un clic depuis sa fiche client (bloc Espace), ou appelez-le.", urgence: 4, telephone: dossier.clientTelephone, etiquette: `projet-demande-${permanent.id}` });
 }
 
 /** Lucas accorde des projets en cours de plus : la demande est close. */

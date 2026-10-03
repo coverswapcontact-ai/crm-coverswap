@@ -189,7 +189,7 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
       <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
         {/* Mission 18 (A1) : la pastille de l'espace client (teintée par son signal), le détail en infobulle. */}
-        {dossier.espace ? <IconeEspace espace={dossier.espace} maintenant={maintenant} /> : null}
+        {dossier.espace ? <IconeEspace espace={dossier.espace} maintenant={maintenant} libelle="court" /> : null}
         {enRetard ? <PastilleRetard /> : null}
         {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} motif={dossier.mainMotif} className="px-1.5 py-0 text-[10.5px]" /> : null}
       </span>

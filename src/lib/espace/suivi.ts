@@ -12,7 +12,7 @@ import { confirmationRequise, jetonEspace, lienApercu, lienEspace } from "./lien
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS } from "./projets";
 import { famille, famillesDe, lireSelection } from "@/lib/prestations/prestations";
 import { lireProjet, projetPrecise, resumerProjet } from "./projet";
-import { nomDuProjetClient, photosDuClient } from "./service";
+import { nomDuProjetClient, photosDuClient, rendusDesDossiers } from "./service";
 import { appliquerAuProjet, clesDesProjets, lireVueDesTaches, signalDuClientVisible } from "@/lib/a-faire/vue-espaces";
 import { cleDuSignal } from "@/lib/a-faire/detecteurs/signaux-cles";
 
@@ -56,6 +56,9 @@ export type FiltreEspaces = { permanentId?: string; permanentIds?: string[]; esp
  */
 export type OptionsEspaces = { signauxBruts?: boolean };
 
+/** Au-delà de ce nombre de motifs (deux par espace), `listerEspaces` lit tous les envois du lien (`/e/`) d'une traite. */
+const MOTIFS_LIEN_MAX = 120;
+
 /** Les événements du dossier qui disent « lien communiqué » : un SMS copié par Lucas, ou le texte rendu par l'assistant (« lien_espace »). */
 const TYPES_LIEN_COMMUNIQUE = ["SMS_COPIE", "ESPACE_LIEN_COMMUNIQUE"];
 
@@ -66,11 +69,16 @@ const TYPES_LIEN_COMMUNIQUE = ["SMS_COPIE", "ESPACE_LIEN_COMMUNIQUE"];
  * La même règle pour le signal « Lien pas encore envoyé », « Lien jamais ouvert » et le choix du SMS avec le lien ;
  * c'est aussi le texte, pas le code, qui passe la main au client après un SMS copié (`sms/catalogue › porteLienEspace`).
  */
-export async function liensEnvoyes(contient = "/e/"): Promise<{ texte: string; createdAt: Date }[]> {
+export async function liensEnvoyes(contient: string | readonly string[] = "/e/"): Promise<{ texte: string; createdAt: Date }[]> {
+  // Relecture de la partie A : plusieurs motifs (les codes des espaces lus) bornent la lecture à ces espaces.
+  const motifs = typeof contient === "string" ? [contient] : [...new Set(contient)];
+  if (motifs.length === 0) return [];
+  const texte = motifs.length === 1 ? { texte: { contains: motifs[0] } } : { OR: motifs.map((m) => ({ texte: { contains: m } })) };
+  const contenu = motifs.length === 1 ? { contenu: { contains: motifs[0] } } : { OR: motifs.map((m) => ({ contenu: { contains: m } })) };
   const [sms, mails, evenements] = await Promise.all([
-    prisma.sms.findMany({ where: { sens: "SORTANT", texte: { contains: contient }, statut: { not: "ECHEC" } }, select: { texte: true, createdAt: true } }),
-    prisma.envoiMail.findMany({ where: { texte: { contains: contient }, statut: { in: ["A_ENVOYER", "ENVOYE"] } }, select: { texte: true, createdAt: true } }),
-    prisma.dossierEvenement.findMany({ where: { type: { in: TYPES_LIEN_COMMUNIQUE }, contenu: { contains: contient } }, select: { contenu: true, createdAt: true, survenuLe: true } }),
+    prisma.sms.findMany({ where: { sens: "SORTANT", ...texte, statut: { not: "ECHEC" } }, select: { texte: true, createdAt: true } }),
+    prisma.envoiMail.findMany({ where: { ...texte, statut: { in: ["A_ENVOYER", "ENVOYE"] } }, select: { texte: true, createdAt: true } }),
+    prisma.dossierEvenement.findMany({ where: { type: { in: TYPES_LIEN_COMMUNIQUE }, ...contenu }, select: { contenu: true, createdAt: true, survenuLe: true } }),
   ]);
   const communiques = evenements.map((e) => ({ texte: e.contenu, createdAt: e.survenuLe ?? e.createdAt }));
   return [...sms, ...mails, ...communiques].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -120,13 +128,18 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
   });
   const vivants = espaces.filter((e) => !e.dossier.archiveLe);
   const dossierIds = vivants.map((e) => e.dossierId);
-  const [activites, envoisDuLien, avecSimulation] = await Promise.all([
+  // Relecture de la partie A : les envois du lien ne se lisent que pour ces espaces (`/e/<code>-` : le code du client et
+  // celui du projet, toutes versions), sauf pour une longue liste, où le motif commun coûte moins qu'une longue suite de OU.
+  const motifs = [...new Set(vivants.flatMap((e) => [`/e/${(e.permanent ?? e).code}-`, `/e/${e.code}-`]))];
+  const [activites, envoisDuLien, avecSimulation, rendus] = await Promise.all([
     dossierIds.length
       ? prisma.dossierEvenement.groupBy({ by: ["dossierId"], where: { dossierId: { in: dossierIds }, direction: "ENTRANT", type: { startsWith: "ESPACE_" } }, _max: { createdAt: true } })
       : Promise.resolve([] as { dossierId: string; _max: { createdAt: Date | null } }[]),
-    liensEnvoyes(),
+    motifs.length > MOTIFS_LIEN_MAX ? liensEnvoyes() : liensEnvoyes(motifs),
     // La règle de la relance photos : un client qui a fait une simulation n'est jamais « en attente de ses photos ».
     dossiersAvecSimulation(vivants.map((e) => e.dossier)),
+    // Les rendus du site rangés dans les photos, d'une requête pour toute la liste (une par dossier auparavant).
+    rendusDesDossiers(dossierIds),
   ]);
   const activiteParDossier = new Map(activites.map((a) => [a.dossierId, a._max.createdAt]));
 
@@ -138,7 +151,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
     const jeton = jetonEspace(signable);
     const envoi = envoisDuLien.find((s) => s.texte.includes(`/e/${jeton}`)) ?? null;
     const ancienEnvoi = envoi ? null : (envoisDuLien.find((s) => s.texte.includes(`/e/${espace.code}-`)) ?? null);
-    const photos = (await photosDuClient(d.id, d.photos)).length;
+    const photos = (await photosDuClient(d.id, d.photos, rendus.get(d.id))).length;
     const vivantes = espace.simulations.filter((s) => !s.archiveLe);
     const publiees = vivantes.filter((s) => s.statut === "PUBLIEE");
     const crm = publiees.filter((s) => s.source !== "SITE" && s.source !== "CLIENT").length;

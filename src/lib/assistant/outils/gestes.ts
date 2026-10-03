@@ -350,7 +350,7 @@ export const outilGesteEspace = definirOutil({
     const { ids } = c;
     const nom = ids.nom;
     // Mission 18 (A1) : sans dossier, la fiche du client (les gestes de son espace y sont), sinon le filtre « Espaces » de Dossiers.
-    const liensDossier = ids.dossierId ? [lien("Dossier", `/dossiers?dossier=${ids.dossierId}`)] : ids.clientId ? [lien("Fiche client", `/clients/${ids.clientId}`)] : [lien("Espaces clients", ADRESSE_ESPACES)];
+    const liensDossier = ids.dossierId ? [lien("Dossier", `/dossiers?dossier=${ids.dossierId}`)] : ids.clientId ? [lien("Fiche client", `/clients/${ids.clientId}`)] : [lien("Dossiers › Espaces", ADRESSE_ESPACES)];
     const geste = async (g: GesteEspace, texte: string): Promise<ResultatOutil> => {
       await gesteDeLucas(exigerDossier(ids), g);
       return { texte, liens: liensDossier };

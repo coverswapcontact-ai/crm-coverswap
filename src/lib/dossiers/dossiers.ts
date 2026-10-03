@@ -39,7 +39,7 @@ import {
   verifierPhoto,
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
-import { espaceDansLeFiltre, type CompteursEspaces, type EspaceResume, type FiltreEspace } from "@/lib/espace/suivi-types";
+import { comparerEspaces, espaceDansLeFiltre, type CompteursEspaces, type EspaceResume, type FiltreEspace, type TriEspace } from "@/lib/espace/suivi-types";
 import type { EtapeEspace } from "@/lib/espace/etapes";
 import { CATEGORIES_CLIENT } from "@/lib/clients/constantes";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
@@ -334,6 +334,8 @@ export type FiltresDossiers = {
   espace?: FiltreEspace;
   /** Avec `espace` : l'étape de l'espace (« Devis à signer »…). */
   etapeEspace?: EtapeEspace;
+  /** Avec `espace` : le tri de l'ancien onglet (à moi d'abord par défaut), fait ici puisque la page est découpée ici. */
+  triEspace?: TriEspace;
 };
 export type CompteursDossiers = { enCours: number; aFaire: number; enRetard: number; sorties: number; inactifs: number };
 export type PageDossiers = {
@@ -418,7 +420,8 @@ const avecEspaces = (resumes: DossierResume[], espaces: ReadonlyMap<string, Espa
 /**
  * Mission 18 (A1) — le filtre « Espaces » : qui a la main, signaux et étape de l'espace se calculent (espace/suivi.ts),
  * ils ne se lisent pas en base. Le filtre est donc exact sur TOUS les dossiers qui ont un espace (recherche comprise),
- * puis la page est découpée ici, à moi d'abord, puis par dernière activité du client (l'ordre de l'ancien onglet).
+ * puis la page est découpée ici, dans l'ordre de l'ancien onglet (`triEspace` : à moi d'abord puis dernière activité,
+ * dernière activité, lien le plus récent). L'écran garde cet ordre (relecture de la partie A).
  */
 async function pageDesEspaces(
   filtre: FiltreEspace,
@@ -430,10 +433,8 @@ async function pageDesEspaces(
   const espaces = await espacesDe(candidats.map((candidat) => candidat.id));
   const dansLEtape = [...espaces.entries()].filter(([, espace]) => !filtres.etapeEspace || espace.etape === filtres.etapeEspace);
   const nombre = (f: FiltreEspace) => dansLEtape.filter(([, espace]) => espaceDansLeFiltre(espace, f)).length;
-  const poids = (espace: EspaceResume) => (espace.attente.qui === "MOI" ? 0 : espace.attente.qui === "CLIENT" ? 1 : 2);
-  const retenus = dansLEtape
-    .filter(([, espace]) => espaceDansLeFiltre(espace, filtre))
-    .sort(([, a], [, b]) => poids(a) - poids(b) || (b.derniereActivite ?? b.creeLe).localeCompare(a.derniereActivite ?? a.creeLe));
+  const ordre = comparerEspaces(filtres.triEspace);
+  const retenus = dansLEtape.filter(([, espace]) => espaceDansLeFiltre(espace, filtre)).sort(([, a], [, b]) => ordre(a, b));
   const ids = retenus.slice(skip, skip + take).map(([id]) => id);
   const lus = ids.length ? await prisma.dossier.findMany({ where: { id: { in: ids } }, include: { documents: DERNIER_DEVIS } }) : [];
   const parId = new Map(lus.map((dossier) => [dossier.id, dossier]));

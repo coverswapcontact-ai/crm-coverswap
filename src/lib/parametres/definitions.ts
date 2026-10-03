@@ -285,7 +285,7 @@ export const DEFINITIONS_PARAMETRES = {
   },
   SIMULATEUR_ESPACE_GRATUITES: {
     libelle: "Simulations offertes à chaque client (espace client)",
-    aide: "Nombre de simulations qu'un client peut créer lui-même dans son espace (chacune coûte environ 0,21 à 0,34 $ de crédit OpenAI). Sans valeur saisie : 5. Les simulations qu'il a faites sur coverswap.fr avant de recevoir son lien comptent aussi. Au-delà, il vous en demande d'autres, que vous accordez depuis Espaces clients.",
+    aide: "Nombre de simulations qu'un client peut créer lui-même dans son espace (chacune coûte environ 0,21 à 0,34 $ de crédit OpenAI). Sans valeur saisie : 5. Les simulations qu'il a faites sur coverswap.fr avant de recevoir son lien comptent aussi. Au-delà, il vous en demande d'autres, que vous accordez depuis le bloc Espace du dossier.",
     nature: "choix",
     options: [
       { valeur: "0", libelle: "0 (simulateur fermé)" },

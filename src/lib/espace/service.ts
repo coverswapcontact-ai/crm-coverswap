@@ -149,24 +149,31 @@ export type EtatEspace = {
 
 const CLIENT_INCONNU = /^(inconnu|client)$/i;
 
-/** Photos de chantier qui sont des rendus du site (copies) : ce ne sont pas des photos du client. */
-async function rendusDansLesPhotos(dossierId: string): Promise<Set<string>> {
-  const simulations = await prisma.simulation.findMany({ where: { dossierId, photosDossier: { not: null } }, select: { photosDossier: true } });
-  const ids = new Set<string>();
+/**
+ * Photos de chantier qui sont des rendus du site (copies) : ce ne sont pas des photos du client. Relecture de la
+ * partie A : lues d'une seule requête pour toute une liste de dossiers (le suivi des espaces en lisait une par dossier).
+ */
+export async function rendusDesDossiers(dossierIds: readonly string[]): Promise<Map<string, Set<string>>> {
+  const parDossier = new Map<string, Set<string>>(dossierIds.map((id) => [id, new Set<string>()]));
+  if (dossierIds.length === 0) return parDossier;
+  const simulations = await prisma.simulation.findMany({ where: { dossierId: { in: [...dossierIds] }, photosDossier: { not: null } }, select: { dossierId: true, photosDossier: true } });
   for (const s of simulations) {
     try {
       const { rendu } = JSON.parse(s.photosDossier!) as { rendu?: string | null };
-      if (rendu) ids.add(rendu);
+      if (rendu && s.dossierId) parDossier.get(s.dossierId)?.add(rendu);
     } catch {
       // ignoré
     }
   }
-  return ids;
+  return parDossier;
 }
 
-/** Photos « avant » du client dans son dossier (ni rendu du site, ni photo après chantier). */
-export async function photosDuClient(dossierId: string, photosJson: string): Promise<{ chemin: string; id: string }[]> {
-  const rendus = await rendusDansLesPhotos(dossierId);
+/**
+ * Photos « avant » du client dans son dossier (ni rendu du site, ni photo après chantier). `rendus` : déjà lus pour
+ * toute une liste (`rendusDesDossiers`), sinon lus ici.
+ */
+export async function photosDuClient(dossierId: string, photosJson: string, rendusLus?: ReadonlySet<string>): Promise<{ chemin: string; id: string }[]> {
+  const rendus = rendusLus ?? (await rendusDesDossiers([dossierId])).get(dossierId) ?? new Set<string>();
   return lirePhotos(photosJson)
     .filter((chemin) => !estPhotoApres(chemin))
     .map((chemin) => ({ chemin, id: idPhoto(chemin) }))

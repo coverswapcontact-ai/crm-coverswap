@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import type { PageDossiers } from "@/lib/dossiers/dossiers";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
 import type { EtapeEspace } from "@/lib/espace/etapes";
-import type { FiltreEspace } from "@/lib/espace/suivi-types";
+import type { FiltreEspace, TriEspace } from "@/lib/espace/suivi-types";
 import { cn } from "@/lib/utils";
 import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAttente";
 import { DossiersArchives } from "./ArchivageDossier";
@@ -117,9 +117,12 @@ export default function DossiersPilotage({
   const [filtreEspace, setFiltreEspace] = useState<FiltreEspace | null>(espaceInitial?.filtre ?? null);
   const [etapeEspace, setEtapeEspace] = useState<EtapeEspace | null>(espaceInitial?.etape ?? null);
   const [compteursEspaces, setCompteursEspaces] = useState(initial.espaces);
+  // Relecture de la partie A : le tri de l'ancien onglet (à moi d'abord, dernière activité, lien le plus récent), fait
+  // par le serveur qui découpe les pages ; sous le filtre, l'écran garde cet ordre.
+  const [triEspace, setTriEspace] = useState<TriEspace>("MAIN");
   const espaceActif = filtreEspace !== null;
   // Mission 13 (lot 6) : une page à la fois ; changer un filtre ramène à la première page (la clé des filtres change).
-  const cleFiltres = `${filtreAFaire}|${afficherSorties}|${recherche}|${masquerInactifs}|${filtreEspace}|${etapeEspace}`;
+  const cleFiltres = `${filtreAFaire}|${afficherSorties}|${recherche}|${masquerInactifs}|${filtreEspace}|${etapeEspace}|${triEspace}`;
   const [pageDemandee, setPageDemandee] = useState({ page: initial.page, cle: cleFiltres });
   const page = pageDemandee.cle === cleFiltres ? pageDemandee.page : 1;
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
@@ -170,7 +173,7 @@ export default function DossiersPilotage({
     );
 
   // Le serveur ne rend qu'une page, filtrée là-bas ; les filtres vivent dans une référence pour que la fonction reste stable.
-  const filtres = useRef({ page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace });
+  const filtres = useRef({ page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace });
   const rafraichir = useCallback(async () => {
     const f = filtres.current;
     try {
@@ -181,6 +184,7 @@ export default function DossiersPilotage({
         ...(f.masquerInactifs ? { inactifs: "0" } : {}),
         ...(f.filtreEspace ? { espace: f.filtreEspace } : {}),
         ...(f.filtreEspace && f.etapeEspace ? { etapeEspace: f.etapeEspace } : {}),
+        ...(f.filtreEspace && f.triEspace !== "MAIN" ? { triEspace: f.triEspace } : {}),
       });
       const reponse = await appelApi<PageDossiers>(`/api/dossiers?${parametres}`);
       setDossiers(reponse.dossiers);
@@ -194,16 +198,18 @@ export default function DossiersPilotage({
 
   const premierRendu = useRef(true);
   useEffect(() => {
-    filtres.current = { page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace };
+    filtres.current = { page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace };
     if (premierRendu.current) {
       premierRendu.current = false;
       // La première page est arrivée avec l'écran (filtre « Espaces » de l'adresse compris) : on ne la redemande que
       // si l'appareil masque les inactifs (sans effet sous le filtre « Espaces »).
       if (page === initial.page && !filtreAFaire && !afficherSorties && !recherche && (filtreEspace !== null || !masquerInactifs)) return;
     }
-    const minuterie = window.setTimeout(() => void rafraichir(), recherche ? 250 : 0);
+    // Relecture de la partie A : sous le filtre « Espaces », le serveur recalcule l'état de tous les espaces à chaque
+    // requête ; la recherche attend donc la fin de la saisie (600 ms) plutôt que chaque frappe.
+    const minuterie = window.setTimeout(() => void rafraichir(), recherche ? (filtreEspace ? 600 : 250) : 0);
     return () => window.clearTimeout(minuterie);
-  }, [page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, rafraichir, initial.page]);
+  }, [page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace, rafraichir, initial.page]);
 
   const mettreAJour = useCallback((detail: DossierDetail) => {
     setDossiers((liste) => {
@@ -431,7 +437,7 @@ export default function DossiersPilotage({
           <span className="sr-only sm:not-sr-only">Légende</span>
         </Bouton>
 
-        {vue === "liste" ? (
+        {vue === "liste" && !espaceActif ? (
           <label className="flex w-full items-center gap-2 text-[12px] text-[#9CA3AF] md:hidden">
             Trier par
             <select
@@ -449,7 +455,7 @@ export default function DossiersPilotage({
         ) : null}
       </div>
 
-      {filtreEspace ? <FiltreEspaces filtre={filtreEspace} etape={etapeEspace} compteurs={compteursEspaces} onFiltre={setFiltreEspace} onEtape={setEtapeEspace} /> : null}
+      {filtreEspace ? <FiltreEspaces filtre={filtreEspace} etape={etapeEspace} tri={triEspace} compteurs={compteursEspaces} onFiltre={setFiltreEspace} onEtape={setEtapeEspace} onTri={setTriEspace} /> : null}
 
       {legendeOuverte ? <Legende onFermer={() => setLegendeOuverte(false)} /> : null}
 
@@ -483,11 +489,12 @@ export default function DossiersPilotage({
             dossiers={visibles}
             afficherSorties={afficherSorties || espaceActif}
             masquerColonnesVides={filtreAFaire || espaceActif}
+            ordreServeur={espaceActif}
             maintenant={maintenant}
             onOuvrir={ouvrirDossier}
           />
         ) : (
-          <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
+          <VueListe dossiers={visibles} tri={espaceActif ? null : tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
         )}
         <Pagination total={total} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />
       </main>

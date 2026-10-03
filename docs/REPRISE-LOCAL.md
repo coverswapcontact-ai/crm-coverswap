@@ -612,3 +612,79 @@ Tests : 1 331 → 1 341 verts (10 ajoutés).
 Reste :
 - Partie A terminée (A1 à A6). Rien à reconnecter pour ce lot ; le rappel de reconnexion des lots A1, A2 et A4 tient
   toujours.
+
+### Mission 18, partie A — corrections de la relecture
+
+Deux relecteurs ont relu A1 à A6 (`f77a149..c8357f6`) : dix constats, tous vérifiés dans le code, tous réels et tous
+corrigés (le n° 4 par des requêtes groupées, sans cache). Aucun n'est faux.
+
+Livré (03/10, branche `mission-18`, pas de push), constat par constat :
+1. **Une photo déposée par Lucas ouvrait le dossier** (important, réel). Une PhotoLead d'origine `DEPOT_CRM` (lien de
+   dépôt, `ajouter_fichier`) n'ouvre plus rien. Elle n'est comptée ni par `faitsDuSite` pour le motif
+   (`seulementDuContact`), ni par la branche « sans dossier » du filet (`PHOTO_DU_CONTACT`). Elle se range toujours
+   dans le dossier vivant, comme le dit le message du dépôt.
+2. **Le filtre « Espaces » avait perdu son tri** (mineur, réel). Le tri revient : « À moi d'abord », « Dernière
+   activité », « Lien le plus récent » (`TRIS_ESPACE`, `comparerEspaces` dans `espace/suivi-types.ts`). Le serveur
+   le fait (`FiltresDossiers.triEspace`, `GET /api/dossiers?triEspace=`), car c'est lui qui découpe les pages. Le
+   sélecteur est dans `FiltreEspaces`.
+3. **Des textes renvoyaient à l'écran « Espaces clients » retiré** (mineur, réel). Corrigés :
+   - la notification « projet de plus » renvoie à la fiche client, seul endroit où ce geste existe ;
+   - la notification « autres simulations » et l'aide du paramètre renvoient au bloc Espace du dossier ;
+   - la confirmation d'archivage dit « sort de Dossiers (filtre « Espaces » compris) » ;
+   - en plus des trois textes signalés, les liens de l'assistant s'intitulent « Dossiers › Espaces » (même adresse).
+4. **Coût du filtre « Espaces »** (important, réel). Les requêtes sont groupées :
+   - les rendus rangés dans les photos se lisent en une seule requête pour toute la liste (`rendusDesDossiers`), au
+     lieu d'une par dossier ; `photosDuClient` reçoit le résultat ;
+   - `liensEnvoyes` accepte une liste de motifs : `listerEspaces` ne lit que les envois des espaces chargés
+     (`/e/<code>-` du client et du projet). Au-delà de 120 motifs, il reprend le motif commun `/e/`, moins cher
+     qu'une longue suite de OU. La liste par défaut (50 dossiers) ne parcourt donc plus tout l'historique ;
+   - sous le filtre, la recherche attend 600 ms après la dernière frappe (250 ms ailleurs).
+5. **La demande d'avis pouvait ouvrir un espace** (mineur, réel). `RELANCE_AVIS` lit l'espace existant du dossier.
+   S'il est absent, archivé, désactivé ou sans lien, l'action renvoie un refus 409 et rien n'est écrit. Cela vaut
+   aussi pour « noter_sms » DEMANDE_AVIS, qui passe par `proposerSms`. Le commentaire est maintenant exact.
+6. **Un dossier archivé par Lucas se rouvrait sur un fait ancien** (mineur, réel). Sans dossier vivant,
+   `ouvrirDossierAutomatique` ne compte que les faits postérieurs au dernier archivage du lead
+   (`max(DEBUT_OUVERTURE_AUTO, archiveLe)`). Une nouvelle simulation ou une nouvelle demande rouvre le dossier ; un
+   fait déjà connu, non.
+7. **Une photo introuvable revenait toutes les 15 minutes** (mineur, réel). Comme une simulation sans images, une
+   photo absente du volume (ou vide) est marquée « tentée » : `rangeeLe` est posé, sans dossier. Le filet et
+   `rangerImagesDuLead` l'ignorent ensuite (`PHOTO_A_RANGER`). Une erreur d'écriture (volume plein) n'est pas
+   marquée : elle est reprise au passage suivant, ce qui est voulu.
+8. **Ordre affiché ≠ ordre des pages** (mineur, réel ; même cause que le n° 2). Sous le filtre, la liste ne retrie
+   plus. `VueListe` reçoit `tri={null}` : les en-têtes deviennent de simples titres et le « Trier par » du téléphone
+   est masqué. Le kanban garde aussi l'ordre du serveur dans chaque colonne (`ordreServeur`).
+9. **Accessibilité** (mineur, réel). Les pastilles du filtre sont des boutons `aria-pressed` dans un
+   `role="group"`, et non plus des onglets sans panneau. L'icône de l'espace a maintenant un `libelle` :
+   - « aucun » (`aria-hidden`) dans la ligne courte des cartes et du téléphone, où le texte visible suffit ;
+   - « court » (« Espace : signal ou étape ») sur la carte compacte, où l'icône est seule ;
+   - « detaille » dans la cellule du tableau.
+10. **Course entre deux ouvertures** (mineur, réel, reproduit). Sur l'ancien code, quatre appels simultanés ouvraient
+    quatre dossiers. Une file de promesses par contact (`unParContact`) sérialise maintenant `ouvrirDossierDuLead`
+    et toute la décision d'`ouvrirDossierAutomatique` : un seul processus sert le CRM, la file suffit. Le contrôle
+    `LEAD_A_PLUSIEURS_DOSSIERS` reste en filet.
+
+Décisions prises seul (solution la plus simple) :
+- « Lien le plus récent » trie par date d'ouverture du projet dans l'espace (`creeLe`). L'ancien onglet triait les
+  clients par `lienEmisLe` ; la colonne travaille par dossier.
+- Le tri des espaces n'entre pas dans l'adresse (`?espace=` seulement). Il revient à « À moi d'abord » à chaque
+  ouverture, comme dans l'ancien onglet.
+- Pas de cache du calcul des espaces : les requêtes groupées et le délai de saisie suffisent pour le volume actuel. Un
+  cache de quelques secondes reste possible si l'écran rame.
+- L'outil MCP `lister` ne reçoit pas le tri : sa description et son schéma ne changent pas, et son empreinte non
+  plus. Rien à reconnecter.
+- Une photo introuvable est seulement journalisée (`console.warn`), sans événement sur le dossier : la photo n'en a
+  jamais fait partie.
+
+Tests : 1 341 → 1 353 verts (12 ajoutés).
+- `dossiers/depuis-lead.test.ts`, 4 tests ajoutés : photo DEPOT_CRM sur un lead Meta (ni webhook ni filet, puis
+  rangée dans le dossier vivant), dossier archivé (fait connu / fait nouveau), photo introuvable tentée une fois,
+  quatre ouvertures simultanées. Les quatre échouent sur l'ancien code (vérifié ; la course y ouvrait 4 dossiers).
+- Nouveau `src/lib/base/mission-18-relecture-a.test.ts`, 8 tests : demande d'avis sans espace ou désactivée (refus,
+  rien d'écrit), trois tris du serveur et de l'API, ordre du serveur gardé par l'écran, `liensEnvoyes` borné,
+  `rendusDesDossiers` équivalent à l'ancienne lecture, textes sans « Espaces clients », boutons `aria-pressed`.
+- Aucun test existant n'a eu à changer.
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres.
+
+Reste :
+- Rien pour Lucas sur ce lot.
+- Si le filtre « Espaces » rame un jour avec beaucoup d'espaces, poser un cache court sur `espacesDesDossiers`.

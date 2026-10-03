@@ -53,7 +53,7 @@ export function ArchivageDossier({ detail, onArchive }: { detail: DossierDetail;
         }
       >
         <ul className="mb-4 list-disc space-y-1 pl-4 text-[13px] leading-relaxed text-[#D1D5DB]">
-          <li>Le dossier sort de Dossiers et d&apos;Espaces clients.</li>
+          <li>Le dossier sort de Dossiers (filtre « Espaces » compris).</li>
           {detail.origine?.type === "LEAD" ? <li>Son lead revient dans Leads (« À appeler » ou « À rappeler »), avec ses simulations et ses photos.</li> : null}
           <li>Le lien de son espace client est désactivé.</li>
         </ul>

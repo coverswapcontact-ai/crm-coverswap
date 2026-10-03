@@ -115,6 +115,25 @@ export const FILTRES_ESPACE = ["MOI", "CLIENT", "SIGNAUX", "TOUS", "DESACTIVES"]
 export type FiltreEspace = (typeof FILTRES_ESPACE)[number];
 export const LIBELLES_FILTRE_ESPACE: Record<FiltreEspace, string> = { MOI: "À moi", CLIENT: "Chez le client", SIGNAUX: "Signaux", TOUS: "Tous", DESACTIVES: "Désactivés" };
 export const estFiltreEspace = (valeur: unknown): valeur is FiltreEspace => typeof valeur === "string" && (FILTRES_ESPACE as readonly string[]).includes(valeur);
+/**
+ * Relecture de la partie A : le tri de l'ancien onglet, rendu au filtre « Espaces » et fait par le serveur (qui découpe
+ * les pages) — à moi d'abord (puis dernière activité), dernière activité du client, lien le plus récent (projet ouvert
+ * dans l'espace le plus récemment).
+ */
+export const TRIS_ESPACE = ["MAIN", "ACTIVITE", "CREATION"] as const;
+export type TriEspace = (typeof TRIS_ESPACE)[number];
+export const LIBELLES_TRI_ESPACE: Record<TriEspace, string> = { MAIN: "À moi d'abord", ACTIVITE: "Dernière activité", CREATION: "Lien le plus récent" };
+export const estTriEspace = (valeur: unknown): valeur is TriEspace => typeof valeur === "string" && (TRIS_ESPACE as readonly string[]).includes(valeur);
+
+/** L'ordre du filtre « Espaces » pour ce tri (la page est découpée dans cet ordre, l'écran le garde). */
+export function comparerEspaces(tri: TriEspace = "MAIN"): (a: EspaceResume, b: EspaceResume) => number {
+  const poids = (espace: EspaceResume) => (espace.attente.qui === "MOI" ? 0 : espace.attente.qui === "CLIENT" ? 1 : 2);
+  const activite = (a: EspaceResume, b: EspaceResume) => (b.derniereActivite ?? b.creeLe).localeCompare(a.derniereActivite ?? a.creeLe);
+  if (tri === "ACTIVITE") return activite;
+  if (tri === "CREATION") return (a, b) => b.creeLe.localeCompare(a.creeLe);
+  return (a, b) => poids(a) - poids(b) || activite(a, b);
+}
+
 /** Les compteurs des pastilles, sur tous les espaces (pas seulement la page). */
 export type CompteursEspaces = Record<FiltreEspace, number>;
 

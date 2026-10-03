@@ -209,3 +209,21 @@ retouche faite a son original dans `~/coverswap-photos/serie-2/originaux/` et n'
   faites portent `faite` dans `retouches-serie-2.json` (le script ne les relance pas).
 - **Coût final de la série 2 : 10,10 $ dans GenerationImage (167 appels, aucun échec) + 0,25 $ d'appel interrompu
   = 10,35 $** sur 10,40 $.
+
+# Mission 21 (03/10/2026) — la mission 18 d'abord (phase A), puis le site 3.0 « La Revue » (phases B à G)
+
+Énoncé : message de Lucas du 03/10, copie dans `~/coverswap-photos/missions/prompt-mission-21-site-3-0.md` ; maquette
+`~/coverswap-photos/missions/maquette-11/`. Travail local sur les deux dépôts, fusion dans `main` et push par l'agent
+(pas de PR) ; aucun arrêt ; décisions simples notées ici. Branche `mission-18` (les deux dépôts) fusionnée à la fin
+de la phase A, CRM d'abord ; puis branche `site-3-0` (site) fusionnée à la fin de la phase G.
+
+## Phase A, étape 1 : ce qui existait (03/10)
+
+- `git status` : rien hors fins de ligne CRLF (10 fichiers du CRM, 1 du site) et la garde locale `src/proxy.ts`
+  (jamais commitée). `git stash list` vide dans les deux dépôts.
+- Branches : `main` et la branche cloud `origin/claude/beautiful-goldberg-lu7keb`, **entièrement contenue dans `main`**
+  (mission 17 fusionnée ; aucun commit de la branche absent de `main`, dans les deux dépôts).
+- REPRISE-MISSION : « Mission 18 — à démarrer » ; aucun commit, aucune note de la mission 18 → **départ de zéro**.
+- Base de départ : CRM 1 283 tests verts, site 284 tests verts, lint propre.
+- Plan d'implémentation (cartographie par 8 lecteurs + synthèse) : lots A1-A6, B0-B13, mise en route ; décisions
+  « solution la plus simple » listées en fin de phase.

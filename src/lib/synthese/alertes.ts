@@ -3,6 +3,7 @@ import { PLAFOND_ECRITURES_PAR_HEURE } from "@/lib/assistant/execution";
 import { lireDelaiRelance } from "@/lib/relances/service";
 import { jourParis } from "@/lib/dossiers/dates";
 import { formatMontant } from "@/lib/dossiers/montants";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
 import type { Alerte } from "./types";
 
@@ -129,13 +130,13 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
   }
   const echecs = await prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } });
   if (echecs > 0) {
-    alertes.push({ code: "TACHES_EN_ECHEC", gravite: "ATTENTION", titre: `${echecs} tâche${echecs > 1 ? "s" : ""} de fond en échec`, detail: "Un envoi, une synchronisation ou une reprise n'a pas abouti.", lien: "/taches-de-fond" });
+    alertes.push({ code: "TACHES_EN_ECHEC", gravite: "ATTENTION", titre: `${echecs} tâche${echecs > 1 ? "s" : ""} de fond en échec`, detail: "Un envoi, une synchronisation ou une reprise n'a pas abouti.", lien: ADRESSE_SYSTEME });
   }
 
   // Mission 13 (lot 2) : l'assistant a atteint son plafond d'écritures (60 par heure) dans l'heure écoulée.
   const refusPlafond = await prisma.appelOutil.count({ where: { statut: "REFUSE", erreur: { startsWith: "Plafond" }, createdAt: { gte: new Date(maintenant.getTime() - 3_600_000) } } });
   if (refusPlafond > 0) {
-    alertes.push({ code: "PLAFOND_ASSISTANT", gravite: "ATTENTION", titre: "Assistant : plafond d'écritures atteint", detail: `${refusPlafond} ${refusPlafond > 1 ? "actions refusées" : "action refusée"} dans l'heure : plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude. Vérifier le journal (Tâches de fond → Assistant).`, lien: "/taches-de-fond" });
+    alertes.push({ code: "PLAFOND_ASSISTANT", gravite: "ATTENTION", titre: "Assistant : plafond d'écritures atteint", detail: `${refusPlafond} ${refusPlafond > 1 ? "actions refusées" : "action refusée"} dans l'heure : plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude. Vérifier le journal (Paramètres › Système → Sessions de l'assistant).`, lien: ADRESSE_SYSTEME });
   }
 
   // Disque du volume de la base (mission 10) : 70 % avertit, 85 % alerte.
@@ -144,8 +145,8 @@ export async function calculerAlertes(maintenant: Date = new Date(), options: { 
     const fichier = fichierDeLaBase();
     if (fichier) {
       const c = capaciteVolume(fichier.replace(/[\\/][^\\/]+$/, ""));
-      if (c.pourcentUtilise >= SEUILS_ALERTE.disqueUrgentPct) alertes.push({ code: "DISQUE_PLEIN", gravite: "URGENT", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : agrandir le volume ou faire de la place (photos, sauvegardes).`, lien: "/taches-de-fond" });
-      else if (c.pourcentUtilise >= SEUILS_ALERTE.disqueAttentionPct) alertes.push({ code: "DISQUE_70", gravite: "ATTENTION", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : à surveiller.`, lien: "/taches-de-fond" });
+      if (c.pourcentUtilise >= SEUILS_ALERTE.disqueUrgentPct) alertes.push({ code: "DISQUE_PLEIN", gravite: "URGENT", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : agrandir le volume ou faire de la place (photos, sauvegardes).`, lien: ADRESSE_SYSTEME });
+      else if (c.pourcentUtilise >= SEUILS_ALERTE.disqueAttentionPct) alertes.push({ code: "DISQUE_70", gravite: "ATTENTION", titre: `Volume rempli à ${c.pourcentUtilise} %`, detail: `${Math.round(c.libre / 1_048_576)} Mo libres sur ${Math.round(c.total / 1_048_576)} : à surveiller.`, lien: ADRESSE_SYSTEME });
     }
   } catch {
     // volume illisible (base distante) : pas d'alerte disque

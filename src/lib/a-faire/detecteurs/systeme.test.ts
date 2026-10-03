@@ -193,7 +193,7 @@ describe("détecteur SYSTEME : chaque tâche détectée, puis cochée par le CRM
     await cocheeParLeCrm(cle, "solde OpenAI noté : 20,00 $ le 30/09");
   });
 
-  test("tâche de fond en échec définitif → « Relancer 1 tâche de fond en échec » (4, /taches-de-fond) ; relancée → cochée", async () => {
+  test("tâche de fond en échec définitif → « Relancer 1 tâche de fond en échec » (4, Paramètres › Système) ; relancée → cochée", async () => {
     const echec = await uneTacheDeFond("ESSAI_ECHEC", { statut: "ECHEC_DEFINITIF", derniereErreur: "boom", termineLe: plus(MERCREDI, -2 * H) });
     await passe("SYSTEME");
     const cle = "SYSTEME:taches-de-fond";
@@ -201,7 +201,8 @@ describe("détecteur SYSTEME : chaque tâche détectée, puis cochée par le CRM
     assert.deepEqual([ligne.statut, ligne.titre, ligne.niveau], ["A_FAIRE", "Relancer 1 tâche de fond en échec", 4]);
     assert.equal(ligne.raison, "1 échec définitif depuis le 30/09");
     const raccourci = await raccourciDe(cle);
-    assert.equal(raccourci.href, "/taches-de-fond");
+    // Mission 18 (A5) : l'écran Tâches de fond est l'onglet Système de Paramètres ; la clé de la tâche ne change pas.
+    assert.equal(raccourci.href, "/parametres?section=systeme");
     assert.ok(String(raccourci.marche).length > 20, "la marche à suivre");
     await file.relancerTache(echec.id);
     await passe("SYSTEME");

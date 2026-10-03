@@ -5,6 +5,7 @@ import { alerter } from "@/lib/alertes/canaux";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourParis } from "@/lib/dossiers/dates";
 import { avecActeur } from "@/lib/journal/contexte";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import type { ContexteOutil, DefinitionOutil, NiveauOutil, ResultatOutil } from "./definition";
 
 /**
@@ -31,7 +32,7 @@ export const schemaCommun = z.object({
 
 export type Session = { id: string; utilisateur: string };
 
-/** Une session par jeton et par jour : c'est elle que l'écran Tâches de fond montre. */
+/** Une session par jeton et par jour : c'est elle que Paramètres › Système montre. */
 export async function ouvrirSession(entree: { jetonId: string | null; clientNom: string | null; utilisateur: string; maintenant?: Date }): Promise<Session> {
   const maintenant = entree.maintenant ?? new Date();
   const jour = jourParis(maintenant);
@@ -79,7 +80,7 @@ async function refuserAuPlafond(maintenant: Date): Promise<never> {
   const deja = await prisma.appelOutil.count({ where: { statut: "REFUSE", erreur: { startsWith: "Plafond" }, createdAt: { gte: new Date(maintenant.getTime() - 3_600_000) } } });
   if (deja === 0) {
     await alerter(
-      { titre: "Assistant : plafond d'écritures atteint", texte: `Plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude : les suivantes sont refusées jusqu'à la prochaine heure. Vérifier le journal (Tâches de fond → Assistant).`, lien: "/taches-de-fond", urgence: 4 },
+      { titre: "Assistant : plafond d'écritures atteint", texte: `Plus de ${PLAFOND_ECRITURES_PAR_HEURE} écritures en une heure depuis l'application Claude : les suivantes sont refusées jusqu'à la prochaine heure. Vérifier le journal (Paramètres › Système → Sessions de l'assistant).`, lien: ADRESSE_SYSTEME, urgence: 4 },
       { origine: "assistant-plafond" }
     ).catch(() => undefined);
   }
@@ -155,7 +156,7 @@ export async function executerOutil<E extends Record<string, unknown>>(definitio
   }
 }
 
-/* ── Lecture pour l'écran Tâches de fond ────────────────────────────── */
+/* ── Lecture pour Paramètres › Système ────────────────────────────── */
 
 export type SessionVue = { id: string; jour: string; clientNom: string | null; dernierAppelLe: string | null; appels: number; ecritures: number; derniers: { le: string; outil: string; niveau: string; statut: string; commande: string | null; resume: string | null; erreur: string | null; dureeMs: number }[] };
 

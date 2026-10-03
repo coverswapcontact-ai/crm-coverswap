@@ -31,6 +31,7 @@ import { coutPar } from "@/lib/analytique/calculs";
 import { nombreDeJours, resoudrePeriode as resoudrePeriodeAnalytique } from "@/lib/analytique/periode";
 import { LIBELLES_VERDICT } from "@/lib/analytique/types";
 import { definirOutil, format, lien, type LienOutil } from "../definition";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { chercherContacts, trouverUnSeul, type Candidat } from "../recherche";
 import { titreDossier } from "@/lib/commun/format";
 import { pluriel } from "@/lib/commun/format";
@@ -500,7 +501,7 @@ export const outilSanteSysteme = definirOutil({
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
       s.alertes.length ? `Alertes : ${s.alertes.map((a) => `[${a.gravite}] ${a.titre} — ${a.detail}`).join(" · ")}` : "Aucune alerte.",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: s, liens: [lien("Tâches de fond", "/taches-de-fond"), lien("Paramètres", "/parametres")] };
+    return { texte, donnees: s, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME), lien("Paramètres", "/parametres")] };
   },
 });
 

@@ -51,6 +51,13 @@
   REACTIVATION les compte) : L21, L22, DP7, PA2 et 4.6 sont mis à jour, sans ligne nouvelle (bilan inchangé). Ni outil
   ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils). Des descriptions changent (`lister`, `noter_sms`,
   `voir_parametres` via `etat_crm`, `manager_operations`) : reconnecter le connecteur.
+- **Mission 18, A5 (03/10/2026)** : l'écran Tâches de fond devient l'onglet « Système » de Paramètres
+  (`/parametres?section=systeme`, où `/taches-de-fond` redirige), lu à l'ouverture de l'onglet par les routes de ses
+  blocs. Les lignes B1–B7 passent en 2.13 (sous « Système ») ; les liens des outils (`etat_crm` vue générale, SANTE,
+  TACHES_DE_FOND, COHERENCE, AUDIT, SESSIONS ; `agir_systeme` ; `manager_operations`), des alertes et de la tâche
+  « Relancer N tâches de fond en échec » mènent à l'onglet. Un seul compteur dans la barre (N2) : le badge des tâches
+  de fond en échec disparaît, l'échec remonte comme tâche système dans Tâches. Ni outil, ni paramètre, ni description
+  ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -570,7 +577,7 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…) | — | — | — | sans objet | — |
+| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…, `?section=` depuis la mission 18, A5) | — | — | — | sans objet | — |
 | PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance, `DELAI_RELANCE_AVIS` compris depuis la mission 18, A4), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » ; `mission-18-a4.test.ts` › « « etat_crm » PARAMETRES : plus d'interrupteur de séquence ; le délai… » |
 | PA3 | « Historique » d'un paramètre | page | L | etat_crm (PARAMETRES : historique complet) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (cle, valeur, valable_du, source ; ou saisies[]) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
@@ -631,6 +638,23 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | PC10 | Outils par famille et niveau | page (`catalogueVue`) | L | etat_crm (OUTILS) | couvert | `mcp-v3.test.ts` › « « tools/list » expose exactement le catalogue (registre dérivé du code)… » |
 | PC11 | Groupe « Agent mail et IA » (IA_*, MAIL_*, budget) | POST /api/parametres | S-param | modifier PARAMETRE / AUTOMATISME | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 
+#### Système (ex-écran `/taches-de-fond`, mission 18 A5)
+
+`/parametres?section=systeme` (où `/taches-de-fond` redirige ; ancres `#systeme`, `#taches-de-fond`, `#coherence`,
+`#audit`, `#sessions`). Chaque bloc se lit à l'ouverture de l'onglet par sa route (celle de son bouton) ; les outils
+rendent un lien vers l'onglet (`mission-18-a5.test.ts` › « etat_crm (vue générale, SANTE, TACHES_DE_FOND, COHERENCE,
+AUDIT, SESSIONS), agir_systeme et manager_operations »).
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| B1 | État des tâches : compteurs, file, planifications ; « Actualiser », pages | GET /api/taches | L | etat_crm (TACHES_DE_FOND) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | agir_systeme (RELANCER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | agir_systeme (ANNULER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B4 | Cohérence › rapport, « Recontrôler » | GET /api/coherence | L | etat_crm (COHERENCE : clé, correction proposée) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| B6 | Audit des connexions › « Revérifier » | GET /api/audit/connexions | L | etat_crm (AUDIT) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | etat_crm (SESSIONS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+
 ### 2.14 À valider (`/validation`)
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
@@ -647,25 +671,19 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | V10 | Fusion de clients › choisir la fiche à conserver (A ou B) | … {corrections:{conserver}} | S-suppr | doublon (CLIENT, FUSIONNER, conserver A ou B ; ECARTER, motif) | couvert | `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » |
 | V11 | Liens de la carte (fiches, dossier, message) | nav | — | — | sans objet | — |
 
-### 2.15 Tâches de fond (`/taches-de-fond`)
+### 2.15 Tâches de fond — onglet Système de Paramètres depuis la mission 18 (A5)
 
-| # | Action | Route | Nature | Outil MCP | Statut | Test |
-|---|---|---|---|---|---|---|
-| B1 | État des tâches : compteurs, file, planifications ; « Recharger », pages | GET /api/taches | L | etat_crm (TACHES_DE_FOND) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | agir_systeme (RELANCER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
-| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | agir_systeme (ANNULER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
-| B4 | Cohérence › rapport, « Relancer le contrôle » | GET /api/coherence | L | etat_crm (COHERENCE : clé, correction proposée) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
-| B6 | Audit des connexions › « Relancer » | GET /api/audit/connexions | L | etat_crm (AUDIT) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | etat_crm (SESSIONS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+L'écran n'existe plus : `/taches-de-fond` redirige vers l'onglet « Système » de Paramètres
+(`/parametres?section=systeme`) ; ses lignes B1–B7 sont en 2.13, avec leurs outils et leurs tests (redirection, onglet
+et liens : `mission-18-a5.test.ts`). Elles ne sont plus comptées ici en 2.17, mais sous « Paramètres › Système ».
 
 ### 2.16 Navigation et application
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Paramètres ; menu « Plus » (mission 18 : Espaces clients retiré en A1, Dépenses en A3 ; la saisie `/depenses/nouvelle` allume Finances) | — | — | — | sans objet | — |
-| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses` (mission 18) | — | — | — | sans objet | — |
+| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Paramètres ; menu « Plus » (mission 18 : Espaces clients retiré en A1, Dépenses en A3 ; la saisie `/depenses/nouvelle` allume Finances ; Tâches de fond retiré en A5, onglet Système de Paramètres) | — | — | — | sans objet | — |
+| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter (mission 18, A5 : plus de badge des tâches de fond en échec, un seul compteur : l'échec est une tâche système de Tâches ; la route garde la clé `tachesEnEchec`) | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses`, `/taches-de-fond` → `/parametres?section=systeme` (mission 18) | — | — | — | sans objet | — |
 | N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
 | N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
@@ -700,8 +718,8 @@ Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » :
 | Paramètres › Mail | 8 | 2 | 2 | 4 | 8 | 0 |
 | Paramètres › SMS | 6 | 3 | 1 | 1 | 5 | 1 |
 | Paramètres › Assistant | 11 | 5 | 1 | 4 | 10 | 1 |
+| Paramètres › Système (ex-Tâches de fond) | 7 | 0 | 2 | 5 | 7 | 0 |
 | À valider | 11 | 1 | 4 | 5 | 10 | 1 |
-| Tâches de fond | 7 | 0 | 2 | 5 | 7 | 0 |
 | Navigation et application | 10 | 4 | 0 | 0 | 4 | 6 |
 | **Total** | **439** | **168** | **98** | **136** | **402** | **37** |
 
@@ -721,6 +739,9 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - **Après la mission 18, A4 (03/10/2026)** : les séquences n'avaient plus d'écran depuis la mission 13 ; l'avis et la
   réactivation passent par les gestes existants des relances (L21, L22, DP7). Total inchangé : **427 actions, 391
   couvertes, 36 sans objet**, 0 partielle, 0 manquante.
+- **Après la mission 18, A5 (03/10/2026)** : Tâches de fond devient l'onglet « Système » de Paramètres (B1–B7 en
+  2.13) : la ligne change de nom, pas de compte. Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0
+  partielle, 0 manquante.
 
 ## 3. Les manques, par domaine
 

@@ -4,7 +4,7 @@ import { reponseErreur } from "@/lib/commun/api";
 
 export const dynamic = "force-dynamic";
 
-/** GET : les dernières sessions de l'assistant (jour, jeton, appels, écritures, derniers outils appelés) pour Tâches de fond. */
+/** GET : les dernières sessions de l'assistant (jour, jeton, appels, écritures, derniers outils appelés) pour Paramètres › Système. */
 export async function GET() {
   try {
     return NextResponse.json({ sessions: await sessionsRecentes(10) });

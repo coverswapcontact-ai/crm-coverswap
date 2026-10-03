@@ -12,6 +12,7 @@ import { lireSelection } from "@/lib/prestations/prestations";
 import { devaliderChoix, devaliderProjet, RAISON_PROJET_VALIDE } from "@/lib/espace/validations";
 import { figeDuProjet, LIMITE_PROJETS_EN_COURS, projetsVisibles } from "@/lib/espace/projets";
 import { pluriel } from "@/lib/commun/format";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 
 /**
@@ -22,7 +23,7 @@ import { synchroniserRappel } from "@/lib/agenda/rappels";
  * donne la matrice). Lecture seule ; chaque incohérence dit ce qu'elle est,
  * pourquoi elle compte, et — quand la correction est sans risque — propose un
  * bouton « Corriger » (`corrigerIncoherence`). Tourne au démarrage et une fois
- * par jour (taches.ts) ; Tâches de fond l'affiche et le relance à la demande.
+ * par jour (taches.ts) ; Paramètres › Système l'affiche et le relance à la demande.
  */
 
 export type CodeIncoherence =
@@ -409,7 +410,7 @@ export async function controleAutomatique(): Promise<RapportCoherence> {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
     const hautes = rapport.incoherences.filter((i) => i.gravite === "HAUTE").length;
     await alerter(
-      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${pluriel(rapport.incoherences.length - 4, "autre")}.` : ""}`, lien: `${appUrl}/taches-de-fond`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
+      { titre: `${rapport.incoherences.length} incohérence${rapport.incoherences.length > 1 ? "s" : ""} dans le CRM`, texte: `${rapport.incoherences.slice(0, 4).map((i) => `• ${i.client} : ${i.constat}`).join("\n")}${rapport.incoherences.length > 4 ? `\n… et ${pluriel(rapport.incoherences.length - 4, "autre")}.` : ""}`, lien: `${appUrl}${ADRESSE_SYSTEME}`, libelleLien: "Voir et corriger", urgence: hautes > 0 ? 4 : 2, etiquette: `coherence-${new Date().toISOString().slice(0, 10)}` },
       { origine: "coherence", canaux: ["telegram", "ntfy", "pushweb"] }
     ).catch(() => undefined);
   }

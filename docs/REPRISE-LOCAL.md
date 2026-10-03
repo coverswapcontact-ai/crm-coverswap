@@ -483,3 +483,72 @@ Reste :
 - Rappeler à Lucas de reconnecter le connecteur (descriptions changées).
 - Les consignes de Lucas en base peuvent encore citer les séquences : à lui de les relire (non réécrites, règle de la
   mission 17).
+
+### Mission 18, A5 — Tâches de fond dans Paramètres › Système, un seul compteur
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Onglet « Système » de Paramètres** (sixième onglet, après Assistant) : la file des tâches de fond et les travaux
+  périodiques, le contrôle de cohérence, l'audit des connexions et les sessions de l'assistant, dans l'ordre de
+  l'ancien écran. `SectionSysteme.tsx` lit chaque bloc à l'ouverture de l'onglet par la route de son bouton
+  (`/api/taches`, `/api/coherence`, `/api/audit/connexions`, `/api/assistant/sessions`) : la page Paramètres ne lance
+  ni le contrôle de cohérence ni l'audit, et un bloc en panne affiche « Réessayer » sans gêner les autres.
+- Les quatre composants passent de `taches-de-fond/_components` à `parametres/_components` (renommés dans git).
+  `EtatTaches` devient un bloc : plus d'en-tête de page ni d'enfants, un titre de section avec « Actualiser ». Chaque
+  bloc a son ancre (`#taches-de-fond`, `#coherence`, `#audit`, `#sessions`).
+- `parametres/page.tsx` lit `?section=` et le passe à `OngletsParametres`. L'ordre de priorité est : l'ancre, puis la
+  section, puis l'onglet mémorisé. La table `ANCRES` gagne `systeme`, `taches-de-fond`, `coherence`, `audit` et
+  `sessions`. La recherche se fait sur les propriétés propres (`ongletDe`), donc `#toString` n'ouvre rien. Sur
+  téléphone, l'onglet ouvert reste visible dans la liste qui défile.
+- `/taches-de-fond` redirige vers `/parametres?section=systeme` (`next.config.ts`, 307 comme les autres, la requête
+  suit). L'écran `src/app/(pilotage)/taches-de-fond/` est supprimé.
+- **Un seul compteur** : l'entrée « Tâches de fond » et son badge rouge `tachesEnEchec` sortent de la navigation (le
+  type `Compteurs` et `tonDe` aussi, l'icône `Workflow` n'est plus importée). Un échec remonte déjà comme tâche système
+  « Relancer N tâches de fond en échec » (niveau 4, comptée dans l'onglet Tâches). La route `/api/pilotage/compteurs`
+  garde la clé, pour les réponses servies par le cache hors ligne et pour `ecran.test.ts`.
+- Adresse unique `ADRESSE_SYSTEME` dans `src/lib/parametres/sections.ts`. Elle sert au raccourci des tâches système
+  (`a-faire/detecteurs/systeme.ts`, clé `SYSTEME:taches-de-fond` inchangée, donc rien n'est recréé), aux alertes
+  (`synthese/alertes.ts`, `analytique/alertes.ts`, alerte de plafond de `assistant/execution.ts`, alerte quotidienne
+  de `coherence/controle.ts`), et aux liens des outils (`etat_crm` vue générale, TACHES_DE_FOND, COHERENCE, AUDIT,
+  SESSIONS et SANTE via `lecture.ts` ; `agir_systeme` ; `manager_operations`). Les textes qui disaient « Tâches de
+  fond → Assistant » disent « Paramètres › Système → Sessions de l'assistant ».
+- MCP : aucun outil, paramètre ni description ne change. L'empreinte reste `040d6c7aa53c` (53 outils) et il n'y a rien
+  à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête, B1–B7 en 2.13 sous « Système », 2.15 qui renvoie à 2.13, PA1, N1, N2, N3,
+  ligne « Paramètres › Système » du bilan, total inchangé à 427 actions dont 391 couvertes et 36 sans objet),
+  `ARCHITECTURE-PILOTAGE.md` (§4 et mentions de l'écran) et `TACHES.md` (§0).
+
+Décisions prises seul (solution la plus simple) :
+- Une requête `?section=systeme` plutôt qu'une ancre : le fragment n'est pas garanti à travers une redirection du
+  serveur (même choix que Finances en A3).
+- Redirection en 307 comme toutes les anciennes adresses : `analytique.test.ts` exige `permanent: false`, et rien
+  n'est mis en cache par le navigateur.
+- Le badge disparaît mais la clé `tachesEnEchec` reste dans la route. Les alertes « N tâches de fond en échec » de
+  l'Analytique et du point du jour restent : ce sont des alertes, pas des compteurs de la barre, et elles mènent à
+  l'onglet.
+- Seul l'onglet Système est ajouté. Tarifs viendra avec A6, pour ne pas laisser un onglet vide.
+- `public/sw.js` n'est pas changé : le changement de `VERSION` est prévu en A6, avec la navigation à 10 onglets.
+
+Tests : 1 320 → 1 331 verts (11 ajoutés).
+- Nouveau `src/lib/base/mission-18-a5.test.ts`. Il couvre :
+  - l'adresse de l'onglet ;
+  - la page qui passe `?section=` sans lancer le contrôle ;
+  - l'onglet et ses ancres ;
+  - les routes des blocs et leurs réponses ;
+  - la redirection (307, sans chaîne) ;
+  - l'écran retiré, la navigation sans onglet ni badge, plus aucune adresse `/taches-de-fond` dans `src` et `public` ;
+  - la tâche système comptée dans Tâches avec son raccourci vers l'onglet, et la clé gardée dans la route ;
+  - l'alerte `TACHES_EN_ECHEC` ;
+  - les liens de `etat_crm` (six parties), `agir_systeme` et `manager_operations`.
+- Adaptés, même intention : `systeme.test.ts` (le raccourci mène à l'onglet), `mcp-gestes.test.ts` (lien de
+  RELANCER_TACHE), `mcp-analytique.test.ts` (plus de lien `/taches-de-fond`, `manager_operations` mène à l'onglet).
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres (le dossier `.next` a été supprimé avant, à
+  cause de la page retirée).
+- Vérifié à l'œil sur une base d'essai jetable (port 3007, canaux sortants vidés, tâches de fond coupées) :
+  - `/taches-de-fond?x=1` donne une 307 vers `/parametres?x=1&section=systeme` ;
+  - les quatre blocs se lisent à l'ouverture ;
+  - à 390 px, pas de défilement horizontal et l'onglet Système reste en vue ;
+  - le menu Plus n'a plus Tâches de fond.
+
+Reste :
+- A6 : l'onglet Tarifs, la navigation à 10 onglets et `VERSION` de `sw.js`.
+- Rien à reconnecter pour ce lot. Le rappel général de reconnexion des lots A1, A2 et A4 tient toujours.

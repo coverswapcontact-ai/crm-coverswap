@@ -317,7 +317,8 @@ après le lot 7 du 29/09/2026) vivent dans le groupe de routes
 (`/auth/signin`) suit la même charte.
 
 - **Ordinateur** : barre du haut, compteurs à côté des entrées (rappels de
-  leads en retard, en rouge ; mails à traiter ; tâches en échec).
+  leads en retard, en rouge ; mails à traiter ; tâches du jour — les tâches de
+  fond en échec n'ont plus de badge depuis la mission 18, A5).
 - **Téléphone** : barre du bas au pouce, cinq écrans (Leads, Dossiers, Espaces,
   Mail, Clients) et « Plus » pour le reste ; le contenu réserve la hauteur de la
   barre (et la zone de sécurité de l'iPhone).
@@ -330,8 +331,12 @@ après le lot 7 du 29/09/2026) vivent dans le groupe de routes
   pour ce qui a été repris et les redirections de ses adresses.
 - **Tâches** (`/taches`, accueil depuis la mission 17) : la liste de ce que Lucas a à faire
   (`src/lib/a-faire/`, routes `/api/a-faire/…`, conception dans `docs/TACHES.md`).
-- **Tâches de fond** (`/taches-de-fond`, anciennement `/taches`) : travaux périodiques et leur dernier passage,
-  tâches en échec avec leur erreur, relance et annulation à la main.
+- **Tâches de fond** : depuis la mission 18 (A5), l'onglet « Système » de Paramètres (`/parametres?section=systeme` ;
+  `/taches-de-fond`, son adresse de la mission 17, y redirige). Travaux périodiques et leur dernier passage, tâches en
+  échec avec leur erreur, relance et annulation à la main ; puis le contrôle de cohérence, l'audit des connexions et
+  les sessions de l'assistant. L'onglet lit chaque bloc par sa route à son ouverture (`SectionSysteme.tsx`), pas avec
+  la page. Plus de badge des échecs dans la navigation : un échec remonte comme tâche système dans Tâches
+  (« Relancer N tâches de fond en échec », clé `SYSTEME:taches-de-fond`), un seul compteur.
 
 ## 5. Validation : « l'agent propose, je valide »
 
@@ -1709,7 +1714,7 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
 
 - Aucun fournisseur de SMS réel n'a été essayé : OVH et Brevo sont testés contre de
   faux serveurs qui imitent leurs API (`fournisseurs.test.ts`). Premier envoi réel à
-  surveiller dans Tâches de fond.
+  surveiller dans Tâches de fond (Paramètres › Système).
 - OVH ne pousse pas les réponses : elles arrivent à la relève (trente secondes).
 - `src/lib/sms/flux.ts` émet encore des événements sans aucun lecteur depuis le
   retrait de `/api/sms/flux` (lot 7) : à retirer avec le prochain ménage.
@@ -1795,7 +1800,7 @@ périodique `simulations-dossiers` (quinze minutes). Le lead du simulateur n'en 
 autant de Leads (voir ci-dessous). Les demandes du site déclenchent désormais un **push** (`notifierDemandeDuSite`),
 comme les leads Meta — avant, seulement un mail.
 
-### Audit des connexions (`src/lib/audit/connexions.ts`, Tâches de fond)
+### Audit des connexions (`src/lib/audit/connexions.ts`, Paramètres › Système)
 
 Neuf maillons vérifiés sur les vraies données, en lecture seule (rien n'est créé ni
 envoyé) : lead Meta → pastille et push ; Leads sans doublon ; dossier issu d'un lead ;
@@ -2215,7 +2220,7 @@ Matrice complète : `docs/COHERENCE.md`. À retenir pour toute évolution :
 - **L'étape suit l'argent** : `suivreSoldeDossier` (factures) et `suivreAcompteDossier` (acompte → Signé, et retour).
 - **Simulation du site = lead** (plus de dossier d'office) ; `dossiers/archivage.ts` archive / restaure un dossier et
   rend ses simulations au lead.
-- **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Tâches de fond, `corrigerIncoherence`).
+- **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Paramètres › Système, `corrigerIncoherence`).
 
 ## 25. Appels, rappels, relances, SMS : un seul circuit (mission 14, 29/09/2026)
 
@@ -2384,7 +2389,7 @@ ajouté change l'empreinte du catalogue : reconnecter le connecteur Claude.
   notification) ; le résumé le dit.
 - L'état « API Google Calendar non activée » ne se lit que tant qu'une tâche attend pour
   cette raison : après l'activation, la carte le dit encore jusqu'au passage suivant (6 h
-  au plus ; « Reconnecter » tout de suite — « Relancer » dans Tâches de fond ne vaut que
+  au plus ; « Reconnecter » tout de suite — « Relancer » dans Paramètres › Système ne vaut que
   pour une tâche en échec ou annulée, pas pour une tâche en attente).
 - `commercial/pilotage.ts › relancesAValider` et `ce_qui_m_attend` comptent toutes les
   propositions en attente, pas seulement les relances.

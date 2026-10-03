@@ -48,7 +48,7 @@ export default function ControleCoherence({ initial }: { initial: RapportCoheren
 
   const n = rapport.incoherences.length;
   return (
-    <section className="mb-10">
+    <section id="coherence" className="mb-10 scroll-mt-20">
       <TitreSection
         action={
           <Bouton taille="sm" icone={<RefreshCw size={13} aria-hidden />} chargement={charge} onClick={() => void relancer()}>

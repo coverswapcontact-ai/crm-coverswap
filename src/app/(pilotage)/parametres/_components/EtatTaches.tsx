@@ -5,17 +5,22 @@ import { AlertTriangle, Ban, ChevronDown, CircleCheck, Clock, Loader2, RotateCw 
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { rafraichirCompteurs } from "@/components/pilotage/Navigation";
-import { Bouton, EnTetePage, EtatVide, Pagination, Pastille, TitreSection, TRANS } from "@/components/pilotage/ui";
+import { Bouton, EtatVide, Pagination, Pastille, TitreSection, TRANS } from "@/components/pilotage/ui";
 import { formatHorodatage } from "@/lib/dossiers/dates";
 import { LIBELLES_STATUT_TACHE } from "@/lib/taches/statuts";
 import type { EtatTaches as Etat, TacheVue } from "@/lib/taches/lecture";
 import { cn } from "@/lib/utils";
 
 /**
- * Tâches de fond (mission 13, lot 3) : l'en-tête en haut ; ce qui demande un
- * regard d'abord (en échec, en cours, en attente) ; les travaux périodiques et
- * les tâches finies repliés ; 50 lignes par page. Une tâche abandonnée par le
- * ménage porte « Abandonnée » et sa raison en première ligne.
+ * Tâches de fond (mission 13, lot 3) : ce qui demande un regard d'abord (en
+ * échec, en cours, en attente) ; les travaux périodiques et les tâches finies
+ * repliés ; 50 lignes par page. Une tâche abandonnée par le ménage porte
+ * « Abandonnée » et sa raison en première ligne.
+ *
+ * Mission 18 (A5) : un bloc de Paramètres › Système, et non plus un écran : plus
+ * d'en-tête de page, un titre de section (l'ancienne adresse /taches-de-fond
+ * redirige vers l'onglet). Les échecs ne font plus de compteur dans la
+ * navigation : ils remontent comme tâche système dans Tâches.
  */
 
 const TON_STATUT = {
@@ -99,7 +104,7 @@ function Repli({ titre, nombre, ton, ouvertParDefaut = false, children }: { titr
   );
 }
 
-export default function EtatTaches({ initial, children }: { initial: Etat; children?: ReactNode }) {
+export default function EtatTaches({ initial }: { initial: Etat }) {
   const [etat, setEtat] = useState(initial);
   const [chargement, setChargement] = useState(false);
   const [pageAVoir, setPageAVoir] = useState(0);
@@ -124,26 +129,23 @@ export default function EtatTaches({ initial, children }: { initial: Etat; child
   const tranche = (liste: TacheVue[], page: number) => liste.slice(page * PAR_PAGE, (page + 1) * PAR_PAGE);
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-8">
-      <EnTetePage
-        titre="Tâches de fond"
-        sousTitre={
-          compteurs.ECHEC_DEFINITIF > 0 ? (
-            <span className="text-[#F87171]">
-              {compteurs.ECHEC_DEFINITIF} en échec : à relancer une fois la cause réglée.
-            </span>
-          ) : (
-            `${compteurs.EN_ATTENTE + compteurs.EN_COURS} en cours ou en attente · ${compteurs.TERMINEE} terminées`
-          )
-        }
-        actions={
-          <Bouton icone={chargement ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCw size={14} aria-hidden />} onClick={() => void recharger()}>
+    <section id="taches-de-fond" className="mb-10 scroll-mt-20">
+      <TitreSection
+        action={
+          <Bouton taille="sm" icone={chargement ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <RotateCw size={13} aria-hidden />} onClick={() => void recharger()}>
             Actualiser
           </Bouton>
         }
-      />
+      >
+        Tâches de fond
+      </TitreSection>
+      <p className={cn("-mt-1.5 mb-4 text-[12.5px]", compteurs.ECHEC_DEFINITIF > 0 ? "text-[#F87171]" : "text-[#9CA3AF]")}>
+        {compteurs.ECHEC_DEFINITIF > 0
+          ? `${compteurs.ECHEC_DEFINITIF} en échec : à relancer une fois la cause réglée.`
+          : `${compteurs.EN_ATTENTE + compteurs.EN_COURS} en cours ou en attente · ${compteurs.TERMINEE} terminées`}
+      </p>
 
-      <section className="mt-6">
+      <section>
         <TitreSection>À voir · en échec, en cours, en attente ({aVoir.length})</TitreSection>
         {aVoir.length === 0 ? (
           <EtatVide icone={<CircleCheck size={18} className="text-[#1D9E75]" aria-hidden />} titre="Rien en échec ni en attente" texte="Envois validés, miroir Drive, relève des mails et sauvegardes passent par ici." />
@@ -214,8 +216,6 @@ export default function EtatTaches({ initial, children }: { initial: Etat; child
           </>
         )}
       </Repli>
-
-      {children}
-    </div>
+    </section>
   );
 }

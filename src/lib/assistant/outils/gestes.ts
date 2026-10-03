@@ -33,6 +33,7 @@ import { etatBanc, lancerBanc } from "@/lib/simulateur/banc/banc";
 import { changerStatutSimulation, publierSimulations } from "@/lib/simulations/dossier";
 import { publierPublication, retirerPublication } from "@/lib/site/publications";
 import { annulerTache, relancerTache } from "@/lib/taches/file";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { listerPropositions, rejeterProposition, validerProposition, vueProposition } from "@/lib/validation/service";
 import { lireDateDictee } from "../agenda";
 import { definirOutil, format, lien, type ResultatOutil } from "../definition";
@@ -606,12 +607,12 @@ export const outilAgirSysteme = definirOutil({
         } catch (erreur) {
           throw new ErreurMetier(erreur instanceof Error ? erreur.message : "Geste impossible.", 409);
         }
-        return { texte: e.action === "RELANCER_TACHE" ? "Tâche de fond remise en file." : "Tâche de fond annulée.", liens: [lien("Tâches de fond", "/taches-de-fond")] };
+        return { texte: e.action === "RELANCER_TACHE" ? "Tâche de fond remise en file." : "Tâche de fond annulée.", liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
       }
       case "CORRIGER_INCOHERENCE": {
         if (!e.cle) throw new ErreurMetier("Quelle incohérence ? (cle, rendue par etat_crm COHERENCE)", 400);
         const r = await corrigerIncoherence(e.cle);
-        return { texte: r.corrigee ? `Corrigé : ${r.message}` : r.message, donnees: r, liens: [lien("Tâches de fond", "/taches-de-fond")] };
+        return { texte: r.corrigee ? `Corrigé : ${r.message}` : r.message, donnees: r, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
       }
       case "RELANCER_SYNCHRO": {
         if (!e.source) throw new ErreurMetier("Quelle source ? (META, GOOGLE_ADS, SEARCH_CONSOLE, FICHE_GOOGLE)", 400);

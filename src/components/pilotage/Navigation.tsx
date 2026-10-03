@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -14,8 +14,10 @@ import { TRANS } from "./ui";
 /**
  * Mission 14 (partie 3) : l'onglet Leads ne compte que les rappels en retard (en rouge).
  * Mission 17 (partie A) : l'onglet Tâches compte les tâches d'« Aujourd'hui » (10 au plus, en vert).
+ * Mission 18 (A5) : plus de compteur des tâches de fond en échec : un échec remonte comme tâche système dans Tâches
+ * (« Relancer N tâches de fond en échec »), un seul compteur. La route le rend encore, pour les réponses mises en cache.
  */
-export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; tachesEnEchec: number; mailATraiter: number };
+export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
@@ -49,6 +51,7 @@ type Entree = {
 // (/espaces y redirige), le bloc Espace du panneau du dossier et la fiche client gardent les gestes.
 // Mission 18 (A3) : « Dépenses » devient une section de Finances (/depenses y redirige) ; la saisie /depenses/nouvelle
 // (raccourci de l'application installée) reste et allume Finances.
+// Mission 18 (A5) : « Tâches de fond » devient l'onglet Système de Paramètres (/taches-de-fond y redirige), sans badge.
 const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
@@ -64,7 +67,6 @@ const PRINCIPALES: Entree[] = [
 // Écrans secondaires : petites icônes à droite, menu « Plus » sur téléphone.
 const SECONDAIRES: Entree[] = [
   { href: "/site", libelle: "Site", icone: Globe },
-  { href: "/taches-de-fond", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 
@@ -88,12 +90,12 @@ function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "ro
 }
 
 function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
-  return cle === "tachesEnEchec" || cle === "leadsEnRetard" ? "rouge" : "vert";
+  return cle === "leadsEnRetard" ? "rouge" : "vert";
 }
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, tachesEnEchec: 0, mailATraiter: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, mailATraiter: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 

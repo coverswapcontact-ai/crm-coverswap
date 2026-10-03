@@ -9,7 +9,9 @@ Référence de conception. À lire avant de toucher `src/lib/a-faire/`, l'écran
 - Le nouveau modèle s'appelle **`TacheAFaire`** ; son code vit dans **`src/lib/a-faire/`** ; ses routes d'API dans
   **`/api/a-faire/…`**.
 - L'écran **`/taches`** devient la liste des tâches de Lucas (premier onglet, accueil de l'application).
-  L'écran technique « Tâches de fond » déménage à **`/taches-de-fond`** (liens mis à jour).
+  L'écran technique « Tâches de fond » déménage à **`/taches-de-fond`** (liens mis à jour), puis devient l'onglet
+  « Système » de Paramètres (mission 18, A5 : **`/parametres?section=systeme`**, où `/taches-de-fond` redirige ; ses
+  échecs n'ont plus de badge, ils remontent comme tâche système « Relancer N tâches de fond en échec »).
 - Acteur des écritures automatiques : `SYSTEME:taches-a-faire`.
 
 ## 1. Le modèle

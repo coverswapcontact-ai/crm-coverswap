@@ -22,6 +22,7 @@ import { consommation } from "@/lib/simulateur/consommation";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { listerCatalogue } from "@/lib/sms/modeles";
 import { etatDesTaches } from "@/lib/taches/lecture";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { definirOutil, format, lien, type ContexteOutil, type ResultatOutil } from "../definition";
 import { sessionsRecentes } from "../execution";
 import { outilListerOutils } from "./catalogue-outils";
@@ -120,7 +121,7 @@ export async function etatGlobal(contexte: ContexteOutil): Promise<ResultatOutil
       leads: leads.map((l) => ({ id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, source: l.source, projet: l.typeProjet, le: l.createdAt.toISOString() })),
       sources,
     },
-    liens: [lien("Tâches", "/taches"), lien("Tâches de fond", "/taches-de-fond"), lien("Finances", "/finances")],
+    liens: [lien("Tâches", "/taches"), lien("Paramètres › Système", ADRESSE_SYSTEME), lien("Finances", "/finances")],
   };
 }
 
@@ -184,19 +185,19 @@ async function partie(e: EntreeEtat, contexte: ContexteOutil): Promise<ResultatO
     case "TACHES_DE_FOND": {
       const t = await etatDesTaches();
       const lignes = t.taches.slice(0, limite ?? 40).map((x) => `- ${x.libelle} (${x.type}) : ${x.statut.toLowerCase()}${x.tentatives ? `, ${pluriel(x.tentatives, "tentative")}` : ""}${x.derniereErreur ? ` — ${court(x.derniereErreur, 120)}` : ""}${x.resume ? ` — ${court(x.resume, 120)}` : ""} [tache-de-fond:${x.id}]`);
-      return { texte: `Tâches de fond : ${Object.entries(t.compteurs).map(([s, n]) => `${s.toLowerCase()} ${n}`).join(", ")}.\n${lignes.join("\n") || "File vide."}\nPlanifications : ${t.planifications.map((p) => `${p.nom}${p.dernierStatut ? ` (${p.dernierStatut.toLowerCase()})` : ""}`).join(" · ") || "aucune"}.\nRelancer ou annuler : « agir_systeme » RELANCER_TACHE / ANNULER_TACHE avec l'identifiant.`, donnees: t, liens: [lien("Tâches de fond", "/taches-de-fond")] };
+      return { texte: `Tâches de fond : ${Object.entries(t.compteurs).map(([s, n]) => `${s.toLowerCase()} ${n}`).join(", ")}.\n${lignes.join("\n") || "File vide."}\nPlanifications : ${t.planifications.map((p) => `${p.nom}${p.dernierStatut ? ` (${p.dernierStatut.toLowerCase()})` : ""}`).join(" · ") || "aucune"}.\nRelancer ou annuler : « agir_systeme » RELANCER_TACHE / ANNULER_TACHE avec l'identifiant.`, donnees: t, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
     }
     case "COHERENCE": {
       const r = await controlerCoherence();
-      return { texte: r.incoherences.length ? `${pluriel(r.incoherences.length, "incohérence")} sur ${r.dossiersControles} dossiers :\n${r.incoherences.map((i) => `- [${i.gravite}] ${i.client} : ${i.constat}${i.correction ? ` — « Corriger » : ${i.correction}` : " — à régler à la main"} [cle:${i.cle}]${i.dossierId ? ` [dossier:${i.dossierId}]` : ""}`).join("\n")}\nCorriger : « agir_systeme » CORRIGER_INCOHERENCE avec la clé.` : `Cohérence : rien à signaler (${r.dossiersControles} dossiers contrôlés).`, donnees: r, liens: [lien("Tâches de fond", "/taches-de-fond")] };
+      return { texte: r.incoherences.length ? `${pluriel(r.incoherences.length, "incohérence")} sur ${r.dossiersControles} dossiers :\n${r.incoherences.map((i) => `- [${i.gravite}] ${i.client} : ${i.constat}${i.correction ? ` — « Corriger » : ${i.correction}` : " — à régler à la main"} [cle:${i.cle}]${i.dossierId ? ` [dossier:${i.dossierId}]` : ""}`).join("\n")}\nCorriger : « agir_systeme » CORRIGER_INCOHERENCE avec la clé.` : `Cohérence : rien à signaler (${r.dossiersControles} dossiers contrôlés).`, donnees: r, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
     }
     case "AUDIT": {
       const a = await auditerConnexions();
-      return { texte: `Audit des connexions (${a.alertes} alerte${a.alertes > 1 ? "s" : ""}) :\n${a.maillons.map((m) => `- ${m.libelle} : ${m.etat} — ${m.constat}${m.aFaire ? ` (à faire : ${m.aFaire})` : ""}`).join("\n")}`, donnees: a, liens: [lien("Tâches de fond", "/taches-de-fond")] };
+      return { texte: `Audit des connexions (${a.alertes} alerte${a.alertes > 1 ? "s" : ""}) :\n${a.maillons.map((m) => `- ${m.libelle} : ${m.etat} — ${m.constat}${m.aFaire ? ` (à faire : ${m.aFaire})` : ""}`).join("\n")}`, donnees: a, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
     }
     case "SESSIONS": {
       const s = await sessionsRecentes(limite ?? 10);
-      return { texte: s.length ? s.map((x) => `- ${x.jour} ${x.clientNom ?? "?"} : ${pluriel(x.appels, "appel")}, ${pluriel(x.ecritures, "écriture")}${x.derniers.length ? ` ; derniers : ${x.derniers.slice(0, 6).map((a) => `${a.outil} ${a.statut.toLowerCase()}`).join(", ")}` : ""}`).join("\n") : "Aucune session de l'assistant.", donnees: s, liens: [lien("Tâches de fond", "/taches-de-fond")] };
+      return { texte: s.length ? s.map((x) => `- ${x.jour} ${x.clientNom ?? "?"} : ${pluriel(x.appels, "appel")}, ${pluriel(x.ecritures, "écriture")}${x.derniers.length ? ` ; derniers : ${x.derniers.slice(0, 6).map((a) => `${a.outil} ${a.statut.toLowerCase()}`).join(", ")}` : ""}`).join("\n") : "Aucune session de l'assistant.", donnees: s, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME)] };
     }
     case "CONNEXIONS": {
       const [google, drive, agent] = await Promise.all([etatConnexionGoogle(), etatMiroir(), etatAgentMail(contexte.maintenant)]);

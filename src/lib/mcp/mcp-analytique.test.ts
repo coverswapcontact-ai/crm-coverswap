@@ -165,6 +165,10 @@ describe("analytique publicite (ex-« campagne »), etat_crm META (ex-« voir_pu
     const argent = await appeler("analytique", { onglet: "argent" });
     const finances = await appeler("manager_finances");
     for (const l of [synthese, commercial, site, clients, argent, finances].flatMap((r) => r.liens ?? [])) assert.doesNotMatch(l.href, /\/depenses(\?|$)/);
+    // Mission 18 (A5) : plus de lien vers l'écran Tâches de fond retiré ; l'onglet Système de Paramètres à la place.
+    const operations = await appeler("manager_operations");
+    assert.ok(operations.liens?.some((l) => l.href === "http://localhost:3001/parametres?section=systeme"), JSON.stringify(operations.liens));
+    for (const l of [synthese, commercial, site, clients, argent, finances, operations].flatMap((r) => r.liens ?? [])) assert.doesNotMatch(l.href, /\/taches-de-fond(\?|$)/);
     assert.deepEqual(reseau, []);
   });
 });

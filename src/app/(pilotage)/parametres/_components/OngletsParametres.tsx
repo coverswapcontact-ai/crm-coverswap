@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown } from "lucide-react";
 import { EnTetePage, TRANS } from "@/components/pilotage/ui";
 import type { VueAccesAssistant, VueConsignesAssistant } from "@/lib/assistant/vues-parametres";
@@ -15,6 +15,7 @@ import MarqueEspace from "./MarqueEspace";
 import MessagerieSms, { type ReponseSms } from "./MessagerieSms";
 import Numerotation from "./Numerotation";
 import ReglagesMail from "./ReglagesMail";
+import SectionSysteme from "./SectionSysteme";
 
 /**
  * Mission 13 (lot 3) — Paramètres en cinq onglets : Activité (pilotage,
@@ -23,19 +24,28 @@ import ReglagesMail from "./ReglagesMail";
  * fiscaux et cotisations derrière « Avancé »), Mail, SMS, Assistant. Tout est
  * rendu par le serveur avec la page : plus de « Chargement… ». Les ancres
  * d'avant (#mail, #sms, #assistant) ouvrent l'onglet correspondant.
+ *
+ * Mission 18 (A5) : sixième onglet, « Système » (l'ancien écran Tâches de fond :
+ * file des tâches, cohérence, audit des connexions, sessions de l'assistant),
+ * lu à l'ouverture de l'onglet par ses propres routes. `?section=` (passé par la
+ * page) ouvre un onglet comme une ancre : /taches-de-fond redirige vers
+ * /parametres?section=systeme.
  */
 
-type Onglet = "activite" | "facturation" | "mail" | "sms" | "assistant";
+type Onglet = "activite" | "facturation" | "mail" | "sms" | "assistant" | "systeme";
 const ONGLETS: { valeur: Onglet; libelle: string }[] = [
   { valeur: "activite", libelle: "Activité" },
   { valeur: "facturation", libelle: "Facturation" },
   { valeur: "mail", libelle: "Mail" },
   { valeur: "sms", libelle: "SMS" },
   { valeur: "assistant", libelle: "Assistant" },
+  { valeur: "systeme", libelle: "Système" },
 ];
 const CLE_MEMOIRE = "parametres-onglet";
 // Les groupes de l'onglet Activité ont chacun leur ancre (`id` posé par GroupesParametres) : `/parametres#simulateur` depuis le banc.
-const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", mail: "mail", sms: "sms", assistant: "assistant" };
+const ANCRES: Record<string, Onglet> = { activite: "activite", pilotage: "activite", commercial: "activite", publicite: "activite", simulateur: "activite", rgpd: "activite", connexions: "activite", facturation: "facturation", numerotation: "facturation", mail: "mail", sms: "sms", assistant: "assistant", systeme: "systeme", "taches-de-fond": "systeme", coherence: "systeme", audit: "systeme", sessions: "systeme" };
+/** L'onglet d'une ancre ou d'une section (propriétés propres seulement : « toString » n'est pas un onglet). */
+const ongletDe = (nom: string | null): Onglet | null => (nom && Object.prototype.hasOwnProperty.call(ANCRES, nom) ? ANCRES[nom] : null);
 const GROUPES_ACTIVITE: readonly GroupeParametre[] = ["PILOTAGE", "COMMERCIAL", "PUBLICITE", "SIMULATEUR", "RGPD"];
 const GROUPES_FACTURATION: readonly GroupeParametre[] = ["ENCAISSEMENT", "FACTURATION"];
 const GROUPES_AVANCES: readonly GroupeParametre[] = ["FISCAL", "SOCIAL"];
@@ -66,6 +76,7 @@ export default function OngletsParametres({
   acces,
   consignes,
   compteurs,
+  section = null,
 }: {
   parametres: ParametreVue[];
   connexions: EtatConnexions;
@@ -75,14 +86,27 @@ export default function OngletsParametres({
   acces: VueAccesAssistant;
   consignes: VueConsignesAssistant;
   compteurs: CompteurVue[];
+  /** `?section=` de l'adresse (un nom d'onglet ou une ancre de la table ANCRES). */
+  section?: string | null;
 }) {
   const [parametres, setParametres] = useState(initiaux);
-  // L'ancre (#mail, #sms…) l'emporte quand elle change ; un onglet choisi à la main l'emporte tant que l'ancre ne bouge pas ; sinon la mémoire.
+  // L'ancre (#mail, #sms…) l'emporte quand elle change ; un onglet choisi à la main l'emporte tant que l'ancre ne bouge pas ;
+  // puis la section de l'adresse (?section=systeme, rendue telle quelle par le serveur) ; sinon la mémoire.
   const ancre = useSyncExternalStore(surChangementAncre, lireAncre, () => "");
   const memorise = useSyncExternalStore(rien, lireMemoire, () => "activite" as Onglet);
   const [choix, setChoix] = useState<{ valeur: Onglet; ancre: string } | null>(null);
-  const onglet: Onglet = choix && choix.ancre === ancre ? choix.valeur : ancre in ANCRES ? ANCRES[ancre] : memorise;
+  const onglet: Onglet = choix && choix.ancre === ancre ? choix.valeur : (ongletDe(ancre) ?? ongletDe(section) ?? memorise);
   const [avance, setAvance] = useState(false);
+  // Six onglets débordent sur téléphone (la liste défile) : l'onglet ouvert, par exemple Système depuis ?section=, reste en vue.
+  const liste = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const boite = liste.current;
+    const actif = boite?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!boite || !actif) return;
+    const [b, o] = [boite.getBoundingClientRect(), actif.getBoundingClientRect()];
+    if (o.right > b.right) boite.scrollLeft += o.right - b.right + 4;
+    else if (o.left < b.left) boite.scrollLeft -= b.left - o.left + 4;
+  }, [onglet]);
 
   function choisir(valeur: Onglet) {
     setChoix({ valeur, ancre });
@@ -103,7 +127,7 @@ export default function OngletsParametres({
         sousTitre={aRenseigner > 0 ? <span className="text-[#F5B454]">{aRenseigner} à renseigner : {aRenseigner > 1 ? "ils seront demandés" : "il sera demandé"} à la première utilisation.</span> : "Seuils, taux et règles datés. Une nouvelle valeur ne réécrit jamais le passé."}
       />
 
-      <div role="tablist" aria-label="Rubriques des paramètres" className="mt-4 flex gap-1 overflow-x-auto rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-1">
+      <div ref={liste} role="tablist" aria-label="Rubriques des paramètres" className="mt-4 flex gap-1 overflow-x-auto rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-1">
         {ONGLETS.map((o) => (
           <button
             key={o.valeur}
@@ -154,6 +178,7 @@ export default function OngletsParametres({
           <GroupesParametres parametres={parametres} groupes={["AGENT"]} onMisAJour={setParametres} />
         </>
       ) : null}
+      {onglet === "systeme" ? <SectionSysteme /> : null}
     </div>
   );
 }

@@ -418,12 +418,14 @@ describe("« publier » : les brouillons seulement, aperçu et jeton quand un ma
 });
 
 describe("« agir_systeme » : les gestes techniques", () => {
-  test("RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les boutons de « Tâches de fond »", async () => {
+  test("RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les boutons de « Tâches de fond » (Paramètres › Système)", async () => {
     const tache = (cle: string) => prisma.tache.create({ data: { type: "ESSAI", cle, statut: "ECHEC_DEFINITIF", tentatives: 8, derniereErreur: "boum", demandeePar: "SYSTEME:essai" } });
     const [a, b] = [await tache("essai-a"), await tache("essai-b")];
     await route("@/app/api/taches/[id]/relancer/route", "POST", `/api/taches/${a.id}/relancer`, undefined, { id: a.id });
     const r = await executer(gestes.outilAgirSysteme, { action: "RELANCER_TACHE", id: b.id });
     assert.ok(!r.confirmation, r.texte);
+    // Mission 18 (A5) : les boutons sont dans Paramètres › Système ; le lien du résultat y mène.
+    assert.equal(r.liens?.[0].href, "http://localhost:3001/parametres?section=systeme");
     const etat = async (id: string) => {
       const t = await prisma.tache.findUniqueOrThrow({ where: { id } });
       return { statut: t.statut, tentatives: t.tentatives, erreur: t.derniereErreur };

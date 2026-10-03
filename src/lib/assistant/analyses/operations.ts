@@ -8,6 +8,7 @@ import prisma from "@/lib/prisma";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
 import { lireParametre } from "@/lib/parametres/service";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { rappelsDesLeads } from "@/lib/prospects/leads";
 import { lireConsignes } from "../consignes";
 import { definirOutil, format, lien } from "../definition";
@@ -117,6 +118,6 @@ export const outilManagerOperations = definirOutil({
       `Retards : ${a.retards.total} (${a.retards.actions} actions, ${a.retards.rappels} rappels, ${a.retards.chantiersDatePassee} chantiers à date passée, ${a.retards.signesSansDate} signés sans date${a.chantiers.sansDate.length ? ` : ${a.chantiers.sansDate.slice(0, 4).map((d) => d.client).join(", ")}` : ""}).`,
       `Santé : ${pluriel(a.sante.taches.enEchec.length, "tâche")} en échec, ${pluriel(a.sante.alertes.length, "alerte")}${a.sante.google?.coupee ? ", Google COUPÉ" : ""}${a.sante.ia && !a.sante.ia.cleApi ? ", clé Anthropic absente" : ""}.`,
     ].join("\n");
-    return { texte, donnees: a, liens: [lien("Dossiers", "/dossiers"), lien("Leads", "/leads"), lien("Tâches de fond", "/taches-de-fond")] };
+    return { texte, donnees: a, liens: [lien("Dossiers", "/dossiers"), lien("Leads", "/leads"), lien("Paramètres › Système", ADRESSE_SYSTEME)] };
   },
 });

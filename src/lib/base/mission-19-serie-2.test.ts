@@ -222,3 +222,41 @@ describe("la bibliothèque (calage, teintes, réétiquetage)", () => {
     assert.equal(meilleurEssai([e(1, "calage")]), null);
   });
 });
+
+describe("les retouches après relecture (03/10/2026)", () => {
+  test("la liste réelle se lit ; les prompts des variantes gardent le texte d'origine, plus une phrase ou un passage remplacé", async () => {
+    const { lireRetouches, promptVariante } = await import("@/lib/simulations/retouches");
+    const retouches = lireRetouches(await fs.readFile(path.join(process.cwd(), "scripts", "retouches-serie-2.json"), "utf8"));
+    const liste = ambiances.lireListeImages(await fs.readFile(LISTE_S2, "utf8"));
+    for (const v of retouches.variantes) {
+      const origine = liste.images.find((i) => i.nom === v.nom)!.prompt;
+      const prompt = promptVariante(origine, v);
+      if (v.ajout) assert.ok(prompt.startsWith(origine.trimEnd()) && prompt.endsWith(v.ajout), v.nom);
+      if (v.remplacer) assert.ok(prompt.includes(v.remplacer[1]) && !prompt.includes(v.remplacer[0]), v.nom);
+    }
+    assert.throws(() => promptVariante("abc", { nom: "x", remplacer: ["zzz", "y"] }), /absent du prompt/);
+    assert.equal(promptVariante("Une phrase", { nom: "x", ajout: "Deux." }), "Une phrase. Deux.");
+  });
+
+  test("les essais suivants se numérotent après le dernier présent", async () => {
+    const { prochainsEssais } = await import("@/lib/simulations/retouches");
+    const d = dossier("essais");
+    await fs.writeFile(path.join(d, "x-1.png"), "");
+    await fs.writeFile(path.join(d, "x-2.png"), "");
+    assert.deepEqual(prochainsEssais(d, "x", 2), [3, 4]);
+    assert.deepEqual(prochainsEssais(d, "y", 1), [1]);
+  });
+
+  test("recollage : hors de la zone élargie, l'original reste au pixel près ; au centre, la retouche ; garde du raccord", async () => {
+    const { recollerZone, ecartAutourDeLaZone } = await import("@/lib/simulations/retouches");
+    const original = await sharp({ create: { width: 400, height: 200, channels: 3, background: "#808080" } }).png().toBuffer();
+    const retouche = await sharp({ create: { width: 400, height: 200, channels: 3, background: "#FF0000" } }).png().toBuffer();
+    const zone: [number, number, number, number] = [40, 40, 20, 20];
+    const sortie = await sharp(await recollerZone(original, retouche, zone, 4)).raw().toBuffer();
+    const px = (x: number, y: number) => [...sortie.subarray((y * 400 + x) * 3, (y * 400 + x) * 3 + 3)];
+    assert.deepEqual(px(10, 10), [128, 128, 128], "loin de la zone : intact");
+    assert.deepEqual(px(200, 100), [255, 0, 0], "centre de la zone : la retouche");
+    assert.ok((await ecartAutourDeLaZone(original, original, zone)) < 1);
+    assert.ok((await ecartAutourDeLaZone(original, retouche, zone)) > 40, "une autre image : refusée");
+  });
+});

@@ -1,0 +1,145 @@
+{
+ "prompt_bouilloire": "Edit this exact photo, the first image. Keep everything identical: camera position, framing, light, shadows, walls, floor, furniture and every other object. Remove only the electric kettle and fill its place with exactly what would naturally be behind and under it: the same surface, wall, tiles and shadows, continuing the existing lines, grain, texture and light. Do not add any new object. No other change.",
+ "bouilloires": [
+  {
+   "avant": "sdb-petit-meuble-vasque-avant",
+   "zone": [
+    87,
+    72,
+    11,
+    22
+   ],
+   "recopier": [
+    "sdb-petit-meuble-vasque-apres-bois",
+    "sdb-petit-meuble-vasque-apres-couleur"
+   ]
+  },
+  {
+   "avant": "sdb-double-vasque-wenge-avant",
+   "zone": [
+    89,
+    57,
+    11,
+    22
+   ],
+   "recopier": [
+    "sdb-double-vasque-wenge-apres-neutre",
+    "sdb-double-vasque-wenge-apres-bois"
+   ]
+  },
+  {
+   "avant": "sdb-baignoire-tablier-avant",
+   "zone": [
+    88,
+    41,
+    12,
+    21
+   ],
+   "recopier": [
+    "sdb-baignoire-tablier-apres-neutre",
+    "sdb-baignoire-tablier-apres-couleur"
+   ]
+  },
+  {
+   "avant": "placard-coulissant-chambre-avant",
+   "zone": [
+    0,
+    49,
+    7,
+    13
+   ],
+   "recopier": [
+    "placard-coulissant-chambre-apres-bois",
+    "placard-coulissant-chambre-apres-couleur"
+   ]
+  },
+  {
+   "avant": "pro-comptoir-accueil-avant",
+   "zone": [
+    47.5,
+    34,
+    7,
+    11
+   ],
+   "corriger": [
+    "pro-comptoir-accueil-apres-bois",
+    "pro-comptoir-accueil-apres-couleur"
+   ]
+  },
+  {
+   "avant": "buffet-salle-a-manger-avant",
+   "zone": [
+    64,
+    34,
+    9,
+    14
+   ],
+   "corriger": [
+    "buffet-salle-a-manger-apres-neutre",
+    "buffet-salle-a-manger-apres-couleur"
+   ]
+  }
+ ],
+ "variantes": [
+  {
+   "nom": "cuisine-bordeaux-brillante-apres-neutre",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-bordeaux-brillante-apres-couleur",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-grise-brillante-apres-bois",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-grise-brillante-apres-couleur",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-ouverte-bar-apres-bois",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-ouverte-bar-apres-couleur",
+   "essais": 1,
+   "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+  },
+  {
+   "nom": "cuisine-ilot-maison-apres-couleur",
+   "essais": 2,
+   "ajout": "The splashback stays exactly as in the first image: same brown stone, same colour.",
+   "motif": "crédence changée (brune → beige) dans les essais 1 et 2"
+  },
+  {
+   "nom": "mesure-visite",
+   "essais": 2,
+   "remplacer": [
+    "a dated cherry-effect kitchen cabinet door",
+    "a flat cherry-effect laminate door without any moulding"
+   ],
+   "motif": "porte à moulures : on ne montre que des façades planes"
+  },
+  {
+   "nom": "picto-plan-parallele",
+   "essais": 2,
+   "remplacer": [
+    "Subject: a tiny galley kitchen",
+    "Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base, the same base as the other kitchen plans of the series: a tiny galley kitchen"
+   ],
+   "motif": "même sol que les 4 plans de la série 1 (base carrée fine)"
+  }
+ ]
+}

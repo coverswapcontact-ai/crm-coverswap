@@ -38,7 +38,22 @@
   "picto-refrigerateur": 2,
   "picto-plan-parallele": 2
  },
- "rejets": {},
+ "rejets": {
+  "cuisine-bordeaux-brillante-apres-neutre-1": "reflets brillants, refait mat",
+  "cuisine-bordeaux-brillante-apres-neutre-2": "reflets brillants, refait mat",
+  "cuisine-bordeaux-brillante-apres-couleur-1": "reflets brillants, refait mat",
+  "cuisine-bordeaux-brillante-apres-couleur-2": "reflets brillants, refait mat",
+  "cuisine-grise-brillante-apres-bois-1": "reflets brillants, refait mat",
+  "cuisine-grise-brillante-apres-bois-2": "reflets brillants, refait mat",
+  "cuisine-grise-brillante-apres-couleur-1": "reflets brillants, refait mat",
+  "cuisine-grise-brillante-apres-couleur-2": "reflets brillants, refait mat",
+  "cuisine-ouverte-bar-apres-bois-1": "reflets brillants, refait mat",
+  "cuisine-ouverte-bar-apres-bois-2": "reflets brillants, refait mat",
+  "cuisine-ouverte-bar-apres-couleur-1": "reflets brillants, refait mat",
+  "cuisine-ouverte-bar-apres-couleur-2": "reflets brillants, refait mat",
+  "cuisine-ilot-maison-apres-couleur-1": "crédence changée",
+  "cuisine-ilot-maison-apres-couleur-2": "crédence changée"
+ },
  "mesures": {
   "cuisine-bordeaux-brillante-avant": {
    "blanc": {
@@ -64,14 +79,32 @@
       62,
       6,
       10
+     ],
+     [
+      20,
+      12,
+      8,
+      10
+     ],
+     [
+      12,
+      62,
+      8,
+      5
      ]
     ],
     "plan": [
      [
-      46,
-      53,
-      12,
-      2.5
+      13,
+      56,
+      8,
+      1.2
+     ],
+     [
+      82,
+      58,
+      6,
+      1.2
      ]
     ]
    }

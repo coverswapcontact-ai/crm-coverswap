@@ -176,3 +176,28 @@ copiée dans `coverswap/docs/direction-artistique-serie-2.md`. `--priorite N` fi
   bois et couleur) vérifiés en fondu à 50 % : rien n'a bougé, l'écart vient du changement de teinte → `calages_vus`.
 - Défaut des prompts, signalé sans les réécrire : le style commun des avants demande « a kettle, a tea towel, a fruit
   bowl » → bouilloires en salle de bain, chambre, couloir et accueil pro. Essais choisis pour le limiter.
+
+### Série 2 : retouches après relecture (03/10/2026)
+
+Six retouches demandées par Lucas dans le reste du plafond (1,90 $). Script `scripts/retouches-serie-2.ts`
+(logique `src/lib/simulations/retouches.ts`, liste `scripts/retouches-serie-2.json`), relancé sans risque : une
+retouche faite a son original dans `~/coverswap-photos/serie-2/originaux/` et n'est pas refaite.
+- **Bouilloires** : édition de l'image entière puis recollage de la seule zone (bord adouci) ; garde
+  `ecartAutourDeLaZone` > 8 = raccord visible, rien n'est recollé (éditions calées 2-5, ratées 9-83). Corrigées :
+  sdb-double-vasque, sdb-baignoire, placard (avant + zone recopiée dans les deux après), pro-comptoir (3 images),
+  buffet avant et après couleur. Restent : sdb-petit-meuble-vasque (le modèle enlève aussi la coupe de fruits et
+  décale le sèche-serviettes) et buffet après neutre (le torchon bouge, le recollage le couperait).
+- **ERREUR, 0,50 à 0,75 $ perdus** : la première version passait un masque SANS passer le modèle → `gpt-image-1`
+  (modèle par défaut du simulateur, 6 208 jetons de sortie, 0,25 $ l'appel) ; il a rendu une autre photo. Un appel
+  interrompu n'est pas noté dans GenerationImage mais compté en réserve (`--hors-base 0,25`). Garde ajoutée : un
+  appel qui coûte plus du double de l'estimation arrête tout. Le masque a été retiré du code (non essayé avec
+  gpt-image-2.5-sunburst).
+- **Brillance** : les 6 après des cuisines brillantes refaits en essai 3 avec la phrase de finition mate ; essais 1-2
+  rejetés à l'œil (`rejets` de `zones-serie-2.json`). Bordeaux neutre : façades blanc cassé mates lues NE56 → K6 Light
+  Grey (blanc à l'ombre, mesure sans exposition), même avec des zones éclairées ajoutées.
+- **Îlot couleur** : essais 1-2 rejetés (crédence changée) ; essais 3-4 gardent la crédence mais aussi le plan granit
+  côté mur (seul le dessus de l'îlot change) → à refaire.
+- **Bordeaux couleur, plan** : zones déplacées sur le plan éclairé (l'ancienne mêlait chant et carrelage, écart-type
+  67) → AG13 Pale Oak fidèle (ΔE 9,9), plus de Winter Breeze.
+- **Plafond atteint** (9,73 $ dans GenerationImage + 0,25 $ hors base) : mesure-visite et picto-plan-parallele non
+  lancés (≈ 0,20 $ pour leurs 4 essais), variantes prêtes dans `retouches-serie-2.json`.

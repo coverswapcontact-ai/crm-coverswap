@@ -1,7 +1,7 @@
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { lireListeImages, type ImageSite } from "./ambiances";
+import { ESSAIS_MAX, lireListeImages, type ImageSite } from "./ambiances";
 import { ecartContours } from "./planches";
 import { deltaE, hexVersRgb, mesurerImage, plusProche, rgbVersHex, type Zone } from "./teintes";
 import { lireCatalogue, type Revetement } from "./vignettes";
@@ -139,7 +139,8 @@ export async function construireBibliotheque(options: { liste: string; zones: st
         continue;
       }
       const essais: EssaiMesure[] = [];
-      for (let k = 1; k <= (image.essais ?? liste.essais); k++) {
+      // Les essais de la liste, plus ceux ajoutés ensuite (retouches : essais 3, 4…).
+      for (let k = 1; k <= Math.max(image.essais ?? liste.essais, ESSAIS_MAX); k++) {
         const fichier = fichierEssai(options.racine, image, k);
         if (!fichier) continue;
         const ecart = arrondi(await ecartContours(avant, fichier));

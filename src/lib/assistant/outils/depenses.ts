@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
-import { CODES_CATEGORIE, libelleCategorie } from "@/lib/depenses/constantes";
+import { ADRESSE_DEPENSES, CODES_CATEGORIE, libelleCategorie } from "@/lib/depenses/constantes";
 import { definirOutil, format, lien } from "../definition";
 import { resoudrePeriode, schemaPeriode } from "../periodes";
 import { pluriel } from "@/lib/commun/format";
@@ -46,7 +46,7 @@ export const outilDepenses = definirOutil({
       nonRattachees.length ? `À rattacher (ou à marquer hors chantier) : ${nonRattachees.slice(0, 10).map(ligne).join(" · ")}` : "",
       liste.length ? `Détail :\n${liste.slice(0, e.limite ?? 25).map(ligne).join("\n")}${liste.length > (e.limite ?? 25) ? `\n… ${liste.length - (e.limite ?? 25)} de plus` : ""}` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: { periode: { du: periode.du, au: periode.au }, total, parCategorie, rattachees: centimes(rattachees), horsChantier: centimes(horsChantier), nonRattachees: nonRattachees.map((d) => ({ id: d.id, montant: d.montant, fournisseur: d.fournisseur, categorie: d.categorie, payeeLe: d.payeeLe })), depenses: liste.slice(0, e.limite ?? 25).map((d) => ({ id: d.id, payeeLe: d.payeeLe, montant: d.montant, fournisseur: d.fournisseur, libelle: d.libelle, categorie: d.categorie, dossier: d.dossier, horsChantier: d.horsChantier, justificatif: Boolean(d.justificatifId) })) }, liens: [lien("Dépenses", "/depenses")] };
+    return { texte, donnees: { periode: { du: periode.du, au: periode.au }, total, parCategorie, rattachees: centimes(rattachees), horsChantier: centimes(horsChantier), nonRattachees: nonRattachees.map((d) => ({ id: d.id, montant: d.montant, fournisseur: d.fournisseur, categorie: d.categorie, payeeLe: d.payeeLe })), depenses: liste.slice(0, e.limite ?? 25).map((d) => ({ id: d.id, payeeLe: d.payeeLe, montant: d.montant, fournisseur: d.fournisseur, libelle: d.libelle, categorie: d.categorie, dossier: d.dossier, horsChantier: d.horsChantier, justificatif: Boolean(d.justificatifId) })) }, liens: [lien("Dépenses", ADRESSE_DEPENSES)] };
   },
 });
 

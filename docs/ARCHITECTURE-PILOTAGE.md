@@ -815,6 +815,12 @@ l'autre : « à rattacher », compté et signalé.
   « hors chantier » tant que le rattachement n'a pas été choisi à la main.
 - Le dossier affiche ses dépenses et une marge indicative (facturé, à défaut
   devis signé, moins dépensé).
+- La liste de l'année (à rattacher, sans justificatif, fiche d'une dépense pour
+  la modifier, la rattacher ou la retirer) est une section de Finances depuis la
+  mission 18 (A3, 03/10/2026) : `/finances?section=depenses`, sur la même année
+  que le reste de l'écran ; l'ancienne adresse `/depenses` y redirige. La
+  saisie `/depenses/nouvelle` reste un écran (raccourci de l'application
+  installée) et ramène à la section.
 
 ### Rien ne se perd, rien ne se supprime
 

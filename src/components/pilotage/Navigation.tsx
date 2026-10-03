@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -30,6 +30,8 @@ type Entree = {
   compteur?: keyof Compteurs;
   /** Barre du bas sur téléphone (5 entrées au plus, « Plus » en sixième). */
   mobile?: boolean;
+  /** Autres adresses qui allument l'entrée (un écran devenu section d'un autre, sa saisie restée à part). */
+  aussi?: string[];
 };
 
 // Navigation resserrée (21/09/2026) : ce que Lucas utilise, dans l'ordre du travail — un lead
@@ -45,6 +47,8 @@ type Entree = {
 // « Synthèse » ont disparu (leurs chiffres sont dans l'Analytique ; la chaîne des leads Meta en bas de son onglet Publicité).
 // Mission 18 (A1) : l'onglet « Espaces clients » disparaît : l'état de l'espace est une colonne et un filtre de Dossiers
 // (/espaces y redirige), le bloc Espace du panneau du dossier et la fiche client gardent les gestes.
+// Mission 18 (A3) : « Dépenses » devient une section de Finances (/depenses y redirige) ; la saisie /depenses/nouvelle
+// (raccourci de l'application installée) reste et allume Finances.
 const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
@@ -54,19 +58,18 @@ const PRINCIPALES: Entree[] = [
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/analytique", libelle: "Analytique", icone: ChartLine, mobile: true },
-  { href: "/finances", libelle: "Finances", icone: Wallet },
+  { href: "/finances", libelle: "Finances", icone: Wallet, aussi: ["/depenses/nouvelle"] },
 ];
 
 // Écrans secondaires : petites icônes à droite, menu « Plus » sur téléphone.
 const SECONDAIRES: Entree[] = [
   { href: "/site", libelle: "Site", icone: Globe },
   { href: "/taches-de-fond", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
-  { href: "/depenses", libelle: "Dépenses", icone: Receipt },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 
-function estActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
+function estActive(pathname: string, entree: Entree): boolean {
+  return [entree.href, ...(entree.aussi ?? [])].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "rouge" }) {
@@ -132,7 +135,7 @@ export function Navigation() {
 
   // Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires.
   const DANS_LE_MENU = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
-  const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree.href));
+  const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree));
   const alerteMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "rouge" ? compteurs[entree.compteur] : 0), 0);
   const aTraiterMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "vert" ? compteurs[entree.compteur] : 0), 0);
 
@@ -150,7 +153,7 @@ export function Navigation() {
           </Link>
           <ul className="flex min-w-0 flex-1 items-center gap-1">
             {[...PRINCIPALES, ...SECONDAIRES].map((entree) => {
-              const active = estActive(pathname, entree.href);
+              const active = estActive(pathname, entree);
               const Icone = entree.icone;
               // L'icône seule tant que la place manque : libellés des écrans principaux dès 1280 px,
               // ceux des secondaires sur très grand écran.
@@ -191,7 +194,7 @@ export function Navigation() {
           style={{ gridTemplateColumns: `repeat(${PRINCIPALES.filter((entree) => entree.mobile).length + 1}, minmax(0, 1fr))` }}
         >
           {PRINCIPALES.filter((entree) => entree.mobile).map((entree) => {
-            const active = estActive(pathname, entree.href);
+            const active = estActive(pathname, entree);
             const Icone = entree.icone;
             return (
               <li key={entree.href} className="contents">
@@ -250,7 +253,7 @@ export function Navigation() {
             <ul className="flex flex-col">
               {DANS_LE_MENU.map((entree) => {
                 const Icone = entree.icone;
-                const active = estActive(pathname, entree.href);
+                const active = estActive(pathname, entree);
                 return (
                   <li key={entree.href}>
                     <Link

@@ -161,6 +161,10 @@ describe("analytique publicite (ex-« campagne »), etat_crm META (ex-« voir_pu
     const clients = await appeler("manager_clients");
     assert.ok(clients.liens?.some((l) => l.href === "http://localhost:3001/dossiers?espace=TOUS"), JSON.stringify(clients.liens));
     for (const l of clients.liens ?? []) assert.doesNotMatch(l.href, /\/espaces(\?|$)/);
+    // Mission 18 (A3) : plus de lien vers l'écran Dépenses retiré (une section de Finances) ; la saisie reste.
+    const argent = await appeler("analytique", { onglet: "argent" });
+    const finances = await appeler("manager_finances");
+    for (const l of [synthese, commercial, site, clients, argent, finances].flatMap((r) => r.liens ?? [])) assert.doesNotMatch(l.href, /\/depenses(\?|$)/);
     assert.deepEqual(reseau, []);
   });
 });

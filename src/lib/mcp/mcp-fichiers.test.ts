@@ -129,6 +129,7 @@ describe("ajouter_fichier : base64 sur chaque cible", () => {
 
     const depense = await appeler(outils.outilAjouterFichier, { cible: { entite: "DEPENSE", id: ids.depense }, type: "JUSTIFICATIF", source: { base64: b64(PDF), nom: "facture.pdf" } });
     assert.ok((await prisma.depense.findUniqueOrThrow({ where: { id: ids.depense } })).justificatifId, depense.texte);
+    assert.ok(depense.liens?.some((l) => l.href === "http://localhost:3001/finances?section=depenses"), JSON.stringify(depense.liens));
 
     const publication = await appeler(outils.outilAjouterFichier, { cible: { entite: "PUBLICATION", id: ids.publication }, type: "PHOTO_AVANT", source: { base64: b64(JPEG), nom: "avant.jpg" } });
     assert.equal(publication.confirmation, undefined);

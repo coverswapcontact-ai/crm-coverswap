@@ -4,6 +4,18 @@
 import { z } from "zod/v4";
 import { estJourValide, jourParis } from "@/lib/dossiers/dates";
 
+/**
+ * Mission 18 (A3) : la liste des dépenses est une section de Finances. L'ancien écran /depenses y redirige
+ * (`next.config.ts`) ; la saisie `/depenses/nouvelle` (raccourci de l'application installée, file hors ligne) reste.
+ */
+export const ADRESSE_DEPENSES = "/finances?section=depenses";
+export const SECTION_DEPENSES = "depenses";
+
+/** La section Dépenses de Finances, sur une année donnée (sinon l'année en cours). */
+export function adresseDepenses(annee?: number): string {
+  return annee ? `${ADRESSE_DEPENSES}&annee=${annee}` : ADRESSE_DEPENSES;
+}
+
 export const CATEGORIES_DEPENSE = [
   { code: "MATIERE", libelle: "Matière (films, adhésifs)", chantier: true },
   { code: "FOURNITURES", libelle: "Fournitures et consommables", chantier: true },

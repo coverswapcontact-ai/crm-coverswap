@@ -8,6 +8,7 @@
  */
 import Link from "next/link";
 import type { Courbe, EcranArgent } from "@/lib/analytique/types";
+import { ADRESSE_DEPENSES } from "@/lib/depenses/constantes";
 import { jourParis } from "@/lib/dossiers/dates";
 import { BarresHorizontales, Carte, GrilleTuiles, LienDetail, Progression, Tableau } from "./base";
 import { FiscalArgent } from "./FiscalArgent";
@@ -194,8 +195,8 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
       <div className="grid gap-3 md:gap-4 xl:grid-cols-2">
         <Carte
           titre="Dépenses par catégorie"
-          sousTitre={`Saisies ${surLaPeriode(ecran.periode)} (écran Dépenses)`}
-          action={<LienDetail href="/depenses">Dépenses →</LienDetail>}
+          sousTitre={`Saisies ${surLaPeriode(ecran.periode)} (Finances, section Dépenses)`}
+          action={<LienDetail href={ADRESSE_DEPENSES}>Dépenses →</LienDetail>}
           gap="gap-4"
         >
           <BarresHorizontales

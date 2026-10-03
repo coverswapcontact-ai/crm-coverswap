@@ -298,8 +298,9 @@ describe("partie serveur de l'écran", () => {
     assert.match(leads, /\/analytique\?onglet=publicite#chaine-meta`,\n\s+libelleLien: "Voir la chaîne des leads Meta"/);
     assert.doesNotMatch(leads, /\/publicite`/);
     // Mission 17 (partie C) : l'ex-« rattacher_depense » est « creer » DEPENSE (entites/argent.ts).
+    // Mission 18 (A3) : la liste des dépenses est une section de Finances (ADRESSE_DEPENSES = /finances?section=depenses).
     const ecriture = readFileSync(path.join(racine, "src/lib/assistant/entites/argent.ts"), "utf8");
-    assert.match(ecriture, /rattachée au chantier[\s\S]{0,500}lien\("Dépenses", "\/depenses"\)/);
+    assert.match(ecriture, /rattachée au chantier[\s\S]{0,500}lien\("Dépenses", ADRESSE_DEPENSES\)/);
     assert.deepEqual(reseau, []);
   });
 });

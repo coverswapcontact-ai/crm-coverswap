@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourHeure, pluriel } from "@/lib/commun/format";
+import { ADRESSE_DEPENSES } from "@/lib/depenses/constantes";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { schemaDepotDocument } from "@/lib/dossiers/depot-document";
 import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
@@ -82,7 +83,7 @@ export async function resoudreCibleFichier(c: CibleOutil): Promise<CibleResolue>
 }
 
 const lienCible = (c: { entite: EntiteCible; id: string }): LienOutil =>
-  c.entite === "DOSSIER" ? lien("Dossier", `/dossiers?dossier=${c.id}`) : c.entite === "LEAD" ? lien("Lead", `/leads?lead=${c.id}`) : c.entite === "CLIENT" ? lien("Client", `/clients?client=${c.id}`) : c.entite === "DEPENSE" ? lien("Dépenses", "/depenses") : lien("Site", "/site");
+  c.entite === "DOSSIER" ? lien("Dossier", `/dossiers?dossier=${c.id}`) : c.entite === "LEAD" ? lien("Lead", `/leads?lead=${c.id}`) : c.entite === "CLIENT" ? lien("Client", `/clients?client=${c.id}`) : c.entite === "DEPENSE" ? lien("Dépenses", ADRESSE_DEPENSES) : lien("Site", "/site");
 
 async function publicationPubliee(cible: CibleFichier | null | undefined): Promise<boolean> {
   if (cible?.entite !== "PUBLICATION") return false;

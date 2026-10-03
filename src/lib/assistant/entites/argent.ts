@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateCourte, euros } from "@/lib/commun/format";
-import { libelleCategorie } from "@/lib/depenses/constantes";
+import { ADRESSE_DEPENSES, libelleCategorie } from "@/lib/depenses/constantes";
 import { schemaCreationDepense, schemaModificationDepense } from "@/lib/depenses/constantes";
 import { archiverDepense, creerDepense, modifierDepense, restaurerDepense } from "@/lib/depenses/service";
 import { UNITES } from "@/lib/dossiers/constants";
@@ -142,7 +142,8 @@ export const DEPENSE: DefinitionEntite = {
     if (!d) throw new ErreurMetier(`Dépense introuvable : ${id}.`, 404);
     return { id, nom: `la dépense du ${dateCourte(d.payeeLe)} (${euros(d.montant)} chez ${d.fournisseur})`, archive: Boolean(d.archiveLe), contexte: {} };
   },
-  chemin: () => "/depenses",
+  // Mission 18 (A3) : la liste des dépenses est une section de Finances.
+  chemin: () => ADRESSE_DEPENSES,
   modifier: {
     schema: objet(schemaModificationDepense),
     libelles: { payeeLe: "la date", montant: "le montant", fournisseur: "le fournisseur", categorie: "la catégorie", libelle: "le libellé", moyen: "le moyen", dossierId: "le chantier", horsChantier: "hors chantier", note: "la note" },
@@ -180,7 +181,7 @@ export const DEPENSE: DefinitionEntite = {
       return {
         texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${euros(depense.montant)} chez ${depense.fournisseur} (${libelleCategorie(depense.categorie).toLowerCase()})${depense.dossier ? `, rattachée au chantier de ${depense.dossier.clientNom}` : depense.horsChantier ? ", hors chantier" : ", pas encore rattachée"} [depense:${depense.id}].${depense.justificatif ? " Justificatif attaché." : " Le justificatif s'ajoute ici (justificatif) ou ensuite par « ajouter_fichier »."}`,
         donnees: { depenseId: depense.id, depense },
-        liens: [lien("Dépenses", "/depenses")],
+        liens: [lien("Dépenses", ADRESSE_DEPENSES)],
       };
     },
   },

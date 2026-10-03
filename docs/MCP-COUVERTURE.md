@@ -37,6 +37,12 @@
   « Ouvrir un dossier » (L12, LF4) et `creer DOSSIER (lead_id)` ne servent plus qu'à un lead qualifié au téléphone ;
   la description de `creer` le dit. Paramètres inchangés, empreinte **`040d6c7aa53c`** (53 outils) : reconnecter le
   connecteur pour la nouvelle description.
+- **Mission 18, A3 (03/10/2026)** : l'écran Dépenses devient la section « Dépenses » de Finances
+  (`/finances?section=depenses`, où `/depenses` redirige) ; la saisie `/depenses/nouvelle` reste un écran (raccourci de
+  l'application installée, file hors ligne) et le panneau du dossier garde ses dépenses (DP91, DP92). Les lignes X1–X10
+  passent en 2.10 ; les liens des outils (`lister` DEPENSES, `creer` / `modifier` / `archiver` DEPENSE,
+  `ajouter_fichier` sur une dépense) mènent à la section. Ni outil ni paramètre ne change : empreinte
+  **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -466,7 +472,7 @@ retiré, ils ont leurs lignes.
 | W5 | « Publier » (exige l'accord écrit, une photo après ou un texte) | PATCH … {publier} | S-client (site public) | publier (PUBLICATION) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
 | W6 | « Retirer » du site | PATCH … {retirer} | R | publier (PUBLICATION, retirer) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
 
-### 2.10 Finances (`/finances`, allégé en partie B)
+### 2.10 Finances (`/finances`, allégé en partie B ; section Dépenses depuis la mission 18, A3)
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
@@ -481,11 +487,16 @@ retiré, ils ont leurs lignes.
 | F9 | « Exporter (CSV) » | GET /api/finances/livre?annee= | L | lister LIVRE (lien du CSV) | couvert | `mcp-lister-etat.test.ts` › « ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE… » |
 | F10 | Lien vers le dossier d'une facture | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
-### 2.11 Dépenses (`/depenses`, `/depenses/nouvelle`)
+#### Section « Dépenses » (ex-écran `/depenses`, mission 18 A3) et saisie (`/depenses/nouvelle`)
+
+La liste de l'année est une section de Finances, sur la même année que le reste de l'écran ; `/depenses` redirige vers
+`/finances?section=depenses` (la requête suit : `?annee=`), qui y descend. « Nouvelle dépense » ouvre la saisie
+`/depenses/nouvelle`, restée un écran (raccourci de l'application installée, file hors ligne), dont les retours mènent
+à la section. Le panneau du dossier garde ses dépenses (DP91, DP92).
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| X1 | Liste de l'année (« à traiter » : sans chantier, sans justificatif), année −1 / +1 | GET /api/depenses?annee= | L | lister DEPENSES (annee ou periode, categorie, rattachement ; vue ARCHIVEES) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » ; `mcp-v2.test.ts` › « « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie… » |
+| X1 | Section « Dépenses » : liste de l'année de l'écran (« à traiter » : sans chantier, sans justificatif ; total), année −1 / +1 de Finances | /finances?section=depenses&annee= ; GET /api/depenses?annee= | L | lister DEPENSES (annee ou periode, categorie, rattachement ; vue ARCHIVEES) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » ; `mcp-v2.test.ts` › « « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie… » ; `mission-18-a3.test.ts` › « la page Finances charge les dépenses de l'année demandée comme l'ancien écran… » |
 | X2 | File hors ligne › « Abandonner cette saisie » | IndexedDB | — | — | sans objet | — |
 | X3 | Fiche › voir le justificatif | GET /api/depenses/:id/justificatif | L | voir_fichiers (documents, cible DEPENSE : justificatif) | couvert | `mcp-fichiers.test.ts` › « voir_fichiers : justificatif d'une dépense en image ou en lien… » |
 | X4 | Fiche › « Modifier » : montant, date, fournisseur, catégorie, moyen, libellé, note, chantier ou hors chantier | PATCH /api/depenses/:id | R | modifier DEPENSE (montant, payee_le, fournisseur, categorie, moyen, libelle, note, dossier_id, hors_chantier) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
@@ -495,6 +506,13 @@ retiré, ils ont leurs lignes.
 | X8 | Nouvelle › photo du ticket (caméra, galerie) | — | — | — | sans objet (la photo part avec X9) | — |
 | X9 | Nouvelle › « Enregistrer la dépense » (justificatif, reprise hors ligne) | POST /api/depenses (multipart) | R | creer DEPENSE (justificatif, note, forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » ; `mcp-mail.test.ts` › « 6. « Le mail de la facture Meta, mets-le en dépense » : lecture… » |
 | X10 | « Enregistrer quand même » (justificatif déjà reçu) | POST /api/depenses {forcer} | R | creer DEPENSE (forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » |
+
+### 2.11 Dépenses — section de Finances depuis la mission 18 (A3)
+
+L'écran n'existe plus : `/depenses` redirige vers la section « Dépenses » de Finances (`/finances?section=depenses`) ;
+ses lignes X1–X10, saisie `/depenses/nouvelle` comprise, sont en 2.10, avec leurs outils et leurs tests (les liens des
+outils vers la section : `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année… », `mcp-partie-c.test.ts`
+› « creer DEPENSE avec justificatif… », `mission-18-a3.test.ts`). Elles ne sont plus comptées ici en 2.17.
 
 ### 2.12 Analytique (`/analytique`, partie B)
 
@@ -637,9 +655,9 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » (mission 18, A1 : Espaces clients retiré) | — | — | — | sans objet | — |
+| N1 | Barre : Tâches, Leads, Dossiers, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Paramètres ; menu « Plus » (mission 18 : Espaces clients retiré en A1, Dépenses en A3 ; la saisie `/depenses/nouvelle` allume Finances) | — | — | — | sans objet | — |
 | N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS` (mission 18) | — | — | — | sans objet | — |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses` (mission 18) | — | — | — | sans objet | — |
 | N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
 | N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
@@ -689,6 +707,9 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
   sans objet) ; Dossiers passe à 20 actions (E1–E4 : 17 couvertes, 3 sans objet) ; Clients à 30 (C27–C30, 30
   couvertes). Total : **427 actions, 391 couvertes (100 % hors gestes sans objet), 36 sans objet**, 0 partielle, 0
   manquante.
+- **Après la mission 18, A3 (03/10/2026)** : l'écran Dépenses devient la section « Dépenses » de Finances (X1–X10 en
+  2.10) : la ligne Dépenses sort du compte, Finances passe à 20 actions (17 couvertes, 3 sans objet). Total inchangé :
+  **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
 
 ## 3. Les manques, par domaine
 
@@ -905,7 +926,8 @@ la date du chantier, reflétés dans Google Calendar.
 
 ### 3.23 Pièges relevés en passant (à corriger avec les outils)
 
-1. `rattacher_depense` crée une dépense (voir 3.14), et son lien mène à `/finances` au lieu de `/depenses`.
+1. `rattacher_depense` crée une dépense (voir 3.14), et son lien mène à `/finances` au lieu de `/depenses`. (Mission 18,
+   A3 : les dépenses sont une section de Finances ; `creer` DEPENSE, son remplaçant, mène à `/finances?section=depenses`.)
 2. `annuler_encaissement` affiche l'identifiant du dossier comme un message, et son lien mène à `/finances`.
 3. `lien_espace` écrit « lien communiqué par SMS » et passe la main au client, même si rien n'est envoyé.
 4. `publier_simulation` republie aussi les simulations **masquées** (filtre `statut !== "PUBLIEE"`), ce qui envoie un

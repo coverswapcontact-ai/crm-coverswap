@@ -8,7 +8,7 @@ import { CATEGORIES_CLIENT, SOURCES_CLIENT, type CategorieClient, type SourceCli
 import { pageClients } from "@/lib/clients/fiches";
 import { LIBELLES_ISSUE } from "@/lib/commercial/constantes";
 import { issueDuContenu } from "@/lib/commercial/sans-reponse";
-import { CODES_CATEGORIE, libelleCategorie } from "@/lib/depenses/constantes";
+import { adresseDepenses, CODES_CATEGORIE, libelleCategorie } from "@/lib/depenses/constantes";
 import { listerDepenses, suggestionsSaisie } from "@/lib/depenses/service";
 import { dossiersArchives } from "@/lib/dossiers/archivage";
 import { ETAPES, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
@@ -321,7 +321,7 @@ async function listerLesDepenses(e: EntreeLister, vue: string, contexte: Context
   if (vue === "ARCHIVEES") {
     const lignes = await prisma.depense.findMany({ where: { archiveLe: { not: null }, payeeLe: { gte: new Date(`${annee}-01-01T00:00:00Z`), lt: new Date(`${annee + 1}-01-01T00:00:00Z`) } }, orderBy: { payeeLe: "desc" }, include: { dossier: { select: { id: true, clientNom: true } } } });
     const p = paginer(lignes, e.page, e.par_page);
-    return { texte: p.total ? `${pluriel(p.total, "dépense retirée", "dépenses retirées")} en ${annee}${textePage(p)} :\n${p.lignes.map((d) => `- ${format.jourCourt(d.payeeLe)} ${format.euros(d.montant)} ${d.fournisseur} (${libelleCategorie(d.categorie).toLowerCase()}), retirée le ${format.jourCourt(d.archiveLe)}${d.archiveMotif ? ` (${d.archiveMotif})` : ""} [depense:${d.id}]`).join("\n")}` : `Aucune dépense retirée en ${annee}.`, donnees: { annee, ...p, lignes: p.lignes.map((d) => ({ id: d.id, payeeLe: d.payeeLe, montant: d.montant, fournisseur: d.fournisseur, categorie: d.categorie, archiveLe: d.archiveLe, archiveMotif: d.archiveMotif, dossier: d.dossier })) }, liens: [lien("Dépenses", `/depenses?annee=${annee}`)] };
+    return { texte: p.total ? `${pluriel(p.total, "dépense retirée", "dépenses retirées")} en ${annee}${textePage(p)} :\n${p.lignes.map((d) => `- ${format.jourCourt(d.payeeLe)} ${format.euros(d.montant)} ${d.fournisseur} (${libelleCategorie(d.categorie).toLowerCase()}), retirée le ${format.jourCourt(d.archiveLe)}${d.archiveMotif ? ` (${d.archiveMotif})` : ""} [depense:${d.id}]`).join("\n")}` : `Aucune dépense retirée en ${annee}.`, donnees: { annee, ...p, lignes: p.lignes.map((d) => ({ id: d.id, payeeLe: d.payeeLe, montant: d.montant, fournisseur: d.fournisseur, categorie: d.categorie, archiveLe: d.archiveLe, archiveMotif: d.archiveMotif, dossier: d.dossier })) }, liens: [lien("Dépenses", adresseDepenses(annee))] };
   }
   const liste = await listerDepenses(annee);
   const filtrees = liste.depenses.filter((d) => !f.categorie || d.categorie === f.categorie);
@@ -332,7 +332,7 @@ async function listerLesDepenses(e: EntreeLister, vue: string, contexte: Context
     liste.parCategorie.length ? `Par catégorie : ${liste.parCategorie.map((c) => `${c.libelle} ${format.euros(c.total)}`).join(" · ")}.` : "",
     p.total ? `${f.categorie ? `${libelleCategorie(f.categorie as (typeof CODES_CATEGORIE)[number])} : ` : ""}${pluriel(p.total, "dépense")}${textePage(p)} :\n${p.lignes.map(ligne).join("\n")}` : "Aucune dépense.",
   ].filter(Boolean).join("\n");
-  return { texte, donnees: { annee, total: liste.total, parCategorie: liste.parCategorie, aRattacher: liste.aRattacher, sansJustificatif: liste.sansJustificatif, page: p.page, pages: p.pages, nombre: p.total, depenses: p.lignes }, liens: [lien("Dépenses", `/depenses?annee=${annee}`)] };
+  return { texte, donnees: { annee, total: liste.total, parCategorie: liste.parCategorie, aRattacher: liste.aRattacher, sansJustificatif: liste.sansJustificatif, page: p.page, pages: p.pages, nombre: p.total, depenses: p.lignes }, liens: [lien("Dépenses", adresseDepenses(annee))] };
 }
 
 /* ── FINANCES ───────────────────────────────────────────────────────── */

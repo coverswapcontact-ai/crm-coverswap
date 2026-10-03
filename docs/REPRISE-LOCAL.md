@@ -341,3 +341,62 @@ Reste :
 - Reconnecter le connecteur MCP après la mise en ligne (description de `creer`).
 - B12 : statut du lead d'un dossier ouvert tout seul (CONTACTE), et l'alignement complet lead ↔ étape.
 - L'audit des connexions ne signale pas une simulation récente restée sans dossier : le filet la rattrape en 15 min.
+
+### Mission 18, A3 — Dépenses passe dans Finances
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Section « Dépenses » de Finances** : `finances/page.tsx` charge aussi `listerDepenses(annee)` et
+  `suggestionsSaisie()` pour la même année que le reste de l'écran ; `ListeDepenses` (déplacée de
+  `depenses/_components` vers `finances/_components`) devient une section `id="depenses"` placée entre « À corriger » et
+  « Livre des recettes ». On y retrouve le total, « Nouvelle dépense », la file hors ligne, les compteurs « à rattacher »
+  et « sans justificatif », la liste par mois et la fiche d'une dépense (modifier, justificatif, retirer), inchangée.
+  L'année se change par la navigation d'année de Finances, dont les liens gardent `section`.
+- `/depenses` redirige vers `/finances?section=depenses` (`next.config.ts`, 307 comme les autres ; la requête suit,
+  `?annee=` compris) ; la page descend alors à la section. L'écran `depenses/page.tsx` est supprimé.
+- **Gardés** : la saisie `/depenses/nouvelle` (raccourci du manifeste, file IndexedDB), dont les liens « Dépenses » et
+  « Voir les dépenses » mènent à la section ; les routes `/api/depenses*` ; le bloc Dépenses du panneau du dossier
+  (`DepensesDossier`, même composant, « + Dépense » vers la saisie).
+- Navigation : l'entrée Dépenses disparaît (11 onglets en attendant A5-A6) ; Finances s'allume aussi sur
+  `/depenses/nouvelle` (nouveau champ `aussi` des entrées).
+- Liens : `ADRESSE_DEPENSES` et `adresseDepenses(annee)` (`depenses/constantes.ts`) servent à l'Analytique (carte
+  « Dépenses par catégorie »), à la saisie et à l'assistant (`lister` DEPENSES et sa période, `creer`, `modifier` et
+  `archiver` DEPENSE, `ajouter_fichier` sur une dépense). Aucun outil, paramètre ni description ne change : empreinte
+  `040d6c7aa53c` (53 outils), rien à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête ; X1–X10 en 2.10 sous « Section Dépenses » ; 2.11 renvoie à 2.10 ; N1, N3 ;
+  bilan inchangé, 427 actions, 391 couvertes, 36 sans objet ; piège 3.23-1) et `ARCHITECTURE-PILOTAGE.md` §12.
+
+Décisions prises seul (solution la plus simple) :
+- « Le panneau du dossier garde ses dépenses, même composant » : `DepensesDossier` n'est pas touché (lecture, marge,
+  ajout par la saisie). On modifie une dépense depuis la fiche de la section de Finances, comme avant depuis l'écran
+  Dépenses.
+- La section passe avant le livre des recettes : le travail à faire vient avant l'archive de l'année. L'écran n'a
+  qu'une navigation d'année.
+- La redirection passe par `?section=`, pas par un fragment, en 307 (le test « rien de figé dans le navigateur »
+  l'exige). Seule la valeur `depenses` est reconnue ; toute autre valeur ouvre l'écran en haut.
+- `/depenses/nouvelle` n'est pas redirigée : elle sert au raccourci de l'application installée, au « + Dépense » du
+  panneau et aux suggestions de `lister` DEPENSES.
+- `public/sw.js` n'est pas touché : la `VERSION` change en A6, comme convenu en A1.
+
+Tests : 1 303 → 1 311 verts.
+- Nouveau `src/lib/base/mission-18-a3.test.ts`. Il couvre :
+  - la page Finances rendue comme Next la rend : dépenses de l'année demandée égales à `listerDepenses`, chantiers de
+    la fiche, `?section=`, année illisible ;
+  - la route de rechargement et le panneau du dossier ;
+  - les adresses, la redirection (sans chaîne, saisie non touchée), l'écran retiré, le manifeste et la navigation ;
+  - l'absence de tout lien vers `/depenses` dans `src` et `public`.
+- Jumeaux MCP, liens vers la section :
+  - `mcp-lister-etat` : DEPENSES de l'année, retirées, période ; les suggestions mènent à la saisie ;
+  - `mcp-partie-c` : `creer` DEPENSE ;
+  - `mcp-fichiers` : `ajouter_fichier` sur une dépense ;
+  - `mcp-analytique` : aucun lien vers `/depenses`.
+- Adapté : `relecture-b.test.ts`. Le lien de `creer` DEPENSE y devient `ADRESSE_DEPENSES`, même intention.
+- `tsc` (après suppression de `.next`, qui gardait les types de la page retirée), `eslint` sur les fichiers touchés et
+  `npm run build` : propres. Les 40 avertissements NFT de `next.config.ts` (via `simulateur/banc`) existaient déjà.
+- Vérifié à l'œil sur une base d'essai jetable (port 3007, aucun canal sortant) :
+  - `/depenses?annee=2025` mène à `/finances?annee=2025&section=depenses` ;
+  - la page descend à la section, sur bureau et à 390 px ;
+  - l'année −1 / +1 garde la section ; la fiche d'une dépense s'ouvre ;
+  - le menu « Plus » n'a plus Dépenses et Finances y est actif ; la saisie ramène à la section.
+
+Reste :
+- A6 : `ARCHITECTURE-PILOTAGE.md` §4 et §21 (navigation finale) et la `VERSION` de `public/sw.js`.

@@ -6,6 +6,7 @@ import { Camera, CircleCheck, CloudOff, FileText, ImagePlus, Receipt, X } from "
 import { toast } from "sonner";
 import { Bouton, Champ, Puces, TRANS } from "@/components/pilotage/ui";
 import {
+  ADRESSE_DEPENSES,
   CATEGORIES_DEPENSE,
   LIBELLES_MOYEN_DEPENSE,
   MOYENS_DEPENSE,
@@ -169,7 +170,7 @@ export default function SaisieDepense({
             <Bouton variante="primaire" onClick={recommencer}>
               Saisir une autre dépense
             </Bouton>
-            <Link href="/depenses" className={cn("rounded-[8px] py-2 text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+            <Link href={ADRESSE_DEPENSES} className={cn("rounded-[8px] py-2 text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
               Voir les dépenses
             </Link>
           </div>
@@ -182,7 +183,7 @@ export default function SaisieDepense({
     <div className="mx-auto w-full max-w-lg px-5 py-6 pb-28 md:pb-8">
       <div className="flex items-center justify-between">
         <h1 className="text-[20px] font-semibold text-[#F2F3F5]">Nouvelle dépense</h1>
-        <Link href="/depenses" className={cn("text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+        <Link href={ADRESSE_DEPENSES} className={cn("text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
           Dépenses
         </Link>
       </div>

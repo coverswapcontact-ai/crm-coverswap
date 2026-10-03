@@ -12,7 +12,8 @@
    "recopier": [
     "sdb-petit-meuble-vasque-apres-bois",
     "sdb-petit-meuble-vasque-apres-couleur"
-   ]
+   ],
+   "ajout": "Keep the fruit bowl and every piece of fruit exactly as they are, and the towel rail exactly where it is."
   },
   {
    "avant": "sdb-double-vasque-wenge-avant",
@@ -77,7 +78,8 @@
    "corriger": [
     "buffet-salle-a-manger-apres-neutre",
     "buffet-salle-a-manger-apres-couleur"
-   ]
+   ],
+   "ajout": "Keep the tea towel and the mug exactly where they are."
   }
  ],
  "variantes": [
@@ -85,43 +87,57 @@
    "nom": "cuisine-bordeaux-brillante-apres-neutre",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-bordeaux-brillante-apres-couleur",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-grise-brillante-apres-bois",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-grise-brillante-apres-couleur",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-ouverte-bar-apres-bois",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-ouverte-bar-apres-couleur",
    "essais": 1,
    "ajout": "The new surfaces have a soft matte finish: no glossy reflections, only a soft diffuse sheen.",
-   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant"
+   "motif": "films mats (finition Soft) : sans les reflets de l'avant brillant",
+   "faite": "03/10 : essai 3"
   },
   {
    "nom": "cuisine-ilot-maison-apres-couleur",
    "essais": 2,
    "ajout": "The splashback stays exactly as in the first image: same brown stone, same colour.",
-   "motif": "crédence changée (brune → beige) dans les essais 1 et 2"
+   "motif": "crédence changée (brune → beige) dans les essais 1 et 2",
+   "faite": "03/10 : essais 3 et 4"
+  },
+  {
+   "nom": "cuisine-ilot-maison-apres-couleur",
+   "essais": 1,
+   "ajout": "The splashback stays exactly as in the first image: same brown stone, same colour. All the worktops change, including the run along the wall, not only the island top.",
+   "motif": "essais 3-4 : plan mural resté en granit",
+   "faite": "03/10 : essai 5"
   },
   {
    "nom": "mesure-visite",
@@ -130,7 +146,8 @@
     "a dated cherry-effect kitchen cabinet door",
     "a flat cherry-effect laminate door without any moulding"
    ],
-   "motif": "porte à moulures : on ne montre que des façades planes"
+   "motif": "porte à moulures : on ne montre que des façades planes",
+   "faite": "03/10 : essais 3 et 4"
   },
   {
    "nom": "picto-plan-parallele",
@@ -139,7 +156,8 @@
     "Subject: a tiny galley kitchen",
     "Subject: a miniature kitchen scale model seen from above at 45 degrees on a thin square base, the same base as the other kitchen plans of the series: a tiny galley kitchen"
    ],
-   "motif": "même sol que les 4 plans de la série 1 (base carrée fine)"
+   "motif": "même sol que les 4 plans de la série 1 (base carrée fine)",
+   "faite": "03/10 : essais 3 et 4"
   }
  ]
 }

@@ -201,3 +201,11 @@ retouche faite a son original dans `~/coverswap-photos/serie-2/originaux/` et n'
   67) → AG13 Pale Oak fidèle (ΔE 9,9), plus de Winter Breeze.
 - **Plafond atteint** (9,73 $ dans GenerationImage + 0,25 $ hors base) : mesure-visite et picto-plan-parallele non
   lancés (≈ 0,20 $ pour leurs 4 essais), variantes prêtes dans `retouches-serie-2.json`.
+- **Complément accordé par Lucas (0,40 $, plafond 10,40 $, `--plafond 10,40`)** : 7 appels, 0,38 $. Bouilloires
+  restantes reprises avec une consigne (`ajout` : garder la coupe de fruits et le sèche-serviettes ; garder le
+  torchon et la tasse) → les 10 sont corrigées. Îlot couleur essai 5 (« All the worktops change, including the run
+  along the wall ») : crédence brune gardée, plan mural changé ; essais 3-4 rejetés. mesure-visite essais 3-4 (porte
+  plane), essai 3 retenu ; picto-plan-parallele essais 3-4 (base carrée de la série 1), essai 4 retenu. Les variantes
+  faites portent `faite` dans `retouches-serie-2.json` (le script ne les relance pas).
+- **Coût final de la série 2 : 10,10 $ dans GenerationImage (167 appels, aucun échec) + 0,25 $ d'appel interrompu
+  = 10,35 $** sur 10,40 $.

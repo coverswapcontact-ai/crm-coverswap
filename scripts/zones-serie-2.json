@@ -24,7 +24,7 @@
   "detail-chant": 2,
   "pose-mains": 2,
   "echantillons-table": 1,
-  "mesure-visite": 1,
+  "mesure-visite": 3,
   "usure-detail": 1,
   "outils-pose": 2,
   "amb-cuisine-familiale": 1,
@@ -36,7 +36,7 @@
   "picto-meuble-vasque": 1,
   "picto-porte-entree": 1,
   "picto-refrigerateur": 2,
-  "picto-plan-parallele": 2
+  "picto-plan-parallele": 4
  },
  "rejets": {
   "cuisine-bordeaux-brillante-apres-neutre-1": "reflets brillants, refait mat",
@@ -52,7 +52,9 @@
   "cuisine-ouverte-bar-apres-couleur-1": "reflets brillants, refait mat",
   "cuisine-ouverte-bar-apres-couleur-2": "reflets brillants, refait mat",
   "cuisine-ilot-maison-apres-couleur-1": "crédence changée",
-  "cuisine-ilot-maison-apres-couleur-2": "crédence changée"
+  "cuisine-ilot-maison-apres-couleur-2": "crédence changée",
+  "cuisine-ilot-maison-apres-couleur-3": "plan mural resté en granit",
+  "cuisine-ilot-maison-apres-couleur-4": "plan mural resté en granit"
  },
  "mesures": {
   "cuisine-bordeaux-brillante-avant": {

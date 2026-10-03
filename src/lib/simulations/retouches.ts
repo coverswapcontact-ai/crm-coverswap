@@ -33,6 +33,8 @@ const schemaRetouches = z
           zone,
           /** Après où la même zone corrigée est recopiée (bouilloire posée hors des surfaces couvertes). */
           recopier: z.array(z.string()).optional(),
+          /** Phrase ajoutée au prompt pour cette pièce (2e tentative : ce que le modèle a bougé à tort). */
+          ajout: z.string().optional(),
           /** Après corrigés un par un (bouilloire posée sur une surface couverte). */
           corriger: z.array(z.string()).optional(),
         })
@@ -47,6 +49,8 @@ const schemaRetouches = z
           remplacer: z.tuple([z.string().min(1), z.string().min(1)]).optional(),
           /** Pourquoi (repris dans le journal et le compte rendu). */
           motif: z.string().min(1),
+          /** Variante déjà générée (date, essais) : le script ne la relance pas. */
+          faite: z.string().optional(),
         })
         .strict()
         .refine((v) => v.ajout || v.remplacer, { message: "ajout ou remplacer" })

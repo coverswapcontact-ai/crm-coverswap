@@ -3,6 +3,7 @@
 //
 //   node --import tsx scripts/retouches-serie-2.ts --estimer     (le plan et le coût, sans appel)
 //   node --import tsx scripts/retouches-serie-2.ts               (lance ; s'arrête avant l'appel qui franchirait le plafond)
+//   --plafond 10,40    relève le plafond de la série (complément accordé par Lucas)
 //   --hors-base 0,25   dépense facturée mais absente de GenerationImage (appel interrompu), comptée dans le plafond
 //
 // L'essai retenu de chaque avant vient de scripts/zones-serie-2.json (choix), celui de chaque après de
@@ -50,12 +51,12 @@ async function principal() {
   const copies: { titre: string; faire: () => Promise<void> }[] = [];
   const catalogue = new Map(lireCatalogue(await fs.readFile(CATALOGUE_DEFAUT(), "utf8")).map((r) => [r.id, r]));
 
-  const corrigerBouilloire = async (fichier: string, zone: [number, number, number, number]) => {
+  const corrigerBouilloire = async (fichier: string, zone: [number, number, number, number], ajout?: string) => {
     const original = await fs.readFile(fichier);
     const sharp = (await import("sharp")).default;
     const meta = await sharp(original).metadata();
     const format = `${meta.width}x${meta.height}` as ImageSite["format"];
-    const r = await genererAmbiance({ prompt: retouches.prompt_bouilloire, format, source: { octets: original, type: "image/png", nom: path.basename(fichier) } }, { modele: modeleEdition(), phase: "serie-2", journal: console.log });
+    const r = await genererAmbiance({ prompt: ajout ? promptVariante(retouches.prompt_bouilloire, { nom: path.basename(fichier), ajout }) : retouches.prompt_bouilloire, format, source: { octets: original, type: "image/png", nom: path.basename(fichier) } }, { modele: modeleEdition(), phase: "serie-2", journal: console.log });
     if (!r.ok) throw new Error(`${path.basename(fichier)} : échec ${r.raison} (${r.message}).`);
     await fs.mkdir(originaux, { recursive: true });
     await fs.writeFile(path.join(originaux, `${path.basename(fichier, ".png")}.brut-retouche.png`), r.image);
@@ -74,11 +75,11 @@ async function principal() {
   for (const b of retouches.bouilloires) {
     const avant = retenu(b.avant);
     if (existsSync(sauvegarde(avant))) console.log(`Déjà fait : ${path.basename(avant)}.`);
-    else appels.push({ titre: `bouilloire ${path.basename(avant)}`, estime: estimerAppel({ mode: "edition", format: image(b.avant).format }), faire: () => corrigerBouilloire(avant, b.zone) });
+    else appels.push({ titre: `bouilloire ${path.basename(avant)}`, estime: estimerAppel({ mode: "edition", format: image(b.avant).format }), faire: () => corrigerBouilloire(avant, b.zone, b.ajout) });
     for (const nom of b.corriger ?? []) {
       const f = retenu(nom);
       if (existsSync(sauvegarde(f))) console.log(`Déjà fait : ${path.basename(f)}.`);
-      else appels.push({ titre: `bouilloire ${path.basename(f)}`, estime: estimerAppel({ mode: "edition", format: image(nom).format }), faire: () => corrigerBouilloire(f, b.zone) });
+      else appels.push({ titre: `bouilloire ${path.basename(f)}`, estime: estimerAppel({ mode: "edition", format: image(nom).format }), faire: () => corrigerBouilloire(f, b.zone, b.ajout) });
     }
     for (const nom of b.recopier ?? []) {
       const f = retenu(nom);
@@ -98,6 +99,10 @@ async function principal() {
   }
 
   for (const v of retouches.variantes) {
+    if (v.faite) {
+      console.log(`Déjà faite : ${v.nom} (${v.faite}).`);
+      continue;
+    }
     const img = image(v.nom);
     const dossier = dossierDe(img, racine, liste);
     const prompt = promptVariante(img.prompt, v);
@@ -123,7 +128,9 @@ async function principal() {
     }
   }
 
-  const plafond = liste.plafond ?? 10;
+  const j = process.argv.indexOf("--plafond");
+  const plafond = j > 0 ? Number(process.argv[j + 1].replace(",", ".")) : (liste.plafond ?? 10);
+  if (!Number.isFinite(plafond) || plafond <= 0) throw new Error("--plafond : un montant en dollars.");
   const deja = (await depenseDeLaSerie("serie-2")) + horsBase;
   const estime = appels.reduce((s, a) => s + a.estime, 0);
   console.log(`Plan : ${appels.length} appel(s), ≈ ${dollars(estime)} ; ${copies.length} recopie(s) de zone (sans appel). Série : ${dollars(deja)} déjà dépensés${horsBase ? ` (dont ${dollars(horsBase)} hors GenerationImage)` : ""}, plafond ${dollars(plafond)}, reste ${dollars(plafond - deja)}.`);

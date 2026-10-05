@@ -1288,3 +1288,52 @@ Reste à Lucas : poser `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sur Railwa
 activer Klarna et Alma dans Stripe s'il le souhaite ; laisser les reçus automatiques de Stripe DÉSACTIVÉS (sinon un
 second mail au client) ; frais Stripe à saisir en dépense ; remboursement ou litige : annuler l'encaissement à la main.
 Reste de la partie B : B7, B8, B11-B13.
+
+### Mission 18, B11 — états en double : lectures du devis, teintes (écart 11)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Lectures du devis : le devis seul.** `espace/service.ts › noterConsultationDevis` n'écrit plus la copie de l'espace
+  (`EspaceClient.devisConsultations`, `devisConsulteId`, `devisConsulteLe` : colonnes gardées, plus aucun lecteur) ;
+  une première lecture (après une remise à zéro comprise) ouvre une nouvelle ligne `ESPACE_DEVIS_CONSULTE` au lieu de
+  réécrire l'ancienne. `assistant/analyses/commercial.ts › devisEnAttente` (`manager_commercial`) lit
+  `Document.consultations` de chaque devis (avant : la copie de l'espace, seul le dernier devis lu comptait).
+  « Réinitialiser » l'étape Devis (`vue-crm.ts › gesteDeLucas`, écran et `geste_espace`) remet à zéro, dans une
+  transaction, `consultations` et `consulteLe` de chaque devis du dossier (le déclencheur d'immuabilité les autorise),
+  l'ancienne copie de l'espace et écrit sa ligne d'historique (`devisRemisAZero`) : le signal « relu sans signer » tombe,
+  la lecture suivante repart de 1 et sonne de nouveau.
+- **Teintes.** Nouveau `src/lib/espace/teintes-choix.ts` : `lireChoixEspace` (lecture unique du choix), `teinteDe`
+  (déplacé de `devis-propose.ts`), `teintesParSousPartie` (pure : sous-parties cochées, sinon celles des surfaces,
+  comme le devis proposé ; une sous-partie à deux zones les nomme toutes deux, 80 caractères), `zonesDuChoix`,
+  `reporterTeintesDuChoix(tx, …, { remplacer })`. `choisir` (client, Lucas, `geste_espace` VALIDER_SIMULATION) reporte
+  dans la transaction du choix les teintes sur les sous-parties qu'elles habillent ; les autres clés restent.
+  `devaliderChoix` ne touche pas aux teintes. `suivi.ts` lit le choix comme `service.ts` (`choixLe` ET choix lisible).
+- **Migration `etats-en-double-18`** (en fin de liste) : lectures, le devis prend le plus grand des deux compteurs
+  (jamais abaissé) ; teintes d'un choix déjà validé, seulement pour les sous-parties sans teinte (rien de Lucas remplacé).
+- Docs : `SYNCHRO.md` (ligne CHOIX_VALIDE, paragraphe B11, B11 retiré du tableau 4), `MCP-COUVERTURE.md` (entrée B11).
+
+Décisions prises seul (solution la plus simple) :
+- Un choix validé REMPLACE la teinte des sous-parties qu'il habille, même notée par Lucas avant (le choix est plus
+  récent) ; une sous-partie dont le choix ne couvre qu'une zone (l'îlot avec le plan seul) prend la teinte de cette zone.
+- La migration s'appelle `etats-en-double-18` (et non `consultations-devis-18` du plan) : elle reprend aussi les teintes.
+  Sur la base, la copie de l'espace n'a jamais dépassé le devis depuis la mission 13 : la partie lectures ne devrait
+  rien trouver.
+- La remise à zéro vise tous les devis émis du dossier (l'étape Devis entière), pas seulement le dernier lu.
+
+Constaté, laissé (règle voulue de `main.ts`, pas de ce lot) : quand Lucas valide une simulation à la place du client,
+la main reste au client alors que la prochaine action est « Préparer le devis (simulation choisie) » ; à trancher en
+B13 si besoin.
+
+Tests : 1 426 → 1 433 (`npm test` : 1 433 verts). Nouveau `src/lib/espace/etats-en-double.test.ts` (7 essais, état des
+deux côtés, réseau coupé) : lu deux fois → compté sur le devis seul, `manager_commercial` (par l'exécuteur MCP) et la
+vue CRM le lisent, tâche « relu 2 fois sans signer » ; REINITIALISER DEVIS par `geste_espace` (aperçu, rien sans
+jeton, puis le geste) → compteur à zéro, dossier et espace comme avant la lecture, tâche tombée, lecture suivante = 1
+et nouvelle ligne d'historique ; migration des lectures ; choix du client (projet coché, îlot = façades basses + plan,
+crédence gardée, teinte de Lucas remplacée), dévalidé (teintes gardées), mélange ensuite ; validé par Lucas (rien de
+coché : surfaces) ; choix illisible lu pareil des deux côtés ; fonctions pures ; migration des teintes. Adaptés en
+gardant leur intention : `mission-13-lot-5` (l'espace n'a plus de copie : `[null, 0]`), `espace-v2` (compte lu sur le
+devis), `mission-17-partie-a` (sa migration n'est plus la dernière : après celles de la mission 15). `tsc`, `eslint`
+sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description changée : rien à reconnecter.
+
+Reste de la partie B : B7, B8 (agents morts), B12, B13.

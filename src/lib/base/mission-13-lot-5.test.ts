@@ -63,7 +63,7 @@ describe("B6 : un compteur de lectures par devis", () => {
   const relire = (id: string) => prisma.espaceClient.findUniqueOrThrow({ where: { id } });
   const lectures = async (id: string) => (await prisma.document.findUniqueOrThrow({ where: { id }, select: { consultations: true } })).consultations;
 
-  test("chaque devis compte ses propres lectures ; l'espace garde la trace du dernier lu ; la vue CRM les porte par devis", async () => {
+  test("chaque devis compte ses propres lectures ; l'espace n'en garde plus de copie (mission 18, B11) ; la vue CRM les porte par devis", async () => {
     const { espace, dossierId, premier, second } = await espaceAvecDeuxDevis("Yael");
     assert.deepEqual(await service.noterConsultationDevis(espace, second.id), { consultations: 1 });
     assert.deepEqual(await service.noterConsultationDevis(await relire(espace.id), premier.id), { consultations: 1 });
@@ -73,7 +73,7 @@ describe("B6 : un compteur de lectures par devis", () => {
     assert.deepEqual(await service.noterConsultationDevis(await relire(espace.id), premier.id), { consultations: 2 });
     assert.deepEqual([await lectures(premier.id), await lectures(second.id)], [2, 1]);
     const trace = await relire(espace.id);
-    assert.deepEqual([trace.devisConsulteId, trace.devisConsultations], [premier.id, 2]);
+    assert.deepEqual([trace.devisConsulteId, trace.devisConsultations], [null, 0], "le devis est la seule source de ses lectures");
     const vue = await vueCrm.vueEspaceCrm(dossierId);
     assert.ok(vue);
     assert.deepEqual(

@@ -97,7 +97,8 @@ describe("Mission 17 (partie A) — mise en route des tâches de Lucas", () => {
     assert.ok(Object.values(r).every((n) => n === 0), JSON.stringify(r));
     assert.equal(await prisma.tacheAFaire.count(), 0);
     const noms = (await import("@/lib/base/migrations")).MIGRATIONS_DONNEES.map((x) => x.nom);
-    assert.equal(noms.at(-1), m.NOM_MIGRATION_17_A, "ajoutée en fin de liste");
+    // Mission 18 (B11) : d'autres migrations la suivent désormais ; elle reste après celles de la mission 15.
+    assert.ok(noms.indexOf(m.NOM_MIGRATION_17_A) > noms.indexOf("agenda-rappels-en-attente-15-2b") && noms.indexOf("agenda-rappels-en-attente-15-2b") >= 0, noms.join(", "));
   });
 
   test("chaque décision appliquée au seul candidat net ; tâches à moi en lot, une fois ; rejouable sans effet", async () => {

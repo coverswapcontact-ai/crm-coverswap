@@ -142,6 +142,13 @@
   Le paiement par carte lui-même est un geste du client dans son espace (Stripe, webhook) : pas d'outil, l'encaissement
   qu'il crée se lit comme les autres (`lire_fiche`, `manager_finances`). Ni outil, ni paramètre, ni description ne
   change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B11 (05/10/2026)** : états en double. `manager_commercial` (devis en attente, « relus sans signature »)
+  lit les lectures de CHAQUE devis (`Document.consultations`), plus la copie de l'espace (seul le dernier devis lu y
+  comptait). `geste_espace` REINITIALISER DEVIS (même fonction que l'écran, `vue-crm.ts › gesteDeLucas`) remet aussi à
+  zéro le compteur des devis du dossier (avant : celui de l'espace seulement, « lu N fois » et le signal restaient).
+  `geste_espace` VALIDER_SIMULATION (`choisir`, comme le client) reporte les teintes de la simulation dans les teintes
+  du dossier (`modifier` DOSSIER `teintes`, `lire_fiche`). Ni outil, ni paramètre, ni description ne change :
+  empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

@@ -292,8 +292,14 @@ export async function gesteDeLucas(dossierId: string, geste: GesteEspace): Promi
         await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_ETAPE_REINITIALISEE", direction: "INTERNE", contenu: "Étape « Simulations » réinitialisée par Lucas : plus de simulation validée, plus de demande en attente (ses simulations restent)", metadata: JSON.stringify({ etape: "SIMULATIONS" }) } });
       } else {
         await retirerAccord(espace, "LUCAS", "Étape « Devis » réinitialisée");
-        await prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsultations: 0, devisConsulteId: null, devisConsulteLe: null } });
-        await prisma.dossierEvenement.create({ data: { dossierId, type: "ESPACE_ETAPE_REINITIALISEE", direction: "INTERNE", contenu: "Étape « Devis » réinitialisée par Lucas : accord en ligne retiré (preuve gardée), compteur de lectures remis à zéro", metadata: JSON.stringify({ etape: "DEVIS" }) } });
+        // Mission 18 (B11) : le compteur de lectures vit sur chaque devis (seule source) : il repart de zéro, la
+        // première lecture suivante sonne de nouveau et ouvre une nouvelle ligne d'historique. Les anciens champs de
+        // l'espace sont remis à zéro aussi (plus lus, mais jamais en désaccord).
+        await prisma.$transaction(async (tx) => {
+          const remis = await tx.document.updateMany({ where: { dossierId, type: "DEVIS", numero: { not: null }, OR: [{ consultations: { gt: 0 } }, { consulteLe: { not: null } }] }, data: { consultations: 0, consulteLe: null } });
+          await tx.espaceClient.update({ where: { id: espace.id }, data: { devisConsultations: 0, devisConsulteId: null, devisConsulteLe: null } });
+          await tx.dossierEvenement.create({ data: { dossierId, type: "ESPACE_ETAPE_REINITIALISEE", direction: "INTERNE", contenu: "Étape « Devis » réinitialisée par Lucas : accord en ligne retiré (preuve gardée), compteur de lectures remis à zéro", metadata: JSON.stringify({ etape: "DEVIS", devisRemisAZero: remis.count }) } });
+        });
       }
       return;
     }

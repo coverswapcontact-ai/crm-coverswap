@@ -27,6 +27,7 @@ import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type E
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { stripeActif } from "@/lib/paiement/stripe";
+import { reporterTeintesDuChoix } from "./teintes-choix";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -765,6 +766,8 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
       await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, id: { notIn: impliquees }, choisieLe: { not: null } }, data: { choisieLe: null } });
       for (const id of impliquees) await tx.simulationEspace.update({ where: { id }, data: { choisieLe: maintenant, ...(entree.commentaire && choix.mode === "UNE" ? { commentaireClient: entree.commentaire, commenteeLe: maintenant } : {}) } });
       await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: JSON.stringify(choix), choixLe: maintenant } });
+      // Mission 18 (B11) : les teintes choisies deviennent celles du dossier (sous-parties de son projet), les autres restent.
+      await reporterTeintesDuChoix(tx, espace.dossierId, zonesValidees.map((z) => ({ zone: z.zone, ref: z.ref || null, nom: z.nom || null })), { remplacer: true });
       await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: auteur === "LUCAS" ? "INTERNE" : "ENTRANT", contenu: `${texte}${choix.mode === "UNE" && zonesValidees.length ? ` — ${zonesValidees.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}` : ""}`.slice(0, 1500), metadata: JSON.stringify({ simulations: impliquees, mode: choix.mode, auteur, zones: zonesValidees }) } });
       return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_VALIDE" }, maintenant);
     })
@@ -845,12 +848,13 @@ export async function noterConsultationDevis(espace: EspaceClient, documentId: s
   const apres = await prisma.document.findUnique({ where: { id: devis.id }, select: { consultations: true } });
   const consultations = apres?.consultations ?? 1;
   if (pris.count === 0) return { consultations };
-  // L'espace garde la trace du dernier devis lu (anciens lecteurs de ces champs).
-  await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsulteId: devis.id, devisConsulteLe: maintenant, devisConsultations: consultations } }));
+  // Mission 18 (B11) : le devis est la seule source de ses lectures ; les champs de l'espace (devisConsulte*) ne sont
+  // plus écrits (colonnes gardées, plus aucun lecteur).
   const accord = await prisma.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null }, select: { id: true } });
   const contenu = `Le client a consulté son devis ${devis.numero} ${consultations === 1 ? "pour la première fois" : `— ${consultations} fois (dernière le ${maintenant.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" })} à ${maintenant.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" })})`}`;
   await avecActeur(ACTEUR, async () => {
-    const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", metadata: { contains: devis.id } }, orderBy: { createdAt: "desc" } });
+    // Une première lecture (le compteur remis à zéro par « Réinitialiser » compris) ouvre une nouvelle ligne d'historique.
+    const evenement = consultations === 1 ? null : await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", metadata: { contains: devis.id } }, orderBy: { createdAt: "desc" } });
     if (evenement) await prisma.dossierEvenement.update({ where: { id: evenement.id }, data: { contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });
     else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", direction: "ENTRANT", contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });
   });

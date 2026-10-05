@@ -72,7 +72,7 @@ rangée si une action manuelle est en place), **Espace** (étape de l'espace du 
 | `PHOTOS_RECUES` | `espace/service.ts › deposerPhotos` | inchangée | MOI « Photos reçues dans son espace » | « Préparer la simulation (photos reçues) », si vide ou « attendre les photos » ; tâche `photos` | PHOTOS → PROJET ou SIMULATIONS | la relance photos n'est plus proposable | `photos` si gardée ; puis détecteurs | `ESPACE_PHOTOS` (un par dépôt de 15 min) | inchangé | alerte Lucas (file, 2 min) ; agenda |
 | `PROJET_VALIDE` | `espace/validations.ts › validerProjet` | Q → S dans la transaction, par le point d'entrée (AUTOMATIQUE, raison « projet validé dans l'espace client », relue par `devaliderProjet` pour défaire) — B9 | MOI « Projet validé par le client » (geste du client) | « Suivre ses simulations, ou lui en préparer une (projet validé) », si vide ou « attendre (les photos, qu'il, le projet) » ; tâche `projet-valide` | PROJET → SIMULATIONS | — | `projet-valide` si gardée | `ESPACE_PROJET_VALIDE`, `CHANGEMENT_ETAPE` ; objet et source du dossier complétés | CONTACTE (dans la transaction du passage) | alerte Lucas (client) ; agenda |
 | `PROJET_DEVALIDE` | `validations.ts › devaliderProjet` | S → Q après, si la validation l'y avait mis et sans choix | CLIENT « Il modifie son projet » (geste du client) | « Attendre qu'il valide son projet (il le modifie) », si le texte contient « (projet validé) » | → PROJET | — | `projet-devalide` si gardée | `ESPACE_PROJET_DEVALIDE` | inchangé | agenda |
-| `CHOIX_VALIDE` | `espace/service.ts › choisir` | Q → S dans la transaction, par le point d'entrée (raison « simulation validée dans l'espace client ») — B9 ; ailleurs inchangée | MOI « Simulation validée : faire le devis » (client) | « Préparer le devis (simulation choisie) », toujours ; tâche `choix` | → ATTENTE_DEVIS | — | `choix` si gardée ; détecteur DEVIS | `ESPACE_SIMULATION_CHOISIE` (+ `CHANGEMENT_ETAPE` depuis Q) | CONTACTE depuis Q (dans la transaction) | alerte Lucas (client) ; agenda. Teintes non reportées dans `Dossier.teintes` (B11) |
+| `CHOIX_VALIDE` | `espace/service.ts › choisir` | Q → S dans la transaction, par le point d'entrée (raison « simulation validée dans l'espace client ») — B9 ; ailleurs inchangée | MOI « Simulation validée : faire le devis » (client) | « Préparer le devis (simulation choisie) », toujours ; tâche `choix` | → ATTENTE_DEVIS | — | `choix` si gardée ; détecteur DEVIS | `ESPACE_SIMULATION_CHOISIE` (+ `CHANGEMENT_ETAPE` depuis Q) | CONTACTE depuis Q (dans la transaction) | alerte Lucas (client) ; agenda. Teintes du choix reportées dans `Dossier.teintes` dans la transaction (B11) |
 | `CHOIX_DEVALIDE` | `validations.ts › devaliderChoix` ; B9 : aussi Lucas qui masque, repasse en brouillon ou retire une simulation du choix (la validée, ou celle d'une zone d'un mélange : `validations.ts › simulationDansLeChoix`), d'un bloc avec le geste (`devaliderChoixDansTransaction`) — bloc Espace et outil `publier` (`simulations/dossier.ts › changerStatutSimulation`), outil `modifier` SIMULATION, ancien retrait (`espace/service.ts › retirerSimulation`) | inchangée | CLIENT (geste du client) | « Attendre qu'il valide une simulation (il a dévalidé la sienne) », si « préparer le devis (simulation » | ATTENTE_DEVIS → SIMULATIONS | — | `choix-devalide` si gardée | `ESPACE_SIMULATION_DEVALIDEE` (B9 : « Simulation dévalidée par Lucas, … (simulation masquée : titre) ») | inchangé | alerte Lucas (client) ; agenda |
 | `PROPOSITION_DEMANDEE` | `service.ts › demanderProposition` | inchangée | MOI « Il demande une autre proposition » | « Préparer une autre proposition — « son mot » », toujours ; tâche `proposition` | inchangée | — | `proposition` si gardée ; message d'espace (détecteur des messages) | `ESPACE_NOUVELLE_PROPOSITION` ; `MessageEspace` | inchangé | alerte Lucas ; agenda |
 | `PROPOSITION_RETIREE` | `validations.ts › retirerDemandeProposition` | inchangée | CLIENT (geste du client) | si « autre proposition » : « Préparer le devis (simulation choisie) » si une simulation reste validée, sinon effacée | inchangée | — | `proposition-retiree` si gardée | `ESPACE_PROPOSITION_RETIREE` | inchangé | agenda |
@@ -119,7 +119,6 @@ relance, réponse) recalculent la main après l'envoi.
 |---|---|---|---|
 | Avenant sur un dossier signé | `espace/service.ts › accepterDevis`, `EtatEspace` | l'espace ne montre que l'accepté | B7 |
 | Signature | `service.ts › accepterDevis` | accord, puis étape dans une 2e transaction, puis prochaine action | B8 |
-| Consultations de devis, teintes | `service.ts › noterConsultationDevis`, `choisir` | deux sources | B11 |
 | Statut du lead | `statut-lead.ts`, `coherence/controle.ts` | deux tables divergentes, le dernier dossier changé décide | B12 |
 | Cohérence | `coherence/controle.ts` | pas de règle pour les écarts 1, 3, 5, 6, 7 | B13 |
 
@@ -205,6 +204,24 @@ l'assistant (`changerEtapeDansTransaction`) et la correction de cohérence `PAIE
 `ACCORD_SANS_SIGNATURE` (devis de l'accord, ou devis des acomptes) passent aussi les autres variantes « non retenu »
 (`retenirDevis`) ; l'imputation automatique n'impute plus un acompte sur un devis non retenu, remplacé ou annulé
 (`soldes.ts › piecesDuDossier`, devis actif = émis, envoyé ou accepté).
+
+**États en double : lectures du devis, teintes (B11).** Les lectures d'un devis n'ont qu'une source :
+`Document.consultations` et `consulteLe`, comptées par `espace/service.ts › noterConsultationDevis` (une par visite de
+30 minutes, mise à jour conditionnelle). La copie de l'espace (`EspaceClient.devisConsultations`, `devisConsulteId`,
+`devisConsulteLe`) n'est plus écrite (colonnes gardées) ; tous les lecteurs lisent le devis : bloc Espace et colonne
+Espace de Dossiers, signal et tâche « relu N fois sans signer », contexte des mails, `lister` ESPACES, et
+`manager_commercial` (devis en attente, « relus sans signature » : chaque devis ses propres lectures). « Réinitialiser »
+l'étape Devis (écran, `geste_espace` REINITIALISER DEVIS : `vue-crm.ts › gesteDeLucas`) retire l'accord en ligne puis,
+dans une transaction, remet à zéro le compteur de chaque devis du dossier (et l'ancienne copie de l'espace) avec sa ligne
+d'historique : le signal tombe, la lecture suivante repart de 1, sonne de nouveau et ouvre une nouvelle ligne
+`ESPACE_DEVIS_CONSULTE` (l'ancienne reste). Lire ou réinitialiser ne change ni l'étape, ni la main, ni la prochaine
+action, ni l'espace. Teintes : valider une simulation ou un mélange (`choisir`, client ou Lucas) reporte, dans la
+transaction du choix, les teintes des zones choisies sur les sous-parties du projet qu'elles habillent
+(`espace/teintes-choix.ts › reporterTeintesDuChoix` ; sous-parties cochées, sinon celles que les surfaces laissent
+deviner ; une sous-partie à deux zones les nomme toutes deux) : celles-là sont remplacées, les autres gardent leur
+teinte. Dévalider ne touche pas aux teintes. La liste des espaces lit le choix comme l'espace du client (un choix
+illisible n'en est pas un : `lireChoixEspace`). Reprise de l'existant : migration `etats-en-double-18` (lectures : le
+plus grand des deux compteurs, jamais abaissé ; teintes d'un choix déjà validé : seulement les sous-parties sans teinte).
 
 ## 5. Ce qui ne passe pas par le point d'entrée
 

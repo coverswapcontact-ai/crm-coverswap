@@ -30,6 +30,7 @@ import { cleDuSignal } from "@/lib/a-faire/detecteurs/signaux-cles";
 export type { ClientEspace, CodeSignal, LigneEspace, Signal } from "./suivi-types";
 import { CODES_SIGNAL_CLIENT, type ClientEspace, type EspaceResume, type LigneEspace, type Signal, type PageEspaces } from "./suivi-types";
 import { simulationsGratuites } from "./creation";
+import { lireChoixEspace } from "./teintes-choix";
 
 const JOUR = 86_400_000;
 const date = (d: Date | null | undefined) => d?.toISOString() ?? null;
@@ -176,7 +177,8 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
       simulationsCrm: crm,
       simulationsSite: publiees.filter((s) => s.source === "SITE").length,
       simulationsClient: duClient,
-      choix: Boolean(espace.choixLe),
+      // Mission 18 (B11) : la même lecture que l'espace du client (service.ts) : un choix daté mais illisible n'en est pas un.
+      choix: Boolean(espace.choixLe && lireChoixEspace(espace.choix)),
       lecture,
       etapeDossier: d.etape,
     });

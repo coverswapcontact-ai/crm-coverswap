@@ -234,7 +234,7 @@ describe("le devis dans l'espace", () => {
     const { espace, dossierId, devis } = await avecDevis("Wanda");
     const resultats = await Promise.all([service.noterConsultationDevis(espace, devis.id), service.noterConsultationDevis(espace, devis.id), service.noterConsultationDevis(espace, devis.id)]);
     assert.deepEqual(resultats.map((r) => r.consultations), [1, 1, 1]);
-    assert.equal((await relire(espace.id)).devisConsultations, 1);
+    assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: devis.id } })).consultations, 1, "compté sur le devis (seule source, mission 18 B11)");
     assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_DEVIS_CONSULTE" } }), 1);
   });
 

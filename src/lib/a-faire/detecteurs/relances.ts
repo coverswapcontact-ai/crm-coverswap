@@ -43,7 +43,7 @@ export const detecteurRelances: Detecteur = {
         sujet,
         dossierId: d.dossierId,
         titre: titreTache("Relancer le devis", d.clientNom),
-        raison: `devis ${d.numero} envoyé le ${jourEtMois(new Date(d.emisLe))}, ${rang(d.rang)} relance`,
+        raison: `devis ${d.numero} envoyé le ${jourEtMois(new Date(d.envoyeLe))}, ${rang(d.rang)} relance`,
         niveau: 2,
         montant: d.totalHt,
         depuis: new Date(d.prochaineProposableLe ?? d.emisLe),

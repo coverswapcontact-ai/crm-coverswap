@@ -116,8 +116,11 @@ export function EspaceDossier({
   async function visibilite(documentId: string, visibleEspace: boolean) {
     setOccupe("visible" + documentId);
     try {
-      await envoyerJson(`/api/dossiers/${detail.id}/documents/${documentId}`, "PATCH", { visibleEspace });
-      toast.success(visibleEspace ? "Devis visible dans son espace" : "Devis masqué dans son espace");
+      const reponse = await envoyerJson<{ annonce: { mail: boolean; raison: string | null } | null; avertissements: string[] }>(`/api/dossiers/${detail.id}/documents/${documentId}`, "PATCH", { visibleEspace });
+      // Mission 18 (B5) : mis en ligne, il est annoncé par le mail « Devis disponible », sinon l'écran dit pourquoi.
+      if (!visibleEspace) toast.success("Devis masqué dans son espace");
+      else if (reponse.annonce?.mail) toast.success("Devis en ligne : le client est prévenu par mail");
+      else toast.success(["Devis visible dans son espace.", ...(reponse.avertissements ?? [])].join(" "));
       await charger();
       await onRecharger();
     } catch (erreur) {

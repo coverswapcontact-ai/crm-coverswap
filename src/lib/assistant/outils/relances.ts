@@ -79,7 +79,7 @@ export const outilVoirRelances = definirOutil({
     if (r.devis.length === 0) return { texte: [`Aucun devis en attente de réponse (délai de relance : ${r.delai} jours${r.delaiParDefaut ? ", valeur par défaut" : ""}).`, ...blocs].join("\n"), donnees, liens: [lien("À valider", "/validation")] };
     const lignes = r.devis.map(
       (d) =>
-        `- ${d.clientNom} : devis ${d.numero} de ${format.euros(d.totalHt)}, envoyé il y a ${pluriel(d.joursDepuisEmission, "jour")}, ${pluriel(d.relancesFaites, "relance faite", "relances faites")}${d.derniereRelanceLe ? ` (dernière le ${format.jourCourt(new Date(d.derniereRelanceLe))})` : ""} — ${etatDuDevis(d, contexte.maintenant)} [dossier:${d.dossierId}]`
+        `- ${d.clientNom} : devis ${d.numero} de ${format.euros(d.totalHt)}, envoyé il y a ${pluriel(d.joursDepuisEnvoi, "jour")}, ${pluriel(d.relancesFaites, "relance faite", "relances faites")}${d.derniereRelanceLe ? ` (dernière le ${format.jourCourt(new Date(d.derniereRelanceLe))})` : ""} — ${etatDuDevis(d, contexte.maintenant)} [dossier:${d.dossierId}]`
     );
     return { texte: [`${r.devis.length} devis en attente de réponse (délai de relance : ${r.delai} jours${r.delaiParDefaut ? ", valeur par défaut tant que DELAI_RELANCE_DEVIS n'est pas renseigné" : ""}) :`, ...lignes, ...blocs].join("\n"), donnees, liens: [lien("À valider", "/validation"), lien("Dossiers", "/dossiers")] };
   },

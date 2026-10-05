@@ -163,7 +163,7 @@ function BoutonsRelance({ onSms, onMail }: { onSms?: () => void; onMail?: () => 
 
 /** « {nom} — devis {numéro} de {montant}, relance {rang}/2, envoyé il y a N jours ». */
 export function texteRelanceDevis(d: DevisARelancer): string {
-  return `devis ${d.numero} de ${euros(d.totalHt)}, relance ${d.rang}/2, envoyé il y a ${pluriel(d.joursDepuisEmission, "jour")}`;
+  return `devis ${d.numero} de ${euros(d.totalHt)}, relance ${d.rang}/2, envoyé il y a ${pluriel(d.joursDepuisEnvoi, "jour")}`;
 }
 
 /** Ce qui manque à une relance de devis, dit sous la ligne : STOP, pas de mail, mail en échec. */

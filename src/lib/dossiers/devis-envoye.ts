@@ -2,6 +2,7 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import type { EtapeDossier, TypeDocument } from "./constants";
 import { recalculerMain } from "./main";
 import { estEtape } from "./regles";
+import { appliquerEvenementDossier, type Suites } from "./synchro";
 import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "./transitions";
 
 /**
@@ -89,14 +90,45 @@ export async function suitesDevisEnvoye(dossierId: string, changements: readonly
 }
 
 /**
- * Un devis masqué devenu visible (interrupteur de l'espace, outil « presenter_devis », correction d'un devis repris)
- * fait avancer le dossier comme un devis émis. L'appelant a écrit l'événement DEVIS_ENVOYE qui passe la main.
- * Rend le passage en « Devis envoyé », s'il a eu lieu.
+ * Mission 18 (B5, écart 5) : un devis masqué rendu visible dans l'espace (interrupteur du bloc Espace, outil « modifier »
+ * DOCUMENT, correction d'un devis repris) est MIS EN LIGNE, dans la transaction de l'appelant (qui a déjà écrit
+ * `visibleEspace`) : l'événement « Devis envoyé » (`canal: "ESPACE"`) date la mise en ligne (référence des relances) et
+ * passe la main au client, le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance, puis le
+ * point d'entrée (synchro.ts) pose « Attendre l'accord » à la place de « Préparer / Envoyer le devis » (une action posée
+ * à la main n'est jamais écrasée) et écrit la main. Les suites (lead, Meta, agenda, tâches) et l'annonce
+ * (`annoncerDevisEnLigne`) partent après la transaction.
  */
-export async function devisRenduVisible(dossierId: string, documentId: string, numero: string): Promise<ChangementEtape | null> {
-  const changement = await prisma.$transaction((tx) => passerEnDevisEnvoye(tx, dossierId, { documentId, raison: `devis ${numero} rendu visible dans son espace` }));
-  await suitesDevisEnvoye(dossierId, [changement]);
-  return changement;
+export async function mettreEnLigneDevis(tx: Transaction, dossierId: string, devis: { id: string; numero: string }, contenu: string): Promise<Suites> {
+  await tx.dossierEvenement.create({
+    data: { dossierId, type: "DEVIS_ENVOYE", direction: "INTERNE", contenu, metadata: JSON.stringify({ documentId: devis.id, presentation: true, canal: "ESPACE" }) },
+  });
+  const changement = await passerEnDevisEnvoye(tx, dossierId, { documentId: devis.id, raison: `devis ${devis.numero} rendu visible dans son espace` });
+  const suites = await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ENVOYE", documentId: devis.id, canal: "ESPACE" });
+  return { ...suites, changements: changement ? [changement] : [] };
+}
+
+/** Ce qu'il est advenu du mail « Devis disponible » à la mise en ligne : programmé, ou pourquoi rien n'est parti. */
+export type AnnonceMiseEnLigne = { mail: boolean; raison: string | null };
+
+/**
+ * Mission 18 (B5) : la mise en ligne d'un devis du CRM qui n'a pas encore atteint le client (« Généré ») est annoncée
+ * par l'automatisme existant « Devis disponible » (interrupteur dans Paramètres, adresse valide, espace ouvert ; une
+ * fois par devis : la clé de l'envoi est le devis, un devis déjà annoncé à sa génération ne l'est pas deux fois).
+ * Un devis repris (fait ailleurs) ou déjà « Envoyé » (mail du CRM, Gmail) est déjà chez le client : pas de mail.
+ * Après la transaction ; jamais d'erreur.
+ */
+export async function annoncerDevisEnLigne(dossierId: string, devis: { id: string; origine: string; statut: string }): Promise<AnnonceMiseEnLigne> {
+  if (devis.origine === "REPRISE") return { mail: false, raison: "devis repris : il est déjà parti ailleurs" };
+  if (devis.statut !== "GENERE") return { mail: false, raison: "devis déjà envoyé par mail" };
+  const { notifierClient } = await import("@/lib/mail/notifications");
+  const { programme, raison } = await notifierClient("DEVIS_DISPONIBLE", dossierId, devis.id);
+  return { mail: programme, raison: programme ? null : (raison ?? "notification impossible") };
+}
+
+/** La phrase de l'annonce, pour l'écran et l'assistant. */
+export function phraseAnnonce(annonce: AnnonceMiseEnLigne): string {
+  if (annonce.mail) return "Le client est prévenu par le mail « Devis disponible ».";
+  return `Aucun mail « Devis disponible » : ${annonce.raison ? annonce.raison.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase()) : "rien à annoncer"}.`;
 }
 
 /**

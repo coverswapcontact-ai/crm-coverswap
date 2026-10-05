@@ -997,3 +997,60 @@ Aucun test existant à adapter (les essais annoncés par le plan restent verts :
 
 Reste : B5-B13 (B10 : brancher `retenirDevis` dans le passage « Signé » de l'écran et dans `suivreAcompteDossier`) ;
 rien pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B5 — devis rendu visible : mis en ligne et annoncé (écart 5)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **La mise en ligne d'un bloc** (`devis-envoye.ts › mettreEnLigneDevis`, à la place de `devisRenduVisible`, retiré) :
+  un devis masqué (« Généré » ou « Envoyé ») rendu visible écrit, dans UNE transaction, la visibilité, l'événement
+  `DEVIS_ENVOYE` (`canal: "ESPACE"`, « Devis N : visible dans l'espace client ») qui date l'envoi, le passage Q, S,
+  Relance → Devis envoyé (« devis N rendu visible dans son espace »), puis le point d'entrée (nouveau canal `ESPACE` de
+  l'événement `DEVIS_ENVOYE` de `synchro.ts` : « Attendre l'accord » à la place de « Préparer / Envoyer le devis »,
+  action posée à la main gardée avec la tâche `devis` à la place, main écrite). Après : `suitesEvenementDossier` (lead,
+  Meta, agenda, tâches : ENVOYER_DEVIS se coche « mis en ligne »). Deux appelants : `presentation-devis.ts ›
+  modifierPresentationDevis` (interrupteur du bloc Espace, PATCH `…/documents/[documentId]`, outil `modifier` DOCUMENT)
+  et `documents-existants.ts › modifierDocumentExistant` (devis repris corrigé visible, désormais dans la transaction
+  de la correction).
+- **L'annonce** (`devis-envoye.ts › annoncerDevisEnLigne`, après la transaction) : l'automatisme existant « Devis
+  disponible » (`notifierClient`, clé `notif:DEVIS_DISPONIBLE:<devis>` : une fois par devis, masqué puis remis en ligne =
+  pas de second mail ; interrupteur du modèle gardé) pour un devis du CRM encore « Généré ». Aucun mail pour un devis
+  repris (fait ailleurs, déjà chez le client) ni pour un devis « Envoyé » (mail du CRM, Gmail). `modifierPresentationDevis`
+  rend `annonce` (`{ mail, raison }`) ; la route la renvoie (avec la phrase dans `avertissements`) ; l'écran dit « Devis en
+  ligne : le client est prévenu par mail », ou « Devis visible dans son espace. Aucun mail « Devis disponible » : … ».
+- **Relance comptée depuis la mise en ligne, et dite ainsi** : la référence lisait déjà le dernier `DEVIS_ENVOYE` (B2) ;
+  les textes datent maintenant l'envoi, plus l'émission (`relances/service.ts › dateDEnvoiDuDevis` : dernier envoi —
+  mail, Gmail, mise en ligne — sinon l'émission ; le dépôt n'est pas un envoi). `DevisARelancer` gagne `envoyeLe` et
+  `joursDepuisEnvoi` (`emisLe`, `joursDepuisEmission` gardés) : « envoyé il y a N jours » de la feuille Relances et de
+  `lister` RELANCES, « devis N envoyé le jj/mm » de la tâche RELANCER_DEVIS, « que je vous ai adressé le … » du mail de
+  relance n°1 et le résumé de sa proposition. `valableJusquau` ne bouge pas.
+- **Outil `modifier` DOCUMENT** : la note de l'aperçu dit que la relance compte depuis la mise en ligne et si le mail
+  « Devis disponible » partira (`peutNotifier`), ou pourquoi pas (devis fait ailleurs, déjà envoyé par mail, interrupteur,
+  adresse, espace) ; le résultat dit s'il est parti ; l'annulation partielle dit que le mail parti ne se reprend pas.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE` canal ESPACE, paragraphe B5, B5 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B5, DP48, ligne DOCUMENT).
+
+Décisions prises seul (solution la plus simple) :
+- La mise en ligne par Lucas vaut envoi même quand le mail ne peut pas partir (pas d'adresse, espace fermé, interrupteur
+  coupé) : c'est son geste explicite (mission 14, R1), il a pu prévenir le client autrement ; l'écran et l'outil disent
+  pourquoi aucun mail n'est parti. (La règle de B1, « pas annoncé = pas envoyé », reste celle de la génération.)
+- Pas de « Devis disponible » pour un devis repris ou déjà « Envoyé » : même raison que « un dépôt visible ne notifie
+  pas » et « le mail vaut notification » (aucun envoi en plus au client).
+- Remasqué puis remis en ligne : nouvel événement `DEVIS_ENVOYE` (la relance repart de la dernière mise en ligne), jamais
+  un second mail (clé par devis).
+- Le masquage garde son comportement (main relue, pas de retour d'étape) : c'est B6.
+- « adressé le » (relance n°1) prend la date d'envoi ; « devis du … » (relance n°2) garde la date du devis.
+
+Tests : 1 383 → 1 387 (`npm test` : 1 385 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/mise-en-ligne.test.ts` (4 essais, état
+des deux côtés, réseau coupé, rien ne sort du poste) : Simulation, devis masqué rendu visible → Devis envoyé, main au
+client, « Attendre l'accord », lead DEVIS_ENVOYE, espace DEVIS, ENVOYER_DEVIS cochée, historique (canal ESPACE,
+passage), un « Devis disponible » programmé vers `#devis`, relance datée de la mise en ligne et décalée avec elle,
+`envoyeLe`/`joursDepuisEnvoi`, « adressé le » de la date d'envoi, délai pas écoulé depuis la mise en ligne ; remasqué
+puis remis en ligne → pas de second mail ; action posée à la main gardée + tâche `devis`, interrupteur coupé → en ligne
+sans mail ; sans adresse → en ligne, raison dite ; devis repris masqué rendu visible par l'interrupteur et par la
+correction → en ligne d'un bloc, aucun mail, relance depuis la mise en ligne ; outil `modifier` DOCUMENT → l'aperçu
+annonce le mail, le résultat le dit, un seul mail. Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers
+touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune description changée :
+rien à reconnecter pour ce lot.
+
+Reste : B6-B13 (B13 : règle de cohérence de l'écart 5, un devis visible « Généré » sans `DEVIS_ENVOYE` ni annonce) ;
+rien pour Lucas.

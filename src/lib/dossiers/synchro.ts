@@ -61,9 +61,10 @@ export type EvenementDossier =
   | { type: "DEVIS_DEPOSE"; documentId: string; accepte?: boolean }
   /**
    * Devis envoyé après sa génération : par le mail du CRM (mail/propositions.ts, mission 18, B2) ; ou depuis Gmail, hors
-   * du CRM, enregistré après coup (devis-gmail.ts › enregistrerDevisGmail, mission 18, B3).
+   * du CRM, enregistré après coup (devis-gmail.ts › enregistrerDevisGmail, mission 18, B3) ; ou mis en ligne, masqué
+   * rendu visible dans l'espace (devis-envoye.ts › mettreEnLigneDevis, mission 18, B5).
    */
-  | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" | "GMAIL" }
+  | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" | "GMAIL" | "ESPACE" }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
   | { type: "ACOMPTE_REJETE"; encaissementId: string };
 
@@ -144,7 +145,7 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
     case "DEVIS_DEPOSE":
       // Mission 18 (B4) : un devis déposé « accepté » n'attend l'accord de personne.
       return evenement.accepte ? null : { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
-    // Mission 18 (B2, B3) : envoyé par mail (CRM ou Gmail), il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
+    // Mission 18 (B2, B3, B5) : envoyé par mail (CRM ou Gmail) ou mis en ligne, il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
     case "DEVIS_ENVOYE":
       return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
     case "ACOMPTE_REJETE":

@@ -4,7 +4,7 @@ import prisma, { type Transaction } from "@/lib/prisma";
 import { imputerSurFacture, planImputationFacture } from "@/lib/encaissements/service";
 import { LIBELLES_TYPE_DOCUMENT, type TypeDocument } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
-import { devisRenduVisible, estDevisEnvoye, passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
+import { estDevisEnvoye, mettreEnLigneDevis, passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
 import { estSigneeParDevisAccepte, signerParDevisAccepte } from "./devis-signe";
 import { recalculerMain } from "./main";
 import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "./synchro";
@@ -307,7 +307,7 @@ async function documentRepris(dossierId: string, documentId: string) {
 export async function modifierDocumentExistant(dossierId: string, documentId: string, entree: z.output<typeof schemaModificationDocumentExistant>): Promise<string[]> {
   const document = await documentRepris(dossierId, documentId);
   const avertissements: string[] = [];
-  const signature = await prisma.$transaction(async (tx) => {
+  const suites = await prisma.$transaction(async (tx): Promise<Suites | null> => {
     const totalHt = entree.montant !== undefined ? versCentimes(entree.montant) / 100 : undefined;
     await tx.document.update({
       where: { id: document.id },
@@ -342,20 +342,22 @@ export async function modifierDocumentExistant(dossierId: string, documentId: st
     // prochaine action d'un accord (une action posée à la main reste), la main.
     if (document.type === "DEVIS" && entree.statut !== undefined && document.statut !== "ACCEPTE" && statutDe("DEVIS", entree.statut) === "ACCEPTE") {
       const signe = await signerParDevisAccepte(tx, dossierId, document.id, `devis ${document.numero} noté « accepté » (signé hors ligne)`);
-      if (signe) return { changement: signe.changement, suites: await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ACCEPTE", documentId: document.id }) };
+      if (signe) return { ...(await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ACCEPTE", documentId: document.id })), changements: [signe.changement] };
+    }
+    // Mission 14 (R1) : un devis repris masqué qui devient visible est envoyé au client (main, étape), comme par
+    // l'interrupteur de l'espace. Mission 18 (B5) : mis en ligne dans cette transaction (événement, étape, prochaine
+    // action, main) ; pas de mail « Devis disponible » : fait ailleurs, il est déjà chez le client.
+    const statut = entree.statut !== undefined ? statutDe(document.type as TypeDocument, entree.statut) : document.statut;
+    if (entree.visibleEspace === true && !document.visibleEspace && estDevisEnvoye({ ...document, statut, visibleEspace: true })) {
+      return mettreEnLigneDevis(tx, dossierId, { id: document.id, numero: document.numero! }, `Devis ${document.numero} : visible dans l'espace client`);
     }
     return null;
   });
-  if (signature) {
-    await suitesEvenementDossier({ ...signature.suites, changements: [signature.changement] });
+  if (suites) {
+    await suitesEvenementDossier(suites);
     return avertissements;
   }
-  // Mission 14 (R1) : un devis repris masqué qui devient visible est envoyé au client (main, étape), comme par l'interrupteur de l'espace.
-  const statut = entree.statut !== undefined ? statutDe(document.type as TypeDocument, entree.statut) : document.statut;
-  if (entree.visibleEspace === true && !document.visibleEspace && estDevisEnvoye({ ...document, statut, visibleEspace: true })) {
-    await prisma.dossierEvenement.create({ data: { dossierId, type: "DEVIS_ENVOYE", direction: "INTERNE", contenu: `Devis ${document.numero} : visible dans l'espace client`, metadata: JSON.stringify({ documentId: document.id, presentation: true }) } });
-    await devisRenduVisible(dossierId, document.id, document.numero!);
-  } else if (document.type === "DEVIS" && (entree.visibleEspace !== undefined || entree.statut !== undefined)) {
+  if (document.type === "DEVIS" && (entree.visibleEspace !== undefined || entree.statut !== undefined)) {
     // Masqué, accepté, refusé : le devis n'attend peut-être plus sa réponse, la main est relue (main.ts).
     await recalculerMain(dossierId);
   }

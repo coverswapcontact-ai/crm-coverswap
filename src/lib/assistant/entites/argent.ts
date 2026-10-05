@@ -7,6 +7,7 @@ import { schemaCreationDepense, schemaModificationDepense } from "@/lib/depenses
 import { archiverDepense, creerDepense, modifierDepense, restaurerDepense } from "@/lib/depenses/service";
 import { UNITES } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
+import { phraseAnnonce } from "@/lib/dossiers/devis-envoye";
 import { modifierDocumentExistant, schemaModificationDocumentExistant } from "@/lib/dossiers/documents-existants";
 import { modifierPresentationDevis } from "@/lib/dossiers/presentation-devis";
 import { archiverPreset, creerPreset, lirePrestationsDuTarif, modifierPreset, restaurerPreset, schemaPreset } from "@/lib/dossiers/presets";
@@ -14,6 +15,7 @@ import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constant
 import { schemaCorrectionEncaissement } from "@/lib/encaissements/schemas";
 import { crediterCheque, modifierEncaissement } from "@/lib/encaissements/service";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { peutNotifier } from "@/lib/mail/notifications";
 import { ADRESSE_TARIFS } from "@/lib/parametres/sections";
 import { libelleReperee, repererSousPartie } from "@/lib/prestations/reperage";
 import { attribuerTarif, modifierTarifSousPartie, tarifsDesPrestations } from "@/lib/prestations/tarifs";
@@ -53,18 +55,23 @@ export const DOCUMENT: DefinitionEntite = {
     // Un document repris qui change touche l'argent ; un devis masqué qui devient visible vaut envoi au client.
     sensible: (apres, avant) => CHAMPS_REPRIS.some((c) => c in apres && JSON.stringify(apres[c]) !== JSON.stringify(avant[c])) || (apres.visibleEspace === true && avant.visibleEspace !== true),
     pretraiter: (e, contexte) => datesDictees(e, ["dateEmission"], contexte.maintenant),
-    note: (apres, avant) =>
-      apres.statut === "ACCEPTE" && avant.statut !== "ACCEPTE"
-        ? "Noté « accepté », le devis vaut signature (hors ligne) : un dossier pas encore signé passe en « Signé », les autres devis proposés deviennent « non retenus »."
-        : apres.visibleEspace === true && avant.visibleEspace !== true
-          ? "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas."
-          : null,
+    note: async (apres, avant, cible) => {
+      if (apres.statut === "ACCEPTE" && avant.statut !== "ACCEPTE") {
+        return "Noté « accepté », le devis vaut signature (hors ligne) : un dossier pas encore signé passe en « Signé », les autres devis proposés deviennent « non retenus ».";
+      }
+      if (apres.visibleEspace !== true || avant.visibleEspace === true) return null;
+      // Mission 18 (B5) : la mise en ligne d'un devis du CRM pas encore envoyé est annoncée par « Devis disponible ».
+      const envoi = "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas, la relance compte depuis la mise en ligne.";
+      if (cible.contexte.repris || avant.statut !== "GENERE") return `${envoi} Aucun mail : ${cible.contexte.repris ? "devis fait ailleurs" : "il a déjà été envoyé par mail"}.`;
+      const etat = await peutNotifier("DEVIS_DISPONIBLE", String(cible.contexte.dossierId));
+      return `${envoi} ${etat.possible ? "Le mail « Devis disponible » partira au client (une fois par devis)." : `Aucun mail « Devis disponible » : ${(etat.raison ?? "notification impossible").replace(/\.$/, "")}.`}`;
+    },
     // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste, et l'étape ne revient pas d'elle-même.
     annulationPartielle: (changements) =>
       changements.some((c) => c.cle === "statut" && c.apres === "ACCEPTE" && c.avant !== "ACCEPTE")
         ? "Le devis n'est plus noté « accepté », mais le dossier garde l'étape « Signé » s'il y est passé (et les autres devis restent « non retenus ») : « changer_etape » pour le remettre à son étape d'avant."
         : changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true)
-          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant."
+          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique (le mail « Devis disponible », s'il est parti, ne se reprend pas) et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant."
           : null,
     lire: async (cible) => {
       const d = await prisma.document.findUniqueOrThrow({ where: { id: cible.id } });
@@ -74,8 +81,8 @@ export const DOCUMENT: DefinitionEntite = {
       const dossierId = cible.contexte.dossierId as string;
       // Comme la route : { visibleEspace, libelleVariante } seuls = la présentation ; le reste = la correction d'un document repris.
       if (Object.keys(valeurs).every((c) => CHAMPS_PRESENTATION.includes(c))) {
-        await modifierPresentationDevis(dossierId, cible.id, valeurs);
-        return [];
+        const { annonce } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
+        return annonce ? [phraseAnnonce(annonce)] : [];
       }
       return modifierDocumentExistant(dossierId, cible.id, valeurs);
     },

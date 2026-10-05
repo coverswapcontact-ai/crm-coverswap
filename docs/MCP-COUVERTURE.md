@@ -100,6 +100,16 @@
   « émis »). L'aperçu de `ajouter_fichier` et la note de `modifier` le disent d'avance. Ni outil ni paramètre ne change :
   empreinte **`040d6c7aa53c`** (53 outils). La description du paramètre `statut` de `ajouter_fichier` change :
   reconnecter le connecteur.
+- **Mission 18, B5 (05/10/2026)** : devis rendu visible = mis en ligne. `modifier` DOCUMENT `visible_espace: true`
+  (DP48) passe par la même fonction que l'interrupteur du bloc Espace (`presentation-devis.ts ›
+  modifierPresentationDevis` → `devis-envoye.ts › mettreEnLigneDevis`) : visibilité, événement « Devis envoyé »
+  (`canal: "ESPACE"`, il date la relance), étape, prochaine action et main dans une transaction ; puis le mail
+  « Devis disponible » de l'automatisme existant (une fois par devis, interrupteur gardé ; pas pour un devis repris ni
+  déjà envoyé par mail). La note de l'aperçu dit d'avance si le mail partira (`peutNotifier`), le résultat s'il est parti
+  ou pourquoi pas. Même mise en ligne, sans mail, pour un devis repris corrigé visible (DP59). `lister` RELANCES dit
+  « envoyé il y a N jours » depuis le dernier envoi (mail, Gmail, mise en ligne), plus depuis l'émission (champs
+  `envoyeLe`, `joursDepuisEnvoi`). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
+  (53 outils), rien à reconnecter pour ce lot.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -340,7 +350,7 @@ un lien « Gérer les tarifs » vers l'onglet.
 | DP45 | Espace › Simulations › « Afficher » (republier, mail automatique) | … {afficher} | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
 | DP46 | Espace › Simulations › « Accorder 3 simulations » | … {geste:accorder, nombre} | S-€ (≈ 0,20 $ l'image) | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
 | DP47 | Espace › Simulations › « Réinitialiser » l'étape | … {geste:reinitialiser, SIMULATIONS} | R | geste_espace (REINITIALISER, etape SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
-| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} (mission 18, B5 : rend `annonce`, le mail « Devis disponible ») | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » ; `mise-en-ligne.test.ts` › « outil « modifier » DOCUMENT : l'aperçu annonce le mail « Devis disponible »… » |
 | DP49 | Espace › Devis › « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | générateur / dépôt | S | generer_document / ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » ; `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » |
 | DP50 | Espace › Devis › « Retirer son accord » | … {geste:retirer-accord} | S | geste_espace (RETIRER_ACCORD) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
 | DP51 | Espace › Paiement (ce qu'il voit), « Son avis » (note, texte, publication) | GET …/espace | L | lire_fiche (dossier, espace: true : paiement vu, avis) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
@@ -1103,7 +1113,7 @@ effaçable.
 | DOSSIER (suite) | `dossiers/dossiers.ts › modifierDateEvenement` | passage {evenement_id, survenu_le} | R | DP89 |
 | CLIENT | `clients/fiches.ts › modifierClient` (`schemaModificationClient`) | categorie, prenom, nom_famille, raison_sociale, siret, adresse, code_postal, ville, source, source_detail, campagne, publicite, formulaire, premier_contact_le, recommande_par_id, recommande_par_texte, notes (le passif) | R | C11, C20 |
 | COORDONNEE | `clients/fiches.ts › modifierCoordonnee` ; `definirPrincipale` | client, nature (email, telephone), coordonnee_id, valeur, libelle, principale: true | R | C16, C17 |
-| DOCUMENT | `dossiers/presentation-devis.ts › modifierPresentationDevis` | libelle_variante, visible_espace (ex-`presenter_devis`) | R ; S quand un devis masqué devient visible (vaut envoi) | DP48 (repris) |
+| DOCUMENT | `dossiers/presentation-devis.ts › modifierPresentationDevis` | libelle_variante, visible_espace (ex-`presenter_devis`) | R ; S quand un devis masqué devient visible (vaut envoi ; mission 18 B5 : mis en ligne d'un bloc, mail « Devis disponible » d'un devis du CRM pas encore envoyé) | DP48 (repris) |
 | DOCUMENT (repris) | `dossiers/documents-existants.ts › modifierDocumentExistant` (`schemaModificationDocumentExistant`) | date_emission, montant, objet, statut, acompte_pct, libelle_variante, visible_espace | S-€ | DP59 |
 | ENCAISSEMENT | `encaissements/service.ts › modifierEncaissement` (`schemaCorrectionEncaissement`) ; `crediterCheque` quand seul credite_le est donné | montant, recu_le, moyen, reference, credite_le | S-€ | DP76, DP77, F5 |
 | DEPENSE | `depenses/service.ts › modifierDepense` (`schemaModificationDepense`) | montant, payee_le, fournisseur, categorie, moyen, libelle, note, dossier_id, hors_chantier | R (comme aujourd'hui pour les dépenses) | X4 |

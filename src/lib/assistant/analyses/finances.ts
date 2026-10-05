@@ -5,6 +5,7 @@ import { lireParametre, lireParametres } from "@/lib/parametres/service";
 import { lireConsignes } from "../consignes";
 import { definirOutil, format, lien } from "../definition";
 import { resoudrePeriode, schemaPeriode, type Periode } from "../periodes";
+import { montantSigneHt } from "@/lib/dossiers/montant-signe";
 import { arrondi, avertissementMinces, evolution, familleDuDossier, libelleFamille, mois, repartir, somme } from "./commun";
 
 /**
@@ -69,7 +70,7 @@ export async function analyseFinanciere(entree: z.output<typeof schemaPeriode>, 
     prisma.encaissement.findMany({ where: { statut: "VALIDE", recuLe: { gte: debutLarge } }, select: { montant: true, recuLe: true, dossierId: true, dossier: { select: { prestations: true, lead: { select: { typeProjet: true } }, client: { select: { categorie: true } } } } } }),
     prisma.depense.findMany({ where: { archiveLe: null, payeeLe: { gte: new Date(debutLarge.getTime() - 365 * 86_400_000) } }, select: { montant: true, payeeLe: true, dossierId: true, categorie: true, horsChantier: true } }),
     prisma.document.findMany({ where: { type: "FACTURE", numero: { not: null }, archiveLe: null, statut: { notIn: ["ANNULEE", "REMPLACE"] }, dateEmission: { gte: debutLarge } }, select: { dossierId: true, totalHt: true, dateEmission: true, numero: true, dossier: { select: { clientNom: true } } } }),
-    prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"] } }, select: { id: true, clientNom: true, dateChantier: true, accords: { where: { retireLe: null }, select: { totalHt: true }, orderBy: { createdAt: "desc" }, take: 1 }, encaissements: { where: { statut: "VALIDE" }, select: { montant: true } } } }),
+    prisma.dossier.findMany({ where: { archiveLe: null, etape: { in: ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"] } }, select: { id: true, clientNom: true, dateChantier: true, accords: { where: { retireLe: null }, select: { documentId: true, totalHt: true } }, documents: { where: { type: "DEVIS", statut: "ACCEPTE", archiveLe: null, numero: { not: null } }, select: { id: true, statut: true, totalHt: true } }, encaissements: { where: { statut: "VALIDE" }, select: { montant: true } } } }),
     chargerTableauFinances(annee, maintenant),
     lireParametres(["TAUX_COTISATIONS_SOCIALES", "TAUX_CFP"], maintenant),
     lireConsignes(),
@@ -82,8 +83,9 @@ export async function analyseFinanciere(entree: z.output<typeof schemaPeriode>, 
   const cumulAnnee = somme(encaissements.filter((e) => e.recuLe.getFullYear() === annee && e.recuLe <= maintenant).map((e) => e.montant));
 
   // Trésorerie : à encaisser sur les dossiers signés (accord − reçu), attendu au chantier (solde) ou tout de suite (acompte).
+  // Mission 18 (relecture) : le signé est le devis d'origine plus ses avenants signés (montant-signe.ts).
   const resteAEncaisser = signes
-    .map((d) => ({ dossierId: d.id, client: d.clientNom, montant: arrondi((d.accords[0]?.totalHt ?? 0) - d.encaissements.reduce((t, e) => t + e.montant, 0)), attenduLe: d.dateChantier }))
+    .map((d) => ({ dossierId: d.id, client: d.clientNom, montant: arrondi((montantSigneHt(d.documents, d.accords) ?? 0) - d.encaissements.reduce((t, e) => t + e.montant, 0)), attenduLe: d.dateChantier }))
     .filter((r) => r.montant > 0);
   const tauxCotisations = typeof params.TAUX_COTISATIONS_SOCIALES === "number" ? params.TAUX_COTISATIONS_SOCIALES : null;
   const tauxCfp = typeof params.TAUX_CFP === "number" ? params.TAUX_CFP : 0;

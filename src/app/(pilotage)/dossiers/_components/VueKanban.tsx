@@ -83,6 +83,7 @@ export function VueKanban({
   dossiers,
   afficherSorties,
   masquerColonnesVides,
+  ordreServeur = false,
   maintenant,
   onOuvrir,
 }: {
@@ -90,6 +91,8 @@ export function VueKanban({
   afficherSorties: boolean;
   /** Filtre « À faire » : seules les colonnes qui ont des dossiers restent. */
   masquerColonnesVides: boolean;
+  /** Filtre « Espaces » : chaque colonne garde l'ordre du serveur (le tri choisi), sans retri par échéance. */
+  ordreServeur?: boolean;
   maintenant: Date;
   onOuvrir: (id: string) => void;
 }) {
@@ -103,7 +106,8 @@ export function VueKanban({
     <div ref={repere} className="-mx-5 scroll-px-5 snap-x snap-mandatory overflow-x-auto px-5 pb-4 md:-mx-8 md:scroll-px-8 md:snap-none md:px-8">
       <div className="flex w-max items-start gap-3">
         {colonnes.map((etape) => {
-          const liste = dossiers.filter((dossier) => dossier.etape === etape).sort(comparerPourColonne(maintenant));
+          const dansLaColonne = dossiers.filter((dossier) => dossier.etape === etape);
+          const liste = ordreServeur ? dansLaColonne : dansLaColonne.sort(comparerPourColonne(maintenant));
           const total = liste.reduce((somme, dossier) => somme + (montantAffiche(dossier) ?? 0), 0);
           const aFaire = liste.filter((dossier) => estAFaire(dossier, maintenant)).length;
           const retards = liste.filter((dossier) => echeanceDe(dossier, maintenant) === "retard").length;

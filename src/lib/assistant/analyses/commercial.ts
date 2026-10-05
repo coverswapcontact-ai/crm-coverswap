@@ -162,11 +162,11 @@ async function motifsDePerte(periode: Periode) {
 async function devisEnAttente(maintenant: Date) {
   const devis = await prisma.document.findMany({
     where: { type: "DEVIS", numero: { not: null }, archiveLe: null, statut: { in: ["GENERE", "ENVOYE"] }, dossier: { archiveLe: null, etape: { in: ["DEVIS_ENVOYE", "RELANCE", "SIMULATION", "QUALIFICATION"] } } },
-    select: { id: true, numero: true, totalHt: true, dateEmission: true, dossier: { select: { id: true, clientNom: true, etape: true, accords: { where: { retireLe: null }, select: { id: true } }, espaces: { where: { archiveLe: null }, select: { devisConsultations: true, devisConsulteId: true } } } } },
+    select: { id: true, numero: true, totalHt: true, dateEmission: true, consultations: true, dossier: { select: { id: true, clientNom: true, etape: true, accords: { where: { retireLe: null }, select: { id: true } } } } },
   });
   const lignes = devis
     .filter((d) => d.dossier.accords.length === 0)
-    .map((d) => ({ documentId: d.id, dossierId: d.dossier.id, client: d.dossier.clientNom, numero: d.numero, montant: d.totalHt, emisLe: d.dateEmission?.toISOString() ?? null, ancienneteJours: d.dateEmission ? Math.floor((maintenant.getTime() - d.dateEmission.getTime()) / 86_400_000) : null, consultations: d.dossier.espaces.reduce((t, e) => t + (e.devisConsulteId === d.id ? e.devisConsultations : 0), 0) }))
+    .map((d) => ({ documentId: d.id, dossierId: d.dossier.id, client: d.dossier.clientNom, numero: d.numero, montant: d.totalHt, emisLe: d.dateEmission?.toISOString() ?? null, ancienneteJours: d.dateEmission ? Math.floor((maintenant.getTime() - d.dateEmission.getTime()) / 86_400_000) : null, consultations: d.consultations }))
     .sort((a, b) => (b.ancienneteJours ?? 0) - (a.ancienneteJours ?? 0));
   return { nombre: lignes.length, montantTotal: somme(lignes.map((l) => l.montant)), ancienneteMoyenneJours: moyenne(lignes.map((l) => l.ancienneteJours ?? 0)), relusSansSignature: lignes.filter((l) => l.consultations > 0).length, lignes: lignes.slice(0, 30) };
 }

@@ -69,8 +69,10 @@ after(async () => {
 
 describe("deux devis proposés, le client en choisit un", () => {
   test("A « façades seules » puis B « façades + plan de travail » : les deux sont proposés, aucun ne remplace l'autre, chacun avec son libellé", async () => {
-    const c = await client("Fawzi");
-    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Recouvrement cuisine", [ligne("Revêtement adhésif — façades", 11.5, 150)], { libelleVariante: "façades seules", notifier: false })));
+    // Mission 18 (B1) : générer n'est pas envoyer — le premier devis est annoncé (adresse, espace ouvert), le second est
+    // une variante silencieuse (`notifier: false`) mise en ligne à côté : le cas réel de la mission 11.
+    const c = await client("Fawzi", "fawzi.essai@example.test");
+    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Recouvrement cuisine", [ligne("Revêtement adhésif — façades", 11.5, 150)], { libelleVariante: "façades seules" })));
     const { document: b } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Recouvrement cuisine", [ligne("Revêtement adhésif — façades", 11.5, 150), ligne("Plan de travail", 4.6, 150)], { libelleVariante: "façades + plan de travail", notifier: false })));
     assert.deepEqual([a.libelleVariante, b.libelleVariante, a.visibleEspace, b.visibleEspace], ["façades seules", "façades + plan de travail", true, true]);
     assert.equal(await statutDe(a.id), "GENERE", "sans « remplace », le premier devis reste en vigueur");
@@ -88,8 +90,8 @@ describe("deux devis proposés, le client en choisit un", () => {
   });
 
   test("interrupteur « visible dans l'espace » : masqué, le client ne le voit plus et ne peut pas l'accepter ; la présentation d'un devis émis se modifie, pas son contenu", async () => {
-    const c = await client("Inès");
-    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 10, 150)], { libelleVariante: "façades seules", notifier: false })));
+    const c = await client("Inès", "ines.essai@example.test");
+    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 10, 150)], { libelleVariante: "façades seules" })));
     const { document: b } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 10, 150), ligne("Plan de travail", 4, 150)], { libelleVariante: "façades + plan", notifier: false })));
 
     await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, a.id, { visibleEspace: false }));
@@ -107,8 +109,8 @@ describe("deux devis proposés, le client en choisit un", () => {
   });
 
   test("validation de B : B signé, A « non retenu » (gardé), le dossier avance, l'événement et la main nomment le devis choisi ; l'accord retiré rend A au choix", async () => {
-    const c = await client("Fawzi");
-    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 11.5, 150)], { libelleVariante: "façades seules", notifier: false })));
+    const c = await client("Fawzi", "fawzi.choix@example.test");
+    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 11.5, 150)], { libelleVariante: "façades seules" })));
     const { document: b } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 11.5, 150), ligne("Plan de travail", 4.6, 150)], { libelleVariante: "façades + plan de travail", notifier: false })));
 
     await service.accepterDevis(await espaceDe(c.espaceId), { documentId: b.id, nom: "Fawzi Essai", accepte: true }, ORIGINE);
@@ -158,8 +160,8 @@ describe("deux devis proposés, le client en choisit un", () => {
   });
 
   test("devis PDF déjà fait, déposé avec un libellé : proposé comme les autres ; annulé : gardé en historique, plus proposé ; un devis accepté ne s'annule pas", async () => {
-    const c = await client("Léa");
-    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 10, 150)], { libelleVariante: "façades", notifier: false })));
+    const c = await client("Léa", "lea.essai@example.test");
+    const { document: a } = await avecActeur(LUCAS, () => documents.genererDocument(c.dossierId, generation("Cuisine", [ligne("Façades", 10, 150)], { libelleVariante: "façades" })));
     const depose = await avecActeur(LUCAS, () =>
       existants.enregistrerDocumentExistant(c.dossierId, existants.schemaDocumentExistant.parse({ type: "DEVIS", numero: `2026-9${Math.floor(Math.random() * 90 + 10)}`, dateEmission: "2026-09-20", montant: 2415, statut: "ENVOYE", acomptePct: 30, libelleVariante: "façades + plan (PDF)", inscrireAuRegistre: true }))
     );

@@ -17,7 +17,7 @@ import type { IdZone } from "@/lib/simulateur/types-surface";
  *  - aux SURFACES du moteur de simulation (identifiants du simulateur du site,
  *    lib/simulateur/surfaces) — toujours prises dans le projet du simulateur de
  *    sa famille, car la consigne refuse une surface d'un autre projet ;
- *  - à un TARIF : celui que Lucas lui attribue dans ses tarifs (Dossiers →
+ *  - à un TARIF : celui que Lucas lui attribue dans ses tarifs (Paramètres ›
  *    Tarifs), sinon le premier de ses tarifs dont la désignation contient les
  *    mots donnés ici ; sinon aucun (prix à saisir : rien n'est inventé).
  *

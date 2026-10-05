@@ -176,6 +176,32 @@ describe("« lister » : le même contenu que la fonction de l'écran", () => {
     const relance = await listerAvec({ liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 1 } });
     const ancien = await lecture.outilEspacesClients.executer({ sans_photo_ni_simulation_depuis_jours: 1 }, { sessionId: session.id, commande: null, utilisateur: "essai", maintenant: new Date() });
     assert.equal(relance.texte, ancien.texte);
+    // Mission 18 (A1) : l'onglet Espaces n'existe plus ; le lien mène au filtre « Espaces » de Dossiers.
+    assert.equal(r.liens?.[0].href, "http://localhost:3001/dossiers?espace=TOUS");
+  });
+
+  test("DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles, étape, compteurs exacts, colonne Espace sur chaque ligne", async () => {
+    const { pageDossiers } = await import("@/lib/dossiers/dossiers");
+    for (const espace of ["TOUS", "MOI", "CLIENT", "SIGNAUX", "DESACTIVES"] as const) {
+      const r = await listerAvec({ liste: "DOSSIERS", filtres: { espace } });
+      const ecran = await pageDossiers({ espace, page: 1, parPage: 20 });
+      const donnees = r.donnees as { dossiers: { id: string }[]; compteursEspaces: unknown; espace: string };
+      assert.deepEqual(idsDe(donnees.dossiers), idsDe(ecran.dossiers), espace);
+      assert.deepEqual(donnees.compteursEspaces, ecran.espaces, espace);
+      assert.equal(donnees.espace, espace);
+    }
+    const tous = await listerAvec({ liste: "DOSSIERS", filtres: { espace: "TOUS" } });
+    assert.match(tous.texte, /^\d+ dossiers? avec un espace client, filtre « Tous »\. Compteurs des espaces : à moi \d+, chez le client \d+, signaux \d+, tous \d+, désactivés 0\./);
+    assert.match(tous.texte, new RegExp(`; espace : Photos attendues · lien pas encore envoyé[^\\n]*\\[dossier:${ids.dossierAlice}\\]`));
+    assert.equal(tous.liens?.[0].href, "http://localhost:3001/dossiers?espace=TOUS");
+    const etape = await listerAvec({ liste: "DOSSIERS", filtres: { espace: "TOUS", etape_espace: "devis" } });
+    assert.deepEqual(idsDe((etape.donnees as { dossiers: { id: string }[] }).dossiers), idsDe((await pageDossiers({ espace: "TOUS", etapeEspace: "DEVIS", page: 1, parPage: 20 })).dossiers));
+    assert.equal(etape.liens?.[0].href, "http://localhost:3001/dossiers?espace=TOUS&etapeEspace=DEVIS");
+    assert.match((await listerAvec({ liste: "DOSSIERS", filtres: { espace: "TOUS", etape_espace: "NIMPORTE" } })).texte, /^Refusé : Étape d'espace inconnue/);
+    // Sans filtre, la colonne aussi : l'état de l'espace sur la ligne du dossier qui en a un.
+    const enCours = await listerAvec({ liste: "DOSSIERS" });
+    assert.ok((enCours.donnees as { dossiers: { id: string; espace: unknown }[] }).dossiers.find((d) => d.id === ids.dossierAlice)?.espace);
+    assert.match(enCours.texte, new RegExp(`; espace : Photos attendues[^\\n]*\\[dossier:${ids.dossierAlice}\\]`));
   });
 
   test("MAILS : listerVue par vue (rangés compris), recherche dans la vue ; NON_CLASSES = l'ex-« mails_non_classes »", async () => {
@@ -219,6 +245,12 @@ describe("« lister » : le même contenu que la fonction de l'écran", () => {
     const periode = await listerAvec({ liste: "DEPENSES", filtres: { periode: "mois_en_cours" } });
     const depenses = await import("@/lib/assistant/outils/depenses");
     assert.equal(periode.texte, (await depenses.outilDepenses.executer({ periode: "mois_en_cours" }, { sessionId: session.id, commande: null, utilisateur: "essai", maintenant: new Date() })).texte);
+    // Mission 18 (A3) : la liste des dépenses est une section de Finances (l'ancien écran /depenses y redirige).
+    assert.deepEqual(r.liens?.map((l) => l.href), [`http://localhost:3001/finances?section=depenses&annee=${annee}`]);
+    assert.deepEqual(retirees.liens?.map((l) => l.href), [`http://localhost:3001/finances?section=depenses&annee=${annee}`]);
+    assert.deepEqual(periode.liens?.map((l) => l.href), ["http://localhost:3001/finances?section=depenses"]);
+    const suggestions = await listerAvec({ liste: "DEPENSES", vue: "SUGGESTIONS" });
+    assert.deepEqual(suggestions.liens?.map((l) => l.href), ["http://localhost:3001/depenses/nouvelle"], "la saisie reste un écran");
   });
 
   test("ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE : chargerLivre et le lien CSV", async () => {

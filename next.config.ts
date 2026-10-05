@@ -21,6 +21,15 @@ const ANCIENNES_ADRESSES: { source: string; destination: string }[] = [
   { source: "/factures", destination: "/finances" },
   { source: "/chantiers/:chemin*", destination: "/dossiers" },
   { source: "/commandes", destination: "/dossiers" },
+  // Mission 18 (A1) : l'onglet Espaces clients est devenu le filtre « Espaces » de Dossiers (tâches, notifications et
+  // favoris qui menaient à /espaces y arrivent).
+  { source: "/espaces", destination: "/dossiers?espace=TOUS" },
+  // Mission 18 (A3) : Dépenses est une section de Finances (liens de l'assistant, favoris, ?annee= suit). Le chemin
+  // exact seulement : la saisie /depenses/nouvelle (raccourci de l'application installée) reste un écran.
+  { source: "/depenses", destination: "/finances?section=depenses" },
+  // Mission 18 (A5) : Tâches de fond est l'onglet « Système » de Paramètres (tâches, alertes, notifications et liens de
+  // l'assistant déjà envoyés y arrivent).
+  { source: "/taches-de-fond", destination: "/parametres?section=systeme" },
 ];
 
 const nextConfig: NextConfig = {

@@ -27,9 +27,9 @@ import {
   lireNombre,
 } from "@/lib/dossiers/montants";
 import type { DocumentVue, DossierDetail, PresetVue } from "@/lib/dossiers/types";
+import { ADRESSE_TARIFS } from "@/lib/parametres/sections";
 import { cn } from "@/lib/utils";
 import { useParametresExiges } from "@/components/pilotage/SaisieParametres";
-import { GestionTarifs } from "./GestionTarifs";
 import { Bouton, CaseACocher, Champ, CLASSE_SAISIE, Modale, TRANS } from "@/components/pilotage/ui";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { documentDeDepart, lireAcompte, nouvelleCle, prestationVide, saisieDepuis, type Erreurs, type LigneSaisie, type Resultat } from "./generateur-lignes";
@@ -64,21 +64,29 @@ export function GenerateurDocument({
   const [notifier, setNotifier] = useState(true);
   const dejaProposes = detail.documents.filter((d) => d.type === "DEVIS" && d.numero && ["GENERE", "ENVOYE", "ACCEPTE"].includes(d.statut) && d.id !== remplace?.id);
   const [presets, setPresets] = useState<PresetVue[]>([]);
-  const [gestionTarifs, setGestionTarifs] = useState(false);
   const [numero, setNumero] = useState<{ type: TypeDocument; valeur: string } | null>(null);
   const [erreurs, setErreurs] = useState<Erreurs>({});
   const [envoi, setEnvoi] = useState(false);
   const [resultat, setResultat] = useState<Resultat | null>(null);
 
+  // Mission 18 (A6) : les tarifs se gèrent dans Paramètres › Tarifs (ouvert dans un autre onglet, pour ne pas perdre
+  // le document en cours) ; la liste se relit au retour sur cet onglet.
   useEffect(() => {
     let actif = true;
-    appelApi<{ presets: PresetVue[] }>("/api/dossiers/presets")
-      .then((reponse) => {
-        if (actif) setPresets(reponse.presets);
-      })
-      .catch((probleme: unknown) => toast.error("Tarifs indisponibles", { description: messageErreur(probleme) }));
+    const charger = (signaler: boolean) =>
+      appelApi<{ presets: PresetVue[] }>("/api/dossiers/presets")
+        .then((reponse) => {
+          if (actif) setPresets(reponse.presets);
+        })
+        .catch((probleme: unknown) => {
+          if (signaler) toast.error("Tarifs indisponibles", { description: messageErreur(probleme) });
+        });
+    void charger(true);
+    const auRetour = () => void charger(false);
+    window.addEventListener("focus", auRetour);
     return () => {
       actif = false;
+      window.removeEventListener("focus", auRetour);
     };
   }, []);
 
@@ -280,7 +288,7 @@ export function GenerateurDocument({
               Fermer
             </Bouton>
           </div>
-        ) : gestionTarifs ? null : (
+        ) : (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[12px] text-[#6B7280]">
               Le numéro est attribué à la génération et ne sera jamais réutilisé.
@@ -331,8 +339,6 @@ export function GenerateurDocument({
             </a>
           </div>
         </div>
-      ) : gestionTarifs ? (
-        <GestionTarifs presets={presets} setPresets={setPresets} onRetour={() => setGestionTarifs(false)} />
       ) : (
         <div className="space-y-5">
           <div className="flex flex-wrap items-end gap-3">
@@ -441,14 +447,19 @@ export function GenerateurDocument({
                   </option>
                 ))}
               </select>
-              <Bouton
-                variante="fantome"
-                taille="sm"
-                icone={<Settings2 size={13} aria-hidden />}
-                onClick={() => setGestionTarifs(true)}
+              <a
+                href={ADRESSE_TARIFS}
+                target="_blank"
+                rel="noopener"
+                title="Paramètres › Tarifs, dans un autre onglet"
+                className={cn(
+                  "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-7 sm:px-2.5 sm:text-[12px]",
+                  TRANS
+                )}
               >
+                <Settings2 size={13} aria-hidden />
                 Gérer les tarifs
-              </Bouton>
+              </a>
             </div>
           </div>
 
@@ -480,7 +491,7 @@ export function GenerateurDocument({
                   />
                   <CaseACocher
                     libelle="Prévenir le client par mail"
-                    description="« Votre devis est disponible », s'il a un e-mail. À décocher pour le présenter d'abord de vive voix."
+                    description="« Votre devis est disponible », s'il a un e-mail et un espace ouvert : le devis est alors envoyé. Décoché (ou sans e-mail), il reste à envoyer — masqué dans son espace avant tout devis envoyé — et une tâche « Envoyer le devis » le rappelle."
                     checked={notifier}
                     onChange={setNotifier}
                   />

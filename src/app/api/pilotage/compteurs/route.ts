@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic";
  * retard (mission 14), les mails à traiter, les tâches de fond en échec, et le rappel de la connexion Google quand elle
  * expire bientôt.
  *
+ * Mission 18 (A5) : la navigation n'affiche plus `tachesEnEchec` (un seul compteur : l'échec remonte comme tâche système
+ * dans Tâches) ; la clé reste dans la réponse pour les clients d'avant (réponse servie par le cache hors ligne).
+ *
  * Mission 17 (partie A) : l'onglet Mail compte les tâches à faire venues du mail ou des messages de l'espace client
  * (une seule source de vérité avec l'écran Tâches), et non plus les conversations « À traiter » recalculées ici.
  */

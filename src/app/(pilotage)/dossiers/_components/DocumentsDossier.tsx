@@ -39,9 +39,10 @@ function ModaleAnnulationDevis({ detail, devis, onFermer, onFait }: { detail: Do
   async function annuler() {
     setEnvoi(true);
     try {
-      const reponse = await envoyerJson<{ dossier: DossierDetail }>(`/api/dossiers/${detail.id}/documents/${devis.id}/annulation`, "POST", { motif: motif.trim() });
+      const reponse = await envoyerJson<{ dossier: DossierDetail; avertissements?: string[] }>(`/api/dossiers/${detail.id}/documents/${devis.id}/annulation`, "POST", { motif: motif.trim() });
       onFait(reponse.dossier);
-      toast.success(`Devis ${devis.numero} annulé`, { description: "Il reste dans l'historique du dossier ; le client ne le voit plus." });
+      // Mission 18 (B6) : sans autre devis en attente, le dossier revient avant « Devis envoyé » : la description le dit.
+      toast.success(`Devis ${devis.numero} annulé`, { description: ["Il reste dans l'historique du dossier ; le client ne le voit plus.", ...(reponse.avertissements ?? [])].join(" ") });
       onFermer();
     } catch (erreur) {
       toast.error("Annulation impossible", { description: messageErreur(erreur) });
@@ -165,7 +166,7 @@ function ModaleAvoir({
 type Brouillon = { a: string; objet: string; texte: string };
 
 /** Envoi d'un devis ou d'une facture par mail : brouillon pré-rempli, relu, envoyé par la file. */
-function ModaleEnvoiMail({ detail, document, onFermer }: { detail: DossierDetail; document: DocumentVue; onFermer: () => void }) {
+function ModaleEnvoiMail({ detail, document, onFermer, onEnvoye }: { detail: DossierDetail; document: DocumentVue; onFermer: () => void; onEnvoye?: () => void }) {
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
@@ -187,8 +188,13 @@ function ModaleEnvoiMail({ detail, document, onFermer }: { detail: DossierDetail
     if (!brouillon || !complet) return;
     setEnvoi(true);
     try {
-      await envoyerJson(url, "POST", brouillon);
-      toast.success("Mail en cours d'envoi", { description: "Il part dans quelques secondes ; l'envoi s'inscrit dans l'historique du dossier." });
+      const reponse = await envoyerJson<{ deja?: boolean }>(url, "POST", brouillon);
+      if (reponse.deja) toast.info("Déjà envoyé", { description: "Ce même mail est déjà parti ou en cours d'envoi : rien de plus ne part." });
+      else
+        toast.success("Mail en cours d'envoi", {
+          description: document.type === "DEVIS" ? "Il part dans quelques secondes : le devis devient visible dans son espace et le dossier passe en « Devis envoyé »." : "Il part dans quelques secondes ; l'envoi s'inscrit dans l'historique du dossier.",
+        });
+      onEnvoye?.();
       onFermer();
     } catch (probleme) {
       toast.error("Envoi refusé", { description: messageErreur(probleme) });
@@ -234,12 +240,15 @@ export function DocumentsDossier({
   onGenerer,
   onRefaire,
   onMisAJour,
+  onRecharger,
   sansTitre = false,
 }: {
   detail: DossierDetail;
   onGenerer: (type: TypeDocument) => void;
   onRefaire: (devis: DocumentVue) => void;
   onMisAJour: (detail: DossierDetail) => void;
+  /** Mission 18 (B2) : relit le dossier (étape, main, visibilité) une fois le mail parti par la file. */
+  onRecharger?: () => Promise<void> | void;
   sansTitre?: boolean;
 }) {
   const [aAnnuler, setAAnnuler] = useState<DocumentVue | null>(null);
@@ -381,7 +390,17 @@ export function DocumentsDossier({
           })}
         </ul>
       )}
-      {aEnvoyer ? <ModaleEnvoiMail key={aEnvoyer.id} detail={detail} document={aEnvoyer} onFermer={() => setAEnvoyer(null)} /> : null}
+      {aEnvoyer ? <ModaleEnvoiMail
+          key={aEnvoyer.id}
+          detail={detail}
+          document={aEnvoyer}
+          onFermer={() => setAEnvoyer(null)}
+          onEnvoye={() => {
+            // Le mail part par la file dans les secondes qui suivent : relu tout de suite, puis une fois parti.
+            void onRecharger?.();
+            window.setTimeout(() => void onRecharger?.(), 8_000);
+          }}
+        /> : null}
       {existant ? (
         <ModaleDocumentExistant key={existant.document?.id ?? "nouveau"} detail={detail} document={existant.document} onFermer={() => setExistant(null)} onMisAJour={onMisAJour} />
       ) : null}

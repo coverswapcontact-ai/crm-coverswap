@@ -33,6 +33,18 @@ export type EtapeDossier = (typeof ETAPES)[number];
 export const ETAPES_CLOSES: EtapeDossier[] = ["PERDU", "ENCAISSE"];
 export const estDossierClos = (etape: string): boolean => (ETAPES_CLOSES as string[]).includes(etape);
 
+/**
+ * Mission 18 (A2) : la prochaine action d'un dossier ouvert tout seul par le site (`dossiers/depuis-lead.ts`), pour
+ * aujourd'hui — le premier appel, qu'une tâche « Appeler · Nom » porte. Un appel noté « Intéressé » y répond (il
+ * s'efface, `commercial/appels.ts`). Les textes ne changent pas sans les regex qui les lisent (« appeler », « rappel »).
+ */
+export const ACTIONS_OUVERTURE_AUTO = {
+  SIMULATION: "Appeler : simulation faite sur le site",
+  DEMANDE: "Appeler : demande de devis",
+} as const;
+export type MotifOuvertureAuto = keyof typeof ACTIONS_OUVERTURE_AUTO;
+export const estActionOuvertureAuto = (action: string | null | undefined): boolean => (Object.values(ACTIONS_OUVERTURE_AUTO) as string[]).includes((action ?? "").trim());
+
 export const LIBELLES_ETAPE: Record<EtapeDossier, string> = {
   QUALIFICATION: "Qualification",
   SIMULATION: "Simulation",
@@ -204,6 +216,25 @@ export const estRubriqueDossier = (valeur: string | null | undefined): valeur is
 // « Préparer le devis … » vient de l'espace (le client a choisi une simulation) ; un devis généré OU déposé la remplace.
 export const PROCHAINE_ACTION_PREPARER_DEVIS = "Préparer le devis";
 export const PROCHAINE_ACTION_APRES_DEVIS = "Attendre l'accord du client sur le devis";
+/** Mission 18 (B1) : le devis est prêt mais pas encore envoyé (masqué dans son espace, ou sans annonce). */
+export const PROCHAINE_ACTION_ENVOYER_DEVIS = "Envoyer le devis au client";
+/** Mission 18 (B6) : le seul devis en attente a été annulé ou masqué, le dossier est revenu avant « Devis envoyé ». */
+export const PROCHAINE_ACTION_REFAIRE_DEVIS = "Refaire le devis";
+
+/**
+ * Mission 18 (B4) : les étapes d'où un devis noté « accepté » par Lucas (déposé « accepté », devis repris corrigé)
+ * fait passer le dossier en « Signé » — les étapes actives d'avant « Signé » (dossiers/devis-signe.ts). Ici pour que
+ * la modale de dépôt le dise d'avance.
+ */
+export const ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
+
+/**
+ * Mission 18 (relecture de B4) : le dossier est-il « non signé » au sens de l'écart 4 — à une étape d'avant « Signé », ou
+ * EN PAUSE depuis une de ces étapes (l'étape d'avant la pause, `avantSortie`) ? Perdu : non, il se reprend d'abord. Pure
+ * (écran, outil, service).
+ */
+export const signeParDevisAccepte = (etape: string | null | undefined, avantSortie?: string | null): boolean =>
+  (ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE as readonly string[]).includes(etape ?? "") || (etape === "EN_PAUSE" && (ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE as readonly string[]).includes(avantSortie ?? ""));
 
 // Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [

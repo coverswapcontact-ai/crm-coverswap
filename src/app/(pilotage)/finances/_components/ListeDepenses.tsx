@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronLeft, ChevronRight, CloudOff, FileText, Paperclip, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CloudOff, FileText, Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
-import { Bouton, Champ, CLASSE_SAISIE, EnTetePage, Modale, Pastille, Puces, TRANS, TitreSection, ZoneTexte, CARTE } from "@/components/pilotage/ui";
+import { Bouton, Champ, CLASSE_SAISIE, Modale, Pastille, Puces, TRANS, TitreSection, ZoneTexte, CARTE } from "@/components/pilotage/ui";
 import { envoisEnAttente, envoyerFile, retirerEnvoi, type EnvoiEnAttente } from "@/lib/depenses/boite-envoi";
 import {
   CATEGORIES_DEPENSE,
   LIBELLES_MOYEN_DEPENSE,
   MOYENS_DEPENSE,
+  SECTION_DEPENSES,
   libelleCategorie,
   type CategorieDepense,
   type ChantierPropose,
@@ -189,6 +190,11 @@ function ModaleDepense({
   );
 }
 
+/**
+ * Mission 18 (A3) : l'ancien écran Dépenses, devenu une section de Finances (la même année que le reste de l'écran ;
+ * l'ancienne adresse /depenses y redirige, `/finances?section=depenses` y descend). La saisie reste sur
+ * `/depenses/nouvelle`.
+ */
 export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste; chantiers: ChantierPropose[] }) {
   const [liste, setListe] = useState(initiale);
   const [ouverte, setOuverte] = useState<DepenseVue | null>(null);
@@ -222,28 +228,26 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
   const mois = [...new Set(depenses.map((depense) => Number(jourParis(depense.payeeLe).slice(5, 7))))];
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-5 py-6 md:px-8 md:py-8">
-      <EnTetePage
-        titre="Dépenses"
-        sousTitre="Rattachées au chantier qu'elles servent, pour connaître la marge de chaque dossier."
-        actions={
-          <div className="flex items-center gap-2">
-            <Link href={`/depenses?annee=${annee - 1}`} aria-label={`Année ${annee - 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
-              <ChevronLeft size={16} aria-hidden />
-            </Link>
-            <span className="text-[14px] font-medium text-[#F2F3F5] tabular-nums">{annee}</span>
-            <Link href={`/depenses?annee=${annee + 1}`} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
-              <ChevronRight size={16} aria-hidden />
-            </Link>
-            <Link href="/depenses/nouvelle" className={cn("ml-1 flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:h-8", TRANS)}>
-              <Plus size={15} aria-hidden /> Nouvelle dépense
+    <section id={SECTION_DEPENSES} className="mt-8 scroll-mt-20">
+      <TitreSection
+        action={
+          <div className="flex items-center gap-3">
+            {depenses.length > 0 ? <span className="text-[13px] font-medium text-[#D1D5DB] tabular-nums">{formatMontant(total)}</span> : null}
+            <Link
+              href="/depenses/nouvelle"
+              className={cn("flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}
+            >
+              <Plus size={13} aria-hidden /> Nouvelle dépense
             </Link>
           </div>
         }
-      />
+      >
+        Dépenses {annee}
+      </TitreSection>
+      <p className="-mt-1 mb-3 text-[12.5px] text-[#6B7280]">Rattachées au chantier qu&apos;elles servent, pour connaître la marge de chaque dossier.</p>
 
       {attente.length > 0 ? (
-        <div className={cn(CARTE, "mt-5 p-3.5")}>
+        <div className={cn(CARTE, "mb-3 p-3.5")}>
           <p className="flex items-center gap-2 text-[13px] text-[#F5B454]">
             <CloudOff size={15} aria-hidden /> {`${attente.length} dépense${attente.length > 1 ? "s" : ""} en attente d'envoi sur ce téléphone`}
           </p>
@@ -274,7 +278,7 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
       {/* Mission 17 (partie B) : les chiffres (total et répartition par catégorie de la période) sont dans l'Analytique,
           onglet Argent, « Dépenses par catégorie » ; restent le travail — ce qui attend un chantier ou un justificatif — la liste et la saisie. */}
       {aRattacher > 0 || sansJustificatif > 0 ? (
-        <p className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#F5B454]">
+        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#F5B454]">
           <AlertTriangle size={14} aria-hidden className="shrink-0" />
           {aRattacher > 0 ? <span>{aRattacher} à rattacher à un chantier</span> : null}
           {aRattacher > 0 && sansJustificatif > 0 ? <span aria-hidden className="text-[#6B7280]">·</span> : null}
@@ -282,51 +286,48 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
         </p>
       ) : null}
 
-      <section className="mt-8">
-        <TitreSection action={depenses.length > 0 ? <span className="text-[13px] font-medium text-[#D1D5DB] tabular-nums">{formatMontant(total)}</span> : undefined}>Dépenses {annee}</TitreSection>
-        {depenses.length === 0 ? (
-          <p className="text-[13px] text-[#6B7280]">Aucune dépense en {annee}.</p>
-        ) : (
-          <div className={cn(CARTE, "overflow-hidden")}>
-            {mois.map((numero) => (
-              <div key={numero}>
-                <p className="border-t-[0.5px] border-[#2A2D34] bg-[#191B20] px-4 py-2 text-[12px] font-medium text-[#9CA3AF] first:border-t-0 first-letter:uppercase">{libelleMois(numero)}</p>
-                <ul>
-                  {depenses
-                    .filter((depense) => Number(jourParis(depense.payeeLe).slice(5, 7)) === numero)
-                    .map((depense) => (
-                      <li key={depense.id} className="border-t-[0.5px] border-[#2A2D34]">
-                        <button type="button" onClick={() => setOuverte(depense)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[#23262D]", TRANS)}>
-                          <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{formatDateCourte(depense.payeeLe)}</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] text-[#F2F3F5]">
-                              {depense.fournisseur} <span className="text-[#9CA3AF]">· {libelleCategorie(depense.categorie)}</span>
-                            </span>
-                            <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6B7280]">
-                              {depense.dossier ? (
-                                <span className="truncate">{depense.dossier.clientNom}</span>
-                              ) : depense.horsChantier ? (
-                                <span>Hors chantier</span>
-                              ) : (
-                                <Pastille ton="ambre">
-                                  <AlertTriangle size={11} aria-hidden /> À rattacher
-                                </Pastille>
-                              )}
-                              {depense.justificatif ? <Paperclip size={11} aria-label="Justificatif joint" /> : <span className="text-[#F5B454]">sans justificatif</span>}
-                            </span>
+      {depenses.length === 0 ? (
+        <p className="text-[13px] text-[#6B7280]">Aucune dépense en {annee}.</p>
+      ) : (
+        <div className={cn(CARTE, "overflow-hidden")}>
+          {mois.map((numero) => (
+            <div key={numero}>
+              <p className="border-t-[0.5px] border-[#2A2D34] bg-[#191B20] px-4 py-2 text-[12px] font-medium text-[#9CA3AF] first:border-t-0 first-letter:uppercase">{libelleMois(numero)}</p>
+              <ul>
+                {depenses
+                  .filter((depense) => Number(jourParis(depense.payeeLe).slice(5, 7)) === numero)
+                  .map((depense) => (
+                    <li key={depense.id} className="border-t-[0.5px] border-[#2A2D34]">
+                      <button type="button" onClick={() => setOuverte(depense)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[#23262D]", TRANS)}>
+                        <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{formatDateCourte(depense.payeeLe)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] text-[#F2F3F5]">
+                            {depense.fournisseur} <span className="text-[#9CA3AF]">· {libelleCategorie(depense.categorie)}</span>
                           </span>
-                          <span className="shrink-0 text-[13px] text-[#F2F3F5] tabular-nums">{formatMontant(depense.montant)}</span>
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6B7280]">
+                            {depense.dossier ? (
+                              <span className="truncate">{depense.dossier.clientNom}</span>
+                            ) : depense.horsChantier ? (
+                              <span>Hors chantier</span>
+                            ) : (
+                              <Pastille ton="ambre">
+                                <AlertTriangle size={11} aria-hidden /> À rattacher
+                              </Pastille>
+                            )}
+                            {depense.justificatif ? <Paperclip size={11} aria-label="Justificatif joint" /> : <span className="text-[#F5B454]">sans justificatif</span>}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[13px] text-[#F2F3F5] tabular-nums">{formatMontant(depense.montant)}</span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
       {ouverte ? <ModaleDepense key={ouverte.id} depense={ouverte} chantiers={chantiers} onFermer={() => setOuverte(null)} onFait={() => void recharger()} /> : null}
-    </div>
+    </section>
   );
 }

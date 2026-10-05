@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import { recalculerMain } from "./main";
+import { ecrireMain, recalculerMain } from "./main";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
+import { alignerStatutLead, ecrireStatutLead } from "./statut-lead";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
@@ -16,6 +18,7 @@ import {
   type EtapeDossier,
 } from "./constants";
 import { dateDepuisJour, estJourValide, jourParis } from "./dates";
+import { retenirDevis, suiteNonRetenus, type DevisNonRetenu } from "./devis-retenu";
 import { ErreurMetier } from "./erreurs";
 import { verifierMotifPerte } from "./perte";
 import {
@@ -96,6 +99,8 @@ type Application = ChangementEtape & {
   etapeReference?: EtapeDossier | null;
   /** Changement automatique ou retour provoqué par un fait (paiement, avoir) : écrit dans l'événement. */
   raison?: string;
+  /** Mission 18 (B6) : retour provoqué par le seul devis en attente, annulé ou masqué (devis-retire.ts). */
+  devisRetire?: MetadataChangementEtape["devisRetire"];
 };
 
 /**
@@ -190,6 +195,7 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
     ...(sansAcompte ? { sansAcompte } : {}),
     ...(application.raison ? { raison: application.raison } : {}),
     ...(documentId ? { documentId } : {}),
+    ...(application.devisRetire ? { devisRetire: application.devisRetire } : {}),
     ...(avertissements.length > 0 ? { avertissements } : {}),
   };
 
@@ -255,6 +261,8 @@ export const schemaChangementEtape = z.object({
 export type EntreeChangementEtape = DonneesTransition & {
   vers: EtapeDossier;
   devisAccepteId?: string;
+  /** Mission 18 (B4) : passage provoqué par un fait (devis noté « accepté ») ; écrit dans l'événement. Jamais lu des écrans. */
+  raison?: string;
 };
 
 /**
@@ -273,8 +281,10 @@ export async function changerEtapeDansTransaction(
   const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
   if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
 
-  // Franchir « Signé » en avançant : le devis choisi (à défaut le dernier) est le devis accepté.
+  // Franchir « Signé » en avançant : le devis choisi (à défaut le dernier) est le devis accepté. Mission 18 (B10) : il
+  // n'en signe qu'un, les autres devis proposés passent « non retenu » (comme le bon pour accord de l'espace).
   let documentId: string | undefined;
+  let nonRetenus: DevisNonRetenu[] = [];
   const reference = estEtapeActive(faits.etape) ? faits.etape : avantSortie;
   const franchitSignature =
     estEtapeActive(entree.vers) && rangEtape(entree.vers) >= rangEtape("SIGNE") && (reference === null || rangEtape(reference) < rangEtape("SIGNE"));
@@ -287,10 +297,12 @@ export async function changerEtapeDansTransaction(
     if (signe) {
       if (signe.statut !== "ACCEPTE") await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
       documentId = signe.id;
+      nonRetenus = await retenirDevis(tx, dossierId, signe.id);
     }
   }
+  const raison = [entree.raison, suiteNonRetenus(nonRetenus)].filter(Boolean).join(" ; ");
 
-  return appliquerChangementEtape(tx, {
+  const changement = await appliquerChangementEtape(tx, {
     dossierId,
     de: faits.etape,
     vers: entree.vers,
@@ -298,8 +310,30 @@ export async function changerEtapeDansTransaction(
     donnees: entree,
     documentId,
     etapeReference: avantSortie,
+    ...(raison ? { raison } : {}),
     avertissements: verification.avertissements.map((avertissement) => avertissement.message),
   });
+  // Mission 18 (B0) : la main et le statut du lead suivent DANS la transaction ; les effets d'après ne les refont pas.
+  await ecrireMain(tx, dossierId);
+  await ecrireStatutLead(tx, dossierId, changement.vers);
+  SYNCHRONISES.add(changement);
+  return changement;
+}
+
+/**
+ * Mission 18 (B0) : les changements dont la main et le statut du lead sont déjà écrits dans leur transaction
+ * (`changerEtapeDansTransaction`). Un ensemble faible plutôt qu'un champ : le changement rendu à l'écran, à l'assistant
+ * ou à une proposition garde sa forme ; une copie (`{ ...changement }`) retombe sur le chemin complet, sans risque.
+ */
+const SYNCHRONISES = new WeakSet<ChangementEtape>();
+
+/**
+ * Mission 18 (B6) : un changement écrit par `appliquerChangementEtape` dont l'appelant a déjà écrit la main et le statut
+ * du lead dans la même transaction (point d'entrée, synchro.ts) ; ses effets d'après ne les refont pas.
+ */
+export function marquerSynchronise(changement: ChangementEtape): ChangementEtape {
+  SYNCHRONISES.add(changement);
+  return changement;
 }
 
 /** Changement d'étape demandé depuis l'interface. */
@@ -309,31 +343,20 @@ export async function changerEtape(dossierId: string, entree: EntreeChangementEt
   return changement;
 }
 
-// Statut du lead B2C (écran /leads) qui reflète l'étape du dossier.
-// EN_PAUSE ne change rien.
-const STATUT_LEAD_PAR_ETAPE: Partial<Record<EtapeDossier, string>> = {
-  QUALIFICATION: "CONTACTE",
-  SIMULATION: "CONTACTE",
-  DEVIS_ENVOYE: "DEVIS_ENVOYE",
-  RELANCE: "DEVIS_ENVOYE",
-  SIGNE: "SIGNE",
-  PLANIFIE: "CHANTIER_PLANIFIE",
-  CHANTIER: "CHANTIER_PLANIFIE",
-  FACTURE: "TERMINE",
-  ENCAISSE: "TERMINE",
-  PERDU: "PERDU",
-};
-
 /**
  * Effets hors transaction d'un changement d'étape, jamais bloquants :
- * - le statut du lead B2C d'origine suit l'étape du dossier ;
+ * - la main et le statut du lead B2C d'origine suivent l'étape du dossier (sauf s'ils sont déjà écrits dans la
+ *   transaction : `changerEtapeDansTransaction`, mission 18) ; l'agenda suit ; un chantier terminé prévient le client ;
  * - Meta Conversions API reçoit « SubmitApplication » (devis envoyé) et
  *   « Purchase » (signé, avec le montant du devis accepté), comme le faisait
  *   l'ancien écran /devis. Sans META_PIXEL_ID ni META_ACCESS_TOKEN, rien ne part.
  */
 export async function effetsDuChangementEtape(changement: ChangementEtape): Promise<void> {
-  // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts).
-  await recalculerMain(changement.dossierId);
+  const synchronise = SYNCHRONISES.has(changement);
+  // Qui a la main : l'étape la redonne à son responsable, sauf geste plus récent (main.ts). Déjà écrite dans la
+  // transaction d'un changement passé par `changerEtapeDansTransaction` (mission 18) : seules les tâches sont prévenues.
+  if (synchronise) await signalerChangementTaches();
+  else await recalculerMain(changement.dossierId);
   // Mission 14 (partie 7) : perdu ou encaissé, le rappel du dossier quitte l'agenda ; repris, il y revient.
   await synchroniserRappel({ type: "DOSSIER", id: changement.dossierId });
   // Mission 7 : chantier terminé (facturé ou encaissé) → merci et invitation à laisser un avis, par mail, une fois.
@@ -358,10 +381,8 @@ export async function effetsDuChangementEtape(changement: ChangementEtape): Prom
     const lead = dossier?.lead;
     if (!lead) return;
 
-    const statut = STATUT_LEAD_PAR_ETAPE[changement.vers];
-    if (statut && statut !== lead.statut) {
-      await prisma.lead.update({ where: { id: lead.id }, data: { statut } });
-    }
+    // Mission 18 (B12) : le dossier vivant le plus avancé du lead décide (statut-lead.ts), pas le dernier changé.
+    if (!synchronise) await alignerStatutLead(prisma, lead.id);
 
     if (changement.nature === "RETOUR" || changement.nature === "REPRISE") return;
     // Renvoi à Meta : l'algorithme apprend sur les gens qui signent, pas sur ceux

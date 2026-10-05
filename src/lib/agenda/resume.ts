@@ -11,7 +11,7 @@ import { relancesProposables } from "@/lib/relances/proposables";
 export type ResumeDuJour = { rappelsAujourdhui: number; rappelsEnRetard: number; relancesProposables: number };
 
 export async function resumeDuJour(maintenant: Date = new Date()): Promise<ResumeDuJour> {
-  const [rappels, relances] = await Promise.all([compterRappelsDuJour(maintenant), relancesProposables(maintenant, { smsPhotos: false, smsDevis: false })]);
+  const [rappels, relances] = await Promise.all([compterRappelsDuJour(maintenant), relancesProposables(maintenant, { smsPhotos: false, smsDevis: false, smsAvis: false, smsReactivations: false })]);
   return { rappelsAujourdhui: rappels.aujourdhui, rappelsEnRetard: rappels.enRetard, relancesProposables: relances.total };
 }
 

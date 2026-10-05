@@ -2,9 +2,11 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourHeure, pluriel } from "@/lib/commun/format";
+import { ADRESSE_DEPENSES } from "@/lib/depenses/constantes";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { schemaDepotDocument } from "@/lib/dossiers/depot-document";
 import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
+import { estSigneeParDevisAccepte } from "@/lib/dossiers/devis-signe";
 import { estEtape } from "@/lib/dossiers/regles";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { idPhoto, lireFichier } from "@/lib/dossiers/stockage";
@@ -82,7 +84,7 @@ export async function resoudreCibleFichier(c: CibleOutil): Promise<CibleResolue>
 }
 
 const lienCible = (c: { entite: EntiteCible; id: string }): LienOutil =>
-  c.entite === "DOSSIER" ? lien("Dossier", `/dossiers?dossier=${c.id}`) : c.entite === "LEAD" ? lien("Lead", `/leads?lead=${c.id}`) : c.entite === "CLIENT" ? lien("Client", `/clients?client=${c.id}`) : c.entite === "DEPENSE" ? lien("Dépenses", "/depenses") : lien("Site", "/site");
+  c.entite === "DOSSIER" ? lien("Dossier", `/dossiers?dossier=${c.id}`) : c.entite === "LEAD" ? lien("Lead", `/leads?lead=${c.id}`) : c.entite === "CLIENT" ? lien("Client", `/clients?client=${c.id}`) : c.entite === "DEPENSE" ? lien("Dépenses", ADRESSE_DEPENSES) : lien("Site", "/site");
 
 async function publicationPubliee(cible: CibleFichier | null | undefined): Promise<boolean> {
   if (cible?.entite !== "PUBLICATION") return false;
@@ -139,7 +141,9 @@ const schemaAjouterFichier = z.object({
 });
 type EntreeAjouter = z.output<typeof schemaAjouterFichier>;
 
-const estDocumentRepris = (e: EntreeAjouter) => ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant)) || e.type === "PDF_DOCUMENT";
+// Mission 18 (relecture) : le PDF d'un mail parti de Gmail, en piece_mail, avec son numéro : enregistré comme devis envoyé
+// même sans montant quand c'est un devis du CRM (le montant est le sien), comme depuis l'écran.
+const estDocumentRepris = (e: EntreeAjouter) => ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant)) || (e.type === "DEVIS" && Boolean(e.numero && e.source.piece_mail)) || e.type === "PDF_DOCUMENT";
 const optionsSimulation = (e: EntreeAjouter) => ({ simulation: { titre: e.titre ?? null, description: e.description ?? null, source: e.origine_simulation ?? "MANUEL", preparationId: e.preparation_id ?? "auto" }, documentRepris: e.document_id ?? null });
 const champsDocument = (e: EntreeAjouter): ChampsDocument => ({ numero: e.numero, libelle: e.libelle, montant: e.montant, date_emission: e.date_emission, statut: e.statut, acompte_pct: e.acompte_pct, objet: e.objet, visible_espace: e.visible_espace, inscrire_au_registre: e.inscrire_au_registre });
 
@@ -164,7 +168,7 @@ export const outilAjouterFichier = definirOutil({
   nom: "ajouter_fichier",
   titre: "Ajouter un fichier (photo, plan, devis, facture, justificatif…)",
   description:
-    "Ajoute un fichier sur une cible — dossier, lead, client, dépense, réalisation du site — par l'une des cinq voies de « source » : lien_depot (ce qu'un lien de dépôt a reçu), url (lien public ou lien de partage Google Drive : le CRM le télécharge, 9 Mo au plus, photo ou PDF ; adresses internes refusées), base64 (+ nom), piece_mail { message_id, piece } (« lire_mail » liste les pièces), fichier_id (fichier déjà conservé). Selon la cible et le type : DOSSIER › PHOTO_AVANT / PHOTO_APRES → photos du dossier (proposées au simulateur) ; DOSSIER › DEVIS / FACTURE avec numero et montant → document repris, comme le dépôt d'un document repris (un devis visible, émis ou envoyé, vaut devis envoyé : le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance) — sans numéro ni montant, il est gardé « à compléter » ; DOSSIER › PLAN / JUSTIFICATIF / AUTRE → document du dossier ; LEAD › photo → photo du lead, autre → document rattaché ; CLIENT → document rattaché ; DOSSIER › SIMULATION → simulation déposée en brouillon (« Déposer une simulation » : titre, description, origine_simulation, preparation_id ; l'image de ChatGPT après « preparer_simulation ») ; DOSSIER › PDF_DOCUMENT + document_id → PDF d'un devis ou d'une facture repris (« importer le PDF ») ; DEPENSE › JUSTIFICATIF → justificatif (l'ancien part aux archives) ; PUBLICATION › PHOTO_AVANT / PHOTO_APRES → photo de la réalisation (prise dans son dossier). Le type du fichier est vérifié par son contenu (JPEG, PNG, WebP, HEIC converti, PDF). Réversible (« ranger_fichier » retirer: true) ; sensible — aperçu puis confirmation — quand un devis ou une facture repris devient visible du client ou change l'étape, ou quand la réalisation est déjà publiée.",
+    "Ajoute un fichier sur une cible — dossier, lead, client, dépense, réalisation du site — par l'une des cinq voies de « source » : lien_depot (ce qu'un lien de dépôt a reçu), url (lien public ou lien de partage Google Drive : le CRM le télécharge, 9 Mo au plus, photo ou PDF ; adresses internes refusées), base64 (+ nom), piece_mail { message_id, piece } (« lire_mail » liste les pièces), fichier_id (fichier déjà conservé). Selon la cible et le type : DOSSIER › PHOTO_AVANT / PHOTO_APRES → photos du dossier (proposées au simulateur) ; DOSSIER › DEVIS / FACTURE avec numero et montant → document repris, comme le dépôt d'un document repris (un devis visible, émis ou envoyé, vaut devis envoyé : le dossier passe en « Devis envoyé » depuis Qualification, Simulation ou Relance ; le PDF d'un mail parti de Gmail, en piece_mail, s'enregistre comme devis envoyé depuis Gmail, daté du mail — relances depuis le mail, tâche « Enregistrer comme devis envoyé » cochée ; un devis du CRM de ce numéro passe alors « Envoyé » sans second dépôt) — sans numéro ni montant, il est gardé « à compléter » ; DOSSIER › PLAN / JUSTIFICATIF / AUTRE → document du dossier ; LEAD › photo → photo du lead, autre → document rattaché ; CLIENT → document rattaché ; DOSSIER › SIMULATION → simulation déposée en brouillon (« Déposer une simulation » : titre, description, origine_simulation, preparation_id ; l'image de ChatGPT après « preparer_simulation ») ; DOSSIER › PDF_DOCUMENT + document_id → PDF d'un devis ou d'une facture repris (« importer le PDF ») ; DEPENSE › JUSTIFICATIF → justificatif (l'ancien part aux archives) ; PUBLICATION › PHOTO_AVANT / PHOTO_APRES → photo de la réalisation (prise dans son dossier). Le type du fichier est vérifié par son contenu (JPEG, PNG, WebP, HEIC converti, PDF). Réversible (« ranger_fichier » retirer: true) ; sensible — aperçu puis confirmation — quand un devis ou une facture repris devient visible du client ou change l'étape, ou quand la réalisation est déjà publiée.",
   niveau: "REVERSIBLE",
   schema: schemaAjouterFichier,
   sensible: async (e) => {
@@ -185,8 +189,15 @@ export const outilAjouterFichier = definirOutil({
     }
     const dossier = await prisma.dossier.findUnique({ where: { id: lue.id }, select: { etape: true } });
     const vers = e.type === "DEVIS" && e.visible_espace !== false && (e.statut ?? "ENVOYE") === "ENVOYE" && dossier && estEtape(dossier.etape) ? etapeApresGeneration("DEVIS", dossier.etape) : null;
-    const passage = vers && dossier ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.` : "";
-    return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${format.euros(e.montant!)} HT, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
+    // Mission 18 (B4) : un devis déposé « accepté » (signé hors ligne) signe le dossier pas encore signé.
+    // Relecture : en pause depuis une étape d'avant « Signé » aussi (la même lecture que le dépôt, devis-signe.ts).
+    const signe = e.type === "DEVIS" && e.statut === "ACCEPTE" && dossier && (await estSigneeParDevisAccepte(prisma, lue.id));
+    const passage = signe
+      ? ` Accepté (signé hors ligne) : le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « Signé », les autres devis proposés deviendront « non retenus ».`
+      : vers && dossier
+        ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.`
+        : "";
+    return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${e.montant ? `${format.euros(e.montant)} HT` : "montant du devis du CRM de ce numéro"}, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
   },
   executer: async (e) => {
     if (e.type === "PDF_DOCUMENT" && !e.document_id) throw new ErreurMetier("PDF_DOCUMENT : donne document_id (le document repris).", 400);
@@ -203,7 +214,8 @@ export const outilAjouterFichier = definirOutil({
       for (const ligne of lignes) resultats.push(await rangerFichierDepose(ligne.id, r.cible, e.type, document, optionsSimulation(e)));
     } else {
       const source = await lireSourceFichier(e.source);
-      resultats = [await enregistrerFichierRecu(r.cible, e.type, { contenu: source.contenu, nom: source.nom }, { voie: source.voie, origine: source.origine, document, ...optionsSimulation(e) })];
+      const pieceMail = e.source.piece_mail ? { messageId: e.source.piece_mail.message_id, pieceId: e.source.piece_mail.piece } : null;
+      resultats = [await enregistrerFichierRecu(r.cible, e.type, { contenu: source.contenu, nom: source.nom }, { voie: source.voie, origine: source.origine, document, pieceMail, ...optionsSimulation(e) })];
     }
     const cible = resultats[0].cible!;
     return {

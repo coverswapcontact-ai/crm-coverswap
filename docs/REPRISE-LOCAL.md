@@ -209,3 +209,1522 @@ retouche faite a son original dans `~/coverswap-photos/serie-2/originaux/` et n'
   faites portent `faite` dans `retouches-serie-2.json` (le script ne les relance pas).
 - **Coût final de la série 2 : 10,10 $ dans GenerationImage (167 appels, aucun échec) + 0,25 $ d'appel interrompu
   = 10,35 $** sur 10,40 $.
+
+# Mission 21 (03/10/2026) — la mission 18 d'abord (phase A), puis le site 3.0 « La Revue » (phases B à G)
+
+Énoncé : message de Lucas du 03/10, copie dans `~/coverswap-photos/missions/prompt-mission-21-site-3-0.md` ; maquette
+`~/coverswap-photos/missions/maquette-11/`. Travail local sur les deux dépôts, fusion dans `main` et push par l'agent
+(pas de PR) ; aucun arrêt ; décisions simples notées ici. Branche `mission-18` (les deux dépôts) fusionnée à la fin
+de la phase A, CRM d'abord ; puis branche `site-3-0` (site) fusionnée à la fin de la phase G.
+
+## Phase A, étape 1 : ce qui existait (03/10)
+
+- `git status` : rien hors fins de ligne CRLF (10 fichiers du CRM, 1 du site) et la garde locale `src/proxy.ts`
+  (jamais commitée). `git stash list` vide dans les deux dépôts.
+- Branches : `main` et la branche cloud `origin/claude/beautiful-goldberg-lu7keb`, **entièrement contenue dans `main`**
+  (mission 17 fusionnée ; aucun commit de la branche absent de `main`, dans les deux dépôts).
+- REPRISE-MISSION : « Mission 18 — à démarrer » ; aucun commit, aucune note de la mission 18 → **départ de zéro**.
+- Base de départ : CRM 1 283 tests verts, site 284 tests verts, lint propre.
+- Plan d'implémentation (cartographie par 8 lecteurs + synthèse) : lots A1-A6, B0-B13, mise en route ; décisions
+  « solution la plus simple » listées en fin de phase.
+
+### Mission 18, A1 — l'onglet Espaces devient une colonne et un filtre de Dossiers
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Colonne « Espace »** dans la liste de Dossiers (bureau), une ligne de plus sur le téléphone, une icône teintée
+  par le signal sur la carte du kanban (le détail en infobulle) : étape de l'espace, lien envoyé ou dernière visite
+  (avec le nombre de visites), photos, simulations, devis relu (ou accord), le signal rouge ou ambre s'il y en a un.
+  Calculée par `espace/suivi.ts › espacesDesDossiers` (la même lecture que l'ancien onglet, vue des tâches
+  comprise), pour la page seulement ; textes communs dans `espace/colonne-espace.ts` (écran et assistant).
+- **Filtre « Espaces »** (bouton dans la barre de Dossiers) : pastilles À moi, Chez le client, Signaux, Tous,
+  Désactivés avec leurs compteurs, et l'étape de l'espace. `pageDossiers({ espace, etapeEspace })` calcule TOUS les
+  espaces (recherche comprise), filtre et trie en mémoire (à moi d'abord, puis dernière activité), puis découpe la
+  page : les compteurs et les signaux sont exacts au-delà de 50 (l'ancien onglet ne filtrait que la page chargée).
+  `/api/dossiers?espace=&etapeEspace=`, `/dossiers?espace=` lu par la page et gardé dans l'adresse.
+- `/espaces` redirige vers `/dossiers?espace=TOUS` (`next.config.ts`) ; l'écran `src/app/(pilotage)/espaces/` est
+  supprimé, l'onglet retiré de la navigation (12 onglets en attendant A3-A6). Gardés : `/api/espaces/*`, `suivi.ts`,
+  `suivi-types.ts`, `NouveauLien`, `LienParMail`, le bloc Espace du panneau et le résumé de la fiche client.
+- En passant : `/dossiers?archives=1` (lien de l'assistant) ouvre les dossiers archivés.
+- Liens : tâche « projet de plus demandé » (et « nouveau projet » sans projet trouvé) → fiche du client, où vit
+  « Permettre un projet de plus » ; assistant (`manager_clients`, `lister` ESPACES et MESSAGES_ESPACE,
+  `espaces_clients`, `geste_espace` sans dossier) → `/dossiers?espace=TOUS` (constante `ADRESSE_ESPACES`).
+- MCP : `lister` DOSSIERS gagne `filtres.espace` et `filtres.etape_espace` (imbriqués : empreinte inchangée,
+  `040d6c7aa53c`, 53 outils) et l'état de l'espace sur chaque ligne ; `lister` ESPACES (par client) est gardé pour
+  l'assistant. `docs/MCP-COUVERTURE.md` : E1–E4 en 2.3, E5–E20 renvoyés vers le panneau et la fiche client (2.5),
+  C27–C30 ajoutés (boutons du lien de la fiche client), N1, N3, bilan (427 actions, 391 couvertes, 36 sans objet).
+
+Décisions prises seul (solution la plus simple) :
+- Dates de la colonne = celles du PROJET (`EspaceClient`) ; « Désactivé » = lien du client révoqué ; les signaux du
+  client (projet de plus demandé, nouveau projet, téléphone à confirmer) et « à moi : accorder un projet de plus »
+  vont à son projet le plus récent.
+- Sous le filtre « Espaces », la vue (« Tous / À faire »), « Perdus et en pause » et les inactifs ne jouent plus
+  (masqués) : tous les dossiers qui ont un espace, perdus, en pause et terminés compris, comme l'ancien onglet. Les
+  compteurs des pastilles suivent la recherche et l'étape choisies. Le tri de l'ancien onglet (activité, lien récent)
+  n'est pas repris : l'ordre du serveur (à moi d'abord) découpe les pages, le tri local de la liste s'applique dessus.
+- Redirection en 307 (`permanent: false`) comme toutes les anciennes adresses : le test « rien de figé dans le
+  navigateur » l'exige, et une 308 resterait en cache si l'adresse devait encore changer en A6.
+- `public/sw.js` non touché : les écrans sont servis réseau d'abord ; le changement de `VERSION` est prévu en A6.
+
+Tests : 1 283 → 1 294 verts (nouveau `src/lib/dossiers/espaces-colonne.test.ts` : colonne, signaux du client,
+filtre exact sur 56 espaces, ordre, vue par défaut inchangée, route, règles pures, redirection, aucun lien vers
+`/espaces` dans le code ; jumeau MCP dans `mcp-lister-etat.test.ts` ; lien de `manager_clients` dans
+`mcp-analytique.test.ts`). Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` :
+propres. Vérifié à l'œil sur une base d'essai jetable (port 3007) : redirection, colonne, pastilles, téléphone.
+
+Reste : mettre à jour `docs/ARCHITECTURE-PILOTAGE.md` (§4, §21 : navigation) et `docs/COHERENCE.md` (tableau §1)
+avec la navigation finale en A6 ; reconnecter le connecteur MCP après la mise en ligne (descriptions de `lister` et
+`geste_espace` changées).
+
+### Mission 18, A2 — le dossier s'ouvre tout seul (photos, simulation, demande de devis)
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **`dossiers/depuis-lead.ts › ouvrirDossierAutomatique(leadId, { demande })`** (remplace `assurerDossierDeSimulation`) :
+  un contact qui envoie des photos, fait une simulation ou demande un devis sur le site a son dossier ouvert tout
+  seul, en Qualification, avec « Appeler : simulation faite sur le site » ou « Appeler : demande de devis » pour
+  aujourd'hui (« Rappeler » à l'heure demandée s'il a demandé un rappel), la note de reprise du bouton, ses images et
+  ses photos rangées. S'il a déjà un dossier vivant (le sien ou celui de son client), tout y est rangé — photos de
+  toute source désormais, plus seulement celles du simulateur. Appelée par le webhook du site (simulation, photos, ou
+  `estDemandeDeDevis` : /devis, /pro, /contact avec un projet), par la fin d'une simulation du site
+  (`simulations/travaux.ts`), par la correction de cohérence `SIMULATIONS_HORS_DOSSIER` et par le filet de 15 min.
+  Aucun mail ni SMS de plus (seul l'accusé de réception habituel d'un nouveau contact).
+- **Webhook** : l'ouverture passe avant le tunnel du simulateur (comme le rangement d'avant) ; `contactNeuf` est lu
+  AVANT elle et passé à `ouvrirEspaceALEnvoi({ neuf })`, sinon le lien de l'espace ne s'afficherait plus au contact
+  neuf (le dossier qu'on vient d'ouvrir le rendait « connu »). Le lien « Voir dans le CRM » du mail et du push mène au
+  dossier.
+- **Filet** `rattraperSimulationsSansDossier` (libellé de la tâche de fond mis à jour) : en plus du rangement dans le
+  dossier vivant, il ouvre le dossier d'un contact qui n'en a JAMAIS eu (archivés compris : un dossier archivé par
+  Lucas ne se rouvre pas seul), dont le client n'en a pas de vivant, ni perdu, ni après devis, ni hors zone, avec un
+  fait du site de moins de deux jours et postérieur à `DEBUT_OUVERTURE_AUTO` (03/10/2026 0 h, Paris).
+- **Tâches** : « Appeler · Nom » (type RAPPELER, niveau 2, raison « demande de devis, prévu le jj/mm ») sur le dossier
+  remplace « Appeler » du lead (détecteur DOSSIERS : une action « Appeler : … » est un premier appel). Un appel noté
+  « Intéressé » efface l'action automatique (`commercial/appels.ts`, `estActionOuvertureAuto`) et la tâche est cochée
+  « appel noté » ; une action écrite par Lucas ne bouge pas. La coche « dossier ouvert » ne vaut plus pour une tâche
+  du dossier lui-même (`a-faire/achevement.ts`) : ouvrir n'est pas appeler.
+- **Leads** : un lead du site (simulateur, simulation, demande de devis) dont le dossier s'est ouvert reste dans
+  « À appeler » et dans la file des appels jusqu'au premier appel (règle de la mission 17, `siteNonAppele`, étendue
+  des simulations aux demandes de devis).
+- « Ouvrir un dossier » (fiche du lead) : infobulle « Pour un contact qualifié au téléphone… » ; description de
+  `creer` (MCP) : DOSSIER depuis un lead = lead qualifié au téléphone. Paramètres inchangés, empreinte
+  `040d6c7aa53c` (53 outils).
+- Docs : `MCP-COUVERTURE.md` (en-tête, L12, LF4, §4.4), `COHERENCE.md` §4, `TACHES.md` §3,
+  `ARCHITECTURE-PILOTAGE.md` (simulation → dossier, lead du simulateur). Audit des connexions : textes du maillon
+  « simulation → dossier » mis à jour.
+
+Décisions prises seul (solution la plus simple) :
+- `DEBUT_OUVERTURE_AUTO` = 03/10/2026 (jour du lot), la date du déploiement n'étant pas connue ; comme le filet ne
+  regarde que deux jours, la mise en ligne n'ouvre jamais le stock, seulement les contacts du site des deux derniers
+  jours (ceux qu'une ouverture au webhook aurait eus).
+- Hors zone (« À écarter ») : pas d'ouverture automatique, il reste « Classer · Nom (hors zone) » dans Leads (le bouton
+  reste). Le tunnel du simulateur n'a pas changé (il ouvrait déjà l'espace, donc le dossier, même hors zone).
+- Lead Meta : rien ne s'ouvre tant qu'il ne fait rien sur le site ; s'il y fait ensuite une simulation, c'est un fait
+  du site : son dossier s'ouvre.
+- Espace client : rien à changer — tout s'y passe déjà dans un dossier (un projet créé par le client ouvre le sien,
+  mission 5 ; photos, simulations et demande de devis vont au dossier du projet).
+- Contact dont le dossier est clos (perdu ou encaissé) : un nouveau fait du site ouvre un nouveau dossier, comme le
+  bouton. Des photos seules (sans demande) : motif « demande de devis » (elles arrivent avec un formulaire) ; la photo
+  d'une génération échouée (lead du simulateur) : motif « simulation ».
+- Statut du lead : inchangé ici (NOUVEAU → CONTACTE comme toute ouverture, DEVIS_DEMANDE gardé) ; la table complète
+  vient en B12.
+- Date réelle d'un dossier rangé après coup : celle de la simulation la plus récente (et plus la première), et seulement
+  s'il y en a une — un contact revenu simuler aujourd'hui n'ouvre pas un dossier daté de sa première visite.
+- Un rappel demandé passe avant « Appeler : … » (texte « Rappeler », pour que `rappelALOuverture` le pose à l'heure
+  exacte ; avant, une simulation avec rappel gardait « Appeler : simulation… » et perdait l'heure).
+
+Tests : 1 294 → 1 303 verts. Nouveau `src/lib/base/mission-18-a2.test.ts` (webhook : demande de devis sans photo,
+tâche « Appeler · Nom » sur le dossier puis cochée par l'appel, simulation sans tunnel, photos jointes, rappel à l'heure,
+tunnel avec lien affiché au contact neuf, rien pour un lead Meta, un simple message ou un ancien lead). Réécrits :
+`dossiers/depuis-lead.test.ts` (« une simulation seule n'ouvre plus de dossier » → ouverture automatique, demande de
+devis, rien de nouveau → rien, filet : fenêtre, stock, dossier archivé) et `prospects/doublons.test.ts` (le doublon
+ouvre un second dossier, que la fusion archive). `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+
+Reste :
+- Reconnecter le connecteur MCP après la mise en ligne (description de `creer`).
+- B12 : statut du lead d'un dossier ouvert tout seul (CONTACTE), et l'alignement complet lead ↔ étape.
+- L'audit des connexions ne signale pas une simulation récente restée sans dossier : le filet la rattrape en 15 min.
+
+### Mission 18, A3 — Dépenses passe dans Finances
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Section « Dépenses » de Finances** : `finances/page.tsx` charge aussi `listerDepenses(annee)` et
+  `suggestionsSaisie()` pour la même année que le reste de l'écran ; `ListeDepenses` (déplacée de
+  `depenses/_components` vers `finances/_components`) devient une section `id="depenses"` placée entre « À corriger » et
+  « Livre des recettes ». On y retrouve le total, « Nouvelle dépense », la file hors ligne, les compteurs « à rattacher »
+  et « sans justificatif », la liste par mois et la fiche d'une dépense (modifier, justificatif, retirer), inchangée.
+  L'année se change par la navigation d'année de Finances, dont les liens gardent `section`.
+- `/depenses` redirige vers `/finances?section=depenses` (`next.config.ts`, 307 comme les autres ; la requête suit,
+  `?annee=` compris) ; la page descend alors à la section. L'écran `depenses/page.tsx` est supprimé.
+- **Gardés** : la saisie `/depenses/nouvelle` (raccourci du manifeste, file IndexedDB), dont les liens « Dépenses » et
+  « Voir les dépenses » mènent à la section ; les routes `/api/depenses*` ; le bloc Dépenses du panneau du dossier
+  (`DepensesDossier`, même composant, « + Dépense » vers la saisie).
+- Navigation : l'entrée Dépenses disparaît (11 onglets en attendant A5-A6) ; Finances s'allume aussi sur
+  `/depenses/nouvelle` (nouveau champ `aussi` des entrées).
+- Liens : `ADRESSE_DEPENSES` et `adresseDepenses(annee)` (`depenses/constantes.ts`) servent à l'Analytique (carte
+  « Dépenses par catégorie »), à la saisie et à l'assistant (`lister` DEPENSES et sa période, `creer`, `modifier` et
+  `archiver` DEPENSE, `ajouter_fichier` sur une dépense). Aucun outil, paramètre ni description ne change : empreinte
+  `040d6c7aa53c` (53 outils), rien à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête ; X1–X10 en 2.10 sous « Section Dépenses » ; 2.11 renvoie à 2.10 ; N1, N3 ;
+  bilan inchangé, 427 actions, 391 couvertes, 36 sans objet ; piège 3.23-1) et `ARCHITECTURE-PILOTAGE.md` §12.
+
+Décisions prises seul (solution la plus simple) :
+- « Le panneau du dossier garde ses dépenses, même composant » : `DepensesDossier` n'est pas touché (lecture, marge,
+  ajout par la saisie). On modifie une dépense depuis la fiche de la section de Finances, comme avant depuis l'écran
+  Dépenses.
+- La section passe avant le livre des recettes : le travail à faire vient avant l'archive de l'année. L'écran n'a
+  qu'une navigation d'année.
+- La redirection passe par `?section=`, pas par un fragment, en 307 (le test « rien de figé dans le navigateur »
+  l'exige). Seule la valeur `depenses` est reconnue ; toute autre valeur ouvre l'écran en haut.
+- `/depenses/nouvelle` n'est pas redirigée : elle sert au raccourci de l'application installée, au « + Dépense » du
+  panneau et aux suggestions de `lister` DEPENSES.
+- `public/sw.js` n'est pas touché : la `VERSION` change en A6, comme convenu en A1.
+
+Tests : 1 303 → 1 311 verts.
+- Nouveau `src/lib/base/mission-18-a3.test.ts`. Il couvre :
+  - la page Finances rendue comme Next la rend : dépenses de l'année demandée égales à `listerDepenses`, chantiers de
+    la fiche, `?section=`, année illisible ;
+  - la route de rechargement et le panneau du dossier ;
+  - les adresses, la redirection (sans chaîne, saisie non touchée), l'écran retiré, le manifeste et la navigation ;
+  - l'absence de tout lien vers `/depenses` dans `src` et `public`.
+- Jumeaux MCP, liens vers la section :
+  - `mcp-lister-etat` : DEPENSES de l'année, retirées, période ; les suggestions mènent à la saisie ;
+  - `mcp-partie-c` : `creer` DEPENSE ;
+  - `mcp-fichiers` : `ajouter_fichier` sur une dépense ;
+  - `mcp-analytique` : aucun lien vers `/depenses`.
+- Adapté : `relecture-b.test.ts`. Le lien de `creer` DEPENSE y devient `ADRESSE_DEPENSES`, même intention.
+- `tsc` (après suppression de `.next`, qui gardait les types de la page retirée), `eslint` sur les fichiers touchés et
+  `npm run build` : propres. Les 40 avertissements NFT de `next.config.ts` (via `simulateur/banc`) existaient déjà.
+- Vérifié à l'œil sur une base d'essai jetable (port 3007, aucun canal sortant) :
+  - `/depenses?annee=2025` mène à `/finances?annee=2025&section=depenses` ;
+  - la page descend à la section, sur bureau et à 390 px ;
+  - l'année −1 / +1 garde la section ; la fiche d'une dépense s'ouvre ;
+  - le menu « Plus » n'a plus Dépenses et Finances y est actif ; la saisie ramène à la section.
+
+Reste :
+- A6 : `ARCHITECTURE-PILOTAGE.md` §4 et §21 (navigation finale) et la `VERSION` de `public/sw.js`.
+
+### Mission 18, A4 — un seul système de relance
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Séquences de mails retirées du code** : `src/lib/mail/sequences.ts` est supprimé, avec les quatre interrupteurs
+  `SEQUENCE_*` (`automatismes/interrupteurs.ts` : un code `SEQUENCE_…` répond « Automatisme inconnu », et lister les
+  automatismes ne crée plus de lignes `SequenceMail`), le travail périodique `sequences-mail` (`mail/taches.ts`), les
+  champs `sequences*` de `manager_operations` et le paramètre `MAIL_EXPEDITEUR` (définition et branche d'`envoi-crm`).
+  Les modèles `SequenceMail`, `EtapeSequence`, `InscriptionSequence` et `Desinscription` sont gardés, lignes comprises
+  (`db push` au démarrage) ; `"SEQUENCE"` reste dans `NATURES_ENVOI` pour relire d'anciens envois ; le RGPD est
+  inchangé.
+- **Désinscription gardée** dans `mail/desinscription.ts` (`jetonDesinscription`, `lienDesinscription`, `desinscrire`,
+  signatures inchangées, sans l'arrêt des inscriptions) ; la route `api/site/desinscription` (appelée par le site) n'a
+  changé que d'import.
+- **Demande d'avis après chantier** (`relances/avis.ts`) : dossier Facturé ou Encaissé non archivé, espace actif, sans
+  avis ; le délai `DELAI_RELANCE_AVIS` (nouveau paramètre, Suivi commercial, 7 jours par défaut) court depuis le mail
+  « Projet terminé » parti, sinon depuis le passage en Facturé (ou Encaissé) depuis une étape en cours. SMS
+  `DEMANDE_AVIS` (groupe Relances) avec le lien de l'espace `#apres`, une seule fois, jamais en STOP.
+- **Réactivation à 6 mois** (`relances/reactivation.ts`) : lead sans suite depuis 180 jours, d'après `Lead.perteLe`
+  ou le `perteLe` de son dossier perdu (jamais `updatedAt`). Conditions : dernière déclaration `ACCORDE`, aucune
+  adresse désinscrite (`relances/accord-commercial.ts`, règle partagée par la liste, la proposition et la copie), ni
+  dossier vivant ni autre contact actif pour le client. Un client, une réactivation. SMS `REACTIVATION` sans lien, avec
+  « STOP pour ne plus en recevoir », une fois. La copie se trace toujours sur le lead (« SMS REACTIVATION copié : … »),
+  même s'il garde un dossier perdu.
+- `relancesProposables` rend `{ devis, photos, avis, reactivations, total }` (la fiche d'un dossier n'a pas de
+  réactivation). L'utilisent `GET /api/relances`, la ligne du jour, le point du jour, `manager_operations` (avis et
+  réactivations dus) et le détecteur de tâches RELANCES. Ce dernier ajoute les types `RELANCER_AVIS` « Demander un
+  avis · Nom » et `REACTIVER` « Reprendre contact · Nom » (sur le lead), niveau 3, 1 min, groupe SMS.
+- SMS : actions `RELANCE_AVIS` et `REACTIVATION`, vrais discriminants (`estRelanceDevis`, `estRelanceAvis`,
+  `estRelanceReactivation`) à la place du « sinon c'est un devis » de `copie.ts` et `proposition.ts` ;
+  `schemaRelanceSms` garde `rang ≤ 2`. La coche des tâches lit le type de la relance (un SMS d'avis ne coche ni
+  `RELANCER_DEVIS` ni `RELANCER_PHOTOS`) ; un contact sans suite n'est pas un « sujet disparu » pour `REACTIVER`. Le
+  pré-filtre des relances photos lit `"type":"PHOTOS"`.
+- Écran : `FeuilleRelances` a une section par type (devis, photos, demandes d'avis, réactivations) ; la rubrique de
+  la fiche du dossier montre aussi la demande d'avis.
+- MCP : `lister` RELANCES rend les blocs avis et réactivation, y compris dans le retour « Aucun devis en attente ».
+  `noter_sms` compte `DEMANDE_AVIS` et `REACTIVATION` quand la liste les propose. `taches` prépare le texte de la
+  réactivation. Les descriptions de `voir_parametres`, `etat_crm` et `AUTOMATISME` ne citent plus les séquences ;
+  `manager_clients` parle de la relance d'avis. Aucun outil ni paramètre ne change : empreinte `040d6c7aa53c`
+  (53 outils). Les descriptions changent : **reconnecter le connecteur**.
+- Textes : consignes par défaut (sections mission 11 et 14 ; la version de Lucas en base n'est pas réécrite),
+  `routes-publiques.ts`, `ReglagesMail.tsx`, `envoi.ts`, `mime.ts`. `JOURS_REACTIVATION` n'existe plus qu'à un seul
+  endroit (`relances/reactivation.ts`, réexporté par `analyses/clients.ts`).
+- Docs : `MCP-COUVERTURE.md` (en-tête, L21, L22, DP7, PA2, AUTOMATISME en 4.3, RELANCES en 4.6, `noter_sms` en 4.9,
+  bilan inchangé à 427 actions, 391 couvertes, 36 sans objet), `ARCHITECTURE-PILOTAGE.md` §25 et `TACHES.md` (§ 3 et § 5).
+
+Décisions prises seul (solution la plus simple) :
+- Avis et réactivation sont des **SMS à copier**, comme les autres relances : pas de nouveau motif de mail, rien ne
+  part seul. Le mail « Projet terminé » reste l'automatisme existant (avec son interrupteur) ; le SMS le rappelle une
+  seule fois, et pas au-delà de 60 jours (la fenêtre de l'ancienne séquence).
+- Réactivation = la règle de la séquence (lead perdu avec accord), pas `aReactiver` de `manager_clients` (clients
+  terminés), qui reste une lecture d'analyse. Sans date de perte connue, pas de réactivation. Le lead a bien un
+  `perteLe` : la carte disait le contraire.
+- La copie d'une réactivation est refusée sans accord ou après une désinscription (comme la proposition) : c'est une
+  prospection.
+- La réactivation n'apparaît pas dans la fiche d'un dossier (elle porte sur un contact) ; la tâche est sur le lead.
+- `desinscrire` n'arrête plus d'inscriptions (aucune ne peut plus être active) ; la preuve devient « Lien de
+  désinscription d'un mail commercial ».
+- La ligne `Planification` « sequences-mail » et d'éventuels paramètres `MAIL_EXPEDITEUR` restent en base, ignorés
+  (vérifié : `parametresPourEcran` ne lit que les clés définies).
+
+Tests : 1 311 → 1 320 verts (3 tests de séquences retirés de `mail.test.ts`, 12 ajoutés).
+- Nouveau `src/lib/base/mission-18-a4.test.ts`. Il couvre :
+  - plus de séquences : automatismes, aucune ligne créée, code `SEQUENCE_` inconnu, plus de travail, aucun appel
+    restant dans `src`, modèles gardés ;
+  - `MAIL_EXPEDITEUR` ignoré en base et la route de désinscription ;
+  - l'avis : délai, fenêtre, lien `#apres`, copie comptée une fois, origine mail puis passage, reprise et ouverture
+    exclues, avis donné, STOP, espace désactivé ;
+  - la tâche d'avis et la coche par type (un SMS d'avis ne coche ni devis ni photos) ;
+  - la réactivation : accord (proposition et copie refusées sans lui), retrait, désinscription, STOP, date de la perte
+    (lead, dossier, jamais `updatedAt`), client revenu, un par client ;
+  - la tâche « Reprendre contact » : tracée sur le lead, cochée « faite » ;
+  - `relancesProposables`, `GET /api/relances` et le point du jour ;
+  - les jumeaux MCP : `lister` RELANCES (et par dossier), `noter_sms` DEMANDE_AVIS et REACTIVATION, `etat_crm`
+    PARAMETRES, `manager_operations`, le délai paramétré.
+- Adaptés, même intention : `mail.test.ts` (désinscription par le nouveau module, sans inscription de séquence) et
+  `mission-14-partie-8.test.ts` (le catalogue SMS compte 16 codes).
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres.
+
+Reste :
+- Rappeler à Lucas de reconnecter le connecteur (descriptions changées).
+- Les consignes de Lucas en base peuvent encore citer les séquences : à lui de les relire (non réécrites, règle de la
+  mission 17).
+
+### Mission 18, A5 — Tâches de fond dans Paramètres › Système, un seul compteur
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Onglet « Système » de Paramètres** (sixième onglet, après Assistant) : la file des tâches de fond et les travaux
+  périodiques, le contrôle de cohérence, l'audit des connexions et les sessions de l'assistant, dans l'ordre de
+  l'ancien écran. `SectionSysteme.tsx` lit chaque bloc à l'ouverture de l'onglet par la route de son bouton
+  (`/api/taches`, `/api/coherence`, `/api/audit/connexions`, `/api/assistant/sessions`) : la page Paramètres ne lance
+  ni le contrôle de cohérence ni l'audit, et un bloc en panne affiche « Réessayer » sans gêner les autres.
+- Les quatre composants passent de `taches-de-fond/_components` à `parametres/_components` (renommés dans git).
+  `EtatTaches` devient un bloc : plus d'en-tête de page ni d'enfants, un titre de section avec « Actualiser ». Chaque
+  bloc a son ancre (`#taches-de-fond`, `#coherence`, `#audit`, `#sessions`).
+- `parametres/page.tsx` lit `?section=` et le passe à `OngletsParametres`. L'ordre de priorité est : l'ancre, puis la
+  section, puis l'onglet mémorisé. La table `ANCRES` gagne `systeme`, `taches-de-fond`, `coherence`, `audit` et
+  `sessions`. La recherche se fait sur les propriétés propres (`ongletDe`), donc `#toString` n'ouvre rien. Sur
+  téléphone, l'onglet ouvert reste visible dans la liste qui défile.
+- `/taches-de-fond` redirige vers `/parametres?section=systeme` (`next.config.ts`, 307 comme les autres, la requête
+  suit). L'écran `src/app/(pilotage)/taches-de-fond/` est supprimé.
+- **Un seul compteur** : l'entrée « Tâches de fond » et son badge rouge `tachesEnEchec` sortent de la navigation (le
+  type `Compteurs` et `tonDe` aussi, l'icône `Workflow` n'est plus importée). Un échec remonte déjà comme tâche système
+  « Relancer N tâches de fond en échec » (niveau 4, comptée dans l'onglet Tâches). La route `/api/pilotage/compteurs`
+  garde la clé, pour les réponses servies par le cache hors ligne et pour `ecran.test.ts`.
+- Adresse unique `ADRESSE_SYSTEME` dans `src/lib/parametres/sections.ts`. Elle sert au raccourci des tâches système
+  (`a-faire/detecteurs/systeme.ts`, clé `SYSTEME:taches-de-fond` inchangée, donc rien n'est recréé), aux alertes
+  (`synthese/alertes.ts`, `analytique/alertes.ts`, alerte de plafond de `assistant/execution.ts`, alerte quotidienne
+  de `coherence/controle.ts`), et aux liens des outils (`etat_crm` vue générale, TACHES_DE_FOND, COHERENCE, AUDIT,
+  SESSIONS et SANTE via `lecture.ts` ; `agir_systeme` ; `manager_operations`). Les textes qui disaient « Tâches de
+  fond → Assistant » disent « Paramètres › Système → Sessions de l'assistant ».
+- MCP : aucun outil, paramètre ni description ne change. L'empreinte reste `040d6c7aa53c` (53 outils) et il n'y a rien
+  à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête, B1–B7 en 2.13 sous « Système », 2.15 qui renvoie à 2.13, PA1, N1, N2, N3,
+  ligne « Paramètres › Système » du bilan, total inchangé à 427 actions dont 391 couvertes et 36 sans objet),
+  `ARCHITECTURE-PILOTAGE.md` (§4 et mentions de l'écran) et `TACHES.md` (§0).
+
+Décisions prises seul (solution la plus simple) :
+- Une requête `?section=systeme` plutôt qu'une ancre : le fragment n'est pas garanti à travers une redirection du
+  serveur (même choix que Finances en A3).
+- Redirection en 307 comme toutes les anciennes adresses : `analytique.test.ts` exige `permanent: false`, et rien
+  n'est mis en cache par le navigateur.
+- Le badge disparaît mais la clé `tachesEnEchec` reste dans la route. Les alertes « N tâches de fond en échec » de
+  l'Analytique et du point du jour restent : ce sont des alertes, pas des compteurs de la barre, et elles mènent à
+  l'onglet.
+- Seul l'onglet Système est ajouté. Tarifs viendra avec A6, pour ne pas laisser un onglet vide.
+- `public/sw.js` n'est pas changé : le changement de `VERSION` est prévu en A6, avec la navigation à 10 onglets.
+
+Tests : 1 320 → 1 331 verts (11 ajoutés).
+- Nouveau `src/lib/base/mission-18-a5.test.ts`. Il couvre :
+  - l'adresse de l'onglet ;
+  - la page qui passe `?section=` sans lancer le contrôle ;
+  - l'onglet et ses ancres ;
+  - les routes des blocs et leurs réponses ;
+  - la redirection (307, sans chaîne) ;
+  - l'écran retiré, la navigation sans onglet ni badge, plus aucune adresse `/taches-de-fond` dans `src` et `public` ;
+  - la tâche système comptée dans Tâches avec son raccourci vers l'onglet, et la clé gardée dans la route ;
+  - l'alerte `TACHES_EN_ECHEC` ;
+  - les liens de `etat_crm` (six parties), `agir_systeme` et `manager_operations`.
+- Adaptés, même intention : `systeme.test.ts` (le raccourci mène à l'onglet), `mcp-gestes.test.ts` (lien de
+  RELANCER_TACHE), `mcp-analytique.test.ts` (plus de lien `/taches-de-fond`, `manager_operations` mène à l'onglet).
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres (le dossier `.next` a été supprimé avant, à
+  cause de la page retirée).
+- Vérifié à l'œil sur une base d'essai jetable (port 3007, canaux sortants vidés, tâches de fond coupées) :
+  - `/taches-de-fond?x=1` donne une 307 vers `/parametres?x=1&section=systeme` ;
+  - les quatre blocs se lisent à l'ouverture ;
+  - à 390 px, pas de défilement horizontal et l'onglet Système reste en vue ;
+  - le menu Plus n'a plus Tâches de fond.
+
+Reste :
+- A6 : l'onglet Tarifs, la navigation à 10 onglets et `VERSION` de `sw.js`.
+- Rien à reconnecter pour ce lot. Le rappel général de reconnexion des lots A1, A2 et A4 tient toujours.
+
+### Mission 18, A6 — les tarifs dans Paramètres › Tarifs, navigation à 10 onglets
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **Onglet « Tarifs » de Paramètres** (septième onglet, après Facturation ; `/parametres?section=tarifs`, ancre
+  `#tarifs`) : les tarifs des devis (presets : désignation, unité, prix HT, ajout, retrait) et « Tarif de chaque
+  prestation ». `GestionTarifs.tsx` passe de `dossiers/_components` à `parametres/_components` (renommé dans git) ;
+  plus de bouton « Retour au document » (`onRetour` retiré), une section titrée « Tarifs des devis ».
+- `parametres/page.tsx` lit les presets actifs (`listerPresets`) avec les autres réglages ; `OngletsParametres` les
+  garde dans son état (comme les paramètres) : revenir sur l'onglet ne perd pas ce qui vient d'être changé.
+- **Générateur de documents** : plus de sous-mode des tarifs. Il garde la liste « Ajouter depuis un tarif… » ; « Gérer
+  les tarifs » devient un lien vers l'onglet, ouvert dans un autre onglet du navigateur pour ne pas perdre le document
+  en cours, et la liste des tarifs se relit au retour sur la fenêtre (`focus`, sans message d'erreur à ce moment-là).
+- Adresse unique `ADRESSE_TARIFS` (`src/lib/parametres/sections.ts`), utilisée par le générateur et par les liens de
+  l'assistant : outil des tarifs (`reglages.ts`, donc `lister` TARIFS), `creer` TARIF, chemin des entités TARIF et
+  SOUS_PARTIE (`modifier`, `archiver`). Les commentaires « Dossiers → Tarifs » de `prestations/` sont corrigés.
+- **Navigation à 10 onglets** (`Navigation.tsx`) : principaux Tâches, Leads, Dossiers, Mail, Clients, Analytique ;
+  secondaires Simulateur, Site, Finances (allumé aussi par `/depenses/nouvelle`), Paramètres. Barre du bas inchangée :
+  Tâches, Leads, Dossiers, Mail, Analytique, puis « Plus » (Clients, Simulateur, Site, Finances, Paramètres).
+  `PRINCIPALES`, `SECONDAIRES` et `DANS_LE_MENU` sont exportés pour le test. Les icônes `Smartphone`, `Workflow`,
+  `Receipt` et le type des compteurs étaient déjà retirés par A1, A3 et A5.
+- **Anciennes adresses** : `/espaces`, `/depenses`, `/taches-de-fond` (déjà dans `next.config.ts`) sont vérifiées
+  ensemble : 307, sans chaîne, vers un écran qui existe, écran d'origine retiré ; les raccourcis du manifeste mènent à
+  des écrans. `public/sw.js` passe en `VERSION = "v12"` : les écrans retirés ne restent pas servis hors ligne.
+- MCP : aucun outil, paramètre ni description ne change (seuls les liens rendus changent). L'empreinte reste
+  `040d6c7aa53c` (53 outils) : rien à reconnecter pour ce lot.
+- Docs : `MCP-COUVERTURE.md` (en-tête, note en 2.4, DP64 et DP70–DP73 en 2.13 › Tarifs avec le nouveau test, PA1,
+  N1, N3, bilan : panneau 92 actions, ligne « Paramètres › Tarifs » de 5 actions, total inchangé à 427 dont 391
+  couvertes et 36 sans objet), `ARCHITECTURE-PILOTAGE.md` (§4 réécrit : 10 onglets, barre du bas, puce Tarifs ; note
+  en tête de §21, qui décrivait l'état du 21/09), `COHERENCE.md` (§1 : colonne Espace au lieu d'Espaces clients).
+  `TACHES.md` §0 était déjà à jour (A5).
+
+Décisions prises seul (solution la plus simple) :
+- Tarifs placé juste après Facturation (l'argent ensemble), pas en fin de liste.
+- Presets lus par le serveur avec la page, comme les autres onglets (pas de « Chargement… ») : `listerPresets` est
+  une petite lecture ; seul l'onglet Système reste lu à la demande.
+- « Gérer les tarifs » ouvre un autre onglet du navigateur plutôt que de quitter la modale : un devis à moitié saisi
+  ne se perd pas. La liste du générateur se relit au retour.
+- Pas de nouvelle redirection : les tarifs n'avaient pas d'adresse (sous-mode d'une modale). Les redirections restent
+  en 307 (`analytique.test.ts` exige `permanent: false`), comme en A1, A3 et A5.
+- DP64 (lire les tarifs) suit DP70–DP73 dans l'onglet, comme le prévoyait le plan : le générateur ne fait plus que les
+  proposer (DP67 reste dans le panneau).
+
+Tests : 1 331 → 1 341 verts (10 ajoutés).
+- Nouveau `src/lib/base/mission-18-a6.test.ts`. Il couvre :
+  - l'adresse de l'onglet, la page qui lit les tarifs actifs et passe `?section=tarifs` ;
+  - l'ordre des sept onglets, l'ancre `#tarifs`, les tarifs gardés par les onglets ;
+  - `GestionTarifs` déplacé sans « Retour », le générateur sans sous-mode, avec sa liste et son lien ;
+  - les gestes de l'onglet (POST, PATCH, attribution, DELETE) et les outils jumeaux (`creer`, `modifier`, `modifier`
+    SOUS_PARTIE, `archiver`) : même état en base, tarif archivé jamais effacé, liens vers l'onglet ;
+  - les liens de `lister` TARIFS, de l'outil des tarifs et le chemin des entités TARIF et SOUS_PARTIE ;
+  - la navigation à 10 onglets (chaque onglet mène à un écran existant), la barre du bas et le menu « Plus » ;
+  - les trois anciennes adresses, les raccourcis du manifeste et la version du service worker.
+- Aucun test existant n'a eu à changer (`mission-18-a3.test.ts` lit toujours l'entrée Finances telle quelle).
+- `tsc`, `eslint` sur les fichiers touchés (2 avertissements anciens de `sw.js`, hors de mes lignes) et
+  `npm run build` : propres.
+
+Reste :
+- Partie A terminée (A1 à A6). Rien à reconnecter pour ce lot ; le rappel de reconnexion des lots A1, A2 et A4 tient
+  toujours.
+
+### Mission 18, partie A — corrections de la relecture
+
+Deux relecteurs ont relu A1 à A6 (`f77a149..c8357f6`) : dix constats, tous vérifiés dans le code, tous réels et tous
+corrigés (le n° 4 par des requêtes groupées, sans cache). Aucun n'est faux.
+
+Livré (03/10, branche `mission-18`, pas de push), constat par constat :
+1. **Une photo déposée par Lucas ouvrait le dossier** (important, réel). Une PhotoLead d'origine `DEPOT_CRM` (lien de
+   dépôt, `ajouter_fichier`) n'ouvre plus rien. Elle n'est comptée ni par `faitsDuSite` pour le motif
+   (`seulementDuContact`), ni par la branche « sans dossier » du filet (`PHOTO_DU_CONTACT`). Elle se range toujours
+   dans le dossier vivant, comme le dit le message du dépôt.
+2. **Le filtre « Espaces » avait perdu son tri** (mineur, réel). Le tri revient : « À moi d'abord », « Dernière
+   activité », « Lien le plus récent » (`TRIS_ESPACE`, `comparerEspaces` dans `espace/suivi-types.ts`). Le serveur
+   le fait (`FiltresDossiers.triEspace`, `GET /api/dossiers?triEspace=`), car c'est lui qui découpe les pages. Le
+   sélecteur est dans `FiltreEspaces`.
+3. **Des textes renvoyaient à l'écran « Espaces clients » retiré** (mineur, réel). Corrigés :
+   - la notification « projet de plus » renvoie à la fiche client, seul endroit où ce geste existe ;
+   - la notification « autres simulations » et l'aide du paramètre renvoient au bloc Espace du dossier ;
+   - la confirmation d'archivage dit « sort de Dossiers (filtre « Espaces » compris) » ;
+   - en plus des trois textes signalés, les liens de l'assistant s'intitulent « Dossiers › Espaces » (même adresse).
+4. **Coût du filtre « Espaces »** (important, réel). Les requêtes sont groupées :
+   - les rendus rangés dans les photos se lisent en une seule requête pour toute la liste (`rendusDesDossiers`), au
+     lieu d'une par dossier ; `photosDuClient` reçoit le résultat ;
+   - `liensEnvoyes` accepte une liste de motifs : `listerEspaces` ne lit que les envois des espaces chargés
+     (`/e/<code>-` du client et du projet). Au-delà de 120 motifs, il reprend le motif commun `/e/`, moins cher
+     qu'une longue suite de OU. La liste par défaut (50 dossiers) ne parcourt donc plus tout l'historique ;
+   - sous le filtre, la recherche attend 600 ms après la dernière frappe (250 ms ailleurs).
+5. **La demande d'avis pouvait ouvrir un espace** (mineur, réel). `RELANCE_AVIS` lit l'espace existant du dossier.
+   S'il est absent, archivé, désactivé ou sans lien, l'action renvoie un refus 409 et rien n'est écrit. Cela vaut
+   aussi pour « noter_sms » DEMANDE_AVIS, qui passe par `proposerSms`. Le commentaire est maintenant exact.
+6. **Un dossier archivé par Lucas se rouvrait sur un fait ancien** (mineur, réel). Sans dossier vivant,
+   `ouvrirDossierAutomatique` ne compte que les faits postérieurs au dernier archivage du lead
+   (`max(DEBUT_OUVERTURE_AUTO, archiveLe)`). Une nouvelle simulation ou une nouvelle demande rouvre le dossier ; un
+   fait déjà connu, non.
+7. **Une photo introuvable revenait toutes les 15 minutes** (mineur, réel). Comme une simulation sans images, une
+   photo absente du volume (ou vide) est marquée « tentée » : `rangeeLe` est posé, sans dossier. Le filet et
+   `rangerImagesDuLead` l'ignorent ensuite (`PHOTO_A_RANGER`). Une erreur d'écriture (volume plein) n'est pas
+   marquée : elle est reprise au passage suivant, ce qui est voulu.
+8. **Ordre affiché ≠ ordre des pages** (mineur, réel ; même cause que le n° 2). Sous le filtre, la liste ne retrie
+   plus. `VueListe` reçoit `tri={null}` : les en-têtes deviennent de simples titres et le « Trier par » du téléphone
+   est masqué. Le kanban garde aussi l'ordre du serveur dans chaque colonne (`ordreServeur`).
+9. **Accessibilité** (mineur, réel). Les pastilles du filtre sont des boutons `aria-pressed` dans un
+   `role="group"`, et non plus des onglets sans panneau. L'icône de l'espace a maintenant un `libelle` :
+   - « aucun » (`aria-hidden`) dans la ligne courte des cartes et du téléphone, où le texte visible suffit ;
+   - « court » (« Espace : signal ou étape ») sur la carte compacte, où l'icône est seule ;
+   - « detaille » dans la cellule du tableau.
+10. **Course entre deux ouvertures** (mineur, réel, reproduit). Sur l'ancien code, quatre appels simultanés ouvraient
+    quatre dossiers. Une file de promesses par contact (`unParContact`) sérialise maintenant `ouvrirDossierDuLead`
+    et toute la décision d'`ouvrirDossierAutomatique` : un seul processus sert le CRM, la file suffit. Le contrôle
+    `LEAD_A_PLUSIEURS_DOSSIERS` reste en filet.
+
+Décisions prises seul (solution la plus simple) :
+- « Lien le plus récent » trie par date d'ouverture du projet dans l'espace (`creeLe`). L'ancien onglet triait les
+  clients par `lienEmisLe` ; la colonne travaille par dossier.
+- Le tri des espaces n'entre pas dans l'adresse (`?espace=` seulement). Il revient à « À moi d'abord » à chaque
+  ouverture, comme dans l'ancien onglet.
+- Pas de cache du calcul des espaces : les requêtes groupées et le délai de saisie suffisent pour le volume actuel. Un
+  cache de quelques secondes reste possible si l'écran rame.
+- L'outil MCP `lister` ne reçoit pas le tri : sa description et son schéma ne changent pas, et son empreinte non
+  plus. Rien à reconnecter.
+- Une photo introuvable est seulement journalisée (`console.warn`), sans événement sur le dossier : la photo n'en a
+  jamais fait partie.
+
+Tests : 1 341 → 1 353 verts (12 ajoutés).
+- `dossiers/depuis-lead.test.ts`, 4 tests ajoutés : photo DEPOT_CRM sur un lead Meta (ni webhook ni filet, puis
+  rangée dans le dossier vivant), dossier archivé (fait connu / fait nouveau), photo introuvable tentée une fois,
+  quatre ouvertures simultanées. Les quatre échouent sur l'ancien code (vérifié ; la course y ouvrait 4 dossiers).
+- Nouveau `src/lib/base/mission-18-relecture-a.test.ts`, 8 tests : demande d'avis sans espace ou désactivée (refus,
+  rien d'écrit), trois tris du serveur et de l'API, ordre du serveur gardé par l'écran, `liensEnvoyes` borné,
+  `rendusDesDossiers` équivalent à l'ancienne lecture, textes sans « Espaces clients », boutons `aria-pressed`.
+- Aucun test existant n'a eu à changer.
+- `tsc`, `eslint` sur les fichiers touchés et `npm run build` : propres.
+
+Reste :
+- Rien pour Lucas sur ce lot.
+- Si le filtre « Espaces » rame un jour avec beaucoup d'espaces, poser un cache court sur `espacesDesDossiers`.
+
+### Mission 18, B0 — le point d'entrée unique et docs/SYNCHRO.md
+
+Livré (03/10, branche `mission-18`, pas de push) :
+- **`src/lib/dossiers/synchro.ts`** : union `EvenementDossier` (13 événements : photos reçues, projet validé ou
+  dévalidé, choix validé ou dévalidé, autre proposition demandée ou retirée, accord donné ou retiré, simulation
+  publiée, devis généré, devis déposé, acompte rejeté), `prochaineActionDe` (la matrice des prochaines actions, textes
+  et conditions d'avant à l'identique), `appliquerEvenementDossier(tx, …)` (prochaine action, puis la main écrite en
+  dernier, dans la transaction de l'appelant), `suitesEvenementDossier` (effets des changements d'étape, agenda si la
+  prochaine action a changé, signal des tâches ; jamais bloquant), `evenementDossier` (les deux, transaction propre).
+- **`src/lib/dossiers/prochaine-action-auto.ts › ecrireProchaineActionAuto`** : une prochaine action posée à la main
+  (trio `prochaineActionManuelle*`, texte inchangé) n'est jamais écrasée ni effacée ; une tâche MANUELLE de clé
+  `MANUELLE:synchro:<dossierId>:<code>` est rangée à la place (« ‹ texte › · ‹ client › », raison « ta prochaine
+  action « … » est gardée »). Rejouée : la même tâche ; répondue puis nouvel événement : elle revient ; « Plus tard » et
+  archivée : pas touchée.
+- **Branchés** (écritures automatiques de prochaine action, désormais dans une transaction interactive avec l'écriture
+  du geste) : `espace/service.ts` (`deposerPhotos`, `choisir`, `demanderProposition`, `accepterDevis`),
+  `espace/validations.ts` (`validerProjet`, `devaliderProjet`, `devaliderChoix`, `retirerDemandeProposition`,
+  `retirerAccord`), `simulations/dossier.ts › publierSimulations`, `documents.ts › emettre`,
+  `documents-existants.ts › rattacherDocumentExistant` (après l'événement `DOCUMENT_REPRIS`, pour que la main le lise),
+  `encaissements/service.ts › terminerEncaissement`. Les gestes de Lucas (appel, rappel, planifier, modifier le
+  dossier) restent tels quels.
+- **La main dans la transaction** : `main.ts` gagne `lireFaitsMain(id, client)`, `calculerMain(id, client)` et
+  `ecrireMain(tx, id)` (sans signal) ; `recalculerMain` reste pour les appels hors module.
+- **`changerEtapeDansTransaction`** écrit la main et le statut du lead dans sa transaction (nouveau
+  `dossiers/statut-lead.ts`, la table d'avant déplacée) ; `effetsDuChangementEtape` ne refait alors ni l'un ni l'autre
+  (un `WeakSet` des changements synchronisés : la forme du changement rendu ne change pas, une copie retombe sur le
+  chemin complet). Les autres chemins (`appliquerChangementEtape` seul) gardent le recalcul d'après.
+- **Helper d'essai `src/test/etat-dossier.ts › etatDesDeuxCotes`** : étape, main écrite et calculée, prochaine action
+  et action manuelle en place, statut du lead, étape de l'espace (`chargerProjet` + `etapeEspace`), relances
+  proposables et à venir, tâches ouvertes du dossier après une passe complète de réconciliation.
+- **`docs/SYNCHRO.md`** : principe, règle des actions manuelles, matrice des 13 événements (fonction d'origine, étape,
+  main, prochaine action, espace, relances, tâches, historique, lead, effets externes ; ce qui reste écrit hors de la
+  transaction est marqué avec son lot), tableau des écarts B1-B13 pas encore branchés, ce qui ne passe pas par le module.
+
+Décisions prises seul (solution la plus simple) :
+- L'étape ne passe pas encore par le module : les gestes l'écrivent comme avant (`deplacerDossier`, `changerEtape`,
+  `appliquerChangementEtape`) ; chaque lot B1-B13 la rapatrie avec son écart (livraison progressive).
+- La condition d'une écriture automatique (« si vide ou « attendre les photos » »…) est relue dans la transaction, et
+  plus sur la lecture faite avant : même résultat, sans course.
+- Une action posée à la main que l'événement voudrait effacer, ou qui dit déjà le même texte : rien n'est rangé.
+- Niveau de la tâche rangée : 2 (geste du client), 1 pour l'argent (accord donné ou retiré, chèque rejeté), 3 pour la
+  production (simulation publiée, devis émis ou déposé) ; durée : celle de départ des tâches MANUELLE (5 min).
+- Une tâche répondue (Fait, Pas à faire) revient à faire au prochain événement du même code : c'est un nouveau besoin.
+- `accepterDevis` pose sa prochaine action par `evenementDossier` (troisième transaction, comme avant) : B8 réunira
+  accord, étape et prochaine action.
+- Outils MCP : aucun changement (mêmes fonctions de service) ; empreinte de la liste inchangée (`040d6c7aa53c`,
+  53 outils) ; `docs/MCP-COUVERTURE.md` inchangé.
+
+Tests : 1 353 → 1 360 verts. Nouveau `src/lib/dossiers/synchro.test.ts` (7 essais, état des deux côtés) : photos sans
+action manuelle (texte écrit, main à moi, espace qui avance) ; action manuelle puis photos deux fois (texte gardé, une
+seule tâche, revenue après « Fait » et de nouvelles photos) ; devis émis sur « Préparer le devis » posé par l'espace
+(remplacé) ou à la main (gardé, tâche « Attendre l'accord… ») ; règles fines (condition, effacement, même texte, « Plus
+tard », archivée) ; main et statut du lead lus DANS la transaction d'un changement d'étape ; `evenementDossier` ; chaque
+événement présent dans `docs/SYNCHRO.md`. Aucun test existant à adapter (les cas « vigueur levée par une écriture
+automatique » annoncés par le plan n'existent pas dans `moteur.test.ts` : la vigueur y tombe par un geste du client).
+`tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+
+Reste : B1-B13 (étape, notification, relances et statut du lead par le module, écart par écart) ; rien pour Lucas.
+
+### Mission 18, B1 — générer un devis n'est pas l'envoyer (écart 1)
+
+Livré (03/10, branche `mission-18`, pas de push, site non touché) :
+- **La règle** (`dossiers/devis-envoye.ts › envoiALaGeneration`, pure) : à la génération, un devis est ANNONCÉ — donc
+  envoyé : étape Q, S, Relance → Devis envoyé, main au client, relances — s'il part avec le mail « Devis disponible »
+  (notifier demandé, adresse valide, espace ouvert), ou si l'interrupteur du modèle est coupé dans Paramètres et que
+  l'espace est ouvert (la mise en ligne vaut envoi). Sinon, en Qualification ou Simulation, il est créé MASQUÉ
+  (`visibleEspace: false`), l'étape ne bouge pas. Après Simulation (Devis envoyé, Relance, Signé…), il reste visible ;
+  une variante silencieuse (`notifier: false`) dans un espace ouvert vaut mise en ligne (le cas de la mission 11 : le
+  premier devis annoncé, les variantes à côté), sinon il n'est pas envoyé.
+- **`notifications.ts › peutNotifier`** : les conditions de `notifierClient` (modèle, dossier, adresse, espace ouvert),
+  lues sans rien programmer, AVANT la transaction de `emettre` ; `notifierClient` partage la même lecture. Le mail ne
+  part qu'après la transaction et seulement pour un devis annoncé.
+- **`emettre`** : `visibleEspace` posé à la création, l'événement `DEVIS_GENERE` porte `envoye` et `visibleEspace`,
+  le changement d'étape seulement si envoyé, l'événement `DEVIS_GENERE { envoye }` du point d'entrée. Rend `envoi`
+  (`{ visible, envoye, mail }`) à l'écran et à l'outil.
+- **Point d'entrée** (`synchro.ts`) : `DEVIS_GENERE` envoyé → « Attendre l'accord du client sur le devis » ; pas
+  envoyé → « Envoyer le devis au client » (`PROCHAINE_ACTION_ENVOYER_DEVIS`), à la place de « Préparer le devis… »
+  seulement. Une action posée à la main reste, SANS tâche rangée à la place (option `tache: false` de
+  `ecrireProchaineActionAuto`) : la tâche ENVOYER_DEVIS couvre ce besoin. « Envoyer le devis au client » est remplacé
+  par « Attendre l'accord » au prochain devis envoyé ou déposé.
+- **La main** (`main.ts`) : `DEVIS_GENERE` marqué `envoye: false` me la donne, « Devis prêt, pas encore envoyé (n°) :
+  à lui envoyer » (`motifDevisAEnvoyer`, `estMotifDevisAEnvoyer`), tant que le devis est « Généré », non archivé et pas
+  mis en ligne depuis (un `DEVIS_ENVOYE` qui le porte). Les événements d'avant n'ont pas la marque : ils passent
+  toujours la main au client, aucune migration.
+- **Tâche `ENVOYER_DEVIS`** « Envoyer le devis · X » (niveau 2, 2 min) : lecture propre du détecteur DOSSIERS
+  (`devis-envoye.ts › devisAEnvoyer` : marque `"envoye":false`, devis « Généré », pas de `DEVIS_ENVOYE` qui le porte,
+  dossier vivant), une par dossier (« devis A, B prêts, pas encore envoyés »), occurrence = les devis. Raccourci :
+  le dossier, rubrique devis (rendre visible, ou « Envoyer par mail »). Jamais écartée par une action posée à la main
+  (`moteur.ts › TYPES_HORS_VIGUEUR`) : c'est mon geste resté en route. Coche par le CRM (`achevement.ts`) : envoyé par
+  mail ou accepté, mis en ligne, annulé ou remplacé. /commercial : groupe DEVIS, action = le motif (plus « Préparer la
+  simulation » sur un dossier dont le devis attend d'être envoyé) ; le cas DEVIS du détecteur s'efface devant elle.
+- **Outil `generer_document`** : l'aperçu dit d'avance ce qui se passera (même règle), le résultat aussi
+  (`donnees.envoye`, `donnees.visibleEspace`) ; descriptions mises à jour (outil et paramètre `notifier`). Écran : la
+  case « Prévenir le client par mail » l'explique.
+- **Docs** : `docs/SYNCHRO.md` (deux lignes `DEVIS_GENERE`, envoyé ou non ; B1 retiré du tableau 4), `docs/TACHES.md`
+  (type, coche, exception à la vigueur), `docs/MCP-COUVERTURE.md` (entrée B1).
+
+Décisions prises seul (solution la plus simple) :
+- « Envoyé » se décide AVANT la transaction (`peutNotifier`), pas d'après le résultat de `notifierClient` : l'étape
+  avance dans la transaction ; un échec rare de la mise en file du mail n'annule pas l'envoi.
+- Pas d'événement `DEVIS_ENVOYE` en plus à la génération (le plan le proposait) : la marque `envoye` de
+  `DEVIS_GENERE` suffit et n'écrit pas deux lignes dans l'historique ; la date d'envoi d'un devis annoncé à la
+  génération est son émission (B5 lira le `DEVIS_ENVOYE` d'une mise en ligne ultérieure).
+- Variante silencieuse après Simulation dans un espace ouvert = mise en ligne (pas de tâche) ; sans espace ouvert ou
+  sans adresse pour l'annoncer = pas envoyé (tâche), même visible.
+- Le raccourci de la tâche ouvre la rubrique devis du dossier (gestes existants) plutôt qu'un `&devis=envoyer`
+  nouveau : B2 (mail) et B5 (mise en ligne annoncée) corrigent les effets de ces deux gestes.
+- Niveau 2 (chaud) pour ENVOYER_DEVIS : un devis prêt qui n'est pas parti.
+- La conversion Meta DEVIS_ENVOYE suit le vrai passage d'étape (décalée à l'envoi), comme prévu.
+
+Tests : 1 360 → 1 366 (`npm test` : 1 364 verts ; les 2 échecs, `mission-14-partie-8` « ouvert il y a 4 jours » et `mcp-mail` « lundi 9 h », tombent aussi sur ac1b274 sans B1 : ils dépendent de la date du jour, le 05/10, un lundi). Nouveau `src/lib/dossiers/generer-envoyer.test.ts` (6 essais, état des deux
+côtés) : la règle pure ; Qualification + `notifier: false` → Qualification, main à moi (« Devis prêt… »), espace
+inchangé, aucune relance, tâche « Envoyer le devis · X », aucun mail, /commercial DEVIS, puis rendu visible → Devis
+envoyé, main au client, relance n°1, tâche cochée « mis en ligne à hh:mm » ; annoncé → Devis envoyé, « Attendre
+l'accord », espace DEVIS, relance à venir, un seul mail programmé ; « Préparer le devis » → « Envoyer le devis au
+client », action posée à la main gardée sans tâche de remplacement et ENVOYER_DEVIS malgré la vigueur ; interrupteur
+coupé → envoyé sans mail ; deux devis → une tâche, annulés → cochée ; devis d'avant (sans marque) jamais « à
+envoyer ». Adaptés (comportement changé volontairement, intention gardée) : `documents.test.ts` (sans espace : reste en
+Qualification, masqué), `main.test.ts` (contact avec adresse : le devis annoncé passe la main), `synchro.test.ts`
+(devis annoncés pour le cas « Attendre l'accord »), `mission-14-partie-1.test.ts` (aide `devisEnvoye` : émis puis
+rendu visible ; le cas « seul devis masqué » commence masqué et non envoyé), `devis-multiples.test.ts` (premier devis
+annoncé, variantes silencieuses) ; `mcp-v3.test.ts` passe sans changement (l'aperçu dit toujours « aucun mail ne
+partira »). `tsc`, `eslint` sur les
+fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; descriptions de
+`generer_document` changées : reconnecter le connecteur.
+
+Reste : B2 (envoi par mail : visibilité, étape, main, double validation), B5 (mise en ligne annoncée, relance datée de
+la mise en ligne), B13 (règle de cohérence de l'écart 1, réparation des devis déjà « envoyés » sans l'avoir été) ; rien
+pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B2 — devis envoyé par mail depuis le CRM (écart 2)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Mêmes effets qu'un devis rendu visible** (`mail/propositions.ts › effetsDeLEnvoi`, `enregistrerDevisEnvoye`) : à
+  l'exécution d'un mail ENVOI_DEVIS (bouton « Envoyer par mail » du dossier ou outil `envoyer_document`), dans UNE
+  transaction après la trace `MAIL_ENVOYE` : devis « Envoyé » et visible dans l'espace, événement `DEVIS_ENVOYE`
+  (`documentId`, `canal: "MAIL"`, `propositionId`) qui date l'envoi et passe la main au client, Q, S, Relance → Devis
+  envoyé (`passerEnDevisEnvoye`), puis le point d'entrée (nouvel événement `DEVIS_ENVOYE` de `synchro.ts`) : « Envoyer
+  le devis au client » ou « Préparer le devis… » → « Attendre l'accord du client sur le devis » (une action posée à la
+  main n'est jamais écrasée), main écrite dans la transaction. Après : effets du changement d'étape (lead, Meta),
+  agenda, signal des tâches ; la tâche ENVOYER_DEVIS se coche (« envoyé par mail »). Les autres mails (facture,
+  relance, réponse) recalculent maintenant la main après l'envoi (elle ne l'était pas sans changement d'étape).
+- **Relances datées de l'envoi** (`relances/service.ts › referenceDuDevis`) : la référence est la plus tardive de
+  l'émission, du dépôt et du dernier `DEVIS_ENVOYE` du devis (chargé avec le dossier, sans nouvelle colonne).
+- **Un seul mail** : `envoyer_document` ne revalide plus la proposition (l'ancienne 2e validation rendait 409, et la
+  nouvelle tentative envoyait un second mail) ; `envoyerDocumentParMail` pose la clé
+  `envoi-document:<document>:<empreinte destinataire|objet|texte>` et rend `{ proposition, deja }` : le même envoi
+  refait (double clic, outil relancé) rend la proposition déjà décidée sans rien revalider ni renvoyer ; écarté
+  (rejeté, annulé, expiré) ou parti depuis plus de 30 min, il peut être refait (l'ancienne proposition garde sa trace
+  sous une clé close `…:<id>`). La route renvoie `deja` ; l'outil le dit (« nouvelle tentative sans effet, aucun
+  second mail ») avec `donnees.deja` et `donnees.statut`.
+- **Rien ne part pour un devis devenu caduc** : `executerPropositionValidee` relit `pertinente` avant d'exécuter ; un
+  devis annulé ou remplacé entre la validation et l'envoi → proposition ANNULEE (« Sans objet au moment de
+  l'exécution : … »), aucun mail, rien ne bouge.
+- **Tâche rejouée** : déjà envoyée (trace `MAIL_ENVOYE`) mais sans les effets du devis (coupure juste après l'envoi) →
+  les effets sont écrits, le mail ne repart pas ; rejouée encore → rien.
+- **Écran** : la modale d'envoi relit le dossier tout de suite puis 8 s plus tard (le mail part par la file) ; message
+  « Déjà envoyé » si `deja`. `PanneauDossier` passe `onRecharger` à `DocumentsDossier`.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE`, règle « un seul mail par envoi », B2 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B2, défaut 11 corrigé, test de DP60).
+
+Décisions prises seul (solution la plus simple) :
+- Le mail vaut l'annonce : pas de « Devis disponible » en plus (aucun nouvel envoi au client).
+- Un `DEVIS_ENVOYE` par devis joint, écrit après `MAIL_ENVOYE` : l'historique dit « Devis … envoyé par mail à … » et la
+  main lit « Devis envoyé : en attente de sa réponse ».
+- La référence des relances lit déjà tous les `DEVIS_ENVOYE` (aussi ceux d'une mise en ligne) : la partie « relance
+  depuis la mise en ligne » de B5 est donc faite ; B5 garde la notification « Devis disponible » à la mise en ligne.
+- Fenêtre de 30 min pour l'idempotence d'un envoi déjà parti : une nouvelle tentative arrive dans les minutes ; un
+  renvoi volontaire identique plus tard (« je ne l'ai pas reçu ») reste possible.
+- Relecture de la pertinence à l'exécution pour toutes les propositions en file (mail, SMS, cartes) : même règle qu'à
+  la validation.
+- Un envoi par mail en Relance ramène le dossier en Devis envoyé (comme une mise en ligne).
+
+Tests : 1 366 → 1 371 (`npm test` : 1 369 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date
+du jour : `mission-14-partie-8` « ouvert il y a 4 jours » et `mcp-mail` « lundi 9 h »). Nouveau `src/lib/dossiers/envoyer-par-mail.test.ts` (5 essais, état des deux
+côtés, envoyeur d'essai en mémoire, rien ne sort du poste) : bouton → Devis envoyé, main au client, « Attendre
+l'accord », lead DEVIS_ENVOYE, espace DEVIS, relance n°1 datée de l'envoi (décalée avec lui), ENVOYER_DEVIS cochée,
+aucun « Devis disponible », double clic, tâche rejouée et même envoi refait sans effet (un mail, un `MAIL_ENVOYE`, un
+`DEVIS_ENVOYE`, une proposition, état identique) ; outil confirmé puis relancé deux fois → une validation, un mail,
+action posée à la main gardée ; devis annulé entre validation et envoi → rien ne part ; coupure après l'envoi → effets
+écrits sans renvoi ; envoi écarté ou ancien → refaisable. Aucun test existant à adapter. `tsc`, `eslint` sur les
+fichiers touchés, `npm run build` : propres.
+Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description de `envoyer_document` changée : reconnecter le
+connecteur.
+
+Reste : B3-B13 ; B5 n'a plus que la notification à la mise en ligne ; rien pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B3 — devis envoyé depuis Gmail (écart 3)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Les PDF sortants sont gardés** (`mail/rattachement.ts › suitesDuTri`) : un mail SORTANT parti de la boîte (pas par
+  le CRM), non automatique, rangé dans le dossier d'un client, met ses PDF en file (`MAIL_PDF_SORTANTS` →
+  `conserverPdfSortants` → `messages/stockage.ts › conserverPieces(…, { seulementPdf: true })`, puis signal des tâches).
+  Les photos de ce mail ne sont ni téléchargées ni rangées.
+- **La tâche** `ENREGISTRER_DEVIS` « Enregistrer comme devis envoyé · X » (niveau 2, 2 min, une par PDF, clé
+  `ENREGISTRER_DEVIS:dossier:<id>:<pièce>`, jamais écartée par une action posée à la main) : lecture du détecteur des
+  dossiers, `dossiers/devis-gmail.ts › devisGmailNonEnregistres` — PDF conservé d'un tel mail, de moins de 30 jours,
+  dossier vivant, nom qui évoque un devis (« devis », ou un numéro « 2026-012 » ; jamais une facture « F2026-… » ni une
+  date), ni envoi du CRM (identifiant « crm: », `EnvoiMail` programmé ou `MAIL_ENVOYE` de proposition de même objet et
+  même destinataire), ni déjà dans le CRM (devis de ce numéro déjà envoyé ou ailleurs, devis déposé depuis cette pièce,
+  ou — sans numéro lisible — devis entré dans le dossier après le mail). Coche : « devis N enregistré comme envoyé depuis
+  Gmail à hh:mm » (ou « déposé » / « envoyé » s'il est entré autrement).
+- **Le geste en une fois** : raccourci `&devis=gmail&piece=<id>` (écran Tâches : la demande d'ouverture du panneau
+  porte `devis: "gmail"`, `piece`) → la modale de dépôt (`ModaleDocumentExistant`, prop `pieceGmail`) préremplie par
+  `GET /api/dossiers/[id]/devis-gmail` : numéro lu dans le nom du fichier (ou celui du registre), date du mail, montant
+  du registre s'il y est, PDF du mail ; un clic si tout est connu. `POST` → `depot-document.ts › deposerDocument` avec
+  la pièce du mail — la même fonction que l'outil `ajouter_fichier` (source `piece_mail`, désormais passée telle quelle
+  par `enregistrerFichierRecu`, option `pieceMail`) — qui délègue à `devis-gmail.ts › enregistrerDevisGmail` :
+  PDF vérifié (vide, 9 Mo, `%PDF-`) AVANT toute écriture, puis UNE transaction : devis repris « Envoyé », visible, PDF
+  du mail écrit et rattaché (`enregistrerPdf` dans la transaction, fichier seul), événement `DEVIS_ENVOYE`
+  (`canal: "GMAIL"`, `messageId`, `pieceId`, `envoyeLe` = date du mail), Q, S, Relance → Devis envoyé, point d'entrée
+  (`DEVIS_ENVOYE` canal GMAIL : « Attendre l'accord », main). Effets externes après (lead, Meta, agenda, tâches).
+  Rejoué pour la même pièce : `deja`, rien n'est écrit.
+- **Devis du CRM envoyé depuis Gmail** : si un devis du CRM porte ce numéro et attend d'être envoyé (B1), le geste le
+  passe « Envoyé » et visible (son PDF reste le sien), sans second dépôt ni montant à saisir ; ENVOYER_DEVIS se coche.
+- **Relances depuis le mail** (`relances/service.ts › envoiDuDevis`, `referenceDuDevis`) : un envoi Gmail prend
+  l'heure du mail, pas celle de l'enregistrement ; une émission datée au jour (midi) le même jour ne la repousse pas.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE` canal GMAIL, paragraphe B3, B3 retiré du tableau 4),
+  `docs/TACHES.md` (type, coche, exception à la vigueur), `docs/MCP-COUVERTURE.md` (entrée B3, ligne DP98).
+
+Décisions prises seul (solution la plus simple) :
+- Pas de lecture du texte du PDF (aucune bibliothèque) : montant saisi, ou repris du registre.
+- Seuls les PDF du mail sortant sont conservés (pas les photos) ; seuls les PDF CONSERVÉS font une tâche (le geste a
+  besoin du fichier) ; les mails relevés avant ce lot ne sont pas rattrapés (B13 / mise en route s'il le faut).
+- Une tâche par PDF (et non par dossier) : chaque pièce a son geste et sa coche.
+- L'événement `DEVIS_ENVOYE` est écrit maintenant (main au client « Devis envoyé : en attente de sa réponse ») et porte
+  la date du mail dans `envoyeLe` (lue par les relances), plutôt qu'antidaté.
+- Aucun mail ne part (le client a déjà le devis) ; le devis déposé est toujours visible et « Envoyé ».
+- Constante de file dans `mail/rattachement.ts` (à côté de `MAIL_PIECES_DOSSIER`).
+
+Tests : 1 371 → 1 376 (`npm test` : 1 374 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/devis-gmail.test.ts` (5 essais, état des deux côtés, rien ne sort du
+poste) : noms de fichiers ; mail parti → file des PDF (pas pour un mail reçu), tâche une fois conservé, modale
+préremplie, dépôt → Devis envoyé, main au client, « Attendre l'accord », lead DEVIS_ENVOYE, espace DEVIS, relance n°1
+datée du mail (pas du dépôt), tâche cochée, aucun mail, rejoué sans effet ; devis du CRM masqué envoyé par Gmail →
+« Envoyé » sans second dépôt, ENVOYER_DEVIS et ENREGISTRER_DEVIS cochées, action posée à la main gardée ; exclusions
+(envoi « crm: », `EnvoiMail` et `MAIL_ENVOYE` de même objet et destinataire, plus de 30 jours, facture, devis déposé
+après le mail, pièce d'un mail reçu = dépôt ordinaire) et faux PDF refusé avant toute écriture (aucun numéro inscrit,
+étape inchangée) ; outil `ajouter_fichier` avec `pieceMail` → même enregistrement. Aucun test existant à adapter.
+`tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53
+outils) ; description de `ajouter_fichier` changée : reconnecter le connecteur.
+
+Reste : B4-B13 (B13 : règle de cohérence `DEVIS_GMAIL_NON_ENREGISTRE` s'appuiera sur `devisGmailNonEnregistres`) ;
+pour Lucas : l'agent mail doit être actif pour que les PDF sortants soient gardés ; reconnecter le connecteur.
+
+### Mission 18, B4 — dépôt d'un bloc, devis déposé « accepté » = signé (écart 4)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **PDF vérifié avant toute écriture** (`documents-existants.ts › verifierPdf` : vide, 9 Mo, `%PDF-` ; la même
+  vérification sert à l'import d'un PDF et au dépôt Gmail de B3) : `depot-document.ts › deposerDocument` (outil
+  `ajouter_fichier`) la fait avant d'inscrire quoi que ce soit. Un faux PDF ne consomme aucun numéro, aucun document
+  n'est créé, l'étape ne bouge pas : on peut réessayer avec le même numéro.
+- **Un bloc** : `enregistrerDocumentExistant(dossierId, entree, { pdf })` écrit document, PDF (sous le numéro du
+  registre, dans la transaction, fichier seul : `rattacherDocumentExistant` option `pdf`, comme `emettre`), étape,
+  prochaine action et main dans UNE transaction ; si elle échoue, le PDF écrit quitte sa place (archives,
+  « depot-annule »). B3 (`devis-gmail.ts`) passe par la même option : plus de fichier orphelin. Les suites passent par
+  `suitesEvenementDossier` (agenda si la prochaine action a changé).
+- **L'écran** : la modale « Enregistrer un document existant » envoie le PDF dans la même requête (formulaire
+  `donnees` JSON + `pdf` ; `POST /api/dossiers/[id]/documents/existant` accepte aussi le JSON seul) ; l'ancienne route
+  du PDF reste pour importer ou remplacer le PDF d'un document déjà repris (« Corriger »).
+- **Devis déposé « accepté » sur un dossier pas encore signé → « Signé »** (nouveau `dossiers/devis-signe.ts ›
+  signerParDevisAccepte`, `retenirDevis`) : depuis Qualification, Simulation, Devis envoyé ou Relance
+  (`ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE`, constants.ts), dans la transaction du dépôt : les autres devis émis ou envoyés
+  « non retenus », puis `changerEtapeDansTransaction(vers SIGNE, devisAccepteId, BON_POUR_ACCORD)` (main et statut du
+  lead dans la transaction ; nouvelle option `raison` : « devis N déposé « accepté » (signé hors ligne) ; non retenu :
+  … »), puis le point d'entrée avec `DEVIS_ACCEPTE` (« Appeler le client : fixer la date du chantier, suivre
+  l'acompte » ; une action posée à la main reste, tâche `accord` à la place). L'historique du dépôt le dit (« …,
+  accepté (signé hors ligne) »). Après : Meta SIGNE, agenda, tâches (ENVOYER_DEVIS d'un devis devenu non retenu se coche).
+- **Même règle** pour un devis repris corrigé en « accepté » (`modifierDocumentExistant` : écran « Corriger », outil
+  `modifier` DOCUMENT) et pour la correction du contrôle `DEVIS_ACCEPTE_AVANT_SIGNE` (elle signe au lieu de remettre
+  le devis « émis » ; constat et correction réécrits, `COHERENCE_CORRIGEE` écrit dans la même transaction).
+- **Déposé « accepté » ailleurs** (dossier déjà signé, en pause, perdu) : l'étape ne bouge pas, et plus de « Attendre
+  l'accord » (événement `DEVIS_DEPOSE` avec `accepte`). La reprise d'un dossier entier ne signe jamais.
+- **Ce que l'assistant et l'écran disent d'avance** : aperçu de `ajouter_fichier` (« Accepté (signé hors ligne) : le
+  dossier passera de X à « Signé »… »), note et annulation partielle de `modifier` DOCUMENT, aide sous « Où en est ce
+  devis » dans la modale, message après dépôt ; description du paramètre `statut` de `ajouter_fichier`.
+- **Docs** : `docs/SYNCHRO.md` (lignes `DEVIS_ACCEPTE` et `DEVIS_DEPOSE`, paragraphe B4, B4 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B4, DP57, ligne `ajouter_fichier`), `docs/COHERENCE.md` (`DEVIS_ACCEPTE_AVANT_SIGNE`).
+
+Décisions prises seul (solution la plus simple) :
+- Le PDF s'écrit DANS la transaction (une fois le numéro du registre connu), comme `emettre` et B3, plutôt qu'avant :
+  le chemin dépend du numéro normalisé ; archivé si la transaction échoue.
+- Étapes qui signent : les étapes actives d'avant « Signé » seulement (celles du contrôle de cohérence). En pause, l'étape
+  d'avant la sortie peut être après « Signé » (avenant) ; un dossier perdu se reprend d'abord.
+- `retenirDevis` sert ici seulement ; `changerEtapeDansTransaction` (passage « Signé » à l'écran) n'écarte toujours pas
+  les autres variantes : B10 l'y branchera avec le paiement (comportement inchangé pour les autres chemins).
+- Main après un dépôt « accepté » : celle de l'étape « Signé » (le client, pour l'acompte) ; la prochaine action dit à
+  Lucas de fixer la date et de suivre l'acompte. Pas d'alerte « DEVIS SIGNÉ » : c'est Lucas qui l'enregistre.
+- Correction de cohérence `DEVIS_ACCEPTE_AVANT_SIGNE` : elle signe (un devis noté « accepté » par Lucas vaut signature
+  hors ligne) ; elle reste dans les corrections sensibles (elle change l'étape).
+- La réponse de la route `existant` porte aussi `suites` (lecture seule, sans effet).
+
+Tests : 1 376 → 1 383 (`npm test` : 1 381 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date
+du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/depot-atomique.test.ts` (7 essais, état
+des deux côtés, rien ne sort du poste) : faux PDF et PDF tronqué refusés avant toute écriture (aucun numéro, aucun
+document, aucun fichier, état identique des deux côtés), puis le bon PDF → Devis envoyé, main au client, « Attendre
+l'accord », espace DEVIS, relance n°1, PDF rattaché ; transaction qui échoue après l'écriture du PDF → rien en base, PDF
+retiré, état inchangé ; devis déposé « accepté » en Simulation avec un devis du CRM pas envoyé → Signé, lead SIGNE, main
+de l'étape, prochaine action d'accord, espace ACOMPTE, plus de relance, l'autre devis NON_RETENU, ENVOYER_DEVIS
+fermée, historique ; action posée à la main gardée + tâche `accord`, second devis « accepté » sur dossier signé sans
+effet ; devis repris corrigé en « accepté » → Signé (une seule fois) ; route de la modale en formulaire (415 sans rien
+écrire, puis 201 et Signé ; JSON seul accepté) ; contrôle de cohérence → la correction signe, l'incohérence disparaît.
+Aucun test existant à adapter (les essais annoncés par le plan restent verts : le dossier « accepté » de
+`documents-existants.test` est déjà signé, la reprise ne signe pas). `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description du paramètre `statut` de
+`ajouter_fichier` changée : reconnecter le connecteur.
+
+Reste : B5-B13 (B10 : brancher `retenirDevis` dans le passage « Signé » de l'écran et dans `suivreAcompteDossier`) ;
+rien pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B5 — devis rendu visible : mis en ligne et annoncé (écart 5)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **La mise en ligne d'un bloc** (`devis-envoye.ts › mettreEnLigneDevis`, à la place de `devisRenduVisible`, retiré) :
+  un devis masqué (« Généré » ou « Envoyé ») rendu visible écrit, dans UNE transaction, la visibilité, l'événement
+  `DEVIS_ENVOYE` (`canal: "ESPACE"`, « Devis N : visible dans l'espace client ») qui date l'envoi, le passage Q, S,
+  Relance → Devis envoyé (« devis N rendu visible dans son espace »), puis le point d'entrée (nouveau canal `ESPACE` de
+  l'événement `DEVIS_ENVOYE` de `synchro.ts` : « Attendre l'accord » à la place de « Préparer / Envoyer le devis »,
+  action posée à la main gardée avec la tâche `devis` à la place, main écrite). Après : `suitesEvenementDossier` (lead,
+  Meta, agenda, tâches : ENVOYER_DEVIS se coche « mis en ligne »). Deux appelants : `presentation-devis.ts ›
+  modifierPresentationDevis` (interrupteur du bloc Espace, PATCH `…/documents/[documentId]`, outil `modifier` DOCUMENT)
+  et `documents-existants.ts › modifierDocumentExistant` (devis repris corrigé visible, désormais dans la transaction
+  de la correction).
+- **L'annonce** (`devis-envoye.ts › annoncerDevisEnLigne`, après la transaction) : l'automatisme existant « Devis
+  disponible » (`notifierClient`, clé `notif:DEVIS_DISPONIBLE:<devis>` : une fois par devis, masqué puis remis en ligne =
+  pas de second mail ; interrupteur du modèle gardé) pour un devis du CRM encore « Généré ». Aucun mail pour un devis
+  repris (fait ailleurs, déjà chez le client) ni pour un devis « Envoyé » (mail du CRM, Gmail). `modifierPresentationDevis`
+  rend `annonce` (`{ mail, raison }`) ; la route la renvoie (avec la phrase dans `avertissements`) ; l'écran dit « Devis en
+  ligne : le client est prévenu par mail », ou « Devis visible dans son espace. Aucun mail « Devis disponible » : … ».
+- **Relance comptée depuis la mise en ligne, et dite ainsi** : la référence lisait déjà le dernier `DEVIS_ENVOYE` (B2) ;
+  les textes datent maintenant l'envoi, plus l'émission (`relances/service.ts › dateDEnvoiDuDevis` : dernier envoi —
+  mail, Gmail, mise en ligne — sinon l'émission ; le dépôt n'est pas un envoi). `DevisARelancer` gagne `envoyeLe` et
+  `joursDepuisEnvoi` (`emisLe`, `joursDepuisEmission` gardés) : « envoyé il y a N jours » de la feuille Relances et de
+  `lister` RELANCES, « devis N envoyé le jj/mm » de la tâche RELANCER_DEVIS, « que je vous ai adressé le … » du mail de
+  relance n°1 et le résumé de sa proposition. `valableJusquau` ne bouge pas.
+- **Outil `modifier` DOCUMENT** : la note de l'aperçu dit que la relance compte depuis la mise en ligne et si le mail
+  « Devis disponible » partira (`peutNotifier`), ou pourquoi pas (devis fait ailleurs, déjà envoyé par mail, interrupteur,
+  adresse, espace) ; le résultat dit s'il est parti ; l'annulation partielle dit que le mail parti ne se reprend pas.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE` canal ESPACE, paragraphe B5, B5 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B5, DP48, ligne DOCUMENT).
+
+Décisions prises seul (solution la plus simple) :
+- La mise en ligne par Lucas vaut envoi même quand le mail ne peut pas partir (pas d'adresse, espace fermé, interrupteur
+  coupé) : c'est son geste explicite (mission 14, R1), il a pu prévenir le client autrement ; l'écran et l'outil disent
+  pourquoi aucun mail n'est parti. (La règle de B1, « pas annoncé = pas envoyé », reste celle de la génération.)
+- Pas de « Devis disponible » pour un devis repris ou déjà « Envoyé » : même raison que « un dépôt visible ne notifie
+  pas » et « le mail vaut notification » (aucun envoi en plus au client).
+- Remasqué puis remis en ligne : nouvel événement `DEVIS_ENVOYE` (la relance repart de la dernière mise en ligne), jamais
+  un second mail (clé par devis).
+- Le masquage garde son comportement (main relue, pas de retour d'étape) : c'est B6.
+- « adressé le » (relance n°1) prend la date d'envoi ; « devis du … » (relance n°2) garde la date du devis.
+
+Tests : 1 383 → 1 387 (`npm test` : 1 385 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/mise-en-ligne.test.ts` (4 essais, état
+des deux côtés, réseau coupé, rien ne sort du poste) : Simulation, devis masqué rendu visible → Devis envoyé, main au
+client, « Attendre l'accord », lead DEVIS_ENVOYE, espace DEVIS, ENVOYER_DEVIS cochée, historique (canal ESPACE,
+passage), un « Devis disponible » programmé vers `#devis`, relance datée de la mise en ligne et décalée avec elle,
+`envoyeLe`/`joursDepuisEnvoi`, « adressé le » de la date d'envoi, délai pas écoulé depuis la mise en ligne ; remasqué
+puis remis en ligne → pas de second mail ; action posée à la main gardée + tâche `devis`, interrupteur coupé → en ligne
+sans mail ; sans adresse → en ligne, raison dite ; devis repris masqué rendu visible par l'interrupteur et par la
+correction → en ligne d'un bloc, aucun mail, relance depuis la mise en ligne ; outil `modifier` DOCUMENT → l'aperçu
+annonce le mail, le résultat le dit, un seul mail. Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers
+touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune description changée :
+rien à reconnecter pour ce lot.
+
+Reste : B6-B13 (B13 : règle de cohérence de l'écart 5, un devis visible « Généré » sans `DEVIS_ENVOYE` ni annonce) ;
+rien pour Lucas.
+
+### Mission 18, B6 — devis annulé ou masqué sans autre devis actif (écart 6)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Le point d'entrée du retrait** (`devis-retire.ts › retirerDevis`, nouvel événement `DEVIS_RETIRE` de `synchro.ts`),
+  dans la transaction du geste : `documents.ts › annulerDevis` (désormais une transaction interactive, garde contre le
+  double clic), `presentation-devis.ts › modifierPresentationDevis` masqué (interrupteur, PATCH, outil `modifier`
+  DOCUMENT, annulation de « rendre visible ») et `documents-existants.ts › modifierDocumentExistant` (devis repris
+  corrigé masqué). S'il ne reste aucun autre devis en attente (visible « Généré », « Envoyé » ou « Non retenu », ou un
+  devis accepté) et que le dossier est en Devis envoyé ou Relance :
+  - retour RETOUR vers le `de` du dernier passage en « Devis envoyé » (Q ou S), sinon Simulation s'il y a une simulation
+    publiée ou choisie, sinon Qualification ; statut du lead (CONTACTE) écrit dans la transaction, changement marqué
+    synchronisé (`transitions.ts › marquerSynchronise`) ; pas de Meta ;
+  - main à Lucas « Devis N annulé (masqué) : refaire le devis » : le CHANGEMENT_ETAPE porte `devisRetire` et
+    `main.ts › passageDeMain` en fait un geste (aucun type d'événement nouveau) ;
+  - prochaine action « Refaire le devis » (`PROCHAINE_ACTION_REFAIRE_DEVIS`, date du jour), action posée à la main
+    gardée avec la tâche MANUELLE `devis-a-refaire` ; un nouveau devis la remplace (« Attendre l'accord » / « Envoyer
+    le devis au client » : `devisAPreparerOuAEnvoyer` la reconnaît) ;
+  - mails de relance EN_ATTENTE ou en ECHEC annulés (`relances/etape.ts › prefixeRelance`) : ceux du devis retiré, au
+    retour ceux de tous les devis du dossier ; les relances calculées s'arrêtent d'elles-mêmes ;
+  - tâche DEVIS « Refaire le devis · X » : `commercial/pilotage.ts` met ce motif en groupe DEVIS, le détecteur titre
+    « Refaire le devis » (raison « devis N annulé le jj/mm ») sur ce motif ou quand un devis annulé existe dans le
+    dossier ; cochée par le prochain devis visible.
+  Avec un autre devis en attente : rien ne recule, seuls ses mails de relance sont annulés, main relue.
+- **Écrans et outils** : la route d'annulation et le PATCH rendent la phrase du retour dans `avertissements`, les toasts
+  la montrent ; `annuler_document` l'annonce à l'aperçu et la dit au résultat ; note de `modifier` DOCUMENT au masquage,
+  annulation partielle de « rendre visible » réécrite.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_RETIRE`, paragraphe B6, B6 retiré du tableau 4), `docs/COHERENCE.md`,
+  `docs/MCP-COUVERTURE.md` (entrée B6, DP48, DP63).
+
+Décisions prises seul (solution la plus simple) :
+- Un devis « Non retenu » visible ou un devis accepté comptent comme en attente : le retour avant « Signé » les ferait
+  revivre (`appliquerChangementEtape`) ; dans ce cas l'étape ne bouge pas.
+- Devis annulé en Qualification ou Simulation (pas encore envoyé, B1) sans autre devis « Généré »/« Envoyé » : pas de
+  retour, mais « Envoyer le devis » / « Attendre l'accord » (ou vide) devient « Refaire le devis » ; la main suit la
+  règle (rien ne la force). Un masquage sans retour ne touche pas à la prochaine action.
+- Au retour, « Refaire le devis » remplace toute prochaine action automatique (tout ce qui concernait le devis est
+  dépassé) ; une action posée à la main reste toujours.
+- Les mails de relance déjà validés (VALIDEE) ne sont pas touchés : l'exécution relit la pertinence (B2).
+- La tâche « Refaire le devis » est la tâche DEVIS du détecteur (pas de type nouveau) ; elle est écartée, comme toutes,
+  par une action posée à la main en vigueur, d'où la tâche MANUELLE à côté.
+
+Tests : 1 387 → 1 394. Nouveau `src/lib/dossiers/devis-retire.test.ts` (7 essais, état des deux côtés, réseau coupé) :
+annulé en Devis envoyé → Simulation, main, « Refaire le devis », lead CONTACTE, espace hors DEVIS, relances arrêtées,
+mail de relance annulé, historique, rejoué refusé, nouveau devis qui repart et coche la tâche ; Relance → masqué →
+Qualification puis remis en ligne ; autre devis en attente (rien ne recule, relance de l'autre gardée, puis le dernier
+masqué → retour) ; action posée à la main gardée + une seule tâche ; devis pas encore envoyé annulé en Simulation ;
+devis repris masqué par la correction ; outil `annuler_document`. Adaptés (comportement voulu) : `mission-14-partie-1`
+(masqué/annulé : retour en Qualification, main « refaire le devis »), `mise-en-ligne` (remasqué → Simulation, remis →
+Devis envoyé), `mcp-relecture-c` (texte de l'annulation partielle, étape revenue). `devis-multiples` vert sans
+changement. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter.
+
+Reste : B7-B13 (B13 : règle de cohérence de l'écart 6 — devis envoyé sans devis en attente, « Attendre l'accord » sans
+devis) ; rien pour Lucas.
+
+### Mission 18, B0, B1, B2, B3, B4, B5, B6 — corrections de la relecture
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). Les 14 constats des trois relecteurs, et leur sort :
+1. **B6 pas commité** (important) — réglé hors de ce commit : B6 est commité (`6f0eeec`) ; relu de nouveau ici, rien à
+   reprendre sauf l'effet de la règle 2 (un devis visible pas encore envoyé compte comme « en attente » : l'étape ne
+   recule pas, la tâche « Envoyer le devis » reste).
+2. **Variante silencieuse tenue pour envoyée** (important, écart 1) — corrigé : `devis-envoye.ts › envoiALaGeneration`,
+   une variante `notifier: false` après Simulation est visible mais PAS envoyée (pas d'étape, tâche ENVOYER_DEVIS) ;
+   une variante en Relance ne repasse plus en Devis envoyé.
+3. **Statut du lead après la transaction** (important) — corrigé : `passerEnDevisEnvoye` (génération annoncée hors
+   `emettre`, mail, Gmail, dépôt, mise en ligne) et `emettre` écrivent le statut du lead dans la transaction et marquent
+   le changement synchronisé (main écrite par le point d'entrée) ; `emettre` passe ses suites par
+   `suitesEvenementDossier` (agenda, tâches). Essai : statut lu DANS la transaction.
+4. **En pause non signé par un devis « accepté »** (mineur, écart 4) — corrigé : en pause depuis Q, S, Devis envoyé ou
+   Relance → Signé (sortie de pause) ; perdu, ou en pause après la signature : rien (`devis-signe.ts ›
+   estSigneeParDevisAccepte`, `constants.ts › signeParDevisAccepte` pour la modale ; aperçu de `ajouter_fichier`).
+5. **Ancienneté des relances depuis l'émission** (mineur) — corrigé : `manager_operations` (`joursDepuis` depuis
+   l'envoi, `envoyeLe` ajouté) et le tri de `listerRelances`.
+6. **Suite `npm test` rouge (dates)** (mineur) — corrigé hors de ce commit (`49069e7`, `7765057`) ; le premier avait
+   cassé « dates dictées » de `assistant.test` (« mardi » dit le mardi à l'heure visée tombait la semaine suivante) :
+   `agenda.ts`, `<` au lieu de `<=` (à l'heure même : aujourd'hui). Suite verte.
+7. **« Rappeler » d'un appel noté écrasé** (important) — corrigé : `prochaine-action-auto.ts › estRappelAVenir`, un
+   « Rappeler… » daté d'aujourd'hui ou plus tard est gardé comme une action posée à la main (tâche à la place, raison
+   « ton rappel « Rappeler » du jj/mm est gardé », agenda intact) ; passé d'un jour ou sans date, il ne tient plus.
+   Choisi plutôt que de marquer les appels « manuels » : la vigueur et la main n'en sont pas changées.
+8. **Case « visible » sans avertissement** (mineur) — corrigé : le libellé d'un devis du CRM « Généré » masqué dit que
+   le rendre visible l'envoie, et l'écran demande confirmation (`window.confirm`, l'adresse du dossier) avant.
+9. **`pertinente` avant la trace du mail** (mineur) et 12. **relecture pour tous les types FILE** (mineur) — corrigés
+   ensemble : nouveau `dejaExecutee` des définitions (ENVOI_MAIL : trace `MAIL_ENVOYE` de la proposition ; ENVOI_SMS :
+   SMS de clé `proposition:<id>`) ; un message déjà parti n'est plus relu, la proposition est notée EXÉCUTÉE, jamais
+   « sans objet ». La relecture reste pour tous les types avant le départ (B6 compte dessus pour les relances validées).
+10. **Deux règles de l'envoi** (important) — corrigé : une seule (`devis-envoye.ts › annonceAboutit`) pour la
+    génération et la mise en ligne. Un devis du CRM jamais parti (`devisDejaParti` : ni « Envoyé », ni repris, ni déjà
+    mis en ligne) rendu visible sans espace ouvert, ou sans adresse avec le modèle actif, est visible SANS être envoyé
+    (`rendreVisibleSansEnvoi` : note, main relue, ni étape ni relance, ENVOYER_DEVIS reste) ; l'écran, le PATCH et
+    l'outil le disent (`nonEnvoye`). Interrupteur coupé et espace ouvert : envoyé (décision 7).
+11. **Relances sur un devis pas envoyé** (important) — corrigé : `chargerDossiersARelancer` écarte les devis de
+    `devisAEnvoyer`, `sms/copie.ts › devisARelancer` les refuse.
+13. **`ajouter_fichier` piece_mail sans montant** (mineur) — corrigé : avec le numéro, la pièce d'un mail parti de Gmail
+    passe par `deposerDocument` (montant exigé seulement sans devis du CRM, comme l'écran) ; l'outil la tient pour
+    sensible (aperçu, confirmation).
+14. **Tâche « Attendre … » rangée pour Lucas** (mineur) — corrigé : `tache: false` pour SIMULATION_PUBLIEE et les
+    « Attendre l'accord » (DEVIS_GENERE envoyé, DEVIS_DEPOSE, DEVIS_ENVOYE) ; les gestes du client gardent leur tâche.
+
+Décisions prises seul (solution la plus simple) :
+- Pas de bouton « Annoncer » pour un devis visible pas encore envoyé : il s'envoie par mail (`envoyer_document`, bouton
+  du dossier), ou se remasque puis se remet en ligne une fois l'espace ouvert et l'adresse connue.
+- Pas de numéro deviné du nom du fichier dans `ajouter_fichier` : l'aperçu ne le verrait pas (étape changée sans
+  confirmation) ; le numéro reste à donner.
+- Le statut du lead des autres changements écrits par `appliquerChangementEtape` (facture, relance, paiements) reste
+  après la transaction : B12.
+
+Tests : 1 397 → 1 406. Nouveau `src/lib/dossiers/relecture-b.test.ts` (7 essais, état des deux côtés, réseau coupé :
+variante silencieuse en Relance, relances mail et SMS ; espace fermé puis rouvert ; lead dans la transaction ; en pause
+→ Signé, et pas après la signature ; rappel gardé puis échu ; attente sans tâche ; ancienneté depuis la mise en ligne),
+plus un essai dans `envoyer-par-mail.test.ts` (coupure puis devis annulé : EXÉCUTÉE, rien ne repart) et un dans
+`devis-gmail.test.ts` (pièce du mail sans montant). Adaptés (comportement voulu) : `generer-envoyer` (règle),
+`mise-en-ligne` (sans adresse : pas envoyé ; pas de tâche « Attendre »), `synchro` (pas de tâche « Attendre »),
+`devis-retire` (seconde variante annoncée), `mcp-v3` (texte de la variante silencieuse), `mission-14-partie-1` (le
+dossier reçoit une adresse avant la mise en ligne). Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description changée : rien à reconnecter.
+
+Reste : B7-B13 ; rien pour Lucas.
+
+### Mission 18, B9 — « Publier » depuis le bloc Espace (écart 9)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). B7 et B8 n'ont rien laissé dans la copie de travail
+(agents morts avant d'écrire) : B9 part de `7c1d8a2`, B7 et B8 restent à faire.
+- **Publier depuis le bloc Espace = le bouton « Publier ».** `simulations/dossier.ts › publierDansLEspace`, une
+  fonction pour les deux : statut, événement `ESPACE_SIMULATION_DEPOSEE` (« republiée » pour une simulation masquée
+  remise), point d'entrée SIMULATION_PUBLIEE dans UNE transaction ; puis les suites (agenda, tâches) et le mail
+  automatique, même clé qu'avant (jamais deux mails pour la même simulation). `changerStatutSimulation(…, "afficher")`
+  (interrupteur du bloc, PATCH `…/simulations/[sid]`, outil `publier` `reafficher`) y passe ; le SMS reste au bouton.
+  Avant : ni étape, ni prochaine action, ni agenda, et la main seulement à la première publication.
+- **Retirer une simulation choisie annule le choix.** Masquer, repasser en brouillon ou retirer une simulation du choix
+  (la validée en mode UNE, ou celle de n'importe quelle zone d'un mélange : `validations.ts › simulationDansLeChoix`,
+  en plus de `choisieLe`) dévalide le choix dans la MÊME transaction que le geste
+  (`validations.ts › devaliderChoixDansTransaction`, extrait de `devaliderChoix`, raison dans l'historique : « (simulation
+  masquée : titre) »). L'ancien retrait `espace/service.ts › retirerSimulation` (POST `…/espace/simulations/[sid]`)
+  passe par `changerStatutSimulation(…, "retirer")` : il dévalide aussi (avant : archivait sans rien dire).
+- **Qualification → Simulation porté par le point d'entrée.** `synchro.ts › raisonDuPassageEnSimulation` +
+  `passerEnSimulation` : changement AUTOMATIQUE avec sa raison, statut du lead dans la transaction, marqué synchronisé,
+  main écrite après par le point d'entrée. Événements : SIMULATION_PUBLIEE, CHOIX_VALIDE (`choisir`), PROJET_VALIDE
+  (`validerProjet` : n'appelle plus `deplacerDossier` après coup ; la raison « projet validé dans l'espace client » est
+  gardée, définie dans `synchro.ts` et réexportée par `validations.ts`, `devaliderProjet` et la cohérence la relisent),
+  et le nouvel événement SIMULATION_DU_CLIENT : simulation créée par le client dans son espace
+  (`preparation.ts › publierSimulationDuClient`, PUBLIEE seulement — gardée en brouillon pour relecture, elle suivra sa
+  publication par Lucas) ou faite sur le site et rangée dans son espace (`synchroniserSimulationsSite` : décision du
+  plan, la lecture qui écrit reste mais émet l'événement ; lectures avant la transaction, créations et point d'entrée
+  dedans).
+- `docs/SYNCHRO.md` : lignes PROJET_VALIDE, CHOIX_VALIDE, CHOIX_DEVALIDE, SIMULATION_PUBLIEE mises à jour, ligne
+  SIMULATION_DU_CLIENT ajoutée, B9 retiré du tableau 4, paragraphe « Publier depuis le bloc Espace (B9) ».
+  `docs/MCP-COUVERTURE.md` : DP44, DP45.
+
+Décisions prises seul (solution la plus simple) :
+- Republier une simulation masquée refait tout ce que fait une publication (événement, « Attendre le retour du client
+  sur la simulation », main au client) ; seul le mail ne repart pas (même clé).
+- Masquer la dernière simulation publiée ne fait PAS revenir le dossier en Qualification (rien ne le demande ; le
+  retour du projet dévalidé garde sa règle).
+- Un mélange dont une zone disparaît est dévalidé en entier (pas de choix partiel).
+- Le passage en Simulation est AUTOMATIQUE avec raison, plus le changement « avancé » de `changerEtape` qu'utilisait
+  `publierSimulations` : texte « Qualification → Simulation : simulation publiée dans son espace ».
+
+Tests : 1 406 → 1 413. Nouveau `src/lib/dossiers/publier-espace.test.ts` (7 essais, état des deux côtés, réseau coupé :
+bloc Espace contre bouton, même état ; masquée puis republiée, un seul mail et un seul passage ; action posée à la main
+gardée sans tâche ; choix UNE masqué ; mélange dont une zone est retirée par l'ancien retrait ; `simulationDansLeChoix` ;
+simulation du site rangée à la lecture → Simulation, lead CONTACTE, rejouée sans effet ; choix validé sur un dossier
+revenu en Qualification). `mission-15-partie-5` complété (simulation du client publiée → Simulation, main au client ;
+gardée en brouillon → Qualification ; publiée par Lucas → Simulation). Aucun essai existant cassé
+(`espace.test`, `mcp-gestes` verts sans changement). Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description d'outil changée : rien à reconnecter.
+
+Reste : B7, B8 (agents morts), B10-B13 ; rien pour Lucas.
+
+### Mission 18, B10 — paiement par carte (Stripe), variantes retenues, « Mes documents » (écart 10)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché : `EtapePaiement.tsx` appelait déjà `/paiement-carte`
+avec `?projet=` et suit `paiementCarte`). La copie de travail n'avait aucun reste d'un agent précédent sur ce lot.
+- **`src/lib/paiement/stripe.ts`** (aucune dépendance npm) : `stripeActif()` exige `STRIPE_SECRET_KEY` ET
+  `STRIPE_WEBHOOK_SECRET` ; `corpsSession` (pure) et `creerSessionCheckout` (`fetch` REST, `Idempotency-Key`, 10 s) :
+  `mode=payment`, `locale=fr`, montant en centimes, `metadata` (dossier, espace, nature, document) recopiées sur le
+  paiement, retour `lienPourLeProjet()#paiement`, expiration 60 min, AUCUN `payment_method_types` (Klarna, Alma
+  s'activent dans le tableau de bord Stripe, sans code) ; `verifierSignatureStripe` (pure : `t` + `v1` multiples,
+  HMAC-SHA256 de `t.corps brut`, temps constant, 300 s, refus sans secret), `signerCommeStripe` (essais) ;
+  `lireSessionPayee` (pure : `checkout.session.completed` payée ou `async_payment_succeeded`, euros seulement).
+- **`src/lib/paiement/carte.ts`** : `aReglerParCarte` (le serveur seul : acompte du devis signé moins le reçu, sinon,
+  chantier Facturé ou Encaissé, `faitsPaiements().resteCentimes` des factures) ; `preparerPaiementCarte` (409
+  `carte-fermee`, `rien-a-regler`, `lien-revoque`) ; `enregistrerPaiementStripe` : sous `EXTERNE:stripe`,
+  `enregistrerEncaissement` (moyen CARTE, origine STRIPE — type élargi —, `cleReprise: stripe:<session>`, référence
+  `pi_…`, imputation sur le devis de la session s'il est en vigueur, sinon automatique), rejeu → DEJA (lecture de la clé,
+  puis P2002), dossier inconnu → ignoré et journalisé ; puis alerte « Paiement par carte reçu » à Lucas (`prevenir`).
+- **Routes** : branche `POST /api/espace/<jeton>/paiement-carte` (avant `projetDe(acces, true)` : un projet facturé paie
+  son solde ; aperçu 403 ; 10 essais par IP) ; webhook `src/app/api/webhook/stripe/route.ts` (corps brut, 401 / 503
+  sans secret, 400 corps illisible, 200 pour l'ignoré et le rejeu, 500 si l'écriture échoue : Stripe rejoue) ; entrée
+  dans `routes-publiques.ts`. `service.ts` : `paiementCarte: stripeActif()`.
+- **Point d'entrée `PAIEMENT_RECU`** (synchro.ts) : `enregistrerEncaissement` (écran, `saisir_encaissement`, Stripe)
+  écrit encaissement, étape, statut du lead (changement marqué synchronisé), prochaine action et main dans UNE
+  transaction ; après : effets du changement (Meta, « projet terminé », agenda), tâches, puis le mail « paiement reçu »
+  existant. Signé par l'acompte : « Appeler le client : fixer la date du chantier (acompte reçu) »
+  (`PROCHAINE_ACTION_ACOMPTE_RECU`, tâche `acompte-recu` niveau 1 sous une action posée à la main) ; autre paiement :
+  efface seulement « réclamer un nouveau paiement ».
+- **Variantes retenues** : `retenirDevis` déplacé dans `dossiers/devis-retenu.ts` (réexporté par `devis-signe.ts`, pour
+  éviter l'import circulaire avec les transitions) ; `suivreAcompteDossier(…, devisId?)` signe sur le devis que règle
+  l'acompte (`devisDesAcomptes` : imputations du paiement, à défaut celles du dossier, puis le plus récent), les autres
+  NON_RETENU, raison « acompte encaissé ; non retenu : … » (le recul relit le préfixe) ; `changerEtapeDansTransaction`
+  (écran, `changer_etape`, paiement à la signature) au passage « Signé » ; correction `PAIEMENT_AVANT_SIGNATURE` /
+  `ACCORD_SANS_SIGNATURE` d'un bloc (devis des acomptes ou de l'accord). `piecesDuDossier` : un devis n'est actif
+  qu'émis, envoyé ou accepté (`DEVIS_EN_VIGUEUR`) : l'imputation automatique ne vise plus un non retenu ou annulé.
+- **« Mes documents »** (`compte.ts › statutFacture`, pure) : Annulée, puis d'après le registre « Réglée » / « Reste X € »
+  / « À régler », repli sur l'étape ENCAISSE pour une facture reprise sans ligne au registre (corrige « Réglée » pour
+  une facture annulée d'un dossier encaissé).
+- Docs : `SYNCHRO.md` (ligne `PAIEMENT_RECU`, paragraphe B10, B10 retiré du tableau 4), `MCP-COUVERTURE.md` (entrée
+  B10), `COHERENCE.md` (deux corrections), `ARCHITECTURE-PILOTAGE.md` (paiement par carte fait).
+
+Décisions prises seul (solution la plus simple) :
+- Le paiement par carte ne s'ouvre qu'après l'accord (onglet Paiement du site) : acompte seulement si un accord existe.
+- Klarna et Alma restent enregistrés en « CARTE » (pas d'appel supplémentaire pour lire le moyen exact).
+- Clé d'idempotence par dossier, nature, montant, nombre de paiements valides et fenêtre de 10 minutes : un double
+  clic rend la même session, une session abandonnée n'est pas resservie expirée.
+- `changerEtapeAvecPaiement` (signature avec acompte à l'écran) garde son chemin : il retient désormais les variantes
+  (par `changerEtapeDansTransaction`) mais n'émet pas `PAIEMENT_RECU` (la prochaine action reste celle de l'écran).
+- Pas de trace dans l'historique à l'ouverture de la page de paiement : seul le paiement reçu compte.
+
+Tests : 1 413 → 1 426 (`npm test` : 1 426 verts). Nouveau `src/lib/paiement/paiement-carte.test.ts` (13 essais, état
+des deux côtés, Stripe simulé, rien hors du poste) : signature (valide, mal signée, corps modifié, trop ancienne, secret
+ou en-tête absents, rotation) ; lecture des événements ; corps de session (pas de moyen imposé) ; bouton masqué avec la
+clé seule, 409 avant l'accord, aperçu 403, montant du serveur, retour `#paiement` ; webhook refusé sans rien écrire,
+puis encaissé (CARTE, STRIPE, imputé sur le devis, espace CHANTIER, un mail), rejoué sans effet ; moyen différé ;
+acompte Stripe sur la variante B d'un devis envoyé (Signé, A non retenu, lead SIGNE, prochaine action, main relue, plus
+de relance) puis annulé (retour, A et B au choix) ; action posée à la main gardée avec la tâche ; « Signé » à l'écran
+sur B ; correction de cohérence ; `statutFacture` ; solde par carte d'un chantier facturé → Encaissé, facture « Réglée ».
+Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP
+inchangée (`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter.
+
+Reste à Lucas : poser `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sur Railway ; déclarer le webhook
+`https://<crm>/api/webhook/stripe` (événements `checkout.session.completed` et `checkout.session.async_payment_succeeded`) ;
+activer Klarna et Alma dans Stripe s'il le souhaite ; laisser les reçus automatiques de Stripe DÉSACTIVÉS (sinon un
+second mail au client) ; frais Stripe à saisir en dépense ; remboursement ou litige : annuler l'encaissement à la main.
+Reste de la partie B : B7, B8, B11-B13.
+
+### Mission 18, B11 — états en double : lectures du devis, teintes (écart 11)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Lectures du devis : le devis seul.** `espace/service.ts › noterConsultationDevis` n'écrit plus la copie de l'espace
+  (`EspaceClient.devisConsultations`, `devisConsulteId`, `devisConsulteLe` : colonnes gardées, plus aucun lecteur) ;
+  une première lecture (après une remise à zéro comprise) ouvre une nouvelle ligne `ESPACE_DEVIS_CONSULTE` au lieu de
+  réécrire l'ancienne. `assistant/analyses/commercial.ts › devisEnAttente` (`manager_commercial`) lit
+  `Document.consultations` de chaque devis (avant : la copie de l'espace, seul le dernier devis lu comptait).
+  « Réinitialiser » l'étape Devis (`vue-crm.ts › gesteDeLucas`, écran et `geste_espace`) remet à zéro, dans une
+  transaction, `consultations` et `consulteLe` de chaque devis du dossier (le déclencheur d'immuabilité les autorise),
+  l'ancienne copie de l'espace et écrit sa ligne d'historique (`devisRemisAZero`) : le signal « relu sans signer » tombe,
+  la lecture suivante repart de 1 et sonne de nouveau.
+- **Teintes.** Nouveau `src/lib/espace/teintes-choix.ts` : `lireChoixEspace` (lecture unique du choix), `teinteDe`
+  (déplacé de `devis-propose.ts`), `teintesParSousPartie` (pure : sous-parties cochées, sinon celles des surfaces,
+  comme le devis proposé ; une sous-partie à deux zones les nomme toutes deux, 80 caractères), `zonesDuChoix`,
+  `reporterTeintesDuChoix(tx, …, { remplacer })`. `choisir` (client, Lucas, `geste_espace` VALIDER_SIMULATION) reporte
+  dans la transaction du choix les teintes sur les sous-parties qu'elles habillent ; les autres clés restent.
+  `devaliderChoix` ne touche pas aux teintes. `suivi.ts` lit le choix comme `service.ts` (`choixLe` ET choix lisible).
+- **Migration `etats-en-double-18`** (en fin de liste) : lectures, le devis prend le plus grand des deux compteurs
+  (jamais abaissé) ; teintes d'un choix déjà validé, seulement pour les sous-parties sans teinte (rien de Lucas remplacé).
+- Docs : `SYNCHRO.md` (ligne CHOIX_VALIDE, paragraphe B11, B11 retiré du tableau 4), `MCP-COUVERTURE.md` (entrée B11).
+
+Décisions prises seul (solution la plus simple) :
+- Un choix validé REMPLACE la teinte des sous-parties qu'il habille, même notée par Lucas avant (le choix est plus
+  récent) ; une sous-partie dont le choix ne couvre qu'une zone (l'îlot avec le plan seul) prend la teinte de cette zone.
+- La migration s'appelle `etats-en-double-18` (et non `consultations-devis-18` du plan) : elle reprend aussi les teintes.
+  Sur la base, la copie de l'espace n'a jamais dépassé le devis depuis la mission 13 : la partie lectures ne devrait
+  rien trouver.
+- La remise à zéro vise tous les devis émis du dossier (l'étape Devis entière), pas seulement le dernier lu.
+
+Constaté, laissé (règle voulue de `main.ts`, pas de ce lot) : quand Lucas valide une simulation à la place du client,
+la main reste au client alors que la prochaine action est « Préparer le devis (simulation choisie) » ; à trancher en
+B13 si besoin.
+
+Tests : 1 426 → 1 433 (`npm test` : 1 433 verts). Nouveau `src/lib/espace/etats-en-double.test.ts` (7 essais, état des
+deux côtés, réseau coupé) : lu deux fois → compté sur le devis seul, `manager_commercial` (par l'exécuteur MCP) et la
+vue CRM le lisent, tâche « relu 2 fois sans signer » ; REINITIALISER DEVIS par `geste_espace` (aperçu, rien sans
+jeton, puis le geste) → compteur à zéro, dossier et espace comme avant la lecture, tâche tombée, lecture suivante = 1
+et nouvelle ligne d'historique ; migration des lectures ; choix du client (projet coché, îlot = façades basses + plan,
+crédence gardée, teinte de Lucas remplacée), dévalidé (teintes gardées), mélange ensuite ; validé par Lucas (rien de
+coché : surfaces) ; choix illisible lu pareil des deux côtés ; fonctions pures ; migration des teintes. Adaptés en
+gardant leur intention : `mission-13-lot-5` (l'espace n'a plus de copie : `[null, 0]`), `espace-v2` (compte lu sur le
+devis), `mission-17-partie-a` (sa migration n'est plus la dernière : après celles de la mission 15). `tsc`, `eslint`
+sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description changée : rien à reconnecter.
+
+Reste de la partie B : B7, B8 (agents morts), B12, B13.
+
+### Mission 18, B13 — cohérence : les écarts de la partie B, d'un clic
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Huit règles nouvelles** dans `coherence/controle.ts` (codes dans `CODES_INCOHERENCE`, tableau constant d'où vient le
+  type) :
+  - `DEVIS_ENVOYE_SANS_ENVOI` (écart 1) : Devis envoyé ou Relance, des devis, mais aucun n'a atteint le client (ni
+    repris, ni « Envoyé »/accepté/non retenu, ni `DEVIS_ENVOYE`, ni `DEVIS_GENERE` marqué `envoye: true`, ni « Devis
+    disponible » programmé ou parti, ni mail en cours d'envoi) et aucun visible dans un espace ouvert → retour d'avant
+    le devis (RETOUR, `etapeAvantLeDevis` de B6), « Envoyer le devis au client » ;
+  - `DEVIS_ENVOYE_SANS_DEVIS_ACTIF` (écart 6) : Devis envoyé ou Relance sans aucun devis émis, envoyé, non retenu ni
+    accepté → retour, main « Devis N annulé : refaire le devis » (quand un devis annulé existe : `devisRetire`),
+    « Refaire le devis » ;
+  - `DEVIS_VISIBLE_NON_NOTIFIE` (écart 5) : visible dans un espace ouvert, jamais annoncé → mise en ligne datée
+    d'aujourd'hui (`mettreEnLigneDevis` de B5 : relances depuis, Relance → Devis envoyé) puis « Devis disponible »
+    (`annoncerDevisEnLigne`, une fois par devis) ; interrupteur coupé : rien à signaler (décision 7) ; sans adresse ou
+    annonce en échec : correction à la main ;
+  - `DEVIS_GMAIL_NON_ENREGISTRE` (écart 3) : `devisGmailNonEnregistres` de B3, clé par pièce ; correction =
+    `enregistrerDevisGmail` (la fonction de la tâche) quand le devis du CRM ou le registre donne le montant, sinon à la
+    main (la tâche) ; écarté du détecteur COHERENCE (`CODES_ECARTES`) : la tâche ENREGISTRER_DEVIS existe déjà ;
+  - `AVENANT_NON_PROPOSE` (écart 7) : Signé → Facturé, devis « Généré » émis après l'accepté, ni mail en cours, ni
+    « à envoyer » (B1, qui a sa tâche) → `envoyerDocumentParMail` avec le texte type (`brouillonEnvoiDocument`, le
+    bouton « Envoyer par mail ») ; sans adresse : à la main ;
+  - `ATTENTE_ACCORD_SANS_DEVIS` : « Attendre l'accord… » (pas posée à la main) sans devis émis ou envoyé → effacée ;
+  - `DATE_CHANTIER_EN_SIGNE` : Signé avec une date de chantier → Planifié (AUTOMATIQUE, lead CHANTIER_PLANIFIE dans la
+    transaction), « … fixer la date du chantier … » effacée ;
+  - `ESPACE_ACTIF_DOSSIER_CLOS` (remplace `ESPACE_ACTIF_DOSSIER_ARCHIVE`, qui ne voyait que les archivés sans espace
+    permanent) : projet d'un dossier archivé resté ouvert (fermé comme l'archivage), ou lien actif alors que TOUS les
+    projets de l'espace sont perdus ou archivés (`desactiverLien`, rien n'est effacé). Sujet de la tâche : le lead.
+- **Point d'entrée** : nouvel événement `CORRECTION_COHERENCE { code }` (`synchro.ts`) pour les écarts 1 et 6,
+  « Attendre l'accord » et la date du chantier (prochaine action ; une action posée à la main n'est jamais écrasée :
+  tâche `devis-a-refaire` / `devis-a-envoyer` à côté). Écarts 5 et 3 : `DEVIS_ENVOYE` (canaux ESPACE, GMAIL) par leurs
+  fonctions ; écart 7 : l'envoi par mail de B2.
+- **`appliquerCorrection(incoherence)`** extraite (la correction d'une incohérence déjà lue, sans rejouer le contrôle ;
+  chacune relit ce qu'elle touche et refuse en 409 si le dossier a bougé) ; `corrigerIncoherence` rejoue puis l'appelle.
+  **`controlerCoherence({ etendu: true })`** lit aussi perdus et archivés (`AVEC_ARCHIVES`) : statut du lead, doublons
+  et main jamais sur un archivé ; un perdu n'impose « PERDU » au lead que sans autre dossier vivant ; règles des devis
+  sur les dossiers vivants seulement. Prêts pour la mise en route.
+- **`COHERENCE_CORRIGEE` pour tous les codes** (helper `tracer`, dans la transaction quand il y en a une).
+- **Sensibles** : `CORRECTIONS_SENSIBLES` vit maintenant dans `controle.ts` (gestes.ts l'importe) = toutes les
+  corrections qui changent l'étape (`CORRECTIONS_QUI_CHANGENT_L_ETAPE`, figée par un essai) + `SIGNE_SANS_DEVIS_ACCEPTE`
+  + `AVENANT_NON_PROPOSE` (mail). `devis-retire.ts › annulerRelancesEnAttente` extraite de `retirerDevis` (même code).
+- Docs : `COHERENCE.md` § 5 (tous les codes, colonne « S », les 4 qui manquaient), `SYNCHRO.md` (ligne
+  `CORRECTION_COHERENCE`, paragraphe B13, B13 retiré du tableau 4, § 5), `MCP-COUVERTURE.md` (entrée B13, ligne
+  CORRIGER_INCOHERENCE).
+
+Décisions prises seul (solution la plus simple) :
+- Écart 7 « en un clic » = l'envoyer par mail (texte type), seule façon de le proposer tant que le site ne montre pas
+  les avenants (B7, pas fait) ; quand B7 sera là, la règle devra tenir « visible dans un espace ouvert » pour proposé.
+- Écart 3 en un clic seulement si tout est connu (devis du CRM ou montant du registre), sinon la tâche de B3.
+- `PROJET_VALIDE_INCOMPLET` devient sensible : dévalider peut faire revenir Simulation → Qualification (le trou que le
+  plan signalait). `SIMULATIONS_HORS_DOSSIER` ne change pas l'étape lui-même (le rangement dans l'espace se fait à la
+  lecture) : non sensible.
+- Un projet perdu dans un espace qui a d'autres projets vivants n'est PAS une incohérence (« non réalisé », par
+  conception) ; un espace dont un projet est encaissé garde son lien (révocation à 90 jours). Pour un perdu, seul le
+  lien du client est coupé (le projet reste, il réapparaît si le lien est régénéré) ; un archivé ferme aussi son projet.
+- Ancienne tâche « Corriger » d'un `ESPACE_ACTIF_DOSSIER_ARCHIVE` : cochée « incohérence corrigée » au passage suivant,
+  la nouvelle clé la remplace.
+- Une proposition d'envoi par mail validée et pas encore exécutée vaut « parti » (pas d'écart 1 ou 5 pendant l'envoi).
+- Constaté en B11, laissé : la main reste au client quand Lucas valide une simulation à sa place (règle voulue de
+  `main.ts`, aucune règle de cohérence ne la contredit).
+
+Tests : 1 433 → 1 443 (`npm test` : 1 443 verts). Nouveau `src/lib/coherence/coherence-b13.test.ts` (10 essais, état des deux
+côtés, réseau coupé, rien hors du poste) : écart 6 (retour en Simulation, main « refaire », « Refaire le devis », lead
+CONTACTE, espace hors DEVIS, relances arrêtées et mail de relance annulé, tâche DEVIS « Refaire le devis », trace,
+corrigé une seule fois) ; écart 1 (action posée à la main gardée, tâche « Envoyer le devis au client » à côté) ; écart 5
+(un seul « Devis disponible », Devis envoyé, « Attendre l'accord », espace DEVIS, relance repartie d'aujourd'hui ;
+interrupteur coupé : rien ; sans adresse : à la main) ; écart 3 (un clic : Devis envoyé, tâches ENREGISTRER_DEVIS et
+ENVOYER_DEVIS cochées, aucun mail, pas de seconde tâche « Corriger » ; sans montant : à la main) ; écart 7 (proposition
+d'envoi validée, étape et espace inchangés, variante silencieuse gardée à sa tâche) ; « Attendre l'accord » sans devis
+(effacée ; posée à la main : jamais signalée) ; date du chantier (Planifié, lead, espace CHANTIER) ; espaces clos (perdu
+seul : lien coupé, projet gardé, aucun envoi ; perdu à côté d'un vivant : rien ; archivé : projet et lien) ; contrôle
+étendu + `appliquerCorrection` ; liste figée des corrections qui changent l'étape, toutes sensibles, chaque code dans
+`COHERENCE.md`. Aucun test existant à adapter (`coherence.test`, `mission-14-partie-1`, `migrations/mission-13`,
+`systeme.test`, `main.test` verts sans changement). `tsc`, `eslint` sur les fichiers touchés, `npm run build` :
+propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description de `agir_systeme` changée : reconnecter le
+connecteur.
+
+Reste : B7, B8, B12 (agents morts), puis la mise en route (migration `mise-en-route-18` : `controlerCoherence({ etendu:
+true })` une fois, `appliquerCorrection` pour les codes hors `CORRECTIONS_SENSIBLES`, tâches pour le reste) ; rien pour
+Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, MR — mise en route : contrôle étendu, réparations sûres, le reste en tâches
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Migration `mise-en-route-18`** (`src/lib/base/migrations/mission-18-mise-en-route.ts`, dernière de
+  `MIGRATIONS_DONNEES`, après `etats-en-double-18`). Elle tournera au démarrage qui suit le push de `main`, après la
+  sauvegarde automatique d'avant migration (`executerMigrationsDonnees`). Base vide : rien. Sinon : UN
+  `controlerCoherence({ etendu: true })` (perdus et archivés compris) ; `appliquerCorrection` (la fonction du bouton
+  « Corriger », sans rejouer le contrôle) pour chaque code qui a une correction hors `CORRECTIONS_SENSIBLES` ; le reste
+  au détecteur COHERENCE s'il le voit (un contrôle ordinaire le dit), sinon (dossier perdu ou archivé) une tâche à moi
+  `MANUELLE:coherence-18-<clé>`, lot « coherence-18 », constat + correction proposée « à décider : jamais appliquée
+  d'office » (P2002 ignoré) ; puis `invaliderCoherence` et signal des tâches. Ne lève jamais (échec compté, le démarrage
+  continue).
+- **Lisible après le déploiement** : journal de démarrage (`[migration mise-en-route-18] N dossiers contrôlés (perdus et
+  archivés compris) : … écarts trouvés, … réparés, … tâches à moi, … au détecteur, … échec`, puis une ligne par règle ;
+  clients en initiales) et `etat_crm` SANTE (nouvelle ligne « Dernières migrations » : les trois dernières ; pour
+  celle-ci, par règle « CODE n trouvés, m réparés, k en tâche, j au détecteur » ; `lecture.ts › texteMigration`).
+  Résumé en base : `dossiersControles`, `trouves`, `repares`, `taches`, `detecteur`, `echecs`, et `<compteur>.<CODE>`
+  non nuls.
+- Docs : `SYNCHRO.md` § 7 (nouveau), `COHERENCE.md` § 5 (paragraphe), `MCP-COUVERTURE.md` (entrée mise en route).
+
+Décisions prises seul (solution la plus simple) :
+- Réparations appliquées d'office = les codes non sensibles qui ont une correction (`ATTENTE_ACCORD_SANS_DEVIS`,
+  `ESPACE_ACTIF_DOSSIER_CLOS`, `STATUT_DU_LEAD`, `MAIN_DECALEE`, `PROCHAINE_ACTION_PERIMEE`, `CHOIX_SANS_SIMULATION`,
+  `PROJETS_AU_DELA_DE_LA_LIMITE`). Aucune ne change l'étape : la consigne « nature REPRISE quand une étape bouge » n'a
+  donc pas à jouer (aucune correction sensible n'est appliquée, aucune conversion Meta ne peut partir).
+- `SIMULATIONS_HORS_DOSSIER` n'est pas appliqué par la migration : le filet des 15 minutes (`rattraperSimulationsSansDossier`)
+  fait la même chose et range aussi dans l'espace (avec une alerte à Lucas et un miroir Drive : pas au démarrage).
+- « Le reste » sur un dossier vivant n'écrit rien (le détecteur le remonte en « Corriger · Nom ») ; « vu du détecteur »
+  se décide par un second contrôle, ordinaire, après les réparations (et non par une liste de codes, fragile).
+- Tâches de la mise en route : sujet DOSSIER, raccourci « Ouvrir le dossier », niveau 5 ; une tâche MANUELLE ne se
+  coche jamais par absence (Lucas y répond ou « Tout classer » le lot).
+- SANTE : la ligne « Dernières migrations » est ajoutée sans changer ni paramètre ni description : empreinte inchangée.
+
+Tests : 1 443 → 1 446 (`npm test` : 1 446 verts). Nouveau `src/lib/base/mission-18-mise-en-route.test.ts` (3 essais,
+réseau coupé, Meta « configuré » avec des valeurs factices pendant la migration) : base vide (passée au démarrage,
+résumé à zéro, dernière de la liste, après `etats-en-double-18`, aucune tâche) ; un cas par règle — « Attendre
+l'accord » sans devis effacée (et posée à la main : gardée, jamais signalée), prochaine action périmée effacée, main
+décalée remise « à moi » (message du client sans réponse), choix d'une simulation invisible dévalidé (espace revenu
+aux photos), Signé avec date de chantier laissé (sensible) et remonté par le détecteur avec le lead aligné « SIGNE »,
+perdu (lead PERDU, lien coupé, projet gardé), archivé en « Signé » sans devis accepté (projet et lien fermés, devis
+intact, tâche à moi en lot, pas cochée par une passe) — avec le résumé exact, aucun CHANGEMENT_ETAPE, aucun mail,
+aucune conversion Meta mise en file, une trace COHERENCE_CORRIGEE par réparation, état des deux côtés ; rejouée : 0
+réparation, 0 tâche ; ligne SANTE lue par l'outil ; texte d'une migration, initiales, codes laissés au filet. Aucun
+test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée
+(`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter pour ce lot.
+
+Reste : B7, B8, B12 (agents morts). En production : avant de déployer, lire « [sauvegarde] Volume » (volume plein =
+CRM qui ne démarre pas) ; après, lire la ligne de la migration au journal ou `etat_crm` SANTE, puis le lot
+« coherence-18 » dans Tâches.
+
+### Mission 18, B7 — avenant ou nouveau devis sur un dossier signé : l'espace l'affiche et le fait signer (écart 7)
+
+Livré (05/10, branche `mission-18`, pas de push ; CRM et site, deux commits). La copie de travail n'avait aucun reste
+d'un agent précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Avenant calculé, sans colonne** (`espace/faits.ts › estAvenant`) : un devis émis après le devis signé d'origine (un
+  autre devis du dossier accepté, créé avant lui). `devisEnVigueur` rend désormais le PLUS ANCIEN accepté : « le
+  devis » de l'espace, l'acompte, le paiement, le virement et le paiement par carte restent sur le devis d'origine ;
+  l'avenant est facturé avec le solde (décision 8).
+- **Le CRM calcule, le site affiche** : `EtatEspace.devisASigner` (`faits.ts › devisASigner` : visibles, « Généré » ou
+  « Envoyé », sans accord en cours ; avant la signature, les devis proposés ; après, ceux émis après l'origine),
+  `EtatEspace.prochainPas` (nouveau `espace/prochain-pas.ts`, le calcul du site repris à l'identique — dates à l'heure
+  de Paris — plus « Un nouveau devis vous est proposé : X €. Votre devis signé reste valable. » en tête), chaque devis de
+  `devisProposes` avec SON accord (un avenant signé se relit signé, retirable en Signé ou Planifié). Fait
+  `avenantASigner` (`composerFaits`) : l'onglet Devis redevient « à faire » et courant (`progression`), la carte du
+  projet dit « Un nouveau devis à signer » (`pastilleDuProjet`). L'étape de l'espace ne change pas (ACOMPTE, CHANTIER).
+- **Signer un avenant** (`accepterDevis`, branche avenant) : UNE transaction interactive (accord relu dedans, accord,
+  autres « Généré »/« Envoyé » non retenus, avenant ACCEPTE, `ESPACE_DEVIS_ACCEPTE` marqué `avenant`, point d'entrée
+  `DEVIS_ACCEPTE { avenant }`), aucune étape, l'accord d'origine intact ; après : suites, alerte « AVENANT SIGNÉ » à
+  Lucas. Prochaine action « Avenant signé (devis N) : le prévoir au chantier et sur la facture », sauf à la place de
+  « … fixer la date du chantier … » ou « réclamer un nouveau paiement » ; tâche `avenant-signe` sous une action posée à la
+  main. Main : MOI « Il a signé l'avenant N : le prévoir au chantier » (`main.ts`). La signature du devis d'origine
+  garde son chemin (B8 la passera en une transaction).
+- **Retrait ciblé** (`validations.ts › retirerAccord(…, documentId?)`, route `/accord/retrait { documentId }`) : l'accord
+  d'un avenant → `retirerAccordAvenant` (une transaction : accord retiré, avenant ACCEPTE → « Envoyé », seuls les devis
+  que CET accord avait écartés redeviennent « Envoyé », trace, point d'entrée `ACCORD_RETIRE { avenant }`) : le dossier
+  ne recule pas ; le client le peut en Signé ou Planifié, Lucas toujours. Sans devis nommé (ancien site, `geste_espace`
+  RETIRER_ACCORD, « Réinitialiser » Devis) : l'accord du devis signé d'origine (le plus ancien en cours), comme avant.
+- **Cohérence (B13)** : `AVENANT_NON_PROPOSE` ne vise plus qu'un avenant VISIBLE dont l'espace n'est pas ouvert (ouvert,
+  l'espace le propose ; masqué, il l'a été exprès) ; même filtre dans la correction (`envoyerAvenant`). La mise en route
+  (MR) n'applique pas ce code (sensible) : rien à changer.
+- **Site** (`coverswap`, branche `mission-18`) : `api.ts` (`devisASigner?`, `prochainPas?`, type `ProchainPas`,
+  facultatifs : état gardé dans `localStorage`) ; nouveau `src/lib/espace/devis.ts` (pur : `devisDeLOnglet`,
+  `enteteDesDevis`, `precisionAccord` ; repli sur le calcul d'avant sans `devisASigner`) ; `EtapeDevis.tsx` (l'avenant
+  à côté du devis signé, ouvert d'emblée, « · Signé » sur les cartes, case « Votre devis signé n° X reste valable. »,
+  retrait avec `documentId`, pas de saut vers le paiement après un avenant) ; `EspaceClient.tsx` (`etat.prochainPas`
+  d'abord, onglet Devis ouvert aussi par `devisASigner`).
+- Docs : `SYNCHRO.md` (lignes DEVIS_ACCEPTE et ACCORD_RETIRE, paragraphe B7, B7 retiré du tableau 4, § 5 et § 6),
+  `COHERENCE.md` (règle `AVENANT_NON_PROPOSE`), `MCP-COUVERTURE.md` (entrée B7).
+
+Décisions prises seul (solution la plus simple) :
+- L'étape de l'espace reste ACOMPTE ou CHANTIER avec un avenant à signer (relances, main par le lien, colonne Espace
+  inchangées) ; seuls l'onglet Devis, la prochaine étape et la carte du projet le disent.
+- Une variante visible non annoncée (B1) émise après la signature est aussi « à signer » : visible = proposée.
+- Avenant retiré : il repasse « Envoyé » (le client l'a eu en main), pas « Généré ».
+- `prochainPas` porté en entier dans le CRM ; le calcul du site reste en repli pour un état gardé d'avant.
+
+Tests : CRM 1 446 → 1 453 (`npm test` : 1 453 verts). Nouveau `src/lib/espace/avenant-b7.test.ts` (7 essais, état des
+deux côtés, réseau coupé) : règles pures (avenant, devis en vigueur, devis à signer, onglets, pastille) ; avenant émis →
+proposé (devis à signer, prochaine étape, onglet Devis, paiement sur l'origine), étape SIGNE, lead, prochaine action
+« fixer la date » gardée, main relue ; signé → deux accords, aucun CHANGEMENT_ETAPE, main MOI, rejoué sans effet ;
+retrait ciblé (dossier signé, avenant à signer) puis sans devis nommé (retour en Devis envoyé) ; chantier commencé
+(client refusé, Lucas sans recul) ; action posée à la main gardée avec la tâche `avenant-signe`, deux avenants (l'autre
+non retenu puis rendu) ; prochaine étape d'avant à l'identique. `etatDesDeuxCotes` rend aussi `devisASigner`. Adapté en
+gardant son intention : `coherence-b13` écart 7 (espace ouvert : proposé, rien à signaler ; espace fermé : l'écart et
+sa correction par mail). Site 284 → 288 (`src/lib/espace/devis.test.ts`, 4 essais). `tsc`, `eslint` (fichiers touchés
+du CRM ; `npx eslint .` du site), `npm run build` des deux : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53
+outils), aucune description changée : rien à reconnecter.
+
+Reste : B8, B12 (agents morts). Déployer le CRM AVANT le site (le site sans le CRM garde le calcul d'avant). Écran du
+site non vérifié dans un navigateur (logique couverte par les essais purs).
+
+### Mission 18, B8 — signature : accord et passage en Signé dans une seule transaction (écart 8)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **`espace/service.ts › accepterDevis`** : UNE transaction interactive pour le devis d'origine comme pour l'avenant
+  (B7). Dedans : le devis relu (annulé, remplacé, non retenu ou archivé entre-temps : 409), le projet relu (perdu ou
+  encaissé, figé : 409 `MESSAGE_FIGE`, la règle de la route `projetDe`), l'accord relu ; puis l'accord, les autres
+  devis « Généré »/« Envoyé » non retenus (`retenirDevis`), `ESPACE_DEVIS_ACCEPTE`, le passage en « Signé »
+  (`changerEtapeDansTransaction` : devis accepté, main et statut du lead dans la transaction ; raison « bon pour accord
+  donné dans l'espace client sur le devis N ; non retenu : … »), enfin le point d'entrée (`DEVIS_ACCEPTE` : prochaine
+  action, une action posée à la main reste avec la tâche `accord` ; main). Après la transaction : `suitesEvenementDossier`
+  (Meta SIGNE, agenda, signal des tâches), puis l'alerte « DEVIS SIGNÉ » (ou « AVENANT SIGNÉ »).
+- **Nouvelle tentative** : une panne au milieu n'écrit rien (plus d'accord orphelin) et la tentative suivante signe ;
+  rejouée après une signature réussie, `dejaAccepte` sans effet ; deux appuis simultanés : les transactions se suivent,
+  la seconde trouve l'accord (un seul `AccordDevis`, un seul `CHANGEMENT_ETAPE`). Un accord d'avant B8 resté sans
+  passage en « Signé » (`ACCORD_SANS_SIGNATURE`) : la nouvelle tentative termine le passage sans second accord ni second
+  `ESPACE_DEVIS_ACCEPTE` (raison « … (passage terminé à la nouvelle tentative) »), rend `dejaAccepte: true` et prévient
+  Lucas.
+- **Étapes signables** : celles de `devis-signe.ts › estSigneeParDevisAccepte` (Q, S, Devis envoyé, Relance, ou en pause
+  depuis l'une d'elles), lues dans la transaction ; PERDU n'en est plus (figé, refusé), en pause après la signature non
+  plus (le devis seul passe « accepté », comme un dossier déjà signé).
+- **Signature au doigt** : écrite avant la transaction sous un nom stable, `signature-<devis>-<empreinte sha256 16>.png`
+  (avant : l'horodatage) ; une nouvelle tentative réécrit le même fichier.
+- Docs : `SYNCHRO.md` (ligne `DEVIS_ACCEPTE`, paragraphe B8, ligne B8 retirée du tableau 4), `COHERENCE.md`
+  (`ACCORD_SANS_SIGNATURE`), `MCP-COUVERTURE.md` (entrée B8).
+
+Décisions prises seul (solution la plus simple) :
+- Pas d'index unique partiel sur `AccordDevis` (décision 9) : la relecture dans la transaction suffit, SQLite sérialise
+  les écrivains (vérifié par l'essai des deux appuis simultanés).
+- Panne simulée dans l'essai par un déclencheur SQLite temporaire (`RAISE(ABORT)` sur l'écriture du `CHANGEMENT_ETAPE`
+  de ce dossier), plutôt qu'un crochet d'essai dans le code.
+- Passage terminé sur un accord d'avant : pas de nouvel `ESPACE_DEVIS_ACCEPTE` (l'accord est déjà raconté), Lucas
+  prévenu (l'ancien chemin ne l'avait pas fait avant l'échec).
+- Le service refuse lui-même un projet figé (perdu, encaissé), comme la route : un accord ne s'écrit plus sur un dossier
+  perdu par un autre chemin.
+- Outils MCP : aucun (geste du client) ; empreinte inchangée (`040d6c7aa53c`, 53 outils), aucune description changée :
+  rien à reconnecter. Mise en route : rien à changer (`ACCORD_SANS_SIGNATURE` reste sensible, au détecteur).
+
+Tests : CRM 1 453 → 1 458 (`npm test` : 1 458 verts). Nouveau `src/lib/espace/signature-b8.test.ts` (5 essais, état
+des deux côtés, réseau coupé) : signature d'un bloc (Signé, lead, espace ACOMPTE, rien à signer, prochaine action, main
+relue, plus de relance, variante non retenue, raison du passage) ; panne au milieu (rien d'écrit, des deux côtés) puis
+nouvelle tentative signée, un seul fichier de signature ; deux appuis simultanés puis rejouée (un accord, un passage,
+état identique, variante refusée) ; accord d'avant B8 sans signature (écart de cohérence, passage terminé, plus
+d'écart, rejouée sans effet) ; en pause depuis Devis envoyé avec une action posée à la main (Signé, action gardée, tâche
+`accord`), dossier perdu refusé. Aucun test existant à adapter (`espace.test`, `espace-v2`, `devis-multiples`,
+`coherence.test`, `avenant-b7`, `synchro` verts sans changement). `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres.
+
+Reste : B12 (agent mort) ; rien pour Lucas.
+
+### Mission 18, B12 — statut du lead ↔ étape : une table, le dossier vivant le plus avancé décide (écart 12)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF) : lot repris de zéro.
+- **Une seule table**, `dossiers/statut-lead.ts › STATUT_LEAD_PAR_ETAPE`, pour TOUTES les étapes : Qualification et
+  Simulation → CONTACTE, Devis envoyé et Relance → DEVIS_ENVOYE, Signé → SIGNE, Planifié et Chantier →
+  CHANTIER_PLANIFIE, Facturé et Encaissé → TERMINE, Perdu → PERDU, En pause → `null` explicite (inchangé). La table du
+  contrôle (`STATUT_LEAD_ATTENDU`, qui ignorait Q, S et la pause) est supprimée.
+- **« Le vivant le plus avancé décide »** (`statutLeadSelonDossiers`, pure) : parmi les dossiers non archivés du lead,
+  hors Perdu et En pause, le plus avancé ; aucun vivant et tous perdus → PERDU ; sinon inchangé. `statutLeadAttendu` /
+  `alignerStatutLead(tx, leadId, etapeDe?)` la lisent dans la transaction de l'appelant ; `ecrireStatutLead(tx,
+  dossierId, etape)` (même signature, mêmes appelants : changement d'étape, point d'entrée, devis envoyé, retours,
+  paiement, cohérence) passe par elle. `effetsDuChangementEtape` (changements non synchronisés) aussi, au lieu de
+  l'étape du dernier dossier changé.
+- **Ouverture** : `dossiers.ts › ouvrirDossier` aligne le lead dans la transaction de l'ouverture (bouton, ouverture
+  automatique A2, nouveau projet de l'espace, mail validé, reprise) : « À traiter », « Devis demandé » ou « Sans suite »
+  → « Contacté » (ou le statut de l'étape d'ouverture), sauf dossier plus avancé du même lead. `suitesOuverture` ne fait
+  plus le NOUVEAU → CONTACTE (il écrasait le statut d'un dossier ouvert à une étape avancée). Un contact qui revient sur
+  son dossier vivant (`depuis-lead.ts › ouvrirSansFile`) est réaligné aussi.
+- **Cohérence** : `STATUT_DU_LEAD` lit la même règle, signalé sur le seul dossier qui décide (« le plus avancé de ses N
+  dossiers ») ; la correction appelle `alignerStatutLead` (relue sur la base). Q et S comptent désormais : la mise en
+  route alignera les leads restés « À traiter » ou « Devis demandé » sur un dossier vivant (réparation sûre, déjà dans
+  sa liste).
+- **Webhook** : une demande de devis d'un contact connu qui n'avait écrit que pour « Autre » lui donne le projet que le
+  site envoie (`typeProjet`, seulement s'il est dit) — son intention « Devis » se lisait sur le statut DEVIS_DEMANDE, que
+  le dossier ouvert par la demande remplace maintenant par « Contacté ».
+- Docs : `SYNCHRO.md` (§ 1, paragraphe des changements non synchronisés, tableau 4 vidé, nouveau § 4 bis : table, règle,
+  matrice des quatre déclencheurs), `COHERENCE.md` (`STATUT_DU_LEAD`). `MCP-COUVERTURE.md` : rien (aucune action ne
+  change).
+
+Décisions prises seul (solution la plus simple) :
+- La règle porte sur les dossiers dont `leadId` est ce lead (pas ceux de sa fiche client venus d'un autre lead), comme
+  le plan.
+- En pause : la table dit `null` ; si le lead a un autre dossier vivant, c'est lui qui décide (la pause n'est jamais
+  le décideur) — même règle pour les gestes et pour le contrôle, sinon l'un signalerait ce que l'autre écrit.
+- À égalité d'avancement, le plus ancien dossier est le décideur (seule la clé du signalement en dépend).
+- Un dossier ouvert automatiquement donne CONTACTE (décision 11), même sur un lead « Devis demandé ».
+- La conversion Meta PERDU d'un dossier perdu reste celle du changement d'étape (hors lot) ; aucun envoi nouveau.
+- Outils MCP : aucun changé, aucune description changée ; empreinte inchangée (`040d6c7aa53c`, 53 outils).
+
+Tests : CRM 1 458 → 1 464 (`npm test` : 1 464 verts). Nouveau `src/lib/dossiers/statut-lead-b12.test.ts` (6 essais,
+état des deux côtés, réseau coupé) : la table (toutes les étapes) et la règle pure ; demande du site sur un lead
+« Devis demandé » (Contacté, Qualification, « Appeler : demande de devis », main, relances, aucune tâche de cohérence) ;
+lead perdu qui revient (nouveau dossier et son espace : Contacté, PHOTOS, le perdu ne décide plus) ; deux dossiers
+(Signé + second en Qualification puis Simulation : reste Signé ; premier en pause : Contacté ; second perdu : inchangé ;
+tous perdus : PERDU ; reprise : Signé) ; dossier seul en pause (inchangé) et effets d'après non synchronisés ; cohérence
+(un seul signalement sur le plus avancé, correction, second passage vide, Simulation sur un lead « À traiter »
+signalée). Adaptés : `mission-18-mise-en-route.test.ts` (un cas de plus : lead « Devis demandé » en Qualification
+aligné, seul le statut change ; résumé 9 dossiers, 11 trouvés, 9 réparés, STATUT_DU_LEAD 3/3) ;
+`mission-16-partie-4.test.ts` (la demande d'un contact connu ouvre son dossier : statut CONTACTE au lieu de
+DEVIS_DEMANDE, intention « Devis » gardée, dossier en Qualification). `coherence.test`, `coherence-b13`, `systeme.test`,
+`synchro.test`, `depuis-lead.test`, `reprise.test` verts sans changement. `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres.
+
+Reste : rien pour ce lot ; rien pour Lucas.
+
+### Mission 18, B7, B8, B9, B10, B11, B12, B13, MR (mise en route) — corrections de la relecture
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché : il affiche déjà ce que le CRM calcule). Les 15
+constats des trois relecteurs, et leur sort (tous vérifiés dans le code, tous réels) :
+1. **Lucas ne retire pas l'accord d'un avenant seul** (important, B7) — corrigé : `documentId` facultatif dans le geste
+   « retirer-accord » (`vue-crm.ts`), un bouton « Retirer l'accord » par avenant signé dans le bloc Espace
+   (`RubriqueDevisEspace.tsx`, `devisProposes[].avenant` et `.accordEnCours`), `document_id` dans `geste_espace`
+   RETIRER_ACCORD ; Lucas le peut à toute étape (Chantier compris), le dossier ne recule pas.
+2. **Paiement de l'espace sans l'avenant** (important, B7/B10) — corrigé : `faits.ts › lireDevisEtPaiements` ajoute les
+   avenants signés au total et au solde (acompte de l'origine seul) ; facturé, `paiementEspace(…, factures)` prend le
+   reste des factures actives (`service.ts › facturesDuDossier`, la lecture de « Payer par carte » et de « Mes
+   documents ») : `solde.montant − solde.recu` = ce que Stripe débite, « Réglé » seulement quand les factures sont
+   soldées. Espace du client et vue de Lucas lisent pareil.
+3. **Perdu ne ferme jamais l'espace, tâche « Corriger » aussitôt** (important, B13) — corrigé, règle choisie : un délai,
+   comme après l'encaissement. `revocation.ts` désactive le lien 90 jours après la clôture du dernier projet quand TOUS
+   sont perdus ou archivés (`dernierProjetClosLe`, motif propre) ; `ESPACE_ACTIF_DOSSIER_CLOS` ne signale le lien
+   qu'après ce délai + 2 jours, et sa correction suit la même règle (fermer le projet d'un archivé reste immédiat).
+   Ligne ajoutée à SYNCHRO.md (« Passage en Perdu et lien de l'espace »).
+4. **Retour Signé → Devis envoyé hors de la transaction du retrait** (mineur) — corrigé : étape relue dans la
+   transaction, `appliquerChangementEtape` RETOUR, statut du lead, changement marqué synchronisé, puis le point
+   d'entrée ; une panne n'écrit rien, rejoué : `{ retire: false }`.
+5. **Mise en route : « au détecteur » ce que le moteur écarte** (mineur) — corrigé : un écart d'un dossier vivant dont
+   l'action posée à la main est en vigueur (`ecarteeParVigueur`) devient une tâche à moi `MANUELLE:coherence-18-<clé>` ;
+   les `CODES_ECARTES` sont comptés `autre` (« à leur propre tâche », dans le journal et `etat_crm` SANTE), jamais au
+   détecteur. Choisi plutôt que de sortir COHERENCE du filtre de vigueur (docs/TACHES.md § 2 le veut ainsi).
+6. **Simulation du client (voie ESPACE) sans essai des deux côtés** (mineur) — corrigé :
+   `mission-15-partie-5.test.ts` lit `etatDesDeuxCotes` (étape, main = calculée, prochaine action inchangée, lead
+   « Devis demandé » → « Contacté », espace, relances, aucune tâche de cohérence). L'espace reste à « Projet » (projet
+   pas précisé : sa simulation ne le saute pas, par conception d'`etapes.ts`).
+7. **MCP-COUVERTURE sans entrée B12** (mineur) — corrigé : entrée ajoutée (aucun schéma changé, empreinte
+   `040d6c7aa53c` à B12).
+8. **`PROCHAINE_ACTION_PERIMEE` efface une action posée à la main** (important, MR) — corrigé : la détection exclut
+   `estActionManuelleEnPlace` (comme `ATTENTE_ACCORD_SANS_DEVIS`), la correction la refuse (409). COHERENCE.md à jour.
+9. **Idempotence Stripe cassée, double paiement muet** (mineur) — corrigé : `expires_at` compté depuis le début de la
+   fenêtre de 10 minutes (`stripe.ts › FENETRE_SESSION_MS`, `fenetreSession`) : même clé, même corps ; au webhook, un
+   paiement au-delà de ce qui restait dû (`aReglerParCarte` relu avant l'enregistrement) est enregistré et alerte Lucas
+   (« Paiement par carte en trop »). Pas de réutilisation d'une session ouverte (non retenu : l'alerte suffit).
+10. **Session payée sans dossier : rien qu'un console.error** (mineur) — corrigé : alerte à Lucas (montant, session,
+    sans nom, lien Finances), réponse 200 « IGNORE » gardée.
+11. **L'aperçu de RETIRER_ACCORD n'annonce pas l'accord retiré** (important) — corrigé avec le 1 :
+    `validations.ts › accordARetirer` (le plus ancien sans devis nommé), lu par le geste ET par l'aperçu, qui dit
+    « avenant » ou « devis » et si le dossier revient à « Devis envoyé ».
+12. **Lecteurs qui prennent l'avenant pour le devis signé** (important) — corrigé : `dossiers/montant-signe.ts`
+    (`devisSigneDOrigine`, `accordDOrigine`, `montantSigneHt`), lu par le détecteur des dossiers (acompte et date de
+    l'accord d'origine, montant en jeu origine + avenants), `manager_finances` (reste à encaisser) et l'analytique
+    (montant signé, deux endroits).
+13. **Avenant « à signer » sur un projet figé** (mineur) — corrigé : `lireDevisEtPaiements({ etapeDossier })` rend
+    `aSigner` vide en Encaissé ou Perdu (tous les lecteurs passent l'étape).
+14. **`accepterDevis` signe une ancienne variante** (mineur) — corrigé : dans la transaction, un devis non accepté créé
+    AVANT un devis accepté → 409 « n'est plus en vigueur ». Les variantes d'avant B10 restées « Généré » ne sont pas
+    passées « non retenu » par la mise en route (inutile : elles ne sont ni proposées ni signables).
+15. **Simulation remise après masquage = nouvelle publication** (mineur, B9) — corrigé : `SIMULATION_PUBLIEE`
+    `republiee` (toutes déjà publiées une fois) ne pose plus de prochaine action, et l'événement marqué `republiees` ne
+    passe plus la main (`main.ts`) ; l'étape seule suit, aucun second mail.
+
+Décisions prises seul (solution la plus simple) :
+- Délai du lien d'un espace tout perdu : le même que l'encaissement (90 jours, une seule constante).
+- `autre` dans le résumé de la mise en route n'apparaît que s'il n'est pas nul (forme des résumés d'avant gardée).
+- La tâche à moi d'un écart caché par une action en vigueur peut cohabiter plus tard avec le « Corriger » du détecteur
+  (quand la vigueur tombe) ; Lucas répond à l'une, l'autre se coche quand l'écart est corrigé.
+
+Tests : CRM 1 464 → 1 476 (`npm test` : 1 476 verts). Nouveau `src/lib/espace/relecture-partie-b.test.ts`
+(8 essais, état des deux côtés, réseau coupé : outil et aperçu RETIRER_ACCORD ; écran en Chantier ; panne au milieu du
+retrait puis nouvelle tentative ; paiement après avenant jusqu'à l'encaissement ; tâche « Encaisser l'acompte » et
+montants ; projet figé ; ancienne variante ; lien d'un espace perdu révoqué après 90 jours). Ajoutés :
+`paiement-carte.test.ts` (3 : corps stable, paiement en trop, session sans dossier), `publier-espace.test.ts` (1 :
+simulation remise). Adaptés (comportement voulu) : `coherence-b13.test.ts` (perdu ou archivé aujourd'hui : plus de
+signalement du lien avant le délai), `mission-18-mise-en-route.test.ts` (perdu et archivé datés de 100 jours ; cas de
+plus : perdu du jour, action « autre proposition » posée à la main gardée et correction refusée, écart caché par une
+action en vigueur en tâche à moi ; résumé 12 dossiers, 14 trouvés, 11 réparés, 2 tâches, 1 au détecteur),
+`mission-15-partie-5.test.ts` (état des deux côtés). `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+Empreinte MCP : **change**, `040d6c7aa53c` → `6665a6b457fe` (53 outils ; paramètre `document_id` et description de
+`geste_espace`) : reconnecter le connecteur.
+
+Reste : rien pour ce lot ; pour Lucas, reconnecter le connecteur MCP.
+
+## Phase A, fin : mission 18 fusionnée (05/10/2026)
+
+- Lots : A1 3442b9a, A2 57b6edf, A3 cb93bbe, A4 1e78e5d, A5 f2c41bb, A6 c8357f6, relecture A 49eb5f3 ; B0 ac1b274,
+  B1 13c8801, B2 8a47493, B3 36e68dc, B4 e24b09c, B5 cc44a97, B6 6f0eeec, relecture 7c1d8a2 ; B9 7a4dc4d, B10 d90e297,
+  B11 860e201, B13 171bd9e, MR 798aad9, B7 691aea0 (site 4746465), B8 cf49415, B12 b3585d3, relecture 406f9bf.
+- Trois relectures adverses (conformité, sûreté des clients, régressions) : 10 + 14 + 15 constats, tous corrigés ou
+  réfutés, détail dans les sections « corrections de la relecture » ci-dessus.
+- Tests : CRM 1 283 → 1 476, site 284 → 288 ; tsc, lint, build verts dans les deux dépôts.
+- Incidents : coupures réseau et surcharge de l'API (03/10 et 05/10) ont tué 5 agents ; leurs lots ont été relancés
+  (travail partiel de B1 repris, patch gardé). Deux tests du CRM cassés par la date (05/10) réparés : 49069e7 (un
+  vrai défaut : « lundi » dit un lundi après l'heure visait un moment passé), 7765057.
+- Avant la fusion : production en bonne santé (disque 14 %, 3,8 Go libres ; cohérence sans écart sur 24 dossiers).
+  La mise en route (migration `mise-en-route-18`) tourne au premier démarrage après le push, sauvegarde d'abord.
+- Empreinte des outils MCP : inchangée (53 outils), mais des descriptions ont changé → reconnecter le connecteur.

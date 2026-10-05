@@ -157,6 +157,18 @@ describe("analytique publicite (ex-« campagne »), etat_crm META (ex-« voir_pu
     assert.ok(commercial.liens?.some((l) => /\/analytique\?du=/.test(l.href)));
     const site = await appeler("voir_fichiers", { genre: "site", jours: 30 });
     assert.equal(site.liens?.[0].href, "http://localhost:3001/analytique?onglet=site");
+    // Mission 18 (A1) : plus de lien vers l'onglet Espaces clients retiré ; le filtre « Espaces » de Dossiers à la place.
+    const clients = await appeler("manager_clients");
+    assert.ok(clients.liens?.some((l) => l.href === "http://localhost:3001/dossiers?espace=TOUS"), JSON.stringify(clients.liens));
+    for (const l of clients.liens ?? []) assert.doesNotMatch(l.href, /\/espaces(\?|$)/);
+    // Mission 18 (A3) : plus de lien vers l'écran Dépenses retiré (une section de Finances) ; la saisie reste.
+    const argent = await appeler("analytique", { onglet: "argent" });
+    const finances = await appeler("manager_finances");
+    for (const l of [synthese, commercial, site, clients, argent, finances].flatMap((r) => r.liens ?? [])) assert.doesNotMatch(l.href, /\/depenses(\?|$)/);
+    // Mission 18 (A5) : plus de lien vers l'écran Tâches de fond retiré ; l'onglet Système de Paramètres à la place.
+    const operations = await appeler("manager_operations");
+    assert.ok(operations.liens?.some((l) => l.href === "http://localhost:3001/parametres?section=systeme"), JSON.stringify(operations.liens));
+    for (const l of [synthese, commercial, site, clients, argent, finances, operations].flatMap((r) => r.liens ?? [])) assert.doesNotMatch(l.href, /\/taches-de-fond(\?|$)/);
     assert.deepEqual(reseau, []);
   });
 });

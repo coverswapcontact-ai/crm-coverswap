@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, Receipt, SlidersHorizontal, Smartphone, Users, Wallet, WandSparkles, Workflow, X, type LucideIcon } from "lucide-react";
+import { ChartLine, FolderKanban, Globe, ListChecks, Mail, Menu, PhoneForwarded, SlidersHorizontal, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
 import { appelApi } from "./client";
@@ -14,14 +14,16 @@ import { TRANS } from "./ui";
 /**
  * Mission 14 (partie 3) : l'onglet Leads ne compte que les rappels en retard (en rouge).
  * Mission 17 (partie A) : l'onglet Tâches compte les tâches d'« Aujourd'hui » (10 au plus, en vert).
+ * Mission 18 (A5) : plus de compteur des tâches de fond en échec : un échec remonte comme tâche système dans Tâches
+ * (« Relancer N tâches de fond en échec »), un seul compteur. La route le rend encore, pour les réponses mises en cache.
  */
-export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; tachesEnEchec: number; mailATraiter: number };
+export type Compteurs = { tachesAujourdhui: number; leadsEnRetard: number; mailATraiter: number };
 type EtatNavigation = Compteurs & { rappelGoogle?: RappelGoogle | null };
 
 // Mission 13 (lot 5) : l'événement vit dans `evenements.ts` (émis par `appelApi` après chaque écriture) ; réexporté pour les écrans qui l'importaient d'ici.
 export { EVENEMENT_COMPTEURS, rafraichirCompteurs } from "./evenements";
 
-type Entree = {
+export type Entree = {
   href: string;
   libelle: string;
   /** Libellé court de la barre du bas (téléphone). */
@@ -30,6 +32,8 @@ type Entree = {
   compteur?: keyof Compteurs;
   /** Barre du bas sur téléphone (5 entrées au plus, « Plus » en sixième). */
   mobile?: boolean;
+  /** Autres adresses qui allument l'entrée (un écran devenu section d'un autre, sa saisie restée à part). */
+  aussi?: string[];
 };
 
 // Navigation resserrée (21/09/2026) : ce que Lucas utilise, dans l'ordre du travail — un lead
@@ -43,29 +47,37 @@ type Entree = {
 // Mission 17 (partie B) : « Analytique » (tous les chiffres) rejoint les écrans principaux, sur téléphone aussi : la barre
 // du bas devient Tâches, Leads, Dossiers, Mail, Analytique, puis Plus (Espaces clients y passe). « Publicité » et
 // « Synthèse » ont disparu (leurs chiffres sont dans l'Analytique ; la chaîne des leads Meta en bas de son onglet Publicité).
-const PRINCIPALES: Entree[] = [
+// Mission 18 (A1) : l'onglet « Espaces clients » disparaît : l'état de l'espace est une colonne et un filtre de Dossiers
+// (/espaces y redirige), le bloc Espace du panneau du dossier et la fiche client gardent les gestes.
+// Mission 18 (A3) : « Dépenses » devient une section de Finances (/depenses y redirige) ; la saisie /depenses/nouvelle
+// (raccourci de l'application installée) reste et allume Finances.
+// Mission 18 (A5) : « Tâches de fond » devient l'onglet Système de Paramètres (/taches-de-fond y redirige), sans badge.
+// Mission 18 (A6) : les tarifs passent dans Paramètres (onglet Tarifs). Navigation cible, 10 onglets : principaux Tâches,
+// Leads, Dossiers, Mail, Clients, Analytique ; secondaires Simulateur, Site, Finances, Paramètres. Barre du bas inchangée
+// (Tâches, Leads, Dossiers, Mail, Analytique, puis Plus) ; « Plus » : Clients, puis Simulateur, Site, Finances, Paramètres.
+export const PRINCIPALES: Entree[] = [
   { href: "/taches", libelle: "Tâches", icone: ListChecks, compteur: "tachesAujourdhui", mobile: true },
   { href: "/leads", libelle: "Leads", icone: PhoneForwarded, compteur: "leadsEnRetard", mobile: true },
   { href: "/dossiers", libelle: "Dossiers", icone: FolderKanban, mobile: true },
-  { href: "/espaces", libelle: "Espaces clients", court: "Espaces", icone: Smartphone },
-  { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   // Mission 7 (22/09/2026) : SMS retiré (pas de numéro professionnel) ; le mail prend le relais : l'onglet Mail, trié d'office.
   { href: "/mail", libelle: "Mail", icone: Mail, compteur: "mailATraiter", mobile: true },
   { href: "/clients", libelle: "Clients", icone: Users },
   { href: "/analytique", libelle: "Analytique", icone: ChartLine, mobile: true },
-  { href: "/finances", libelle: "Finances", icone: Wallet },
 ];
 
-// Écrans secondaires : petites icônes à droite, menu « Plus » sur téléphone.
-const SECONDAIRES: Entree[] = [
+// Écrans secondaires : petites icônes à droite (libellés sur très grand écran), menu « Plus » sur téléphone.
+export const SECONDAIRES: Entree[] = [
+  { href: "/simulateur", libelle: "Simulateur", icone: WandSparkles },
   { href: "/site", libelle: "Site", icone: Globe },
-  { href: "/taches-de-fond", libelle: "Tâches de fond", icone: Workflow, compteur: "tachesEnEchec" },
-  { href: "/depenses", libelle: "Dépenses", icone: Receipt },
+  { href: "/finances", libelle: "Finances", icone: Wallet, aussi: ["/depenses/nouvelle"] },
   { href: "/parametres", libelle: "Paramètres", icone: SlidersHorizontal },
 ];
 
-function estActive(pathname: string, href: string): boolean {
-  return pathname === href || pathname.startsWith(`${href}/`);
+/** Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires. */
+export const DANS_LE_MENU: Entree[] = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
+
+function estActive(pathname: string, entree: Entree): boolean {
+  return [entree.href, ...(entree.aussi ?? [])].some((href) => pathname === href || pathname.startsWith(`${href}/`));
 }
 
 function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "rouge" }) {
@@ -84,12 +96,12 @@ function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "ro
 }
 
 function tonDe(cle: keyof Compteurs | undefined): "vert" | "rouge" {
-  return cle === "tachesEnEchec" || cle === "leadsEnRetard" ? "rouge" : "vert";
+  return cle === "leadsEnRetard" ? "rouge" : "vert";
 }
 
 export function Navigation() {
   const pathname = usePathname();
-  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, tachesEnEchec: 0, mailATraiter: 0 });
+  const [compteurs, setCompteurs] = useState<Compteurs>({ tachesAujourdhui: 0, leadsEnRetard: 0, mailATraiter: 0 });
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
   const [menuOuvert, setMenuOuvert] = useState(false);
 
@@ -129,9 +141,7 @@ export function Navigation() {
     setMenuOuvert(false);
   }
 
-  // Menu « Plus » du téléphone : les écrans principaux absents de la barre du bas, puis les secondaires.
-  const DANS_LE_MENU = [...PRINCIPALES.filter((entree) => !entree.mobile), ...SECONDAIRES];
-  const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree.href));
+  const secondaireActive = DANS_LE_MENU.some((entree) => estActive(pathname, entree));
   const alerteMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "rouge" ? compteurs[entree.compteur] : 0), 0);
   const aTraiterMenu = DANS_LE_MENU.reduce((total, entree) => total + (entree.compteur && tonDe(entree.compteur) === "vert" ? compteurs[entree.compteur] : 0), 0);
 
@@ -149,7 +159,7 @@ export function Navigation() {
           </Link>
           <ul className="flex min-w-0 flex-1 items-center gap-1">
             {[...PRINCIPALES, ...SECONDAIRES].map((entree) => {
-              const active = estActive(pathname, entree.href);
+              const active = estActive(pathname, entree);
               const Icone = entree.icone;
               // L'icône seule tant que la place manque : libellés des écrans principaux dès 1280 px,
               // ceux des secondaires sur très grand écran.
@@ -190,7 +200,7 @@ export function Navigation() {
           style={{ gridTemplateColumns: `repeat(${PRINCIPALES.filter((entree) => entree.mobile).length + 1}, minmax(0, 1fr))` }}
         >
           {PRINCIPALES.filter((entree) => entree.mobile).map((entree) => {
-            const active = estActive(pathname, entree.href);
+            const active = estActive(pathname, entree);
             const Icone = entree.icone;
             return (
               <li key={entree.href} className="contents">
@@ -249,7 +259,7 @@ export function Navigation() {
             <ul className="flex flex-col">
               {DANS_LE_MENU.map((entree) => {
                 const Icone = entree.icone;
-                const active = estActive(pathname, entree.href);
+                const active = estActive(pathname, entree);
                 return (
                   <li key={entree.href}>
                     <Link

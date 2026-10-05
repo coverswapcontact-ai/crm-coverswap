@@ -114,10 +114,22 @@ export function EspaceDossier({
 
   /** Mission 11 : chaque devis proposé a son interrupteur « visible dans l'espace client ». */
   async function visibilite(documentId: string, visibleEspace: boolean) {
+    // Mission 18 (relecture) : rendre visible un devis du CRM pas encore parti l'envoie — le mail « Devis disponible »
+    // part (automatisme existant, interrupteur dans Paramètres) : l'écran le demande avant, comme l'aperçu de l'outil.
+    const devis = espace?.devisProposes.find((d) => d.id === documentId);
+    if (visibleEspace && devis && !devis.repris && devis.statut === "GENERE") {
+      const adresse = detail.clientEmail ? ` à ${detail.clientEmail}` : "";
+      const texte = `Rendre le devis ${devis.numero} visible, c'est l'envoyer : le mail « Devis disponible » partira au client${adresse} si son espace est ouvert et son adresse valide (une fois par devis ; interrupteur dans Paramètres). Sans cela, il sera visible mais pas envoyé. Continuer ?`;
+      if (!window.confirm(texte)) return;
+    }
     setOccupe("visible" + documentId);
     try {
-      await envoyerJson(`/api/dossiers/${detail.id}/documents/${documentId}`, "PATCH", { visibleEspace });
-      toast.success(visibleEspace ? "Devis visible dans son espace" : "Devis masqué dans son espace");
+      const reponse = await envoyerJson<{ annonce: { mail: boolean; raison: string | null } | null; avertissements: string[] }>(`/api/dossiers/${detail.id}/documents/${documentId}`, "PATCH", { visibleEspace });
+      // Mission 18 (B5) : mis en ligne, il est annoncé par le mail « Devis disponible », sinon l'écran dit pourquoi.
+      // Mission 18 (B6) : masqué sans autre devis en attente, le dossier revient avant « Devis envoyé » : l'écran le dit.
+      if (!visibleEspace) toast.success(["Devis masqué dans son espace.", ...(reponse.avertissements ?? [])].join(" "));
+      else if (reponse.annonce?.mail) toast.success("Devis en ligne : le client est prévenu par mail");
+      else toast.success(["Devis visible dans son espace.", ...(reponse.avertissements ?? [])].join(" "));
       await charger();
       await onRecharger();
     } catch (erreur) {

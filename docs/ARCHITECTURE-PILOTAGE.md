@@ -308,19 +308,24 @@ tâches par jour.
 
 ## 4. Interface : un gabarit commun aux écrans de pilotage
 
-Le pilotage est le seul point d'entrée du CRM. Ses écrans (Leads, Dossiers,
-Espaces clients, Simulateur, Mail, Clients, Finances, puis Site, Publicité,
-Tâches de fond, Dépenses, Paramètres ; À valider et Synthèse restent joignables
-par leur adresse seulement — `src/components/pilotage/Navigation.tsx`, état
-après le lot 7 du 29/09/2026) vivent dans le groupe de routes
-`src/app/(pilotage)` : une charte sombre, une seule navigation. La connexion
-(`/auth/signin`) suit la même charte.
+Le pilotage est le seul point d'entrée du CRM. Ses écrans vivent dans le groupe
+de routes `src/app/(pilotage)` : une charte sombre, une seule navigation
+(`src/components/pilotage/Navigation.tsx`). Depuis la mission 18 (partie A,
+03/10/2026), **10 onglets** : principaux Tâches, Leads, Dossiers, Mail, Clients,
+Analytique ; secondaires Simulateur, Site, Finances, Paramètres. Espaces clients
+est devenu la colonne et le filtre « Espace » de Dossiers, Dépenses une section de
+Finances, Tâches de fond et les tarifs des devis des onglets de Paramètres
+(« Système », « Tarifs ») ; leurs anciennes adresses redirigent
+(`next.config.ts`). À valider reste joignable par son adresse seulement. La
+connexion (`/auth/signin`) suit la même charte.
 
 - **Ordinateur** : barre du haut, compteurs à côté des entrées (rappels de
-  leads en retard, en rouge ; mails à traiter ; tâches en échec).
-- **Téléphone** : barre du bas au pouce, cinq écrans (Leads, Dossiers, Espaces,
-  Mail, Clients) et « Plus » pour le reste ; le contenu réserve la hauteur de la
-  barre (et la zone de sécurité de l'iPhone).
+  leads en retard, en rouge ; mails à traiter ; tâches du jour — les tâches de
+  fond en échec n'ont plus de badge depuis la mission 18, A5).
+- **Téléphone** : barre du bas au pouce, cinq écrans (Tâches, Leads, Dossiers,
+  Mail, Analytique) et « Plus » pour le reste (Clients, Simulateur, Site,
+  Finances, Paramètres) ; le contenu réserve la hauteur de la barre (et la zone
+  de sécurité de l'iPhone).
 - **Primitives partagées** : `src/components/pilotage/ui.tsx` (boutons, champs à
   16 px sur mobile pour éviter le zoom de Safari, modale plein écran sur
   téléphone, puces de choix rapide, pastilles) et `client.ts` (appels d'API aux
@@ -330,8 +335,18 @@ après le lot 7 du 29/09/2026) vivent dans le groupe de routes
   pour ce qui a été repris et les redirections de ses adresses.
 - **Tâches** (`/taches`, accueil depuis la mission 17) : la liste de ce que Lucas a à faire
   (`src/lib/a-faire/`, routes `/api/a-faire/…`, conception dans `docs/TACHES.md`).
-- **Tâches de fond** (`/taches-de-fond`, anciennement `/taches`) : travaux périodiques et leur dernier passage,
-  tâches en échec avec leur erreur, relance et annulation à la main.
+- **Tâches de fond** : depuis la mission 18 (A5), l'onglet « Système » de Paramètres (`/parametres?section=systeme` ;
+  `/taches-de-fond`, son adresse de la mission 17, y redirige). Travaux périodiques et leur dernier passage, tâches en
+  échec avec leur erreur, relance et annulation à la main ; puis le contrôle de cohérence, l'audit des connexions et
+  les sessions de l'assistant. L'onglet lit chaque bloc par sa route à son ouverture (`SectionSysteme.tsx`), pas avec
+  la page. Plus de badge des échecs dans la navigation : un échec remonte comme tâche système dans Tâches
+  (« Relancer N tâches de fond en échec », clé `SYSTEME:taches-de-fond`), un seul compteur.
+- **Tarifs** : depuis la mission 18 (A6), l'onglet « Tarifs » de Paramètres (`/parametres?section=tarifs`, ancre
+  `#tarifs`) : les tarifs des devis (presets : désignation, unité, prix HT, retrait) et le tarif de chaque prestation
+  (`GestionTarifs.tsx`, déplacé de Dossiers). Ce n'est plus un sous-mode du générateur de documents : le générateur
+  propose toujours les tarifs ligne par ligne, et son lien « Gérer les tarifs » ouvre l'onglet dans un autre onglet du
+  navigateur (le document en cours n'est pas perdu ; la liste se relit au retour). Les outils de l'assistant (`lister`
+  TARIFS, `creer` / `modifier` / `archiver` TARIF et SOUS_PARTIE) rendent un lien vers l'onglet.
 
 ## 5. Validation : « l'agent propose, je valide »
 
@@ -815,6 +830,12 @@ l'autre : « à rattacher », compté et signalé.
   « hors chantier » tant que le rattachement n'a pas été choisi à la main.
 - Le dossier affiche ses dépenses et une marge indicative (facturé, à défaut
   devis signé, moins dépensé).
+- La liste de l'année (à rattacher, sans justificatif, fiche d'une dépense pour
+  la modifier, la rattacher ou la retirer) est une section de Finances depuis la
+  mission 18 (A3, 03/10/2026) : `/finances?section=depenses`, sur la même année
+  que le reste de l'écran ; l'ancienne adresse `/depenses` y redirige. La
+  saisie `/depenses/nouvelle` reste un écran (raccourci de l'application
+  installée) et ramène à la section.
 
 ### Rien ne se perd, rien ne se supprime
 
@@ -1703,15 +1724,16 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
 
 - Aucun fournisseur de SMS réel n'a été essayé : OVH et Brevo sont testés contre de
   faux serveurs qui imitent leurs API (`fournisseurs.test.ts`). Premier envoi réel à
-  surveiller dans Tâches de fond.
+  surveiller dans Tâches de fond (Paramètres › Système).
 - OVH ne pousse pas les réponses : elles arrivent à la relève (trente secondes).
 - `src/lib/sms/flux.ts` émet encore des événements sans aucun lecteur depuis le
   retrait de `/api/sms/flux` (lot 7) : à retirer avec le prochain ménage.
 - Le service worker garde sur le téléphone des écrans lus avec une session. La page de
   connexion les efface (arriver là, c'est ne plus avoir de session) ; tant que la session
   vit, un téléphone perdu les montre encore — hors ligne compris.
-- Paiement par carte de l'acompte : non fait (`paiementCarte` est prêt côté API,
-  `STRIPE_SECRET_KEY` réservée). Aujourd'hui : virement, RIB affiché après l'accord.
+- Paiement par carte de l'acompte : fait par la mission 18 (B10, docs/SYNCHRO.md) — Stripe Checkout par `fetch`,
+  webhook signé `/api/webhook/stripe` ; le bouton n'apparaît qu'avec `STRIPE_SECRET_KEY` ET `STRIPE_WEBHOOK_SECRET`
+  (à poser par Lucas sur Railway). Sans elles : virement, RIB affiché après l'accord.
 
 ## 21. Navigation resserrée, section Leads, simulation → dossier, audit des connexions
 
@@ -1722,6 +1744,11 @@ ont répondu jusqu'au lot 7 de la mission 13 (29/09/2026), qui a retiré pour de
 écrans sans usage — `/commercial`, `/prospects`, `/messages`, `/numeros`, `/journal`,
 `/sms`, `/messagerie` (404 aujourd'hui, sans redirection ; les données restent en base).
 Seuls `/validation` et `/synthese` répondent encore par leur adresse.
+
+> **Depuis la mission 18 (partie A, 03/10/2026)**, la navigation compte 10 onglets (voir §4) : Tâches, Leads,
+> Dossiers, Mail, Clients, Analytique ; Simulateur, Site, Finances, Paramètres. `/espaces`, `/depenses` et
+> `/taches-de-fond` redirigent (`next.config.ts`), les tarifs sont dans Paramètres › Tarifs. Ce qui suit décrit l'état
+> du 21/09/2026.
 
 ### Navigation (`src/components/pilotage/Navigation.tsx`)
 
@@ -1772,12 +1799,13 @@ photos du dossier. L'espace client passe par la même porte (`dossierDuContact`)
 
 ### Simulation du site → dossier
 
-(Depuis le 22/09/2026, section 24 : une simulation du site reste sur le lead, sans
-dossier d'office ; ce qui suit vaut pour le rangement dans un dossier déjà ouvert et pour
-le rattrapage de l'existant.)
+(Du 22/09 au 03/10/2026, section 24 : une simulation du site restait sur le lead, sans
+dossier d'office. Mission 18, A2 : le dossier s'ouvre de nouveau tout seul, pour une
+simulation, des photos ou une demande de devis venues du site (`ouvrirDossierAutomatique`,
+faits postérieurs au 03/10/2026 seulement, hors zone exclu ; voir `docs/REPRISE-LOCAL.md`).)
 
 Coordonnées + photo = dossier. Une simulation rattachée à un contact (webhook du site,
-`/api/simulate`) ouvre son dossier toute seule (`assurerDossierDeSimulation`), photo avant
+`/api/simulate`) ouvre son dossier toute seule (`ouvrirDossierAutomatique`), photo avant
 et chaque rendu dans les photos de chantier — donc dans Drive, le miroir les recopie.
 Plusieurs simulations : le même dossier, la photo avant une seule fois. Un dossier vivant
 existe déjà pour ce client (ni perdu ni encaissé) : on range dedans. Génération échouée
@@ -1788,7 +1816,7 @@ périodique `simulations-dossiers` (quinze minutes). Le lead du simulateur n'en 
 autant de Leads (voir ci-dessous). Les demandes du site déclenchent désormais un **push** (`notifierDemandeDuSite`),
 comme les leads Meta — avant, seulement un mail.
 
-### Audit des connexions (`src/lib/audit/connexions.ts`, Tâches de fond)
+### Audit des connexions (`src/lib/audit/connexions.ts`, Paramètres › Système)
 
 Neuf maillons vérifiés sur les vraies données, en lecture seule (rien n'est créé ni
 envoyé) : lead Meta → pastille et push ; Leads sans doublon ; dossier issu d'un lead ;
@@ -1805,7 +1833,7 @@ Depuis le 22/09/2026 sa simulation reste sur sa fiche (section 24 : plus de doss
 d'office) ; s'il a déjà un dossier (ouvert par Lucas, ou rangé dans le dossier vivant de
 son client), il reste dans **« À appeler »** — et en tête de la file d'appels — tant
 qu'aucun appel ni aucune note d'appel n'est retenu et qu'aucun rappel n'est daté
-(`simulationNonAppelee`, `src/lib/prospects/leads.ts` ; mission 14, partie 3). Même contact,
+(`siteNonAppele`, `src/lib/prospects/leads.ts` ; mission 14, partie 3 ; mission 18 : demandes de devis comprises). Même contact,
 même dossier : deux vues, aucun doublon. Conditions : 60 jours depuis son arrivée ou sa
 dernière simulation, dossier encore en Qualification ou Simulation. Le premier appel noté
 (ou le premier rappel daté) l'y fait sortir vers son dossier, où vit son rappel ; il n'est
@@ -2056,6 +2084,11 @@ Chaque version affiche ses résultats (simulations, publiées, masquées, choisi
 
 ### Espaces clients (`/espaces`, `src/lib/espace/suivi.ts`)
 
+> Mission 18 (A1, 03/10/2026) : l'onglet est retiré. L'état de l'espace est la colonne « Espace » et le filtre
+> « Espaces » de Dossiers (`/dossiers?espace=TOUS`, où `/espaces` redirige ; `suivi.ts › espacesDesDossiers`) ; les
+> gestes restent dans le bloc Espace du panneau du dossier et dans la fiche client. La description ci-dessous est
+> celle de l'ancien onglet.
+
 Une carte par espace : étape, ce qui est fait, dernière visite, qui a la main (moi / client) ;
 signaux (photos sans simulation, autre proposition demandée, brouillons, devis relu sans
 signature, lien jamais ouvert après 48 h, lien qui expire, date à fixer) ; tri « à moi d'abord » ;
@@ -2203,7 +2236,7 @@ Matrice complète : `docs/COHERENCE.md`. À retenir pour toute évolution :
 - **L'étape suit l'argent** : `suivreSoldeDossier` (factures) et `suivreAcompteDossier` (acompte → Signé, et retour).
 - **Simulation du site = lead** (plus de dossier d'office) ; `dossiers/archivage.ts` archive / restaure un dossier et
   rend ses simulations au lead.
-- **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Tâches de fond, `corrigerIncoherence`).
+- **Contrôle** : `src/lib/coherence/controle.ts` (démarrage + quotidien, Paramètres › Système, `corrigerIncoherence`).
 
 ## 25. Appels, rappels, relances, SMS : un seul circuit (mission 14, 29/09/2026)
 
@@ -2290,10 +2323,34 @@ un texte est proposé, puis le lead suivant (`GET /api/leads/suivant`).
   `LIEN_ESPACE` si le lien n'a jamais été communiqué) ; deux au plus ; une simulation faite
   sur le site compte (`espace/simulations-faites.ts`, règle unique « a fait une
   simulation »).
+- **Demande d'avis** (mission 18, A4, `relances/avis.ts`) : chantier fini (« Facturé » ou
+  « Encaissé ») sans avis dans l'espace, `DELAI_RELANCE_AVIS` jours (7 au départ) après le
+  mail « Projet terminé » parti, sinon après le passage en Facturé depuis une étape en cours
+  (ni retour, ni reprise) : SMS `DEMANDE_AVIS` avec le lien de l'espace (`#apres`), une
+  seule fois, plus rien après 60 jours ; jamais vers un numéro en STOP. Le mail « Projet
+  terminé » reste l'automatisme existant, avec son interrupteur.
+- **Réactivation à 6 mois** (mission 18, A4, `relances/reactivation.ts`) : contact « sans
+  suite » depuis 180 jours (date de la perte : `Lead.perteLe`, sinon celle de son dossier
+  perdu ; jamais `updatedAt`), dont la dernière déclaration est l'accord aux messages
+  commerciaux et dont aucune adresse n'est désinscrite (`relances/accord-commercial.ts`,
+  règle partagée par la liste, la proposition du SMS et sa copie) ; ni dossier vivant ni
+  autre contact actif pour son client ; un client, une réactivation. SMS `REACTIVATION`
+  sans lien, une fois, tracé sur le lead (« SMS REACTIVATION copié : … »), même s'il garde
+  un dossier perdu.
+- **Plus de séquences de mails** (mission 18, A4) : `mail/sequences.ts`, ses quatre
+  interrupteurs `SEQUENCE_*`, le travail `sequences-mail` et le paramètre `MAIL_EXPEDITEUR`
+  sont retirés ; les modèles `SequenceMail`, `EtapeSequence`, `InscriptionSequence` et leurs
+  lignes restent en base (`db push` au démarrage). La désinscription reste
+  (`mail/desinscription.ts`, route `api/site/desinscription` appelée par le site).
 - **Source unique** : `relances/proposables.ts › relancesProposables` → `GET /api/relances`,
   la feuille Relances de l'écran Leads (`FeuilleRelances.tsx`), la rubrique de la fiche
-  du dossier, `voir_relances`, `manager_operations`, la ligne du jour. Tout est proposé,
-  rien n'est envoyé. L'ancien circuit `relances-sms` est **retiré** (section 20 ;
+  du dossier, `voir_relances`, `manager_operations`, la ligne du jour, le détecteur de
+  tâches RELANCES (RELANCER_DEVIS, RELANCER_PHOTOS, RELANCER_AVIS, REACTIVER). Elle rend
+  `{ devis, photos, avis, reactivations, total }` ; la fiche d'un dossier n'a pas de
+  réactivation (elle porte sur un contact). La feuille Relances a une section par type.
+  Chaque relance a son discriminant (`estRelanceDevis`, `estRelancePhotos`,
+  `estRelanceAvis`, `estRelanceReactivation`) : aucune n'est « un devis par défaut ». Tout
+  est proposé, rien n'est envoyé. L'ancien circuit `relances-sms` est **retiré** (section 20 ;
   migration `relances-un-circuit-14-6` : modèles archivés, délai photos posé, mains
   relues).
 
@@ -2348,7 +2405,7 @@ ajouté change l'empreinte du catalogue : reconnecter le connecteur Claude.
   notification) ; le résumé le dit.
 - L'état « API Google Calendar non activée » ne se lit que tant qu'une tâche attend pour
   cette raison : après l'activation, la carte le dit encore jusqu'au passage suivant (6 h
-  au plus ; « Reconnecter » tout de suite — « Relancer » dans Tâches de fond ne vaut que
+  au plus ; « Reconnecter » tout de suite — « Relancer » dans Paramètres › Système ne vaut que
   pour une tâche en échec ou annulée, pas pour une tâche en attente).
 - `commercial/pilotage.ts › relancesAValider` et `ce_qui_m_attend` comptent toutes les
   propositions en attente, pas seulement les relances.

@@ -399,6 +399,18 @@ export async function executerPropositionValidee(charge: unknown, contexte: Cont
   const definition = definitionDe(proposition.type);
   if (!definition) throw new ErreurDefinitive(`Type de proposition inconnu : ${proposition.type}`);
   const contenu = analyser(definition.schema, lireJson(proposition.contenuValide) ?? {});
+  // Mission 18 (B2) : relue au moment d'exécuter (un devis annulé ou remplacé entre la validation et l'envoi) : rien ne part.
+  // Relecture : sauf si le message est déjà parti (tâche rejouée après une coupure) — `executer` écrit alors ce qui manque.
+  const dejaParti = (await definition.dejaExecutee?.(contenu, propositionId)) ?? false;
+  const sansObjet = dejaParti ? null : await definition.pertinente?.(contenu);
+  if (sansObjet) {
+    await prisma.proposition.updateMany({
+      where: { id: propositionId, statut: "VALIDEE" },
+      data: { statut: "ANNULEE", commentaireRejet: `Sans objet au moment de l'exécution : ${sansObjet}`.slice(0, 1000) },
+    });
+    await signalerChangementTaches();
+    return { sansObjet };
+  }
 
   try {
     const sortie = await avecActeur(

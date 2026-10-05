@@ -76,6 +76,28 @@ function deposer(dossierId: string, extra: Record<string, unknown> = {}) {
   );
 }
 
+/**
+ * Mission 18 (B1) : générer n'est pas envoyer. Un devis émis sans annonce (pas d'adresse, `notifier: false`) reste masqué ;
+ * le rendre visible dans l'espace l'envoie (étape, main au client) — l'état que ces essais supposaient après l'émission.
+ */
+/**
+ * Mission 18 (relecture) : un devis du CRM rendu visible n'est envoyé que s'il est annoncé (espace ouvert, adresse
+ * valide) — le dossier reçoit une adresse s'il n'en a pas, comme un vrai client qu'on prévient.
+ */
+async function avecAdresse(dossierId: string) {
+  const d = await dossierDe(dossierId);
+  if (!d.clientEmail) await prisma.dossier.update({ where: { id: dossierId }, data: { clientEmail: `dossier-${dossierId}@example.test` } });
+}
+
+async function devisEnvoye(dossierId: string, objet: string, quantite: number, prixUnitaire: number) {
+  await avecAdresse(dossierId);
+  const { document } = await avecActeur(LUCAS, () =>
+    documents.genererDocument(dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet, lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite, unite: "ml", prixUnitaire }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
+  );
+  await avecActeur(LUCAS, () => documents.modifierPresentationDevis(dossierId, document.id, { visibleEspace: true }));
+  return document;
+}
+
 /** Un mail du client (ou ma réponse), tracé dans le dossier par la vraie fonction de rattachement. */
 async function mail(dossierId: string, sens: "ENTRANT" | "SORTANT", fil: string, recuLe = new Date()) {
   const d = await dossierDe(dossierId);
@@ -229,23 +251,32 @@ describe("R1 : un devis visible, émis ou déposé, c'est « Devis envoyé »", 
     const { document: devis } = await avecActeur(LUCAS, () =>
       documents.genererDocument(c.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Cuisine", lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite: 3, unite: "ml", prixUnitaire: 140 }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
     );
-    assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");
+    // Mission 18 (B1) : générer n'est pas envoyer — masqué, le dossier reste où il est, la main est à moi.
+    const genere = await dossierDe(c.dossierId);
+    assert.deepEqual([genere.etape, genere.main, genere.mainMotif], ["QUALIFICATION", "MOI", `Devis prêt, pas encore envoyé (${devis.numero}) : à lui envoyer`]);
     const permanent = await prisma.espacePermanent.findUniqueOrThrow({ where: { id: c.permanentId } });
+    assert.ok(!(await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id), "pas envoyé : absent de « Mes documents »");
+    await avecAdresse(c.dossierId);
+    const envoye = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: true }));
+    assert.equal(envoye.passage?.vers, "DEVIS_ENVOYE", "rendu visible : envoyé");
+    assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");
     assert.ok((await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id));
 
+    // Mission 18 (B6) : le seul devis masqué, le dossier revient avant « Devis envoyé » et la main est à moi (le refaire).
     const masque = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: false }));
-    assert.equal(masque.passage, null);
+    assert.deepEqual([masque.passage?.vers, masque.passage?.nature], ["QUALIFICATION", "RETOUR"]);
     const d = await dossierDe(c.dossierId);
-    assert.deepEqual([d.etape, d.main, d.mainMotif], ["DEVIS_ENVOYE", "CLIENT", "Étape « Devis envoyé »"], "l'étape ne recule pas ; le motif ne parle plus d'un devis qu'il ne voit pas");
+    assert.deepEqual([d.etape, d.main, d.mainMotif], ["QUALIFICATION", "MOI", `Devis ${devis.numero} masqué : refaire le devis`], "revenu avant le devis ; le motif ne parle plus d'un devis qu'il ne voit pas");
     assert.ok(!(await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id), "masqué : absent de « Mes documents »");
     await assert.rejects(compte.pdfPourLeClient(permanent, devis.id), /introuvable/i);
     await assert.rejects(compte.pdfDuProjetPourLeClient(await espaceDe(c.espaceId), devis.id), /introuvable/i);
 
     const rendu = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: true }));
-    assert.equal(rendu.passage, null, "déjà en « Devis envoyé » : pas de passage");
+    assert.equal(rendu.passage?.vers, "DEVIS_ENVOYE", "remis en ligne : de nouveau envoyé");
     assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");
     await avecActeur(LUCAS, () => documents.annulerDevis(c.dossierId, devis.id, "erreur de métrage"));
-    assert.equal((await dossierDe(c.dossierId)).mainMotif, "Étape « Devis envoyé »", "annulé : il n'attend plus sa réponse");
+    const annule = await dossierDe(c.dossierId);
+    assert.deepEqual([annule.etape, annule.main, annule.mainMotif], ["QUALIFICATION", "MOI", `Devis ${devis.numero} annulé : refaire le devis`], "annulé : il n'attend plus sa réponse");
   });
 });
 
@@ -264,9 +295,7 @@ describe("R2 : un message du client sans réponse, c'est à moi", () => {
 
   test("un mail rattaché → « Répondre à … » partout ; une publication ne la reprend pas ; ma réponse par mail la rend au client", async () => {
     const c = await contact("Gaspard");
-    await avecActeur(LUCAS, () =>
-      documents.genererDocument(c.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Salle de bain", lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite: 2, unite: "ml", prixUnitaire: 150 }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
-    );
+    await devisEnvoye(c.dossierId, "Salle de bain", 2, 150);
     let d = await dossierDe(c.dossierId);
     assert.deepEqual([d.etape, d.main], ["DEVIS_ENVOYE", "CLIENT"]);
 
@@ -315,9 +344,7 @@ describe("R2 : un message du client sans réponse, c'est à moi", () => {
 
   test("un mail déplacé dans un autre dossier du client : l'ancien n'est plus épinglé, le nouveau l'est", async () => {
     const c = await contact("Romeo");
-    await avecActeur(LUCAS, () =>
-      documents.genererDocument(c.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Cuisine", lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite: 2, unite: "ml", prixUnitaire: 150 }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
-    );
+    await devisEnvoye(c.dossierId, "Cuisine", 2, 150);
     const recu = await mail(c.dossierId, "ENTRANT", "fil-romeo");
     const a = await dossierDe(c.dossierId);
     assert.equal(a.mainMotif, `Répondre à ${c.nom}`);
@@ -330,9 +357,7 @@ describe("R2 : un message du client sans réponse, c'est à moi", () => {
   test("contrôle de cohérence, même définition que la main : un mail rangé ne lève rien ; une main affichée « chez le client » face à un mail sans réponse, si", async () => {
     const controle = await import("@/lib/coherence/controle");
     const c = await contact("Theo");
-    await avecActeur(LUCAS, () =>
-      documents.genererDocument(c.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Cuisine", lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite: 2, unite: "ml", prixUnitaire: 150 }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
-    );
+    await devisEnvoye(c.dossierId, "Cuisine", 2, 150);
     const range = await mail(c.dossierId, "ENTRANT", "fil-theo-1", new Date(Date.now() - 3 * JOUR));
     assert.equal((await dossierDe(c.dossierId)).main, "MOI");
     await avecActeur(LUCAS, () => v2.rangerMail(range, "Pas de réponse à faire"));
@@ -413,9 +438,7 @@ describe("migration qui-a-la-main-14-1", () => {
 
     // Lucas a ramené celui-ci en Simulation (retour en arrière) alors que son devis était émis : il y reste.
     const r = await contact("Rosalie");
-    await avecActeur(LUCAS, () =>
-      documents.genererDocument(r.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Cuisine", lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite: 2, unite: "ml", prixUnitaire: 150 }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
-    );
+    await devisEnvoye(r.dossierId, "Cuisine", 2, 150);
     const transitions = await import("@/lib/dossiers/transitions");
     await avecActeur(LUCAS, () => transitions.changerEtape(r.dossierId, { vers: "SIMULATION" }));
     assert.equal((await dossierDe(r.dossierId)).etape, "SIMULATION");

@@ -3,12 +3,21 @@ import { analyser, lireFormulaire, reponseErreur, texteFormulaire } from "@/lib/
 import { lirePage } from "@/lib/commun/pagination";
 import { creerDossier, pageDossiers, schemaCreation } from "@/lib/dossiers/dossiers";
 import { ErreurMetier } from "@/lib/dossiers/erreurs";
+import { estEtapeEspace } from "@/lib/espace/etapes";
+import { estFiltreEspace, estTriEspace } from "@/lib/espace/suivi-types";
 
-/** GET ?page=1&vue=EN_COURS|TOUS|A_FAIRE&q=…&inactifs=0 : une page de 50 dossiers, filtrée ici (mission 13, lot 6). */
+/**
+ * GET ?page=1&vue=EN_COURS|TOUS|A_FAIRE&q=…&inactifs=0 : une page de 50 dossiers, filtrée ici (mission 13, lot 6).
+ * Mission 18 (A1) : &espace=TOUS|MOI|CLIENT|SIGNAUX|DESACTIVES (&etapeEspace=…) — le filtre « Espaces » (ex-onglet
+ * Espaces clients) ; il remplace la vue et les inactifs. &triEspace=MAIN|ACTIVITE|CREATION : son tri (relecture de la partie A).
+ */
 export async function GET(requete: NextRequest) {
   try {
     const parametres = requete.nextUrl.searchParams;
     const vue = parametres.get("vue");
+    const espace = parametres.get("espace");
+    const etapeEspace = parametres.get("etapeEspace");
+    const triEspace = parametres.get("triEspace");
     const { page, parPage } = lirePage(parametres);
     return NextResponse.json(
       await pageDossiers({
@@ -17,6 +26,9 @@ export async function GET(requete: NextRequest) {
         vue: vue === "TOUS" || vue === "A_FAIRE" ? vue : "EN_COURS",
         recherche: parametres.get("q")?.slice(0, 120) ?? undefined,
         masquerInactifs: parametres.get("inactifs") === "0",
+        espace: estFiltreEspace(espace) ? espace : undefined,
+        etapeEspace: estEtapeEspace(etapeEspace) ? etapeEspace : undefined,
+        triEspace: estTriEspace(triEspace) ? triEspace : undefined,
       })
     );
   } catch (erreur) {

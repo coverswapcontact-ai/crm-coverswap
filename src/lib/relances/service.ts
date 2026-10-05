@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { EMETTEUR } from "@/lib/dossiers/constants";
-import { dateEnLettres } from "@/lib/dossiers/dates";
+import { dateEnLettres, jourParis } from "@/lib/dossiers/dates";
 import { lireParametre } from "@/lib/parametres/service";
 import type { PropositionSms } from "@/lib/sms/catalogue";
 import { lecteurDuStop } from "@/lib/sms/conversations";
@@ -38,11 +38,11 @@ export async function lireDelaiRelance(maintenant: Date = new Date()): Promise<{
   return valeur === null ? { jours: DELAI_RELANCE_DEFAUT_JOURS, parametre: false } : { jours: Number(valeur), parametre: true };
 }
 
-function texteRelance(entree: { prenom: string | null; numero: string; emisLe: Date; rang: number }): { objet: string; texte: string } {
+function texteRelance(entree: { prenom: string | null; numero: string; emisLe: Date; envoyeLe: Date; rang: number }): { objet: string; texte: string } {
   const bonjour = entree.prenom ? `Bonjour ${entree.prenom},` : "Bonjour,";
   const corps =
     entree.rang === 1
-      ? `Je me permets de revenir vers vous au sujet du devis n° ${entree.numero} que je vous ai adressé le ${dateEnLettres(entree.emisLe)}. Avez-vous pu en prendre connaissance ?\n\nJe reste à votre disposition pour toute question, ou pour l'ajuster si besoin.`
+      ? `Je me permets de revenir vers vous au sujet du devis n° ${entree.numero} que je vous ai adressé le ${dateEnLettres(entree.envoyeLe)}. Avez-vous pu en prendre connaissance ?\n\nJe reste à votre disposition pour toute question, ou pour l'ajuster si besoin.`
       : `Je reviens vers vous une dernière fois au sujet du devis n° ${entree.numero} du ${dateEnLettres(entree.emisLe)}. Si votre projet a changé ou a été reporté, un simple mot me permettra de mettre à jour mon suivi.\n\nJe reste à votre disposition.`;
   return {
     objet: `Votre devis n° ${entree.numero} — CoverSwap`,
@@ -53,18 +53,73 @@ function texteRelance(entree: { prenom: string | null; numero: string; emisLe: D
 /**
  * Mission 14 (R1) : la 1re relance attend le délai à partir du moment où le client a le devis — la plus tardive
  * de sa date d'émission et de son dépôt dans le CRM (un devis déposé aujourd'hui, daté d'avant, attend le délai).
+ * Mission 18 (B2) : et de son envoi, quand il est parti après sa génération (événement « Devis envoyé » : mail du
+ * CRM, mise en ligne) — un devis généré masqué puis envoyé par mail trois jours plus tard attend le délai depuis l'envoi.
  */
-export function referenceDuDevis(devis: { dateEmission: Date; createdAt: Date }): Date {
-  return devis.createdAt.getTime() > devis.dateEmission.getTime() ? devis.createdAt : devis.dateEmission;
+export function referenceDuDevis(devis: { dateEmission: Date; createdAt: Date }, envoi: Date | EnvoiDuDevis | null = null): Date {
+  const lu = envoi instanceof Date ? { le: envoi, depuisLeMail: false } : envoi;
+  // Mission 18 (B3) : envoyé depuis Gmail puis enregistré après coup — l'heure du mail fait foi, pas celle du dépôt (une
+  // émission datée au jour, midi, le jour même du mail ne la repousse pas).
+  if (lu?.depuisLeMail) return jourParis(devis.dateEmission) > jourParis(lu.le) ? devis.dateEmission : lu.le;
+  const dates = [devis.dateEmission, devis.createdAt, ...(lu ? [lu.le] : [])];
+  return dates.reduce((plusTard, date) => (date.getTime() > plusTard.getTime() ? date : plusTard));
 }
 
-/** Les dossiers en « Devis envoyé » ou « Relance », non archivés (un seul si `dossierId` ; `touteEtape` : quelle que soit son étape). */
+/** Un envoi de devis : sa date ; `depuisLeMail` : envoyé depuis Gmail, la date est celle du mail (mission 18, B3). */
+export type EnvoiDuDevis = { le: Date; depuisLeMail: boolean };
+
+/**
+ * Le dernier envoi d'un devis (événement « Devis envoyé » qui le porte), parmi ceux chargés avec son dossier : sa date
+ * d'écriture, ou celle du mail parti de Gmail (`envoyeLe` de l'événement, mission 18, B3).
+ */
+export function envoiDuDevis(dossier: { evenements: { metadata: string; createdAt: Date }[] }, devisId: string): EnvoiDuDevis | null {
+  const envois = dossier.evenements
+    .filter((e) => e.metadata.includes(devisId))
+    .map((e) => {
+      let meta: { canal?: unknown; envoyeLe?: unknown } = {};
+      try {
+        meta = JSON.parse(e.metadata) as typeof meta;
+      } catch {
+        // Metadata illisible : la date d'écriture.
+      }
+      const duMail = meta.canal === "GMAIL" && typeof meta.envoyeLe === "string" && !Number.isNaN(Date.parse(meta.envoyeLe));
+      return duMail ? { le: new Date(meta.envoyeLe as string), depuisLeMail: true } : { le: e.createdAt, depuisLeMail: false };
+    });
+  return envois.reduce<EnvoiDuDevis | null>((dernier, envoi) => (!dernier || envoi.le.getTime() > dernier.le.getTime() ? envoi : dernier), null);
+}
+
+/**
+ * Mission 18 (B5) : le jour où le client a eu le devis, pour le dire (« envoyé le », « envoyé il y a N jours », « adressé
+ * le » de la relance) : son dernier envoi (mail du CRM, Gmail, mise en ligne dans l'espace), sinon son émission. Le dépôt
+ * dans le CRM n'est pas un envoi (la référence du délai, elle, le compte : `referenceDuDevis`).
+ */
+export function dateDEnvoiDuDevis(devis: { dateEmission: Date }, envoi: EnvoiDuDevis | null): Date {
+  return referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.dateEmission }, envoi);
+}
+
+/**
+ * Les dossiers en « Devis envoyé » ou « Relance », non archivés (un seul si `dossierId` ; `touteEtape` : quelle que soit
+ * son étape), avec leurs devis à relancer. Mission 18 (relecture) : jamais un devis généré mais pas encore envoyé (visible
+ * sans annonce : variante silencieuse, espace fermé, pas d'adresse — `devisAEnvoyer`) ; la relance reste sur le devis
+ * réellement envoyé, et ne parle pas d'un devis « adressé » que le client n'a pas reçu.
+ */
 async function chargerDossiersARelancer(filtre: { dossierId?: string; touteEtape?: boolean } = {}) {
+  const dossiers = await lireDossiersARelancer(filtre);
+  if (dossiers.length === 0) return dossiers;
+  const { devisAEnvoyer } = await import("@/lib/dossiers/devis-envoye");
+  const pasEnvoyes = new Set((await devisAEnvoyer(prisma, dossiers.map((d) => d.id))).map((d) => d.documentId));
+  if (pasEnvoyes.size === 0) return dossiers;
+  return dossiers.map((d) => ({ ...d, documents: d.documents.filter((document) => !pasEnvoyes.has(document.id)) }));
+}
+
+async function lireDossiersARelancer(filtre: { dossierId?: string; touteEtape?: boolean }) {
   return prisma.dossier.findMany({
     where: filtre.dossierId && filtre.touteEtape ? { id: filtre.dossierId } : { ...(filtre.dossierId ? { id: filtre.dossierId } : {}), etape: { in: ["DEVIS_ENVOYE", "RELANCE"] }, archiveLe: null },
     include: {
       // Mission 14 : seulement les devis que le client voit, jamais un devis archivé (l'extension ne filtre pas les include).
       documents: { where: { type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true, archiveLe: null }, orderBy: { dateEmission: "desc" } },
+      // Mission 18 (B2) : les envois des devis, du plus récent au plus ancien (référence des relances).
+      evenements: { where: { type: "DEVIS_ENVOYE", archiveLe: null }, orderBy: { createdAt: "desc" }, select: { metadata: true, createdAt: true } },
       // Le numéro du SMS : celui du lead d'abord (`proposerSms`), sinon celui du dossier — pour le STOP.
       lead: { select: { telephone: true } },
       client: {
@@ -128,6 +183,9 @@ export type DevisARelancer = {
   totalHt: number;
   emisLe: string;
   joursDepuisEmission: number;
+  /** Mission 18 (B5) : le dernier envoi du devis (mail, Gmail, mise en ligne), sinon son émission (`dateDEnvoiDuDevis`). */
+  envoyeLe: string;
+  joursDepuisEnvoi: number;
   relancesFaites: number;
   derniereRelanceLe: string | null;
   prochaineProposableLe: string | null;
@@ -195,7 +253,9 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
   for (const { dossier, devis, numero, emisLe, relances, rang } of etats) {
     const consentement = dossier.client?.consentements[0]?.statut;
     const adresse = dossier.clientEmail ?? dossier.client?.emails[0]?.adresse ?? null;
-    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: emisLe, createdAt: devis.createdAt });
+    const envoi = envoiDuDevis(dossier, devis.id);
+    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: emisLe, createdAt: devis.createdAt }, envoi);
+    const envoyeLe = dateDEnvoiDuDevis({ dateEmission: emisLe }, envoi);
     const prochaine = relances.length < RELANCES_MAX_PAR_DEVIS ? new Date(reference.getTime() + delai * JOUR_MS) : null;
     const proposition = mails.find((p) => p.statut === "EN_ATTENTE" && p.contenu.includes(devis.id));
     // Le mail de CE rang déjà décidé : validé (il part), en échec, ou écarté. Celui d'un rang passé est compté par sa trace.
@@ -220,6 +280,8 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
       totalHt: devis.totalHt,
       emisLe: emisLe.toISOString(),
       joursDepuisEmission: Math.floor((maintenant.getTime() - emisLe.getTime()) / JOUR_MS),
+      envoyeLe: envoyeLe.toISOString(),
+      joursDepuisEnvoi: Math.max(0, Math.floor((maintenant.getTime() - envoyeLe.getTime()) / JOUR_MS)),
       relancesFaites: relances.length,
       derniereRelanceLe: relances[0]?.le.toISOString() ?? null,
       prochaineProposableLe: prochaine?.toISOString() ?? null,
@@ -234,7 +296,8 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
       mailTraite: traite ? { propositionId: traite.id, statut: traite.statut as StatutMailTraite } : null,
     });
   }
-  return { delai, delaiParDefaut: !parametre, devis: liste.sort((a, b) => b.joursDepuisEmission - a.joursDepuisEmission) };
+  // Mission 18 (relecture) : les plus anciens d'abord, comptés depuis l'envoi (mise en ligne, mail) et non l'émission.
+  return { delai, delaiParDefaut: !parametre, devis: liste.sort((a, b) => b.joursDepuisEnvoi - a.joursDepuisEnvoi || b.joursDepuisEmission - a.joursDepuisEmission) };
 }
 
 /* ── Le mail de relance (proposition à valider) ───────────────────────────── */
@@ -269,21 +332,24 @@ export async function relancerDevis(dossierId: string, options: { maintenant?: D
   const relances = relancesDuDevis(await tracesDeRelance([dossier.id]), dossier.id, devis.id);
   if (relances.length >= RELANCES_MAX_PAR_DEVIS) throw new ErreurMetier(`Déjà ${RELANCES_MAX_PAR_DEVIS} relances faites pour le devis ${devis.numero} (mail ou SMS) : plus de relance.`, 409);
   const delai = options.delai === undefined || options.delai === null ? (await lireDelaiRelance(maintenant)).jours : options.delai;
-  const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt });
+  const envoi = envoiDuDevis(dossier, devis.id);
+  const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt }, envoi);
   if (!options.forcer && maintenant.getTime() - reference.getTime() < delai * JOUR_MS) throw new ErreurMetier("Délai de relance pas encore écoulé.", 409);
   const rang = relances.length + 1;
   // « relancer » (forcer) : le mail de ce rang déjà validé, en échec ou écarté n'est jamais reproposé — le dire tout de suite.
   const existant = options.forcer ? await prisma.proposition.findUnique({ where: { cleUnicite: cleRelance(devis.id, rang) }, select: { statut: true } }) : null;
   if (existant && existant.statut !== "EN_ATTENTE") throw new ErreurMetier(mailDejaTraite(rang, devis.numero, existant.statut), 409);
-  const jours = Math.floor((maintenant.getTime() - devis.dateEmission.getTime()) / JOUR_MS);
-  const { objet, texte } = texteRelance({ prenom: dossier.client?.prenom ?? null, numero: devis.numero, emisLe: devis.dateEmission, rang });
+  // Mission 18 (B5) : « envoyé il y a N jours », « adressé le » : depuis l'envoi (mail, Gmail, mise en ligne), pas l'émission.
+  const envoyeLe = dateDEnvoiDuDevis({ dateEmission: devis.dateEmission }, envoi);
+  const jours = Math.max(0, Math.floor((maintenant.getTime() - envoyeLe.getTime()) / JOUR_MS));
+  const { objet, texte } = texteRelance({ prenom: dossier.client?.prenom ?? null, numero: devis.numero, emisLe: devis.dateEmission, envoyeLe, rang });
   if (options.apercuSeulement) return { propositionId: "", creee: false, rang, numero: devis.numero, documentId: devis.id, a: adresse, objet, texte };
   const { id, creee } = await proposer({
     type: "ENVOI_MAIL",
     titre: `Relancer ${dossier.clientNom} : devis ${devis.numero}`,
     resume: `Devis envoyé il y a ${jours} jours, sans réponse enregistrée. Relance n° ${rang} sur ${RELANCES_MAX_PAR_DEVIS}.${options.forcer ? " Demandée par Lucas (sans attendre le délai)." : ""}`,
     raisonnement: `Dossier à l'étape « ${dossier.etape === "RELANCE" ? "Relance" : "Devis envoyé"} » ; ${
-      relances.length ? `dernière relance (${relances[0].canal === "SMS" ? "SMS" : "mail"}) le ${dateEnLettres(relances[0].le)}` : `devis émis le ${dateEnLettres(devis.dateEmission)}`
+      relances.length ? `dernière relance (${relances[0].canal === "SMS" ? "SMS" : "mail"}) le ${dateEnLettres(relances[0].le)}` : envoi ? `devis émis le ${dateEnLettres(devis.dateEmission)}, envoyé le ${dateEnLettres(envoyeLe)}` : `devis émis le ${dateEnLettres(devis.dateEmission)}`
     } ; délai de relance : ${delai} jours.`,
     contenu: { motif: "RELANCE_DEVIS", dossierId: dossier.id, clientId: dossier.clientId, a: adresse, objet, texte, documentIds: [devis.id] },
     cleUnicite: cleRelance(devis.id, rang),
@@ -320,7 +386,7 @@ export async function proposerRelances(maintenant: Date = new Date()): Promise<R
     }
     const relances = relancesDuDevis(traces, dossier.id, devis.id);
     if (relances.length >= RELANCES_MAX_PAR_DEVIS) continue;
-    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt });
+    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt }, envoiDuDevis(dossier, devis.id));
     if (maintenant.getTime() - reference.getTime() < delai * JOUR_MS) continue;
     const { creee } = await relancerDevis(dossier.id, { maintenant, delai });
     if (creee) resume.proposees++;

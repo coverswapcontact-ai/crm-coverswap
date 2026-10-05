@@ -146,7 +146,8 @@ describe("Mission 11 : libérer le MCP", () => {
   test("« generer_document » : deux devis à libellés qui s'ajoutent (sans mail), une remise en ligne négative ; « annuler_document » annule l'un ; l'autre reste proposé", async () => {
     const lignes = [{ designation: "Revêtement adhésif — façades", quantite: 11.5, unite: "ml", prix_unitaire: 150 }];
     const a = await confirmer("generer_document", { dossierId: ids.dossierFares, type: "DEVIS", objet: "Cuisine", lignes, libelle_variante: "façades seules", notifier: false });
-    assert.match(a, /« façades seules » émis .* proposé dans son espace, sans mail/);
+    // Mission 18 (relecture) : une variante silencieuse est visible mais pas envoyée (« Devis envoyé » = visible ET notifié, ou mail).
+    assert.match(a, /« façades seules » émis .* visible dans son espace sans annonce : PAS encore envoyé/);
     ids.devisA = donneesDe<{ documentId: string }>(a).documentId;
     const apercuB = await appeler("generer_document", { dossierId: ids.dossierFares, type: "DEVIS", objet: "Cuisine", lignes: [...lignes, { designation: "Plan de travail", quantite: 4.6, unite: "ml", prix_unitaire: 150 }], libelle_variante: "façades + plan de travail", remise: 100, notifier: false });
     assert.match(apercuB, /Il s'ajoute au devis \d{4}-\d{3} déjà proposé : le client en choisira un/);

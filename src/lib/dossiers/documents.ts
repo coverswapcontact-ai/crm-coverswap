@@ -1,5 +1,7 @@
 import { z } from "zod/v4";
 import { recalculerMain } from "./main";
+import { appliquerEvenementDossier, suitesEvenementDossier } from "./synchro";
+import { phraseRetrait, retirerDevis } from "./devis-retire";
 import prisma, { type Transaction } from "@/lib/prisma";
 import {
   imputerSurFacture,
@@ -18,17 +20,16 @@ import {
   type EtapeDossier,
   type LigneDocument,
   type TypeDocument,
-  PROCHAINE_ACTION_APRES_DEVIS,
-  PROCHAINE_ACTION_PREPARER_DEVIS,
 } from "./constants";
 import { ErreurMetier } from "./erreurs";
 import { mentionsLegales, type CategorieDestinataire } from "./mentions";
 import { calculerMontants, formatCentimes, versCentimes } from "./montants";
-import { etapeApresGeneration } from "./devis-envoye";
+import { envoiALaGeneration, etapeApresGeneration } from "./devis-envoye";
 import { attribuerNumero, numeroFactice } from "./numerotation";
 import { estEtape } from "./regles";
 import { archiverFichier, enregistrerPdf, lireFichier, lireLignes } from "./stockage";
-import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "./transitions";
+import { ecrireStatutLead } from "./statut-lead";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "./transitions";
 
 const arrondiCentieme = (valeur: number) => versCentimes(valeur) / 100;
 
@@ -198,7 +199,7 @@ type Emission = {
   motifAvoir?: string | null;
   factureOrigine?: { numero: string; dateEmission: Date } | null;
   libelleVariante?: string | null;
-  /** Faux : pas de notification « votre devis est disponible ». */
+  /** Faux : pas de notification « votre devis est disponible » (mission 18, B1 : en Qualification ou Simulation, le devis reste alors masqué, pas envoyé). */
   notifier?: boolean;
   /** Écritures propres au type, dans la transaction de l'émission (devis remplacé, facture annulée). */
   pendant?: (tx: Transaction, document: { id: string; numero: string }) => Promise<void>;
@@ -245,6 +246,13 @@ async function emettre(emission: Emission) {
   // verrouillée pendant le rendu.
   const essai = await rendreDocumentPdf(donneesPdf);
 
+  // Mission 18 (B1) : générer n'est pas envoyer. La notification partirait-elle ? Lu avant la transaction (même
+  // lecture que l'envoi) : le devis n'est « envoyé » (étape, main, relances) que s'il est annoncé (devis-envoye.ts).
+  const envoi =
+    emission.type === "DEVIS"
+      ? envoiALaGeneration({ etape: emission.etape, notifier: emission.notifier !== false, ...(await (await import("@/lib/mail/notifications")).peutNotifier("DEVIS_DISPONIBLE", emission.dossierId)) })
+      : null;
+
   const ecrit: { chemin?: string } = {};
   try {
     const resultat = await prisma.$transaction(
@@ -274,6 +282,7 @@ async function emettre(emission: Emission) {
             documentOrigineId: emission.documentOrigineId ?? null,
             motifAvoir: emission.motifAvoir ?? null,
             libelleVariante: emission.libelleVariante ?? null,
+            ...(envoi ? { visibleEspace: envoi.visible } : {}),
           },
         });
         await tx.numeroDocument.update({
@@ -291,12 +300,12 @@ async function emettre(emission: Emission) {
             type: EVENEMENT_GENERE[emission.type],
             direction: "INTERNE",
             contenu: `${LIBELLE_GENERE[emission.type](numero)}${emission.libelleVariante ? ` « ${emission.libelleVariante} »` : ""} : ${formatCentimes(totalHtCentimes)}`,
-            metadata: JSON.stringify({ documentId: document.id, numero, totalHt: document.totalHt, client: destinataire }),
+            metadata: JSON.stringify({ documentId: document.id, numero, totalHt: document.totalHt, client: destinataire, ...(envoi ? { envoye: envoi.envoye, visibleEspace: envoi.visible } : {}) }),
           },
         });
 
-        // Mission 14 : un devis n'est « envoyé » que s'il est visible dans l'espace (un devis généré l'est toujours aujourd'hui).
-        const vers = emission.type === "DEVIS" && document.visibleEspace === false ? null : etapeApresGeneration(emission.type, emission.etape);
+        // Mission 18 (B1) : un devis n'avance l'étape que s'il est envoyé (annoncé : devis-envoye.ts › annonceAboutit).
+        const vers = envoi && !envoi.envoye ? null : etapeApresGeneration(emission.type, emission.etape);
         const changements: ChangementEtape[] = vers
           ? [
               await appliquerChangementEtape(tx, {
@@ -308,25 +317,32 @@ async function emettre(emission: Emission) {
               }),
             ]
           : [];
+        // Mission 18 (relecture) : le devis envoyé fait suivre le statut du lead DANS la transaction ; la main est écrite
+        // plus bas par le point d'entrée : le changement est synchronisé (ses effets d'après ne refont ni l'un ni l'autre).
+        if (envoi && vers) {
+          await ecrireStatutLead(tx, emission.dossierId, vers);
+          marquerSynchronise(changements[0]);
+        }
         // Facture déjà couverte par les acomptes : le dossier est encaissé.
         const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
         if (solde) changements.push(solde);
-        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste.
-        if (emission.type === "DEVIS") {
-          await tx.dossier.updateMany({
-            where: { id: emission.dossierId, prochaineAction: { startsWith: PROCHAINE_ACTION_PREPARER_DEVIS } },
-            data: { prochaineAction: PROCHAINE_ACTION_APRES_DEVIS, prochaineActionDate: null },
-          });
-        }
-        return { document, changements };
+        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait : « Attendre l'accord » s'il est
+        // envoyé, « Envoyer le devis » sinon. Une action écrite par Lucas reste (mission 18 : par le point d'entrée, qui
+        // écrit la main dans la transaction ; un devis pas envoyé me la donne).
+        const suites = envoi ? await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id, envoye: envoi.envoye }) : null;
+        return { document, changements, envoi, suites };
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
-    for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
-    // Un devis émis passe la main au client, même sans changement d'étape (main.ts).
-    await recalculerMain(emission.dossierId);
-    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 : `notifier: false`).
-    if (emission.type === "DEVIS" && emission.notifier !== false) {
+    // Un devis : la main est écrite dans la transaction (point d'entrée) ; ses suites (Meta, agenda, tâches) partent ici.
+    if (resultat.suites) await suitesEvenementDossier({ ...resultat.suites, changements: resultat.changements });
+    else {
+      for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
+      await recalculerMain(emission.dossierId);
+    }
+    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 :
+    // `notifier: false`). Mission 18 (B1) : seulement pour un devis annoncé (visible, espace ouvert, adresse valide).
+    if (resultat.envoi?.mail) {
       const { notifierClient } = await import("@/lib/mail/notifications");
       await notifierClient("DEVIS_DISPONIBLE", emission.dossierId, resultat.document.id);
     }
@@ -562,17 +578,29 @@ export async function lirePdfDocument(dossierId: string, documentId: string) {
 // Libellé et visibilité d'un devis émis : presentation-devis.ts (sorti de ce fichier, mission 14).
 export { modifierPresentationDevis, schemaPresentationDevis } from "./presentation-devis";
 
-/** Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté. */
-export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string }> {
+/**
+ * Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté.
+ * Mission 18 (B6, écart 6) : dans la même transaction, le point d'entrée (devis-retire.ts › retirerDevis) — sans autre
+ * devis en attente de sa réponse, le dossier revient avant « Devis envoyé », la main à Lucas (« refaire le devis »), les
+ * relances en attente sont annulées ; sinon la main est relue. Les suites (agenda, tâches) partent après.
+ */
+export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string; retour: ChangementEtape | null; avertissements: string[] }> {
   const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
   if (!devis?.numero) throw new ErreurMetier("Devis introuvable dans ce dossier.", 404);
   if (devis.statut === "ACCEPTE") throw new ErreurMetier("Ce devis est accepté : il ne s'annule pas (retirer l'accord d'abord).", 409);
   if (devis.statut === "ANNULEE") throw new ErreurMetier("Ce devis est déjà annulé.", 409);
-  await prisma.$transaction([
-    prisma.document.update({ where: { id: devis.id }, data: { statut: "ANNULEE" } }),
-    prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } }),
-  ]);
-  // Mission 14 : un devis annulé n'attend plus la réponse du client ; la main est relue (main.ts).
-  await recalculerMain(dossierId);
-  return { id: devis.id, numero: devis.numero };
+  const numero = devis.numero;
+  const retrait = await prisma.$transaction(
+    async (tx) => {
+      // Garde : annulé entre-temps (double clic), rien n'est réécrit.
+      const { count } = await tx.document.updateMany({ where: { id: devis.id, statut: { notIn: ["ACCEPTE", "ANNULEE"] } }, data: { statut: "ANNULEE" } });
+      if (count === 0) throw new ErreurMetier("Ce devis a changé entre-temps (accepté ou déjà annulé) : recharge le dossier.", 409);
+      await tx.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } });
+      return retirerDevis(tx, dossierId, { id: devis.id, numero }, "ANNULE");
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  await suitesEvenementDossier(retrait);
+  const phrase = phraseRetrait(retrait);
+  return { id: devis.id, numero, retour: retrait.retour, avertissements: phrase ? [phrase] : [] };
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v4";
 import { analyser, lireCorpsJson, reponseErreur } from "@/lib/commun/api";
-import { desinscrire } from "@/lib/mail/sequences";
+import { desinscrire } from "@/lib/mail/desinscription";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function OPTIONS(requete: NextRequest) {
 
 const schema = z.object({ e: z.string().min(3).max(400), j: z.string().min(10).max(64) });
 
-/** POST { e, j } (page de désinscription du site) : désinscription définitive des séquences, jeton HMAC vérifié. */
+/** POST { e, j } (page de désinscription du site) : désinscription définitive des mails commerciaux, jeton HMAC vérifié. */
 export async function POST(requete: NextRequest) {
   try {
     const { e, j } = analyser(schema, await lireCorpsJson(requete));

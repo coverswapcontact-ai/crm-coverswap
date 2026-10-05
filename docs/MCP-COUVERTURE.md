@@ -25,6 +25,177 @@
   ajoute ou corrige la ligne de l'écran et l'outil qui la couvre, puis on relève la nouvelle empreinte. La mission 18
   (retrait de l'onglet Espaces, Dépenses dans Finances, Tâches de fond et Tarifs dans Paramètres) devra mettre ces
   tableaux à jour, comme le prévoit `docs/MISSION-18.md`.
+- **Mission 18, A1 (03/10/2026)** : l'onglet Espaces clients est retiré (`/espaces` redirige vers
+  `/dossiers?espace=TOUS`). Ses lignes de liste E1–E4 sont en 2.3 (colonne et filtre « Espaces » de Dossiers) ; ses
+  gestes E5–E20 n'existent plus que dans le bloc Espace du panneau et dans la fiche client (2.5 dit où) ; les boutons
+  du lien de la fiche client deviennent C27–C30. `lister` gagne le filtre imbriqué `filtres.espace` (DOSSIERS) : les
+  paramètres de premier niveau ne changent pas, l'empreinte reste **`040d6c7aa53c`** (53 outils). Des descriptions
+  changent (`lister`, `geste_espace`) : reconnecter le connecteur.
+- **Mission 18, A2 (03/10/2026)** : le dossier s'ouvre tout seul dès qu'un contact envoie des photos, fait une
+  simulation ou demande un devis sur le site (webhook, fin d'une simulation du site, filet de 15 min :
+  `dossiers/depuis-lead.ts › ouvrirDossierAutomatique`). Ce n'est pas un geste de l'interface : aucune ligne nouvelle.
+  « Ouvrir un dossier » (L12, LF4) et `creer DOSSIER (lead_id)` ne servent plus qu'à un lead qualifié au téléphone ;
+  la description de `creer` le dit. Paramètres inchangés, empreinte **`040d6c7aa53c`** (53 outils) : reconnecter le
+  connecteur pour la nouvelle description.
+- **Mission 18, A3 (03/10/2026)** : l'écran Dépenses devient la section « Dépenses » de Finances
+  (`/finances?section=depenses`, où `/depenses` redirige) ; la saisie `/depenses/nouvelle` reste un écran (raccourci de
+  l'application installée, file hors ligne) et le panneau du dossier garde ses dépenses (DP91, DP92). Les lignes X1–X10
+  passent en 2.10 ; les liens des outils (`lister` DEPENSES, `creer` / `modifier` / `archiver` DEPENSE,
+  `ajouter_fichier` sur une dépense) mènent à la section. Ni outil ni paramètre ne change : empreinte
+  **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, A4 (03/10/2026)** : un seul système de relance. Les séquences de mails sont retirées (code,
+  interrupteurs `SEQUENCE_*`, travail `sequences-mail`, paramètre `MAIL_EXPEDITEUR` ; lignes gardées en base) : la
+  ligne AUTOMATISME de 4.3 ne les cite plus. La demande d'avis après chantier et la réactivation à 6 mois deviennent
+  des types de relance : mêmes écrans (feuille Relances avec une section par type, fiche du dossier pour l'avis,
+  tâches RELANCER_AVIS et REACTIVER), mêmes outils (`lister` RELANCES les rend, `noter_sms` DEMANDE_AVIS ou
+  REACTIVATION les compte) : L21, L22, DP7, PA2 et 4.6 sont mis à jour, sans ligne nouvelle (bilan inchangé). Ni outil
+  ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils). Des descriptions changent (`lister`, `noter_sms`,
+  `voir_parametres` via `etat_crm`, `manager_operations`) : reconnecter le connecteur.
+- **Mission 18, A5 (03/10/2026)** : l'écran Tâches de fond devient l'onglet « Système » de Paramètres
+  (`/parametres?section=systeme`, où `/taches-de-fond` redirige), lu à l'ouverture de l'onglet par les routes de ses
+  blocs. Les lignes B1–B7 passent en 2.13 (sous « Système ») ; les liens des outils (`etat_crm` vue générale, SANTE,
+  TACHES_DE_FOND, COHERENCE, AUDIT, SESSIONS ; `agir_systeme` ; `manager_operations`), des alertes et de la tâche
+  « Relancer N tâches de fond en échec » mènent à l'onglet. Un seul compteur dans la barre (N2) : le badge des tâches
+  de fond en échec disparaît, l'échec remonte comme tâche système dans Tâches. Ni outil, ni paramètre, ni description
+  ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, A6 (03/10/2026)** : les tarifs des devis (presets, tarif de chaque prestation) ne sont plus un
+  sous-mode du générateur de Dossiers mais l'onglet « Tarifs » de Paramètres (`/parametres?section=tarifs`) : DP64 et
+  DP70–DP73 passent en 2.13 › Tarifs. Les liens de `lister` TARIFS, de l'outil des tarifs et des entités TARIF et
+  SOUS_PARTIE (`creer`, `modifier`, `archiver`) mènent à l'onglet. Navigation à 10 onglets (N1), anciennes adresses
+  vérifiées (N3). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à
+  reconnecter pour ce lot.
+- **Mission 18, B1 (03/10/2026)** : générer un devis n'est pas l'envoyer. `generer_document` (DP68) passe par la même
+  fonction que l'écran (`documents.ts › emettre`) : le devis n'est « envoyé » (étape, main au client, relances) que s'il
+  est annoncé par le mail « Devis disponible » (adresse valide, espace ouvert) ou, interrupteur du modèle coupé, mis en
+  ligne dans un espace ouvert ; sinon il reste masqué en Qualification ou Simulation et la tâche `ENVOYER_DEVIS`
+  (« Envoyer le devis · X ») le rappelle. L'aperçu de l'outil dit d'avance ce qui se passera, le résultat aussi
+  (`donnees.envoye`, `donnees.visibleEspace`). Nouveau type de tâche `ENVOYER_DEVIS` (`taches` le rend comme les
+  autres). Pas de ligne nouvelle : les gestes « Envoyer par mail » (DP60, `envoyer_document`) et « visible dans
+  l'espace » (DP48, `modifier` DOCUMENT visible_espace) existent déjà. Ni outil ni paramètre ne change : empreinte
+  **`040d6c7aa53c`** (53 outils). Des descriptions changent (`generer_document`, son paramètre `notifier`) :
+  reconnecter le connecteur.
+- **Mission 18, B2 (05/10/2026)** : devis envoyé par mail. `envoyer_document` (DP60) appelle le même service que le
+  bouton « Envoyer par mail » (`mail/service.ts › envoyerDocumentParMail`) et ne revalide plus la proposition (défaut 11
+  de la section 3 corrigé : plus de 409, plus de second mail à la nouvelle tentative). Le même envoi refait (même
+  document, destinataire, objet, texte) dans la demi-heure est sans effet : le résultat le dit (`donnees.deja`,
+  `donnees.statut`). Un devis envoyé ainsi a les effets d'un devis rendu visible : visible dans l'espace, « Devis
+  envoyé », main au client, « Attendre l'accord », relances datées de l'envoi. Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description de `envoyer_document` change : reconnecter le connecteur.
+- **Mission 18, B3 (05/10/2026)** : devis envoyé depuis Gmail. Les PDF d'un mail parti de la boîte chez un client sont
+  gardés dans le CRM ; la tâche `ENREGISTRER_DEVIS` (« Enregistrer comme devis envoyé · X », `taches` la rend comme les
+  autres) ouvre la modale de dépôt préremplie (DP98). `ajouter_fichier` (DOSSIER › DEVIS, numero, montant, source
+  `piece_mail`) passe par la même fonction que la modale (`depot-document.ts › deposerDocument` →
+  `devis-gmail.ts › enregistrerDevisGmail`) : devis déposé avec le PDF du mail, « Devis envoyé » daté du mail
+  (relances depuis le mail), étape, main, « Attendre l'accord » ; un devis du CRM de ce numéro passe « Envoyé » ;
+  rejoué, sans effet. Claude peut lire la pièce avant (`voir_fichiers` piece_mail). Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description de `ajouter_fichier` change : reconnecter le connecteur.
+- **Mission 18, B4 (05/10/2026)** : dépôt d'un bloc. `ajouter_fichier` (DOSSIER › DEVIS, FACTURE) et la modale
+  « Enregistrer un document existant » (DP57, le PDF part désormais dans la même requête) passent par la même fonction
+  (`depot-document.ts › deposerDocument` → `documents-existants.ts › enregistrerDocumentExistant`) : PDF vérifié avant
+  toute écriture (un faux PDF ne consomme aucun numéro, l'étape ne bouge pas, on peut réessayer), puis document, PDF et
+  étape dans une transaction. Un devis déposé `statut: ACCEPTE` (signé hors ligne) sur un dossier pas encore signé le
+  fait passer en « Signé » dans la même transaction, les autres devis proposés « non retenus », prochaine action d'un
+  accord ; même règle pour `modifier` DOCUMENT `statut: ACCEPTE` (DP59, `modifierDocumentExistant`) et pour la
+  correction de cohérence `DEVIS_ACCEPTE_AVANT_SIGNE` (`agir_systeme`, qui signe au lieu de remettre le devis
+  « émis »). L'aperçu de `ajouter_fichier` et la note de `modifier` le disent d'avance. Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description du paramètre `statut` de `ajouter_fichier` change :
+  reconnecter le connecteur.
+- **Mission 18, B5 (05/10/2026)** : devis rendu visible = mis en ligne. `modifier` DOCUMENT `visible_espace: true`
+  (DP48) passe par la même fonction que l'interrupteur du bloc Espace (`presentation-devis.ts ›
+  modifierPresentationDevis` → `devis-envoye.ts › mettreEnLigneDevis`) : visibilité, événement « Devis envoyé »
+  (`canal: "ESPACE"`, il date la relance), étape, prochaine action et main dans une transaction ; puis le mail
+  « Devis disponible » de l'automatisme existant (une fois par devis, interrupteur gardé ; pas pour un devis repris ni
+  déjà envoyé par mail). La note de l'aperçu dit d'avance si le mail partira (`peutNotifier`), le résultat s'il est parti
+  ou pourquoi pas. Même mise en ligne, sans mail, pour un devis repris corrigé visible (DP59). `lister` RELANCES dit
+  « envoyé il y a N jours » depuis le dernier envoi (mail, Gmail, mise en ligne), plus depuis l'émission (champs
+  `envoyeLe`, `joursDepuisEnvoi`). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
+  (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, B6 (05/10/2026)** : devis annulé ou masqué sans autre devis en attente. `annuler_document` (DP63) et
+  `modifier` DOCUMENT `visible_espace: false` (DP48) passent par les mêmes fonctions que l'écran (`annulerDevis`,
+  `modifierPresentationDevis` → `devis-retire.ts › retirerDevis`) : dans la même transaction, retour du dossier avant
+  « Devis envoyé » (Simulation ou Qualification), main à Lucas (« Devis N annulé : refaire le devis »), prochaine action
+  « Refaire le devis » (une action posée à la main reste, avec la tâche), mails de relance en attente annulés, lead
+  CONTACTE. L'aperçu de `annuler_document` dit d'avance si c'est le seul devis en attente, le résultat dit le retour ;
+  la note de `modifier` DOCUMENT le dit au masquage, et l'annulation partielle de « rendre visible » ne dit plus que
+  l'étape reste. Même retour pour un devis repris corrigé masqué (DP59, `modifierDocumentExistant`). Ni outil, ni
+  paramètre, ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, relecture de B0 à B6 (05/10/2026)** : `modifier` DOCUMENT `visible_espace: true` (DP48) suit la règle
+  unique de l'envoi (`devis-envoye.ts › annonceAboutit`, celle de `generer_document`) : un devis du CRM jamais parti,
+  sans espace ouvert ou sans adresse (modèle actif), devient visible SANS être envoyé — la note de l'aperçu et le
+  résultat le disent (`nonEnvoye`), la tâche « Envoyer le devis » reste (`envoyer_document` pour l'envoyer par mail).
+  `generer_document` : une variante silencieuse (`notifier: false`) après Simulation est visible mais pas envoyée (le
+  résultat le disait déjà : « visible dans son espace sans annonce : PAS encore envoyé »). `lister` RELANCES et
+  `relancer` (mail, SMS) ne visent plus un devis pas encore envoyé. `ajouter_fichier` (DP98) : la pièce d'un mail parti
+  de Gmail avec son `numero`, sans `montant`, s'enregistre comme devis envoyé quand c'est un devis du CRM (comme
+  l'écran), sous confirmation. `manager_operations` : `joursDepuis` d'un devis à relancer compté depuis l'envoi
+  (`envoyeLe` ajouté). Un devis déposé « accepté » sur un dossier en pause d'avant la signature le signe (aperçu de
+  `ajouter_fichier` compris). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
+  (53 outils), rien à reconnecter.
+- **Mission 18, B7 (05/10/2026)** : avenant ou nouveau devis sur un dossier signé. L'espace du client le propose et le
+  fait signer (`EtatEspace.devisASigner`, `prochainPas`, calculés par le CRM) à côté du devis d'origine, sans changer
+  l'étape ; « le devis » de l'espace reste le devis signé d'origine (acompte, paiement). `geste_espace` RETIRER_ACCORD
+  (DP50, `vue-crm.ts › gesteDeLucas` → `retirerAccord`, comme l'écran) retire l'accord du devis signé d'origine (le plus
+  ancien en cours ; avant : le plus récent, le même tant qu'il n'y avait qu'un accord) ; l'accord d'un avenant se retire
+  depuis l'espace du client (le site nomme le devis) sans recul d'étape. `etat_crm` COHERENCE : `AVENANT_NON_PROPOSE` ne
+  vise plus qu'un avenant visible dont l'espace n'est pas ouvert. Ni outil, ni paramètre, ni description ne change :
+  empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B8 (05/10/2026)** : signature en une transaction. Le bon pour accord est un geste du client dans son
+  espace (`accepterDevis`) : pas d'outil. Ce qui change pour l'assistant : un accord ne laisse plus de dossier en
+  attente de « Signé » (`etat_crm` COHERENCE ne verra plus naître d'`ACCORD_SANS_SIGNATURE` par ce chemin ; ceux
+  d'avant se corrigent toujours par `agir_systeme`, ou par la nouvelle tentative du client), et l'historique du
+  passage (`lire_fiche`) dit « bon pour accord donné dans l'espace client sur le devis N ». Ni outil, ni paramètre,
+  ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B10 (05/10/2026)** : paiement par carte et variantes retenues. `saisir_encaissement` (DP9, DP75, F4,
+  T11) passe toujours par `enregistrerEncaissement`, désormais par le point d'entrée (`PAIEMENT_RECU`) : un acompte sur
+  un devis encore envoyé signe le dossier sur le devis qu'il règle (la pièce choisie, ou celle de l'imputation), les
+  autres variantes passent « non retenu », prochaine action « Appeler le client : fixer la date du chantier (acompte
+  reçu) » (une action posée à la main reste, avec la tâche), statut du lead et main dans la même transaction ;
+  l'imputation automatique ne vise plus un devis non retenu, remplacé ou annulé. `changer_etape` vers « Signé » (DP
+  du changement d'étape, même fonction que l'écran) passe aussi les autres variantes « non retenu » ; la correction de
+  cohérence `PAIEMENT_AVANT_SIGNATURE` / `ACCORD_SANS_SIGNATURE` (`agir_systeme`) signe sur le devis réglé ou accordé.
+  Le paiement par carte lui-même est un geste du client dans son espace (Stripe, webhook) : pas d'outil, l'encaissement
+  qu'il crée se lit comme les autres (`lire_fiche`, `manager_finances`). Ni outil, ni paramètre, ni description ne
+  change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B11 (05/10/2026)** : états en double. `manager_commercial` (devis en attente, « relus sans signature »)
+  lit les lectures de CHAQUE devis (`Document.consultations`), plus la copie de l'espace (seul le dernier devis lu y
+  comptait). `geste_espace` REINITIALISER DEVIS (même fonction que l'écran, `vue-crm.ts › gesteDeLucas`) remet aussi à
+  zéro le compteur des devis du dossier (avant : celui de l'espace seulement, « lu N fois » et le signal restaient).
+  `geste_espace` VALIDER_SIMULATION (`choisir`, comme le client) reporte les teintes de la simulation dans les teintes
+  du dossier (`modifier` DOSSIER `teintes`, `lire_fiche`). Ni outil, ni paramètre, ni description ne change :
+  empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B12 (05/10/2026)** : statut du lead ↔ étape. Ce que font sur le statut du lead `changer_etape`,
+  l'ouverture d'un dossier (`creer` DOSSIER, un mail validé par `traiter_mail` ou `valider_proposition`) et
+  `agir_systeme` CORRIGER_INCOHERENCE `STATUT_DU_LEAD` suit une seule table et une seule règle (le dossier vivant le
+  plus avancé du lead décide ; Qualification et Simulation → « Contacté », En pause inchangé) : un lead « Devis
+  demandé » ou perdu qui reçoit un dossier devient « Contacté » ; un second projet en Qualification ne ramène plus un
+  client signé à « Contacté ». Mêmes fonctions de service que les écrans. Ni outil, ni paramètre, ni description ne
+  change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot (entrée ajoutée à la relecture).
+- **Mission 18, B13 (05/10/2026)** : cohérence. `etat_crm` COHERENCE montre les nouveaux codes (écarts 1, 3, 5, 6, 7 ;
+  « Attendre l'accord » sans devis ; date du chantier posée en « Signé » ; `ESPACE_ACTIF_DOSSIER_CLOS`, qui remplace
+  `ESPACE_ACTIF_DOSSIER_ARCHIVE` et voit aussi les dossiers perdus). `agir_systeme` CORRIGER_INCOHERENCE passe par la
+  même fonction que le bouton « Corriger » (`corrigerIncoherence` → `appliquerCorrection`) ; sa sensibilité vient de
+  `coherence/controle.ts › CORRECTIONS_SENSIBLES` (une seule liste : toute correction qui change l'étape — liste figée
+  par un essai, `PROJET_VALIDE_INCOMPLET` compris —, touche un devis ou envoie un mail au client : « Devis disponible »
+  d'un devis jamais annoncé, avenant envoyé par mail). Chaque correction laisse `COHERENCE_CORRIGEE` dans l'historique
+  (`lire_fiche`). Ni outil ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils) ; la description de
+  `agir_systeme` change (« … ou envoie un mail au client ») : reconnecter le connecteur.
+- **Mission 18, mise en route (05/10/2026)** : `etat_crm` SANTE ajoute une ligne
+  « Dernières migrations » : les trois dernières migrations de données du démarrage, et pour `mise-en-route-18` le
+  compte par règle (écarts trouvés, réparés, en tâche à moi, au détecteur) ; `donnees.dernieresMigrations`. Les tâches à
+  moi du lot « coherence-18 » se lisent et se répondent comme les autres (`taches`). Ni outil, ni paramètre, ni
+  description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, relecture de B7 à B13 et de la mise en route (05/10/2026)** : `geste_espace` RETIRER_ACCORD (DP50,
+  DP50 bis) prend un paramètre **`document_id`** : l'accord de CE devis (un avenant se retire seul, le dossier ne
+  recule pas, à toute étape), comme le bouton « Retirer l'accord » de chaque avenant signé du bloc Espace ; sans lui,
+  l'accord du devis signé d'origine (comme avant). L'aperçu lit l'accord que le geste retirera (même fonction,
+  `validations.ts › accordARetirer` : avant, il annonçait le plus récent quand le geste retirait le plus ancien) et dit
+  si le dossier revient à « Devis envoyé ». `agir_systeme` CORRIGER_INCOHERENCE `PROCHAINE_ACTION_PERIMEE` refuse une
+  action posée à la main (409 ; elle n'est plus signalée) ; `ESPACE_ACTIF_DOSSIER_CLOS` ne désactive un lien qu'après
+  le délai de la révocation automatique. `manager_finances` (reste à encaisser) et `analytique` (montant signé) comptent
+  le devis d'origine plus ses avenants signés ; la tâche « Encaisser l'acompte » (`taches`) porte l'acompte du devis
+  d'origine. `etat_crm` SANTE : la mise en route peut compter des écarts « à leur propre tâche ». La description de
+  `geste_espace` change et un paramètre s'ajoute : empreinte **`6665a6b457fe`** (53 outils) — reconnecter le
+  connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -112,7 +283,7 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | L9 | « Enchaîner les appels · N » (la file) | GET /api/leads/suivant?apres= | L | lister LEADS (A_RAPPELER puis A_APPELER) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » |
 | L10 | Mode appels › « Passer » / « Quitter » | — | — | — | sans objet | — |
 | L11 | Mode appels › « Noter sans appeler » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
-| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| L12 | Mode appels › « Ouvrir son dossier sans noter d'appel » (lead qualifié au téléphone : un lead du site a déjà le sien, mission 18 A2) | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
 | L13 | Ligne › téléphone (`tel:`) | — | — | — | sans objet | — |
 | L14 | Ligne › puce du rappel : déplacer | PATCH /api/prospects/entrants/:id {rappelLe} | R | modifier LEAD (rappel_le) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
 | L15 | Ligne › puce du rappel : « Sans date » | PATCH … {rappelLe:null} | R | modifier LEAD (rappel_le: null) | couvert | `mcp-generiques.test.ts` › « LEAD : champs, rappel dicté ; « sans suite » sensible (aperçu, jeton… » |
@@ -121,8 +292,8 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | L18 | Sélection (Archivés) › « Restaurer » | POST /api/leads/actions {RESTAURER} | R | lister LEADS (vue ARCHIVES) + restaurer (leads) | couvert | `mcp-lister-etat.test.ts` › « LEADS : chaque vue (À appeler, À rappeler, Sans suite, Archivés) rend… » ; `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 | L19 | Message « Annuler » (action inverse) | POST /api/leads/actions | R | archiver / restaurer | couvert | `mcp-generiques.test.ts` › « raccourcis leads / dossiers (comportement de l'ancien « archiver »)… » |
 | L20 | Ligne du jour : « N rappels aujourd'hui · N en retard » | GET /api/leads | L | lister LEADS (vue A_RAPPELER) | couvert | `mission-14-partie-8.test.ts` › « en-tête, ordre (datés croissants, retards en tête, puis sans date)… » |
-| L21 | Ligne du jour › « N relances proposables » → feuille Relances | GET /api/relances | L | lister RELANCES | couvert | `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
-| L22 | Relances › « SMS » (texte modifiable) → « Copier » | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| L21 | Ligne du jour › « N relances proposables » → feuille Relances (une section par type depuis la mission 18, A4 : devis, photos, demandes d'avis, réactivations) | GET /api/relances | L | lister RELANCES | couvert | `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » ; `mission-18-a4.test.ts` › « relancesProposables : devis, photos, avis, réactivations, et le total ; la… » |
+| L22 | Relances › « SMS » (texte modifiable) → « Copier » : devis, photos, demande d'avis (DEMANDE_AVIS), réactivation (REACTIVATION, tracée sur le lead) | POST /api/sms/proposition ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » ; `mission-18-a4.test.ts` › « « lister » RELANCES rend les demandes d'avis et les réactivations, même… » |
 | L23 | Relances › « Relire le mail » → corriger → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
 | L24 | Sur le site › simulations des 7 derniers jours, avec images | SSR `simulationsSiteRecentes(7)` | L | voir_fichiers (site) | couvert | `mcp-v3.test.ts` › « « voir_fichiers » site (ex-« simulations_site ») liste les simulations… » |
 | L25 | Sur le site › générations en cours ou en échec, avec la raison | SSR `travauxSiteRecents(7)` | L | voir_fichiers (site : générations en cours ou en échec, avec la raison) | couvert | `mcp-partie-c.test.ts` › « pièce jointe d'un mail (M15), rendu du banc (S17), générations du site… » |
@@ -137,7 +308,7 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | LF1 | Ouvrir la fiche (et la marquer vue) | GET /api/prospects/entrants/:id | L | lire_fiche (lead : tous les champs) | couvert | `mcp-lister-etat.test.ts` › « lead : tous les champs de la fiche (campagne, tentatives, dernier… » |
 | LF2 | Doublon › « Fusionner avec X » | POST /api/leads/:id/doublon {fusionner} | S-suppr | doublon (LEAD, FUSIONNER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
 | LF3 | Doublon › « Ce n'est pas la même personne » | POST /api/leads/:id/doublon {ecarter} | R | doublon (LEAD, ECARTER) | couvert | `mcp-gestes.test.ts` › « LEAD : ECARTER et FUSIONNER (sensible) donnent le même état que les… » |
-| LF4 | « Ouvrir un dossier » | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
+| LF4 | « Ouvrir un dossier » (lead qualifié au téléphone ; simulation, photos ou demande de devis du site : déjà ouvert tout seul, mission 18 A2) | POST /api/leads/:id/dossier | R | creer DOSSIER (lead_id) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
 | LF5 | Liens « Dossier · étape » / « Fiche client » | — | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | LF6 | Téléphone (`tel:`) | — | — | — | sans objet | — |
 | LF7 | « Noter l'appel » → feuille de fin d'appel | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
@@ -197,7 +368,24 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | D15 | Création › annuaire des entreprises | GET /api/clients/annuaire?q= | L | lister ENTREPRISES | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
 | D16 | « Reprise » d'un dossier commencé avant le CRM : fiche, étape actuelle, dates des jalons, date d'ouverture, documents émis (numéro, date, montant, statut, registre), paiements reçus, puis les PDF un par un | GET /api/numeros?libres=1 ; POST /api/dossiers/reprise ; POST …/documents/:docId/pdf | S-€ | creer REPRISE + ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 
+#### Colonne et filtre « Espaces » (ex-onglet Espaces clients, mission 18 A1)
+
+Les dates affichées sont celles du projet (son espace dans l'espace permanent du client) ; « désactivé » = lien du
+client révoqué ; les signaux du client (projet de plus demandé, nouveau projet, téléphone à confirmer) vont à son
+projet le plus récent.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| E1 | Colonne « Espace » (liste), ligne du téléphone, pastille du kanban : étape de l'espace, lien envoyé, dernière visite, photos, simulations, devis relu, signal | GET /api/dossiers | L | lister DOSSIERS (« espace : … » sur chaque ligne, `espace` dans les données) ; lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » ; `espaces-colonne.test.ts` › « un dossier avec un espace porte son état (dates du projet, photos… » |
+| E2 | « Espaces », puis pastilles À moi / Chez le client / Signaux / Tous / Désactivés, compteurs exacts sur tous les espaces, pages de 50 | GET /api/dossiers?espace=&page= | L | lister DOSSIERS (filtres.espace, page) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » ; `espaces-colonne.test.ts` › « À moi, Chez le client, Signaux, Désactivés, Tous : exacts au-delà de 50… » |
+| E3 | Sélecteur « Étape de l'espace » | GET /api/dossiers?espace=&etapeEspace= | L | lister DOSSIERS (filtres.etape_espace) | couvert | `mcp-lister-etat.test.ts` › « DOSSIERS filtres.espace (ex-onglet Espaces) = pageDossiers({ espace }) : pastilles… » |
+| E4 | Ordre du filtre : à moi d'abord, puis dernière activité ; perdus, en pause et terminés compris | GET /api/dossiers?espace= | L | lister DOSSIERS (filtres.espace : même ordre) | couvert | `espaces-colonne.test.ts` › « ordre : à moi d'abord, puis chez le client, puis personne (perdu)… » |
+
 ### 2.4 Dossier — le panneau et ses rubriques (`PanneauDossier`)
+
+Mission 18 (A6) : les tarifs (DP64, DP70–DP73) ne sont plus un sous-mode du générateur mais l'onglet « Tarifs » de
+Paramètres : leurs lignes sont en 2.13 › Tarifs. Le générateur garde la liste « Ajouter depuis un tarif… » (DP67) et
+un lien « Gérer les tarifs » vers l'onglet.
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
@@ -207,7 +395,7 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | DP4 | À compléter › croix « masquer ce point pour ce dossier » | PATCH /api/dossiers/:id/completude {code, masque:true} | R | modifier DOSSIER (points_masques) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
 | DP5 | À compléter › « Réafficher » un point masqué | PATCH … {masque:false} | R | modifier DOSSIER (points_reaffiches) | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » |
 | DP6 | Prochaine action : texte et date (Aujourd'hui, Demain, Dans 3 j, Dans 1 sem.) › « Enregistrer » ou vider | PATCH /api/dossiers/:id {prochaineAction, prochaineActionDate} | R | modifier DOSSIER (prochaine_action, prochaine_action_date) / planifier | couvert | `mcp-generiques.test.ts` › « DOSSIER : cœur (montant, objet) et suite (nom, source, point masqué) en… » ; `mcp.test.ts` › « « Planifie un rappel de Madame Piketty jeudi 14h » » |
-| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | lister RELANCES + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » |
+| DP7 | Relance proposable › « SMS » relance n/2 → « Copier » ; « Demande d'avis proposable » › « SMS » (mission 18, A4) | GET /api/relances?dossierId= ; POST /api/sms/copie | S-client | lister RELANCES (dossier_id) + noter_sms | couvert | `mcp-lister-etat.test.ts` › « MESSAGES_ESPACE et RELANCES : le texte des outils qu'ils remplacent » ; `mission-14-partie-8.test.ts` › « relance de devis : RELANCE_DEVIS_1 retrouve seul le devis du dossier et… » ; `mission-18-a4.test.ts` › « « lister » RELANCES rend les demandes d'avis et les réactivations, même… » |
 | DP8 | Relance proposable › « Relire le mail » → valider | POST /api/validation/:id/valider | S-client | valider_proposition (corrections : objet, texte) / relancer | couvert | `mcp-gestes.test.ts` › « un mail proposé hors d'une carte de mail, une fusion de clients… » ; `mcp-v3.test.ts` › « « lister » RELANCES / « relancer » / « ignorer_proposition » (ex-«… » |
 | DP9 | Encaisser l'acompte ou le solde : montant, date, moyen, référence, pièce réglée (automatique ou choisie) | POST /api/dossiers/:id/encaissements {paiement, numeroDocumentId} | S-€ | saisir_encaissement (montant, recu_le, moyen, reference, piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
 | DP10 | Étape › bouton d'étape suivante, « Reprendre en … » | POST /api/dossiers/:id/etape {vers} | R ; S vers Signé, Facturé, Encaissé, Perdu | changer_etape | couvert | `assistant.test.ts` › « passer un dossier à « perdu » est sensible (aperçu puis confirmation)… » |
@@ -244,36 +432,33 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | DP41 | Espace › Simulations › « Retirer la demande » | … {geste:retirer-demande} | R | geste_espace (RETIRER_DEMANDE) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
 | DP42 | Espace › Simulations › « Valider » à sa place | … {geste:valider-simulation} | R | geste_espace (VALIDER_SIMULATION, simulation_id) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
 | DP43 | Espace › Simulations › « Dévalider » | … {geste:devalider-simulation} | R | geste_espace (DEVALIDER_SIMULATION) | couvert | `mcp-gestes.test.ts` › « VALIDER_PROJET, DEVALIDER_PROJET, VALIDER_SIMULATION… » |
-| DP44 | Espace › Simulations › « Masquer » | PATCH /api/dossiers/:id/simulations/:sid {masquer} | R | publier (SIMULATION, retirer) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
-| DP45 | Espace › Simulations › « Afficher » (republier, mail automatique) | … {afficher} | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| DP44 | Espace › Simulations › « Masquer » (la simulation du choix du client : son choix est dévalidé d'un bloc, mission 18 B9) | PATCH /api/dossiers/:id/simulations/:sid {masquer} | R | publier (SIMULATION, retirer) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
+| DP45 | Espace › Simulations › « Afficher » (republier, mail automatique ; mission 18 B9 : mêmes effets que « Publier », Qualification → Simulation, prochaine action, main) | … {afficher} | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
 | DP46 | Espace › Simulations › « Accorder 3 simulations » | … {geste:accorder, nombre} | S-€ (≈ 0,20 $ l'image) | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
 | DP47 | Espace › Simulations › « Réinitialiser » l'étape | … {geste:reinitialiser, SIMULATIONS} | R | geste_espace (REINITIALISER, etape SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
-| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} (mission 18, B5 : rend `annonce`, le mail « Devis disponible » ; B6 : masqué, le seul devis en attente fait revenir le dossier avant « Devis envoyé ») | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » ; `mise-en-ligne.test.ts` › « outil « modifier » DOCUMENT : l'aperçu annonce le mail « Devis disponible »… » |
 | DP49 | Espace › Devis › « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | générateur / dépôt | S | generer_document / ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » ; `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » |
 | DP50 | Espace › Devis › « Retirer son accord » | … {geste:retirer-accord} | S | geste_espace (RETIRER_ACCORD) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP50 bis | Espace › Devis › avenant signé › « Retirer l'accord » (mission 18, relecture) | … {geste:retirer-accord, documentId} | S | geste_espace (RETIRER_ACCORD, document_id) | couvert | `relecture-partie-b.test.ts` › « outil geste_espace : l'aperçu annonce l'accord que le geste retire… » |
 | DP51 | Espace › Paiement (ce qu'il voit), « Son avis » (note, texte, publication) | GET …/espace | L | lire_fiche (dossier, espace: true : paiement vu, avis) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP52 | Espace › Messages › le fil | GET …/espace | L | lister MESSAGES_ESPACE | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
 | DP53 | Espace › Messages › « Répondre dans son espace » | … {geste:repondre} | S-client | repondre_espace | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
 | DP54 | Espace › « Ses derniers gestes » | GET …/espace | L | lire_fiche (dossier, espace: true : derniers gestes) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP55 | Documents › « Générer un devis » | POST /api/dossiers/:id/documents | S | generer_document (lignes SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
 | DP56 | Documents › « Générer une facture » | … {type:FACTURE} | S-€ | generer_document (FACTURE, depuis_devis) | couvert | `mcp.test.ts` › « « Génère la facture de Monsieur Rousse, mets-la dans son dossier et son… » ; `assistant.test.ts` › « sur un dossier signé, la facture s'émet, puis l'encaissement (sensible)… » |
-| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant (mission 18, B4 : le PDF dans la même requête, d'un bloc ; « accepté » signe un dossier pas encore signé) ; POST …/pdf (remplacer) | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » ; `depot-atomique.test.ts` › « l'écran : le PDF dans la même requête (formulaire) ; un faux PDF… » |
 | DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | voir_fichiers (documents, document_id : PDF joint) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 | DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | modifier DOCUMENT (date_emission, montant, objet, statut, acompte_pct) ; ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
-| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » |
+| DP98 | Tâches › « Enregistrer comme devis envoyé » (PDF parti de Gmail : modale de dépôt préremplie, numéro lu dans le nom, date du mail, montant du registre) | GET/POST /api/dossiers/:id/devis-gmail | S-€ | ajouter_fichier (DOSSIER › DEVIS, numero, montant, source piece_mail) ; voir_fichiers (piece_mail) ; taches | couvert | `devis-gmail.test.ts` › « outil « ajouter_fichier » avec la pièce du mail : le même enregistrement… » |
+| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » ; `envoyer-par-mail.test.ts` › « outil « envoyer_document » confirmé, puis relancé : une seule validation… » |
 | DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert | `mcp-sensibles.test.ts` › « annuler_document — annuler un devis : aperçu et jeton, aucune écriture » |
-| DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation | S | annuler_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
-| DP64 | Générateur › tarifs disponibles (presets) | GET /api/dossiers/presets | L | lister TARIFS (presets avec identifiant) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » |
+| DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation (mission 18, B6 : sans autre devis en attente, retour avant « Devis envoyé », dit dans `avertissements`) | S | annuler_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » ; `devis-retire.test.ts` › « outil « annuler_document » : l'aperçu annonce le retour, le résultat le dit… » |
 | DP65 | Générateur › lignes préremplies d'après l'espace (choix, mètres, tarifs) | GET /api/dossiers/:id/devis-propose | L | generer_document (depuis_espace: true) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
 | DP66 | Générateur › numéro à venir | GET /api/dossiers/numerotation?type= | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | DP67 | Générateur › lignes : prestation ou section, monter, descendre, supprimer, choisir un tarif | — | — | generer_document (lignes, dont SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » ; `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP68 | Générateur › objet, acompte %, mention ml, libellé de variante, « prévenir le client » | POST …/documents | S | generer_document (objet, acompte_pct, note_ml, libelle_variante, notifier) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP69 | Générateur › paramètres légaux manquants → saisie | POST /api/parametres | S-param | modifier PARAMETRE | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
-| DP70 | Tarifs › modifier un tarif (désignation, unité, prix) | PATCH /api/dossiers/presets/:id | S-param | modifier TARIF (designation, unite, prix_unitaire) / modifier SOUS_PARTIE | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-v2.test.ts` › « « modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec… » |
-| DP71 | Tarifs › « Nouveau tarif » | POST /api/dossiers/presets | S-param | creer TARIF | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » |
-| DP72 | Tarifs › « Retirer » un tarif | DELETE /api/dossiers/presets/:id | S-suppr | archiver / restaurer (TARIF) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » |
-| DP73 | Tarifs › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | modifier SOUS_PARTIE (preset_id, ou null = automatique) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 | DP74 | Paiements › liste, reste dû | GET /api/dossiers/:id | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP75 | Paiements › « Ajouter un paiement » | POST /api/dossiers/:id/encaissements | S-€ | saisir_encaissement (piece, payeur, credite_le) | couvert | `mcp-partie-c.test.ts` › « saisir_encaissement : pièce réglée, payeur, chèque crédité ; une… » |
 | DP76 | Paiements › « Corriger » (montant, date, moyen, référence) | PATCH /api/encaissements/:id | S-€ | modifier ENCAISSEMENT (montant, recu_le, moyen, reference) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
@@ -299,30 +484,31 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | DP96 | Le reste › Chronologie du client : familles filtrables, « tout voir » | GET /api/chronologie | L | lire_fiche (chronologie : familles) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP97 | Le reste › « Archiver le dossier » (motif) | POST /api/dossiers/:id/archivage {archiver} | S-suppr | archiver (dossiers, motif) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » |
 
-### 2.5 Espaces clients (`/espaces`)
+### 2.5 Espaces clients (`/espaces`) — retiré par la mission 18 (A1)
 
-| # | Action | Route | Nature | Outil MCP | Statut | Test |
-|---|---|---|---|---|---|---|
-| E1 | Charger, rafraîchir, pages de 50 clients | GET /api/espaces?page= | L | lister ESPACES (page) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E2 | Onglets À moi / Chez le client / Signaux / Tous / Désactivés (compteurs) | filtre local | L | lister ESPACES (vue MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E3 | Sélecteur « Étape », tri (main, activité, lien récent) | filtre local | L | lister ESPACES (etape, tri) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E4 | Déplier la carte : lien, visites, projets, faits, signaux | données chargées | L | lister ESPACES (faits par projet) ; lire_fiche (espace) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E5 | Raccourcis Photos / Messages / Devis / Encaisser | nav | — | voir_fichiers, lister MESSAGES_ESPACE, lire_fiche, saisir_encaissement | couvert | `mcp-v2.test.ts` › « « voir_fichiers » photos (ex-« voir_photos ») : de vraies images MCP… » ; `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
-| E6 | « Accorder un projet de plus » | POST /api/espaces/:permanentId {accorder-projet} | R | geste_espace (ACCORDER_PROJET) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E7 | « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (espace: true : lien d'aperçu) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E8 | « Copier son lien » | — | L | lister ESPACES (lien) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
-| E9 | « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E10 | « Désactiver » | POST /api/espaces/:permanentId {desactiver} | R | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
-| E11 | « Accorder 3 simulations » | POST /api/dossiers/:id/espace {accorder} | S-€ léger | geste_espace (ACCORDER_SIMULATIONS) | couvert | `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
-| E12 | « Faire le devis » / « Ajouter un devis » | nav | S | generer_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
-| E13 | « Déposer un devis PDF » | nav | S | ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-fichiers.test.ts` › « devis visible : aperçu + jeton (étape annoncée), puis document repris… » |
-| E14 | « Simulateur » | nav | R | preparer_simulation | couvert | `mcp-v2.test.ts` › « « Prépare une simu de la cuisine de Thimalu, colonnes café latte, îlot… » |
-| E15 | Geste « Publier » | nav | S-client | publier (SIMULATION) | couvert | `mcp-gestes.test.ts` › « SIMULATION : une simulation masquée n'est pas republiée ; le brouillon… » |
-| E16 | Geste « Appeler » (`tel:`) | — | — | noter_appel ensuite | sans objet | — |
-| E17 | « Dossier » | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E18 | « Ce projet, comme lui » (aperçu par projet) | lien d'aperçu signé | L | lire_fiche (espace: true : aperçu par projet) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
-| E19 | « Envoyer le lien par mail » : À, Objet, Phrase ; code LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL | POST /api/mail/lien-espace | S-client | envoyer_lien_espace (a, objet, phrase ; code selon l'étape) | couvert | `mcp-partie-c.test.ts` › « objet remplacé ; code par défaut selon l'étape de l'espace ; l'aperçu… » |
-| E20 | « SMS avec le lien » → « Copier » | POST /api/sms/proposition ; /api/sms/copie | S-client | lien_espace + noter_sms | couvert | `mission-14-partie-8.test.ts` › « intéressé : le SMS du lien est dans la réponse ; « noter_sms »… » |
+L'onglet n'existe plus : `/espaces` redirige vers le filtre « Espaces » de Dossiers (E1–E4, en 2.3). Ses gestes E5–E20
+ne sont plus des gestes d'écran ; chacun reste dans le bloc Espace du panneau du dossier (DP) ou dans la fiche client
+(C), avec son outil et son test. La colonne « Aujourd'hui » dit où vit le geste (l'ancien tableau est dans
+l'historique git) ; ces lignes ne sont plus comptées en 2.17. La liste par client reste pour l'assistant : `lister`
+ESPACES.
+
+| # | Action (ancien onglet) | Aujourd'hui |
+|---|---|---|
+| E5 | Raccourcis Photos / Messages / Devis / Encaisser | raccourcis de la ligne de Dossiers (D11) |
+| E6 | « Accorder un projet de plus » | fiche client (C22) |
+| E7 | « Voir comme le client » | fiche client (C28), panneau (DP30) |
+| E8 | « Copier son lien » | fiche client (C27), panneau (DP29) |
+| E9 | « Nouveau lien… » | fiche client (C29), panneau (DP34) |
+| E10 | « Désactiver » | fiche client (C30), panneau (DP33) |
+| E11 | « Accorder 3 simulations » | panneau (DP46) |
+| E12, E13 | « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | panneau (DP49) |
+| E14 | « Simulateur » | écran Simulateur depuis le panneau (`/simulateur?dossier=`) |
+| E15 | Geste « Publier » | panneau (DP45) |
+| E16 | Geste « Appeler » (`tel:`) | sans objet (noter_appel ensuite) |
+| E17 | « Dossier » | la ligne ouvre le panneau |
+| E18 | « Ce projet, comme lui » | panneau (DP30) |
+| E19 | « Envoyer le lien par mail » | panneau (DP31) |
+| E20 | « SMS avec le lien » → « Copier » | panneau (DP32) |
 
 ### 2.6 Mail (`/mail`)
 
@@ -390,8 +576,15 @@ Chaque ligne porte un repère (T1, L3…), repris dans les sections 3 et 4.
 | C25 | Historique de la fiche (résumé, date, auteur) | GET /api/clients/:id | L | lire_fiche (client : historique) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | C26 | Bandeau « proposition en attente » → `/validation` | nav | L | lire_fiche (propositionsEnAttente) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
-Les boutons « Copier », « Voir comme le client », « Nouveau lien… » et « Désactiver » de la fiche client sont ceux
-de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
+Mission 18 (A1) : les boutons du lien de la fiche client étaient comptés avec l'onglet Espaces (E7 à E10) ; l'onglet
+retiré, ils ont leurs lignes.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| C27 | Espace › « Copier » le lien du client | — | L | lister ESPACES (lien) / lire_fiche (client : espace permanent) | couvert | `mcp-lister-etat.test.ts` › « ESPACES : pageClientsEspaces, filtre et tri de l'écran ; l'ex-«… » |
+| C28 | Espace › « Voir comme le client » | lien d'aperçu signé | L | lire_fiche (espace: true : lien d'aperçu) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
+| C29 | Espace › « Nouveau lien… » (case « Envoyer par mail », phrase modifiable) | POST /api/espaces/:permanentId {regenerer, mail, texte} | S-client | geste_espace (NOUVEAU_LIEN, mail, texte) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » ; `mcp-gestes.test.ts` › « ACCORDER_SIMULATIONS, ACCORDER_PROJET, NOUVEAU_LIEN sans mail… » |
+| C30 | Espace › « Désactiver le lien » | POST /api/espaces/:permanentId {desactiver} | R | geste_espace (DESACTIVER) | couvert | `mcp-gestes.test.ts` › « sensibles : DESACTIVER, REINITIALISER, NOUVEAU_LIEN avec mail… » |
 
 ### 2.8 Simulateur (`/simulateur`), banc (`/simulateur/banc`), prompts (`/simulateur/prompts`)
 
@@ -433,7 +626,7 @@ de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
 | W5 | « Publier » (exige l'accord écrit, une photo après ou un texte) | PATCH … {publier} | S-client (site public) | publier (PUBLICATION) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
 | W6 | « Retirer » du site | PATCH … {retirer} | R | publier (PUBLICATION, retirer) | couvert | `mcp-gestes.test.ts` › « PUBLICATION : publier sur le site (sensible) comme « Publier » de… » |
 
-### 2.10 Finances (`/finances`, allégé en partie B)
+### 2.10 Finances (`/finances`, allégé en partie B ; section Dépenses depuis la mission 18, A3)
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
@@ -448,11 +641,16 @@ de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
 | F9 | « Exporter (CSV) » | GET /api/finances/livre?annee= | L | lister LIVRE (lien du CSV) | couvert | `mcp-lister-etat.test.ts` › « ENCOURS, CHEQUES, QUALITE_FINANCES : chargerTableauFinances ; LIVRE… » |
 | F10 | Lien vers le dossier d'une facture | nav | L | lire_fiche | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 
-### 2.11 Dépenses (`/depenses`, `/depenses/nouvelle`)
+#### Section « Dépenses » (ex-écran `/depenses`, mission 18 A3) et saisie (`/depenses/nouvelle`)
+
+La liste de l'année est une section de Finances, sur la même année que le reste de l'écran ; `/depenses` redirige vers
+`/finances?section=depenses` (la requête suit : `?annee=`), qui y descend. « Nouvelle dépense » ouvre la saisie
+`/depenses/nouvelle`, restée un écran (raccourci de l'application installée, file hors ligne), dont les retours mènent
+à la section. Le panneau du dossier garde ses dépenses (DP91, DP92).
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| X1 | Liste de l'année (« à traiter » : sans chantier, sans justificatif), année −1 / +1 | GET /api/depenses?annee= | L | lister DEPENSES (annee ou periode, categorie, rattachement ; vue ARCHIVEES) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » ; `mcp-v2.test.ts` › « « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie… » |
+| X1 | Section « Dépenses » : liste de l'année de l'écran (« à traiter » : sans chantier, sans justificatif ; total), année −1 / +1 de Finances | /finances?section=depenses&annee= ; GET /api/depenses?annee= | L | lister DEPENSES (annee ou periode, categorie, rattachement ; vue ARCHIVEES) | couvert | `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année, les retirées à part, la période… » ; `mcp-v2.test.ts` › « « Qu'est-ce que j'ai dépensé en pub ce mois-ci ? » : par catégorie… » ; `mission-18-a3.test.ts` › « la page Finances charge les dépenses de l'année demandée comme l'ancien écran… » |
 | X2 | File hors ligne › « Abandonner cette saisie » | IndexedDB | — | — | sans objet | — |
 | X3 | Fiche › voir le justificatif | GET /api/depenses/:id/justificatif | L | voir_fichiers (documents, cible DEPENSE : justificatif) | couvert | `mcp-fichiers.test.ts` › « voir_fichiers : justificatif d'une dépense en image ou en lien… » |
 | X4 | Fiche › « Modifier » : montant, date, fournisseur, catégorie, moyen, libellé, note, chantier ou hors chantier | PATCH /api/depenses/:id | R | modifier DEPENSE (montant, payee_le, fournisseur, categorie, moyen, libelle, note, dossier_id, hors_chantier) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » |
@@ -462,6 +660,13 @@ de l'écran Espaces (E7 à E10). Ils ne sont pas comptés deux fois.
 | X8 | Nouvelle › photo du ticket (caméra, galerie) | — | — | — | sans objet (la photo part avec X9) | — |
 | X9 | Nouvelle › « Enregistrer la dépense » (justificatif, reprise hors ligne) | POST /api/depenses (multipart) | R | creer DEPENSE (justificatif, note, forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » ; `mcp-mail.test.ts` › « 6. « Le mail de la facture Meta, mets-le en dépense » : lecture… » |
 | X10 | « Enregistrer quand même » (justificatif déjà reçu) | POST /api/depenses {forcer} | R | creer DEPENSE (forcer) | couvert | `mcp-partie-c.test.ts` › « creer DEPENSE avec justificatif : comme « Enregistrer la dépense »… » |
+
+### 2.11 Dépenses — section de Finances depuis la mission 18 (A3)
+
+L'écran n'existe plus : `/depenses` redirige vers la section « Dépenses » de Finances (`/finances?section=depenses`) ;
+ses lignes X1–X10, saisie `/depenses/nouvelle` comprise, sont en 2.10, avec leurs outils et leurs tests (les liens des
+outils vers la section : `mcp-lister-etat.test.ts` › « DEPENSES : listerDepenses de l'année… », `mcp-partie-c.test.ts`
+› « creer DEPENSE avec justificatif… », `mission-18-a3.test.ts`). Elles ne sont plus comptées ici en 2.17.
 
 ### 2.12 Analytique (`/analytique`, partie B)
 
@@ -511,8 +716,8 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…) | — | — | — | sans objet | — |
-| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » |
+| PA1 | Changer d'onglet (mémorisé ; ancres `#mail`, `#sms`…, `?section=` depuis la mission 18, A5 ; onglet Tarifs depuis A6) | — | — | — | sans objet | — |
+| PA2 | Lire les groupes Pilotage, Suivi commercial (dont la **zone d'intervention** `ZONE_DEPARTEMENTS(_PROCHES)` et les délais de relance, `DELAI_RELANCE_AVIS` compris depuis la mission 18, A4), Campagne publicitaire, Simulateur, RGPD : valeur en vigueur, valeurs futures, source | GET /api/parametres | L | etat_crm (PARAMETRES, groupe) | couvert | `mcp-v3.test.ts` › « « etat_crm » PARAMETRES / « modifier » PARAMETRE et AUTOMATISME (ex-«… » ; `mission-18-a4.test.ts` › « « etat_crm » PARAMETRES : plus d'interrupteur de séquence ; le délai… » |
 | PA3 | « Historique » d'un paramètre | page | L | etat_crm (PARAMETRES : historique complet) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PA4 | « Nouvelle valeur » / « Renseigner » : valeur, valable du, source | POST /api/parametres {saisies[]} | S-param | modifier PARAMETRE (cle, valeur, valable_du, source ; ou saisies[]) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 | PA5 | Connexions › « Connecter » / « Reconnecter » le compte Google | GET /api/google/connexion | S-sécu | — | sans objet (consentement dans le navigateur) | — |
@@ -531,6 +736,21 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | PF2 | Déplier « Avancé » | — | — | — | sans objet | — |
 | PF3 | Numérotation › prochain numéro de devis et de facture | GET /api/numeros/compteurs | L | etat_crm (NUMEROTATION) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | PF4 | Numérotation › « Faire repartir à… » | PATCH /api/numeros/compteurs {serie, prochain} | S-param | modifier COMPTEUR (serie, prochain) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
+
+#### Tarifs (ex-sous-mode du générateur de Dossiers, mission 18 A6)
+
+`/parametres?section=tarifs` (ancre `#tarifs`) : les tarifs des devis et le tarif de chaque prestation
+(`GestionTarifs.tsx`, déplacé de Dossiers). Les presets sont lus par la page avec les autres réglages ; le générateur
+de documents les propose toujours ligne par ligne (DP67) et son lien « Gérer les tarifs » ouvre l'onglet. Les outils
+rendent un lien vers l'onglet (`mission-18-a6.test.ts` › « lister TARIFS, l'outil des tarifs (une sous-partie ou toutes), et le… »). Pas d'ancienne adresse : c'était un sous-mode, sans URL.
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| DP64 | Lire les tarifs (presets : désignation, unité, prix) et le tarif de chaque prestation ; le générateur les propose | page (`listerPresets`) ; GET /api/dossiers/presets ; GET /api/prestations/tarifs | L | lister TARIFS (sous-parties et presets avec identifiant) | couvert | `mcp-lister-etat.test.ts` › « TARIFS (presets avec identifiant), PUBLICATIONS, CRENEAUX, TEINTES… » ; `mission-18-a6.test.ts` › « lister TARIFS, l'outil des tarifs (une sous-partie ou toutes), et le… » |
+| DP70 | Modifier un tarif (désignation, unité, prix) › « Enregistrer » | PATCH /api/dossiers/presets/:id | S-param | modifier TARIF (designation, unite, prix_unitaire) / modifier SOUS_PARTIE | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-v2.test.ts` › « « modifier » SOUS_PARTIE (ex-« modifier_tarifs ») : aperçu avec… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP71 | « Ajouter » un tarif | POST /api/dossiers/presets | S-param | creer TARIF | couvert | `mcp-generiques.test.ts` › « DOSSIER (depuis une fiche client ; « Signé » d'emblée : sensible)… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP72 | « Retirer » un tarif (archivé, jamais effacé) | DELETE /api/dossiers/presets/:id | S-suppr | archiver / restaurer (TARIF) | couvert | `mcp-generiques.test.ts` › « archiver puis restaurer huit entités en un appel (au-delà de trois… » ; `mcp-generiques.test.ts` › « restaurerCoordonnee (redevient principale s'il n'y en a plus)… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
+| DP73 | « Tarif de chaque prestation » › attribuer un tarif à une sous-partie, ou « automatique » | POST /api/prestations/tarifs {cle, presetId} | S-param | modifier SOUS_PARTIE (preset_id, ou null = automatique) | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » ; `mission-18-a6.test.ts` › « les gestes de l'onglet (ajouter, modifier, retirer, attribuer) laissent… » |
 
 #### Mail
 
@@ -572,6 +792,23 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | PC10 | Outils par famille et niveau | page (`catalogueVue`) | L | etat_crm (OUTILS) | couvert | `mcp-v3.test.ts` › « « tools/list » expose exactement le catalogue (registre dérivé du code)… » |
 | PC11 | Groupe « Agent mail et IA » (IA_*, MAIL_*, budget) | POST /api/parametres | S-param | modifier PARAMETRE / AUTOMATISME | couvert | `mcp-generiques.test.ts` › « réglages uniques (paramètre, compteur, automatisme, SMS, mail, guide… » |
 
+#### Système (ex-écran `/taches-de-fond`, mission 18 A5)
+
+`/parametres?section=systeme` (où `/taches-de-fond` redirige ; ancres `#systeme`, `#taches-de-fond`, `#coherence`,
+`#audit`, `#sessions`). Chaque bloc se lit à l'ouverture de l'onglet par sa route (celle de son bouton) ; les outils
+rendent un lien vers l'onglet (`mission-18-a5.test.ts` › « etat_crm (vue générale, SANTE, TACHES_DE_FOND, COHERENCE,
+AUDIT, SESSIONS), agir_systeme et manager_operations »).
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| B1 | État des tâches : compteurs, file, planifications ; « Actualiser », pages | GET /api/taches | L | etat_crm (TACHES_DE_FOND) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | agir_systeme (RELANCER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | agir_systeme (ANNULER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
+| B4 | Cohérence › rapport, « Recontrôler » | GET /api/coherence | L | etat_crm (COHERENCE : clé, correction proposée) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
+| B6 | Audit des connexions › « Revérifier » | GET /api/audit/connexions | L | etat_crm (AUDIT) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | etat_crm (SESSIONS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+
 ### 2.14 À valider (`/validation`)
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
@@ -588,25 +825,19 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | V10 | Fusion de clients › choisir la fiche à conserver (A ou B) | … {corrections:{conserver}} | S-suppr | doublon (CLIENT, FUSIONNER, conserver A ou B ; ECARTER, motif) | couvert | `mcp-gestes.test.ts` › « CLIENT : CHERCHER (comme « Chercher les doublons »), LISTER, FUSIONNER… » |
 | V11 | Liens de la carte (fiches, dossier, message) | nav | — | — | sans objet | — |
 
-### 2.15 Tâches de fond (`/taches-de-fond`)
+### 2.15 Tâches de fond — onglet Système de Paramètres depuis la mission 18 (A5)
 
-| # | Action | Route | Nature | Outil MCP | Statut | Test |
-|---|---|---|---|---|---|---|
-| B1 | État des tâches : compteurs, file, planifications ; « Recharger », pages | GET /api/taches | L | etat_crm (TACHES_DE_FOND) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B2 | Tâche en échec › « Relancer » | POST /api/taches/:id/relancer | R | agir_systeme (RELANCER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
-| B3 | Tâche en attente ou en échec › « Annuler » | POST /api/taches/:id/annuler | S (un envoi peut ne jamais partir) | agir_systeme (ANNULER_TACHE) | couvert | `mcp-gestes.test.ts` › « RELANCER_TACHE (direct) et ANNULER_TACHE (sensible) : même état que les… » |
-| B4 | Cohérence › rapport, « Relancer le contrôle » | GET /api/coherence | L | etat_crm (COHERENCE : clé, correction proposée) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B5 | Cohérence › « Corriger » | POST /api/coherence/corriger {cle} | R / S selon la correction | agir_systeme (CORRIGER_INCOHERENCE, cle) | couvert | `mcp-gestes.test.ts` › « RELANCER_SYNCHRO met en file comme « Relancer » de l'Analytique… » |
-| B6 | Audit des connexions › « Relancer » | GET /api/audit/connexions | L | etat_crm (AUDIT) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
-| B7 | Sessions de l'assistant et appels d'outils › « Rafraîchir » | GET /api/assistant/sessions | L | etat_crm (SESSIONS) | couvert | `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+L'écran n'existe plus : `/taches-de-fond` redirige vers l'onglet « Système » de Paramètres
+(`/parametres?section=systeme`) ; ses lignes B1–B7 sont en 2.13, avec leurs outils et leurs tests (redirection, onglet
+et liens : `mission-18-a5.test.ts`). Elles ne sont plus comptées ici en 2.17, mais sous « Paramètres › Système ».
 
 ### 2.16 Navigation et application
 
 | # | Action | Route | Nature | Outil MCP | Statut | Test |
 |---|---|---|---|---|---|---|
-| N1 | Barre : Tâches, Leads, Dossiers, Espaces, Simulateur, Mail, Clients, Analytique, Finances ; Site, Tâches de fond, Dépenses, Paramètres ; menu « Plus » | — | — | — | sans objet | — |
-| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter, tâches de fond en échec | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
-| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés | — | — | — | sans objet | — |
+| N1 | Barre à 10 onglets (mission 18, A6) : Tâches, Leads, Dossiers, Mail, Clients, Analytique ; Simulateur, Site, Finances, Paramètres. Téléphone : Tâches, Leads, Dossiers, Mail, Analytique, puis « Plus » (Clients, Simulateur, Site, Finances, Paramètres). Espaces clients retiré en A1, Dépenses en A3 (la saisie `/depenses/nouvelle` allume Finances), Tâches de fond en A5 (onglet Système de Paramètres), les tarifs dans Paramètres en A6 | — | — | — | sans objet | — |
+| N2 | Compteurs de la barre : tâches du jour, leads en retard, mails à traiter (mission 18, A5 : plus de badge des tâches de fond en échec, un seul compteur : l'échec est une tâche système de Tâches ; la route garde la clé `tachesEnEchec`) | GET /api/pilotage/compteurs | L | point_du_jour / taches / etat_crm | couvert | `mcp-taches.test.ts` › « relecture : un seul compteur de mails — taches TOUT et point_du_jour… » |
+| N3 | Accueil `/` → `/taches` ; `/publicite` et `/synthese` redirigés ; `/espaces` → `/dossiers?espace=TOUS`, `/depenses` → `/finances?section=depenses`, `/taches-de-fond` → `/parametres?section=systeme` (mission 18 ; 307 sans chaîne, vers un écran qui existe : `mission-18-a6.test.ts`) ; service worker en `v12` | — | — | — | sans objet | — |
 | N4 | Retour d'appel « Comment ça s'est passé ? » | POST /api/commercial/appels | R | noter_appel | couvert | `mission-14-partie-8.test.ts` › « pas de réponse : le SMS A avec le rappel de demain 18 h, puis «… » |
 | N5 | Écran SMS commun (« Copier » vaut envoi) | POST /api/sms/copie | S-client | noter_sms | couvert | `mission-14-partie-8.test.ts` › « texte seul : noté en texte libre ; ni code ni texte : refusé par le… » |
 | N6 | Bandeau « Reconnecter Google » | nav /api/google/connexion | S-sécu | — | sans objet | — |
@@ -627,7 +858,7 @@ Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » :
 | Leads (fiche) | 27 | 9 | 10 | 7 | 26 | 1 |
 | Fin d'appel | 9 | 8 | 0 | 0 | 8 | 1 |
 | Dossiers (liste, création, reprise) | 16 | 4 | 5 | 4 | 13 | 3 |
-| Dossier (panneau et rubriques) | 97 | 37 | 26 | 33 | 96 | 1 |
+| Dossier (panneau et rubriques) | 92 | 37 | 23 | 31 | 91 | 1 |
 | Espaces clients | 20 | 9 | 6 | 4 | 19 | 1 |
 | Mail | 30 | 17 | 8 | 5 | 30 | 0 |
 | Clients | 26 | 4 | 10 | 12 | 26 | 0 |
@@ -638,11 +869,12 @@ Comptes faits sur les tableaux ci-dessus (une ligne = une action). « Audit » :
 | Analytique | 30 | 14 | 1 | 11 | 26 | 4 |
 | Paramètres › Activité | 11 | 2 | 2 | 4 | 8 | 3 |
 | Paramètres › Facturation | 4 | 3 | 0 | 0 | 3 | 1 |
+| Paramètres › Tarifs (ex-générateur de Dossiers) | 5 | 0 | 3 | 2 | 5 | 0 |
 | Paramètres › Mail | 8 | 2 | 2 | 4 | 8 | 0 |
 | Paramètres › SMS | 6 | 3 | 1 | 1 | 5 | 1 |
 | Paramètres › Assistant | 11 | 5 | 1 | 4 | 10 | 1 |
+| Paramètres › Système (ex-Tâches de fond) | 7 | 0 | 2 | 5 | 7 | 0 |
 | À valider | 11 | 1 | 4 | 5 | 10 | 1 |
-| Tâches de fond | 7 | 0 | 2 | 5 | 7 | 0 |
 | Navigation et application | 10 | 4 | 0 | 0 | 4 | 6 |
 | **Total** | **439** | **168** | **98** | **136** | **402** | **37** |
 
@@ -652,6 +884,22 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 - Après la partie C : **402 couvertes (100 %)**, 0 partielle, 0 manquante. Les 37 gestes `sans objet` sont ceux de
   la règle de l'en-tête : `tel:`, presse-papiers, tri ou dépli local, consentement dans le navigateur, abonnement push
   de l'appareil, hors ligne, liens de navigation.
+- **Après la mission 18, A1 (03/10/2026)** : l'onglet Espaces clients sort du compte (20 actions : 19 couvertes, 1
+  sans objet) ; Dossiers passe à 20 actions (E1–E4 : 17 couvertes, 3 sans objet) ; Clients à 30 (C27–C30, 30
+  couvertes). Total : **427 actions, 391 couvertes (100 % hors gestes sans objet), 36 sans objet**, 0 partielle, 0
+  manquante.
+- **Après la mission 18, A3 (03/10/2026)** : l'écran Dépenses devient la section « Dépenses » de Finances (X1–X10 en
+  2.10) : la ligne Dépenses sort du compte, Finances passe à 20 actions (17 couvertes, 3 sans objet). Total inchangé :
+  **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
+- **Après la mission 18, A4 (03/10/2026)** : les séquences n'avaient plus d'écran depuis la mission 13 ; l'avis et la
+  réactivation passent par les gestes existants des relances (L21, L22, DP7). Total inchangé : **427 actions, 391
+  couvertes, 36 sans objet**, 0 partielle, 0 manquante.
+- **Après la mission 18, A5 (03/10/2026)** : Tâches de fond devient l'onglet « Système » de Paramètres (B1–B7 en
+  2.13) : la ligne change de nom, pas de compte. Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0
+  partielle, 0 manquante.
+- **Après la mission 18, A6 (03/10/2026)** : les tarifs passent dans Paramètres › Tarifs (DP64, DP70–DP73 en 2.13) :
+  le panneau du dossier passe à 92 actions (91 couvertes, 1 sans objet), Paramètres › Tarifs compte 5 actions (5
+  couvertes). Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
 
 ## 3. Les manques, par domaine
 
@@ -868,7 +1116,8 @@ la date du chantier, reflétés dans Google Calendar.
 
 ### 3.23 Pièges relevés en passant (à corriger avec les outils)
 
-1. `rattacher_depense` crée une dépense (voir 3.14), et son lien mène à `/finances` au lieu de `/depenses`.
+1. `rattacher_depense` crée une dépense (voir 3.14), et son lien mène à `/finances` au lieu de `/depenses`. (Mission 18,
+   A3 : les dépenses sont une section de Finances ; `creer` DEPENSE, son remplaçant, mène à `/finances?section=depenses`.)
 2. `annuler_encaissement` affiche l'identifiant du dossier comme un message, et son lien mène à `/finances`.
 3. `lien_espace` écrit « lien communiqué par SMS » et passe la main au client, même si rien n'est envoyé.
 4. `publier_simulation` republie aussi les simulations **masquées** (filtre `statut !== "PUBLIEE"`), ce qui envoie un
@@ -882,7 +1131,7 @@ la date du chantier, reflétés dans Google Calendar.
    `lib/journal/extension.ts`). `restaurer` n'est donc utilisable qu'avec un identifiant déjà connu.
 10. `planifier` coupe la prochaine action à 120 caractères ; l'écran en accepte 140.
 11. `envoyer_document` revalide une proposition déjà validée : erreur 409, et mail en double à la nouvelle tentative.
-    Déjà inscrit dans la mission 18, partie B, point 2.
+    **Corrigé** (mission 18, B2) : une seule validation, le même envoi refait est sans effet.
 12. `noter_appel` sur un lead fait deux écritures (note d'appel, puis appel). L'écran permet la note seule.
 
 ## 4. Outillage : tous les manques fermés, 53 outils au lieu de 84
@@ -951,7 +1200,7 @@ effaçable.
 | DOSSIER (suite) | `dossiers/dossiers.ts › modifierDateEvenement` | passage {evenement_id, survenu_le} | R | DP89 |
 | CLIENT | `clients/fiches.ts › modifierClient` (`schemaModificationClient`) | categorie, prenom, nom_famille, raison_sociale, siret, adresse, code_postal, ville, source, source_detail, campagne, publicite, formulaire, premier_contact_le, recommande_par_id, recommande_par_texte, notes (le passif) | R | C11, C20 |
 | COORDONNEE | `clients/fiches.ts › modifierCoordonnee` ; `definirPrincipale` | client, nature (email, telephone), coordonnee_id, valeur, libelle, principale: true | R | C16, C17 |
-| DOCUMENT | `dossiers/presentation-devis.ts › modifierPresentationDevis` | libelle_variante, visible_espace (ex-`presenter_devis`) | R ; S quand un devis masqué devient visible (vaut envoi) | DP48 (repris) |
+| DOCUMENT | `dossiers/presentation-devis.ts › modifierPresentationDevis` | libelle_variante, visible_espace (ex-`presenter_devis`) | R ; S quand un devis masqué devient visible (vaut envoi ; mission 18 B5 : mis en ligne d'un bloc, mail « Devis disponible » d'un devis du CRM pas encore envoyé) | DP48 (repris) |
 | DOCUMENT (repris) | `dossiers/documents-existants.ts › modifierDocumentExistant` (`schemaModificationDocumentExistant`) | date_emission, montant, objet, statut, acompte_pct, libelle_variante, visible_espace | S-€ | DP59 |
 | ENCAISSEMENT | `encaissements/service.ts › modifierEncaissement` (`schemaCorrectionEncaissement`) ; `crediterCheque` quand seul credite_le est donné | montant, recu_le, moyen, reference, credite_le | S-€ | DP76, DP77, F5 |
 | DEPENSE | `depenses/service.ts › modifierDepense` (`schemaModificationDepense`) | montant, payee_le, fournisseur, categorie, moyen, libelle, note, dossier_id, hors_chantier | R (comme aujourd'hui pour les dépenses) | X4 |
@@ -962,7 +1211,7 @@ effaçable.
 | PUBLICATION | `site/publications.ts › modifierPublication` (`schemaPublication`) | type, titre, texte, ville, type_projet, note, auteur, dossier_id, client_id, photo_avant, photo_apres, accord_client_le, ordre | R en brouillon ; S-client si déjà publiée | W4 |
 | PARAMETRE | `parametres/service.ts › enregistrerParametre` | cle, valeur, valable_du, source ; ou `saisies[]` (lot, comme `POST /api/parametres`) | S-param | PA4, F3 (en lot) |
 | COMPTEUR | `dossiers/compteurs.ts › poserCompteur` | serie (DEVIS, FACTURE), prochain | S-param | PF4 (repris) |
-| AUTOMATISME | `automatismes/interrupteurs.ts › reglerAutomatisme` | code (NOTIF_*, SMS_ACCUSE_*, SEQUENCE_*, IA_CRM, MAIL_RANGEMENT_GMAIL…), actif | S-param | PM4, PS4 (repris) |
+| AUTOMATISME | `automatismes/interrupteurs.ts › reglerAutomatisme` | code (NOTIF_*, SMS_ACCUSE_*, IA_CRM, MAIL_RANGEMENT_GMAIL…), actif. Mission 18 (A4) : plus de `SEQUENCE_*` (inconnu, 404) — `mission-18-a4.test.ts` › « les automatismes n'ont plus de séquence (aucune ligne SequenceMail créée)… » | S-param | PM4, PS4 (repris) |
 | MODELE_SMS | `sms/modeles.ts › modifierModele` | code, texte, actif, libelle ; `defaut: true` (revient au texte de départ) | S-param | PS3, PS5 |
 | MODELE_MAIL | `mail/notifications.ts › enregistrerModeleNotification` (le modèle entier est relu puis réécrit ; `actif` est gardé) | evenement, objet, phrase, bouton, actif | S-param (texte envoyé aux clients) | PM5 |
 | GUIDE_STYLE | `mail/redaction.ts › enregistrerGuideStyle` ; `genererGuideStyle` | texte ; ou `tirer_des_mails: true` (coût d'IA) | S-param | PM2, PM3 |
@@ -974,7 +1223,7 @@ effaçable.
 | Entité | Fonction de service | Champs permis | Niveau | Ferme |
 |---|---|---|---|---|
 | LEAD | `prospects/creation-assistant.ts › creerContactAssistant` (anti-doublon) ; avec `message_id` : `mail/rattachement.ts › creerLeadDepuisMail` | prenom, nom, telephone, email, ville, code_postal, source, type_projet, projet, ouvrir_dossier, forcer ; message_id | R | L1, M24 |
-| DOSSIER | Depuis un lead : `dossiers/depuis-lead.ts › ouvrirDossierDuLead` (ex-`ouvrir_dossier`). Sinon : `dossiers/dossiers.ts › creerDossier` (`schemaCreation`) | lead_id, ou client_id, ou rien ; client_nom, client_adresse, client_cp, client_ville, client_telephone, client_email, objet, source, montant_estime, prochaine_action, prochaine_action_date, etape, date_chantier, client_categorie, client_siret. Photos ensuite par `ajouter_fichier` | R ; S si etape ≥ SIGNE | D13, D14, C10 |
+| DOSSIER | Depuis un lead (qualifié au téléphone ; mission 18 A2 : un lead du site a déjà le sien, ouvert par `ouvrirDossierAutomatique`) : `dossiers/depuis-lead.ts › ouvrirDossierDuLead` (ex-`ouvrir_dossier`). Sinon : `dossiers/dossiers.ts › creerDossier` (`schemaCreation`) | lead_id, ou client_id, ou rien ; client_nom, client_adresse, client_cp, client_ville, client_telephone, client_email, objet, source, montant_estime, prochaine_action, prochaine_action_date, etape, date_chantier, client_categorie, client_siret. Photos ensuite par `ajouter_fichier` | R ; S si etape ≥ SIGNE | D13, D14, C10 |
 | REPRISE | `dossiers/reprise.ts › reprendreDossier` (`schemaReprise`) | fiche client, étape actuelle, dates des jalons, ouvert_le, documents émis (numéro, date, montant, statut, registre), paiements reçus ; les PDF ensuite par `ajouter_fichier` (PDF_DOCUMENT) | S-€ | D16 |
 | CLIENT | `clients/fiches.ts › creerClientManuel` (`schemaCreationClient`) ; le 409 doublon rend les candidats | champs de `champsClient` + telephone, email, forcer | R | C5, C6 |
 | COORDONNEE | `clients/fiches.ts › ajouterCoordonnee` | client, nature, valeur, libelle | R | C15 |
@@ -1017,12 +1266,12 @@ outils d'écriture.
 | Liste | Fonction de service | Vues et filtres (ceux de l'écran) | Ferme |
 |---|---|---|---|
 | LEADS | `prospects/leads.ts › listerLeads` (+ `AVEC_ARCHIVES` pour ARCHIVES) | vue A_APPELER, A_RAPPELER, SANS_SUITE, ARCHIVES ; source ; recherche (campagne comprise) ; page | L3–L8, L18 |
-| DOSSIERS | `dossiers/dossiers.ts › pageDossiers` ; `listerDossiers` (par étape) ; `dossiers/archivage.ts › dossiersArchives` | vue EN_COURS, A_FAIRE, TOUS, ARCHIVES ; etape ; recherche ; masquer_inactifs ; page ; compteurs | D1, D4, D6–D8 |
+| DOSSIERS | `dossiers/dossiers.ts › pageDossiers` ; `listerDossiers` (par étape) ; `dossiers/archivage.ts › dossiersArchives` | vue EN_COURS, A_FAIRE, TOUS, ARCHIVES ; etape ; recherche ; masquer_inactifs ; page ; compteurs ; mission 18 (A1) : `espace` (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES) et `etape_espace` — le filtre « Espaces », état de l'espace par ligne (`espace/suivi.ts › espacesDesDossiers`) | D1, D4, D6–D8, E1–E4 |
 | CLIENTS | `clients/fiches.ts › pageClients` | recherche, categorie, source, archives, page | C1, C2 |
-| ESPACES | `espace/suivi.ts › pageClientsEspaces` ; `relances/photos.ts › relancesPhotosProposables` | qui (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES), etape, tri, page, sans_photo_ni_simulation_depuis_jours ; faits par projet | E1–E4 |
+| ESPACES | `espace/suivi.ts › pageClientsEspaces` ; `relances/photos.ts › relancesPhotosProposables` | qui (MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES), etape, tri, page, sans_photo_ni_simulation_depuis_jours ; faits par projet. Mission 18 (A1) : plus d'écran, liste par client gardée pour l'assistant | C27 (lien) |
 | MAILS | `mail/vues.ts › listerVue` ; vue NON_CLASSES = ex-`mails_non_classes` | vue A_TRAITER, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES ; recherche dans la vue | M3, M4 |
 | MESSAGES_ESPACE | `espace/messages.ts › messagesEspace` | cible, tout, limite | (ex-`messages_espace`) |
-| RELANCES | `relances/service.ts › listerRelances` + `relancesPhotosProposables` | dossier | (ex-`voir_relances`) |
+| RELANCES | `relances/service.ts › listerRelances` + `relancesPhotosProposables` ; mission 18 (A4) : `relances/avis.ts › relancesAvisProposables` et `relances/reactivation.ts › relancesReactivationProposables` (blocs rendus aussi sans devis en attente) | dossier (la réactivation porte sur un contact : aucune dans la liste d'un dossier) | (ex-`voir_relances`) |
 | PROPOSITIONS | `validation/service.ts › listerPropositions` | statut (EN_ATTENTE, ECHEC, HISTORIQUE), type, dossier, client, message, proposition_id (lecture d'une seule) ; rend `sensible`, `validationGroupee`, champs corrigibles, motifs de rejet | V1–V3 |
 | DEPENSES | `depenses/service.ts › listerDepenses` ; `suggestionsSaisie` | annee ou periode, categorie, rattachement, archivees ; suggestions | X1, X7 |
 | ENCOURS, CHEQUES, QUALITE_FINANCES | `finances/tableau.ts › chargerTableauFinances` | annee ; identifiants de registre et d'encaissement | F1 |
@@ -1075,7 +1324,7 @@ Schéma : `{ partie, … }`. Lecture seule, jamais de secret.
 |---|---|---|---|
 | DOSSIER › PHOTO_AVANT, PHOTO_APRES | `dossiers/dossiers.ts › ajouterPhoto(dossierId, fichier, apres)` | R | DP22, DP23, D13 (photos) |
 | DOSSIER › SIMULATION (titre, description, source MANUEL ou CHATGPT, preparation_id « auto ») | `simulations/dossier.ts › deposerSimulationDossier` (brouillon) | R | DP82, S13 |
-| DOSSIER › DEVIS, FACTURE, AUTRE (champs de l'ex-`deposer_document`) | `dossiers/depot-document.ts › deposerDocument` ; sans fichier : `dossiers/documents-existants.ts › enregistrerDocumentExistant` | S (un devis visible vaut envoi) | DP57, DP49 (repris) |
+| DOSSIER › DEVIS, FACTURE, AUTRE (champs de l'ex-`deposer_document`) | `dossiers/depot-document.ts › deposerDocument` ; sans fichier : `dossiers/documents-existants.ts › enregistrerDocumentExistant` | S (un devis visible vaut envoi ; « accepté » vaut signature, mission 18 B4) | DP57, DP49 (repris) |
 | DOCUMENT › PDF_DOCUMENT (PDF d'un document repris) | `dossiers/documents-existants.ts › importerPdfDocument` | S-€ | DP59 |
 | DEPENSE › JUSTIFICATIF | `depenses/service.ts › remplacerJustificatif` (à la création : `creer DEPENSE`) | R | X5, X9, DP92 |
 | PUBLICATION › PHOTO_AVANT, PHOTO_APRES | `fichiers/stockage.ts › enregistrerFichier`, puis `site/publications.ts › modifierPublication` (chemin), dans `fichiers-depot/enregistrement.ts` | R (S-client si déjà publiée) | W3, W4 |
@@ -1132,10 +1381,11 @@ téléphone pour prendre ou choisir des fichiers.
 | envoyer_lien_espace | `objet` ; code par défaut selon l'étape (LIEN_ESPACE à l'étape Photos, sinon LIEN_ESPACE_RAPPEL) | DP31, E19 |
 | valider_proposition | sensibilité = celle de la définition du type (FUSION_CLIENTS et ANONYMISATION_CLIENT toujours sensibles) ; `corrections` = les champs corrigibles du type (objet et texte d'un mail, `conserver` A ou B…) ; en lot, `validerEnLot` (garde `validationGroupee`) ; `reessayer: true` → `reessayerExecution` | T15, T17, L23, DP8, V4, V5, V7–V10 |
 | ignorer_proposition | accepte les relances de devis (`annulerProposition`, ex-`annuler_relance`) | — |
+| noter_sms | mission 18 (A4) : `code` DEMANDE_AVIS compte la demande d'avis du dossier, REACTIVATION la réactivation du contact (tracée sur le lead, refusée sans son accord), quand `lister` RELANCES les propose ; paramètres inchangés | L22, DP7 |
 | annuler_modification | toutes les entités tracées par `modifier` | — |
 
 Gardés sans changement : point_du_jour, les cinq manager_*, lire_mail, rechercher_mails, rediger_mail, supprimer,
-noter_appel, noter_sms, envoyer_document, annuler_document, relancer, lien_espace, repondre_espace, classer_mail,
+noter_appel, envoyer_document, annuler_document, relancer, lien_espace, repondre_espace, classer_mail,
 resumer_fil, proposer_mise_a_jour, deposer_brouillon, envoyer_mail.
 
 ### 4.10 `traiter_mail` : les gestes de la boîte
@@ -1204,7 +1454,7 @@ par expéditeur, ou plus de 3 fils.
 | DETECTER_TACHES | `a-faire/detection.ts › passeComplete` | R | T3 |
 | RELANCER_TACHE (id) | `taches/file.ts › relancerTache` | R | B2 |
 | ANNULER_TACHE (id) | `taches/file.ts › annulerTache` | S (un envoi peut ne jamais partir) | B3 |
-| CORRIGER_INCOHERENCE (cle) | `coherence/controle.ts › corrigerIncoherence` (aperçu = la correction) | S si la correction touche une étape ou un montant | T18, B5 |
+| CORRIGER_INCOHERENCE (cle) | `coherence/controle.ts › corrigerIncoherence` → `appliquerCorrection` (aperçu = la correction ; trace `COHERENCE_CORRIGEE`) | S si la correction change une étape, touche un devis ou envoie un mail au client (`CORRECTIONS_SENSIBLES`, mission 18 B13) | T18, B5 |
 | RELANCER_SYNCHRO (META, GOOGLE_ADS, SEARCH_CONSOLE, FICHE_GOOGLE) | `analytique/synchro.ts › relancerSynchro` | R | A10 |
 | SYNCHRONISER_DRIVE, VERIFIER_DRIVE | `drive/synchronisation.ts › demanderSynchronisation(verifier)` | R | PA8, PA9 |
 | RELEVER_MAILS | `messages/taches.ts › demanderReleve` | R | PA10 |

@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { A_COMPLETER, compterMessagesNonLus, LIBELLES_SOURCE_MESSAGE, messagesEspace, repondreDansLEspace } from "@/lib/espace/messages";
 import { CODES_LIEN_MAIL, proposerLienParSms } from "@/lib/mail/lien-espace";
+import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
 import { definirOutil, format, lien } from "../definition";
 import { cibler } from "./cible";
 import { schemaCible } from "./lecture";
@@ -38,7 +39,7 @@ export const outilMessagesEspace = definirOutil({
     const liste = await messagesEspace({ nonLus: !e.tout, limite: e.limite ?? 30 });
     const total = await compterMessagesNonLus();
     if (liste.length === 0) return { texte: e.tout ? "Aucun message d'espace récent." : "Aucun message d'espace non lu.", donnees: { nonLus: total, messages: [] } };
-    return { texte: `${e.tout ? `${pluriel(liste.length, "message récent", "messages récents")}, ${pluriel(total, "non lu")}` : `${pluriel(total, "message non lu", "messages non lus")}`} :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus: total, messages: liste }, liens: [lien("Espaces clients", "/espaces")] };
+    return { texte: `${e.tout ? `${pluriel(liste.length, "message récent", "messages récents")}, ${pluriel(total, "non lu")}` : `${pluriel(total, "message non lu", "messages non lus")}`} :\n${liste.map(ligneMessage).join("\n")}`, donnees: { nonLus: total, messages: liste }, liens: [lien("Dossiers › Espaces", ADRESSE_ESPACES)] };
   },
 });
 

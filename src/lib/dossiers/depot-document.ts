@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { enregistrerDocumentExistant, importerPdfDocument, schemaDocumentExistant } from "@/lib/dossiers/documents-existants";
+import { enregistrerDevisGmail, pieceEnvoyeeDepuisGmail } from "@/lib/dossiers/devis-gmail";
+import { enregistrerDocumentExistant, schemaDocumentExistant, verifierPdf } from "@/lib/dossiers/documents-existants";
 import type { ChangementEtape } from "@/lib/dossiers/transitions";
 import { enregistrerFichier, lireFichierConserve } from "@/lib/fichiers/stockage";
 import { lirePieceMessage } from "@/lib/messages/consultation";
@@ -14,6 +15,14 @@ import { lirePieceMessage } from "@/lib/messages/consultation";
  * l'historique du dossier et servi par /api/fichiers/[id]. Le fichier vient
  * d'une pièce de mail conservée, d'un fichier déjà conservé, ou du contenu
  * lui-même (base64). Rien n'est envoyé au client.
+ *
+ * Mission 18 (B3) : un devis dont le PDF est la pièce d'un mail parti de Gmail (pas par le CRM) est un devis ENVOYÉ
+ * depuis Gmail : `devis-gmail.ts › enregistrerDevisGmail` (daté du mail, relances depuis le mail ; un devis du CRM de
+ * ce numéro, pas encore envoyé, passe « Envoyé » au lieu d'être déposé une seconde fois).
+ *
+ * Mission 18 (B4, écart 4) : un devis ou une facture se dépose d'un bloc — le PDF vérifié avant toute écriture, puis
+ * document, PDF et étape dans une transaction (documents-existants.ts › enregistrerDocumentExistant) ; un devis déposé
+ * « accepté » sur un dossier pas encore signé le fait passer en « Signé » (devis-signe.ts).
  */
 
 export const OCTETS_MAX_DEPOT = 9 * 1024 * 1024;
@@ -36,7 +45,7 @@ export const schemaDepotDocument = z.object({
   libelle: z.string().trim().max(80).optional().describe("Devis : libellé de la variante (« façades + plan de travail ») ; AUTRE : nature du document (« BAT fournisseur »)."),
   montant: z.number().positive().max(1_000_000).optional().describe("Devis ou facture : montant HT en euros."),
   date_emission: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "AAAA-MM-JJ").optional().describe("Devis ou facture : date d'émission (AAAA-MM-JJ) ; aujourd'hui par défaut."),
-  statut: z.enum(["ENVOYE", "ACCEPTE", "REFUSE"]).optional().describe("Devis : où il en est (ENVOYE par défaut)."),
+  statut: z.enum(["ENVOYE", "ACCEPTE", "REFUSE"]).optional().describe("Devis : où il en est (ENVOYE par défaut). ACCEPTE = signé hors ligne : un dossier pas encore signé passe en « Signé », les autres devis proposés « non retenus »."),
   acompte_pct: z.number().int().min(0).max(100).optional(),
   objet: z.string().trim().max(160).optional(),
   visible_espace: z.boolean().optional().describe("Devis : visible dans l'espace client (vrai par défaut)."),
@@ -74,12 +83,28 @@ export type ResultatDepot =
       octets: number;
       /** Mission 14 (R1) : un devis visible, émis ou envoyé, a fait passer le dossier en « Devis envoyé ». */
       changements: ChangementEtape[];
+      /** Mission 18 (B3) : devis envoyé depuis Gmail, déposé ou (devis du CRM) passé « Envoyé » ; `deja` : rien n'a changé. */
+      gmail?: { nature: "DEPOSE" | "ENVOYE"; deja: boolean };
     }
   | { nature: "FICHIER"; fichierId: string; nom: string; typeMime: string; octets: number; libelle: string };
 
 export async function deposerDocument(dossierId: string, entree: EntreeDepotDocument): Promise<ResultatDepot> {
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, archiveLe: true, objet: true } });
   if (!dossier || dossier.archiveLe) throw new ErreurMetier("Dossier introuvable ou archivé.", 404);
+  if (entree.type === "DEVIS" && (entree.statut ?? "ENVOYE") === "ENVOYE" && entree.source.message_id && entree.source.piece_id && (await pieceEnvoyeeDepuisGmail(entree.source.message_id, entree.source.piece_id))) {
+    const envoye = await enregistrerDevisGmail(dossierId, {
+      messageId: entree.source.message_id,
+      pieceId: entree.source.piece_id,
+      numero: entree.numero ?? null,
+      montant: entree.montant ?? null,
+      dateEmission: entree.date_emission ?? null,
+      acomptePct: entree.acompte_pct ?? null,
+      libelleVariante: entree.libelle ?? null,
+      objet: entree.objet ?? null,
+      inscrireAuRegistre: entree.inscrire_au_registre ?? false,
+    });
+    return { nature: "DOCUMENT", documentId: envoye.documentId, numero: envoye.numero, type: "DEVIS", avertissements: envoye.avertissements, nom: envoye.nom, octets: envoye.octets, changements: envoye.changements, gmail: { nature: envoye.nature, deja: envoye.deja } };
+  }
   const fichier = await lireSource(entree.source);
 
   if (entree.type === "AUTRE") {
@@ -94,6 +119,10 @@ export async function deposerDocument(dossierId: string, entree: EntreeDepotDocu
   if (fichier.typeMime !== "application/pdf") throw new ErreurMetier("Un devis ou une facture se dépose en PDF.", 400);
   if (!entree.numero) throw new ErreurMetier(`Le numéro ${entree.type === "DEVIS" ? "du devis" : "de la facture"} est obligatoire.`, 400);
   if (!entree.montant) throw new ErreurMetier("Le montant HT est obligatoire.", 400);
+  // Mission 18 (B4) : le PDF est vérifié AVANT toute écriture (un faux PDF ne consomme aucun numéro, l'étape ne bouge
+  // pas, on peut réessayer) ; puis document, PDF et étape (« Devis envoyé », ou « Signé » pour un devis déposé
+  // « accepté ») dans UNE transaction.
+  verifierPdf(fichier.contenu);
   const enregistre = await enregistrerDocumentExistant(
     dossierId,
     schemaDocumentExistant.parse({
@@ -104,8 +133,8 @@ export async function deposerDocument(dossierId: string, entree: EntreeDepotDocu
       objet: entree.objet ?? null,
       ...(entree.type === "DEVIS" ? { statut: entree.statut ?? "ENVOYE", acomptePct: entree.acompte_pct ?? null, libelleVariante: entree.libelle ?? null, visibleEspace: entree.visible_espace ?? true } : {}),
       inscrireAuRegistre: entree.inscrire_au_registre ?? false,
-    })
+    }),
+    { pdf: fichier.contenu }
   );
-  await importerPdfDocument(dossierId, enregistre.documentId, versFile(fichier));
   return { nature: "DOCUMENT", documentId: enregistre.documentId, numero: enregistre.numero, type: entree.type, avertissements: enregistre.avertissements, nom: fichier.nom, octets: fichier.contenu.length, changements: enregistre.changements };
 }

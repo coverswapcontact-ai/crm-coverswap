@@ -9,7 +9,9 @@ Référence de conception. À lire avant de toucher `src/lib/a-faire/`, l'écran
 - Le nouveau modèle s'appelle **`TacheAFaire`** ; son code vit dans **`src/lib/a-faire/`** ; ses routes d'API dans
   **`/api/a-faire/…`**.
 - L'écran **`/taches`** devient la liste des tâches de Lucas (premier onglet, accueil de l'application).
-  L'écran technique « Tâches de fond » déménage à **`/taches-de-fond`** (liens mis à jour).
+  L'écran technique « Tâches de fond » déménage à **`/taches-de-fond`** (liens mis à jour), puis devient l'onglet
+  « Système » de Paramètres (mission 18, A5 : **`/parametres?section=systeme`**, où `/taches-de-fond` redirige ; ses
+  échecs n'ont plus de badge, ils remontent comme tâche système « Relancer N tâches de fond en échec »).
 - Acteur des écritures automatiques : `SYSTEME:taches-a-faire`.
 
 ## 1. Le modèle
@@ -122,7 +124,9 @@ ESPACE_PROJET_DEMANDE, ESPACE_ACCORD_RETIRE, DEMANDE_SITE, ESPACE_SIMULATION_CLI
 **Prochaine action manuelle en vigueur** (cas « j'attends sa modification visuelle ») : `prochaineActionManuelleLe`
 posé, `prochaineAction` égale au texte retenu, et aucun événement du client après. Tant qu'elle est en vigueur :
 aucun détecteur ne crée de tâche sur ce dossier (signaux, cohérence, étapes, messages plus anciens compris) ; une
-seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Posée à la main, elle écrit un événement
+seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Exception (mission 18, B1) : `ENVOYER_DEVIS`, un devis
+généré mais pas encore envoyé, reste — c'est le geste de Lucas resté en route, aucune action manuelle ne le couvre ; de même
+`ENREGISTRER_DEVIS` (B3), un devis envoyé depuis Gmail pas encore enregistré. Posée à la main, elle écrit un événement
 `PROCHAINE_ACTION_MANUELLE` qui compte comme une réponse pour la règle de la main (ce qui est plus ancien est traité)
 et qui passe la main au client si le texte dit d'attendre (`/\battend|\battente\b/i` : « en attente de… » compris), sinon à
 Lucas.
@@ -148,15 +152,19 @@ Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les d
 | DEMANDE_CLIENT | Préparer une autre proposition · Nom (ou « Accorder des simulations », « Ouvrir un nouveau projet ») | 1 | 5 | SIGNAUX | dossier |
 | RELANCER_DEVIS | Relancer le devis · Nom | 2 | 2 | RELANCES | aperçu du mail de relance, ou SMS à copier |
 | HESITE | Appeler · Nom (devis relu 4 fois) | 2 | 3 | SIGNAUX | tel: |
-| RAPPELER | Rappeler · Nom | 2 | 3 | LEADS / DOSSIERS | tel: puis fin d'appel |
+| RAPPELER | Rappeler · Nom (« Appeler · Nom » quand l'action du dossier est « Appeler : … » : premier appel d'un dossier ouvert tout seul, mission 18 A2) | 2 | 3 | LEADS / DOSSIERS | tel: puis fin d'appel |
 | APPELER | Appeler · Nom | 2 (< 24 h) sinon 3 | 3 | LEADS | tel: puis fin d'appel |
 | PROCHAINE_ACTION | (texte de l'action) · Nom | 2 | 3 | DOSSIERS | dossier |
 | VALIDER | Valider · (titre de la proposition) | 2 relance, 3 carte, 5 règle | 1 | PROPOSITIONS | Valider / Ignorer dans la ligne |
 | SIMULATION | Préparer la simulation · Nom | 3 | 10 | DOSSIERS | simulateur ouvert sur le dossier |
 | PUBLIER | Publier la simulation · Nom | 3 | 1 | SIGNAUX | dossier, rubrique simulations |
 | DEVIS | Faire le devis · Nom | 3 | 10 | DOSSIERS | devis prérempli, ou « déposer un PDF » |
+| ENVOYER_DEVIS | Envoyer le devis · Nom (généré mais pas encore envoyé : masqué dans son espace, ou sans annonce ; mission 18 B1) | 2 | 2 | DOSSIERS | dossier, rubrique devis (le rendre visible dans son espace, ou « Envoyer par mail ») |
+| ENREGISTRER_DEVIS | Enregistrer comme devis envoyé · Nom (un PDF qui ressemble à un devis, parti de Gmail chez le client, pas encore dans le CRM ; une tâche par PDF ; mission 18 B3) | 2 | 2 | DOSSIERS | modale de dépôt préremplie (`&devis=gmail&piece=<id>`) : numéro lu dans le nom, date du mail, PDF du mail ; un geste |
 | ENVOYER_LIEN | Envoyer le lien · Nom | 3 | 1 | SIGNAUX | SMS LIEN_ESPACE à copier |
 | RELANCER_PHOTOS | Relancer pour les photos · Nom | 3 | 1 | RELANCES | SMS à copier |
+| RELANCER_AVIS | Demander un avis · Nom (chantier fini sans avis, mission 18 A4) | 3 | 1 | RELANCES | SMS DEMANDE_AVIS à copier (lien de l'espace) |
+| REACTIVER | Reprendre contact · Nom (sur le lead : sans suite depuis 6 mois, d'accord pour les messages commerciaux, mission 18 A4) | 3 | 1 | RELANCES | SMS REACTIVATION à copier |
 | DECIDER | Décider · Nom (appelé, sans rappel daté) | 3 | 2 | LEADS | fiche du lead |
 | MANUELLE | le texte de Lucas | 3 | 5 | MANUELLE | aucun (ou la cible) |
 | SYSTEME | (verbe) · (quoi) | 4 si urgent, sinon 5 | 5 | SYSTEME | la bonne page + marche à suivre |
@@ -201,11 +209,17 @@ raccourci → « Fait » ou coche du CRM dans l'heure), bornée entre la moitié
 | Type | Condition d'achèvement | Raison affichée |
 |---|---|---|
 | DEVIS | un devis visible (`estDevisEnvoye`) | « devis 2026-043 déposé » / « émis » |
+| ENVOYER_DEVIS | le devis parti par le mail du CRM (« Envoyé ») ou accepté, mis en ligne (`DEVIS_ENVOYE` qui le porte), annulé ou remplacé | « devis 2026-043 envoyé par mail », « mis en ligne à 10:12 » |
+| ENREGISTRER_DEVIS | le « Devis envoyé » (`canal: "GMAIL"`) qui porte la pièce, ou le devis de ce numéro entré autrement (déposé, envoyé, accepté) | « devis 2026-043 enregistré comme envoyé depuis Gmail à 10:12 », « devis 2026-043 déposé » |
 | SIMULATION | une simulation PUBLIEE | « simulation publiée le 29/09 » |
 | REPONDRE | réponse partie (mail sortant, réponse d'espace, SMS copié, appel abouti), fil archivé ou rangé | « réponse partie le 29/09 » |
 | APPELER | lead contacté par Lucas (appel, SMS copié ou envoyé, mail parti ; jamais un message reçu ni l'accusé automatique) ; lead qui a écrit | « SMS copié le 29/09 », « il a écrit : à lui répondre » |
 | DATE_CHANTIER | `dateChantier` posée | « date posée au 12/10 » |
 | ENCAISSER | un encaissement VALIDE | « encaissement de 1 200 € saisi » |
+| RELANCER_DEVIS | un SMS de relance de devis copié (`relance.documentId`) ou le mail de relance parti | « SMS de relance copié à 10:12 » |
+| RELANCER_PHOTOS | un SMS de relance photos copié (`relance.type` PHOTOS) | « SMS de relance copié le 29/09 » |
+| RELANCER_AVIS | un SMS de demande d'avis copié (`relance.type` AVIS) ; un SMS d'avis ne coche aucune autre relance | « SMS de demande d'avis copié le 29/09 » |
+| REACTIVER | la réactivation copiée, tracée sur le lead (« SMS REACTIVATION copié : … ») ; un contact sans suite n'est pas un sujet disparu pour elle | « SMS de réactivation copié le 29/09 » |
 | VALIDER | proposition décidée | « proposition validée » |
 
 ## 6. Mise en route (migration `taches-a-faire-17-a`)

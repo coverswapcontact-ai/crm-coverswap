@@ -2,11 +2,12 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateCourte, euros } from "@/lib/commun/format";
-import { libelleCategorie } from "@/lib/depenses/constantes";
+import { ADRESSE_DEPENSES, libelleCategorie } from "@/lib/depenses/constantes";
 import { schemaCreationDepense, schemaModificationDepense } from "@/lib/depenses/constantes";
 import { archiverDepense, creerDepense, modifierDepense, restaurerDepense } from "@/lib/depenses/service";
 import { UNITES } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
+import { annonceAboutit, devisDejaParti, phraseAnnonce } from "@/lib/dossiers/devis-envoye";
 import { modifierDocumentExistant, schemaModificationDocumentExistant } from "@/lib/dossiers/documents-existants";
 import { modifierPresentationDevis } from "@/lib/dossiers/presentation-devis";
 import { archiverPreset, creerPreset, lirePrestationsDuTarif, modifierPreset, restaurerPreset, schemaPreset } from "@/lib/dossiers/presets";
@@ -14,6 +15,8 @@ import { LIBELLES_MOYEN, type MoyenPaiement } from "@/lib/encaissements/constant
 import { schemaCorrectionEncaissement } from "@/lib/encaissements/schemas";
 import { crediterCheque, modifierEncaissement } from "@/lib/encaissements/service";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { peutNotifier } from "@/lib/mail/notifications";
+import { ADRESSE_TARIFS } from "@/lib/parametres/sections";
 import { libelleReperee, repererSousPartie } from "@/lib/prestations/reperage";
 import { attribuerTarif, modifierTarifSousPartie, tarifsDesPrestations } from "@/lib/prestations/tarifs";
 import { lien } from "../definition";
@@ -52,9 +55,33 @@ export const DOCUMENT: DefinitionEntite = {
     // Un document repris qui change touche l'argent ; un devis masqué qui devient visible vaut envoi au client.
     sensible: (apres, avant) => CHAMPS_REPRIS.some((c) => c in apres && JSON.stringify(apres[c]) !== JSON.stringify(avant[c])) || (apres.visibleEspace === true && avant.visibleEspace !== true),
     pretraiter: (e, contexte) => datesDictees(e, ["dateEmission"], contexte.maintenant),
-    note: (apres, avant) => (apres.visibleEspace === true && avant.visibleEspace !== true ? "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas." : null),
-    // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste, et l'étape ne revient pas d'elle-même.
-    annulationPartielle: (changements) => (changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true) ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant." : null),
+    note: async (apres, avant, cible) => {
+      if (apres.statut === "ACCEPTE" && avant.statut !== "ACCEPTE") {
+        return "Noté « accepté », le devis vaut signature (hors ligne) : un dossier pas encore signé passe en « Signé », les autres devis proposés deviennent « non retenus ».";
+      }
+      // Mission 18 (B6) : masqué, le seul devis qui attend sa réponse fait revenir le dossier avant « Devis envoyé ».
+      if (apres.visibleEspace === false && avant.visibleEspace === true) {
+        return "Masqué, le client ne le voit plus et ses mails de relance en attente sont annulés ; si c'était le seul devis qui attendait sa réponse, le dossier revient à son étape d'avant le devis, la main à toi pour refaire le devis.";
+      }
+      if (apres.visibleEspace !== true || avant.visibleEspace === true) return null;
+      // Mission 18 (B5) : la mise en ligne d'un devis du CRM pas encore envoyé est annoncée par « Devis disponible ».
+      const envoi = "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas, la relance compte depuis la mise en ligne.";
+      if (cible.contexte.repris || avant.statut !== "GENERE") return `${envoi} Aucun mail : ${cible.contexte.repris ? "devis fait ailleurs" : "il a déjà été envoyé par mail"}.`;
+      const etat = await peutNotifier("DEVIS_DISPONIBLE", String(cible.contexte.dossierId));
+      // Relecture : la règle de la génération (devis-envoye.ts › annonceAboutit) — sans annonce possible, visible mais pas envoyé.
+      if (!annonceAboutit(etat) && !(await devisDejaParti({ id: cible.id, dossierId: String(cible.contexte.dossierId), origine: "CRM", statut: String(avant.statut) }))) {
+        return `Rendu visible, le devis n'est pas envoyé pour autant : ${(etat.raison ?? "notification impossible").replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}. Le dossier ne bouge pas, la tâche « Envoyer le devis » reste ouverte (« envoyer_document » pour l'envoyer par mail).`;
+      }
+      return `${envoi} ${etat.possible ? "Le mail « Devis disponible » partira au client (une fois par devis)." : `Aucun mail « Devis disponible » : ${(etat.raison ?? "notification impossible").replace(/\.$/, "")}.`}`;
+    },
+    // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste ; l'étape revient avant « Devis envoyé »
+    // seulement si plus aucun devis n'attend sa réponse (mission 18, B6).
+    annulationPartielle: (changements) =>
+      changements.some((c) => c.cle === "statut" && c.apres === "ACCEPTE" && c.avant !== "ACCEPTE")
+        ? "Le devis n'est plus noté « accepté », mais le dossier garde l'étape « Signé » s'il y est passé (et les autres devis restent « non retenus ») : « changer_etape » pour le remettre à son étape d'avant."
+        : changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true)
+          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique (le mail « Devis disponible », s'il est parti, ne se reprend pas) ; s'il était le seul devis qui attendait sa réponse, le dossier revient à son étape d'avant le devis (la main à toi pour refaire le devis), sinon il garde l'étape « Devis envoyé »."
+          : null,
     lire: async (cible) => {
       const d = await prisma.document.findUniqueOrThrow({ where: { id: cible.id } });
       return { dateEmission: jour(d.dateEmission), montant: d.totalHt, objet: d.objet, statut: d.statut, acomptePct: d.acomptePct, libelleVariante: d.libelleVariante, visibleEspace: d.visibleEspace };
@@ -63,8 +90,8 @@ export const DOCUMENT: DefinitionEntite = {
       const dossierId = cible.contexte.dossierId as string;
       // Comme la route : { visibleEspace, libelleVariante } seuls = la présentation ; le reste = la correction d'un document repris.
       if (Object.keys(valeurs).every((c) => CHAMPS_PRESENTATION.includes(c))) {
-        await modifierPresentationDevis(dossierId, cible.id, valeurs);
-        return [];
+        const { annonce, retrait, nonEnvoye } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
+        return [...(nonEnvoye ? [nonEnvoye] : annonce ? [phraseAnnonce(annonce)] : []), ...(retrait ? [retrait] : [])];
       }
       return modifierDocumentExistant(dossierId, cible.id, valeurs);
     },
@@ -142,7 +169,8 @@ export const DEPENSE: DefinitionEntite = {
     if (!d) throw new ErreurMetier(`Dépense introuvable : ${id}.`, 404);
     return { id, nom: `la dépense du ${dateCourte(d.payeeLe)} (${euros(d.montant)} chez ${d.fournisseur})`, archive: Boolean(d.archiveLe), contexte: {} };
   },
-  chemin: () => "/depenses",
+  // Mission 18 (A3) : la liste des dépenses est une section de Finances.
+  chemin: () => ADRESSE_DEPENSES,
   modifier: {
     schema: objet(schemaModificationDepense),
     libelles: { payeeLe: "la date", montant: "le montant", fournisseur: "le fournisseur", categorie: "la catégorie", libelle: "le libellé", moyen: "le moyen", dossierId: "le chantier", horsChantier: "hors chantier", note: "la note" },
@@ -180,7 +208,7 @@ export const DEPENSE: DefinitionEntite = {
       return {
         texte: `Dépense ${dejaRecue ? "déjà connue" : "enregistrée"} : ${euros(depense.montant)} chez ${depense.fournisseur} (${libelleCategorie(depense.categorie).toLowerCase()})${depense.dossier ? `, rattachée au chantier de ${depense.dossier.clientNom}` : depense.horsChantier ? ", hors chantier" : ", pas encore rattachée"} [depense:${depense.id}].${depense.justificatif ? " Justificatif attaché." : " Le justificatif s'ajoute ici (justificatif) ou ensuite par « ajouter_fichier »."}`,
         donnees: { depenseId: depense.id, depense },
-        liens: [lien("Dépenses", "/depenses")],
+        liens: [lien("Dépenses", ADRESSE_DEPENSES)],
       };
     },
   },
@@ -205,7 +233,7 @@ export const TARIF: DefinitionEntite = {
   libelle: "le tarif",
   designation: "id du tarif (preset), ou des mots de sa désignation",
   resoudre: resoudreTarif,
-  chemin: () => "/dossiers",
+  chemin: () => ADRESSE_TARIFS,
   modifier: {
     schema: objet(schemaPreset.partial()),
     libelles: { designation: "la désignation", unite: "l'unité", prixUnitaire: "le prix unitaire" },
@@ -238,7 +266,7 @@ export const TARIF: DefinitionEntite = {
       }
       const cree = await creerPreset(preset as z.output<typeof schemaPreset>);
       if (cle) await attribuerTarif(cle, cree.id);
-      return { texte: `Tarif créé : « ${cree.designation} », ${cree.prixUnitaire === null ? "prix à saisir" : euros(cree.prixUnitaire)} / ${cree.unite}${cle ? `, attribué à ${cle}` : ""} [tarif:${cree.id}].`, donnees: { tarif: cree }, liens: [lien("Dossiers → Tarifs", "/dossiers")] };
+      return { texte: `Tarif créé : « ${cree.designation} », ${cree.prixUnitaire === null ? "prix à saisir" : euros(cree.prixUnitaire)} / ${cree.unite}${cle ? `, attribué à ${cle}` : ""} [tarif:${cree.id}].`, donnees: { tarif: cree }, liens: [lien("Paramètres › Tarifs", ADRESSE_TARIFS)] };
     },
   },
   archiver: async (cible) => archiverPreset(cible.id),
@@ -266,7 +294,7 @@ export const SOUS_PARTIE: DefinitionEntite = {
     if ("aucune" in trouve) throw new ErreurMetier(`« ${texte} » n'est pas une sous-partie connue. Possibles : ${trouve.proposees.map((p) => `${p.famille.libelle} › ${p.sousPartie.libelle}`).join(", ")}.`, 404);
     return { id: trouve.trouvee.cle, nom: `${trouve.trouvee.famille.libelle} › ${trouve.trouvee.sousPartie.libelle}`, archive: false, contexte: {} };
   },
-  chemin: () => "/dossiers",
+  chemin: () => ADRESSE_TARIFS,
   modifier: {
     schema: objet(z.object({ prixUnitaire: z.number().min(0).max(1_000_000).nullable(), unite: z.enum(UNITES), designation: z.string().trim().min(1).max(200), presetId: z.string().max(40).nullable() }).partial()),
     libelles: { prixUnitaire: "le prix unitaire", unite: "l'unité", designation: "la désignation du tarif", presetId: "le tarif attribué" },

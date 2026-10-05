@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { recalculerMain } from "@/lib/dossiers/main";
+import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { SimulationEspace } from "@prisma/client";
@@ -8,8 +9,6 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { alerter } from "@/lib/alertes/canaux";
 import { FORMATS_PHOTO, PHOTO_OCTETS_MAX } from "@/lib/dossiers/constants";
-import { changerEtape } from "@/lib/dossiers/transitions";
-import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { lienPourLeProjet, ouvrirEspace } from "@/lib/espace/liens";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
@@ -114,6 +113,10 @@ function zonesDuSite(origine: OrigineSite | null, notes: string | null, referenc
  * d'origine, lisibles dans la fiche et par `voir_simulations`). Rejouable :
  * une simulation déjà présente — même retirée par Lucas — n'est jamais recréée.
  * Rend les lignes créées.
+ *
+ * Mission 18 (B9) : une lecture qui écrit (l'espace, la liste du dossier, l'ouverture de l'espace) ; quand elle range
+ * quelque chose, c'est une simulation du client, d'un bloc avec le point d'entrée (SIMULATION_DU_CLIENT, `SITE` :
+ * Qualification → Simulation, main), puis ses suites.
  */
 export async function synchroniserSimulationsSite(dossierId: string): Promise<SimulationEspace[]> {
   const espace = await prisma.espaceClient.findFirst({ where: { dossierId }, select: { id: true } });
@@ -123,31 +126,41 @@ export async function synchroniserSimulationsSite(dossierId: string): Promise<Si
     prisma.simulationEspace.findMany({ where: { ...AVEC_ARCHIVES, espaceId: espace.id, simulationId: { not: null } }, select: { simulationId: true } }),
   ]);
   const connues = new Set(dejaLa.map((s) => s.simulationId));
-  const creees: SimulationEspace[] = [];
-  for (const simulation of simulations) {
-    if (connues.has(simulation.id)) continue;
-    const origine = await origineDuSite(simulation.id);
-    const zones = zonesDuSite(origine, simulation.notes, simulation.referenceChoisie);
-    const ordre = await prisma.simulationEspace.count({ where: { ...AVEC_ARCHIVES, espaceId: espace.id } });
-    creees.push(
-      await prisma.simulationEspace.create({
-        data: {
-          espaceId: espace.id,
-          dossierId,
-          chemin: simulation.imageAfterPath!,
-          photoAvant: simulation.imageBeforePath ?? simulation.imageOriginalPath,
-          titre: "Votre simulation sur coverswap.fr",
-          source: "SITE",
-          statut: "PUBLIEE",
-          publieeLe: simulation.createdAt,
-          zones: zones.length ? JSON.stringify(zones) : null,
-          simulationId: simulation.id,
-          ordre,
-          ...traceDuSite(origine),
-        },
-      })
-    );
-  }
+  const nouvelles = simulations.filter((simulation) => !connues.has(simulation.id));
+  if (nouvelles.length === 0) return [];
+  // Lu avant la transaction : rien n'y passe par le client global.
+  const origines = await Promise.all(nouvelles.map((simulation) => origineDuSite(simulation.id)));
+  const { creees, suites } = await prisma.$transaction(
+    async (tx) => {
+      const creees: SimulationEspace[] = [];
+      for (const [i, simulation] of nouvelles.entries()) {
+        const origine = origines[i];
+        const zones = zonesDuSite(origine, simulation.notes, simulation.referenceChoisie);
+        const ordre = await tx.simulationEspace.count({ where: { ...AVEC_ARCHIVES, espaceId: espace.id } });
+        creees.push(
+          await tx.simulationEspace.create({
+            data: {
+              espaceId: espace.id,
+              dossierId,
+              chemin: simulation.imageAfterPath!,
+              photoAvant: simulation.imageBeforePath ?? simulation.imageOriginalPath,
+              titre: "Votre simulation sur coverswap.fr",
+              source: "SITE",
+              statut: "PUBLIEE",
+              publieeLe: simulation.createdAt,
+              zones: zones.length ? JSON.stringify(zones) : null,
+              simulationId: simulation.id,
+              ordre,
+              ...traceDuSite(origine),
+            },
+          })
+        );
+      }
+      return { creees, suites: await appliquerEvenementDossier(tx, dossierId, { type: "SIMULATION_DU_CLIENT", simulationIds: creees.map((s) => s.id), origine: "SITE" }) };
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  await suitesEvenementDossier(suites);
   return creees;
 }
 
@@ -408,36 +421,48 @@ export async function texteSmsPublication(dossierId: string): Promise<{ texte: s
   return { texte, ...(recent ? { dejaPrevenuLe: recent.createdAt.toISOString() } : {}), ...(fournisseur.nom ? {} : { attente: fournisseur.remarque ?? "Aucun fournisseur de SMS configuré." }) };
 }
 
+/**
+ * Publier des simulations dans l'espace du client : le bouton « Publier » des brouillons comme « Publier » ou
+ * « Republier » d'une seule depuis le bloc Espace (mission 18, B9 : mêmes effets, sauf le SMS, demandé seulement
+ * depuis le bouton). Dans une transaction : statut, événement `ESPACE_SIMULATION_DEPOSEE`, puis le point d'entrée
+ * (SIMULATION_PUBLIEE : Qualification → Simulation, « Attendre le retour du client sur la simulation », main au client).
+ * Après : les suites (agenda, tâches), puis le mail automatique (une fois par publication : même clé, jamais deux
+ * mails pour la même simulation).
+ */
+async function publierDansLEspace(dossierId: string, aPublier: SimulationEspace[], maintenant: Date): Promise<ResultatPublication["mail"]> {
+  const republiees = aPublier.every((s) => s.publieeLe);
+  const suites = await prisma.$transaction(
+    async (tx) => {
+      for (const s of aPublier) await tx.simulationEspace.update({ where: { id: s.id }, data: { statut: "PUBLIEE", publieeLe: s.publieeLe ?? maintenant, masqueeLe: null } });
+      await tx.dossierEvenement.create({
+        data: {
+          dossierId,
+          type: "ESPACE_SIMULATION_DEPOSEE",
+          direction: "SORTANT",
+          contenu: `${aPublier.length > 1 ? `${aPublier.length} simulations ${republiees ? "republiées" : "publiées"}` : `Simulation ${republiees ? "republiée" : "publiée"}`} dans l'espace du client${aPublier.length === 1 && aPublier[0].titre ? ` : ${aPublier[0].titre}` : ""}`,
+          metadata: JSON.stringify({ simulations: aPublier.map((s) => s.id), ...(republiees ? { republiees: true } : {}) }),
+        },
+      });
+      // Mission 18 (B0, B9) : le point d'entrée, pour l'étape, la prochaine action (une action posée à la main reste) et la main.
+      // Relecture : des simulations déjà publiées une fois (masquées puis remises) ne touchent ni la prochaine action ni la main.
+      return appliquerEvenementDossier(tx, dossierId, { type: "SIMULATION_PUBLIEE", simulationIds: aPublier.map((s) => s.id), ...(republiees ? { republiee: true } : {}) }, maintenant);
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit (les suites).
+  await suitesEvenementDossier(suites);
+  // Mission 7 : le client est prévenu par mail, automatiquement (une fois par publication).
+  const { notifierClient } = await import("@/lib/mail/notifications");
+  return notifierClient("SIMULATION_PUBLIEE", dossierId, aPublier.map((s) => s.id).sort().join("+"));
+}
+
 export async function publierSimulations(dossierId: string, ids: string[], options: { prevenir: boolean; texte?: string | null }): Promise<ResultatPublication> {
   const lignes = await prisma.simulationEspace.findMany({ where: { dossierId, id: { in: [...new Set(ids)] } } });
   if (lignes.length === 0) throw new ErreurMetier("Aucune simulation à publier.", 404);
   const maintenant = new Date();
   const aPublier = lignes.filter((s) => s.statut !== "PUBLIEE");
   let mail: ResultatPublication["mail"];
-  if (aPublier.length > 0) {
-    await prisma.$transaction([
-      ...aPublier.map((s) => prisma.simulationEspace.update({ where: { id: s.id }, data: { statut: "PUBLIEE", publieeLe: s.publieeLe ?? maintenant, masqueeLe: null } })),
-      prisma.dossierEvenement.create({
-        data: {
-          dossierId,
-          type: "ESPACE_SIMULATION_DEPOSEE",
-          direction: "SORTANT",
-          contenu: `${aPublier.length > 1 ? `${aPublier.length} simulations publiées` : "Simulation publiée"} dans l'espace du client${aPublier.length === 1 && aPublier[0].titre ? ` : ${aPublier[0].titre}` : ""}`,
-          metadata: JSON.stringify({ simulations: aPublier.map((s) => s.id) }),
-        },
-      }),
-      prisma.dossier.update({ where: { id: dossierId }, data: { prochaineAction: "Attendre le retour du client sur la simulation", prochaineActionDate: null } }),
-    ]);
-    const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
-    if (dossier?.etape === "QUALIFICATION") await changerEtape(dossierId, { vers: "SIMULATION" }).catch((erreur) => console.error("[simulations] passage en Simulation (non bloquant) :", erreur));
-    // Publiée : la main passe au client, partout (dossiers/main.ts).
-    await recalculerMain(dossierId);
-    // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit.
-    await synchroniserRappel({ type: "DOSSIER", id: dossierId });
-    // Mission 7 : le client est prévenu par mail, automatiquement (une fois par publication).
-    const { notifierClient } = await import("@/lib/mail/notifications");
-    mail = await notifierClient("SIMULATION_PUBLIEE", dossierId, aPublier.map((s) => s.id).sort().join("+"));
-  }
+  if (aPublier.length > 0) mail = await publierDansLEspace(dossierId, aPublier, maintenant);
 
   if (!options.prevenir) return { publiees: aPublier.length, sms: { envoye: false, raison: "Client non prévenu par SMS." }, mail };
   const propose = await texteSmsPublication(dossierId);
@@ -453,51 +478,45 @@ export async function publierSimulations(dossierId: string, ids: string[], optio
   }
 }
 
+/**
+ * Masquer, republier, repasser en brouillon ou retirer une simulation (bloc « Espace client » du dossier, outils
+ * « publier » et « modifier »).
+ * - « afficher » une simulation pas encore visible est une publication, avec les mêmes effets que le bouton « Publier »
+ *   (mission 18, B9 : `publierDansLEspace`, soit Qualification → Simulation, prochaine action, main, agenda, mail
+ *   automatique), sans SMS.
+ * - Masquer, retirer ou repasser en brouillon une simulation qui fait partie du choix du client (la simulation validée,
+ *   ou une zone d'un mélange) dévalide son choix, d'un bloc avec le geste (mission 18, B9) : elle ne peut pas
+ *   disparaître de sa galerie en restant « validée ».
+ */
 export async function changerStatutSimulation(dossierId: string, simulationId: string, action: "masquer" | "afficher" | "brouillon" | "retirer", motif?: string | null): Promise<SimulationVue | null> {
   const simulation = await simulationDuDossier(dossierId, simulationId);
   const maintenant = new Date();
-  // La simulation que le client a validée ne peut pas disparaître de sa galerie en restant « validée » :
-  // la masquer, la retirer ou la repasser en brouillon dévalide son choix (tracé, et le dossier le sait).
-  if (action !== "afficher" && simulation.choisieLe) {
-    const espace = await prisma.espaceClient.findUnique({ where: { id: simulation.espaceId } });
-    if (espace?.choixLe) {
-      const { devaliderChoix } = await import("@/lib/espace/validations");
-      await devaliderChoix(espace, "LUCAS");
-    }
+  if (action === "afficher") {
+    if (simulation.statut !== "PUBLIEE") await publierDansLEspace(dossierId, [simulation], maintenant);
+    return versVue(dossierId, await prisma.simulationEspace.findUniqueOrThrow({ where: { id: simulation.id } }), await seuilControle());
   }
-  if (action === "retirer") {
-    await prisma.simulationEspace.update({ where: { id: simulation.id }, data: { archiveLe: maintenant, archiveMotif: motif?.trim().slice(0, 200) || "Retirée du dossier" } });
-    return null;
-  }
+  const espace = await prisma.espaceClient.findUnique({ where: { id: simulation.espaceId } });
+  const { devaliderChoixDansTransaction, simulationDansLeChoix } = await import("@/lib/espace/validations");
+  const choix = espace?.choixLe && (simulation.choisieLe || simulationDansLeChoix(espace.choix, simulation.id)) ? espace : null;
+  const geste = action === "masquer" ? "simulation masquée" : action === "retirer" ? "simulation retirée" : "simulation repassée en brouillon";
   const data =
-    action === "masquer"
-      ? { statut: "MASQUEE", masqueeLe: maintenant }
-      : action === "afficher"
-        ? { statut: "PUBLIEE", masqueeLe: null, publieeLe: simulation.publieeLe ?? maintenant }
+    action === "retirer"
+      ? { archiveLe: maintenant, archiveMotif: motif?.trim().slice(0, 200) || "Retirée du dossier" }
+      : action === "masquer"
+        ? { statut: "MASQUEE", masqueeLe: maintenant }
         : { statut: "BROUILLON", masqueeLe: null };
-  const modifiee = await prisma.simulationEspace.update({ where: { id: simulation.id }, data });
-  if (action === "masquer" && simulation.statut === "PUBLIEE") {
-    await prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Simulation masquée au client${simulation.titre ? ` : ${simulation.titre}` : ""}`, metadata: JSON.stringify({ simulationId }) } });
-  }
-  // Publiée d'ici (bloc « Espace client » du dossier) : même suite que par le bouton « Publier » — l'événement,
-  // la main qui passe au client, et le mail automatique (même clé : jamais deux mails pour la même simulation).
-  if (action === "afficher" && simulation.statut !== "PUBLIEE") {
-    if (!simulation.publieeLe) {
-      await prisma.dossierEvenement.create({
-        data: {
-          dossierId,
-          type: "ESPACE_SIMULATION_DEPOSEE",
-          direction: "SORTANT",
-          contenu: `Simulation publiée dans l'espace du client${simulation.titre ? ` : ${simulation.titre}` : ""}`,
-          metadata: JSON.stringify({ simulations: [simulation.id] }),
-        },
-      });
-      await recalculerMain(dossierId);
-    }
-    const { notifierClient } = await import("@/lib/mail/notifications");
-    await notifierClient("SIMULATION_PUBLIEE", dossierId, simulation.id);
-  }
-  return versVue(dossierId, modifiee, await seuilControle());
+  const { modifiee, suites } = await prisma.$transaction(
+    async (tx): Promise<{ modifiee: SimulationEspace; suites: Suites | null }> => {
+      const ecrite = await tx.simulationEspace.update({ where: { id: simulation.id }, data });
+      if (action === "masquer" && simulation.statut === "PUBLIEE") {
+        await tx.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Simulation masquée au client${simulation.titre ? ` : ${simulation.titre}` : ""}`, metadata: JSON.stringify({ simulationId }) } });
+      }
+      return { modifiee: ecrite, suites: choix ? await devaliderChoixDansTransaction(tx, choix, "LUCAS", `${geste}${simulation.titre ? ` : ${simulation.titre}` : ""}`) : null };
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  if (suites) await suitesEvenementDossier(suites);
+  return action === "retirer" ? null : versVue(dossierId, modifiee, await seuilControle());
 }
 
 /**

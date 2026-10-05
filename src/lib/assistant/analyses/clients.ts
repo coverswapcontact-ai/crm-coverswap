@@ -2,6 +2,8 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { LIBELLES_SOURCE_CLIENT, type SourceClient } from "@/lib/clients/constantes";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
+import { JOURS_REACTIVATION } from "@/lib/relances/reactivation";
 import { definirOutil, format, lien } from "../definition";
 import { avertissementMinces, familleDuDossier, joursEntre, libelleFamille, repartir, somme } from "./commun";
 import { pluriel } from "@/lib/commun/format";
@@ -14,7 +16,8 @@ import { pluriel } from "@/lib/commun/format";
 
 const ETAPES_EN_COURS: EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE", "EN_PAUSE"];
 const ETAPES_SIGNEES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"];
-export const JOURS_REACTIVATION = 180;
+// Mission 18 (A4) : une seule durée de réactivation, celle de la relance (`relances/reactivation.ts`).
+export { JOURS_REACTIVATION };
 
 export type ClientLu = {
   id: string;
@@ -103,7 +106,7 @@ export async function analyseClients(maintenant: Date = new Date()) {
     definitions: {
       etat: "Le dossier le plus avancé du client décide : signé (chantier à venir ou en cours) > en cours > terminé (encaissé) > perdu ; sans dossier = prospect.",
       aReactiver: `Clients terminés dont le dernier mouvement de dossier date de plus de ${JOURS_REACTIVATION} jours, sans dossier ouvert.`,
-      avis: "Avis déposé dans l'espace du client après son chantier ; à demander = dossier facturé ou encaissé sans avis (la séquence « demande d'avis » s'en charge si elle est active).",
+      avis: "Avis déposé dans l'espace du client après son chantier ; à demander = dossier facturé ou encaissé sans avis (la relance « demande d'avis » propose le SMS DELAI_RELANCE_AVIS jours après la fin du chantier, une fois : « lister » RELANCES).",
       espaces: "Espace permanent du client (un par client) ; actif cette semaine = ouvert dans les 7 derniers jours.",
     },
     avertissement: avertissementMinces(clients.length, "clients"),
@@ -137,6 +140,6 @@ export const outilManagerClients = definirOutil({
       `Espaces : ${a.espaces.ouverts} ouverts, ${a.espaces.jamaisOuverts} jamais ouverts, ${a.espaces.actifsSemaine} actifs cette semaine, ${a.espaces.sansEspace} clients sans espace.`,
       a.recommandeurs.length ? `Recommandent : ${a.recommandeurs.map((r) => `${r.nom} (${r.recommandations})`).join(", ")}.` : "",
     ].filter(Boolean).join("\n");
-    return { texte, donnees: a, liens: [lien("Clients", "/clients"), lien("Espaces", "/espaces")] };
+    return { texte, donnees: a, liens: [lien("Clients", "/clients"), lien("Espaces", ADRESSE_ESPACES)] };
   },
 });

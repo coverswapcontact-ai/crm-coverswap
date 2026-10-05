@@ -2,6 +2,7 @@ import path from "node:path";
 import prisma from "@/lib/prisma";
 import { pluriel } from "@/lib/commun/format";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { travauxPeriodiques } from "@/lib/taches/registre";
 import { jourMois, PREFIXE_COCHE } from "../achevement";
 import type { Detection, NiveauTache, Raccourci } from "../types";
@@ -67,7 +68,8 @@ const baseLocale = () => Boolean(process.env.DATABASE_URL?.startsWith("file:")) 
 
 /** SAUVEGARDE_DRIVE a sa propre tâche (SYSTEME:sauvegarde), ANALYTIQUE_SYNCHRO la sienne (SYSTEME:synchro-<source>) : pas comptées deux fois. */
 const TYPES_A_PART = ["SAUVEGARDE_DRIVE", "ANALYTIQUE_SYNCHRO"];
-const LIEN_TACHES_DE_FOND = "/taches-de-fond";
+/** Mission 18 (A5) : l'onglet Système de Paramètres ; la clé de la tâche (`SYSTEME:taches-de-fond`) ne change pas. */
+const LIEN_TACHES_DE_FOND = ADRESSE_SYSTEME;
 
 const tachesDeFond: Signal = {
   nom: "tâches de fond",
@@ -119,7 +121,7 @@ const travaux: Signal = {
           raison: `${pluriel(p.echecsConsecutifs, "échec", "échecs")} de suite : ${p.derniereErreur ?? "erreur inconnue"}`,
           niveau: p.nom.startsWith("sauvegarde") ? 4 : 5,
           depuis: p.dernierDebut ?? etat.maintenant,
-          raccourci: { libelle: "Ouvrir les tâches de fond", href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur du travail dans Tâches de fond et régler sa cause : il repart seul au passage suivant." },
+          raccourci: { libelle: "Ouvrir les tâches de fond", href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur du travail dans Paramètres › Système et régler sa cause : il repart seul au passage suivant." },
         })
       ),
       preuve: async (c) => {
@@ -352,13 +354,13 @@ const sauvegarde: Signal = {
     ]);
     const causes: { texte: string; depuis: Date; href: string; marche: string }[] = [];
     if (quotidienne?.dernierStatut === "ECHEC") {
-      causes.push({ texte: `sauvegarde quotidienne en échec : ${quotidienne.derniereErreur ?? "erreur inconnue"}`, depuis: quotidienne.dernierDebut ?? etat.maintenant, href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur du travail « sauvegarde-quotidienne » dans Tâches de fond (souvent : disque plein), régler la cause : il repart seul." });
+      causes.push({ texte: `sauvegarde quotidienne en échec : ${quotidienne.derniereErreur ?? "erreur inconnue"}`, depuis: quotidienne.dernierDebut ?? etat.maintenant, href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur du travail « sauvegarde-quotidienne » dans Paramètres › Système (souvent : disque plein), régler la cause : il repart seul." });
     }
     if (driveEchec) {
       const echecLe = driveEchec.termineLe ?? driveEchec.updatedAt;
       // Une copie hebdomadaire réussie depuis règle l'échec d'une semaine passée.
       const reussie = await prisma.tache.findFirst({ where: { type: TYPE_TACHE_SAUVEGARDE_DRIVE, statut: "TERMINEE", termineLe: { gt: echecLe } }, select: { id: true } });
-      if (!reussie) causes.push({ texte: `copie chiffrée vers Drive en échec le ${jourMois(echecLe)}`, depuis: echecLe, href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur de la tâche « SAUVEGARDE_DRIVE » dans Tâches de fond, régler la cause, puis « Relancer »." });
+      if (!reussie) causes.push({ texte: `copie chiffrée vers Drive en échec le ${jourMois(echecLe)}`, depuis: echecLe, href: LIEN_TACHES_DE_FOND, marche: "Lire l'erreur de la tâche « SAUVEGARDE_DRIVE » dans Paramètres › Système, régler la cause, puis « Relancer »." });
     }
     // Base Turso (non locale) : rien à copier, ce n'est pas un défaut.
     const empechement = baseLocale() ? await empechementSauvegardeDrive() : null;

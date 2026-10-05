@@ -46,8 +46,9 @@ const CLASSE_PUCE_LIEN = cn(
  * Mission 13 (lot 4) : ce qu'un raccourci demande en ouvrant le panneau — une rubrique, ou une étape à passer.
  * Mission 17 (partie A) : `devis` ouvre d'emblée le générateur prérempli (« nouveau ») ou le dépôt d'un PDF (« pdf ») —
  * le panneau rendu hors de /dossiers (écran Tâches) ne lit pas `?devis=` dans l'adresse.
+ * Mission 18 (B3) : « gmail » + `piece` ouvre le dépôt prérempli d'un PDF parti de Gmail (« Enregistrer comme devis envoyé »).
  */
-export type DemandeOuverture = { rubrique: RubriqueDossier; etape?: EtapeDossier | null; devis?: "nouveau" | "pdf" | null; cle: number };
+export type DemandeOuverture = { rubrique: RubriqueDossier; etape?: EtapeDossier | null; devis?: "nouveau" | "pdf" | "gmail" | null; piece?: string | null; cle: number };
 
 export function PanneauDossier({
   dossierId,
@@ -247,6 +248,8 @@ function ContenuPanneau({
   }, [demande]);
   // Mission 11 : dépôt d'un devis PDF déjà fait (numéro + libellé), proposé au client à côté des autres.
   const [depotPdf, setDepotPdf] = useState(() => (demande?.devis === "pdf" ? 1 : 0));
+  // Mission 18 (B3) : « Enregistrer comme devis envoyé » — le PDF parti de Gmail (tâche ENREGISTRER_DEVIS).
+  const [depotGmail, setDepotGmail] = useState<string | null>(() => (demande?.devis === "gmail" && demande.piece ? demande.piece : null));
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
   const ajouterDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, variante: true }));
   const deposerPdf = () => setDepotPdf((n) => n + 1);
@@ -254,12 +257,15 @@ function ContenuPanneau({
   useEffect(() => {
     const url = new URL(window.location.href);
     const demande = url.searchParams.get("devis");
-    if (demande !== "nouveau" && demande !== "variante" && demande !== "pdf") return;
+    const piece = url.searchParams.get("piece");
+    if (demande !== "nouveau" && demande !== "variante" && demande !== "pdf" && !(demande === "gmail" && piece)) return;
     // Le paramètre n'est consommé qu'à l'ouverture effective (un montage annulé ne le perd pas).
     const premier = window.setTimeout(() => {
       if (demande === "pdf") setDepotPdf((n) => n || 1);
+      else if (demande === "gmail") setDepotGmail((actuel) => actuel ?? piece);
       else setGenerateur((actuel) => actuel ?? { type: "DEVIS", cle: 1, variante: demande === "variante" });
       url.searchParams.delete("devis");
+      url.searchParams.delete("piece");
       window.history.replaceState(window.history.state, "", url.toString());
     }, 0);
     return () => window.clearTimeout(premier);
@@ -376,6 +382,7 @@ function ContenuPanneau({
               onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
               onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
               onMisAJour={onMisAJour}
+              onRecharger={onRecharger}
               sansTitre
             />
           </SectionRepliable>
@@ -436,6 +443,7 @@ function ContenuPanneau({
         />
       ) : null}
       {depotPdf ? <ModaleDocumentExistant key={`depot-${depotPdf}`} detail={detail} depotDevis onFermer={() => setDepotPdf(0)} onMisAJour={onMisAJour} /> : null}
+      {depotGmail ? <ModaleDocumentExistant key={`gmail-${depotGmail}`} detail={detail} depotDevis pieceGmail={depotGmail} onFermer={() => setDepotGmail(null)} onMisAJour={onMisAJour} /> : null}
     </div>
   );
 }

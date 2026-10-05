@@ -10,14 +10,14 @@ import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook"
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
 import { rattacherSimulationsSite } from "@/lib/site/simulations";
-import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
+import { ouvrirDossierAutomatique } from "@/lib/dossiers/depuis-lead";
 import { notifierDemandeDuSite } from "@/lib/prospects/notification";
 import { estDemandeDeDevis } from "@/lib/prospects/constantes";
 import { reperDoublonProbable } from "@/lib/prospects/doublons";
 import type { Priorite } from "@/lib/prospects/priorite";
 import { pluriel } from "@/lib/commun/format";
 import { CRENEAUX_RAPPEL_SITE, momentDuRappel, rappelDuCreneau } from "@/lib/commercial/quand";
-import { complementsDeLaDemande, ouvrirEspaceALEnvoi, suivreLeRappel, type EspaceALEnvoi } from "@/lib/site/tunnel";
+import { complementsDeLaDemande, contactNeuf, ouvrirEspaceALEnvoi, suivreLeRappel, type EspaceALEnvoi } from "@/lib/site/tunnel";
 
 // Accept both Meta/n8n format AND internal format
 const webhookSchema = z.object({
@@ -293,6 +293,12 @@ export async function POST(request: NextRequest) {
       if (demandeDeDevis && existing.statut === "NOUVEAU") {
         updates.statut = "DEVIS_DEMANDE";
       }
+      // Mission 18 (B12) : une demande de devis d'un contact qui n'avait écrit que pour « Autre » lui donne son projet — son
+      // intention (« Devis ») se lit sur ses faits, plus sur un statut que le dossier ouvert par la demande remplace.
+      // (seulement un projet que le site a dit : pas la valeur par défaut de normalizeData)
+      if (demandeDeDevis && (!existing.typeProjet || existing.typeProjet === "AUTRE") && parsed.data.typeProjet && parsed.data.typeProjet !== "AUTRE") {
+        updates.typeProjet = data.typeProjet;
+      }
       if (Object.keys(updates).length > 0) {
         lead = await prisma.lead.update({ where: { id: existing.id }, data: updates });
       }
@@ -413,16 +419,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ── Simulation du site : elle reste sur la fiche du LEAD (règle du 22/09/2026 : une simulation seule n'ouvre plus
-    //    de dossier). Si le contact a déjà un dossier vivant, photo avant et rendus y sont rangés (et rejoignent son espace). ──
+    // ── Mission 18 (A2) : une simulation, des photos ou une demande de devis venues du site ouvrent le dossier tout
+    //    seuls (Qualification, « Appeler : … » pour aujourd'hui, ou « Rappeler » à l'heure demandée) ; « Ouvrir un
+    //    dossier » ne sert plus qu'à un lead qualifié au téléphone. Un contact qui a déjà un dossier vivant : photo avant,
+    //    rendus et photos y sont rangés (et rejoignent son espace). Ni hors zone, ni lead Meta (rien fait sur le site). ──
     const aSimule = isSimulation || simulationsRattachees.length > 0 || photosEcrites > 0;
-    const ouverture = aSimule ? await assurerDossierDeSimulation(lead.id) : null;
+    const tunnel = data.source === "SITE_SIMULATEUR" && parsed.data.afficherLienEspace === true;
+    // Le tunnel n'affiche le lien qu'à un contact neuf : lu AVANT l'ouverture du dossier, qui le rendrait « connu ».
+    const neuf = tunnel && isNew ? await contactNeuf(lead.id).catch(() => false) : false;
+    const ouverture = aSimule || demandeDeDevis ? await ouvrirDossierAutomatique(lead.id, { demande: demandeDeDevis }) : null;
     // ── Mission 16 (partie 4) : après un rendu du simulateur, l'espace client s'ouvre et son lien revient au site, qui
     //    l'AFFICHE (rien n'est envoyé) — à un contact neuf, ou au même parcours, jamais à un contact déjà connu.
     //    Seulement quand le site le demande (`afficherLienEspace`, formulaire après un rendu) : ni l'ancien site ni la
     //    demande après un échec de génération n'ouvrent l'espace. Au-delà de deux projets en cours, c'est Lucas qui
     //    ouvre : lien null. ──
-    const espace: EspaceALEnvoi | null = data.source === "SITE_SIMULATEUR" && parsed.data.afficherLienEspace === true ? await ouvrirEspaceALEnvoi(lead.id, { rappel: !!rappelLe, nouveau: isNew, parcoursId: data.parcoursId }) : null;
+    const espace: EspaceALEnvoi | null = tunnel ? await ouvrirEspaceALEnvoi(lead.id, { rappel: !!rappelLe, nouveau: isNew, parcoursId: data.parcoursId, neuf }) : null;
     // Le rappel demandé : sur le dossier s'il en a un (à l'heure exacte), sinon « À rappeler » ; agenda et notification suivent.
     if (rappelLe) await suivreLeRappel(lead.id);
     const dossierIdFinal = espace?.dossierId ?? ouverture?.dossierId ?? null;

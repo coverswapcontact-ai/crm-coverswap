@@ -78,12 +78,36 @@ export function lectureDesDevis(options: { avecNonRetenus?: boolean } = {}) {
  * Le devis que voit le client : le devis accepté s'il y en a un, sinon le dernier émis encore en vigueur.
  * Mission 14 : un devis masqué dans l'espace n'est « le devis » que s'il est accepté (même règle que « proposé »).
  * L'ordre reste celui de la création (comme `devisProposes`) : le dernier devis fait ou déposé est « le devis ».
+ * Mission 18 (B7) : avec un avenant signé (deux devis acceptés), « le devis » reste le devis signé d'origine — le plus
+ * ancien accepté : l'acompte, le paiement et la référence du virement portent sur lui ; l'avenant est facturé avec le
+ * solde (décision 8).
  */
 export function devisEnVigueur<T extends Pick<DevisLu, "statut" | "createdAt" | "numero" | "visibleEspace">>(devis: T[]): T | null {
   const vivants = devis
     .filter((d) => d.numero && (STATUTS_DEVIS_EN_VIGUEUR as readonly string[]).includes(d.statut) && (d.visibleEspace !== false || d.statut === "ACCEPTE"))
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return vivants.find((d) => d.statut === "ACCEPTE") ?? vivants[0] ?? null;
+  return vivants.filter((d) => d.statut === "ACCEPTE").at(-1) ?? vivants[0] ?? null;
+}
+
+/**
+ * Mission 18 (B7, écart 7) : un avenant (ou un nouveau devis) est un devis émis APRÈS le devis signé d'origine — calculé,
+ * sans colonne : un autre devis du dossier, accepté, créé avant lui. Son accord ne touche pas à l'accord d'origine, ni à
+ * l'étape ; le retirer ne fait pas reculer le dossier.
+ */
+export function estAvenant(devis: Pick<DevisLu, "id" | "createdAt">, autres: readonly Pick<DevisLu, "id" | "statut" | "createdAt" | "numero">[]): boolean {
+  return autres.some((d) => d.id !== devis.id && d.numero && d.statut === "ACCEPTE" && d.createdAt.getTime() < devis.createdAt.getTime());
+}
+
+/**
+ * Mission 18 (B7) : les devis que le client peut signer MAINTENANT dans son espace, du plus ancien au plus récent :
+ * visibles, « Généré » ou « Envoyé », sans accord en cours. Avant la signature, ce sont les devis proposés ; après, les
+ * avenants et nouveaux devis émis depuis (le devis signé n'y est jamais). Le site les affiche tels quels.
+ */
+export function devisASigner<T extends Pick<DevisLu, "id" | "statut" | "createdAt" | "numero" | "visibleEspace">>(devis: T[], accords: readonly Pick<AccordLu, "documentId" | "retireLe">[]): T[] {
+  const accordes = new Set(accords.filter((a) => !a.retireLe).map((a) => a.documentId));
+  // Signé : seulement ce qui est émis APRÈS le devis signé d'origine (une ancienne variante restée « Généré » n'est pas un avenant).
+  const origine = devisProposes(devis).find((d) => d.statut === "ACCEPTE");
+  return devisProposes(devis).filter((d) => (d.statut === "GENERE" || d.statut === "ENVOYE") && d.visibleEspace !== false && !accordes.has(d.id) && (!origine || estAvenant(d, [origine])));
 }
 
 /**
@@ -144,8 +168,11 @@ const centimesEnEuros = (centimes: number) => Math.round(centimes) / 100;
  * Ce que le client doit et ce qu'il a payé, à partir des encaissements VALIDES
  * du dossier (un chèque rejeté ou un paiement annulé ne compte plus : la ligne
  * redevient « à régler »). Les paiements règlent l'acompte d'abord, puis le solde.
+ * Mission 18 (relecture) : `factures`, le reste dû des factures actives d'un chantier facturé (`soldes.ts ›
+ * faitsPaiements`) : le solde à régler est alors CELUI-LÀ — ce que « Payer par carte » débite et ce que « Mes documents »
+ * affiche (avenants facturés avec le solde compris) ; « Réglé » quand il ne reste rien sur les factures.
  */
-export function paiementEspace(montants: { totalTtcCentimes: number; acompteCentimes: number }, acomptePct: number | null, encaissements: EncaissementLu[]): PaiementEspace {
+export function paiementEspace(montants: { totalTtcCentimes: number; acompteCentimes: number }, acomptePct: number | null, encaissements: EncaissementLu[], factures?: { resteCentimes: number } | null): PaiementEspace {
   const valides = encaissements.filter((e) => e.statut === "VALIDE").sort((a, b) => a.recuLe.getTime() - b.recuLe.getTime());
   const total = montants.totalTtcCentimes;
   const acompte = montants.acompteCentimes;
@@ -164,14 +191,23 @@ export function paiementEspace(montants: { totalTtcCentimes: number; acompteCent
     const fin = paye ? atteint(seuil) : null;
     return { montant: centimesEnEuros(du), statut: paye ? "PAYE" : recuPourCetteLigne > 0 ? "PARTIEL" : "A_REGLER", recu: centimesEnEuros(Math.min(du, Math.max(0, recuPourCetteLigne))), payeLe: fin?.recuLe.toISOString() ?? null, moyen: fin?.moyen ?? null };
   };
+  const lignesFaites = valides.map((e) => ({ montant: e.montant, le: e.recuLe.toISOString(), moyen: e.moyen }));
+  const acompteLigne = acompte > 0 ? { ...ligne(acompte, recu, acompte), pct: acomptePct } : null;
+  if (factures) {
+    // Facturé : le solde dû est le reste des factures (la facture peut différer du devis : avenants, remise).
+    const reste = Math.max(0, Math.round(factures.resteCentimes));
+    const soldeDu = Math.max(total - acompte, Math.max(0, recu - acompte) + reste);
+    const totalFacture = acompte + soldeDu;
+    return { total: centimesEnEuros(totalFacture), recu: centimesEnEuros(recu), reste: centimesEnEuros(reste), acompte: acompteLigne, solde: ligne(soldeDu, soldeDu - reste, totalFacture), encaissements: lignesFaites, regle: totalFacture > 0 && reste === 0 };
+  }
   const soldeDu = total - acompte;
   return {
     total: centimesEnEuros(total),
     recu: centimesEnEuros(recu),
     reste: centimesEnEuros(Math.max(0, total - recu)),
-    acompte: acompte > 0 ? { ...ligne(acompte, recu, acompte), pct: acomptePct } : null,
+    acompte: acompteLigne,
     solde: ligne(soldeDu, recu - acompte, total),
-    encaissements: valides.map((e) => ({ montant: e.montant, le: e.recuLe.toISOString(), moyen: e.moyen })),
+    encaissements: lignesFaites,
     regle: total > 0 && recu >= total - 50,
   };
 }
@@ -180,21 +216,34 @@ export type LectureDevis = {
   devis: DevisLu | null;
   /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent. */
   proposes: DevisLu[];
+  /** Mission 18 (B7) : ceux qu'il peut signer maintenant (`devisASigner`) ; après la signature, les avenants. */
+  aSigner: DevisLu[];
   montants: ReturnType<typeof montantsDocument> | null;
   accord: AccordEffectif | null;
   paiement: PaiementEspace | null;
   acompteRecu: boolean;
 };
 
-/** Devis en vigueur, accord et paiements d'un dossier, d'un seul geste. */
-export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null }): LectureDevis {
+/** Mission 18 (relecture) : les étapes d'un projet figé (`projets.ts › figeDuProjet` : encaissé, perdu) — plus rien à y signer. */
+export const ETAPES_PROJET_FIGE: readonly string[] = ["ENCAISSE", "PERDU"];
+
+/**
+ * Devis en vigueur, accord et paiements d'un dossier, d'un seul geste.
+ * Mission 18 (relecture) : `etapeDossier` — un projet figé n'a plus de devis à signer (le bon pour accord y est refusé) ;
+ * les avenants signés s'ajoutent au total à payer (facturés avec le solde, décision 8 ; l'acompte reste celui du devis
+ * d'origine) ; `factures` (chantier facturé) : le solde est le reste des factures (`paiementEspace`).
+ */
+export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null; etapeDossier?: string; factures?: { resteCentimes: number } | null }): LectureDevis {
   const devis = devisEnVigueur(entree.devis);
   const proposes = devisProposes(entree.devis);
-  if (!devis) return { devis: null, proposes, montants: null, accord: null, paiement: null, acompteRecu: false };
+  const aSigner = entree.etapeDossier && ETAPES_PROJET_FIGE.includes(entree.etapeDossier) ? [] : devisASigner(entree.devis, entree.accords);
+  if (!devis) return { devis: null, proposes, aSigner, montants: null, accord: null, paiement: null, acompteRecu: false };
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
   const accord = accordEffectif(devis, entree.accords, { nom: entree.clientNom, signeLe: entree.signeLe ?? devis.dateEmission ?? devis.createdAt });
-  const paiement = paiementEspace(montants, devis.acomptePct, entree.encaissements);
-  return { devis, proposes, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
+  const avenants = devis.statut === "ACCEPTE" ? entree.devis.filter((d) => d.id !== devis.id && d.statut === "ACCEPTE" && estAvenant(d, [devis])) : [];
+  const totalAvenants = avenants.reduce((somme, d) => somme + montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes, 0);
+  const paiement = paiementEspace({ totalTtcCentimes: montants.totalTtcCentimes + totalAvenants, acompteCentimes: montants.acompteCentimes }, devis.acomptePct, entree.encaissements, entree.factures);
+  return { devis, proposes, aSigner, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
 }
 
 /** Date du passage en « Signé » lue dans les changements d'étape (date réelle si elle a été saisie). */
@@ -248,6 +297,8 @@ export function composerFaits(entree: {
     choix: entree.choix,
     devis: Boolean(entree.lecture.devis),
     accord: Boolean(entree.lecture.accord),
+    // Mission 18 (B7) : signé, et un avenant (ou un nouveau devis) l'attend dans son espace.
+    avenantASigner: Boolean(entree.lecture.accord) && entree.lecture.aSigner.length > 0,
     acompteRecu: entree.lecture.acompteRecu,
     solde: Boolean(entree.lecture.paiement?.regle),
     etapeDossier: entree.etapeDossier,

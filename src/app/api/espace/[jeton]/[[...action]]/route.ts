@@ -39,6 +39,7 @@ import {
 import { creerSimulationClient, demanderSimulations, schemaCreationSimulation, suivreCreation } from "@/lib/espace/creation";
 import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogue";
 import { demanderAnalyseEspace, schemaAnalyseEspace, suivreAnalyseEspace } from "@/lib/espace/simulateur";
+import { preparerPaiementCarte } from "@/lib/paiement/carte";
 
 /**
  * API PUBLIQUE de l'espace client — appelée par la page coverswap.fr/e/<jeton>,
@@ -61,6 +62,7 @@ import { demanderAnalyseEspace, schemaAnalyseEspace, suivreAnalyseEspace } from 
  *   POST   /photos (multipart) · /simulations/creer | demande | vues | analyse · /choix · /proposition · /accord · /avis
  *   POST   /projet/validation | devalidation · /choix/retrait · /proposition/retrait · /accord/retrait · /photos/<id>/retrait
  *   POST   /devis/<id>/consultation · /simulations/<id>/choix | commentaire (page du 20/09)
+ *   POST   /paiement-carte                                  ouvre le paiement Stripe de ce qui est dû (acompte ou solde) : { url }
  *   PUT    /projet | souhaits · /coordonnees
  *
  * Garde-fous : origine restreinte au site, limite par adresse IP, blocage d'une
@@ -294,6 +296,14 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
         await donnerAvis(projet, analyser(schemaAvis, corps));
         return NextResponse.json(await etatComplet(permanent.id, projet.id));
       }
+      // Mission 18 (B10) : « Payer par carte » (onglet Paiement) — le CRM calcule seul ce qui est dû (acompte ou solde),
+      // ouvre la page de paiement Stripe et rend son adresse ; un projet terminé peut encore régler son solde.
+      if (action.length === 1 && ressource === "paiement-carte") {
+        const projet = projetDe(acces);
+        if (ipDepasseLaLimite(`espace-carte:${ipDe(requete)}`, Date.now(), 10)) throw new ErreurMetier("Trop d'essais : réessayez dans quelques minutes, ou réglez par virement.", 429);
+        const { url } = await preparerPaiementCarte(projet);
+        return NextResponse.json({ url });
+      }
       const projet = projetDe(acces, true);
       const relu = async () => NextResponse.json(await etatComplet(permanent.id, projet.id));
       // L'analyse d'une photo du dossier (mission 15, partie 5) : le même moteur que la génération, avant elle ; 202 quand une
@@ -326,7 +336,9 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
       }
       if (action.length === 2 && ressource === "accord" && id === "retrait") {
         const motif = corps && typeof corps === "object" && typeof (corps as { motif?: unknown }).motif === "string" ? (corps as { motif: string }).motif.trim().slice(0, 500) : "";
-        await retirerAccord(projet, "CLIENT", motif);
+        // Mission 18 (B7) : le site nomme le devis (un avenant se retire seul) ; l'ancien site ne le nomme pas : le devis signé d'origine.
+        const documentId = corps && typeof corps === "object" && typeof (corps as { documentId?: unknown }).documentId === "string" ? (corps as { documentId: string }).documentId.slice(0, 40) : null;
+        await retirerAccord(projet, "CLIENT", motif, documentId);
         return relu();
       }
       if (action.length === 3 && ressource === "photos" && geste === "retrait") {

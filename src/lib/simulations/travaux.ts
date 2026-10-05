@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { rendreSimulation } from "@/lib/acces/limite-site";
-import { assurerDossierDeSimulation } from "@/lib/dossiers/depuis-lead";
+import { ouvrirDossierAutomatique } from "@/lib/dossiers/depuis-lead";
 import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
 import { DOSSIER_SITE, enregistrerSimulationSite, rattacherSimulationsSite, type ReferenceSimulee, type TraceMoteur } from "@/lib/site/simulations";
 import { empreintePhoto } from "@/lib/simulateur/analyses";
@@ -215,14 +215,15 @@ async function terminerAvecRendu(travail: TravailLu, resultat: Reussite, demarre
   const maintenant = new Date();
   await prisma.travailSimulation.update({ where: { id: travail.id }, data: { statut: "PRETE", etape: "rendu", termineLe: maintenant, dureeMs: maintenant.getTime() - demarreLe.getTime(), simulationSiteId, photoPath: null, moteur: resultat.moteur, promptTexte: resultat.prompt, photoEmpreinte: resultat.empreinte } });
   console.log(`[simulate] travail ${travail.id} prêt en ${maintenant.getTime() - demarreLe.getTime()} ms (simulation ${simulationSiteId}, moteur ${resultat.moteur}, ${extensionDe(type)}${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10` : ""})`);
-  // La personne a déjà laissé ses coordonnées pendant ce parcours (ou « Me prévenir ») : la simulation rejoint sa fiche et son dossier — jamais bloquant.
+  // La personne a déjà laissé ses coordonnées pendant ce parcours (ou « Me prévenir ») : la simulation rejoint sa fiche et son dossier,
+  // qui s'ouvre au besoin (mission 18, A2) — jamais bloquant.
   try {
     // « Me prévenir » a pu poser le lead pendant la génération : relu maintenant, pas au départ.
     const leadId = (await prisma.travailSimulation.findUnique({ where: { id: travail.id }, select: { leadId: true } }))?.leadId ?? travail.leadId;
     const connu = leadId ? { id: leadId } : await prisma.lead.findFirst({ where: { parcoursId: travail.parcoursId, archiveLe: null }, orderBy: { createdAt: "desc" }, select: { id: true } });
     if (connu) {
       await rattacherSimulationsSite(connu.id, travail.parcoursId, [simulationSiteId]);
-      await assurerDossierDeSimulation(connu.id);
+      await ouvrirDossierAutomatique(connu.id);
     }
   } catch (erreur) {
     console.error("[simulate] rattachement au lead du parcours (non bloquant) :", erreur);

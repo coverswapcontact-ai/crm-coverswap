@@ -42,6 +42,11 @@ export type FaitsEspace = {
   choix: boolean;
   devis: boolean;
   accord: boolean;
+  /**
+   * Mission 18 (B7) : signé, et un avenant (ou un nouveau devis émis depuis) l'attend dans son espace. L'étape ne change
+   * pas (le paiement et le chantier suivent le devis d'origine) ; l'onglet Devis redevient « à faire » et courant.
+   */
+  avenantASigner?: boolean;
   acompteRecu: boolean;
   /** Tout est encaissé. */
   solde?: boolean;
@@ -93,7 +98,7 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
     PHOTOS: f.photos > 0 || f.simulationsSite > 0 || f.accord,
     PROJET: projetFait(f) || f.devis || f.accord,
     SIMULATIONS: f.choix || f.accord,
-    DEVIS: f.accord,
+    DEVIS: f.accord && !f.avenantASigner,
     ACOMPTE: f.acompteRecu || ["PLANIFIE", "CHANTIER", "FACTURE", "ENCAISSE"].includes(f.etapeDossier),
   };
   const verrouillee: Record<CleProgression, boolean> = {
@@ -105,7 +110,8 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
     ACOMPTE: !f.accord,
   };
   const courante: CleProgression | null =
-    etape === "PHOTOS" ? "PHOTOS"
+    f.avenantASigner ? "DEVIS"
+    : etape === "PHOTOS" ? "PHOTOS"
     : etape === "PROJET" ? "PROJET"
     : etape === "SIMULATIONS" || etape === "ATTENTE_SIMULATION" ? "SIMULATIONS"
     : etape === "DEVIS" || etape === "ATTENTE_DEVIS" ? "DEVIS"
@@ -113,6 +119,10 @@ export function progression(f: FaitsEspace): { cle: CleProgression; libelle: str
     : null;
   return ETAPES_PROGRESSION.map((e) => ({ cle: e.cle, libelle: e.libelle, fait: fait[e.cle], courante: e.cle === courante, verrouillee: verrouillee[e.cle], raison: verrouillee[e.cle] ? (RAISONS_VERROU[e.cle] ?? null) : null }));
 }
+
+/** Les étapes de l'espace dans l'ordre du parcours (le sélecteur « Étape » du filtre Espaces de Dossiers). */
+export const ETAPES_ESPACE: readonly EtapeEspace[] = ["PHOTOS", "PROJET", "ATTENTE_SIMULATION", "SIMULATIONS", "ATTENTE_DEVIS", "DEVIS", "ACOMPTE", "CHANTIER", "TERMINE"];
+export const estEtapeEspace = (valeur: unknown): valeur is EtapeEspace => typeof valeur === "string" && (ETAPES_ESPACE as readonly string[]).includes(valeur);
 
 export const LIBELLES_ETAPE_ESPACE: Record<EtapeEspace, string> = {
   PHOTOS: "Photos attendues",

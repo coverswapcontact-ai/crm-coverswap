@@ -15,6 +15,10 @@ import { LIBELLES_MOYEN, MOTIFS_ANNULATION, MOTIFS_REJET, libelleMotif, type Moy
 import type { CorrectionEncaissement, EntreePaiement } from "./schemas";
 import { faitsPaiements, piecesDuDossier } from "./soldes";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
+import { retenirDevis, suiteNonRetenus } from "@/lib/dossiers/devis-retenu";
+import { ecrireStatutLead } from "@/lib/dossiers/statut-lead";
+import { marquerSynchronise } from "@/lib/dossiers/transitions";
 
 /**
  * Encaissements : l'argent reçu, distinct de ce qui est facturé.
@@ -41,7 +45,9 @@ export type EnregistrementPaiement = {
   numeroDocumentId?: string | null;
   payeur?: string | null;
   clientId?: string | null;
-  origine?: "SAISIE" | "REPRISE_ANCIEN_ECRAN";
+  /** Mission 18 (B10) : STRIPE, un paiement en ligne reçu par le webhook (paiement/carte.ts). */
+  origine?: "SAISIE" | "REPRISE_ANCIEN_ECRAN" | "STRIPE";
+  /** Clé unique (figée en base) : une reprise ou un paiement Stripe rejoué ne s'enregistre pas deux fois. */
   cleReprise?: string;
 };
 
@@ -204,23 +210,60 @@ export async function suivreSoldeDossier(
 export const RAISON_ACOMPTE_ENCAISSE = "acompte encaissé";
 
 /**
+ * Mission 18 (B10) : le devis que règlent les acomptes du dossier — celui qui porte le plus d'argent reçu (affectations
+ * actives d'encaissements valides), parmi les devis en vigueur ; null s'il n'y en a pas. `imputations` : seulement
+ * celles-ci (le paiement qu'on vient d'enregistrer). Dans la transaction de l'appelant.
+ */
+export async function devisDesAcomptes(tx: Transaction, dossierId: string, imputations?: readonly Imputation[]): Promise<string | null> {
+  const lignes = imputations
+    ? (await tx.numeroDocument.findMany({ where: { id: { in: imputations.map((i) => i.registreId) }, type: "DEVIS" }, select: { id: true, documentId: true } })).map((l) => ({
+        documentId: l.documentId,
+        centimes: imputations.filter((i) => i.registreId === l.id).reduce((somme, i) => somme + i.centimes, 0),
+      }))
+    : (
+        await tx.affectationEncaissement.findMany({
+          where: { statut: "ACTIVE", encaissement: { dossierId, statut: "VALIDE" }, numeroDocument: { type: "DEVIS" } },
+          select: { montant: true, numeroDocument: { select: { documentId: true } } },
+        })
+      ).map((a) => ({ documentId: a.numeroDocument.documentId, centimes: versCentimes(a.montant) }));
+  const parDevis = new Map<string, number>();
+  for (const ligne of lignes) if (ligne.documentId) parDevis.set(ligne.documentId, (parDevis.get(ligne.documentId) ?? 0) + ligne.centimes);
+  if (parDevis.size === 0) return null;
+  const enVigueur = await tx.document.findMany({ where: { id: { in: [...parDevis.keys()] }, dossierId, type: "DEVIS", statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { id: true } });
+  return enVigueur.map((d) => d.id).sort((a, b) => (parDevis.get(b) ?? 0) - (parDevis.get(a) ?? 0))[0] ?? null;
+}
+
+/** La raison d'un passage en « Signé » par l'acompte (suivie des devis non retenus) : le recul la relit. */
+const estRaisonAcompte = (raison: string | undefined) => raison === RAISON_ACOMPTE_ENCAISSE || Boolean(raison?.startsWith(`${RAISON_ACOMPTE_ENCAISSE} ;`));
+
+/**
  * L'étape suit l'argent, côté acompte (22/09/2026). Un paiement reçu sur un
  * dossier dont le devis attend encore (« Devis envoyé », « Relance ») vaut
  * accord : le dossier passe « Signé », le devis « accepté » — et l'espace du
  * client le dit aussitôt (il lit les mêmes faits). À l'inverse, si ce paiement
  * est annulé ou rejeté, qu'il n'en reste aucun et qu'aucun bon pour accord
  * n'existe, le dossier revient à « Devis envoyé » : il n'avait avancé que pour ça.
+ *
+ * Mission 18 (B10) : le devis accepté est celui que l'acompte règle (`devisId`, tiré des imputations du paiement ; à
+ * défaut celui des acomptes du dossier, puis le plus récent), et les autres variantes passent « non retenu » — comme
+ * un bon pour accord donné dans l'espace (il n'en signe qu'un). La raison les nomme.
  */
-export async function suivreAcompteDossier(tx: Transaction, dossierId: string, sens: "AVANCE" | "RECUL"): Promise<ChangementEtape | null> {
+export async function suivreAcompteDossier(tx: Transaction, dossierId: string, sens: "AVANCE" | "RECUL", devisId?: string | null): Promise<ChangementEtape | null> {
   const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
   if (!dossier || !estEtape(dossier.etape)) return null;
   const valides = await tx.encaissement.count({ where: { dossierId, statut: "VALIDE" } });
   if (sens === "AVANCE") {
     if (!["DEVIS_ENVOYE", "RELANCE"].includes(dossier.etape) || valides === 0) return null;
-    const devis = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } });
+    const cible = devisId ?? (await devisDesAcomptes(tx, dossierId));
+    const enVigueur = { dossierId, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } };
+    const devis =
+      (cible ? await tx.document.findFirst({ where: { ...enVigueur, id: cible }, select: { id: true, statut: true } }) : null) ??
+      (await tx.document.findFirst({ where: enVigueur, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } }));
     if (!devis) return null;
     if (devis.statut !== "ACCEPTE") await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
-    return appliquerChangementEtape(tx, { dossierId, de: dossier.etape, vers: "SIGNE", nature: "AUTOMATIQUE", raison: RAISON_ACOMPTE_ENCAISSE, documentId: devis.id });
+    const nonRetenus = await retenirDevis(tx, dossierId, devis.id);
+    const raison = [RAISON_ACOMPTE_ENCAISSE, suiteNonRetenus(nonRetenus)].filter(Boolean).join(" ; ");
+    return appliquerChangementEtape(tx, { dossierId, de: dossier.etape, vers: "SIGNE", nature: "AUTOMATIQUE", raison, documentId: devis.id });
   }
   if (dossier.etape !== "SIGNE" || valides > 0) return null;
   if ((await tx.accordDevis.count({ where: { dossierId, retireLe: null } })) > 0) return null;
@@ -231,21 +274,40 @@ export async function suivreAcompteDossier(tx: Transaction, dossierId: string, s
   } catch {
     raison = undefined;
   }
-  if (raison !== RAISON_ACOMPTE_ENCAISSE) return null;
+  if (!estRaisonAcompte(raison)) return null;
   return appliquerChangementEtape(tx, { dossierId, de: "SIGNE", vers: "DEVIS_ENVOYE", nature: "RETOUR", raison: "acompte annulé ou rejeté, plus aucun paiement" });
 }
 
-/** Paiement saisi : imputé, tracé sur le dossier, étape suivie. */
+/**
+ * Paiement saisi (écran, assistant `saisir_encaissement`) ou reçu en ligne (Stripe, paiement/carte.ts) : imputé, tracé
+ * sur le dossier, étape suivie. Mission 18 (B10) : par le point d'entrée (`PAIEMENT_RECU`, docs/SYNCHRO.md) — dans UNE
+ * transaction, l'encaissement, l'étape (Facturé → Encaissé, ou Devis envoyé → Signé avec le devis réglé retenu), le
+ * statut du lead, la prochaine action et la main ; après, les effets du changement d'étape (Meta, « projet terminé »,
+ * agenda), les tâches, puis le mail « paiement reçu » de l'automatisme existant.
+ */
 export async function enregistrerEncaissement(entree: EnregistrementPaiement) {
-  const { resultat, changement } = await prisma.$transaction(async (tx) => {
-    const resultat = await enregistrerEncaissementDansTransaction(tx, entree);
-    const changement = resultat.dossierId ? ((await suivreSoldeDossier(tx, resultat.dossierId, "factures réglées")) ?? (await suivreAcompteDossier(tx, resultat.dossierId, "AVANCE"))) : null;
-    return { resultat, changement };
-  });
-  if (changement) await effetsDuChangementEtape(changement);
+  const { resultat, suites } = await prisma.$transaction(
+    async (tx) => {
+      const resultat = await enregistrerEncaissementDansTransaction(tx, entree);
+      const dossierId = resultat.dossierId;
+      if (!dossierId) return { resultat, suites: null };
+      const changement =
+        (await suivreSoldeDossier(tx, dossierId, "factures réglées")) ??
+        (await suivreAcompteDossier(tx, dossierId, "AVANCE", await devisDesAcomptes(tx, dossierId, resultat.imputations)));
+      if (changement) {
+        await ecrireStatutLead(tx, dossierId, changement.vers);
+        marquerSynchronise(changement); // la main est écrite par le point d'entrée, juste après
+      }
+      const evenement = await appliquerEvenementDossier(tx, dossierId, { type: "PAIEMENT_RECU", encaissementId: resultat.encaissement.id, signe: changement?.vers === "SIGNE" });
+      const suites: Suites = { ...evenement, changements: [...(changement ? [changement] : []), ...evenement.changements] };
+      return { resultat, suites };
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  if (suites) await suitesEvenementDossier(suites);
+  else await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   // Mission 7 : « paiement bien reçu », par mail, automatiquement (une fois par paiement).
   if (resultat.dossierId) await (await import("@/lib/mail/notifications")).notifierPaiementsRecents(resultat.dossierId);
-  await signalerChangementTaches(); // Mission 17 (partie A) : les tâches de Lucas suivent ce geste.
   return resultat;
 }
 
@@ -321,15 +383,10 @@ async function terminerEncaissement(
         metadata: JSON.stringify({ encaissementId: id }),
       },
     });
-    // Un acompte qui revient impayé est à réclamer : c'est la prochaine action.
+    // Un acompte qui revient impayé est à réclamer : c'est la prochaine action (mission 18 : par le point d'entrée ; une
+    // action posée à la main reste, une tâche le dit).
     if (fin.statut === "REJETE" && liberees.some((affectation) => affectation.numeroDocument.type === "DEVIS")) {
-      await tx.dossier.update({
-        where: { id: encaissement.dossierId },
-        data: {
-          prochaineAction: "Chèque d'acompte rejeté : réclamer un nouveau paiement",
-          prochaineActionDate: dateDepuisJour(jourParis(new Date())),
-        },
-      });
+      await appliquerEvenementDossier(tx, encaissement.dossierId, { type: "ACOMPTE_REJETE", encaissementId: id });
     }
     return (
       (await suivreSoldeDossier(

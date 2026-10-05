@@ -7,6 +7,7 @@ import { chiffresDisponibles, etatDe } from "./ecrans/commun";
 import { memoiser } from "./memoire";
 import { LEADS_MINIMUM, meilleurCoutParLead, MULTIPLE_COUPE } from "./verdicts";
 import type { Alerte, EtatSource, SourceDonnees } from "./types";
+import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 
 /**
  * Mission 17 (partie B) — les alertes de l'Analytique (docs/ANALYTIQUE.md § 5), calculées par des règles :
@@ -33,7 +34,7 @@ export function alertesDesSources(etats: readonly EtatSource[]): Alerte[] {
     .map((e) => {
       const jeton = /jeton|token|expir|190|oauth/i.test(e.erreur ?? "");
       const depuis = e.derniereReussite ? ` ; dernière synchronisation réussie le ${jourParis(e.derniereReussite).split("-").reverse().join("/")}` : "";
-      return { cle: `SYNCHRO_${e.source}`, gravite: "ATTENTION" as const, texte: jeton ? `Jeton ${NOMS[e.source]} expiré ou refusé : à renouveler${depuis}` : `Synchronisation ${NOMS[e.source]} en échec${e.erreur ? ` (${e.erreur})` : ""}${depuis}`, lien: "/taches-de-fond", source: e.source };
+      return { cle: `SYNCHRO_${e.source}`, gravite: "ATTENTION" as const, texte: jeton ? `Jeton ${NOMS[e.source]} expiré ou refusé : à renouveler${depuis}` : `Synchronisation ${NOMS[e.source]} en échec${e.erreur ? ` (${e.erreur})` : ""}${depuis}`, lien: ADRESSE_SYSTEME, source: e.source };
     });
 }
 

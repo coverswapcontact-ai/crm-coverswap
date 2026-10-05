@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LIBELLES_UNITE, UNITES, type Unite } from "@/lib/dossiers/constants";
 import { formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import type { PresetVue } from "@/lib/dossiers/types";
 import type { LigneTarifPrestation } from "@/lib/prestations/tarifs";
 import { cn } from "@/lib/utils";
-import { Bouton, CLASSE_SAISIE } from "@/components/pilotage/ui";
+import { Bouton, CLASSE_SAISIE, TitreSection } from "@/components/pilotage/ui";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type SaisiePreset = { designation: string; unite: Unite; prix: string };
@@ -141,15 +141,20 @@ function LignePreset({
   );
 }
 
-/** Presets de tarifs, éditables depuis le générateur. */
+/**
+ * Les tarifs des devis (presets) et le tarif de chaque prestation.
+ *
+ * Mission 18 (A6) : ce n'est plus un sous-mode du générateur de documents (Dossiers) mais l'onglet « Tarifs » de
+ * Paramètres (`/parametres?section=tarifs`). Les presets sont lus par la page avec les autres réglages et gardés par
+ * les onglets (on revient sur l'onglet sans perdre ce qui vient d'être changé) ; le générateur ne fait que les
+ * proposer, et son lien « Gérer les tarifs » mène ici.
+ */
 export function GestionTarifs({
   presets,
   setPresets,
-  onRetour,
 }: {
   presets: PresetVue[];
   setPresets: React.Dispatch<React.SetStateAction<PresetVue[]>>;
-  onRetour: () => void;
 }) {
   const vide: SaisiePreset = { designation: "", unite: "ml", prix: "" };
   const [nouveau, setNouveau] = useState<SaisiePreset>(vide);
@@ -176,15 +181,12 @@ export function GestionTarifs({
   }
 
   return (
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-[13px] text-[#9CA3AF]">
-          Prix HT. Un prix vide se saisit à chaque document (carburant, péage…).
-        </p>
-        <Bouton variante="secondaire" taille="sm" icone={<ArrowLeft size={13} aria-hidden />} onClick={onRetour}>
-          Retour au document
-        </Bouton>
-      </div>
+    <section id="tarifs" className="mt-8 scroll-mt-20">
+      <TitreSection>Tarifs des devis</TitreSection>
+      <p className="mb-3 text-[13px] text-[#9CA3AF]">
+        Prix HT, proposés ligne par ligne dans le générateur de devis et de factures. Un prix vide se saisit à chaque
+        document (carburant, péage…). Les documents déjà émis ne changent pas.
+      </p>
       <ul className="space-y-2">
         {presets.map((preset) => (
           <LignePreset key={preset.id} preset={preset} setPresets={setPresets} />
@@ -210,7 +212,7 @@ export function GestionTarifs({
         </Bouton>
       </form>
       <TarifsParPrestation presets={presets} />
-    </div>
+    </section>
   );
 }
 

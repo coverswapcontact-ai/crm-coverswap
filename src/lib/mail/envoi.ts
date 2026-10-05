@@ -16,14 +16,14 @@ import { PORTEES_GOOGLE, connexionActive } from "@/lib/google/connexion";
 export type PieceJointe = { nom: string; type: string; contenu: Buffer };
 
 export type MessageSortant = {
-  /** Adresse d'expédition (séquences : paramètre MAIL_EXPEDITEUR) ; par défaut la boîte connectée. */
+  /** Adresse d'expédition ; par défaut la boîte connectée (plus aucun appelant ne la donne depuis la mission 18, A4). */
   de?: string | null;
   a: string;
   objet: string;
   texte: string;
   /** Mise en page (notifications de l'espace) : envoyée avec le texte. */
   html?: string | null;
-  /** En-têtes ajoutés (List-Unsubscribe des séquences). */
+  /** En-têtes ajoutés (List-Unsubscribe d'un mail commercial). */
   entetes?: Record<string, string>;
   repondreA?: string;
   pieces?: PieceJointe[];

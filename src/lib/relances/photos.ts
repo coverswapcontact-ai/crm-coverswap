@@ -17,7 +17,7 @@ import { proposerSms } from "@/lib/sms/proposition";
  * deux au plus par projet.
  *
  * Une simulation compte d'où qu'elle vienne (`dossiersAvecSimulation`, la règle
- * partagée avec le libellé de l'écran Espaces) : celui qui en a fait une n'est
+ * partagée avec le libellé de la colonne Espace) : celui qui en a fait une n'est
  * jamais relancé pour ses photos, ni dit « en attente de ses photos ». Un
  * numéro qui a répondu STOP n'a pas de relance photos (ce n'est qu'un SMS).
  */
@@ -87,7 +87,8 @@ export async function relancesPhotosProposables(maintenant: Date = new Date(), f
   const [avecSimulation, estEnStop, relances, liens] = await Promise.all([
     dossiersAvecSimulation(candidats.map((e) => e.dossier)),
     lecteurDuStop(candidats.flatMap((e) => [e.dossier.lead?.telephone, e.dossier.clientTelephone])),
-    prisma.dossierEvenement.findMany({ where: { dossierId: { in: dossierIds }, type: "SMS_COPIE", metadata: { contains: "PHOTOS" } }, orderBy: { createdAt: "desc" }, select: { dossierId: true, metadata: true, createdAt: true } }),
+    // Mission 18 (A4) : le pré-filtre lit le type de la relance, pas un mot qu'un SMS pourrait contenir.
+    prisma.dossierEvenement.findMany({ where: { dossierId: { in: dossierIds }, type: "SMS_COPIE", metadata: { contains: '"type":"PHOTOS"' } }, orderBy: { createdAt: "desc" }, select: { dossierId: true, metadata: true, createdAt: true } }),
     liensEnvoyes(),
   ]);
 

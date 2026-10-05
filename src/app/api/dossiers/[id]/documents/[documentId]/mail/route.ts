@@ -16,12 +16,15 @@ export async function GET(_requete: NextRequest, { params }: Contexte) {
   }
 }
 
-/** POST : envoi décidé par la personne (proposition validée, envoi par la file, trace au dossier). */
+/**
+ * POST : envoi décidé par la personne (proposition validée, envoi par la file, trace au dossier). Mission 18 (B2) : le
+ * même envoi refait (double clic) est sans effet, `deja: true`.
+ */
 export async function POST(requete: NextRequest, { params }: Contexte) {
   try {
     const { id, documentId } = await params;
-    const proposition = await envoyerDocumentParMail(id, documentId, analyser(schemaEnvoiDocument, await lireCorpsJson(requete)));
-    return NextResponse.json(proposition, { status: 202 });
+    const { proposition, deja } = await envoyerDocumentParMail(id, documentId, analyser(schemaEnvoiDocument, await lireCorpsJson(requete)));
+    return NextResponse.json({ ...proposition, deja }, { status: 202 });
   } catch (erreur) {
     return reponseErreur(erreur, "POST /api/dossiers/[id]/documents/[documentId]/mail");
   }

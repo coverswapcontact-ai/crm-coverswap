@@ -42,8 +42,11 @@ export async function rapportCoherence(): Promise<RapportCoherence> {
   return rapport;
 }
 
-/** Recoupe les tâches « Répondre » : pas de seconde tâche pour le même mail. */
-export const CODES_ECARTES: readonly string[] = ["MAIL_SANS_REPONSE"];
+/**
+ * Recoupe les tâches « Répondre » : pas de seconde tâche pour le même mail. Mission 18 (B13) : un PDF parti de Gmail à
+ * enregistrer a déjà sa tâche « Enregistrer comme devis envoyé » (détecteur des dossiers, un geste) : pas de seconde.
+ */
+export const CODES_ECARTES: readonly string[] = ["MAIL_SANS_REPONSE", "DEVIS_GMAIL_NON_ENREGISTRE"];
 
 /** « Le devis 2026-043 vaut 0 € » : le constat jusqu'à sa première explication (« : … », « . … »), 140 caractères au plus. */
 export function constatCourt(constat: string): string {
@@ -55,8 +58,8 @@ export function constatCourt(constat: string): string {
 const cleDe = (i: Pick<Incoherence, "cle">) => `COHERENCE:${i.cle}`;
 
 function detectionDe(i: Incoherence, depuis: Date): Detection {
-  // Un dossier archivé (espace resté actif) n'est pas le sujet : la tâche serait écartée comme « sujet disparu ».
-  const dossierVivant = i.code === "ESPACE_ACTIF_DOSSIER_ARCHIVE" ? null : i.dossierId;
+  // Un dossier clos (perdu ou archivé, espace resté ouvert) n'est pas le sujet : la tâche serait écartée comme « sujet disparu ».
+  const dossierVivant = i.code === "ESPACE_ACTIF_DOSSIER_CLOS" && i.leadId ? null : i.dossierId;
   const sujet = dossierVivant ? ({ type: "DOSSIER", id: dossierVivant } as const) : i.leadId ? ({ type: "LEAD", id: i.leadId } as const) : ({ type: "DOSSIER", id: i.dossierId } as const);
   const fiche: Raccourci = i.dossierId
     ? { genre: "DOSSIER", libelle: "Ouvrir le dossier", dossierId: i.dossierId, href: `/dossiers?dossier=${i.dossierId}` }

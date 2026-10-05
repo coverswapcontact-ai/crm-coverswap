@@ -16,13 +16,16 @@
 // un mail rangé, traité, automatique ou déplacé dans un autre dossier ne
 // compte pas. Un devis (généré, rendu visible, déposé) ne passe la main au
 // client que s'il attend encore sa réponse : visible, émis ou envoyé, non
-// archivé. Un devis déposé la passe à la date du dépôt, et seulement avant la
-// signature (Qualification → Relance) ; après, l'étape décide.
+// archivé. Mission 18 (B1) : générer n'est pas envoyer — un devis généré sans
+// être envoyé (DEVIS_GENERE marqué `envoye: false`) me donne la main, « Devis
+// prêt, pas encore envoyé », tant qu'il est « Généré » et pas mis en ligne. Un devis déposé la passe à la date du dépôt, et seulement avant la
+// signature (Qualification → Relance) ; après, l'étape décide. Mission 18 (B6) : le seul devis en attente annulé ou
+// masqué, le retour d'avant « Devis envoyé » (marqué `devisRetire`) me la donne : « Devis N annulé : refaire le devis ».
 //
 // `mainSelonFaits` est pure ; `recalculerMain` l'applique au dossier et range
 // le résultat dans `Dossier.main / mainLe / mainMotif`, relus par les écrans.
 
-import { prisma } from "@/lib/prisma";
+import { prisma, type Transaction } from "@/lib/prisma";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { porteLienEspace } from "@/lib/sms/catalogue";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
@@ -50,6 +53,16 @@ const MODELES_LIEN = /^(LIEN_ESPACE|INJOIGNABLE_LIEN|RELANCE_PHOTOS|SIMULATION_P
 const MOTIF_DEVIS_ENVOYE = "Devis envoyé : en attente de sa réponse";
 const MOTIF_LIEN_ENVOYE = "Lien de son espace envoyé : en attente du client";
 const MOTIF_ESPACE_OUVERT = "Espace ouvert : en attente du client";
+/** Mission 18 (B1) : un devis généré mais pas encore envoyé (masqué, ou sans annonce) : à moi de l'envoyer. */
+export const MOTIF_DEVIS_A_ENVOYER = "Devis prêt, pas encore envoyé";
+export const motifDevisAEnvoyer = (numero: unknown): string => `${MOTIF_DEVIS_A_ENVOYER}${typeof numero === "string" && numero ? ` (${numero})` : ""} : à lui envoyer`;
+export const estMotifDevisAEnvoyer = (motif: string | null | undefined): boolean => (motif ?? "").startsWith(MOTIF_DEVIS_A_ENVOYER);
+/**
+ * Mission 18 (B6) : le seul devis en attente a été annulé ou masqué, le dossier est revenu avant « Devis envoyé » : à moi
+ * de le refaire (le retour lui-même, CHANGEMENT_ETAPE marqué `devisRetire`, passe la main).
+ */
+export const motifDevisARefaire = (numero: string, geste: "ANNULE" | "MASQUE"): string => `Devis ${numero} ${geste === "ANNULE" ? "annulé" : "masqué"} : refaire le devis`;
+export const estMotifDevisARefaire = (motif: string | null | undefined): boolean => /^Devis \S+ (annulé|masqué) : refaire le devis$/.test(motif ?? "");
 /** Mission 14 (partie 6) : une relance de devis copiée (SMS) ; le mail de relance garde « Mail envoyé : … ». */
 export const MOTIF_RELANCE_ENVOYEE = "Relance envoyée : en attente de sa réponse";
 
@@ -101,11 +114,22 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
   const client = evenement.direction === "ENTRANT";
   switch (evenement.type) {
     // Lucas passe la main au client.
+    // Mission 18 (relecture) : une simulation masquée puis remise (« republiée ») ne repasse pas la main.
     case "ESPACE_SIMULATION_DEPOSEE":
-      return { qui: "CLIENT", motif: "Simulation publiée : en attente de son retour" };
-    case "DEVIS_GENERE":
+      return lireMetadata(evenement.metadata).republiees === true ? null : { qui: "CLIENT", motif: "Simulation publiée : en attente de son retour" };
+    // Mission 18 (B1) : un devis généré sans être envoyé me la donne (les devis d'avant n'ont pas la marque : envoyés).
+    case "DEVIS_GENERE": {
+      const meta = lireMetadata(evenement.metadata);
+      return meta.envoye === false ? { qui: "MOI", motif: motifDevisAEnvoyer(meta.numero) } : { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE };
+    }
     case "DEVIS_ENVOYE":
       return { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE };
+    // Mission 18 (B6) : le retour d'avant « Devis envoyé » quand le seul devis en attente est annulé ou masqué : à moi
+    // de refaire le devis. Les autres changements d'étape ne sont pas des gestes : l'étape décide (mainSelonFaits).
+    case "CHANGEMENT_ETAPE": {
+      const retire = lireMetadata(evenement.metadata).devisRetire as { numero?: unknown; geste?: unknown } | undefined;
+      return retire && typeof retire.numero === "string" && (retire.geste === "ANNULE" || retire.geste === "MASQUE") ? { qui: "MOI", motif: motifDevisARefaire(retire.numero, retire.geste) } : null;
+    }
     // Mission 14 : un devis déposé (fait ailleurs), visible et en attente de réponse, vaut un devis émis.
     case "DOCUMENT_REPRIS":
       return devisDeposeVisible(evenement) ? { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE } : null;
@@ -174,6 +198,8 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
       const meta = lireMetadata(evenement.metadata);
       const numero = typeof meta.numero === "string" ? meta.numero : null;
       const libelle = typeof meta.libelle === "string" && meta.libelle ? ` (${meta.libelle})` : "";
+      // Mission 18 (B7) : un avenant signé (le dossier l'était déjà) : à moi de le prévoir au chantier.
+      if (meta.avenant) return { qui: "MOI", motif: `Il a signé l'avenant${numero ? ` ${numero}` : ""}${libelle} : le prévoir au chantier` };
       return { qui: "MOI", motif: numero ? `Il a choisi le devis ${numero}${libelle} : fixer la date du chantier` : "Bon pour accord reçu : fixer la date du chantier" };
     }
     case "ESPACE_ACCORD_RETIRE":
@@ -382,10 +408,10 @@ const devisEnAttente = (document: { type: string; statut: string; visibleEspace:
  * Les faits de la règle pour un dossier, lus en base (événements non archivés, mails et devis relus) : la même
  * lecture pour la main (`calculerMain`) et pour le contrôle de cohérence (message du client sans réponse).
  */
-export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { messageSansReponse: MessageSansReponse | null }) | null> {
-  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true, clientNom: true } });
+export async function lireFaitsMain(dossierId: string, client: Transaction = prisma): Promise<(FaitsMain & { messageSansReponse: MessageSansReponse | null }) | null> {
+  const dossier = await client.dossier.findUnique({ where: { id: dossierId }, select: { etape: true, clientNom: true } });
   if (!dossier) return null;
-  const lus = await prisma.dossierEvenement.findMany({
+  const lus = await client.dossierEvenement.findMany({
     where: { dossierId, archiveLe: null, type: { in: TYPES_LUS } },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 60,
@@ -396,20 +422,26 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
   // ou déplacé dans un autre dossier ne compte plus.
   const idsMessages = evenements.filter((e) => e.type === "MAIL_RECU").map(idMessage).filter(nonNul);
   const messages = idsMessages.length
-    ? await prisma.message.findMany({ where: { id: { in: idsMessages }, archiveLe: null }, select: { id: true, dossierId: true, automatique: true, rangeLe: true, traiteLe: true, canal: true, filCanal: true, recuLe: true } })
+    ? await client.message.findMany({ where: { id: { in: idsMessages }, archiveLe: null }, select: { id: true, dossierId: true, automatique: true, rangeLe: true, traiteLe: true, canal: true, filCanal: true, recuLe: true } })
     : [];
   const parId = new Map(messages.map((m) => [m.id, m]));
   // Mission 14 : un devis masqué, annulé, accepté, refusé ou archivé depuis ne dit plus « en attente de sa réponse ».
   const idsDocuments = evenements.filter((e) => TYPES_DEVIS.includes(e.type)).map(idDocument).filter(nonNul);
   const documents = idsDocuments.length
-    ? await prisma.document.findMany({ where: { id: { in: idsDocuments }, ...AVEC_ARCHIVES }, select: { id: true, type: true, statut: true, visibleEspace: true, archiveLe: true } })
+    ? await client.document.findMany({ where: { id: { in: idsDocuments }, ...AVEC_ARCHIVES }, select: { id: true, type: true, statut: true, visibleEspace: true, archiveLe: true } })
     : [];
   const documentsParId = new Map(documents.map((d) => [d.id, d]));
+  // Mission 18 (B1) : les devis mis en ligne depuis (« Devis envoyé ») ne sont plus « à envoyer », même masqués ensuite.
+  const misEnLigne = new Set(evenements.filter((e) => e.type === "DEVIS_ENVOYE").map(idDocument).filter(nonNul));
   const retenus = evenements.filter((e) => {
     if (TYPES_DEVIS.includes(e.type)) {
       const document = documentsParId.get(idDocument(e) ?? "");
       // Sans document retrouvé (événement sans identifiant), l'événement seul décide (passageDeMain).
-      return !document || devisEnAttente(document);
+      if (!document) return true;
+      // Mission 18 (B1) : généré sans être envoyé, il compte tant qu'il est « Généré » (masqué ou non) ; une mise en
+      // ligne (DEVIS_ENVOYE, plus récent) ou un mail du CRM (« Envoyé », MAIL_ENVOYE) passe ensuite la main au client.
+      if (e.type === "DEVIS_GENERE" && lireMetadata(e.metadata).envoye === false) return document.statut === "GENERE" && !document.archiveLe && !misEnLigne.has(document.id);
+      return devisEnAttente(document);
     }
     const id = e.type === "MAIL_RECU" ? idMessage(e) : null;
     if (!id) return true;
@@ -420,7 +452,7 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
   const repondu = async (e: EvenementLu) => {
     const message = e.type === "MAIL_RECU" ? parId.get(idMessage(e) ?? "") : undefined;
     if (!message?.filCanal) return false;
-    const reponse = await prisma.message.findFirst({ where: { canal: message.canal, filCanal: message.filCanal, sens: "SORTANT", automatique: false, archiveLe: null, recuLe: { gt: message.recuLe } }, select: { id: true } });
+    const reponse = await client.message.findFirst({ where: { canal: message.canal, filCanal: message.filCanal, sens: "SORTANT", automatique: false, archiveLe: null, recuLe: { gt: message.recuLe } }, select: { id: true } });
     return reponse !== null;
   };
   return {
@@ -432,9 +464,20 @@ export async function lireFaitsMain(dossierId: string): Promise<(FaitsMain & { m
 }
 
 /** La main telle que la règle la donne aujourd'hui, sans rien écrire (contrôle de cohérence, migration). */
-export async function calculerMain(dossierId: string): Promise<MainCalculee | null> {
-  const faits = await lireFaitsMain(dossierId);
+export async function calculerMain(dossierId: string, client: Transaction = prisma): Promise<MainCalculee | null> {
+  const faits = await lireFaitsMain(dossierId, client);
   return faits ? mainSelonFaits(faits) : null;
+}
+
+/**
+ * Mission 18 (B0) : la main calculée et écrite DANS la transaction de l'appelant (`dossiers/synchro.ts`), sans signal
+ * des tâches (il part après la transaction, jamais dedans). Rend la valeur retenue.
+ */
+export async function ecrireMain(tx: Transaction, dossierId: string): Promise<MainCalculee | null> {
+  const calcul = await calculerMain(dossierId, tx);
+  if (!calcul) return null;
+  await tx.dossier.update({ where: { id: dossierId }, data: { main: calcul.qui, mainLe: calcul.le, mainMotif: calcul.motif } });
+  return calcul;
 }
 
 /** Mission 14 (R2) : des mails rangés, traités, archivés ou remis « à traiter » — la main de leurs dossiers est relue. Jamais bloquant. */

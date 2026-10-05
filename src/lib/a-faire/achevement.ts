@@ -54,8 +54,11 @@ const smsSortant = (contenu: string) => SMS_COPIE.test(contenu) || contenu.start
 const mailSortant = (contenu: string) => contenu.startsWith("Mail envoyé");
 const appelAbouti = (contenu: string) => !/pas de réponse|messagerie/i.test(contenu);
 
-/** Le sujet a-t-il disparu ? Rend la raison lisible (« dossier perdu »), ou null. Un dossier l'emporte sur son lead. */
-export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierId">): Promise<string | null> {
+/**
+ * Le sujet a-t-il disparu ? Rend la raison lisible (« dossier perdu »), ou null. Un dossier l'emporte sur son lead.
+ * Mission 18 (A4) : la réactivation (REACTIVER) porte justement sur un contact sans suite — il n'a pas disparu pour elle.
+ */
+export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierId"> & { type?: string }): Promise<string | null> {
   if (tache.dossierId) {
     const dossier = await prisma.dossier.findUnique({ where: { id: tache.dossierId }, select: { archiveLe: true, etape: true } });
     if (!dossier) return "dossier introuvable";
@@ -67,7 +70,7 @@ export async function sujetDisparu(tache: Pick<TacheAFaire, "leadId" | "dossierI
     const lead = await prisma.lead.findUnique({ where: { id: tache.leadId }, select: { archiveLe: true, statut: true } });
     if (!lead) return "contact introuvable";
     if (lead.archiveLe) return "contact archivé";
-    if (lead.statut === "PERDU") return "contact sans suite";
+    if (lead.statut === "PERDU" && tache.type !== "REACTIVER") return "contact sans suite";
   }
   return null;
 }
@@ -171,7 +174,9 @@ async function dernierContact(tache: Tache, apres: Date, maintenant: Date): Prom
     ajouter(echanges.find((e) => e.type === "EMAIL" && mailSortant(e.contenu))?.createdAt, "mail parti");
     const contactLe = lead?.dernierContactLe;
     if (contactLe && !candidats.some((c) => Math.abs(c.le.getTime() - contactLe.getTime()) < 60_000)) ajouter(contactLe, "contacté");
-    ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert");
+    // Le dossier ouvert clôt une tâche du LEAD (il vit désormais dans son dossier) ; pour une tâche du dossier lui-même,
+    // ouvrir n'est pas appeler (mission 18, A2 : le dossier s'ouvre tout seul, « Appeler · Nom » reste à faire).
+    if (!tache.dossierId) ajouter(lead?.dossiers[0]?.createdAt, "dossier ouvert");
     rappelLe = lead?.rappelLe ?? null;
   }
   if (tache.dossierId) {
@@ -225,6 +230,45 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       });
       return devis ? `devis ${devis.numero} ${devis.origine === "REPRISE" ? "déposé" : "émis"}` : null;
     }
+    case "ENVOYER_DEVIS": {
+      // Mission 18 (B1) : le devis parti par le mail du CRM (« Envoyé »), mis en ligne (« Devis envoyé »), ou devenu sans objet.
+      if (!tache.dossierId) return null;
+      const ids = Array.isArray(donnees.documentIds) ? donnees.documentIds.filter((id): id is string => typeof id === "string") : [];
+      if (ids.length === 0) return null;
+      const devis = await prisma.document.findMany({ where: { id: { in: ids }, ...AVEC_ARCHIVES }, select: { id: true, numero: true, statut: true } });
+      const misEnLigne = await prisma.dossierEvenement.findFirst({
+        where: { dossierId: tache.dossierId, type: "DEVIS_ENVOYE", createdAt: { gt: depuis }, OR: ids.map((id) => ({ metadata: { contains: id } })) },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, metadata: true },
+      });
+      const parMail = devis.find((d) => d.statut === "ENVOYE" || d.statut === "ACCEPTE");
+      if (parMail) return `devis ${parMail.numero} ${parMail.statut === "ACCEPTE" ? "accepté" : "envoyé par mail"}`;
+      if (misEnLigne) {
+        const numero = devis.find((d) => misEnLigne.metadata.includes(d.id))?.numero;
+        return `devis${numero ? ` ${numero}` : ""} mis en ligne ${leOuA(misEnLigne.createdAt, maintenant)}`;
+      }
+      const caduc = devis.find((d) => d.statut === "ANNULEE" || d.statut === "REMPLACE");
+      return caduc ? `devis ${caduc.numero} ${caduc.statut === "ANNULEE" ? "annulé" : "remplacé"}` : null;
+    }
+    case "ENREGISTRER_DEVIS": {
+      // Mission 18 (B3) : le PDF parti de Gmail enregistré (« Devis envoyé » qui porte sa pièce), ou le devis de ce
+      // numéro entré dans le dossier autrement (dépôt, mail du CRM, mise en ligne).
+      if (!tache.dossierId) return null;
+      const pieceId = texteOuNull(donnees.pieceId);
+      const enregistre = pieceId
+        ? await prisma.dossierEvenement.findFirst({ where: { dossierId: tache.dossierId, type: "DEVIS_ENVOYE", metadata: { contains: `"pieceId":"${pieceId}"` } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } })
+        : null;
+      if (enregistre) {
+        const documentId = texteOuNull(lireObjet(enregistre.metadata).documentId);
+        const devis = documentId ? await prisma.document.findUnique({ where: { id: documentId }, select: { numero: true } }) : null;
+        return `devis${devis?.numero ? ` ${devis.numero}` : ""} enregistré comme envoyé depuis Gmail ${leOuA(enregistre.createdAt, maintenant)}`;
+      }
+      const numero = texteOuNull(donnees.numero);
+      if (!numero) return null;
+      const devis = await prisma.document.findFirst({ where: { dossierId: tache.dossierId, type: "DEVIS", numero, archiveLe: null }, select: { numero: true, statut: true, origine: true } });
+      if (!devis || devis.statut === "GENERE") return null;
+      return `devis ${devis.numero} ${devis.origine === "REPRISE" ? "déposé" : devis.statut === "ACCEPTE" ? "accepté" : "envoyé"}`;
+    }
     case "SIMULATION":
     case "PUBLIER": {
       if (!tache.dossierId) return null;
@@ -272,16 +316,25 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       return encaissement ? `encaissement de ${euros(encaissement.montant)} saisi` : null;
     }
     case "RELANCER_DEVIS":
-    case "RELANCER_PHOTOS": {
-      // La relance faite : un SMS de relance copié, ou le mail de relance parti (docs/TACHES.md § 5).
+    case "RELANCER_PHOTOS":
+    case "RELANCER_AVIS": {
+      // La relance faite : un SMS de relance DE CE TYPE copié, ou le mail de relance du devis parti (docs/TACHES.md § 5).
+      // Mission 18 (A4) : le type de la relance est lu — un SMS d'avis ne coche pas la relance d'un devis.
       if (!tache.dossierId) return null;
+      const sms = tache.type === "RELANCER_DEVIS" ? '"relance":{"documentId"' : tache.type === "RELANCER_PHOTOS" ? '"type":"PHOTOS"' : '"type":"AVIS"';
       const trace = await prisma.dossierEvenement.findFirst({
-        where: { dossierId: tache.dossierId, createdAt: { gt: depuis }, OR: [{ type: "SMS_COPIE", metadata: { contains: '"relance"' } }, { type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } }] },
+        where: { dossierId: tache.dossierId, createdAt: { gt: depuis }, OR: [{ type: "SMS_COPIE", metadata: { contains: sms } }, ...(tache.type === "RELANCER_DEVIS" ? [{ type: "MAIL_ENVOYE", metadata: { contains: "RELANCE_DEVIS" } }] : [])] },
         orderBy: { createdAt: "desc" },
         select: { type: true, createdAt: true },
       });
       if (!trace) return null;
-      return `${trace.type === "SMS_COPIE" ? "SMS de relance copié" : "mail de relance parti"} ${leOuA(trace.createdAt, maintenant)}`;
+      return `${trace.type === "SMS_COPIE" ? (tache.type === "RELANCER_AVIS" ? "SMS de demande d'avis copié" : "SMS de relance copié") : "mail de relance parti"} ${leOuA(trace.createdAt, maintenant)}`;
+    }
+    case "REACTIVER": {
+      // Mission 18 (A4) : la réactivation copiée se trace sur le lead (relances/reactivation.ts).
+      if (!tache.leadId) return null;
+      const trace = await prisma.interaction.findFirst({ where: { leadId: tache.leadId, type: "SMS", contenu: { startsWith: "SMS REACTIVATION copié" }, createdAt: { gt: depuis } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+      return trace ? `SMS de réactivation copié ${leOuA(trace.createdAt, maintenant)}` : null;
     }
     case "VALIDER": {
       const propositionId = texteOuNull(donnees.propositionId) ?? texteOuNull(raccourci.propositionId);

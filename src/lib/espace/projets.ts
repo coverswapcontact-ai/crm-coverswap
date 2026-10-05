@@ -45,10 +45,12 @@ export const LIBELLES_PASTILLE: Record<PastilleProjet, string> = {
 };
 
 /** La pastille et la prochaine action d'un projet, dites au client (une phrase courte, jamais de jargon). */
-export function pastilleDuProjet(entree: { etape: EtapeEspace; etapeDossier: string; dateChantier: Date | null; soldeDu: boolean; enCoursCreation: boolean }): { pastille: PastilleProjet; prochaine: string | null } {
+export function pastilleDuProjet(entree: { etape: EtapeEspace; etapeDossier: string; dateChantier: Date | null; soldeDu: boolean; enCoursCreation: boolean; avenantASigner?: boolean }): { pastille: PastilleProjet; prochaine: string | null } {
   const fige = figeDuProjet(entree.etapeDossier);
   if (fige === "TERMINE") return { pastille: "TERMINE", prochaine: null };
   if (fige === "NON_REALISE") return { pastille: "NON_REALISE", prochaine: null };
+  // Mission 18 (B7) : un avenant (ou un nouveau devis) à signer passe devant le reste.
+  if (entree.avenantASigner) return { pastille: "A_VOUS", prochaine: "Un nouveau devis à signer" };
   const date = entree.dateChantier ? entree.dateChantier.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" }) : null;
   switch (entree.etape) {
     case "PHOTOS":
@@ -172,7 +174,7 @@ export async function demanderProjetDePlus(permanent: EspacePermanent): Promise<
     await prisma.espacePermanent.update({ where: { id: permanent.id }, data: { projetDemandeLe: new Date() } });
     if (dossier) await prisma.dossierEvenement.create({ data: { dossierId: dossier.id, type: "ESPACE_PROJET_DEMANDE", direction: "ENTRANT", contenu: "Le client demande à ouvrir un projet de plus dans son espace (il en a déjà deux en cours).", metadata: JSON.stringify({ permanentId: permanent.id }) } });
   });
-  if (dossier) await prevenir(dossier.id, { titre: `${dossier.clientNom} voudrait un projet de plus`, texte: "Il a déjà deux projets en cours dans son espace. Accordez-en un de plus en un clic (fiche client ou Espaces clients), ou appelez-le.", urgence: 4, telephone: dossier.clientTelephone, etiquette: `projet-demande-${permanent.id}` });
+  if (dossier) await prevenir(dossier.id, { titre: `${dossier.clientNom} voudrait un projet de plus`, texte: "Il a déjà deux projets en cours dans son espace. Accordez-en un de plus en un clic depuis sa fiche client (bloc Espace), ou appelez-le.", urgence: 4, telephone: dossier.clientTelephone, etiquette: `projet-demande-${permanent.id}` });
 }
 
 /** Lucas accorde des projets en cours de plus : la demande est close. */

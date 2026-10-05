@@ -45,6 +45,12 @@ export type DefinitionProposition<C = Record<string, unknown>> = {
   liens?: (contenu: C) => { libelle: string; href: string }[];
   /** Encore pertinente ? Rend le motif qui la rend sans objet, ou null. */
   pertinente?: (contenu: C) => Promise<string | null>;
+  /**
+   * Mission 18 (relecture) : l'effet extérieur de l'exécution est-il déjà produit (mail ou SMS parti), la tâche étant
+   * rejouée après une coupure ? Alors la pertinence n'est plus relue au moment d'exécuter : `executer` rejoue ce qui
+   * manque (sans renvoyer), et la proposition est notée exécutée — jamais « sans objet » pour un message parti.
+   */
+  dejaExecutee?: (contenu: C, propositionId: string) => Promise<boolean>;
 };
 
 /** Aide au typage : `definirProposition({ … })` infère le type du contenu depuis le schéma. */

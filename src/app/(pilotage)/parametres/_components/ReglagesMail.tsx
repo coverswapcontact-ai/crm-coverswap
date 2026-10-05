@@ -14,8 +14,8 @@ import { cn } from "@/lib/utils";
  * Paramètres → Mail (mission 7) : le guide de style que suit « Rédiger avec
  * l'IA », les quatre mails automatiques de l'espace client, et vos décisions
  * sur les expéditeurs (« ne plus me montrer », « remonté ») — chacune se
- * retire ici. Les interrupteurs (rédaction IA, rangement dans Gmail, adresse
- * des séquences) sont dans la liste des paramètres, plus haut.
+ * retire ici. Les interrupteurs (rédaction IA, rangement dans Gmail) sont dans
+ * la liste des paramètres, plus haut.
  */
 
 

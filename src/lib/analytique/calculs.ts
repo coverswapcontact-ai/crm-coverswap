@@ -4,6 +4,7 @@ import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { jourParis } from "@/lib/dossiers/dates";
 import { estDevisEnvoye } from "@/lib/dossiers/devis-envoye";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
+import { montantSigneHt } from "@/lib/dossiers/montant-signe";
 import { versCentimes } from "@/lib/dossiers/montants";
 import { appelSansReponse, issueDesMetadonnees, issueDuContenu } from "@/lib/commercial/sans-reponse";
 import { categorieDeChantier, CATEGORIES_DEPENSE } from "@/lib/depenses/constantes";
@@ -143,8 +144,8 @@ const SELECT_LEAD = {
     select: {
       etape: true,
       evenements: { where: { archiveLe: null, type: { in: ["APPEL", ...TYPES_ECRITS_ENTRANTS] } }, select: { type: true, contenu: true, metadata: true, survenuLe: true, createdAt: true, direction: true } },
-      documents: { where: { type: "DEVIS", numero: { not: null }, visibleEspace: true, archiveLe: null }, select: { totalHt: true, statut: true, dateEmission: true } },
-      accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, select: { totalHt: true } },
+      documents: { where: { type: "DEVIS", numero: { not: null }, visibleEspace: true, archiveLe: null }, select: { id: true, totalHt: true, statut: true, dateEmission: true } },
+      accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, select: { documentId: true, totalHt: true } },
       encaissements: { where: { statut: "VALIDE" }, select: { montant: true } },
       messages: { where: { sens: "ENTRANT", archiveLe: null }, select: { recuLe: true } },
       messagesEspace: { where: { auteur: "CLIENT", archiveLe: null }, select: { createdAt: true } },
@@ -189,7 +190,8 @@ async function analyserLeads(where: Prisma.LeadWhereInput): Promise<LeadAnalyse[
     ];
     const historique = { creeLe: l.createdAt, appels, ecritsRecus };
     const signes = l.dossiers.filter((d) => d.accords.length > 0 || (ETAPES_SIGNEES as readonly string[]).includes(d.etape));
-    const montants = signes.map((d) => d.accords[0]?.totalHt ?? d.documents.find((doc) => doc.statut === "ACCEPTE")?.totalHt ?? null).filter((m): m is number => m !== null);
+    // Mission 18 (relecture) : le montant signé est le devis d'origine plus ses avenants signés (montant-signe.ts).
+    const montants = signes.map((d) => montantSigneHt(d.documents, d.accords)).filter((m): m is number => m !== null);
     const meta = l.metaLeads[0] ?? null;
     return {
       id: l.id,
@@ -279,7 +281,7 @@ export async function toutesLesSignatures(): Promise<Signature[]> {
       createdAt: true,
       ouvertLe: true,
       ...SELECT_FAMILLE,
-      accords: { where: { retireLe: null }, orderBy: { createdAt: "asc" }, select: { totalHt: true, createdAt: true } },
+      accords: { where: { retireLe: null }, orderBy: { createdAt: "asc" }, select: { documentId: true, totalHt: true, createdAt: true } },
       evenements: { where: { type: "CHANGEMENT_ETAPE", archiveLe: null }, select: { metadata: true, survenuLe: true, createdAt: true } },
       documents: { where: { type: "DEVIS", archiveLe: null }, select: { id: true, statut: true, totalHt: true, dateEmission: true, updatedAt: true } },
     },
@@ -290,10 +292,9 @@ export async function toutesLesSignatures(): Promise<Signature[]> {
     const passages = d.evenements.map((e) => ({ m: lireMetadataChangementEtape(e.metadata), le: e.survenuLe ?? e.createdAt }));
     const acceptes = d.documents.filter((doc) => doc.statut === "ACCEPTE");
     const instant = instantDeSignature({ creeLe: d.ouvertLe ?? d.createdAt, accords: d.accords.map((a) => a.createdAt), passages: passages.map((p) => ({ vers: p.m?.vers ?? null, le: p.le })), devisAcceptes: acceptes.map((doc) => doc.updatedAt) });
-    const dernierAccord = d.accords.at(-1);
-    const accepte = [...acceptes].sort((a, b) => (b.dateEmission?.getTime() ?? 0) - (a.dateEmission?.getTime() ?? 0))[0];
     const duPassage = passages.filter((p) => p.m && signees.includes(p.m.vers)).map((p) => p.m?.documentId).filter(Boolean).map((id) => d.documents.find((doc) => doc.id === id)).find(Boolean);
-    const montant = dernierAccord?.totalHt ?? accepte?.totalHt ?? duPassage?.totalHt ?? null;
+    // Mission 18 (relecture) : le devis d'origine plus ses avenants signés, pas le dernier accord (celui d'un avenant).
+    const montant = montantSigneHt(d.documents, d.accords) ?? duPassage?.totalHt ?? null;
     return { dossierId: d.id, jour: jourParis(instant), montant, famille: familleDuDossier(d, parcours) };
   });
 }

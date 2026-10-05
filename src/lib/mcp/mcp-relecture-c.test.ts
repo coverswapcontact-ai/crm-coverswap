@@ -155,7 +155,7 @@ describe("traiter_mail RATTACHER à un lead : par la fonction de service", () =>
 });
 
 describe("annuler « rendre un devis visible » : ce qui reste est dit", () => {
-  test("le devis est remasqué, et la réponse dit que l'envoi et l'étape restent", async () => {
+  test("le devis est remasqué, et la réponse dit que l'envoi reste et que l'étape revient avant le devis s'il était le seul", async () => {
     const d = await dossier("Devis Visible", { etape: "SIMULATION" });
     const { enregistrerDocumentExistant } = await import("@/lib/dossiers/documents-existants");
     const repris = (await enregistrerDocumentExistant(d.id, { type: "DEVIS", numero: "2025-871", montant: 900, dateEmission: "2025-05-02", statut: "ENVOYE", objet: "Repris", inscrireAuRegistre: true } as never)) as { documentId?: string; document?: { id: string } };
@@ -167,8 +167,10 @@ describe("annuler « rendre un devis visible » : ce qui reste est dit", () => {
     const modificationId = (fait.donnees as { modifications: string[] }).modifications[0];
     const annule = await appeler("annuler_modification", { modification_id: modificationId });
     assert.match(annule.texte, /Modification annulée/);
-    assert.match(annule.texte, /garde l'étape « Devis envoyé »/);
+    // Mission 18 (B6) : remasqué, le seul devis en attente fait revenir le dossier à son étape d'avant le devis.
+    assert.match(annule.texte, /s'il était le seul devis qui attendait sa réponse, le dossier revient à son étape d'avant le devis/);
     assert.equal((await prisma.document.findUniqueOrThrow({ where: { id: documentId } })).visibleEspace, false);
+    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: d.id } })).etape, "SIMULATION");
   });
 });
 

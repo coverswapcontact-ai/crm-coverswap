@@ -16,6 +16,11 @@
  * fournisseur : INJOIGNABLE_J3, RELANCE_PHOTOS, RELANCE_SIMULATION, RELANCE_DEVIS,
  * RELANCE_DEVIS_QUESTIONS, RELANCE_DERNIERE) est retiré : ses modèles sont archivés
  * (migration `relances-un-circuit-14-6`), les relances sont des SMS à copier.
+ *
+ * Mission 18 (A4) : un seul système de relance. La demande d'avis après chantier
+ * (DEMANDE_AVIS, avec le lien de son espace) et la réactivation à 6 mois
+ * (REACTIVATION, sans lien) rejoignent les relances de devis, à copier comme
+ * elles (les séquences de mails sont retirées).
  */
 
 export const GROUPES_SMS = ["AUTOMATIQUES", "APRES_APPEL", "ESPACE", "RELANCES"] as const;
@@ -219,6 +224,29 @@ export const CATALOGUE_SMS = [
     fournisseur: false,
     defaut: "Bonjour, c'est Lucas de CoverSwap. Je reviens vers vous pour votre devis : s'il vous reste une question ou si le projet n'est plus d'actualité, dites-le-moi simplement.",
   },
+  // ── Mission 18 (A4) : après le chantier, et six mois après un projet resté sans suite.
+  {
+    code: "DEMANDE_AVIS",
+    libelle: "Demande d'avis après le chantier",
+    groupe: "RELANCES",
+    usage: "Quelques jours après la fin du chantier, s'il n'a pas encore donné son avis dans son espace (une seule fois).",
+    variables: ["prenom", "lien"],
+    lien: true,
+    automatique: false,
+    fournisseur: false,
+    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Merci encore pour votre confiance. Si le résultat vous plaît, votre avis nous aide beaucoup : il se donne en un clic depuis votre espace : {lien}",
+  },
+  {
+    code: "REACTIVATION",
+    libelle: "Réactivation à 6 mois",
+    groupe: "RELANCES",
+    usage: "Six mois après un projet resté sans suite, seulement s'il a donné son accord aux messages commerciaux (une seule fois).",
+    variables: ["prenom"],
+    lien: false,
+    automatique: false,
+    fournisseur: false,
+    defaut: "Bonjour {prenom}, c'est Lucas de CoverSwap. Où en est votre projet de rénovation ? S'il est toujours d'actualité, répondez-moi ici. STOP pour ne plus en recevoir.",
+  },
 ] as const satisfies readonly DefinitionSms[];
 
 export type CodeSms = (typeof CATALOGUE_SMS)[number]["code"];
@@ -281,20 +309,41 @@ export function verifierTexteSms(code: string, texte: string): string | null {
 /* ── Proposer un SMS (types partagés avec l'écran SMS) ─────────────────────── */
 
 /** Ce que l'écran demande : l'action (issue d'appel, lien, relance) et la cible. Le serveur choisit le code. */
-export const ACTIONS_SMS = ["PAS_DE_REPONSE", "A_RAPPELER", "INTERESSE", "LIEN_ESPACE", "ENVOYER_LIEN", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL", "RELANCE_DEVIS", "RELANCE_PHOTOS"] as const;
+export const ACTIONS_SMS = ["PAS_DE_REPONSE", "A_RAPPELER", "INTERESSE", "LIEN_ESPACE", "ENVOYER_LIEN", "INJOIGNABLE_LIEN", "LIEN_ESPACE_RAPPEL", "RELANCE_DEVIS", "RELANCE_PHOTOS", "RELANCE_AVIS", "REACTIVATION"] as const;
 export type ActionSms = (typeof ACTIONS_SMS)[number];
 
 /**
  * Une relance : de devis (le devis et le rang, 1 ou 2), ou photos (mission 14, partie 6 : `type: "PHOTOS"` et le rang,
  * pour un espace ouvert sans photo ni simulation). La copie la range dans la trace (`metadata.relance`) : c'est elle
- * qui compte les relances faites, deux au plus.
+ * qui compte les relances faites, deux au plus. Mission 18 (A4) : la demande d'avis (`type: "AVIS"`, sur le dossier) et
+ * la réactivation (`type: "REACTIVATION"`, tracée sur le lead), une seule chacune. Chaque relance a son discriminant :
+ * aucune n'est « un devis par défaut ».
  */
 export type RelanceDevisSms = { documentId: string; rang: number };
 export type RelancePhotosSms = { type: "PHOTOS"; rang: number };
-export type RelanceSms = RelanceDevisSms | RelancePhotosSms;
+export type RelanceAvisSms = { type: "AVIS"; rang: number };
+export type RelanceReactivationSms = { type: "REACTIVATION"; rang: number };
+export type RelanceSms = RelanceDevisSms | RelancePhotosSms | RelanceAvisSms | RelanceReactivationSms;
+
+export function estRelanceDevis(relance: RelanceSms | null | undefined): relance is RelanceDevisSms {
+  return Boolean(relance && "documentId" in relance && typeof relance.documentId === "string");
+}
 
 export function estRelancePhotos(relance: RelanceSms | null | undefined): relance is RelancePhotosSms {
   return Boolean(relance && "type" in relance && relance.type === "PHOTOS");
+}
+
+export function estRelanceAvis(relance: RelanceSms | null | undefined): relance is RelanceAvisSms {
+  return Boolean(relance && "type" in relance && relance.type === "AVIS");
+}
+
+export function estRelanceReactivation(relance: RelanceSms | null | undefined): relance is RelanceReactivationSms {
+  return Boolean(relance && "type" in relance && relance.type === "REACTIVATION");
+}
+
+/** « de devis », « photos », « de demande d'avis », « de réactivation » : pour les messages d'erreur. */
+export function libelleRelance(relance: RelanceSms): string {
+  return estRelanceDevis(relance) ? "de devis" : estRelancePhotos(relance) ? "photos" : estRelanceAvis(relance) ? "de demande d'avis" : "de réactivation";
 }
 
 /** Le SMS prérempli rendu à l'écran (et à l'assistant) : rien n'est écrit tant qu'il n'est pas copié. */

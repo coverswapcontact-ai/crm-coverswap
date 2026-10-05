@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { LIBELLES_STATUT_DOCUMENT, MOTIFS_AVOIR } from "@/lib/dossiers/constants";
+import { ETAPES_RETOUR_DEVIS } from "@/lib/dossiers/devis-retire";
 import { annulerDevis, genererAvoir } from "@/lib/dossiers/documents";
 import { definirOutil, format, lien } from "../definition";
 
@@ -20,6 +21,19 @@ async function documentDe(dossierId: string, documentId: string) {
   return document;
 }
 
+/**
+ * Mission 18 (B6) : l'aperçu dit si l'annulation fera revenir le dossier avant « Devis envoyé » (la règle de
+ * dossiers/devis-retire.ts, lue sans rien écrire).
+ */
+async function siPlusAucunDevis(dossierId: string, documentId: string): Promise<string> {
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+  if (!dossier || !(ETAPES_RETOUR_DEVIS as readonly string[]).includes(dossier.etape)) return "";
+  const autres = await prisma.document.count({
+    where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, id: { not: documentId }, OR: [{ statut: "ACCEPTE" }, { statut: { in: ["GENERE", "ENVOYE", "NON_RETENU"] }, visibleEspace: true }] },
+  });
+  return autres > 0 ? "" : " C'est le seul devis qui attend sa réponse : le dossier reviendra à son étape d'avant le devis, la main à toi pour refaire le devis, les relances s'arrêtent.";
+}
+
 export const outilAnnulerDocument = definirOutil({
   nom: "annuler_document",
   titre: "Annuler un devis ou une facture",
@@ -36,7 +50,7 @@ export const outilAnnulerDocument = definirOutil({
     const d = await documentDe(e.dossierId, e.documentId);
     if (d.type === "DEVIS") {
       if (d.statut === "ACCEPTE") throw new ErreurMetier(`Le devis ${d.numero} est accepté : il ne s'annule pas. Retire d'abord l'accord (retirer-accord depuis le dossier).`, 409);
-      return `Je vais annuler le devis ${d.numero}${d.libelleVariante ? ` « ${d.libelleVariante} »` : ""} de ${d.dossier.clientNom} (${format.euros(d.totalHt)}, ${LIBELLES_STATUT_DOCUMENT[d.statut as keyof typeof LIBELLES_STATUT_DOCUMENT]?.toLowerCase() ?? d.statut})${e.motif ? ` — motif : ${e.motif}` : ""}. Il passe « Annulé », reste dans l'historique, le client ne le voit plus dans son espace. Aucun mail n'est envoyé.`;
+      return `Je vais annuler le devis ${d.numero}${d.libelleVariante ? ` « ${d.libelleVariante} »` : ""} de ${d.dossier.clientNom} (${format.euros(d.totalHt)}, ${LIBELLES_STATUT_DOCUMENT[d.statut as keyof typeof LIBELLES_STATUT_DOCUMENT]?.toLowerCase() ?? d.statut})${e.motif ? ` — motif : ${e.motif}` : ""}. Il passe « Annulé », reste dans l'historique, le client ne le voit plus dans son espace. Aucun mail n'est envoyé.${await siPlusAucunDevis(e.dossierId, d.id)}`;
     }
     if (d.type === "FACTURE") {
       if (!e.motif_avoir) throw new ErreurMetier("Une facture s'annule par un avoir : donne motif_avoir (ERREUR_MONTANT, ERREUR_CLIENT, PRESTATION_ANNULEE, GESTE_COMMERCIAL, AUTRE).", 400);
@@ -49,7 +63,7 @@ export const outilAnnulerDocument = definirOutil({
     const d = await documentDe(e.dossierId, e.documentId);
     if (d.type === "DEVIS") {
       const r = await annulerDevis(e.dossierId, e.documentId, e.motif ?? "");
-      return { texte: `Devis ${r.numero} de ${d.dossier.clientNom} annulé : gardé en historique, plus proposé dans son espace.`, donnees: { documentId: r.id, numero: r.numero, dossierId: e.dossierId }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
+      return { texte: [`Devis ${r.numero} de ${d.dossier.clientNom} annulé : gardé en historique, plus proposé dans son espace.`, ...r.avertissements].join(" "), donnees: { documentId: r.id, numero: r.numero, dossierId: e.dossierId, ...(r.retour ? { etape: r.retour.vers } : {}) }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
     }
     if (d.type === "FACTURE") {
       if (!e.motif_avoir) throw new ErreurMetier("Une facture s'annule par un avoir : donne motif_avoir.", 400);

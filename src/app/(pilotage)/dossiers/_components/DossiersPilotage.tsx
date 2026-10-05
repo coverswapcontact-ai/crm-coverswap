@@ -2,14 +2,17 @@
 
 import { alertesACompleter } from "@/lib/dossiers/completude";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Archive, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search } from "lucide-react";
+import { Archive, CircleCheck, Columns3, FolderOpen, FolderPlus, Info, List, Play, Search, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import type { PageDossiers } from "@/lib/dossiers/dossiers";
 import type { DossierDetail, DossierResume, LeadTrouve } from "@/lib/dossiers/types";
+import type { EtapeEspace } from "@/lib/espace/etapes";
+import type { FiltreEspace, TriEspace } from "@/lib/espace/suivi-types";
 import { cn } from "@/lib/utils";
 import { PropositionsEnAttente } from "@/components/pilotage/PropositionsEnAttente";
 import { DossiersArchives } from "./ArchivageDossier";
 import { CreationDossier } from "./CreationDossier";
+import { FiltreEspaces } from "./EspaceColonne";
 import { Legende } from "./Legende";
 import { PanneauDossier, type DemandeOuverture } from "./PanneauDossier";
 import { VueKanban } from "./VueKanban";
@@ -34,7 +37,8 @@ function lireVueParDefaut(): Vue {
   return window.matchMedia("(max-width: 767px)").matches ? "liste" : "kanban";
 }
 
-function resumeDepuisDetail(detail: DossierDetail): DossierResume {
+/** Le résumé refait depuis le panneau ; l'état de l'espace (calculé par la liste) reste celui de la ligne. */
+function resumeDepuisDetail(detail: DossierDetail, precedent?: DossierResume): DossierResume {
   return {
     id: detail.id,
     clientNom: detail.clientNom,
@@ -57,6 +61,7 @@ function resumeDepuisDetail(detail: DossierDetail): DossierResume {
     createdAt: detail.createdAt,
     updatedAt: detail.updatedAt,
     prestations: detail.prestations,
+    espace: precedent?.espace,
   };
 }
 
@@ -77,13 +82,19 @@ export default function DossiersPilotage({
   leadInitial,
   dossierInitialId,
   demandeInitiale = null,
+  espaceInitial = null,
+  archivesInitiales = false,
 }: {
   /** Mission 13 (lot 6) : la première page (50), rendue par le serveur avec l'écran ; le reste se demande page par page. */
   initial: PageDossiers;
   leadInitial: LeadTrouve | null;
   dossierInitialId: string | null;
-  /** Mission 13 (lot 4) : ?rubrique= dans l'adresse (notification, Espaces clients) — la rubrique du panneau à ouvrir. */
+  /** Mission 13 (lot 4) : ?rubrique= dans l'adresse (notification, tâche) — la rubrique du panneau à ouvrir. */
   demandeInitiale?: DemandeOuverture | null;
+  /** Mission 18 (A1) : ?espace= (et ?etapeEspace=) — le filtre « Espaces » ouvert d'emblée (/espaces y redirige). */
+  espaceInitial?: { filtre: FiltreEspace; etape: EtapeEspace | null } | null;
+  /** ?archives=1 : les dossiers archivés ouverts d'emblée. */
+  archivesInitiales?: boolean;
 }) {
   const [dossiers, setDossiers] = useState(initial.dossiers);
   const [total, setTotal] = useState(initial.total);
@@ -98,11 +109,20 @@ export default function DossiersPilotage({
   const masquerInactifs = masquerInactifsChoisi ?? masquerInactifsParDefaut;
   const [filtreAFaire, setFiltreAFaire] = useState(false);
   const [legendeOuverte, setLegendeOuverte] = useState(false);
-  const [archivesOuvertes, setArchivesOuvertes] = useState(false);
+  const [archivesOuvertes, setArchivesOuvertes] = useState(archivesInitiales);
   const [recherche, setRecherche] = useState("");
   const [tri, setTri] = useState<Tri>({ cle: "prochaineAction", sens: "asc" });
+  // Mission 18 (A1) : le filtre « Espaces » (l'ancien onglet Espaces clients) ; null = éteint. Il remplace « Tous / À
+  // faire », « Perdus et en pause » et les inactifs : le serveur filtre tous les dossiers qui ont un espace.
+  const [filtreEspace, setFiltreEspace] = useState<FiltreEspace | null>(espaceInitial?.filtre ?? null);
+  const [etapeEspace, setEtapeEspace] = useState<EtapeEspace | null>(espaceInitial?.etape ?? null);
+  const [compteursEspaces, setCompteursEspaces] = useState(initial.espaces);
+  // Relecture de la partie A : le tri de l'ancien onglet (à moi d'abord, dernière activité, lien le plus récent), fait
+  // par le serveur qui découpe les pages ; sous le filtre, l'écran garde cet ordre.
+  const [triEspace, setTriEspace] = useState<TriEspace>("MAIN");
+  const espaceActif = filtreEspace !== null;
   // Mission 13 (lot 6) : une page à la fois ; changer un filtre ramène à la première page (la clé des filtres change).
-  const cleFiltres = `${filtreAFaire}|${afficherSorties}|${recherche}|${masquerInactifs}`;
+  const cleFiltres = `${filtreAFaire}|${afficherSorties}|${recherche}|${masquerInactifs}|${filtreEspace}|${etapeEspace}|${triEspace}`;
   const [pageDemandee, setPageDemandee] = useState({ page: initial.page, cle: cleFiltres });
   const page = pageDemandee.cle === cleFiltres ? pageDemandee.page : 1;
   const [dossierOuvertId, setDossierOuvertId] = useState<string | null>(dossierInitialId);
@@ -121,17 +141,22 @@ export default function DossiersPilotage({
     return () => window.clearInterval(minuteur);
   }, []);
 
-  // L'URL suit le dossier ouvert : un rechargement ou un lien partagé le rouvre.
+  // L'URL suit le dossier ouvert et le filtre « Espaces » : un rechargement ou un lien partagé les rouvre.
   useEffect(() => {
     const url = new URL(window.location.href);
     if (dossierOuvertId) url.searchParams.set("dossier", dossierOuvertId);
     else url.searchParams.delete("dossier");
+    if (filtreEspace) url.searchParams.set("espace", filtreEspace);
+    else url.searchParams.delete("espace");
+    if (filtreEspace && etapeEspace) url.searchParams.set("etapeEspace", etapeEspace);
+    else url.searchParams.delete("etapeEspace");
     // Pré-remplissage consommé : un rechargement ne doit pas rouvrir la création (dossier en double).
     url.searchParams.delete("lead");
     url.searchParams.delete("prospect");
     url.searchParams.delete("client");
+    url.searchParams.delete("archives");
     window.history.replaceState(window.history.state, "", url);
-  }, [dossierOuvertId]);
+  }, [dossierOuvertId, filtreEspace, etapeEspace]);
 
   const choisirVue = (nouvelle: Vue) => {
     setVueChoisie(nouvelle);
@@ -148,7 +173,7 @@ export default function DossiersPilotage({
     );
 
   // Le serveur ne rend qu'une page, filtrée là-bas ; les filtres vivent dans une référence pour que la fonction reste stable.
-  const filtres = useRef({ page, filtreAFaire, afficherSorties, recherche, masquerInactifs });
+  const filtres = useRef({ page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace });
   const rafraichir = useCallback(async () => {
     const f = filtres.current;
     try {
@@ -157,11 +182,15 @@ export default function DossiersPilotage({
         vue: f.filtreAFaire ? "A_FAIRE" : f.afficherSorties ? "TOUS" : "EN_COURS",
         ...(f.recherche.trim() ? { q: f.recherche.trim() } : {}),
         ...(f.masquerInactifs ? { inactifs: "0" } : {}),
+        ...(f.filtreEspace ? { espace: f.filtreEspace } : {}),
+        ...(f.filtreEspace && f.etapeEspace ? { etapeEspace: f.etapeEspace } : {}),
+        ...(f.filtreEspace && f.triEspace !== "MAIN" ? { triEspace: f.triEspace } : {}),
       });
       const reponse = await appelApi<PageDossiers>(`/api/dossiers?${parametres}`);
       setDossiers(reponse.dossiers);
       setTotal(reponse.total);
       setCompteurs(reponse.compteurs);
+      setCompteursEspaces(reponse.espaces);
     } catch (erreur) {
       toast.error("Liste des dossiers non rechargée", { description: messageErreur(erreur) });
     }
@@ -169,24 +198,36 @@ export default function DossiersPilotage({
 
   const premierRendu = useRef(true);
   useEffect(() => {
-    filtres.current = { page, filtreAFaire, afficherSorties, recherche, masquerInactifs };
+    filtres.current = { page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace };
     if (premierRendu.current) {
       premierRendu.current = false;
-      // La première page est arrivée avec l'écran : on ne la redemande que si l'appareil masque les inactifs.
-      if (page === initial.page && !filtreAFaire && !afficherSorties && !recherche && !masquerInactifs) return;
+      // La première page est arrivée avec l'écran (filtre « Espaces » de l'adresse compris) : on ne la redemande que
+      // si l'appareil masque les inactifs (sans effet sous le filtre « Espaces »).
+      if (page === initial.page && !filtreAFaire && !afficherSorties && !recherche && (filtreEspace !== null || !masquerInactifs)) return;
     }
-    const minuterie = window.setTimeout(() => void rafraichir(), recherche ? 250 : 0);
+    // Relecture de la partie A : sous le filtre « Espaces », le serveur recalcule l'état de tous les espaces à chaque
+    // requête ; la recherche attend donc la fin de la saisie (600 ms) plutôt que chaque frappe.
+    const minuterie = window.setTimeout(() => void rafraichir(), recherche ? (filtreEspace ? 600 : 250) : 0);
     return () => window.clearTimeout(minuterie);
-  }, [page, filtreAFaire, afficherSorties, recherche, masquerInactifs, rafraichir, initial.page]);
+  }, [page, filtreAFaire, afficherSorties, recherche, masquerInactifs, filtreEspace, etapeEspace, triEspace, rafraichir, initial.page]);
 
   const mettreAJour = useCallback((detail: DossierDetail) => {
     setDossiers((liste) => {
-      const resume = resumeDepuisDetail(detail);
-      return liste.some((dossier) => dossier.id === detail.id)
-        ? liste.map((dossier) => (dossier.id === detail.id ? resume : dossier))
-        : [resume, ...liste];
+      const precedent = liste.find((dossier) => dossier.id === detail.id);
+      const resume = resumeDepuisDetail(detail, precedent);
+      return precedent ? liste.map((dossier) => (dossier.id === detail.id ? resume : dossier)) : [resume, ...liste];
     });
   }, []);
+
+  const basculerEspaces = () => {
+    if (espaceActif) {
+      setFiltreEspace(null);
+      setEtapeEspace(null);
+      return;
+    }
+    setFiltreAFaire(false);
+    setFiltreEspace("TOUS");
+  };
 
   // Mission 13 (lot 6) : la page arrive déjà filtrée par le serveur.
   const visibles = dossiers;
@@ -232,11 +273,11 @@ export default function DossiersPilotage({
       </header>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        {/* Filtre rapide : « À faire » ne garde que les dossiers où j'ai la main. */}
+        {/* Filtre rapide : « À faire » ne garde que les dossiers où j'ai la main (le filtre « Espaces » a les siens). */}
         <div
           role="tablist"
           aria-label="Filtre rapide"
-          className="flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]"
+          className={cn("flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]", espaceActif && "hidden")}
         >
           <button
             type="button"
@@ -323,7 +364,7 @@ export default function DossiersPilotage({
           />
         </label>
 
-        {filtreAFaire ? null : (
+        {filtreAFaire || espaceActif ? null : (
           <button
             type="button"
             aria-pressed={afficherSorties}
@@ -341,7 +382,7 @@ export default function DossiersPilotage({
           </button>
         )}
 
-        {inactifs > 0 || masquerInactifs ? (
+        {!espaceActif && (inactifs > 0 || masquerInactifs) ? (
           <button
             type="button"
             aria-pressed={masquerInactifs}
@@ -361,6 +402,24 @@ export default function DossiersPilotage({
           </button>
         ) : null}
 
+        {/* Mission 18 (A1) : l'ancien onglet Espaces clients — les dossiers qui ont un espace, par qui a la main et par signal. */}
+        <button
+          type="button"
+          aria-pressed={espaceActif}
+          onClick={basculerEspaces}
+          title="Les dossiers qui ont un espace client : qui a la main, signaux, étape de l'espace"
+          className={cn(
+            "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
+            espaceActif
+              ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
+              : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+            TRANS
+          )}
+        >
+          <Smartphone size={13} aria-hidden />
+          Espaces
+        </button>
+
         <Bouton variante="fantome" taille="sm" icone={<Archive size={13} aria-hidden />} onClick={() => setArchivesOuvertes(true)} aria-label="Dossiers archivés" className="h-11 sm:ml-auto sm:h-7">
           <span className="sr-only sm:not-sr-only">Archivés</span>
         </Bouton>
@@ -378,7 +437,7 @@ export default function DossiersPilotage({
           <span className="sr-only sm:not-sr-only">Légende</span>
         </Bouton>
 
-        {vue === "liste" ? (
+        {vue === "liste" && !espaceActif ? (
           <label className="flex w-full items-center gap-2 text-[12px] text-[#9CA3AF] md:hidden">
             Trier par
             <select
@@ -396,6 +455,8 @@ export default function DossiersPilotage({
         ) : null}
       </div>
 
+      {filtreEspace ? <FiltreEspaces filtre={filtreEspace} etape={etapeEspace} tri={triEspace} compteurs={compteursEspaces} onFiltre={setFiltreEspace} onEtape={setEtapeEspace} onTri={setTriEspace} /> : null}
+
       {legendeOuverte ? <Legende onFermer={() => setLegendeOuverte(false)} /> : null}
 
       <main className="mt-5">
@@ -404,6 +465,12 @@ export default function DossiersPilotage({
             icone={<FolderOpen size={18} className="text-[#6B7280]" aria-hidden />}
             titre="Aucun dossier pour l'instant"
             texte="Un dossier s'ouvre à la conversion : photos du chantier, coordonnées complètes du client et nature du chantier."
+          />
+        ) : espaceActif && visibles.length === 0 ? (
+          <EtatVide
+            icone={<Smartphone size={18} className="text-[#6B7280]" aria-hidden />}
+            titre="Aucun espace client dans ce filtre"
+            texte="Un espace s'ouvre depuis un lead ou un dossier (« Ouvrir l'espace client »), puis le lien part par mail ou par SMS. Un client n'en a qu'un, pour tous ses projets."
           />
         ) : filtreAFaire && visibles.length === 0 ? (
           <EtatVide
@@ -420,13 +487,14 @@ export default function DossiersPilotage({
         ) : vue === "kanban" ? (
           <VueKanban
             dossiers={visibles}
-            afficherSorties={afficherSorties}
-            masquerColonnesVides={filtreAFaire}
+            afficherSorties={afficherSorties || espaceActif}
+            masquerColonnesVides={filtreAFaire || espaceActif}
+            ordreServeur={espaceActif}
             maintenant={maintenant}
             onOuvrir={ouvrirDossier}
           />
         ) : (
-          <VueListe dossiers={visibles} tri={tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
+          <VueListe dossiers={visibles} tri={espaceActif ? null : tri} onTrier={trier} maintenant={maintenant} onOuvrir={ouvrirDossier} />
         )}
         <Pagination total={total} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />
       </main>

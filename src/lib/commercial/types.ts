@@ -5,7 +5,7 @@ export type GroupeAffaire =
   | "REPONDRE" // un SMS, un mail ou un message d'espace du client attend une réponse
   | "RAPPELER" // nouveau contact, rappel dû, appel resté sans réponse
   | "SIMULATION" // photos reçues : à moi de préparer la simulation
-  | "DEVIS" // simulation choisie : à moi de faire le devis
+  | "DEVIS" // simulation choisie : à moi de faire le devis ; ou devis prêt, pas encore envoyé (mission 18, B1)
   | "PLANIFIER" // devis signé : fixer la date, suivre l'acompte
   | "DECIDER" // contacté, mais aucune suite donnée
   | "ECARTER" // hors zone : ne se rappelle que si Lucas le décide

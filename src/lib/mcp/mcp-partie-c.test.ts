@@ -383,6 +383,8 @@ describe("dépense avec son justificatif (X9, X10, DP92)", () => {
     const d = await dossierEssai("Depense", { etape: "CHANTIER" });
     const { fait } = { fait: await appeler("creer", { entite: "DEPENSE", cible: { dossierId: d }, champs: { montant: 64.9, fournisseur: "Leroy Merlin", categorie: "FOURNITURES", payee_le: AUJOURDHUI(), justificatif: { base64: PDF.toString("base64"), nom: "ticket.pdf" } } }) };
     assert.match(fait.texte, /Dépense enregistrée : 64,9 € chez Leroy Merlin .*rattachée au chantier .*Justificatif attaché\./);
+    // Mission 18 (A3) : le lien mène à la section Dépenses de Finances (l'ancien écran /depenses y redirige).
+    assert.deepEqual(fait.liens?.map((l) => l.href), ["http://localhost:3001/finances?section=depenses"]);
     const depense = await prisma.depense.findFirstOrThrow({ where: { fournisseur: "Leroy Merlin", dossierId: d } });
     assert.ok(depense.justificatifId);
     const doublon = await appeler("creer", { entite: "DEPENSE", champs: { montant: 64.9, fournisseur: "Leroy Merlin", categorie: "FOURNITURES", hors_chantier: true, justificatif: { base64: PDF.toString("base64"), nom: "ticket.pdf" } } });

@@ -1,5 +1,5 @@
 import { listerClientsEspaces, type ClientEspace, type LigneEspace, type Signal } from "@/lib/espace/suivi";
-import type { CodeSignal } from "@/lib/espace/suivi-types";
+import { ADRESSE_ESPACES, type CodeSignal } from "@/lib/espace/suivi-types";
 import { jourMois } from "../achevement";
 import type { Detection, NiveauTache, Raccourci, TypeTache } from "../types";
 import { entreGuillemets, titreTache } from "./libelles";
@@ -9,7 +9,7 @@ import type { Detecteur } from "./types";
 /**
  * Mission 17 (partie A) : détecteur SIGNAUX — les signaux des espaces clients (espace/suivi.ts), lus UNE fois pour
  * tous (`listerClientsEspaces`, qui calcule lui-même `listerEspaces` une seule fois : ses projets portent les signaux
- * par dossier, le client ceux de son espace permanent), BRUTS (`signauxBruts` : la vue de l'écran Espaces masque les
+ * par dossier, le client ceux de son espace permanent), BRUTS (`signauxBruts` : la vue des espaces de Dossiers masque les
  * signaux des tâches écartées, le détecteur doit les voir pour ne pas cocher ces tâches à tort).
  *
  * | Signal | Tâche (clé : signaux-cles.ts) | Titre | Niveau | Raccourci |
@@ -113,11 +113,17 @@ function gabaritDuProjet(signal: Signal, p: LigneEspace): Gabarit | null {
   }
 }
 
+/**
+ * La fiche du client, où vivent les gestes de son espace (« Permettre un projet de plus », nouveau lien) ; à défaut, le
+ * filtre « Espaces » de Dossiers (mission 18, A1 : l'onglet Espaces clients n'existe plus).
+ */
+const ficheDuClient = (c: ClientEspace) => (c.clientId ? { genre: "PAGE" as const, libelle: "Ouvrir sa fiche", href: `/clients/${c.clientId}` } : { genre: "PAGE" as const, libelle: "Ouvrir les espaces", href: ADRESSE_ESPACES });
+
 /** La tâche d'un signal du client (espace permanent). */
 function gabaritDuClient(signal: Signal, c: ClientEspace): Gabarit | null {
   switch (signal.code) {
     case "PROJET_DEMANDE":
-      return { type: "DEMANDE_CLIENT", verbe: "Ouvrir un nouveau projet", niveau: 1, depuis: c.projetDemandeLe ? new Date(c.projetDemandeLe) : new Date(c.lienEmisLe), raison: "demande un projet de plus", raccourci: { genre: "PAGE", libelle: "Ouvrir les espaces", href: "/espaces" } };
+      return { type: "DEMANDE_CLIENT", verbe: "Ouvrir un nouveau projet", niveau: 1, depuis: c.projetDemandeLe ? new Date(c.projetDemandeLe) : new Date(c.lienEmisLe), raison: "demande un projet de plus", raccourci: ficheDuClient(c) };
     case "NOUVEAU_PROJET": {
       const projet = c.projets.find((p) => p.creeParLeClient && !p.fige && p.etape === "PHOTOS");
       return {
@@ -126,7 +132,7 @@ function gabaritDuClient(signal: Signal, c: ClientEspace): Gabarit | null {
         niveau: 1,
         depuis: projet ? new Date(projet.creeLe) : new Date(c.lienEmisLe),
         raison: projet ? `nouveau projet ouvert : ${entreGuillemets(projet.nomProjet, 40)}` : "nouveau projet ouvert par le client",
-        raccourci: projet ? { genre: "DOSSIER", libelle: "Ouvrir le projet", dossierId: projet.dossierId, href: dossierHref(projet.dossierId) } : { genre: "PAGE", libelle: "Ouvrir les espaces", href: "/espaces" },
+        raccourci: projet ? { genre: "DOSSIER", libelle: "Ouvrir le projet", dossierId: projet.dossierId, href: dossierHref(projet.dossierId) } : ficheDuClient(c),
       };
     }
     default:

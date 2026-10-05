@@ -212,10 +212,10 @@ export async function demanderSimulations(espace: EspaceClient): Promise<void> {
     await prisma.espaceClient.update({ where: { id: espace.id }, data: { simulationsDemandeesLe: new Date() } });
     await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATIONS_DEMANDEES", direction: "ENTRANT", contenu: `Le client demande d'autres simulations (${quota.faites} faite${quota.faites > 1 ? "s" : ""} sur ${quota.gratuites + quota.accordees}).`, metadata: "{}" } });
   });
-  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${pluriel(quota.faites, "simulation faite", "simulations faites")} (site et espace). Accordez-en d'autres en un clic depuis Espaces clients.`, urgence: 3, telephone: dossier?.clientTelephone });
+  await prevenir(espace.dossierId, { titre: `${dossier?.clientNom ?? "Un client"} demande d'autres simulations`, texte: `${pluriel(quota.faites, "simulation faite", "simulations faites")} (site et espace). Accordez-en d'autres en un clic depuis le bloc Espace du dossier.`, urgence: 3, telephone: dossier?.clientTelephone });
 }
 
-/** Lucas accorde des simulations de plus (Espaces clients, dossier) : la demande est close. */
+/** Lucas accorde des simulations de plus (bloc Espace du dossier, assistant) : la demande est close. */
 export async function accorderSimulations(espaceId: string, nombre: number): Promise<{ accordees: number }> {
   if (!Number.isInteger(nombre) || nombre < 1 || nombre > 20) throw new ErreurMetier("Nombre de simulations invalide (1 à 20).", 400);
   const espace = await prisma.espaceClient.findUnique({ where: { id: espaceId }, select: { id: true, dossierId: true } });

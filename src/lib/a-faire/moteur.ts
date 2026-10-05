@@ -19,7 +19,7 @@ export { CLE_OCCURRENCE, occurrenceDe } from "./json";
  * 0. Les détections sont normalisées (`dossierId`, `leadId`, `clientId` déduits du sujet quand le détecteur ne les
  *    donne pas), puis le filtre de vigueur (FAIT ICI, pas dans detection.ts : un appel direct de `reconcilier` y est
  *    soumis aussi) : une détection sur un dossier dont la prochaine action manuelle est en vigueur est écartée, sauf
- *    PROCHAINE_ACTION et les tâches de source SYSTEME ; les tâches déjà ouvertes de ce dossier sont cochées par le CRM
+ *    PROCHAINE_ACTION, ENVOYER_DEVIS (mission 18, B1), ENREGISTRER_DEVIS (B3) et les tâches de source SYSTEME ; les tâches déjà ouvertes de ce dossier sont cochées par le CRM
  *    (« prochaine action posée à la main ») et reviennent d'elles-mêmes quand la vigueur tombe (condition revenue).
  * 1. Fusion par clé : la source dont le `depuis` est le plus récent donne titre, raison, raccourci et données (§ 2.1 ;
  *    les données des autres sources complètent) ; le niveau le plus urgent, le montant le plus grand, le `depuis` le
@@ -80,9 +80,16 @@ export function normaliserDetection(d: Detection): Detection {
   };
 }
 
+/**
+ * Les tâches jamais écartées par une action posée à la main : la sienne, un devis généré mais pas encore envoyé
+ * (mission 18, B1 : c'est mon propre geste resté en route, aucune action manuelle ne le couvre), et un devis envoyé
+ * depuis Gmail pas encore enregistré (B3 : même raison).
+ */
+const TYPES_HORS_VIGUEUR = ["PROCHAINE_ACTION", "ENVOYER_DEVIS", "ENREGISTRER_DEVIS"];
+
 /** Une détection écartée par une prochaine action manuelle en vigueur sur son dossier (docs/TACHES.md § 2). */
 export function ecarteeParVigueur(d: { type: string; source: string; dossierId?: string | null }, vigueur: ReadonlyMap<string, ActionManuelle>): boolean {
-  return Boolean(d.dossierId && vigueur.has(d.dossierId) && d.type !== "PROCHAINE_ACTION" && d.source !== "SYSTEME");
+  return Boolean(d.dossierId && vigueur.has(d.dossierId) && !TYPES_HORS_VIGUEUR.includes(d.type) && d.source !== "SYSTEME");
 }
 
 const plusAncien = (a: Date, b: Date) => (a.getTime() <= b.getTime() ? a : b);

@@ -64,10 +64,16 @@ export function RubriqueDevisEspace({
                   {d.consultations > 0 ? `lu ${d.consultations} fois${d.consulteLe ? ` · dernière le ${jour(d.consulteLe)}` : ""}` : "pas encore ouvert"}
                 </span>
               ) : null}
+              {d.avenant && d.accordEnCours ? (
+                // Mission 18 (B7, relecture) : l'accord d'un avenant se retire seul, à toute étape ; le devis signé d'origine tient.
+                <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} disabled={occupe !== null} onClick={() => setConfirmation({ titre: `Retirer son accord sur l'avenant ${d.numero} ?`, texte: "L'accord de l'avenant ne vaut plus (sa preuve reste gardée) : l'avenant redevient à signer dans son espace. Le devis signé d'origine tient toujours, le dossier ne change pas d'étape.", bouton: "Retirer l'accord de l'avenant", geste: { geste: "retirer-accord", motif: "", documentId: d.id }, succes: "Accord de l'avenant retiré" })}>
+                  Retirer l&apos;accord
+                </Bouton>
+              ) : null}
               {espace.accord ? null : (
                 <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
                   <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
-                  {d.visibleEspace ? "visible dans son espace" : "masqué dans son espace"}
+                  {d.visibleEspace ? "visible dans son espace" : !d.repris && d.statut === "GENERE" ? "masqué dans son espace (le rendre visible l'envoie : mail « Devis disponible »)" : "masqué dans son espace"}
                 </label>
               )}
             </li>

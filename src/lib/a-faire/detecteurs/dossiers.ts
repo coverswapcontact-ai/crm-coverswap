@@ -4,7 +4,11 @@ import { aHeureParis } from "@/lib/commercial/quand";
 import type { Affaire } from "@/lib/commercial/types";
 import { euros, pluriel } from "@/lib/commun/format";
 import { estDossierClos } from "@/lib/dossiers/constants";
+import { devisAEnvoyer } from "@/lib/dossiers/devis-envoye";
+import { devisGmailNonEnregistres } from "@/lib/dossiers/devis-gmail";
+import { estMotifDevisAEnvoyer, estMotifDevisARefaire } from "@/lib/dossiers/main";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
+import { accordDOrigine, devisSigneDOrigine, montantSigneHt } from "@/lib/dossiers/montant-signe";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { lireLignes, lirePhotos } from "@/lib/dossiers/stockage";
 import { MOTIFS_SANS_ACOMPTE } from "@/lib/encaissements/constantes";
@@ -24,9 +28,18 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  *   `REPONDRE:dossier:<id>`, la même clé que MAIL et ESPACE_MESSAGES (le moteur fusionne) ;
  * - PLANIFIER (signé sans date de chantier) → DATE_CHANTIER ;
  * - RAPPELER (rappel du dossier échu ce soir au plus tard) → RAPPELER. Une relance d'un devis en attente (« Relancer :
- *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS) ;
- * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN.
- * Deux lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
+ *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS). Mission 18 (A2) : « Appeler : … » (premier appel, posé à
+ *   l'ouverture automatique du dossier ou d'un nouveau projet de l'espace) s'intitule « Appeler · Nom », raison = le motif ;
+ * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN. Un DEVIS « Devis prêt, pas encore
+ *   envoyé » (mission 18, B1) est laissé à la lecture ENVOYER_DEVIS ci-dessous. Mission 18 (B6) : « Refaire le devis »
+ *   quand le seul devis en attente a été annulé ou masqué (motif de la main) ou qu'un devis annulé existe.
+ * Quatre lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
+ * - ENVOYER_DEVIS (mission 18, B1) : un devis généré mais pas encore envoyé (`devis-envoye.ts › devisAEnvoyer`), quelle
+ *   que soit l'étape ; jamais écartée par une action posée à la main (moteur.ts). Une tâche par dossier, l'occurrence
+ *   = les devis à envoyer (un nouveau devis la fait revenir après un « Fait ») ;
+ * - ENREGISTRER_DEVIS (mission 18, B3) : un PDF qui ressemble à un devis, parti de Gmail chez le client, pas encore
+ *   dans le CRM (`devis-gmail.ts › devisGmailNonEnregistres`) ; une tâche par PDF, jamais écartée par une action posée
+ *   à la main. Raccourci : la modale de dépôt du dossier, préremplie (numéro lu dans le nom, date du mail, PDF du mail) ;
  * - ENCAISSER : SIGNE, PLANIFIE ou CHANTIER sans encaissement VALIDE ni « sans acompte » motivé (« Acompte promis, pas
  *   encore reçu » reste à encaisser) ; FACTURE avec un reste dû ;
  * - PROCHAINE_ACTION : la prochaine action posée à la main, en vigueur (`contexte.vigueur`), le jour de sa date. Le
@@ -52,6 +65,8 @@ const LIBELLE_ACOMPTE_A_VENIR = MOTIFS_SANS_ACOMPTE.find((m) => m.code === "ACOM
 const ETAPES_ACOMPTE = ["SIGNE", "PLANIFIE", "CHANTIER"];
 const ETAPES_RELANCE_DEVIS = ["DEVIS_ENVOYE", "RELANCE"];
 const LONGUEUR_ACTION = 60;
+/** « Appeler : demande de devis » : un premier appel (ouverture automatique, nouveau projet), son motif après les deux-points. */
+const PREMIER_APPEL = /^\s*appeler\s*:\s*(\S[\s\S]*)/i;
 
 /** « prévu le 28/09 à 14 h », « prévu le 28/09 » (jour seul). Toujours absolu. */
 function quandPrevu(date: Date, instant: Date | null, feminin = false): string {
@@ -66,45 +81,59 @@ function actionCourte(texte: string): string {
   return courte.charAt(0).toUpperCase() + courte.slice(1);
 }
 
+/** « demande de devis » : le motif d'un premier appel, en minuscule et court (raison de la tâche). */
+function motifDuPremierAppel(texte: string): string {
+  const court = actionCourte(texte);
+  return court.charAt(0).toLowerCase() + court.slice(1);
+}
+
 const plusRecent = (dates: (Date | null | undefined)[]): Date | null => dates.reduce<Date | null>((max, d) => (d && (!max || d.getTime() > max.getTime()) ? d : max), null);
 
-type DevisLu = { statut: string; totalHt: number; acomptePct: number | null; lignes: string; visibleEspace: boolean };
-type AccordLu = { createdAt: Date; totalHt: number; acomptePct: number | null };
+type DevisLu = { id: string; createdAt: Date; statut: string; totalHt: number; acomptePct: number | null; lignes: string; visibleEspace: boolean };
+type AccordLu = { documentId: string; createdAt: Date; totalHt: number; acomptePct: number | null };
 
-/** Le montant en jeu d'un dossier (voir l'en-tête). */
+/**
+ * Le montant en jeu d'un dossier (voir l'en-tête). Mission 18 (relecture) : signé, le devis d'origine et ses avenants
+ * signés (`montant-signe.ts`), quel que soit l'ordre des listes.
+ */
 export function montantEnJeu(d: { documents: readonly DevisLu[]; accords: readonly AccordLu[]; montantEstime: number | null }): number | null {
-  const accepte = d.documents.find((x) => x.statut === "ACCEPTE");
-  if (accepte) return accepte.totalHt;
-  if (d.accords[0]) return d.accords[0].totalHt;
+  const signe = montantSigneHt(d.documents, d.accords);
+  if (signe !== null) return signe;
   const visibles = d.documents.filter((x) => x.visibleEspace && (x.statut === "GENERE" || x.statut === "ENVOYE")).map((x) => x.totalHt);
   if (visibles.length) return Math.max(...visibles);
   return d.montantEstime ?? null;
 }
 
-/** L'acompte attendu (en euros) : celui du devis accepté, sinon de l'accord ; null s'il n'y a ni l'un ni l'autre. */
+/**
+ * L'acompte attendu (en euros) : celui du devis accepté, sinon de l'accord ; null s'il n'y a ni l'un ni l'autre.
+ * Mission 18 (relecture) : celui du devis signé d'origine (un avenant n'a pas d'acompte à part : facturé avec le solde).
+ */
 export function acompteAttendu(d: { documents: readonly DevisLu[]; accords: readonly AccordLu[] }): number | null {
-  const accepte = d.documents.find((x) => x.statut === "ACCEPTE");
+  const accepte = devisSigneDOrigine(d.documents);
   if (accepte) return montantsDocument({ lignes: lireLignes(accepte.lignes), totalHt: accepte.totalHt, acomptePct: accepte.acomptePct }).acompteCentimes / 100;
-  const accord = d.accords[0];
+  const accord = accordDOrigine(d.documents, d.accords);
   if (accord) return accord.acomptePct ? Math.round((versCentimes(accord.totalHt) * accord.acomptePct) / 100) / 100 : 0;
   return null;
 }
 
 async function lireDossiers(ids: string[]) {
-  const [dossiers, photos, changements] = await Promise.all([
+  const [dossiers, photos, changements, annules] = await Promise.all([
     prisma.dossier.findMany({
       where: { id: { in: ids } },
       select: {
         id: true, clientNom: true, clientTelephone: true, leadId: true, clientId: true, etape: true, photos: true, montantEstime: true, createdAt: true, updatedAt: true, mainLe: true,
         prochaineAction: true, prochaineActionDate: true, prochaineActionInstant: true,
-        documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { statut: true, totalHt: true, acomptePct: true, lignes: true, visibleEspace: true } },
-        accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, totalHt: true, acomptePct: true } },
+        documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, createdAt: true, statut: true, totalHt: true, acomptePct: true, lignes: true, visibleEspace: true } },
+        accords: { where: { retireLe: null }, orderBy: { createdAt: "asc" }, select: { documentId: true, createdAt: true, totalHt: true, acomptePct: true } },
         espaces: { where: { archiveLe: null }, select: { simulations: { where: { archiveLe: null, OR: [{ choisieLe: { not: null } }, { statut: "BROUILLON" }] }, select: { choisieLe: true, statut: true } } } },
       },
     }),
     prisma.dossierEvenement.findMany({ where: { dossierId: { in: ids }, type: "ESPACE_PHOTOS" }, select: { dossierId: true, createdAt: true, survenuLe: true } }),
     prisma.dossierEvenement.findMany({ where: { dossierId: { in: ids }, type: "CHANGEMENT_ETAPE" }, select: { dossierId: true, metadata: true, createdAt: true, survenuLe: true } }),
+    // Mission 18 (B6) : un devis annulé dans le dossier — le devis à faire est à refaire.
+    prisma.document.findMany({ where: { dossierId: { in: ids }, type: "DEVIS", statut: "ANNULEE", archiveLe: null, numero: { not: null } }, select: { dossierId: true } }),
   ]);
+  const avecDevisAnnule = new Set(annules.map((a) => a.dossierId));
   const photosLe = new Map<string, Date>();
   for (const p of photos) {
     const le = p.survenuLe ?? p.createdAt;
@@ -129,9 +158,11 @@ async function lireDossiers(ids: string[]) {
         nom: d.clientNom.trim() || "Sans nom",
         nbPhotos: lirePhotos(d.photos).length,
         photosLe: photosLe.get(d.id) ?? null,
+        devisAnnule: avecDevisAnnule.has(d.id),
         choisieLe: plusRecent(d.espaces.flatMap((e) => e.simulations.map((s) => s.choisieLe))),
         brouillon: d.espaces.some((e) => e.simulations.some((s) => s.statut === "BROUILLON")),
-        accordLe: d.accords[0]?.createdAt ?? null,
+        // Mission 18 (relecture) : la date de l'accord du devis signé d'origine (pas celle d'un avenant).
+        accordLe: accordDOrigine(d.documents, d.accords)?.createdAt ?? null,
         signeLe: signeLe.get(d.id) ?? null,
         sansAcompte: sansAcompte.get(d.id) ?? [],
       },
@@ -197,15 +228,18 @@ function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
       const relance = a.action.startsWith("Relancer");
       // La relance d'un devis en attente : le détecteur RELANCES la propose (RELANCER_DEVIS), pas de doublon ici.
       if (relance && ETAPES_RELANCE_DEVIS.includes(d.etape)) return null;
+      // Mission 18 (A2) : « Appeler : demande de devis » — un premier appel, pas un rappel ; la raison dit pourquoi.
+      const premier = !relance ? PREMIER_APPEL.exec(a.action) : null;
+      const verbe = relance ? "Relancer" : premier ? "Appeler" : "Rappeler";
       // Sans date (main « à relancer ») : l'origine du besoin reste fixe d'un passage à l'autre.
       const date = d.prochaineActionDate ?? d.mainLe ?? d.updatedAt;
       return surLeDossier(d, "RAPPELER", {
-        titre: `${relance ? "Relancer" : "Rappeler"} · ${d.nom}`,
-        raison: d.prochaineActionDate ? `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, relance)}` : relance ? "relance à faire" : "rappel à faire",
+        titre: `${verbe} · ${d.nom}`,
+        raison: premier ? `${motifDuPremierAppel(premier[1])}${d.prochaineActionDate ? `, ${quandPrevu(date, d.prochaineActionInstant)}` : ""}` : d.prochaineActionDate ? `${relance ? "relance" : "rappel"} ${quandPrevu(date, d.prochaineActionInstant, relance)}` : relance ? "relance à faire" : "rappel à faire",
         niveau: 2,
         depuis: date,
         echeance: d.prochaineActionDate,
-        raccourci: { genre: "APPEL", libelle: relance ? "Relancer" : "Rappeler", telephone, dossierId: d.id, leadId: d.leadId, href: telephone ? `tel:${telephone}` : null },
+        raccourci: { genre: "APPEL", libelle: verbe, telephone, dossierId: d.id, leadId: d.leadId, href: telephone ? `tel:${telephone}` : null },
         donnees: {
           ...(d.prochaineAction ? { action: d.prochaineAction } : {}),
           ...(d.prochaineActionDate ? { occurrence: `${d.prochaineActionDate.toISOString()}|${d.prochaineAction ?? ""}` } : {}),
@@ -224,14 +258,22 @@ function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
         raccourci: { genre: "SIMULATEUR", libelle: "Préparer la simulation", dossierId: d.id, href: `/simulateur?dossier=${d.id}` },
       });
     }
-    case "DEVIS":
+    case "DEVIS": {
+      // Mission 18 (B1) : le devis est fait, il reste à l'envoyer — la lecture ENVOYER_DEVIS le dit (voir detecter).
+      if (estMotifDevisAEnvoyer(a.action)) return null;
+      // Mission 18 (B6) : le seul devis en attente annulé ou masqué (dossier revenu avant « Devis envoyé »), ou un devis
+      // déjà annulé dans ce dossier : « Refaire le devis ».
+      const retire = estMotifDevisARefaire(a.action);
+      const verbe = retire || d.devisAnnule ? "Refaire le devis" : "Faire le devis";
+      const depuis = retire ? (d.mainLe ?? d.updatedAt) : (d.choisieLe ?? d.mainLe ?? d.updatedAt);
       return surLeDossier(d, "DEVIS", {
-        titre: `Faire le devis · ${d.nom}`,
-        raison: d.choisieLe ? `simulation choisie le ${jourMois(d.choisieLe)}` : "simulation choisie",
+        titre: `${verbe} · ${d.nom}`,
+        raison: retire ? `${a.action.replace(/ : refaire le devis$/, "").replace(/^Devis/, "devis")} le ${jourMois(depuis)}` : d.choisieLe ? `simulation choisie le ${jourMois(d.choisieLe)}` : "simulation choisie",
         niveau: 3,
-        depuis: d.choisieLe ?? d.mainLe ?? d.updatedAt,
-        raccourci: { genre: "DEVIS", libelle: "Faire le devis", dossierId: d.id, devis: "nouveau", href: lienDossier(d.id, "&devis=nouveau") },
+        depuis,
+        raccourci: { genre: "DEVIS", libelle: verbe, dossierId: d.id, devis: "nouveau", href: lienDossier(d.id, "&devis=nouveau") },
       });
+    }
     case "DECIDER":
       // Seul « Envoyer le lien de son espace » est une tâche de ce détecteur ; les autres « à moi » d'un dossier (une
       // demande du client dans son espace) viennent de SIGNAUX et de ESPACE_MESSAGES.
@@ -260,9 +302,9 @@ async function aEncaisser(): Promise<{ acompte: string[]; solde: string[] }> {
 
 async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
   const { maintenant, vigueur } = contexte;
-  const [pilotage, encaisser] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser()]);
+  const [pilotage, encaisser, aEnvoyer, gmail] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser(), devisAEnvoyer(), devisGmailNonEnregistres(undefined, { maintenant })]);
   const affaires = pilotage.affaires.filter((a) => a.genre === "DOSSIER" && a.main === "MOI" && a.dossierId);
-  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...vigueur.keys()])];
+  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...aEnvoyer.map((x) => x.dossierId), ...gmail.map((x) => x.dossierId), ...vigueur.keys()])];
   const dossiers = await lireDossiers(ids);
   const detections: Detection[] = [];
 
@@ -313,6 +355,46 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
         donnees: { occurrence: `SOLDE:${facture?.documentId ?? facture?.numero ?? "facture"}` },
       })
     );
+  }
+
+  // Mission 18 (B1) : les devis générés mais pas encore envoyés, une tâche par dossier (le plus ancien donne l'origine).
+  const parDossier = new Map<string, typeof aEnvoyer>();
+  for (const devis of aEnvoyer) parDossier.set(devis.dossierId, [...(parDossier.get(devis.dossierId) ?? []), devis]);
+  for (const [id, liste] of parDossier) {
+    const d = dossiers.get(id);
+    if (!d || estDossierClos(d.etape)) continue;
+    const premier = liste[0];
+    detections.push(
+      surLeDossier(d, "ENVOYER_DEVIS", {
+        titre: `Envoyer le devis · ${d.nom}`,
+        raison:
+          liste.length > 1
+            ? `devis ${liste.map((x) => x.numero).join(", ")} prêts, pas encore envoyés`
+            : `devis ${premier.numero} prêt le ${jourMois(premier.le)}, ${premier.visible ? "pas encore annoncé" : "masqué dans son espace"}`,
+        niveau: 2,
+        depuis: premier.le,
+        raccourci: { genre: "DOSSIER", libelle: "Envoyer le devis", dossierId: d.id, rubrique: "devis", href: lienDossier(d.id, "&rubrique=devis") },
+        donnees: { documentIds: liste.map((x) => x.documentId), occurrence: liste.map((x) => x.documentId).join(",") },
+      })
+    );
+  }
+
+  // Mission 18 (B3) : un devis parti de Gmail, pas encore dans le CRM — une tâche par PDF, enregistré en un geste.
+  for (const devis of gmail) {
+    const d = dossiers.get(devis.dossierId);
+    if (!d || estDossierClos(d.etape)) continue;
+    const quoi = devis.devisCrm ? `devis ${devis.devisCrm.numero} du CRM` : `« ${devis.nom} »`;
+    detections.push({
+      ...surLeDossier(d, "ENREGISTRER_DEVIS", {
+        titre: `Enregistrer comme devis envoyé · ${d.nom}`,
+        raison: `${quoi} envoyé depuis Gmail le ${jourMois(devis.envoyeLe)}${devis.a ? ` à ${devis.a}` : ""} : pas encore dans le CRM (étape, relances)`,
+        niveau: 2,
+        depuis: devis.envoyeLe,
+        raccourci: { genre: "DEVIS", libelle: "Enregistrer comme devis envoyé", dossierId: d.id, rubrique: "devis", devis: "gmail", pieceId: devis.pieceId, href: lienDossier(d.id, `&devis=gmail&piece=${devis.pieceId}`) },
+        donnees: { pieceId: devis.pieceId, messageId: devis.messageId, nom: devis.nom, numero: devis.devisCrm?.numero ?? devis.numero, documentId: devis.devisCrm?.id ?? null },
+      }),
+      cle: cleTache("ENREGISTRER_DEVIS", { type: "DOSSIER", id: d.id }, devis.pieceId),
+    });
   }
 
   // La prochaine action posée à la main, le jour de sa date (ou en retard) : la seule tâche de ce dossier tant qu'elle est en vigueur.

@@ -262,7 +262,7 @@ function CarteOutils({ outils }: { outils: OutilVue[] }) {
               </ul>
             </div>
           ))}
-          <p className="text-[11.5px] leading-relaxed text-[#6B7280]">Sensible = jamais sans ta confirmation dans Claude (aperçu d&apos;abord). Rien ne se supprime : « supprimer » archive. Plafond : 60 écritures par heure, au-delà le serveur refuse et t&apos;alerte. Journal : Tâches de fond → Sessions de l&apos;assistant.</p>
+          <p className="text-[11.5px] leading-relaxed text-[#6B7280]">Sensible = jamais sans ta confirmation dans Claude (aperçu d&apos;abord). Rien ne se supprime : « supprimer » archive. Plafond : 60 écritures par heure, au-delà le serveur refuse et t&apos;alerte. Journal : onglet Système → Sessions de l&apos;assistant.</p>
         </div>
       ) : null}
     </div>

@@ -6,6 +6,7 @@ import { cleSousPartie, famille, famillesDe, lireSelection, resumerSelection, se
 import { tarifDeLaSousPartie } from "@/lib/prestations/tarifs";
 import { lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { lireProjet } from "./projet";
+import { teinteDe } from "./teintes-choix";
 
 /**
  * Le devis qui part du projet du client : les SOUS-PARTIES cochées (fichier des
@@ -23,7 +24,6 @@ export type DevisPropose = { lignes: LigneProposee[]; resume: string };
 /** Une zone à chiffrer : sa teinte si le client l'a choisie (ancien appel, par zones). */
 export type ZoneAChiffrer = { zone: string; libelle: string; ref: string | null; nom: string | null };
 
-const teinteDe = (z: { ref: string | null; nom: string | null } | undefined) => (z && (z.nom || z.ref) ? `${z.nom || z.ref}${z.ref && z.nom ? ` (${z.ref})` : ""}` : "");
 
 /**
  * Les lignes : les sous-parties cochées, dans l'ordre du fichier ; celles qui

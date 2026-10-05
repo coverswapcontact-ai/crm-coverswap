@@ -10,6 +10,7 @@ import { montantAffiche, type DossierResume } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
 import { LigneDossierCompacte, PastilleACompleter, PastilleRetard, ProchaineActionResume, type DemandeRaccourci } from "./CarteDossier";
 import { BadgeMain, BarreProgression, Lisere, couleurLisere } from "./Indicateurs";
+import { CelluleEspace } from "./EspaceColonne";
 import { comparerParEcheance } from "./VueKanban";
 import { PastilleEtape, TRANS } from "@/components/pilotage/ui";
 
@@ -44,7 +45,15 @@ export function trierDossiers(dossiers: DossierResume[], tri: Tri): DossierResum
   });
 }
 
-function EnteteTriable({ cle, tri, onTrier, className }: { cle: CleTri; tri: Tri; onTrier: (cle: CleTri) => void; className?: string }) {
+function EnteteTriable({ cle, tri, onTrier, className }: { cle: CleTri; tri: Tri | null; onTrier: (cle: CleTri) => void; className?: string }) {
+  // Sous le filtre « Espaces », l'ordre est celui du serveur (relecture de la partie A) : un simple titre de colonne.
+  if (!tri) {
+    return (
+      <th scope="col" className={cn("px-3 py-2.5 font-medium", className)}>
+        {cle === "prochaineAction" ? "Prochaine action" : LIBELLES_TRI[cle]}
+      </th>
+    );
+  }
   const actif = tri.cle === cle;
   const Icone = !actif ? ArrowUpDown : tri.sens === "asc" ? ArrowUp : ArrowDown;
   return (
@@ -69,12 +78,13 @@ export function VueListe({
   onOuvrir,
 }: {
   dossiers: DossierResume[];
-  tri: Tri;
+  /** null : l'ordre du serveur est gardé (filtre « Espaces », dont la page est découpée et triée par le serveur). */
+  tri: Tri | null;
   onTrier: (cle: CleTri) => void;
   maintenant: Date;
   onOuvrir: (id: string, demande?: DemandeRaccourci) => void;
 }) {
-  const tries = trierDossiers(dossiers, tri);
+  const tries = tri ? trierDossiers(dossiers, tri) : dossiers;
 
   return (
     <>
@@ -87,13 +97,15 @@ export function VueListe({
 
       {/* Bureau : tableau triable */}
       <div className="hidden overflow-x-auto rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:block">
-        <table className="w-full min-w-[1040px] table-fixed text-left text-[13px]">
+        <table className="w-full min-w-[1240px] table-fixed text-left text-[13px]">
           <thead className="border-b-[0.5px] border-[#2A2D34] text-[12px] text-[#9CA3AF]">
             <tr>
               <th scope="col" className="w-[132px] px-3 py-2.5 pl-4 font-medium">Main</th>
               <th scope="col" className="w-[200px] px-3 py-2.5 font-medium">Client</th>
               <th scope="col" className="px-3 py-2.5 font-medium">Objet</th>
               <th scope="col" className="w-[168px] px-3 py-2.5 font-medium">Étape</th>
+              {/* Mission 18 (A1) : l'ancien onglet Espaces clients, en colonne. */}
+              <th scope="col" className="w-[200px] px-3 py-2.5 font-medium">Espace</th>
               <EnteteTriable cle="montant" tri={tri} onTrier={onTrier} className="w-[116px] text-right" />
               <EnteteTriable cle="prochaineAction" tri={tri} onTrier={onTrier} className="w-[250px]" />
               <EnteteTriable cle="anciennete" tri={tri} onTrier={onTrier} className="w-[112px]" />
@@ -135,6 +147,9 @@ export function VueListe({
                   <td className="px-3 py-2">
                     <PastilleEtape etape={dossier.etape} libelle={LIBELLES_ETAPE[dossier.etape]} />
                     <BarreProgression etape={dossier.etape} etapeAvantSortie={dossier.etapeAvantSortie} className="mt-1.5" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <CelluleEspace espace={dossier.espace} maintenant={maintenant} />
                   </td>
                   <td className="px-3 py-2.5 text-right whitespace-nowrap text-[#F2F3F5] tabular-nums">
                     {montant !== null ? formatMontant(montant) : <span className="text-[#6B7280]">—</span>}

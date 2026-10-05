@@ -3,9 +3,11 @@ import prisma from "@/lib/prisma";
 import { estJourSeul, estRappel } from "@/lib/agenda/rappels";
 import { aHeureParis, jourLisible, quandLisible } from "@/lib/commercial/quand";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { relancesAvisProposables } from "@/lib/relances/avis";
 import { RELANCES_PHOTOS_MAX, relancesPhotosProposables } from "@/lib/relances/photos";
+import { relancesReactivationProposables } from "@/lib/relances/reactivation";
 import { listerRelances, RELANCES_MAX_PAR_DEVIS } from "@/lib/relances/service";
-import { CODES_LIEN_ESPACE, CODES_SMS, type ActionSms, type CodeSms, type RelanceDevisSms, type RelancePhotosSms, type RelanceSms } from "@/lib/sms/catalogue";
+import { CODES_LIEN_ESPACE, CODES_SMS, type ActionSms, type CodeSms, type RelanceAvisSms, type RelanceDevisSms, type RelancePhotosSms, type RelanceReactivationSms, type RelanceSms } from "@/lib/sms/catalogue";
 import { CODE_LIBRE, noterSmsCopie } from "@/lib/sms/copie";
 import { LONGUEUR_MAX_SMS } from "@/lib/sms/envoi";
 import { texteDuCatalogue } from "@/lib/sms/modeles";
@@ -24,7 +26,9 @@ import { schemaCible } from "./lecture";
  * passe au client, « Lien pas encore envoyé » tombe), relance de devis comptée,
  * relance photos comptée (un SMS de lien sur un espace que « voir_relances »
  * propose de relancer, comme la feuille Relances → écran SMS → Copier).
- * Rien n'est envoyé ici.
+ * Mission 18 (A4) : DEMANDE_AVIS compte la demande d'avis du dossier, et
+ * REACTIVATION la réactivation du contact (tracée sur le lead), quand la liste
+ * des relances les propose. Rien n'est envoyé ici.
  */
 
 /** L'action de `proposerSms` qui recompose le texte d'un code (prénom, lien, rappel) ; les accusés n'en ont pas. */
@@ -41,6 +45,8 @@ const ACTION_DU_CODE: Partial<Record<CodeSms, ActionSms>> = {
   SIMULATION_PRETE: "LIEN_ESPACE_RAPPEL",
   RELANCE_DEVIS_1: "RELANCE_DEVIS",
   RELANCE_DEVIS_2: "RELANCE_DEVIS",
+  DEMANDE_AVIS: "RELANCE_AVIS",
+  REACTIVATION: "REACTIVATION",
 };
 
 const CODES_RELANCE_DEVIS: readonly string[] = ["RELANCE_DEVIS_1", "RELANCE_DEVIS_2"];
@@ -78,12 +84,26 @@ async function relanceDuDossier(ids: Ids, maintenant: Date): Promise<RelanceDevi
 /**
  * La relance photos que ce SMS de lien fait : le dossier est de ceux que « voir_relances » propose de relancer
  * aujourd'hui (espace ouvert sans photo ni simulation, délai écoulé, moins de deux relances), avec son rang. Sinon
- * rien : un lien envoyé hors relance n'en compte pas une (comme l'écran Espaces).
+ * rien : un lien envoyé hors relance n'en compte pas une (comme la colonne Espace de Dossiers).
  */
 async function relancePhotosDuDossier(ids: Ids, maintenant: Date): Promise<RelancePhotosSms | null> {
   if (!ids.dossierId) return null;
   const p = (await relancesPhotosProposables(maintenant, { dossierId: ids.dossierId }))[0];
   return p ? { type: "PHOTOS", rang: p.rang } : null;
+}
+
+/** Mission 18 (A4) : la demande d'avis que ce SMS fait, si la liste des relances la propose pour ce dossier ; sinon rien. */
+async function relanceAvisDuDossier(ids: Ids, maintenant: Date): Promise<RelanceAvisSms | null> {
+  if (!ids.dossierId) return null;
+  const a = (await relancesAvisProposables(maintenant, { dossierId: ids.dossierId, sms: false }))[0];
+  return a ? { type: "AVIS", rang: a.rang } : null;
+}
+
+/** Mission 18 (A4) : la réactivation que ce SMS fait, si la liste des relances la propose pour ce contact ; sinon rien. */
+async function relanceReactivationDuContact(ids: Ids, maintenant: Date): Promise<RelanceReactivationSms | null> {
+  if (!ids.leadId) return null;
+  const r = (await relancesReactivationProposables(maintenant, { leadId: ids.leadId, sms: false }))[0];
+  return r ? { type: "REACTIVATION", rang: r.rang } : null;
 }
 
 /**
@@ -92,7 +112,7 @@ async function relancePhotosDuDossier(ids: Ids, maintenant: Date): Promise<Relan
  * code dit par Lucas est gardé, rempli avec les mêmes variables. Un rappel noté au jour seul se dit par son jour
  * (« jeudi »), jamais par une heure que Lucas n'a pas choisie.
  */
-async function texteDuCode(code: CodeSms, ids: Ids, relance: RelanceDevisSms | null, maintenant: Date): Promise<string> {
+async function texteDuCode(code: CodeSms, ids: Ids, relance: RelanceSms | null, maintenant: Date): Promise<string> {
   const rappel = await rappelDe(ids);
   const action = ACTION_DU_CODE[code] ?? "A_RAPPELER";
   const p = await proposerSms({ action, leadId: ids.leadId, dossierId: ids.dossierId, rappelLe: rappel && !rappel.jourSeul ? rappel.le : null, relance }, maintenant);
@@ -105,7 +125,7 @@ export const outilNoterSms = definirOutil({
   nom: "noter_sms",
   titre: "Noter un SMS envoyé par Lucas",
   description:
-    "Quand Lucas dit avoir envoyé un SMS (« c'est envoyé », « je lui ai envoyé le lien »), note-le dans le CRM avec les mêmes effets que le bouton « Copier » de l'écran SMS : trace dans l'histoire du dossier (ou les échanges du lead), lien de l'espace communiqué (la main passe au client, « Lien pas encore envoyé » tombe), relance de devis comptée (RELANCE_DEVIS_1 ou _2 : le devis du dossier et son rang sont retrouvés seuls, 2 relances au plus), relance photos comptée (un SMS de lien — LIEN_ESPACE, LIEN_ESPACE_RAPPEL… — sur un espace que « lister » RELANCES ou ESPACES (filtré) propose de relancer : 2 au plus). Donne le code du catalogue (celui du SMS proposé par « noter_appel », « lister » RELANCES ou ESPACES, « lien_espace ») et/ou le texte envoyé tel quel : code seul → le texte est recomposé depuis le catalogue ; texte seul → noté comme texte libre (aussi pour un SMS que tu as rédigé toi-même). Rien n'est envoyé par le CRM.",
+    "Quand Lucas dit avoir envoyé un SMS (« c'est envoyé », « je lui ai envoyé le lien »), note-le dans le CRM avec les mêmes effets que le bouton « Copier » de l'écran SMS : trace dans l'histoire du dossier (ou les échanges du lead), lien de l'espace communiqué (la main passe au client, « Lien pas encore envoyé » tombe), relance de devis comptée (RELANCE_DEVIS_1 ou _2 : le devis du dossier et son rang sont retrouvés seuls, 2 relances au plus), relance photos comptée (un SMS de lien — LIEN_ESPACE, LIEN_ESPACE_RAPPEL… — sur un espace que « lister » RELANCES ou ESPACES (filtré) propose de relancer : 2 au plus), demande d'avis comptée (DEMANDE_AVIS, sur le dossier que « lister » RELANCES propose : une fois), réactivation comptée (REACTIVATION, sur le contact que « lister » RELANCES propose, tracée dans ses échanges : une fois ; refusée sans son accord aux messages commerciaux). Donne le code du catalogue (celui du SMS proposé par « noter_appel », « lister » RELANCES ou ESPACES, « lien_espace ») et/ou le texte envoyé tel quel : code seul → le texte est recomposé depuis le catalogue ; texte seul → noté comme texte libre (aussi pour un SMS que tu as rédigé toi-même). Rien n'est envoyé par le CRM.",
   niveau: "REVERSIBLE",
   schema: schemaCible
     .extend({
@@ -121,9 +141,12 @@ export const outilNoterSms = definirOutil({
     const relanceDevis = e.code && CODES_RELANCE_DEVIS.includes(e.code) ? await relanceDuDossier(ids, contexte.maintenant) : null;
     // Un SMS de lien sur un espace à relancer pour ses photos compte la relance, comme « Copier » depuis la feuille Relances.
     const relancePhotos = e.code && CODES_LIEN.includes(e.code) ? await relancePhotosDuDossier(ids, contexte.maintenant) : null;
-    const relance: RelanceSms | null = relanceDevis ? { documentId: relanceDevis.documentId, rang: relanceDevis.rang } : relancePhotos;
+    // Mission 18 (A4) : la demande d'avis et la réactivation, comptées quand la liste des relances les propose.
+    const relanceAvis = e.code === "DEMANDE_AVIS" ? await relanceAvisDuDossier(ids, contexte.maintenant) : null;
+    const relanceReactivation = e.code === "REACTIVATION" ? await relanceReactivationDuContact(ids, contexte.maintenant) : null;
+    const relance: RelanceSms | null = relanceDevis ? { documentId: relanceDevis.documentId, rang: relanceDevis.rang } : (relancePhotos ?? relanceAvis ?? relanceReactivation);
     const recompose = e.texte === undefined;
-    const texte = e.texte ?? (await texteDuCode(e.code!, ids, relanceDevis, contexte.maintenant));
+    const texte = e.texte ?? (await texteDuCode(e.code!, ids, relanceDevis ? { documentId: relanceDevis.documentId, rang: relanceDevis.rang } : (relanceAvis ?? relanceReactivation), contexte.maintenant));
     const copie = await noterSmsCopie({ code, texte, leadId: ids.leadId, dossierId: ids.dossierId, relance, origine: "ASSISTANT" }, contexte.maintenant);
     // Un double toucher (même SMS en moins de 10 minutes) n'écrit rien : aucun effet à annoncer, aucune relance comptée.
     const effets = [
@@ -135,6 +158,8 @@ export const outilNoterSms = definirOutil({
             copie.lien ? "lien de l'espace communiqué : la main passe au client" : null,
             relanceDevis ? `relance n° ${relanceDevis.rang} du devis ${relanceDevis.numero} comptée (${RELANCES_MAX_PAR_DEVIS} au plus, mail ou SMS)` : null,
             relancePhotos ? `relance photos n° ${relancePhotos.rang} comptée (${RELANCES_PHOTOS_MAX} au plus)` : null,
+            relanceAvis ? "demande d'avis comptée (une seule)" : null,
+            relanceReactivation ? "réactivation comptée (une seule)" : null,
           ]),
     ].filter((x): x is string => Boolean(x));
     return {

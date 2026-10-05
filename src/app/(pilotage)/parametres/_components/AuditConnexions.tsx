@@ -29,7 +29,7 @@ export default function AuditConnexions({ initial }: { initial: Audit }) {
   }
 
   return (
-    <section className="mb-10">
+    <section id="audit" className="mb-10 scroll-mt-20">
       <TitreSection
         action={
           <Bouton taille="sm" icone={<RefreshCw size={13} aria-hidden />} chargement={charge} onClick={() => void relancer()}>

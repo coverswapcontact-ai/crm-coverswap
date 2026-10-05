@@ -6,7 +6,7 @@ import { synchroniserRappels, type CibleRappel } from "@/lib/agenda/rappels";
 import { changerEtape } from "@/lib/dossiers/transitions";
 import { ecrireNote } from "@/lib/dossiers/dossiers";
 import { recalculerMain } from "@/lib/dossiers/main";
-import { LIBELLES_ETAPE, MOTIFS_PERTE, estDossierClos, type EtapeDossier } from "@/lib/dossiers/constants";
+import { LIBELLES_ETAPE, MOTIFS_PERTE, estActionOuvertureAuto, estDossierClos, type EtapeDossier } from "@/lib/dossiers/constants";
 import { motifPerteDansUnePhrase, verifierMotifPerte } from "@/lib/dossiers/perte";
 import { libelleSourceLead } from "@/lib/prospects/constantes";
 import { nomDuLead, telephoneLisible } from "@/lib/prospects/leads";
@@ -148,7 +148,13 @@ export async function noterAppel(entree: EntreeAppel, maintenant: Date = new Dat
       if (entree.issue === "PAS_DE_REPONSE" || entree.issue === "A_RAPPELER") {
         await tx.dossier.update({ where: { id: idDossier }, data: { prochaineAction: entree.issue === "PAS_DE_REPONSE" ? "Rappeler (pas de réponse)" : "Rappeler", prochaineActionDate: rappel, prochaineActionInstant: rappel } });
       }
-      if (entree.issue === "INTERESSE") await tx.dossier.update({ where: { id: idDossier }, data: { updatedAt: new Date() } });
+      if (entree.issue === "INTERESSE") {
+        // Mission 18 (A2) : l'appel répond au « Appeler : … » posé à l'ouverture automatique du dossier — il s'efface, et
+        // sa tâche « Appeler · Nom » avec (une action écrite par Lucas, elle, ne bouge pas).
+        const actuelle = (await tx.dossier.findUnique({ where: { id: idDossier }, select: { prochaineAction: true } }))?.prochaineAction;
+        const repondue = estActionOuvertureAuto(actuelle) ? { prochaineAction: null, prochaineActionDate: null, prochaineActionInstant: null } : {};
+        await tx.dossier.update({ where: { id: idDossier }, data: { updatedAt: new Date(), ...repondue } });
+      }
       if (note && entree.issue !== "PAS_DE_REPONSE") await ecrireNote(tx, idDossier, { etape: (dossier?.etape ?? "QUALIFICATION") as EtapeDossier, contenu: `${libelle} — ${note}` });
     });
     // « Pas intéressé » : le dossier passe perdu — jamais un dossier clos (déjà perdu, ou encaissé : le chantier est payé).

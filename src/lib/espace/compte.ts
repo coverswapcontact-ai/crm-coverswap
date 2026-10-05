@@ -5,7 +5,8 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
 import { EMETTEUR } from "@/lib/dossiers/constants";
 import { lireLignes } from "@/lib/dossiers/stockage";
-import { montantsDocument } from "@/lib/dossiers/montants";
+import { formatCentimes, montantsDocument } from "@/lib/dossiers/montants";
+import { piecesDuDossier, type PieceSolde } from "@/lib/encaissements/soldes";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { recalculerMain } from "@/lib/dossiers/main";
 import { famille, famillesDe, lireSelection, prestationsPubliques, type IdFamille, type PrestationsPubliques } from "@/lib/prestations/prestations";
@@ -117,7 +118,7 @@ async function carteDuProjet(projet: EspaceClient): Promise<ProjetCarte> {
   const charge = await chargerProjet(projet);
   const etape = etapeEspace(charge.faits);
   const enCoursCreation = (await prisma.preparationSimulation.count({ where: { dossierId: projet.dossierId, origine: "CLIENT", statut: "EN_COURS", createdAt: { gte: new Date(Date.now() - 30 * 60_000) } } })) > 0;
-  const { pastille, prochaine } = pastilleDuProjet({ etape, etapeDossier: charge.dossier.etape, dateChantier: charge.dossier.dateChantier, soldeDu: Boolean(charge.lecture.paiement && !charge.lecture.paiement.regle), enCoursCreation });
+  const { pastille, prochaine } = pastilleDuProjet({ etape, etapeDossier: charge.dossier.etape, dateChantier: charge.dossier.dateChantier, soldeDu: Boolean(charge.lecture.paiement && !charge.lecture.paiement.regle), enCoursCreation, avenantASigner: charge.faits.avenantASigner });
   const familles = charge.familles.length ? charge.familles : charge.suggerees;
   const dossier = await prisma.dossier.findUnique({ where: { id: projet.dossierId }, select: { ouvertLe: true, createdAt: true } });
   return {
@@ -134,6 +135,19 @@ async function carteDuProjet(projet: EspaceClient): Promise<ProjetCarte> {
 
 const STATUTS_DEVIS: Record<string, string> = { GENERE: "À signer", ENVOYE: "À signer", ACCEPTE: "Signé", REFUSE: "Refusé", REMPLACE: "Remplacé", ANNULEE: "Annulé", NON_RETENU: "Non retenu" };
 
+/**
+ * Mission 18 (B10, écart 10) — le statut d'une facture dans « Mes documents », dans cet ordre : annulée (par un avoir) ;
+ * sinon d'après le registre (ce que règlent les encaissements valides) : « Réglée », « Reste X € » si une partie est
+ * reçue, « À régler » ; une facture reprise sans ligne au registre garde le repli sur l'étape (« Réglée » si le dossier
+ * est encaissé). Avant : l'étape décidait de tout (une facture annulée d'un dossier encaissé se disait « Réglée »). Pure.
+ */
+export function statutFacture(statut: string, piece: Pick<PieceSolde, "resteCentimes" | "regleCentimes"> | undefined, etapeDossier: string | undefined): string {
+  if (statut === "ANNULEE") return "Annulée";
+  if (!piece || piece.resteCentimes === null) return etapeDossier === "ENCAISSE" ? "Réglée" : "À régler";
+  if (piece.resteCentimes === 0) return "Réglée";
+  return piece.regleCentimes > 0 ? `Reste ${formatCentimes(piece.resteCentimes)}` : "À régler";
+}
+
 /** Tous ses devis et factures, tous projets confondus, du plus récent au plus ancien. */
 export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">): Promise<DocumentClient[]> {
   const projets = await projetsVisibles(prisma, permanent.id);
@@ -144,18 +158,14 @@ export async function documentsDuClient(permanent: Pick<EspacePermanent, "id">):
     orderBy: [{ dateEmission: "desc" }, { createdAt: "desc" }],
   });
   const etapes = new Map(projets.map((p) => [p.dossierId, p.dossier.etape]));
+  // Mission 18 (B10, écart 10) : une facture se dit « Réglée » d'après les encaissements qui la règlent (le registre),
+  // plus d'après l'étape du dossier.
+  const dossiersFactures = [...new Set(documents.filter((d) => d.type === "FACTURE").map((d) => d.dossierId))];
+  const pieces = new Map<string, PieceSolde>();
+  for (const dossierId of dossiersFactures) for (const piece of await piecesDuDossier(prisma, dossierId)) if (piece.documentId) pieces.set(piece.documentId, piece);
   return documents.map((d) => {
     const montants = montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct });
-    const statut =
-      d.type === "DEVIS"
-        ? (STATUTS_DEVIS[d.statut] ?? d.statut)
-        : d.type === "AVOIR"
-          ? "Avoir"
-          : etapes.get(d.dossierId) === "ENCAISSE"
-            ? "Réglée"
-            : d.statut === "ANNULEE"
-              ? "Annulée"
-              : "À régler";
+    const statut = d.type === "DEVIS" ? (STATUTS_DEVIS[d.statut] ?? d.statut) : d.type === "AVOIR" ? "Avoir" : statutFacture(d.statut, pieces.get(d.id), etapes.get(d.dossierId));
     return {
       id: d.id,
       type: d.type as DocumentClient["type"],

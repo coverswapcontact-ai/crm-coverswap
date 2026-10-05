@@ -122,8 +122,8 @@ export type TextePret =
   | { canal: "SMS"; texte: null; ecran: string; source: "ECRAN_SMS" }
   | { canal: "MAIL"; texte: string; objet: string; a: string; propositionId: string; source: "PROPOSITION" };
 
-/** Les actions du SMS qui n'ouvrent ni espace ni dossier : les seules calculées ici (une lecture n'écrit rien). */
-const ACTIONS_SMS_SANS_ECRITURE = ["PAS_DE_REPONSE", "A_RAPPELER", "RELANCE_DEVIS"];
+/** Les actions du SMS qui n'ouvrent ni espace ni dossier : les seules calculées ici (une lecture n'écrit rien). Mission 18 (A4) : la réactivation, sans lien. */
+const ACTIONS_SMS_SANS_ECRITURE = ["PAS_DE_REPONSE", "A_RAPPELER", "RELANCE_DEVIS", "REACTIVATION"];
 
 const propositionDe = (v: Pick<TacheVue, "raccourci" | "donnees">) => texteOuNull(v.donnees.propositionId) ?? texteOuNull(v.raccourci.propositionId);
 

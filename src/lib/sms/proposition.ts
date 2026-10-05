@@ -6,7 +6,8 @@ import { issueDesMetadonnees, tentativesALaFin } from "@/lib/commercial/sans-rep
 import { jetonEspace, lienPourLeProjet, ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { liensEnvoyes } from "@/lib/espace/suivi";
 import { estIssuDuSimulateur } from "@/lib/prospects/qualification";
-import { estRelancePhotos, type ActionSms, type CodeSms, type PropositionSms, type RelanceSms } from "./catalogue";
+import { refusReactivation } from "@/lib/relances/accord-commercial";
+import { estRelanceAvis, estRelanceDevis, estRelancePhotos, type ActionSms, type CodeSms, type PropositionSms, type RelanceSms } from "./catalogue";
 import { devisARelancer } from "./copie";
 import { texteDuCatalogue } from "./modeles";
 import { prenomDuContact } from "./texte";
@@ -26,7 +27,10 @@ export type DemandeSms = {
   dossierId?: string | null;
   /** Le rappel posé (PAS_DE_REPONSE : demain 18 h à défaut ; A_RAPPELER : « prochainement » sans date). */
   rappelLe?: Date | string | null;
-  /** RELANCE_DEVIS : le devis et le rang de la relance ; RELANCE_PHOTOS : `{ type: "PHOTOS", rang }` (partie 6). */
+  /**
+   * RELANCE_DEVIS : le devis et le rang de la relance ; RELANCE_PHOTOS : `{ type: "PHOTOS", rang }` (partie 6) ;
+   * RELANCE_AVIS : `{ type: "AVIS", rang }` et REACTIVATION : `{ type: "REACTIVATION", rang }` (mission 18, A4).
+   */
   relance?: RelanceSms | null;
   /** PAS_DE_REPONSE : les appels sans réponse d'affilée, cet appel compris (sinon lus sur le lead ou le dossier). */
   tentatives?: number | null;
@@ -159,15 +163,21 @@ async function espaceEtLien(contact: Contact): Promise<{ dossierId: string; lien
  *    nouveau » serait faux), LIEN_ESPACE_NOUVEAU s'il n'a reçu qu'un lien d'avant « Nouveau lien » ; la relance
  *    `{ type: "PHOTOS", rang }` donnée suit jusqu'à la copie, qui la compte ;
  *  - RELANCE_DEVIS { documentId, rang } → RELANCE_DEVIS_1 ou RELANCE_DEVIS_2, pour un devis que le client attend
- *    dans son espace (`devisARelancer`), du dossier visé.
+ *    dans son espace (`devisARelancer`), du dossier visé ;
+ *  - RELANCE_AVIS (mission 18, A4 : chantier fini, pas d'avis) → DEMANDE_AVIS, le lien de son espace sur la rubrique
+ *    « Après le chantier » (`#apres`), pour un dossier qui a déjà son espace (jamais un espace ouvert pour l'occasion :
+ *    refus 409 sans espace, ou lien désactivé) ;
+ *  - REACTIVATION (mission 18, A4 : contact perdu depuis 6 mois) → REACTIVATION, sans lien ; refusé sans accord aux
+ *    messages commerciaux ou après une désinscription (`refusReactivation`).
+ * Une relance d'avis ou de réactivation suit toujours le SMS (rang 1 à défaut) : c'est la copie qui la compte.
  * LIEN_ESPACE_SIMULATION suppose une simulation du site déjà dans l'espace (`simulationDansLEspace`).
- * Les actions avec le lien ouvrent l'espace s'il le faut ; aucune n'écrit d'événement.
+ * Les actions avec le lien ouvrent l'espace s'il le faut (sauf la demande d'avis) ; aucune n'écrit d'événement.
  */
 export async function proposerSms(entree: DemandeSms, maintenant: Date = new Date()): Promise<PropositionSms> {
   let dossierIdDemande = entree.dossierId ?? null;
   const relance = entree.relance ?? null;
   if (entree.action === "RELANCE_DEVIS") {
-    if (!relance || estRelancePhotos(relance)) throw new ErreurMetier("Indique le devis à relancer et le rang de la relance.", 400);
+    if (!estRelanceDevis(relance)) throw new ErreurMetier("Indique le devis à relancer et le rang de la relance.", 400);
     dossierIdDemande = (await devisARelancer(relance.documentId, dossierIdDemande)).dossierId;
   }
   const contact = await contactDe({ leadId: entree.leadId, dossierId: dossierIdDemande });
@@ -191,6 +201,24 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
     case "RELANCE_DEVIS":
       code = (relance?.rang ?? 1) >= 2 ? "RELANCE_DEVIS_2" : "RELANCE_DEVIS_1";
       break;
+    case "REACTIVATION": {
+      if (!contact.leadId) throw new ErreurMetier("Une réactivation se fait sur un contact : ce dossier n'en a pas.", 409);
+      const refus = await refusReactivation(contact.leadId);
+      if (refus) throw new ErreurMetier(refus, 409);
+      code = "REACTIVATION";
+      break;
+    }
+    case "RELANCE_AVIS": {
+      if (!dossierId) throw new ErreurMetier("La demande d'avis se fait sur le dossier du chantier : ce contact n'en a pas.", 409);
+      // Relecture de la partie A : l'espace EXISTANT du dossier, jamais ouvert pour l'occasion (pas d'écriture en base).
+      const existant = await prisma.espaceClient.findUnique({ where: { dossierId } });
+      const lienAvis = existant && !existant.archiveLe && !existant.revoqueLe ? await lienPourLeProjet(existant) : null;
+      if (!lienAvis) throw new ErreurMetier("Ce dossier n'a pas d'espace client ouvert (ou son lien est désactivé) : la demande d'avis passe par son espace, qui ne s'ouvre pas pour l'occasion.", 409);
+      lien = `${lienAvis}#apres`;
+      variables.lien = lien;
+      code = "DEMANDE_AVIS";
+      break;
+    }
     default: {
       const espace = await espaceEtLien(contact);
       dossierId = espace.dossierId;
@@ -213,7 +241,9 @@ export async function proposerSms(entree: DemandeSms, maintenant: Date = new Dat
     leadId: contact.leadId,
     dossierId,
     ...(lien ? { lien } : {}),
-    ...(entree.action === "RELANCE_DEVIS" && relance && !estRelancePhotos(relance) ? { relance: { documentId: relance.documentId, rang: relance.rang } } : {}),
+    ...(entree.action === "RELANCE_DEVIS" && estRelanceDevis(relance) ? { relance: { documentId: relance.documentId, rang: relance.rang } } : {}),
     ...(entree.action === "RELANCE_PHOTOS" && estRelancePhotos(relance) ? { relance: { type: "PHOTOS" as const, rang: relance.rang } } : {}),
+    ...(entree.action === "RELANCE_AVIS" ? { relance: { type: "AVIS" as const, rang: estRelanceAvis(relance) ? relance.rang : 1 } } : {}),
+    ...(entree.action === "REACTIVATION" ? { relance: { type: "REACTIVATION" as const, rang: 1 } } : {}),
   };
 }

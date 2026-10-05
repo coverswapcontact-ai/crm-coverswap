@@ -147,6 +147,8 @@ export function lireDateDictee(texte: string, maintenant: Date = new Date(), heu
     const courant = new Date(`${aujourdhui}T12:00:00Z`).getUTCDay();
     let ecart = (index - courant + 7) % 7;
     if (ecart === 0) ecart = /prochain/.test(brut) ? 7 : 0;
+    // « lundi » dit un lundi après l'heure visée : le lundi suivant, pas un moment déjà passé (à l'heure même : aujourd'hui).
+    if (ecart === 0 && aParis(aujourdhui) < maintenant) ecart = 7;
     return aParis(plusJours(ecart));
   }
   return null;

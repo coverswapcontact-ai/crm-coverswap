@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EspaceClient, EspacePermanent, SimulationEspace } from "@prisma/client";
@@ -6,26 +7,32 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
 import { mettreEnFile } from "@/lib/taches/file";
-import { EMETTEUR, FORMATS_PHOTO, PHOTO_OCTETS_MAX, type EtapeDossier } from "@/lib/dossiers/constants";
+import { EMETTEUR, FORMATS_PHOTO, PHOTO_OCTETS_MAX } from "@/lib/dossiers/constants";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
 import { montantsDocument } from "@/lib/dossiers/montants";
 import { idPhoto, lireLignes, lirePhotos, estPhotoApres } from "@/lib/dossiers/stockage";
-import { changerEtape } from "@/lib/dossiers/transitions";
+import { changerEtapeDansTransaction } from "@/lib/dossiers/transitions";
+import { estSigneeParDevisAccepte, libelleNonRetenus, retenirDevis, type DevisNonRetenu } from "@/lib/dossiers/devis-signe";
+import { suiteNonRetenus } from "@/lib/dossiers/devis-retenu";
+import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
 import { conditionsDuDevis } from "@/lib/pdf/conditions";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { libelleZoneClient, lireZones, type ZoneTeinte } from "@/lib/simulateur/types-surface";
 import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
 import { famillesDe, lireSelection, motsDuProjet, phraseFamilles, type IdFamille } from "@/lib/prestations/prestations";
 import { creationPourLeClient, type CreationClient } from "./creation";
-import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
+import { changerStatutSimulation, deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
 import { ACTEUR, prevenir } from "./alertes";
 import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
-import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
-import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { accordEffectif, composerFaits, dateSignature, estAvenant, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
+import { stripeActif } from "@/lib/paiement/stripe";
+import { faitsPaiements } from "@/lib/encaissements/soldes";
+import { prochainPas, type ProchainPas } from "./prochain-pas";
+import { reporterTeintesDuChoix } from "./teintes-choix";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -128,6 +135,14 @@ export type EtatEspace = {
   devis: DevisClient | null;
   /** Mission 11 : les devis proposés visibles, du plus ancien au plus récent ; plusieurs → le client en choisit un ; l'accepté y est toujours. */
   devisProposes: DevisClient[];
+  /**
+   * Mission 18 (B7) : ceux qu'il peut signer maintenant, du plus ancien au plus récent (visibles, « Généré » ou
+   * « Envoyé », sans accord). Avant la signature : les devis proposés ; après : les avenants et nouveaux devis émis
+   * depuis — le devis signé reste `devis` (l'acompte porte sur lui), chacun garde son accord dans `devisProposes`.
+   */
+  devisASigner: DevisClient[];
+  /** Mission 18 (B7) : la prochaine étape de l'accueil du projet et le point rouge des onglets (prochain-pas.ts). */
+  prochainPas: ProchainPas;
   acompte: { montant: number; recu: number; complet: boolean } | null;
   /** Onglet Paiement : ce qui est dû, ce qui est payé (date et moyen), à partir des encaissements du dossier. */
   paiement: (PaiementEspace & { devisNumero: string; signeLe: string | null }) | null;
@@ -149,24 +164,31 @@ export type EtatEspace = {
 
 const CLIENT_INCONNU = /^(inconnu|client)$/i;
 
-/** Photos de chantier qui sont des rendus du site (copies) : ce ne sont pas des photos du client. */
-async function rendusDansLesPhotos(dossierId: string): Promise<Set<string>> {
-  const simulations = await prisma.simulation.findMany({ where: { dossierId, photosDossier: { not: null } }, select: { photosDossier: true } });
-  const ids = new Set<string>();
+/**
+ * Photos de chantier qui sont des rendus du site (copies) : ce ne sont pas des photos du client. Relecture de la
+ * partie A : lues d'une seule requête pour toute une liste de dossiers (le suivi des espaces en lisait une par dossier).
+ */
+export async function rendusDesDossiers(dossierIds: readonly string[]): Promise<Map<string, Set<string>>> {
+  const parDossier = new Map<string, Set<string>>(dossierIds.map((id) => [id, new Set<string>()]));
+  if (dossierIds.length === 0) return parDossier;
+  const simulations = await prisma.simulation.findMany({ where: { dossierId: { in: [...dossierIds] }, photosDossier: { not: null } }, select: { dossierId: true, photosDossier: true } });
   for (const s of simulations) {
     try {
       const { rendu } = JSON.parse(s.photosDossier!) as { rendu?: string | null };
-      if (rendu) ids.add(rendu);
+      if (rendu && s.dossierId) parDossier.get(s.dossierId)?.add(rendu);
     } catch {
       // ignoré
     }
   }
-  return ids;
+  return parDossier;
 }
 
-/** Photos « avant » du client dans son dossier (ni rendu du site, ni photo après chantier). */
-export async function photosDuClient(dossierId: string, photosJson: string): Promise<{ chemin: string; id: string }[]> {
-  const rendus = await rendusDansLesPhotos(dossierId);
+/**
+ * Photos « avant » du client dans son dossier (ni rendu du site, ni photo après chantier). `rendus` : déjà lus pour
+ * toute une liste (`rendusDesDossiers`), sinon lus ici.
+ */
+export async function photosDuClient(dossierId: string, photosJson: string, rendusLus?: ReadonlySet<string>): Promise<{ chemin: string; id: string }[]> {
+  const rendus = rendusLus ?? (await rendusDesDossiers([dossierId])).get(dossierId) ?? new Set<string>();
   return lirePhotos(photosJson)
     .filter((chemin) => !estPhotoApres(chemin))
     .map((chemin) => ({ chemin, id: idPhoto(chemin) }))
@@ -231,6 +253,15 @@ export function nomDuProjetClient(nomProjet: string | null | undefined, objet: s
 }
 
 /**
+ * Mission 18 (relecture) : le reste dû des factures actives d'un dossier facturé (`soldes.ts › faitsPaiements`, la
+ * lecture de « Payer par carte » et de « Mes documents ») ; null sans facture active (le solde se lit sur le devis).
+ */
+export async function facturesDuDossier(dossierId: string): Promise<{ resteCentimes: number } | null> {
+  const { pieces, resteCentimes } = await faitsPaiements(prisma, dossierId);
+  return pieces.some((piece) => piece.type === "FACTURE" && piece.active) ? { resteCentimes } : null;
+}
+
+/**
  * Tout ce qu'il faut pour savoir où en est un projet — son dossier, ses
  * simulations publiées, ses photos, la lecture unique des devis et paiements
  * (faits.ts), ses familles —, sans rien écrire. Sert à l'état complet du projet
@@ -267,7 +298,9 @@ export async function chargerProjet(espace: EspaceClient) {
     photosDuClient(dossier.id, dossier.photos),
   ]);
   // Devis en vigueur (repris compris), accord (en ligne ou constaté dans le CRM), paiements : lecture unique (faits.ts).
-  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements) });
+  // Mission 18 (relecture) : facturé, le solde à régler est le reste des factures (ce que « Payer par carte » débite).
+  const factures = await facturesDuDossier(dossier.id);
+  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements), etapeDossier: dossier.etape, factures });
   const selection = lireSelection(dossier.prestations);
   const monProjet = lireProjet(espace.souhaits, selection, dossier.lead?.typeProjet);
   const choix = lireChoix(espace.choix);
@@ -311,6 +344,11 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
   // Il peut revenir sur son accord tant que rien n'est encaissé et que le chantier n'est pas planifié.
   const accordRetirable = dossier.etape === "SIGNE" && (lecture.paiement?.recu ?? 0) === 0;
   const devis = lecture.devis ? devisPourLeClient(lecture.devis, accord, accordRetirable) : null;
+  // Mission 18 (B7) : un avenant signé garde SON accord (le client le relit signé) ; il se retire tant que le chantier
+  // n'a pas commencé — le retirer ne fait pas reculer le dossier.
+  const avenantRetirable = ["SIGNE", "PLANIFIE"].includes(dossier.etape);
+  const pourLeClient = (d: DevisLu): DevisClient =>
+    d.id === lecture.devis?.id ? devis! : devisPourLeClient(d, accordEffectif(d, dossier.accords, { nom: dossier.clientNom, signeLe: d.dateEmission ?? d.createdAt }), estAvenant(d, dossier.documents) && avenantRetirable);
   const recu = lecture.paiement?.recu ?? 0;
   const etape = etapeEspace(faits);
   // Le prénom de la fiche client d'abord : un prénom corrigé par le client (carte « coordonnées ») l'emporte sur le formulaire.
@@ -347,7 +385,7 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
         ? { ok: false, raison: "Votre devis est établi sur ce projet : pour le changer, appelez CoverSwap, nous l'ajustons avec vous." }
         : { ok: true, raison: null };
 
-  return {
+  const sansPas: Omit<EtatEspace, "prochainPas"> = {
     version: 2,
     apercu: Boolean(options.apercu),
     code: espace.code,
@@ -399,16 +437,16 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     choix,
     coordonnees,
     devis,
-    devisProposes: lecture.proposes
-      .filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE")
-      .map((d) => (d.id === lecture.devis?.id ? devis! : devisPourLeClient(d, null, false))),
+    devisProposes: lecture.proposes.filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE").map(pourLeClient),
+    devisASigner: lecture.aSigner.map(pourLeClient),
     acompte: devis && devis.acompte > 0 ? { montant: devis.acompte, recu, complet: recu >= devis.acompte - 0.5 } : null,
     paiement: devis && accord && lecture.paiement ? { ...lecture.paiement, devisNumero: devis.numero, signeLe: accord.le.toISOString() } : null,
     virement: (() => {
       const ribLu = /RIB : ([A-Z0-9 ]+?) –.*?: ([A-Z0-9]+)$/.exec(EMETTEUR.ligneRib);
       return ribLu && devis ? { titulaire: EMETTEUR.raisonSociale, iban: ribLu[1].trim(), bic: ribLu[2], reference: `Devis ${devis.numero}` } : null;
     })(),
-    paiementCarte: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+    // Mission 18 (B10) : le bouton « Payer par carte » n'apparaît que si Stripe est configuré en entier (clé ET webhook).
+    paiementCarte: stripeActif(),
     chantier: faits.accord || ["PLANIFIE", "CHANTIER"].includes(dossier.etape) ? { date: dossier.dateChantier?.toISOString() ?? null } : null,
     apres: apresChantier
       ? { photos: lirePhotos(dossier.photos).filter(estPhotoApres).map((chemin) => ({ id: idPhoto(chemin) })), avis: avis && typeof avis.note === "number" ? avis : null }
@@ -420,6 +458,7 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     choixModifiable: !devis && !fige,
     expireLe: espace.expireLe.toISOString(),
   };
+  return { ...sansPas, prochainPas: prochainPas(sansPas) };
 }
 
 /* ── Simulations créées par le client (espace v3) ─────────────────── */
@@ -473,7 +512,7 @@ export async function noterVisite(espace: EspaceClient): Promise<void> {
 
 export async function deposerPhotos(espace: EspaceClient, fichiers: File[]): Promise<{ deposees: number; refusees: string[] }> {
   if (fichiers.length === 0) throw new ErreurMetier("Aucune photo reçue.", 400);
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, etape: true, prochaineAction: true } });
+  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { photos: true, etape: true } });
   if (!dossier) throw new ErreurMetier("Projet introuvable.", 404);
   const dejaLa = lirePhotos(dossier.photos).length;
   if (dejaLa + fichiers.length > PHOTOS_MAX_PAR_DOSSIER) throw new ErreurMetier(`Vous avez déjà déposé beaucoup de photos (${dejaLa}). Quelques-unes suffisent : appelez-nous si besoin.`, 413);
@@ -492,17 +531,18 @@ export async function deposerPhotos(espace: EspaceClient, fichiers: File[]): Pro
       }
     }
     if (deposees > 0) {
-      // Le téléphone envoie les photos une à une : un dépôt en plusieurs envois reste UN événement.
-      const recent = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", createdAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { createdAt: "desc" } });
-      const deja = recent ? Number((JSON.parse(recent.metadata || "{}") as { nombre?: number }).nombre) || 0 : 0;
-      const total = deja + deposees;
-      const contenu = `${total} photo${total > 1 ? "s" : ""} déposée${total > 1 ? "s" : ""} par le client dans son espace`;
-      if (recent) await prisma.dossierEvenement.update({ where: { id: recent.id }, data: { contenu, metadata: JSON.stringify({ nombre: total }) } });
-      else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ nombre: total }) } });
-      // La balle passe dans le camp de Lucas.
-      if (!dossier.prochaineAction || /attendre les photos/i.test(dossier.prochaineAction)) {
-        await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer la simulation (photos reçues)", prochaineActionDate: new Date() } });
-      }
+      const suites = await prisma.$transaction(async (tx) => {
+        // Le téléphone envoie les photos une à une : un dépôt en plusieurs envois reste UN événement.
+        const recent = await tx.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", createdAt: { gte: new Date(Date.now() - 15 * 60_000) } }, orderBy: { createdAt: "desc" } });
+        const deja = recent ? Number((JSON.parse(recent.metadata || "{}") as { nombre?: number }).nombre) || 0 : 0;
+        const total = deja + deposees;
+        const contenu = `${total} photo${total > 1 ? "s" : ""} déposée${total > 1 ? "s" : ""} par le client dans son espace`;
+        if (recent) await tx.dossierEvenement.update({ where: { id: recent.id }, data: { contenu, metadata: JSON.stringify({ nombre: total }) } });
+        else await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu, metadata: JSON.stringify({ nombre: total }) } });
+        // La balle passe dans le camp de Lucas (mission 18 : une action posée à la main reste, une tâche le dit).
+        return appliquerEvenementDossier(tx, espace.dossierId, { type: "PHOTOS_RECUES" });
+      });
+      await suitesEvenementDossier(suites);
       // Une seule alerte pour un dépôt en plusieurs envois : elle part deux minutes après le premier.
       await mettreEnFile({ type: TACHE_ALERTE_PHOTOS, cle: `espace-photos:${espace.id}:${Math.floor(Date.now() / 300_000)}`, charge: { espaceId: espace.id, dossierId: espace.dossierId }, apres: new Date(Date.now() + 120_000), priorite: 6 });
     }
@@ -686,8 +726,14 @@ export async function deposerSimulation(dossierId: string, fichier: File, detail
   return { id: vue.id, espaceId: ligne.espaceId };
 }
 
+/**
+ * Ancien retrait (POST de l'écran du dossier) : le même geste que « retirer » du bloc Espace (mission 18, B9) — archivée,
+ * et le choix du client dévalidé si elle en fait partie (simulations/dossier.ts › changerStatutSimulation).
+ */
 export async function retirerSimulation(simulationId: string, motif = "Retirée de l'espace client"): Promise<void> {
-  await prisma.simulationEspace.update({ where: { id: simulationId }, data: { archiveLe: new Date(), archiveMotif: motif } });
+  const simulation = await prisma.simulationEspace.findUnique({ where: { id: simulationId }, select: { dossierId: true } });
+  if (!simulation) throw new ErreurMetier("Simulation introuvable.", 404);
+  await changerStatutSimulation(simulation.dossierId, simulationId, "retirer", motif);
 }
 
 /** Le client a regardé ses simulations : elles ne sont plus « nouvelles », et Lucas sait lesquelles ont été vues. */
@@ -744,17 +790,19 @@ export async function choisir(espace: EspaceClient, entree: z.output<typeof sche
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   const zonesValidees = choix.mode === "COMPOSITE" ? choix.zones : lireZones((await prisma.simulationEspace.findUnique({ where: { id: impliquees[0] }, select: { zones: true } }))?.zones ?? null);
   const ecrire = <T,>(travail: () => Promise<T>) => (auteur === "LUCAS" ? travail() : avecActeur(ACTEUR, travail));
-  await ecrire(async () => {
-    await prisma.$transaction([
-      prisma.simulationEspace.updateMany({ where: { espaceId: espace.id, id: { notIn: impliquees }, choisieLe: { not: null } }, data: { choisieLe: null } }),
-      ...impliquees.map((id) => prisma.simulationEspace.update({ where: { id }, data: { choisieLe: maintenant, ...(entree.commentaire && choix.mode === "UNE" ? { commentaireClient: entree.commentaire, commenteeLe: maintenant } : {}) } })),
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { choix: JSON.stringify(choix), choixLe: maintenant } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: auteur === "LUCAS" ? "INTERNE" : "ENTRANT", contenu: `${texte}${choix.mode === "UNE" && zonesValidees.length ? ` — ${zonesValidees.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}` : ""}`.slice(0, 1500), metadata: JSON.stringify({ simulations: impliquees, mode: choix.mode, auteur, zones: zonesValidees }) } }),
-      prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: maintenant } }),
-    ]);
-  });
-  // Mission 14 (partie 7) : la prochaine action remplacée (un rappel peut-être) → l'agenda suit.
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  const suites = await ecrire(() =>
+    prisma.$transaction(async (tx) => {
+      await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, id: { notIn: impliquees }, choisieLe: { not: null } }, data: { choisieLe: null } });
+      for (const id of impliquees) await tx.simulationEspace.update({ where: { id }, data: { choisieLe: maintenant, ...(entree.commentaire && choix.mode === "UNE" ? { commentaireClient: entree.commentaire, commenteeLe: maintenant } : {}) } });
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: JSON.stringify(choix), choixLe: maintenant } });
+      // Mission 18 (B11) : les teintes choisies deviennent celles du dossier (sous-parties de son projet), les autres restent.
+      await reporterTeintesDuChoix(tx, espace.dossierId, zonesValidees.map((z) => ({ zone: z.zone, ref: z.ref || null, nom: z.nom || null })), { remplacer: true });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_CHOISIE", direction: auteur === "LUCAS" ? "INTERNE" : "ENTRANT", contenu: `${texte}${choix.mode === "UNE" && zonesValidees.length ? ` — ${zonesValidees.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref}${z.ref ? ` (${z.ref})` : ""}`).join(" · ")}` : ""}`.slice(0, 1500), metadata: JSON.stringify({ simulations: impliquees, mode: choix.mode, auteur, zones: zonesValidees }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_VALIDE" }, maintenant);
+    })
+  );
+  // Mission 14 (partie 7) : la prochaine action remplacée (un rappel peut-être) → l'agenda suit (mission 18 : les suites).
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, { titre: `Simulation validée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer le devis.`, urgence: 5, telephone: dossier?.clientTelephone });
   return choix;
 }
@@ -789,17 +837,18 @@ export async function demanderProposition(espace: EspaceClient, entree: z.output
   const maintenant = new Date();
   const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true } });
   const texte = `Le client demande une autre proposition${simulation?.titre ? ` (après « ${simulation.titre} »)` : ""}${entree.commentaire ? ` : « ${entree.commentaire} »` : ""}`;
-  await avecActeur(ACTEUR, async () => {
-    const [, evenement] = await prisma.$transaction([
+  const suites = await avecActeur(ACTEUR, async () => {
+    const { evenement, suites } = await prisma.$transaction(async (tx) => {
       // Son mot est gardé entier sur l'espace : il s'affiche dans le dossier et dans Espaces clients, pas seulement dans l'historique.
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: maintenant, propositionMessage: entree.commentaire || null, propositionSimulationId: simulation?.id ?? null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_NOUVELLE_PROPOSITION", direction: "ENTRANT", contenu: texte.slice(0, 1500), metadata: JSON.stringify({ simulationId: simulation?.id ?? null }) } }),
-      prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: `Préparer une autre proposition${entree.commentaire ? ` — « ${entree.commentaire.slice(0, 120)} »` : " (demande du client)"}`, prochaineActionDate: maintenant } }),
-      ...(simulation && entree.commentaire ? [prisma.simulationEspace.update({ where: { id: simulation.id }, data: { commentaireClient: entree.commentaire, commenteeLe: maintenant } })] : []),
-    ]);
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: maintenant, propositionMessage: entree.commentaire || null, propositionSimulationId: simulation?.id ?? null } });
+      const evenement = await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_NOUVELLE_PROPOSITION", direction: "ENTRANT", contenu: texte.slice(0, 1500), metadata: JSON.stringify({ simulationId: simulation?.id ?? null }) } });
+      if (simulation && entree.commentaire) await tx.simulationEspace.update({ where: { id: simulation.id }, data: { commentaireClient: entree.commentaire, commenteeLe: maintenant } });
+      return { evenement, suites: await appliquerEvenementDossier(tx, espace.dossierId, { type: "PROPOSITION_DEMANDEE", commentaire: entree.commentaire }, maintenant) };
+    });
     await enregistrerMessageClient({ dossierId: espace.dossierId, espaceId: espace.id, source: "PROPOSITION", texte: entree.commentaire || texte, simulationId: simulation?.id ?? null, evenementId: evenement.id });
+    return suites;
   });
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  await suitesEvenementDossier(suites);
   await prevenir(espace.dossierId, { titre: `Autre proposition demandée — ${dossier?.clientNom ?? "client"}`, texte: `${texte}\nÀ vous : préparer une nouvelle simulation.`, urgence: 4, telephone: dossier?.clientTelephone, rubrique: "messages" });
 }
 
@@ -828,12 +877,13 @@ export async function noterConsultationDevis(espace: EspaceClient, documentId: s
   const apres = await prisma.document.findUnique({ where: { id: devis.id }, select: { consultations: true } });
   const consultations = apres?.consultations ?? 1;
   if (pris.count === 0) return { consultations };
-  // L'espace garde la trace du dernier devis lu (anciens lecteurs de ces champs).
-  await avecActeur(ACTEUR, () => prisma.espaceClient.update({ where: { id: espace.id }, data: { devisConsulteId: devis.id, devisConsulteLe: maintenant, devisConsultations: consultations } }));
+  // Mission 18 (B11) : le devis est la seule source de ses lectures ; les champs de l'espace (devisConsulte*) ne sont
+  // plus écrits (colonnes gardées, plus aucun lecteur).
   const accord = await prisma.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null }, select: { id: true } });
   const contenu = `Le client a consulté son devis ${devis.numero} ${consultations === 1 ? "pour la première fois" : `— ${consultations} fois (dernière le ${maintenant.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" })} à ${maintenant.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" })})`}`;
   await avecActeur(ACTEUR, async () => {
-    const evenement = await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", metadata: { contains: devis.id } }, orderBy: { createdAt: "desc" } });
+    // Une première lecture (le compteur remis à zéro par « Réinitialiser » compris) ouvre une nouvelle ligne d'historique.
+    const evenement = consultations === 1 ? null : await prisma.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", metadata: { contains: devis.id } }, orderBy: { createdAt: "desc" } });
     if (evenement) await prisma.dossierEvenement.update({ where: { id: evenement.id }, data: { contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });
     else await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_CONSULTE", direction: "ENTRANT", contenu, metadata: JSON.stringify({ documentId: devis.id, consultations }) } });
   });
@@ -858,17 +908,30 @@ export const schemaAccord = z.object({
   signature: z.string().max(400_000, "Signature trop lourde.").optional(),
 });
 
-async function enregistrerSignature(dossierId: string, dataUrl: string | undefined): Promise<string | null> {
+/**
+ * La signature tracée au doigt, écrite AVANT la transaction de l'accord (mission 18, B8 : pas d'écriture de fichier dans
+ * une transaction) sous un nom stable — le devis et l'empreinte du dessin : une nouvelle tentative (double appui,
+ * réseau coupé) réécrit le même fichier au lieu d'en semer un second.
+ */
+async function enregistrerSignature(dossierId: string, documentId: string, dataUrl: string | undefined): Promise<string | null> {
   const m = dataUrl ? /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl) : null;
   if (!m) return null;
   const octets = Buffer.from(m[1], "base64");
   if (octets.length < 200 || octets[0] !== 0x89 || octets[1] !== 0x50) return null;
-  const relatif = path.posix.join("dossiers", dossierId, "accords", `signature-${Date.now().toString(36)}.png`);
+  const empreinte = createHash("sha256").update(octets).digest("hex").slice(0, 16);
+  const relatif = path.posix.join("dossiers", dossierId, "accords", `signature-${documentId}-${empreinte}.png`);
   const absolu = path.join(resolveUploadsDir(), relatif);
   await fs.mkdir(path.dirname(absolu), { recursive: true });
   await fs.writeFile(absolu, octets);
   return relatif;
 }
+
+/** Les statuts d'un devis qui ne se signe plus (remplacé, annulé, refusé, non retenu). */
+const DEVIS_HORS_VIGUEUR = ["REMPLACE", "ANNULEE", "REFUSE", "NON_RETENU"];
+const MESSAGE_HORS_VIGUEUR = "Ce devis n'est plus en vigueur : un nouveau devis vous sera proposé.";
+
+/** Ce qu'a écrit la transaction d'un bon pour accord (null : rien, l'accord était déjà là). */
+type IssueAccord = { avenant: { numero: string | null } | null; suites: Suites; reprise: boolean };
 
 /**
  * Bon pour accord : UN geste du client. L'accord est écrit une fois pour toutes
@@ -876,56 +939,138 @@ async function enregistrerSignature(dossierId: string, dataUrl: string | undefin
  * navigateur, et la signature au doigt s'il l'a tracée), le devis passe
  * « accepté », le dossier passe « Signé » et Lucas est prévenu sur son
  * téléphone. Vaut signature même sans paiement immédiat.
+ *
+ * Mission 18 (B8, écart 8) : tout se joue dans UNE transaction — l'accord relu dedans (un double appui n'en écrit qu'un),
+ * l'accord, les autres devis proposés « non retenus », l'événement `ESPACE_DEVIS_ACCEPTE`, le passage en « Signé »
+ * (`changerEtapeDansTransaction` : devis accepté, main et statut du lead), puis le point d'entrée (`DEVIS_ACCEPTE` :
+ * prochaine action, une action posée à la main reste avec une tâche à côté ; main). Un échec n'écrit rien : la nouvelle
+ * tentative signe. Rejouée après une signature réussie : sans effet. Un accord écrit sans que le dossier soit passé en
+ * « Signé » (ancienne signature en deux temps, interrompue) : la nouvelle tentative termine le passage. Après la
+ * transaction : Meta, agenda, tâches (`suitesEvenementDossier`), puis l'alerte à Lucas.
  */
 export async function accepterDevis(espace: EspaceClient, entree: z.output<typeof schemaAccord>, origine: { ip: string | null; navigateur: string | null }): Promise<{ dejaAccepte: boolean }> {
   const devis = await prisma.document.findFirst({ where: { id: entree.documentId, dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
   if (!devis) throw new ErreurMetier("Devis introuvable.", 404);
-  if (["REMPLACE", "ANNULEE", "REFUSE", "NON_RETENU"].includes(devis.statut)) throw new ErreurMetier("Ce devis n'est plus en vigueur : un nouveau devis vous sera proposé.", 409);
+  if (DEVIS_HORS_VIGUEUR.includes(devis.statut)) throw new ErreurMetier(MESSAGE_HORS_VIGUEUR, 409);
   if (devis.visibleEspace === false && devis.statut !== "ACCEPTE") throw new ErreurMetier("Ce devis n'est pas proposé dans votre espace.", 409);
-  // Un accord retiré ne vaut plus : le client peut en redonner un (nouvelle ligne, nouvelle preuve).
-  const existant = await prisma.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null } });
-  if (existant) return { dejaAccepte: true };
 
+  const dossierId = espace.dossierId;
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
-  const dossier = await prisma.dossier.findUnique({ where: { id: espace.dossierId }, select: { clientNom: true, clientTelephone: true, etape: true } });
-  const signature = await enregistrerSignature(espace.dossierId, entree.signature).catch(() => null);
-  // Mission 11 : il n'en signe qu'un ; les autres devis proposés passent « non retenu » (gardés en historique).
-  const autres = await prisma.document.findMany({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, id: { not: devis.id }, statut: { in: ["GENERE", "ENVOYE"] } }, select: { id: true, numero: true, libelleVariante: true } });
+  const total = (montants.totalTtcCentimes / 100).toLocaleString("fr-FR");
   const libelle = devis.libelleVariante ? ` (${devis.libelleVariante})` : "";
-  const nonRetenus = autres.map((a) => `${a.numero}${a.libelleVariante ? ` (${a.libelleVariante})` : ""}`);
-  await avecActeur(ACTEUR, async () => {
-    await prisma.$transaction([
-      prisma.accordDevis.create({
-        data: { dossierId: espace.dossierId, documentId: devis.id, numeroDevis: devis.numero, totalHt: montants.totalHtCentimes / 100, acomptePct: devis.acomptePct, nomSignataire: entree.nom, mention: "Bon pour accord", ip: origine.ip, navigateur: origine.navigateur?.slice(0, 300) ?? null, signature },
-      }),
-      ...(autres.length ? [prisma.document.updateMany({ where: { id: { in: autres.map((a) => a.id) } }, data: { statut: "NON_RETENU" } })] : []),
-      prisma.dossierEvenement.create({
-        data: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_ACCEPTE", direction: "ENTRANT", contenu: `Bon pour accord donné par ${entree.nom} sur le devis ${devis.numero}${libelle} (${(montants.totalTtcCentimes / 100).toLocaleString("fr-FR")} €)${signature ? ", signé au doigt" : ""}${nonRetenus.length ? ` ; non retenu${nonRetenus.length > 1 ? "s" : ""} : ${nonRetenus.join(", ")}` : ""}`, metadata: JSON.stringify({ documentId: devis.id, numero: devis.numero, libelle: devis.libelleVariante ?? null, signature: Boolean(signature), nonRetenus: autres.map((a) => ({ id: a.id, numero: a.numero, libelle: a.libelleVariante ?? null })) }) },
-      }),
-    ]);
-    // Le dossier passe « Signé » : c'est le client qui signe, pas un agent. L'acompte reste à enregistrer par Lucas.
-    const etapesAvantSignature: EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE", "EN_PAUSE", "PERDU"];
-    if (dossier && etapesAvantSignature.includes(dossier.etape as EtapeDossier)) {
-      await changerEtape(espace.dossierId, { vers: "SIGNE", devisAccepteId: devis.id, confirmations: { BON_POUR_ACCORD: true } });
-    } else if (devis.statut !== "ACCEPTE") {
-      await prisma.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
-    }
-    await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Appeler le client : fixer la date du chantier, suivre l'acompte", prochaineActionDate: new Date() } });
-  });
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { clientNom: true, clientTelephone: true } });
+  const signature = await enregistrerSignature(dossierId, devis.id, entree.signature).catch(() => null);
 
+  const issue = await avecActeur(ACTEUR, () =>
+    prisma.$transaction(
+      async (tx): Promise<IssueAccord | null> => {
+        // Relu dans la transaction : un devis annulé, remplacé ou retiré entre-temps ne se signe plus.
+        const relu = await tx.document.findUnique({ where: { id: devis.id }, select: { statut: true, archiveLe: true } });
+        if (!relu || relu.archiveLe || DEVIS_HORS_VIGUEUR.includes(relu.statut)) throw new ErreurMetier(MESSAGE_HORS_VIGUEUR, 409);
+        // Un projet figé (non réalisé : perdu ; terminé : encaissé) ne se signe plus — la même règle que la route (projetDe).
+        const fige = figeDuProjet((await tx.dossier.findUniqueOrThrow({ where: { id: dossierId }, select: { etape: true } })).etape);
+        if (fige) throw new ErreurMetier(MESSAGE_FIGE[fige], 409);
+        // Un accord retiré ne vaut plus : le client peut en redonner un (nouvelle ligne, nouvelle preuve).
+        const existant = await tx.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null }, select: { id: true } });
+        const nouvelAccord = () =>
+          tx.accordDevis.create({
+            data: { dossierId, documentId: devis.id, numeroDevis: devis.numero, totalHt: montants.totalHtCentimes / 100, acomptePct: devis.acomptePct, nomSignataire: entree.nom, mention: "Bon pour accord", ip: origine.ip, navigateur: origine.navigateur?.slice(0, 300) ?? null, signature },
+          });
+        // Mission 11 : il n'en signe qu'un ; les autres devis proposés passent « non retenu » (gardés en historique).
+        const evenementAccord = (nonRetenus: DevisNonRetenu[], avenantDe: { id: string; numero: string | null } | null) =>
+          tx.dossierEvenement.create({
+            data: {
+              dossierId,
+              type: "ESPACE_DEVIS_ACCEPTE",
+              direction: "ENTRANT",
+              contenu: `Bon pour accord donné par ${entree.nom} sur le devis ${devis.numero}${libelle} (${total} €)${avenantDe ? `, avenant au devis signé ${avenantDe.numero}` : ""}${signature ? ", signé au doigt" : ""}${nonRetenus.length ? ` ; non retenu${nonRetenus.length > 1 ? "s" : ""} : ${libelleNonRetenus(nonRetenus)}` : ""}`,
+              metadata: JSON.stringify({
+                documentId: devis.id,
+                numero: devis.numero,
+                libelle: devis.libelleVariante ?? null,
+                signature: Boolean(signature),
+                ...(avenantDe ? { avenant: true, devisSigneId: avenantDe.id } : {}),
+                nonRetenus: nonRetenus.map((a) => ({ id: a.id, numero: a.numero, libelle: a.libelleVariante ?? null })),
+              }),
+            },
+          });
+
+        // Mission 18 (B7, écart 7) : un avenant (ou un nouveau devis émis après le devis signé) se signe À CÔTÉ du devis
+        // d'origine : son accord n'y touche pas, l'étape ne bouge pas (l'acompte reste celui du devis d'origine), les autres
+        // devis « Généré » ou « Envoyé » (d'autres avenants proposés) passent « non retenu ».
+        const signeAvant = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE", id: { not: devis.id }, createdAt: { lt: devis.createdAt } }, orderBy: { createdAt: "asc" }, select: { id: true, numero: true } });
+        // Mission 18 (relecture) : seuls les devis de `devisASigner` se signent. Sur un dossier signé, un devis créé AVANT le
+        // devis signé d'origine (une ancienne variante restée « Généré ») n'est plus en vigueur : signé, il deviendrait « le
+        // devis » de l'espace (acompte, virement) et ferait passer le vrai devis signé pour un avenant.
+        if (!signeAvant && relu.statut !== "ACCEPTE") {
+          const signeApres = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE", id: { not: devis.id }, createdAt: { gt: devis.createdAt } }, select: { id: true } });
+          if (signeApres) throw new ErreurMetier(MESSAGE_HORS_VIGUEUR, 409);
+        }
+        if (signeAvant) {
+          if (existant) return null;
+          await nouvelAccord();
+          const nonRetenus = await retenirDevis(tx, dossierId, devis.id);
+          await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
+          await evenementAccord(nonRetenus, signeAvant);
+          const suites = await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ACCEPTE", documentId: devis.id, avenant: { numero: devis.numero } });
+          return { avenant: { numero: signeAvant.numero }, suites, reprise: false };
+        }
+
+        // Le devis d'origine. Q, S, Devis envoyé, Relance (ou en pause depuis l'une d'elles) → « Signé » ; perdu (figé,
+        // refusé plus haut) ne figure plus parmi les étapes signables ; déjà signé ou plus loin : le devis seul passe « accepté ».
+        const signer = await estSigneeParDevisAccepte(tx, dossierId);
+        if (existant && !signer) return null;
+        let nonRetenus: DevisNonRetenu[] = [];
+        if (!existant) {
+          await nouvelAccord();
+          nonRetenus = await retenirDevis(tx, dossierId, devis.id);
+          await evenementAccord(nonRetenus, null);
+        }
+        const changement = signer
+          ? await changerEtapeDansTransaction(tx, dossierId, {
+              vers: "SIGNE",
+              devisAccepteId: devis.id,
+              confirmations: { BON_POUR_ACCORD: true },
+              raison: [`bon pour accord donné dans l'espace client sur le devis ${devis.numero}${existant ? " (passage terminé à la nouvelle tentative)" : ""}`, suiteNonRetenus(nonRetenus)].filter(Boolean).join(" ; "),
+            })
+          : null;
+        if (!changement && relu.statut !== "ACCEPTE") await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
+        const suites = await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ACCEPTE", documentId: devis.id });
+        return { avenant: null, suites: changement ? { ...suites, changements: [changement, ...suites.changements] } : suites, reprise: Boolean(existant) };
+      },
+      { maxWait: 10_000, timeout: 30_000 }
+    )
+  );
+  if (!issue) return { dejaAccepte: true };
+  await suitesEvenementDossier(issue.suites);
+
+  if (issue.avenant) {
+    await prevenir(
+      dossierId,
+      {
+        titre: `AVENANT SIGNÉ — ${dossier?.clientNom ?? entree.nom}`,
+        texte: `Bon pour accord sur le devis ${devis.numero}${libelle} : ${total} €, en plus du devis signé ${issue.avenant.numero}.\nÀ vous : le prévoir au chantier et sur la facture.`,
+        urgence: 4,
+        telephone: dossier?.clientTelephone,
+        etiquette: `accord-${dossierId}`,
+      },
+      "espace-accord"
+    );
+    return { dejaAccepte: false };
+  }
+  // Signature reprise (l'accord d'une tentative interrompue) : Lucas n'avait pas été prévenu, il l'est maintenant.
   await prevenir(
-    espace.dossierId,
+    dossierId,
     {
       titre: `DEVIS SIGNÉ — ${dossier?.clientNom ?? entree.nom}`,
-      texte: `Bon pour accord sur le devis ${devis.numero} : ${(montants.totalTtcCentimes / 100).toLocaleString("fr-FR")} €${montants.acompteCentimes ? ` (acompte ${(montants.acompteCentimes / 100).toLocaleString("fr-FR")} €)` : ""}.\nÀ vous : appeler pour fixer la date du chantier.`,
+      texte: `Bon pour accord sur le devis ${devis.numero} : ${total} €${montants.acompteCentimes ? ` (acompte ${(montants.acompteCentimes / 100).toLocaleString("fr-FR")} €)` : ""}.\nÀ vous : appeler pour fixer la date du chantier.`,
       urgence: 5,
       telephone: dossier?.clientTelephone,
-      etiquette: `accord-${espace.dossierId}`,
+      etiquette: `accord-${dossierId}`,
     },
     "espace-accord"
   );
-  return { dejaAccepte: false };
+  return { dejaAccepte: issue.reprise };
 }
 
 /* ── Après le chantier : l'avis ─────────────────────────────────────── */

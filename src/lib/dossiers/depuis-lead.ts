@@ -1,32 +1,44 @@
 import { promises as fs } from "fs";
+import type { Prisma } from "@prisma/client";
 import { OBJET_PAR_FAMILLE } from "./objet";
 import path from "path";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
-import { LIBELLES_TYPE_PROJET, libelleSourceLead } from "@/lib/prospects/constantes";
+import { FILTRE_DEMANDE_DE_DEVIS, LIBELLES_TYPE_PROJET, STATUTS_LEAD_APRES_DEVIS, estDemandeDeDevis, libelleSourceLead } from "@/lib/prospects/constantes";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { ajouterPhoto, creerDossier, ecrireNote, modifierDossier } from "./dossiers";
-import { ETAPES_CLOSES, type EtapeDossier } from "./constants";
+import { ACTIONS_OUVERTURE_AUTO, ETAPES_CLOSES, type EtapeDossier, type MotifOuvertureAuto } from "./constants";
+import { jourParis } from "./dates";
 import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { pluriel } from "@/lib/commun/format";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { alignerStatutLead } from "./statut-lead";
 
 /**
  * Du contact entrant au dossier, sans ressaisie.
  *
- *  - « Ouvrir un dossier » depuis un lead : UN bouton. Coordonnées, projet,
- *    source, campagne, réponses au formulaire, message, montant simulé, rappel
- *    prévu, photos jointes et simulations : tout suit. Le lead sort alors de la
- *    liste Leads — il vit dans Dossiers, sans doublon.
- *  - Une simulation faite sur le site N'OUVRE PLUS de dossier (règle du
- *    22/09/2026) : elle crée un lead, avec ses photos et ses simulations sur sa
- *    fiche. Le dossier s'ouvre quand Lucas le décide depuis Leads (bouton, ou
- *    envoi du lien de l'espace client) ; ce que le client fait ensuite dans son
- *    espace (projet validé, simulation validée) fait avancer ce dossier.
- *    Si le contact a DÉJÀ un dossier vivant, sa nouvelle simulation y est rangée
- *    (et apparaît dans son espace) : un seul dossier par projet en cours.
+ *  - Mission 18 (A2) : le dossier S'OUVRE TOUT SEUL dès que le contact envoie
+ *    des photos, fait une simulation ou demande un devis sur le site
+ *    (`ouvrirDossierAutomatique`, appelée par le webhook et par la fin d'une
+ *    simulation du site), en Qualification, avec « Appeler : … » pour
+ *    aujourd'hui. Dans l'espace client, tout se passe déjà dans un dossier (un
+ *    projet créé par le client ouvre le sien, mission 5). Seuls les faits
+ *    postérieurs à `DEBUT_OUVERTURE_AUTO` ouvrent : le stock reste dans Leads.
+ *    Un contact hors zone (« À écarter ») reste un lead ; un lead Meta aussi,
+ *    tant qu'il ne fait rien sur le site (une photo que Lucas lui dépose depuis
+ *    le CRM n'ouvre rien). Un dossier archivé par Lucas ne se rouvre que sur un
+ *    fait postérieur à son archivage. Une ouverture à la fois par contact.
+ *  - « Ouvrir un dossier » depuis un lead : UN bouton, qui ne sert plus que pour
+ *    un lead qualifié au téléphone. Coordonnées, projet, source, campagne,
+ *    réponses au formulaire, message, montant simulé, rappel prévu, photos
+ *    jointes et simulations : tout suit. Le lead sort alors de la liste Leads —
+ *    il vit dans Dossiers, sans doublon (un lead du site jamais appelé reste dans
+ *    « À appeler », `prospects/leads.ts`).
+ *  - Si le contact a DÉJÀ un dossier vivant, sa nouvelle simulation ou ses
+ *    photos y sont rangées (et apparaissent dans son espace) : un seul dossier
+ *    par projet en cours.
  *
  * La photo avant et chaque rendu rejoignent les photos de chantier du dossier ;
  * le miroir Drive, qui recopie ces photos, n'a rien d'autre à savoir.
@@ -38,7 +50,29 @@ import { synchroniserRappel } from "@/lib/agenda/rappels";
 // Mission 13 : une seule table (dossiers/objet.ts), partagée avec la validation du projet dans l'espace.
 const OBJET_PAR_TYPE_PROJET: Record<string, string> = OBJET_PAR_FAMILLE;
 
-const ACTEUR_AUTOMATIQUE = { acteur: "SYSTEME:simulation-dossier", origine: "Simulation du site rangée dans son dossier" };
+const ACTEUR_AUTOMATIQUE = { acteur: "SYSTEME:simulation-dossier", origine: "Simulation, photos ou demande de devis du site : dossier ouvert ou complété tout seul" };
+
+/**
+ * Mission 18 (A2) : à partir de cette date, une simulation, une photo ou une demande de devis venue du site ouvre le
+ * dossier toute seule. Rien d'avant n'est ouvert après coup : le stock reste dans Leads, où « Ouvrir un dossier » le
+ * reprend si Lucas le décide.
+ */
+export const DEBUT_OUVERTURE_AUTO = new Date("2026-10-03T00:00:00+02:00");
+
+/** Le filet ne rattrape que les deux derniers jours (une erreur au moment du webhook), jamais l'histoire. */
+const FENETRE_DU_FILET_MS = 2 * 86_400_000;
+
+/** Une simulation qui a une image : photo avant, rendu ou photo d'origine. */
+const AVEC_IMAGE: Prisma.SimulationWhereInput[] = [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }];
+
+/**
+ * Relecture de la partie A : une photo que Lucas dépose lui-même sur un lead (lien de dépôt, « ajouter_fichier » :
+ * origine DEPOT_CRM) n'est pas un geste du contact. Elle se range dans son dossier vivant, mais n'en ouvre jamais un.
+ */
+const PHOTO_DU_CONTACT: Prisma.PhotoLeadWhereInput = { origine: { not: "DEPOT_CRM" } };
+
+/** Une photo pas encore rangée ni déjà tentée en vain (fichier absent du volume : `rangeeLe` posé sans dossier). */
+const PHOTO_A_RANGER: Prisma.PhotoLeadWhereInput = { archiveLe: null, dossierId: null, rangeeLe: null };
 
 const LIBELLES_OCCUPATION: Record<string, string> = { PROPRIETAIRE: "propriétaire", LOCATAIRE: "locataire" };
 const LIBELLES_ECHANGE: Record<string, string> = { APPEL: "Appel", SMS: "SMS", EMAIL: "E-mail", NOTE: "Note" };
@@ -47,8 +81,8 @@ const LIBELLES_TAILLE: Record<string, string> = { PETITE: "petite cuisine", MOYE
 export type OuvertureDepuisLead = { dossierId: string; cree: boolean; photosRangees: number; simulationsRangees: number };
 
 type Options = {
-  /** Ce qui déclenche l'ouverture : change la prochaine action et la note d'ouverture. */
-  motif?: "BOUTON" | "SIMULATION" | "ESPACE";
+  /** Ce qui déclenche l'ouverture : change la prochaine action et la note d'ouverture. SIMULATION et DEMANDE : ouverture automatique. */
+  motif?: "BOUTON" | MotifOuvertureAuto | "ESPACE";
   prochaineAction?: string | null;
   /** Geste de Lucas (fusion d'un doublon) : pas d'alerte « nouvelle simulation » sur son propre téléphone. */
   silencieux?: boolean;
@@ -107,13 +141,15 @@ function noteDeReprise(lead: {
 
 /**
  * Range dans le dossier les photos du lead et ses simulations pas encore rangées.
- * Une image absente du disque n'arrête rien : la suivante est tentée, et la
- * ligne reste « à ranger » pour le passage suivant.
+ * Une image absente du disque n'arrête rien : la suivante est tentée. Une photo
+ * introuvable (fichier absent ou vide) est marquée tentée (`rangeeLe` sans
+ * dossier) : le filet n'y revient plus, comme pour une simulation sans images.
+ * Une erreur d'écriture (volume plein) la laisse « à ranger » pour le passage suivant.
  */
 export async function rangerImagesDuLead(leadId: string, dossierId: string, options: { silencieux?: boolean } = {}): Promise<{ photos: number; simulations: number }> {
   const [photos, simulations] = await Promise.all([
-    prisma.photoLead.findMany({ where: { leadId, dossierId: null }, orderBy: { createdAt: "asc" } }),
-    prisma.simulation.findMany({ where: { leadId, dossierId: null, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] }, orderBy: { createdAt: "asc" } }),
+    prisma.photoLead.findMany({ where: { leadId, ...PHOTO_A_RANGER }, orderBy: { createdAt: "asc" } }),
+    prisma.simulation.findMany({ where: { leadId, dossierId: null, OR: AVEC_IMAGE }, orderBy: { createdAt: "asc" } }),
   ]);
   let photosRangees = 0;
   let simulationsRangees = 0;
@@ -133,6 +169,10 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
       if (await recopierDansLeDossier(dossierId, photo.chemin, `photo-${photo.id}${path.extname(photo.chemin) || ".jpg"}`)) {
         await prisma.photoLead.update({ where: { id: photo.id }, data: { dossierId, rangeeLe: new Date() } });
         photosRangees++;
+      } else {
+        // Rien sur le disque : tentée une fois, on n'y revient pas (la ligne reste sur le lead, sans dossier).
+        await prisma.photoLead.update({ where: { id: photo.id }, data: { rangeeLe: new Date() } });
+        console.warn(`[dossiers] photo ${photo.id} du contact ${leadId} introuvable sur le serveur : non rangée, plus retentée`);
       }
     } catch (erreur) {
       console.error(`[dossiers] photo ${photo.id} du contact ${leadId} non rangée :`, erreur);
@@ -185,8 +225,31 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
   return { photos: photosRangees, simulations: simulationsRangees };
 }
 
+/**
+ * Relecture de la partie A : l'ouverture d'un dossier se fait une à la fois par contact. Le webhook, la fin d'une
+ * simulation, le filet et le bouton peuvent arriver ensemble ; sans cela, deux appels liraient « pas de dossier
+ * vivant » avant que l'un ne le crée, et ouvriraient deux dossiers. Le serveur est un seul processus : une file de
+ * promesses par contact suffit.
+ */
+const ouverturesEnCours = new Map<string, Promise<unknown>>();
+
+async function unParContact<T>(leadId: string, travail: () => Promise<T>): Promise<T> {
+  const precedente = ouverturesEnCours.get(leadId) ?? Promise.resolve();
+  const suite = precedente.catch(() => undefined).then(travail);
+  const fin = suite.catch(() => undefined);
+  ouverturesEnCours.set(leadId, fin);
+  void fin.then(() => {
+    if (ouverturesEnCours.get(leadId) === fin) ouverturesEnCours.delete(leadId);
+  });
+  return suite;
+}
+
 /** Ouvre le dossier d'un contact (ou retrouve le sien), reprend tout ce qu'on sait, range ses images. */
 export async function ouvrirDossierDuLead(leadId: string, options: Options = {}): Promise<OuvertureDepuisLead> {
+  return unParContact(leadId, () => ouvrirSansFile(leadId, options));
+}
+
+async function ouvrirSansFile(leadId: string, options: Options): Promise<OuvertureDepuisLead> {
   const lead = await prisma.lead.findUnique({ where: { id: leadId }, include: { simulations: { where: { archiveLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { prixDevis: true } } } });
   if (!lead) throw new ErreurMetier("Contact introuvable.", 404);
 
@@ -197,13 +260,16 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
     const montant = lead.simulations[0]?.prixDevis ?? lead.prixDevis ?? null;
     const client = lead.clientId ? await prisma.client.findUnique({ where: { id: lead.clientId }, select: { archiveLe: true } }) : null;
     const rappel = lead.rappelLe && lead.rappelLe.getTime() > Date.now() ? lead.rappelLe : null;
+    // Ouverture automatique : « Appeler : … » pour aujourd'hui (une tâche le porte) ; un rappel demandé passe avant, à
+    // son heure (« Rappeler » : `rappelALOuverture` l'y pose, un autre texte le perdrait).
+    const automatique = options.motif === "SIMULATION" || options.motif === "DEMANDE" ? options.motif : null;
     const prochaineAction =
       options.prochaineAction !== undefined
         ? options.prochaineAction
-        : options.motif === "SIMULATION"
-          ? "Appeler : simulation faite sur le site"
-          : rappel
-            ? "Rappeler"
+        : rappel
+          ? "Rappeler"
+          : automatique
+            ? ACTIONS_OUVERTURE_AUTO[automatique]
             : null;
     dossierId = await creerDossier(
       {
@@ -219,7 +285,7 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
         source: "ENTRANT",
         montantEstime: montant && montant > 0 ? Math.round(montant) : null,
         prochaineAction,
-        prochaineActionDate: rappel ? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(rappel) : null,
+        prochaineActionDate: rappel ? jourParis(rappel) : automatique && prochaineAction ? jourParis(new Date()) : null,
       },
       []
     );
@@ -228,12 +294,14 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
     const idDossier = dossierId;
     const echanges = await prisma.interaction.findMany({ where: { leadId: lead.id }, orderBy: { createdAt: "desc" }, take: 8, select: { type: true, contenu: true, createdAt: true } });
     await prisma.$transaction((tx) => ecrireNote(tx, idDossier, { etape, contenu: noteDeReprise(lead, echanges.reverse()) }));
-    // Simulation d'avant cette règle (rattrapage) : le dossier porte la date réelle de la simulation, pas celle du rattrapage —
-    // les délais et la synthèse du mois restent vrais.
+    // Simulation rangée après coup (rattrapage, fusion d'un doublon) : le dossier porte la date réelle de la simulation qui
+    // l'ouvre (la plus récente), pas celle du rattrapage — les délais et la synthèse du mois restent vrais. Mission 18 (A2) :
+    // la plus récente, et non plus la première (ni l'arrivée du lead, sans simulation) — un contact revenu simuler aujourd'hui
+    // n'ouvre pas un dossier daté de sa première visite.
     if (options.motif === "SIMULATION") {
-      const premiere = await prisma.simulation.findFirst({ where: { leadId: lead.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } });
-      const reelle = premiere?.createdAt ?? lead.createdAt;
-      if (Date.now() - reelle.getTime() > 2 * 86_400_000) {
+      const derniere = await prisma.simulation.findFirst({ where: { leadId: lead.id }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+      const reelle = derniere?.createdAt ?? null;
+      if (reelle && Date.now() - reelle.getTime() > 2 * 86_400_000) {
         await modifierDossier(idDossier, { ouvertLe: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(reelle) }).catch((erreur: unknown) => console.error(`[dossiers] date réelle du dossier ${idDossier} non posée :`, erreur));
       }
     }
@@ -241,9 +309,12 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
     // `rappelALOuverture`, qui a aussi supprimé l'événement du lead et posé celui du dossier). Un rappel passé, ou écarté
     // par une autre prochaine action, ne reste pas sur le lead.
     if (lead.rappelLe) await prisma.lead.update({ where: { id: lead.id }, data: { rappelLe: null } });
-  } else if (lead.agendaEvenementId) {
+  } else {
+    // Mission 18 (B12) : un contact qui revient (demande, simulation) sur son dossier vivant retrouve le statut que ses
+    // dossiers lui donnent — un « Devis demandé » ou un « Sans suite » posé entre-temps ne reste pas (statut-lead.ts).
+    await alignerStatutLead(prisma, lead.id);
     // Un lead repris par son dossier vivant n'a plus de rappel à lui : son événement quitte l'agenda.
-    await synchroniserRappel({ type: "LEAD", id: lead.id });
+    if (lead.agendaEvenementId) await synchroniserRappel({ type: "LEAD", id: lead.id });
   }
 
   const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId, { silencieux: options.silencieux });
@@ -253,52 +324,123 @@ export async function ouvrirDossierDuLead(leadId: string, options: Options = {})
   return { dossierId, cree, photosRangees: photos, simulationsRangees: simulations };
 }
 
-/** Ce contact a des images à ranger : une simulation avec image, ou la photo d'une simulation échouée. */
-async function relevDeLaRegle(leadId: string): Promise<boolean> {
-  const [simulations, photosSimulateur] = await Promise.all([
-    prisma.simulation.count({ where: { leadId, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] } }),
-    prisma.photoLead.count({ where: { leadId, lead: { source: "SITE_SIMULATEUR" } } }),
+type LeadLu = { id: string; clientId: string | null; source: string; typeProjet: string; createdAt: Date; archiveLe: Date | null };
+
+/**
+ * Ce que le contact a fait sur le site, depuis une date (ou depuis toujours) : une simulation avec image, une photo, une
+ * demande de devis. `seulementDuContact` : les photos déposées par Lucas (DEPOT_CRM) ne comptent pas (elles n'ouvrent
+ * jamais un dossier, mais se rangent dans le dossier vivant).
+ */
+async function faitsDuSite(lead: LeadLu, depuis: Date | null, seulementDuContact = false): Promise<{ simulation: boolean; photos: boolean; demande: boolean }> {
+  const quand = depuis ? { createdAt: { gte: depuis } } : {};
+  const [simulations, photos] = await Promise.all([
+    prisma.simulation.count({ where: { leadId: lead.id, ...quand, OR: AVEC_IMAGE } }),
+    prisma.photoLead.count({ where: { leadId: lead.id, ...quand, ...(seulementDuContact ? PHOTO_DU_CONTACT : {}) } }),
   ]);
-  return simulations + photosSimulateur > 0;
+  return { simulation: simulations > 0, photos: photos > 0, demande: estDemandeDeDevis(lead) && (!depuis || lead.createdAt.getTime() >= depuis.getTime()) };
 }
 
 /**
- * Après une simulation du site : si le contact a déjà un dossier vivant, ses
- * images y sont rangées (et rejoignent son espace). Sinon RIEN ne s'ouvre : le
- * contact reste un lead, ses simulations sur sa fiche (null). Jamais bloquant
- * pour le webhook — une erreur se journalise, et le filet périodique repasse.
+ * Ce qui ouvre le dossier tout seul, d'après les seuls faits postérieurs à `depuis` (`DEBUT_OUVERTURE_AUTO`, ou
+ * l'archivage de son dernier dossier) : la demande de devis qui arrive (ou le formulaire qui a créé le lead), sinon une
+ * simulation (ou la photo d'une simulation échouée), sinon des photos jointes à une demande — envoyées par le contact,
+ * jamais déposées par Lucas. null : rien de nouveau, le contact reste un lead.
  */
-export async function assurerDossierDeSimulation(leadId: string): Promise<OuvertureDepuisLead | null> {
+async function motifDOuverture(lead: LeadLu, demande: boolean, depuis: Date): Promise<MotifOuvertureAuto | null> {
+  if (demande) return "DEMANDE";
+  const recents = await faitsDuSite(lead, depuis, true);
+  if (recents.simulation || (recents.photos && lead.source === "SITE_SIMULATEUR")) return "SIMULATION";
+  if (recents.photos || recents.demande) return "DEMANDE";
+  return null;
+}
+
+/**
+ * Mission 18 (A2) — le contact vient d'envoyer des photos, de faire une simulation ou de demander un devis sur le site
+ * (`demande` : la demande qui arrive). S'il a un dossier vivant, photo avant, rendus et photos y sont rangés (et
+ * rejoignent son espace). Sinon son dossier S'OUVRE, en Qualification, « Appeler : … » pour aujourd'hui (ou
+ * « Rappeler » à l'heure qu'il a demandée) — sauf contact archivé, hors zone, ou sans fait postérieur à
+ * `DEBUT_OUVERTURE_AUTO` (null : il reste un lead). Aucun mail ni SMS de plus. Jamais bloquant pour le webhook : une
+ * erreur se journalise, et le filet périodique repasse.
+ */
+export async function ouvrirDossierAutomatique(leadId: string, options: { demande?: boolean } = {}): Promise<OuvertureDepuisLead | null> {
   try {
-    if (!(await relevDeLaRegle(leadId))) return null;
-    const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, clientId: true } });
-    // Il a vu sa pièce rénovée : sa classe est relue (Prioritaire d'office, sauf hors zone), dossier ou pas.
-    if (!lead || !(await dossierVivant(lead))) {
-      await classerLeadSansBloquer(leadId);
-      return null;
-    }
-    const resultat = await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirDossierDuLead(leadId, { motif: "SIMULATION" }));
+    const lead = await prisma.lead.findUnique({ where: { id: leadId }, select: { id: true, clientId: true, source: true, typeProjet: true, createdAt: true, archiveLe: true } });
+    if (!lead) return null;
+    // Il a vu sa pièce rénovée, ou il demande un devis : sa classe est relue (Prioritaire d'office, sauf hors zone), dossier ou pas.
     await classerLeadSansBloquer(leadId);
-    if (resultat.cree || resultat.simulationsRangees > 0) console.log(`[dossiers] simulation → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${pluriel(resultat.simulationsRangees, "simulation")}, ${pluriel(resultat.photosRangees, "photo")}`);
+    // Relecture de la partie A : la décision (dossier vivant ou non) et l'ouverture se font d'un bloc, un appel à la fois
+    // par contact (`unParContact`) — jamais deux dossiers ouverts ensemble par le webhook, la simulation et le filet.
+    const ouvert = await unParContact(leadId, async (): Promise<{ motif: MotifOuvertureAuto; resultat: OuvertureDepuisLead } | null> => {
+      let motif: MotifOuvertureAuto;
+      if (await dossierVivant(lead)) {
+        // Un dossier vivant : ce qui n'y est pas encore rangé y entre ; jamais de second dossier.
+        const faits = await faitsDuSite(lead, null);
+        if (!faits.simulation && !faits.photos && !options.demande) return null;
+        motif = options.demande ? "DEMANDE" : "SIMULATION";
+      } else {
+        if (lead.archiveLe) return null;
+        // Hors zone : il reste dans Leads (« Classer · … (hors zone) ») ; « Ouvrir un dossier » le reprend si Lucas le traite quand même.
+        if ((await prisma.lead.findUnique({ where: { id: leadId }, select: { priorite: true } }))?.priorite === "A_ECARTER") return null;
+        // Un dossier archivé par Lucas ne se rouvre pas sur un fait qu'il connaissait déjà : seuls comptent les faits
+        // postérieurs à son archivage (une nouvelle simulation, une nouvelle demande l'ouvrent, comme pour un nouveau contact).
+        const archive = await prisma.dossier.findFirst({ where: { leadId, archiveLe: { not: null } }, orderBy: { archiveLe: "desc" }, select: { archiveLe: true } });
+        const depuis = new Date(Math.max(DEBUT_OUVERTURE_AUTO.getTime(), archive?.archiveLe?.getTime() ?? 0));
+        const trouve = await motifDOuverture(lead, options.demande === true, depuis);
+        if (!trouve) return null;
+        motif = trouve;
+      }
+      return { motif, resultat: await avecActeur(ACTEUR_AUTOMATIQUE, () => ouvrirSansFile(leadId, { motif })) };
+    });
+    if (!ouvert) return null;
+    const { motif, resultat } = ouvert;
+    if (resultat.cree || resultat.simulationsRangees + resultat.photosRangees > 0) {
+      console.log(`[dossiers] ${motif === "DEMANDE" ? "demande de devis" : "simulation"} du site → dossier ${resultat.dossierId} (${resultat.cree ? "ouvert" : "existant"}) : ${pluriel(resultat.simulationsRangees, "simulation")}, ${pluriel(resultat.photosRangees, "photo")}`);
+    }
     return resultat;
   } catch (erreur) {
-    console.error(`[dossiers] simulation du contact ${leadId} non rangée (sera reprise) :`, erreur);
+    console.error(`[dossiers] dossier du contact ${leadId} non ouvert ou non complété (sera repris) :`, erreur);
     return null;
   }
 }
 
 /**
- * Filet : les simulations d'un contact qui A un dossier vivant et qu'une erreur
- * aurait laissées hors de ce dossier. Depuis le 22/09/2026, un contact sans
- * dossier n'en reçoit plus : ses simulations restent sur sa fiche de lead.
+ * Filet, toutes les 15 minutes : ce qu'une erreur au moment du webhook aurait laissé de côté.
+ *  - Un contact qui A un dossier vivant : ses simulations et ses photos pas encore rangées y entrent.
+ *  - Mission 18 (A2) : un contact qui n'a JAMAIS eu de dossier (archivés compris : un dossier archivé par Lucas ne se
+ *    rouvre pas tout seul), dont le client n'en a pas de vivant, et qui a fait quelque chose sur le site ces deux
+ *    derniers jours, après `DEBUT_OUVERTURE_AUTO` : son dossier s'ouvre. Ni perdu, ni après devis, ni hors zone ; le
+ *    stock n'est jamais ouvert.
  */
-export async function rattraperSimulationsSansDossier(limite = 200): Promise<{ contacts: number; dossiersOuverts: number; simulationsRangees: number; photosRangees: number; echecs: number }> {
+export async function rattraperSimulationsSansDossier(limite = 200, maintenant: Date = new Date()): Promise<{ contacts: number; dossiersOuverts: number; simulationsRangees: number; photosRangees: number; echecs: number }> {
+  const depuis = new Date(Math.max(DEBUT_OUVERTURE_AUTO.getTime(), maintenant.getTime() - FENETRE_DU_FILET_MS));
   const leads = await prisma.lead.findMany({
     where: {
-      dossiers: { some: { archiveLe: null, etape: { notIn: ETAPES_CLOSES } } },
       OR: [
-        { simulations: { some: { dossierId: null, OR: [{ imageBeforePath: { not: null } }, { imageAfterPath: { not: null } }, { imageOriginalPath: { not: null } }] } } },
-        { source: "SITE_SIMULATEUR", photos: { some: { dossierId: null } } },
+        {
+          dossiers: { some: { archiveLe: null, etape: { notIn: ETAPES_CLOSES } } },
+          OR: [
+            { simulations: { some: { archiveLe: null, dossierId: null, OR: AVEC_IMAGE } } },
+            { source: "SITE_SIMULATEUR", photos: { some: PHOTO_A_RANGER } },
+            { photos: { some: { ...PHOTO_A_RANGER, createdAt: { gte: DEBUT_OUVERTURE_AUTO } } } },
+          ],
+        },
+        {
+          dossiers: { none: {} },
+          statut: { notIn: [...STATUTS_LEAD_APRES_DEVIS, "PERDU"] },
+          AND: [
+            { OR: [{ priorite: null }, { priorite: { not: "A_ECARTER" } }] },
+            // Son client n'a pas déjà un dossier vivant (sinon c'est celui-là qui reçoit, au webhook : rien à rattraper ici).
+            { OR: [{ clientId: null }, { client: { dossiers: { none: { archiveLe: null, etape: { notIn: ETAPES_CLOSES } } } } }] },
+            {
+              OR: [
+                { simulations: { some: { archiveLe: null, dossierId: null, createdAt: { gte: depuis }, OR: AVEC_IMAGE } } },
+                // Une photo envoyée par le contact : celle que Lucas dépose (DEPOT_CRM) n'ouvre rien.
+                { photos: { some: { ...PHOTO_A_RANGER, ...PHOTO_DU_CONTACT, createdAt: { gte: depuis } } } },
+                { createdAt: { gte: depuis }, ...FILTRE_DEMANDE_DE_DEVIS },
+              ],
+            },
+          ],
+        },
       ],
     },
     orderBy: { createdAt: "asc" },
@@ -307,7 +449,7 @@ export async function rattraperSimulationsSansDossier(limite = 200): Promise<{ c
   });
   const bilan = { contacts: leads.length, dossiersOuverts: 0, simulationsRangees: 0, photosRangees: 0, echecs: 0 };
   for (const lead of leads) {
-    const resultat = await assurerDossierDeSimulation(lead.id);
+    const resultat = await ouvrirDossierAutomatique(lead.id);
     if (!resultat) bilan.echecs++;
     else {
       if (resultat.cree) bilan.dossiersOuverts++;

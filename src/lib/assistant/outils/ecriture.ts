@@ -11,6 +11,8 @@ import { ETAPES, LIBELLES_ETAPE, LIBELLES_MOTIF_PERTE, MOTIFS_PERTE, UNITES, typ
 import { verifierMotifPerte } from "@/lib/dossiers/perte";
 import { jourParis } from "@/lib/dossiers/dates";
 import { genererDocument } from "@/lib/dossiers/documents";
+import { envoiALaGeneration } from "@/lib/dossiers/devis-envoye";
+import { peutNotifier } from "@/lib/mail/notifications";
 import { lireLignes } from "@/lib/dossiers/stockage";
 import { devisProposeDuDossier } from "@/lib/espace/devis-propose";
 import { analyser } from "@/lib/commun/api";
@@ -22,7 +24,6 @@ import { envoyerDepuisLOnglet } from "@/lib/mail/detail";
 import { apercuLienParMail, CODES_LIEN_MAIL, envoyerLienParMail, proposerLienParMail } from "@/lib/mail/lien-espace";
 import { redigerBrouillon } from "@/lib/mail/redaction";
 import { brouillonEnvoiDocument, envoyerDocumentParMail } from "@/lib/mail/service";
-import { validerProposition } from "@/lib/validation/service";
 import { planifierAction } from "@/lib/agenda/planification";
 import { planifierDepuisMail } from "@/lib/agenda/depuis-mail";
 import { lireDateDictee } from "../agenda";
@@ -281,7 +282,7 @@ export const outilGenererDocument = definirOutil({
   nom: "generer_document",
   titre: "Générer un devis ou une facture",
   description:
-    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire ; lignes de section pour regrouper ; une ligne « Remise … » peut avoir un prix négatif, ou donne « remise » en euros), sur un dossier existant. depuis_espace: true préremplit les lignes d'après l'espace du client (le bouton DEVIS des tâches) : l'aperçu les montre avant tout. Un dossier porte autant de devis que nécessaire : un nouveau devis S'AJOUTE aux devis proposés (libelle_variante : « façades seules », « façades + plan de travail » ; le client en choisira un dans son espace) — il ne remplace un devis existant que si « remplace » (identifiant) le dit. notifier: false évite le mail automatique « votre devis est disponible » (vrai par défaut). depuis_devis (identifiant) fait la facture à partir des lignes du devis (lignes facultatives) ; avenant_de (identifiant) émet un avenant (objet préfixé, lignes du devis reprises ou dictées). Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier. Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
+    "Émet un devis ou une facture avec ses lignes (désignation, quantité, unité, prix unitaire ; lignes de section pour regrouper ; une ligne « Remise … » peut avoir un prix négatif, ou donne « remise » en euros), sur un dossier existant. depuis_espace: true préremplit les lignes d'après l'espace du client (le bouton DEVIS des tâches) : l'aperçu les montre avant tout. Un dossier porte autant de devis que nécessaire : un nouveau devis S'AJOUTE aux devis proposés (libelle_variante : « façades seules », « façades + plan de travail » ; le client en choisira un dans son espace) — il ne remplace un devis existant que si « remplace » (identifiant) le dit. notifier: false évite le mail automatique « votre devis est disponible » (vrai par défaut). Générer n'est pas envoyer : un devis n'est « envoyé » (étape Devis envoyé, main au client, relances) que s'il est annoncé par ce mail (adresse valide, espace ouvert) ; sinon il reste à envoyer — masqué dans son espace en Qualification ou Simulation, tâche « Envoyer le devis » — jusqu'à l'envoi par mail (envoyer_document) ou sa mise en ligne (modifier DOCUMENT, visible_espace: true). depuis_devis (identifiant) fait la facture à partir des lignes du devis (lignes facultatives) ; avenant_de (identifiant) émet un avenant (objet préfixé, lignes du devis reprises ou dictées). Une facture ne se génère que sur un dossier signé (ou plus loin). Le document est numéroté, figé, rangé dans le dossier. Sensible : aperçu puis confirmation. Les prix viennent de Lucas ou des tarifs du CRM, jamais d'une estimation.",
   niveau: "SENSIBLE",
   schema: schemaCible.extend({
     type: z.enum(["DEVIS", "FACTURE"]),
@@ -291,7 +292,7 @@ export const outilGenererDocument = definirOutil({
     acompte_pct: z.number().int().min(0).max(100).optional().describe("Devis : pourcentage d'acompte (30 par défaut)."),
     note_ml: z.boolean().optional().describe("Mention « mètre linéaire » sur le document (vrai par défaut)."),
     libelle_variante: z.string().trim().max(80).optional().describe("Devis : le libellé de la variante, visible par le client (« façades seules »)."),
-    notifier: z.boolean().optional().describe("Devis : faux = pas de mail « votre devis est disponible » (vrai par défaut)."),
+    notifier: z.boolean().optional().describe("Devis : faux = pas de mail « votre devis est disponible » (vrai par défaut) ; en Qualification ou Simulation, le devis reste alors masqué et à envoyer."),
     remplace: z.string().max(40).optional().describe("Devis : identifiant du devis remplacé (il passe « Remplacé »). Sans lui, le nouveau devis s'ajoute."),
     depuis_devis: z.string().max(40).optional().describe("Facture depuis ce devis : ses lignes sont reprises."),
     avenant_de: z.string().max(40).optional().describe("Avenant à ce devis : objet préfixé « Avenant au devis N° », lignes reprises sauf lignes dictées."),
@@ -303,7 +304,9 @@ export const outilGenererDocument = definirOutil({
     const dossierId = exigerDossier(r.ids);
     const c = await composerGeneration(dossierId, { type: e.type, objet: e.objet ?? "", lignes: e.lignes, remise: e.remise, depuis_devis: e.depuis_devis, avenant_de: e.avenant_de, remplace: e.remplace, depuis_espace: e.depuis_espace });
     const proposes = c.type === "DEVIS" && !c.remplace ? await prisma.document.findMany({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { numero: true, libelleVariante: true } }) : [];
-    return `Je vais émettre ${c.type === "DEVIS" ? "un devis" : "une facture"} « ${c.objet} »${e.libelle_variante ? ` (variante « ${e.libelle_variante} »)` : ""} pour ${r.ids.nom} : ${c.lignes.map(ligneEnMots).join(" ; ")} — total ${format.euros(totalDe(c.lignes))}${c.type === "DEVIS" ? `, acompte ${e.acompte_pct ?? 30} %` : ""}.${c.remplace ? ` Il remplace le devis ${c.remplace.numero} (qui passe « Remplacé »).` : ""}${c.origine ? ` ${e.depuis_devis ? "Fait d'après" : "Avenant au"} devis ${c.origine.numero}.` : ""}${proposes.length ? ` Il s'ajoute ${proposes.length > 1 ? `aux ${proposes.length} devis déjà proposés` : `au devis ${proposes[0].numero} déjà proposé`} : le client en choisira un.` : ""} Le document sera numéroté et figé${c.type === "DEVIS" ? (e.notifier === false ? " ; aucun mail ne partira (notifier: false)" : ", et le client recevra le mail « votre devis est disponible » s'il a une adresse") : ""}.`;
+    // Mission 18 (B1) : générer n'est pas envoyer — l'aperçu dit ce qui se passera, avec la même règle que l'émission.
+    const envoi = c.type === "DEVIS" ? await envoiPrevu(dossierId, e.notifier !== false) : "";
+    return `Je vais émettre ${c.type === "DEVIS" ? "un devis" : "une facture"} « ${c.objet} »${e.libelle_variante ? ` (variante « ${e.libelle_variante} »)` : ""} pour ${r.ids.nom} : ${c.lignes.map(ligneEnMots).join(" ; ")} — total ${format.euros(totalDe(c.lignes))}${c.type === "DEVIS" ? `, acompte ${e.acompte_pct ?? 30} %` : ""}.${c.remplace ? ` Il remplace le devis ${c.remplace.numero} (qui passe « Remplacé »).` : ""}${c.origine ? ` ${e.depuis_devis ? "Fait d'après" : "Avenant au"} devis ${c.origine.numero}.` : ""}${proposes.length ? ` Il s'ajoute ${proposes.length > 1 ? `aux ${proposes.length} devis déjà proposés` : `au devis ${proposes[0].numero} déjà proposé`} : le client en choisira un.` : ""} Le document sera numéroté et figé${envoi}.`;
   },
   executer: async (e) => {
     const r = await cibler(e, "DOSSIER");
@@ -324,19 +327,30 @@ export const outilGenererDocument = definirOutil({
       libelleVariante: c.type === "DEVIS" ? e.libelle_variante || null : null,
       notifier: e.notifier,
     });
-    const document = (resultat as { document: { id: string; numero: string | null; totalHt: number } }).document;
+    const { document, envoi } = resultat as { document: { id: string; numero: string | null; totalHt: number }; envoi?: { visible: boolean; envoye: boolean; mail: boolean } | null };
     return {
-      texte: `${c.type === "DEVIS" ? "Devis" : "Facture"} ${document.numero ?? ""}${e.libelle_variante ? ` « ${e.libelle_variante} »` : ""} émis${c.type === "FACTURE" ? "e" : ""} pour ${r.ids.nom} : ${format.euros(document.totalHt)}.${c.remplace ? ` Remplace le devis ${c.remplace.numero}.` : ""}${c.origine ? ` ${e.depuis_devis ? "D'après le" : "Avenant au"} devis ${c.origine.numero}.` : ""} Rangé${c.type === "FACTURE" ? "e" : ""} dans le dossier${c.type === "DEVIS" ? `, proposé dans son espace${e.notifier === false ? ", sans mail" : ""}` : ""}.`,
-      donnees: { documentId: document.id, numero: document.numero, totalHt: document.totalHt, dossierId, libelleVariante: e.libelle_variante ?? null, remplace: c.remplace, origine: c.origine },
+      texte: `${c.type === "DEVIS" ? "Devis" : "Facture"} ${document.numero ?? ""}${e.libelle_variante ? ` « ${e.libelle_variante} »` : ""} émis${c.type === "FACTURE" ? "e" : ""} pour ${r.ids.nom} : ${format.euros(document.totalHt)}.${c.remplace ? ` Remplace le devis ${c.remplace.numero}.` : ""}${c.origine ? ` ${e.depuis_devis ? "D'après le" : "Avenant au"} devis ${c.origine.numero}.` : ""} Rangé${c.type === "FACTURE" ? "e" : ""} dans le dossier${!envoi ? "" : envoi.envoye ? `, proposé dans son espace${envoi.mail ? " et annoncé par mail" : ", sans mail"} : il est envoyé` : `, ${envoi.visible ? "visible dans son espace sans annonce" : "masqué dans son espace"} : PAS encore envoyé (tâche « Envoyer le devis » ; envoyer_document pour l'envoyer par mail)`}.`,
+      donnees: { documentId: document.id, numero: document.numero, totalHt: document.totalHt, dossierId, libelleVariante: e.libelle_variante ?? null, remplace: c.remplace, origine: c.origine, envoye: envoi?.envoye ?? null, visibleEspace: envoi?.visible ?? null },
       liens: [lien("Dossier", `/dossiers?dossier=${dossierId}`)],
     };
   },
 });
 
+/** Ce que la génération d'un devis fera, dit à l'aperçu (mission 18, B1 : la règle de documents.ts › emettre). */
+async function envoiPrevu(dossierId: string, notifier: boolean): Promise<string> {
+  const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId }, select: { etape: true } });
+  const etat = await peutNotifier("DEVIS_DISPONIBLE", dossierId);
+  const prevu = envoiALaGeneration({ etape: dossier.etape as EtapeDossier, notifier, ...etat });
+  const sansMail = !notifier ? " ; aucun mail ne partira (notifier: false)" : !etat.modeleActif ? " ; le mail « votre devis est disponible » est coupé dans Paramètres" : "";
+  if (prevu.envoye) return prevu.mail ? ", et le client recevra le mail « votre devis est disponible » : le devis sera envoyé" : `${sansMail} : mis en ligne dans son espace, il vaut envoi`;
+  const pourquoi = sansMail ? "" : ` (${(etat.raison ?? "pas d'annonce possible").replace(/\.$/, "").toLowerCase()})`;
+  return `${sansMail} ; il ne sera PAS envoyé${pourquoi} : ${prevu.visible ? "visible dans son espace sans annonce" : "masqué dans son espace"}, à envoyer ensuite (tâche « Envoyer le devis »)`;
+}
+
 export const outilEnvoyerDocument = definirOutil({
   nom: "envoyer_document",
   titre: "Envoyer un devis ou une facture par mail",
-  description: "Envoie par mail, en pièce jointe, un devis ou une facture déjà émis (identifiant du document, rendu par « lire_fiche » ou « generer_document »). Le texte du mail est proposé par le CRM et peut être remplacé. Sensible : aperçu puis confirmation.",
+  description: "Envoie par mail, en pièce jointe, un devis ou une facture déjà émis (identifiant du document, rendu par « lire_fiche » ou « generer_document »). Le texte du mail est proposé par le CRM et peut être remplacé. Un devis envoyé ainsi est envoyé au sens du dossier : visible dans son espace, étape « Devis envoyé », main au client, relances datées de l'envoi (le mail vaut l'annonce « Devis disponible »). Le même envoi refait (même document, destinataire, objet et texte) dans la demi-heure est sans effet : jamais de second mail. Sensible : aperçu puis confirmation.",
   niveau: "SENSIBLE",
   schema: z.object({ dossierId: z.string().max(40), documentId: z.string().max(40), a: z.email().optional().describe("Destinataire ; à défaut l'adresse du client."), objet: z.string().max(200).optional(), texte: z.string().max(10_000).optional() }),
   apercu: async (e) => {
@@ -347,11 +361,17 @@ export const outilEnvoyerDocument = definirOutil({
     const b = await brouillonEnvoiDocument(e.dossierId, e.documentId);
     const a = e.a ?? b.a;
     if (!a) throw new ErreurMetier("Aucune adresse e-mail pour ce client : indique-la (paramètre « a »).", 409);
-    const proposition = await envoyerDocumentParMail(e.dossierId, e.documentId, { a, objet: e.objet ?? b.objet, texte: e.texte ?? b.texte });
-    // Confirmé par Lucas dans Claude : la proposition est validée dans la foulée (même chemin d'envoi que depuis le CRM).
-    await validerProposition(proposition.id);
+    // Confirmé par Lucas dans Claude : la proposition est validée par le même service que le bouton du CRM (une seule
+    // fois : mission 18, B2 — l'ancienne seconde validation rendait 409, et la nouvelle tentative envoyait un 2e mail).
+    const { proposition, deja } = await envoyerDocumentParMail(e.dossierId, e.documentId, { a, objet: e.objet ?? b.objet, texte: e.texte ?? b.texte });
     void contexte;
-    return { texte: `Mail envoyé à ${a} avec le document en pièce jointe (« ${e.objet ?? b.objet} »).`, donnees: { propositionId: proposition.id }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
+    const objet = e.objet ?? b.objet;
+    const texte = deja
+      ? proposition.statut === "ECHEC"
+        ? `Ce même mail (« ${objet} » à ${a}) a déjà été décidé et son envoi a échoué : rien de plus n'est parti. Le réessayer depuis « À valider » du CRM.`
+        : `Ce même mail (« ${objet} » à ${a}) est déjà ${proposition.statut === "EXECUTEE" ? "parti" : "en cours d'envoi"} : nouvelle tentative sans effet, aucun second mail.`
+      : `Mail validé : il part dans quelques secondes à ${a} avec le document en pièce jointe (« ${objet} »). Un devis envoyé ainsi est visible dans son espace et le dossier passe en « Devis envoyé » (main au client, relances datées de l'envoi).`;
+    return { texte, donnees: { propositionId: proposition.id, deja, statut: proposition.statut }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
   },
 });
 

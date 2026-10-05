@@ -18,8 +18,12 @@ export const TYPES_TACHE = [
   "SIMULATION",
   "PUBLIER",
   "DEVIS",
+  "ENVOYER_DEVIS",
+  "ENREGISTRER_DEVIS",
   "ENVOYER_LIEN",
   "RELANCER_PHOTOS",
+  "RELANCER_AVIS",
+  "REACTIVER",
   "DECIDER",
   "MANUELLE",
   "SYSTEME",
@@ -63,8 +67,12 @@ export const DUREES_DEPART: Record<TypeTache, number> = {
   SIMULATION: 10,
   PUBLIER: 1,
   DEVIS: 10,
+  ENVOYER_DEVIS: 2,
+  ENREGISTRER_DEVIS: 2,
   ENVOYER_LIEN: 1,
   RELANCER_PHOTOS: 1,
+  RELANCER_AVIS: 1,
+  REACTIVER: 1,
   DECIDER: 2,
   MANUELLE: 5,
   SYSTEME: 5,
@@ -89,8 +97,12 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
   SIMULATION: ["simulation", "simulations"],
   PUBLIER: ["publication", "publications"],
   DEVIS: ["devis", "devis"],
+  ENVOYER_DEVIS: ["devis à envoyer", "devis à envoyer"],
+  ENREGISTRER_DEVIS: ["devis Gmail à enregistrer", "devis Gmail à enregistrer"],
   ENVOYER_LIEN: ["SMS", "SMS"],
   RELANCER_PHOTOS: ["SMS", "SMS"],
+  RELANCER_AVIS: ["SMS", "SMS"],
+  REACTIVER: ["SMS", "SMS"],
   DECIDER: ["lead à trancher", "leads à trancher"],
   MANUELLE: ["tâche à moi", "tâches à moi"],
   SYSTEME: ["réglage", "réglages"],
@@ -100,7 +112,7 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
 };
 
 /** Les types regroupés sous « appels » dans « j'ai N minutes » (un même geste : tel:). */
-export const FAMILLE_GROUPE: Partial<Record<TypeTache, string>> = { HESITE: "APPELS", RAPPELER: "APPELS", APPELER: "APPELS", ENVOYER_LIEN: "SMS", RELANCER_PHOTOS: "SMS" };
+export const FAMILLE_GROUPE: Partial<Record<TypeTache, string>> = { HESITE: "APPELS", RAPPELER: "APPELS", APPELER: "APPELS", ENVOYER_LIEN: "SMS", RELANCER_PHOTOS: "SMS", RELANCER_AVIS: "SMS", REACTIVER: "SMS" };
 
 /* ── Raccourci : l'action prête à faire (un seul bouton principal) ─────────── */
 
@@ -134,8 +146,10 @@ export type Raccourci = {
   rubrique?: string | null;
   /** Écran SMS : la demande (action + cible + relance), jamais la proposition calculée d'avance. */
   sms?: { action: string; leadId?: string | null; dossierId?: string | null; relance?: unknown } | null;
-  /** Devis : « nouveau » (prérempli) ou « pdf » (dépôt). */
-  devis?: "nouveau" | "pdf" | null;
+  /** Devis : « nouveau » (prérempli), « pdf » (dépôt), « gmail » (mission 18, B3 : PDF parti de Gmail à enregistrer). */
+  devis?: "nouveau" | "pdf" | "gmail" | null;
+  /** Devis « gmail » : la pièce du mail (PieceMessage.id) à enregistrer comme devis envoyé. */
+  pieceId?: string | null;
   /** Contrôle de cohérence : la clé à corriger. */
   cleCoherence?: string | null;
   /** Système : la marche à suivre en une ligne. */
@@ -218,7 +232,13 @@ function raisonsDuType(type: TypeTache): RaisonPasAFaire[] {
     case "RELANCER_DEVIS":
     case "RELANCER_PHOTOS":
     case "ENVOYER_LIEN":
+    case "ENVOYER_DEVIS":
+    case "ENREGISTRER_DEVIS":
       return ["DEJA_FAIT", "CLIENT_PERDU", "PAS_PERTINENT", "AUTRE"];
+    // Mission 18 (A4) : un chantier fini, un contact déjà perdu — « client perdu » n'a pas de sens ici.
+    case "RELANCER_AVIS":
+    case "REACTIVER":
+      return ["DEJA_FAIT", "PAS_PERTINENT", "AUTRE"];
     case "DATE_CHANTIER":
     case "ENCAISSER":
     case "DEMANDE_CLIENT":

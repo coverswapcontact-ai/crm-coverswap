@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { heure } from "@/lib/commun/format";
 
 /**
- * Tâches de fond → Sessions de l'assistant (mission 8) : chaque jour où
+ * Paramètres › Système → Sessions de l'assistant (mission 8 ; écran Tâches de fond jusqu'à la mission 18) : chaque jour où
  * Claude s'est servi du CRM, ses appels (outil, niveau, paramètres résumés,
  * phrase de Lucas, résultat ou refus). Journal en lecture seule.
  */
@@ -36,7 +36,7 @@ export default function SessionsAssistant({ initial }: { initial: SessionVue[] }
   }
 
   return (
-    <section className="mb-10">
+    <section id="sessions" className="mb-10 scroll-mt-20">
       <TitreSection
         action={
           <Bouton taille="sm" icone={<RefreshCw size={13} aria-hidden />} chargement={charge} onClick={() => void rafraichir()}>

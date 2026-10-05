@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Ban, ChevronLeft, ChevronRight, Download, Landmark, Plus, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,9 @@ import type { ChequeACrediter, LigneEncours, TableauFinances as Tableau } from "
 import { DEFINITIONS_PARAMETRES, type CleParametre } from "@/lib/parametres/definitions";
 import { cn } from "@/lib/utils";
 import { dateCourte } from "@/lib/commun/format";
+import type { ChantierPropose } from "@/lib/depenses/constantes";
+import type { ListeDepenses as Depenses } from "@/lib/depenses/service";
+import ListeDepenses from "./ListeDepenses";
 
 
 function AParametrer({ manquants, pourquoi, onRenseigner }: { manquants: CleParametre[]; pourquoi: string; onRenseigner: () => void }) {
@@ -31,7 +34,17 @@ function AParametrer({ manquants, pourquoi, onRenseigner }: { manquants: ClePara
   );
 }
 
-export default function TableauFinances({ initial }: { initial: Tableau }) {
+export default function TableauFinances({
+  initial,
+  depenses,
+  section,
+}: {
+  initial: Tableau;
+  /** Mission 18 (A3) : la section Dépenses (l'ancien écran /depenses), sur la même année. */
+  depenses: { liste: Depenses; chantiers: ChantierPropose[] };
+  /** Section où descendre à l'ouverture (`/finances?section=depenses`, où mène l'ancienne adresse /depenses). */
+  section: string | null;
+}) {
   const [tableau, setTableau] = useState(initial);
   const [paiement, setPaiement] = useState<LigneEncours | null>(null);
   const [action, setAction] = useState<{ type: TypeActionEncaissement; cheque: ChequeACrediter } | null>(null);
@@ -46,20 +59,26 @@ export default function TableauFinances({ initial }: { initial: Tableau }) {
     }
   }
 
+  useEffect(() => {
+    if (section) document.getElementById(section)?.scrollIntoView({ block: "start" });
+  }, [section]);
+
   const totalCheques = cheques.reduce((somme, cheque) => somme + cheque.montant, 0);
+  // Changer d'année garde la section où l'on est descendu.
+  const adresseAnnee = (valeur: number) => `/finances?annee=${valeur}${section ? `&section=${section}` : ""}`;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-6 md:px-8 md:py-8">
       <EnTetePage
         titre="Finances"
-        sousTitre="Encaisser, créditer les chèques, corriger, tenir le livre des recettes."
+        sousTitre="Encaisser, créditer les chèques, corriger, suivre les dépenses, tenir le livre des recettes."
         actions={
           <div className="flex items-center gap-2">
-            <Link href={`/finances?annee=${annee - 1}`} aria-label={`Année ${annee - 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+            <Link href={adresseAnnee(annee - 1)} aria-label={`Année ${annee - 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
               <ChevronLeft size={16} aria-hidden />
             </Link>
             <span className="text-[14px] font-medium text-[#F2F3F5] tabular-nums">{annee}</span>
-            <Link href={`/finances?annee=${annee + 1}`} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+            <Link href={adresseAnnee(annee + 1)} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
               <ChevronRight size={16} aria-hidden />
             </Link>
           </div>
@@ -182,6 +201,8 @@ export default function TableauFinances({ initial }: { initial: Tableau }) {
           </ul>
         </section>
       ) : null}
+
+      <ListeDepenses initiale={depenses.liste} chantiers={depenses.chantiers} />
 
       {recettes.etat === "OK" ? (
         <section className="mt-8">

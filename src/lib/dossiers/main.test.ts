@@ -126,7 +126,8 @@ describe("qui a la main : la règle", () => {
 
 describe("qui a la main : la même partout, à chaque geste", () => {
   test("je publie une simulation → « chez le client » partout ; il valide → elle me revient partout ; j'émets le devis → chez lui", async () => {
-    const c = await contact("Main");
+    // Mission 18 (B1) : une adresse, pour que le devis émis soit annoncé (générer n'est pas envoyer).
+    const c = await contact("Main", { email: "main.essai@example.test" });
     // L'espace vient de s'ouvrir : il attend ses photos et son projet.
     const avant = await partout(c.dossierId, c.leadId);
     assert.deepEqual([avant.carte, avant.fiche, avant.espaces], ["CLIENT", "CLIENT", "CLIENT"], JSON.stringify(avant));
@@ -151,6 +152,7 @@ describe("qui a la main : la même partout, à chaque geste", () => {
     );
     const devis = await partout(c.dossierId, c.leadId);
     assert.deepEqual([devis.carte, devis.fiche, devis.espaces, devis.commercial], ["CLIENT", "CLIENT", "CLIENT", "CLIENT"], JSON.stringify(devis));
+    assert.equal((await dossierDe(c.dossierId)).etape, "DEVIS_ENVOYE");
   });
 
   test("contrôle de cohérence : une main décalée est signalée, « Corriger » la remet", async () => {

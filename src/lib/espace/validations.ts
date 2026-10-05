@@ -4,13 +4,16 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
 import { alerter } from "@/lib/alertes/canaux";
 import { idPhoto, lirePhotos } from "@/lib/dossiers/stockage";
-import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "@/lib/dossiers/transitions";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "@/lib/dossiers/transitions";
+import { ecrireStatutLead } from "@/lib/dossiers/statut-lead";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, resumerProjet, type ProjetClient } from "./projet";
 import { lireSelection } from "@/lib/prestations/prestations";
-import { synchroniserRappel } from "@/lib/agenda/rappels";
+import type { Transaction } from "@/lib/prisma";
+import { appliquerEvenementDossier, RAISON_PROJET_VALIDE, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
+import { estAvenant } from "./faits";
 
 /**
  * Valider, dévalider, revalider — et tout ce qui se défait dans l'espace client.
@@ -62,8 +65,11 @@ async function deplacerDossier(dossierId: string, de: EtapeDossier, vers: EtapeD
   }
 }
 
-/** Raison écrite dans le changement d'étape : c'est elle qui permet de défaire exactement ce mouvement-là. */
-export const RAISON_PROJET_VALIDE = "projet validé dans l'espace client";
+/**
+ * Raison écrite dans le changement d'étape : c'est elle qui permet de défaire exactement ce mouvement-là. Mission 18
+ * (B9) : le passage en Simulation du projet validé est écrit par le point d'entrée (synchro.ts), dans la transaction.
+ */
+export { RAISON_PROJET_VALIDE };
 export const RAISON_PROJET_DEVALIDE = "projet dévalidé dans l'espace client";
 export const RAISON_ACCORD_RETIRE = "bon pour accord retiré";
 
@@ -85,19 +91,20 @@ export async function validerProjet(espace: EspaceClient, auteur: Auteur): Promi
   if (manque) throw new ErreurMetier(manque, 400, { raison: "incomplet" });
   if (espace.projetValideLe) return;
   const maintenant = new Date();
-  await ecrire(auteur, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: maintenant, projetValidePar: auteur } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
-    if (!dossier.prochaineAction || /attendre (les photos|qu'il|le projet)/i.test(dossier.prochaineAction)) {
-      await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Suivre ses simulations, ou lui en préparer une (projet validé)", prochaineActionDate: maintenant } });
-    }
-    // Mission 13 (B3) : un dossier ouvert sans objet ni source le reçoit du projet validé — ce que le client veut rénover,
-    // venu de son espace. Une source déjà écrite ne bouge pas.
-    // Mission 14 (R3) : l'objet suit la famille validée (même s'il venait du lead), sauf si Lucas l'a écrit à la main.
-    const complement = { ...complementDuDossier(dossier, projet), ...objetSuivi(dossier, projet) };
-    if (Object.keys(complement).length) await prisma.dossier.update({ where: { id: espace.dossierId }, data: complement });
-  });
-  if (dossier.etape === "QUALIFICATION") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "QUALIFICATION", "SIMULATION", "AUTOMATIQUE", RAISON_PROJET_VALIDE));
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: maintenant, projetValidePar: auteur } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_VALIDE", direction: direction(auteur), contenu: `Projet validé ${par(auteur)} : ${resumerProjet(projet)}`.slice(0, 1500), metadata: JSON.stringify({ auteur, projet }) } });
+      // Mission 13 (B3) : un dossier ouvert sans objet ni source le reçoit du projet validé — ce que le client veut rénover,
+      // venu de son espace. Une source déjà écrite ne bouge pas.
+      // Mission 14 (R3) : l'objet suit la famille validée (même s'il venait du lead), sauf si Lucas l'a écrit à la main.
+      const complement = { ...complementDuDossier(dossier, projet), ...objetSuivi(dossier, projet) };
+      if (Object.keys(complement).length) await tx.dossier.update({ where: { id: espace.dossierId }, data: complement });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROJET_VALIDE" }, maintenant);
+    })
+  );
+  // Mission 18 (B9) : Qualification → Simulation est écrit dans la transaction, par le point d'entrée (PROJET_VALIDE).
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet), 3, dossier.clientTelephone);
 }
 
@@ -121,14 +128,15 @@ export function complementDuDossier(dossier: { objet: string; source: string }, 
 export async function devaliderProjet(espace: EspaceClient, auteur: Auteur, motif = "pour le modifier"): Promise<void> {
   if (!espace.projetValideLe) return;
   const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: null, projetValidePar: null } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_DEVALIDE", direction: direction(auteur), contenu: `Projet dévalidé ${par(auteur)} (${motif})`, metadata: JSON.stringify({ auteur }) } });
-    // La prochaine action posée par la validation ne vaut plus.
-    if (dossier.prochaineAction && /\(projet validé\)/i.test(dossier.prochaineAction)) {
-      await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Attendre qu'il valide son projet (il le modifie)", prochaineActionDate: null } });
-    }
-  });
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { projetValideLe: null, projetValidePar: null } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROJET_DEVALIDE", direction: direction(auteur), contenu: `Projet dévalidé ${par(auteur)} (${motif})`, metadata: JSON.stringify({ auteur }) } });
+      // La prochaine action posée par la validation ne vaut plus.
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROJET_DEVALIDE" });
+    })
+  );
+  await suitesEvenementDossier(suites);
   // Recul : seulement si le dossier est encore là où la validation l'avait mis, et que rien d'autre ne l'y retient.
   if (dossier.etape === "SIMULATION" && !espace.choixLe) {
     const mouvement = await dernierMouvement(espace.dossierId);
@@ -151,31 +159,53 @@ export async function devaliderChoix(espace: EspaceClient, auteur: Auteur): Prom
     throw new ErreurMetier("Votre devis est déjà établi sur la simulation validée. Pour en changer, appelez CoverSwap : nous l'ajustons avec vous.", 409, { raison: "devis-emis" });
   }
   const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.$transaction([
-      prisma.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } }),
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null }) } }),
-      ...(dossier.prochaineAction && /préparer le devis \(simulation/i.test(dossier.prochaineAction) ? [prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: "Attendre qu'il valide une simulation (il a dévalidé la sienne)", prochaineActionDate: null } })] : []),
-    ]);
-  });
+  const suites = await ecrire(auteur, () => prisma.$transaction((tx) => devaliderChoixDansTransaction(tx, espace, auteur)));
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Simulation dévalidée — ${dossier.clientNom}`, "Le client est revenu sur la simulation qu'il avait validée. Le devis n'est plus attendu pour l'instant.", 3, dossier.clientTelephone);
+}
+
+/**
+ * La dévalidation elle-même, dans la transaction de l'appelant : plus aucune simulation validée, l'événement, puis le
+ * point d'entrée (CHOIX_DEVALIDE). Mission 18 (B9) : aussi quand Lucas masque, repasse en brouillon ou retire une
+ * simulation qui fait partie du choix (simulations/dossier.ts › changerStatutSimulation), d'un bloc avec ce geste ;
+ * `raison` le dit dans l'historique. Les suites sont à lancer après la transaction.
+ */
+export async function devaliderChoixDansTransaction(tx: Transaction, espace: Pick<EspaceClient, "id" | "dossierId" | "choix">, auteur: Auteur, raison?: string): Promise<Suites> {
+  await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } });
+  await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } });
+  await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)}${raison ? ` (${raison})` : ""} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null, ...(raison ? { raison } : {}) }) } });
+  return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_DEVALIDE" });
+}
+
+/**
+ * Mission 18 (B9) : la simulation fait-elle partie du choix du client ? La simulation validée (mode UNE), ou celle d'une
+ * des zones d'un mélange (mode COMPOSITE). Pure : lit `EspaceClient.choix` (JSON) ; illisible = non.
+ */
+export function simulationDansLeChoix(choix: string | null, simulationId: string): boolean {
+  if (!choix) return false;
+  try {
+    const lu = JSON.parse(choix) as { mode?: unknown; simulationId?: unknown; zones?: unknown };
+    if (lu?.mode === "UNE") return lu.simulationId === simulationId;
+    if (lu?.mode === "COMPOSITE" && Array.isArray(lu.zones)) return lu.zones.some((z: { simulationId?: unknown } | null) => z?.simulationId === simulationId);
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /* ── La demande d'autre proposition ───────────────────────────────── */
 
 export async function retirerDemandeProposition(espace: EspaceClient, auteur: Auteur): Promise<void> {
   if (!espace.propositionDemandeeLe) return;
-  const dossier = await dossierDe(espace.dossierId);
-  await ecrire(auteur, async () => {
-    await prisma.$transaction([
-      prisma.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: null, propositionMessage: null, propositionSimulationId: null } }),
-      prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROPOSITION_RETIREE", direction: direction(auteur), contenu: `Demande d'autre proposition retirée ${par(auteur)}${espace.propositionMessage ? ` (elle disait : « ${espace.propositionMessage} »)` : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, message: espace.propositionMessage ?? null }) } }),
-      ...(dossier.prochaineAction && /autre proposition/i.test(dossier.prochaineAction)
-        ? [prisma.dossier.update({ where: { id: espace.dossierId }, data: espace.choixLe ? { prochaineAction: "Préparer le devis (simulation choisie)", prochaineActionDate: new Date() } : { prochaineAction: null, prochaineActionDate: null } })]
-        : []),
-    ]);
-  });
+  await dossierDe(espace.dossierId);
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      await tx.espaceClient.update({ where: { id: espace.id }, data: { propositionDemandeeLe: null, propositionMessage: null, propositionSimulationId: null } });
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_PROPOSITION_RETIREE", direction: direction(auteur), contenu: `Demande d'autre proposition retirée ${par(auteur)}${espace.propositionMessage ? ` (elle disait : « ${espace.propositionMessage} »)` : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, message: espace.propositionMessage ?? null }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROPOSITION_RETIREE", choixValide: Boolean(espace.choixLe) });
+    })
+  );
+  await suitesEvenementDossier(suites);
 }
 
 /* ── Les photos ────────────────────────────────────────────────────── */
@@ -242,11 +272,16 @@ export async function remettrePhoto(espaceId: string, photoId: string): Promise<
  * et que le chantier n'est pas planifié (au-delà : un appel). La preuve de
  * l'accord reste en base, annotée « retiré le … par … » ; le dossier revient à
  * « Devis envoyé », le devis redevient un devis émis ; Lucas est prévenu fort.
+ * Mission 18 (B7) : `documentId` vise l'accord de ce devis (un avenant se retire seul, le dossier ne recule pas) ;
+ * sans lui, l'accord du devis signé d'origine (`accordARetirer`). Lucas le peut depuis l'écran (un bouton par avenant
+ * signé) et par l'outil `geste_espace` RETIRER_ACCORD (`document_id`), à toute étape.
  */
-export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif = ""): Promise<{ retire: boolean }> {
-  const accord = await prisma.accordDevis.findFirst({ where: { dossierId: espace.dossierId, retireLe: null }, orderBy: { createdAt: "desc" } });
-  if (!accord) return { retire: false };
+export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif = "", documentId?: string | null): Promise<{ retire: boolean }> {
+  const cible = await accordARetirer(prisma, espace.dossierId, documentId);
+  if (!cible) return { retire: false };
+  const { accord } = cible;
   const dossier = await dossierDe(espace.dossierId);
+  if (cible.avenant) return retirerAccordAvenant(espace, auteur, motif, accord, dossier);
   if (auteur === "CLIENT") {
     const encaisse = await prisma.encaissement.count({ where: { dossierId: espace.dossierId, statut: "VALIDE" } });
     if (encaisse > 0 || dossier.etape !== "SIGNE") {
@@ -254,17 +289,87 @@ export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif 
     }
   }
   const maintenant = new Date();
-  await ecrire(auteur, async () => {
-    await prisma.accordDevis.update({ where: { id: accord.id }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
-    // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
-    const rendus = await prisma.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
-    await prisma.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
-    await prisma.dossier.update({ where: { id: espace.dossierId }, data: { prochaineAction: auteur === "CLIENT" ? "Appeler : il a retiré son bon pour accord" : "Refaire signer le devis", prochaineActionDate: maintenant } });
-  });
-  if (dossier.etape === "SIGNE") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "SIGNE", "DEVIS_ENVOYE", "RETOUR", `${RAISON_ACCORD_RETIRE} ${par(auteur)}`));
-  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit.
-  await synchroniserRappel({ type: "DOSSIER", id: espace.dossierId });
+  // Mission 18 (relecture) : l'accord, les devis rendus au choix, l'événement, le retour Signé → Devis envoyé (avec le
+  // statut du lead) et le point d'entrée (prochaine action, main) dans UNE transaction : une panne n'écrit rien, la
+  // nouvelle tentative retire. Rejouée après un retrait réussi : l'accord n'est plus en cours, rien n'est écrit.
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(
+      async (tx): Promise<Suites | null> => {
+        const pris = await tx.accordDevis.updateMany({ where: { id: accord.id, retireLe: null }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
+        if (pris.count === 0) return null;
+        // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
+        const rendus = await tx.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
+        await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
+        // L'étape relue dans la transaction : « Signé » revient à « Devis envoyé » (le devis accepté redevient émis).
+        const etape = (await tx.dossier.findUniqueOrThrow({ where: { id: espace.dossierId }, select: { etape: true } })).etape;
+        const changement = etape === "SIGNE" ? marquerSynchronise(await appliquerChangementEtape(tx, { dossierId: espace.dossierId, de: "SIGNE", vers: "DEVIS_ENVOYE", nature: "RETOUR", raison: `${RAISON_ACCORD_RETIRE} ${par(auteur)}` })) : null;
+        if (changement) await ecrireStatutLead(tx, espace.dossierId, changement.vers);
+        const suites = await appliquerEvenementDossier(tx, espace.dossierId, { type: "ACCORD_RETIRE", auteur }, maintenant);
+        return changement ? { ...suites, changements: [changement, ...suites.changements] } : suites;
+      },
+      { maxWait: 10_000, timeout: 30_000 }
+    )
+  );
+  if (!suites) return { retire: false };
+  // Après : effets du retour (agenda, tâches ; pas de Meta pour un RETOUR), prochaine action remplacée → l'agenda suit.
+  await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `ACCORD RETIRÉ — ${dossier.clientNom}`, `Le client a retiré son bon pour accord sur le devis ${accord.numeroDevis ?? ""}${motif ? ` : « ${motif} »` : ""}.\nÀ vous : l'appeler.`, 5, dossier.clientTelephone);
+  return { retire: true };
+}
+
+export type AccordARetirer = { accord: { id: string; documentId: string; numeroDevis: string | null; createdAt: Date; nomSignataire: string }; avenant: boolean };
+
+/**
+ * Mission 18 (B7, relecture) : l'accord que retire `retirerAccord` — lu de la même façon par le geste et par l'aperçu
+ * de l'outil `geste_espace` RETIRER_ACCORD. Avec un devis nommé, l'accord de CE devis (un avenant se retire seul) ; sans,
+ * l'accord du devis signé d'origine (le plus ancien en cours : l'ancien site, « Réinitialiser » l'étape Devis).
+ * `avenant` : le devis de l'accord est émis après un autre devis accepté (le dossier ne recule pas).
+ */
+export async function accordARetirer(lecteur: Transaction, dossierId: string, documentId?: string | null): Promise<AccordARetirer | null> {
+  const accord = await lecteur.accordDevis.findFirst({ where: { dossierId, retireLe: null, ...(documentId ? { documentId } : {}) }, orderBy: { createdAt: documentId ? "desc" : "asc" }, select: { id: true, documentId: true, numeroDevis: true, createdAt: true, nomSignataire: true } });
+  if (!accord) return null;
+  const devisDuDossier = await lecteur.document.findMany({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } }, select: { id: true, statut: true, createdAt: true, numero: true } });
+  const devisDeLAccord = devisDuDossier.find((d) => d.id === accord.documentId);
+  return { accord, avenant: Boolean(devisDeLAccord && estAvenant(devisDeLAccord, devisDuDossier)) };
+}
+
+/** Les étapes où le client peut encore retirer son accord sur un avenant : le chantier n'a pas commencé. */
+export const ETAPES_AVENANT_RETIRABLE: readonly EtapeDossier[] = ["SIGNE", "PLANIFIE"];
+
+/**
+ * Mission 18 (B7) : retirer l'accord d'un avenant. Le devis signé d'origine tient toujours : l'étape ne recule pas,
+ * l'acompte ne bouge pas. L'avenant redevient à signer (« Envoyé » : le client l'a eu en main), les devis qu'il avait
+ * écartés en le signant redeviennent au choix ; la preuve de l'accord reste, annotée. Une transaction, le point
+ * d'entrée (prochaine action, main), puis les suites et l'alerte.
+ */
+async function retirerAccordAvenant(espace: EspaceClient, auteur: Auteur, motif: string, accord: { id: string; documentId: string; numeroDevis: string | null; createdAt: Date }, dossier: Awaited<ReturnType<typeof dossierDe>>): Promise<{ retire: boolean }> {
+  if (auteur === "CLIENT" && !ETAPES_AVENANT_RETIRABLE.includes(dossier.etape as EtapeDossier)) {
+    throw new ErreurMetier("Le chantier a commencé. Pour revenir sur votre accord, appelez CoverSwap.", 409, { raison: "engage" });
+  }
+  const maintenant = new Date();
+  const suites = await ecrire(auteur, () =>
+    prisma.$transaction(async (tx) => {
+      const pris = await tx.accordDevis.updateMany({ where: { id: accord.id, retireLe: null }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
+      if (pris.count === 0) return null;
+      await tx.document.updateMany({ where: { id: accord.documentId, statut: "ACCEPTE" }, data: { statut: "ENVOYE" } });
+      // Les devis que cet accord avait écartés (lus dans son événement) redeviennent au choix ; pas ceux de la signature d'origine.
+      const signature = await tx.dossierEvenement.findFirst({ where: { dossierId: espace.dossierId, type: "ESPACE_DEVIS_ACCEPTE", metadata: { contains: accord.documentId } }, orderBy: { createdAt: "desc" }, select: { metadata: true } });
+      const ecartes = (() => {
+        try {
+          const meta = JSON.parse(signature?.metadata ?? "{}") as { documentId?: unknown; nonRetenus?: { id?: unknown }[] };
+          return meta.documentId === accord.documentId && Array.isArray(meta.nonRetenus) ? meta.nonRetenus.map((n) => n.id).filter((id): id is string => typeof id === "string") : [];
+        } catch {
+          return [];
+        }
+      })();
+      const rendus = ecartes.length ? await tx.document.updateMany({ where: { id: { in: ecartes }, dossierId: espace.dossierId, statut: "NON_RETENU" }, data: { statut: "ENVOYE" } }) : { count: 0 };
+      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur l'avenant ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. Le devis signé d'origine tient toujours ; la preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count, avenant: true }) } });
+      return appliquerEvenementDossier(tx, espace.dossierId, { type: "ACCORD_RETIRE", auteur, avenant: true }, maintenant);
+    })
+  );
+  if (!suites) return { retire: false };
+  await suitesEvenementDossier(suites);
+  if (auteur === "CLIENT") await prevenir(espace.dossierId, `ACCORD RETIRÉ — ${dossier.clientNom}`, `Le client a retiré son bon pour accord sur l'avenant ${accord.numeroDevis ?? ""}${motif ? ` : « ${motif} »` : ""} (le devis signé d'origine tient toujours).\nÀ vous : l'appeler.`, 4, dossier.clientTelephone);
   return { retire: true };
 }
 

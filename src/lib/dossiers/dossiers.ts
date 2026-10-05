@@ -23,6 +23,7 @@ import { ErreurMetier } from "./erreurs";
 import { rappelALOuverture, synchroniserRappel } from "@/lib/agenda/rappels";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { noterProchaineActionManuelle } from "./prochaine-action-manuelle";
+import { alignerStatutLead } from "./statut-lead";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
 import {
@@ -39,6 +40,8 @@ import {
   verifierPhoto,
 } from "./stockage";
 import type { DossierDetail, DossierResume, NoteVue, PhotoVue } from "./types";
+import { comparerEspaces, espaceDansLeFiltre, type CompteursEspaces, type EspaceResume, type FiltreEspace, type TriEspace } from "@/lib/espace/suivi-types";
+import type { EtapeEspace } from "@/lib/espace/etapes";
 import { CATEGORIES_CLIENT } from "@/lib/clients/constantes";
 import { completerCoordonnees, rattacherDossier } from "@/lib/clients/identification";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -319,7 +322,22 @@ async function resumesDe(dossiers: DossierAvecDernierDevis[]): Promise<DossierRe
 /* ── Mission 13 (lot 6) : une page de dossiers, filtres côté serveur ─────── */
 
 export type VueDossiers = "EN_COURS" | "TOUS" | "A_FAIRE";
-export type FiltresDossiers = { page?: number; parPage?: number; vue?: VueDossiers; recherche?: string; masquerInactifs?: boolean };
+export type FiltresDossiers = {
+  page?: number;
+  parPage?: number;
+  vue?: VueDossiers;
+  recherche?: string;
+  masquerInactifs?: boolean;
+  /**
+   * Mission 18 (A1) : le filtre « Espaces » (l'ancien onglet Espaces clients) — les dossiers qui ont un espace, perdus,
+   * en pause et terminés compris (la vue et les inactifs ne jouent plus), à moi d'abord puis par dernière activité.
+   */
+  espace?: FiltreEspace;
+  /** Avec `espace` : l'étape de l'espace (« Devis à signer »…). */
+  etapeEspace?: EtapeEspace;
+  /** Avec `espace` : le tri de l'ancien onglet (à moi d'abord par défaut), fait ici puisque la page est découpée ici. */
+  triEspace?: TriEspace;
+};
 export type CompteursDossiers = { enCours: number; aFaire: number; enRetard: number; sorties: number; inactifs: number };
 export type PageDossiers = {
   dossiers: DossierResume[];
@@ -328,6 +346,8 @@ export type PageDossiers = {
   parPage: number;
   /** Sur tous les dossiers vivants, quel que soit le filtre : les chiffres de l'en-tête. */
   compteurs: CompteursDossiers;
+  /** Mission 18 (A1) : avec le filtre « Espaces », les compteurs de ses pastilles (sur tous les espaces, recherche et étape comprises). */
+  espaces?: CompteursEspaces;
 };
 
 const JOURS_INACTIF = 30;
@@ -368,17 +388,63 @@ export async function pageDossiers(filtres: FiltresDossiers = {}, maintenant: Da
   else if (vue === "EN_COURS") conditions.push(horsSortie);
   if (filtres.masquerInactifs) conditions.push({ OR: [aFaire, { updatedAt: { gte: limiteInactif } }] });
   const where: Prisma.DossierWhereInput = { AND: conditions };
-  const [total, dossiers, enCours, nbAFaire, enRetard, sorties, vieux, vieuxAFaire] = await Promise.all([
+  const compteurs = async (): Promise<CompteursDossiers> => {
+    const [enCours, nbAFaire, enRetard, sorties, vieux, vieuxAFaire] = await Promise.all([
+      prisma.dossier.count({ where: { etape: { notIn: [...ETAPES_SORTIE, "ENCAISSE"] } } }),
+      prisma.dossier.count({ where: aFaire }),
+      prisma.dossier.count({ where: { etape: { notIn: ["PERDU", "ENCAISSE"] }, prochaineActionDate: { lt: debutDuJourParis(maintenant) } } }),
+      prisma.dossier.count({ where: { etape: { in: [...ETAPES_SORTIE] } } }),
+      prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }] } }),
+      prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }, aFaire] } }),
+    ]);
+    return { enCours, aFaire: nbAFaire, enRetard, sorties, inactifs: Math.max(0, vieux - vieuxAFaire) };
+  };
+  // Import différé : le suivi des espaces importe l'espace client, qui importe ce module.
+  const { espacesDesDossiers } = await import("@/lib/espace/suivi");
+  if (filtres.espace) {
+    const resultat = await pageDesEspaces(filtres.espace, filtres, { skip, take }, (ids) => espacesDesDossiers(maintenant, ids));
+    return { ...resultat, page, parPage, compteurs: await compteurs() };
+  }
+  const [total, dossiers, chiffres] = await Promise.all([
     prisma.dossier.count({ where }),
     prisma.dossier.findMany({ where, orderBy: { updatedAt: "desc" }, skip, take, include: { documents: DERNIER_DEVIS } }),
-    prisma.dossier.count({ where: { etape: { notIn: [...ETAPES_SORTIE, "ENCAISSE"] } } }),
-    prisma.dossier.count({ where: aFaire }),
-    prisma.dossier.count({ where: { etape: { notIn: ["PERDU", "ENCAISSE"] }, prochaineActionDate: { lt: debutDuJourParis(maintenant) } } }),
-    prisma.dossier.count({ where: { etape: { in: [...ETAPES_SORTIE] } } }),
-    prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }] } }),
-    prisma.dossier.count({ where: { AND: [horsSortie, { updatedAt: { lt: limiteInactif } }, aFaire] } }),
+    compteurs(),
   ]);
-  return { dossiers: await resumesDe(dossiers), total, page, parPage, compteurs: { enCours, aFaire: nbAFaire, enRetard, sorties, inactifs: Math.max(0, vieux - vieuxAFaire) } };
+  // Mission 18 (A1) : la colonne « Espace », calculée pour la page seulement.
+  const espaces = await espacesDesDossiers(maintenant, dossiers.map((dossier) => dossier.id));
+  return { dossiers: avecEspaces(await resumesDe(dossiers), espaces), total, page, parPage, compteurs: chiffres };
+}
+
+const avecEspaces = (resumes: DossierResume[], espaces: ReadonlyMap<string, EspaceResume>): DossierResume[] =>
+  resumes.map((resume) => ({ ...resume, espace: espaces.get(resume.id) ?? null }));
+
+/**
+ * Mission 18 (A1) — le filtre « Espaces » : qui a la main, signaux et étape de l'espace se calculent (espace/suivi.ts),
+ * ils ne se lisent pas en base. Le filtre est donc exact sur TOUS les dossiers qui ont un espace (recherche comprise),
+ * puis la page est découpée ici, dans l'ordre de l'ancien onglet (`triEspace` : à moi d'abord puis dernière activité,
+ * dernière activité, lien le plus récent). L'écran garde cet ordre (relecture de la partie A).
+ */
+async function pageDesEspaces(
+  filtre: FiltreEspace,
+  filtres: FiltresDossiers,
+  { skip, take }: { skip: number; take: number },
+  espacesDe: (dossierIds: string[]) => Promise<Map<string, EspaceResume>>
+): Promise<Pick<PageDossiers, "dossiers" | "total" | "espaces">> {
+  const candidats = await prisma.dossier.findMany({ where: { AND: [whereRechercheDossiers(filtres.recherche), { espaces: { some: { archiveLe: null } } }] }, select: { id: true } });
+  const espaces = await espacesDe(candidats.map((candidat) => candidat.id));
+  const dansLEtape = [...espaces.entries()].filter(([, espace]) => !filtres.etapeEspace || espace.etape === filtres.etapeEspace);
+  const nombre = (f: FiltreEspace) => dansLEtape.filter(([, espace]) => espaceDansLeFiltre(espace, f)).length;
+  const ordre = comparerEspaces(filtres.triEspace);
+  const retenus = dansLEtape.filter(([, espace]) => espaceDansLeFiltre(espace, filtre)).sort(([, a], [, b]) => ordre(a, b));
+  const ids = retenus.slice(skip, skip + take).map(([id]) => id);
+  const lus = ids.length ? await prisma.dossier.findMany({ where: { id: { in: ids } }, include: { documents: DERNIER_DEVIS } }) : [];
+  const parId = new Map(lus.map((dossier) => [dossier.id, dossier]));
+  const dossiers = ids.map((id) => parId.get(id)).filter((dossier): dossier is DossierAvecDernierDevis => Boolean(dossier));
+  return {
+    dossiers: avecEspaces(await resumesDe(dossiers), espaces),
+    total: retenus.length,
+    espaces: { MOI: nombre("MOI"), CLIENT: nombre("CLIENT"), SIGNAUX: nombre("SIGNAUX"), TOUS: nombre("TOUS"), DESACTIVES: nombre("DESACTIVES") },
+  };
 }
 
 function messageDeLEvenement(metadata: string): string | null {
@@ -575,6 +641,10 @@ export async function ouvrirDossier(
       metadata: JSON.stringify(ouverture),
     },
   });
+  // Mission 18 (B12) : le lead d'origine suit son dossier dès l'ouverture, dans la même transaction — un lead « À
+  // traiter », « Devis demandé » ou « Sans suite » (perdu) qui reçoit un dossier vivant devient « Contacté » (ou le statut
+  // de l'étape d'ouverture) ; un autre dossier plus avancé du même lead garde la main (statut-lead.ts).
+  if (origine.leadId) await alignerStatutLead(tx, origine.leadId);
   // Client pérenne : celui choisi, celui du lead ou du prospect, sinon retrouvé
   // par e-mail ou téléphone, sinon créé depuis ces coordonnées.
   if (entree.clientId) {
@@ -650,16 +720,13 @@ export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | 
 }
 
 /**
- * Après l'ouverture, jamais bloquant : le lead B2C passe à « Contacté » ; le
- * prospect B2B est converti en client (il sort des séquences de prospection),
- * sauf s'il s'est désinscrit. Mission 14 (partie 7) : le rappel à venir du lead
- * passe sur le dossier, et l'agenda suit pour les deux (`rappelALOuverture`).
+ * Après l'ouverture, jamais bloquant : le prospect B2B est converti en client (il sort des séquences de prospection),
+ * sauf s'il s'est désinscrit. Le statut du lead B2C est écrit dans la transaction de l'ouverture (`ouvrirDossier`,
+ * mission 18, B12). Mission 14 (partie 7) : le rappel à venir du lead passe sur le dossier, et l'agenda suit pour les
+ * deux (`rappelALOuverture`).
  */
 export async function suitesOuverture({ lead, prospect }: Origines, dossierId: string): Promise<void> {
   try {
-    if (lead?.statut === "NOUVEAU") {
-      await prisma.lead.update({ where: { id: lead.id }, data: { statut: "CONTACTE" } });
-    }
     if (prospect && prospect.statut !== "CLIENT" && prospect.statut !== "OPT_OUT") {
       await prisma.$transaction([
         prisma.prospect.update({ where: { id: prospect.id }, data: { statut: "CLIENT" } }),
@@ -673,7 +740,7 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
       ]);
     }
   } catch (erreur) {
-    console.error("[dossiers] mise à jour du lead d'origine :", erreur);
+    console.error("[dossiers] conversion du prospect d'origine :", erreur);
   }
   await rappelALOuverture(dossierId, lead?.id ?? null);
 }

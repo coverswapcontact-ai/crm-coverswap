@@ -15,6 +15,7 @@ import { accorderProjets, desactiverLien, regenererLien } from "@/lib/espace/ges
 import { ouvrirEspace, ouvrirEspaceDuContact } from "@/lib/espace/liens";
 import { marquerMessagesLus } from "@/lib/espace/messages";
 import { ADRESSE_ESPACES } from "@/lib/espace/suivi-types";
+import { accordARetirer } from "@/lib/espace/validations";
 import { gesteDeLucas, type GesteEspace } from "@/lib/espace/vue-crm";
 import { deconnecterGoogle } from "@/lib/google/connexion";
 import { archiverFil, classerALaMain, marquerLu, nePlusMontrer, remonter, synchroniserBoite } from "@/lib/mail/boite";
@@ -284,6 +285,7 @@ const schemaGesteEspace = schemaCible.extend({
   simulation_id: z.string().max(40).optional().describe("VALIDER_SIMULATION : la simulation retenue à la place du client."),
   etape: z.enum(["PROJET", "SIMULATIONS", "DEVIS"]).optional().describe("REINITIALISER : l'étape que le client refait."),
   motif: z.string().max(500).optional().describe("RETIRER_ACCORD, DESACTIVER : le motif."),
+  document_id: z.string().max(40).optional().describe("RETIRER_ACCORD : le devis dont retirer l'accord (un avenant se retire seul, le dossier ne recule pas) ; sans, l'accord du devis signé d'origine."),
   photo_id: z.string().max(80).optional().describe("RETIRER_PHOTO / REMETTRE_PHOTO."),
 });
 type EntreeGesteEspace = z.output<typeof schemaGesteEspace>;
@@ -313,7 +315,7 @@ export const outilGesteEspace = definirOutil({
   nom: "geste_espace",
   titre: "Les gestes de Lucas sur l'espace client",
   description:
-    "Tous les gestes du bloc Espace du dossier et de l'espace de la fiche client, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail ; sensible) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » ; sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
+    "Tous les gestes du bloc Espace du dossier et de l'espace de la fiche client, par la même fonction : OUVRIR l'espace sans rien noter ni envoyer (rend le lien) ; DESACTIVER le lien (le client lit « lien désactivé », rien n'est effacé ; sensible) ; REACTIVER (nouveau lien sans mail ; sensible) ; NOUVEAU_LIEN (l'ancien meurt ; mail vrai par défaut, avec la phrase « texte » ; sensible) ; ACCORDER_SIMULATIONS (nombre, ≈ 0,20 $ l'image : au-delà de 3, sensible) ; ACCORDER_PROJET (un projet en cours de plus, 1 à 5) ; VALIDER_PROJET / DEVALIDER_PROJET à sa place ; VALIDER_SIMULATION (simulation_id) / DEVALIDER_SIMULATION ; RETIRER_DEMANDE (d'autre proposition) ; REINITIALISER une étape (PROJET, SIMULATIONS, DEVIS : sensible, le client la refait) ; RETIRER_ACCORD (bon pour accord, celui du devis signé d'origine ou, avec document_id, celui d'un avenant ; sensible) ; MARQUER_LUS ses messages sans répondre ; RETIRER_PHOTO / REMETTRE_PHOTO (photo_id). Chaque geste est écrit dans l'historique du dossier « par Lucas ».",
   niveau: "REVERSIBLE",
   schema: schemaGesteEspace,
   sensible: (e) => GESTES_SENSIBLES_ESPACE.includes(e.geste) || (e.geste === "ACCORDER_SIMULATIONS" && (e.nombre ?? 3) > 3),
@@ -336,9 +338,13 @@ export const outilGesteEspace = definirOutil({
       case "REINITIALISER":
         return `Je vais réinitialiser l'étape « ${e.etape ?? "?"} » de l'espace de ${nom} : le client la refera (ce qu'il avait saisi reste gardé dans l'historique).`;
       case "RETIRER_ACCORD": {
-        const acc = c.ids.dossierId ? await prisma.accordDevis.findFirst({ where: { dossierId: c.ids.dossierId, retireLe: null }, orderBy: { createdAt: "desc" } }) : null;
-        if (!acc) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom} : rien à retirer.`, 409);
-        return `Je vais retirer le bon pour accord de ${nom} sur le devis ${acc.numeroDevis ?? ""} (donné le ${format.jourCourt(acc.createdAt)} par ${acc.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; le dossier revient à « Devis envoyé ».`;
+        // Mission 18 (relecture) : l'accord que le geste retirera, lu par la même fonction (le plus ancien sans devis nommé).
+        const cible = c.ids.dossierId ? await accordARetirer(prisma, c.ids.dossierId, e.document_id) : null;
+        if (!cible) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom}${e.document_id ? " sur ce devis" : ""} : rien à retirer.`, 409);
+        const { accord: acc } = cible;
+        const etape = cible.avenant ? null : (await prisma.dossier.findUnique({ where: { id: c.ids.dossierId! }, select: { etape: true } }))?.etape;
+        const suite = cible.avenant ? "le devis signé d'origine tient toujours, le dossier ne change pas d'étape ; l'avenant redevient à signer dans son espace" : etape === "SIGNE" ? "le dossier revient à « Devis envoyé »" : "le dossier garde son étape";
+        return `Je vais retirer le bon pour accord de ${nom} sur ${cible.avenant ? "l'avenant" : "le devis"} ${acc.numeroDevis ?? ""} (donné le ${format.jourCourt(acc.createdAt)} par ${acc.nomSignataire})${e.motif ? ` — motif : ${e.motif}` : ""}. La preuve reste gardée ; ${suite}.`;
       }
       default:
         return `Je vais faire « ${e.geste} » sur l'espace de ${nom}.`;
@@ -392,9 +398,17 @@ export const outilGesteEspace = definirOutil({
         return geste({ geste: "reinitialiser", etape: e.etape }, `Étape « ${e.etape} » de l'espace de ${nom} réinitialisée : le client la refait.`);
       case "RETIRER_ACCORD": {
         // Comme l'ex-« retirer_accord » : sans accord en vigueur, rien n'est fait (et le dossier ne bouge pas).
-        const acc = await prisma.accordDevis.findFirst({ where: { dossierId: exigerDossier(ids), retireLe: null }, select: { id: true } });
-        if (!acc) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom} : rien à retirer.`, 409);
-        return geste({ geste: "retirer-accord", motif: e.motif ?? "" }, `Bon pour accord retiré chez ${nom} : preuve gardée, dossier revenu à « Devis envoyé ».`);
+        const dossierId = exigerDossier(ids);
+        const cible = await accordARetirer(prisma, dossierId, e.document_id);
+        if (!cible) throw new ErreurMetier(`Aucun bon pour accord en vigueur chez ${nom}${e.document_id ? " sur ce devis" : ""} : rien à retirer.`, 409);
+        const avant = (await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } }))?.etape;
+        await gesteDeLucas(dossierId, { geste: "retirer-accord", motif: e.motif ?? "", ...(e.document_id ? { documentId: e.document_id } : {}) });
+        const apres = (await prisma.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } }))?.etape;
+        const numero = cible.accord.numeroDevis ?? "";
+        const texte = cible.avenant
+          ? `Bon pour accord retiré chez ${nom} sur l'avenant ${numero} : preuve gardée, le devis signé d'origine tient toujours (étape inchangée).`
+          : `Bon pour accord retiré chez ${nom} sur le devis ${numero} : preuve gardée${avant !== apres ? ", dossier revenu à « Devis envoyé »" : ", étape inchangée"}.`;
+        return { texte, liens: liensDossier };
       }
       case "MARQUER_LUS": {
         const n = await marquerMessagesLus(exigerDossier(ids));

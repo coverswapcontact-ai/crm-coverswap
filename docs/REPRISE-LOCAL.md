@@ -1637,3 +1637,79 @@ DEVIS_DEMANDE, intention « Devis » gardée, dossier en Qualification). `cohere
 `npm run build` : propres.
 
 Reste : rien pour ce lot ; rien pour Lucas.
+
+### Mission 18, B7, B8, B9, B10, B11, B12, B13, MR (mise en route) — corrections de la relecture
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché : il affiche déjà ce que le CRM calcule). Les 15
+constats des trois relecteurs, et leur sort (tous vérifiés dans le code, tous réels) :
+1. **Lucas ne retire pas l'accord d'un avenant seul** (important, B7) — corrigé : `documentId` facultatif dans le geste
+   « retirer-accord » (`vue-crm.ts`), un bouton « Retirer l'accord » par avenant signé dans le bloc Espace
+   (`RubriqueDevisEspace.tsx`, `devisProposes[].avenant` et `.accordEnCours`), `document_id` dans `geste_espace`
+   RETIRER_ACCORD ; Lucas le peut à toute étape (Chantier compris), le dossier ne recule pas.
+2. **Paiement de l'espace sans l'avenant** (important, B7/B10) — corrigé : `faits.ts › lireDevisEtPaiements` ajoute les
+   avenants signés au total et au solde (acompte de l'origine seul) ; facturé, `paiementEspace(…, factures)` prend le
+   reste des factures actives (`service.ts › facturesDuDossier`, la lecture de « Payer par carte » et de « Mes
+   documents ») : `solde.montant − solde.recu` = ce que Stripe débite, « Réglé » seulement quand les factures sont
+   soldées. Espace du client et vue de Lucas lisent pareil.
+3. **Perdu ne ferme jamais l'espace, tâche « Corriger » aussitôt** (important, B13) — corrigé, règle choisie : un délai,
+   comme après l'encaissement. `revocation.ts` désactive le lien 90 jours après la clôture du dernier projet quand TOUS
+   sont perdus ou archivés (`dernierProjetClosLe`, motif propre) ; `ESPACE_ACTIF_DOSSIER_CLOS` ne signale le lien
+   qu'après ce délai + 2 jours, et sa correction suit la même règle (fermer le projet d'un archivé reste immédiat).
+   Ligne ajoutée à SYNCHRO.md (« Passage en Perdu et lien de l'espace »).
+4. **Retour Signé → Devis envoyé hors de la transaction du retrait** (mineur) — corrigé : étape relue dans la
+   transaction, `appliquerChangementEtape` RETOUR, statut du lead, changement marqué synchronisé, puis le point
+   d'entrée ; une panne n'écrit rien, rejoué : `{ retire: false }`.
+5. **Mise en route : « au détecteur » ce que le moteur écarte** (mineur) — corrigé : un écart d'un dossier vivant dont
+   l'action posée à la main est en vigueur (`ecarteeParVigueur`) devient une tâche à moi `MANUELLE:coherence-18-<clé>` ;
+   les `CODES_ECARTES` sont comptés `autre` (« à leur propre tâche », dans le journal et `etat_crm` SANTE), jamais au
+   détecteur. Choisi plutôt que de sortir COHERENCE du filtre de vigueur (docs/TACHES.md § 2 le veut ainsi).
+6. **Simulation du client (voie ESPACE) sans essai des deux côtés** (mineur) — corrigé :
+   `mission-15-partie-5.test.ts` lit `etatDesDeuxCotes` (étape, main = calculée, prochaine action inchangée, lead
+   « Devis demandé » → « Contacté », espace, relances, aucune tâche de cohérence). L'espace reste à « Projet » (projet
+   pas précisé : sa simulation ne le saute pas, par conception d'`etapes.ts`).
+7. **MCP-COUVERTURE sans entrée B12** (mineur) — corrigé : entrée ajoutée (aucun schéma changé, empreinte
+   `040d6c7aa53c` à B12).
+8. **`PROCHAINE_ACTION_PERIMEE` efface une action posée à la main** (important, MR) — corrigé : la détection exclut
+   `estActionManuelleEnPlace` (comme `ATTENTE_ACCORD_SANS_DEVIS`), la correction la refuse (409). COHERENCE.md à jour.
+9. **Idempotence Stripe cassée, double paiement muet** (mineur) — corrigé : `expires_at` compté depuis le début de la
+   fenêtre de 10 minutes (`stripe.ts › FENETRE_SESSION_MS`, `fenetreSession`) : même clé, même corps ; au webhook, un
+   paiement au-delà de ce qui restait dû (`aReglerParCarte` relu avant l'enregistrement) est enregistré et alerte Lucas
+   (« Paiement par carte en trop »). Pas de réutilisation d'une session ouverte (non retenu : l'alerte suffit).
+10. **Session payée sans dossier : rien qu'un console.error** (mineur) — corrigé : alerte à Lucas (montant, session,
+    sans nom, lien Finances), réponse 200 « IGNORE » gardée.
+11. **L'aperçu de RETIRER_ACCORD n'annonce pas l'accord retiré** (important) — corrigé avec le 1 :
+    `validations.ts › accordARetirer` (le plus ancien sans devis nommé), lu par le geste ET par l'aperçu, qui dit
+    « avenant » ou « devis » et si le dossier revient à « Devis envoyé ».
+12. **Lecteurs qui prennent l'avenant pour le devis signé** (important) — corrigé : `dossiers/montant-signe.ts`
+    (`devisSigneDOrigine`, `accordDOrigine`, `montantSigneHt`), lu par le détecteur des dossiers (acompte et date de
+    l'accord d'origine, montant en jeu origine + avenants), `manager_finances` (reste à encaisser) et l'analytique
+    (montant signé, deux endroits).
+13. **Avenant « à signer » sur un projet figé** (mineur) — corrigé : `lireDevisEtPaiements({ etapeDossier })` rend
+    `aSigner` vide en Encaissé ou Perdu (tous les lecteurs passent l'étape).
+14. **`accepterDevis` signe une ancienne variante** (mineur) — corrigé : dans la transaction, un devis non accepté créé
+    AVANT un devis accepté → 409 « n'est plus en vigueur ». Les variantes d'avant B10 restées « Généré » ne sont pas
+    passées « non retenu » par la mise en route (inutile : elles ne sont ni proposées ni signables).
+15. **Simulation remise après masquage = nouvelle publication** (mineur, B9) — corrigé : `SIMULATION_PUBLIEE`
+    `republiee` (toutes déjà publiées une fois) ne pose plus de prochaine action, et l'événement marqué `republiees` ne
+    passe plus la main (`main.ts`) ; l'étape seule suit, aucun second mail.
+
+Décisions prises seul (solution la plus simple) :
+- Délai du lien d'un espace tout perdu : le même que l'encaissement (90 jours, une seule constante).
+- `autre` dans le résumé de la mise en route n'apparaît que s'il n'est pas nul (forme des résumés d'avant gardée).
+- La tâche à moi d'un écart caché par une action en vigueur peut cohabiter plus tard avec le « Corriger » du détecteur
+  (quand la vigueur tombe) ; Lucas répond à l'une, l'autre se coche quand l'écart est corrigé.
+
+Tests : CRM 1 464 → 1 476 (`npm test` : 1 476 verts). Nouveau `src/lib/espace/relecture-partie-b.test.ts`
+(8 essais, état des deux côtés, réseau coupé : outil et aperçu RETIRER_ACCORD ; écran en Chantier ; panne au milieu du
+retrait puis nouvelle tentative ; paiement après avenant jusqu'à l'encaissement ; tâche « Encaisser l'acompte » et
+montants ; projet figé ; ancienne variante ; lien d'un espace perdu révoqué après 90 jours). Ajoutés :
+`paiement-carte.test.ts` (3 : corps stable, paiement en trop, session sans dossier), `publier-espace.test.ts` (1 :
+simulation remise). Adaptés (comportement voulu) : `coherence-b13.test.ts` (perdu ou archivé aujourd'hui : plus de
+signalement du lien avant le délai), `mission-18-mise-en-route.test.ts` (perdu et archivé datés de 100 jours ; cas de
+plus : perdu du jour, action « autre proposition » posée à la main gardée et correction refusée, écart caché par une
+action en vigueur en tâche à moi ; résumé 12 dossiers, 14 trouvés, 11 réparés, 2 tâches, 1 au détecteur),
+`mission-15-partie-5.test.ts` (état des deux côtés). `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
+Empreinte MCP : **change**, `040d6c7aa53c` → `6665a6b457fe` (53 outils ; paramètre `document_id` et description de
+`geste_espace`) : reconnecter le connecteur.
+
+Reste : rien pour ce lot ; pour Lucas, reconnecter le connecteur MCP.

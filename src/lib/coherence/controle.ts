@@ -229,7 +229,7 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
   for (const d of dossiers) {
     const signaler = (code: CodeIncoherence, gravite: Incoherence["gravite"], constat: string, correction: string | null) =>
       incoherences.push({ cle: `${code}:${d.id}`, code, gravite, dossierId: d.id, leadId: d.leadId, client: d.clientNom, constat, correction });
-    const lecture = lireDevisEtPaiements({ devis: d.documents, accords: d.accords, encaissements: d.encaissements, clientNom: d.clientNom, signeLe: dateSignature(d.evenements) });
+    const lecture = lireDevisEtPaiements({ devis: d.documents, accords: d.accords, encaissements: d.encaissements, clientNom: d.clientNom, signeLe: dateSignature(d.evenements), etapeDossier: d.etape });
     const espace = d.espaces[0] ?? null;
     const archive = d.archiveLe !== null;
     const active = estActive(d.etape);
@@ -347,10 +347,12 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
     }
     // Prochaine action ↔ faits.
     const action = d.prochaineAction ?? "";
-    // (seulement pour un dossier qui a un espace : sans espace, c'est Lucas qui a écrit cette action, elle lui appartient)
-    if (espace && /préparer le devis \(simulation/i.test(action) && (lecture.devis || !espace.choixLe)) {
+    // (seulement pour un dossier qui a un espace : sans espace, c'est Lucas qui a écrit cette action, elle lui appartient ;
+    // mission 18, relecture : une action posée à la main n'est jamais périmée — elle reste à Lucas, comme ci-dessus)
+    const actionDuSysteme = !estActionManuelleEnPlace(d);
+    if (espace && actionDuSysteme && /préparer le devis \(simulation/i.test(action) && (lecture.devis || !espace.choixLe)) {
       signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors que ${lecture.devis ? "le devis est déjà émis" : "plus aucune simulation n'est validée"}.`, lecture.devis ? `Remplacer par « ${PROCHAINE_ACTION_APRES_DEVIS} »` : "Effacer cette prochaine action");
-    } else if (espace && /autre proposition/i.test(action) && !espace.propositionDemandeeLe) {
+    } else if (espace && actionDuSysteme && /autre proposition/i.test(action) && !espace.propositionDemandeeLe) {
       signaler("PROCHAINE_ACTION_PERIMEE", "MOYENNE", `Prochaine action « ${action} » alors qu'aucune demande n'est en attente dans l'espace du client.`, "Effacer cette prochaine action");
     }
     // Un dossier archivé est sorti des listes, son lead est revenu dans Leads : ni statut du lead, ni main à comparer.
@@ -444,14 +446,19 @@ async function devisGmailOublies(dossiers: Map<string, { clientNom: string; lead
  * espace sont clos (perdus ou archivés). Un projet perdu dans un espace qui a d'autres projets vivants reste affiché
  * « non réalisé », par conception (`figeDuProjet`) : ce n'est pas une incohérence. Un projet encaissé garde le lien
  * (révocation 90 jours après l'encaissement, `espace/revocation.ts`).
+ * Mission 18 (relecture) : le lien d'un espace dont tous les projets sont clos n'est signalé qu'une fois le délai de la
+ * révocation automatique passé depuis la clôture du dernier projet (`revocation.ts › dernierProjetClosLe`, plus 2 jours :
+ * elle passe une fois par jour) — c'est elle qui le ferme ; passer un dossier en « Perdu » n'est pas une incohérence.
  */
 async function espacesDeDossiersClos(): Promise<Incoherence[]> {
+  const { closDepuisLeDelai, dernierProjetClosLe, JOURS_AVANT_REVOCATION } = await import("@/lib/espace/revocation");
+  const maintenant = new Date();
   const projets = await prisma.espaceClient.findMany({
     where: { dossier: { OR: [{ archiveLe: { not: null } }, { etape: "PERDU" }] } },
     select: {
       id: true, dossierId: true, revoqueLe: true, permanentId: true,
-      dossier: { select: { clientNom: true, leadId: true, archiveLe: true, etape: true } },
-      permanent: { select: { id: true, revoqueLe: true, fusionneDansId: true, projets: { select: { archiveLe: true, dossier: { select: { archiveLe: true, etape: true } } } } } },
+      dossier: { select: { clientNom: true, leadId: true, archiveLe: true, etape: true, perteLe: true, updatedAt: true } },
+      permanent: { select: { id: true, revoqueLe: true, fusionneDansId: true, projets: { select: { archiveLe: true, dossier: { select: { archiveLe: true, etape: true, perteLe: true, updatedAt: true } } } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -461,7 +468,8 @@ async function espacesDeDossiersClos(): Promise<Incoherence[]> {
     const ouvert = !p.revoqueLe;
     const fermerProjet = Boolean(p.dossier.archiveLe) && ouvert;
     const lienActif = p.permanent ? !p.permanent.revoqueLe && !p.permanent.fusionneDansId : ouvert;
-    const tousClos = p.permanent ? p.permanent.projets.filter((x) => !x.archiveLe).every((x) => x.dossier.archiveLe !== null || x.dossier.etape === "PERDU") : true;
+    const dossiersDuLien = p.permanent ? p.permanent.projets.filter((x) => !x.archiveLe).map((x) => x.dossier) : [p.dossier];
+    const tousClos = closDepuisLeDelai(dernierProjetClosLe(dossiersDuLien), maintenant, JOURS_AVANT_REVOCATION + 2);
     const desactiver = lienActif && tousClos && !(p.permanent && liensVus.has(p.permanent.id));
     if (p.permanent && desactiver) liensVus.add(p.permanent.id);
     if (!fermerProjet && !desactiver) continue;
@@ -683,21 +691,26 @@ async function effacerAttenteSansDevis(dossierId: string): Promise<void> {
 /**
  * Espace d'un dossier clos : le projet d'un dossier archivé fermé dans l'espace (comme l'archivage) ; le lien du client
  * désactivé si tous ses projets sont clos (rien n'est effacé : un nouveau lien le rouvre). Aucun envoi.
+ * Mission 18 (relecture) : le lien, seulement une fois le délai de la révocation automatique passé (la règle du
+ * contrôle, `espacesDeDossiersClos`).
  */
 async function fermerEspaceDeDossierClos(dossierId: string): Promise<void> {
+  const { closDepuisLeDelai, dernierProjetClosLe, JOURS_AVANT_REVOCATION } = await import("@/lib/espace/revocation");
   const projet = await prisma.espaceClient.findFirst({
     where: { dossierId },
-    select: { id: true, revoqueLe: true, dossier: { select: { archiveLe: true, etape: true } }, permanent: { select: { id: true, revoqueLe: true, fusionneDansId: true, projets: { select: { archiveLe: true, dossier: { select: { archiveLe: true, etape: true } } } } } } },
+    select: { id: true, revoqueLe: true, dossier: { select: { archiveLe: true, etape: true, perteLe: true, updatedAt: true } }, permanent: { select: { id: true, revoqueLe: true, fusionneDansId: true, projets: { select: { archiveLe: true, dossier: { select: { archiveLe: true, etape: true, perteLe: true, updatedAt: true } } } } } } },
   });
   if (!projet || (!projet.dossier.archiveLe && projet.dossier.etape !== "PERDU")) throw new ErreurMetier("Le dossier n'est plus clos : rien à corriger.", 409);
   const fait: string[] = [];
   const maintenant = new Date();
-  if (!projet.revoqueLe && (projet.dossier.archiveLe || !projet.permanent)) {
+  const dossiersDuLien = projet.permanent ? projet.permanent.projets.filter((x) => !x.archiveLe).map((x) => x.dossier) : [projet.dossier];
+  const lienAFermer = closDepuisLeDelai(dernierProjetClosLe(dossiersDuLien), maintenant, JOURS_AVANT_REVOCATION + 2);
+  if (!projet.revoqueLe && (projet.dossier.archiveLe || (!projet.permanent && lienAFermer))) {
     await prisma.espaceClient.update({ where: { id: projet.id }, data: { revoqueLe: maintenant } });
     fait.push(projet.permanent ? "projet fermé dans son espace" : "lien de son espace désactivé");
   }
   const permanent = projet.permanent;
-  if (permanent && !permanent.revoqueLe && !permanent.fusionneDansId && permanent.projets.filter((x) => !x.archiveLe).every((x) => x.dossier.archiveLe !== null || x.dossier.etape === "PERDU")) {
+  if (permanent && !permanent.revoqueLe && !permanent.fusionneDansId && lienAFermer) {
     await desactiverLien(permanent.id, `${RAISON} : tous ses projets sont clos`);
     fait.push("lien de son espace désactivé (tous ses projets sont clos)");
   }
@@ -821,7 +834,10 @@ export async function appliquerCorrection(incoherence: Incoherence): Promise<{ c
     case "PROCHAINE_ACTION_PERIMEE": {
       // Mission 13 (B1) : un devis en vigueur → « Attendre l'accord du client sur le devis » ; sinon l'action s'efface.
       const devis = await prisma.document.findFirst({ where: { dossierId: dossierId!, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, select: { id: true } });
-      const actuelle = (await prisma.dossier.findUnique({ where: { id: dossierId! }, select: { prochaineAction: true } }))?.prochaineAction ?? "";
+      const relu = await prisma.dossier.findUnique({ where: { id: dossierId! }, select: { prochaineAction: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true } });
+      // Mission 18 (relecture) : une action posée à la main n'est jamais écrasée, même par une correction.
+      if (relu && estActionManuelleEnPlace(relu)) throw new ErreurMetier("Cette prochaine action a été posée à la main : elle n'est pas corrigée d'office (change-la depuis le dossier).", 409);
+      const actuelle = relu?.prochaineAction ?? "";
       const suite = devis && /préparer le devis/i.test(actuelle) ? PROCHAINE_ACTION_APRES_DEVIS : null;
       await prisma.dossier.update({ where: { id: dossierId! }, data: { prochaineAction: suite, prochaineActionDate: null } });
       await synchroniserRappel({ type: "DOSSIER", id: dossierId! });

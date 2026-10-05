@@ -396,3 +396,47 @@ describe("le solde par carte, et « Mes documents » d'après les encaissements 
     assert.equal((await payerParCarte(c.jeton, { projet: code })).corps.raison, "rien-a-regler", "projet terminé, tout est réglé");
   });
 });
+
+describe("relecture de la mission 18 : sessions stables, paiement en trop, session sans dossier", () => {
+  test("deux clics dans la même fenêtre de 10 minutes : la même clé ET le même corps (Stripe refuse une clé réutilisée avec un autre corps)", () => {
+    const demande = { centimes: 45_000, libelle: "Acompte – devis 2026-001", nature: "ACOMPTE" as const, dossierId: "d1", espaceId: "e1", documentId: "doc1", retour: "https://coverswap.fr/e/x#paiement", cleIdempotence: "k" };
+    const premier = stripe.corpsSession({ ...demande, maintenant: new Date("2026-10-05T10:00:10Z") });
+    const second = stripe.corpsSession({ ...demande, maintenant: new Date("2026-10-05T10:04:00Z") });
+    assert.equal(second.toString(), premier.toString(), "avant : expires_at changeait à la seconde");
+    assert.equal(premier.get("expires_at"), String(Math.floor(new Date("2026-10-05T11:00:00Z").getTime() / 1000)), "compté depuis le début de la fenêtre");
+    assert.equal(stripe.fenetreSession(new Date("2026-10-05T10:00:10Z")), stripe.fenetreSession(new Date("2026-10-05T10:09:59Z")));
+    // Au pire, en fin de fenêtre, la session vit encore 50 minutes (Stripe en exige 30).
+    const tard = stripe.corpsSession({ ...demande, maintenant: new Date("2026-10-05T10:09:59Z") });
+    assert.ok(Number(tard.get("expires_at")) * 1000 - new Date("2026-10-05T10:09:59Z").getTime() > 30 * 60_000);
+  });
+
+  test("deux sessions payées pour le même acompte : les deux sont enregistrées (l'argent est reçu), Lucas est alerté du paiement en trop", async () => {
+    stripeOuvert(true);
+    const c = await client("Paulin");
+    const d = await devis(c.dossierId, [ligne("Façades", 10, 150)]);
+    await service.accepterDevis(await espaceDe(c.espaceId), { documentId: d.id, nom: "Paulin Essai", accepte: true }, ORIGINE);
+    const alertes = () => prisma.alerteEnvoi.count({ where: { origine: "stripe" } });
+    const avant = await alertes();
+    const premier = await webhook(evenementStripe({ id: "cs_double_1", centimes: 45_000, dossierId: c.dossierId, documentId: d.id }));
+    assert.equal(premier.corps.statut, "ENREGISTRE");
+    assert.equal(await alertes(), avant + 1, "« Paiement par carte reçu » seulement");
+    const second = await webhook(evenementStripe({ id: "cs_double_2", centimes: 45_000, dossierId: c.dossierId, documentId: d.id }));
+    assert.equal(second.corps.statut, "ENREGISTRE", "enregistré quand même : l'argent est arrivé");
+    assert.equal(await alertes(), avant + 3, "« reçu » puis « Paiement par carte en trop »");
+    const etat = await etatDesDeuxCotes(c.dossierId);
+    assert.deepEqual([etat.etape, etat.etapeEspace], ["SIGNE", "CHANTIER"]);
+    assert.equal(etat.main, etat.mainCalculee);
+    assert.equal(await prisma.encaissement.count({ where: { dossierId: c.dossierId, statut: "VALIDE" } }), 2);
+    stripeOuvert(false);
+  });
+
+  test("session payée sans dossier connu : 200 « IGNORE » comme avant, mais Lucas est alerté (montant, session ; aucun nom)", async () => {
+    stripeOuvert(true);
+    const avant = await prisma.alerteEnvoi.count({ where: { origine: "stripe" } });
+    const recu = await webhook(evenementStripe({ id: "cs_orphelin", centimes: 12_300, dossierId: "dossier-inconnu" }));
+    assert.deepEqual([recu.status, recu.corps.statut], [200, "IGNORE"]);
+    assert.equal(await prisma.alerteEnvoi.count({ where: { origine: "stripe" } }), avant + 1, "avant : un console.error seulement");
+    assert.equal(await prisma.encaissement.count({ where: { cleReprise: "stripe:cs_orphelin" } }), 0, "rien d'inventé : Lucas le saisit à la main");
+    stripeOuvert(false);
+  });
+});

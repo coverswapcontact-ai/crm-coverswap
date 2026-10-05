@@ -168,8 +168,11 @@ const centimesEnEuros = (centimes: number) => Math.round(centimes) / 100;
  * Ce que le client doit et ce qu'il a payé, à partir des encaissements VALIDES
  * du dossier (un chèque rejeté ou un paiement annulé ne compte plus : la ligne
  * redevient « à régler »). Les paiements règlent l'acompte d'abord, puis le solde.
+ * Mission 18 (relecture) : `factures`, le reste dû des factures actives d'un chantier facturé (`soldes.ts ›
+ * faitsPaiements`) : le solde à régler est alors CELUI-LÀ — ce que « Payer par carte » débite et ce que « Mes documents »
+ * affiche (avenants facturés avec le solde compris) ; « Réglé » quand il ne reste rien sur les factures.
  */
-export function paiementEspace(montants: { totalTtcCentimes: number; acompteCentimes: number }, acomptePct: number | null, encaissements: EncaissementLu[]): PaiementEspace {
+export function paiementEspace(montants: { totalTtcCentimes: number; acompteCentimes: number }, acomptePct: number | null, encaissements: EncaissementLu[], factures?: { resteCentimes: number } | null): PaiementEspace {
   const valides = encaissements.filter((e) => e.statut === "VALIDE").sort((a, b) => a.recuLe.getTime() - b.recuLe.getTime());
   const total = montants.totalTtcCentimes;
   const acompte = montants.acompteCentimes;
@@ -188,14 +191,23 @@ export function paiementEspace(montants: { totalTtcCentimes: number; acompteCent
     const fin = paye ? atteint(seuil) : null;
     return { montant: centimesEnEuros(du), statut: paye ? "PAYE" : recuPourCetteLigne > 0 ? "PARTIEL" : "A_REGLER", recu: centimesEnEuros(Math.min(du, Math.max(0, recuPourCetteLigne))), payeLe: fin?.recuLe.toISOString() ?? null, moyen: fin?.moyen ?? null };
   };
+  const lignesFaites = valides.map((e) => ({ montant: e.montant, le: e.recuLe.toISOString(), moyen: e.moyen }));
+  const acompteLigne = acompte > 0 ? { ...ligne(acompte, recu, acompte), pct: acomptePct } : null;
+  if (factures) {
+    // Facturé : le solde dû est le reste des factures (la facture peut différer du devis : avenants, remise).
+    const reste = Math.max(0, Math.round(factures.resteCentimes));
+    const soldeDu = Math.max(total - acompte, Math.max(0, recu - acompte) + reste);
+    const totalFacture = acompte + soldeDu;
+    return { total: centimesEnEuros(totalFacture), recu: centimesEnEuros(recu), reste: centimesEnEuros(reste), acompte: acompteLigne, solde: ligne(soldeDu, soldeDu - reste, totalFacture), encaissements: lignesFaites, regle: totalFacture > 0 && reste === 0 };
+  }
   const soldeDu = total - acompte;
   return {
     total: centimesEnEuros(total),
     recu: centimesEnEuros(recu),
     reste: centimesEnEuros(Math.max(0, total - recu)),
-    acompte: acompte > 0 ? { ...ligne(acompte, recu, acompte), pct: acomptePct } : null,
+    acompte: acompteLigne,
     solde: ligne(soldeDu, recu - acompte, total),
-    encaissements: valides.map((e) => ({ montant: e.montant, le: e.recuLe.toISOString(), moyen: e.moyen })),
+    encaissements: lignesFaites,
     regle: total > 0 && recu >= total - 50,
   };
 }
@@ -212,15 +224,25 @@ export type LectureDevis = {
   acompteRecu: boolean;
 };
 
-/** Devis en vigueur, accord et paiements d'un dossier, d'un seul geste. */
-export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null }): LectureDevis {
+/** Mission 18 (relecture) : les étapes d'un projet figé (`projets.ts › figeDuProjet` : encaissé, perdu) — plus rien à y signer. */
+export const ETAPES_PROJET_FIGE: readonly string[] = ["ENCAISSE", "PERDU"];
+
+/**
+ * Devis en vigueur, accord et paiements d'un dossier, d'un seul geste.
+ * Mission 18 (relecture) : `etapeDossier` — un projet figé n'a plus de devis à signer (le bon pour accord y est refusé) ;
+ * les avenants signés s'ajoutent au total à payer (facturés avec le solde, décision 8 ; l'acompte reste celui du devis
+ * d'origine) ; `factures` (chantier facturé) : le solde est le reste des factures (`paiementEspace`).
+ */
+export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null; etapeDossier?: string; factures?: { resteCentimes: number } | null }): LectureDevis {
   const devis = devisEnVigueur(entree.devis);
   const proposes = devisProposes(entree.devis);
-  const aSigner = devisASigner(entree.devis, entree.accords);
+  const aSigner = entree.etapeDossier && ETAPES_PROJET_FIGE.includes(entree.etapeDossier) ? [] : devisASigner(entree.devis, entree.accords);
   if (!devis) return { devis: null, proposes, aSigner, montants: null, accord: null, paiement: null, acompteRecu: false };
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
   const accord = accordEffectif(devis, entree.accords, { nom: entree.clientNom, signeLe: entree.signeLe ?? devis.dateEmission ?? devis.createdAt });
-  const paiement = paiementEspace(montants, devis.acomptePct, entree.encaissements);
+  const avenants = devis.statut === "ACCEPTE" ? entree.devis.filter((d) => d.id !== devis.id && d.statut === "ACCEPTE" && estAvenant(d, [devis])) : [];
+  const totalAvenants = avenants.reduce((somme, d) => somme + montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes, 0);
+  const paiement = paiementEspace({ totalTtcCentimes: montants.totalTtcCentimes + totalAvenants, acompteCentimes: montants.acompteCentimes }, devis.acomptePct, entree.encaissements, entree.factures);
   return { devis, proposes, aSigner, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
 }
 

@@ -43,9 +43,17 @@ export type DemandeSession = {
 /** Durée de vie d'une session de paiement (Stripe exige au moins 30 minutes). */
 export const DUREE_SESSION_MS = 60 * 60_000;
 
+/**
+ * Mission 18 (relecture) : la fenêtre de la clé d'idempotence (deux clics dans la même fenêtre rendent la même session).
+ * Stripe refuse une clé réutilisée avec un corps différent : l'expiration est donc comptée depuis le DÉBUT de la fenêtre
+ * (le corps ne change pas d'un clic à l'autre ; elle reste entre 50 et 60 minutes, au-delà des 30 exigées).
+ */
+export const FENETRE_SESSION_MS = 10 * 60_000;
+export const fenetreSession = (maintenant: Date): number => Math.floor(maintenant.getTime() / FENETRE_SESSION_MS);
+
 /** Le corps de la création d'une session Checkout (formulaire encodé à la manière de Stripe). Pure. */
 export function corpsSession(demande: DemandeSession): URLSearchParams {
-  const maintenant = demande.maintenant ?? new Date();
+  const debutFenetre = fenetreSession(demande.maintenant ?? new Date()) * FENETRE_SESSION_MS;
   const metadata = { dossierId: demande.dossierId, espaceId: demande.espaceId, nature: demande.nature, documentId: demande.documentId ?? "" };
   const corps = new URLSearchParams({
     mode: "payment",
@@ -57,7 +65,7 @@ export function corpsSession(demande: DemandeSession): URLSearchParams {
     success_url: demande.retour,
     cancel_url: demande.retour,
     client_reference_id: demande.dossierId,
-    expires_at: String(Math.floor((maintenant.getTime() + DUREE_SESSION_MS) / 1000)),
+    expires_at: String(Math.floor((debutFenetre + DUREE_SESSION_MS) / 1000)),
   });
   for (const [cle, valeur] of Object.entries(metadata)) {
     corps.set(`metadata[${cle}]`, valeur);

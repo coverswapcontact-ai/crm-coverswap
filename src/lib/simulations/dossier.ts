@@ -444,7 +444,8 @@ async function publierDansLEspace(dossierId: string, aPublier: SimulationEspace[
         },
       });
       // Mission 18 (B0, B9) : le point d'entrée, pour l'étape, la prochaine action (une action posée à la main reste) et la main.
-      return appliquerEvenementDossier(tx, dossierId, { type: "SIMULATION_PUBLIEE", simulationIds: aPublier.map((s) => s.id) }, maintenant);
+      // Relecture : des simulations déjà publiées une fois (masquées puis remises) ne touchent ni la prochaine action ni la main.
+      return appliquerEvenementDossier(tx, dossierId, { type: "SIMULATION_PUBLIEE", simulationIds: aPublier.map((s) => s.id), ...(republiees ? { republiee: true } : {}) }, maintenant);
     },
     { maxWait: 10_000, timeout: 30_000 }
   );

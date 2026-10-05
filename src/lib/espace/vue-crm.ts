@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
-import { devisProposes } from "@/lib/espace/faits";
+import { devisProposes, estAvenant } from "@/lib/espace/faits";
 import { montantsDocument } from "@/lib/dossiers/montants";
 import { lireLignes } from "@/lib/dossiers/stockage";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -13,7 +13,7 @@ import { figeDuProjet, LIBELLES_PASTILLE, projetsVisibles } from "./projets";
 import { enregistrerPrestations } from "@/lib/prestations/dossier";
 import { lireSelection } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, type ProjetClient } from "./projet";
-import { accorderSimulations, choisir, photosDuClient, quotaSimulations } from "./service";
+import { accorderSimulations, choisir, facturesDuDossier, photosDuClient, quotaSimulations } from "./service";
 import { devaliderChoix, devaliderProjet, lirePhotosRetirees, remettrePhoto, retirerAccord, retirerDemandeProposition, retirerPhoto, validerProjet } from "./validations";
 import { messagesEspace, repondreDansLEspace, type MessageEspaceVue } from "./messages";
 
@@ -56,7 +56,7 @@ export type VueEspaceCrm = {
   favoris: string[];
   devis: { id: string; numero: string; total: number; repris: boolean; statut: string; consultations: number; consulteLe: string | null } | null;
   /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent, avec libellé et visibilité. */
-  devisProposes: { id: string; numero: string; libelle: string | null; total: number; statut: string; visibleEspace: boolean; repris: boolean; consultations: number; consulteLe: string | null }[];
+  devisProposes: { id: string; numero: string; libelle: string | null; total: number; statut: string; visibleEspace: boolean; repris: boolean; consultations: number; consulteLe: string | null; avenant: boolean; accordEnCours: boolean }[];
   accord: { le: string; nom: string; source: "ESPACE" | "CRM"; signature: boolean } | null;
   accordsRetires: { le: string; retireLe: string; par: string | null; motif: string | null; nom: string }[];
   paiement: PaiementEspace | null;
@@ -116,7 +116,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
   if (!dossier) return null;
   const selection = lireSelection(dossier.prestations);
   const typeProjet = Object.keys(selection)[0] ?? dossier.lead?.typeProjet ?? "AUTRE";
-  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements.filter((e) => e.type === "CHANGEMENT_ETAPE")) });
+  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements.filter((e) => e.type === "CHANGEMENT_ETAPE")), etapeDossier: dossier.etape, factures: await facturesDuDossier(dossierId) });
   const [photos, quota] = await Promise.all([photosDuClient(dossierId, dossier.photos), quotaSimulations(espace)]);
   const projet = lireProjet(espace.souhaits, selection, dossier.lead?.typeProjet);
   const publiees = espace.simulations.filter((s) => s.statut === "PUBLIEE");
@@ -200,7 +200,7 @@ export async function vueEspaceCrm(dossierId: string): Promise<VueEspaceCrm | nu
       }
     })(),
     devis: lecture.devis && lecture.montants ? { id: lecture.devis.id, numero: lecture.devis.numero!, total: lecture.montants.totalTtcCentimes / 100, repris: lecture.devis.origine === "REPRISE", statut: lecture.devis.statut, consultations: lecture.devis.consultations ?? 0, consulteLe: iso(lecture.devis.consulteLe) } : null,
-    devisProposes: devisProposes(dossier.documents, { avecNonRetenus: true }).map((d) => ({ id: d.id, numero: d.numero!, libelle: d.libelleVariante ?? null, total: montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes / 100, statut: d.statut, visibleEspace: d.visibleEspace !== false, repris: d.origine === "REPRISE", consultations: d.consultations, consulteLe: iso(d.consulteLe) })),
+    devisProposes: devisProposes(dossier.documents, { avecNonRetenus: true }).map((d) => ({ id: d.id, numero: d.numero!, libelle: d.libelleVariante ?? null, total: montantsDocument({ lignes: lireLignes(d.lignes), totalHt: d.totalHt, acomptePct: d.acomptePct }).totalTtcCentimes / 100, statut: d.statut, visibleEspace: d.visibleEspace !== false, repris: d.origine === "REPRISE", consultations: d.consultations, consulteLe: iso(d.consulteLe), avenant: estAvenant(d, dossier.documents), accordEnCours: dossier.accords.some((a) => a.documentId === d.id && !a.retireLe) })),
     accord: lecture.accord ? { le: lecture.accord.le.toISOString(), nom: lecture.accord.nom, source: lecture.accord.source, signature: lecture.accord.signature } : null,
     accordsRetires: dossier.accords.filter((a) => a.retireLe).map((a) => ({ le: a.createdAt.toISOString(), retireLe: a.retireLe!.toISOString(), par: a.retirePar, motif: a.retireMotif, nom: a.nomSignataire })),
     paiement: lecture.accord ? lecture.paiement : null,
@@ -224,7 +224,8 @@ export const schemaGesteEspace = z.discriminatedUnion("geste", [
   z.object({ geste: z.literal("valider-simulation"), simulationId: z.string().min(1).max(40) }),
   z.object({ geste: z.literal("devalider-simulation") }),
   z.object({ geste: z.literal("retirer-demande") }),
-  z.object({ geste: z.literal("retirer-accord"), motif: z.string().trim().max(500).default("") }),
+  // Mission 18 (B7, relecture) : `documentId` vise l'accord d'un devis (un avenant se retire seul) ; sans, celui du devis signé d'origine.
+  z.object({ geste: z.literal("retirer-accord"), motif: z.string().trim().max(500).default(""), documentId: z.string().min(1).max(40).optional() }),
   z.object({ geste: z.literal("accorder"), nombre: z.number().int().min(1).max(20).default(3) }),
   z.object({ geste: z.literal("retirer-photo"), photoId: z.string().min(1).max(80) }),
   z.object({ geste: z.literal("remettre-photo"), photoId: z.string().min(1).max(80) }),
@@ -267,7 +268,7 @@ export async function gesteDeLucas(dossierId: string, geste: GesteEspace): Promi
     case "retirer-demande":
       return retirerDemandeProposition(espace, "LUCAS");
     case "retirer-accord":
-      await retirerAccord(espace, "LUCAS", geste.motif);
+      await retirerAccord(espace, "LUCAS", geste.motif, geste.documentId);
       return;
     case "accorder":
       await accorderSimulations(espace.id, geste.nombre);

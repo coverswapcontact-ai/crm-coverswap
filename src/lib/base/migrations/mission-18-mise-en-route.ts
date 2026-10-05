@@ -20,10 +20,16 @@ import type { MigrationDonnees } from "./index";
  * 4. Le reste : un second contrôle, ordinaire (celui du détecteur de tâches), dit ce que le détecteur COHERENCE
  *    remontera de lui-même (« Corriger · Nom ») ; rien n'est écrit pour ceux-là. Ce qu'il ne voit pas (dossiers perdus
  *    ou archivés) devient une tâche à moi `MANUELLE:coherence-18-<clé>`, lot « coherence-18 », une fois (P2002 ignoré).
+ *    Relecture : ce que le contrôle ordinaire voit mais que le moteur des tâches écarterait — un dossier dont la
+ *    prochaine action posée à la main est en vigueur (`moteur.ts › ecarteeParVigueur`) — devient aussi une tâche à moi
+ *    (une MANUELLE n'est jamais écartée) ; les codes que le détecteur laisse à leur
+ *    propre tâche (`CODES_ECARTES` : « Enregistrer comme devis envoyé », mails sans réponse) sont comptés à part
+ *    (`autre`), jamais « au détecteur ».
  * 5. Le détecteur oublie son rapport gardé (`invaliderCoherence`) et la liste des tâches est prévenue.
  *
- * Résumé : `dossiersControles`, totaux (`trouves`, `repares`, `taches`, `detecteur`, `echecs`) puis, par règle,
- * `trouves.<CODE>`, `repares.<CODE>`, `taches.<CODE>`, `detecteur.<CODE>`, `echecs.<CODE>` (seulement ceux qui ne sont
+ * Résumé : `dossiersControles`, totaux (`trouves`, `repares`, `taches`, `detecteur`, `echecs`, et `autre` s'il n'est pas
+ * nul) puis, par règle, `trouves.<CODE>`, `repares.<CODE>`, `taches.<CODE>`, `detecteur.<CODE>`, `autre.<CODE>`,
+ * `echecs.<CODE>` (seulement ceux qui ne sont
  * pas nuls). Les journaux disent les clients en initiales (dépôt public). Ne lève jamais : un contrôle ou une correction
  * en échec est compté, et le démarrage continue. Idempotente : rejouée, elle ne répare plus rien (ce qui est réparé a
  * disparu du contrôle) et ne recrée aucune tâche.
@@ -99,9 +105,10 @@ async function creerTache(client: BaseDonnees, i: Incoherence, dossier: { leadId
 /** La mise en route elle-même (les essais l'appellent directement). Ne lève pas. */
 export async function miseEnRoute18(client: BaseDonnees, options: { maintenant?: Date } = {}): Promise<Compteurs> {
   const maintenant = options.maintenant ?? new Date();
+  // `autre` (relecture) n'apparaît que s'il n'est pas nul : les résumés d'avant gardent leur forme.
   const c: Compteurs = { dossiersControles: 0, trouves: 0, repares: 0, taches: 0, detecteur: 0, echecs: 0 };
-  const compter = (quoi: "trouves" | "repares" | "taches" | "detecteur" | "echecs", code: CodeIncoherence) => {
-    c[quoi]++;
+  const compter = (quoi: "trouves" | "repares" | "taches" | "detecteur" | "autre" | "echecs", code: CodeIncoherence) => {
+    c[quoi] = (c[quoi] ?? 0) + 1;
     c[`${quoi}.${code}`] = (c[`${quoi}.${code}`] ?? 0) + 1;
   };
   if (await baseVide(client)) {
@@ -156,17 +163,26 @@ export async function miseEnRoute18(client: BaseDonnees, options: { maintenant?:
       const dossiers = new Map(
         (await client.dossier.findMany({ where: { id: { in: ids }, ...AVEC_ARCHIVES }, select: { id: true, etape: true, archiveLe: true, leadId: true, clientId: true } })).map((d) => [d.id, d])
       );
+      // Relecture : ce que le moteur des tâches rendra vraiment (la vigueur d'une action posée à la main écarte la détection).
+      const [{ CODES_ECARTES }, { actionsManuellesEnVigueur }, { ecarteeParVigueur }] = await Promise.all([import("@/lib/a-faire/detecteurs/coherence"), import("@/lib/a-faire/vigueur"), import("@/lib/a-faire/moteur")]);
+      const vigueur = await actionsManuellesEnVigueur(maintenant);
       for (const i of restes) {
-        if (vusDuDetecteur.has(i.cle)) {
+        const vu = vusDuDetecteur.has(i.cle);
+        if (vu && CODES_ECARTES.includes(i.code)) {
+          compter("autre", i.code);
+          continue;
+        }
+        const cache = vu && ecarteeParVigueur({ type: "COHERENCE", source: "COHERENCE", dossierId: i.dossierId }, vigueur);
+        if (vu && !cache) {
           compter("detecteur", i.code);
           continue;
         }
         const dossier = i.dossierId ? dossiers.get(i.dossierId) : undefined;
-        if (!dossier || (!dossier.archiveLe && dossier.etape !== "PERDU")) continue; // vivant et disparu entre-temps : plus rien à faire
+        if (!dossier || (!cache && !dossier.archiveLe && dossier.etape !== "PERDU")) continue; // vivant et disparu entre-temps : plus rien à faire
         try {
           if (await creerTache(client, i, dossier, maintenant)) {
             compter("taches", i.code);
-            journal(`${i.code} (${initiales(i.client)}, dossier ${dossier.archiveLe ? "archivé" : "perdu"}) : tâche à moi`);
+            journal(`${i.code} (${initiales(i.client)}, dossier ${cache ? "à l'action posée à la main" : dossier.archiveLe ? "archivé" : "perdu"}) : tâche à moi`);
           }
         } catch (erreur) {
           compter("echecs", i.code);
@@ -187,7 +203,7 @@ export async function miseEnRoute18(client: BaseDonnees, options: { maintenant?:
 
   const parRegle = [...new Set(incoherences.map((i) => i.code))]
     .sort()
-    .map((code) => `${code} : ${c[`trouves.${code}`]} trouvé${c[`trouves.${code}`] > 1 ? "s" : ""}, ${c[`repares.${code}`] ?? 0} réparé${(c[`repares.${code}`] ?? 0) > 1 ? "s" : ""}, ${c[`taches.${code}`] ?? 0} en tâche à moi, ${c[`detecteur.${code}`] ?? 0} au détecteur${c[`echecs.${code}`] ? `, ${c[`echecs.${code}`]} en échec` : ""}`);
+    .map((code) => `${code} : ${c[`trouves.${code}`]} trouvé${c[`trouves.${code}`] > 1 ? "s" : ""}, ${c[`repares.${code}`] ?? 0} réparé${(c[`repares.${code}`] ?? 0) > 1 ? "s" : ""}, ${c[`taches.${code}`] ?? 0} en tâche à moi, ${c[`detecteur.${code}`] ?? 0} au détecteur${c[`autre.${code}`] ? `, ${c[`autre.${code}`]} à leur propre tâche` : ""}${c[`echecs.${code}`] ? `, ${c[`echecs.${code}`]} en échec` : ""}`);
   journal(`${pluriel(c.dossiersControles, "dossier contrôlé", "dossiers contrôlés")} (perdus et archivés compris) : ${pluriel(c.trouves, "écart trouvé", "écarts trouvés")}, ${pluriel(c.repares, "réparé", "réparés")}, ${pluriel(c.taches, "tâche à moi", "tâches à moi")}, ${c.detecteur} au détecteur, ${pluriel(c.echecs, "échec")}`);
   for (const ligne of parRegle) journal(ligne);
   return c;

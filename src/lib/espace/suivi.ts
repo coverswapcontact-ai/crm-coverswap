@@ -163,7 +163,7 @@ export async function listerEspaces(maintenant: Date = new Date(), filtre: Filtr
     const restantes = simulationsRestantes({ gratuites, accordees: espace.simulationsAccordees ?? 0, faitesEspace, faitesSite, enCours: 0 });
     const brouillons = vivantes.filter((s) => s.statut === "BROUILLON").length;
     // Devis, accord, paiements : la même lecture que l'espace du client (faits.ts).
-    const lecture = lireDevisEtPaiements({ devis: d.documents, accords: d.accords, encaissements: d.encaissements, clientNom: d.clientNom, signeLe: dateSignature(d.evenements) });
+    const lecture = lireDevisEtPaiements({ devis: d.documents, accords: d.accords, encaissements: d.encaissements, clientNom: d.clientNom, signeLe: dateSignature(d.evenements), etapeDossier: d.etape });
     const devis = lecture.devis;
     const accord = lecture.accord ? { createdAt: lecture.accord.le, source: lecture.accord.source } : null;
     const recu = lecture.paiement?.recu ?? 0;

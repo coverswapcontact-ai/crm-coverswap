@@ -30,6 +30,7 @@ import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type E
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { accordEffectif, composerFaits, dateSignature, estAvenant, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { stripeActif } from "@/lib/paiement/stripe";
+import { faitsPaiements } from "@/lib/encaissements/soldes";
 import { prochainPas, type ProchainPas } from "./prochain-pas";
 import { reporterTeintesDuChoix } from "./teintes-choix";
 
@@ -252,6 +253,15 @@ export function nomDuProjetClient(nomProjet: string | null | undefined, objet: s
 }
 
 /**
+ * Mission 18 (relecture) : le reste dû des factures actives d'un dossier facturé (`soldes.ts › faitsPaiements`, la
+ * lecture de « Payer par carte » et de « Mes documents ») ; null sans facture active (le solde se lit sur le devis).
+ */
+export async function facturesDuDossier(dossierId: string): Promise<{ resteCentimes: number } | null> {
+  const { pieces, resteCentimes } = await faitsPaiements(prisma, dossierId);
+  return pieces.some((piece) => piece.type === "FACTURE" && piece.active) ? { resteCentimes } : null;
+}
+
+/**
  * Tout ce qu'il faut pour savoir où en est un projet — son dossier, ses
  * simulations publiées, ses photos, la lecture unique des devis et paiements
  * (faits.ts), ses familles —, sans rien écrire. Sert à l'état complet du projet
@@ -288,7 +298,9 @@ export async function chargerProjet(espace: EspaceClient) {
     photosDuClient(dossier.id, dossier.photos),
   ]);
   // Devis en vigueur (repris compris), accord (en ligne ou constaté dans le CRM), paiements : lecture unique (faits.ts).
-  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements) });
+  // Mission 18 (relecture) : facturé, le solde à régler est le reste des factures (ce que « Payer par carte » débite).
+  const factures = await facturesDuDossier(dossier.id);
+  const lecture = lireDevisEtPaiements({ devis: dossier.documents, accords: dossier.accords, encaissements: dossier.encaissements, clientNom: dossier.clientNom, signeLe: dateSignature(dossier.evenements), etapeDossier: dossier.etape, factures });
   const selection = lireSelection(dossier.prestations);
   const monProjet = lireProjet(espace.souhaits, selection, dossier.lead?.typeProjet);
   const choix = lireChoix(espace.choix);
@@ -987,6 +999,13 @@ export async function accepterDevis(espace: EspaceClient, entree: z.output<typeo
         // d'origine : son accord n'y touche pas, l'étape ne bouge pas (l'acompte reste celui du devis d'origine), les autres
         // devis « Généré » ou « Envoyé » (d'autres avenants proposés) passent « non retenu ».
         const signeAvant = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE", id: { not: devis.id }, createdAt: { lt: devis.createdAt } }, orderBy: { createdAt: "asc" }, select: { id: true, numero: true } });
+        // Mission 18 (relecture) : seuls les devis de `devisASigner` se signent. Sur un dossier signé, un devis créé AVANT le
+        // devis signé d'origine (une ancienne variante restée « Généré ») n'est plus en vigueur : signé, il deviendrait « le
+        // devis » de l'espace (acompte, virement) et ferait passer le vrai devis signé pour un avenant.
+        if (!signeAvant && relu.statut !== "ACCEPTE") {
+          const signeApres = await tx.document.findFirst({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE", id: { not: devis.id }, createdAt: { gt: devis.createdAt } }, select: { id: true } });
+          if (signeApres) throw new ErreurMetier(MESSAGE_HORS_VIGUEUR, 409);
+        }
         if (signeAvant) {
           if (existant) return null;
           await nouvelAccord();

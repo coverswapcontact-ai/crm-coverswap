@@ -125,6 +125,31 @@ describe("« Publier » depuis le bloc Espace (mission 18, B9)", () => {
   });
 });
 
+describe("relecture de la mission 18 : une simulation masquée puis remise", () => {
+  test("ni la prochaine action ni la main ne bougent (comme avant la mission 18) : seul l'historique le dit, aucun second mail", async () => {
+    const c = await contact("Remise");
+    const s = await brouillon(c.dossierId, "Béton ciré");
+    await bloc(c.dossierId, s, "afficher");
+    // Plus tard dans le dossier : Lucas a posé une action (la main lui revient), puis une action automatique l'a remplacée.
+    await avecActeur(LUCAS, () => dossiers.modifierDossier(c.dossierId, { prochaineAction: "Passer chez lui jeudi" }));
+    const AUTO = "Appeler le client : fixer la date du chantier, suivre l'acompte";
+    await prisma.dossier.update({ where: { id: c.dossierId }, data: { prochaineAction: AUTO } });
+    const avant = await etatDesDeuxCotes(c.dossierId);
+    assert.deepEqual([avant.prochaineAction, avant.actionManuelle, avant.main, avant.mainCalculee], [AUTO, null, "MOI", "MOI"]);
+
+    await bloc(c.dossierId, s, "masquer");
+    await bloc(c.dossierId, s, "afficher");
+    const apres = await etatDesDeuxCotes(c.dossierId);
+    assert.equal(apres.prochaineAction, AUTO, "avant la relecture : écrasée par « Attendre le retour du client sur la simulation »");
+    assert.deepEqual([apres.main, apres.mainCalculee, apres.mainMotif], ["MOI", "MOI", avant.mainMotif], "avant la relecture : la main passait au client");
+    assert.deepEqual([apres.etape, apres.etapeEspace, apres.statutLead], [avant.etape, avant.etapeEspace, avant.statutLead]);
+    assert.deepEqual(apres.taches.filter((t) => t.cle.includes(":synchro:")), [], "rien de rangé à la place");
+    assert.equal(await mails(s), 1);
+    const trace = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: c.dossierId, type: "ESPACE_SIMULATION_DEPOSEE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+    assert.equal(trace.contenu, "Simulation republiée dans l'espace du client : Béton ciré");
+  });
+});
+
 describe("retirer une simulation choisie annule le choix (mission 18, B9)", () => {
   test("mode UNE : masquer la simulation validée la dévalide d'un bloc ; « Préparer le devis » redevient une attente, l'espace revient aux simulations", async () => {
     const c = await contact("Une");

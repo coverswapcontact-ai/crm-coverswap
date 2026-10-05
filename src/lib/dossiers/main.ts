@@ -114,8 +114,9 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
   const client = evenement.direction === "ENTRANT";
   switch (evenement.type) {
     // Lucas passe la main au client.
+    // Mission 18 (relecture) : une simulation masquée puis remise (« republiée ») ne repasse pas la main.
     case "ESPACE_SIMULATION_DEPOSEE":
-      return { qui: "CLIENT", motif: "Simulation publiée : en attente de son retour" };
+      return lireMetadata(evenement.metadata).republiees === true ? null : { qui: "CLIENT", motif: "Simulation publiée : en attente de son retour" };
     // Mission 18 (B1) : un devis généré sans être envoyé me la donne (les devis d'avant n'ont pas la marque : envoyés).
     case "DEVIS_GENERE": {
       const meta = lireMetadata(evenement.metadata);

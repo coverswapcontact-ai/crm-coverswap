@@ -57,9 +57,10 @@ export type EvenementDossier =
   | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS"; avenant?: boolean }
   /**
    * Simulations publiées dans l'espace (simulations/dossier.ts › publierSimulations ; mission 18, B9 : aussi « Publier »
-   * depuis le bloc Espace, `changerStatutSimulation(…, "afficher")`).
+   * depuis le bloc Espace, `changerStatutSimulation(…, "afficher")`). Relecture : `republiee`, des simulations déjà
+   * publiées une fois (masquées puis remises) : ni prochaine action ni main (comme avant la mission 18), l'étape seule.
    */
-  | { type: "SIMULATION_PUBLIEE"; simulationIds: string[] }
+  | { type: "SIMULATION_PUBLIEE"; simulationIds: string[]; republiee?: boolean }
   /**
    * Mission 18 (B9) : une simulation faite par le client lui-même, visible dans son espace : créée dans son espace
    * (simulateur/preparation.ts › publierSimulationDuClient, `ESPACE`) ou faite sur coverswap.fr et rangée dans son espace
@@ -195,6 +196,8 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
     // Mission 18 (relecture) : les attentes du client (« Attendre … ») ne rangent pas de tâche à la place d'une action posée
     // à la main : rien à faire de mon côté, la main passe au client (`tache: false`).
     case "SIMULATION_PUBLIEE":
+      // Relecture : remettre une simulation masquée n'est pas une nouvelle publication (rien n'attend son retour de plus).
+      if (evenement.republiee) return null;
       return { code: "simulation-publiee", texte: "Attendre le retour du client sur la simulation", date: null, niveau: 3, tache: false };
     // Mission 18 (B9) : sa propre simulation ne pose pas de prochaine action (comme avant) : l'étape et la main suivent.
     case "SIMULATION_DU_CLIENT":

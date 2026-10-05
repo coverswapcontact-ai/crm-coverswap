@@ -316,10 +316,13 @@ describe("cohérence de la partie B (mission 18, B13)", () => {
     assert.deepEqual(await codesDe(c.dossierId), []);
   });
 
-  test("dossier perdu ou archivé avec un espace ouvert : lien désactivé si tous ses projets sont clos ; un projet perdu à côté d'un projet vivant reste affiché", async () => {
-    // Perdu, seul projet de son espace : le lien fonctionne encore.
+  test("dossier perdu ou archivé avec un espace ouvert : lien désactivé si tous ses projets sont clos depuis le délai de la révocation ; un projet perdu à côté d'un projet vivant reste affiché", async () => {
+    // Perdu aujourd'hui, seul projet de son espace : pas une incohérence (relecture) — la révocation automatique fermera
+    // le lien 90 jours après la perte ; au-delà, le lien qui fonctionne encore est signalé.
     const c = await contact("Lazare");
-    await prisma.dossier.update({ where: { id: c.dossierId }, data: { etape: "PERDU" } });
+    await prisma.dossier.update({ where: { id: c.dossierId }, data: { etape: "PERDU", perteLe: new Date() } });
+    assert.deepEqual(await codesDe(c.dossierId), [], "passer en « Perdu » ne crée pas d'incohérence");
+    await prisma.dossier.update({ where: { id: c.dossierId }, data: { perteLe: new Date(Date.now() - 93 * 86_400_000) } });
     const vues = await incoherencesDe(c.dossierId);
     assert.deepEqual(vues.map((i) => [i.code, i.correction]), [["ESPACE_ACTIF_DOSSIER_CLOS", "Désactiver le lien"]]);
     assert.equal(await sensible(vues[0].cle), false);
@@ -340,10 +343,13 @@ describe("cohérence de la partie B (mission 18, B13)", () => {
     await prisma.dossier.update({ where: { id: d.dossierId }, data: { etape: "PERDU" } });
     assert.deepEqual(await codesDe(d.dossierId), []);
 
-    // Archivé, projet resté ouvert (donnée d'avant) : le projet se ferme et, seul projet, le lien aussi.
+    // Archivé, projet resté ouvert (donnée d'avant) : le projet se ferme ; le lien, seul projet, une fois le délai passé.
     const a = await contact("Aristide");
     await avecActeur(LUCAS, async () => (await import("@/lib/dossiers/archivage")).archiverDossier(a.dossierId, "doublon"));
     await prisma.espaceClient.update({ where: { id: a.espaceId }, data: { revoqueLe: null } });
+    const recent = (await controle.controlerCoherence()).incoherences.filter((i) => i.dossierId === a.dossierId);
+    assert.deepEqual(recent.map((i) => [i.code, i.correction]), [["ESPACE_ACTIF_DOSSIER_CLOS", "Fermer le projet dans son espace"]], "archivé aujourd'hui : le lien attend le délai");
+    await prisma.dossier.update({ where: { id: a.dossierId }, data: { archiveLe: new Date(Date.now() - 93 * 86_400_000) } });
     const archive = (await controle.controlerCoherence()).incoherences.filter((i) => i.dossierId === a.dossierId);
     assert.deepEqual(archive.map((i) => [i.code, i.correction, i.leadId]), [["ESPACE_ACTIF_DOSSIER_CLOS", "Fermer le projet et désactiver le lien", a.leadId]]);
     await corriger(archive[0].cle);

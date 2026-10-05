@@ -451,7 +451,7 @@ export function texteMigration(m: { nom: string; executeeLe: Date; resume: strin
     const total = `${pluriel(n("dossiersControles"), "dossier contrôlé", "dossiers contrôlés")}, ${pluriel(n("trouves"), "écart trouvé", "écarts trouvés")}, ${pluriel(n("repares"), "réparé", "réparés")}, ${pluriel(n("taches"), "tâche à moi", "tâches à moi")}, ${n("detecteur")} au détecteur, ${pluriel(n("echecs"), "échec")}`;
     const regles = codes.map(
       (code) =>
-        `${code} ${n(`trouves.${code}`)} trouvé${s(`trouves.${code}`)}, ${n(`repares.${code}`)} réparé${s(`repares.${code}`)}${n(`taches.${code}`) ? `, ${n(`taches.${code}`)} en tâche` : ""}${n(`detecteur.${code}`) ? `, ${n(`detecteur.${code}`)} au détecteur` : ""}${n(`echecs.${code}`) ? `, ${n(`echecs.${code}`)} en échec` : ""}`
+        `${code} ${n(`trouves.${code}`)} trouvé${s(`trouves.${code}`)}, ${n(`repares.${code}`)} réparé${s(`repares.${code}`)}${n(`taches.${code}`) ? `, ${n(`taches.${code}`)} en tâche` : ""}${n(`detecteur.${code}`) ? `, ${n(`detecteur.${code}`)} au détecteur` : ""}${n(`autre.${code}`) ? `, ${n(`autre.${code}`)} à leur propre tâche` : ""}${n(`echecs.${code}`) ? `, ${n(`echecs.${code}`)} en échec` : ""}`
     );
     return `${quand} : ${total}${regles.length ? ` (${regles.join(" ; ")})` : ""}`;
   }

@@ -10,7 +10,8 @@ import { prevenir } from "@/lib/espace/alertes";
 import { lienPourLeProjet } from "@/lib/espace/liens";
 import { chargerProjet } from "@/lib/espace/service";
 import { avecActeur } from "@/lib/journal/contexte";
-import { creerSessionCheckout, stripeActif, type NaturePaiementCarte, type SessionPayee } from "./stripe";
+import { alerter } from "@/lib/alertes/canaux";
+import { creerSessionCheckout, fenetreSession, stripeActif, type NaturePaiementCarte, type SessionPayee } from "./stripe";
 
 /**
  * Mission 18 (B10, écart 10) — le paiement par carte depuis l'espace du client.
@@ -25,6 +26,8 @@ import { creerSessionCheckout, stripeActif, type NaturePaiementCarte, type Sessi
  *    « paiement reçu » de l'automatisme existant), puis prévient Lucas (alerte, pas un envoi au client).
  * Aucun autre envoi au client : les reçus de Stripe restent désactivés dans son tableau de bord.
  */
+
+const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr").replace(/\/$/, "");
 
 export type ReglementCarte = { nature: NaturePaiementCarte; centimes: number; documentId: string | null; numero: string | null; libelle: string };
 
@@ -58,8 +61,9 @@ export async function preparerPaiementCarte(espace: EspaceClient, maintenant = n
   const retour = await lienPourLeProjet(espace);
   if (!retour) throw new ErreurMetier("Ce lien n'est plus actif : appelez CoverSwap pour en recevoir un nouveau.", 409, { raison: "lien-revoque" });
   const valides = await prisma.encaissement.count({ where: { dossierId: espace.dossierId, statut: "VALIDE" } });
-  // Deux clics rapprochés rendent la même session ; dix minutes plus tard (session peut-être abandonnée), une nouvelle.
-  const fenetre = Math.floor(maintenant.getTime() / 600_000);
+  // Deux clics rapprochés rendent la même session (même clé, même corps : stripe.ts › FENETRE_SESSION_MS) ; dix minutes
+  // plus tard (session peut-être abandonnée), une nouvelle. Deux sessions payées toutes deux : le webhook alerte Lucas.
+  const fenetre = fenetreSession(maintenant);
   const session = await creerSessionCheckout({
     centimes: reglement.centimes,
     libelle: reglement.libelle,
@@ -88,8 +92,18 @@ export async function enregistrerPaiementStripe(session: SessionPayee): Promise<
   const dossier = session.dossierId ? await prisma.dossier.findUnique({ where: { id: session.dossierId }, select: { id: true, clientNom: true } }) : null;
   if (!dossier) {
     console.error(`[stripe] session ${session.sessionId} payée sans dossier connu (${session.dossierId ?? "aucun"}) : à saisir à la main.`);
+    // Mission 18 (relecture) : l'argent est reçu mais n'apparaît nulle part (Stripe ne rejouera pas) : Lucas est prévenu,
+    // pour saisir l'encaissement à la main. Une alerte à lui, sans nom de client (aucun envoi au client).
+    await alerter(
+      { titre: "Paiement par carte sans dossier", texte: `Stripe a reçu ${formatCentimes(session.centimes)} (session ${session.sessionId}) sans dossier du CRM reconnu : à saisir à la main (Finances › Ajouter un paiement).`, lien: `${appUrl()}/finances`, libelleLien: "Ouvrir Finances", urgence: 4, etiquette: `stripe-${session.sessionId}` },
+      { origine: "stripe", canaux: ["telegram", "ntfy", "pushweb"] }
+    ).catch((erreur) => console.error("[stripe] alerte « paiement sans dossier » non envoyée :", erreur));
     return { statut: "IGNORE", raison: "dossier inconnu" };
   }
+  // Mission 18 (relecture) : ce qui restait dû avant ce paiement (la même lecture que « Payer par carte ») ; au-delà, un
+  // second paiement de la même échéance (deux fenêtres, deux sessions payées) : enregistré quand même, Lucas alerté.
+  const espace = await prisma.espaceClient.findFirst({ where: { dossierId: dossier.id } });
+  const restaitDu = espace ? ((await aReglerParCarte(espace).catch(() => null))?.centimes ?? 0) : null;
   const devis =
     session.nature === "ACOMPTE" && session.documentId
       ? await prisma.document.findFirst({ where: { id: session.documentId, dossierId: dossier.id, type: "DEVIS", statut: { in: [...DEVIS_EN_VIGUEUR] } }, select: { id: true } })
@@ -123,5 +137,12 @@ export async function enregistrerPaiementStripe(session: SessionPayee): Promise<
     { titre: "Paiement par carte reçu", texte: `${dossier.clientNom} : ${formatCentimes(session.centimes)} (${quoi}) payés en ligne.`, urgence: 3, etiquette: `stripe-${session.sessionId}`, rubrique: "encaisser" },
     "stripe"
   );
+  if (restaitDu !== null && session.centimes > restaitDu + 50) {
+    await prevenir(
+      dossier.id,
+      { titre: "Paiement par carte en trop", texte: `${dossier.clientNom} : ${formatCentimes(session.centimes)} payés en ligne alors qu'il ne restait que ${formatCentimes(restaitDu)} à régler (deux paiements de la même échéance ?). À vérifier, et à rembourser depuis Stripe si besoin.`, urgence: 4, etiquette: `stripe-trop-${session.sessionId}`, rubrique: "encaisser" },
+      "stripe"
+    );
+  }
   return { statut: "ENREGISTRE", dossierId: dossier.id, encaissementId };
 }

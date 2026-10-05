@@ -8,6 +8,7 @@ import { devisAEnvoyer } from "@/lib/dossiers/devis-envoye";
 import { devisGmailNonEnregistres } from "@/lib/dossiers/devis-gmail";
 import { estMotifDevisAEnvoyer, estMotifDevisARefaire } from "@/lib/dossiers/main";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
+import { accordDOrigine, devisSigneDOrigine, montantSigneHt } from "@/lib/dossiers/montant-signe";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { lireLignes, lirePhotos } from "@/lib/dossiers/stockage";
 import { MOTIFS_SANS_ACOMPTE } from "@/lib/encaissements/constantes";
@@ -88,24 +89,29 @@ function motifDuPremierAppel(texte: string): string {
 
 const plusRecent = (dates: (Date | null | undefined)[]): Date | null => dates.reduce<Date | null>((max, d) => (d && (!max || d.getTime() > max.getTime()) ? d : max), null);
 
-type DevisLu = { statut: string; totalHt: number; acomptePct: number | null; lignes: string; visibleEspace: boolean };
-type AccordLu = { createdAt: Date; totalHt: number; acomptePct: number | null };
+type DevisLu = { id: string; createdAt: Date; statut: string; totalHt: number; acomptePct: number | null; lignes: string; visibleEspace: boolean };
+type AccordLu = { documentId: string; createdAt: Date; totalHt: number; acomptePct: number | null };
 
-/** Le montant en jeu d'un dossier (voir l'en-tête). */
+/**
+ * Le montant en jeu d'un dossier (voir l'en-tête). Mission 18 (relecture) : signé, le devis d'origine et ses avenants
+ * signés (`montant-signe.ts`), quel que soit l'ordre des listes.
+ */
 export function montantEnJeu(d: { documents: readonly DevisLu[]; accords: readonly AccordLu[]; montantEstime: number | null }): number | null {
-  const accepte = d.documents.find((x) => x.statut === "ACCEPTE");
-  if (accepte) return accepte.totalHt;
-  if (d.accords[0]) return d.accords[0].totalHt;
+  const signe = montantSigneHt(d.documents, d.accords);
+  if (signe !== null) return signe;
   const visibles = d.documents.filter((x) => x.visibleEspace && (x.statut === "GENERE" || x.statut === "ENVOYE")).map((x) => x.totalHt);
   if (visibles.length) return Math.max(...visibles);
   return d.montantEstime ?? null;
 }
 
-/** L'acompte attendu (en euros) : celui du devis accepté, sinon de l'accord ; null s'il n'y a ni l'un ni l'autre. */
+/**
+ * L'acompte attendu (en euros) : celui du devis accepté, sinon de l'accord ; null s'il n'y a ni l'un ni l'autre.
+ * Mission 18 (relecture) : celui du devis signé d'origine (un avenant n'a pas d'acompte à part : facturé avec le solde).
+ */
 export function acompteAttendu(d: { documents: readonly DevisLu[]; accords: readonly AccordLu[] }): number | null {
-  const accepte = d.documents.find((x) => x.statut === "ACCEPTE");
+  const accepte = devisSigneDOrigine(d.documents);
   if (accepte) return montantsDocument({ lignes: lireLignes(accepte.lignes), totalHt: accepte.totalHt, acomptePct: accepte.acomptePct }).acompteCentimes / 100;
-  const accord = d.accords[0];
+  const accord = accordDOrigine(d.documents, d.accords);
   if (accord) return accord.acomptePct ? Math.round((versCentimes(accord.totalHt) * accord.acomptePct) / 100) / 100 : 0;
   return null;
 }
@@ -117,8 +123,8 @@ async function lireDossiers(ids: string[]) {
       select: {
         id: true, clientNom: true, clientTelephone: true, leadId: true, clientId: true, etape: true, photos: true, montantEstime: true, createdAt: true, updatedAt: true, mainLe: true,
         prochaineAction: true, prochaineActionDate: true, prochaineActionInstant: true,
-        documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { statut: true, totalHt: true, acomptePct: true, lignes: true, visibleEspace: true } },
-        accords: { where: { retireLe: null }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, totalHt: true, acomptePct: true } },
+        documents: { where: { type: "DEVIS", archiveLe: null, numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, createdAt: true, statut: true, totalHt: true, acomptePct: true, lignes: true, visibleEspace: true } },
+        accords: { where: { retireLe: null }, orderBy: { createdAt: "asc" }, select: { documentId: true, createdAt: true, totalHt: true, acomptePct: true } },
         espaces: { where: { archiveLe: null }, select: { simulations: { where: { archiveLe: null, OR: [{ choisieLe: { not: null } }, { statut: "BROUILLON" }] }, select: { choisieLe: true, statut: true } } } },
       },
     }),
@@ -155,7 +161,8 @@ async function lireDossiers(ids: string[]) {
         devisAnnule: avecDevisAnnule.has(d.id),
         choisieLe: plusRecent(d.espaces.flatMap((e) => e.simulations.map((s) => s.choisieLe))),
         brouillon: d.espaces.some((e) => e.simulations.some((s) => s.statut === "BROUILLON")),
-        accordLe: d.accords[0]?.createdAt ?? null,
+        // Mission 18 (relecture) : la date de l'accord du devis signé d'origine (pas celle d'un avenant).
+        accordLe: accordDOrigine(d.documents, d.accords)?.createdAt ?? null,
         signeLe: signeLe.get(d.id) ?? null,
         sansAcompte: sansAcompte.get(d.id) ?? [],
       },

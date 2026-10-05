@@ -254,6 +254,10 @@ describe("contrôle automatique avant publication", () => {
     await poserParametre("SIMULATEUR_MOTEUR", "V2");
     try {
       const { espace, dossierId, photoId } = await espaceAvecPhoto("Espace Publiee");
+      // Relecture (mission 18) : un lead « Devis demandé » derrière le dossier, pour lire son statut des deux côtés.
+      const lead = await prisma.lead.create({ data: { prenom: "Espace", nom: "Publiee", telephone: `+336${++numeroTelephone}`, ville: "Lattes", codePostal: "34970", source: "SITE_FORMULAIRE", statut: "DEVIS_DEMANDE" } });
+      await prisma.dossier.update({ where: { id: dossierId }, data: { leadId: lead.id } });
+      const actionAvant = (await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } })).prochaineAction;
       scoresControle = [8];
       const { preparationId } = await service.creerSimulationClient(espace, { piece: "SDB", photoId, zones: [{ zone: "meuble-vasque", ref: "D1" }] });
       const { simulationId } = await preparation.executerGenerationApi(preparationId);
@@ -264,6 +268,16 @@ describe("contrôle automatique avant publication", () => {
       const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } });
       assert.deepEqual([dossier.etape, dossier.main, dossier.mainMotif], ["SIMULATION", "CLIENT", "Il a créé une simulation : à lui d'en valider une"]);
       assert.equal((await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })).contenu, "Qualification → Simulation : simulation créée par le client dans son espace");
+      // Relecture (mission 18, écart 9, voie ESPACE) : l'état des deux côtés, comme la voie du site (publier-espace.test).
+      const { etatDesDeuxCotes } = await import("@/test/etat-dossier");
+      const deuxCotes = await etatDesDeuxCotes(dossierId);
+      assert.deepEqual(
+        [deuxCotes.etape, deuxCotes.main, deuxCotes.mainCalculee, deuxCotes.prochaineAction, deuxCotes.statutLead, deuxCotes.etapeEspace],
+        ["SIMULATION", "CLIENT", "CLIENT", actionAvant, "CONTACTE", "PROJET"],
+        "étape, main écrite = calculée, prochaine action inchangée (comme avant), lead « Contacté » dans la transaction ; l'espace reste à « Projet » (pas encore précisé : sa propre simulation ne le saute pas, etapes.ts)"
+      );
+      assert.deepEqual([deuxCotes.relances.proposables, deuxCotes.relances.devis, deuxCotes.devisASigner], [[], [], []]);
+      assert.deepEqual(deuxCotes.taches.filter((t) => t.type === "COHERENCE"), [], "aucune incohérence laissée");
       const etat = await service.etatEspace(espace);
       assert.deepEqual([(await service.suivreCreation(espace, preparationId)).statut, etat.creation.enRelecture], ["PRETE", []]);
       assert.equal(etat.simulations[0].nouvelle, false, "faite par lui, vue à la création : jamais « Nouveau »");

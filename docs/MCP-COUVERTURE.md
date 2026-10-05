@@ -163,6 +163,13 @@
   `geste_espace` VALIDER_SIMULATION (`choisir`, comme le client) reporte les teintes de la simulation dans les teintes
   du dossier (`modifier` DOSSIER `teintes`, `lire_fiche`). Ni outil, ni paramètre, ni description ne change :
   empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B12 (05/10/2026)** : statut du lead ↔ étape. Ce que font sur le statut du lead `changer_etape`,
+  l'ouverture d'un dossier (`creer` DOSSIER, un mail validé par `traiter_mail` ou `valider_proposition`) et
+  `agir_systeme` CORRIGER_INCOHERENCE `STATUT_DU_LEAD` suit une seule table et une seule règle (le dossier vivant le
+  plus avancé du lead décide ; Qualification et Simulation → « Contacté », En pause inchangé) : un lead « Devis
+  demandé » ou perdu qui reçoit un dossier devient « Contacté » ; un second projet en Qualification ne ramène plus un
+  client signé à « Contacté ». Mêmes fonctions de service que les écrans. Ni outil, ni paramètre, ni description ne
+  change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot (entrée ajoutée à la relecture).
 - **Mission 18, B13 (05/10/2026)** : cohérence. `etat_crm` COHERENCE montre les nouveaux codes (écarts 1, 3, 5, 6, 7 ;
   « Attendre l'accord » sans devis ; date du chantier posée en « Signé » ; `ESPACE_ACTIF_DOSSIER_CLOS`, qui remplace
   `ESPACE_ACTIF_DOSSIER_ARCHIVE` et voit aussi les dossiers perdus). `agir_systeme` CORRIGER_INCOHERENCE passe par la
@@ -177,6 +184,18 @@
   compte par règle (écarts trouvés, réparés, en tâche à moi, au détecteur) ; `donnees.dernieresMigrations`. Les tâches à
   moi du lot « coherence-18 » se lisent et se répondent comme les autres (`taches`). Ni outil, ni paramètre, ni
   description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, relecture de B7 à B13 et de la mise en route (05/10/2026)** : `geste_espace` RETIRER_ACCORD (DP50,
+  DP50 bis) prend un paramètre **`document_id`** : l'accord de CE devis (un avenant se retire seul, le dossier ne
+  recule pas, à toute étape), comme le bouton « Retirer l'accord » de chaque avenant signé du bloc Espace ; sans lui,
+  l'accord du devis signé d'origine (comme avant). L'aperçu lit l'accord que le geste retirera (même fonction,
+  `validations.ts › accordARetirer` : avant, il annonçait le plus récent quand le geste retirait le plus ancien) et dit
+  si le dossier revient à « Devis envoyé ». `agir_systeme` CORRIGER_INCOHERENCE `PROCHAINE_ACTION_PERIMEE` refuse une
+  action posée à la main (409 ; elle n'est plus signalée) ; `ESPACE_ACTIF_DOSSIER_CLOS` ne désactive un lien qu'après
+  le délai de la révocation automatique. `manager_finances` (reste à encaisser) et `analytique` (montant signé) comptent
+  le devis d'origine plus ses avenants signés ; la tâche « Encaisser l'acompte » (`taches`) porte l'acompte du devis
+  d'origine. `etat_crm` SANTE : la mise en route peut compter des écarts « à leur propre tâche ». La description de
+  `geste_espace` change et un paramètre s'ajoute : empreinte **`6665a6b457fe`** (53 outils) — reconnecter le
+  connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -420,6 +439,7 @@ un lien « Gérer les tarifs » vers l'onglet.
 | DP48 | Espace › Devis › interrupteur « visible dans l'espace client » | PATCH /api/dossiers/:id/documents/:docId {visibleEspace} (mission 18, B5 : rend `annonce`, le mail « Devis disponible » ; B6 : masqué, le seul devis en attente fait revenir le dossier avant « Devis envoyé ») | R / S-client | modifier DOCUMENT (visible_espace) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » ; `mise-en-ligne.test.ts` › « outil « modifier » DOCUMENT : l'aperçu annonce le mail « Devis disponible »… » |
 | DP49 | Espace › Devis › « Faire le devis », « Ajouter un devis », « Déposer un devis PDF » | générateur / dépôt | S | generer_document / ajouter_fichier (DOSSIER › DEVIS) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » ; `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » |
 | DP50 | Espace › Devis › « Retirer son accord » | … {geste:retirer-accord} | S | geste_espace (RETIRER_ACCORD) | couvert | `mcp-v3.test.ts` › « « modifier » DOCUMENT (ex-« presenter_devis ») : libellé et visibilité… » |
+| DP50 bis | Espace › Devis › avenant signé › « Retirer l'accord » (mission 18, relecture) | … {geste:retirer-accord, documentId} | S | geste_espace (RETIRER_ACCORD, document_id) | couvert | `relecture-partie-b.test.ts` › « outil geste_espace : l'aperçu annonce l'accord que le geste retire… » |
 | DP51 | Espace › Paiement (ce qu'il voit), « Son avis » (note, texte, publication) | GET …/espace | L | lire_fiche (dossier, espace: true : paiement vu, avis) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP52 | Espace › Messages › le fil | GET …/espace | L | lister MESSAGES_ESPACE | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |
 | DP53 | Espace › Messages › « Répondre dans son espace » | … {geste:repondre} | S-client | repondre_espace | couvert | `mcp-v2.test.ts` › « « lister » MESSAGES_ESPACE (ex-« messages_espace ») puis «… » |

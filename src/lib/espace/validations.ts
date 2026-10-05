@@ -4,7 +4,8 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { avecActeur } from "@/lib/journal/contexte";
 import { alerter } from "@/lib/alertes/canaux";
 import { idPhoto, lirePhotos } from "@/lib/dossiers/stockage";
-import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "@/lib/dossiers/transitions";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "@/lib/dossiers/transitions";
+import { ecrireStatutLead } from "@/lib/dossiers/statut-lead";
 import type { EtapeDossier } from "@/lib/dossiers/constants";
 import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
@@ -271,16 +272,16 @@ export async function remettrePhoto(espaceId: string, photoId: string): Promise<
  * et que le chantier n'est pas planifié (au-delà : un appel). La preuve de
  * l'accord reste en base, annotée « retiré le … par … » ; le dossier revient à
  * « Devis envoyé », le devis redevient un devis émis ; Lucas est prévenu fort.
+ * Mission 18 (B7) : `documentId` vise l'accord de ce devis (un avenant se retire seul, le dossier ne recule pas) ;
+ * sans lui, l'accord du devis signé d'origine (`accordARetirer`). Lucas le peut depuis l'écran (un bouton par avenant
+ * signé) et par l'outil `geste_espace` RETIRER_ACCORD (`document_id`), à toute étape.
  */
 export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif = "", documentId?: string | null): Promise<{ retire: boolean }> {
-  // Mission 18 (B7) : avec un devis nommé, l'accord de CE devis (un avenant se retire seul) ; sans, l'accord du devis
-  // signé d'origine (le plus ancien en cours : l'ancien site, le geste de Lucas, « Réinitialiser » l'étape Devis).
-  const accord = await prisma.accordDevis.findFirst({ where: { dossierId: espace.dossierId, retireLe: null, ...(documentId ? { documentId } : {}) }, orderBy: { createdAt: documentId ? "desc" : "asc" } });
-  if (!accord) return { retire: false };
+  const cible = await accordARetirer(prisma, espace.dossierId, documentId);
+  if (!cible) return { retire: false };
+  const { accord } = cible;
   const dossier = await dossierDe(espace.dossierId);
-  const devisDuDossier = await prisma.document.findMany({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } }, select: { id: true, statut: true, createdAt: true, numero: true } });
-  const devisDeLAccord = devisDuDossier.find((d) => d.id === accord.documentId);
-  if (devisDeLAccord && estAvenant(devisDeLAccord, devisDuDossier)) return retirerAccordAvenant(espace, auteur, motif, accord, dossier);
+  if (cible.avenant) return retirerAccordAvenant(espace, auteur, motif, accord, dossier);
   if (auteur === "CLIENT") {
     const encaisse = await prisma.encaissement.count({ where: { dossierId: espace.dossierId, statut: "VALIDE" } });
     if (encaisse > 0 || dossier.etape !== "SIGNE") {
@@ -288,20 +289,48 @@ export async function retirerAccord(espace: EspaceClient, auteur: Auteur, motif 
     }
   }
   const maintenant = new Date();
+  // Mission 18 (relecture) : l'accord, les devis rendus au choix, l'événement, le retour Signé → Devis envoyé (avec le
+  // statut du lead) et le point d'entrée (prochaine action, main) dans UNE transaction : une panne n'écrit rien, la
+  // nouvelle tentative retire. Rejouée après un retrait réussi : l'accord n'est plus en cours, rien n'est écrit.
   const suites = await ecrire(auteur, () =>
-    prisma.$transaction(async (tx) => {
-      await tx.accordDevis.update({ where: { id: accord.id }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
-      // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
-      const rendus = await tx.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
-      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
-      return appliquerEvenementDossier(tx, espace.dossierId, { type: "ACCORD_RETIRE", auteur }, maintenant);
-    })
+    prisma.$transaction(
+      async (tx): Promise<Suites | null> => {
+        const pris = await tx.accordDevis.updateMany({ where: { id: accord.id, retireLe: null }, data: { retireLe: maintenant, retirePar: auteur, retireMotif: motif.slice(0, 500) || null } });
+        if (pris.count === 0) return null;
+        // Mission 11 : les devis écartés au moment de l'accord redeviennent au choix.
+        const rendus = await tx.document.updateMany({ where: { dossierId: espace.dossierId, type: "DEVIS", statut: "NON_RETENU" }, data: { statut: "ENVOYE" } });
+        await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_ACCORD_RETIRE", direction: direction(auteur), contenu: `Bon pour accord sur le devis ${accord.numeroDevis ?? ""} retiré ${par(auteur)}${motif ? ` : « ${motif} »` : ""}. La preuve de l'accord du ${accord.createdAt.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })} est gardée.${rendus.count > 1 ? ` Les ${rendus.count} autres devis proposés redeviennent au choix.` : rendus.count === 1 ? " L'autre devis proposé redevient au choix." : ""}`.slice(0, 1500), metadata: JSON.stringify({ auteur, accordId: accord.id, documentId: accord.documentId, rendus: rendus.count }) } });
+        // L'étape relue dans la transaction : « Signé » revient à « Devis envoyé » (le devis accepté redevient émis).
+        const etape = (await tx.dossier.findUniqueOrThrow({ where: { id: espace.dossierId }, select: { etape: true } })).etape;
+        const changement = etape === "SIGNE" ? marquerSynchronise(await appliquerChangementEtape(tx, { dossierId: espace.dossierId, de: "SIGNE", vers: "DEVIS_ENVOYE", nature: "RETOUR", raison: `${RAISON_ACCORD_RETIRE} ${par(auteur)}` })) : null;
+        if (changement) await ecrireStatutLead(tx, espace.dossierId, changement.vers);
+        const suites = await appliquerEvenementDossier(tx, espace.dossierId, { type: "ACCORD_RETIRE", auteur }, maintenant);
+        return changement ? { ...suites, changements: [changement, ...suites.changements] } : suites;
+      },
+      { maxWait: 10_000, timeout: 30_000 }
+    )
   );
-  if (dossier.etape === "SIGNE") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "SIGNE", "DEVIS_ENVOYE", "RETOUR", `${RAISON_ACCORD_RETIRE} ${par(auteur)}`));
-  // Mission 14 (partie 7) : la prochaine action remplacée (un « Rappeler » daté peut-être) → l'agenda suit (mission 18 : les suites).
+  if (!suites) return { retire: false };
+  // Après : effets du retour (agenda, tâches ; pas de Meta pour un RETOUR), prochaine action remplacée → l'agenda suit.
   await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `ACCORD RETIRÉ — ${dossier.clientNom}`, `Le client a retiré son bon pour accord sur le devis ${accord.numeroDevis ?? ""}${motif ? ` : « ${motif} »` : ""}.\nÀ vous : l'appeler.`, 5, dossier.clientTelephone);
   return { retire: true };
+}
+
+export type AccordARetirer = { accord: { id: string; documentId: string; numeroDevis: string | null; createdAt: Date; nomSignataire: string }; avenant: boolean };
+
+/**
+ * Mission 18 (B7, relecture) : l'accord que retire `retirerAccord` — lu de la même façon par le geste et par l'aperçu
+ * de l'outil `geste_espace` RETIRER_ACCORD. Avec un devis nommé, l'accord de CE devis (un avenant se retire seul) ; sans,
+ * l'accord du devis signé d'origine (le plus ancien en cours : l'ancien site, « Réinitialiser » l'étape Devis).
+ * `avenant` : le devis de l'accord est émis après un autre devis accepté (le dossier ne recule pas).
+ */
+export async function accordARetirer(lecteur: Transaction, dossierId: string, documentId?: string | null): Promise<AccordARetirer | null> {
+  const accord = await lecteur.accordDevis.findFirst({ where: { dossierId, retireLe: null, ...(documentId ? { documentId } : {}) }, orderBy: { createdAt: documentId ? "desc" : "asc" }, select: { id: true, documentId: true, numeroDevis: true, createdAt: true, nomSignataire: true } });
+  if (!accord) return null;
+  const devisDuDossier = await lecteur.document.findMany({ where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } }, select: { id: true, statut: true, createdAt: true, numero: true } });
+  const devisDeLAccord = devisDuDossier.find((d) => d.id === accord.documentId);
+  return { accord, avenant: Boolean(devisDeLAccord && estAvenant(devisDeLAccord, devisDuDossier)) };
 }
 
 /** Les étapes où le client peut encore retirer son accord sur un avenant : le chantier n'a pas commencé. */

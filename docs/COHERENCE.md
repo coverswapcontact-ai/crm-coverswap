@@ -74,26 +74,48 @@ Légende de la colonne « Vérifié » : **T** = essai automatique (`src/lib/coh
 
 ## 5. Le contrôle automatique
 
-`src/lib/coherence/controle.ts`, au démarrage (75 s après) et une fois par jour, et à la demande depuis **Tâches de
-fond** (chaque incohérence avec son constat et, quand c'est sans risque, un bouton *Corriger* ; sinon un lien vers le
-dossier). Une alerte part sur le téléphone seulement s'il y a quelque chose à lire.
+`src/lib/coherence/controle.ts`, au démarrage (75 s après) et une fois par jour, et à la demande depuis **Paramètres ›
+Système** (ex-Tâches de fond ; chaque incohérence avec son constat et, quand c'est possible, un bouton *Corriger* ;
+sinon un lien vers le dossier), dans Tâches (« Corriger · Nom », un geste) et par l'assistant (`etat_crm` COHERENCE,
+`agir_systeme` CORRIGER_INCOHERENCE). Une alerte part sur le téléphone seulement s'il y a quelque chose à lire.
 
-| Code | Ce qui est comparé | Corriger |
-|---|---|---|
-| `DEVIS_MONTANT_NUL` | Devis en vigueur à 0 € (le client lirait « 0 € ») | À la main : corriger le document |
-| `ACCORD_SANS_SIGNATURE` | Accord en ligne ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis de l'accord ; les autres variantes « non retenu », mission 18 B10) |
-| `DEVIS_ACCEPTE_AVANT_SIGNE` | Devis « accepté » ↔ dossier avant « Signé » | Passer en « Signé », les autres devis « non retenus » (mission 18, B4 : un devis noté « accepté » vaut signature hors ligne ; le dépôt et la correction le font d'eux-mêmes depuis) |
-| `SIGNE_SANS_DEVIS_ACCEPTE` | Dossier signé ↔ aucun devis accepté | Noter le dernier devis « accepté » |
-| `PAIEMENT_AVANT_SIGNATURE` | Encaissement valide ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis que règlent les acomptes ; les autres variantes « non retenu », mission 18 B10) |
-| `ETAPE_ET_SOLDE` | Facturé / Encaissé ↔ factures réglées | Suivre le solde |
-| `PROJET_VALIDE_INCOMPLET` | Pastille verte ↔ projet incomplet | Dévalider |
-| `PROJET_VALIDE_SANS_AVANCER` | Projet validé ↔ dossier en Qualification | Passer en « Simulation » |
-| `CHOIX_SANS_SIMULATION` | Simulation validée ↔ plus visible du client | Dévalider le choix |
-| `PROCHAINE_ACTION_PERIMEE` | « Préparer le devis » / « autre proposition » ↔ faits de l'espace | Effacer l'action |
-| `STATUT_DU_LEAD` | Étape du dossier ↔ statut du lead | Aligner le lead |
-| `LEAD_A_PLUSIEURS_DOSSIERS` | Un contact, plusieurs dossiers vivants | À la main : archiver le doublon |
-| `ESPACE_ACTIF_DOSSIER_ARCHIVE` | Dossier archivé ↔ lien encore actif | Désactiver le lien |
-| `SIMULATIONS_HORS_DOSSIER` | Contact avec dossier ↔ simulations restées hors du dossier | Les ranger |
+Mission 18 (B13) : chaque correction laisse une trace `COHERENCE_CORRIGEE` (« Contrôle de cohérence : … », avec le code)
+dans l'historique du dossier, pour tous les codes. Les corrections qui changent l'étape (liste figée par un essai :
+`CORRECTIONS_QUI_CHANGENT_L_ETAPE`) et celles qui touchent un devis ou envoient un mail au client sont **sensibles**
+(`CORRECTIONS_SENSIBLES` : l'assistant montre l'aperçu et demande confirmation ; une migration ne les applique jamais
+d'office) — colonne « S » ci-dessous. `appliquerCorrection` corrige une incohérence déjà lue sans rejouer le contrôle ;
+`controlerCoherence({ etendu: true })` lit aussi les dossiers perdus et archivés (les règles du lead et de la main
+ne regardent jamais un dossier archivé ; celles des devis, seulement les dossiers vivants). Les corrections qui touchent
+la phase du devis ou du chantier passent par le point d'entrée (`dossiers/synchro.ts`, événement `CORRECTION_COHERENCE` :
+une prochaine action posée à la main n'est jamais écrasée).
+
+| Code | Ce qui est comparé | Corriger | S |
+|---|---|---|---|
+| `DEVIS_MONTANT_NUL` | Devis en vigueur à 0 € (le client lirait « 0 € ») | À la main : corriger le document | |
+| `ACCORD_SANS_SIGNATURE` | Accord en ligne ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis de l'accord ; les autres variantes « non retenu », mission 18 B10) | S |
+| `DEVIS_ACCEPTE_AVANT_SIGNE` | Devis « accepté » ↔ dossier avant « Signé » | Passer en « Signé », les autres devis « non retenus » (mission 18, B4 : un devis noté « accepté » vaut signature hors ligne ; le dépôt et la correction le font d'eux-mêmes depuis) | S |
+| `SIGNE_SANS_DEVIS_ACCEPTE` | Dossier signé ↔ aucun devis accepté | Noter le dernier devis « accepté » | S |
+| `PAIEMENT_AVANT_SIGNATURE` | Encaissement valide ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis que règlent les acomptes ; les autres variantes « non retenu », mission 18 B10) | S |
+| `ETAPE_ET_SOLDE` | Facturé / Encaissé ↔ factures réglées | Suivre le solde | S |
+| `PROJET_VALIDE_INCOMPLET` | Pastille verte ↔ projet incomplet | Dévalider (peut ramener Simulation → Qualification : sensible depuis la mission 18, B13) | S |
+| `PROJET_VALIDE_SANS_AVANCER` | Projet validé ↔ dossier en Qualification | Passer en « Simulation » | S |
+| `CHOIX_SANS_SIMULATION` | Simulation validée ↔ plus visible du client | Dévalider le choix | |
+| `PROCHAINE_ACTION_PERIMEE` | « Préparer le devis » / « autre proposition » ↔ faits de l'espace | Effacer l'action (ou « Attendre l'accord » si le devis est là) | |
+| `STATUT_DU_LEAD` | Étape du dossier ↔ statut du lead (contrôle étendu : un dossier perdu n'impose « PERDU » que si le contact n'a pas d'autre dossier vivant) | Aligner le lead | |
+| `LEAD_A_PLUSIEURS_DOSSIERS` | Un contact, plusieurs dossiers vivants | À la main : archiver le doublon | |
+| `SIMULATIONS_HORS_DOSSIER` | Contact avec dossier ↔ simulations restées hors du dossier | Les ranger | |
+| `PROJET_FIGE_MODIFIE` | Projet encaissé ou perdu ↔ geste du client dans son espace après la date où il s'est figé | À la main : lire ce qui a changé | |
+| `PROJETS_AU_DELA_DE_LA_LIMITE` | Projets en cours d'un espace ↔ limite (2 + accordés) | Accorder ces projets (la limite suit) | |
+| `MAIN_DECALEE` | Main affichée ↔ main que donnent les derniers gestes | Recalculer la main | |
+| `MAIL_SANS_REPONSE` | Message du client sans réponse depuis 2 jours ↔ dossier « chez le client » | À la main : lui répondre (pas de tâche « Corriger » : « Répondre » la couvre) | |
+| `DEVIS_ENVOYE_SANS_ENVOI` | Mission 18, écart 1 : Devis envoyé / Relance ↔ aucun devis parti chez le client (ni annoncé, ni mis en ligne, ni envoyé par mail ou Gmail, ni repris ; aucun visible dans un espace ouvert) | Revenir à l'étape d'avant le devis (RETOUR, pas de Meta), « Envoyer le devis au client », relances en attente annulées | S |
+| `DEVIS_GMAIL_NON_ENREGISTRE` | Écart 3 : PDF parti de Gmail qui ressemble à un devis ↔ absent du dossier (`devis-gmail.ts › devisGmailNonEnregistres`) | Enregistrer comme devis envoyé (même fonction que la tâche), si le devis du CRM ou le registre donne le montant ; sinon la tâche « Enregistrer comme devis envoyé » (pas de seconde tâche « Corriger ») | S |
+| `DEVIS_VISIBLE_NON_NOTIFIE` | Écart 5 : Devis envoyé / Relance ↔ devis visible dans un espace ouvert, jamais annoncé ni envoyé (interrupteur « Devis disponible » coupé : la mise en ligne vaut envoi, rien à signaler) | Le prévenir : mise en ligne datée d'aujourd'hui (relances depuis) et mail « Devis disponible » (automatisme existant, une fois par devis) ; sans adresse ou annonce en échec : à la main | S |
+| `DEVIS_ENVOYE_SANS_DEVIS_ACTIF` | Écart 6 : Devis envoyé / Relance ↔ aucun devis émis, envoyé, non retenu ni accepté | Revenir à l'étape d'avant le devis, main à Lucas, « Refaire le devis », relances en attente annulées | S |
+| `AVENANT_NON_PROPOSE` | Écart 7 : devis émis après la signature (Signé → Facturé), « Généré », ni envoyé par mail ni en cours d'envoi, hors devis « à envoyer » (B1) ↔ l'espace ne montre que le devis signé (B7 à venir côté site) | Le lui envoyer par mail, texte type (le bouton « Envoyer par mail ») ; sans adresse : à la main | S |
+| `ATTENTE_ACCORD_SANS_DEVIS` | Prochaine action « Attendre l'accord du client sur le devis » (pas posée à la main) ↔ aucun devis émis ou envoyé | L'effacer | |
+| `DATE_CHANTIER_EN_SIGNE` | Dossier « Signé » ↔ date du chantier posée | Passer en « Planifié » (lead CHANTIER_PLANIFIE), « fixer la date du chantier » effacée | S |
+| `ESPACE_ACTIF_DOSSIER_CLOS` | Dossier perdu ou archivé ↔ espace encore ouvert : projet d'un dossier archivé resté ouvert, ou lien actif alors que TOUS les projets de l'espace sont perdus ou archivés (un projet perdu à côté d'un projet vivant reste « non réalisé », par conception). Remplace `ESPACE_ACTIF_DOSSIER_ARCHIVE` (archivés d'avant la mission 5 seulement) | Fermer le projet (comme l'archivage), désactiver le lien si tous ses projets sont clos (rien n'est effacé ; un nouveau lien le rouvre ; aucun envoi) | |
 
 ## 6. Ce que la matrice a révélé de cassé (22/09/2026)
 

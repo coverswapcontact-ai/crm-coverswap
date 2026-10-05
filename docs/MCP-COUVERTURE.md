@@ -149,6 +149,15 @@
   `geste_espace` VALIDER_SIMULATION (`choisir`, comme le client) reporte les teintes de la simulation dans les teintes
   du dossier (`modifier` DOSSIER `teintes`, `lire_fiche`). Ni outil, ni paramètre, ni description ne change :
   empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B13 (05/10/2026)** : cohérence. `etat_crm` COHERENCE montre les nouveaux codes (écarts 1, 3, 5, 6, 7 ;
+  « Attendre l'accord » sans devis ; date du chantier posée en « Signé » ; `ESPACE_ACTIF_DOSSIER_CLOS`, qui remplace
+  `ESPACE_ACTIF_DOSSIER_ARCHIVE` et voit aussi les dossiers perdus). `agir_systeme` CORRIGER_INCOHERENCE passe par la
+  même fonction que le bouton « Corriger » (`corrigerIncoherence` → `appliquerCorrection`) ; sa sensibilité vient de
+  `coherence/controle.ts › CORRECTIONS_SENSIBLES` (une seule liste : toute correction qui change l'étape — liste figée
+  par un essai, `PROJET_VALIDE_INCOMPLET` compris —, touche un devis ou envoie un mail au client : « Devis disponible »
+  d'un devis jamais annoncé, avenant envoyé par mail). Chaque correction laisse `COHERENCE_CORRIGEE` dans l'historique
+  (`lire_fiche`). Ni outil ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils) ; la description de
+  `agir_systeme` change (« … ou envoie un mail au client ») : reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -1406,7 +1415,7 @@ par expéditeur, ou plus de 3 fils.
 | DETECTER_TACHES | `a-faire/detection.ts › passeComplete` | R | T3 |
 | RELANCER_TACHE (id) | `taches/file.ts › relancerTache` | R | B2 |
 | ANNULER_TACHE (id) | `taches/file.ts › annulerTache` | S (un envoi peut ne jamais partir) | B3 |
-| CORRIGER_INCOHERENCE (cle) | `coherence/controle.ts › corrigerIncoherence` (aperçu = la correction) | S si la correction touche une étape ou un montant | T18, B5 |
+| CORRIGER_INCOHERENCE (cle) | `coherence/controle.ts › corrigerIncoherence` → `appliquerCorrection` (aperçu = la correction ; trace `COHERENCE_CORRIGEE`) | S si la correction change une étape, touche un devis ou envoie un mail au client (`CORRECTIONS_SENSIBLES`, mission 18 B13) | T18, B5 |
 | RELANCER_SYNCHRO (META, GOOGLE_ADS, SEARCH_CONSOLE, FICHE_GOOGLE) | `analytique/synchro.ts › relancerSynchro` | R | A10 |
 | SYNCHRONISER_DRIVE, VERIFIER_DRIVE | `drive/synchronisation.ts › demanderSynchronisation(verifier)` | R | PA8, PA9 |
 | RELEVER_MAILS | `messages/taches.ts › demanderReleve` | R | PA10 |

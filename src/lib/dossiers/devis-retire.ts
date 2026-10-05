@@ -86,16 +86,27 @@ export async function retirerDevis(tx: Transaction, dossierId: string, devis: { 
 
   // Les mails de relance en attente : ceux de ce devis ; revenu avant le devis, ceux de tous les devis du dossier.
   const ids = retour ? [devis.id, ...autres.map((d) => d.id)] : [devis.id];
-  const { acteur } = await resoudreContexte();
-  const { count: relancesAnnulees } = await tx.proposition.updateMany({
-    where: { type: "ENVOI_MAIL", statut: { in: ["EN_ATTENTE", "ECHEC"] }, OR: ids.map((id) => ({ cleUnicite: { startsWith: prefixeRelance(id) } })) },
-    data: { statut: "ANNULEE", decideLe: maintenant, decidePar: acteur, commentaireRejet: MOTIF_RELANCE_DEVIS_RETIRE },
-  });
+  const relancesAnnulees = await annulerRelancesEnAttente(tx, ids, maintenant);
 
   // Plus rien à proposer : revenu avant le devis, ou devis annulé avant tout envoi sans autre devis en cours.
   const refaire = retour !== null || (geste === "ANNULE" && etape !== null && ETAPES_DEVIS_MASQUE.includes(etape) && !autres.some((d) => d.statut === "GENERE" || d.statut === "ENVOYE"));
   const suites = await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_RETIRE", documentId: devis.id, geste, retour: retour !== null, refaire }, maintenant);
   return { ...suites, changements: retour ? [retour] : [], retour, relancesAnnulees };
+}
+
+/**
+ * Les mails de relance de ces devis en attente de validation (ou en échec) : annulés, « Devis annulé ou masqué : plus de
+ * relance ». Dans la transaction de l'appelant ; rend leur nombre. Mission 18 (B13) : aussi au retour d'avant le devis
+ * corrigé par le contrôle de cohérence.
+ */
+export async function annulerRelancesEnAttente(tx: Transaction, documentIds: readonly string[], maintenant: Date = new Date()): Promise<number> {
+  if (documentIds.length === 0) return 0;
+  const { acteur } = await resoudreContexte();
+  const { count } = await tx.proposition.updateMany({
+    where: { type: "ENVOI_MAIL", statut: { in: ["EN_ATTENTE", "ECHEC"] }, OR: documentIds.map((id) => ({ cleUnicite: { startsWith: prefixeRelance(id) } })) },
+    data: { statut: "ANNULEE", decideLe: maintenant, decidePar: acteur, commentaireRejet: MOTIF_RELANCE_DEVIS_RETIRE },
+  });
+  return count;
 }
 
 /** La phrase du retrait, pour l'écran et l'assistant (null : le dossier ne bouge pas). */

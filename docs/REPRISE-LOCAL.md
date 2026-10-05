@@ -1337,3 +1337,85 @@ sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (
 description changée : rien à reconnecter.
 
 Reste de la partie B : B7, B8 (agents morts), B12, B13.
+
+### Mission 18, B13 — cohérence : les écarts de la partie B, d'un clic
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Huit règles nouvelles** dans `coherence/controle.ts` (codes dans `CODES_INCOHERENCE`, tableau constant d'où vient le
+  type) :
+  - `DEVIS_ENVOYE_SANS_ENVOI` (écart 1) : Devis envoyé ou Relance, des devis, mais aucun n'a atteint le client (ni
+    repris, ni « Envoyé »/accepté/non retenu, ni `DEVIS_ENVOYE`, ni `DEVIS_GENERE` marqué `envoye: true`, ni « Devis
+    disponible » programmé ou parti, ni mail en cours d'envoi) et aucun visible dans un espace ouvert → retour d'avant
+    le devis (RETOUR, `etapeAvantLeDevis` de B6), « Envoyer le devis au client » ;
+  - `DEVIS_ENVOYE_SANS_DEVIS_ACTIF` (écart 6) : Devis envoyé ou Relance sans aucun devis émis, envoyé, non retenu ni
+    accepté → retour, main « Devis N annulé : refaire le devis » (quand un devis annulé existe : `devisRetire`),
+    « Refaire le devis » ;
+  - `DEVIS_VISIBLE_NON_NOTIFIE` (écart 5) : visible dans un espace ouvert, jamais annoncé → mise en ligne datée
+    d'aujourd'hui (`mettreEnLigneDevis` de B5 : relances depuis, Relance → Devis envoyé) puis « Devis disponible »
+    (`annoncerDevisEnLigne`, une fois par devis) ; interrupteur coupé : rien à signaler (décision 7) ; sans adresse ou
+    annonce en échec : correction à la main ;
+  - `DEVIS_GMAIL_NON_ENREGISTRE` (écart 3) : `devisGmailNonEnregistres` de B3, clé par pièce ; correction =
+    `enregistrerDevisGmail` (la fonction de la tâche) quand le devis du CRM ou le registre donne le montant, sinon à la
+    main (la tâche) ; écarté du détecteur COHERENCE (`CODES_ECARTES`) : la tâche ENREGISTRER_DEVIS existe déjà ;
+  - `AVENANT_NON_PROPOSE` (écart 7) : Signé → Facturé, devis « Généré » émis après l'accepté, ni mail en cours, ni
+    « à envoyer » (B1, qui a sa tâche) → `envoyerDocumentParMail` avec le texte type (`brouillonEnvoiDocument`, le
+    bouton « Envoyer par mail ») ; sans adresse : à la main ;
+  - `ATTENTE_ACCORD_SANS_DEVIS` : « Attendre l'accord… » (pas posée à la main) sans devis émis ou envoyé → effacée ;
+  - `DATE_CHANTIER_EN_SIGNE` : Signé avec une date de chantier → Planifié (AUTOMATIQUE, lead CHANTIER_PLANIFIE dans la
+    transaction), « … fixer la date du chantier … » effacée ;
+  - `ESPACE_ACTIF_DOSSIER_CLOS` (remplace `ESPACE_ACTIF_DOSSIER_ARCHIVE`, qui ne voyait que les archivés sans espace
+    permanent) : projet d'un dossier archivé resté ouvert (fermé comme l'archivage), ou lien actif alors que TOUS les
+    projets de l'espace sont perdus ou archivés (`desactiverLien`, rien n'est effacé). Sujet de la tâche : le lead.
+- **Point d'entrée** : nouvel événement `CORRECTION_COHERENCE { code }` (`synchro.ts`) pour les écarts 1 et 6,
+  « Attendre l'accord » et la date du chantier (prochaine action ; une action posée à la main n'est jamais écrasée :
+  tâche `devis-a-refaire` / `devis-a-envoyer` à côté). Écarts 5 et 3 : `DEVIS_ENVOYE` (canaux ESPACE, GMAIL) par leurs
+  fonctions ; écart 7 : l'envoi par mail de B2.
+- **`appliquerCorrection(incoherence)`** extraite (la correction d'une incohérence déjà lue, sans rejouer le contrôle ;
+  chacune relit ce qu'elle touche et refuse en 409 si le dossier a bougé) ; `corrigerIncoherence` rejoue puis l'appelle.
+  **`controlerCoherence({ etendu: true })`** lit aussi perdus et archivés (`AVEC_ARCHIVES`) : statut du lead, doublons
+  et main jamais sur un archivé ; un perdu n'impose « PERDU » au lead que sans autre dossier vivant ; règles des devis
+  sur les dossiers vivants seulement. Prêts pour la mise en route.
+- **`COHERENCE_CORRIGEE` pour tous les codes** (helper `tracer`, dans la transaction quand il y en a une).
+- **Sensibles** : `CORRECTIONS_SENSIBLES` vit maintenant dans `controle.ts` (gestes.ts l'importe) = toutes les
+  corrections qui changent l'étape (`CORRECTIONS_QUI_CHANGENT_L_ETAPE`, figée par un essai) + `SIGNE_SANS_DEVIS_ACCEPTE`
+  + `AVENANT_NON_PROPOSE` (mail). `devis-retire.ts › annulerRelancesEnAttente` extraite de `retirerDevis` (même code).
+- Docs : `COHERENCE.md` § 5 (tous les codes, colonne « S », les 4 qui manquaient), `SYNCHRO.md` (ligne
+  `CORRECTION_COHERENCE`, paragraphe B13, B13 retiré du tableau 4, § 5), `MCP-COUVERTURE.md` (entrée B13, ligne
+  CORRIGER_INCOHERENCE).
+
+Décisions prises seul (solution la plus simple) :
+- Écart 7 « en un clic » = l'envoyer par mail (texte type), seule façon de le proposer tant que le site ne montre pas
+  les avenants (B7, pas fait) ; quand B7 sera là, la règle devra tenir « visible dans un espace ouvert » pour proposé.
+- Écart 3 en un clic seulement si tout est connu (devis du CRM ou montant du registre), sinon la tâche de B3.
+- `PROJET_VALIDE_INCOMPLET` devient sensible : dévalider peut faire revenir Simulation → Qualification (le trou que le
+  plan signalait). `SIMULATIONS_HORS_DOSSIER` ne change pas l'étape lui-même (le rangement dans l'espace se fait à la
+  lecture) : non sensible.
+- Un projet perdu dans un espace qui a d'autres projets vivants n'est PAS une incohérence (« non réalisé », par
+  conception) ; un espace dont un projet est encaissé garde son lien (révocation à 90 jours). Pour un perdu, seul le
+  lien du client est coupé (le projet reste, il réapparaît si le lien est régénéré) ; un archivé ferme aussi son projet.
+- Ancienne tâche « Corriger » d'un `ESPACE_ACTIF_DOSSIER_ARCHIVE` : cochée « incohérence corrigée » au passage suivant,
+  la nouvelle clé la remplace.
+- Une proposition d'envoi par mail validée et pas encore exécutée vaut « parti » (pas d'écart 1 ou 5 pendant l'envoi).
+- Constaté en B11, laissé : la main reste au client quand Lucas valide une simulation à sa place (règle voulue de
+  `main.ts`, aucune règle de cohérence ne la contredit).
+
+Tests : 1 433 → 1 443 (`npm test` : 1 443 verts). Nouveau `src/lib/coherence/coherence-b13.test.ts` (10 essais, état des deux
+côtés, réseau coupé, rien hors du poste) : écart 6 (retour en Simulation, main « refaire », « Refaire le devis », lead
+CONTACTE, espace hors DEVIS, relances arrêtées et mail de relance annulé, tâche DEVIS « Refaire le devis », trace,
+corrigé une seule fois) ; écart 1 (action posée à la main gardée, tâche « Envoyer le devis au client » à côté) ; écart 5
+(un seul « Devis disponible », Devis envoyé, « Attendre l'accord », espace DEVIS, relance repartie d'aujourd'hui ;
+interrupteur coupé : rien ; sans adresse : à la main) ; écart 3 (un clic : Devis envoyé, tâches ENREGISTRER_DEVIS et
+ENVOYER_DEVIS cochées, aucun mail, pas de seconde tâche « Corriger » ; sans montant : à la main) ; écart 7 (proposition
+d'envoi validée, étape et espace inchangés, variante silencieuse gardée à sa tâche) ; « Attendre l'accord » sans devis
+(effacée ; posée à la main : jamais signalée) ; date du chantier (Planifié, lead, espace CHANTIER) ; espaces clos (perdu
+seul : lien coupé, projet gardé, aucun envoi ; perdu à côté d'un vivant : rien ; archivé : projet et lien) ; contrôle
+étendu + `appliquerCorrection` ; liste figée des corrections qui changent l'étape, toutes sensibles, chaque code dans
+`COHERENCE.md`. Aucun test existant à adapter (`coherence.test`, `mission-14-partie-1`, `migrations/mission-13`,
+`systeme.test`, `main.test` verts sans changement). `tsc`, `eslint` sur les fichiers touchés, `npm run build` :
+propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description de `agir_systeme` changée : reconnecter le
+connecteur.
+
+Reste : B7, B8, B12 (agents morts), puis la mise en route (migration `mise-en-route-18` : `controlerCoherence({ etendu:
+true })` une fois, `appliquerCorrection` pour les codes hors `CORRECTIONS_SENSIBLES`, tâches pour le reste) ; rien pour
+Lucas, sauf reconnecter le connecteur.

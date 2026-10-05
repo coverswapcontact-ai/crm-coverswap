@@ -7,7 +7,7 @@ import { envoyerPushWeb } from "@/lib/alertes/pushweb";
 import { relancerSynchro } from "@/lib/analytique/synchro";
 import { LIBELLES_SOURCE_SYNCHRONISEE, SOURCES_SYNCHRONISEES } from "@/lib/analytique/suivi";
 import { proposerFusions } from "@/lib/clients/doublons";
-import { controlerCoherence, corrigerIncoherence } from "@/lib/coherence/controle";
+import { controlerCoherence, corrigerIncoherence, CORRECTIONS_SENSIBLES } from "@/lib/coherence/controle";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { accord, pluriel } from "@/lib/commun/format";
 import { demanderSynchronisation } from "@/lib/drive/synchronisation";
@@ -512,8 +512,6 @@ export const outilAnonymiserClient = definirOutil({
 
 export const ACTIONS_SYSTEME = ["DETECTER_TACHES", "RELANCER_TACHE", "ANNULER_TACHE", "CORRIGER_INCOHERENCE", "RELANCER_SYNCHRO", "SYNCHRONISER_DRIVE", "VERIFIER_DRIVE", "RELEVER_MAILS", "ESSAI_META", "TESTER_NOTIFICATION", "REJOUER_META", "LANCER_BANC", "REVOQUER_ACCES", "DECONNECTER_GOOGLE"] as const;
 
-/** Les corrections de cohérence qui déplacent un dossier d'étape (Signé, Simulation) ou touchent un devis : sensibles. */
-const CORRECTIONS_SENSIBLES = new Set(["ACCORD_SANS_SIGNATURE", "PAIEMENT_AVANT_SIGNATURE", "DEVIS_ACCEPTE_AVANT_SIGNE", "SIGNE_SANS_DEVIS_ACCEPTE", "ETAPE_ET_SOLDE", "PROJET_VALIDE_SANS_AVANCER"]);
 
 const schemaAgirSysteme = z.object({
   action: z.enum(ACTIONS_SYSTEME),
@@ -552,7 +550,7 @@ export const outilAgirSysteme = definirOutil({
   nom: "agir_systeme",
   titre: "Les gestes techniques (tâches de fond, cohérence, synchronisations, Meta, banc, accès)",
   description:
-    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous ; toujours sensible : des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible). Les états se lisent par « etat_crm ».",
+    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis, ou envoie un mail au client) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous ; toujours sensible : des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible). Les états se lisent par « etat_crm ».",
   niveau: "REVERSIBLE",
   schema: schemaAgirSysteme,
   sensible: async (e) => {

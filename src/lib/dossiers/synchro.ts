@@ -90,7 +90,20 @@ export type EvenementDossier =
    * l'assistant, ou payé en ligne par carte, webhook Stripe). `signe` : l'acompte a fait passer le dossier en « Signé »
    * dans la même transaction (un paiement reçu vaut accord).
    */
-  | { type: "PAIEMENT_RECU"; encaissementId: string; signe: boolean };
+  | { type: "PAIEMENT_RECU"; encaissementId: string; signe: boolean }
+  /**
+   * Mission 18 (B13) : une correction du contrôle de cohérence (coherence/controle.ts › appliquerCorrection) qui touche
+   * à la phase du devis ou du chantier : retour d'avant « Devis envoyé » sans devis actif (`DEVIS_ENVOYE_SANS_DEVIS_ACTIF`)
+   * ou sans devis parti (`DEVIS_ENVOYE_SANS_ENVOI`), « Attendre l'accord » sans devis (`ATTENTE_ACCORD_SANS_DEVIS`),
+   * date du chantier posée en « Signé » (`DATE_CHANTIER_EN_SIGNE`).
+   */
+  | { type: "CORRECTION_COHERENCE"; code: CodeCorrectionSynchro };
+
+/** Mission 18 (B13) : les corrections de cohérence qui passent par le point d'entrée (leur prochaine action). */
+export type CodeCorrectionSynchro = "DEVIS_ENVOYE_SANS_DEVIS_ACTIF" | "DEVIS_ENVOYE_SANS_ENVOI" | "ATTENTE_ACCORD_SANS_DEVIS" | "DATE_CHANTIER_EN_SIGNE";
+
+/** Le texte d'une prochaine action de dossier signé qui demande de fixer la date du chantier (accord, acompte reçu). */
+export const DIT_DE_FIXER_LA_DATE = /fixer la date du chantier/i;
 
 export type TypeEvenementDossier = EvenementDossier["type"];
 
@@ -113,6 +126,7 @@ export const TYPES_EVENEMENT_DOSSIER = [
   "DEVIS_RETIRE",
   "ACOMPTE_REJETE",
   "PAIEMENT_RECU",
+  "CORRECTION_COHERENCE",
 ] as const satisfies readonly TypeEvenementDossier[];
 
 /** Ce qu'il reste à faire après la transaction, et ce qui a été écrit (pour les écrans, l'assistant et les essais). */
@@ -202,6 +216,22 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
       return evenement.signe
         ? { code: "acompte-recu", texte: PROCHAINE_ACTION_ACOMPTE_RECU, date: maintenant, niveau: 1 }
         : { code: "paiement-recu", texte: null, date: null, si: (a) => Boolean(a && /réclamer un nouveau paiement/i.test(a)) };
+    // Mission 18 (B13) : les corrections du contrôle de cohérence. Revenu avant « Devis envoyé », tout ce que le système
+    // avait posé pour la phase du devis est dépassé (comme DEVIS_RETIRE) : « Refaire le devis » s'il n'y a plus de devis,
+    // « Envoyer le devis au client » si le devis n'est jamais parti (une action posée à la main reste, une tâche à côté).
+    // « Attendre l'accord » sans devis, et « fixer la date du chantier » une fois la date posée, s'effacent (rien à ranger
+    // sous une action posée à la main : c'est elle qui compte).
+    case "CORRECTION_COHERENCE":
+      switch (evenement.code) {
+        case "DEVIS_ENVOYE_SANS_DEVIS_ACTIF":
+          return { code: "devis-a-refaire", texte: PROCHAINE_ACTION_REFAIRE_DEVIS, date: maintenant };
+        case "DEVIS_ENVOYE_SANS_ENVOI":
+          return { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: maintenant };
+        case "ATTENTE_ACCORD_SANS_DEVIS":
+          return { code: "attente-sans-devis", texte: null, date: null, si: (a) => Boolean(a?.startsWith(PROCHAINE_ACTION_APRES_DEVIS)), tache: false };
+        case "DATE_CHANTIER_EN_SIGNE":
+          return { code: "date-chantier", texte: null, date: null, si: (a) => Boolean(a && DIT_DE_FIXER_LA_DATE.test(a)), tache: false };
+      }
   }
 }
 

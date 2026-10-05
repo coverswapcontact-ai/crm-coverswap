@@ -28,7 +28,8 @@ import { envoiALaGeneration, etapeApresGeneration } from "./devis-envoye";
 import { attribuerNumero, numeroFactice } from "./numerotation";
 import { estEtape } from "./regles";
 import { archiverFichier, enregistrerPdf, lireFichier, lireLignes } from "./stockage";
-import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "./transitions";
+import { ecrireStatutLead } from "./statut-lead";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "./transitions";
 
 const arrondiCentieme = (valeur: number) => versCentimes(valeur) / 100;
 
@@ -303,7 +304,7 @@ async function emettre(emission: Emission) {
           },
         });
 
-        // Mission 18 (B1) : un devis n'avance l'étape que s'il est envoyé (annoncé, ou variante mise en ligne).
+        // Mission 18 (B1) : un devis n'avance l'étape que s'il est envoyé (annoncé : devis-envoye.ts › annonceAboutit).
         const vers = envoi && !envoi.envoye ? null : etapeApresGeneration(emission.type, emission.etape);
         const changements: ChangementEtape[] = vers
           ? [
@@ -316,20 +317,29 @@ async function emettre(emission: Emission) {
               }),
             ]
           : [];
+        // Mission 18 (relecture) : le devis envoyé fait suivre le statut du lead DANS la transaction ; la main est écrite
+        // plus bas par le point d'entrée : le changement est synchronisé (ses effets d'après ne refont ni l'un ni l'autre).
+        if (envoi && vers) {
+          await ecrireStatutLead(tx, emission.dossierId, vers);
+          marquerSynchronise(changements[0]);
+        }
         // Facture déjà couverte par les acomptes : le dossier est encaissé.
         const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
         if (solde) changements.push(solde);
         // « Préparer le devis », posé par l'espace quand le client a choisi, est fait : « Attendre l'accord » s'il est
         // envoyé, « Envoyer le devis » sinon. Une action écrite par Lucas reste (mission 18 : par le point d'entrée, qui
         // écrit la main dans la transaction ; un devis pas envoyé me la donne).
-        if (envoi) await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id, envoye: envoi.envoye });
-        return { document, changements, envoi };
+        const suites = envoi ? await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id, envoye: envoi.envoye }) : null;
+        return { document, changements, envoi, suites };
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
-    for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
-    // Un devis envoyé passe la main au client, même sans changement d'étape ; pas envoyé, il me la donne (main.ts).
-    await recalculerMain(emission.dossierId);
+    // Un devis : la main est écrite dans la transaction (point d'entrée) ; ses suites (Meta, agenda, tâches) partent ici.
+    if (resultat.suites) await suitesEvenementDossier({ ...resultat.suites, changements: resultat.changements });
+    else {
+      for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
+      await recalculerMain(emission.dossierId);
+    }
     // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 :
     // `notifier: false`). Mission 18 (B1) : seulement pour un devis annoncé (visible, espace ouvert, adresse valide).
     if (resultat.envoi?.mail) {

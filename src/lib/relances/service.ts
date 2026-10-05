@@ -97,8 +97,22 @@ export function dateDEnvoiDuDevis(devis: { dateEmission: Date }, envoi: EnvoiDuD
   return referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.dateEmission }, envoi);
 }
 
-/** Les dossiers en « Devis envoyé » ou « Relance », non archivés (un seul si `dossierId` ; `touteEtape` : quelle que soit son étape). */
+/**
+ * Les dossiers en « Devis envoyé » ou « Relance », non archivés (un seul si `dossierId` ; `touteEtape` : quelle que soit
+ * son étape), avec leurs devis à relancer. Mission 18 (relecture) : jamais un devis généré mais pas encore envoyé (visible
+ * sans annonce : variante silencieuse, espace fermé, pas d'adresse — `devisAEnvoyer`) ; la relance reste sur le devis
+ * réellement envoyé, et ne parle pas d'un devis « adressé » que le client n'a pas reçu.
+ */
 async function chargerDossiersARelancer(filtre: { dossierId?: string; touteEtape?: boolean } = {}) {
+  const dossiers = await lireDossiersARelancer(filtre);
+  if (dossiers.length === 0) return dossiers;
+  const { devisAEnvoyer } = await import("@/lib/dossiers/devis-envoye");
+  const pasEnvoyes = new Set((await devisAEnvoyer(prisma, dossiers.map((d) => d.id))).map((d) => d.documentId));
+  if (pasEnvoyes.size === 0) return dossiers;
+  return dossiers.map((d) => ({ ...d, documents: d.documents.filter((document) => !pasEnvoyes.has(document.id)) }));
+}
+
+async function lireDossiersARelancer(filtre: { dossierId?: string; touteEtape?: boolean }) {
   return prisma.dossier.findMany({
     where: filtre.dossierId && filtre.touteEtape ? { id: filtre.dossierId } : { ...(filtre.dossierId ? { id: filtre.dossierId } : {}), etape: { in: ["DEVIS_ENVOYE", "RELANCE"] }, archiveLe: null },
     include: {
@@ -282,7 +296,8 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
       mailTraite: traite ? { propositionId: traite.id, statut: traite.statut as StatutMailTraite } : null,
     });
   }
-  return { delai, delaiParDefaut: !parametre, devis: liste.sort((a, b) => b.joursDepuisEmission - a.joursDepuisEmission) };
+  // Mission 18 (relecture) : les plus anciens d'abord, comptés depuis l'envoi (mise en ligne, mail) et non l'émission.
+  return { delai, delaiParDefaut: !parametre, devis: liste.sort((a, b) => b.joursDepuisEnvoi - a.joursDepuisEnvoi || b.joursDepuisEmission - a.joursDepuisEmission) };
 }
 
 /* ── Le mail de relance (proposition à valider) ───────────────────────────── */

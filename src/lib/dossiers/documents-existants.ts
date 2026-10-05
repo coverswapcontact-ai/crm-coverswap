@@ -187,7 +187,7 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
     if (options.ecrit) options.ecrit.chemin = pdfPath;
   }
   // Un devis déposé « accepté » sur un dossier pas encore signé le signe (B4) : l'historique le dit.
-  const signe = options.avancerEtape !== false && entree.type === "DEVIS" && statutDe(entree.type, entree.statut) === "ACCEPTE" && estSigneeParDevisAccepte(dossier.etape);
+  const signe = options.avancerEtape !== false && entree.type === "DEVIS" && statutDe(entree.type, entree.statut) === "ACCEPTE" && (await estSigneeParDevisAccepte(tx, dossierId));
   let document;
   try {
     document = await tx.document.create({

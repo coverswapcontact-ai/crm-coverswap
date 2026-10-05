@@ -187,6 +187,10 @@ export const propositionEnvoiMail = definirProposition({
     if (perime) return `le document ${perime.numero} a été ${perime.statut === "REMPLACE" ? "remplacé" : "annulé"}`;
     return null;
   },
+  // Mission 18 (relecture) : la trace MAIL_ENVOYE de cette proposition dit que le mail est parti (voir `executer`).
+  async dejaExecutee(_contenu, propositionId) {
+    return Boolean(await prisma.dossierEvenement.findFirst({ where: { type: "MAIL_ENVOYE", metadata: { contains: propositionId } }, select: { id: true } }));
+  },
   async executer(contenu, { propositionId }) {
     // Réponse à un mail rangé depuis la proposition : elle suit son client et son dossier.
     const recu = contenu.enReponseA ? await prisma.message.findUnique({ where: { id: contenu.enReponseA }, include: { contenu: { select: { entetes: true } } } }) : null;

@@ -22,7 +22,9 @@ import { effetsDuChangementEtape, type ChangementEtape } from "./transitions";
  * l'historique et le statut du lead y passeront événement par événement (écarts 1 à 13). Les changements d'étape
  * demandés (`changerEtapeDansTransaction`) écrivent déjà la main et le statut du lead dans leur transaction.
  * Les gestes de Lucas qui posent eux-mêmes la prochaine action (appel noté, rappel, planifier, modifier le dossier)
- * restent tels quels : ce sont des actions manuelles.
+ * restent tels quels : ce sont des actions manuelles. Mission 18 (relecture) : un « Rappeler… » daté pour aujourd'hui ou
+ * plus tard (appel noté, rappel repris du lead) est gardé comme une action posée à la main, une tâche à la place
+ * (prochaine-action-auto.ts › estRappelAVenir) : ni le texte ni l'agenda ne bougent.
  *
  * SQLite n'a qu'un écrivain : dans la transaction, rien ne lit ni n'écrit par le client global.
  */
@@ -141,21 +143,23 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
       return { code: "accord", texte: "Appeler le client : fixer la date du chantier, suivre l'acompte", date: maintenant, niveau: 1 };
     case "ACCORD_RETIRE":
       return { code: "accord-retire", texte: evenement.auteur === "CLIENT" ? "Appeler : il a retiré son bon pour accord" : "Refaire signer le devis", date: maintenant, niveau: 1 };
+    // Mission 18 (relecture) : les attentes du client (« Attendre … ») ne rangent pas de tâche à la place d'une action posée
+    // à la main : rien à faire de mon côté, la main passe au client (`tache: false`).
     case "SIMULATION_PUBLIEE":
-      return { code: "simulation-publiee", texte: "Attendre le retour du client sur la simulation", date: null, niveau: 3 };
+      return { code: "simulation-publiee", texte: "Attendre le retour du client sur la simulation", date: null, niveau: 3, tache: false };
     // « Préparer le devis », posé par l'espace quand le client a choisi, est fait dès qu'un devis est émis ou déposé.
     // Mission 18 (B1) : émis sans être envoyé, il reste à l'envoyer ; la tâche ENVOYER_DEVIS (détecteur des dossiers)
     // le dit, même sous une action posée à la main : rien n'est rangé à sa place.
     case "DEVIS_GENERE":
       return evenement.envoye
-        ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 }
+        ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false }
         : { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     case "DEVIS_DEPOSE":
       // Mission 18 (B4) : un devis déposé « accepté » n'attend l'accord de personne.
-      return evenement.accepte ? null : { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
+      return evenement.accepte ? null : { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     // Mission 18 (B2, B3, B5) : envoyé par mail (CRM ou Gmail) ou mis en ligne, il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
     case "DEVIS_ENVOYE":
-      return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
+      return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     // Mission 18 (B6) : le devis retiré (annulé, masqué) n'attend plus l'accord. Revenu avant « Devis envoyé », tout ce que
     // le système avait posé pour la phase du devis est dépassé : « Refaire le devis » (une action posée à la main reste,
     // avec la tâche à côté). Sans retour (étape Qualification ou Simulation), seulement à la place de « Attendre

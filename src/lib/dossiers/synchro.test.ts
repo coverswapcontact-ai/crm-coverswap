@@ -113,7 +113,7 @@ describe("prochaine action automatique (mission 18, B0)", () => {
     assert.equal((await dossierDe(c.dossierId)).prochaineAction, ecrite);
   });
 
-  test("devis émis : « Préparer le devis » posé par l'espace devient « Attendre l'accord » ; posé à la main, il reste et une tâche le dit", async () => {
+  test("devis émis : « Préparer le devis » posé par l'espace devient « Attendre l'accord » ; posé à la main, il reste, sans tâche (une attente du client)", async () => {
     // Mission 18 (B1) : devis annoncés (adresse, espace ouvert, notification) : ils sont envoyés.
     const parLEspace = await contact("Espace", "espace.synchro@example.test");
     await prisma.dossier.update({ where: { id: parLEspace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)" } });
@@ -130,10 +130,8 @@ describe("prochaine action automatique (mission 18, B0)", () => {
     const gardee = await etatDesDeuxCotes(alaMain.dossierId);
     assert.deepEqual([gardee.prochaineAction, gardee.actionManuelle], [ecrite, ecrite]);
     assert.equal(gardee.main, gardee.mainCalculee);
-    assert.deepEqual(
-      gardee.taches.filter((t) => t.cle.startsWith(auto.PREFIXE_TACHE_SYNCHRO)).map((t) => [t.cle, t.titre, t.niveau]),
-      [[auto.cleTacheSynchro(alaMain.dossierId, "devis"), `Attendre l'accord du client sur le devis · ${alaMain.nom}`, 3]]
-    );
+    // Relecture : « Attendre l'accord » n'a rien à faire de mon côté (la main passe au client) — aucune tâche rangée à la place.
+    assert.deepEqual(gardee.taches.filter((t) => t.cle.startsWith(auto.PREFIXE_TACHE_SYNCHRO)), []);
     // L'étape et l'espace suivent le devis envoyé, action posée à la main ou non : les deux dossiers sont au même point.
     assert.deepEqual([gardee.etape, gardee.etapeEspace], [remplacee.etape, remplacee.etapeEspace]);
     assert.equal(gardee.etape, "DEVIS_ENVOYE");

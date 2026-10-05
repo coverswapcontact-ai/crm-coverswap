@@ -1,6 +1,6 @@
 import type { Transaction } from "@/lib/prisma";
-import { ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE } from "./constants";
-import { changerEtapeDansTransaction, type ChangementEtape } from "./transitions";
+import { signeParDevisAccepte } from "./constants";
+import { changerEtapeDansTransaction, chargerEtatEtape, type ChangementEtape } from "./transitions";
 
 /**
  * Mission 18 (B4, écart 4) — un devis noté « accepté » par Lucas (déposé « accepté », ou devis repris corrigé en
@@ -12,11 +12,16 @@ import { changerEtapeDansTransaction, type ChangementEtape } from "./transitions
 
 /**
  * Les étapes d'où un devis noté « accepté » fait signer le dossier (`ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE`, constants.ts) :
- * les étapes actives d'avant « Signé » (les mêmes que le contrôle `DEVIS_ACCEPTE_AVANT_SIGNE`). En pause ou perdu, rien
- * ne bouge : l'étape d'avant la sortie peut être plus loin que « Signé » (un avenant), et un dossier perdu se reprend
- * d'abord.
+ * les étapes actives d'avant « Signé » (les mêmes que le contrôle `DEVIS_ACCEPTE_AVANT_SIGNE`). Mission 18 (relecture) :
+ * EN PAUSE depuis une de ces étapes aussi (le passage en « Signé » sort de la pause) ; en pause après la signature (un
+ * avenant), rien ne bouge ; perdu non plus : il se reprend d'abord. Lu dans la transaction de l'appelant.
  */
-export const estSigneeParDevisAccepte = (etape: string | null | undefined): boolean => (ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE as readonly string[]).includes(etape ?? "");
+export async function estSigneeParDevisAccepte(tx: Transaction, dossierId: string): Promise<boolean> {
+  const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+  if (!dossier) return false;
+  if (dossier.etape !== "EN_PAUSE") return signeParDevisAccepte(dossier.etape);
+  return signeParDevisAccepte(dossier.etape, (await chargerEtatEtape(tx, dossierId)).avantSortie);
+}
 
 export type DevisNonRetenu = { id: string; numero: string | null; libelleVariante: string | null };
 
@@ -45,8 +50,7 @@ export const libelleNonRetenus = (devis: readonly DevisNonRetenu[]): string => d
  * Dans la transaction de l'appelant.
  */
 export async function signerParDevisAccepte(tx: Transaction, dossierId: string, devisId: string, raison: string): Promise<{ changement: ChangementEtape; nonRetenus: DevisNonRetenu[] } | null> {
-  const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
-  if (!dossier || !estSigneeParDevisAccepte(dossier.etape)) return null;
+  if (!(await estSigneeParDevisAccepte(tx, dossierId))) return null;
   const nonRetenus = await retenirDevis(tx, dossierId, devisId);
   const suite = nonRetenus.length ? ` ; non retenu${nonRetenus.length > 1 ? "s" : ""} : ${libelleNonRetenus(nonRetenus)}` : "";
   const changement = await changerEtapeDansTransaction(tx, dossierId, { vers: "SIGNE", devisAccepteId: devisId, confirmations: { BON_POUR_ACCORD: true }, raison: `${raison}${suite}` });

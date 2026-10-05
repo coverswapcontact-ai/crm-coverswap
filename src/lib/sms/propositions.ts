@@ -83,6 +83,10 @@ export const propositionEnvoiSms = definirProposition({
     }
     return null;
   },
+  // Mission 18 (relecture) : un SMS de cette proposition existe (clé d'envoi) : il est parti, `executer` ne le renvoie pas.
+  async dejaExecutee(_contenu, propositionId) {
+    return Boolean(await prisma.sms.findUnique({ where: { cleEnvoi: `proposition:${propositionId}` }, select: { id: true } }));
+  },
   async executer(contenu, { propositionId }) {
     const proposition = await prisma.proposition.findUnique({ where: { id: propositionId }, select: { contenu: true } });
     let textePropose: string | null = null;

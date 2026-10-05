@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { dateCourte, euros } from "@/lib/commun/format";
 import { deposerDocument, type EntreeDepotDocument } from "@/lib/dossiers/depot-document";
+import { pieceEnvoyeeDepuisGmail } from "@/lib/dossiers/devis-gmail";
 import { importerPdfDocument } from "@/lib/dossiers/documents-existants";
 import { deposerSimulationDossier } from "@/lib/simulations/dossier";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
@@ -292,7 +293,10 @@ export async function enregistrerFichierRecu(cible: CibleFichier | null, typeDem
       const source = { contenu_base64: fichier.contenu.toString("base64"), nom: fichier.nom, type_mime: fichier.format.typeMime };
       // Mission 18 (B3) : la pièce d'un mail parti de Gmail est désignée comme telle (devis envoyé depuis Gmail).
       const sourceDocument = options.pieceMail ? { message_id: options.pieceMail.messageId, piece_id: options.pieceMail.pieceId } : source;
-      if ((type === "DEVIS" || type === "FACTURE") && fichier.format.typeMime === "application/pdf" && champs.numero && champs.montant) {
+      // Mission 18 (relecture) : la pièce d'un mail parti de Gmail, avec son numéro, s'enregistre comme devis envoyé même
+      // sans montant (`enregistrerDevisGmail` ne l'exige que sans devis du CRM de ce numéro), comme depuis l'écran.
+      const pieceGmail = type === "DEVIS" && options.pieceMail && champs.numero && !champs.montant ? Boolean(await pieceEnvoyeeDepuisGmail(options.pieceMail.messageId, options.pieceMail.pieceId)) : false;
+      if ((type === "DEVIS" || type === "FACTURE") && fichier.format.typeMime === "application/pdf" && champs.numero && (champs.montant || pieceGmail)) {
         const depot = await deposerDocument(lue.id, { ...champs, type, source: sourceDocument } as EntreeDepotDocument);
         if (depot.nature !== "DOCUMENT") throw new ErreurMetier("Dépôt inattendu.", 500);
         const ligne = await prisma.fichierDepose.create({ data: { ...base, documentId: depot.documentId } });

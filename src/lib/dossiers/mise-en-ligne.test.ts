@@ -162,7 +162,7 @@ describe("devis rendu visible = mis en ligne et annoncé (mission 18, B5)", () =
     assert.deepEqual([apres.etape, apres.main, apres.prochaineAction, apres.etapeEspace], ["DEVIS_ENVOYE", "CLIENT", "Attendre l'accord du client sur le devis", "DEVIS"]);
   });
 
-  test("action posée à la main gardée (une tâche à la place) ; interrupteur « Devis disponible » coupé : mis en ligne quand même, sans mail", async () => {
+  test("action posée à la main gardée (sans tâche : une attente du client) ; interrupteur « Devis disponible » coupé : mis en ligne quand même, sans mail ; sans adresse : visible, pas envoyé", async () => {
     const coupe = { ...notifications.MODELES_PAR_DEFAUT.DEVIS_DISPONIBLE, actif: false };
     await notifications.enregistrerModeleNotification("DEVIS_DISPONIBLE", coupe, "essai");
     try {
@@ -178,21 +178,25 @@ describe("devis rendu visible = mis en ligne et annoncé (mission 18, B5)", () =
       const etat = await etatDesDeuxCotes(c.dossierId);
       assert.deepEqual([etat.etape, etat.main, etat.mainCalculee, etat.etapeEspace], ["DEVIS_ENVOYE", "CLIENT", "CLIENT", "DEVIS"]);
       assert.deepEqual([etat.prochaineAction, etat.actionManuelle], [texte, texte], "jamais écrasée");
-      const rangee = etat.taches.filter((t) => t.cle === `${auto.PREFIXE_TACHE_SYNCHRO}${c.dossierId}:devis`);
-      assert.deepEqual(rangee.map((t) => t.titre), [`Attendre l'accord du client sur le devis · ${c.nom}`], "la tâche à la place de l'action");
+      // Relecture : « Attendre l'accord » est une attente du client : aucune tâche rangée à la place de l'action gardée.
+      assert.deepEqual(etat.taches.filter((t) => t.cle === `${auto.PREFIXE_TACHE_SYNCHRO}${c.dossierId}:devis`), []);
       assert.deepEqual(etat.relances.devis.map((r) => [r.numero, r.rang]), [[devis.numero, 1]]);
       assert.equal((await notifs(devis.id)).length, 0, "interrupteur gardé : aucun mail");
     } finally {
       await notifications.enregistrerModeleNotification("DEVIS_DISPONIBLE", notifications.MODELES_PAR_DEFAUT.DEVIS_DISPONIBLE, "essai");
     }
 
-    // Sans adresse : mis en ligne (Lucas a pu le prévenir autrement), l'écran dit pourquoi aucun mail n'est parti.
+    // Relecture (une seule règle, celle de la génération) : sans adresse, rendu visible mais PAS envoyé — l'étape ne bouge
+    // pas, la main reste à moi, la tâche « Envoyer le devis » reste ouverte, aucune relance ; l'écran dit pourquoi.
     const sans = await contact("Sansadresse");
     const { document: devis } = await genererMasque(sans.dossierId, "Cuisine");
     const rendu = await rendreVisible(sans.dossierId, devis.id);
-    assert.deepEqual(rendu.annonce, { mail: false, raison: "Aucune adresse e-mail valide pour ce client." });
-    const etat = await etatDesDeuxCotes(sans.dossierId, { taches: false });
-    assert.deepEqual([etat.etape, etat.main, etat.etapeEspace], ["DEVIS_ENVOYE", "CLIENT", "DEVIS"]);
+    assert.deepEqual([rendu.passage, rendu.annonce], [null, { mail: false, raison: "Aucune adresse e-mail valide pour ce client." }]);
+    assert.match(rendu.nonEnvoye ?? "", /^Visible dans son espace, mais pas envoyé : aucune adresse e-mail valide pour ce client\. /);
+    const etat = await etatDesDeuxCotes(sans.dossierId);
+    assert.deepEqual([etat.etape, etat.main, etat.mainCalculee, etat.relances.devis], ["QUALIFICATION", "MOI", "MOI", []]);
+    assert.deepEqual(tachesDe(etat, "ENVOYER_DEVIS").map((t) => t.raison.replace(/\d{2}\/\d{2}/, "jj/mm")), [`devis ${devis.numero} prêt le jj/mm, pas encore annoncé`]);
+    assert.equal((await misesEnLigne(sans.dossierId)).length, 0, "aucun « Devis envoyé »");
     const { phraseAnnonce } = await import("./devis-envoye");
     assert.equal(phraseAnnonce(rendu.annonce!), "Aucun mail « Devis disponible » : aucune adresse e-mail valide pour ce client.");
   });

@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
-import { annoncerDevisEnLigne, mettreEnLigneDevis, STATUTS_DEVIS_ENVOYE, type AnnonceMiseEnLigne } from "./devis-envoye";
+import { peutNotifier } from "@/lib/mail/notifications";
+import { annonceAboutit, annoncerDevisEnLigne, devisDejaParti, mettreEnLigneDevis, phraseNonEnvoye, rendreVisibleSansEnvoi, STATUTS_DEVIS_ENVOYE, type AnnonceMiseEnLigne } from "./devis-envoye";
 import { phraseRetrait, retirerDevis } from "./devis-retire";
 import { ErreurMetier } from "./erreurs";
 import { suitesEvenementDossier } from "./synchro";
@@ -30,6 +31,8 @@ export type PresentationDevis = {
   annonce: AnnonceMiseEnLigne | null;
   /** Mission 18 (B6) : masqué, ce que le retour a fait, dit à Lucas (null : l'étape n'a pas bougé). */
   retrait: string | null;
+  /** Mission 18 (relecture) : rendu visible sans être envoyé (pas d'espace ouvert, pas d'adresse), dit à Lucas ; sinon null. */
+  nonEnvoye: string | null;
 };
 
 /**
@@ -39,6 +42,8 @@ export type PresentationDevis = {
  * Mission 18 (B5, écart 5) : la mise en ligne s'écrit d'un bloc (visibilité, événement « Devis envoyé » qui date la
  * relance, étape, prochaine action, main : `mettreEnLigneDevis`), puis elle est annoncée par l'automatisme existant
  * « Devis disponible » (une fois par devis ; pas pour un devis repris ou déjà envoyé par mail : `annoncerDevisEnLigne`).
+ * Mission 18 (relecture) : un devis du CRM jamais parti, rendu visible sans annonce possible (pas d'espace ouvert, ou pas
+ * d'adresse avec le modèle actif), est visible mais PAS envoyé (`rendreVisibleSansEnvoi`) : même règle qu'à la génération.
  * Mission 18 (B6, écart 6) : masqué, il passe par le point d'entrée dans la même transaction (devis-retire.ts ›
  * retirerDevis) : sans autre devis en attente de sa réponse, retour avant « Devis envoyé », main à Lucas (« refaire le
  * devis »), relances en attente annulées ; sinon la main est relue (il n'attend plus la réponse sur CE devis).
@@ -55,6 +60,11 @@ export async function modifierPresentationDevis(dossierId: string, documentId: s
   // et le dossier passe à « Devis envoyé » s'il n'y est pas encore.
   const devientVisible = entree.visibleEspace === true && !devis.visibleEspace && (STATUTS_DEVIS_ENVOYE as readonly string[]).includes(devis.statut);
   const devientMasque = entree.visibleEspace === false && devis.visibleEspace;
+  // Mission 18 (relecture) : une seule règle (devis-envoye.ts › annonceAboutit) — un devis du CRM qui n'a pas encore
+  // atteint le client n'est envoyé par sa mise en ligne que si elle est annoncée (espace ouvert, adresse valide ou
+  // interrupteur coupé). Lu avant la transaction, comme à la génération.
+  const etat = devientVisible && !(await devisDejaParti(devis)) ? await peutNotifier("DEVIS_DISPONIBLE", dossierId) : null;
+  const envoye = !etat || annonceAboutit(etat);
   const { maj, suites } = await prisma.$transaction(
     async (tx) => {
       const maj = await tx.document.update({
@@ -62,7 +72,7 @@ export async function modifierPresentationDevis(dossierId: string, documentId: s
         data: { ...(entree.visibleEspace !== undefined ? { visibleEspace: entree.visibleEspace } : {}), ...(entree.libelleVariante !== undefined ? { libelleVariante: entree.libelleVariante || null } : {}) },
       });
       const contenu = `Devis ${numero} : ${changements.join(", ")}`;
-      if (devientVisible) return { maj, suites: await mettreEnLigneDevis(tx, dossierId, { id: devis.id, numero }, contenu) };
+      if (devientVisible) return { maj, suites: envoye ? await mettreEnLigneDevis(tx, dossierId, { id: devis.id, numero }, contenu) : await rendreVisibleSansEnvoi(tx, dossierId, devis, contenu, etat?.raison ?? null) };
       if (changements.length) {
         await tx.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu, metadata: JSON.stringify({ documentId: devis.id, presentation: true }) } });
       }
@@ -72,6 +82,15 @@ export async function modifierPresentationDevis(dossierId: string, documentId: s
     { maxWait: 10_000, timeout: 30_000 }
   );
   if (suites) await suitesEvenementDossier(suites);
-  const annonce = devientVisible ? await annoncerDevisEnLigne(dossierId, devis) : null;
-  return { id: maj.id, numero, libelleVariante: maj.libelleVariante, visibleEspace: maj.visibleEspace, passage: suites?.changements[0] ?? null, annonce, retrait: devientMasque && suites ? phraseRetrait({ retour: suites.changements[0] ?? null }) : null };
+  const annonce = !devientVisible ? null : envoye ? await annoncerDevisEnLigne(dossierId, devis) : { mail: false, raison: etat?.raison ?? null };
+  return {
+    id: maj.id,
+    numero,
+    libelleVariante: maj.libelleVariante,
+    visibleEspace: maj.visibleEspace,
+    passage: suites?.changements[0] ?? null,
+    annonce,
+    retrait: devientMasque && suites ? phraseRetrait({ retour: suites.changements[0] ?? null }) : null,
+    nonEnvoye: devientVisible && !envoye ? phraseNonEnvoye(etat?.raison ?? null) : null,
+  };
 }

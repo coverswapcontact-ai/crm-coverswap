@@ -3,9 +3,10 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourHeure, pluriel } from "@/lib/commun/format";
 import { ADRESSE_DEPENSES } from "@/lib/depenses/constantes";
-import { ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { schemaDepotDocument } from "@/lib/dossiers/depot-document";
 import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
+import { estSigneeParDevisAccepte } from "@/lib/dossiers/devis-signe";
 import { estEtape } from "@/lib/dossiers/regles";
 import { lirePdfDocument } from "@/lib/dossiers/documents";
 import { idPhoto, lireFichier } from "@/lib/dossiers/stockage";
@@ -140,7 +141,9 @@ const schemaAjouterFichier = z.object({
 });
 type EntreeAjouter = z.output<typeof schemaAjouterFichier>;
 
-const estDocumentRepris = (e: EntreeAjouter) => ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant)) || e.type === "PDF_DOCUMENT";
+// Mission 18 (relecture) : le PDF d'un mail parti de Gmail, en piece_mail, avec son numéro : enregistré comme devis envoyé
+// même sans montant quand c'est un devis du CRM (le montant est le sien), comme depuis l'écran.
+const estDocumentRepris = (e: EntreeAjouter) => ((e.type === "DEVIS" || e.type === "FACTURE") && Boolean(e.numero && e.montant)) || (e.type === "DEVIS" && Boolean(e.numero && e.source.piece_mail)) || e.type === "PDF_DOCUMENT";
 const optionsSimulation = (e: EntreeAjouter) => ({ simulation: { titre: e.titre ?? null, description: e.description ?? null, source: e.origine_simulation ?? "MANUEL", preparationId: e.preparation_id ?? "auto" }, documentRepris: e.document_id ?? null });
 const champsDocument = (e: EntreeAjouter): ChampsDocument => ({ numero: e.numero, libelle: e.libelle, montant: e.montant, date_emission: e.date_emission, statut: e.statut, acompte_pct: e.acompte_pct, objet: e.objet, visible_espace: e.visible_espace, inscrire_au_registre: e.inscrire_au_registre });
 
@@ -187,13 +190,14 @@ export const outilAjouterFichier = definirOutil({
     const dossier = await prisma.dossier.findUnique({ where: { id: lue.id }, select: { etape: true } });
     const vers = e.type === "DEVIS" && e.visible_espace !== false && (e.statut ?? "ENVOYE") === "ENVOYE" && dossier && estEtape(dossier.etape) ? etapeApresGeneration("DEVIS", dossier.etape) : null;
     // Mission 18 (B4) : un devis déposé « accepté » (signé hors ligne) signe le dossier pas encore signé.
-    const signe = e.type === "DEVIS" && e.statut === "ACCEPTE" && dossier && ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE.includes(dossier.etape as EtapeDossier);
+    // Relecture : en pause depuis une étape d'avant « Signé » aussi (la même lecture que le dépôt, devis-signe.ts).
+    const signe = e.type === "DEVIS" && e.statut === "ACCEPTE" && dossier && (await estSigneeParDevisAccepte(prisma, lue.id));
     const passage = signe
       ? ` Accepté (signé hors ligne) : le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « Signé », les autres devis proposés deviendront « non retenus ».`
       : vers && dossier
         ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.`
         : "";
-    return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${format.euros(e.montant!)} HT, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
+    return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${e.montant ? `${format.euros(e.montant)} HT` : "montant du devis du CRM de ce numéro"}, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
   },
   executer: async (e) => {
     if (e.type === "PDF_DOCUMENT" && !e.document_id) throw new ErreurMetier("PDF_DOCUMENT : donne document_id (le document repris).", 400);

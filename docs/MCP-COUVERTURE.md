@@ -119,6 +119,18 @@
   la note de `modifier` DOCUMENT le dit au masquage, et l'annulation partielle de « rendre visible » ne dit plus que
   l'étape reste. Même retour pour un devis repris corrigé masqué (DP59, `modifierDocumentExistant`). Ni outil, ni
   paramètre, ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
+- **Mission 18, relecture de B0 à B6 (05/10/2026)** : `modifier` DOCUMENT `visible_espace: true` (DP48) suit la règle
+  unique de l'envoi (`devis-envoye.ts › annonceAboutit`, celle de `generer_document`) : un devis du CRM jamais parti,
+  sans espace ouvert ou sans adresse (modèle actif), devient visible SANS être envoyé — la note de l'aperçu et le
+  résultat le disent (`nonEnvoye`), la tâche « Envoyer le devis » reste (`envoyer_document` pour l'envoyer par mail).
+  `generer_document` : une variante silencieuse (`notifier: false`) après Simulation est visible mais pas envoyée (le
+  résultat le disait déjà : « visible dans son espace sans annonce : PAS encore envoyé »). `lister` RELANCES et
+  `relancer` (mail, SMS) ne visent plus un devis pas encore envoyé. `ajouter_fichier` (DP98) : la pièce d'un mail parti
+  de Gmail avec son `numero`, sans `montant`, s'enregistre comme devis envoyé quand c'est un devis du CRM (comme
+  l'écran), sous confirmation. `manager_operations` : `joursDepuis` d'un devis à relancer compté depuis l'envoi
+  (`envoyeLe` ajouté). Un devis déposé « accepté » sur un dossier en pause d'avant la signature le signe (aperçu de
+  `ajouter_fichier` compris). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
+  (53 outils), rien à reconnecter.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

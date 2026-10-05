@@ -1,6 +1,8 @@
 import type { Transaction } from "@/lib/prisma";
 import { jsonStable } from "@/lib/a-faire/json";
 import { DUREES_DEPART, type NiveauTache, type Raccourci } from "@/lib/a-faire/types";
+import { estRappel } from "@/lib/agenda/rappels";
+import { jourParis } from "./dates";
 
 /**
  * Mission 18 (B0) : la prochaine action écrite par un événement automatique (photos reçues, simulation choisie,
@@ -27,7 +29,10 @@ export type ProchaineActionAuto = {
   code: string;
   /** Niveau de cette tâche : 2 (chaud) par défaut, un geste du client. */
   niveau?: NiveauTache;
-  /** Faux : le besoin a déjà sa tâche dérivée, jamais écartée par l'action manuelle (B1 : ENVOYER_DEVIS) ; rien n'est rangé. */
+  /**
+   * Faux : rien n'est rangé à la place de l'action gardée — le besoin a déjà sa tâche dérivée, jamais écartée par l'action
+   * manuelle (B1 : ENVOYER_DEVIS), ou il n'y a rien à faire de mon côté (une attente du client : « Attendre … »).
+   */
   tache?: false;
 };
 
@@ -36,6 +41,17 @@ export type IssueProchaineAction = "ECRITE" | "GARDEE" | "INCHANGEE" | "SANS_OBJ
 
 export const PREFIXE_TACHE_SYNCHRO = "MANUELLE:synchro:";
 export const cleTacheSynchro = (dossierId: string, code: string): string => `${PREFIXE_TACHE_SYNCHRO}${dossierId}:${code}`;
+
+/**
+ * Mission 18 (relecture) : un rappel daté (« Rappeler… », posé par un appel noté « à rappeler » ou « pas de réponse », un
+ * rappel repris du lead, une demande de rappel), pour aujourd'hui ou plus tard. Ces gestes écrivent la prochaine action
+ * sans la retenir « à la main » : ils sont gardés pareil (une tâche à la place), sinon le rappel quitterait l'agenda. Un
+ * rappel passé d'un jour ou sans date ne tient plus le dossier. Pure.
+ */
+export function estRappelAVenir(dossier: { prochaineAction: string | null; prochaineActionDate?: Date | null; prochaineActionInstant?: Date | null }, maintenant: Date): boolean {
+  const quand = dossier.prochaineActionInstant ?? dossier.prochaineActionDate ?? null;
+  return Boolean(quand && estRappel(dossier.prochaineAction) && jourParis(quand) >= jourParis(maintenant));
+}
 
 /** La prochaine action du dossier est-elle celle posée à la main (texte inchangé depuis) ? Pure. */
 export function estActionManuelleEnPlace(dossier: { prochaineAction: string | null; prochaineActionManuelle: string | null; prochaineActionManuelleLe: Date | null }): boolean {
@@ -51,13 +67,14 @@ const REPONSE_EFFACEE = { reponse: null, reponseRaison: null, reponseTexte: null
 export async function ecrireProchaineActionAuto(tx: Transaction, dossierId: string, voulu: ProchaineActionAuto, maintenant: Date = new Date()): Promise<IssueProchaineAction> {
   const dossier = await tx.dossier.findUnique({
     where: { id: dossierId },
-    select: { prochaineAction: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true, clientNom: true, leadId: true, clientId: true },
+    select: { prochaineAction: true, prochaineActionDate: true, prochaineActionInstant: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true, clientNom: true, leadId: true, clientId: true },
   });
   if (!dossier) return "SANS_OBJET";
   const actuelle = dossier.prochaineAction ?? null;
   if (voulu.si && !voulu.si(actuelle)) return "SANS_OBJET";
 
-  if (!estActionManuelleEnPlace(dossier)) {
+  const rappel = !estActionManuelleEnPlace(dossier) && estRappelAVenir(dossier, maintenant);
+  if (!estActionManuelleEnPlace(dossier) && !rappel) {
     await tx.dossier.update({ where: { id: dossierId }, data: { prochaineAction: voulu.texte, ...(voulu.date !== undefined ? { prochaineActionDate: voulu.date } : {}) } });
     return "ECRITE";
   }
@@ -67,7 +84,8 @@ export async function ecrireProchaineActionAuto(tx: Transaction, dossierId: stri
 
   const cle = cleTacheSynchro(dossierId, voulu.code);
   const titre = `${voulu.texte} · ${dossier.clientNom}`.slice(0, 300);
-  const raison = `ta prochaine action « ${actuelle} » est gardée`.slice(0, 500);
+  const quand = dossier.prochaineActionInstant ?? dossier.prochaineActionDate;
+  const raison = (rappel && quand ? `ton rappel « ${actuelle} » du ${quand.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit" })} est gardé` : `ta prochaine action « ${actuelle} » est gardée`).slice(0, 500);
   const donnees = jsonStable({ synchro: voulu.code, actionGardee: actuelle, actionProposee: voulu.texte });
   const existante = await tx.tacheAFaire.findUnique({ where: { cle } });
   if (existante) {

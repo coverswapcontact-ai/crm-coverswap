@@ -164,7 +164,8 @@ describe("devis annulé ou masqué sans autre devis actif (mission 18, B6)", () 
     const c = await contact("Variantes", "variantes.essai@example.test");
     await enSimulation(c.dossierId);
     const { document: a } = await generer(c.dossierId, "Cuisine", true, "façades");
-    const { document: b } = await generer(c.dossierId, "Cuisine", false, "façades et plan");
+    // Relecture : la seconde variante est annoncée elle aussi (une variante silencieuse est visible, pas envoyée : pas de relance).
+    const { document: b } = await generer(c.dossierId, "Cuisine", true, "façades et plan");
     const relanceA = await proposerRelance(c.dossierId, a.id);
     const relanceB = await proposerRelance(c.dossierId, b.id);
 

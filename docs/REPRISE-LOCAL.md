@@ -1108,3 +1108,67 @@ changement. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune descrip
 
 Reste : B7-B13 (B13 : règle de cohérence de l'écart 6 — devis envoyé sans devis en attente, « Attendre l'accord » sans
 devis) ; rien pour Lucas.
+
+### Mission 18, B0, B1, B2, B3, B4, B5, B6 — corrections de la relecture
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). Les 14 constats des trois relecteurs, et leur sort :
+1. **B6 pas commité** (important) — réglé hors de ce commit : B6 est commité (`6f0eeec`) ; relu de nouveau ici, rien à
+   reprendre sauf l'effet de la règle 2 (un devis visible pas encore envoyé compte comme « en attente » : l'étape ne
+   recule pas, la tâche « Envoyer le devis » reste).
+2. **Variante silencieuse tenue pour envoyée** (important, écart 1) — corrigé : `devis-envoye.ts › envoiALaGeneration`,
+   une variante `notifier: false` après Simulation est visible mais PAS envoyée (pas d'étape, tâche ENVOYER_DEVIS) ;
+   une variante en Relance ne repasse plus en Devis envoyé.
+3. **Statut du lead après la transaction** (important) — corrigé : `passerEnDevisEnvoye` (génération annoncée hors
+   `emettre`, mail, Gmail, dépôt, mise en ligne) et `emettre` écrivent le statut du lead dans la transaction et marquent
+   le changement synchronisé (main écrite par le point d'entrée) ; `emettre` passe ses suites par
+   `suitesEvenementDossier` (agenda, tâches). Essai : statut lu DANS la transaction.
+4. **En pause non signé par un devis « accepté »** (mineur, écart 4) — corrigé : en pause depuis Q, S, Devis envoyé ou
+   Relance → Signé (sortie de pause) ; perdu, ou en pause après la signature : rien (`devis-signe.ts ›
+   estSigneeParDevisAccepte`, `constants.ts › signeParDevisAccepte` pour la modale ; aperçu de `ajouter_fichier`).
+5. **Ancienneté des relances depuis l'émission** (mineur) — corrigé : `manager_operations` (`joursDepuis` depuis
+   l'envoi, `envoyeLe` ajouté) et le tri de `listerRelances`.
+6. **Suite `npm test` rouge (dates)** (mineur) — corrigé hors de ce commit (`49069e7`, `7765057`) ; le premier avait
+   cassé « dates dictées » de `assistant.test` (« mardi » dit le mardi à l'heure visée tombait la semaine suivante) :
+   `agenda.ts`, `<` au lieu de `<=` (à l'heure même : aujourd'hui). Suite verte.
+7. **« Rappeler » d'un appel noté écrasé** (important) — corrigé : `prochaine-action-auto.ts › estRappelAVenir`, un
+   « Rappeler… » daté d'aujourd'hui ou plus tard est gardé comme une action posée à la main (tâche à la place, raison
+   « ton rappel « Rappeler » du jj/mm est gardé », agenda intact) ; passé d'un jour ou sans date, il ne tient plus.
+   Choisi plutôt que de marquer les appels « manuels » : la vigueur et la main n'en sont pas changées.
+8. **Case « visible » sans avertissement** (mineur) — corrigé : le libellé d'un devis du CRM « Généré » masqué dit que
+   le rendre visible l'envoie, et l'écran demande confirmation (`window.confirm`, l'adresse du dossier) avant.
+9. **`pertinente` avant la trace du mail** (mineur) et 12. **relecture pour tous les types FILE** (mineur) — corrigés
+   ensemble : nouveau `dejaExecutee` des définitions (ENVOI_MAIL : trace `MAIL_ENVOYE` de la proposition ; ENVOI_SMS :
+   SMS de clé `proposition:<id>`) ; un message déjà parti n'est plus relu, la proposition est notée EXÉCUTÉE, jamais
+   « sans objet ». La relecture reste pour tous les types avant le départ (B6 compte dessus pour les relances validées).
+10. **Deux règles de l'envoi** (important) — corrigé : une seule (`devis-envoye.ts › annonceAboutit`) pour la
+    génération et la mise en ligne. Un devis du CRM jamais parti (`devisDejaParti` : ni « Envoyé », ni repris, ni déjà
+    mis en ligne) rendu visible sans espace ouvert, ou sans adresse avec le modèle actif, est visible SANS être envoyé
+    (`rendreVisibleSansEnvoi` : note, main relue, ni étape ni relance, ENVOYER_DEVIS reste) ; l'écran, le PATCH et
+    l'outil le disent (`nonEnvoye`). Interrupteur coupé et espace ouvert : envoyé (décision 7).
+11. **Relances sur un devis pas envoyé** (important) — corrigé : `chargerDossiersARelancer` écarte les devis de
+    `devisAEnvoyer`, `sms/copie.ts › devisARelancer` les refuse.
+13. **`ajouter_fichier` piece_mail sans montant** (mineur) — corrigé : avec le numéro, la pièce d'un mail parti de Gmail
+    passe par `deposerDocument` (montant exigé seulement sans devis du CRM, comme l'écran) ; l'outil la tient pour
+    sensible (aperçu, confirmation).
+14. **Tâche « Attendre … » rangée pour Lucas** (mineur) — corrigé : `tache: false` pour SIMULATION_PUBLIEE et les
+    « Attendre l'accord » (DEVIS_GENERE envoyé, DEVIS_DEPOSE, DEVIS_ENVOYE) ; les gestes du client gardent leur tâche.
+
+Décisions prises seul (solution la plus simple) :
+- Pas de bouton « Annoncer » pour un devis visible pas encore envoyé : il s'envoie par mail (`envoyer_document`, bouton
+  du dossier), ou se remasque puis se remet en ligne une fois l'espace ouvert et l'adresse connue.
+- Pas de numéro deviné du nom du fichier dans `ajouter_fichier` : l'aperçu ne le verrait pas (étape changée sans
+  confirmation) ; le numéro reste à donner.
+- Le statut du lead des autres changements écrits par `appliquerChangementEtape` (facture, relance, paiements) reste
+  après la transaction : B12.
+
+Tests : 1 397 → 1 406. Nouveau `src/lib/dossiers/relecture-b.test.ts` (7 essais, état des deux côtés, réseau coupé :
+variante silencieuse en Relance, relances mail et SMS ; espace fermé puis rouvert ; lead dans la transaction ; en pause
+→ Signé, et pas après la signature ; rappel gardé puis échu ; attente sans tâche ; ancienneté depuis la mise en ligne),
+plus un essai dans `envoyer-par-mail.test.ts` (coupure puis devis annulé : EXÉCUTÉE, rien ne repart) et un dans
+`devis-gmail.test.ts` (pièce du mail sans montant). Adaptés (comportement voulu) : `generer-envoyer` (règle),
+`mise-en-ligne` (sans adresse : pas envoyé ; pas de tâche « Attendre »), `synchro` (pas de tâche « Attendre »),
+`devis-retire` (seconde variante annoncée), `mcp-v3` (texte de la variante silencieuse), `mission-14-partie-1` (le
+dossier reçoit une adresse avant la mise en ligne). Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description changée : rien à reconnecter.
+
+Reste : B7-B13 ; rien pour Lucas.

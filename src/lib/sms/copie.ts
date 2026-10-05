@@ -90,6 +90,12 @@ export async function devisARelancer(documentId: string, dossierId?: string | nu
   if (devis.archiveLe) throw new ErreurMetier("Ce devis est archivé : rien à relancer.", 409);
   if (!devis.numero || !["GENERE", "ENVOYE"].includes(devis.statut)) throw new ErreurMetier("Ce devis n'attend pas de réponse du client : rien à relancer.", 409);
   if (!devis.visibleEspace) throw new ErreurMetier("Ce devis n'est pas visible dans son espace.", 409);
+  // Mission 18 (relecture) : visible mais pas encore envoyé (variante silencieuse, espace fermé, pas d'adresse) : le
+  // client ne l'a pas reçu, « le devis que je vous ai adressé » serait faux — le même filtre que les relances par mail.
+  const { devisAEnvoyer } = await import("@/lib/dossiers/devis-envoye");
+  if ((await devisAEnvoyer(prisma, [devis.dossierId])).some((d) => d.documentId === devis.id)) {
+    throw new ErreurMetier("Ce devis n'a pas encore été envoyé au client : rien à relancer (l'envoyer d'abord).", 409);
+  }
   return { id: devis.id, dossierId: devis.dossierId };
 }
 

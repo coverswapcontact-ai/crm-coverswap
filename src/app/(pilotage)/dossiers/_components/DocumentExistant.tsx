@@ -5,7 +5,7 @@ import { AlertTriangle, FileUp } from "lucide-react";
 import { toast } from "sonner";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Puces, Bouton, Champ, Modale } from "@/components/pilotage/ui";
-import { ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE, LIBELLES_STATUT_DOCUMENT } from "@/lib/dossiers/constants";
+import { LIBELLES_STATUT_DOCUMENT, signeParDevisAccepte } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import { numerosProposables } from "@/lib/dossiers/numeros-libres";
@@ -289,7 +289,7 @@ export function ModaleDocumentExistant({
         {type === "DEVIS" && !pieceGmail ? (
           <div>
             <Puces libelle="Où en est ce devis" options={STATUTS_DEVIS.map((valeur) => ({ valeur, libelle: LIBELLES_STATUT_DOCUMENT[valeur] }))} valeur={statut} onChange={setStatut} />
-            {statut === "ACCEPTE" && document?.statut !== "ACCEPTE" && ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE.includes(detail.etape) ? (
+            {statut === "ACCEPTE" && document?.statut !== "ACCEPTE" && signeParDevisAccepte(detail.etape, detail.etapeAvantSortie) ? (
               <p className="mt-1 text-[12px] text-[#6B7280]">Accepté (signé hors ligne) : le dossier passera en « Signé », les autres devis proposés deviendront « non retenus ».</p>
             ) : null}
           </div>

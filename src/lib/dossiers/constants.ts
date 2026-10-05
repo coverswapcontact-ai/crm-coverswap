@@ -228,6 +228,14 @@ export const PROCHAINE_ACTION_REFAIRE_DEVIS = "Refaire le devis";
  */
 export const ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
 
+/**
+ * Mission 18 (relecture de B4) : le dossier est-il « non signé » au sens de l'écart 4 — à une étape d'avant « Signé », ou
+ * EN PAUSE depuis une de ces étapes (l'étape d'avant la pause, `avantSortie`) ? Perdu : non, il se reprend d'abord. Pure
+ * (écran, outil, service).
+ */
+export const signeParDevisAccepte = (etape: string | null | undefined, avantSortie?: string | null): boolean =>
+  (ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE as readonly string[]).includes(etape ?? "") || (etape === "EN_PAUSE" && (ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE as readonly string[]).includes(avantSortie ?? ""));
+
 // Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [
   "PRIX",

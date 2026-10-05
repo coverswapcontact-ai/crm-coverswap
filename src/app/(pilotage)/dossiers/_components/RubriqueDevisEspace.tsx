@@ -67,7 +67,7 @@ export function RubriqueDevisEspace({
               {espace.accord ? null : (
                 <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
                   <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
-                  {d.visibleEspace ? "visible dans son espace" : "masqué dans son espace"}
+                  {d.visibleEspace ? "visible dans son espace" : !d.repris && d.statut === "GENERE" ? "masqué dans son espace (le rendre visible l'envoie : mail « Devis disponible »)" : "masqué dans son espace"}
                 </label>
               )}
             </li>

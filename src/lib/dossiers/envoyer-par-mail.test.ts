@@ -238,6 +238,26 @@ describe("devis envoyé par mail depuis le CRM (mission 18, B2)", () => {
     assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: c.dossierId, type: "DEVIS_ENVOYE" } }), 1);
   });
 
+  test("relecture : coupure après l'envoi, puis devis annulé avant la reprise : la proposition est notée exécutée (le mail est parti), jamais « sans objet », rien ne repart", async () => {
+    const c = await devisPasEncoreEnvoye("Coupeannule");
+    const { proposition } = await avecActeur(LUCAS, async () => mail.envoyerDocumentParMail(c.dossierId, c.devis.id, await mail.brouillonEnvoiDocument(c.dossierId, c.devis.id)));
+    // Le mail est parti (sa trace est écrite en premier), puis le processus s'est arrêté ; Lucas annule ensuite le devis.
+    await prisma.dossierEvenement.create({ data: { dossierId: c.dossierId, type: "MAIL_ENVOYE", direction: "SORTANT", contenu: "Envoi du devis (essai de coupure)", metadata: JSON.stringify({ propositionId: proposition.id, motif: "ENVOI_DEVIS", documentIds: [c.devis.id] }) } });
+    await avecActeur(LUCAS, () => documents.annulerDevis(c.dossierId, c.devis.id, "erreur de métrage"));
+
+    await validation.executerPropositionValidee({ propositionId: proposition.id }, contexte("coupure-annule"));
+    const apres = await prisma.proposition.findUniqueOrThrow({ where: { id: proposition.id } });
+    assert.equal(apres.statut, "EXECUTEE", "l'historique dit vrai : le mail est parti");
+    assert.equal(envoyes.filter((m) => m.a === c.email).length, 0, "le mail ne repart pas");
+    assert.equal(await mailsDuDossier(c.dossierId), 1);
+    // Le devis annulé ne revit pas : ni « Devis envoyé » ni passage d'étape.
+    assert.equal(await prisma.dossierEvenement.count({ where: { dossierId: c.dossierId, type: "DEVIS_ENVOYE" } }), 0);
+    const etat = await etatDesDeuxCotes(c.dossierId, { taches: false });
+    assert.deepEqual([etat.etape, etat.relances.devis], ["SIMULATION", []]);
+    // La clé d'unicité reste prise : le même envoi, refait, rend la proposition exécutée au lieu d'en créer une autre.
+    assert.equal(await propositionsDuDossier(c.dossierId), 1);
+  });
+
   test("écarté (annulé, rejeté…) ou parti depuis plus d'une demi-heure, le même envoi peut être refait", async () => {
     const c = await devisPasEncoreEnvoye("Refait");
     const brouillon = await mail.brouillonEnvoiDocument(c.dossierId, c.devis.id);

@@ -1,9 +1,10 @@
 import prisma, { type Transaction } from "@/lib/prisma";
 import type { EtapeDossier, TypeDocument } from "./constants";
-import { recalculerMain } from "./main";
+import { ecrireMain, recalculerMain } from "./main";
 import { estEtape } from "./regles";
+import { ecrireStatutLead } from "./statut-lead";
 import { appliquerEvenementDossier, type Suites } from "./synchro";
-import { appliquerChangementEtape, effetsDuChangementEtape, type ChangementEtape } from "./transitions";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "./transitions";
 
 /**
  * Mission 14 (29/09/2026), R1 : un devis visible dans l'espace du client, qu'il
@@ -24,21 +25,32 @@ export function etapeApresGeneration(type: TypeDocument, etape: EtapeDossier): E
 }
 
 /**
+ * Mission 18 (relecture de B1 à B5) : LA règle de l'envoi par l'espace, une seule pour la génération et la mise en ligne
+ * (interrupteur, outil « modifier » DOCUMENT). Un devis du CRM qui n'a pas encore atteint le client est « envoyé » quand
+ * il est ANNONCÉ : espace ouvert et adresse valide (le mail « Devis disponible » part), ou interrupteur du modèle coupé
+ * dans Paramètres (alors la mise en ligne dans un espace ouvert vaut envoi, décision 7 de la mission 18). Sans espace
+ * ouvert, ou sans adresse avec le modèle actif, il peut être visible mais il n'est pas envoyé (tâche « Envoyer le
+ * devis »). L'autre voie est le mail (CRM ou Gmail). Pure : lit `peutNotifier("DEVIS_DISPONIBLE", …)`.
+ */
+export function annonceAboutit(e: { modeleActif: boolean; espaceOuvert: boolean; possible: boolean }): boolean {
+  return e.espaceOuvert && (e.possible || !e.modeleActif);
+}
+
+/**
  * Mission 18 (B1) : générer un devis n'est pas l'envoyer. À la génération, le devis est :
- * - ANNONCÉ (visible, envoyé : l'étape avance, la main passe au client) s'il part avec la notification « Devis
- *   disponible » : notifier demandé, espace ouvert, adresse valide ; ou interrupteur du modèle coupé dans Paramètres
- *   (alors la mise en ligne dans un espace ouvert vaut envoi, décision de la mission 18) ;
+ * - ANNONCÉ (visible, envoyé : l'étape avance, la main passe au client) si la notification est demandée et que
+ *   l'annonce aboutit (`annonceAboutit`) ;
  * - sinon, en Qualification ou Simulation : MASQUÉ dans l'espace, pas envoyé (tâche « Envoyer le devis ») ;
- * - sinon (Devis envoyé, Relance, après la signature…) : visible ; une variante silencieuse (`notifier: false`) dans un
- *   espace ouvert vaut mise en ligne (le client a déjà ses devis là, il a été prévenu du premier) ; sans espace ouvert ou
- *   sans adresse pour l'annoncer, il n'est pas envoyé.
+ * - sinon (Devis envoyé, Relance, après la signature…) : visible (le client a déjà ses devis là), mais PAS envoyé —
+ *   une variante silencieuse (`notifier: false`) comprise (relecture : « Devis envoyé » seulement si visible ET
+ *   notifié, ou envoyé par mail) : l'étape ne bouge pas, la tâche « Envoyer le devis » s'ouvre, les relances restent
+ *   sur le devis réellement envoyé.
  * Pure (essais) ; `mail` dit si la notification est à programmer après la transaction.
  */
 export function envoiALaGeneration(e: { etape: EtapeDossier; notifier: boolean; modeleActif: boolean; espaceOuvert: boolean; possible: boolean }): { visible: boolean; envoye: boolean; mail: boolean } {
-  const annonce = e.notifier && e.espaceOuvert && (e.possible || !e.modeleActif);
-  if (annonce) return { visible: true, envoye: true, mail: e.modeleActif };
+  if (e.notifier && annonceAboutit(e)) return { visible: true, envoye: true, mail: e.modeleActif };
   if (ETAPES_DEVIS_MASQUE.includes(e.etape)) return { visible: false, envoye: false, mail: false };
-  return { visible: true, envoye: !e.notifier && e.espaceOuvert, mail: false };
+  return { visible: true, envoye: false, mail: false };
 }
 
 /** Les étapes où un devis généré sans être annoncé reste masqué dans l'espace (avant tout devis envoyé). */
@@ -66,7 +78,9 @@ export type OptionsDevisEnvoye = {
 /**
  * Passe le dossier en « Devis envoyé » dans la transaction de l'appelant, si un
  * devis envoyé (voir `estDevisEnvoye`) le justifie ; rend le changement, ou null.
- * Les effets (lead, Meta, main) se lancent après la transaction : `suitesDevisEnvoye`.
+ * Mission 18 (relecture) : le statut du lead suit DANS la transaction et le changement est marqué synchronisé ; la
+ * main est écrite par l'appelant dans la même transaction (point d'entrée : `appliquerEvenementDossier`), ou relue
+ * après par `suitesDevisEnvoye` (reprise, migration). Après la transaction, seuls Meta, l'agenda et les tâches suivent.
  */
 export async function passerEnDevisEnvoye(tx: Transaction, dossierId: string, options: OptionsDevisEnvoye = {}): Promise<ChangementEtape | null> {
   const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
@@ -80,7 +94,9 @@ export async function passerEnDevisEnvoye(tx: Transaction, dossierId: string, op
     select: { id: true },
   });
   if (!devis) return null;
-  return appliquerChangementEtape(tx, { dossierId, de: dossier.etape, vers, nature: options.nature ?? "AUTOMATIQUE", documentId: devis.id, ...(options.raison ? { raison: options.raison } : {}) });
+  const changement = await appliquerChangementEtape(tx, { dossierId, de: dossier.etape, vers, nature: options.nature ?? "AUTOMATIQUE", documentId: devis.id, ...(options.raison ? { raison: options.raison } : {}) });
+  await ecrireStatutLead(tx, dossierId, vers);
+  return marquerSynchronise(changement);
 }
 
 /** Après la transaction, comme à la génération : effets des changements d'étape (lead, Meta), puis la main recalculée. */
@@ -105,6 +121,34 @@ export async function mettreEnLigneDevis(tx: Transaction, dossierId: string, dev
   const changement = await passerEnDevisEnvoye(tx, dossierId, { documentId: devis.id, raison: `devis ${devis.numero} rendu visible dans son espace` });
   const suites = await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ENVOYE", documentId: devis.id, canal: "ESPACE" });
   return { ...suites, changements: changement ? [changement] : [] };
+}
+
+/**
+ * Mission 18 (relecture) : le devis a-t-il déjà atteint le client ? Fait ailleurs (repris), envoyé par mail (« Envoyé »,
+ * accepté…), ou déjà mis en ligne une fois (événement « Devis envoyé » qui le porte : remasqué puis réaffiché, il l'a
+ * déjà eu). Sinon, sa mise en ligne n'est un envoi que si l'annonce aboutit (`annonceAboutit`). Lu hors transaction.
+ */
+export async function devisDejaParti(devis: { id: string; dossierId: string; origine: string; statut: string }): Promise<boolean> {
+  if (devis.origine === "REPRISE" || devis.statut !== "GENERE") return true;
+  const misEnLigne = await prisma.dossierEvenement.findFirst({ where: { dossierId: devis.dossierId, type: "DEVIS_ENVOYE", metadata: { contains: devis.id } }, select: { id: true } });
+  return Boolean(misEnLigne);
+}
+
+/**
+ * Mission 18 (relecture) : un devis rendu visible SANS être envoyé (pas d'espace ouvert, ou pas d'adresse avec le modèle
+ * « Devis disponible » actif), dans la transaction de l'appelant qui a écrit `visibleEspace` : la trace (note), la main
+ * relue ; ni « Devis envoyé », ni étape, ni relance. La tâche « Envoyer le devis » reste ouverte (`devisAEnvoyer`).
+ */
+export async function rendreVisibleSansEnvoi(tx: Transaction, dossierId: string, devis: { id: string }, contenu: string, raison: string | null): Promise<Suites> {
+  await tx.dossierEvenement.create({
+    data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `${contenu}, pas encore envoyé${raison ? ` (${raison.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())})` : ""}`, metadata: JSON.stringify({ documentId: devis.id, presentation: true, envoye: false }) },
+  });
+  return { dossierId, changements: [], prochaineAction: null, main: await ecrireMain(tx, dossierId) };
+}
+
+/** La phrase d'un devis rendu visible sans être envoyé, pour l'écran et l'assistant. */
+export function phraseNonEnvoye(raison: string | null): string {
+  return `Visible dans son espace, mais pas envoyé${raison ? ` : ${raison.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}` : ""}. Le dossier ne passe pas en « Devis envoyé », la tâche « Envoyer le devis » reste ouverte (l'envoyer par mail, ou le remettre en ligne une fois l'espace ouvert et l'adresse connue).`;
 }
 
 /** Ce qu'il est advenu du mail « Devis disponible » à la mise en ligne : programmé, ou pourquoi rien n'est parti. */

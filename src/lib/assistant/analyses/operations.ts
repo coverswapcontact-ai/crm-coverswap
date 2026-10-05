@@ -76,7 +76,8 @@ export async function analyseOperations(maintenant: Date = new Date()) {
   const enRetardActions = actions.filter((a) => a.prochaineActionDate && a.prochaineActionDate < debutJour);
   const rappelsEnRetard = rappels.filter((r) => r.enRetard);
   const delai = delaiRelance;
-  const devisDus = relances.devis.map((d) => ({ dossierId: d.dossierId, client: d.clientNom, numero: d.numero, montant: d.totalHt, emisLe: d.emisLe, joursDepuis: d.joursDepuisEmission, rang: d.rang }));
+  // Mission 18 (relecture) : l'ancienneté depuis l'envoi (mise en ligne, mail), comme la relance elle-même, pas depuis l'émission.
+  const devisDus = relances.devis.map((d) => ({ dossierId: d.dossierId, client: d.clientNom, numero: d.numero, montant: d.totalHt, emisLe: d.emisLe, envoyeLe: d.envoyeLe, joursDepuis: d.joursDepuisEnvoi, rang: d.rang }));
   const photosDues = relances.photos.map((p) => ({ dossierId: p.dossierId, client: p.clientNom, joursDepuisOuverture: p.joursDepuisOuverture, rang: p.rang }));
   // Mission 18 (A4) : la demande d'avis après chantier et la réactivation à 6 mois, des relances comme les autres.
   const avisDus = relances.avis.map((a) => ({ dossierId: a.dossierId, client: a.clientNom, joursDepuisFin: a.joursDepuisFin }));

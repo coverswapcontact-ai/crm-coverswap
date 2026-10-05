@@ -80,7 +80,17 @@ function deposer(dossierId: string, extra: Record<string, unknown> = {}) {
  * Mission 18 (B1) : générer n'est pas envoyer. Un devis émis sans annonce (pas d'adresse, `notifier: false`) reste masqué ;
  * le rendre visible dans l'espace l'envoie (étape, main au client) — l'état que ces essais supposaient après l'émission.
  */
+/**
+ * Mission 18 (relecture) : un devis du CRM rendu visible n'est envoyé que s'il est annoncé (espace ouvert, adresse
+ * valide) — le dossier reçoit une adresse s'il n'en a pas, comme un vrai client qu'on prévient.
+ */
+async function avecAdresse(dossierId: string) {
+  const d = await dossierDe(dossierId);
+  if (!d.clientEmail) await prisma.dossier.update({ where: { id: dossierId }, data: { clientEmail: `dossier-${dossierId}@example.test` } });
+}
+
 async function devisEnvoye(dossierId: string, objet: string, quantite: number, prixUnitaire: number) {
+  await avecAdresse(dossierId);
   const { document } = await avecActeur(LUCAS, () =>
     documents.genererDocument(dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet, lignes: [{ type: "PRESTATION", designation: "Revêtement adhésif", quantite, unite: "ml", prixUnitaire }], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
   );
@@ -246,6 +256,7 @@ describe("R1 : un devis visible, émis ou déposé, c'est « Devis envoyé »", 
     assert.deepEqual([genere.etape, genere.main, genere.mainMotif], ["QUALIFICATION", "MOI", `Devis prêt, pas encore envoyé (${devis.numero}) : à lui envoyer`]);
     const permanent = await prisma.espacePermanent.findUniqueOrThrow({ where: { id: c.permanentId } });
     assert.ok(!(await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id), "pas envoyé : absent de « Mes documents »");
+    await avecAdresse(c.dossierId);
     const envoye = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: true }));
     assert.equal(envoye.passage?.vers, "DEVIS_ENVOYE", "rendu visible : envoyé");
     assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");

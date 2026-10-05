@@ -7,7 +7,7 @@ import { schemaCreationDepense, schemaModificationDepense } from "@/lib/depenses
 import { archiverDepense, creerDepense, modifierDepense, restaurerDepense } from "@/lib/depenses/service";
 import { UNITES } from "@/lib/dossiers/constants";
 import { jourParis } from "@/lib/dossiers/dates";
-import { phraseAnnonce } from "@/lib/dossiers/devis-envoye";
+import { annonceAboutit, devisDejaParti, phraseAnnonce } from "@/lib/dossiers/devis-envoye";
 import { modifierDocumentExistant, schemaModificationDocumentExistant } from "@/lib/dossiers/documents-existants";
 import { modifierPresentationDevis } from "@/lib/dossiers/presentation-devis";
 import { archiverPreset, creerPreset, lirePrestationsDuTarif, modifierPreset, restaurerPreset, schemaPreset } from "@/lib/dossiers/presets";
@@ -68,6 +68,10 @@ export const DOCUMENT: DefinitionEntite = {
       const envoi = "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas, la relance compte depuis la mise en ligne.";
       if (cible.contexte.repris || avant.statut !== "GENERE") return `${envoi} Aucun mail : ${cible.contexte.repris ? "devis fait ailleurs" : "il a déjà été envoyé par mail"}.`;
       const etat = await peutNotifier("DEVIS_DISPONIBLE", String(cible.contexte.dossierId));
+      // Relecture : la règle de la génération (devis-envoye.ts › annonceAboutit) — sans annonce possible, visible mais pas envoyé.
+      if (!annonceAboutit(etat) && !(await devisDejaParti({ id: cible.id, dossierId: String(cible.contexte.dossierId), origine: "CRM", statut: String(avant.statut) }))) {
+        return `Rendu visible, le devis n'est pas envoyé pour autant : ${(etat.raison ?? "notification impossible").replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}. Le dossier ne bouge pas, la tâche « Envoyer le devis » reste ouverte (« envoyer_document » pour l'envoyer par mail).`;
+      }
       return `${envoi} ${etat.possible ? "Le mail « Devis disponible » partira au client (une fois par devis)." : `Aucun mail « Devis disponible » : ${(etat.raison ?? "notification impossible").replace(/\.$/, "")}.`}`;
     },
     // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste ; l'étape revient avant « Devis envoyé »
@@ -86,8 +90,8 @@ export const DOCUMENT: DefinitionEntite = {
       const dossierId = cible.contexte.dossierId as string;
       // Comme la route : { visibleEspace, libelleVariante } seuls = la présentation ; le reste = la correction d'un document repris.
       if (Object.keys(valeurs).every((c) => CHAMPS_PRESENTATION.includes(c))) {
-        const { annonce, retrait } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
-        return [...(annonce ? [phraseAnnonce(annonce)] : []), ...(retrait ? [retrait] : [])];
+        const { annonce, retrait, nonEnvoye } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
+        return [...(nonEnvoye ? [nonEnvoye] : annonce ? [phraseAnnonce(annonce)] : []), ...(retrait ? [retrait] : [])];
       }
       return modifierDocumentExistant(dossierId, cible.id, valeurs);
     },

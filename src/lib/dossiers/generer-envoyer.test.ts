@@ -66,7 +66,7 @@ after(async () => {
 });
 
 describe("générer n'est pas envoyer (mission 18, B1)", () => {
-  test("la règle : annoncé = envoyé ; sinon masqué avant tout devis envoyé ; une variante silencieuse dans un espace ouvert est mise en ligne", () => {
+  test("la règle : annoncé = envoyé ; sinon masqué avant tout devis envoyé ; une variante silencieuse est visible mais pas envoyée (relecture)", () => {
     const regle = (etape: import("./constants").EtapeDossier, notifier: boolean, etat: Partial<{ modeleActif: boolean; espaceOuvert: boolean; possible: boolean }> = {}) =>
       devisEnvoye.envoiALaGeneration({ etape, notifier, modeleActif: true, espaceOuvert: true, possible: true, ...etat });
     assert.deepEqual(regle("QUALIFICATION", true), { visible: true, envoye: true, mail: true });
@@ -75,7 +75,9 @@ describe("générer n'est pas envoyer (mission 18, B1)", () => {
     assert.deepEqual(regle("SIMULATION", true, { espaceOuvert: false, possible: false }), { visible: false, envoye: false, mail: false });
     assert.deepEqual(regle("SIMULATION", true, { modeleActif: false, possible: false }), { visible: true, envoye: true, mail: false }, "interrupteur coupé : la mise en ligne vaut envoi");
     assert.deepEqual(regle("SIMULATION", true, { modeleActif: false, espaceOuvert: false, possible: false }), { visible: false, envoye: false, mail: false });
-    assert.deepEqual(regle("DEVIS_ENVOYE", false), { visible: true, envoye: true, mail: false }, "variante silencieuse");
+    // Relecture : « Devis envoyé » seulement si visible ET notifié, ou envoyé par mail — la variante silencieuse est visible, pas envoyée.
+    assert.deepEqual(regle("DEVIS_ENVOYE", false), { visible: true, envoye: false, mail: false }, "variante silencieuse");
+    assert.deepEqual(regle("RELANCE", false), { visible: true, envoye: false, mail: false }, "variante silencieuse en Relance : l'étape ne bouge pas");
     assert.deepEqual(regle("RELANCE", true, { possible: false, espaceOuvert: true }), { visible: true, envoye: false, mail: false }, "visible, mais pas annoncé");
     assert.deepEqual(regle("SIGNE", false, { espaceOuvert: false }), { visible: true, envoye: false, mail: false });
   });

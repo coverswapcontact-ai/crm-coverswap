@@ -272,4 +272,31 @@ describe("devis envoyé depuis Gmail (mission 18, B3)", () => {
     assert.deepEqual([etat.etape, etat.main, etat.prochaineAction, etat.etapeEspace], ["DEVIS_ENVOYE", "CLIENT", "Attendre l'accord du client sur le devis", "DEVIS"]);
     assert.equal(tachesDe(etat, "ENREGISTRER_DEVIS").length, 0);
   });
+
+  test("relecture : « ajouter_fichier » avec la pièce du mail d'un devis du CRM, sans montant : enregistré comme envoyé (comme l'écran), jamais rangé « à compléter »", async () => {
+    const c = await contact("Sansmontant");
+    const { document: genere } = await avecActeur(LUCAS, () =>
+      documents.genererDocument(c.dossierId, documents.schemaGeneration.parse({ type: "DEVIS", objet: "Recouvrement cuisine", lignes: [ligne("Revêtement adhésif — façades", 8, 140)], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false }))
+    );
+    const nom = `Devis-${genere.numero}-ESSAI.pdf`;
+    const parti = await mailParti(c, { nom, il_y_a: 0 });
+    const resultat = await avecActeur(LUCAS, () =>
+      enregistrement.enregistrerFichierRecu({ entite: "DOSSIER", id: c.dossierId }, "DEVIS", { contenu: PDF, nom }, { voie: "PIECE_MAIL", origine: `mail ${parti.messageId}`, document: { numero: genere.numero! }, pieceMail: { messageId: parti.messageId, pieceId: parti.pieceId } })
+    );
+    assert.ok(resultat.destination.startsWith(`devis ${genere.numero} enregistré comme envoyé depuis Gmail (devis du CRM passé « Envoyé »)`), resultat.destination);
+    assert.equal(resultat.aCompleter, false);
+    assert.equal(await prisma.document.count({ where: { dossierId: c.dossierId, type: "DEVIS" } }), 1, "pas de second dépôt");
+    const devis = await prisma.document.findUniqueOrThrow({ where: { id: genere.id } });
+    assert.deepEqual([devis.statut, devis.visibleEspace], ["ENVOYE", true]);
+    const etat = await etatDesDeuxCotes(c.dossierId);
+    assert.deepEqual([etat.etape, etat.main, etat.prochaineAction, etat.statutLead, etat.etapeEspace], ["DEVIS_ENVOYE", "CLIENT", "Attendre l'accord du client sur le devis", "DEVIS_ENVOYE", "DEVIS"]);
+    assert.equal(tachesDe(etat, "ENVOYER_DEVIS").length + tachesDe(etat, "ENREGISTRER_DEVIS").length, 0);
+
+    // Sans devis du CRM de ce numéro, le montant reste exigé (même règle que l'écran) : rien n'est rangé en silence.
+    const autre = await mailParti(c, { nom: "Devis-2026-955-ESSAI.pdf", il_y_a: 0 });
+    await assert.rejects(
+      avecActeur(LUCAS, () => enregistrement.enregistrerFichierRecu({ entite: "DOSSIER", id: c.dossierId }, "DEVIS", { contenu: PDF, nom: "Devis-2026-955-ESSAI.pdf" }, { voie: "PIECE_MAIL", origine: `mail ${autre.messageId}`, document: { numero: "2026-955" }, pieceMail: { messageId: autre.messageId, pieceId: autre.pieceId } })),
+      /montant HT est obligatoire/
+    );
+  });
 });

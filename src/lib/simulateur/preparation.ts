@@ -1,4 +1,5 @@
 import { recalculerMain } from "@/lib/dossiers/main";
+import { appliquerEvenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
 import { z } from "zod/v4";
 import type { PreparationSimulation } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -315,7 +316,7 @@ async function publierSimulationDuClient(
     const trace = traceDe(resultat);
     const teintes = zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ");
     const cout = `≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10${resultat.tentatives > 1 ? ` en ${resultat.tentatives} essais` : ""}` : ""}`;
-    const simulation = await prisma.$transaction(async (tx) => {
+    const { simulation, suites } = await prisma.$transaction(async (tx) => {
       const creee = await tx.simulationEspace.create({
         data: {
           espaceId: espace.id,
@@ -342,9 +343,13 @@ async function publierSimulationDuClient(
           ? { dossierId: p.dossierId, type: "ESPACE_SIMULATION_RELECTURE", direction: "INTERNE", contenu: `Simulation du client gardée en brouillon (contrôle sous le seuil de ${relecture.seuil}/10) : ${teintes} (${cout})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id, scoreControle: resultat.scoreControle, seuil: relecture.seuil }) }
           : { dossierId: p.dossierId, type: "ESPACE_SIMULATION_CLIENT", direction: "ENTRANT", contenu: `Le client a créé une simulation dans son espace : ${teintes} (${cout})`, metadata: JSON.stringify({ simulationId: creee.id, preparationId: p.id }) },
       });
-      return creee;
-    });
-    await recalculerMain(p.dossierId);
+      // Mission 18 (B9) : visible dans sa galerie, c'est une simulation du client — le point d'entrée (Qualification →
+      // Simulation, main), d'un bloc. Gardée en brouillon pour relecture, elle n'est pas encore dans son espace : la main
+      // seule est relue (après), l'étape suivra la publication par Lucas.
+      return { simulation: creee, suites: relecture ? null : await appliquerEvenementDossier(tx, p.dossierId, { type: "SIMULATION_DU_CLIENT", simulationIds: [creee.id], origine: "ESPACE" }, maintenant) };
+    }, { maxWait: 10_000, timeout: 30_000 });
+    if (suites) await suitesEvenementDossier(suites);
+    else await recalculerMain(p.dossierId);
     const defauts = (resultat.defautsControle ?? []).map((d) => d.detail).filter(Boolean).slice(0, 3).join(" · ");
     await alerter(
       relecture

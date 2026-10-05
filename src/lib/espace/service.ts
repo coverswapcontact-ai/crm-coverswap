@@ -18,7 +18,7 @@ import { libelleZoneClient, lireZones, type ZoneTeinte } from "@/lib/simulateur/
 import { enregistrerPrestations, famillesSuggerees } from "@/lib/prestations/dossier";
 import { famillesDe, lireSelection, motsDuProjet, phraseFamilles, type IdFamille } from "@/lib/prestations/prestations";
 import { creationPourLeClient, type CreationClient } from "./creation";
-import { deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
+import { changerStatutSimulation, deposerSimulationDossier, lireImage, synchroniserSimulationsSite } from "@/lib/simulations/dossier";
 import { etapeEspace, progression, type EtapeEspace, type FaitsEspace } from "./etapes";
 import { lireProjet, projetComplet, projetDepuisEntree, projetPrecise, resumerProjet, schemaProjet, ZONES_DEPUIS_SITE, type EntreeProjet, type ProjetClient } from "./projet";
 import { ACTEUR, prevenir } from "./alertes";
@@ -694,8 +694,14 @@ export async function deposerSimulation(dossierId: string, fichier: File, detail
   return { id: vue.id, espaceId: ligne.espaceId };
 }
 
+/**
+ * Ancien retrait (POST de l'écran du dossier) : le même geste que « retirer » du bloc Espace (mission 18, B9) — archivée,
+ * et le choix du client dévalidé si elle en fait partie (simulations/dossier.ts › changerStatutSimulation).
+ */
 export async function retirerSimulation(simulationId: string, motif = "Retirée de l'espace client"): Promise<void> {
-  await prisma.simulationEspace.update({ where: { id: simulationId }, data: { archiveLe: new Date(), archiveMotif: motif } });
+  const simulation = await prisma.simulationEspace.findUnique({ where: { id: simulationId }, select: { dossierId: true } });
+  if (!simulation) throw new ErreurMetier("Simulation introuvable.", 404);
+  await changerStatutSimulation(simulation.dossierId, simulationId, "retirer", motif);
 }
 
 /** Le client a regardé ses simulations : elles ne sont plus « nouvelles », et Lucas sait lesquelles ont été vues. */

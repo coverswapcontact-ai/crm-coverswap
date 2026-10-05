@@ -5,7 +5,8 @@ import { PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_ENVOYER_DEVIS, PROCHAINE
 import { dateDepuisJour, jourParis } from "./dates";
 import { ecrireMain, type MainCalculee } from "./main";
 import { ecrireProchaineActionAuto, type IssueProchaineAction, type ProchaineActionAuto } from "./prochaine-action-auto";
-import { effetsDuChangementEtape, type ChangementEtape } from "./transitions";
+import { ecrireStatutLead } from "./statut-lead";
+import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise, type ChangementEtape } from "./transitions";
 
 /**
  * Mission 18 (partie B) : le point d'entrée unique de ce qui arrive à un dossier (docs/SYNCHRO.md, la matrice).
@@ -51,8 +52,17 @@ export type EvenementDossier =
   | { type: "DEVIS_ACCEPTE"; documentId: string }
   /** Bon pour accord retiré (validations.ts › retirerAccord). */
   | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS" }
-  /** Simulations publiées dans l'espace (simulations/dossier.ts › publierSimulations). */
+  /**
+   * Simulations publiées dans l'espace (simulations/dossier.ts › publierSimulations ; mission 18, B9 : aussi « Publier »
+   * depuis le bloc Espace, `changerStatutSimulation(…, "afficher")`).
+   */
   | { type: "SIMULATION_PUBLIEE"; simulationIds: string[] }
+  /**
+   * Mission 18 (B9) : une simulation faite par le client lui-même, visible dans son espace : créée dans son espace
+   * (simulateur/preparation.ts › publierSimulationDuClient, `ESPACE`) ou faite sur coverswap.fr et rangée dans son espace
+   * (simulations/dossier.ts › synchroniserSimulationsSite, `SITE`).
+   */
+  | { type: "SIMULATION_DU_CLIENT"; simulationIds: string[]; origine: "ESPACE" | "SITE" }
   /** Devis généré par le CRM (documents.ts › emettre) ; `envoye` : annoncé au client (mission 18, B1 : générer n'est pas envoyer). */
   | { type: "DEVIS_GENERE"; documentId: string; envoye: boolean }
   /**
@@ -90,6 +100,7 @@ export const TYPES_EVENEMENT_DOSSIER = [
   "DEVIS_ACCEPTE",
   "ACCORD_RETIRE",
   "SIMULATION_PUBLIEE",
+  "SIMULATION_DU_CLIENT",
   "DEVIS_GENERE",
   "DEVIS_DEPOSE",
   "DEVIS_ENVOYE",
@@ -147,6 +158,9 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
     // à la main : rien à faire de mon côté, la main passe au client (`tache: false`).
     case "SIMULATION_PUBLIEE":
       return { code: "simulation-publiee", texte: "Attendre le retour du client sur la simulation", date: null, niveau: 3, tache: false };
+    // Mission 18 (B9) : sa propre simulation ne pose pas de prochaine action (comme avant) : l'étape et la main suivent.
+    case "SIMULATION_DU_CLIENT":
+      return null;
     // « Préparer le devis », posé par l'espace quand le client a choisi, est fait dès qu'un devis est émis ou déposé.
     // Mission 18 (B1) : émis sans être envoyé, il reste à l'envoyer ; la tâche ENVOYER_DEVIS (détecteur des dossiers)
     // le dit, même sous une action posée à la main : rien n'est rangé à sa place.
@@ -175,15 +189,54 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
 }
 
 /**
- * Applique un événement au dossier dans la transaction de l'appelant (après ses propres écritures) : prochaine action
- * (ou tâche à la place d'une action posée à la main), puis la main. Rend les suites, à passer à `suitesEvenementDossier`
+ * Applique un événement au dossier dans la transaction de l'appelant (après ses propres écritures) : l'étape
+ * (Qualification → Simulation, mission 18, B9), la prochaine action (ou tâche à la place d'une action posée à la main),
+ * puis la main. Rend les suites, à passer à `suitesEvenementDossier`
  * une fois la transaction terminée.
  */
 export async function appliquerEvenementDossier(tx: Transaction, dossierId: string, evenement: EvenementDossier, maintenant: Date = new Date()): Promise<Suites> {
+  const raison = raisonDuPassageEnSimulation(evenement);
+  const changement = raison ? await passerEnSimulation(tx, dossierId, raison) : null;
   const voulue = prochaineActionDe(evenement, maintenant);
   const prochaineAction = voulue ? await ecrireProchaineActionAuto(tx, dossierId, voulue, maintenant) : null;
   const main = await ecrireMain(tx, dossierId);
-  return { dossierId, changements: [], prochaineAction, main };
+  return { dossierId, changements: changement ? [changement] : [], prochaineAction, main };
+}
+
+/** Raison écrite dans le passage en Simulation d'un projet validé : c'est elle qui permet de le défaire (espace/validations.ts). */
+export const RAISON_PROJET_VALIDE = "projet validé dans l'espace client";
+
+/**
+ * Mission 18 (B9, écart 9) : les événements qui font passer un dossier de Qualification à Simulation, et la raison
+ * écrite dans le changement d'étape. Une simulation est dans son espace (publiée par Lucas, faite par lui), il en a
+ * validé une, ou il a validé son projet. Ailleurs qu'en Qualification, l'étape ne bouge pas.
+ */
+export function raisonDuPassageEnSimulation(evenement: EvenementDossier): string | null {
+  switch (evenement.type) {
+    case "SIMULATION_PUBLIEE":
+      return evenement.simulationIds.length > 1 ? "simulations publiées dans son espace" : "simulation publiée dans son espace";
+    case "SIMULATION_DU_CLIENT":
+      return evenement.origine === "SITE" ? "simulation faite sur coverswap.fr, rangée dans son espace" : "simulation créée par le client dans son espace";
+    case "CHOIX_VALIDE":
+      return "simulation validée dans l'espace client";
+    case "PROJET_VALIDE":
+      return RAISON_PROJET_VALIDE;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Qualification → Simulation dans la transaction de l'événement (changement AUTOMATIQUE, raison écrite), avec le statut
+ * du lead ; la main est écrite ensuite par le point d'entrée. Rend le changement (marqué synchronisé : ses effets
+ * d'après ne refont ni la main ni le lead), ou null si le dossier n'est pas en Qualification.
+ */
+async function passerEnSimulation(tx: Transaction, dossierId: string, raison: string): Promise<ChangementEtape | null> {
+  const dossier = await tx.dossier.findUnique({ where: { id: dossierId }, select: { etape: true } });
+  if (dossier?.etape !== "QUALIFICATION") return null;
+  const changement = await appliquerChangementEtape(tx, { dossierId, de: "QUALIFICATION", vers: "SIMULATION", nature: "AUTOMATIQUE", raison });
+  await ecrireStatutLead(tx, dossierId, "SIMULATION");
+  return marquerSynchronise(changement);
 }
 
 /**

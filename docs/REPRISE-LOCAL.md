@@ -1172,3 +1172,53 @@ dossier reçoit une adresse avant la mise en ligne). Empreinte MCP inchangée (`
 description changée : rien à reconnecter.
 
 Reste : B7-B13 ; rien pour Lucas.
+
+### Mission 18, B9 — « Publier » depuis le bloc Espace (écart 9)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). B7 et B8 n'ont rien laissé dans la copie de travail
+(agents morts avant d'écrire) : B9 part de `7c1d8a2`, B7 et B8 restent à faire.
+- **Publier depuis le bloc Espace = le bouton « Publier ».** `simulations/dossier.ts › publierDansLEspace`, une
+  fonction pour les deux : statut, événement `ESPACE_SIMULATION_DEPOSEE` (« republiée » pour une simulation masquée
+  remise), point d'entrée SIMULATION_PUBLIEE dans UNE transaction ; puis les suites (agenda, tâches) et le mail
+  automatique, même clé qu'avant (jamais deux mails pour la même simulation). `changerStatutSimulation(…, "afficher")`
+  (interrupteur du bloc, PATCH `…/simulations/[sid]`, outil `publier` `reafficher`) y passe ; le SMS reste au bouton.
+  Avant : ni étape, ni prochaine action, ni agenda, et la main seulement à la première publication.
+- **Retirer une simulation choisie annule le choix.** Masquer, repasser en brouillon ou retirer une simulation du choix
+  (la validée en mode UNE, ou celle de n'importe quelle zone d'un mélange : `validations.ts › simulationDansLeChoix`,
+  en plus de `choisieLe`) dévalide le choix dans la MÊME transaction que le geste
+  (`validations.ts › devaliderChoixDansTransaction`, extrait de `devaliderChoix`, raison dans l'historique : « (simulation
+  masquée : titre) »). L'ancien retrait `espace/service.ts › retirerSimulation` (POST `…/espace/simulations/[sid]`)
+  passe par `changerStatutSimulation(…, "retirer")` : il dévalide aussi (avant : archivait sans rien dire).
+- **Qualification → Simulation porté par le point d'entrée.** `synchro.ts › raisonDuPassageEnSimulation` +
+  `passerEnSimulation` : changement AUTOMATIQUE avec sa raison, statut du lead dans la transaction, marqué synchronisé,
+  main écrite après par le point d'entrée. Événements : SIMULATION_PUBLIEE, CHOIX_VALIDE (`choisir`), PROJET_VALIDE
+  (`validerProjet` : n'appelle plus `deplacerDossier` après coup ; la raison « projet validé dans l'espace client » est
+  gardée, définie dans `synchro.ts` et réexportée par `validations.ts`, `devaliderProjet` et la cohérence la relisent),
+  et le nouvel événement SIMULATION_DU_CLIENT : simulation créée par le client dans son espace
+  (`preparation.ts › publierSimulationDuClient`, PUBLIEE seulement — gardée en brouillon pour relecture, elle suivra sa
+  publication par Lucas) ou faite sur le site et rangée dans son espace (`synchroniserSimulationsSite` : décision du
+  plan, la lecture qui écrit reste mais émet l'événement ; lectures avant la transaction, créations et point d'entrée
+  dedans).
+- `docs/SYNCHRO.md` : lignes PROJET_VALIDE, CHOIX_VALIDE, CHOIX_DEVALIDE, SIMULATION_PUBLIEE mises à jour, ligne
+  SIMULATION_DU_CLIENT ajoutée, B9 retiré du tableau 4, paragraphe « Publier depuis le bloc Espace (B9) ».
+  `docs/MCP-COUVERTURE.md` : DP44, DP45.
+
+Décisions prises seul (solution la plus simple) :
+- Republier une simulation masquée refait tout ce que fait une publication (événement, « Attendre le retour du client
+  sur la simulation », main au client) ; seul le mail ne repart pas (même clé).
+- Masquer la dernière simulation publiée ne fait PAS revenir le dossier en Qualification (rien ne le demande ; le
+  retour du projet dévalidé garde sa règle).
+- Un mélange dont une zone disparaît est dévalidé en entier (pas de choix partiel).
+- Le passage en Simulation est AUTOMATIQUE avec raison, plus le changement « avancé » de `changerEtape` qu'utilisait
+  `publierSimulations` : texte « Qualification → Simulation : simulation publiée dans son espace ».
+
+Tests : 1 406 → 1 413. Nouveau `src/lib/dossiers/publier-espace.test.ts` (7 essais, état des deux côtés, réseau coupé :
+bloc Espace contre bouton, même état ; masquée puis republiée, un seul mail et un seul passage ; action posée à la main
+gardée sans tâche ; choix UNE masqué ; mélange dont une zone est retirée par l'ancien retrait ; `simulationDansLeChoix` ;
+simulation du site rangée à la lecture → Simulation, lead CONTACTE, rejouée sans effet ; choix validé sur un dossier
+revenu en Qualification). `mission-15-partie-5` complété (simulation du client publiée → Simulation, main au client ;
+gardée en brouillon → Qualification ; publiée par Lucas → Simulation). Aucun essai existant cassé
+(`espace.test`, `mcp-gestes` verts sans changement). Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune
+description d'outil changée : rien à reconnecter.
+
+Reste : B7, B8 (agents morts), B10-B13 ; rien pour Lucas.

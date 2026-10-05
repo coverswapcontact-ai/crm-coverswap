@@ -10,7 +10,8 @@ import { objetDepuisFamilles, objetDepuisProjet } from "@/lib/dossiers/objet";
 import { famillesDe } from "@/lib/prestations/prestations";
 import { lireProjet, projetComplet, resumerProjet, type ProjetClient } from "./projet";
 import { lireSelection } from "@/lib/prestations/prestations";
-import { appliquerEvenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
+import type { Transaction } from "@/lib/prisma";
+import { appliquerEvenementDossier, RAISON_PROJET_VALIDE, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
 
 /**
  * Valider, dévalider, revalider — et tout ce qui se défait dans l'espace client.
@@ -62,8 +63,11 @@ async function deplacerDossier(dossierId: string, de: EtapeDossier, vers: EtapeD
   }
 }
 
-/** Raison écrite dans le changement d'étape : c'est elle qui permet de défaire exactement ce mouvement-là. */
-export const RAISON_PROJET_VALIDE = "projet validé dans l'espace client";
+/**
+ * Raison écrite dans le changement d'étape : c'est elle qui permet de défaire exactement ce mouvement-là. Mission 18
+ * (B9) : le passage en Simulation du projet validé est écrit par le point d'entrée (synchro.ts), dans la transaction.
+ */
+export { RAISON_PROJET_VALIDE };
 export const RAISON_PROJET_DEVALIDE = "projet dévalidé dans l'espace client";
 export const RAISON_ACCORD_RETIRE = "bon pour accord retiré";
 
@@ -97,8 +101,8 @@ export async function validerProjet(espace: EspaceClient, auteur: Auteur): Promi
       return appliquerEvenementDossier(tx, espace.dossierId, { type: "PROJET_VALIDE" }, maintenant);
     })
   );
+  // Mission 18 (B9) : Qualification → Simulation est écrit dans la transaction, par le point d'entrée (PROJET_VALIDE).
   await suitesEvenementDossier(suites);
-  if (dossier.etape === "QUALIFICATION") await ecrire(auteur, () => deplacerDossier(espace.dossierId, "QUALIFICATION", "SIMULATION", "AUTOMATIQUE", RAISON_PROJET_VALIDE));
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Projet validé — ${dossier.clientNom}`, resumerProjet(projet), 3, dossier.clientTelephone);
 }
 
@@ -153,16 +157,38 @@ export async function devaliderChoix(espace: EspaceClient, auteur: Auteur): Prom
     throw new ErreurMetier("Votre devis est déjà établi sur la simulation validée. Pour en changer, appelez CoverSwap : nous l'ajustons avec vous.", 409, { raison: "devis-emis" });
   }
   const dossier = await dossierDe(espace.dossierId);
-  const suites = await ecrire(auteur, () =>
-    prisma.$transaction(async (tx) => {
-      await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } });
-      await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } });
-      await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null }) } });
-      return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_DEVALIDE" });
-    })
-  );
+  const suites = await ecrire(auteur, () => prisma.$transaction((tx) => devaliderChoixDansTransaction(tx, espace, auteur)));
   await suitesEvenementDossier(suites);
   if (auteur === "CLIENT") await prevenir(espace.dossierId, `Simulation dévalidée — ${dossier.clientNom}`, "Le client est revenu sur la simulation qu'il avait validée. Le devis n'est plus attendu pour l'instant.", 3, dossier.clientTelephone);
+}
+
+/**
+ * La dévalidation elle-même, dans la transaction de l'appelant : plus aucune simulation validée, l'événement, puis le
+ * point d'entrée (CHOIX_DEVALIDE). Mission 18 (B9) : aussi quand Lucas masque, repasse en brouillon ou retire une
+ * simulation qui fait partie du choix (simulations/dossier.ts › changerStatutSimulation), d'un bloc avec ce geste ;
+ * `raison` le dit dans l'historique. Les suites sont à lancer après la transaction.
+ */
+export async function devaliderChoixDansTransaction(tx: Transaction, espace: Pick<EspaceClient, "id" | "dossierId" | "choix">, auteur: Auteur, raison?: string): Promise<Suites> {
+  await tx.simulationEspace.updateMany({ where: { espaceId: espace.id, choisieLe: { not: null } }, data: { choisieLe: null } });
+  await tx.espaceClient.update({ where: { id: espace.id }, data: { choix: null, choixLe: null } });
+  await tx.dossierEvenement.create({ data: { dossierId: espace.dossierId, type: "ESPACE_SIMULATION_DEVALIDEE", direction: direction(auteur), contenu: `Simulation dévalidée ${par(auteur)}${raison ? ` (${raison})` : ""} : plus aucune simulation n'est validée`, metadata: JSON.stringify({ auteur, choixPrecedent: espace.choix ? (JSON.parse(espace.choix) as unknown) : null, ...(raison ? { raison } : {}) }) } });
+  return appliquerEvenementDossier(tx, espace.dossierId, { type: "CHOIX_DEVALIDE" });
+}
+
+/**
+ * Mission 18 (B9) : la simulation fait-elle partie du choix du client ? La simulation validée (mode UNE), ou celle d'une
+ * des zones d'un mélange (mode COMPOSITE). Pure : lit `EspaceClient.choix` (JSON) ; illisible = non.
+ */
+export function simulationDansLeChoix(choix: string | null, simulationId: string): boolean {
+  if (!choix) return false;
+  try {
+    const lu = JSON.parse(choix) as { mode?: unknown; simulationId?: unknown; zones?: unknown };
+    if (lu?.mode === "UNE") return lu.simulationId === simulationId;
+    if (lu?.mode === "COMPOSITE" && Array.isArray(lu.zones)) return lu.zones.some((z: { simulationId?: unknown } | null) => z?.simulationId === simulationId);
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /* ── La demande d'autre proposition ───────────────────────────────── */

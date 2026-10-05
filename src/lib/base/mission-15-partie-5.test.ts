@@ -220,6 +220,7 @@ describe("contrôle automatique avant publication", () => {
       assert.match(simulation.defautsControle ?? "", /tile joints/);
       assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_SIMULATION_RELECTURE" } }), 1);
       assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_SIMULATION_CLIENT" } }), 0);
+      assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } })).etape, "QUALIFICATION", "gardée en brouillon : l'étape suivra sa publication");
       assert.equal(await prisma.alerteEnvoi.count({ where: { origine: "espace-client" } }), alertesAvant + 1, "Lucas est prévenu (aucun canal configuré : rien ne part)");
       // Le client : « relecture », avec l'étape et l'attente ; sa galerie ne la montre pas encore ; le quota ne l'a comptée qu'une fois.
       const suivi = await service.suivreCreation(espace, preparationId);
@@ -235,6 +236,7 @@ describe("contrôle automatique avant publication", () => {
       // Lucas la publie : le client la retrouve, le quota ne bouge pas.
       const { publierSimulations } = await import("@/lib/simulations/dossier");
       await publierSimulations(dossierId, [simulationId!], { prevenir: false });
+      assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } })).etape, "SIMULATION", "publiée : le dossier passe en Simulation (mission 18, B9)");
       assert.equal((await service.suivreCreation(espace, preparationId)).statut, "PRETE");
       const apres = await service.etatEspace(espace);
       assert.deepEqual([apres.creation.enRelecture, apres.simulations.map((s) => s.id), apres.creation.faites], [[], [simulationId], 1]);
@@ -258,6 +260,10 @@ describe("contrôle automatique avant publication", () => {
       const simulation = await prisma.simulationEspace.findUniqueOrThrow({ where: { id: simulationId! } });
       assert.deepEqual([simulation.source, simulation.statut, simulation.scoreControle, simulation.tentatives, Boolean(simulation.publieeLe)], ["CLIENT", "PUBLIEE", 8, 1, true]);
       assert.equal(await prisma.dossierEvenement.count({ where: { dossierId, type: "ESPACE_SIMULATION_CLIENT" } }), 1);
+      // Mission 18 (B9) : sa propre simulation, visible, fait passer le dossier en Simulation d'un bloc (main au client).
+      const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId } });
+      assert.deepEqual([dossier.etape, dossier.main, dossier.mainMotif], ["SIMULATION", "CLIENT", "Il a créé une simulation : à lui d'en valider une"]);
+      assert.equal((await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId, type: "CHANGEMENT_ETAPE" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })).contenu, "Qualification → Simulation : simulation créée par le client dans son espace");
       const etat = await service.etatEspace(espace);
       assert.deepEqual([(await service.suivreCreation(espace, preparationId)).statut, etat.creation.enRelecture], ["PRETE", []]);
       assert.equal(etat.simulations[0].nouvelle, false, "faite par lui, vue à la création : jamais « Nouveau »");

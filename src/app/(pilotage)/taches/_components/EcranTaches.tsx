@@ -371,6 +371,8 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       case "DOSSIER":
         return dossier(estRubriqueDossier(r.rubrique) ? { rubrique: r.rubrique } : null);
       case "DEVIS":
+        // Mission 18 (B3) : « gmail » — la modale de dépôt préremplie avec le PDF parti de Gmail.
+        if (r.devis === "gmail" && r.pieceId) return dossier({ rubrique: "devis", devis: "gmail", piece: r.pieceId });
         return dossier({ rubrique: "devis", devis: r.devis === "pdf" ? "pdf" : "nouveau" });
       case "ENCAISSER":
         return dossier({ rubrique: "encaisser" });

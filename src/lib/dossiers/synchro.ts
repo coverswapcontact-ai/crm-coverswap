@@ -52,8 +52,11 @@ export type EvenementDossier =
   | { type: "DEVIS_GENERE"; documentId: string; envoye: boolean }
   /** Devis émis ailleurs, déposé (documents-existants.ts › rattacherDocumentExistant). */
   | { type: "DEVIS_DEPOSE"; documentId: string }
-  /** Devis envoyé après sa génération : par le mail du CRM (mail/propositions.ts, mission 18, B2). */
-  | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" }
+  /**
+   * Devis envoyé après sa génération : par le mail du CRM (mail/propositions.ts, mission 18, B2) ; ou depuis Gmail, hors
+   * du CRM, enregistré après coup (devis-gmail.ts › enregistrerDevisGmail, mission 18, B3).
+   */
+  | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" | "GMAIL" }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
   | { type: "ACOMPTE_REJETE"; encaissementId: string };
 
@@ -132,7 +135,7 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
         ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 }
         : { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     case "DEVIS_DEPOSE":
-    // Mission 18 (B2) : envoyé par mail, il est envoyé comme un devis annoncé (« Envoyer le devis au client » est fait).
+    // Mission 18 (B2, B3) : envoyé par mail (CRM ou Gmail), il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
     case "DEVIS_ENVOYE":
       return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
     case "ACOMPTE_REJETE":

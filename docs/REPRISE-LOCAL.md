@@ -875,3 +875,60 @@ Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description de `envoyer_d
 connecteur.
 
 Reste : B3-B13 ; B5 n'a plus que la notification à la mise en ligne ; rien pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B3 — devis envoyé depuis Gmail (écart 3)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Les PDF sortants sont gardés** (`mail/rattachement.ts › suitesDuTri`) : un mail SORTANT parti de la boîte (pas par
+  le CRM), non automatique, rangé dans le dossier d'un client, met ses PDF en file (`MAIL_PDF_SORTANTS` →
+  `conserverPdfSortants` → `messages/stockage.ts › conserverPieces(…, { seulementPdf: true })`, puis signal des tâches).
+  Les photos de ce mail ne sont ni téléchargées ni rangées.
+- **La tâche** `ENREGISTRER_DEVIS` « Enregistrer comme devis envoyé · X » (niveau 2, 2 min, une par PDF, clé
+  `ENREGISTRER_DEVIS:dossier:<id>:<pièce>`, jamais écartée par une action posée à la main) : lecture du détecteur des
+  dossiers, `dossiers/devis-gmail.ts › devisGmailNonEnregistres` — PDF conservé d'un tel mail, de moins de 30 jours,
+  dossier vivant, nom qui évoque un devis (« devis », ou un numéro « 2026-012 » ; jamais une facture « F2026-… » ni une
+  date), ni envoi du CRM (identifiant « crm: », `EnvoiMail` programmé ou `MAIL_ENVOYE` de proposition de même objet et
+  même destinataire), ni déjà dans le CRM (devis de ce numéro déjà envoyé ou ailleurs, devis déposé depuis cette pièce,
+  ou — sans numéro lisible — devis entré dans le dossier après le mail). Coche : « devis N enregistré comme envoyé depuis
+  Gmail à hh:mm » (ou « déposé » / « envoyé » s'il est entré autrement).
+- **Le geste en une fois** : raccourci `&devis=gmail&piece=<id>` (écran Tâches : la demande d'ouverture du panneau
+  porte `devis: "gmail"`, `piece`) → la modale de dépôt (`ModaleDocumentExistant`, prop `pieceGmail`) préremplie par
+  `GET /api/dossiers/[id]/devis-gmail` : numéro lu dans le nom du fichier (ou celui du registre), date du mail, montant
+  du registre s'il y est, PDF du mail ; un clic si tout est connu. `POST` → `depot-document.ts › deposerDocument` avec
+  la pièce du mail — la même fonction que l'outil `ajouter_fichier` (source `piece_mail`, désormais passée telle quelle
+  par `enregistrerFichierRecu`, option `pieceMail`) — qui délègue à `devis-gmail.ts › enregistrerDevisGmail` :
+  PDF vérifié (vide, 9 Mo, `%PDF-`) AVANT toute écriture, puis UNE transaction : devis repris « Envoyé », visible, PDF
+  du mail écrit et rattaché (`enregistrerPdf` dans la transaction, fichier seul), événement `DEVIS_ENVOYE`
+  (`canal: "GMAIL"`, `messageId`, `pieceId`, `envoyeLe` = date du mail), Q, S, Relance → Devis envoyé, point d'entrée
+  (`DEVIS_ENVOYE` canal GMAIL : « Attendre l'accord », main). Effets externes après (lead, Meta, agenda, tâches).
+  Rejoué pour la même pièce : `deja`, rien n'est écrit.
+- **Devis du CRM envoyé depuis Gmail** : si un devis du CRM porte ce numéro et attend d'être envoyé (B1), le geste le
+  passe « Envoyé » et visible (son PDF reste le sien), sans second dépôt ni montant à saisir ; ENVOYER_DEVIS se coche.
+- **Relances depuis le mail** (`relances/service.ts › envoiDuDevis`, `referenceDuDevis`) : un envoi Gmail prend
+  l'heure du mail, pas celle de l'enregistrement ; une émission datée au jour (midi) le même jour ne la repousse pas.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE` canal GMAIL, paragraphe B3, B3 retiré du tableau 4),
+  `docs/TACHES.md` (type, coche, exception à la vigueur), `docs/MCP-COUVERTURE.md` (entrée B3, ligne DP98).
+
+Décisions prises seul (solution la plus simple) :
+- Pas de lecture du texte du PDF (aucune bibliothèque) : montant saisi, ou repris du registre.
+- Seuls les PDF du mail sortant sont conservés (pas les photos) ; seuls les PDF CONSERVÉS font une tâche (le geste a
+  besoin du fichier) ; les mails relevés avant ce lot ne sont pas rattrapés (B13 / mise en route s'il le faut).
+- Une tâche par PDF (et non par dossier) : chaque pièce a son geste et sa coche.
+- L'événement `DEVIS_ENVOYE` est écrit maintenant (main au client « Devis envoyé : en attente de sa réponse ») et porte
+  la date du mail dans `envoyeLe` (lue par les relances), plutôt qu'antidaté.
+- Aucun mail ne part (le client a déjà le devis) ; le devis déposé est toujours visible et « Envoyé ».
+- Constante de file dans `mail/rattachement.ts` (à côté de `MAIL_PIECES_DOSSIER`).
+
+Tests : 1 371 → 1 376 (`npm test` : 1 374 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/devis-gmail.test.ts` (5 essais, état des deux côtés, rien ne sort du
+poste) : noms de fichiers ; mail parti → file des PDF (pas pour un mail reçu), tâche une fois conservé, modale
+préremplie, dépôt → Devis envoyé, main au client, « Attendre l'accord », lead DEVIS_ENVOYE, espace DEVIS, relance n°1
+datée du mail (pas du dépôt), tâche cochée, aucun mail, rejoué sans effet ; devis du CRM masqué envoyé par Gmail →
+« Envoyé » sans second dépôt, ENVOYER_DEVIS et ENREGISTRER_DEVIS cochées, action posée à la main gardée ; exclusions
+(envoi « crm: », `EnvoiMail` et `MAIL_ENVOYE` de même objet et destinataire, plus de 30 jours, facture, devis déposé
+après le mail, pièce d'un mail reçu = dépôt ordinaire) et faux PDF refusé avant toute écriture (aucun numéro inscrit,
+étape inchangée) ; outil `ajouter_fichier` avec `pieceMail` → même enregistrement. Aucun test existant à adapter.
+`tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53
+outils) ; description de `ajouter_fichier` changée : reconnecter le connecteur.
+
+Reste : B4-B13 (B13 : règle de cohérence `DEVIS_GMAIL_NON_ENREGISTRE` s'appuiera sur `devisGmailNonEnregistres`) ;
+pour Lucas : l'agent mail doit être actif pour que les PDF sortants soient gardés ; reconnecter le connecteur.

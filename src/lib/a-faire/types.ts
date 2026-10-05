@@ -19,6 +19,7 @@ export const TYPES_TACHE = [
   "PUBLIER",
   "DEVIS",
   "ENVOYER_DEVIS",
+  "ENREGISTRER_DEVIS",
   "ENVOYER_LIEN",
   "RELANCER_PHOTOS",
   "RELANCER_AVIS",
@@ -67,6 +68,7 @@ export const DUREES_DEPART: Record<TypeTache, number> = {
   PUBLIER: 1,
   DEVIS: 10,
   ENVOYER_DEVIS: 2,
+  ENREGISTRER_DEVIS: 2,
   ENVOYER_LIEN: 1,
   RELANCER_PHOTOS: 1,
   RELANCER_AVIS: 1,
@@ -96,6 +98,7 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
   PUBLIER: ["publication", "publications"],
   DEVIS: ["devis", "devis"],
   ENVOYER_DEVIS: ["devis à envoyer", "devis à envoyer"],
+  ENREGISTRER_DEVIS: ["devis Gmail à enregistrer", "devis Gmail à enregistrer"],
   ENVOYER_LIEN: ["SMS", "SMS"],
   RELANCER_PHOTOS: ["SMS", "SMS"],
   RELANCER_AVIS: ["SMS", "SMS"],
@@ -143,8 +146,10 @@ export type Raccourci = {
   rubrique?: string | null;
   /** Écran SMS : la demande (action + cible + relance), jamais la proposition calculée d'avance. */
   sms?: { action: string; leadId?: string | null; dossierId?: string | null; relance?: unknown } | null;
-  /** Devis : « nouveau » (prérempli) ou « pdf » (dépôt). */
-  devis?: "nouveau" | "pdf" | null;
+  /** Devis : « nouveau » (prérempli), « pdf » (dépôt), « gmail » (mission 18, B3 : PDF parti de Gmail à enregistrer). */
+  devis?: "nouveau" | "pdf" | "gmail" | null;
+  /** Devis « gmail » : la pièce du mail (PieceMessage.id) à enregistrer comme devis envoyé. */
+  pieceId?: string | null;
   /** Contrôle de cohérence : la clé à corriger. */
   cleCoherence?: string | null;
   /** Système : la marche à suivre en une ligne. */
@@ -228,6 +233,7 @@ function raisonsDuType(type: TypeTache): RaisonPasAFaire[] {
     case "RELANCER_PHOTOS":
     case "ENVOYER_LIEN":
     case "ENVOYER_DEVIS":
+    case "ENREGISTRER_DEVIS":
       return ["DEJA_FAIT", "CLIENT_PERDU", "PAS_PERTINENT", "AUTRE"];
     // Mission 18 (A4) : un chantier fini, un contact déjà perdu — « client perdu » n'a pas de sens ici.
     case "RELANCER_AVIS":

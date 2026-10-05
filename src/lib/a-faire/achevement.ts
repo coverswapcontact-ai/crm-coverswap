@@ -250,6 +250,25 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       const caduc = devis.find((d) => d.statut === "ANNULEE" || d.statut === "REMPLACE");
       return caduc ? `devis ${caduc.numero} ${caduc.statut === "ANNULEE" ? "annulé" : "remplacé"}` : null;
     }
+    case "ENREGISTRER_DEVIS": {
+      // Mission 18 (B3) : le PDF parti de Gmail enregistré (« Devis envoyé » qui porte sa pièce), ou le devis de ce
+      // numéro entré dans le dossier autrement (dépôt, mail du CRM, mise en ligne).
+      if (!tache.dossierId) return null;
+      const pieceId = texteOuNull(donnees.pieceId);
+      const enregistre = pieceId
+        ? await prisma.dossierEvenement.findFirst({ where: { dossierId: tache.dossierId, type: "DEVIS_ENVOYE", metadata: { contains: `"pieceId":"${pieceId}"` } }, orderBy: { createdAt: "desc" }, select: { createdAt: true, metadata: true } })
+        : null;
+      if (enregistre) {
+        const documentId = texteOuNull(lireObjet(enregistre.metadata).documentId);
+        const devis = documentId ? await prisma.document.findUnique({ where: { id: documentId }, select: { numero: true } }) : null;
+        return `devis${devis?.numero ? ` ${devis.numero}` : ""} enregistré comme envoyé depuis Gmail ${leOuA(enregistre.createdAt, maintenant)}`;
+      }
+      const numero = texteOuNull(donnees.numero);
+      if (!numero) return null;
+      const devis = await prisma.document.findFirst({ where: { dossierId: tache.dossierId, type: "DEVIS", numero, archiveLe: null }, select: { numero: true, statut: true, origine: true } });
+      if (!devis || devis.statut === "GENERE") return null;
+      return `devis ${devis.numero} ${devis.origine === "REPRISE" ? "déposé" : devis.statut === "ACCEPTE" ? "accepté" : "envoyé"}`;
+    }
     case "SIMULATION":
     case "PUBLIER": {
       if (!tache.dossierId) return null;

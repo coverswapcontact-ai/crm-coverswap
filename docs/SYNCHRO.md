@@ -76,6 +76,7 @@ rangée si une action manuelle est en place), **Espace** (étape de l'espace du 
 | `DEVIS_GENERE` (`envoye: false`) | `documents.ts › emettre` (B1 : `notifier: false`, ou ni adresse ni espace ouvert pour l'annoncer) | inchangée ; devis MASQUÉ en Q et S (visible ensuite, sans annonce) | MOI « Devis prêt, pas encore envoyé (n°) : à lui envoyer », tant qu'il est « Généré » et pas mis en ligne | « Envoyer le devis au client », si « Préparer le devis… » ; action posée à la main gardée SANS tâche à la place (ENVOYER_DEVIS la remplace) | inchangée (le devis masqué n'y est pas) | aucune (étape inchangée, devis masqué) | ENVOYER_DEVIS « Envoyer le devis · X » (niveau 2, jamais écartée par une action manuelle ; cochée quand le devis est mis en ligne, envoyé par mail, accepté, annulé ou remplacé) | `DEVIS_GENERE` (`envoye: false`) | inchangé | aucun envoi ; /commercial : groupe DEVIS « Devis prêt, pas encore envoyé » |
 | `DEVIS_DEPOSE` | `documents-existants.ts › rattacherDocumentExistant` | Q, S, RELANCE → DEVIS_ENVOYE si visible, émis ou envoyé ; un dépôt « accepté » ne signe pas (B4) | CLIENT (dépôt avant signature) | comme `DEVIS_GENERE` envoyé (« Attendre l'accord… ») ; tâche `devis` | → DEVIS | depuis le dépôt | `devis` si gardée | `DOCUMENT_REPRIS` | DEVIS_ENVOYE (effets du changement) | Meta DEVIS_ENVOYE ; aucune notification au client |
 | `DEVIS_ENVOYE` (`canal: "MAIL"`) | `mail/propositions.ts` (exécution de la proposition ENVOI_MAIL, motif ENVOI_DEVIS : bouton « Envoyer par mail » du dossier, `mail/service.ts › envoyerDocumentParMail`, outil `envoyer_document`) — B2 | Q, S, RELANCE → DEVIS_ENVOYE dans la transaction de l'envoi (`passerEnDevisEnvoye`) | CLIENT « Devis envoyé : en attente de sa réponse » (l'événement `DEVIS_ENVOYE`, écrit après `MAIL_ENVOYE`) | « Attendre l'accord du client sur le devis », si « Préparer le devis… » ou « Envoyer le devis au client » ; tâche `devis` (niveau 3) | → DEVIS (le devis devient visible) | depuis l'envoi : la référence est la plus tardive de l'émission, du dépôt et du dernier `DEVIS_ENVOYE` du devis | ENVOYER_DEVIS cochée (« envoyé par mail ») ; RELANCER_DEVIS ensuite | `MAIL_ENVOYE` (trace de l'envoi, avant tout), `DEVIS_ENVOYE` (`documentId`, `canal`, `propositionId`), `CHANGEMENT_ETAPE` ; devis « Envoyé », `visibleEspace` | DEVIS_ENVOYE (effets du changement) | le mail lui-même (proposition validée par Lucas, file d'envoi) : il vaut l'annonce, pas de « Devis disponible » en plus ; Meta DEVIS_ENVOYE ; agenda |
+| `DEVIS_ENVOYE` (`canal: "GMAIL"`) | `devis-gmail.ts › enregistrerDevisGmail`, appelé par `depot-document.ts › deposerDocument` quand la source est la pièce d'un mail SORTANT parti de Gmail (modale « Enregistrer comme devis envoyé » : `/api/dossiers/[id]/devis-gmail` ; outil `ajouter_fichier` piece_mail) — B3 | Q, S, RELANCE → DEVIS_ENVOYE dans la même transaction que le dépôt (`passerEnDevisEnvoye`) | CLIENT « Devis envoyé : en attente de sa réponse » | « Attendre l'accord du client sur le devis », si « Préparer le devis… » ou « Envoyer le devis au client » ; tâche `devis` (niveau 3) | → DEVIS (devis déposé visible, ou devis du CRM rendu visible) | depuis le MAIL (`envoyeLe` de l'événement), pas depuis le dépôt (`relances/service.ts › envoiDuDevis`) | ENREGISTRER_DEVIS cochée (« enregistré comme envoyé depuis Gmail ») ; ENVOYER_DEVIS cochée (devis du CRM) ; RELANCER_DEVIS ensuite | `DOCUMENT_REPRIS` (dépôt, PDF du mail) ou devis du CRM « Envoyé » ; `DEVIS_ENVOYE` (`documentId`, `canal`, `messageId`, `pieceId`, `envoyeLe`), `CHANGEMENT_ETAPE` | DEVIS_ENVOYE (effets du changement) | aucun mail (le client a déjà le devis) ; Meta DEVIS_ENVOYE ; agenda |
 | `ACOMPTE_REJETE` | `encaissements/service.ts › rejeterEncaissement` (`terminerEncaissement`) | SIGNE → DEVIS_ENVOYE s'il ne reste aucun paiement ; ENCAISSE → FACTURE | selon l'étape | « Chèque d'acompte rejeté : réclamer un nouveau paiement » (aujourd'hui), si l'acompte d'un devis est rejeté ; tâche `acompte-rejete` (niveau 1) | ACOMPTE si signé | — | `acompte-rejete` si gardée ; ENCAISSER | `ENCAISSEMENT_REJETE` | suit l'étape | agenda |
 
 Les changements d'étape demandés (écran, assistant `changer_etape`, propositions, paiement à la signature :
@@ -97,7 +98,6 @@ relance, réponse) recalculent la main après l'envoi.
 
 | Geste | Fonction d'origine | Aujourd'hui | Lot |
 |---|---|---|---|
-| Devis envoyé depuis Gmail | `mail/rattachement.ts › suitesDuTri` | rien | B3 |
 | Dépôt d'un devis avec son PDF | `depot-document.ts › deposerDocument` | étape changée avant la vérification du PDF ; « accepté » ne signe pas | B4 |
 | Devis rendu visible | `presentation-devis.ts › modifierPresentationDevis`, `devis-envoye.ts › devisRenduVisible` | étape et main, sans notification ni date de mise en ligne | B5 |
 | Devis annulé ou masqué | `documents.ts › annulerDevis`, `presentation-devis.ts` | la main seule ; ni retour d'étape ni « Refaire le devis » | B6 |
@@ -108,6 +108,16 @@ relance, réponse) recalculent la main après l'envoi.
 | Consultations de devis, teintes | `service.ts › noterConsultationDevis`, `choisir` | deux sources | B11 |
 | Statut du lead | `statut-lead.ts`, `coherence/controle.ts` | deux tables divergentes, le dernier dossier changé décide | B12 |
 | Cohérence | `coherence/controle.ts` | pas de règle pour les écarts 1, 3, 5, 6, 7 | B13 |
+
+**Devis envoyé depuis Gmail (B3).** Un mail SORTANT parti de la boîte (pas par le CRM), non automatique, rangé dans le
+dossier d'un client (`mail/rattachement.ts › suitesDuTri`) met ses PDF en file (`MAIL_PDF_SORTANTS` :
+`conserverPieces(…, { seulementPdf: true })`, l'agent mail doit être actif). Le détecteur des dossiers
+(`devis-gmail.ts › devisGmailNonEnregistres`) propose « Enregistrer comme devis envoyé · X » pour chaque PDF conservé
+de moins de 30 jours dont le nom évoque un devis, sur un dossier vivant, qui n'est ni un envoi du CRM (identifiant
+« crm: », `EnvoiMail` ou `MAIL_ENVOYE` de proposition de même objet et même destinataire), ni déjà dans le CRM (devis de
+ce numéro déjà envoyé, devis déposé depuis cette pièce, ou — sans numéro lisible — devis entré après le mail). Le
+geste : la modale de dépôt préremplie (numéro lu dans le nom, date du mail, montant du registre s'il y est). Un devis
+du CRM de ce numéro, généré mais pas encore envoyé, passe « Envoyé » au lieu d'être déposé une seconde fois.
 
 ## 5. Ce qui ne passe pas par le point d'entrée
 

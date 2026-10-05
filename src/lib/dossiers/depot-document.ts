@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { enregistrerDevisGmail, pieceEnvoyeeDepuisGmail } from "@/lib/dossiers/devis-gmail";
 import { enregistrerDocumentExistant, importerPdfDocument, schemaDocumentExistant } from "@/lib/dossiers/documents-existants";
 import type { ChangementEtape } from "@/lib/dossiers/transitions";
 import { enregistrerFichier, lireFichierConserve } from "@/lib/fichiers/stockage";
@@ -14,6 +15,10 @@ import { lirePieceMessage } from "@/lib/messages/consultation";
  * l'historique du dossier et servi par /api/fichiers/[id]. Le fichier vient
  * d'une pièce de mail conservée, d'un fichier déjà conservé, ou du contenu
  * lui-même (base64). Rien n'est envoyé au client.
+ *
+ * Mission 18 (B3) : un devis dont le PDF est la pièce d'un mail parti de Gmail (pas par le CRM) est un devis ENVOYÉ
+ * depuis Gmail : `devis-gmail.ts › enregistrerDevisGmail` (daté du mail, relances depuis le mail ; un devis du CRM de
+ * ce numéro, pas encore envoyé, passe « Envoyé » au lieu d'être déposé une seconde fois).
  */
 
 export const OCTETS_MAX_DEPOT = 9 * 1024 * 1024;
@@ -74,12 +79,28 @@ export type ResultatDepot =
       octets: number;
       /** Mission 14 (R1) : un devis visible, émis ou envoyé, a fait passer le dossier en « Devis envoyé ». */
       changements: ChangementEtape[];
+      /** Mission 18 (B3) : devis envoyé depuis Gmail, déposé ou (devis du CRM) passé « Envoyé » ; `deja` : rien n'a changé. */
+      gmail?: { nature: "DEPOSE" | "ENVOYE"; deja: boolean };
     }
   | { nature: "FICHIER"; fichierId: string; nom: string; typeMime: string; octets: number; libelle: string };
 
 export async function deposerDocument(dossierId: string, entree: EntreeDepotDocument): Promise<ResultatDepot> {
   const dossier = await prisma.dossier.findUnique({ where: { id: dossierId }, select: { id: true, archiveLe: true, objet: true } });
   if (!dossier || dossier.archiveLe) throw new ErreurMetier("Dossier introuvable ou archivé.", 404);
+  if (entree.type === "DEVIS" && (entree.statut ?? "ENVOYE") === "ENVOYE" && entree.source.message_id && entree.source.piece_id && (await pieceEnvoyeeDepuisGmail(entree.source.message_id, entree.source.piece_id))) {
+    const envoye = await enregistrerDevisGmail(dossierId, {
+      messageId: entree.source.message_id,
+      pieceId: entree.source.piece_id,
+      numero: entree.numero ?? null,
+      montant: entree.montant ?? null,
+      dateEmission: entree.date_emission ?? null,
+      acomptePct: entree.acompte_pct ?? null,
+      libelleVariante: entree.libelle ?? null,
+      objet: entree.objet ?? null,
+      inscrireAuRegistre: entree.inscrire_au_registre ?? false,
+    });
+    return { nature: "DOCUMENT", documentId: envoye.documentId, numero: envoye.numero, type: "DEVIS", avertissements: envoye.avertissements, nom: envoye.nom, octets: envoye.octets, changements: envoye.changements, gmail: { nature: envoye.nature, deja: envoye.deja } };
+  }
   const fichier = await lireSource(entree.source);
 
   if (entree.type === "AUTRE") {

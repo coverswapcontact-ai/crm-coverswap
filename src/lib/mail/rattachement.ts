@@ -5,6 +5,7 @@ import { normaliserEmail } from "@/lib/clients/normalisation";
 import { ajouterPhoto } from "@/lib/dossiers/dossiers";
 import { recalculerMain, recalculerMainDesMessages } from "@/lib/dossiers/main";
 import { lireFichierConserve } from "@/lib/fichiers/stockage";
+import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { conserverPieces, lireListe } from "@/lib/messages/stockage";
 import { decouperNom, retirerCitations, trouverCodePostalVille, trouverTelephone } from "@/lib/messages/texte";
 import { retenirContactEcrit } from "@/lib/prospects/contact-ecrit";
@@ -22,6 +23,8 @@ import { pluriel } from "@/lib/commun/format";
  */
 
 export const TYPE_TACHE_PIECES_DOSSIER = "MAIL_PIECES_DOSSIER";
+/** Mission 18 (B3) : les PDF d'un mail parti de Gmail chez un client, gardés dans le CRM (dossiers/devis-gmail.ts). */
+export const TYPE_TACHE_PDF_SORTANTS = "MAIL_PDF_SORTANTS";
 const ETAPES_CLOSES = ["ENCAISSE", "PERDU"];
 
 /** Le dossier d'un mail : celui où la conversation est déjà rangée, sinon le seul dossier en cours du client. */
@@ -171,16 +174,32 @@ export async function rangerPiecesDansDossier(messageId: string): Promise<{ phot
   return { photos, documents };
 }
 
+/**
+ * Mission 18 (B3) : les PDF d'un mail parti de Gmail chez un client (un devis envoyé hors du CRM, peut-être) sont
+ * conservés dans le CRM ; le détecteur des dossiers propose ensuite « Enregistrer comme devis envoyé » (devis-gmail.ts).
+ */
+export async function conserverPdfSortants(messageId: string): Promise<{ conservees: number }> {
+  const bilan = await conserverPieces(messageId, { seulementPdf: true });
+  if (bilan.erreurs > 0) throw new Error(`${pluriel(bilan.erreurs, "PDF", "PDF")} en échec : nouvel essai plus tard`);
+  if (bilan.conservees > 0) await signalerChangementTaches();
+  return { conservees: bilan.conservees };
+}
+
 /** Les suites d'un mail trié : dossier, lead, pièces (branchées sur la synchro ; exportées pour les essais sur copie). */
 export async function suitesDuTri(messageId: string, resultat: Awaited<ReturnType<typeof classerMessage>>): Promise<void> {
   if (!resultat) return;
-  const message = await prisma.message.findUnique({ where: { id: messageId }, select: { clientId: true, leadId: true, sens: true, automatique: true, _count: { select: { pieces: true } } } });
+  const message = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { clientId: true, leadId: true, sens: true, automatique: true, _count: { select: { pieces: true } }, pieces: { where: { statut: "A_CONSERVER", typeMime: "application/pdf", partie: { not: "" } }, select: { id: true } } },
+  });
   if (!message || message.automatique) return;
   if (resultat.decision.classe === "CLIENT" && message.clientId) {
     const dossierId = await dossierDuMail(messageId);
     if (dossierId) {
       await tracerMailDansDossier(messageId, dossierId);
       if (message.sens === "ENTRANT" && message._count.pieces > 0) await mettreEnFile({ type: TYPE_TACHE_PIECES_DOSSIER, cle: `mail-pieces:${messageId}`, charge: { messageId } });
+      // Mission 18 (B3) : un PDF parti de Gmail chez ce client — gardé dans le CRM (devis envoyé hors du CRM ?).
+      if (message.sens === "SORTANT" && message.pieces.length > 0) await mettreEnFile({ type: TYPE_TACHE_PDF_SORTANTS, cle: `mail-pdf-sortants:${messageId}`, charge: { messageId } });
     } else if (message.leadId) {
       await tracerMailSurLeLead(messageId, message.leadId);
     }
@@ -255,6 +274,16 @@ export function enregistrerTachesRattachement(enregistrer: (type: string, traite
       const messageId = (charge as { messageId?: unknown } | null)?.messageId;
       if (typeof messageId !== "string") throw new Error("Charge invalide : messageId manquant");
       return rangerPiecesDansDossier(messageId);
+    },
+  });
+  enregistrer(TYPE_TACHE_PDF_SORTANTS, {
+    libelle: "PDF d'un mail envoyé depuis Gmail à un client, gardés dans le CRM (devis envoyé hors du CRM)",
+    acteur: "SYSTEME:boite-mail",
+    delaiMaxMs: 5 * 60_000,
+    executer: async (charge) => {
+      const messageId = (charge as { messageId?: unknown } | null)?.messageId;
+      if (typeof messageId !== "string") throw new Error("Charge invalide : messageId manquant");
+      return conserverPdfSortants(messageId);
     },
   });
 }

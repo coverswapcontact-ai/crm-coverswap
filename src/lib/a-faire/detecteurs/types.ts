@@ -20,7 +20,7 @@ export function cleTache(type: TypeTache, sujet: SujetTache, precision?: string 
 /**
  * La prochaine action posée à la main (Lucas ou Claude) sur un dossier, encore en vigueur (`a-faire/vigueur.ts`) :
  * texte inchangé depuis, et aucun événement du client après. Tant qu'elle l'est, aucun détecteur ne crée de tâche sur
- * ce dossier, sauf la tâche PROCHAINE_ACTION (le jour de sa date), ENVOYER_DEVIS (mission 18, B1) et les tâches SYSTEME.
+ * ce dossier, sauf la tâche PROCHAINE_ACTION (le jour de sa date), ENVOYER_DEVIS (mission 18, B1), ENREGISTRER_DEVIS (B3) et les tâches SYSTEME.
  */
 export type ActionManuelle = {
   dossierId: string;

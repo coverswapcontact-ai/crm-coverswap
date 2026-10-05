@@ -84,12 +84,14 @@ export function lireListe(json: string | null | undefined): string[] {
 /**
  * Conserve dans le CRM les photos et PDF joints (9 Mo au plus chacun) ; les
  * autres pièces restent consultables dans la boîte mail. Une pièce en échec
- * garde son erreur et sera reprise au prochain passage.
+ * garde son erreur et sera reprise au prochain passage. Mission 18 (B3) :
+ * `seulementPdf` (mail parti de Gmail chez un client) : les PDF seuls, les
+ * autres pièces restent « à conserver », sans être téléchargées.
  */
-export async function conserverPieces(messageId: string): Promise<{ conservees: number; erreurs: number }> {
+export async function conserverPieces(messageId: string, options: { seulementPdf?: boolean } = {}): Promise<{ conservees: number; erreurs: number }> {
   const message = await prisma.message.findUnique({
     where: { id: messageId },
-    select: { id: true, canal: true, identifiantCanal: true, recuLe: true, pieces: { where: { statut: "A_CONSERVER" }, orderBy: { rang: "asc" } } },
+    select: { id: true, canal: true, identifiantCanal: true, recuLe: true, pieces: { where: { statut: "A_CONSERVER", ...(options.seulementPdf ? { typeMime: "application/pdf" } : {}) }, orderBy: { rang: "asc" } } },
   });
   if (!message) return { conservees: 0, erreurs: 0 };
   let conservees = 0;

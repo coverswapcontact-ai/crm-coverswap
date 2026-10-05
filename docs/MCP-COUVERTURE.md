@@ -81,6 +81,14 @@
   `donnees.statut`). Un devis envoyé ainsi a les effets d'un devis rendu visible : visible dans l'espace, « Devis
   envoyé », main au client, « Attendre l'accord », relances datées de l'envoi. Ni outil ni paramètre ne change :
   empreinte **`040d6c7aa53c`** (53 outils). La description de `envoyer_document` change : reconnecter le connecteur.
+- **Mission 18, B3 (05/10/2026)** : devis envoyé depuis Gmail. Les PDF d'un mail parti de la boîte chez un client sont
+  gardés dans le CRM ; la tâche `ENREGISTRER_DEVIS` (« Enregistrer comme devis envoyé · X », `taches` la rend comme les
+  autres) ouvre la modale de dépôt préremplie (DP98). `ajouter_fichier` (DOSSIER › DEVIS, numero, montant, source
+  `piece_mail`) passe par la même fonction que la modale (`depot-document.ts › deposerDocument` →
+  `devis-gmail.ts › enregistrerDevisGmail`) : devis déposé avec le PDF du mail, « Devis envoyé » daté du mail
+  (relances depuis le mail), étape, main, « Attendre l'accord » ; un devis du CRM de ce numéro passe « Envoyé » ;
+  rejoué, sans effet. Claude peut lire la pièce avant (`voir_fichiers` piece_mail). Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description de `ajouter_fichier` change : reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -333,6 +341,7 @@ un lien « Gérer les tarifs » vers l'onglet.
 | DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | voir_fichiers (documents, document_id : PDF joint) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 | DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | modifier DOCUMENT (date_emission, montant, objet, statut, acompte_pct) ; ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
+| DP98 | Tâches › « Enregistrer comme devis envoyé » (PDF parti de Gmail : modale de dépôt préremplie, numéro lu dans le nom, date du mail, montant du registre) | GET/POST /api/dossiers/:id/devis-gmail | S-€ | ajouter_fichier (DOSSIER › DEVIS, numero, montant, source piece_mail) ; voir_fichiers (piece_mail) ; taches | couvert | `devis-gmail.test.ts` › « outil « ajouter_fichier » avec la pièce du mail : le même enregistrement… » |
 | DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » ; `envoyer-par-mail.test.ts` › « outil « envoyer_document » confirmé, puis relancé : une seule validation… » |
 | DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert | `mcp-sensibles.test.ts` › « annuler_document — annuler un devis : aperçu et jeton, aucune écriture » |

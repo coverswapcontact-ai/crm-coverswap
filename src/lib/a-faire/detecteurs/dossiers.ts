@@ -5,6 +5,7 @@ import type { Affaire } from "@/lib/commercial/types";
 import { euros, pluriel } from "@/lib/commun/format";
 import { estDossierClos } from "@/lib/dossiers/constants";
 import { devisAEnvoyer } from "@/lib/dossiers/devis-envoye";
+import { devisGmailNonEnregistres } from "@/lib/dossiers/devis-gmail";
 import { estMotifDevisAEnvoyer } from "@/lib/dossiers/main";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
@@ -30,10 +31,13 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  *   l'ouverture automatique du dossier ou d'un nouveau projet de l'espace) s'intitule « Appeler · Nom », raison = le motif ;
  * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN. Un DEVIS « Devis prêt, pas encore
  *   envoyé » (mission 18, B1) est laissé à la lecture ENVOYER_DEVIS ci-dessous.
- * Trois lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
+ * Quatre lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
  * - ENVOYER_DEVIS (mission 18, B1) : un devis généré mais pas encore envoyé (`devis-envoye.ts › devisAEnvoyer`), quelle
  *   que soit l'étape ; jamais écartée par une action posée à la main (moteur.ts). Une tâche par dossier, l'occurrence
  *   = les devis à envoyer (un nouveau devis la fait revenir après un « Fait ») ;
+ * - ENREGISTRER_DEVIS (mission 18, B3) : un PDF qui ressemble à un devis, parti de Gmail chez le client, pas encore
+ *   dans le CRM (`devis-gmail.ts › devisGmailNonEnregistres`) ; une tâche par PDF, jamais écartée par une action posée
+ *   à la main. Raccourci : la modale de dépôt du dossier, préremplie (numéro lu dans le nom, date du mail, PDF du mail) ;
  * - ENCAISSER : SIGNE, PLANIFIE ou CHANTIER sans encaissement VALIDE ni « sans acompte » motivé (« Acompte promis, pas
  *   encore reçu » reste à encaisser) ; FACTURE avec un reste dû ;
  * - PROCHAINE_ACTION : la prochaine action posée à la main, en vigueur (`contexte.vigueur`), le jour de sa date. Le
@@ -280,9 +284,9 @@ async function aEncaisser(): Promise<{ acompte: string[]; solde: string[] }> {
 
 async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
   const { maintenant, vigueur } = contexte;
-  const [pilotage, encaisser, aEnvoyer] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser(), devisAEnvoyer()]);
+  const [pilotage, encaisser, aEnvoyer, gmail] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser(), devisAEnvoyer(), devisGmailNonEnregistres(undefined, { maintenant })]);
   const affaires = pilotage.affaires.filter((a) => a.genre === "DOSSIER" && a.main === "MOI" && a.dossierId);
-  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...aEnvoyer.map((x) => x.dossierId), ...vigueur.keys()])];
+  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...aEnvoyer.map((x) => x.dossierId), ...gmail.map((x) => x.dossierId), ...vigueur.keys()])];
   const dossiers = await lireDossiers(ids);
   const detections: Detection[] = [];
 
@@ -355,6 +359,24 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
         donnees: { documentIds: liste.map((x) => x.documentId), occurrence: liste.map((x) => x.documentId).join(",") },
       })
     );
+  }
+
+  // Mission 18 (B3) : un devis parti de Gmail, pas encore dans le CRM — une tâche par PDF, enregistré en un geste.
+  for (const devis of gmail) {
+    const d = dossiers.get(devis.dossierId);
+    if (!d || estDossierClos(d.etape)) continue;
+    const quoi = devis.devisCrm ? `devis ${devis.devisCrm.numero} du CRM` : `« ${devis.nom} »`;
+    detections.push({
+      ...surLeDossier(d, "ENREGISTRER_DEVIS", {
+        titre: `Enregistrer comme devis envoyé · ${d.nom}`,
+        raison: `${quoi} envoyé depuis Gmail le ${jourMois(devis.envoyeLe)}${devis.a ? ` à ${devis.a}` : ""} : pas encore dans le CRM (étape, relances)`,
+        niveau: 2,
+        depuis: devis.envoyeLe,
+        raccourci: { genre: "DEVIS", libelle: "Enregistrer comme devis envoyé", dossierId: d.id, rubrique: "devis", devis: "gmail", pieceId: devis.pieceId, href: lienDossier(d.id, `&devis=gmail&piece=${devis.pieceId}`) },
+        donnees: { pieceId: devis.pieceId, messageId: devis.messageId, nom: devis.nom, numero: devis.devisCrm?.numero ?? devis.numero, documentId: devis.devisCrm?.id ?? null },
+      }),
+      cle: cleTache("ENREGISTRER_DEVIS", { type: "DOSSIER", id: d.id }, devis.pieceId),
+    });
   }
 
   // La prochaine action posée à la main, le jour de sa date (ou en retard) : la seule tâche de ce dossier tant qu'elle est en vigueur.

@@ -63,6 +63,8 @@ export type OptionsEnregistrement = {
   simulation?: ChampsSimulation;
   /** PDF_DOCUMENT : le document repris (Document.id) dont c'est le PDF. */
   documentRepris?: string | null;
+  /** Mission 18 (B3) : le fichier est cette pièce de mail (un devis parti de Gmail s'enregistre comme envoyé). */
+  pieceMail?: { messageId: string; pieceId: string } | null;
 };
 
 export type ResultatEnregistrement = {
@@ -288,12 +290,19 @@ export async function enregistrerFichierRecu(cible: CibleFichier | null, typeDem
       }
       const champs = options.document ?? {};
       const source = { contenu_base64: fichier.contenu.toString("base64"), nom: fichier.nom, type_mime: fichier.format.typeMime };
+      // Mission 18 (B3) : la pièce d'un mail parti de Gmail est désignée comme telle (devis envoyé depuis Gmail).
+      const sourceDocument = options.pieceMail ? { message_id: options.pieceMail.messageId, piece_id: options.pieceMail.pieceId } : source;
       if ((type === "DEVIS" || type === "FACTURE") && fichier.format.typeMime === "application/pdf" && champs.numero && champs.montant) {
-        const depot = await deposerDocument(lue.id, { ...champs, type, source } as EntreeDepotDocument);
+        const depot = await deposerDocument(lue.id, { ...champs, type, source: sourceDocument } as EntreeDepotDocument);
         if (depot.nature !== "DOCUMENT") throw new ErreurMetier("Dépôt inattendu.", 500);
         const ligne = await prisma.fichierDepose.create({ data: { ...base, documentId: depot.documentId } });
         avertissements.push(...depot.avertissements);
-        return resultat(ligne, `${type === "DEVIS" ? "devis" : "facture"} ${depot.numero} rattaché${type === "FACTURE" ? "e" : ""} au dossier de ${lue.nom}`, { documentId: depot.documentId, numero: depot.numero, changements: depot.changements });
+        const phrase = depot.gmail
+          ? depot.gmail.deja
+            ? `devis ${depot.numero} déjà enregistré comme envoyé depuis Gmail (dossier de ${lue.nom}) : rien n'a changé`
+            : `devis ${depot.numero} enregistré comme envoyé depuis Gmail${depot.gmail.nature === "ENVOYE" ? " (devis du CRM passé « Envoyé »)" : ""}, au dossier de ${lue.nom} : relances comptées depuis le mail`
+          : `${type === "DEVIS" ? "devis" : "facture"} ${depot.numero} rattaché${type === "FACTURE" ? "e" : ""} au dossier de ${lue.nom}`;
+        return resultat(ligne, phrase, { documentId: depot.documentId, numero: depot.numero, changements: depot.changements });
       }
       const aCompleter = (type === "DEVIS" || type === "FACTURE") && fichier.format.typeMime === "application/pdf";
       if ((type === "DEVIS" || type === "FACTURE") && !aCompleter) avertissements.push(`Un ${LIBELLES_TYPE_FICHIER[type]} se reprend en PDF : cette image est gardée comme simple document du dossier.`);

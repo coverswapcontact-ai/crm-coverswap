@@ -1,7 +1,7 @@
 import prisma, { type Transaction } from "@/lib/prisma";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
-import { PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_ENVOYER_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS } from "./constants";
+import { PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_ENVOYER_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS, PROCHAINE_ACTION_REFAIRE_DEVIS } from "./constants";
 import { dateDepuisJour, jourParis } from "./dates";
 import { ecrireMain, type MainCalculee } from "./main";
 import { ecrireProchaineActionAuto, type IssueProchaineAction, type ProchaineActionAuto } from "./prochaine-action-auto";
@@ -65,6 +65,12 @@ export type EvenementDossier =
    * rendu visible dans l'espace (devis-envoye.ts › mettreEnLigneDevis, mission 18, B5).
    */
   | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" | "GMAIL" | "ESPACE" }
+  /**
+   * Devis annulé (documents.ts › annulerDevis) ou masqué dans l'espace (presentation-devis.ts), par devis-retire.ts ›
+   * retirerDevis (mission 18, B6). `retour` : le dossier est revenu avant « Devis envoyé » dans la même transaction (plus
+   * aucun devis n'attend la réponse du client) ; `refaire` : il n'y a plus de devis à proposer, « Refaire le devis ».
+   */
+  | { type: "DEVIS_RETIRE"; documentId: string; geste: "ANNULE" | "MASQUE"; retour: boolean; refaire: boolean }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
   | { type: "ACOMPTE_REJETE"; encaissementId: string };
 
@@ -85,6 +91,7 @@ export const TYPES_EVENEMENT_DOSSIER = [
   "DEVIS_GENERE",
   "DEVIS_DEPOSE",
   "DEVIS_ENVOYE",
+  "DEVIS_RETIRE",
   "ACOMPTE_REJETE",
 ] as const satisfies readonly TypeEvenementDossier[];
 
@@ -99,8 +106,9 @@ export type Suites = {
   main: MainCalculee | null;
 };
 
-/** « Préparer le devis… » (posé par l'espace quand le client a choisi), ou « Envoyer le devis au client » (B1). */
-const devisAPreparerOuAEnvoyer = (actuelle: string | null) => Boolean(actuelle?.startsWith(PROCHAINE_ACTION_PREPARER_DEVIS) || actuelle?.startsWith(PROCHAINE_ACTION_ENVOYER_DEVIS));
+/** « Préparer le devis… » (posé par l'espace quand le client a choisi), « Envoyer le devis au client » (B1) ou « Refaire le devis » (B6). */
+const devisAPreparerOuAEnvoyer = (actuelle: string | null) =>
+  Boolean(actuelle?.startsWith(PROCHAINE_ACTION_PREPARER_DEVIS) || actuelle?.startsWith(PROCHAINE_ACTION_ENVOYER_DEVIS) || actuelle?.startsWith(PROCHAINE_ACTION_REFAIRE_DEVIS));
 
 /**
  * La prochaine action de chaque événement (la colonne « prochaine action » de docs/SYNCHRO.md). Les textes et les
@@ -148,6 +156,15 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
     // Mission 18 (B2, B3, B5) : envoyé par mail (CRM ou Gmail) ou mis en ligne, il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
     case "DEVIS_ENVOYE":
       return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
+    // Mission 18 (B6) : le devis retiré (annulé, masqué) n'attend plus l'accord. Revenu avant « Devis envoyé », tout ce que
+    // le système avait posé pour la phase du devis est dépassé : « Refaire le devis » (une action posée à la main reste,
+    // avec la tâche à côté). Sans retour (étape Qualification ou Simulation), seulement à la place de « Attendre
+    // l'accord » ou « Envoyer le devis » devenus sans objet.
+    case "DEVIS_RETIRE":
+      if (!evenement.refaire) return null;
+      return evenement.retour
+        ? { code: "devis-a-refaire", texte: PROCHAINE_ACTION_REFAIRE_DEVIS, date: maintenant }
+        : { code: "devis-a-refaire", texte: PROCHAINE_ACTION_REFAIRE_DEVIS, date: maintenant, si: (a) => !a || a.startsWith(PROCHAINE_ACTION_APRES_DEVIS) || a.startsWith(PROCHAINE_ACTION_ENVOYER_DEVIS) };
     case "ACOMPTE_REJETE":
       return { code: "acompte-rejete", texte: "Chèque d'acompte rejeté : réclamer un nouveau paiement", date: dateDepuisJour(jourParis(maintenant)), niveau: 1 };
   }

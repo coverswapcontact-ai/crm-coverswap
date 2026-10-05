@@ -39,9 +39,10 @@ function ModaleAnnulationDevis({ detail, devis, onFermer, onFait }: { detail: Do
   async function annuler() {
     setEnvoi(true);
     try {
-      const reponse = await envoyerJson<{ dossier: DossierDetail }>(`/api/dossiers/${detail.id}/documents/${devis.id}/annulation`, "POST", { motif: motif.trim() });
+      const reponse = await envoyerJson<{ dossier: DossierDetail; avertissements?: string[] }>(`/api/dossiers/${detail.id}/documents/${devis.id}/annulation`, "POST", { motif: motif.trim() });
       onFait(reponse.dossier);
-      toast.success(`Devis ${devis.numero} annulé`, { description: "Il reste dans l'historique du dossier ; le client ne le voit plus." });
+      // Mission 18 (B6) : sans autre devis en attente, le dossier revient avant « Devis envoyé » : la description le dit.
+      toast.success(`Devis ${devis.numero} annulé`, { description: ["Il reste dans l'historique du dossier ; le client ne le voit plus.", ...(reponse.avertissements ?? [])].join(" ") });
       onFermer();
     } catch (erreur) {
       toast.error("Annulation impossible", { description: messageErreur(erreur) });

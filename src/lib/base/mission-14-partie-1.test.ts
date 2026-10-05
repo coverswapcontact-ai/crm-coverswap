@@ -251,19 +251,21 @@ describe("R1 : un devis visible, émis ou déposé, c'est « Devis envoyé »", 
     assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");
     assert.ok((await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id));
 
+    // Mission 18 (B6) : le seul devis masqué, le dossier revient avant « Devis envoyé » et la main est à moi (le refaire).
     const masque = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: false }));
-    assert.equal(masque.passage, null);
+    assert.deepEqual([masque.passage?.vers, masque.passage?.nature], ["QUALIFICATION", "RETOUR"]);
     const d = await dossierDe(c.dossierId);
-    assert.deepEqual([d.etape, d.main, d.mainMotif], ["DEVIS_ENVOYE", "CLIENT", "Étape « Devis envoyé »"], "l'étape ne recule pas ; le motif ne parle plus d'un devis qu'il ne voit pas");
+    assert.deepEqual([d.etape, d.main, d.mainMotif], ["QUALIFICATION", "MOI", `Devis ${devis.numero} masqué : refaire le devis`], "revenu avant le devis ; le motif ne parle plus d'un devis qu'il ne voit pas");
     assert.ok(!(await compte.documentsDuClient(permanent)).some((x) => x.id === devis.id), "masqué : absent de « Mes documents »");
     await assert.rejects(compte.pdfPourLeClient(permanent, devis.id), /introuvable/i);
     await assert.rejects(compte.pdfDuProjetPourLeClient(await espaceDe(c.espaceId), devis.id), /introuvable/i);
 
     const rendu = await avecActeur(LUCAS, () => documents.modifierPresentationDevis(c.dossierId, devis.id, { visibleEspace: true }));
-    assert.equal(rendu.passage, null, "déjà en « Devis envoyé » : pas de passage");
+    assert.equal(rendu.passage?.vers, "DEVIS_ENVOYE", "remis en ligne : de nouveau envoyé");
     assert.equal((await dossierDe(c.dossierId)).mainMotif, "Devis envoyé : en attente de sa réponse");
     await avecActeur(LUCAS, () => documents.annulerDevis(c.dossierId, devis.id, "erreur de métrage"));
-    assert.equal((await dossierDe(c.dossierId)).mainMotif, "Étape « Devis envoyé »", "annulé : il n'attend plus sa réponse");
+    const annule = await dossierDe(c.dossierId);
+    assert.deepEqual([annule.etape, annule.main, annule.mainMotif], ["QUALIFICATION", "MOI", `Devis ${devis.numero} annulé : refaire le devis`], "annulé : il n'attend plus sa réponse");
   });
 });
 

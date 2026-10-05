@@ -270,6 +270,11 @@ export type MetadataChangementEtape = {
   /** Changement automatique : ce qui l'a provoqué. */
   raison?: string;
   documentId?: string;
+  /**
+   * Mission 18 (B6) : retour d'avant « Devis envoyé » parce que le seul devis en attente a été annulé ou masqué ; la
+   * main revient à Lucas, « Devis N annulé : refaire le devis » (main.ts).
+   */
+  devisRetire?: { numero: string; geste: "ANNULE" | "MASQUE" };
   /** Ce qui manquait, lu et confirmé par la personne au moment du passage. */
   avertissements?: string[];
   /** Dossier repris : le passage a eu lieu, sa date réelle n'est pas connue. */

@@ -1054,3 +1054,57 @@ rien à reconnecter pour ce lot.
 
 Reste : B6-B13 (B13 : règle de cohérence de l'écart 5, un devis visible « Généré » sans `DEVIS_ENVOYE` ni annonce) ;
 rien pour Lucas.
+
+### Mission 18, B6 — devis annulé ou masqué sans autre devis actif (écart 6)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Le point d'entrée du retrait** (`devis-retire.ts › retirerDevis`, nouvel événement `DEVIS_RETIRE` de `synchro.ts`),
+  dans la transaction du geste : `documents.ts › annulerDevis` (désormais une transaction interactive, garde contre le
+  double clic), `presentation-devis.ts › modifierPresentationDevis` masqué (interrupteur, PATCH, outil `modifier`
+  DOCUMENT, annulation de « rendre visible ») et `documents-existants.ts › modifierDocumentExistant` (devis repris
+  corrigé masqué). S'il ne reste aucun autre devis en attente (visible « Généré », « Envoyé » ou « Non retenu », ou un
+  devis accepté) et que le dossier est en Devis envoyé ou Relance :
+  - retour RETOUR vers le `de` du dernier passage en « Devis envoyé » (Q ou S), sinon Simulation s'il y a une simulation
+    publiée ou choisie, sinon Qualification ; statut du lead (CONTACTE) écrit dans la transaction, changement marqué
+    synchronisé (`transitions.ts › marquerSynchronise`) ; pas de Meta ;
+  - main à Lucas « Devis N annulé (masqué) : refaire le devis » : le CHANGEMENT_ETAPE porte `devisRetire` et
+    `main.ts › passageDeMain` en fait un geste (aucun type d'événement nouveau) ;
+  - prochaine action « Refaire le devis » (`PROCHAINE_ACTION_REFAIRE_DEVIS`, date du jour), action posée à la main
+    gardée avec la tâche MANUELLE `devis-a-refaire` ; un nouveau devis la remplace (« Attendre l'accord » / « Envoyer
+    le devis au client » : `devisAPreparerOuAEnvoyer` la reconnaît) ;
+  - mails de relance EN_ATTENTE ou en ECHEC annulés (`relances/etape.ts › prefixeRelance`) : ceux du devis retiré, au
+    retour ceux de tous les devis du dossier ; les relances calculées s'arrêtent d'elles-mêmes ;
+  - tâche DEVIS « Refaire le devis · X » : `commercial/pilotage.ts` met ce motif en groupe DEVIS, le détecteur titre
+    « Refaire le devis » (raison « devis N annulé le jj/mm ») sur ce motif ou quand un devis annulé existe dans le
+    dossier ; cochée par le prochain devis visible.
+  Avec un autre devis en attente : rien ne recule, seuls ses mails de relance sont annulés, main relue.
+- **Écrans et outils** : la route d'annulation et le PATCH rendent la phrase du retour dans `avertissements`, les toasts
+  la montrent ; `annuler_document` l'annonce à l'aperçu et la dit au résultat ; note de `modifier` DOCUMENT au masquage,
+  annulation partielle de « rendre visible » réécrite.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_RETIRE`, paragraphe B6, B6 retiré du tableau 4), `docs/COHERENCE.md`,
+  `docs/MCP-COUVERTURE.md` (entrée B6, DP48, DP63).
+
+Décisions prises seul (solution la plus simple) :
+- Un devis « Non retenu » visible ou un devis accepté comptent comme en attente : le retour avant « Signé » les ferait
+  revivre (`appliquerChangementEtape`) ; dans ce cas l'étape ne bouge pas.
+- Devis annulé en Qualification ou Simulation (pas encore envoyé, B1) sans autre devis « Généré »/« Envoyé » : pas de
+  retour, mais « Envoyer le devis » / « Attendre l'accord » (ou vide) devient « Refaire le devis » ; la main suit la
+  règle (rien ne la force). Un masquage sans retour ne touche pas à la prochaine action.
+- Au retour, « Refaire le devis » remplace toute prochaine action automatique (tout ce qui concernait le devis est
+  dépassé) ; une action posée à la main reste toujours.
+- Les mails de relance déjà validés (VALIDEE) ne sont pas touchés : l'exécution relit la pertinence (B2).
+- La tâche « Refaire le devis » est la tâche DEVIS du détecteur (pas de type nouveau) ; elle est écartée, comme toutes,
+  par une action posée à la main en vigueur, d'où la tâche MANUELLE à côté.
+
+Tests : 1 387 → 1 394. Nouveau `src/lib/dossiers/devis-retire.test.ts` (7 essais, état des deux côtés, réseau coupé) :
+annulé en Devis envoyé → Simulation, main, « Refaire le devis », lead CONTACTE, espace hors DEVIS, relances arrêtées,
+mail de relance annulé, historique, rejoué refusé, nouveau devis qui repart et coche la tâche ; Relance → masqué →
+Qualification puis remis en ligne ; autre devis en attente (rien ne recule, relance de l'autre gardée, puis le dernier
+masqué → retour) ; action posée à la main gardée + une seule tâche ; devis pas encore envoyé annulé en Simulation ;
+devis repris masqué par la correction ; outil `annuler_document`. Adaptés (comportement voulu) : `mission-14-partie-1`
+(masqué/annulé : retour en Qualification, main « refaire le devis »), `mise-en-ligne` (remasqué → Simulation, remis →
+Devis envoyé), `mcp-relecture-c` (texte de l'annulation partielle, étape revenue). `devis-multiples` vert sans
+changement. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter.
+
+Reste : B7-B13 (B13 : règle de cohérence de l'écart 6 — devis envoyé sans devis en attente, « Attendre l'accord » sans
+devis) ; rien pour Lucas.

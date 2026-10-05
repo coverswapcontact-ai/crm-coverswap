@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { recalculerMain } from "./main";
-import { appliquerEvenementDossier } from "./synchro";
+import { appliquerEvenementDossier, suitesEvenementDossier } from "./synchro";
+import { phraseRetrait, retirerDevis } from "./devis-retire";
 import prisma, { type Transaction } from "@/lib/prisma";
 import {
   imputerSurFacture,
@@ -567,17 +568,29 @@ export async function lirePdfDocument(dossierId: string, documentId: string) {
 // Libellé et visibilité d'un devis émis : presentation-devis.ts (sorti de ce fichier, mission 14).
 export { modifierPresentationDevis, schemaPresentationDevis } from "./presentation-devis";
 
-/** Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté. */
-export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string }> {
+/**
+ * Un devis émis qui ne sera pas signé (erreur, client parti) : annulé, gardé en historique ; jamais un devis accepté.
+ * Mission 18 (B6, écart 6) : dans la même transaction, le point d'entrée (devis-retire.ts › retirerDevis) — sans autre
+ * devis en attente de sa réponse, le dossier revient avant « Devis envoyé », la main à Lucas (« refaire le devis »), les
+ * relances en attente sont annulées ; sinon la main est relue. Les suites (agenda, tâches) partent après.
+ */
+export async function annulerDevis(dossierId: string, documentId: string, motif: string): Promise<{ id: string; numero: string; retour: ChangementEtape | null; avertissements: string[] }> {
   const devis = await prisma.document.findFirst({ where: { id: documentId, dossierId, type: "DEVIS", archiveLe: null, numero: { not: null } } });
   if (!devis?.numero) throw new ErreurMetier("Devis introuvable dans ce dossier.", 404);
   if (devis.statut === "ACCEPTE") throw new ErreurMetier("Ce devis est accepté : il ne s'annule pas (retirer l'accord d'abord).", 409);
   if (devis.statut === "ANNULEE") throw new ErreurMetier("Ce devis est déjà annulé.", 409);
-  await prisma.$transaction([
-    prisma.document.update({ where: { id: devis.id }, data: { statut: "ANNULEE" } }),
-    prisma.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${devis.numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } }),
-  ]);
-  // Mission 14 : un devis annulé n'attend plus la réponse du client ; la main est relue (main.ts).
-  await recalculerMain(dossierId);
-  return { id: devis.id, numero: devis.numero };
+  const numero = devis.numero;
+  const retrait = await prisma.$transaction(
+    async (tx) => {
+      // Garde : annulé entre-temps (double clic), rien n'est réécrit.
+      const { count } = await tx.document.updateMany({ where: { id: devis.id, statut: { notIn: ["ACCEPTE", "ANNULEE"] } }, data: { statut: "ANNULEE" } });
+      if (count === 0) throw new ErreurMetier("Ce devis a changé entre-temps (accepté ou déjà annulé) : recharge le dossier.", 409);
+      await tx.dossierEvenement.create({ data: { dossierId, type: "NOTE_AJOUTEE", direction: "INTERNE", contenu: `Devis ${numero}${devis.libelleVariante ? ` (${devis.libelleVariante})` : ""} annulé${motif ? ` : ${motif}` : ""} (gardé en historique)`.slice(0, 1500), metadata: JSON.stringify({ documentId: devis.id, annulation: true }) } });
+      return retirerDevis(tx, dossierId, { id: devis.id, numero }, "ANNULE");
+    },
+    { maxWait: 10_000, timeout: 30_000 }
+  );
+  await suitesEvenementDossier(retrait);
+  const phrase = phraseRetrait(retrait);
+  return { id: devis.id, numero, retour: retrait.retour, avertissements: phrase ? [phrase] : [] };
 }

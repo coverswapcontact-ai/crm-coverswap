@@ -19,7 +19,8 @@
 // archivé. Mission 18 (B1) : générer n'est pas envoyer — un devis généré sans
 // être envoyé (DEVIS_GENERE marqué `envoye: false`) me donne la main, « Devis
 // prêt, pas encore envoyé », tant qu'il est « Généré » et pas mis en ligne. Un devis déposé la passe à la date du dépôt, et seulement avant la
-// signature (Qualification → Relance) ; après, l'étape décide.
+// signature (Qualification → Relance) ; après, l'étape décide. Mission 18 (B6) : le seul devis en attente annulé ou
+// masqué, le retour d'avant « Devis envoyé » (marqué `devisRetire`) me la donne : « Devis N annulé : refaire le devis ».
 //
 // `mainSelonFaits` est pure ; `recalculerMain` l'applique au dossier et range
 // le résultat dans `Dossier.main / mainLe / mainMotif`, relus par les écrans.
@@ -56,6 +57,12 @@ const MOTIF_ESPACE_OUVERT = "Espace ouvert : en attente du client";
 export const MOTIF_DEVIS_A_ENVOYER = "Devis prêt, pas encore envoyé";
 export const motifDevisAEnvoyer = (numero: unknown): string => `${MOTIF_DEVIS_A_ENVOYER}${typeof numero === "string" && numero ? ` (${numero})` : ""} : à lui envoyer`;
 export const estMotifDevisAEnvoyer = (motif: string | null | undefined): boolean => (motif ?? "").startsWith(MOTIF_DEVIS_A_ENVOYER);
+/**
+ * Mission 18 (B6) : le seul devis en attente a été annulé ou masqué, le dossier est revenu avant « Devis envoyé » : à moi
+ * de le refaire (le retour lui-même, CHANGEMENT_ETAPE marqué `devisRetire`, passe la main).
+ */
+export const motifDevisARefaire = (numero: string, geste: "ANNULE" | "MASQUE"): string => `Devis ${numero} ${geste === "ANNULE" ? "annulé" : "masqué"} : refaire le devis`;
+export const estMotifDevisARefaire = (motif: string | null | undefined): boolean => /^Devis \S+ (annulé|masqué) : refaire le devis$/.test(motif ?? "");
 /** Mission 14 (partie 6) : une relance de devis copiée (SMS) ; le mail de relance garde « Mail envoyé : … ». */
 export const MOTIF_RELANCE_ENVOYEE = "Relance envoyée : en attente de sa réponse";
 
@@ -116,6 +123,12 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     }
     case "DEVIS_ENVOYE":
       return { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE };
+    // Mission 18 (B6) : le retour d'avant « Devis envoyé » quand le seul devis en attente est annulé ou masqué : à moi
+    // de refaire le devis. Les autres changements d'étape ne sont pas des gestes : l'étape décide (mainSelonFaits).
+    case "CHANGEMENT_ETAPE": {
+      const retire = lireMetadata(evenement.metadata).devisRetire as { numero?: unknown; geste?: unknown } | undefined;
+      return retire && typeof retire.numero === "string" && (retire.geste === "ANNULE" || retire.geste === "MASQUE") ? { qui: "MOI", motif: motifDevisARefaire(retire.numero, retire.geste) } : null;
+    }
     // Mission 14 : un devis déposé (fait ailleurs), visible et en attente de réponse, vaut un devis émis.
     case "DOCUMENT_REPRIS":
       return devisDeposeVisible(evenement) ? { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE } : null;

@@ -14,7 +14,9 @@ export async function passerEnRelance(tx: Transaction, dossierId: string, raison
 }
 
 /** La clé d'unicité du mail de relance d'un devis à un rang : une seule proposition par relance, jamais reproposée. */
-export const cleRelance = (documentId: string, rang: number) => `relance:${documentId}:${rang}`;
+export const cleRelance = (documentId: string, rang: number) => `${prefixeRelance(documentId)}${rang}`;
+/** Le début commun des clés des mails de relance d'un devis, tous rangs confondus (mission 18, B6). */
+export const prefixeRelance = (documentId: string) => `relance:${documentId}:`;
 
 /** Le motif posé sur la proposition de mail annulée : la même relance est partie par SMS. */
 export const MOTIF_RELANCE_FAITE_PAR_SMS = "Relance faite par SMS";

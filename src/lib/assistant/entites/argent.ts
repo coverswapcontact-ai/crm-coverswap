@@ -59,6 +59,10 @@ export const DOCUMENT: DefinitionEntite = {
       if (apres.statut === "ACCEPTE" && avant.statut !== "ACCEPTE") {
         return "Noté « accepté », le devis vaut signature (hors ligne) : un dossier pas encore signé passe en « Signé », les autres devis proposés deviennent « non retenus ».";
       }
+      // Mission 18 (B6) : masqué, le seul devis qui attend sa réponse fait revenir le dossier avant « Devis envoyé ».
+      if (apres.visibleEspace === false && avant.visibleEspace === true) {
+        return "Masqué, le client ne le voit plus et ses mails de relance en attente sont annulés ; si c'était le seul devis qui attendait sa réponse, le dossier revient à son étape d'avant le devis, la main à toi pour refaire le devis.";
+      }
       if (apres.visibleEspace !== true || avant.visibleEspace === true) return null;
       // Mission 18 (B5) : la mise en ligne d'un devis du CRM pas encore envoyé est annoncée par « Devis disponible ».
       const envoi = "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas, la relance compte depuis la mise en ligne.";
@@ -66,12 +70,13 @@ export const DOCUMENT: DefinitionEntite = {
       const etat = await peutNotifier("DEVIS_DISPONIBLE", String(cible.contexte.dossierId));
       return `${envoi} ${etat.possible ? "Le mail « Devis disponible » partira au client (une fois par devis)." : `Aucun mail « Devis disponible » : ${(etat.raison ?? "notification impossible").replace(/\.$/, "")}.`}`;
     },
-    // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste, et l'étape ne revient pas d'elle-même.
+    // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste ; l'étape revient avant « Devis envoyé »
+    // seulement si plus aucun devis n'attend sa réponse (mission 18, B6).
     annulationPartielle: (changements) =>
       changements.some((c) => c.cle === "statut" && c.apres === "ACCEPTE" && c.avant !== "ACCEPTE")
         ? "Le devis n'est plus noté « accepté », mais le dossier garde l'étape « Signé » s'il y est passé (et les autres devis restent « non retenus ») : « changer_etape » pour le remettre à son étape d'avant."
         : changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true)
-          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique (le mail « Devis disponible », s'il est parti, ne se reprend pas) et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant."
+          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique (le mail « Devis disponible », s'il est parti, ne se reprend pas) ; s'il était le seul devis qui attendait sa réponse, le dossier revient à son étape d'avant le devis (la main à toi pour refaire le devis), sinon il garde l'étape « Devis envoyé »."
           : null,
     lire: async (cible) => {
       const d = await prisma.document.findUniqueOrThrow({ where: { id: cible.id } });
@@ -81,8 +86,8 @@ export const DOCUMENT: DefinitionEntite = {
       const dossierId = cible.contexte.dossierId as string;
       // Comme la route : { visibleEspace, libelleVariante } seuls = la présentation ; le reste = la correction d'un document repris.
       if (Object.keys(valeurs).every((c) => CHAMPS_PRESENTATION.includes(c))) {
-        const { annonce } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
-        return annonce ? [phraseAnnonce(annonce)] : [];
+        const { annonce, retrait } = await modifierPresentationDevis(dossierId, cible.id, valeurs);
+        return [...(annonce ? [phraseAnnonce(annonce)] : []), ...(retrait ? [retrait] : [])];
       }
       return modifierDocumentExistant(dossierId, cible.id, valeurs);
     },

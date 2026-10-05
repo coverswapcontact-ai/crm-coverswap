@@ -218,6 +218,8 @@ export const PROCHAINE_ACTION_PREPARER_DEVIS = "Préparer le devis";
 export const PROCHAINE_ACTION_APRES_DEVIS = "Attendre l'accord du client sur le devis";
 /** Mission 18 (B1) : le devis est prêt mais pas encore envoyé (masqué dans son espace, ou sans annonce). */
 export const PROCHAINE_ACTION_ENVOYER_DEVIS = "Envoyer le devis au client";
+/** Mission 18 (B6) : le seul devis en attente a été annulé ou masqué, le dossier est revenu avant « Devis envoyé ». */
+export const PROCHAINE_ACTION_REFAIRE_DEVIS = "Refaire le devis";
 
 /**
  * Mission 18 (B4) : les étapes d'où un devis noté « accepté » par Lucas (déposé « accepté », devis repris corrigé)

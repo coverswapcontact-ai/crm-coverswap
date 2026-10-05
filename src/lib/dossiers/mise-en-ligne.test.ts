@@ -149,9 +149,11 @@ describe("devis rendu visible = mis en ligne et annoncé (mission 18, B5)", () =
     }
 
     // Masqué puis remis en ligne : une nouvelle mise en ligne (la relance repart d'elle), jamais un second mail.
-    await rendreVisible(c.dossierId, devis.id, false);
+    // Mission 18 (B6) : masqué, le seul devis fait revenir le dossier en Simulation ; remis en ligne, il y repasse.
+    const masque = await rendreVisible(c.dossierId, devis.id, false);
+    assert.deepEqual([masque.passage?.de, masque.passage?.vers, masque.passage?.nature], ["DEVIS_ENVOYE", "SIMULATION", "RETOUR"]);
     const remis = await rendreVisible(c.dossierId, devis.id);
-    assert.equal(remis.passage, null, "déjà en « Devis envoyé »");
+    assert.deepEqual([remis.passage?.de, remis.passage?.vers], ["SIMULATION", "DEVIS_ENVOYE"], "revenu en Simulation au masquage : il repasse en « Devis envoyé »");
     assert.equal(remis.annonce?.mail, false);
     assert.match(remis.annonce?.raison ?? "", /Déjà envoyé/);
     assert.equal((await notifs(devis.id)).length, 1, "un seul « Devis disponible » par devis");

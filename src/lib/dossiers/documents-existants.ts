@@ -5,6 +5,7 @@ import { imputerSurFacture, planImputationFacture } from "@/lib/encaissements/se
 import { LIBELLES_TYPE_DOCUMENT, type TypeDocument } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
 import { estDevisEnvoye, mettreEnLigneDevis, passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
+import { phraseRetrait, retirerDevis } from "./devis-retire";
 import { estSigneeParDevisAccepte, signerParDevisAccepte } from "./devis-signe";
 import { recalculerMain } from "./main";
 import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "./synchro";
@@ -350,6 +351,14 @@ export async function modifierDocumentExistant(dossierId: string, documentId: st
     const statut = entree.statut !== undefined ? statutDe(document.type as TypeDocument, entree.statut) : document.statut;
     if (entree.visibleEspace === true && !document.visibleEspace && estDevisEnvoye({ ...document, statut, visibleEspace: true })) {
       return mettreEnLigneDevis(tx, dossierId, { id: document.id, numero: document.numero! }, `Devis ${document.numero} : visible dans l'espace client`);
+    }
+    // Mission 18 (B6, écart 6) : un devis repris masqué par la correction l'est comme par l'interrupteur de l'espace :
+    // sans autre devis en attente de sa réponse, le dossier revient avant « Devis envoyé » (devis-retire.ts).
+    if (document.type === "DEVIS" && entree.visibleEspace === false && document.visibleEspace) {
+      const retrait = await retirerDevis(tx, dossierId, { id: document.id, numero: document.numero! }, "MASQUE");
+      const phrase = phraseRetrait(retrait);
+      if (phrase) avertissements.push(phrase);
+      return retrait;
     }
     return null;
   });

@@ -6,7 +6,7 @@ import { euros, pluriel } from "@/lib/commun/format";
 import { estDossierClos } from "@/lib/dossiers/constants";
 import { devisAEnvoyer } from "@/lib/dossiers/devis-envoye";
 import { devisGmailNonEnregistres } from "@/lib/dossiers/devis-gmail";
-import { estMotifDevisAEnvoyer } from "@/lib/dossiers/main";
+import { estMotifDevisAEnvoyer, estMotifDevisARefaire } from "@/lib/dossiers/main";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { lireLignes, lirePhotos } from "@/lib/dossiers/stockage";
@@ -30,7 +30,8 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS). Mission 18 (A2) : « Appeler : … » (premier appel, posé à
  *   l'ouverture automatique du dossier ou d'un nouveau projet de l'espace) s'intitule « Appeler · Nom », raison = le motif ;
  * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN. Un DEVIS « Devis prêt, pas encore
- *   envoyé » (mission 18, B1) est laissé à la lecture ENVOYER_DEVIS ci-dessous.
+ *   envoyé » (mission 18, B1) est laissé à la lecture ENVOYER_DEVIS ci-dessous. Mission 18 (B6) : « Refaire le devis »
+ *   quand le seul devis en attente a été annulé ou masqué (motif de la main) ou qu'un devis annulé existe.
  * Quatre lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
  * - ENVOYER_DEVIS (mission 18, B1) : un devis généré mais pas encore envoyé (`devis-envoye.ts › devisAEnvoyer`), quelle
  *   que soit l'étape ; jamais écartée par une action posée à la main (moteur.ts). Une tâche par dossier, l'occurrence
@@ -110,7 +111,7 @@ export function acompteAttendu(d: { documents: readonly DevisLu[]; accords: read
 }
 
 async function lireDossiers(ids: string[]) {
-  const [dossiers, photos, changements] = await Promise.all([
+  const [dossiers, photos, changements, annules] = await Promise.all([
     prisma.dossier.findMany({
       where: { id: { in: ids } },
       select: {
@@ -123,7 +124,10 @@ async function lireDossiers(ids: string[]) {
     }),
     prisma.dossierEvenement.findMany({ where: { dossierId: { in: ids }, type: "ESPACE_PHOTOS" }, select: { dossierId: true, createdAt: true, survenuLe: true } }),
     prisma.dossierEvenement.findMany({ where: { dossierId: { in: ids }, type: "CHANGEMENT_ETAPE" }, select: { dossierId: true, metadata: true, createdAt: true, survenuLe: true } }),
+    // Mission 18 (B6) : un devis annulé dans le dossier — le devis à faire est à refaire.
+    prisma.document.findMany({ where: { dossierId: { in: ids }, type: "DEVIS", statut: "ANNULEE", archiveLe: null, numero: { not: null } }, select: { dossierId: true } }),
   ]);
+  const avecDevisAnnule = new Set(annules.map((a) => a.dossierId));
   const photosLe = new Map<string, Date>();
   for (const p of photos) {
     const le = p.survenuLe ?? p.createdAt;
@@ -148,6 +152,7 @@ async function lireDossiers(ids: string[]) {
         nom: d.clientNom.trim() || "Sans nom",
         nbPhotos: lirePhotos(d.photos).length,
         photosLe: photosLe.get(d.id) ?? null,
+        devisAnnule: avecDevisAnnule.has(d.id),
         choisieLe: plusRecent(d.espaces.flatMap((e) => e.simulations.map((s) => s.choisieLe))),
         brouillon: d.espaces.some((e) => e.simulations.some((s) => s.statut === "BROUILLON")),
         accordLe: d.accords[0]?.createdAt ?? null,
@@ -246,16 +251,22 @@ function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
         raccourci: { genre: "SIMULATEUR", libelle: "Préparer la simulation", dossierId: d.id, href: `/simulateur?dossier=${d.id}` },
       });
     }
-    case "DEVIS":
+    case "DEVIS": {
       // Mission 18 (B1) : le devis est fait, il reste à l'envoyer — la lecture ENVOYER_DEVIS le dit (voir detecter).
       if (estMotifDevisAEnvoyer(a.action)) return null;
+      // Mission 18 (B6) : le seul devis en attente annulé ou masqué (dossier revenu avant « Devis envoyé »), ou un devis
+      // déjà annulé dans ce dossier : « Refaire le devis ».
+      const retire = estMotifDevisARefaire(a.action);
+      const verbe = retire || d.devisAnnule ? "Refaire le devis" : "Faire le devis";
+      const depuis = retire ? (d.mainLe ?? d.updatedAt) : (d.choisieLe ?? d.mainLe ?? d.updatedAt);
       return surLeDossier(d, "DEVIS", {
-        titre: `Faire le devis · ${d.nom}`,
-        raison: d.choisieLe ? `simulation choisie le ${jourMois(d.choisieLe)}` : "simulation choisie",
+        titre: `${verbe} · ${d.nom}`,
+        raison: retire ? `${a.action.replace(/ : refaire le devis$/, "").replace(/^Devis/, "devis")} le ${jourMois(depuis)}` : d.choisieLe ? `simulation choisie le ${jourMois(d.choisieLe)}` : "simulation choisie",
         niveau: 3,
-        depuis: d.choisieLe ?? d.mainLe ?? d.updatedAt,
-        raccourci: { genre: "DEVIS", libelle: "Faire le devis", dossierId: d.id, devis: "nouveau", href: lienDossier(d.id, "&devis=nouveau") },
+        depuis,
+        raccourci: { genre: "DEVIS", libelle: verbe, dossierId: d.id, devis: "nouveau", href: lienDossier(d.id, "&devis=nouveau") },
       });
+    }
     case "DECIDER":
       // Seul « Envoyer le lien de son espace » est une tâche de ce détecteur ; les autres « à moi » d'un dossier (une
       // demande du client dans son espace) viennent de SIGNAUX et de ESPACE_MESSAGES.

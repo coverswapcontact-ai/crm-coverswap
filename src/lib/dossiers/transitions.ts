@@ -98,6 +98,8 @@ type Application = ChangementEtape & {
   etapeReference?: EtapeDossier | null;
   /** Changement automatique ou retour provoqué par un fait (paiement, avoir) : écrit dans l'événement. */
   raison?: string;
+  /** Mission 18 (B6) : retour provoqué par le seul devis en attente, annulé ou masqué (devis-retire.ts). */
+  devisRetire?: MetadataChangementEtape["devisRetire"];
 };
 
 /**
@@ -192,6 +194,7 @@ export async function appliquerChangementEtape(tx: Transaction, application: App
     ...(sansAcompte ? { sansAcompte } : {}),
     ...(application.raison ? { raison: application.raison } : {}),
     ...(documentId ? { documentId } : {}),
+    ...(application.devisRetire ? { devisRetire: application.devisRetire } : {}),
     ...(avertissements.length > 0 ? { avertissements } : {}),
   };
 
@@ -318,6 +321,15 @@ export async function changerEtapeDansTransaction(
  * ou à une proposition garde sa forme ; une copie (`{ ...changement }`) retombe sur le chemin complet, sans risque.
  */
 const SYNCHRONISES = new WeakSet<ChangementEtape>();
+
+/**
+ * Mission 18 (B6) : un changement écrit par `appliquerChangementEtape` dont l'appelant a déjà écrit la main et le statut
+ * du lead dans la même transaction (point d'entrée, synchro.ts) ; ses effets d'après ne les refont pas.
+ */
+export function marquerSynchronise(changement: ChangementEtape): ChangementEtape {
+  SYNCHRONISES.add(changement);
+  return changement;
+}
 
 /** Changement d'étape demandé depuis l'interface. */
 export async function changerEtape(dossierId: string, entree: EntreeChangementEtape): Promise<ChangementEtape> {

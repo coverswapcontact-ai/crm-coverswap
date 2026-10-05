@@ -307,6 +307,10 @@ describe("lister ESPACES filtré (ex-« espaces_clients ») : les espaces sans p
     assert.deepEqual((note.donnees as { relance: unknown }).relance, { type: "PHOTOS", rang: 1 });
     const trace = await prisma.dossierEvenement.findFirstOrThrow({ where: { dossierId: x.dossierId, type: "SMS_COPIE" } });
     assert.deepEqual(JSON.parse(trace.metadata).relance, { type: "PHOTOS", rang: 1 });
+    // La trace est écrite à l'heure réelle (horloge de la base) ; le test lit à LUNDI : on la date de LUNDI, l'instant du
+    // geste, comme `contact()` date l'espace. Sans cela, le délai de 3 jours courrait de la date du jour du lancement et
+    // l'échéance vue de dans(10) dépendrait du calendrier (le test a cassé le 05/10/2026).
+    await prisma.dossierEvenement.update({ where: { id: trace.id }, data: { createdAt: LUNDI } });
     assert.doesNotMatch((await appeler("lister", { liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 3 } })).texte, /Xavier Huit/, "le lien vient de partir");
     const plusTard = await appeler("lister", { liste: "ESPACES", filtres: { sans_photo_ni_simulation_depuis_jours: 3 } }, dans(10));
     assert.match(plusTard.texte, new RegExp(`- Xavier Huit : espace ouvert il y a 14 jours, ni photo ni simulation, \\+33614080\\d{3} — SMS \\(LIEN_ESPACE_RAPPEL\\) : « Bonjour Xavier, c'est Lucas de CoverSwap\\. Voici à nouveau le lien de votre espace, tout votre projet y est à jour : https://coverswap\\.fr/e/[A-Za-z0-9_-]+ » \\[dossier:${x.dossierId}\\]`));

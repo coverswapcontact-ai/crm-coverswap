@@ -2,7 +2,9 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
 import { ETAPES, LIBELLES_ETAPE, PROCHAINE_ACTION_APRES_DEVIS, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
+import { signerParDevisAccepte } from "@/lib/dossiers/devis-signe";
 import { lireFaitsMain, mainSelonFaits, recalculerMain } from "@/lib/dossiers/main";
+import { appliquerEvenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
 import { suivreSoldeDossier } from "@/lib/encaissements/service";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
@@ -115,7 +117,9 @@ export async function controlerCoherence(): Promise<RapportCoherence> {
     if (accordEnLigne && avantSigne) {
       signaler("ACCORD_SANS_SIGNATURE", "HAUTE", `Le client a donné son bon pour accord dans son espace, mais le dossier est encore en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} ».`, "Passer le dossier en « Signé » (le devis devient « accepté »)");
     } else if (!accordEnLigne && avantSigne && d.documents.some((doc) => doc.statut === "ACCEPTE")) {
-      signaler("DEVIS_ACCEPTE_AVANT_SIGNE", "MOYENNE", `Un devis est noté « accepté » alors que le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » : l'espace du client le croit signé.`, "Remettre le devis en « émis » (le dossier ne bouge pas)");
+      // Mission 18 (B4) : un devis noté « accepté » par Lucas vaut signature (hors ligne) ; depuis, le dépôt et la
+      // correction signent le dossier d'eux-mêmes : il ne reste que des dossiers d'avant, que la correction signe.
+      signaler("DEVIS_ACCEPTE_AVANT_SIGNE", "MOYENNE", `Un devis est noté « accepté » (signé hors ligne) alors que le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » : l'espace du client le croit signé.`, "Passer le dossier en « Signé » (les autres devis proposés : non retenus)");
     }
     if (active && rang(d.etape) >= rang("SIGNE") && rang(d.etape) <= rang("CHANTIER") && d.documents.length > 0 && !lecture.accord) {
       signaler("SIGNE_SANS_DEVIS_ACCEPTE", "MOYENNE", `Le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » mais aucun devis n'est accepté : l'espace du client lui demande encore de signer.`, "Noter le dernier devis « accepté »");
@@ -330,10 +334,22 @@ async function corrigerUneIncoherence(cle: string): Promise<{ corrigee: boolean;
       await deplacer(dossierId!, "SIGNE", "AUTOMATIQUE", `${RAISON} : ${incoherence.code === "ACCORD_SANS_SIGNATURE" ? "bon pour accord donné dans l'espace client" : "paiement reçu"}`, devis.id);
       break;
     }
-    case "DEVIS_ACCEPTE_AVANT_SIGNE":
-      await prisma.document.updateMany({ where: { dossierId: dossierId!, type: "DEVIS", statut: "ACCEPTE" }, data: { statut: "GENERE" } });
-      await prisma.dossierEvenement.create({ data: { dossierId: dossierId!, type: "COHERENCE_CORRIGEE", direction: "INTERNE", contenu: "Contrôle de cohérence : devis « accepté » remis en « émis » (le dossier n'est pas signé)", metadata: JSON.stringify({ code: incoherence.code }) } });
+    case "DEVIS_ACCEPTE_AVANT_SIGNE": {
+      // Mission 18 (B4) : comme un dépôt « accepté » (documents-existants.ts), par la même fonction et d'un bloc.
+      const devis = await prisma.document.findFirst({ where: { dossierId: dossierId!, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE" }, orderBy: { createdAt: "desc" }, select: { id: true, numero: true } });
+      if (!devis) throw new ErreurMetier("Aucun devis accepté sur ce dossier.", 409);
+      const suites = await prisma.$transaction(
+        async (tx) => {
+          const signe = await signerParDevisAccepte(tx, dossierId!, devis.id, `${RAISON} : devis ${devis.numero} noté « accepté » (signé hors ligne)`);
+          if (!signe) throw new ErreurMetier("Le dossier n'est plus à une étape d'avant « Signé » : rien à corriger.", 409);
+          await tx.dossierEvenement.create({ data: { dossierId: dossierId!, type: "COHERENCE_CORRIGEE", direction: "INTERNE", contenu: `Contrôle de cohérence : devis ${devis.numero} « accepté » (signé hors ligne), le dossier passe en « Signé »`, metadata: JSON.stringify({ code: incoherence.code, documentId: devis.id }) } });
+          return { ...(await appliquerEvenementDossier(tx, dossierId!, { type: "DEVIS_ACCEPTE", documentId: devis.id })), changements: [signe.changement] };
+        },
+        { maxWait: 10_000, timeout: 30_000 }
+      );
+      await suitesEvenementDossier(suites);
       break;
+    }
     case "SIGNE_SANS_DEVIS_ACCEPTE": {
       const devis = await prisma.document.findFirst({ where: { dossierId: dossierId!, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, numero: true } });
       if (!devis) throw new ErreurMetier("Aucun devis émis sur ce dossier.", 409);

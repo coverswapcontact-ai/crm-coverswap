@@ -257,6 +257,8 @@ export const schemaChangementEtape = z.object({
 export type EntreeChangementEtape = DonneesTransition & {
   vers: EtapeDossier;
   devisAccepteId?: string;
+  /** Mission 18 (B4) : passage provoqué par un fait (devis noté « accepté ») ; écrit dans l'événement. Jamais lu des écrans. */
+  raison?: string;
 };
 
 /**
@@ -300,6 +302,7 @@ export async function changerEtapeDansTransaction(
     donnees: entree,
     documentId,
     etapeReference: avantSortie,
+    ...(entree.raison ? { raison: entree.raison } : {}),
     avertissements: verification.avertissements.map((avertissement) => avertissement.message),
   });
   // Mission 18 (B0) : la main et le statut du lead suivent DANS la transaction ; les effets d'après ne les refont pas.

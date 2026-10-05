@@ -89,6 +89,17 @@
   (relances depuis le mail), étape, main, « Attendre l'accord » ; un devis du CRM de ce numéro passe « Envoyé » ;
   rejoué, sans effet. Claude peut lire la pièce avant (`voir_fichiers` piece_mail). Ni outil ni paramètre ne change :
   empreinte **`040d6c7aa53c`** (53 outils). La description de `ajouter_fichier` change : reconnecter le connecteur.
+- **Mission 18, B4 (05/10/2026)** : dépôt d'un bloc. `ajouter_fichier` (DOSSIER › DEVIS, FACTURE) et la modale
+  « Enregistrer un document existant » (DP57, le PDF part désormais dans la même requête) passent par la même fonction
+  (`depot-document.ts › deposerDocument` → `documents-existants.ts › enregistrerDocumentExistant`) : PDF vérifié avant
+  toute écriture (un faux PDF ne consomme aucun numéro, l'étape ne bouge pas, on peut réessayer), puis document, PDF et
+  étape dans une transaction. Un devis déposé `statut: ACCEPTE` (signé hors ligne) sur un dossier pas encore signé le
+  fait passer en « Signé » dans la même transaction, les autres devis proposés « non retenus », prochaine action d'un
+  accord ; même règle pour `modifier` DOCUMENT `statut: ACCEPTE` (DP59, `modifierDocumentExistant`) et pour la
+  correction de cohérence `DEVIS_ACCEPTE_AVANT_SIGNE` (`agir_systeme`, qui signe au lieu de remettre le devis
+  « émis »). L'aperçu de `ajouter_fichier` et la note de `modifier` le disent d'avance. Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description du paramètre `statut` de `ajouter_fichier` change :
+  reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -338,7 +349,7 @@ un lien « Gérer les tarifs » vers l'onglet.
 | DP54 | Espace › « Ses derniers gestes » | GET …/espace | L | lire_fiche (dossier, espace: true : derniers gestes) | couvert | `mcp-lister-etat.test.ts` › « dossier : historique complet paginé, tâches, mails, devis, paiements… » |
 | DP55 | Documents › « Générer un devis » | POST /api/dossiers/:id/documents | S | generer_document (lignes SECTION) | couvert | `mcp-partie-c.test.ts` › « une ligne de section se dicte ; le devis prérempli montre ses lignes… » |
 | DP56 | Documents › « Générer une facture » | … {type:FACTURE} | S-€ | generer_document (FACTURE, depuis_devis) | couvert | `mcp.test.ts` › « « Génère la facture de Monsieur Rousse, mets-la dans son dossier et son… » ; `assistant.test.ts` › « sur un dossier signé, la facture s'émet, puis l'encaissement (sensible)… » |
-| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
+| DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant (mission 18, B4 : le PDF dans la même requête, d'un bloc ; « accepté » signe un dossier pas encore signé) ; POST …/pdf (remplacer) | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » ; `depot-atomique.test.ts` › « l'écran : le PDF dans la même requête (formulaire) ; un faux PDF… » |
 | DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | voir_fichiers (documents, document_id : PDF joint) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 | DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | modifier DOCUMENT (date_emission, montant, objet, statut, acompte_pct) ; ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 | DP98 | Tâches › « Enregistrer comme devis envoyé » (PDF parti de Gmail : modale de dépôt préremplie, numéro lu dans le nom, date du mail, montant du registre) | GET/POST /api/dossiers/:id/devis-gmail | S-€ | ajouter_fichier (DOSSIER › DEVIS, numero, montant, source piece_mail) ; voir_fichiers (piece_mail) ; taches | couvert | `devis-gmail.test.ts` › « outil « ajouter_fichier » avec la pièce du mail : le même enregistrement… » |
@@ -1216,7 +1227,7 @@ Schéma : `{ partie, … }`. Lecture seule, jamais de secret.
 |---|---|---|---|
 | DOSSIER › PHOTO_AVANT, PHOTO_APRES | `dossiers/dossiers.ts › ajouterPhoto(dossierId, fichier, apres)` | R | DP22, DP23, D13 (photos) |
 | DOSSIER › SIMULATION (titre, description, source MANUEL ou CHATGPT, preparation_id « auto ») | `simulations/dossier.ts › deposerSimulationDossier` (brouillon) | R | DP82, S13 |
-| DOSSIER › DEVIS, FACTURE, AUTRE (champs de l'ex-`deposer_document`) | `dossiers/depot-document.ts › deposerDocument` ; sans fichier : `dossiers/documents-existants.ts › enregistrerDocumentExistant` | S (un devis visible vaut envoi) | DP57, DP49 (repris) |
+| DOSSIER › DEVIS, FACTURE, AUTRE (champs de l'ex-`deposer_document`) | `dossiers/depot-document.ts › deposerDocument` ; sans fichier : `dossiers/documents-existants.ts › enregistrerDocumentExistant` | S (un devis visible vaut envoi ; « accepté » vaut signature, mission 18 B4) | DP57, DP49 (repris) |
 | DOCUMENT › PDF_DOCUMENT (PDF d'un document repris) | `dossiers/documents-existants.ts › importerPdfDocument` | S-€ | DP59 |
 | DEPENSE › JUSTIFICATIF | `depenses/service.ts › remplacerJustificatif` (à la création : `creer DEPENSE`) | R | X5, X9, DP92 |
 | PUBLICATION › PHOTO_AVANT, PHOTO_APRES | `fichiers/stockage.ts › enregistrerFichier`, puis `site/publications.ts › modifierPublication` (chemin), dans `fichiers-depot/enregistrement.ts` | R (S-client si déjà publiée) | W3, W4 |

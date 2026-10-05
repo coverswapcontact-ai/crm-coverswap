@@ -932,3 +932,68 @@ outils) ; description de `ajouter_fichier` changée : reconnecter le connecteur.
 
 Reste : B4-B13 (B13 : règle de cohérence `DEVIS_GMAIL_NON_ENREGISTRE` s'appuiera sur `devisGmailNonEnregistres`) ;
 pour Lucas : l'agent mail doit être actif pour que les PDF sortants soient gardés ; reconnecter le connecteur.
+
+### Mission 18, B4 — dépôt d'un bloc, devis déposé « accepté » = signé (écart 4)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **PDF vérifié avant toute écriture** (`documents-existants.ts › verifierPdf` : vide, 9 Mo, `%PDF-` ; la même
+  vérification sert à l'import d'un PDF et au dépôt Gmail de B3) : `depot-document.ts › deposerDocument` (outil
+  `ajouter_fichier`) la fait avant d'inscrire quoi que ce soit. Un faux PDF ne consomme aucun numéro, aucun document
+  n'est créé, l'étape ne bouge pas : on peut réessayer avec le même numéro.
+- **Un bloc** : `enregistrerDocumentExistant(dossierId, entree, { pdf })` écrit document, PDF (sous le numéro du
+  registre, dans la transaction, fichier seul : `rattacherDocumentExistant` option `pdf`, comme `emettre`), étape,
+  prochaine action et main dans UNE transaction ; si elle échoue, le PDF écrit quitte sa place (archives,
+  « depot-annule »). B3 (`devis-gmail.ts`) passe par la même option : plus de fichier orphelin. Les suites passent par
+  `suitesEvenementDossier` (agenda si la prochaine action a changé).
+- **L'écran** : la modale « Enregistrer un document existant » envoie le PDF dans la même requête (formulaire
+  `donnees` JSON + `pdf` ; `POST /api/dossiers/[id]/documents/existant` accepte aussi le JSON seul) ; l'ancienne route
+  du PDF reste pour importer ou remplacer le PDF d'un document déjà repris (« Corriger »).
+- **Devis déposé « accepté » sur un dossier pas encore signé → « Signé »** (nouveau `dossiers/devis-signe.ts ›
+  signerParDevisAccepte`, `retenirDevis`) : depuis Qualification, Simulation, Devis envoyé ou Relance
+  (`ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE`, constants.ts), dans la transaction du dépôt : les autres devis émis ou envoyés
+  « non retenus », puis `changerEtapeDansTransaction(vers SIGNE, devisAccepteId, BON_POUR_ACCORD)` (main et statut du
+  lead dans la transaction ; nouvelle option `raison` : « devis N déposé « accepté » (signé hors ligne) ; non retenu :
+  … »), puis le point d'entrée avec `DEVIS_ACCEPTE` (« Appeler le client : fixer la date du chantier, suivre
+  l'acompte » ; une action posée à la main reste, tâche `accord` à la place). L'historique du dépôt le dit (« …,
+  accepté (signé hors ligne) »). Après : Meta SIGNE, agenda, tâches (ENVOYER_DEVIS d'un devis devenu non retenu se coche).
+- **Même règle** pour un devis repris corrigé en « accepté » (`modifierDocumentExistant` : écran « Corriger », outil
+  `modifier` DOCUMENT) et pour la correction du contrôle `DEVIS_ACCEPTE_AVANT_SIGNE` (elle signe au lieu de remettre
+  le devis « émis » ; constat et correction réécrits, `COHERENCE_CORRIGEE` écrit dans la même transaction).
+- **Déposé « accepté » ailleurs** (dossier déjà signé, en pause, perdu) : l'étape ne bouge pas, et plus de « Attendre
+  l'accord » (événement `DEVIS_DEPOSE` avec `accepte`). La reprise d'un dossier entier ne signe jamais.
+- **Ce que l'assistant et l'écran disent d'avance** : aperçu de `ajouter_fichier` (« Accepté (signé hors ligne) : le
+  dossier passera de X à « Signé »… »), note et annulation partielle de `modifier` DOCUMENT, aide sous « Où en est ce
+  devis » dans la modale, message après dépôt ; description du paramètre `statut` de `ajouter_fichier`.
+- **Docs** : `docs/SYNCHRO.md` (lignes `DEVIS_ACCEPTE` et `DEVIS_DEPOSE`, paragraphe B4, B4 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B4, DP57, ligne `ajouter_fichier`), `docs/COHERENCE.md` (`DEVIS_ACCEPTE_AVANT_SIGNE`).
+
+Décisions prises seul (solution la plus simple) :
+- Le PDF s'écrit DANS la transaction (une fois le numéro du registre connu), comme `emettre` et B3, plutôt qu'avant :
+  le chemin dépend du numéro normalisé ; archivé si la transaction échoue.
+- Étapes qui signent : les étapes actives d'avant « Signé » seulement (celles du contrôle de cohérence). En pause, l'étape
+  d'avant la sortie peut être après « Signé » (avenant) ; un dossier perdu se reprend d'abord.
+- `retenirDevis` sert ici seulement ; `changerEtapeDansTransaction` (passage « Signé » à l'écran) n'écarte toujours pas
+  les autres variantes : B10 l'y branchera avec le paiement (comportement inchangé pour les autres chemins).
+- Main après un dépôt « accepté » : celle de l'étape « Signé » (le client, pour l'acompte) ; la prochaine action dit à
+  Lucas de fixer la date et de suivre l'acompte. Pas d'alerte « DEVIS SIGNÉ » : c'est Lucas qui l'enregistre.
+- Correction de cohérence `DEVIS_ACCEPTE_AVANT_SIGNE` : elle signe (un devis noté « accepté » par Lucas vaut signature
+  hors ligne) ; elle reste dans les corrections sensibles (elle change l'étape).
+- La réponse de la route `existant` porte aussi `suites` (lecture seule, sans effet).
+
+Tests : 1 376 → 1 383 (`npm test` : 1 381 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date
+du jour : `mission-14-partie-8` et `mcp-mail`). Nouveau `src/lib/dossiers/depot-atomique.test.ts` (7 essais, état
+des deux côtés, rien ne sort du poste) : faux PDF et PDF tronqué refusés avant toute écriture (aucun numéro, aucun
+document, aucun fichier, état identique des deux côtés), puis le bon PDF → Devis envoyé, main au client, « Attendre
+l'accord », espace DEVIS, relance n°1, PDF rattaché ; transaction qui échoue après l'écriture du PDF → rien en base, PDF
+retiré, état inchangé ; devis déposé « accepté » en Simulation avec un devis du CRM pas envoyé → Signé, lead SIGNE, main
+de l'étape, prochaine action d'accord, espace ACOMPTE, plus de relance, l'autre devis NON_RETENU, ENVOYER_DEVIS
+fermée, historique ; action posée à la main gardée + tâche `accord`, second devis « accepté » sur dossier signé sans
+effet ; devis repris corrigé en « accepté » → Signé (une seule fois) ; route de la modale en formulaire (415 sans rien
+écrire, puis 201 et Signé ; JSON seul accepté) ; contrôle de cohérence → la correction signe, l'incohérence disparaît.
+Aucun test existant à adapter (les essais annoncés par le plan restent verts : le dossier « accepté » de
+`documents-existants.test` est déjà signé, la reprise ne signe pas). `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description du paramètre `statut` de
+`ajouter_fichier` changée : reconnecter le connecteur.
+
+Reste : B5-B13 (B10 : brancher `retenirDevis` dans le passage « Signé » de l'écran et dans `suivreAcompteDossier`) ;
+rien pour Lucas, sauf reconnecter le connecteur.

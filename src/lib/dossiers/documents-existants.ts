@@ -5,8 +5,9 @@ import { imputerSurFacture, planImputationFacture } from "@/lib/encaissements/se
 import { LIBELLES_TYPE_DOCUMENT, type TypeDocument } from "./constants";
 import { dateDepuisJour, estJourValide, formatDateCourte, jourParis } from "./dates";
 import { devisRenduVisible, estDevisEnvoye, passerEnDevisEnvoye, suitesDevisEnvoye } from "./devis-envoye";
+import { estSigneeParDevisAccepte, signerParDevisAccepte } from "./devis-signe";
 import { recalculerMain } from "./main";
-import { appliquerEvenementDossier } from "./synchro";
+import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "./synchro";
 import type { ChangementEtape } from "./transitions";
 import { ErreurMetier } from "./erreurs";
 import type { CategorieDestinataire } from "./mentions";
@@ -74,8 +75,32 @@ export type ResultatDocumentExistant = {
   documentId: string;
   numero: string;
   avertissements: string[];
-  /** Mission 14 (R1) : le passage en « Devis envoyé » écrit dans la transaction ; ses effets se lancent après (`suitesDevisEnvoye`). */
+  /**
+   * Mission 14 (R1) : le passage en « Devis envoyé » écrit dans la transaction ; ses effets se lancent après. Mission 18
+   * (B4) : ou le passage en « Signé » d'un devis déposé « accepté ».
+   */
   changements: ChangementEtape[];
+  /** Mission 18 (B4) : ce que le point d'entrée a écrit (devis seulement), pour `suitesEvenementDossier` après la transaction. */
+  suites: Suites | null;
+};
+
+/**
+ * Mission 18 (B4) : un PDF vérifié AVANT toute écriture (dépôt, import) : vide, trop lourd ou pas un PDF → refusé, rien
+ * n'est écrit, aucun numéro consommé, l'étape ne bouge pas.
+ */
+export function verifierPdf(contenu: Buffer): void {
+  if (contenu.length === 0) throw new ErreurMetier("Le PDF est vide.", 400);
+  if (contenu.length > PDF_OCTETS_MAX) throw new ErreurMetier("PDF trop lourd : 9 Mo maximum.", 413);
+  if (contenu.subarray(0, 5).toString("latin1") !== "%PDF-") throw new ErreurMetier("Ce fichier n'est pas un PDF.", 415);
+}
+
+export type OptionsRattachement = {
+  /** false : la reprise d'un dossier entier, dont l'étape est déclarée (rien n'avance, rien ne signe). */
+  avancerEtape?: boolean;
+  /** Mission 18 (B4) : le PDF du document, déjà vérifié (`verifierPdf`), écrit et rattaché dans la même transaction. */
+  pdf?: Buffer;
+  /** Où le PDF a été écrit : l'appelant l'archive si la transaction échoue. */
+  ecrit?: { chemin?: string };
 };
 
 function statutDe(type: TypeDocument, statut: string | undefined): string {
@@ -91,13 +116,16 @@ function statutDe(type: TypeDocument, statut: string | undefined): string {
  *
  * Mission 14 (R1) : un devis déposé visible, émis ou envoyé fait passer le
  * dossier en « Devis envoyé » (depuis Qualification, Simulation ou Relance),
- * comme un devis généré ; l'appelant lance ensuite `suitesDevisEnvoye`.
+ * comme un devis généré ; l'appelant lance ensuite les suites.
+ * Mission 18 (B4) : un devis déposé « accepté » sur un dossier pas encore
+ * signé le fait passer en « Signé », dans la même transaction (devis-signe.ts) ;
+ * le PDF (`options.pdf`) est écrit et rattaché dans la même transaction aussi.
  * `avancerEtape: false` : la reprise d'un dossier, dont l'étape est déclarée.
  */
-export async function rattacherDocumentExistant(tx: Transaction, dossierId: string, entree: EntreeDocumentExistant, options: { avancerEtape?: boolean } = {}): Promise<ResultatDocumentExistant> {
+export async function rattacherDocumentExistant(tx: Transaction, dossierId: string, entree: EntreeDocumentExistant, options: OptionsRattachement = {}): Promise<ResultatDocumentExistant> {
   const dossier = await tx.dossier.findUnique({
     where: { id: dossierId },
-    select: { clientNom: true, clientAdresse: true, clientCp: true, clientVille: true, clientId: true, objet: true, client: { select: { categorie: true, siret: true } } },
+    select: { clientNom: true, clientAdresse: true, clientCp: true, clientVille: true, clientId: true, objet: true, etape: true, client: { select: { categorie: true, siret: true } } },
   });
   if (!dossier) throw new ErreurMetier("Dossier introuvable.", 404);
 
@@ -150,6 +178,15 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
     siret: categorie === "PARTICULIER" ? null : (dossier.client?.siret ?? null),
     categorie,
   };
+  // Mission 18 (B4) : le PDF, déjà vérifié, sous le numéro du registre (fichier seul : jamais le client Prisma global
+  // ici) ; une transaction annulée le fait archiver par l'appelant (`options.ecrit`).
+  let pdfPath: string | null = null;
+  if (options.pdf) {
+    pdfPath = await enregistrerPdf(dossierId, entree.type, ligne.numero, options.pdf);
+    if (options.ecrit) options.ecrit.chemin = pdfPath;
+  }
+  // Un devis déposé « accepté » sur un dossier pas encore signé le signe (B4) : l'historique le dit.
+  const signe = options.avancerEtape !== false && entree.type === "DEVIS" && statutDe(entree.type, entree.statut) === "ACCEPTE" && estSigneeParDevisAccepte(dossier.etape);
   let document;
   try {
     document = await tx.document.create({
@@ -170,6 +207,7 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
         categorieClient: categorie,
         libelleVariante: entree.libelleVariante || null,
         visibleEspace: entree.visibleEspace ?? true,
+        ...(pdfPath ? { pdfPath } : {}),
       },
     });
   } catch (erreur) {
@@ -202,7 +240,7 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
       dossierId,
       type: "DOCUMENT_REPRIS",
       direction: "INTERNE",
-      contenu: `${LIBELLES_TYPE_DOCUMENT[entree.type]} ${ligne.numero}${entree.libelleVariante ? ` « ${entree.libelleVariante} »` : ""} du ${formatDateCourte(dateEmission)} rattaché (émis avant le CRM) : ${formatCentimes(versCentimes(document.totalHt))}`,
+      contenu: `${LIBELLES_TYPE_DOCUMENT[entree.type]} ${ligne.numero}${entree.libelleVariante ? ` « ${entree.libelleVariante} »` : ""} du ${formatDateCourte(dateEmission)} rattaché (émis avant le CRM) : ${formatCentimes(versCentimes(document.totalHt))}${signe ? ", accepté (signé hors ligne)" : ""}`,
       // Mission 14 : type, statut et visibilité disent si ce dépôt passe la main au client (main.ts) ; `reprise` :
       // pendant la reprise d'un dossier entier, dont le parcours est daté du passé, le dépôt se date de son émission.
       metadata: JSON.stringify({ documentId: document.id, numero: ligne.numero, totalHt: document.totalHt, origine: "REPRISE", type: entree.type, statut: document.statut, visibleEspace: document.visibleEspace, ...(options.avancerEtape === false ? { reprise: true } : {}) }),
@@ -211,21 +249,48 @@ export async function rattacherDocumentExistant(tx: Transaction, dossierId: stri
   });
 
   const changements: ChangementEtape[] = [];
-  if (options.avancerEtape !== false && estDevisEnvoye(document)) {
+  if (signe) {
+    // Mission 18 (B4, écart 4) : signé hors ligne → « Signé » dans cette transaction, les autres devis « non retenus ».
+    const signature = await signerParDevisAccepte(tx, dossierId, document.id, `devis ${ligne.numero} déposé « accepté » (signé hors ligne)`);
+    if (signature) changements.push(signature.changement);
+  } else if (options.avancerEtape !== false && estDevisEnvoye(document)) {
     const changement = await passerEnDevisEnvoye(tx, dossierId, { documentId: document.id, raison: `devis ${ligne.numero} déposé, visible dans son espace` });
     if (changement) changements.push(changement);
   }
   // Mission 13 (B1) : comme à la génération (documents.ts › emettre), « Préparer le devis », posé par l'espace quand le
   // client a choisi, est fait dès qu'un devis est rattaché — généré ou déposé. Une action écrite par Lucas reste
   // (mission 18 : par le point d'entrée, qui range une tâche à la place et écrit la main, une fois tout écrit).
-  if (entree.type === "DEVIS") await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_DEPOSE", documentId: document.id });
-  return { documentId: document.id, numero: ligne.numero, avertissements, changements };
+  // Mission 18 (B4) : un devis qui signe le dossier vaut un accord (« fixer la date du chantier, suivre l'acompte ») ;
+  // un devis déposé « accepté » sur un dossier déjà signé (ou en pause, perdu) n'attend l'accord de personne.
+  const suites =
+    entree.type === "DEVIS"
+      ? await appliquerEvenementDossier(
+          tx,
+          dossierId,
+          changements.some((c) => c.vers === "SIGNE") ? { type: "DEVIS_ACCEPTE", documentId: document.id } : { type: "DEVIS_DEPOSE", documentId: document.id, accepte: document.statut === "ACCEPTE" }
+        )
+      : null;
+  return { documentId: document.id, numero: ligne.numero, avertissements, changements, suites };
 }
 
-/** Rattachement demandé depuis le dossier (écran, outil « deposer_document ») ; puis, comme à la génération, l'étape et la main suivent. */
-export async function enregistrerDocumentExistant(dossierId: string, entree: EntreeDocumentExistant): Promise<ResultatDocumentExistant> {
-  const resultat = await prisma.$transaction((tx) => rattacherDocumentExistant(tx, dossierId, entree));
-  await suitesDevisEnvoye(dossierId, resultat.changements);
+/**
+ * Rattachement demandé depuis le dossier (écran, outil « deposer_document ») ; puis, comme à la génération, l'étape et
+ * la main suivent. Mission 18 (B4) : avec son PDF (`pdf`, vérifié ici avant toute écriture), tout se fait dans UNE
+ * transaction ; si elle échoue, le PDF écrit quitte sa place (gardé aux archives) et rien n'a changé.
+ */
+export async function enregistrerDocumentExistant(dossierId: string, entree: EntreeDocumentExistant, options: { pdf?: Buffer } = {}): Promise<ResultatDocumentExistant> {
+  if (options.pdf) verifierPdf(options.pdf);
+  const ecrit: { chemin?: string } = {};
+  let resultat: ResultatDocumentExistant;
+  try {
+    resultat = await prisma.$transaction((tx) => rattacherDocumentExistant(tx, dossierId, entree, { pdf: options.pdf, ecrit }), { maxWait: 10_000, timeout: 30_000 });
+  } catch (erreur) {
+    // Transaction annulée : le numéro n'a jamais été rattaché, l'étape n'a pas bougé ; le PDF écrit quitte sa place.
+    if (ecrit.chemin) await archiverFichier(ecrit.chemin, "depot-annule").catch(() => {});
+    throw erreur;
+  }
+  if (resultat.suites) await suitesEvenementDossier({ ...resultat.suites, changements: resultat.changements });
+  else await suitesDevisEnvoye(dossierId, resultat.changements);
   return resultat;
 }
 
@@ -242,7 +307,7 @@ async function documentRepris(dossierId: string, documentId: string) {
 export async function modifierDocumentExistant(dossierId: string, documentId: string, entree: z.output<typeof schemaModificationDocumentExistant>): Promise<string[]> {
   const document = await documentRepris(dossierId, documentId);
   const avertissements: string[] = [];
-  await prisma.$transaction(async (tx) => {
+  const signature = await prisma.$transaction(async (tx) => {
     const totalHt = entree.montant !== undefined ? versCentimes(entree.montant) / 100 : undefined;
     await tx.document.update({
       where: { id: document.id },
@@ -272,7 +337,19 @@ export async function modifierDocumentExistant(dossierId: string, documentId: st
         avertissements.push(`Le registre garde la date du ${formatDateCourte(ligne.emisLe)} pour ${ligne.numero}.`);
       }
     }
+    // Mission 18 (B4, écart 4) : un devis repris corrigé en « accepté » (signé hors ligne) signe le dossier pas encore
+    // signé, dans cette transaction, comme un dépôt « accepté » : « Signé », les autres devis « non retenus », la
+    // prochaine action d'un accord (une action posée à la main reste), la main.
+    if (document.type === "DEVIS" && entree.statut !== undefined && document.statut !== "ACCEPTE" && statutDe("DEVIS", entree.statut) === "ACCEPTE") {
+      const signe = await signerParDevisAccepte(tx, dossierId, document.id, `devis ${document.numero} noté « accepté » (signé hors ligne)`);
+      if (signe) return { changement: signe.changement, suites: await appliquerEvenementDossier(tx, dossierId, { type: "DEVIS_ACCEPTE", documentId: document.id }) };
+    }
+    return null;
   });
+  if (signature) {
+    await suitesEvenementDossier({ ...signature.suites, changements: [signature.changement] });
+    return avertissements;
+  }
   // Mission 14 (R1) : un devis repris masqué qui devient visible est envoyé au client (main, étape), comme par l'interrupteur de l'espace.
   const statut = entree.statut !== undefined ? statutDe(document.type as TypeDocument, entree.statut) : document.statut;
   if (entree.visibleEspace === true && !document.visibleEspace && estDevisEnvoye({ ...document, statut, visibleEspace: true })) {
@@ -291,7 +368,7 @@ export async function importerPdfDocument(dossierId: string, documentId: string,
   if (fichier.size === 0) throw new ErreurMetier("Le PDF est vide.", 400);
   if (fichier.size > PDF_OCTETS_MAX) throw new ErreurMetier("PDF trop lourd : 9 Mo maximum.", 413);
   const contenu = Buffer.from(await fichier.arrayBuffer());
-  if (contenu.subarray(0, 5).toString("latin1") !== "%PDF-") throw new ErreurMetier("Ce fichier n'est pas un PDF.", 415);
+  verifierPdf(contenu);
 
   if (document.pdfPath && (await lireFichier(document.pdfPath))) await archiverFichier(document.pdfPath, "pdf-remplace");
   const chemin = await enregistrerPdf(dossierId, document.type as TypeDocument, document.numero!, contenu);

@@ -42,7 +42,10 @@ export type EvenementDossier =
   | { type: "PROPOSITION_DEMANDEE"; commentaire?: string | null }
   /** Demande d'autre proposition retirée (validations.ts › retirerDemandeProposition) ; `choixValide` : une simulation reste validée. */
   | { type: "PROPOSITION_RETIREE"; choixValide: boolean }
-  /** Bon pour accord donné dans l'espace (service.ts › accepterDevis). */
+  /**
+   * Bon pour accord donné dans l'espace (service.ts › accepterDevis) ; ou, mission 18 (B4), devis noté « accepté » par
+   * Lucas qui signe le dossier (documents-existants.ts : déposé « accepté », ou devis repris corrigé en « accepté »).
+   */
   | { type: "DEVIS_ACCEPTE"; documentId: string }
   /** Bon pour accord retiré (validations.ts › retirerAccord). */
   | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS" }
@@ -50,8 +53,12 @@ export type EvenementDossier =
   | { type: "SIMULATION_PUBLIEE"; simulationIds: string[] }
   /** Devis généré par le CRM (documents.ts › emettre) ; `envoye` : annoncé au client (mission 18, B1 : générer n'est pas envoyer). */
   | { type: "DEVIS_GENERE"; documentId: string; envoye: boolean }
-  /** Devis émis ailleurs, déposé (documents-existants.ts › rattacherDocumentExistant). */
-  | { type: "DEVIS_DEPOSE"; documentId: string }
+  /**
+   * Devis émis ailleurs, déposé (documents-existants.ts › rattacherDocumentExistant). `accepte` : déposé « accepté »
+   * sur un dossier déjà signé (ou en pause, perdu) — il n'attend l'accord de personne (B4 ; avant « Signé », c'est
+   * `DEVIS_ACCEPTE`).
+   */
+  | { type: "DEVIS_DEPOSE"; documentId: string; accepte?: boolean }
   /**
    * Devis envoyé après sa génération : par le mail du CRM (mail/propositions.ts, mission 18, B2) ; ou depuis Gmail, hors
    * du CRM, enregistré après coup (devis-gmail.ts › enregistrerDevisGmail, mission 18, B3).
@@ -135,6 +142,8 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
         ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 }
         : { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     case "DEVIS_DEPOSE":
+      // Mission 18 (B4) : un devis déposé « accepté » n'attend l'accord de personne.
+      return evenement.accepte ? null : { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
     // Mission 18 (B2, B3) : envoyé par mail (CRM ou Gmail), il l'est comme un devis annoncé (« Envoyer le devis au client » est fait).
     case "DEVIS_ENVOYE":
       return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };

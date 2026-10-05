@@ -219,6 +219,13 @@ export const PROCHAINE_ACTION_APRES_DEVIS = "Attendre l'accord du client sur le 
 /** Mission 18 (B1) : le devis est prêt mais pas encore envoyé (masqué dans son espace, ou sans annonce). */
 export const PROCHAINE_ACTION_ENVOYER_DEVIS = "Envoyer le devis au client";
 
+/**
+ * Mission 18 (B4) : les étapes d'où un devis noté « accepté » par Lucas (déposé « accepté », devis repris corrigé)
+ * fait passer le dossier en « Signé » — les étapes actives d'avant « Signé » (dossiers/devis-signe.ts). Ici pour que
+ * la modale de dépôt le dise d'avance.
+ */
+export const ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION", "DEVIS_ENVOYE", "RELANCE"];
+
 // Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [
   "PRIX",

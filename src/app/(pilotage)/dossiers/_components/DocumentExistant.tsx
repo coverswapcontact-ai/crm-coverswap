@@ -5,7 +5,7 @@ import { AlertTriangle, FileUp } from "lucide-react";
 import { toast } from "sonner";
 import { ErreurApi, appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { Puces, Bouton, Champ, Modale } from "@/components/pilotage/ui";
-import { LIBELLES_STATUT_DOCUMENT } from "@/lib/dossiers/constants";
+import { ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE, LIBELLES_STATUT_DOCUMENT } from "@/lib/dossiers/constants";
 import { formatDateCourte, jourParis } from "@/lib/dossiers/dates";
 import { formatMontant, formatQuantite, lireNombre } from "@/lib/dossiers/montants";
 import { numerosProposables } from "@/lib/dossiers/numeros-libres";
@@ -169,13 +169,21 @@ export function ModaleDocumentExistant({
         avertissements = reponse.avertissements;
         nouveau = (await envoyerPdf(document.id)) ?? reponse.dossier;
       } else {
-        const reponse = await envoyerJson<{ documentId: string; numero: string; avertissements: string[]; dossier: DossierDetail }>(
-          `/api/dossiers/${detail.id}/documents/existant`,
-          "POST",
-          { ...commun, type, numero: numero.trim(), inscrireAuRegistre }
-        );
-        avertissements = reponse.avertissements;
-        nouveau = (await envoyerPdf(reponse.documentId)) ?? reponse.dossier;
+        // Mission 18 (B4) : le PDF part dans la même requête — vérifié avant toute écriture, puis document, PDF et étape
+        // d'un bloc (un faux PDF ne consomme pas le numéro et ne fait pas bouger le dossier).
+        const donnees = { ...commun, type, numero: numero.trim(), inscrireAuRegistre };
+        let corps: RequestInit;
+        if (pdf) {
+          const formulaire = new FormData();
+          formulaire.set("donnees", JSON.stringify(donnees));
+          formulaire.set("pdf", pdf);
+          corps = { method: "POST", body: formulaire };
+        } else {
+          corps = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(donnees) };
+        }
+        const reponse = await appelApi<{ documentId: string; numero: string; avertissements: string[]; changements: { vers: string }[]; dossier: DossierDetail }>(`/api/dossiers/${detail.id}/documents/existant`, corps);
+        avertissements = [...reponse.avertissements, ...(reponse.changements.some((c) => c.vers === "SIGNE") ? ["Le dossier passe en « Signé » ; les autres devis proposés : non retenus."] : [])];
+        nouveau = reponse.dossier;
       }
       onMisAJour(nouveau);
       toast.success(document ? "Document corrigé" : `${type === "DEVIS" ? "Devis" : "Facture"} ${numero.trim()} rattaché${type === "FACTURE" ? "e" : ""}`, {
@@ -279,7 +287,12 @@ export function ModaleDocumentExistant({
           ) : null}
         </div>
         {type === "DEVIS" && !pieceGmail ? (
-          <Puces libelle="Où en est ce devis" options={STATUTS_DEVIS.map((valeur) => ({ valeur, libelle: LIBELLES_STATUT_DOCUMENT[valeur] }))} valeur={statut} onChange={setStatut} />
+          <div>
+            <Puces libelle="Où en est ce devis" options={STATUTS_DEVIS.map((valeur) => ({ valeur, libelle: LIBELLES_STATUT_DOCUMENT[valeur] }))} valeur={statut} onChange={setStatut} />
+            {statut === "ACCEPTE" && document?.statut !== "ACCEPTE" && ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE.includes(detail.etape) ? (
+              <p className="mt-1 text-[12px] text-[#6B7280]">Accepté (signé hors ligne) : le dossier passera en « Signé », les autres devis proposés deviendront « non retenus ».</p>
+            ) : null}
+          </div>
         ) : null}
         {type === "DEVIS" ? (
           <div className="grid gap-3 sm:grid-cols-2">

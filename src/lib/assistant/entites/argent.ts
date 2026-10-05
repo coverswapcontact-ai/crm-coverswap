@@ -53,9 +53,19 @@ export const DOCUMENT: DefinitionEntite = {
     // Un document repris qui change touche l'argent ; un devis masqué qui devient visible vaut envoi au client.
     sensible: (apres, avant) => CHAMPS_REPRIS.some((c) => c in apres && JSON.stringify(apres[c]) !== JSON.stringify(avant[c])) || (apres.visibleEspace === true && avant.visibleEspace !== true),
     pretraiter: (e, contexte) => datesDictees(e, ["dateEmission"], contexte.maintenant),
-    note: (apres, avant) => (apres.visibleEspace === true && avant.visibleEspace !== true ? "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas." : null),
+    note: (apres, avant) =>
+      apres.statut === "ACCEPTE" && avant.statut !== "ACCEPTE"
+        ? "Noté « accepté », le devis vaut signature (hors ligne) : un dossier pas encore signé passe en « Signé », les autres devis proposés deviennent « non retenus »."
+        : apres.visibleEspace === true && avant.visibleEspace !== true
+          ? "Rendu visible, le devis vaut envoi au client : la main passe au client, le dossier passe en « Devis envoyé » s'il n'y est pas."
+          : null,
     // Masquer de nouveau ne « dé-envoie » pas : l'événement « Devis envoyé » reste, et l'étape ne revient pas d'elle-même.
-    annulationPartielle: (changements) => (changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true) ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant." : null),
+    annulationPartielle: (changements) =>
+      changements.some((c) => c.cle === "statut" && c.apres === "ACCEPTE" && c.avant !== "ACCEPTE")
+        ? "Le devis n'est plus noté « accepté », mais le dossier garde l'étape « Signé » s'il y est passé (et les autres devis restent « non retenus ») : « changer_etape » pour le remettre à son étape d'avant."
+        : changements.some((c) => c.cle === "visibleEspace" && c.apres === true && c.avant !== true)
+          ? "Le devis est de nouveau masqué au client, mais l'envoi reste dans l'historique et le dossier garde l'étape « Devis envoyé » s'il y est passé : « changer_etape » pour le remettre à son étape d'avant."
+          : null,
     lire: async (cible) => {
       const d = await prisma.document.findUniqueOrThrow({ where: { id: cible.id } });
       return { dateEmission: jour(d.dateEmission), montant: d.totalHt, objet: d.objet, statut: d.statut, acomptePct: d.acomptePct, libelleVariante: d.libelleVariante, visibleEspace: d.visibleEspace };

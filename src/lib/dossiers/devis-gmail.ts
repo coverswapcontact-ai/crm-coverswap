@@ -6,9 +6,9 @@ import { lireListe } from "@/lib/messages/stockage";
 import { LIBELLES_STATUT_DOCUMENT, type StatutDocument } from "./constants";
 import { formatDateCourte, jourParis } from "./dates";
 import { devisAEnvoyer, passerEnDevisEnvoye, STATUTS_DEVIS_ENVOYE } from "./devis-envoye";
-import { PDF_OCTETS_MAX, rattacherDocumentExistant, schemaDocumentExistant } from "./documents-existants";
+import { rattacherDocumentExistant, schemaDocumentExistant, verifierPdf } from "./documents-existants";
 import { cleNumero, lireNumero } from "./numerotation";
-import { enregistrerPdf } from "./stockage";
+import { archiverFichier } from "./stockage";
 import { appliquerEvenementDossier, suitesEvenementDossier } from "./synchro";
 import type { ChangementEtape } from "./transitions";
 
@@ -263,9 +263,7 @@ export async function enregistrerDevisGmail(dossierId: string, entree: EntreeDev
 
   // Le PDF d'abord : vide, trop lourd ou pas un PDF → rien n'est écrit, aucun numéro consommé.
   const fichier = await lirePieceMessage(entree.messageId, entree.pieceId);
-  if (fichier.contenu.length === 0) throw new ErreurMetier("Le PDF est vide.", 400);
-  if (fichier.contenu.length > PDF_OCTETS_MAX) throw new ErreurMetier("PDF trop lourd : 9 Mo maximum.", 413);
-  if (fichier.contenu.subarray(0, 5).toString("latin1") !== "%PDF-") throw new ErreurMetier("Ce fichier n'est pas un PDF.", 415);
+  verifierPdf(fichier.contenu);
 
   const numero = entree.numero?.trim() || numeroDevine(piece.nom);
   if (!numero) throw new ErreurMetier("Le numéro du devis est obligatoire (illisible dans le nom du fichier).", 400);
@@ -277,7 +275,9 @@ export async function enregistrerDevisGmail(dossierId: string, entree: EntreeDev
   }
   if (!existant && !entree.montant) throw new ErreurMetier("Le montant HT est obligatoire.", 400);
 
-  const { resultat, suites } = await prisma.$transaction(
+  // Mission 18 (B4) : le PDF écrit dans la transaction quitte sa place (gardé aux archives) si elle échoue.
+  const ecrit: { chemin?: string } = {};
+  const enregistrement = prisma.$transaction(
     async (tx) => {
       let documentId: string;
       let numeroFinal: string;
@@ -306,12 +306,10 @@ export async function enregistrerDevisGmail(dossierId: string, entree: EntreeDev
             libelleVariante: entree.libelleVariante ?? null,
             visibleEspace: true,
             inscrireAuRegistre: entree.inscrireAuRegistre ?? false,
-          })
+          }),
+          // Le PDF du mail, écrit et rattaché dans la transaction (fichier seul : jamais le client Prisma global ici).
+          { pdf: fichier.contenu, ecrit }
         );
-        // Le PDF du mail, écrit pendant la transaction (fichier seul : jamais le client Prisma global ici) ; une
-        // transaction annulée laisse au plus un fichier orphelin, écrasé par le prochain dépôt de ce numéro.
-        const chemin = await enregistrerPdf(dossierId, "DEVIS", repris.numero, fichier.contenu);
-        await tx.document.update({ where: { id: repris.documentId }, data: { pdfPath: chemin } });
         await ecrireEnvoiGmail(tx, dossierId, { documentId: repris.documentId, numero: repris.numero, message: piece.message, pieceId: entree.pieceId, renduVisible: false });
         documentId = repris.documentId;
         numeroFinal = repris.numero;
@@ -326,6 +324,10 @@ export async function enregistrerDevisGmail(dossierId: string, entree: EntreeDev
     },
     { maxWait: 10_000, timeout: 30_000 }
   );
+  const { resultat, suites } = await enregistrement.catch(async (erreur: unknown) => {
+    if (ecrit.chemin) await archiverFichier(ecrit.chemin, "depot-annule").catch(() => {});
+    throw erreur;
+  });
   await suitesEvenementDossier(suites);
   return resultat;
 }

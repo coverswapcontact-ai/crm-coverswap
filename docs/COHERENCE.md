@@ -82,7 +82,7 @@ dossier). Une alerte part sur le téléphone seulement s'il y a quelque chose à
 |---|---|---|
 | `DEVIS_MONTANT_NUL` | Devis en vigueur à 0 € (le client lirait « 0 € ») | À la main : corriger le document |
 | `ACCORD_SANS_SIGNATURE` | Accord en ligne ↔ dossier avant « Signé » | Passer en « Signé » |
-| `DEVIS_ACCEPTE_AVANT_SIGNE` | Devis « accepté » ↔ dossier avant « Signé » | Remettre le devis « émis » |
+| `DEVIS_ACCEPTE_AVANT_SIGNE` | Devis « accepté » ↔ dossier avant « Signé » | Passer en « Signé », les autres devis « non retenus » (mission 18, B4 : un devis noté « accepté » vaut signature hors ligne ; le dépôt et la correction le font d'eux-mêmes depuis) |
 | `SIGNE_SANS_DEVIS_ACCEPTE` | Dossier signé ↔ aucun devis accepté | Noter le dernier devis « accepté » |
 | `PAIEMENT_AVANT_SIGNATURE` | Encaissement valide ↔ dossier avant « Signé » | Passer en « Signé » |
 | `ETAPE_ET_SOLDE` | Facturé / Encaissé ↔ factures réglées | Suivre le solde |

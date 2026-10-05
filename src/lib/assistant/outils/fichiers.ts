@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { jourHeure, pluriel } from "@/lib/commun/format";
 import { ADRESSE_DEPENSES } from "@/lib/depenses/constantes";
-import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
+import { ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE, LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { schemaDepotDocument } from "@/lib/dossiers/depot-document";
 import { etapeApresGeneration } from "@/lib/dossiers/devis-envoye";
 import { estEtape } from "@/lib/dossiers/regles";
@@ -186,7 +186,13 @@ export const outilAjouterFichier = definirOutil({
     }
     const dossier = await prisma.dossier.findUnique({ where: { id: lue.id }, select: { etape: true } });
     const vers = e.type === "DEVIS" && e.visible_espace !== false && (e.statut ?? "ENVOYE") === "ENVOYE" && dossier && estEtape(dossier.etape) ? etapeApresGeneration("DEVIS", dossier.etape) : null;
-    const passage = vers && dossier ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.` : "";
+    // Mission 18 (B4) : un devis déposé « accepté » (signé hors ligne) signe le dossier pas encore signé.
+    const signe = e.type === "DEVIS" && e.statut === "ACCEPTE" && dossier && ETAPES_SIGNEES_PAR_DEVIS_ACCEPTE.includes(dossier.etape as EtapeDossier);
+    const passage = signe
+      ? ` Accepté (signé hors ligne) : le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « Signé », les autres devis proposés deviendront « non retenus ».`
+      : vers && dossier
+        ? ` Le dossier passera de « ${LIBELLES_ETAPE[dossier.etape as EtapeDossier]} » à « ${LIBELLES_ETAPE[vers]} » : la main au client, le délai de relance court à partir du dépôt.`
+        : "";
     return `Je vais rattacher au dossier de ${lue.nom} ${e.type === "DEVIS" ? "le devis" : "la facture"} ${e.numero}${e.libelle ? ` « ${e.libelle} »` : ""} : ${format.euros(e.montant!)} HT, ${e.date_emission ?? "daté d'aujourd'hui"}, PDF ${origine}${e.type === "DEVIS" ? `, ${e.visible_espace === false ? "masqué dans son espace" : "visible dans son espace, à côté des autres devis proposés"}` : ""}. Aucun mail n'est envoyé.${passage}${e.inscrire_au_registre ? " Le numéro sera inscrit au registre s'il n'y est pas." : ""}`;
   },
   executer: async (e) => {

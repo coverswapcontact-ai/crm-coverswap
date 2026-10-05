@@ -53,9 +53,17 @@ function texteRelance(entree: { prenom: string | null; numero: string; emisLe: D
 /**
  * Mission 14 (R1) : la 1re relance attend le délai à partir du moment où le client a le devis — la plus tardive
  * de sa date d'émission et de son dépôt dans le CRM (un devis déposé aujourd'hui, daté d'avant, attend le délai).
+ * Mission 18 (B2) : et de son envoi, quand il est parti après sa génération (événement « Devis envoyé » : mail du
+ * CRM, mise en ligne) — un devis généré masqué puis envoyé par mail trois jours plus tard attend le délai depuis l'envoi.
  */
-export function referenceDuDevis(devis: { dateEmission: Date; createdAt: Date }): Date {
-  return devis.createdAt.getTime() > devis.dateEmission.getTime() ? devis.createdAt : devis.dateEmission;
+export function referenceDuDevis(devis: { dateEmission: Date; createdAt: Date }, envoyeLe: Date | null = null): Date {
+  const dates = [devis.dateEmission, devis.createdAt, ...(envoyeLe ? [envoyeLe] : [])];
+  return dates.reduce((plusTard, date) => (date.getTime() > plusTard.getTime() ? date : plusTard));
+}
+
+/** Le dernier envoi d'un devis (événement « Devis envoyé » qui le porte), parmi ceux chargés avec son dossier. */
+function envoyeLe(dossier: { evenements: { metadata: string; createdAt: Date }[] }, devisId: string): Date | null {
+  return dossier.evenements.find((e) => e.metadata.includes(devisId))?.createdAt ?? null;
 }
 
 /** Les dossiers en « Devis envoyé » ou « Relance », non archivés (un seul si `dossierId` ; `touteEtape` : quelle que soit son étape). */
@@ -65,6 +73,8 @@ async function chargerDossiersARelancer(filtre: { dossierId?: string; touteEtape
     include: {
       // Mission 14 : seulement les devis que le client voit, jamais un devis archivé (l'extension ne filtre pas les include).
       documents: { where: { type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE"] }, visibleEspace: true, archiveLe: null }, orderBy: { dateEmission: "desc" } },
+      // Mission 18 (B2) : les envois des devis, du plus récent au plus ancien (référence des relances).
+      evenements: { where: { type: "DEVIS_ENVOYE", archiveLe: null }, orderBy: { createdAt: "desc" }, select: { metadata: true, createdAt: true } },
       // Le numéro du SMS : celui du lead d'abord (`proposerSms`), sinon celui du dossier — pour le STOP.
       lead: { select: { telephone: true } },
       client: {
@@ -195,7 +205,7 @@ export async function listerRelances(maintenant: Date = new Date(), filtre: { do
   for (const { dossier, devis, numero, emisLe, relances, rang } of etats) {
     const consentement = dossier.client?.consentements[0]?.statut;
     const adresse = dossier.clientEmail ?? dossier.client?.emails[0]?.adresse ?? null;
-    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: emisLe, createdAt: devis.createdAt });
+    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: emisLe, createdAt: devis.createdAt }, envoyeLe(dossier, devis.id));
     const prochaine = relances.length < RELANCES_MAX_PAR_DEVIS ? new Date(reference.getTime() + delai * JOUR_MS) : null;
     const proposition = mails.find((p) => p.statut === "EN_ATTENTE" && p.contenu.includes(devis.id));
     // Le mail de CE rang déjà décidé : validé (il part), en échec, ou écarté. Celui d'un rang passé est compté par sa trace.
@@ -269,7 +279,7 @@ export async function relancerDevis(dossierId: string, options: { maintenant?: D
   const relances = relancesDuDevis(await tracesDeRelance([dossier.id]), dossier.id, devis.id);
   if (relances.length >= RELANCES_MAX_PAR_DEVIS) throw new ErreurMetier(`Déjà ${RELANCES_MAX_PAR_DEVIS} relances faites pour le devis ${devis.numero} (mail ou SMS) : plus de relance.`, 409);
   const delai = options.delai === undefined || options.delai === null ? (await lireDelaiRelance(maintenant)).jours : options.delai;
-  const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt });
+  const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt }, envoyeLe(dossier, devis.id));
   if (!options.forcer && maintenant.getTime() - reference.getTime() < delai * JOUR_MS) throw new ErreurMetier("Délai de relance pas encore écoulé.", 409);
   const rang = relances.length + 1;
   // « relancer » (forcer) : le mail de ce rang déjà validé, en échec ou écarté n'est jamais reproposé — le dire tout de suite.
@@ -320,7 +330,7 @@ export async function proposerRelances(maintenant: Date = new Date()): Promise<R
     }
     const relances = relancesDuDevis(traces, dossier.id, devis.id);
     if (relances.length >= RELANCES_MAX_PAR_DEVIS) continue;
-    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt });
+    const reference = relances[0]?.le ?? referenceDuDevis({ dateEmission: devis.dateEmission, createdAt: devis.createdAt }, envoyeLe(dossier, devis.id));
     if (maintenant.getTime() - reference.getTime() < delai * JOUR_MS) continue;
     const { creee } = await relancerDevis(dossier.id, { maintenant, delai });
     if (creee) resume.proposees++;

@@ -74,6 +74,13 @@
   l'espace » (DP48, `modifier` DOCUMENT visible_espace) existent déjà. Ni outil ni paramètre ne change : empreinte
   **`040d6c7aa53c`** (53 outils). Des descriptions changent (`generer_document`, son paramètre `notifier`) :
   reconnecter le connecteur.
+- **Mission 18, B2 (05/10/2026)** : devis envoyé par mail. `envoyer_document` (DP60) appelle le même service que le
+  bouton « Envoyer par mail » (`mail/service.ts › envoyerDocumentParMail`) et ne revalide plus la proposition (défaut 11
+  de la section 3 corrigé : plus de 409, plus de second mail à la nouvelle tentative). Le même envoi refait (même
+  document, destinataire, objet, texte) dans la demi-heure est sans effet : le résultat le dit (`donnees.deja`,
+  `donnees.statut`). Un devis envoyé ainsi a les effets d'un devis rendu visible : visible dans l'espace, « Devis
+  envoyé », main au client, « Attendre l'accord », relances datées de l'envoi. Ni outil ni paramètre ne change :
+  empreinte **`040d6c7aa53c`** (53 outils). La description de `envoyer_document` change : reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -326,7 +333,7 @@ un lien « Gérer les tarifs » vers l'onglet.
 | DP57 | Documents › « Enregistrer un document existant » : type, numéro (suggestions du registre), date, montant, objet, statut, acompte, libellé, visibilité, PDF facultatif, inscription au registre | GET /api/numeros?libres=1 ; POST …/documents/existant ; POST …/pdf | S-€ | ajouter_fichier (DOSSIER › DEVIS, FACTURE, sans fichier possible) ; etat_crm (NUMEROTATION : numéros libres) | couvert | `mcp-v3.test.ts` › « « ajouter_fichier » (ex-« deposer_document ») : un BAT fournisseur en… » ; `mcp-lister-etat.test.ts` › « chaque partie répond (SANTE, PARAMETRES, OUTILS, CONSIGNES_VERSIONS… » |
 | DP58 | Documents › ouvrir ou télécharger le PDF | GET …/documents/:docId/pdf | L | voir_fichiers (documents, document_id : PDF joint) | couvert | `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
 | DP59 | Documents › document repris › « Corriger » (date, montant, objet, statut, acompte, libellé, visibilité), « importer le PDF » | PATCH …/documents/:docId ; POST …/pdf | S-€ | modifier DOCUMENT (date_emission, montant, objet, statut, acompte_pct) ; ajouter_fichier (PDF_DOCUMENT) | couvert | `mcp-generiques.test.ts` › « argent : DOCUMENT repris, ENCAISSEMENT, TARIF sensibles (rien sans… » ; `mcp-partie-c.test.ts` › « ajouter_fichier SIMULATION : brouillon comme « Déposer une simulation »… » |
-| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » |
+| DP60 | Documents › « Envoyer par mail » (à, objet, texte relus, PDF joint) | GET/POST …/documents/:docId/mail | S-client | envoyer_document | couvert | `mcp-sensibles.test.ts` › « envoyer_document — envoyer un devis par mail : aperçu et jeton, aucune écriture » ; `envoyer-par-mail.test.ts` › « outil « envoyer_document » confirmé, puis relancé : une seule validation… » |
 | DP61 | Documents › « Refaire ce devis » (remplace) | POST …/documents {remplaceDocumentId} | S | generer_document (remplace) | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
 | DP62 | Documents › « Annuler par un avoir » (motif, précision) | POST …/documents/:docId/avoir | S-€ | annuler_document (motif_avoir) | couvert | `mcp-sensibles.test.ts` › « annuler_document — annuler un devis : aperçu et jeton, aucune écriture » |
 | DP63 | Documents › « Annuler ce devis » (motif) | POST …/documents/:docId/annulation | S | annuler_document | couvert | `mcp-v3.test.ts` › « « generer_document » : deux devis à libellés qui s'ajoutent (sans… » |
@@ -1007,7 +1014,7 @@ la date du chantier, reflétés dans Google Calendar.
    `lib/journal/extension.ts`). `restaurer` n'est donc utilisable qu'avec un identifiant déjà connu.
 10. `planifier` coupe la prochaine action à 120 caractères ; l'écran en accepte 140.
 11. `envoyer_document` revalide une proposition déjà validée : erreur 409, et mail en double à la nouvelle tentative.
-    Déjà inscrit dans la mission 18, partie B, point 2.
+    **Corrigé** (mission 18, B2) : une seule validation, le même envoi refait est sans effet.
 12. `noter_appel` sur un lead fait deux écritures (note d'appel, puis appel). L'écran permet la note seule.
 
 ## 4. Outillage : tous les manques fermés, 53 outils au lieu de 84

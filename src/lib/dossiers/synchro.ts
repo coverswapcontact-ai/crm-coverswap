@@ -52,6 +52,8 @@ export type EvenementDossier =
   | { type: "DEVIS_GENERE"; documentId: string; envoye: boolean }
   /** Devis émis ailleurs, déposé (documents-existants.ts › rattacherDocumentExistant). */
   | { type: "DEVIS_DEPOSE"; documentId: string }
+  /** Devis envoyé après sa génération : par le mail du CRM (mail/propositions.ts, mission 18, B2). */
+  | { type: "DEVIS_ENVOYE"; documentId: string; canal: "MAIL" }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
   | { type: "ACOMPTE_REJETE"; encaissementId: string };
 
@@ -71,6 +73,7 @@ export const TYPES_EVENEMENT_DOSSIER = [
   "SIMULATION_PUBLIEE",
   "DEVIS_GENERE",
   "DEVIS_DEPOSE",
+  "DEVIS_ENVOYE",
   "ACOMPTE_REJETE",
 ] as const satisfies readonly TypeEvenementDossier[];
 
@@ -129,6 +132,8 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
         ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 }
         : { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     case "DEVIS_DEPOSE":
+    // Mission 18 (B2) : envoyé par mail, il est envoyé comme un devis annoncé (« Envoyer le devis au client » est fait).
+    case "DEVIS_ENVOYE":
       return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
     case "ACOMPTE_REJETE":
       return { code: "acompte-rejete", texte: "Chèque d'acompte rejeté : réclamer un nouveau paiement", date: dateDepuisJour(jourParis(maintenant)), niveau: 1 };

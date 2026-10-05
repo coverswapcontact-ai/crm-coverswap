@@ -818,3 +818,60 @@ fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7
 Reste : B2 (envoi par mail : visibilité, étape, main, double validation), B5 (mise en ligne annoncée, relance datée de
 la mise en ligne), B13 (règle de cohérence de l'écart 1, réparation des devis déjà « envoyés » sans l'avoir été) ; rien
 pour Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, B2 — devis envoyé par mail depuis le CRM (écart 2)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché) :
+- **Mêmes effets qu'un devis rendu visible** (`mail/propositions.ts › effetsDeLEnvoi`, `enregistrerDevisEnvoye`) : à
+  l'exécution d'un mail ENVOI_DEVIS (bouton « Envoyer par mail » du dossier ou outil `envoyer_document`), dans UNE
+  transaction après la trace `MAIL_ENVOYE` : devis « Envoyé » et visible dans l'espace, événement `DEVIS_ENVOYE`
+  (`documentId`, `canal: "MAIL"`, `propositionId`) qui date l'envoi et passe la main au client, Q, S, Relance → Devis
+  envoyé (`passerEnDevisEnvoye`), puis le point d'entrée (nouvel événement `DEVIS_ENVOYE` de `synchro.ts`) : « Envoyer
+  le devis au client » ou « Préparer le devis… » → « Attendre l'accord du client sur le devis » (une action posée à la
+  main n'est jamais écrasée), main écrite dans la transaction. Après : effets du changement d'étape (lead, Meta),
+  agenda, signal des tâches ; la tâche ENVOYER_DEVIS se coche (« envoyé par mail »). Les autres mails (facture,
+  relance, réponse) recalculent maintenant la main après l'envoi (elle ne l'était pas sans changement d'étape).
+- **Relances datées de l'envoi** (`relances/service.ts › referenceDuDevis`) : la référence est la plus tardive de
+  l'émission, du dépôt et du dernier `DEVIS_ENVOYE` du devis (chargé avec le dossier, sans nouvelle colonne).
+- **Un seul mail** : `envoyer_document` ne revalide plus la proposition (l'ancienne 2e validation rendait 409, et la
+  nouvelle tentative envoyait un second mail) ; `envoyerDocumentParMail` pose la clé
+  `envoi-document:<document>:<empreinte destinataire|objet|texte>` et rend `{ proposition, deja }` : le même envoi
+  refait (double clic, outil relancé) rend la proposition déjà décidée sans rien revalider ni renvoyer ; écarté
+  (rejeté, annulé, expiré) ou parti depuis plus de 30 min, il peut être refait (l'ancienne proposition garde sa trace
+  sous une clé close `…:<id>`). La route renvoie `deja` ; l'outil le dit (« nouvelle tentative sans effet, aucun
+  second mail ») avec `donnees.deja` et `donnees.statut`.
+- **Rien ne part pour un devis devenu caduc** : `executerPropositionValidee` relit `pertinente` avant d'exécuter ; un
+  devis annulé ou remplacé entre la validation et l'envoi → proposition ANNULEE (« Sans objet au moment de
+  l'exécution : … »), aucun mail, rien ne bouge.
+- **Tâche rejouée** : déjà envoyée (trace `MAIL_ENVOYE`) mais sans les effets du devis (coupure juste après l'envoi) →
+  les effets sont écrits, le mail ne repart pas ; rejouée encore → rien.
+- **Écran** : la modale d'envoi relit le dossier tout de suite puis 8 s plus tard (le mail part par la file) ; message
+  « Déjà envoyé » si `deja`. `PanneauDossier` passe `onRecharger` à `DocumentsDossier`.
+- **Docs** : `docs/SYNCHRO.md` (ligne `DEVIS_ENVOYE`, règle « un seul mail par envoi », B2 retiré du tableau 4),
+  `docs/MCP-COUVERTURE.md` (entrée B2, défaut 11 corrigé, test de DP60).
+
+Décisions prises seul (solution la plus simple) :
+- Le mail vaut l'annonce : pas de « Devis disponible » en plus (aucun nouvel envoi au client).
+- Un `DEVIS_ENVOYE` par devis joint, écrit après `MAIL_ENVOYE` : l'historique dit « Devis … envoyé par mail à … » et la
+  main lit « Devis envoyé : en attente de sa réponse ».
+- La référence des relances lit déjà tous les `DEVIS_ENVOYE` (aussi ceux d'une mise en ligne) : la partie « relance
+  depuis la mise en ligne » de B5 est donc faite ; B5 garde la notification « Devis disponible » à la mise en ligne.
+- Fenêtre de 30 min pour l'idempotence d'un envoi déjà parti : une nouvelle tentative arrive dans les minutes ; un
+  renvoi volontaire identique plus tard (« je ne l'ai pas reçu ») reste possible.
+- Relecture de la pertinence à l'exécution pour toutes les propositions en file (mail, SMS, cartes) : même règle qu'à
+  la validation.
+- Un envoi par mail en Relance ramène le dossier en Devis envoyé (comme une mise en ligne).
+
+Tests : 1 366 → 1 371 (`npm test` : 1 369 verts ; les 2 échecs sont ceux connus depuis B1, qui dépendent de la date
+du jour : `mission-14-partie-8` « ouvert il y a 4 jours » et `mcp-mail` « lundi 9 h »). Nouveau `src/lib/dossiers/envoyer-par-mail.test.ts` (5 essais, état des deux
+côtés, envoyeur d'essai en mémoire, rien ne sort du poste) : bouton → Devis envoyé, main au client, « Attendre
+l'accord », lead DEVIS_ENVOYE, espace DEVIS, relance n°1 datée de l'envoi (décalée avec lui), ENVOYER_DEVIS cochée,
+aucun « Devis disponible », double clic, tâche rejouée et même envoi refait sans effet (un mail, un `MAIL_ENVOYE`, un
+`DEVIS_ENVOYE`, une proposition, état identique) ; outil confirmé puis relancé deux fois → une validation, un mail,
+action posée à la main gardée ; devis annulé entre validation et envoi → rien ne part ; coupure après l'envoi → effets
+écrits sans renvoi ; envoi écarté ou ancien → refaisable. Aucun test existant à adapter. `tsc`, `eslint` sur les
+fichiers touchés, `npm run build` : propres.
+Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; description de `envoyer_document` changée : reconnecter le
+connecteur.
+
+Reste : B3-B13 ; B5 n'a plus que la notification à la mise en ligne ; rien pour Lucas, sauf reconnecter le connecteur.

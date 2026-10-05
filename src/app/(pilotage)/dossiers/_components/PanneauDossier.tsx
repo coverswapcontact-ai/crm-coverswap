@@ -376,6 +376,7 @@ function ContenuPanneau({
               onGenerer={(type) => setGenerateur((actuel) => ({ type, cle: (actuel?.cle ?? 0) + 1 }))}
               onRefaire={(devis) => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1, remplace: devis }))}
               onMisAJour={onMisAJour}
+              onRecharger={onRecharger}
               sansTitre
             />
           </SectionRepliable>

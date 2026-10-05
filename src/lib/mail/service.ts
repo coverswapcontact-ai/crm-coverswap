@@ -1,9 +1,10 @@
+import { createHash } from "node:crypto";
 import { z } from "zod/v4";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
 import { EMETTEUR } from "@/lib/dossiers/constants";
 import { formatMontant } from "@/lib/dossiers/montants";
-import { proposer, validerProposition } from "@/lib/validation/service";
+import { proposer, validerProposition, vueProposition } from "@/lib/validation/service";
 import type { PropositionVue } from "@/lib/validation/types";
 
 /**
@@ -49,8 +50,41 @@ export async function brouillonEnvoiDocument(dossierId: string, documentId: stri
   };
 }
 
-export async function envoyerDocumentParMail(dossierId: string, documentId: string, entree: z.output<typeof schemaEnvoiDocument>): Promise<PropositionVue> {
+/** Une nouvelle tentative du même envoi dans ce délai (outil relancé après une coupure, double clic) est sans effet. */
+const FENETRE_NOUVELLE_TENTATIVE_MS = 30 * 60_000;
+
+/** Les statuts où l'envoi est décidé et pas fini, ou fini depuis peu : le même mail ne repart pas. */
+const STATUTS_EN_COURS = ["VALIDEE", "ECHEC"];
+
+/** L'empreinte d'un envoi : même document, même destinataire, même objet, même texte. */
+export function cleEnvoiDocument(documentId: string, entree: z.output<typeof schemaEnvoiDocument>): string {
+  const empreinte = createHash("sha256").update(JSON.stringify([entree.a.toLowerCase(), entree.objet, entree.texte])).digest("hex").slice(0, 16);
+  return `envoi-document:${documentId}:${empreinte}`;
+}
+
+export type EnvoiDocument = {
+  proposition: PropositionVue;
+  /** Vrai : ce même envoi était déjà décidé (validé, parti depuis moins de 30 min, ou en échec) ; rien de nouveau ne part. */
+  deja: boolean;
+};
+
+/**
+ * Envoie un devis ou une facture par mail : une proposition ENVOI_MAIL validée tout de suite (la personne décide),
+ * envoyée par la file. Mission 18 (B2) : idempotent — la clé d'unicité porte l'empreinte de l'envoi ; une nouvelle
+ * tentative identique (outil relancé, double clic) rend l'envoi déjà décidé sans rien revalider ni renvoyer. Un envoi
+ * identique écarté (rejeté, annulé, expiré) ou parti depuis plus de 30 minutes peut être refait : l'ancienne
+ * proposition garde sa trace sous une clé close.
+ */
+export async function envoyerDocumentParMail(dossierId: string, documentId: string, entree: z.output<typeof schemaEnvoiDocument>): Promise<EnvoiDocument> {
   const document = await documentEnvoyable(dossierId, documentId);
+  const cleUnicite = cleEnvoiDocument(documentId, entree);
+  const existante = await prisma.proposition.findUnique({ where: { cleUnicite } });
+  if (existante && existante.statut !== "EN_ATTENTE") {
+    const recente = existante.statut === "EXECUTEE" && (existante.executeLe ?? existante.decideLe ?? existante.createdAt).getTime() > Date.now() - FENETRE_NOUVELLE_TENTATIVE_MS;
+    if (recente || STATUTS_EN_COURS.includes(existante.statut)) return { proposition: vueProposition(existante), deja: true };
+    // Écartée, ou partie depuis longtemps : un nouvel envoi, l'ancienne proposition reste (clé close).
+    await prisma.proposition.update({ where: { id: existante.id }, data: { cleUnicite: `${cleUnicite}:${existante.id}` } });
+  }
   const { id } = await proposer({
     type: "ENVOI_MAIL",
     titre: `Envoyer ${document.type === "DEVIS" ? "le devis" : "la facture"} ${document.numero} à ${document.dossier.clientNom}`,
@@ -63,8 +97,16 @@ export async function envoyerDocumentParMail(dossierId: string, documentId: stri
       texte: entree.texte,
       documentIds: [documentId],
     },
+    cleUnicite,
     dossierId,
     clientId: document.dossier.clientId ?? undefined,
   });
-  return validerProposition(id);
+  try {
+    return { proposition: await validerProposition(id), deja: false };
+  } catch (erreur) {
+    // Validée entre-temps par une tentative concurrente : c'est le même envoi, rien de plus ne part.
+    const lue = await prisma.proposition.findUnique({ where: { id } });
+    if (erreur instanceof ErreurMetier && erreur.status === 409 && lue && lue.statut !== "EN_ATTENTE" && lue.statut !== "ANNULEE") return { proposition: vueProposition(lue), deja: true };
+    throw erreur;
+  }
 }

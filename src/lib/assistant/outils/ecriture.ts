@@ -24,7 +24,6 @@ import { envoyerDepuisLOnglet } from "@/lib/mail/detail";
 import { apercuLienParMail, CODES_LIEN_MAIL, envoyerLienParMail, proposerLienParMail } from "@/lib/mail/lien-espace";
 import { redigerBrouillon } from "@/lib/mail/redaction";
 import { brouillonEnvoiDocument, envoyerDocumentParMail } from "@/lib/mail/service";
-import { validerProposition } from "@/lib/validation/service";
 import { planifierAction } from "@/lib/agenda/planification";
 import { planifierDepuisMail } from "@/lib/agenda/depuis-mail";
 import { lireDateDictee } from "../agenda";
@@ -351,7 +350,7 @@ async function envoiPrevu(dossierId: string, notifier: boolean): Promise<string>
 export const outilEnvoyerDocument = definirOutil({
   nom: "envoyer_document",
   titre: "Envoyer un devis ou une facture par mail",
-  description: "Envoie par mail, en pièce jointe, un devis ou une facture déjà émis (identifiant du document, rendu par « lire_fiche » ou « generer_document »). Le texte du mail est proposé par le CRM et peut être remplacé. Sensible : aperçu puis confirmation.",
+  description: "Envoie par mail, en pièce jointe, un devis ou une facture déjà émis (identifiant du document, rendu par « lire_fiche » ou « generer_document »). Le texte du mail est proposé par le CRM et peut être remplacé. Un devis envoyé ainsi est envoyé au sens du dossier : visible dans son espace, étape « Devis envoyé », main au client, relances datées de l'envoi (le mail vaut l'annonce « Devis disponible »). Le même envoi refait (même document, destinataire, objet et texte) dans la demi-heure est sans effet : jamais de second mail. Sensible : aperçu puis confirmation.",
   niveau: "SENSIBLE",
   schema: z.object({ dossierId: z.string().max(40), documentId: z.string().max(40), a: z.email().optional().describe("Destinataire ; à défaut l'adresse du client."), objet: z.string().max(200).optional(), texte: z.string().max(10_000).optional() }),
   apercu: async (e) => {
@@ -362,11 +361,17 @@ export const outilEnvoyerDocument = definirOutil({
     const b = await brouillonEnvoiDocument(e.dossierId, e.documentId);
     const a = e.a ?? b.a;
     if (!a) throw new ErreurMetier("Aucune adresse e-mail pour ce client : indique-la (paramètre « a »).", 409);
-    const proposition = await envoyerDocumentParMail(e.dossierId, e.documentId, { a, objet: e.objet ?? b.objet, texte: e.texte ?? b.texte });
-    // Confirmé par Lucas dans Claude : la proposition est validée dans la foulée (même chemin d'envoi que depuis le CRM).
-    await validerProposition(proposition.id);
+    // Confirmé par Lucas dans Claude : la proposition est validée par le même service que le bouton du CRM (une seule
+    // fois : mission 18, B2 — l'ancienne seconde validation rendait 409, et la nouvelle tentative envoyait un 2e mail).
+    const { proposition, deja } = await envoyerDocumentParMail(e.dossierId, e.documentId, { a, objet: e.objet ?? b.objet, texte: e.texte ?? b.texte });
     void contexte;
-    return { texte: `Mail envoyé à ${a} avec le document en pièce jointe (« ${e.objet ?? b.objet} »).`, donnees: { propositionId: proposition.id }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
+    const objet = e.objet ?? b.objet;
+    const texte = deja
+      ? proposition.statut === "ECHEC"
+        ? `Ce même mail (« ${objet} » à ${a}) a déjà été décidé et son envoi a échoué : rien de plus n'est parti. Le réessayer depuis « À valider » du CRM.`
+        : `Ce même mail (« ${objet} » à ${a}) est déjà ${proposition.statut === "EXECUTEE" ? "parti" : "en cours d'envoi"} : nouvelle tentative sans effet, aucun second mail.`
+      : `Mail validé : il part dans quelques secondes à ${a} avec le document en pièce jointe (« ${objet} »). Un devis envoyé ainsi est visible dans son espace et le dossier passe en « Devis envoyé » (main au client, relances datées de l'envoi).`;
+    return { texte, donnees: { propositionId: proposition.id, deja, statut: proposition.statut }, liens: [lien("Dossier", `/dossiers?dossier=${e.dossierId}`)] };
   },
 });
 

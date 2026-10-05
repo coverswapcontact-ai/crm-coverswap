@@ -18,6 +18,7 @@ import {
   type EtapeDossier,
 } from "./constants";
 import { dateDepuisJour, estJourValide, jourParis } from "./dates";
+import { retenirDevis, suiteNonRetenus, type DevisNonRetenu } from "./devis-retenu";
 import { ErreurMetier } from "./erreurs";
 import { verifierMotifPerte } from "./perte";
 import {
@@ -280,8 +281,10 @@ export async function changerEtapeDansTransaction(
   const verification = verifierTransition(faits, entree.vers, entree, avantSortie);
   if (!verification.ok) throw new ErreurMetier(verification.erreur, 409);
 
-  // Franchir « Signé » en avançant : le devis choisi (à défaut le dernier) est le devis accepté.
+  // Franchir « Signé » en avançant : le devis choisi (à défaut le dernier) est le devis accepté. Mission 18 (B10) : il
+  // n'en signe qu'un, les autres devis proposés passent « non retenu » (comme le bon pour accord de l'espace).
   let documentId: string | undefined;
+  let nonRetenus: DevisNonRetenu[] = [];
   const reference = estEtapeActive(faits.etape) ? faits.etape : avantSortie;
   const franchitSignature =
     estEtapeActive(entree.vers) && rangEtape(entree.vers) >= rangEtape("SIGNE") && (reference === null || rangEtape(reference) < rangEtape("SIGNE"));
@@ -294,8 +297,10 @@ export async function changerEtapeDansTransaction(
     if (signe) {
       if (signe.statut !== "ACCEPTE") await tx.document.update({ where: { id: signe.id }, data: { statut: "ACCEPTE" } });
       documentId = signe.id;
+      nonRetenus = await retenirDevis(tx, dossierId, signe.id);
     }
   }
+  const raison = [entree.raison, suiteNonRetenus(nonRetenus)].filter(Boolean).join(" ; ");
 
   const changement = await appliquerChangementEtape(tx, {
     dossierId,
@@ -305,7 +310,7 @@ export async function changerEtapeDansTransaction(
     donnees: entree,
     documentId,
     etapeReference: avantSortie,
-    ...(entree.raison ? { raison: entree.raison } : {}),
+    ...(raison ? { raison } : {}),
     avertissements: verification.avertissements.map((avertissement) => avertissement.message),
   });
   // Mission 18 (B0) : la main et le statut du lead suivent DANS la transaction ; les effets d'après ne les refont pas.

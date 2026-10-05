@@ -1,5 +1,6 @@
 import type { Transaction } from "@/lib/prisma";
 import { signeParDevisAccepte } from "./constants";
+import { libelleNonRetenus, retenirDevis, type DevisNonRetenu } from "./devis-retenu";
 import { changerEtapeDansTransaction, chargerEtatEtape, type ChangementEtape } from "./transitions";
 
 /**
@@ -23,25 +24,8 @@ export async function estSigneeParDevisAccepte(tx: Transaction, dossierId: strin
   return signeParDevisAccepte(dossier.etape, (await chargerEtatEtape(tx, dossierId)).avantSortie);
 }
 
-export type DevisNonRetenu = { id: string; numero: string | null; libelleVariante: string | null };
-
-/**
- * Il n'en signe qu'un : les autres devis proposés du dossier (émis ou envoyés, non archivés) passent « non retenu »
- * (gardés en historique ; un retour avant « Signé » les rend de nouveau au choix, transitions.ts). Dans la transaction
- * de l'appelant ; rend ceux qui ont changé.
- */
-export async function retenirDevis(tx: Transaction, dossierId: string, devisId: string): Promise<DevisNonRetenu[]> {
-  const autres = await tx.document.findMany({
-    where: { dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, id: { not: devisId }, statut: { in: ["GENERE", "ENVOYE"] } },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, numero: true, libelleVariante: true },
-  });
-  if (autres.length > 0) await tx.document.updateMany({ where: { id: { in: autres.map((a) => a.id) } }, data: { statut: "NON_RETENU" } });
-  return autres;
-}
-
-/** « 2026-012 (façades), 2026-013 » : les devis non retenus, pour l'historique. */
-export const libelleNonRetenus = (devis: readonly DevisNonRetenu[]): string => devis.map((d) => `${d.numero ?? "?"}${d.libelleVariante ? ` (${d.libelleVariante})` : ""}`).join(", ");
+// Mission 18 (B10) : « il n'en signe qu'un » vit dans devis-retenu.ts (les transitions s'en servent aussi) ; réexporté ici.
+export { libelleNonRetenus, retenirDevis, type DevisNonRetenu } from "./devis-retenu";
 
 /**
  * Le devis `devisId` (déjà « accepté » ou à l'accepter) signe le dossier, s'il est à une étape d'avant « Signé »

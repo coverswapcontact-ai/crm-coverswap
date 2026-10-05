@@ -1731,8 +1731,9 @@ navigateur (404, 410) est archivé ; il renaît à l'ouverture suivante de l'app
 - Le service worker garde sur le téléphone des écrans lus avec une session. La page de
   connexion les efface (arriver là, c'est ne plus avoir de session) ; tant que la session
   vit, un téléphone perdu les montre encore — hors ligne compris.
-- Paiement par carte de l'acompte : non fait (`paiementCarte` est prêt côté API,
-  `STRIPE_SECRET_KEY` réservée). Aujourd'hui : virement, RIB affiché après l'accord.
+- Paiement par carte de l'acompte : fait par la mission 18 (B10, docs/SYNCHRO.md) — Stripe Checkout par `fetch`,
+  webhook signé `/api/webhook/stripe` ; le bouton n'apparaît qu'avec `STRIPE_SECRET_KEY` ET `STRIPE_WEBHOOK_SECRET`
+  (à poser par Lucas sur Railway). Sans elles : virement, RIB affiché après l'accord.
 
 ## 21. Navigation resserrée, section Leads, simulation → dossier, audit des connexions
 

@@ -84,7 +84,13 @@ export type EvenementDossier =
    */
   | { type: "DEVIS_RETIRE"; documentId: string; geste: "ANNULE" | "MASQUE"; retour: boolean; refaire: boolean }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
-  | { type: "ACOMPTE_REJETE"; encaissementId: string };
+  | { type: "ACOMPTE_REJETE"; encaissementId: string }
+  /**
+   * Mission 18 (B10) : un paiement reçu (encaissements/service.ts › enregistrerEncaissement : saisi à l'écran ou par
+   * l'assistant, ou payé en ligne par carte, webhook Stripe). `signe` : l'acompte a fait passer le dossier en « Signé »
+   * dans la même transaction (un paiement reçu vaut accord).
+   */
+  | { type: "PAIEMENT_RECU"; encaissementId: string; signe: boolean };
 
 export type TypeEvenementDossier = EvenementDossier["type"];
 
@@ -106,6 +112,7 @@ export const TYPES_EVENEMENT_DOSSIER = [
   "DEVIS_ENVOYE",
   "DEVIS_RETIRE",
   "ACOMPTE_REJETE",
+  "PAIEMENT_RECU",
 ] as const satisfies readonly TypeEvenementDossier[];
 
 /** Ce qu'il reste à faire après la transaction, et ce qui a été écrit (pour les écrans, l'assistant et les essais). */
@@ -118,6 +125,9 @@ export type Suites = {
   /** La main écrite dans la transaction. */
   main: MainCalculee | null;
 };
+
+/** Mission 18 (B10) : la prochaine action d'un dossier signé par son acompte. */
+export const PROCHAINE_ACTION_ACOMPTE_RECU = "Appeler le client : fixer la date du chantier (acompte reçu)";
 
 /** « Préparer le devis… » (posé par l'espace quand le client a choisi), « Envoyer le devis au client » (B1) ou « Refaire le devis » (B6). */
 const devisAPreparerOuAEnvoyer = (actuelle: string | null) =>
@@ -185,6 +195,13 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
         : { code: "devis-a-refaire", texte: PROCHAINE_ACTION_REFAIRE_DEVIS, date: maintenant, si: (a) => !a || a.startsWith(PROCHAINE_ACTION_APRES_DEVIS) || a.startsWith(PROCHAINE_ACTION_ENVOYER_DEVIS) };
     case "ACOMPTE_REJETE":
       return { code: "acompte-rejete", texte: "Chèque d'acompte rejeté : réclamer un nouveau paiement", date: dateDepuisJour(jourParis(maintenant)), niveau: 1 };
+    // Mission 18 (B10) : l'acompte qui signe le dossier, c'est l'accord — « Attendre l'accord » est dépassé, la date du
+    // chantier reste à fixer (une action posée à la main reste, une tâche à côté). Un autre paiement ne fait que clore
+    // « réclamer un nouveau paiement » (chèque rejeté) : il est arrivé.
+    case "PAIEMENT_RECU":
+      return evenement.signe
+        ? { code: "acompte-recu", texte: PROCHAINE_ACTION_ACOMPTE_RECU, date: maintenant, niveau: 1 }
+        : { code: "paiement-recu", texte: null, date: null, si: (a) => Boolean(a && /réclamer un nouveau paiement/i.test(a)) };
   }
 }
 

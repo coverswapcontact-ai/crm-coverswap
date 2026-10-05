@@ -26,6 +26,7 @@ import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
 import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
+import { stripeActif } from "@/lib/paiement/stripe";
 
 /**
  * L'espace client : ce que le client voit de SON projet, et ce qu'il peut y faire.
@@ -415,7 +416,8 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       const ribLu = /RIB : ([A-Z0-9 ]+?) –.*?: ([A-Z0-9]+)$/.exec(EMETTEUR.ligneRib);
       return ribLu && devis ? { titulaire: EMETTEUR.raisonSociale, iban: ribLu[1].trim(), bic: ribLu[2], reference: `Devis ${devis.numero}` } : null;
     })(),
-    paiementCarte: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+    // Mission 18 (B10) : le bouton « Payer par carte » n'apparaît que si Stripe est configuré en entier (clé ET webhook).
+    paiementCarte: stripeActif(),
     chantier: faits.accord || ["PLANIFIE", "CHANTIER"].includes(dossier.etape) ? { date: dossier.dateChantier?.toISOString() ?? null } : null,
     apres: apresChantier
       ? { photos: lirePhotos(dossier.photos).filter(estPhotoApres).map((chemin) => ({ id: idPhoto(chemin) })), avis: avis && typeof avis.note === "number" ? avis : null }

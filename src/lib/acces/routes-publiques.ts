@@ -17,6 +17,7 @@ export const ROUTES_PUBLIQUES: readonly RoutePublique[] = [
   { chemin: "/api/health", protection: "sonde de santé Railway, ne lit ni n'écrit rien" },
   { chemin: "/api/webhook", protection: "formulaires du site : en-tête X-Webhook-Secret vérifié par la route" },
   { chemin: "/api/webhook/meta", protection: "Meta : jeton de vérification, signature X-Hub-Signature-256 si META_APP_SECRET" },
+  { chemin: "/api/webhook/stripe", protection: "Stripe (paiement par carte de l'espace client) : signature Stripe-Signature (HMAC-SHA256 du corps brut, STRIPE_WEBHOOK_SECRET, 5 minutes de tolérance) vérifiée par la route, refus sans secret ; idempotent par session (clé unique de l'encaissement)" },
   { chemin: "/api/webhook/zapier", protection: "Zapier : secret partagé vérifié par la route (en-tête X-Webhook-Secret ; ?secret= toléré jusqu'au 26/10/2026)" },
   { chemin: "/api/espace/", prefixe: true, protection: "espace client : jeton signe (HMAC) dans l'adresse, revocable et regenerable ; confirmation du telephone apres 90 jours sans visite ; origine restreinte au site, limite par IP, blocage des essais de liens au hasard" },
   { chemin: "/api/webhook/sms", protection: "SMS entrant pousse par un fournisseur : secret partage verifie par la route (en-tete X-Webhook-Secret ; ?secret= tolere jusqu'au 26/10/2026), idempotent par identifiant de message" },

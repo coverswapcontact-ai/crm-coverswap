@@ -3,10 +3,11 @@ import { ErreurMetier } from "@/lib/commun/erreurs";
 import { alerter } from "@/lib/alertes/canaux";
 import { ETAPES, LIBELLES_ETAPE, PROCHAINE_ACTION_APRES_DEVIS, REGLES_ETAPES, type EtapeDossier } from "@/lib/dossiers/constants";
 import { signerParDevisAccepte } from "@/lib/dossiers/devis-signe";
+import { retenirDevis, suiteNonRetenus } from "@/lib/dossiers/devis-retenu";
 import { lireFaitsMain, mainSelonFaits, recalculerMain } from "@/lib/dossiers/main";
 import { appliquerEvenementDossier, suitesEvenementDossier } from "@/lib/dossiers/synchro";
 import { appliquerChangementEtape, effetsDuChangementEtape } from "@/lib/dossiers/transitions";
-import { suivreSoldeDossier } from "@/lib/encaissements/service";
+import { devisDesAcomptes, suivreSoldeDossier } from "@/lib/encaissements/service";
 import { faitsPaiements } from "@/lib/encaissements/soldes";
 import { dateSignature, lectureDesDevis, lireDevisEtPaiements } from "@/lib/espace/faits";
 import { lireProjet, projetComplet } from "@/lib/espace/projet";
@@ -328,10 +329,28 @@ async function corrigerUneIncoherence(cle: string): Promise<{ corrigee: boolean;
   switch (incoherence.code) {
     case "ACCORD_SANS_SIGNATURE":
     case "PAIEMENT_AVANT_SIGNATURE": {
-      const devis = await prisma.document.findFirst({ where: { dossierId: dossierId!, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } }, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } });
-      if (!devis) throw new ErreurMetier("Aucun devis en vigueur sur ce dossier.", 409);
-      if (devis.statut !== "ACCEPTE") await prisma.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
-      await deplacer(dossierId!, "SIGNE", "AUTOMATIQUE", `${RAISON} : ${incoherence.code === "ACCORD_SANS_SIGNATURE" ? "bon pour accord donné dans l'espace client" : "paiement reçu"}`, devis.id);
+      // Mission 18 (B10) : le devis signé est celui de l'accord, ou celui que règlent les acomptes (à défaut le plus récent) ;
+      // les autres variantes passent « non retenu » (il n'en signe qu'un), d'un bloc avec le passage en « Signé ».
+      const changement = await prisma.$transaction(
+        async (tx) => {
+          const enVigueur = { dossierId: dossierId!, type: "DEVIS", numero: { not: null }, statut: { in: ["GENERE", "ENVOYE", "ACCEPTE"] } };
+          const cible =
+            incoherence.code === "ACCORD_SANS_SIGNATURE"
+              ? ((await tx.accordDevis.findFirst({ where: { dossierId: dossierId!, retireLe: null }, orderBy: { createdAt: "desc" }, select: { documentId: true } }))?.documentId ?? null)
+              : await devisDesAcomptes(tx, dossierId!);
+          const devis =
+            (cible ? await tx.document.findFirst({ where: { ...enVigueur, id: cible }, select: { id: true, statut: true } }) : null) ??
+            (await tx.document.findFirst({ where: enVigueur, orderBy: { createdAt: "desc" }, select: { id: true, statut: true } }));
+          if (!devis) throw new ErreurMetier("Aucun devis en vigueur sur ce dossier.", 409);
+          if (devis.statut !== "ACCEPTE") await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
+          const nonRetenus = await retenirDevis(tx, dossierId!, devis.id);
+          const dossier = await tx.dossier.findUniqueOrThrow({ where: { id: dossierId! }, select: { etape: true } });
+          const raison = [`${RAISON} : ${incoherence.code === "ACCORD_SANS_SIGNATURE" ? "bon pour accord donné dans l'espace client" : "paiement reçu"}`, suiteNonRetenus(nonRetenus)].filter(Boolean).join(" ; ");
+          return appliquerChangementEtape(tx, { dossierId: dossierId!, de: dossier.etape as EtapeDossier, vers: "SIGNE", nature: "AUTOMATIQUE", raison, documentId: devis.id });
+        },
+        { maxWait: 10_000, timeout: 30_000 }
+      );
+      await effetsDuChangementEtape(changement);
       break;
     }
     case "DEVIS_ACCEPTE_AVANT_SIGNE": {

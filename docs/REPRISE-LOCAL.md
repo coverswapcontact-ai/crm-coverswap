@@ -1222,3 +1222,69 @@ gardée en brouillon → Qualification ; publiée par Lucas → Simulation). Auc
 description d'outil changée : rien à reconnecter.
 
 Reste : B7, B8 (agents morts), B10-B13 ; rien pour Lucas.
+
+### Mission 18, B10 — paiement par carte (Stripe), variantes retenues, « Mes documents » (écart 10)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché : `EtapePaiement.tsx` appelait déjà `/paiement-carte`
+avec `?projet=` et suit `paiementCarte`). La copie de travail n'avait aucun reste d'un agent précédent sur ce lot.
+- **`src/lib/paiement/stripe.ts`** (aucune dépendance npm) : `stripeActif()` exige `STRIPE_SECRET_KEY` ET
+  `STRIPE_WEBHOOK_SECRET` ; `corpsSession` (pure) et `creerSessionCheckout` (`fetch` REST, `Idempotency-Key`, 10 s) :
+  `mode=payment`, `locale=fr`, montant en centimes, `metadata` (dossier, espace, nature, document) recopiées sur le
+  paiement, retour `lienPourLeProjet()#paiement`, expiration 60 min, AUCUN `payment_method_types` (Klarna, Alma
+  s'activent dans le tableau de bord Stripe, sans code) ; `verifierSignatureStripe` (pure : `t` + `v1` multiples,
+  HMAC-SHA256 de `t.corps brut`, temps constant, 300 s, refus sans secret), `signerCommeStripe` (essais) ;
+  `lireSessionPayee` (pure : `checkout.session.completed` payée ou `async_payment_succeeded`, euros seulement).
+- **`src/lib/paiement/carte.ts`** : `aReglerParCarte` (le serveur seul : acompte du devis signé moins le reçu, sinon,
+  chantier Facturé ou Encaissé, `faitsPaiements().resteCentimes` des factures) ; `preparerPaiementCarte` (409
+  `carte-fermee`, `rien-a-regler`, `lien-revoque`) ; `enregistrerPaiementStripe` : sous `EXTERNE:stripe`,
+  `enregistrerEncaissement` (moyen CARTE, origine STRIPE — type élargi —, `cleReprise: stripe:<session>`, référence
+  `pi_…`, imputation sur le devis de la session s'il est en vigueur, sinon automatique), rejeu → DEJA (lecture de la clé,
+  puis P2002), dossier inconnu → ignoré et journalisé ; puis alerte « Paiement par carte reçu » à Lucas (`prevenir`).
+- **Routes** : branche `POST /api/espace/<jeton>/paiement-carte` (avant `projetDe(acces, true)` : un projet facturé paie
+  son solde ; aperçu 403 ; 10 essais par IP) ; webhook `src/app/api/webhook/stripe/route.ts` (corps brut, 401 / 503
+  sans secret, 400 corps illisible, 200 pour l'ignoré et le rejeu, 500 si l'écriture échoue : Stripe rejoue) ; entrée
+  dans `routes-publiques.ts`. `service.ts` : `paiementCarte: stripeActif()`.
+- **Point d'entrée `PAIEMENT_RECU`** (synchro.ts) : `enregistrerEncaissement` (écran, `saisir_encaissement`, Stripe)
+  écrit encaissement, étape, statut du lead (changement marqué synchronisé), prochaine action et main dans UNE
+  transaction ; après : effets du changement (Meta, « projet terminé », agenda), tâches, puis le mail « paiement reçu »
+  existant. Signé par l'acompte : « Appeler le client : fixer la date du chantier (acompte reçu) »
+  (`PROCHAINE_ACTION_ACOMPTE_RECU`, tâche `acompte-recu` niveau 1 sous une action posée à la main) ; autre paiement :
+  efface seulement « réclamer un nouveau paiement ».
+- **Variantes retenues** : `retenirDevis` déplacé dans `dossiers/devis-retenu.ts` (réexporté par `devis-signe.ts`, pour
+  éviter l'import circulaire avec les transitions) ; `suivreAcompteDossier(…, devisId?)` signe sur le devis que règle
+  l'acompte (`devisDesAcomptes` : imputations du paiement, à défaut celles du dossier, puis le plus récent), les autres
+  NON_RETENU, raison « acompte encaissé ; non retenu : … » (le recul relit le préfixe) ; `changerEtapeDansTransaction`
+  (écran, `changer_etape`, paiement à la signature) au passage « Signé » ; correction `PAIEMENT_AVANT_SIGNATURE` /
+  `ACCORD_SANS_SIGNATURE` d'un bloc (devis des acomptes ou de l'accord). `piecesDuDossier` : un devis n'est actif
+  qu'émis, envoyé ou accepté (`DEVIS_EN_VIGUEUR`) : l'imputation automatique ne vise plus un non retenu ou annulé.
+- **« Mes documents »** (`compte.ts › statutFacture`, pure) : Annulée, puis d'après le registre « Réglée » / « Reste X € »
+  / « À régler », repli sur l'étape ENCAISSE pour une facture reprise sans ligne au registre (corrige « Réglée » pour
+  une facture annulée d'un dossier encaissé).
+- Docs : `SYNCHRO.md` (ligne `PAIEMENT_RECU`, paragraphe B10, B10 retiré du tableau 4), `MCP-COUVERTURE.md` (entrée
+  B10), `COHERENCE.md` (deux corrections), `ARCHITECTURE-PILOTAGE.md` (paiement par carte fait).
+
+Décisions prises seul (solution la plus simple) :
+- Le paiement par carte ne s'ouvre qu'après l'accord (onglet Paiement du site) : acompte seulement si un accord existe.
+- Klarna et Alma restent enregistrés en « CARTE » (pas d'appel supplémentaire pour lire le moyen exact).
+- Clé d'idempotence par dossier, nature, montant, nombre de paiements valides et fenêtre de 10 minutes : un double
+  clic rend la même session, une session abandonnée n'est pas resservie expirée.
+- `changerEtapeAvecPaiement` (signature avec acompte à l'écran) garde son chemin : il retient désormais les variantes
+  (par `changerEtapeDansTransaction`) mais n'émet pas `PAIEMENT_RECU` (la prochaine action reste celle de l'écran).
+- Pas de trace dans l'historique à l'ouverture de la page de paiement : seul le paiement reçu compte.
+
+Tests : 1 413 → 1 426 (`npm test` : 1 426 verts). Nouveau `src/lib/paiement/paiement-carte.test.ts` (13 essais, état
+des deux côtés, Stripe simulé, rien hors du poste) : signature (valide, mal signée, corps modifié, trop ancienne, secret
+ou en-tête absents, rotation) ; lecture des événements ; corps de session (pas de moyen imposé) ; bouton masqué avec la
+clé seule, 409 avant l'accord, aperçu 403, montant du serveur, retour `#paiement` ; webhook refusé sans rien écrire,
+puis encaissé (CARTE, STRIPE, imputé sur le devis, espace CHANTIER, un mail), rejoué sans effet ; moyen différé ;
+acompte Stripe sur la variante B d'un devis envoyé (Signé, A non retenu, lead SIGNE, prochaine action, main relue, plus
+de relance) puis annulé (retour, A et B au choix) ; action posée à la main gardée avec la tâche ; « Signé » à l'écran
+sur B ; correction de cohérence ; `statutFacture` ; solde par carte d'un chantier facturé → Encaissé, facture « Réglée ».
+Aucun test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP
+inchangée (`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter.
+
+Reste à Lucas : poser `STRIPE_SECRET_KEY` et `STRIPE_WEBHOOK_SECRET` sur Railway ; déclarer le webhook
+`https://<crm>/api/webhook/stripe` (événements `checkout.session.completed` et `checkout.session.async_payment_succeeded`) ;
+activer Klarna et Alma dans Stripe s'il le souhaite ; laisser les reçus automatiques de Stripe DÉSACTIVÉS (sinon un
+second mail au client) ; frais Stripe à saisir en dépense ; remboursement ou litige : annuler l'encaissement à la main.
+Reste de la partie B : B7, B8, B11-B13.

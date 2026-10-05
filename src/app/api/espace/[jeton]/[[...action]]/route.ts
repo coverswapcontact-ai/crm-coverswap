@@ -39,6 +39,7 @@ import {
 import { creerSimulationClient, demanderSimulations, schemaCreationSimulation, suivreCreation } from "@/lib/espace/creation";
 import { imageEchantillon, vignetteEchantillon } from "@/lib/simulateur/catalogue";
 import { demanderAnalyseEspace, schemaAnalyseEspace, suivreAnalyseEspace } from "@/lib/espace/simulateur";
+import { preparerPaiementCarte } from "@/lib/paiement/carte";
 
 /**
  * API PUBLIQUE de l'espace client — appelée par la page coverswap.fr/e/<jeton>,
@@ -61,6 +62,7 @@ import { demanderAnalyseEspace, schemaAnalyseEspace, suivreAnalyseEspace } from 
  *   POST   /photos (multipart) · /simulations/creer | demande | vues | analyse · /choix · /proposition · /accord · /avis
  *   POST   /projet/validation | devalidation · /choix/retrait · /proposition/retrait · /accord/retrait · /photos/<id>/retrait
  *   POST   /devis/<id>/consultation · /simulations/<id>/choix | commentaire (page du 20/09)
+ *   POST   /paiement-carte                                  ouvre le paiement Stripe de ce qui est dû (acompte ou solde) : { url }
  *   PUT    /projet | souhaits · /coordonnees
  *
  * Garde-fous : origine restreinte au site, limite par adresse IP, blocage d'une
@@ -293,6 +295,14 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
         if (fige === "NON_REALISE" || (fige === "TERMINE" && projet.avisLe)) throw new ErreurMetier(MESSAGE_FIGE[fige], 409, { raison: "fige" });
         await donnerAvis(projet, analyser(schemaAvis, corps));
         return NextResponse.json(await etatComplet(permanent.id, projet.id));
+      }
+      // Mission 18 (B10) : « Payer par carte » (onglet Paiement) — le CRM calcule seul ce qui est dû (acompte ou solde),
+      // ouvre la page de paiement Stripe et rend son adresse ; un projet terminé peut encore régler son solde.
+      if (action.length === 1 && ressource === "paiement-carte") {
+        const projet = projetDe(acces);
+        if (ipDepasseLaLimite(`espace-carte:${ipDe(requete)}`, Date.now(), 10)) throw new ErreurMetier("Trop d'essais : réessayez dans quelques minutes, ou réglez par virement.", 429);
+        const { url } = await preparerPaiementCarte(projet);
+        return NextResponse.json({ url });
       }
       const projet = projetDe(acces, true);
       const relu = async () => NextResponse.json(await etatComplet(permanent.id, projet.id));

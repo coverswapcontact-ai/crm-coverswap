@@ -131,6 +131,17 @@
   (`envoyeLe` ajouté). Un devis déposé « accepté » sur un dossier en pause d'avant la signature le signe (aperçu de
   `ajouter_fichier` compris). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
   (53 outils), rien à reconnecter.
+- **Mission 18, B10 (05/10/2026)** : paiement par carte et variantes retenues. `saisir_encaissement` (DP9, DP75, F4,
+  T11) passe toujours par `enregistrerEncaissement`, désormais par le point d'entrée (`PAIEMENT_RECU`) : un acompte sur
+  un devis encore envoyé signe le dossier sur le devis qu'il règle (la pièce choisie, ou celle de l'imputation), les
+  autres variantes passent « non retenu », prochaine action « Appeler le client : fixer la date du chantier (acompte
+  reçu) » (une action posée à la main reste, avec la tâche), statut du lead et main dans la même transaction ;
+  l'imputation automatique ne vise plus un devis non retenu, remplacé ou annulé. `changer_etape` vers « Signé » (DP
+  du changement d'étape, même fonction que l'écran) passe aussi les autres variantes « non retenu » ; la correction de
+  cohérence `PAIEMENT_AVANT_SIGNATURE` / `ACCORD_SANS_SIGNATURE` (`agir_systeme`) signe sur le devis réglé ou accordé.
+  Le paiement par carte lui-même est un geste du client dans son espace (Stripe, webhook) : pas d'outil, l'encaissement
+  qu'il crée se lit comme les autres (`lire_fiche`, `manager_finances`). Ni outil, ni paramètre, ni description ne
+  change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

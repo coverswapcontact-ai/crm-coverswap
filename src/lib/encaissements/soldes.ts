@@ -24,6 +24,9 @@ export type PieceSolde = {
   active: boolean;
 };
 
+/** Les statuts d'un devis qui attend encore son acompte (les mêmes que `espace/faits.ts › STATUTS_DEVIS_EN_VIGUEUR`). */
+export const DEVIS_EN_VIGUEUR = ["GENERE", "ENVOYE", "ACCEPTE"] as const;
+
 const centimes = (montants: { montant: number }[]) => montants.reduce((somme, ligne) => somme + versCentimes(ligne.montant), 0);
 
 /** Devis et factures émis d'un dossier, avec ce qui les règle. */
@@ -44,7 +47,9 @@ export async function piecesDuDossier(lecteur: Transaction, dossierId: string): 
     const ligne = ligneDe.get(document.id);
     if (!ligne || !document.numero) return [];
     const type = document.type as "DEVIS" | "FACTURE";
-    const active = type === "FACTURE" ? document.statut !== "ANNULEE" : document.statut !== "REMPLACE";
+    // Mission 18 (B10) : un devis n'est en vigueur qu'émis, envoyé ou accepté ; remplacé, annulé ou non retenu (une autre
+    // variante signée), il ne reçoit plus d'acompte par l'imputation automatique.
+    const active = type === "FACTURE" ? document.statut !== "ANNULEE" : (DEVIS_EN_VIGUEUR as readonly string[]).includes(document.statut);
     const total = versCentimes(document.totalHt);
     const regle = centimes(ligne.affectations);
     return [

@@ -158,6 +158,11 @@
   d'un devis jamais annoncé, avenant envoyé par mail). Chaque correction laisse `COHERENCE_CORRIGEE` dans l'historique
   (`lire_fiche`). Ni outil ni paramètre ne change : empreinte **`040d6c7aa53c`** (53 outils) ; la description de
   `agir_systeme` change (« … ou envoie un mail au client ») : reconnecter le connecteur.
+- **Mission 18, mise en route (05/10/2026)** : `etat_crm` SANTE ajoute une ligne
+  « Dernières migrations » : les trois dernières migrations de données du démarrage, et pour `mise-en-route-18` le
+  compte par règle (écarts trouvés, réparés, en tâche à moi, au détecteur) ; `donnees.dernieresMigrations`. Les tâches à
+  moi du lot « coherence-18 » se lisent et se répondent comme les autres (`taches`). Ni outil, ni paramètre, ni
+  description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter pour ce lot.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

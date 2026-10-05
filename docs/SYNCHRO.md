@@ -256,3 +256,32 @@ statut du lead ; étape de l'espace (la lecture du site) ; relances proposables 
 et relances de devis à venir avec leur date ; tâches ouvertes du dossier après une passe de réconciliation complète.
 Chaque écart corrigé a son essai : le déclencheur, puis cet état comparé à l'attendu. Premier usage :
 `src/lib/dossiers/synchro.test.ts`, qui vérifie aussi que chaque événement de `TYPES_EVENEMENT_DOSSIER` a sa ligne ici.
+
+## 7. La mise en route (migration `mise-en-route-18`)
+
+Au premier démarrage qui suit le déploiement, après la sauvegarde automatique prise avant toute migration
+(`base/preparation.ts › executerMigrationsDonnees` : « [base] Sauvegarde avant migration : … » ; si le volume Railway
+est plein, le CRM ne démarre pas : lire « [sauvegarde] Volume » avant de déployer). Fichier
+`src/lib/base/migrations/mission-18-mise-en-route.ts`, dernière de `MIGRATIONS_DONNEES`. Base neuve : rien.
+
+1. **Un** contrôle de cohérence étendu (`controlerCoherence({ etendu: true })`) : tous les dossiers, perdus et archivés
+   compris.
+2. **Réparations sûres appliquées** par `appliquerCorrection` (la fonction du bouton « Corriger », sans rejouer le
+   contrôle) : les codes qui ont une correction et ne sont pas dans `CORRECTIONS_SENSIBLES` — `ATTENTE_ACCORD_SANS_DEVIS`,
+   `ESPACE_ACTIF_DOSSIER_CLOS`, `STATUT_DU_LEAD`, `MAIN_DECALEE`, `PROCHAINE_ACTION_PERIMEE`, `CHOIX_SANS_SIMULATION`,
+   `PROJETS_AU_DELA_DE_LA_LIMITE`. Aucune ne change l'étape, ne touche un devis ni n'envoie de mail : ni mail au client,
+   ni conversion Meta (un essai le vérifie avec Meta « configuré »). `SIMULATIONS_HORS_DOSSIER` est laissé au filet des
+   15 minutes (`rattraperSimulationsSansDossier`, la même fonction, qui range aussi dans l'espace).
+3. **Le reste** (corrections sensibles, ou à la main) : un contrôle ordinaire dit ce que le détecteur COHERENCE remontera
+   de lui-même (« Corriger · Nom ») — rien n'est écrit pour ceux-là ; ce qu'il ne voit pas (dossiers perdus ou archivés)
+   devient une tâche à moi `MANUELLE:coherence-18-<clé>`, lot « coherence-18 », avec le constat et la correction
+   proposée (« à décider : jamais appliquée d'office »).
+4. Le détecteur oublie son rapport gardé (`invaliderCoherence`), la liste des tâches est prévenue.
+
+Lecture : le journal de démarrage (`[migration mise-en-route-18] … dossiers contrôlés … : N écarts trouvés, M réparés…`
+puis une ligne par règle, clients en initiales ; `[base] Migration de données « mise-en-route-18 » : {…}`) et
+`etat_crm` SANTE (ligne « Dernières migrations » : les trois dernières, par règle « CODE n trouvés, m réparés, k en
+tâche, j au détecteur »). Résumé en base (`MigrationDonnees.resume`) : `dossiersControles`, totaux `trouves`, `repares`,
+`taches`, `detecteur`, `echecs`, puis `trouves.<CODE>`, `repares.<CODE>`, `taches.<CODE>`, `detecteur.<CODE>`,
+`echecs.<CODE>` non nuls. Ne lève jamais (un échec est compté, le démarrage continue) ; rejouée, elle ne répare plus rien
+et ne recrée aucune tâche. Essai : `src/lib/base/mission-18-mise-en-route.test.ts`.

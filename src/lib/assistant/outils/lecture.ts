@@ -428,8 +428,39 @@ function texteAnalytique(sources: { source: string; etat: string; derniereReussi
   return `Analytique : ${morceaux.join(" · ")}.`;
 }
 
+/** Les dernières migrations de données passées au démarrage, les plus récentes d'abord (mission 18, mise en route). */
+const DERNIERES_MIGRATIONS = 3;
+
+/**
+ * Mission 18 (mise en route) : le résumé d'une migration en mots. Par règle quand elle en donne (`trouves.<CODE>`,
+ * `repares.<CODE>`… : « MAIN_DECALEE 3 trouvés, 3 réparés ») ; sinon ses compteurs non nuls (« consultations 2 »).
+ */
+export function texteMigration(m: { nom: string; executeeLe: Date; resume: string }): string {
+  let resume: Record<string, unknown> = {};
+  try {
+    const lu: unknown = JSON.parse(m.resume);
+    if (lu && typeof lu === "object") resume = lu as Record<string, unknown>;
+  } catch {
+    resume = {};
+  }
+  const n = (cle: string) => (typeof resume[cle] === "number" ? (resume[cle] as number) : 0);
+  const s = (cle: string) => (n(cle) > 1 ? "s" : "");
+  const quand = `${m.nom} le ${format.jourCourt(m.executeeLe)}`;
+  if ("trouves" in resume) {
+    const codes = Object.keys(resume).filter((k) => k.startsWith("trouves.")).map((k) => k.slice("trouves.".length)).sort();
+    const total = `${pluriel(n("dossiersControles"), "dossier contrôlé", "dossiers contrôlés")}, ${pluriel(n("trouves"), "écart trouvé", "écarts trouvés")}, ${pluriel(n("repares"), "réparé", "réparés")}, ${pluriel(n("taches"), "tâche à moi", "tâches à moi")}, ${n("detecteur")} au détecteur, ${pluriel(n("echecs"), "échec")}`;
+    const regles = codes.map(
+      (code) =>
+        `${code} ${n(`trouves.${code}`)} trouvé${s(`trouves.${code}`)}, ${n(`repares.${code}`)} réparé${s(`repares.${code}`)}${n(`taches.${code}`) ? `, ${n(`taches.${code}`)} en tâche` : ""}${n(`detecteur.${code}`) ? `, ${n(`detecteur.${code}`)} au détecteur` : ""}${n(`echecs.${code}`) ? `, ${n(`echecs.${code}`)} en échec` : ""}`
+    );
+    return `${quand} : ${total}${regles.length ? ` (${regles.join(" ; ")})` : ""}`;
+  }
+  const compteurs = Object.entries(resume).filter(([, v]) => typeof v === "number" && v !== 0).map(([k, v]) => `${k} ${v}`);
+  return `${quand} : ${compteurs.length ? compteurs.join(", ") : "rien à faire"}`;
+}
+
 export async function santeSysteme(maintenant: Date = new Date()) {
-  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle, analytique, alertesAnalytique] = await Promise.all([
+  const [taches, google, etatGoogle, meta, ia, alertes, coherence, avisGoogle, analytique, alertesAnalytique, migrations] = await Promise.all([
     etatDesTaches(),
     rappelConnexionGoogle(maintenant).catch(() => null),
     etatConnexionGoogle().catch(() => null),
@@ -443,6 +474,8 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     import("@/lib/analytique/etat").then((m) => m.etatDesSources(maintenant)).catch(() => null),
     // Les alertes de l'Analytique (coût par lead, chute de trafic, requête qui décolle, www en double) : les mêmes que l'écran.
     import("@/lib/analytique/cache").then((m) => m.alertesPourSante(maintenant)).catch(() => []),
+    // Mission 18 (mise en route) : ce que les dernières migrations du démarrage ont trouvé et réparé.
+    prisma.migrationDonnees.findMany({ orderBy: { executeeLe: "desc" }, take: DERNIERES_MIGRATIONS, select: { nom: true, executeeLe: true, resume: true } }).catch(() => []),
   ]);
   let disqueLibreMo: number | null = null;
   let disque: { libreMo: number; totalMo: number; pourcentUtilise: number; niveau: "OK" | "ATTENTION" | "URGENT" } | null = null;
@@ -475,6 +508,7 @@ export async function santeSysteme(maintenant: Date = new Date()) {
     disque,
     coherence: coherence ? { dossiersControles: coherence.dossiersControles, incoherences: coherence.incoherences.map((i) => ({ code: i.code, gravite: i.gravite, client: i.client, message: i.constat })) } : null,
     alertes: alertes.map((a) => ({ gravite: a.gravite, titre: a.titre, detail: a.detail, lien: a.lien })),
+    dernieresMigrations: migrations.map((m) => ({ nom: m.nom, executeeLe: m.executeeLe.toISOString(), texte: texteMigration(m) })),
   };
 }
 
@@ -500,6 +534,7 @@ export const outilSanteSysteme = definirOutil({
       s.disque ? `Disque : ${s.disque.pourcentUtilise} % utilisé (${s.disque.libreMo} Mo libres sur ${s.disque.totalMo})${s.disque.niveau === "URGENT" ? " — ALERTE, volume presque plein (≥ 85 %)" : s.disque.niveau === "ATTENTION" ? " — attention, plus de 70 %" : ""}.` : s.disqueLibreMo !== null ? `Disque : ${s.disqueLibreMo} Mo libres.` : "",
       s.coherence ? (s.coherence.incoherences.length ? `Cohérence : ${pluriel(s.coherence.incoherences.length, "incohérence")} sur ${s.coherence.dossiersControles} dossiers : ${s.coherence.incoherences.map((i) => i.message).join(" · ")}` : `Cohérence : rien à signaler (${s.coherence.dossiersControles} dossiers contrôlés).`) : "",
       s.alertes.length ? `Alertes : ${s.alertes.map((a) => `[${a.gravite}] ${a.titre} — ${a.detail}`).join(" · ")}` : "Aucune alerte.",
+      s.dernieresMigrations.length ? `Dernières migrations : ${s.dernieresMigrations.map((m) => m.texte).join(" · ")}` : "",
     ].filter(Boolean).join("\n");
     return { texte, donnees: s, liens: [lien("Paramètres › Système", ADRESSE_SYSTEME), lien("Paramètres", "/parametres")] };
   },

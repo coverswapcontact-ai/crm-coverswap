@@ -89,6 +89,11 @@ ne regardent jamais un dossier archivé ; celles des devis, seulement les dossie
 la phase du devis ou du chantier passent par le point d'entrée (`dossiers/synchro.ts`, événement `CORRECTION_COHERENCE` :
 une prochaine action posée à la main n'est jamais écrasée).
 
+Mise en route de la mission 18 (migration `mise-en-route-18`, docs/SYNCHRO.md § 7) : un contrôle étendu au démarrage,
+les corrections non sensibles appliquées d'office (sauf `SIMULATIONS_HORS_DOSSIER`, laissé au filet des 15 minutes), le
+reste au détecteur (dossiers vivants) ou en tâche à moi du lot « coherence-18 » (dossiers perdus ou archivés, que le
+contrôle quotidien ne lit pas) ; le compte par règle dans le journal de démarrage et `etat_crm` SANTE.
+
 | Code | Ce qui est comparé | Corriger | S |
 |---|---|---|---|
 | `DEVIS_MONTANT_NUL` | Devis en vigueur à 0 € (le client lirait « 0 € ») | À la main : corriger le document | |

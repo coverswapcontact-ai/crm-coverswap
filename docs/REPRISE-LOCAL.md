@@ -1419,3 +1419,54 @@ connecteur.
 Reste : B7, B8, B12 (agents morts), puis la mise en route (migration `mise-en-route-18` : `controlerCoherence({ etendu:
 true })` une fois, `appliquerCorrection` pour les codes hors `CORRECTIONS_SENSIBLES`, tâches pour le reste) ; rien pour
 Lucas, sauf reconnecter le connecteur.
+
+### Mission 18, MR — mise en route : contrôle étendu, réparations sûres, le reste en tâches
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Migration `mise-en-route-18`** (`src/lib/base/migrations/mission-18-mise-en-route.ts`, dernière de
+  `MIGRATIONS_DONNEES`, après `etats-en-double-18`). Elle tournera au démarrage qui suit le push de `main`, après la
+  sauvegarde automatique d'avant migration (`executerMigrationsDonnees`). Base vide : rien. Sinon : UN
+  `controlerCoherence({ etendu: true })` (perdus et archivés compris) ; `appliquerCorrection` (la fonction du bouton
+  « Corriger », sans rejouer le contrôle) pour chaque code qui a une correction hors `CORRECTIONS_SENSIBLES` ; le reste
+  au détecteur COHERENCE s'il le voit (un contrôle ordinaire le dit), sinon (dossier perdu ou archivé) une tâche à moi
+  `MANUELLE:coherence-18-<clé>`, lot « coherence-18 », constat + correction proposée « à décider : jamais appliquée
+  d'office » (P2002 ignoré) ; puis `invaliderCoherence` et signal des tâches. Ne lève jamais (échec compté, le démarrage
+  continue).
+- **Lisible après le déploiement** : journal de démarrage (`[migration mise-en-route-18] N dossiers contrôlés (perdus et
+  archivés compris) : … écarts trouvés, … réparés, … tâches à moi, … au détecteur, … échec`, puis une ligne par règle ;
+  clients en initiales) et `etat_crm` SANTE (nouvelle ligne « Dernières migrations » : les trois dernières ; pour
+  celle-ci, par règle « CODE n trouvés, m réparés, k en tâche, j au détecteur » ; `lecture.ts › texteMigration`).
+  Résumé en base : `dossiersControles`, `trouves`, `repares`, `taches`, `detecteur`, `echecs`, et `<compteur>.<CODE>`
+  non nuls.
+- Docs : `SYNCHRO.md` § 7 (nouveau), `COHERENCE.md` § 5 (paragraphe), `MCP-COUVERTURE.md` (entrée mise en route).
+
+Décisions prises seul (solution la plus simple) :
+- Réparations appliquées d'office = les codes non sensibles qui ont une correction (`ATTENTE_ACCORD_SANS_DEVIS`,
+  `ESPACE_ACTIF_DOSSIER_CLOS`, `STATUT_DU_LEAD`, `MAIN_DECALEE`, `PROCHAINE_ACTION_PERIMEE`, `CHOIX_SANS_SIMULATION`,
+  `PROJETS_AU_DELA_DE_LA_LIMITE`). Aucune ne change l'étape : la consigne « nature REPRISE quand une étape bouge » n'a
+  donc pas à jouer (aucune correction sensible n'est appliquée, aucune conversion Meta ne peut partir).
+- `SIMULATIONS_HORS_DOSSIER` n'est pas appliqué par la migration : le filet des 15 minutes (`rattraperSimulationsSansDossier`)
+  fait la même chose et range aussi dans l'espace (avec une alerte à Lucas et un miroir Drive : pas au démarrage).
+- « Le reste » sur un dossier vivant n'écrit rien (le détecteur le remonte en « Corriger · Nom ») ; « vu du détecteur »
+  se décide par un second contrôle, ordinaire, après les réparations (et non par une liste de codes, fragile).
+- Tâches de la mise en route : sujet DOSSIER, raccourci « Ouvrir le dossier », niveau 5 ; une tâche MANUELLE ne se
+  coche jamais par absence (Lucas y répond ou « Tout classer » le lot).
+- SANTE : la ligne « Dernières migrations » est ajoutée sans changer ni paramètre ni description : empreinte inchangée.
+
+Tests : 1 443 → 1 446 (`npm test` : 1 446 verts). Nouveau `src/lib/base/mission-18-mise-en-route.test.ts` (3 essais,
+réseau coupé, Meta « configuré » avec des valeurs factices pendant la migration) : base vide (passée au démarrage,
+résumé à zéro, dernière de la liste, après `etats-en-double-18`, aucune tâche) ; un cas par règle — « Attendre
+l'accord » sans devis effacée (et posée à la main : gardée, jamais signalée), prochaine action périmée effacée, main
+décalée remise « à moi » (message du client sans réponse), choix d'une simulation invisible dévalidé (espace revenu
+aux photos), Signé avec date de chantier laissé (sensible) et remonté par le détecteur avec le lead aligné « SIGNE »,
+perdu (lead PERDU, lien coupé, projet gardé), archivé en « Signé » sans devis accepté (projet et lien fermés, devis
+intact, tâche à moi en lot, pas cochée par une passe) — avec le résumé exact, aucun CHANGEMENT_ETAPE, aucun mail,
+aucune conversion Meta mise en file, une trace COHERENCE_CORRIGEE par réparation, état des deux côtés ; rejouée : 0
+réparation, 0 tâche ; ligne SANTE lue par l'outil ; texte d'une migration, initiales, codes laissés au filet. Aucun
+test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée
+(`040d6c7aa53c`, 53 outils), aucune description changée : rien à reconnecter pour ce lot.
+
+Reste : B7, B8, B12 (agents morts). En production : avant de déployer, lire « [sauvegarde] Volume » (volume plein =
+CRM qui ne démarre pas) ; après, lire la ligne de la migration au journal ou `etat_crm` SANTE, puis le lot
+« coherence-18 » dans Tâches.

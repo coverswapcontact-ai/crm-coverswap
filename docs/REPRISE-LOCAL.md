@@ -1713,3 +1713,18 @@ Empreinte MCP : **change**, `040d6c7aa53c` → `6665a6b457fe` (53 outils ; param
 `geste_espace`) : reconnecter le connecteur.
 
 Reste : rien pour ce lot ; pour Lucas, reconnecter le connecteur MCP.
+
+## Phase A, fin : mission 18 fusionnée (05/10/2026)
+
+- Lots : A1 3442b9a, A2 57b6edf, A3 cb93bbe, A4 1e78e5d, A5 f2c41bb, A6 c8357f6, relecture A 49eb5f3 ; B0 ac1b274,
+  B1 13c8801, B2 8a47493, B3 36e68dc, B4 e24b09c, B5 cc44a97, B6 6f0eeec, relecture 7c1d8a2 ; B9 7a4dc4d, B10 d90e297,
+  B11 860e201, B13 171bd9e, MR 798aad9, B7 691aea0 (site 4746465), B8 cf49415, B12 b3585d3, relecture 406f9bf.
+- Trois relectures adverses (conformité, sûreté des clients, régressions) : 10 + 14 + 15 constats, tous corrigés ou
+  réfutés, détail dans les sections « corrections de la relecture » ci-dessus.
+- Tests : CRM 1 283 → 1 476, site 284 → 288 ; tsc, lint, build verts dans les deux dépôts.
+- Incidents : coupures réseau et surcharge de l'API (03/10 et 05/10) ont tué 5 agents ; leurs lots ont été relancés
+  (travail partiel de B1 repris, patch gardé). Deux tests du CRM cassés par la date (05/10) réparés : 49069e7 (un
+  vrai défaut : « lundi » dit un lundi après l'heure visait un moment passé), 7765057.
+- Avant la fusion : production en bonne santé (disque 14 %, 3,8 Go libres ; cohérence sans écart sur 24 dossiers).
+  La mise en route (migration `mise-en-route-18`) tourne au premier démarrage après le push, sauvegarde d'abord.
+- Empreinte des outils MCP : inchangée (53 outils), mais des descriptions ont changé → reconnecter le connecteur.

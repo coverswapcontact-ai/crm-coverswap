@@ -31,10 +31,10 @@ const LUCAS = { acteur: "HUMAIN:lucas@coverswap.fr" };
 const JPEG = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKAA/9k=", "base64");
 const photo = (nom = "cuisine.jpg") => new File([new Uint8Array(JPEG)], nom, { type: "image/jpeg" });
 const ligne = (designation: string, quantite: number, prixUnitaire: number) => ({ type: "PRESTATION" as const, designation, sousDesignation: undefined, quantite, unite: "ml" as const, prixUnitaire });
-const devisDe = (objet: string) => documents.schemaGeneration.parse({ type: "DEVIS", objet, lignes: [ligne("Revêtement adhésif — façades", 10, 150)], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier: false });
+const devisDe = (objet: string, notifier = false) => documents.schemaGeneration.parse({ type: "DEVIS", objet, lignes: [ligne("Revêtement adhésif — façades", 10, 150)], noteMl: true, acomptePct: 30, remplaceDocumentId: null, notifier });
 
-async function contact(prenom: string) {
-  const lead = await prisma.lead.create({ data: { prenom, nom: "Essai", telephone: `+3361${Math.floor(Math.random() * 9e7 + 1e7)}`, ville: "Lattes", codePostal: "34970", source: "META_ADS" } });
+async function contact(prenom: string, email?: string) {
+  const lead = await prisma.lead.create({ data: { prenom, nom: "Essai", telephone: `+3361${Math.floor(Math.random() * 9e7 + 1e7)}`, ville: "Lattes", codePostal: "34970", source: "META_ADS", ...(email ? { email } : {}) } });
   const ouvert = await liens.ouvrirEspaceDuContact(lead.id);
   return { leadId: lead.id, dossierId: ouvert.dossierId, espace: ouvert.espace, nom: `${prenom} Essai` };
 }
@@ -114,18 +114,19 @@ describe("prochaine action automatique (mission 18, B0)", () => {
   });
 
   test("devis émis : « Préparer le devis » posé par l'espace devient « Attendre l'accord » ; posé à la main, il reste et une tâche le dit", async () => {
-    const parLEspace = await contact("Espace");
+    // Mission 18 (B1) : devis annoncés (adresse, espace ouvert, notification) : ils sont envoyés.
+    const parLEspace = await contact("Espace", "espace.synchro@example.test");
     await prisma.dossier.update({ where: { id: parLEspace.dossierId }, data: { prochaineAction: "Préparer le devis (simulation choisie)" } });
-    await avecActeur(LUCAS, () => documents.genererDocument(parLEspace.dossierId, devisDe("Recouvrement cuisine")));
+    await avecActeur(LUCAS, () => documents.genererDocument(parLEspace.dossierId, devisDe("Recouvrement cuisine", true)));
     const remplacee = await etatDesDeuxCotes(parLEspace.dossierId);
     assert.equal(remplacee.prochaineAction, "Attendre l'accord du client sur le devis");
     assert.equal(remplacee.taches.filter((t) => t.cle.startsWith(auto.PREFIXE_TACHE_SYNCHRO)).length, 0);
     assert.equal(remplacee.main, remplacee.mainCalculee, "la main écrite est celle de la règle");
 
-    const alaMain = await contact("Main");
+    const alaMain = await contact("Main", "main.synchro@example.test");
     const ecrite = "Préparer le devis avec le plan de travail en option";
     await poserALaMain(alaMain.dossierId, ecrite);
-    await avecActeur(LUCAS, () => documents.genererDocument(alaMain.dossierId, devisDe("Recouvrement cuisine")));
+    await avecActeur(LUCAS, () => documents.genererDocument(alaMain.dossierId, devisDe("Recouvrement cuisine", true)));
     const gardee = await etatDesDeuxCotes(alaMain.dossierId);
     assert.deepEqual([gardee.prochaineAction, gardee.actionManuelle], [ecrite, ecrite]);
     assert.equal(gardee.main, gardee.mainCalculee);
@@ -133,8 +134,9 @@ describe("prochaine action automatique (mission 18, B0)", () => {
       gardee.taches.filter((t) => t.cle.startsWith(auto.PREFIXE_TACHE_SYNCHRO)).map((t) => [t.cle, t.titre, t.niveau]),
       [[auto.cleTacheSynchro(alaMain.dossierId, "devis"), `Attendre l'accord du client sur le devis · ${alaMain.nom}`, 3]]
     );
-    // L'étape et l'espace suivent comme avant (B1 changera « généré n'est pas envoyé ») : les deux dossiers sont au même point.
+    // L'étape et l'espace suivent le devis envoyé, action posée à la main ou non : les deux dossiers sont au même point.
     assert.deepEqual([gardee.etape, gardee.etapeEspace], [remplacee.etape, remplacee.etapeEspace]);
+    assert.equal(gardee.etape, "DEVIS_ENVOYE");
   });
 
   test("ce qui ne pose rien : condition non remplie, effacement ou même texte sur une action posée à la main ; une tâche archivée ou reportée n'est pas forcée", async () => {

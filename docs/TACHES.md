@@ -124,7 +124,8 @@ ESPACE_PROJET_DEMANDE, ESPACE_ACCORD_RETIRE, DEMANDE_SITE, ESPACE_SIMULATION_CLI
 **Prochaine action manuelle en vigueur** (cas « j'attends sa modification visuelle ») : `prochaineActionManuelleLe`
 posé, `prochaineAction` égale au texte retenu, et aucun événement du client après. Tant qu'elle est en vigueur :
 aucun détecteur ne crée de tâche sur ce dossier (signaux, cohérence, étapes, messages plus anciens compris) ; une
-seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Posée à la main, elle écrit un événement
+seule tâche `PROCHAINE_ACTION` apparaît le jour de sa date. Exception (mission 18, B1) : `ENVOYER_DEVIS`, un devis
+généré mais pas encore envoyé, reste — c'est le geste de Lucas resté en route, aucune action manuelle ne le couvre. Posée à la main, elle écrit un événement
 `PROCHAINE_ACTION_MANUELLE` qui compte comme une réponse pour la règle de la main (ce qui est plus ancien est traité)
 et qui passe la main au client si le texte dit d'attendre (`/\battend|\battente\b/i` : « en attente de… » compris), sinon à
 Lucas.
@@ -157,6 +158,7 @@ Passages : `a-faire/detection.ts › passeComplete(maintenant)` lance tous les d
 | SIMULATION | Préparer la simulation · Nom | 3 | 10 | DOSSIERS | simulateur ouvert sur le dossier |
 | PUBLIER | Publier la simulation · Nom | 3 | 1 | SIGNAUX | dossier, rubrique simulations |
 | DEVIS | Faire le devis · Nom | 3 | 10 | DOSSIERS | devis prérempli, ou « déposer un PDF » |
+| ENVOYER_DEVIS | Envoyer le devis · Nom (généré mais pas encore envoyé : masqué dans son espace, ou sans annonce ; mission 18 B1) | 2 | 2 | DOSSIERS | dossier, rubrique devis (le rendre visible dans son espace, ou « Envoyer par mail ») |
 | ENVOYER_LIEN | Envoyer le lien · Nom | 3 | 1 | SIGNAUX | SMS LIEN_ESPACE à copier |
 | RELANCER_PHOTOS | Relancer pour les photos · Nom | 3 | 1 | RELANCES | SMS à copier |
 | RELANCER_AVIS | Demander un avis · Nom (chantier fini sans avis, mission 18 A4) | 3 | 1 | RELANCES | SMS DEMANDE_AVIS à copier (lien de l'espace) |
@@ -205,6 +207,7 @@ raccourci → « Fait » ou coche du CRM dans l'heure), bornée entre la moitié
 | Type | Condition d'achèvement | Raison affichée |
 |---|---|---|
 | DEVIS | un devis visible (`estDevisEnvoye`) | « devis 2026-043 déposé » / « émis » |
+| ENVOYER_DEVIS | le devis parti par le mail du CRM (« Envoyé ») ou accepté, mis en ligne (`DEVIS_ENVOYE` qui le porte), annulé ou remplacé | « devis 2026-043 envoyé par mail », « mis en ligne à 10:12 » |
 | SIMULATION | une simulation PUBLIEE | « simulation publiée le 29/09 » |
 | REPONDRE | réponse partie (mail sortant, réponse d'espace, SMS copié, appel abouti), fil archivé ou rangé | « réponse partie le 29/09 » |
 | APPELER | lead contacté par Lucas (appel, SMS copié ou envoyé, mail parti ; jamais un message reçu ni l'accusé automatique) ; lead qui a écrit | « SMS copié le 29/09 », « il a écrit : à lui répondre » |

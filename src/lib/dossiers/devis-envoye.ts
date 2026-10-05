@@ -22,6 +22,27 @@ export function etapeApresGeneration(type: TypeDocument, etape: EtapeDossier): E
   return null;
 }
 
+/**
+ * Mission 18 (B1) : générer un devis n'est pas l'envoyer. À la génération, le devis est :
+ * - ANNONCÉ (visible, envoyé : l'étape avance, la main passe au client) s'il part avec la notification « Devis
+ *   disponible » : notifier demandé, espace ouvert, adresse valide ; ou interrupteur du modèle coupé dans Paramètres
+ *   (alors la mise en ligne dans un espace ouvert vaut envoi, décision de la mission 18) ;
+ * - sinon, en Qualification ou Simulation : MASQUÉ dans l'espace, pas envoyé (tâche « Envoyer le devis ») ;
+ * - sinon (Devis envoyé, Relance, après la signature…) : visible ; une variante silencieuse (`notifier: false`) dans un
+ *   espace ouvert vaut mise en ligne (le client a déjà ses devis là, il a été prévenu du premier) ; sans espace ouvert ou
+ *   sans adresse pour l'annoncer, il n'est pas envoyé.
+ * Pure (essais) ; `mail` dit si la notification est à programmer après la transaction.
+ */
+export function envoiALaGeneration(e: { etape: EtapeDossier; notifier: boolean; modeleActif: boolean; espaceOuvert: boolean; possible: boolean }): { visible: boolean; envoye: boolean; mail: boolean } {
+  const annonce = e.notifier && e.espaceOuvert && (e.possible || !e.modeleActif);
+  if (annonce) return { visible: true, envoye: true, mail: e.modeleActif };
+  if (ETAPES_DEVIS_MASQUE.includes(e.etape)) return { visible: false, envoye: false, mail: false };
+  return { visible: true, envoye: !e.notifier && e.espaceOuvert, mail: false };
+}
+
+/** Les étapes où un devis généré sans être annoncé reste masqué dans l'espace (avant tout devis envoyé). */
+export const ETAPES_DEVIS_MASQUE: readonly EtapeDossier[] = ["QUALIFICATION", "SIMULATION"];
+
 /** Statuts d'un devis qui attend la réponse du client (ni accepté, ni refusé, ni remplacé). */
 export const STATUTS_DEVIS_ENVOYE = ["GENERE", "ENVOYE"] as const;
 
@@ -76,4 +97,49 @@ export async function devisRenduVisible(dossierId: string, documentId: string, n
   const changement = await prisma.$transaction((tx) => passerEnDevisEnvoye(tx, dossierId, { documentId, raison: `devis ${numero} rendu visible dans son espace` }));
   await suitesDevisEnvoye(dossierId, [changement]);
   return changement;
+}
+
+/**
+ * Mission 18 (B1) : les devis générés mais pas encore envoyés — leur événement DEVIS_GENERE dit `envoye: false`, le
+ * devis est toujours « Généré » (le mail du CRM le passe « Envoyé »), non archivé, et aucun « Devis envoyé » ne l'a
+ * mis en ligne depuis (interrupteur de l'espace). Dossiers vivants seulement (ni archivés, ni perdus). Les devis émis
+ * avant la mission 18 n'ont pas la marque : ils ne sont jamais pris pour des devis à envoyer.
+ */
+export async function devisAEnvoyer(client: Transaction = prisma, dossierIds?: readonly string[]): Promise<{ dossierId: string; documentId: string; numero: string; visible: boolean; le: Date }[]> {
+  const generes = await client.dossierEvenement.findMany({
+    where: { type: "DEVIS_GENERE", archiveLe: null, metadata: { contains: MARQUE_PAS_ENVOYE }, ...(dossierIds ? { dossierId: { in: [...dossierIds] } } : {}) },
+    select: { dossierId: true, metadata: true, createdAt: true },
+  });
+  const parDocument = new Map<string, Date>();
+  for (const e of generes) {
+    const id = idDocumentDe(e.metadata);
+    if (id) parDocument.set(id, e.createdAt);
+  }
+  if (parDocument.size === 0) return [];
+  const documents = await client.document.findMany({
+    where: { id: { in: [...parDocument.keys()] }, type: "DEVIS", statut: "GENERE", archiveLe: null, numero: { not: null }, dossier: { archiveLe: null, etape: { not: "PERDU" } } },
+    select: { id: true, dossierId: true, numero: true, visibleEspace: true },
+  });
+  if (documents.length === 0) return [];
+  const misEnLigne = await client.dossierEvenement.findMany({
+    where: { type: "DEVIS_ENVOYE", archiveLe: null, dossierId: { in: [...new Set(documents.map((d) => d.dossierId))] } },
+    select: { metadata: true },
+  });
+  const envoyes = new Set(misEnLigne.map((e) => idDocumentDe(e.metadata)).filter((id): id is string => Boolean(id)));
+  return documents
+    .filter((d) => !envoyes.has(d.id))
+    .map((d) => ({ dossierId: d.dossierId, documentId: d.id, numero: d.numero!, visible: d.visibleEspace, le: parDocument.get(d.id)! }))
+    .sort((a, b) => a.le.getTime() - b.le.getTime());
+}
+
+/** La marque d'un devis généré sans être envoyé, dans la metadata de son DEVIS_GENERE (JSON.stringify). */
+export const MARQUE_PAS_ENVOYE = '"envoye":false';
+
+function idDocumentDe(metadata: string): string | null {
+  try {
+    const valeur = JSON.parse(metadata) as { documentId?: unknown };
+    return typeof valeur?.documentId === "string" ? valeur.documentId : null;
+  } catch {
+    return null;
+  }
 }

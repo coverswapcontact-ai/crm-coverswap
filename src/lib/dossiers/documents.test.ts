@@ -195,7 +195,9 @@ describe("émission des documents", () => {
     const id = await dossierEssai("QUALIFICATION");
     const { document: premier } = await documents.genererDocument(id, generation("DEVIS"));
     assert.equal(numerotation.lireNumero(premier.numero!)?.famille, "");
-    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id } })).etape, "DEVIS_ENVOYE");
+    // Mission 18 (B1) : générer n'est pas envoyer — sans espace ni annonce, le dossier reste en Qualification, devis masqué.
+    assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id } })).etape, "QUALIFICATION");
+    assert.equal(premier.visibleEspace, false);
 
     const { document: second } = await documents.genererDocument(id, generation("DEVIS", premier.id));
     assert.equal(second.documentOrigineId, premier.id);

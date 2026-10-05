@@ -64,6 +64,16 @@
   SOUS_PARTIE (`creer`, `modifier`, `archiver`) mènent à l'onglet. Navigation à 10 onglets (N1), anciennes adresses
   vérifiées (N3). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à
   reconnecter pour ce lot.
+- **Mission 18, B1 (03/10/2026)** : générer un devis n'est pas l'envoyer. `generer_document` (DP68) passe par la même
+  fonction que l'écran (`documents.ts › emettre`) : le devis n'est « envoyé » (étape, main au client, relances) que s'il
+  est annoncé par le mail « Devis disponible » (adresse valide, espace ouvert) ou, interrupteur du modèle coupé, mis en
+  ligne dans un espace ouvert ; sinon il reste masqué en Qualification ou Simulation et la tâche `ENVOYER_DEVIS`
+  (« Envoyer le devis · X ») le rappelle. L'aperçu de l'outil dit d'avance ce qui se passera, le résultat aussi
+  (`donnees.envoye`, `donnees.visibleEspace`). Nouveau type de tâche `ENVOYER_DEVIS` (`taches` le rend comme les
+  autres). Pas de ligne nouvelle : les gestes « Envoyer par mail » (DP60, `envoyer_document`) et « visible dans
+  l'espace » (DP48, `modifier` DOCUMENT visible_espace) existent déjà. Ni outil ni paramètre ne change : empreinte
+  **`040d6c7aa53c`** (53 outils). Des descriptions changent (`generer_document`, son paramètre `notifier`) :
+  reconnecter le connecteur.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

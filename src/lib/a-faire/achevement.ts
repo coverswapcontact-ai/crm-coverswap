@@ -230,6 +230,26 @@ async function preuve(tache: Tache, maintenant: Date): Promise<string | null> {
       });
       return devis ? `devis ${devis.numero} ${devis.origine === "REPRISE" ? "déposé" : "émis"}` : null;
     }
+    case "ENVOYER_DEVIS": {
+      // Mission 18 (B1) : le devis parti par le mail du CRM (« Envoyé »), mis en ligne (« Devis envoyé »), ou devenu sans objet.
+      if (!tache.dossierId) return null;
+      const ids = Array.isArray(donnees.documentIds) ? donnees.documentIds.filter((id): id is string => typeof id === "string") : [];
+      if (ids.length === 0) return null;
+      const devis = await prisma.document.findMany({ where: { id: { in: ids }, ...AVEC_ARCHIVES }, select: { id: true, numero: true, statut: true } });
+      const misEnLigne = await prisma.dossierEvenement.findFirst({
+        where: { dossierId: tache.dossierId, type: "DEVIS_ENVOYE", createdAt: { gt: depuis }, OR: ids.map((id) => ({ metadata: { contains: id } })) },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, metadata: true },
+      });
+      const parMail = devis.find((d) => d.statut === "ENVOYE" || d.statut === "ACCEPTE");
+      if (parMail) return `devis ${parMail.numero} ${parMail.statut === "ACCEPTE" ? "accepté" : "envoyé par mail"}`;
+      if (misEnLigne) {
+        const numero = devis.find((d) => misEnLigne.metadata.includes(d.id))?.numero;
+        return `devis${numero ? ` ${numero}` : ""} mis en ligne ${leOuA(misEnLigne.createdAt, maintenant)}`;
+      }
+      const caduc = devis.find((d) => d.statut === "ANNULEE" || d.statut === "REMPLACE");
+      return caduc ? `devis ${caduc.numero} ${caduc.statut === "ANNULEE" ? "annulé" : "remplacé"}` : null;
+    }
     case "SIMULATION":
     case "PUBLIER": {
       if (!tache.dossierId) return null;

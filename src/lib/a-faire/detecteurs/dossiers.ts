@@ -4,6 +4,8 @@ import { aHeureParis } from "@/lib/commercial/quand";
 import type { Affaire } from "@/lib/commercial/types";
 import { euros, pluriel } from "@/lib/commun/format";
 import { estDossierClos } from "@/lib/dossiers/constants";
+import { devisAEnvoyer } from "@/lib/dossiers/devis-envoye";
+import { estMotifDevisAEnvoyer } from "@/lib/dossiers/main";
 import { montantsDocument, versCentimes } from "@/lib/dossiers/montants";
 import { lireMetadataChangementEtape } from "@/lib/dossiers/regles";
 import { lireLignes, lirePhotos } from "@/lib/dossiers/stockage";
@@ -26,8 +28,12 @@ import { cleTache, type ContexteDetection, type Detecteur } from "./types";
  * - RAPPELER (rappel du dossier échu ce soir au plus tard) → RAPPELER. Une relance d'un devis en attente (« Relancer :
  *   … ») est laissée au détecteur RELANCES (RELANCER_DEVIS). Mission 18 (A2) : « Appeler : … » (premier appel, posé à
  *   l'ouverture automatique du dossier ou d'un nouveau projet de l'espace) s'intitule « Appeler · Nom », raison = le motif ;
- * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN.
- * Deux lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
+ * - SIMULATION, DEVIS, et DECIDER « Envoyer le lien de son espace » → ENVOYER_LIEN. Un DEVIS « Devis prêt, pas encore
+ *   envoyé » (mission 18, B1) est laissé à la lecture ENVOYER_DEVIS ci-dessous.
+ * Trois lectures propres, que le pilotage ne couvre pas (il s'arrête à « Signé ») :
+ * - ENVOYER_DEVIS (mission 18, B1) : un devis généré mais pas encore envoyé (`devis-envoye.ts › devisAEnvoyer`), quelle
+ *   que soit l'étape ; jamais écartée par une action posée à la main (moteur.ts). Une tâche par dossier, l'occurrence
+ *   = les devis à envoyer (un nouveau devis la fait revenir après un « Fait ») ;
  * - ENCAISSER : SIGNE, PLANIFIE ou CHANTIER sans encaissement VALIDE ni « sans acompte » motivé (« Acompte promis, pas
  *   encore reçu » reste à encaisser) ; FACTURE avec un reste dû ;
  * - PROCHAINE_ACTION : la prochaine action posée à la main, en vigueur (`contexte.vigueur`), le jour de sa date. Le
@@ -237,6 +243,8 @@ function depuisLAffaire(a: Affaire, d: DossierLu): Detection | null {
       });
     }
     case "DEVIS":
+      // Mission 18 (B1) : le devis est fait, il reste à l'envoyer — la lecture ENVOYER_DEVIS le dit (voir detecter).
+      if (estMotifDevisAEnvoyer(a.action)) return null;
       return surLeDossier(d, "DEVIS", {
         titre: `Faire le devis · ${d.nom}`,
         raison: d.choisieLe ? `simulation choisie le ${jourMois(d.choisieLe)}` : "simulation choisie",
@@ -272,9 +280,9 @@ async function aEncaisser(): Promise<{ acompte: string[]; solde: string[] }> {
 
 async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
   const { maintenant, vigueur } = contexte;
-  const [pilotage, encaisser] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser()]);
+  const [pilotage, encaisser, aEnvoyer] = await Promise.all([pilotageDuPassage(maintenant), aEncaisser(), devisAEnvoyer()]);
   const affaires = pilotage.affaires.filter((a) => a.genre === "DOSSIER" && a.main === "MOI" && a.dossierId);
-  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...vigueur.keys()])];
+  const ids = [...new Set([...affaires.map((a) => a.dossierId!), ...encaisser.acompte, ...encaisser.solde, ...aEnvoyer.map((x) => x.dossierId), ...vigueur.keys()])];
   const dossiers = await lireDossiers(ids);
   const detections: Detection[] = [];
 
@@ -323,6 +331,28 @@ async function detecter(contexte: ContexteDetection): Promise<Detection[]> {
         montant: reste,
         raccourci: { genre: "ENCAISSER", libelle: "Encaisser", dossierId: d.id, rubrique: "encaisser", href: lienDossier(d.id, "&rubrique=encaisser") },
         donnees: { occurrence: `SOLDE:${facture?.documentId ?? facture?.numero ?? "facture"}` },
+      })
+    );
+  }
+
+  // Mission 18 (B1) : les devis générés mais pas encore envoyés, une tâche par dossier (le plus ancien donne l'origine).
+  const parDossier = new Map<string, typeof aEnvoyer>();
+  for (const devis of aEnvoyer) parDossier.set(devis.dossierId, [...(parDossier.get(devis.dossierId) ?? []), devis]);
+  for (const [id, liste] of parDossier) {
+    const d = dossiers.get(id);
+    if (!d || estDossierClos(d.etape)) continue;
+    const premier = liste[0];
+    detections.push(
+      surLeDossier(d, "ENVOYER_DEVIS", {
+        titre: `Envoyer le devis · ${d.nom}`,
+        raison:
+          liste.length > 1
+            ? `devis ${liste.map((x) => x.numero).join(", ")} prêts, pas encore envoyés`
+            : `devis ${premier.numero} prêt le ${jourMois(premier.le)}, ${premier.visible ? "pas encore annoncé" : "masqué dans son espace"}`,
+        niveau: 2,
+        depuis: premier.le,
+        raccourci: { genre: "DOSSIER", libelle: "Envoyer le devis", dossierId: d.id, rubrique: "devis", href: lienDossier(d.id, "&rubrique=devis") },
+        donnees: { documentIds: liste.map((x) => x.documentId), occurrence: liste.map((x) => x.documentId).join(",") },
       })
     );
   }

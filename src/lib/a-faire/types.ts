@@ -18,6 +18,7 @@ export const TYPES_TACHE = [
   "SIMULATION",
   "PUBLIER",
   "DEVIS",
+  "ENVOYER_DEVIS",
   "ENVOYER_LIEN",
   "RELANCER_PHOTOS",
   "RELANCER_AVIS",
@@ -65,6 +66,7 @@ export const DUREES_DEPART: Record<TypeTache, number> = {
   SIMULATION: 10,
   PUBLIER: 1,
   DEVIS: 10,
+  ENVOYER_DEVIS: 2,
   ENVOYER_LIEN: 1,
   RELANCER_PHOTOS: 1,
   RELANCER_AVIS: 1,
@@ -93,6 +95,7 @@ export const GROUPES_TYPE: Record<TypeTache, [string, string]> = {
   SIMULATION: ["simulation", "simulations"],
   PUBLIER: ["publication", "publications"],
   DEVIS: ["devis", "devis"],
+  ENVOYER_DEVIS: ["devis à envoyer", "devis à envoyer"],
   ENVOYER_LIEN: ["SMS", "SMS"],
   RELANCER_PHOTOS: ["SMS", "SMS"],
   RELANCER_AVIS: ["SMS", "SMS"],
@@ -224,6 +227,7 @@ function raisonsDuType(type: TypeTache): RaisonPasAFaire[] {
     case "RELANCER_DEVIS":
     case "RELANCER_PHOTOS":
     case "ENVOYER_LIEN":
+    case "ENVOYER_DEVIS":
       return ["DEJA_FAIT", "CLIENT_PERDU", "PAS_PERTINENT", "AUTRE"];
     // Mission 18 (A4) : un chantier fini, un contact déjà perdu — « client perdu » n'a pas de sens ici.
     case "RELANCER_AVIS":

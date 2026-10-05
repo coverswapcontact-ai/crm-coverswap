@@ -27,6 +27,8 @@ export type ProchaineActionAuto = {
   code: string;
   /** Niveau de cette tâche : 2 (chaud) par défaut, un geste du client. */
   niveau?: NiveauTache;
+  /** Faux : le besoin a déjà sa tâche dérivée, jamais écartée par l'action manuelle (B1 : ENVOYER_DEVIS) ; rien n'est rangé. */
+  tache?: false;
 };
 
 /** ECRITE : le texte est posé. GARDEE : l'action manuelle reste, une tâche est rangée. INCHANGEE : rien à faire. SANS_OBJET : la condition n'est pas remplie. */
@@ -61,6 +63,7 @@ export async function ecrireProchaineActionAuto(tx: Transaction, dossierId: stri
   }
   // L'action posée à la main reste. Effacer, ou dire ce qu'elle dit déjà : rien à ranger.
   if (!voulu.texte || voulu.texte === actuelle) return "INCHANGEE";
+  if (voulu.tache === false) return "GARDEE";
 
   const cle = cleTacheSynchro(dossierId, voulu.code);
   const titre = `${voulu.texte} · ${dossier.clientNom}`.slice(0, 300);

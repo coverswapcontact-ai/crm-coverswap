@@ -491,7 +491,7 @@ export function GenerateurDocument({
                   />
                   <CaseACocher
                     libelle="Prévenir le client par mail"
-                    description="« Votre devis est disponible », s'il a un e-mail. À décocher pour le présenter d'abord de vive voix."
+                    description="« Votre devis est disponible », s'il a un e-mail et un espace ouvert : le devis est alors envoyé. Décoché (ou sans e-mail), il reste à envoyer — masqué dans son espace avant tout devis envoyé — et une tâche « Envoyer le devis » le rappelle."
                     checked={notifier}
                     onChange={setNotifier}
                   />

@@ -16,7 +16,9 @@
 // un mail rangé, traité, automatique ou déplacé dans un autre dossier ne
 // compte pas. Un devis (généré, rendu visible, déposé) ne passe la main au
 // client que s'il attend encore sa réponse : visible, émis ou envoyé, non
-// archivé. Un devis déposé la passe à la date du dépôt, et seulement avant la
+// archivé. Mission 18 (B1) : générer n'est pas envoyer — un devis généré sans
+// être envoyé (DEVIS_GENERE marqué `envoye: false`) me donne la main, « Devis
+// prêt, pas encore envoyé », tant qu'il est « Généré » et pas mis en ligne. Un devis déposé la passe à la date du dépôt, et seulement avant la
 // signature (Qualification → Relance) ; après, l'étape décide.
 //
 // `mainSelonFaits` est pure ; `recalculerMain` l'applique au dossier et range
@@ -50,6 +52,10 @@ const MODELES_LIEN = /^(LIEN_ESPACE|INJOIGNABLE_LIEN|RELANCE_PHOTOS|SIMULATION_P
 const MOTIF_DEVIS_ENVOYE = "Devis envoyé : en attente de sa réponse";
 const MOTIF_LIEN_ENVOYE = "Lien de son espace envoyé : en attente du client";
 const MOTIF_ESPACE_OUVERT = "Espace ouvert : en attente du client";
+/** Mission 18 (B1) : un devis généré mais pas encore envoyé (masqué, ou sans annonce) : à moi de l'envoyer. */
+export const MOTIF_DEVIS_A_ENVOYER = "Devis prêt, pas encore envoyé";
+export const motifDevisAEnvoyer = (numero: unknown): string => `${MOTIF_DEVIS_A_ENVOYER}${typeof numero === "string" && numero ? ` (${numero})` : ""} : à lui envoyer`;
+export const estMotifDevisAEnvoyer = (motif: string | null | undefined): boolean => (motif ?? "").startsWith(MOTIF_DEVIS_A_ENVOYER);
 /** Mission 14 (partie 6) : une relance de devis copiée (SMS) ; le mail de relance garde « Mail envoyé : … ». */
 export const MOTIF_RELANCE_ENVOYEE = "Relance envoyée : en attente de sa réponse";
 
@@ -103,7 +109,11 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
     // Lucas passe la main au client.
     case "ESPACE_SIMULATION_DEPOSEE":
       return { qui: "CLIENT", motif: "Simulation publiée : en attente de son retour" };
-    case "DEVIS_GENERE":
+    // Mission 18 (B1) : un devis généré sans être envoyé me la donne (les devis d'avant n'ont pas la marque : envoyés).
+    case "DEVIS_GENERE": {
+      const meta = lireMetadata(evenement.metadata);
+      return meta.envoye === false ? { qui: "MOI", motif: motifDevisAEnvoyer(meta.numero) } : { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE };
+    }
     case "DEVIS_ENVOYE":
       return { qui: "CLIENT", motif: MOTIF_DEVIS_ENVOYE };
     // Mission 14 : un devis déposé (fait ailleurs), visible et en attente de réponse, vaut un devis émis.
@@ -405,11 +415,17 @@ export async function lireFaitsMain(dossierId: string, client: Transaction = pri
     ? await client.document.findMany({ where: { id: { in: idsDocuments }, ...AVEC_ARCHIVES }, select: { id: true, type: true, statut: true, visibleEspace: true, archiveLe: true } })
     : [];
   const documentsParId = new Map(documents.map((d) => [d.id, d]));
+  // Mission 18 (B1) : les devis mis en ligne depuis (« Devis envoyé ») ne sont plus « à envoyer », même masqués ensuite.
+  const misEnLigne = new Set(evenements.filter((e) => e.type === "DEVIS_ENVOYE").map(idDocument).filter(nonNul));
   const retenus = evenements.filter((e) => {
     if (TYPES_DEVIS.includes(e.type)) {
       const document = documentsParId.get(idDocument(e) ?? "");
       // Sans document retrouvé (événement sans identifiant), l'événement seul décide (passageDeMain).
-      return !document || devisEnAttente(document);
+      if (!document) return true;
+      // Mission 18 (B1) : généré sans être envoyé, il compte tant qu'il est « Généré » (masqué ou non) ; une mise en
+      // ligne (DEVIS_ENVOYE, plus récent) ou un mail du CRM (« Envoyé », MAIL_ENVOYE) passe ensuite la main au client.
+      if (e.type === "DEVIS_GENERE" && lireMetadata(e.metadata).envoye === false) return document.statut === "GENERE" && !document.archiveLe && !misEnLigne.has(document.id);
+      return devisEnAttente(document);
     }
     const id = e.type === "MAIL_RECU" ? idMessage(e) : null;
     if (!id) return true;

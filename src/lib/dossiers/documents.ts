@@ -23,7 +23,7 @@ import {
 import { ErreurMetier } from "./erreurs";
 import { mentionsLegales, type CategorieDestinataire } from "./mentions";
 import { calculerMontants, formatCentimes, versCentimes } from "./montants";
-import { etapeApresGeneration } from "./devis-envoye";
+import { envoiALaGeneration, etapeApresGeneration } from "./devis-envoye";
 import { attribuerNumero, numeroFactice } from "./numerotation";
 import { estEtape } from "./regles";
 import { archiverFichier, enregistrerPdf, lireFichier, lireLignes } from "./stockage";
@@ -197,7 +197,7 @@ type Emission = {
   motifAvoir?: string | null;
   factureOrigine?: { numero: string; dateEmission: Date } | null;
   libelleVariante?: string | null;
-  /** Faux : pas de notification « votre devis est disponible ». */
+  /** Faux : pas de notification « votre devis est disponible » (mission 18, B1 : en Qualification ou Simulation, le devis reste alors masqué, pas envoyé). */
   notifier?: boolean;
   /** Écritures propres au type, dans la transaction de l'émission (devis remplacé, facture annulée). */
   pendant?: (tx: Transaction, document: { id: string; numero: string }) => Promise<void>;
@@ -244,6 +244,13 @@ async function emettre(emission: Emission) {
   // verrouillée pendant le rendu.
   const essai = await rendreDocumentPdf(donneesPdf);
 
+  // Mission 18 (B1) : générer n'est pas envoyer. La notification partirait-elle ? Lu avant la transaction (même
+  // lecture que l'envoi) : le devis n'est « envoyé » (étape, main, relances) que s'il est annoncé (devis-envoye.ts).
+  const envoi =
+    emission.type === "DEVIS"
+      ? envoiALaGeneration({ etape: emission.etape, notifier: emission.notifier !== false, ...(await (await import("@/lib/mail/notifications")).peutNotifier("DEVIS_DISPONIBLE", emission.dossierId)) })
+      : null;
+
   const ecrit: { chemin?: string } = {};
   try {
     const resultat = await prisma.$transaction(
@@ -273,6 +280,7 @@ async function emettre(emission: Emission) {
             documentOrigineId: emission.documentOrigineId ?? null,
             motifAvoir: emission.motifAvoir ?? null,
             libelleVariante: emission.libelleVariante ?? null,
+            ...(envoi ? { visibleEspace: envoi.visible } : {}),
           },
         });
         await tx.numeroDocument.update({
@@ -290,12 +298,12 @@ async function emettre(emission: Emission) {
             type: EVENEMENT_GENERE[emission.type],
             direction: "INTERNE",
             contenu: `${LIBELLE_GENERE[emission.type](numero)}${emission.libelleVariante ? ` « ${emission.libelleVariante} »` : ""} : ${formatCentimes(totalHtCentimes)}`,
-            metadata: JSON.stringify({ documentId: document.id, numero, totalHt: document.totalHt, client: destinataire }),
+            metadata: JSON.stringify({ documentId: document.id, numero, totalHt: document.totalHt, client: destinataire, ...(envoi ? { envoye: envoi.envoye, visibleEspace: envoi.visible } : {}) }),
           },
         });
 
-        // Mission 14 : un devis n'est « envoyé » que s'il est visible dans l'espace (un devis généré l'est toujours aujourd'hui).
-        const vers = emission.type === "DEVIS" && document.visibleEspace === false ? null : etapeApresGeneration(emission.type, emission.etape);
+        // Mission 18 (B1) : un devis n'avance l'étape que s'il est envoyé (annoncé, ou variante mise en ligne).
+        const vers = envoi && !envoi.envoye ? null : etapeApresGeneration(emission.type, emission.etape);
         const changements: ChangementEtape[] = vers
           ? [
               await appliquerChangementEtape(tx, {
@@ -310,18 +318,20 @@ async function emettre(emission: Emission) {
         // Facture déjà couverte par les acomptes : le dossier est encaissé.
         const solde = emission.type === "FACTURE" ? await suivreSoldeDossier(tx, emission.dossierId, "facture réglée par les paiements déjà reçus") : null;
         if (solde) changements.push(solde);
-        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait. Une action écrite par Lucas reste
-        // (mission 18 : par le point d'entrée, qui range une tâche à la place et écrit la main dans la transaction).
-        if (emission.type === "DEVIS") await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id });
-        return { document, changements };
+        // « Préparer le devis », posé par l'espace quand le client a choisi, est fait : « Attendre l'accord » s'il est
+        // envoyé, « Envoyer le devis » sinon. Une action écrite par Lucas reste (mission 18 : par le point d'entrée, qui
+        // écrit la main dans la transaction ; un devis pas envoyé me la donne).
+        if (envoi) await appliquerEvenementDossier(tx, emission.dossierId, { type: "DEVIS_GENERE", documentId: document.id, envoye: envoi.envoye });
+        return { document, changements, envoi };
       },
       { maxWait: 10_000, timeout: 30_000 }
     );
     for (const changement of resultat.changements) await effetsDuChangementEtape(changement);
-    // Un devis émis passe la main au client, même sans changement d'étape (main.ts).
+    // Un devis envoyé passe la main au client, même sans changement d'étape ; pas envoyé, il me la donne (main.ts).
     await recalculerMain(emission.dossierId);
-    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 : `notifier: false`).
-    if (emission.type === "DEVIS" && emission.notifier !== false) {
+    // Mission 7 : « votre devis est disponible », par mail, automatiquement (une fois par devis) ; débrayable (mission 11 :
+    // `notifier: false`). Mission 18 (B1) : seulement pour un devis annoncé (visible, espace ouvert, adresse valide).
+    if (resultat.envoi?.mail) {
       const { notifierClient } = await import("@/lib/mail/notifications");
       await notifierClient("DEVIS_DISPONIBLE", emission.dossierId, resultat.document.id);
     }

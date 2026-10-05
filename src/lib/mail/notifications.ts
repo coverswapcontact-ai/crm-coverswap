@@ -77,6 +77,55 @@ export function mailNotification(modele: ModeleNotification, valeurs: { prenom: 
   return { objet: remplir(modele.objet), texte, html };
 }
 
+/** Le dossier tel que la notification le lit : adresse, prénom, espace ouvert. */
+async function lireDestination(evenement: EvenementNotifie, dossierId: string) {
+  const modele = await modeleNotification(evenement);
+  const dossier = await prisma.dossier.findUnique({
+    where: { id: dossierId },
+    select: { id: true, archiveLe: true, clientEmail: true, clientNom: true, clientId: true, leadId: true, client: { select: { prenom: true, emails: { where: { archiveLe: null }, orderBy: { principale: "desc" }, take: 1, select: { adresse: true } } } }, lead: { select: { prenom: true } }, espaces: { where: { archiveLe: null }, take: 1 } },
+  });
+  if (!dossier || dossier.archiveLe) return { modele, dossier: null, adresse: null, lien: null };
+  const adresse = normaliserEmail(dossier.clientEmail) ?? normaliserEmail(dossier.client?.emails[0]?.adresse);
+  const espace = dossier.espaces[0];
+  const lien = espace ? await lienPourLeProjet(espace) : null;
+  return { modele, dossier, adresse, lien };
+}
+
+/** Pourquoi rien ne partirait (même ordre qu'avant : le modèle, le dossier, l'adresse, l'espace), ou null. */
+function empechement(d: Awaited<ReturnType<typeof lireDestination>>): string | null {
+  if (!d.modele.actif) return "Modèle désactivé dans Paramètres.";
+  if (!d.dossier) return "Dossier introuvable ou archivé.";
+  if (!d.adresse) return "Aucune adresse e-mail valide pour ce client.";
+  if (!d.lien) return "Espace client fermé ou lien désactivé.";
+  return null;
+}
+
+export type EtatNotification = {
+  /** La notification partirait (modèle actif, adresse valide, espace ouvert). */
+  possible: boolean;
+  /** L'interrupteur du modèle dans Paramètres. */
+  modeleActif: boolean;
+  /** Le dossier a un espace ouvert, au lien actif : ce qui y est mis en ligne, le client le voit. */
+  espaceOuvert: boolean;
+  /** Pourquoi elle ne partirait pas, sinon null. */
+  raison: string | null;
+};
+
+/**
+ * Mission 18 (B1) : la notification partirait-elle, sans rien programmer ? Les mêmes conditions que `notifierClient`.
+ * Lu AVANT la transaction d'un geste qui en dépend (un devis n'est « envoyé » que s'il est annoncé). Jamais d'erreur.
+ */
+export async function peutNotifier(evenement: EvenementNotifie, dossierId: string): Promise<EtatNotification> {
+  try {
+    const destination = await lireDestination(evenement, dossierId);
+    const raison = empechement(destination);
+    return { possible: raison === null, modeleActif: destination.modele.actif, espaceOuvert: Boolean(destination.lien), raison };
+  } catch (erreur) {
+    console.error(`[notifications] ${evenement} ${dossierId} (lecture) :`, erreur);
+    return { possible: false, modeleActif: true, espaceOuvert: false, raison: erreur instanceof Error ? erreur.message : String(erreur) };
+  }
+}
+
 /**
  * Programme la notification d'un événement de l'espace (une seule fois par
  * `cle`). Rend pourquoi rien n'est parti, le cas échéant (jamais d'erreur :
@@ -84,18 +133,10 @@ export function mailNotification(modele: ModeleNotification, valeurs: { prenom: 
  */
 export async function notifierClient(evenement: EvenementNotifie, dossierId: string, cle: string, valeurs: { montant?: string | null; message?: string | null } = {}): Promise<{ programme: boolean; raison?: string }> {
   try {
-    const modele = await modeleNotification(evenement);
-    if (!modele.actif) return { programme: false, raison: "Modèle désactivé dans Paramètres." };
-    const dossier = await prisma.dossier.findUnique({
-      where: { id: dossierId },
-      select: { id: true, archiveLe: true, clientEmail: true, clientNom: true, clientId: true, leadId: true, client: { select: { prenom: true, emails: { where: { archiveLe: null }, orderBy: { principale: "desc" }, take: 1, select: { adresse: true } } } }, lead: { select: { prenom: true } }, espaces: { where: { archiveLe: null }, take: 1 } },
-    });
-    if (!dossier || dossier.archiveLe) return { programme: false, raison: "Dossier introuvable ou archivé." };
-    const adresse = normaliserEmail(dossier.clientEmail) ?? normaliserEmail(dossier.client?.emails[0]?.adresse);
-    if (!adresse) return { programme: false, raison: "Aucune adresse e-mail valide pour ce client." };
-    const espace = dossier.espaces[0];
-    const lien = espace ? await lienPourLeProjet(espace) : null;
-    if (!lien) return { programme: false, raison: "Espace client fermé ou lien désactivé." };
+    const destination = await lireDestination(evenement, dossierId);
+    const raison = empechement(destination);
+    const { modele, dossier, adresse, lien } = destination;
+    if (raison || !dossier || !adresse || !lien) return { programme: false, raison: raison ?? "Notification impossible." };
     const prenomBrut = (dossier.client?.prenom || dossier.lead?.prenom || dossier.clientNom.split(" ")[0] || "").trim();
     const prenom = /^(inconnu|client)$/i.test(prenomBrut) ? "" : prenomBrut.split(/\s+/)[0];
     const mail = mailNotification(modele, { prenom, montant: valeurs.montant, message: valeurs.message, lien: `${lien}${ANCRES[evenement]}` });

@@ -216,6 +216,8 @@ export const estRubriqueDossier = (valeur: string | null | undefined): valeur is
 // « Préparer le devis … » vient de l'espace (le client a choisi une simulation) ; un devis généré OU déposé la remplace.
 export const PROCHAINE_ACTION_PREPARER_DEVIS = "Préparer le devis";
 export const PROCHAINE_ACTION_APRES_DEVIS = "Attendre l'accord du client sur le devis";
+/** Mission 18 (B1) : le devis est prêt mais pas encore envoyé (masqué dans son espace, ou sans annonce). */
+export const PROCHAINE_ACTION_ENVOYER_DEVIS = "Envoyer le devis au client";
 
 // Mission 12 : obligatoire quand un dossier ou un lead passe « perdu » ; remonte dans manager_commercial.
 export const MOTIFS_PERTE = [

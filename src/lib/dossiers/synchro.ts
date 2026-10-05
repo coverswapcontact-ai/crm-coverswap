@@ -1,7 +1,7 @@
 import prisma, { type Transaction } from "@/lib/prisma";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
-import { PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS } from "./constants";
+import { PROCHAINE_ACTION_APRES_DEVIS, PROCHAINE_ACTION_ENVOYER_DEVIS, PROCHAINE_ACTION_PREPARER_DEVIS } from "./constants";
 import { dateDepuisJour, jourParis } from "./dates";
 import { ecrireMain, type MainCalculee } from "./main";
 import { ecrireProchaineActionAuto, type IssueProchaineAction, type ProchaineActionAuto } from "./prochaine-action-auto";
@@ -48,8 +48,8 @@ export type EvenementDossier =
   | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS" }
   /** Simulations publiées dans l'espace (simulations/dossier.ts › publierSimulations). */
   | { type: "SIMULATION_PUBLIEE"; simulationIds: string[] }
-  /** Devis généré par le CRM (documents.ts › emettre). */
-  | { type: "DEVIS_GENERE"; documentId: string }
+  /** Devis généré par le CRM (documents.ts › emettre) ; `envoye` : annoncé au client (mission 18, B1 : générer n'est pas envoyer). */
+  | { type: "DEVIS_GENERE"; documentId: string; envoye: boolean }
   /** Devis émis ailleurs, déposé (documents-existants.ts › rattacherDocumentExistant). */
   | { type: "DEVIS_DEPOSE"; documentId: string }
   /** Chèque d'acompte rejeté (encaissements/service.ts › rejeterEncaissement, terminerEncaissement). */
@@ -85,7 +85,8 @@ export type Suites = {
   main: MainCalculee | null;
 };
 
-const preparerLeDevis = (actuelle: string | null) => Boolean(actuelle?.startsWith(PROCHAINE_ACTION_PREPARER_DEVIS));
+/** « Préparer le devis… » (posé par l'espace quand le client a choisi), ou « Envoyer le devis au client » (B1). */
+const devisAPreparerOuAEnvoyer = (actuelle: string | null) => Boolean(actuelle?.startsWith(PROCHAINE_ACTION_PREPARER_DEVIS) || actuelle?.startsWith(PROCHAINE_ACTION_ENVOYER_DEVIS));
 
 /**
  * La prochaine action de chaque événement (la colonne « prochaine action » de docs/SYNCHRO.md). Les textes et les
@@ -121,9 +122,14 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
     case "SIMULATION_PUBLIEE":
       return { code: "simulation-publiee", texte: "Attendre le retour du client sur la simulation", date: null, niveau: 3 };
     // « Préparer le devis », posé par l'espace quand le client a choisi, est fait dès qu'un devis est émis ou déposé.
+    // Mission 18 (B1) : émis sans être envoyé, il reste à l'envoyer ; la tâche ENVOYER_DEVIS (détecteur des dossiers)
+    // le dit, même sous une action posée à la main : rien n'est rangé à sa place.
     case "DEVIS_GENERE":
+      return evenement.envoye
+        ? { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 }
+        : { code: "devis-a-envoyer", texte: PROCHAINE_ACTION_ENVOYER_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3, tache: false };
     case "DEVIS_DEPOSE":
-      return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: preparerLeDevis, niveau: 3 };
+      return { code: "devis", texte: PROCHAINE_ACTION_APRES_DEVIS, date: null, si: devisAPreparerOuAEnvoyer, niveau: 3 };
     case "ACOMPTE_REJETE":
       return { code: "acompte-rejete", texte: "Chèque d'acompte rejeté : réclamer un nouveau paiement", date: dateDepuisJour(jourParis(maintenant)), niveau: 1 };
   }

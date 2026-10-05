@@ -747,3 +747,74 @@ automatique » annoncés par le plan n'existent pas dans `moteur.test.ts` : la v
 `tsc`, `eslint` sur les fichiers touchés, `npm run build` : propres.
 
 Reste : B1-B13 (étape, notification, relances et statut du lead par le module, écart par écart) ; rien pour Lucas.
+
+### Mission 18, B1 — générer un devis n'est pas l'envoyer (écart 1)
+
+Livré (03/10, branche `mission-18`, pas de push, site non touché) :
+- **La règle** (`dossiers/devis-envoye.ts › envoiALaGeneration`, pure) : à la génération, un devis est ANNONCÉ — donc
+  envoyé : étape Q, S, Relance → Devis envoyé, main au client, relances — s'il part avec le mail « Devis disponible »
+  (notifier demandé, adresse valide, espace ouvert), ou si l'interrupteur du modèle est coupé dans Paramètres et que
+  l'espace est ouvert (la mise en ligne vaut envoi). Sinon, en Qualification ou Simulation, il est créé MASQUÉ
+  (`visibleEspace: false`), l'étape ne bouge pas. Après Simulation (Devis envoyé, Relance, Signé…), il reste visible ;
+  une variante silencieuse (`notifier: false`) dans un espace ouvert vaut mise en ligne (le cas de la mission 11 : le
+  premier devis annoncé, les variantes à côté), sinon il n'est pas envoyé.
+- **`notifications.ts › peutNotifier`** : les conditions de `notifierClient` (modèle, dossier, adresse, espace ouvert),
+  lues sans rien programmer, AVANT la transaction de `emettre` ; `notifierClient` partage la même lecture. Le mail ne
+  part qu'après la transaction et seulement pour un devis annoncé.
+- **`emettre`** : `visibleEspace` posé à la création, l'événement `DEVIS_GENERE` porte `envoye` et `visibleEspace`,
+  le changement d'étape seulement si envoyé, l'événement `DEVIS_GENERE { envoye }` du point d'entrée. Rend `envoi`
+  (`{ visible, envoye, mail }`) à l'écran et à l'outil.
+- **Point d'entrée** (`synchro.ts`) : `DEVIS_GENERE` envoyé → « Attendre l'accord du client sur le devis » ; pas
+  envoyé → « Envoyer le devis au client » (`PROCHAINE_ACTION_ENVOYER_DEVIS`), à la place de « Préparer le devis… »
+  seulement. Une action posée à la main reste, SANS tâche rangée à la place (option `tache: false` de
+  `ecrireProchaineActionAuto`) : la tâche ENVOYER_DEVIS couvre ce besoin. « Envoyer le devis au client » est remplacé
+  par « Attendre l'accord » au prochain devis envoyé ou déposé.
+- **La main** (`main.ts`) : `DEVIS_GENERE` marqué `envoye: false` me la donne, « Devis prêt, pas encore envoyé (n°) :
+  à lui envoyer » (`motifDevisAEnvoyer`, `estMotifDevisAEnvoyer`), tant que le devis est « Généré », non archivé et pas
+  mis en ligne depuis (un `DEVIS_ENVOYE` qui le porte). Les événements d'avant n'ont pas la marque : ils passent
+  toujours la main au client, aucune migration.
+- **Tâche `ENVOYER_DEVIS`** « Envoyer le devis · X » (niveau 2, 2 min) : lecture propre du détecteur DOSSIERS
+  (`devis-envoye.ts › devisAEnvoyer` : marque `"envoye":false`, devis « Généré », pas de `DEVIS_ENVOYE` qui le porte,
+  dossier vivant), une par dossier (« devis A, B prêts, pas encore envoyés »), occurrence = les devis. Raccourci :
+  le dossier, rubrique devis (rendre visible, ou « Envoyer par mail »). Jamais écartée par une action posée à la main
+  (`moteur.ts › TYPES_HORS_VIGUEUR`) : c'est mon geste resté en route. Coche par le CRM (`achevement.ts`) : envoyé par
+  mail ou accepté, mis en ligne, annulé ou remplacé. /commercial : groupe DEVIS, action = le motif (plus « Préparer la
+  simulation » sur un dossier dont le devis attend d'être envoyé) ; le cas DEVIS du détecteur s'efface devant elle.
+- **Outil `generer_document`** : l'aperçu dit d'avance ce qui se passera (même règle), le résultat aussi
+  (`donnees.envoye`, `donnees.visibleEspace`) ; descriptions mises à jour (outil et paramètre `notifier`). Écran : la
+  case « Prévenir le client par mail » l'explique.
+- **Docs** : `docs/SYNCHRO.md` (deux lignes `DEVIS_GENERE`, envoyé ou non ; B1 retiré du tableau 4), `docs/TACHES.md`
+  (type, coche, exception à la vigueur), `docs/MCP-COUVERTURE.md` (entrée B1).
+
+Décisions prises seul (solution la plus simple) :
+- « Envoyé » se décide AVANT la transaction (`peutNotifier`), pas d'après le résultat de `notifierClient` : l'étape
+  avance dans la transaction ; un échec rare de la mise en file du mail n'annule pas l'envoi.
+- Pas d'événement `DEVIS_ENVOYE` en plus à la génération (le plan le proposait) : la marque `envoye` de
+  `DEVIS_GENERE` suffit et n'écrit pas deux lignes dans l'historique ; la date d'envoi d'un devis annoncé à la
+  génération est son émission (B5 lira le `DEVIS_ENVOYE` d'une mise en ligne ultérieure).
+- Variante silencieuse après Simulation dans un espace ouvert = mise en ligne (pas de tâche) ; sans espace ouvert ou
+  sans adresse pour l'annoncer = pas envoyé (tâche), même visible.
+- Le raccourci de la tâche ouvre la rubrique devis du dossier (gestes existants) plutôt qu'un `&devis=envoyer`
+  nouveau : B2 (mail) et B5 (mise en ligne annoncée) corrigent les effets de ces deux gestes.
+- Niveau 2 (chaud) pour ENVOYER_DEVIS : un devis prêt qui n'est pas parti.
+- La conversion Meta DEVIS_ENVOYE suit le vrai passage d'étape (décalée à l'envoi), comme prévu.
+
+Tests : 1 360 → 1 366 (`npm test` : 1 364 verts ; les 2 échecs, `mission-14-partie-8` « ouvert il y a 4 jours » et `mcp-mail` « lundi 9 h », tombent aussi sur ac1b274 sans B1 : ils dépendent de la date du jour, le 05/10, un lundi). Nouveau `src/lib/dossiers/generer-envoyer.test.ts` (6 essais, état des deux
+côtés) : la règle pure ; Qualification + `notifier: false` → Qualification, main à moi (« Devis prêt… »), espace
+inchangé, aucune relance, tâche « Envoyer le devis · X », aucun mail, /commercial DEVIS, puis rendu visible → Devis
+envoyé, main au client, relance n°1, tâche cochée « mis en ligne à hh:mm » ; annoncé → Devis envoyé, « Attendre
+l'accord », espace DEVIS, relance à venir, un seul mail programmé ; « Préparer le devis » → « Envoyer le devis au
+client », action posée à la main gardée sans tâche de remplacement et ENVOYER_DEVIS malgré la vigueur ; interrupteur
+coupé → envoyé sans mail ; deux devis → une tâche, annulés → cochée ; devis d'avant (sans marque) jamais « à
+envoyer ». Adaptés (comportement changé volontairement, intention gardée) : `documents.test.ts` (sans espace : reste en
+Qualification, masqué), `main.test.ts` (contact avec adresse : le devis annoncé passe la main), `synchro.test.ts`
+(devis annoncés pour le cas « Attendre l'accord »), `mission-14-partie-1.test.ts` (aide `devisEnvoye` : émis puis
+rendu visible ; le cas « seul devis masqué » commence masqué et non envoyé), `devis-multiples.test.ts` (premier devis
+annoncé, variantes silencieuses) ; `mcp-v3.test.ts` passe sans changement (l'aperçu dit toujours « aucun mail ne
+partira »). `tsc`, `eslint` sur les
+fichiers touchés, `npm run build` : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53 outils) ; descriptions de
+`generer_document` changées : reconnecter le connecteur.
+
+Reste : B2 (envoi par mail : visibilité, étape, main, double validation), B5 (mise en ligne annoncée, relance datée de
+la mise en ligne), B13 (règle de cohérence de l'écart 1, réparation des devis déjà « envoyés » sans l'avoir été) ; rien
+pour Lucas, sauf reconnecter le connecteur.

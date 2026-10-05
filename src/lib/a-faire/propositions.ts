@@ -31,6 +31,7 @@ export const ACTIONS_TYPE: Record<TypeTache, string> = {
   SIMULATION: "Préparer la simulation",
   PUBLIER: "Publier la simulation",
   DEVIS: "Faire le devis",
+  ENVOYER_DEVIS: "Envoyer le devis",
   ENVOYER_LIEN: "Envoyer le lien",
   RELANCER_PHOTOS: "Relancer pour les photos",
   RELANCER_AVIS: "Demander un avis",

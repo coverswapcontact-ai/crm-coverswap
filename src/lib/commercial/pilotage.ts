@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { lirePhotos } from "@/lib/dossiers/stockage";
-import { estMotifRepondre } from "@/lib/dossiers/main";
+import { estMotifDevisAEnvoyer, estMotifRepondre } from "@/lib/dossiers/main";
 import { mainDe } from "@/lib/dossiers/pilotage";
 import { pluriel } from "@/lib/commun/format";
 import { JOURS_A_TRAITER, LIBELLES_STATUT_LEAD, type StatutLead } from "@/lib/prospects/constantes";
@@ -149,12 +149,15 @@ export async function pilotageCommercial(maintenant: Date = new Date(), options:
 
     // Mission 14 (R2) : un mail ou un message d'espace sans réponse épingle la main : « Répondre à … », avant l'étape.
     const repondreMessage = dossier.main === "MOI" && estMotifRepondre(dossier.mainMotif);
+    // Mission 18 (B1) : un devis généré mais pas encore envoyé — à moi de l'envoyer (ni « simulation » ni « devis à faire »).
+    const devisAEnvoyer = dossier.main === "MOI" && estMotifDevisAEnvoyer(dossier.mainMotif);
     let groupe: GroupeAffaire;
     let action: string;
     if (repondre) [groupe, action] = ["REPONDRE", "Répondre à son SMS"];
     else if (repondreMessage) [groupe, action] = ["REPONDRE", dossier.mainMotif!];
     else if (etape === "SIGNE") [groupe, action] = dossier.dateChantier ? ["PLUS_TARD", "Chantier daté : à planifier"] : ["PLANIFIER", "Appeler : fixer la date du chantier, suivre l'acompte"];
     else if (rappelDu) [groupe, action] = ["RAPPELER", dossier.prochaineAction ?? "Rappeler"];
+    else if (devisAEnvoyer) [groupe, action] = ["DEVIS", dossier.mainMotif!];
     else if (etape === "QUALIFICATION") [groupe, action] = nbPhotos > 0 ? ["SIMULATION", `Préparer la simulation (${nbPhotos} photo${nbPhotos > 1 ? "s" : ""} reçue${nbPhotos > 1 ? "s" : ""})`] : espace ? ["ATTENTE_PHOTOS", espace.premierAccesLe ? "Attend ses photos (lien consulté)" : "Attend ses photos (lien pas encore ouvert)"] : ["DECIDER", "Envoyer le lien de son espace pour recevoir ses photos"];
     else if (etape === "SIMULATION") [groupe, action] = simulations.length === 0 ? ["SIMULATION", "Préparer la simulation"] : choisie && !devis ? ["DEVIS", "Faire le devis (simulation choisie)"] : ["ATTENTE_SIMULATION", "Attend son retour sur la simulation"];
     else [groupe, action] = ["ATTENTE_DEVIS", `Attend sa signature${devis?.numero ? ` (devis ${devis.numero})` : ""}`];

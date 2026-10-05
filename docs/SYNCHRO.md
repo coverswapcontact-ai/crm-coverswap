@@ -20,7 +20,8 @@ point d'entrée** : `src/lib/dossiers/synchro.ts`.
   date de référence) ;
 - les tâches explicites (une tâche « à moi » écrite dans la transaction, voir § 2) ; les autres tâches restent
   dérivées des faits par les détecteurs (passe 3 s après le signal) ;
-- l'historique (`DossierEvenement`) et le statut du lead (avec l'étape).
+- l'historique (`DossierEvenement`) et le statut du lead (avec l'étape ; B12 : la règle du § 4 bis, « le dossier
+  vivant le plus avancé décide »).
 
 **Après la transaction**, `suitesEvenementDossier(suites)` lance les effets externes existants, jamais bloquants :
 effets des changements d'étape (conversion Meta, « projet terminé », agenda), l'agenda si la prochaine action a changé,
@@ -99,7 +100,7 @@ tâches. Les passages en « Devis envoyé » (génération annoncée, mail du CR
 aussi le statut du lead dans leur transaction, la main y étant écrite par le point d'entrée : ils sont marqués
 synchronisés (`marquerSynchronise`, relecture). De même les passages Qualification → Simulation du point d'entrée (B9). Les autres changements écrits par `appliquerChangementEtape` seul
 (facture, relance, paiement annulé ou rejeté, retours de l'espace, cohérence) gardent le recalcul de la main et du lead
-après la transaction, en attendant leur lot (B12 pour le lead). Un paiement reçu (B10) écrit le statut du lead dans sa
+après la transaction (`effetsDuChangementEtape`) ; depuis B12, ce recalcul du lead suit la même règle (§ 4 bis). Un paiement reçu (B10) écrit le statut du lead dans sa
 transaction et marque son changement synchronisé, la main y étant écrite par le point d'entrée (`PAIEMENT_RECU`).
 
 **Un seul mail par envoi (B2).** L'envoi d'un document par mail est une proposition ENVOI_MAIL validée une fois
@@ -116,9 +117,38 @@ relance, réponse) recalculent la main après l'envoi.
 
 ## 4. Pas encore branchés (écarts de la partie B)
 
-| Geste | Fonction d'origine | Aujourd'hui | Lot |
-|---|---|---|---|
-| Statut du lead | `statut-lead.ts`, `coherence/controle.ts` | deux tables divergentes, le dernier dossier changé décide | B12 |
+Plus aucun geste de la partie B (le statut du lead, dernier de la liste, est branché par B12 : § 4 bis).
+
+### 4 bis. Statut du lead ↔ étape (B12)
+
+**Une seule table**, `dossiers/statut-lead.ts › STATUT_LEAD_PAR_ETAPE`, pour toutes les étapes, lue par les changements
+d'étape, l'ouverture d'un dossier et le contrôle de cohérence (`STATUT_DU_LEAD`) :
+
+| Étape | Statut du lead |
+|---|---|
+| Qualification, Simulation | CONTACTE |
+| Devis envoyé, Relance | DEVIS_ENVOYE |
+| Signé | SIGNE |
+| Planifié, Chantier | CHANTIER_PLANIFIE |
+| Facturé, Encaissé | TERMINE |
+| Perdu | PERDU |
+| En pause | inchangé (`null` explicite) |
+
+**Le dossier vivant le plus avancé décide** (`statutLeadSelonDossiers`) : parmi les dossiers NON archivés du lead, hors
+Perdu et En pause, le plus avancé dans le tunnel donne le statut ; aucun vivant et tous perdus : PERDU ; sinon (en pause
+seulement, en pause et perdus, aucun dossier) : le statut ne bouge pas. Un second projet en Qualification ne ramène pas
+un client signé à « Contacté » ; le premier perdu, le second (vivant) décide.
+
+| Événement | Fonction | Lead |
+|---|---|---|
+| Changement d'étape (écran, assistant `changer_etape`, propositions, point d'entrée, paiement, signature, retours) | `ecrireStatutLead(tx, dossierId, vers)` dans la transaction ; `effetsDuChangementEtape` après pour les changements non synchronisés | la règle, avec l'étape nouvelle du dossier |
+| Ouverture d'un dossier (bouton « Ouvrir un dossier », ouverture automatique A2, espace « nouveau projet », mail validé, reprise) | `dossiers.ts › ouvrirDossier`, dans la transaction de l'ouverture (`alignerStatutLead`) | un lead « À traiter », « Devis demandé » ou « Sans suite » (perdu) devient « Contacté » (ou le statut de l'étape d'ouverture), sauf dossier plus avancé du même lead |
+| Le contact revient (demande, simulation) sur son dossier vivant | `depuis-lead.ts › ouvrirSansFile` (`alignerStatutLead`) | la règle (un « Devis demandé » posé par le webhook ne reste pas) |
+| Contrôle de cohérence | `controle.ts` : `STATUT_DU_LEAD` sur le seul dossier qui décide ; correction `alignerStatutLead` | la règle, relue sur la base |
+
+Ni mail, ni SMS, ni conversion Meta de plus : seul le statut du lead s'écrit (les conversions Meta restent celles des
+changements d'étape). L'étape, la main, la prochaine action, l'espace, les relances et les tâches du dossier ne changent
+pas. Essai : `src/lib/dossiers/statut-lead-b12.test.ts`.
 
 **Devis envoyé depuis Gmail (B3).** Un mail SORTANT parti de la boîte (pas par le CRM), non automatique, rangé dans le
 dossier d'un client (`mail/rattachement.ts › suitesDuTri`) met ses PDF en file (`MAIL_PDF_SORTANTS` :
@@ -272,7 +302,7 @@ applique pas d'office).
   d'entrée comme une action posée à la main tant que sa date n'est pas passée (§ 2, relecture).
 - La reprise d'un dossier entier (`reprise.ts`), datée du passé (nature REPRISE, sans Meta).
 - Les corrections du contrôle de cohérence qui ne touchent ni la phase du devis ni le chantier (`coherence/controle.ts` :
-  statut du lead, main, dévalidations, rangement, espace d'un dossier clos…) : elles passent par les fonctions du métier
+  statut du lead (par la règle de B12, `alignerStatutLead`), main, dévalidations, rangement, espace d'un dossier clos…) : elles passent par les fonctions du métier
   et laissent leur trace `COHERENCE_CORRIGEE`. Celles des écarts (B13) passent par le point d'entrée : `CORRECTION_COHERENCE`
   (écarts 1 et 6, « Attendre l'accord » sans devis, date du chantier), `DEVIS_ENVOYE` canal ESPACE (écart 5, par
   `mettreEnLigneDevis`), `DEVIS_ENVOYE` canal GMAIL (écart 3, par `enregistrerDevisGmail`), `DEVIS_ACCEPTE` (B4) ;

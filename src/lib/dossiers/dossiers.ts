@@ -23,6 +23,7 @@ import { ErreurMetier } from "./erreurs";
 import { rappelALOuverture, synchroniserRappel } from "@/lib/agenda/rappels";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
 import { noterProchaineActionManuelle } from "./prochaine-action-manuelle";
+import { alignerStatutLead } from "./statut-lead";
 import { versCentimes } from "./montants";
 import { estEtape, estEtapeSortie, etapeAvantSortie, lireMetadataChangementEtape, type MetadataChangementEtape } from "./regles";
 import {
@@ -640,6 +641,10 @@ export async function ouvrirDossier(
       metadata: JSON.stringify(ouverture),
     },
   });
+  // Mission 18 (B12) : le lead d'origine suit son dossier dès l'ouverture, dans la même transaction — un lead « À
+  // traiter », « Devis demandé » ou « Sans suite » (perdu) qui reçoit un dossier vivant devient « Contacté » (ou le statut
+  // de l'étape d'ouverture) ; un autre dossier plus avancé du même lead garde la main (statut-lead.ts).
+  if (origine.leadId) await alignerStatutLead(tx, origine.leadId);
   // Client pérenne : celui choisi, celui du lead ou du prospect, sinon retrouvé
   // par e-mail ou téléphone, sinon créé depuis ces coordonnées.
   if (entree.clientId) {
@@ -715,16 +720,13 @@ export async function originesDuDossier(entree: Pick<EntreeCreation, "leadId" | 
 }
 
 /**
- * Après l'ouverture, jamais bloquant : le lead B2C passe à « Contacté » ; le
- * prospect B2B est converti en client (il sort des séquences de prospection),
- * sauf s'il s'est désinscrit. Mission 14 (partie 7) : le rappel à venir du lead
- * passe sur le dossier, et l'agenda suit pour les deux (`rappelALOuverture`).
+ * Après l'ouverture, jamais bloquant : le prospect B2B est converti en client (il sort des séquences de prospection),
+ * sauf s'il s'est désinscrit. Le statut du lead B2C est écrit dans la transaction de l'ouverture (`ouvrirDossier`,
+ * mission 18, B12). Mission 14 (partie 7) : le rappel à venir du lead passe sur le dossier, et l'agenda suit pour les
+ * deux (`rappelALOuverture`).
  */
 export async function suitesOuverture({ lead, prospect }: Origines, dossierId: string): Promise<void> {
   try {
-    if (lead?.statut === "NOUVEAU") {
-      await prisma.lead.update({ where: { id: lead.id }, data: { statut: "CONTACTE" } });
-    }
     if (prospect && prospect.statut !== "CLIENT" && prospect.statut !== "OPT_OUT") {
       await prisma.$transaction([
         prisma.prospect.update({ where: { id: prospect.id }, data: { statut: "CLIENT" } }),
@@ -738,7 +740,7 @@ export async function suitesOuverture({ lead, prospect }: Origines, dossierId: s
       ]);
     }
   } catch (erreur) {
-    console.error("[dossiers] mise à jour du lead d'origine :", erreur);
+    console.error("[dossiers] conversion du prospect d'origine :", erreur);
   }
   await rappelALOuverture(dossierId, lead?.id ?? null);
 }

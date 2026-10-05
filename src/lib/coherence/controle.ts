@@ -10,7 +10,7 @@ import { retenirDevis, suiteNonRetenus } from "@/lib/dossiers/devis-retenu";
 import { lireFaitsMain, mainSelonFaits, recalculerMain } from "@/lib/dossiers/main";
 import { estActionManuelleEnPlace } from "@/lib/dossiers/prochaine-action-auto";
 import { estEtape } from "@/lib/dossiers/regles";
-import { ecrireStatutLead } from "@/lib/dossiers/statut-lead";
+import { alignerStatutLead, ecrireStatutLead, statutLeadSelonDossiers } from "@/lib/dossiers/statut-lead";
 import { appliquerEvenementDossier, suitesEvenementDossier, type Suites } from "@/lib/dossiers/synchro";
 import { appliquerChangementEtape, effetsDuChangementEtape, marquerSynchronise } from "@/lib/dossiers/transitions";
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
@@ -128,17 +128,6 @@ const estActive = (etape: string): etape is EtapeDossier => (ETAPES_ACTIVES as s
 /** Au-delà, un mail du client sans réponse sur un dossier « chez le client » est une incohérence. */
 const JOURS_MAIL_SANS_REPONSE = 2;
 
-const STATUT_LEAD_ATTENDU: Partial<Record<EtapeDossier, string[]>> = {
-  DEVIS_ENVOYE: ["DEVIS_ENVOYE"],
-  RELANCE: ["DEVIS_ENVOYE"],
-  SIGNE: ["SIGNE"],
-  PLANIFIE: ["CHANTIER_PLANIFIE"],
-  CHANTIER: ["CHANTIER_PLANIFIE"],
-  FACTURE: ["TERMINE"],
-  ENCAISSE: ["TERMINE"],
-  PERDU: ["PERDU"],
-};
-
 export type OptionsControle = {
   /**
    * Mission 18 (mise en route) : lire aussi les dossiers perdus et archivés. Les règles du lead (statut, doublons) et de
@@ -205,7 +194,7 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
   const dossiers = await prisma.dossier.findMany({
     where: options.etendu ? { ...AVEC_ARCHIVES } : { etape: { not: "PERDU" } },
     select: {
-      id: true, clientNom: true, etape: true, prochaineAction: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true, dateChantier: true, archiveLe: true, leadId: true, prestations: true, main: true, mainMotif: true,
+      id: true, createdAt: true, clientNom: true, etape: true, prochaineAction: true, prochaineActionManuelle: true, prochaineActionManuelleLe: true, dateChantier: true, archiveLe: true, leadId: true, prestations: true, main: true, mainMotif: true,
       lead: { select: { id: true, statut: true, typeProjet: true, archiveLe: true } },
       documents: lectureDesDevis(),
       accords: true,
@@ -230,6 +219,12 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
   let aEnvoyer: Set<string> | null = null;
   const devisAEnvoyerIds = async () => (aEnvoyer ??= new Set((await devisAEnvoyer(prisma)).map((x) => x.documentId)));
   const { peutNotifier } = await import("@/lib/mail/notifications");
+  // Mission 18 (B12) : les dossiers non archivés de chaque lead, du plus ancien au plus récent — le statut attendu du lead
+  // est celui de son dossier vivant le plus avancé (statut-lead.ts, la même règle que les changements d'étape).
+  const dossiersDuLead = new Map<string, typeof dossiers>();
+  for (const d of [...dossiers].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
+    if (d.leadId && !d.archiveLe) dossiersDuLead.set(d.leadId, [...(dossiersDuLead.get(d.leadId) ?? []), d]);
+  }
 
   for (const d of dossiers) {
     const signaler = (code: CodeIncoherence, gravite: Incoherence["gravite"], constat: string, correction: string | null) =>
@@ -360,11 +355,12 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
     }
     // Un dossier archivé est sorti des listes, son lead est revenu dans Leads : ni statut du lead, ni main à comparer.
     if (archive) continue;
-    // Leads ↔ dossiers. Un dossier perdu (contrôle étendu) n'impose « PERDU » que si le contact n'a pas d'autre dossier vivant.
-    const attendus = STATUT_LEAD_ATTENDU[d.etape as EtapeDossier];
-    const autreVivant = d.etape === "PERDU" && dossiers.some((x) => x.id !== d.id && x.leadId === d.leadId && !x.archiveLe && x.etape !== "PERDU");
-    if (d.lead && !d.lead.archiveLe && attendus && !autreVivant && !attendus.includes(d.lead.statut)) {
-      signaler("STATUT_DU_LEAD", "MOYENNE", `Le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} » mais son lead est resté « ${d.lead.statut} » : la section Leads et la publicité ne racontent pas la même histoire.`, `Aligner le lead sur « ${attendus[0]} »`);
+    // Leads ↔ dossiers (B12) : le dossier vivant le plus avancé du lead décide, signalé sur lui seul ; perdus seulement
+    // (contrôle étendu) : « PERDU » ; en pause seulement : rien à comparer.
+    const attendu = d.leadId ? statutLeadSelonDossiers(dossiersDuLead.get(d.leadId) ?? []) : null;
+    if (d.lead && !d.lead.archiveLe && attendu && attendu.decideur.id === d.id && attendu.statut !== d.lead.statut) {
+      const autres = (dossiersDuLead.get(d.leadId!)?.length ?? 1) - 1;
+      signaler("STATUT_DU_LEAD", "MOYENNE", `Le dossier est en « ${LIBELLES_ETAPE[d.etape as EtapeDossier]} »${autres > 0 ? ` (le plus avancé de ses ${autres + 1} dossiers)` : ""} mais son lead est resté « ${d.lead.statut} » : la section Leads et la publicité ne racontent pas la même histoire.`, `Aligner le lead sur « ${attendu.statut} »`);
     }
     // Qui a la main : ce que le dossier affiche (kanban, fiche, Espaces clients, Leads) ↔ ce que disent ses derniers gestes.
     // Mission 14 : les faits lus une fois, les mêmes que ceux de la main (message du client sans réponse compris).
@@ -833,12 +829,10 @@ export async function appliquerCorrection(incoherence: Incoherence): Promise<{ c
       break;
     }
     case "STATUT_DU_LEAD": {
-      const dossier = await prisma.dossier.findFirst({ where: { id: dossierId!, ...AVEC_ARCHIVES }, select: { etape: true, leadId: true, lead: { select: { statut: true } } } });
-      const statut = dossier ? STATUT_LEAD_ATTENDU[dossier.etape as EtapeDossier]?.[0] : null;
-      if (dossier?.leadId && statut) {
-        await prisma.lead.update({ where: { id: dossier.leadId }, data: { statut } });
-        await tracer(prisma, dossierId, code, `lead aligné sur « ${statut} » (il était « ${dossier.lead?.statut ?? "?"} »)`);
-      }
+      // Mission 18 (B12) : la règle des changements d'étape, relue sur la base (tous les dossiers non archivés du lead).
+      const dossier = await prisma.dossier.findFirst({ where: { id: dossierId!, ...AVEC_ARCHIVES }, select: { leadId: true } });
+      const aligne = dossier?.leadId ? await alignerStatutLead(prisma, dossier.leadId) : null;
+      if (aligne) await tracer(prisma, dossierId, code, `lead aligné sur « ${aligne.statut} » (il était « ${aligne.avant} »)`);
       break;
     }
     case "SIMULATIONS_HORS_DOSSIER": {

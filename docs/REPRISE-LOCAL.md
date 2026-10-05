@@ -1581,3 +1581,59 @@ d'écart, rejouée sans effet) ; en pause depuis Devis envoyé avec une action p
 `npm run build` : propres.
 
 Reste : B12 (agent mort) ; rien pour Lucas.
+
+### Mission 18, B12 — statut du lead ↔ étape : une table, le dossier vivant le plus avancé décide (écart 12)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF) : lot repris de zéro.
+- **Une seule table**, `dossiers/statut-lead.ts › STATUT_LEAD_PAR_ETAPE`, pour TOUTES les étapes : Qualification et
+  Simulation → CONTACTE, Devis envoyé et Relance → DEVIS_ENVOYE, Signé → SIGNE, Planifié et Chantier →
+  CHANTIER_PLANIFIE, Facturé et Encaissé → TERMINE, Perdu → PERDU, En pause → `null` explicite (inchangé). La table du
+  contrôle (`STATUT_LEAD_ATTENDU`, qui ignorait Q, S et la pause) est supprimée.
+- **« Le vivant le plus avancé décide »** (`statutLeadSelonDossiers`, pure) : parmi les dossiers non archivés du lead,
+  hors Perdu et En pause, le plus avancé ; aucun vivant et tous perdus → PERDU ; sinon inchangé. `statutLeadAttendu` /
+  `alignerStatutLead(tx, leadId, etapeDe?)` la lisent dans la transaction de l'appelant ; `ecrireStatutLead(tx,
+  dossierId, etape)` (même signature, mêmes appelants : changement d'étape, point d'entrée, devis envoyé, retours,
+  paiement, cohérence) passe par elle. `effetsDuChangementEtape` (changements non synchronisés) aussi, au lieu de
+  l'étape du dernier dossier changé.
+- **Ouverture** : `dossiers.ts › ouvrirDossier` aligne le lead dans la transaction de l'ouverture (bouton, ouverture
+  automatique A2, nouveau projet de l'espace, mail validé, reprise) : « À traiter », « Devis demandé » ou « Sans suite »
+  → « Contacté » (ou le statut de l'étape d'ouverture), sauf dossier plus avancé du même lead. `suitesOuverture` ne fait
+  plus le NOUVEAU → CONTACTE (il écrasait le statut d'un dossier ouvert à une étape avancée). Un contact qui revient sur
+  son dossier vivant (`depuis-lead.ts › ouvrirSansFile`) est réaligné aussi.
+- **Cohérence** : `STATUT_DU_LEAD` lit la même règle, signalé sur le seul dossier qui décide (« le plus avancé de ses N
+  dossiers ») ; la correction appelle `alignerStatutLead` (relue sur la base). Q et S comptent désormais : la mise en
+  route alignera les leads restés « À traiter » ou « Devis demandé » sur un dossier vivant (réparation sûre, déjà dans
+  sa liste).
+- **Webhook** : une demande de devis d'un contact connu qui n'avait écrit que pour « Autre » lui donne le projet que le
+  site envoie (`typeProjet`, seulement s'il est dit) — son intention « Devis » se lisait sur le statut DEVIS_DEMANDE, que
+  le dossier ouvert par la demande remplace maintenant par « Contacté ».
+- Docs : `SYNCHRO.md` (§ 1, paragraphe des changements non synchronisés, tableau 4 vidé, nouveau § 4 bis : table, règle,
+  matrice des quatre déclencheurs), `COHERENCE.md` (`STATUT_DU_LEAD`). `MCP-COUVERTURE.md` : rien (aucune action ne
+  change).
+
+Décisions prises seul (solution la plus simple) :
+- La règle porte sur les dossiers dont `leadId` est ce lead (pas ceux de sa fiche client venus d'un autre lead), comme
+  le plan.
+- En pause : la table dit `null` ; si le lead a un autre dossier vivant, c'est lui qui décide (la pause n'est jamais
+  le décideur) — même règle pour les gestes et pour le contrôle, sinon l'un signalerait ce que l'autre écrit.
+- À égalité d'avancement, le plus ancien dossier est le décideur (seule la clé du signalement en dépend).
+- Un dossier ouvert automatiquement donne CONTACTE (décision 11), même sur un lead « Devis demandé ».
+- La conversion Meta PERDU d'un dossier perdu reste celle du changement d'étape (hors lot) ; aucun envoi nouveau.
+- Outils MCP : aucun changé, aucune description changée ; empreinte inchangée (`040d6c7aa53c`, 53 outils).
+
+Tests : CRM 1 458 → 1 464 (`npm test` : 1 464 verts). Nouveau `src/lib/dossiers/statut-lead-b12.test.ts` (6 essais,
+état des deux côtés, réseau coupé) : la table (toutes les étapes) et la règle pure ; demande du site sur un lead
+« Devis demandé » (Contacté, Qualification, « Appeler : demande de devis », main, relances, aucune tâche de cohérence) ;
+lead perdu qui revient (nouveau dossier et son espace : Contacté, PHOTOS, le perdu ne décide plus) ; deux dossiers
+(Signé + second en Qualification puis Simulation : reste Signé ; premier en pause : Contacté ; second perdu : inchangé ;
+tous perdus : PERDU ; reprise : Signé) ; dossier seul en pause (inchangé) et effets d'après non synchronisés ; cohérence
+(un seul signalement sur le plus avancé, correction, second passage vide, Simulation sur un lead « À traiter »
+signalée). Adaptés : `mission-18-mise-en-route.test.ts` (un cas de plus : lead « Devis demandé » en Qualification
+aligné, seul le statut change ; résumé 9 dossiers, 11 trouvés, 9 réparés, STATUT_DU_LEAD 3/3) ;
+`mission-16-partie-4.test.ts` (la demande d'un contact connu ouvre son dossier : statut CONTACTE au lieu de
+DEVIS_DEMANDE, intention « Devis » gardée, dossier en Qualification). `coherence.test`, `coherence-b13`, `systeme.test`,
+`synchro.test`, `depuis-lead.test`, `reprise.test` verts sans changement. `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres.
+
+Reste : rien pour ce lot ; rien pour Lucas.

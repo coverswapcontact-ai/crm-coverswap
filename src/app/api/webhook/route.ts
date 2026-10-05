@@ -293,6 +293,12 @@ export async function POST(request: NextRequest) {
       if (demandeDeDevis && existing.statut === "NOUVEAU") {
         updates.statut = "DEVIS_DEMANDE";
       }
+      // Mission 18 (B12) : une demande de devis d'un contact qui n'avait écrit que pour « Autre » lui donne son projet — son
+      // intention (« Devis ») se lit sur ses faits, plus sur un statut que le dossier ouvert par la demande remplace.
+      // (seulement un projet que le site a dit : pas la valeur par défaut de normalizeData)
+      if (demandeDeDevis && (!existing.typeProjet || existing.typeProjet === "AUTRE") && parsed.data.typeProjet && parsed.data.typeProjet !== "AUTRE") {
+        updates.typeProjet = data.typeProjet;
+      }
       if (Object.keys(updates).length > 0) {
         lead = await prisma.lead.update({ where: { id: existing.id }, data: updates });
       }

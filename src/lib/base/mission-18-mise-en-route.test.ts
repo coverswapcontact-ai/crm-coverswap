@@ -100,6 +100,9 @@ describe("mise en route de la mission 18", () => {
     await prisma.dossier.update({ where: { id: main.dossierId }, data: { main: "CLIENT", mainMotif: "écrite à la main" } });
     const choix = await contact("Choix"); // choix d'une simulation qu'il ne voit plus → dévalidé
     await prisma.espaceClient.update({ where: { id: choix.espaceId }, data: { choix: JSON.stringify({ mode: "UNE", simulationId: "simulation-absente" }), choixLe: new Date() } });
+    // B12 : un lead resté « Devis demandé » sur un dossier en Qualification (ancienne base) → aligné sur « Contacté ».
+    const demande = await contact("Demande");
+    await prisma.lead.update({ where: { id: demande.leadId }, data: { statut: "DEVIS_DEMANDE" } });
     // Vivant, correction sensible (l'étape changerait) : laissée au détecteur ; le statut du lead, sûr, est aligné.
     const chantier = await contact("Chantier");
     const dateChantier = new Date(Date.now() + 20 * 86_400_000);
@@ -113,7 +116,7 @@ describe("mise en route de la mission 18", () => {
     const devisArchive = await prisma.document.create({ data: { dossierId: archive.dossierId, type: "DEVIS", numero: "D-MR18-1", dateEmission: new Date(), objet: "Cuisine", lignes: LIGNES, totalHt: 1500, acomptePct: 30, statut: "GENERE" } });
     await prisma.dossier.update({ where: { id: archive.dossierId }, data: { archiveLe: new Date() } });
 
-    const avant = Object.fromEntries(await Promise.all([attente, posee, perimee, main, choix, chantier].map(async (c) => [c.dossierId, await etatDesDeuxCotes(c.dossierId, { taches: false })] as const)));
+    const avant = Object.fromEntries(await Promise.all([attente, posee, perimee, main, choix, demande, chantier].map(async (c) => [c.dossierId, await etatDesDeuxCotes(c.dossierId, { taches: false })] as const)));
     const vus = (await controle.controlerCoherence({ etendu: true })).incoherences;
     const codes = (c: Contact) => vus.filter((i) => i.dossierId === c.dossierId).map((i) => i.code).sort();
     assert.deepEqual(codes(attente), ["ATTENTE_ACCORD_SANS_DEVIS"]);
@@ -121,6 +124,7 @@ describe("mise en route de la mission 18", () => {
     assert.deepEqual(codes(perimee), ["PROCHAINE_ACTION_PERIMEE"]);
     assert.deepEqual(codes(main), ["MAIN_DECALEE"]);
     assert.deepEqual(codes(choix), ["CHOIX_SANS_SIMULATION"]);
+    assert.deepEqual(codes(demande), ["STATUT_DU_LEAD"]);
     assert.deepEqual(codes(chantier), ["DATE_CHANTIER_EN_SIGNE", "STATUT_DU_LEAD"]);
     assert.deepEqual(codes(perdu), ["ESPACE_ACTIF_DOSSIER_CLOS", "STATUT_DU_LEAD"]);
     assert.deepEqual(codes(archive), ["ESPACE_ACTIF_DOSSIER_CLOS", "SIGNE_SANS_DEVIS_ACCEPTE"]);
@@ -141,9 +145,9 @@ describe("mise en route de la mission 18", () => {
     process.env.META_ACCESS_TOKEN = "";
 
     assert.deepEqual(r, {
-      dossiersControles: 8,
-      trouves: 10,
-      repares: 8,
+      dossiersControles: 9,
+      trouves: 11,
+      repares: 9,
       taches: 1,
       detecteur: 1,
       echecs: 0,
@@ -155,8 +159,8 @@ describe("mise en route de la mission 18", () => {
       "repares.MAIN_DECALEE": 1,
       "trouves.CHOIX_SANS_SIMULATION": 1,
       "repares.CHOIX_SANS_SIMULATION": 1,
-      "trouves.STATUT_DU_LEAD": 2,
-      "repares.STATUT_DU_LEAD": 2,
+      "trouves.STATUT_DU_LEAD": 3,
+      "repares.STATUT_DU_LEAD": 3,
       "trouves.ESPACE_ACTIF_DOSSIER_CLOS": 2,
       "repares.ESPACE_ACTIF_DOSSIER_CLOS": 2,
       "trouves.DATE_CHANTIER_EN_SIGNE": 1,
@@ -184,6 +188,13 @@ describe("mise en route de la mission 18", () => {
     assert.equal((await prisma.espaceClient.findUniqueOrThrow({ where: { id: choix.espaceId } })).choixLe, null);
     // L'espace disait « devis en préparation » sur une simulation que le client ne voit plus ; il revient à ses photos.
     assert.deepEqual([avant[choix.dossierId].etapeEspace, choixApres.etape, choixApres.etapeEspace], ["ATTENTE_DEVIS", avant[choix.dossierId].etape, "PHOTOS"]);
+    const demandeApres = await etatDesDeuxCotes(demande.dossierId);
+    assert.deepEqual(
+      [demandeApres.statutLead, demandeApres.etape, demandeApres.etapeEspace, demandeApres.prochaineAction, demandeApres.main],
+      ["CONTACTE", "QUALIFICATION", avant[demande.dossierId].etapeEspace, avant[demande.dossierId].prochaineAction, avant[demande.dossierId].main],
+      "seul le statut du lead change"
+    );
+    assert.deepEqual(demandeApres.relances.proposables, avant[demande.dossierId].relances.proposables);
     const chantierApres = await etatDesDeuxCotes(chantier.dossierId);
     assert.deepEqual([chantierApres.etape, chantierApres.statutLead, chantierApres.etapeEspace], ["SIGNE", "SIGNE", avant[chantier.dossierId].etapeEspace], "Signé → Planifié est sensible : jamais d'office");
     assert.ok(
@@ -218,8 +229,8 @@ describe("mise en route de la mission 18", () => {
     const sante = await lecture.outilSanteSysteme.executer({}, { maintenant: new Date() } as never);
     const ligne = sante.texte.split("\n").find((l) => l.startsWith("Dernières migrations : "));
     assert.ok(ligne, sante.texte);
-    assert.match(ligne, /mise-en-route-18 le \d\d\/\d\d(\/\d{4})? : 8 dossiers contrôlés, 10 écarts trouvés, 8 réparés, 1 tâche à moi, 1 au détecteur, 0 échec \(/);
-    assert.match(ligne, /STATUT_DU_LEAD 2 trouvés, 2 réparés/);
+    assert.match(ligne, /mise-en-route-18 le \d\d\/\d\d(\/\d{4})? : 9 dossiers contrôlés, 11 écarts trouvés, 9 réparés, 1 tâche à moi, 1 au détecteur, 0 échec \(/);
+    assert.match(ligne, /STATUT_DU_LEAD 3 trouvés, 3 réparés/);
     assert.match(ligne, /SIGNE_SANS_DEVIS_ACCEPTE 1 trouvé, 0 réparé, 1 en tâche/);
     assert.match(ligne, /DATE_CHANTIER_EN_SIGNE 1 trouvé, 0 réparé, 1 au détecteur/);
   });

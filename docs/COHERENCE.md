@@ -106,7 +106,7 @@ contrôle quotidien ne lit pas) ; le compte par règle dans le journal de démar
 | `PROJET_VALIDE_SANS_AVANCER` | Projet validé ↔ dossier en Qualification | Passer en « Simulation » | S |
 | `CHOIX_SANS_SIMULATION` | Simulation validée ↔ plus visible du client | Dévalider le choix | |
 | `PROCHAINE_ACTION_PERIMEE` | « Préparer le devis » / « autre proposition » ↔ faits de l'espace | Effacer l'action (ou « Attendre l'accord » si le devis est là) | |
-| `STATUT_DU_LEAD` | Étape du dossier ↔ statut du lead (contrôle étendu : un dossier perdu n'impose « PERDU » que si le contact n'a pas d'autre dossier vivant) | Aligner le lead | |
+| `STATUT_DU_LEAD` | Étape du dossier ↔ statut du lead, pour toutes les étapes (mission 18, B12 : la table unique de `statut-lead.ts`, Qualification et Simulation → « Contacté » comprises ; le dossier vivant le plus avancé du lead décide et lui seul est signalé ; perdus seulement, contrôle étendu : « PERDU » ; en pause seulement : rien) | Aligner le lead (la même règle, relue sur la base) | |
 | `LEAD_A_PLUSIEURS_DOSSIERS` | Un contact, plusieurs dossiers vivants | À la main : archiver le doublon | |
 | `SIMULATIONS_HORS_DOSSIER` | Contact avec dossier ↔ simulations restées hors du dossier | Les ranger | |
 | `PROJET_FIGE_MODIFIE` | Projet encaissé ou perdu ↔ geste du client dans son espace après la date où il s'est figé | À la main : lire ce qui a changé | |

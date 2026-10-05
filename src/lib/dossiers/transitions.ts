@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { ecrireMain, recalculerMain } from "./main";
 import { signalerChangementTaches } from "@/lib/a-faire/signal";
-import { ecrireStatutLead, STATUT_LEAD_PAR_ETAPE } from "./statut-lead";
+import { alignerStatutLead, ecrireStatutLead } from "./statut-lead";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
 import { z } from "zod/v4";
 import prisma, { type Transaction } from "@/lib/prisma";
@@ -381,10 +381,8 @@ export async function effetsDuChangementEtape(changement: ChangementEtape): Prom
     const lead = dossier?.lead;
     if (!lead) return;
 
-    const statut = STATUT_LEAD_PAR_ETAPE[changement.vers];
-    if (!synchronise && statut && statut !== lead.statut) {
-      await prisma.lead.update({ where: { id: lead.id }, data: { statut } });
-    }
+    // Mission 18 (B12) : le dossier vivant le plus avancé du lead décide (statut-lead.ts), pas le dernier changé.
+    if (!synchronise) await alignerStatutLead(prisma, lead.id);
 
     if (changement.nature === "RETOUR" || changement.nature === "REPRISE") return;
     // Renvoi à Meta : l'algorithme apprend sur les gens qui signent, pas sur ceux

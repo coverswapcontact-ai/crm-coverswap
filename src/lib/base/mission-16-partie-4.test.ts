@@ -332,11 +332,13 @@ describe("POST /api/webhook — le tunnel du site", () => {
     assert.deepEqual([second.json.deduped, second.json.leadId], [true, leadId]);
     assert.ok((second.json.notifications as unknown[]).length > 0, "le push part pour un contact déjà connu");
     assert.equal((await prisma.lead.findUniqueOrThrow({ where: { id: leadId } })).statut, "NOUVEAU");
-    // Puis il demande un devis pour sa cuisine : statut relevé, classé Prioritaire, intention « Devis ».
+    // Puis il demande un devis pour sa cuisine : statut relevé, classé Prioritaire, intention « Devis ». Mission 18 : la
+    // demande ouvre son dossier (A2), qui donne au lead le statut de son étape (B12 : Qualification → « Contacté »).
     const troisieme = await envoyer({ ...commun, typeProjet: "CUISINE", message: "Un devis pour ma cuisine" });
     assert.ok((troisieme.json.notifications as unknown[]).length > 0);
     const apres = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } });
-    assert.deepEqual([apres.statut, apres.priorite], ["DEVIS_DEMANDE", "PRIORITAIRE"]);
+    assert.deepEqual([apres.statut, apres.priorite], ["CONTACTE", "PRIORITAIRE"]);
+    assert.deepEqual((await prisma.dossier.findMany({ where: { leadId }, select: { etape: true } })).map((d) => d.etape), ["QUALIFICATION"], "la demande a ouvert son dossier");
     assert.equal(constantes.intentionDuLead({ ...apres, simulations: [] }), "DEVIS");
   });
 

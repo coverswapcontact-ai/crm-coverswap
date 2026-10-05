@@ -14,6 +14,7 @@ import { demanderSynchronisation } from "@/lib/drive/synchronisation";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { pluriel } from "@/lib/commun/format";
 import { synchroniserRappel } from "@/lib/agenda/rappels";
+import { alignerStatutLead } from "./statut-lead";
 
 /**
  * Du contact entrant au dossier, sans ressaisie.
@@ -308,9 +309,12 @@ async function ouvrirSansFile(leadId: string, options: Options): Promise<Ouvertu
     // `rappelALOuverture`, qui a aussi supprimé l'événement du lead et posé celui du dossier). Un rappel passé, ou écarté
     // par une autre prochaine action, ne reste pas sur le lead.
     if (lead.rappelLe) await prisma.lead.update({ where: { id: lead.id }, data: { rappelLe: null } });
-  } else if (lead.agendaEvenementId) {
+  } else {
+    // Mission 18 (B12) : un contact qui revient (demande, simulation) sur son dossier vivant retrouve le statut que ses
+    // dossiers lui donnent — un « Devis demandé » ou un « Sans suite » posé entre-temps ne reste pas (statut-lead.ts).
+    await alignerStatutLead(prisma, lead.id);
     // Un lead repris par son dossier vivant n'a plus de rappel à lui : son événement quitte l'agenda.
-    await synchroniserRappel({ type: "LEAD", id: lead.id });
+    if (lead.agendaEvenementId) await synchroniserRappel({ type: "LEAD", id: lead.id });
   }
 
   const { photos, simulations } = await rangerImagesDuLead(lead.id, dossierId, { silencieux: options.silencieux });

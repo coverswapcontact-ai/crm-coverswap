@@ -97,7 +97,7 @@ contrôle quotidien ne lit pas) ; le compte par règle dans le journal de démar
 | Code | Ce qui est comparé | Corriger | S |
 |---|---|---|---|
 | `DEVIS_MONTANT_NUL` | Devis en vigueur à 0 € (le client lirait « 0 € ») | À la main : corriger le document | |
-| `ACCORD_SANS_SIGNATURE` | Accord en ligne ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis de l'accord ; les autres variantes « non retenu », mission 18 B10) | S |
+| `ACCORD_SANS_SIGNATURE` | Accord en ligne ↔ dossier avant « Signé » (mission 18 B8 : l'accord et le passage sont d'une transaction, l'écart ne naît plus de l'espace ; un accord d'avant se termine aussi par la nouvelle tentative du client) | Passer en « Signé » (sur le devis de l'accord ; les autres variantes « non retenu », mission 18 B10) | S |
 | `DEVIS_ACCEPTE_AVANT_SIGNE` | Devis « accepté » ↔ dossier avant « Signé » | Passer en « Signé », les autres devis « non retenus » (mission 18, B4 : un devis noté « accepté » vaut signature hors ligne ; le dépôt et la correction le font d'eux-mêmes depuis) | S |
 | `SIGNE_SANS_DEVIS_ACCEPTE` | Dossier signé ↔ aucun devis accepté | Noter le dernier devis « accepté » | S |
 | `PAIEMENT_AVANT_SIGNATURE` | Encaissement valide ↔ dossier avant « Signé » | Passer en « Signé » (sur le devis que règlent les acomptes ; les autres variantes « non retenu », mission 18 B10) | S |

@@ -139,6 +139,12 @@
   depuis l'espace du client (le site nomme le devis) sans recul d'étape. `etat_crm` COHERENCE : `AVENANT_NON_PROPOSE` ne
   vise plus qu'un avenant visible dont l'espace n'est pas ouvert. Ni outil, ni paramètre, ni description ne change :
   empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
+- **Mission 18, B8 (05/10/2026)** : signature en une transaction. Le bon pour accord est un geste du client dans son
+  espace (`accepterDevis`) : pas d'outil. Ce qui change pour l'assistant : un accord ne laisse plus de dossier en
+  attente de « Signé » (`etat_crm` COHERENCE ne verra plus naître d'`ACCORD_SANS_SIGNATURE` par ce chemin ; ceux
+  d'avant se corrigent toujours par `agir_systeme`, ou par la nouvelle tentative du client), et l'historique du
+  passage (`lire_fiche`) dit « bon pour accord donné dans l'espace client sur le devis N ». Ni outil, ni paramètre,
+  ni description ne change : empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
 - **Mission 18, B10 (05/10/2026)** : paiement par carte et variantes retenues. `saisir_encaissement` (DP9, DP75, F4,
   T11) passe toujours par `enregistrerEncaissement`, désormais par le point d'entrée (`PAIEMENT_RECU`) : un acompte sur
   un devis encore envoyé signe le dossier sur le devis qu'il règle (la pièce choisie, ou celle de l'imputation), les

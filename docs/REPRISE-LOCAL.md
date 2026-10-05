@@ -1531,3 +1531,53 @@ outils), aucune description changée : rien à reconnecter.
 
 Reste : B8, B12 (agents morts). Déployer le CRM AVANT le site (le site sans le CRM garde le calcul d'avant). Écran du
 site non vérifié dans un navigateur (logique couverte par les essais purs).
+
+### Mission 18, B8 — signature : accord et passage en Signé dans une seule transaction (écart 8)
+
+Livré (05/10, branche `mission-18`, pas de push, site non touché). La copie de travail n'avait aucun reste d'un agent
+précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **`espace/service.ts › accepterDevis`** : UNE transaction interactive pour le devis d'origine comme pour l'avenant
+  (B7). Dedans : le devis relu (annulé, remplacé, non retenu ou archivé entre-temps : 409), le projet relu (perdu ou
+  encaissé, figé : 409 `MESSAGE_FIGE`, la règle de la route `projetDe`), l'accord relu ; puis l'accord, les autres
+  devis « Généré »/« Envoyé » non retenus (`retenirDevis`), `ESPACE_DEVIS_ACCEPTE`, le passage en « Signé »
+  (`changerEtapeDansTransaction` : devis accepté, main et statut du lead dans la transaction ; raison « bon pour accord
+  donné dans l'espace client sur le devis N ; non retenu : … »), enfin le point d'entrée (`DEVIS_ACCEPTE` : prochaine
+  action, une action posée à la main reste avec la tâche `accord` ; main). Après la transaction : `suitesEvenementDossier`
+  (Meta SIGNE, agenda, signal des tâches), puis l'alerte « DEVIS SIGNÉ » (ou « AVENANT SIGNÉ »).
+- **Nouvelle tentative** : une panne au milieu n'écrit rien (plus d'accord orphelin) et la tentative suivante signe ;
+  rejouée après une signature réussie, `dejaAccepte` sans effet ; deux appuis simultanés : les transactions se suivent,
+  la seconde trouve l'accord (un seul `AccordDevis`, un seul `CHANGEMENT_ETAPE`). Un accord d'avant B8 resté sans
+  passage en « Signé » (`ACCORD_SANS_SIGNATURE`) : la nouvelle tentative termine le passage sans second accord ni second
+  `ESPACE_DEVIS_ACCEPTE` (raison « … (passage terminé à la nouvelle tentative) »), rend `dejaAccepte: true` et prévient
+  Lucas.
+- **Étapes signables** : celles de `devis-signe.ts › estSigneeParDevisAccepte` (Q, S, Devis envoyé, Relance, ou en pause
+  depuis l'une d'elles), lues dans la transaction ; PERDU n'en est plus (figé, refusé), en pause après la signature non
+  plus (le devis seul passe « accepté », comme un dossier déjà signé).
+- **Signature au doigt** : écrite avant la transaction sous un nom stable, `signature-<devis>-<empreinte sha256 16>.png`
+  (avant : l'horodatage) ; une nouvelle tentative réécrit le même fichier.
+- Docs : `SYNCHRO.md` (ligne `DEVIS_ACCEPTE`, paragraphe B8, ligne B8 retirée du tableau 4), `COHERENCE.md`
+  (`ACCORD_SANS_SIGNATURE`), `MCP-COUVERTURE.md` (entrée B8).
+
+Décisions prises seul (solution la plus simple) :
+- Pas d'index unique partiel sur `AccordDevis` (décision 9) : la relecture dans la transaction suffit, SQLite sérialise
+  les écrivains (vérifié par l'essai des deux appuis simultanés).
+- Panne simulée dans l'essai par un déclencheur SQLite temporaire (`RAISE(ABORT)` sur l'écriture du `CHANGEMENT_ETAPE`
+  de ce dossier), plutôt qu'un crochet d'essai dans le code.
+- Passage terminé sur un accord d'avant : pas de nouvel `ESPACE_DEVIS_ACCEPTE` (l'accord est déjà raconté), Lucas
+  prévenu (l'ancien chemin ne l'avait pas fait avant l'échec).
+- Le service refuse lui-même un projet figé (perdu, encaissé), comme la route : un accord ne s'écrit plus sur un dossier
+  perdu par un autre chemin.
+- Outils MCP : aucun (geste du client) ; empreinte inchangée (`040d6c7aa53c`, 53 outils), aucune description changée :
+  rien à reconnecter. Mise en route : rien à changer (`ACCORD_SANS_SIGNATURE` reste sensible, au détecteur).
+
+Tests : CRM 1 453 → 1 458 (`npm test` : 1 458 verts). Nouveau `src/lib/espace/signature-b8.test.ts` (5 essais, état
+des deux côtés, réseau coupé) : signature d'un bloc (Signé, lead, espace ACOMPTE, rien à signer, prochaine action, main
+relue, plus de relance, variante non retenue, raison du passage) ; panne au milieu (rien d'écrit, des deux côtés) puis
+nouvelle tentative signée, un seul fichier de signature ; deux appuis simultanés puis rejouée (un accord, un passage,
+état identique, variante refusée) ; accord d'avant B8 sans signature (écart de cohérence, passage terminé, plus
+d'écart, rejouée sans effet) ; en pause depuis Devis envoyé avec une action posée à la main (Signé, action gardée, tâche
+`accord`), dossier perdu refusé. Aucun test existant à adapter (`espace.test`, `espace-v2`, `devis-multiples`,
+`coherence.test`, `avenant-b7`, `synchro` verts sans changement). `tsc`, `eslint` sur les fichiers touchés,
+`npm run build` : propres.
+
+Reste : B12 (agent mort) ; rien pour Lucas.

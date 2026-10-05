@@ -25,8 +25,9 @@ import { ACTEUR, prevenir } from "./alertes";
 import { enregistrerMessageClient } from "./messages";
 import { enregistrerCoordonnees, lireCoordonnees, type CoordonneesEspace, type EntreeCoordonnees } from "./coordonnees";
 import { figeDuProjet, MESSAGE_FIGE, type Fige } from "./projets";
-import { composerFaits, dateSignature, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
+import { accordEffectif, composerFaits, dateSignature, estAvenant, lectureDesDevis, lireDevisEtPaiements, type AccordEffectif, type DevisLu, type PaiementEspace } from "./faits";
 import { stripeActif } from "@/lib/paiement/stripe";
+import { prochainPas, type ProchainPas } from "./prochain-pas";
 import { reporterTeintesDuChoix } from "./teintes-choix";
 
 /**
@@ -130,6 +131,14 @@ export type EtatEspace = {
   devis: DevisClient | null;
   /** Mission 11 : les devis proposés visibles, du plus ancien au plus récent ; plusieurs → le client en choisit un ; l'accepté y est toujours. */
   devisProposes: DevisClient[];
+  /**
+   * Mission 18 (B7) : ceux qu'il peut signer maintenant, du plus ancien au plus récent (visibles, « Généré » ou
+   * « Envoyé », sans accord). Avant la signature : les devis proposés ; après : les avenants et nouveaux devis émis
+   * depuis — le devis signé reste `devis` (l'acompte porte sur lui), chacun garde son accord dans `devisProposes`.
+   */
+  devisASigner: DevisClient[];
+  /** Mission 18 (B7) : la prochaine étape de l'accueil du projet et le point rouge des onglets (prochain-pas.ts). */
+  prochainPas: ProchainPas;
   acompte: { montant: number; recu: number; complet: boolean } | null;
   /** Onglet Paiement : ce qui est dû, ce qui est payé (date et moyen), à partir des encaissements du dossier. */
   paiement: (PaiementEspace & { devisNumero: string; signeLe: string | null }) | null;
@@ -320,6 +329,11 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
   // Il peut revenir sur son accord tant que rien n'est encaissé et que le chantier n'est pas planifié.
   const accordRetirable = dossier.etape === "SIGNE" && (lecture.paiement?.recu ?? 0) === 0;
   const devis = lecture.devis ? devisPourLeClient(lecture.devis, accord, accordRetirable) : null;
+  // Mission 18 (B7) : un avenant signé garde SON accord (le client le relit signé) ; il se retire tant que le chantier
+  // n'a pas commencé — le retirer ne fait pas reculer le dossier.
+  const avenantRetirable = ["SIGNE", "PLANIFIE"].includes(dossier.etape);
+  const pourLeClient = (d: DevisLu): DevisClient =>
+    d.id === lecture.devis?.id ? devis! : devisPourLeClient(d, accordEffectif(d, dossier.accords, { nom: dossier.clientNom, signeLe: d.dateEmission ?? d.createdAt }), estAvenant(d, dossier.documents) && avenantRetirable);
   const recu = lecture.paiement?.recu ?? 0;
   const etape = etapeEspace(faits);
   // Le prénom de la fiche client d'abord : un prénom corrigé par le client (carte « coordonnées ») l'emporte sur le formulaire.
@@ -356,7 +370,7 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
         ? { ok: false, raison: "Votre devis est établi sur ce projet : pour le changer, appelez CoverSwap, nous l'ajustons avec vous." }
         : { ok: true, raison: null };
 
-  return {
+  const sansPas: Omit<EtatEspace, "prochainPas"> = {
     version: 2,
     apercu: Boolean(options.apercu),
     code: espace.code,
@@ -408,9 +422,8 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     choix,
     coordonnees,
     devis,
-    devisProposes: lecture.proposes
-      .filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE")
-      .map((d) => (d.id === lecture.devis?.id ? devis! : devisPourLeClient(d, null, false))),
+    devisProposes: lecture.proposes.filter((d) => d.visibleEspace !== false || d.statut === "ACCEPTE").map(pourLeClient),
+    devisASigner: lecture.aSigner.map(pourLeClient),
     acompte: devis && devis.acompte > 0 ? { montant: devis.acompte, recu, complet: recu >= devis.acompte - 0.5 } : null,
     paiement: devis && accord && lecture.paiement ? { ...lecture.paiement, devisNumero: devis.numero, signeLe: accord.le.toISOString() } : null,
     virement: (() => {
@@ -430,6 +443,7 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
     choixModifiable: !devis && !fige,
     expireLe: espace.expireLe.toISOString(),
   };
+  return { ...sansPas, prochainPas: prochainPas(sansPas) };
 }
 
 /* ── Simulations créées par le client (espace v3) ─────────────────── */
@@ -914,6 +928,51 @@ export async function accepterDevis(espace: EspaceClient, entree: z.output<typeo
   const autres = await prisma.document.findMany({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, id: { not: devis.id }, statut: { in: ["GENERE", "ENVOYE"] } }, select: { id: true, numero: true, libelleVariante: true } });
   const libelle = devis.libelleVariante ? ` (${devis.libelleVariante})` : "";
   const nonRetenus = autres.map((a) => `${a.numero}${a.libelleVariante ? ` (${a.libelleVariante})` : ""}`);
+  // Mission 18 (B7, écart 7) : un avenant (ou un nouveau devis émis après le devis signé) se signe À CÔTÉ du devis
+  // d'origine : son accord n'y touche pas, l'étape ne bouge pas (l'acompte reste celui du devis d'origine), la prochaine
+  // action passe par le point d'entrée (une action posée à la main reste). Les autres devis « Généré » ou « Envoyé » (d'autres avenants proposés) passent « non retenu », comme avant la
+  // signature ; une seule transaction, l'accord relu dedans (double appui : un seul accord).
+  const signeAvant = await prisma.document.findFirst({ where: { dossierId: espace.dossierId, type: "DEVIS", archiveLe: null, numero: { not: null }, statut: "ACCEPTE", id: { not: devis.id }, createdAt: { lt: devis.createdAt } }, orderBy: { createdAt: "asc" }, select: { id: true, numero: true } });
+  if (signeAvant) {
+    const total = (montants.totalTtcCentimes / 100).toLocaleString("fr-FR");
+    const suites = await avecActeur(ACTEUR, () =>
+      prisma.$transaction(
+        async (tx) => {
+          if (await tx.accordDevis.findFirst({ where: { documentId: devis.id, retireLe: null }, select: { id: true } })) return null;
+          await tx.accordDevis.create({
+            data: { dossierId: espace.dossierId, documentId: devis.id, numeroDevis: devis.numero, totalHt: montants.totalHtCentimes / 100, acomptePct: devis.acomptePct, nomSignataire: entree.nom, mention: "Bon pour accord", ip: origine.ip, navigateur: origine.navigateur?.slice(0, 300) ?? null, signature },
+          });
+          if (autres.length) await tx.document.updateMany({ where: { id: { in: autres.map((a) => a.id) }, statut: { in: ["GENERE", "ENVOYE"] } }, data: { statut: "NON_RETENU" } });
+          await tx.document.update({ where: { id: devis.id }, data: { statut: "ACCEPTE" } });
+          await tx.dossierEvenement.create({
+            data: {
+              dossierId: espace.dossierId,
+              type: "ESPACE_DEVIS_ACCEPTE",
+              direction: "ENTRANT",
+              contenu: `Bon pour accord donné par ${entree.nom} sur le devis ${devis.numero}${libelle} (${total} €), avenant au devis signé ${signeAvant.numero}${signature ? ", signé au doigt" : ""}${nonRetenus.length ? ` ; non retenu${nonRetenus.length > 1 ? "s" : ""} : ${nonRetenus.join(", ")}` : ""}`,
+              metadata: JSON.stringify({ documentId: devis.id, numero: devis.numero, libelle: devis.libelleVariante ?? null, signature: Boolean(signature), avenant: true, devisSigneId: signeAvant.id, nonRetenus: autres.map((a) => ({ id: a.id, numero: a.numero, libelle: a.libelleVariante ?? null })) }),
+            },
+          });
+          return appliquerEvenementDossier(tx, espace.dossierId, { type: "DEVIS_ACCEPTE", documentId: devis.id, avenant: { numero: devis.numero } });
+        },
+        { maxWait: 10_000, timeout: 30_000 }
+      )
+    );
+    if (!suites) return { dejaAccepte: true };
+    await suitesEvenementDossier(suites);
+    await prevenir(
+      espace.dossierId,
+      {
+        titre: `AVENANT SIGNÉ — ${dossier?.clientNom ?? entree.nom}`,
+        texte: `Bon pour accord sur le devis ${devis.numero}${libelle} : ${total} €, en plus du devis signé ${signeAvant.numero}.\nÀ vous : le prévoir au chantier et sur la facture.`,
+        urgence: 4,
+        telephone: dossier?.clientTelephone,
+        etiquette: `accord-${espace.dossierId}`,
+      },
+      "espace-accord"
+    );
+    return { dejaAccepte: false };
+  }
   await avecActeur(ACTEUR, async () => {
     await prisma.$transaction([
       prisma.accordDevis.create({

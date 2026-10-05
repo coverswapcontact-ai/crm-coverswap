@@ -336,7 +336,9 @@ export async function POST(requete: NextRequest, contexte: Contexte) {
       }
       if (action.length === 2 && ressource === "accord" && id === "retrait") {
         const motif = corps && typeof corps === "object" && typeof (corps as { motif?: unknown }).motif === "string" ? (corps as { motif: string }).motif.trim().slice(0, 500) : "";
-        await retirerAccord(projet, "CLIENT", motif);
+        // Mission 18 (B7) : le site nomme le devis (un avenant se retire seul) ; l'ancien site ne le nomme pas : le devis signé d'origine.
+        const documentId = corps && typeof corps === "object" && typeof (corps as { documentId?: unknown }).documentId === "string" ? (corps as { documentId: string }).documentId.slice(0, 40) : null;
+        await retirerAccord(projet, "CLIENT", motif, documentId);
         return relu();
       }
       if (action.length === 3 && ressource === "photos" && geste === "retrait") {

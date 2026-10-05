@@ -49,9 +49,12 @@ export type EvenementDossier =
    * Bon pour accord donné dans l'espace (service.ts › accepterDevis) ; ou, mission 18 (B4), devis noté « accepté » par
    * Lucas qui signe le dossier (documents-existants.ts : déposé « accepté », ou devis repris corrigé en « accepté »).
    */
-  | { type: "DEVIS_ACCEPTE"; documentId: string }
-  /** Bon pour accord retiré (validations.ts › retirerAccord). */
-  | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS" }
+  | { type: "DEVIS_ACCEPTE"; documentId: string; avenant?: { numero: string | null } }
+  /**
+   * Bon pour accord retiré (validations.ts › retirerAccord). Mission 18 (B7) : `avenant`, l'accord d'un avenant (le devis
+   * signé d'origine tient toujours, le dossier ne recule pas).
+   */
+  | { type: "ACCORD_RETIRE"; auteur: "CLIENT" | "LUCAS"; avenant?: boolean }
   /**
    * Simulations publiées dans l'espace (simulations/dossier.ts › publierSimulations ; mission 18, B9 : aussi « Publier »
    * depuis le bloc Espace, `changerStatutSimulation(…, "afficher")`).
@@ -140,6 +143,11 @@ export type Suites = {
   main: MainCalculee | null;
 };
 
+/** Mission 18 (B7) : la prochaine action d'un avenant signé dans l'espace (le dossier est déjà signé). */
+export const texteAvenantSigne = (numero: string | null): string => `Avenant signé${numero ? ` (devis ${numero})` : ""} : le prévoir au chantier et sur la facture`;
+/** Mission 18 (B7) : ce qu'un avenant ne remplace pas — fixer la date du chantier, réclamer un paiement (le devis d'origine). */
+const nePasCouvrirLeChantier = (actuelle: string | null): boolean => !actuelle || !(DIT_DE_FIXER_LA_DATE.test(actuelle) || /réclamer un nouveau paiement/i.test(actuelle));
+
 /** Mission 18 (B10) : la prochaine action d'un dossier signé par son acompte. */
 export const PROCHAINE_ACTION_ACOMPTE_RECU = "Appeler le client : fixer la date du chantier (acompte reçu)";
 
@@ -174,9 +182,15 @@ export function prochaineActionDe(evenement: EvenementDossier, maintenant: Date)
         ...(evenement.choixValide ? { texte: "Préparer le devis (simulation choisie)", date: maintenant } : { texte: null, date: null }),
         si: (a) => Boolean(a && /autre proposition/i.test(a)),
       };
+    // Mission 18 (B7) : un avenant signé (le dossier l'est déjà) ne remplace pas ce qui reste à faire pour le devis d'origine
+    // (« fixer la date du chantier », un paiement à réclamer : la main et l'alerte disent l'avenant) ; une action posée à
+    // la main reste, la tâche à côté.
     case "DEVIS_ACCEPTE":
-      return { code: "accord", texte: "Appeler le client : fixer la date du chantier, suivre l'acompte", date: maintenant, niveau: 1 };
+      return evenement.avenant
+        ? { code: "avenant-signe", texte: texteAvenantSigne(evenement.avenant.numero), date: maintenant, si: nePasCouvrirLeChantier, niveau: 2 }
+        : { code: "accord", texte: "Appeler le client : fixer la date du chantier, suivre l'acompte", date: maintenant, niveau: 1 };
     case "ACCORD_RETIRE":
+      if (evenement.avenant) return { code: "accord-retire", texte: evenement.auteur === "CLIENT" ? "Appeler : il a retiré son accord sur l'avenant" : "Refaire signer l'avenant", date: maintenant, si: nePasCouvrirLeChantier, niveau: 1 };
       return { code: "accord-retire", texte: evenement.auteur === "CLIENT" ? "Appeler : il a retiré son bon pour accord" : "Refaire signer le devis", date: maintenant, niveau: 1 };
     // Mission 18 (relecture) : les attentes du client (« Attendre … ») ne rangent pas de tâche à la place d'une action posée
     // à la main : rien à faire de mon côté, la main passe au client (`tache: false`).

@@ -197,6 +197,8 @@ export function passageDeMain(evenement: EvenementLu): Passage | null {
       const meta = lireMetadata(evenement.metadata);
       const numero = typeof meta.numero === "string" ? meta.numero : null;
       const libelle = typeof meta.libelle === "string" && meta.libelle ? ` (${meta.libelle})` : "";
+      // Mission 18 (B7) : un avenant signé (le dossier l'était déjà) : à moi de le prévoir au chantier.
+      if (meta.avenant) return { qui: "MOI", motif: `Il a signé l'avenant${numero ? ` ${numero}` : ""}${libelle} : le prévoir au chantier` };
       return { qui: "MOI", motif: numero ? `Il a choisi le devis ${numero}${libelle} : fixer la date du chantier` : "Bon pour accord reçu : fixer la date du chantier" };
     }
     case "ESPACE_ACCORD_RETIRE":

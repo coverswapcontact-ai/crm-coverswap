@@ -131,6 +131,14 @@
   (`envoyeLe` ajouté). Un devis déposé « accepté » sur un dossier en pause d'avant la signature le signe (aperçu de
   `ajouter_fichier` compris). Ni outil, ni paramètre, ni description ne change : empreinte **`040d6c7aa53c`**
   (53 outils), rien à reconnecter.
+- **Mission 18, B7 (05/10/2026)** : avenant ou nouveau devis sur un dossier signé. L'espace du client le propose et le
+  fait signer (`EtatEspace.devisASigner`, `prochainPas`, calculés par le CRM) à côté du devis d'origine, sans changer
+  l'étape ; « le devis » de l'espace reste le devis signé d'origine (acompte, paiement). `geste_espace` RETIRER_ACCORD
+  (DP50, `vue-crm.ts › gesteDeLucas` → `retirerAccord`, comme l'écran) retire l'accord du devis signé d'origine (le plus
+  ancien en cours ; avant : le plus récent, le même tant qu'il n'y avait qu'un accord) ; l'accord d'un avenant se retire
+  depuis l'espace du client (le site nomme le devis) sans recul d'étape. `etat_crm` COHERENCE : `AVENANT_NON_PROPOSE` ne
+  vise plus qu'un avenant visible dont l'espace n'est pas ouvert. Ni outil, ni paramètre, ni description ne change :
+  empreinte **`040d6c7aa53c`** (53 outils), rien à reconnecter.
 - **Mission 18, B10 (05/10/2026)** : paiement par carte et variantes retenues. `saisir_encaissement` (DP9, DP75, F4,
   T11) passe toujours par `enregistrerEncaissement`, désormais par le point d'entrée (`PAIEMENT_RECU`) : un acompte sur
   un devis encore envoyé signe le dossier sur le devis qu'il règle (la pièce choisie, ou celle de l'imputation), les

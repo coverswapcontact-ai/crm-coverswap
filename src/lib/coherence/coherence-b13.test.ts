@@ -249,14 +249,20 @@ describe("cohérence de la partie B (mission 18, B13)", () => {
     assert.match(sansMontant.constat, /Montant à saisir : tâche « Enregistrer comme devis envoyé »/);
   });
 
-  test("écart 7 : devis émis après la signature, annoncé dans l'espace qui ne le propose pas → envoyé par mail d'un clic (texte type) ; l'étape ne bouge pas ; un devis pas encore envoyé garde sa tâche « Envoyer le devis »", async () => {
+  test("écart 7 : devis émis après la signature, visible mais l'espace n'est plus ouvert → envoyé par mail d'un clic (texte type) ; l'étape ne bouge pas ; un devis pas encore envoyé garde sa tâche « Envoyer le devis » ; espace ouvert : proposé, rien à signaler (B7)", async () => {
     const c = await contact("Septime");
     await enSimulation(c.dossierId);
     const { document: signe } = await generer(c.dossierId, "Cuisine");
     await service.accepterDevis(await espaceDe(c.espaceId), { documentId: signe.id, nom: c.nom, accepte: true }, { ip: null, navigateur: null });
     assert.equal((await prisma.dossier.findUniqueOrThrow({ where: { id: c.dossierId } })).etape, "SIGNE");
     const { document: avenant } = await generer(c.dossierId, "Avenant : crédence");
-    await generer(c.dossierId, "Variante silencieuse", false);
+    const { document: silencieuse } = await generer(c.dossierId, "Variante silencieuse", false);
+    // Mission 18 (B7) : l'espace ouvert propose l'avenant (et la variante, visible sans annonce) et les fait signer : plus d'écart.
+    assert.deepEqual(await codesDe(c.dossierId), []);
+    assert.deepEqual((await service.etatEspace(await espaceDe(c.espaceId))).devisASigner.map((d) => d.id), [avenant.id, silencieuse.id]);
+    // L'espace fermé ensuite (lien désactivé) : le client ne peut plus le signer en ligne.
+    const espace = await espaceDe(c.espaceId);
+    await prisma.espacePermanent.update({ where: { id: espace.permanentId! }, data: { revoqueLe: new Date() } });
     const vues = await incoherencesDe(c.dossierId);
     assert.deepEqual(vues.map((i) => i.code), ["AVENANT_NON_PROPOSE"]);
     assert.equal(vues[0].correction, `Lui envoyer le devis ${avenant.numero} par mail (texte type, à ${c.email})`);

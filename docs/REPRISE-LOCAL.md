@@ -1470,3 +1470,64 @@ test existant à adapter. `tsc`, `eslint` sur les fichiers touchés, `npm run bu
 Reste : B7, B8, B12 (agents morts). En production : avant de déployer, lire « [sauvegarde] Volume » (volume plein =
 CRM qui ne démarre pas) ; après, lire la ligne de la migration au journal ou `etat_crm` SANTE, puis le lot
 « coherence-18 » dans Tâches.
+
+### Mission 18, B7 — avenant ou nouveau devis sur un dossier signé : l'espace l'affiche et le fait signer (écart 7)
+
+Livré (05/10, branche `mission-18`, pas de push ; CRM et site, deux commits). La copie de travail n'avait aucun reste
+d'un agent précédent sur ce lot (seuls `src/proxy.ts` et les fichiers qui ne diffèrent que par CRLF).
+- **Avenant calculé, sans colonne** (`espace/faits.ts › estAvenant`) : un devis émis après le devis signé d'origine (un
+  autre devis du dossier accepté, créé avant lui). `devisEnVigueur` rend désormais le PLUS ANCIEN accepté : « le
+  devis » de l'espace, l'acompte, le paiement, le virement et le paiement par carte restent sur le devis d'origine ;
+  l'avenant est facturé avec le solde (décision 8).
+- **Le CRM calcule, le site affiche** : `EtatEspace.devisASigner` (`faits.ts › devisASigner` : visibles, « Généré » ou
+  « Envoyé », sans accord en cours ; avant la signature, les devis proposés ; après, ceux émis après l'origine),
+  `EtatEspace.prochainPas` (nouveau `espace/prochain-pas.ts`, le calcul du site repris à l'identique — dates à l'heure
+  de Paris — plus « Un nouveau devis vous est proposé : X €. Votre devis signé reste valable. » en tête), chaque devis de
+  `devisProposes` avec SON accord (un avenant signé se relit signé, retirable en Signé ou Planifié). Fait
+  `avenantASigner` (`composerFaits`) : l'onglet Devis redevient « à faire » et courant (`progression`), la carte du
+  projet dit « Un nouveau devis à signer » (`pastilleDuProjet`). L'étape de l'espace ne change pas (ACOMPTE, CHANTIER).
+- **Signer un avenant** (`accepterDevis`, branche avenant) : UNE transaction interactive (accord relu dedans, accord,
+  autres « Généré »/« Envoyé » non retenus, avenant ACCEPTE, `ESPACE_DEVIS_ACCEPTE` marqué `avenant`, point d'entrée
+  `DEVIS_ACCEPTE { avenant }`), aucune étape, l'accord d'origine intact ; après : suites, alerte « AVENANT SIGNÉ » à
+  Lucas. Prochaine action « Avenant signé (devis N) : le prévoir au chantier et sur la facture », sauf à la place de
+  « … fixer la date du chantier … » ou « réclamer un nouveau paiement » ; tâche `avenant-signe` sous une action posée à la
+  main. Main : MOI « Il a signé l'avenant N : le prévoir au chantier » (`main.ts`). La signature du devis d'origine
+  garde son chemin (B8 la passera en une transaction).
+- **Retrait ciblé** (`validations.ts › retirerAccord(…, documentId?)`, route `/accord/retrait { documentId }`) : l'accord
+  d'un avenant → `retirerAccordAvenant` (une transaction : accord retiré, avenant ACCEPTE → « Envoyé », seuls les devis
+  que CET accord avait écartés redeviennent « Envoyé », trace, point d'entrée `ACCORD_RETIRE { avenant }`) : le dossier
+  ne recule pas ; le client le peut en Signé ou Planifié, Lucas toujours. Sans devis nommé (ancien site, `geste_espace`
+  RETIRER_ACCORD, « Réinitialiser » Devis) : l'accord du devis signé d'origine (le plus ancien en cours), comme avant.
+- **Cohérence (B13)** : `AVENANT_NON_PROPOSE` ne vise plus qu'un avenant VISIBLE dont l'espace n'est pas ouvert (ouvert,
+  l'espace le propose ; masqué, il l'a été exprès) ; même filtre dans la correction (`envoyerAvenant`). La mise en route
+  (MR) n'applique pas ce code (sensible) : rien à changer.
+- **Site** (`coverswap`, branche `mission-18`) : `api.ts` (`devisASigner?`, `prochainPas?`, type `ProchainPas`,
+  facultatifs : état gardé dans `localStorage`) ; nouveau `src/lib/espace/devis.ts` (pur : `devisDeLOnglet`,
+  `enteteDesDevis`, `precisionAccord` ; repli sur le calcul d'avant sans `devisASigner`) ; `EtapeDevis.tsx` (l'avenant
+  à côté du devis signé, ouvert d'emblée, « · Signé » sur les cartes, case « Votre devis signé n° X reste valable. »,
+  retrait avec `documentId`, pas de saut vers le paiement après un avenant) ; `EspaceClient.tsx` (`etat.prochainPas`
+  d'abord, onglet Devis ouvert aussi par `devisASigner`).
+- Docs : `SYNCHRO.md` (lignes DEVIS_ACCEPTE et ACCORD_RETIRE, paragraphe B7, B7 retiré du tableau 4, § 5 et § 6),
+  `COHERENCE.md` (règle `AVENANT_NON_PROPOSE`), `MCP-COUVERTURE.md` (entrée B7).
+
+Décisions prises seul (solution la plus simple) :
+- L'étape de l'espace reste ACOMPTE ou CHANTIER avec un avenant à signer (relances, main par le lien, colonne Espace
+  inchangées) ; seuls l'onglet Devis, la prochaine étape et la carte du projet le disent.
+- Une variante visible non annoncée (B1) émise après la signature est aussi « à signer » : visible = proposée.
+- Avenant retiré : il repasse « Envoyé » (le client l'a eu en main), pas « Généré ».
+- `prochainPas` porté en entier dans le CRM ; le calcul du site reste en repli pour un état gardé d'avant.
+
+Tests : CRM 1 446 → 1 453 (`npm test` : 1 453 verts). Nouveau `src/lib/espace/avenant-b7.test.ts` (7 essais, état des
+deux côtés, réseau coupé) : règles pures (avenant, devis en vigueur, devis à signer, onglets, pastille) ; avenant émis →
+proposé (devis à signer, prochaine étape, onglet Devis, paiement sur l'origine), étape SIGNE, lead, prochaine action
+« fixer la date » gardée, main relue ; signé → deux accords, aucun CHANGEMENT_ETAPE, main MOI, rejoué sans effet ;
+retrait ciblé (dossier signé, avenant à signer) puis sans devis nommé (retour en Devis envoyé) ; chantier commencé
+(client refusé, Lucas sans recul) ; action posée à la main gardée avec la tâche `avenant-signe`, deux avenants (l'autre
+non retenu puis rendu) ; prochaine étape d'avant à l'identique. `etatDesDeuxCotes` rend aussi `devisASigner`. Adapté en
+gardant son intention : `coherence-b13` écart 7 (espace ouvert : proposé, rien à signaler ; espace fermé : l'écart et
+sa correction par mail). Site 284 → 288 (`src/lib/espace/devis.test.ts`, 4 essais). `tsc`, `eslint` (fichiers touchés
+du CRM ; `npx eslint .` du site), `npm run build` des deux : propres. Empreinte MCP inchangée (`040d6c7aa53c`, 53
+outils), aucune description changée : rien à reconnecter.
+
+Reste : B8, B12 (agents morts). Déployer le CRM AVANT le site (le site sans le CRM garde le calcul d'avant). Écran du
+site non vérifié dans un navigateur (logique couverte par les essais purs).

@@ -25,6 +25,8 @@ export type EtatDesDeuxCotes = {
   statutLead: string | null;
   /** L'étape de l'espace du client (null : pas d'espace), la même lecture que le site. */
   etapeEspace: string | null;
+  /** Mission 18 (B7) : les numéros des devis qu'il peut signer maintenant dans son espace (après la signature : les avenants). */
+  devisASigner: string[];
   relances: {
     /** Ce qui est proposable maintenant : « DEVIS <numéro> n°<rang> », « PHOTOS », « AVIS ». */
     proposables: string[];
@@ -48,7 +50,8 @@ export async function etatDesDeuxCotes(dossierId: string, options: { maintenant?
   const dossier = await prisma.dossier.findUniqueOrThrow({ where: { id: dossierId }, include: { lead: { select: { statut: true } } } });
   const calcul = await calculerMain(dossierId);
   const espace = await prisma.espaceClient.findFirst({ where: { dossierId } });
-  const etapeDeLEspace = espace ? etapeEspace((await chargerProjet(espace)).faits) : null;
+  const projet = espace ? await chargerProjet(espace) : null;
+  const etapeDeLEspace = projet ? etapeEspace(projet.faits) : null;
 
   const proposables = await relancesProposables(maintenant, { dossierId, smsPhotos: false, smsDevis: false, smsAvis: false, smsReactivations: false });
   const { devis } = await listerRelances(maintenant, { dossierId, sms: false });
@@ -69,6 +72,7 @@ export async function etatDesDeuxCotes(dossierId: string, options: { maintenant?
     actionManuelle: estActionManuelleEnPlace(dossier) ? dossier.prochaineActionManuelle : null,
     statutLead: dossier.lead?.statut ?? null,
     etapeEspace: etapeDeLEspace,
+    devisASigner: projet ? projet.lecture.aSigner.map((d) => d.numero ?? "?") : [],
     relances: {
       proposables: [
         ...proposables.devis.map((d) => `DEVIS ${d.numero} n°${d.rang}`),

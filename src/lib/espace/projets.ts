@@ -45,10 +45,12 @@ export const LIBELLES_PASTILLE: Record<PastilleProjet, string> = {
 };
 
 /** La pastille et la prochaine action d'un projet, dites au client (une phrase courte, jamais de jargon). */
-export function pastilleDuProjet(entree: { etape: EtapeEspace; etapeDossier: string; dateChantier: Date | null; soldeDu: boolean; enCoursCreation: boolean }): { pastille: PastilleProjet; prochaine: string | null } {
+export function pastilleDuProjet(entree: { etape: EtapeEspace; etapeDossier: string; dateChantier: Date | null; soldeDu: boolean; enCoursCreation: boolean; avenantASigner?: boolean }): { pastille: PastilleProjet; prochaine: string | null } {
   const fige = figeDuProjet(entree.etapeDossier);
   if (fige === "TERMINE") return { pastille: "TERMINE", prochaine: null };
   if (fige === "NON_REALISE") return { pastille: "NON_REALISE", prochaine: null };
+  // Mission 18 (B7) : un avenant (ou un nouveau devis) à signer passe devant le reste.
+  if (entree.avenantASigner) return { pastille: "A_VOUS", prochaine: "Un nouveau devis à signer" };
   const date = entree.dateChantier ? entree.dateChantier.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" }) : null;
   switch (entree.etape) {
     case "PHOTOS":

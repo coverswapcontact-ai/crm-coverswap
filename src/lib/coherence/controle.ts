@@ -299,14 +299,16 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
         }
       }
     }
-    // Écart 7 : un devis émis après la signature (avenant, nouveau devis) que le client ne peut pas signer — son espace ne
-    // montre que le devis signé (le site ne le propose pas encore, B7) — et qui ne lui a pas été envoyé par mail. Un devis
-    // pas encore envoyé (B1) a déjà sa tâche « Envoyer le devis » : il n'est pas repris ici.
+    // Écart 7 : un devis émis après la signature (avenant, nouveau devis) que le client ne peut pas signer : visible, mais
+    // son espace n'est pas ouvert (ouvert, l'espace le propose et le fait signer depuis B7), et pas envoyé par mail. Un
+    // devis pas encore envoyé (B1) a déjà sa tâche « Envoyer le devis » ; un devis masqué l'a été exprès (B6) : ni l'un ni
+    // l'autre n'est repris ici.
     if (!archive && ETAPES_AVENANT.includes(d.etape as EtapeDossier)) {
       const signe = devisDuDossier.filter((x) => x.statut === "ACCEPTE").at(-1);
       const enAttente = signe ? devisDuDossier.filter((x) => x.statut === "GENERE" && x.origine !== "REPRISE" && x.createdAt > signe.createdAt && !traces.enCoursParMail.has(x.id)) : [];
       const exclus = enAttente.length ? await devisAEnvoyerIds() : new Set<string>();
-      const avenants = enAttente.filter((x) => !exclus.has(x.id));
+      const espaceOuvert = enAttente.some((x) => x.visibleEspace) ? (await peutNotifier("DEVIS_DISPONIBLE", d.id)).espaceOuvert : true;
+      const avenants = enAttente.filter((x) => !exclus.has(x.id) && x.visibleEspace && !espaceOuvert);
       if (avenants.length > 0) {
         const dernier = avenants.at(-1)!;
         const { brouillonEnvoiDocument, schemaEnvoiDocument } = await import("@/lib/mail/service");
@@ -314,7 +316,7 @@ export async function controlerCoherence(options: OptionsControle = {}): Promise
         signaler(
           "AVENANT_NON_PROPOSE",
           "HAUTE",
-          `${avenants.length > 1 ? `Les devis ${avenants.map((x) => x.numero).join(", ")}, émis` : `Le devis ${dernier.numero}, émis`} après la signature (avenant ou nouveau devis), ${avenants.length > 1 ? "n'ont pas été proposés" : "n'a pas été proposé"} au client : son espace ne montre que le devis signé, il ne peut pas le signer en ligne, et aucun mail ne le lui a envoyé.${brouillon.success ? "" : " Aucune adresse e-mail valide : le lui faire signer autrement."}`,
+          `${avenants.length > 1 ? `Les devis ${avenants.map((x) => x.numero).join(", ")}, émis` : `Le devis ${dernier.numero}, émis`} après la signature (avenant ou nouveau devis), ${avenants.length > 1 ? "n'ont pas été proposés" : "n'a pas été proposé"} au client : son espace n'est pas ouvert, il ne peut pas le signer en ligne, et aucun mail ne le lui a envoyé.${brouillon.success ? "" : " Aucune adresse e-mail valide : le lui faire signer autrement."}`,
           brouillon.success ? `Lui envoyer le devis ${dernier.numero} par mail (texte type, à ${brouillon.data.a})` : null
         );
       }
@@ -639,8 +641,11 @@ async function enregistrerDevisGmailOublie(dossierId: string, pieceId: string): 
 async function envoyerAvenant(dossierId: string): Promise<string> {
   const signe = await prisma.document.findFirst({ where: { dossierId, type: "DEVIS", numero: { not: null }, statut: "ACCEPTE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
   const aEnvoyer = new Set((await devisAEnvoyer(prisma, [dossierId])).map((d) => d.documentId));
-  const avenants = signe ? await prisma.document.findMany({ where: { dossierId, type: "DEVIS", numero: { not: null }, statut: "GENERE", origine: { not: "REPRISE" }, createdAt: { gt: signe.createdAt } }, orderBy: { createdAt: "desc" }, select: { id: true, numero: true } }) : [];
-  const avenant = avenants.find((d) => !aEnvoyer.has(d.id));
+  const avenants = signe ? await prisma.document.findMany({ where: { dossierId, type: "DEVIS", numero: { not: null }, statut: "GENERE", origine: { not: "REPRISE" }, createdAt: { gt: signe.createdAt } }, orderBy: { createdAt: "desc" }, select: { id: true, numero: true, visibleEspace: true } }) : [];
+  // Mission 18 (B7) : un avenant visible dans un espace ouvert y est proposé (il le signe là) ; masqué, il l'a été exprès.
+  const { peutNotifier } = await import("@/lib/mail/notifications");
+  const espaceOuvert = avenants.some((d) => d.visibleEspace) ? (await peutNotifier("DEVIS_DISPONIBLE", dossierId)).espaceOuvert : true;
+  const avenant = avenants.find((d) => !aEnvoyer.has(d.id) && d.visibleEspace && !espaceOuvert);
   if (!avenant) throw new ErreurMetier("Plus de devis émis après la signature à proposer sur ce dossier.", 409);
   const { brouillonEnvoiDocument, envoyerDocumentParMail, schemaEnvoiDocument } = await import("@/lib/mail/service");
   const entree = schemaEnvoiDocument.safeParse(await brouillonEnvoiDocument(dossierId, avenant.id));

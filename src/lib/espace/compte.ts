@@ -118,7 +118,7 @@ async function carteDuProjet(projet: EspaceClient): Promise<ProjetCarte> {
   const charge = await chargerProjet(projet);
   const etape = etapeEspace(charge.faits);
   const enCoursCreation = (await prisma.preparationSimulation.count({ where: { dossierId: projet.dossierId, origine: "CLIENT", statut: "EN_COURS", createdAt: { gte: new Date(Date.now() - 30 * 60_000) } } })) > 0;
-  const { pastille, prochaine } = pastilleDuProjet({ etape, etapeDossier: charge.dossier.etape, dateChantier: charge.dossier.dateChantier, soldeDu: Boolean(charge.lecture.paiement && !charge.lecture.paiement.regle), enCoursCreation });
+  const { pastille, prochaine } = pastilleDuProjet({ etape, etapeDossier: charge.dossier.etape, dateChantier: charge.dossier.dateChantier, soldeDu: Boolean(charge.lecture.paiement && !charge.lecture.paiement.regle), enCoursCreation, avenantASigner: charge.faits.avenantASigner });
   const familles = charge.familles.length ? charge.familles : charge.suggerees;
   const dossier = await prisma.dossier.findUnique({ where: { id: projet.dossierId }, select: { ouvertLe: true, createdAt: true } });
   return {

@@ -78,12 +78,36 @@ export function lectureDesDevis(options: { avecNonRetenus?: boolean } = {}) {
  * Le devis que voit le client : le devis accepté s'il y en a un, sinon le dernier émis encore en vigueur.
  * Mission 14 : un devis masqué dans l'espace n'est « le devis » que s'il est accepté (même règle que « proposé »).
  * L'ordre reste celui de la création (comme `devisProposes`) : le dernier devis fait ou déposé est « le devis ».
+ * Mission 18 (B7) : avec un avenant signé (deux devis acceptés), « le devis » reste le devis signé d'origine — le plus
+ * ancien accepté : l'acompte, le paiement et la référence du virement portent sur lui ; l'avenant est facturé avec le
+ * solde (décision 8).
  */
 export function devisEnVigueur<T extends Pick<DevisLu, "statut" | "createdAt" | "numero" | "visibleEspace">>(devis: T[]): T | null {
   const vivants = devis
     .filter((d) => d.numero && (STATUTS_DEVIS_EN_VIGUEUR as readonly string[]).includes(d.statut) && (d.visibleEspace !== false || d.statut === "ACCEPTE"))
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  return vivants.find((d) => d.statut === "ACCEPTE") ?? vivants[0] ?? null;
+  return vivants.filter((d) => d.statut === "ACCEPTE").at(-1) ?? vivants[0] ?? null;
+}
+
+/**
+ * Mission 18 (B7, écart 7) : un avenant (ou un nouveau devis) est un devis émis APRÈS le devis signé d'origine — calculé,
+ * sans colonne : un autre devis du dossier, accepté, créé avant lui. Son accord ne touche pas à l'accord d'origine, ni à
+ * l'étape ; le retirer ne fait pas reculer le dossier.
+ */
+export function estAvenant(devis: Pick<DevisLu, "id" | "createdAt">, autres: readonly Pick<DevisLu, "id" | "statut" | "createdAt" | "numero">[]): boolean {
+  return autres.some((d) => d.id !== devis.id && d.numero && d.statut === "ACCEPTE" && d.createdAt.getTime() < devis.createdAt.getTime());
+}
+
+/**
+ * Mission 18 (B7) : les devis que le client peut signer MAINTENANT dans son espace, du plus ancien au plus récent :
+ * visibles, « Généré » ou « Envoyé », sans accord en cours. Avant la signature, ce sont les devis proposés ; après, les
+ * avenants et nouveaux devis émis depuis (le devis signé n'y est jamais). Le site les affiche tels quels.
+ */
+export function devisASigner<T extends Pick<DevisLu, "id" | "statut" | "createdAt" | "numero" | "visibleEspace">>(devis: T[], accords: readonly Pick<AccordLu, "documentId" | "retireLe">[]): T[] {
+  const accordes = new Set(accords.filter((a) => !a.retireLe).map((a) => a.documentId));
+  // Signé : seulement ce qui est émis APRÈS le devis signé d'origine (une ancienne variante restée « Généré » n'est pas un avenant).
+  const origine = devisProposes(devis).find((d) => d.statut === "ACCEPTE");
+  return devisProposes(devis).filter((d) => (d.statut === "GENERE" || d.statut === "ENVOYE") && d.visibleEspace !== false && !accordes.has(d.id) && (!origine || estAvenant(d, [origine])));
 }
 
 /**
@@ -180,6 +204,8 @@ export type LectureDevis = {
   devis: DevisLu | null;
   /** Mission 11 : tous les devis proposés (en vigueur), du plus ancien au plus récent. */
   proposes: DevisLu[];
+  /** Mission 18 (B7) : ceux qu'il peut signer maintenant (`devisASigner`) ; après la signature, les avenants. */
+  aSigner: DevisLu[];
   montants: ReturnType<typeof montantsDocument> | null;
   accord: AccordEffectif | null;
   paiement: PaiementEspace | null;
@@ -190,11 +216,12 @@ export type LectureDevis = {
 export function lireDevisEtPaiements(entree: { devis: DevisLu[]; accords: AccordLu[]; encaissements: EncaissementLu[]; clientNom: string; signeLe: Date | null }): LectureDevis {
   const devis = devisEnVigueur(entree.devis);
   const proposes = devisProposes(entree.devis);
-  if (!devis) return { devis: null, proposes, montants: null, accord: null, paiement: null, acompteRecu: false };
+  const aSigner = devisASigner(entree.devis, entree.accords);
+  if (!devis) return { devis: null, proposes, aSigner, montants: null, accord: null, paiement: null, acompteRecu: false };
   const montants = montantsDocument({ lignes: lireLignes(devis.lignes), totalHt: devis.totalHt, acomptePct: devis.acomptePct });
   const accord = accordEffectif(devis, entree.accords, { nom: entree.clientNom, signeLe: entree.signeLe ?? devis.dateEmission ?? devis.createdAt });
   const paiement = paiementEspace(montants, devis.acomptePct, entree.encaissements);
-  return { devis, proposes, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
+  return { devis, proposes, aSigner, montants, accord, paiement, acompteRecu: Boolean(accord && (!paiement.acompte || paiement.acompte.statut === "PAYE")) };
 }
 
 /** Date du passage en « Signé » lue dans les changements d'étape (date réelle si elle a été saisie). */
@@ -248,6 +275,8 @@ export function composerFaits(entree: {
     choix: entree.choix,
     devis: Boolean(entree.lecture.devis),
     accord: Boolean(entree.lecture.accord),
+    // Mission 18 (B7) : signé, et un avenant (ou un nouveau devis) l'attend dans son espace.
+    avenantASigner: Boolean(entree.lecture.accord) && entree.lecture.aSigner.length > 0,
     acompteRecu: entree.lecture.acompteRecu,
     solde: Boolean(entree.lecture.paiement?.regle),
     etapeDossier: entree.etapeDossier,

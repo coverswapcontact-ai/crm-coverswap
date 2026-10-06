@@ -89,6 +89,10 @@ before(async () => {
   ids.depense = (await prisma.depense.create({ data: { payeeLe: cetteAnnee, montant: 42.5, fournisseur: "Leroy Merlin", categorie: "FOURNITURES" } })).id;
   ids.depenseRetiree = (await prisma.depense.create({ data: { payeeLe: cetteAnnee, montant: 12, fournisseur: "Erreur de saisie", categorie: "AUTRE", archiveLe: new Date(), archiveMotif: "Doublon" } })).id;
   ids.publication = (await prisma.publicationSite.create({ data: { type: "REALISATION", titre: "Cuisine chêne à Lattes", ville: "Lattes", dossierId: ids.dossierBloch } })).id;
+  // Mission 22 (A1) : pour le journal — un paiement reçu, un événement du client, une tâche de fond en échec définitif.
+  ids.encaissement = (await prisma.encaissement.create({ data: { dossierId: ids.dossierBloch, clientId: ids.clientBloch, payeur: "Hélène Bloch", montant: 300, moyen: "CHEQUE", recuLe: new Date(maintenant - 5 * 3_600_000) } })).id;
+  await prisma.dossierEvenement.create({ data: { dossierId: ids.dossierBloch, type: "ESPACE_PHOTOS", direction: "ENTRANT", contenu: "Le client a déposé 2 photos", createdAt: new Date(maintenant - 4 * 3_600_000) } });
+  await prisma.tache.create({ data: { type: "journal-essai", cle: "journal-essai-1", statut: "ECHEC_DEFINITIF", derniereErreur: "service injoignable", demandeePar: "SYSTEME:essai", termineLe: new Date(maintenant - 3 * 3_600_000) } });
 
   // Un espace client ouvert (Alice).
   const { avecActeur } = await import("@/lib/journal/contexte");
@@ -309,6 +313,57 @@ describe("« etat_crm » : tout ce qui est ouvert en un appel, ou une partie", (
     assert.match(consignes.texte, /Texte par défaut \(« Revenir au défaut »\)/);
     const coherence = await executer(etat.outilEtatCrm, { partie: "COHERENCE" });
     assert.match(coherence.texte, /Cohérence|incohérence/);
+  });
+});
+
+describe("« lister » JOURNAL et « etat_crm » : depuis ta dernière visite (mission 22, A1)", () => {
+  test("JOURNAL (vue DEPUIS_VISITE par défaut) : les mêmes lignes que journal() sur 48 h, en phrases, avec les repères et les gestes des propositions", async () => {
+    const { journal } = await import("@/lib/chronologie/journal");
+    const r = await listerAvec({ liste: "JOURNAL" });
+    const d = r.donnees as { vue: string; vuLe: string | null; total: number; compteurs: Record<string, number>; entrees: { id: string; titre: string }[] };
+    const service = await journal({ depuis: new Date(Date.now() - 48 * 3_600_000), parPage: 20 });
+    assert.deepEqual([d.vue, d.vuLe, d.total, d.compteurs], ["DEPUIS_VISITE", null, service.total, service.compteurs]);
+    assert.deepEqual(idsDe(d.entrees), idsDe(service.entrees));
+    assert.match(r.texte, /^Depuis ta dernière visite \(48 h : aucun « Tout vu » encore\) : \d+ faits? \(clients \d+, argent \d+, système \d+\)\./);
+    assert.ok(r.texte.includes(`Hélène Bloch : À valider : Relance du devis Bloch [dossier:${ids.dossierBloch}] [proposition:${ids.proposition}] → « valider_proposition » ou « ignorer_proposition »`), r.texte);
+    assert.match(r.texte, /Hélène Bloch : Paiement reçu : 300 € par chèque/);
+    assert.match(r.texte, /Hélène Bloch : Mail reçu de Hélène Bloch — Question sur le devis[^\n]*\[mail:/);
+    assert.match(r.texte, /Système : Tâche de fond en échec définitif : journal-essai — service injoignable/);
+    assert.match(r.texte, /Photos déposées par le client/);
+    for (const e of d.entrees) assert.ok(!/^[A-Z_]+$/.test(e.titre), `ligne brute : ${e.titre}`);
+    assert.ok(r.liens?.some((l) => l.href.endsWith("/journal")));
+  });
+
+  test("JOURNAL vue TOUT avec filtres.filtre ARGENT et du/au : seulement l'argent, sur la période ; un filtre imbriqué, donc l'empreinte ne bouge pas (53 outils, 6665a6b457fe avant comme après A1)", async () => {
+    const { jourParis } = await import("@/lib/dossiers/dates");
+    const au = jourParis(new Date());
+    const du = jourParis(new Date(Date.now() - 3 * 86_400_000));
+    const r = await listerAvec({ liste: "JOURNAL", vue: "TOUT", filtres: { filtre: "ARGENT", du, au } });
+    const d = r.donnees as { vue: string; total: number; entrees: { filtre: string; id: string }[] };
+    assert.equal(d.vue, "TOUT");
+    assert.ok(d.total >= 1);
+    assert.ok(d.entrees.every((e) => e.filtre === "ARGENT"));
+    assert.ok(d.entrees.some((e) => e.id === `encaissement:${ids.encaissement}`));
+    assert.match(r.texte, /^Journal du .* au .* : \d+ faits? \(clients \d+, argent \d+, système \d+\), argent seulement : \d+ lignes?\./);
+    const { registreOutils } = await import("@/lib/assistant/couverture");
+    const registre = registreOutils();
+    assert.deepEqual([registre.nombre, registre.empreinte, registre.outils.find((o) => o.nom === "lister")?.parametres], [53, "6665a6b457fe", ["filtres", "liste", "page", "par_page", "recherche", "vue"]]);
+  });
+
+  test("« etat_crm » sans partie dit « Depuis ta dernière visite : N faits (clients K, argent M, système P) » et rend donnees.depuisVisite ; après « Tout vu », le compte repart de zéro", async () => {
+    const { depuisDerniereVisite, marquerJournalVu } = await import("@/lib/chronologie/journal");
+    const r = await executer(etat.outilEtatCrm, {});
+    const attendu = await depuisDerniereVisite(new Date());
+    assert.ok(r.texte.includes(`Depuis ta dernière visite : ${attendu.total} fait${attendu.total > 1 ? "s" : ""} (clients ${attendu.compteurs.CLIENTS}, argent ${attendu.compteurs.ARGENT}, système ${attendu.compteurs.SYSTEME}) — « lister » JOURNAL pour les lire.`), r.texte);
+    const d = r.donnees as { depuisVisite: { vuLe: string | null; total: number; compteurs: Record<string, number> } };
+    assert.deepEqual([d.depuisVisite.vuLe, d.depuisVisite.total, d.depuisVisite.compteurs], [null, attendu.total, attendu.compteurs]);
+    assert.ok(attendu.total >= 4, "le mail, le paiement, la proposition, la tâche en échec…");
+
+    await marquerJournalVu(new Date(), "essai");
+    const apres = await listerAvec({ liste: "JOURNAL" });
+    assert.match(apres.texte, /^Depuis ta dernière visite \(« Tout vu » (à l'instant|dans \d+ min)\) : 0 fait \(clients 0, argent 0, système 0\)\.\nRien de nouveau\./);
+    const e2 = await executer(etat.outilEtatCrm, {});
+    assert.match(e2.texte, /Depuis ta dernière visite \(« Tout vu » [^)]*\) : 0 fait \(clients 0, argent 0, système 0\)/);
   });
 });
 

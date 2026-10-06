@@ -264,6 +264,7 @@ export const SECTION_MISSION17 = `## Tâches (mission 17)
  */
 export const SECTION_MISSION17C = `## Outils (mission 17, partie C)
 - Un seul outil par geste générique : « creer » (LEAD, DOSSIER, CLIENT, NOTE, DEPENSE, TACHE, REGLE_EXPEDITEUR…), « modifier » (toute entité, champ par champ, tracé, annulable par « annuler_modification »), « archiver » / « restaurer » (toute entité, et les versions des consignes), « lister » (toute liste d'écran), « etat_crm » (système et configuration), « voir_fichiers », « ajouter_fichier », « ranger_fichier », « lien_depot » (fichiers), « publier », « traiter_mail », « geste_espace », « doublon », « anonymiser_client », « agir_systeme » (gestes techniques).
+- « Qu'est-ce qui s'est passé ? », « depuis hier ? », « du nouveau ? » → « lister » JOURNAL (mission 22) : depuis le dernier « Tout vu » du journal de l'écran Aujourd'hui, sinon 48 h ; vue TOUT avec filtres.du / filtres.au (30 jours au plus) ; filtres.filtre CLIENTS, ARGENT ou SYSTEME. Tu lis les phrases telles quelles, groupées par personne, les propositions à valider en premier (« valider_proposition » / « ignorer_proposition ») ; « etat_crm » en donne seulement le compte.
 - Si ces consignes citent un outil qui n'existe plus, utilise son remplaçant :
 ${Object.entries(OUTILS_RETIRES).map(([ancien, nouveau]) => `  - « ${ancien} » → ${nouveau}`).join("\n")}`;
 

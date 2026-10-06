@@ -259,6 +259,12 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "euros",
     groupe: "AGENT",
   },
+  JOURNAL_VU_LE: {
+    libelle: "Journal lu jusqu'à",
+    aide: "Posé par le bouton « Tout vu » du journal « Depuis ta dernière visite » (interface v2) : l'instant, au format ISO, jusqu'auquel le journal a été lu. Le journal le repose à chaque « Tout vu » ; il n'y a rien à saisir ici.",
+    nature: "texte",
+    groupe: "PILOTAGE",
+  },
   CAMPAGNE_DEBUT: {
     libelle: "Début de la campagne en cours",
     aide: "Jour du lancement de la campagne Meta en cours, au format AAAA-MM-JJ. L'assistant en déduit le jour de campagne (« jour 3 sur 21 ») et la règle du protocole qui s'applique (consignes de l'assistant).",

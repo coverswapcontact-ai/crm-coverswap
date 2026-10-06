@@ -168,6 +168,57 @@ couverts). Les tests posent `CRM_ESSAI_LOCAL=""` dans `src/test/base-essai.ts` :
 un faux serveur local ne subissent pas la garde. Les données de l'essai : `docs/COMMENT-TESTER-V2.md` (lot A6) ; le
 fichier `essai-v2.db` est couvert par `*.db` dans `.gitignore`.
 
+## Journal « Depuis ta dernière visite » (lot A1)
+
+Un fil unique, global, en lecture seule : `src/lib/chronologie/journal.ts › journal({ depuis, jusqua?, filtres?, page?,
+parPage? })`, bâti à côté de `chronologie.ts` (le fil d'un contact, inchangé) avec les mêmes libellés
+(`LIBELLES_TYPE_EVENEMENT`, complété des 21 types qui sortaient bruts) et les mêmes liens. Chaque source est lue par date
+(500 lignes au plus chacune), le tout trié en mémoire ; `depuis` est borné à 30 jours (`@@index([createdAt])` ajouté sur
+`DossierEvenement`). Trois filtres : **Clients** (ce que les personnes ont fait ou reçu), **Argent** (devis, factures,
+paiements), **Système** (Claude, tâches de fond, alertes).
+
+| Source (table) | Ligne rendue | Filtre |
+|---|---|---|
+| `Message` entrant, canal mail, classe ≠ BRUIT | « Mail reçu de X — objet », extrait, attendu ; lien `/mail?mail=` | Clients |
+| `MessageEspace` auteur CLIENT | « Message du client depuis son espace », « Commentaire du client sur une simulation », « Autre proposition demandée » ; l'événement jumeau du dossier (`evenementId`) est exclu | Clients |
+| `Sms` entrant ; sortant d'origine RELANCE, ACCUSE_AUTO, LIEN_ESPACE | « SMS reçu », « Relance envoyée par SMS », « Accusé de réception envoyé par SMS », « Lien de l'espace envoyé par SMS » ; un échec passe en Système | Clients |
+| `DossierEvenement` (sauf MAIL_RECU, WHATSAPP_*, NOTE_APPEL, APPEL, SMS_RECU, SMS_ENVOYE, ENCAISSEMENT_ENREGISTRE, DOSSIER_MODIFIE, ESPACE_DEVIS_CONSULTE : chacun a sa propre source) | le libellé du type ; « Passé en Simulation » pour un changement d'étape ; MAIL_ENVOYE seulement comme « Relance du devis envoyée par mail » (motif RELANCE_DEVIS), SMS_COPIE seulement comme « Relance du devis envoyée par SMS » | Clients ; documents, avoirs, paiements, accord du client → Argent ; cohérence corrigée → Système |
+| `Document` DEVIS `consulteLe` | « Devis 2026-041 ouvert par le client », « … relu 3 fois » (le compteur vit sur le devis) | Clients |
+| `NoteAppel` | « Appel — Intéressé », la note ; lien `/leads?lead=` | Clients |
+| `Dossier.mainLe` | « La main est passée au client » / « La main est revenue à toi », le motif | Clients |
+| `Encaissement` | « Paiement reçu : 450 € par virement », payeur et référence ; « (rejeté depuis) » | Argent |
+| `EnvoiMail` ENVOYE de nature NOTIFICATION ; ECHEC (toute nature sauf ESSAI) | « Notification envoyée par mail : « objet » » ; « Mail non parti : « objet » » | Clients ; échec → Système |
+| `Proposition` EN_ATTENTE (créées), REJETEE / ANNULEE / ECHEC (décidées), EXECUTEE (exécutées) | « À valider : … » avec les deux gestes (`/api/validation/<id>/valider`, `…/rejeter`), « Proposition ignorée : … », « … devenue sans objet : … », « … en échec : … », « … exécutée : … » | Clients (dossier ou client connu) ; échec ou sans personne → Système |
+| `ModificationAssistant`, `ModificationDossier` `par` ASSISTANT: | « Claude a modifié <nom> », les champs « libellé : avant → après » ; « Modification de Claude annulée … » | Système |
+| `Tache` ECHEC_DEFINITIF ; `Planification` ECHEC ; `Planification` sauvegarde SUCCES ; `AlerteEnvoi` non aboutie | « Tâche de fond en échec définitif : … », « Travail périodique en échec : … », « Sauvegarde du jour faite », « Alerte non remise (origine) » ; lien Réglages › Système | Système |
+
+**Groupé** (une ligne, `occurrences`) : les événements de même type, même dossier et même document (« Photos déposées
+par le client · 3 fois »), les échecs définitifs d'un même type de tâche, les alertes non remises d'une même origine,
+les mails non partis d'un même modèle. **Exclu** : le bruit des mails, les SMS manuels du gérant (tracés dans la fiche),
+les visites répétées de l'espace (seule la première est un événement), les travaux périodiques réussis (hors la
+sauvegarde), les alertes remises, les archivés, et tout ce qui précède `depuis` − 30 jours.
+
+- **Paramètre `JOURNAL_VU_LE`** (`lib/parametres/definitions.ts`, nature texte, groupe Pilotage ; aucun mécanisme de
+  masquage dans Réglages : il y reste visible, avec une aide qui dit qu'il n'y a rien à saisir) : l'instant ISO du
+  dernier « Tout vu », écrit par `marquerJournalVu(maintenant)` → `enregistrerParametre` (une ligne par « Tout vu »,
+  l'historique reste). `depuisDeLaVisite(maintenant)` rend `{ vuLe, depuis }` : `vuLe` sinon 48 h, borné à 30 jours ;
+  `depuisDerniereVisite(maintenant)` ajoute le total et les compteurs (Aujourd'hui, `etat_crm`).
+- **Routes** (non publiques) : `GET /api/journal?depuis&jusqua&filtres=CLIENTS,ARGENT,SYSTEME&page&par_page`
+  (défaut `depuis` = `JOURNAL_VU_LE`, sinon 48 h ; rend aussi `vuLe`) ; `POST /api/journal/vu`.
+- **Outil** : `lister` JOURNAL (vues DEPUIS_VISITE par défaut, TOUT avec `filtres.du` / `filtres.au` ; `filtres.filtre`
+  CLIENTS, ARGENT ou SYSTEME ; mêmes phrases, repères `[dossier:…]`, `[proposition:…]` et les deux gestes), et la ligne
+  « Depuis ta dernière visite : N faits (clients K, argent M, système P) » d'`etat_crm` (`donnees.depuisVisite`).
+- **Écran** `components/v2/journal/Journal.tsx` + `GroupeParPersonne.tsx`, page `/journal` (v2 seulement ; en v1,
+  redirection vers `/taches` ; `?jours=7` lit une période fixe sans « Tout vu »). Groupes par personne (le client
+  réunit ses leads et ses dossiers ; le système en dernier), 5 groupes puis « Voir les N autres », filtres en boutons
+  de 44 px (un seul actif ou tous), chaque ligne = phrase + date relative (`lib/v2/dates.ts › dateRelative`, exacte au
+  survol) + lien ; « Tout vu » = l'unique bouton principal ; Valider / Ignorer sur une proposition partent 5 s plus
+  tard avec « Annuler » (Ignorer = rejet « Inutile », visible ensuite dans À valider › Historique). Le lot A2 importe
+  `Journal` en `compact` dans Aujourd'hui.
+- **Tests** : `lib/chronologie/journal.test.ts` (base d'essai, 13 cas), `app/api/journal/route.test.ts`,
+  `lib/v2/dates.test.ts`, `lib/v2/journal.test.ts`, `components/v2/journal/journal-ecran.test.ts` (sources),
+  `lib/mcp/mcp-lister-etat.test.ts` (JOURNAL, `etat_crm`).
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
@@ -175,6 +226,7 @@ fichier `essai-v2.db` est couvert par `*.db` dans `.gitignore`.
 | Écran v1 | Écran v2 | Adresse | État |
 |---|---|---|---|
 | Coque (`components/pilotage/Navigation.tsx` : 10 onglets, 3 compteurs) | `components/v2/CoqueV2.tsx` + `NavigationV2.tsx` : Aujourd'hui, Dossiers, Personnes, Argent, Plus ; un compteur, recherche globale, bandeau d'essai | toutes | lot A0b, livrée |
+| — (la v1 n'a pas de journal global : `Chronologie.tsx` par contact seulement) | `components/v2/journal/Journal.tsx` + `GroupeParPersonne.tsx` : « Depuis ta dernière visite », groupes par personne, filtres, « Tout vu » | `/journal` (nouvelle ; en v1 → `/taches`), bloc d'Aujourd'hui au lot A2 | lot A1, livrée |
 
 ## Liste de contrôle par écran
 

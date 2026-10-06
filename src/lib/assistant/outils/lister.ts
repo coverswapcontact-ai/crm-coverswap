@@ -22,6 +22,9 @@ import { pageClientsEspaces } from "@/lib/espace/suivi";
 import { ADRESSE_ESPACES, FILTRES_ESPACE, LIBELLES_FILTRE_ESPACE, type ClientEspace } from "@/lib/espace/suivi-types";
 import { chargerTableauFinances } from "@/lib/finances/tableau";
 import { chargerLivre } from "@/lib/finances/livre";
+import { FILTRES_JOURNAL, LIBELLES_FILTRE_JOURNAL, depuisDeLaVisite, journal, phraseCompteurs } from "@/lib/chronologie/journal";
+import { dateDepuisJour, debutDuJourParis } from "@/lib/dossiers/dates";
+import { dateRelative } from "@/lib/v2/dates";
 import { listerVue, VUES_MAIL, type VueMail } from "@/lib/mail/vues";
 import { tarifsDesPrestations } from "@/lib/prestations/tarifs";
 import { SOURCES_LEAD } from "@/lib/prospects/constantes";
@@ -51,7 +54,7 @@ import { outilVoirRelances } from "./relances";
  * messages_espace, voir_relances, depenses et tarifs : leurs cas reprennent leur texte (SMS prêts, lignes lisibles).
  */
 
-export const LISTES = ["LEADS", "DOSSIERS", "CLIENTS", "ESPACES", "MAILS", "MESSAGES_ESPACE", "RELANCES", "PROPOSITIONS", "DEPENSES", "ENCOURS", "CHEQUES", "QUALITE_FINANCES", "LIVRE", "TARIFS", "PUBLICATIONS", "CRENEAUX", "TEINTES", "ENTREPRISES"] as const;
+export const LISTES = ["LEADS", "DOSSIERS", "CLIENTS", "ESPACES", "MAILS", "MESSAGES_ESPACE", "RELANCES", "PROPOSITIONS", "DEPENSES", "ENCOURS", "CHEQUES", "QUALITE_FINANCES", "LIVRE", "TARIFS", "PUBLICATIONS", "CRENEAUX", "TEINTES", "ENTREPRISES", "JOURNAL"] as const;
 export type Liste = (typeof LISTES)[number];
 
 /** Les vues de chaque liste (la première est le défaut). */
@@ -63,6 +66,8 @@ export const VUES_DES_LISTES: Partial<Record<Liste, readonly string[]>> = {
   MAILS: [...VUES_MAIL, "NON_CLASSES"],
   PROPOSITIONS: ["EN_ATTENTE", "ECHEC", "HISTORIQUE"],
   DEPENSES: ["ANNEE", "ARCHIVEES", "SUGGESTIONS"],
+  // Mission 22 (A1) : le journal global, depuis le dernier « Tout vu » (sinon 48 h), ou une période du/au.
+  JOURNAL: ["DEPUIS_VISITE", "TOUT"],
 };
 
 /** Les onglets de l'écran « À valider » (FileValidation.tsx › STATUTS_ONGLET). */
@@ -88,8 +93,9 @@ const schemaFiltres = z
     tout: z.boolean().optional().describe("MESSAGES_ESPACE : tous les messages récents, lus compris."),
     annee: z.number().int().min(2020).max(2100).optional().describe("DEPENSES, ENCOURS, CHEQUES, QUALITE_FINANCES, LIVRE : l'année (celle en cours par défaut)."),
     periode: z.enum(RACCOURCIS_PERIODE).optional().describe("DEPENSES : une période (ex-« depenses ») au lieu de l'année."),
-    du: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    au: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    du: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("DEPENSES (période) ; JOURNAL vue TOUT : premier jour lu (AAAA-MM-JJ, 30 jours au plus avant « au »)."),
+    au: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("DEPENSES (période) ; JOURNAL vue TOUT : dernier jour lu (AAAA-MM-JJ, aujourd'hui par défaut)."),
+    filtre: z.enum(FILTRES_JOURNAL).optional().describe("JOURNAL : ne garder que CLIENTS (ce que les personnes ont fait ou reçu), ARGENT (devis, factures, paiements) ou SYSTEME (Claude, tâches de fond, alertes) ; tout sans filtre."),
     rattachement: z.enum(["toutes", "chantier", "hors_chantier", "non_rattachees"]).optional().describe("DEPENSES (par période)."),
     sous_partie: z.string().max(60).optional().describe("TARIFS : une seule sous-partie (« ilot », « SDB.plan-vasque »)."),
     styles: z.array(z.enum(STYLES_CLIENT)).max(6).optional().describe("TEINTES : goûts du client (bois-clair, bois-fonce, blanc, uni-colore, marbre, beton)."),
@@ -100,9 +106,9 @@ type Filtres = z.output<typeof schemaFiltres>;
 
 const schemaLister = z.object({
   liste: z.enum(LISTES).describe(
-    "LEADS, DOSSIERS, CLIENTS, ESPACES, MAILS, MESSAGES_ESPACE, RELANCES, PROPOSITIONS, DEPENSES, ENCOURS (factures à encaisser), CHEQUES (à créditer), QUALITE_FINANCES (points à corriger), LIVRE (livre des recettes), TARIFS, PUBLICATIONS (site), CRENEAUX (jours libres pour un chantier), TEINTES (catalogue Cover Styl'), ENTREPRISES (annuaire public)."
+    "LEADS, DOSSIERS, CLIENTS, ESPACES, MAILS, MESSAGES_ESPACE, RELANCES, PROPOSITIONS, DEPENSES, ENCOURS (factures à encaisser), CHEQUES (à créditer), QUALITE_FINANCES (points à corriger), LIVRE (livre des recettes), TARIFS, PUBLICATIONS (site), CRENEAUX (jours libres pour un chantier), TEINTES (catalogue Cover Styl'), ENTREPRISES (annuaire public), JOURNAL (ce qui s'est passé : depuis ta dernière visite, ou une période du/au)."
   ),
-  vue: z.string().max(30).optional().describe("LEADS : A_APPELER, A_RAPPELER, SANS_SUITE, ARCHIVES. DOSSIERS : EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE. CLIENTS : ACTIFS, ARCHIVES. ESPACES : TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES. MAILS : A_TRAITER, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES. PROPOSITIONS : EN_ATTENTE, ECHEC, HISTORIQUE. DEPENSES : ANNEE, ARCHIVEES, SUGGESTIONS."),
+  vue: z.string().max(30).optional().describe("LEADS : A_APPELER, A_RAPPELER, SANS_SUITE, ARCHIVES. DOSSIERS : EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE. CLIENTS : ACTIFS, ARCHIVES. ESPACES : TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES. MAILS : A_TRAITER, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES. PROPOSITIONS : EN_ATTENTE, ECHEC, HISTORIQUE. DEPENSES : ANNEE, ARCHIVEES, SUGGESTIONS. JOURNAL : DEPUIS_VISITE (depuis le dernier « Tout vu » du journal, sinon 48 h), TOUT (filtres.du / filtres.au, 30 jours au plus)."),
   filtres: schemaFiltres.optional(),
   recherche: z.string().max(120).optional().describe("La recherche de l'écran (LEADS : nom, téléphone, ville, campagne ; DOSSIERS : client, ville, objet ; CLIENTS ; MAILS dans la vue ; TEINTES ; ENTREPRISES : nom, SIREN, SIRET)."),
   page: z.number().int().min(1).max(500).optional(),
@@ -418,11 +424,46 @@ async function listerLesEntreprises(e: EntreeLister): Promise<ResultatOutil> {
 
 /* ── L'outil ────────────────────────────────────────────────────────── */
 
+/* ── JOURNAL (mission 22, A1) ───────────────────────────────────────── */
+
+/** Les repères que les outils d'écriture attendent, derrière chaque ligne du journal. */
+function reperesJournal(x: { dossierId: string | null; leadId: string | null; clientId: string | null; messageId: string | null; id: string }): string {
+  const reperes = [x.dossierId ? `[dossier:${x.dossierId}]` : x.leadId ? `[lead:${x.leadId}]` : x.clientId ? `[client:${x.clientId}]` : null, x.messageId ? `[mail:${x.messageId}]` : null, x.id.startsWith("proposition:") ? `[${x.id}]` : null].filter(Boolean);
+  return reperes.length ? ` ${reperes.join(" ")}` : "";
+}
+
+/**
+ * Le journal global « Depuis ta dernière visite » (lib/chronologie/journal.ts), les mêmes phrases que l'écran
+ * Aujourd'hui de la v2. Vue DEPUIS_VISITE : depuis le dernier « Tout vu » (paramètre JOURNAL_VU_LE), sinon 48 h ;
+ * vue TOUT : filtres.du / filtres.au (sept jours par défaut), jamais plus de 30 jours. `filtres.filtre` garde un seul
+ * des trois filtres de l'écran. Les filtres restent imbriqués : l'empreinte du catalogue ne bouge pas.
+ */
+async function listerLeJournal(e: EntreeLister, vue: string, contexte: Contexte): Promise<ResultatOutil> {
+  const f = e.filtres ?? {};
+  const maintenant = contexte.maintenant;
+  const visite = await depuisDeLaVisite(maintenant);
+  const jusqua = vue === "TOUT" && f.au ? new Date(Math.min(debutDuJourParis(dateDepuisJour(f.au)).getTime() + 86_400_000 - 1, maintenant.getTime())) : maintenant;
+  const depuis = vue === "TOUT" ? (f.du ? debutDuJourParis(dateDepuisJour(f.du)) : new Date(jusqua.getTime() - 7 * 86_400_000)) : visite.depuis;
+  const r = await journal({ depuis, jusqua, filtres: f.filtre ? [f.filtre] : [], page: e.page, parPage: e.par_page ?? 20 });
+  const entete = vue === "TOUT" ? `Journal du ${format.jourCourt(r.depuis)} au ${format.jourCourt(r.jusqua)}` : `Depuis ta dernière visite (${visite.vuLe ? `« Tout vu » ${dateRelative(visite.vuLe, maintenant)}` : "48 h : aucun « Tout vu » encore"})`;
+  const filtre = f.filtre ? `, ${LIBELLES_FILTRE_JOURNAL[f.filtre].toLowerCase()} seulement : ${pluriel(r.total, "ligne")}` : "";
+  const lignes = r.entrees.map((x) => {
+    const qui = x.clientNom ?? (x.acteur === "Claude" ? "Claude" : "Système");
+    const gestes = x.gestes ? " → « valider_proposition » ou « ignorer_proposition »" : "";
+    return `- ${dateRelative(x.le, maintenant)} · ${qui} : ${x.titre}${x.texte ? ` — ${x.texte}` : ""}${x.occurrences > 1 ? ` (${x.occurrences} fois)` : ""}${reperesJournal(x)}${gestes}`;
+  });
+  return {
+    texte: `${entete} : ${phraseCompteurs(r.compteurs)}${filtre}${textePage(r)}.\n${lignes.join("\n") || "Rien de nouveau."}`,
+    donnees: { vue, depuis: r.depuis, jusqua: r.jusqua, vuLe: visite.vuLe?.toISOString() ?? null, page: r.page, pages: r.pages, total: r.total, compteurs: r.compteurs, entrees: r.entrees },
+    liens: [lien("Journal", "/journal"), lien("À valider", "/validation")],
+  };
+}
+
 export const outilLister = definirOutil({
   nom: "lister",
   titre: "Lister (toutes les listes des écrans)",
   description:
-    "Toute liste d'un écran du CRM, avec ses vues, filtres, recherche et pages, par la même fonction que l'écran ; chaque ligne porte l'identifiant utile aux outils d'écriture. LEADS (vues A_APPELER : jamais appelés, le plus récent en haut ; A_RAPPELER : rappels datés, retards EN RETARD en tête, tentatives, dernier appel ; SANS_SUITE ; ARCHIVES — filtres source, recherche nom/téléphone/ville/campagne). DOSSIERS (EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE avec filtres.etape — qui a la main, prochaine action, état de l'espace client ; recherche client/ville/objet ; masquer_inactifs ; filtres.espace MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES et etape_espace : le filtre « Espaces » de l'écran ; compteurs). CLIENTS (ACTIFS, ARCHIVES ; categorie, source, recherche). ESPACES, par client (TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES ; etape_espace, tri ; faits par projet ; filtres.sans_photo_ni_simulation_depuis_jours : projets sans photo ni simulation, avec téléphone et SMS du lien prêt à copier). MAILS (A_TRAITER dans l'ordre de priorité, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES avec leur texte à classer ; recherche dans la vue). MESSAGES_ESPACE (non lus par défaut ; cible : le fil d'un client ; tout). RELANCES (devis sans réponse : SMS prêt à copier et mail proposé ; relances photos ; demandes d'avis après chantier ; réactivations à 6 mois des contacts d'accord ; dossier_id : celles d'un dossier). PROPOSITIONS (EN_ATTENTE, ECHEC, HISTORIQUE ; type, dossier_id, message_id ; proposition_id pour une seule, avec sensibilité, champs corrigibles et motifs de rejet). DEPENSES (ANNEE, ARCHIVEES, SUGGESTIONS ; ou periode/du/au, categorie, rattachement). ENCOURS, CHEQUES, QUALITE_FINANCES, LIVRE (annee ; lien CSV). TARIFS (sous-parties et presets avec identifiant). PUBLICATIONS (site ; dossier_id : photos proposées avec leur chemin). CRENEAUX (jours libres pour un chantier ; dossier). TEINTES (styles, famille, recherche). ENTREPRISES (annuaire : recherche nom, SIREN, SIRET). Rien n'est écrit.",
+    "Toute liste d'un écran du CRM, avec ses vues, filtres, recherche et pages, par la même fonction que l'écran ; chaque ligne porte l'identifiant utile aux outils d'écriture. LEADS (vues A_APPELER : jamais appelés, le plus récent en haut ; A_RAPPELER : rappels datés, retards EN RETARD en tête, tentatives, dernier appel ; SANS_SUITE ; ARCHIVES — filtres source, recherche nom/téléphone/ville/campagne). DOSSIERS (EN_COURS, A_FAIRE, TOUS, ARCHIVES, PAR_ETAPE avec filtres.etape — qui a la main, prochaine action, état de l'espace client ; recherche client/ville/objet ; masquer_inactifs ; filtres.espace MOI, CLIENT, SIGNAUX, TOUS, DESACTIVES et etape_espace : le filtre « Espaces » de l'écran ; compteurs). CLIENTS (ACTIFS, ARCHIVES ; categorie, source, recherche). ESPACES, par client (TOUS, MOI, CLIENT, SIGNAUX, DESACTIVES ; etape_espace, tri ; faits par projet ; filtres.sans_photo_ni_simulation_depuis_jours : projets sans photo ni simulation, avec téléphone et SMS du lien prêt à copier). MAILS (A_TRAITER dans l'ordre de priorité, CLIENTS, ADMINISTRATIF, RANGES, NON_CLASSES avec leur texte à classer ; recherche dans la vue). MESSAGES_ESPACE (non lus par défaut ; cible : le fil d'un client ; tout). RELANCES (devis sans réponse : SMS prêt à copier et mail proposé ; relances photos ; demandes d'avis après chantier ; réactivations à 6 mois des contacts d'accord ; dossier_id : celles d'un dossier). PROPOSITIONS (EN_ATTENTE, ECHEC, HISTORIQUE ; type, dossier_id, message_id ; proposition_id pour une seule, avec sensibilité, champs corrigibles et motifs de rejet). DEPENSES (ANNEE, ARCHIVEES, SUGGESTIONS ; ou periode/du/au, categorie, rattachement). ENCOURS, CHEQUES, QUALITE_FINANCES, LIVRE (annee ; lien CSV). TARIFS (sous-parties et presets avec identifiant). PUBLICATIONS (site ; dossier_id : photos proposées avec leur chemin). CRENEAUX (jours libres pour un chantier ; dossier). TEINTES (styles, famille, recherche). ENTREPRISES (annuaire : recherche nom, SIREN, SIRET). JOURNAL (mission 22 : « qu'est-ce qui s'est passé ? » — le journal global « Depuis ta dernière visite » de l'écran Aujourd'hui, les mêmes phrases : mails et SMS reçus, messages et gestes du client dans son espace, devis relus, devis et factures, paiements, appels, étape et main, relances et notifications parties, propositions à valider avec leurs gestes, ce que Claude a modifié, tâches de fond en échec, alertes non remises ; vue DEPUIS_VISITE par défaut, TOUT avec filtres.du / filtres.au ; filtres.filtre CLIENTS, ARGENT ou SYSTEME ; page). Rien n'est écrit.",
   niveau: "LECTURE",
   schema: schemaLister,
   executer: async (e, contexte) => {
@@ -472,6 +513,8 @@ export const outilLister = definirOutil({
         return listerLesTeintes(e);
       case "ENTREPRISES":
         return listerLesEntreprises(e);
+      case "JOURNAL":
+        return listerLeJournal(e, vue, contexte);
     }
   },
 });

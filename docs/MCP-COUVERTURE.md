@@ -196,6 +196,14 @@
   d'origine. `etat_crm` SANTE : la mise en route peut compter des écarts « à leur propre tâche ». La description de
   `geste_espace` change et un paramètre s'ajoute : empreinte **`6665a6b457fe`** (53 outils) — reconnecter le
   connecteur.
+- **Mission 22, A1 (06/10/2026)** : le journal global « Depuis ta dernière visite » (`chronologie/journal.ts`, docs/CRM-V2.md
+  § Journal). `lister` gagne la liste **JOURNAL** (vues DEPUIS_VISITE par défaut — depuis le dernier « Tout vu », paramètre
+  `JOURNAL_VU_LE`, sinon 48 h — et TOUT avec `filtres.du` / `filtres.au`, 30 jours au plus) et le filtre imbriqué
+  `filtres.filtre` (CLIENTS, ARGENT, SYSTEME) ; `etat_crm` sans partie dit « Depuis ta dernière visite : N faits (clients K,
+  argent M, système P) » et rend `donnees.depuisVisite`. Les paramètres de premier niveau ne changent pas : empreinte
+  avant **`6665a6b457fe`** → après **`6665a6b457fe`** (53 outils ; la valeur `040d6c7aa53c` citée par l'énoncé du lot
+  est celle d'avant la puce précédente). Les descriptions de `lister` et d'`etat_crm` changent : reconnecter le
+  connecteur. Écran : 2.18 (J1–J4).
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -901,6 +909,15 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
   le panneau du dossier passe à 92 actions (91 couvertes, 1 sans objet), Paramètres › Tarifs compte 5 actions (5
   couvertes). Total inchangé : **427 actions, 391 couvertes, 36 sans objet**, 0 partielle, 0 manquante.
 
+### 2.18 Journal « Depuis ta dernière visite » (`/journal`, mission 22, interface v2)
+
+| # | Action | Route | Nature | Outil MCP | Statut | Test |
+|---|---|---|---|---|---|---|
+| J1 | Lire le journal depuis la dernière visite (groupes par personne, 5 puis « Voir les N autres », filtres Clients · Argent · Système) | GET /api/journal | L | lister (JOURNAL, vue DEPUIS_VISITE, filtres.filtre) | couvert | `mcp-lister-etat.test.ts` › « JOURNAL (vue DEPUIS_VISITE par défaut) : les mêmes lignes que journal()… » |
+| J2 | « Tout le journal » : une période fixe (`?jours=7`, 30 au plus) | GET /api/journal?depuis&jusqua&page | L | lister (JOURNAL, vue TOUT, filtres.du / filtres.au, page) | couvert | `mcp-lister-etat.test.ts` › « JOURNAL vue TOUT avec filtres.filtre ARGENT et du/au… » |
+| J3 | « Tout vu » (pose `JOURNAL_VU_LE`) | POST /api/journal/vu | R | modifier PARAMETRE (JOURNAL_VU_LE, instant ISO) | couvert | `app/api/journal/route.test.ts` › « POST /api/journal/vu pose JOURNAL_VU_LE… » ; `mcp-generiques.test.ts` (PARAMETRE) |
+| J4 | Valider / Ignorer une proposition depuis le journal (5 s, « Annuler ») | POST /api/validation/[id]/valider, …/rejeter (motif INUTILE) | S-client / R | valider_proposition / ignorer_proposition | couvert | `mcp-v2.test.ts` (propositions) ; `components/v2/journal/journal-ecran.test.ts` |
+
 ## 3. Les manques, par domaine
 
 Un manque est une ligne `manquant`, ou ce qui manque à une ligne `partiel`, **à l'audit** (avant la partie C). Pour
@@ -1281,6 +1298,7 @@ outils d'écriture.
 | CRENEAUX | `agenda/creneaux.ts › creneauxLibres` | dossier (date posée, date souhaitée) | T12 |
 | TEINTES | `simulateur/catalogue.ts › catalogue` | styles, famille, recherche | S6 |
 | ENTREPRISES | `clients/annuaire.ts › rechercherEntreprises` | q (nom, SIREN, SIRET) | D15, C7 |
+| JOURNAL | `chronologie/journal.ts › journal`, `depuisDeLaVisite` (mission 22, A1) | vue DEPUIS_VISITE (depuis `JOURNAL_VU_LE`, sinon 48 h), TOUT (`du` / `au`, 30 jours au plus) ; `filtres.filtre` CLIENTS, ARGENT, SYSTEME ; page, par_page ; repères `[dossier:…]`, `[lead:…]`, `[client:…]`, `[mail:…]`, `[proposition:…]` et les gestes des propositions à valider | J1, J2 |
 
 ### 4.7 `etat_crm` : le système et la configuration
 
@@ -1305,6 +1323,7 @@ Schéma : `{ partie, … }`. Lecture seule, jamais de secret.
 | PROMPTS | `simulateur/bibliotheque.ts › listerPrompts`, `lirePrompt`, `texteDeVersion` | S18–S20 |
 | BANC | `simulateur/banc/banc.ts › etatBanc`, `estimerCampagne` | S15 |
 | CONSOMMATION | `simulateur/consommation.ts › consommation` | S1 |
+| (sans partie) | mission 22, A1 : `chronologie/journal.ts › depuisDerniereVisite` — la ligne « Depuis ta dernière visite : N faits (clients K, argent M, système P) » et `donnees.depuisVisite` ; les lignes par `lister` JOURNAL | J1 |
 
 ### 4.8 Fichiers : `ajouter_fichier`, `ranger_fichier`, `voir_fichiers`, `lien_depot`
 

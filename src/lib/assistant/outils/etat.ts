@@ -4,6 +4,7 @@ import { listeTaches } from "@/lib/a-faire/lecture";
 import { compterMailATraiter } from "@/lib/a-faire/ecran";
 import { carnetDeCommandes } from "@/lib/analytique/calculs";
 import { auditerConnexions } from "@/lib/audit/connexions";
+import { depuisDerniereVisite, phraseCompteurs } from "@/lib/chronologie/journal";
 import { controlerCoherence } from "@/lib/coherence/controle";
 import { pluriel } from "@/lib/commun/format";
 import { lireCompteurs } from "@/lib/dossiers/compteurs";
@@ -21,6 +22,7 @@ import { lirePrompt, listerPrompts, texteDeVersion } from "@/lib/simulateur/bibl
 import { consommation } from "@/lib/simulateur/consommation";
 import { etatFournisseur } from "@/lib/sms/fournisseurs";
 import { listerCatalogue } from "@/lib/sms/modeles";
+import { dateRelative } from "@/lib/v2/dates";
 import { etatDesTaches } from "@/lib/taches/lecture";
 import { ADRESSE_SYSTEME } from "@/lib/parametres/sections";
 import { definirOutil, format, lien, type ContexteOutil, type ResultatOutil } from "../definition";
@@ -69,7 +71,7 @@ export async function etatGlobal(contexte: ContexteOutil): Promise<ResultatOutil
   const maintenant = contexte.maintenant;
   const { texteListe } = await import("./taches");
   const depuis = new Date(maintenant.getTime() - 2 * JOUR);
-  const [liste, sante, finances, carnet, propositions, mails, messagesEspace, evenements, leads] = await Promise.all([
+  const [liste, sante, finances, carnet, propositions, mails, messagesEspace, evenements, leads, visite] = await Promise.all([
     listeTaches(maintenant),
     santeSysteme(maintenant),
     chargerTableauFinances(anneeParis(maintenant), maintenant).catch(() => null),
@@ -79,6 +81,8 @@ export async function etatGlobal(contexte: ContexteOutil): Promise<ResultatOutil
     compterMessagesNonLus(),
     prisma.dossierEvenement.findMany({ where: { createdAt: { gte: depuis }, type: { notIn: ["MAIL_RECU"] } }, orderBy: { createdAt: "desc" }, take: 15, select: { dossierId: true, type: true, contenu: true, createdAt: true, dossier: { select: { clientNom: true } } } }),
     prisma.lead.findMany({ where: { createdAt: { gte: depuis } }, orderBy: { createdAt: "desc" }, take: 15, select: { id: true, prenom: true, nom: true, ville: true, source: true, typeProjet: true, createdAt: true } }),
+    // Mission 22 (A1) : le journal global depuis le dernier « Tout vu » (sinon 48 h) — le compte seulement, « lister » JOURNAL pour les lignes.
+    depuisDerniereVisite(maintenant).catch(() => null),
   ]);
   const { texte: texteTaches, aujourdhui } = await texteListe(liste, maintenant, { plusTard: 3, fait: 3 });
   const enAttente = propositions.filter((p) => p.statut === "EN_ATTENTE");
@@ -100,7 +104,7 @@ export async function etatGlobal(contexte: ContexteOutil): Promise<ResultatOutil
   const texte = [
     `État du CRM au ${format.jour(maintenant)} :`,
     `TÂCHES DU JOUR\n${texteTaches}`,
-    `Aussi : ${pluriel(mails, "mail")} à traiter, ${pluriel(enAttente.length, "proposition")} à valider, ${pluriel(messagesEspace, "message d'espace non lu", "messages d'espace non lus")}.`,
+    `Aussi : ${pluriel(mails, "mail")} à traiter, ${pluriel(enAttente.length, "proposition")} à valider, ${pluriel(messagesEspace, "message d'espace non lu", "messages d'espace non lus")}.${visite ? ` Depuis ta dernière visite${visite.vuLe ? ` (« Tout vu » ${dateRelative(visite.vuLe, maintenant)})` : ""} : ${phraseCompteurs(visite.compteurs)} — « lister » JOURNAL pour les lire.` : ""}`,
     `ALERTES (${alertes.length})\n${alertes.length ? alertes.map((a) => `- ${a}`).join("\n") : "Aucune alerte."}`,
     `ARGENT EN ATTENTE\n${finances ? `- Reste à encaisser : ${format.euros(finances.encours.total)} sur ${pluriel(finances.encours.lignes.length, "facture")}${finances.encours.lignes.length ? ` (${finances.encours.lignes.slice(0, 5).map((l) => `${l.numero} ${l.client} ${format.euros(l.reste)}${l.joursRetard ? `, ${l.joursRetard} j de retard` : ""}`).join(" · ")})` : ""}.\n- Chèques à créditer : ${finances.cheques.length ? finances.cheques.map((c) => `${c.payeur} ${format.euros(c.montant)} [encaissement:${c.id}]`).join(" · ") : "aucun"}.` : "- Tableau des finances illisible (paramètres manquants ?)."}\n- Devis en attente de réponse (carnet) : ${format.euros(montantCarnet)} sur ${pluriel(carnet.length, "devis", "devis")}${carnet.length ? ` (${carnet.slice(0, 6).map((c) => `${c.client} ${format.euros(c.montant)}${c.relances ? `, ${pluriel(c.relances, "relance")}` : ""} [dossier:${c.dossierId}]`).join(" · ")})` : ""}.`,
     `DERNIERS ÉVÉNEMENTS (48 h)\n${leads.length ? `- ${pluriel(leads.length, "lead arrivé", "leads arrivés")} : ${leads.map((l) => `${`${l.prenom} ${l.nom}`.trim()}${l.ville ? ` (${l.ville})` : ""}, ${l.source}, ${format.jourCourt(l.createdAt)} [lead:${l.id}]`).join(" · ")}` : "- Aucun lead arrivé."}\n${evenements.length ? evenements.map((ev) => `- ${format.jourCourt(ev.createdAt)} ${ev.dossier.clientNom} : ${court(ev.contenu.replace(/\s+/g, " "), 140)} [dossier:${ev.dossierId}]`).join("\n") : "- Aucun événement de dossier."}`,
@@ -117,6 +121,7 @@ export async function etatGlobal(contexte: ContexteOutil): Promise<ResultatOutil
       propositions: { enAttente: enAttente.length, enEchec },
       mailsATraiter: mails,
       messagesEspaceNonLus: messagesEspace,
+      depuisVisite: visite ? { vuLe: visite.vuLe?.toISOString() ?? null, depuis: visite.depuis.toISOString(), total: visite.total, compteurs: visite.compteurs } : null,
       evenements: evenements.map((e) => ({ dossierId: e.dossierId, client: e.dossier.clientNom, type: e.type, contenu: e.contenu, le: e.createdAt.toISOString() })),
       leads: leads.map((l) => ({ id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, source: l.source, projet: l.typeProjet, le: l.createdAt.toISOString() })),
       sources,
@@ -235,7 +240,7 @@ export const outilEtatCrm = definirOutil({
   nom: "etat_crm",
   titre: "L'état du CRM (en une fois, ou par partie)",
   description:
-    "Sans partie : EN UNE FOIS tout ce qui est ouvert — les tâches du jour (avec le geste et le texte prêt), les alertes (tâches de fond, Google, Meta, disque, cohérence, Analytique, alertes du CRM, propositions en échec), l'argent en attente (reste à encaisser par facture, chèques à créditer, devis en attente de réponse), les derniers événements (48 h : leads arrivés, événements des dossiers) et l'état des sources. L'état du CRM en un appel ; pour le point du matin : « point_du_jour » ; pour la liste de ce que Lucas a à faire : « taches ». Avec « partie » : SANTE (tout va bien ?), META (chaîne des leads Meta et campagne ; « interroger_meta »), PARAMETRES (paramètres par groupe avec l'historique complet, automatismes, catalogue SMS), NUMEROTATION (compteurs, numéros libres), SMS (catalogue, texte de départ, fournisseur), MAIL (guide, modèles, règles, bilan du tri), CONSIGNES (texte, sections, défaut), CONSIGNES_VERSIONS (historique), OUTILS (registre et empreinte : si l'application dit « not registered », reconnecter le connecteur), TACHES_DE_FOND (file avec identifiants), COHERENCE (clé et correction), AUDIT, SESSIONS, CONNEXIONS, ACCES, PROMPTS (« type », « version »), BANC, CONSOMMATION. Jamais de secret.",
+    "Sans partie : EN UNE FOIS tout ce qui est ouvert — les tâches du jour (avec le geste et le texte prêt), les alertes (tâches de fond, Google, Meta, disque, cohérence, Analytique, alertes du CRM, propositions en échec), l'argent en attente (reste à encaisser par facture, chèques à créditer, devis en attente de réponse), les derniers événements (48 h : leads arrivés, événements des dossiers), le compte du journal depuis la dernière visite (« lister » JOURNAL pour les lignes) et l'état des sources. L'état du CRM en un appel ; pour le point du matin : « point_du_jour » ; pour la liste de ce que Lucas a à faire : « taches ». Avec « partie » : SANTE (tout va bien ?), META (chaîne des leads Meta et campagne ; « interroger_meta »), PARAMETRES (paramètres par groupe avec l'historique complet, automatismes, catalogue SMS), NUMEROTATION (compteurs, numéros libres), SMS (catalogue, texte de départ, fournisseur), MAIL (guide, modèles, règles, bilan du tri), CONSIGNES (texte, sections, défaut), CONSIGNES_VERSIONS (historique), OUTILS (registre et empreinte : si l'application dit « not registered », reconnecter le connecteur), TACHES_DE_FOND (file avec identifiants), COHERENCE (clé et correction), AUDIT, SESSIONS, CONNEXIONS, ACCES, PROMPTS (« type », « version »), BANC, CONSOMMATION. Jamais de secret.",
   niveau: "LECTURE",
   schema: schemaEtat,
   executer: async (e, contexte) => (e.partie ? partie(e, contexte) : etatGlobal(contexte)),

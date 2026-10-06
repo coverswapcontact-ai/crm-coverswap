@@ -665,6 +665,7 @@ model DossierEvenement {
   ecriture     String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
 
   @@index([dossierId, createdAt])
+  @@index([createdAt]) // Mission 22 (A1) : le journal global lit tous les dossiers par date
 }
 
 model Document {

@@ -23,6 +23,10 @@ import { coutEnDollars as coutEnDollarsPrix, type Qualite, type Usage } from "./
  * (téléchargés en parallèle). Sortie JPEG q90 (`output_format`,
  * `output_compression`) : des rendus trois à cinq fois plus légers sur le
  * volume. Chaque appel écrit une ligne `GenerationImage` (phase `rendu`).
+ *
+ * Mission 21 (E5) : `modele` et `phase` peuvent être passés par l'appelant (comparatif des modèles) ; un 400 qui
+ * refuse un paramètre facultatif (`input_fidelity`, `output_format`, `output_compression`) refait l'appel une fois
+ * sans lui — sans effet sur le modèle actuel, qui les accepte tous.
  */
 
 // Seuls les hôtes de Cover Styl' sont autorisés pour les échantillons (anti-SSRF).
@@ -44,7 +48,7 @@ type Sortie = { status: number; raison: RaisonEchec | "swatch-download-failed" |
 export type TypeImage = "image/jpeg" | "image/png";
 
 export type ResultatGeneration =
-  | { ok: true; image: Buffer; /** Type réel du rendu, lu dans ses octets : JPEG depuis la mission 15 (`output_format`), PNG si le modèle en rend un malgré tout. */ type: TypeImage; avant: Buffer | null; taille: TailleSortie; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null }
+  | { ok: true; image: Buffer; /** Type réel du rendu, lu dans ses octets : JPEG depuis la mission 15 (`output_format`), PNG si le modèle en rend un malgré tout. */ type: TypeImage; avant: Buffer | null; taille: TailleSortie; dureeMs: number; usage: Usage; coutDollars: number; generationId: string | null; /** Paramètres facultatifs refusés par le modèle (400) et retirés pour cet appel. */ parametresRetires?: string[] }
   | ({ ok: false; dureeMs: number } & Sortie);
 
 /** Dimensions d'une image JPEG ou PNG, lues dans ses premiers octets. */
@@ -149,7 +153,35 @@ export type EntreeGeneration = {
   dossierId?: string | null;
   preparationId?: string | null;
   signal?: AbortSignal;
+  /** Le modèle d'image de cet appel (défaut : `modeleImage()`, la variable OPENAI_IMAGE_MODEL) — le comparatif des modèles le passe explicitement. */
+  modele?: string;
+  /** La phase notée dans GenerationImage (défaut « rendu » ; comparatif des modèles : « essai-modele »). */
+  phase?: string;
 };
+
+/**
+ * Les paramètres facultatifs du rendu qu'un modèle d'édition peut refuser par un 400 (mission 21, E5 :
+ * `gpt-image-2.5-sunburst` refuse `input_fidelity`). Un 400 qui en nomme un : l'appel est refait une fois sans lui
+ * (chaque paramètre n'est retiré qu'une fois). `output_format` retiré emporte `output_compression` (qui n'a de sens
+ * qu'en JPEG ou WebP) : le rendu revient alors en PNG, ce que `typeImage` sait lire.
+ */
+export const PARAMETRES_RETIRABLES = ["input_fidelity", "output_compression", "output_format"] as const;
+export type ParametreRetirable = (typeof PARAMETRES_RETIRABLES)[number];
+
+/** Le paramètre retirable qu'un 400 refuse (champ `error.param`, sinon son nom dans le message), parmi ceux encore envoyés. */
+export function parametreRefuse(status: number, texte: string, envoyes: readonly ParametreRetirable[]): ParametreRetirable | null {
+  if (status !== 400 || envoyes.length === 0) return null;
+  try {
+    const param = (JSON.parse(texte) as { error?: { param?: unknown } })?.error?.param;
+    if (typeof param === "string") {
+      const nom = param.replace(/^.*\./, "") as ParametreRetirable;
+      if (envoyes.includes(nom)) return nom;
+    }
+  } catch {
+    /* corps non JSON : on lit le message */
+  }
+  return envoyes.find((p) => new RegExp(`\\b${p}\\b`, "i").test(texte)) ?? null;
+}
 
 /* ── Générateur remplaçable pour les essais (aucun appel OpenAI d'un test) ── */
 export type Generateur = (entree: EntreeGeneration) => Promise<ResultatGeneration>;
@@ -169,10 +201,12 @@ export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGe
   const cle = process.env.OPENAI_API_KEY;
   if (!cle) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: MESSAGES_ECHEC["service-indisponible"] };
   const swatchUrls = entree.swatchUrls ?? [];
+  const modele = entree.modele ?? modeleImage();
+  const phase = entree.phase ?? "rendu";
   const nombreJoint = () => (entree.planche ? 1 : (entree.swatches?.length ?? swatchUrls.length));
   const echec = async (sortie: Sortie, detail?: string): Promise<ResultatGeneration> => {
     const dureeMs = Date.now() - debut;
-    await noter({ origine: entree.origine, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, echantillons: nombreJoint(), dossierId: entree.dossierId, preparationId: entree.preparationId });
+    await noter({ origine: entree.origine, phase, modele, statut: "ECHEC", erreur: `${sortie.raison}${detail ? ` : ${detail}` : ""}`, dureeMs, echantillons: nombreJoint(), dossierId: entree.dossierId, preparationId: entree.preparationId });
     return { ok: false, dureeMs, ...sortie };
   };
 
@@ -191,34 +225,47 @@ export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGe
   const dims = dimensionsImage(entree.photo);
   const cadrage = await cadrerPourGeneration(entree.photo, dims ? tailleSelonRatio(dims.width, dims.height) : "1024x1024");
 
-  // 3) Appel OpenAI.
-  const formulaire = new FormData();
-  formulaire.append("model", modeleImage());
-  formulaire.append("prompt", entree.prompt);
-  formulaire.append("size", cadrage.taille);
-  formulaire.append("quality", entree.qualite ?? "medium");
-  formulaire.append("input_fidelity", "high");
-  formulaire.append("output_format", "jpeg");
-  formulaire.append("output_compression", "90");
-  formulaire.append("image[]", new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }), "room.png");
-  for (const j of jointes) formulaire.append("image[]", new Blob([new Uint8Array(j.octets)], { type: j.type }), j.nom);
+  // 3) Appel OpenAI. Un 400 qui refuse un paramètre facultatif (PARAMETRES_RETIRABLES) : refait une fois sans lui.
+  const facultatifs: Record<ParametreRetirable, string> = { input_fidelity: "high", output_format: "jpeg", output_compression: "90" };
+  const retires: ParametreRetirable[] = [];
+  const formulaireSans = () => {
+    const formulaire = new FormData();
+    formulaire.append("model", modele);
+    formulaire.append("prompt", entree.prompt);
+    formulaire.append("size", cadrage.taille);
+    formulaire.append("quality", entree.qualite ?? "medium");
+    for (const p of PARAMETRES_RETIRABLES) if (!retires.includes(p)) formulaire.append(p, facultatifs[p]);
+    formulaire.append("image[]", new Blob([new Uint8Array(cadrage.photo)], { type: cadrage.type }), "room.png");
+    for (const j of jointes) formulaire.append("image[]", new Blob([new Uint8Array(j.octets)], { type: j.type }), j.nom);
+    return formulaire;
+  };
 
   const controleur = new AbortController();
   const minuterie = setTimeout(() => controleur.abort(), DELAI_OPENAI_MS);
   entree.signal?.addEventListener("abort", () => controleur.abort(), { once: true });
   let reponse: Response;
-  try {
-    reponse = await fetch(`${baseOpenAI()}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${cle}` }, body: formulaire, signal: controleur.signal });
-  } catch (erreur) {
-    clearTimeout(minuterie);
-    const delai = erreur instanceof Error && (erreur.name === "AbortError" || /aborted/i.test(erreur.message));
-    console.error(`[simulate] OpenAI ${delai ? "délai dépassé" : "injoignable"} après ${Date.now() - debut} ms :`, erreur);
-    return echec({ status: delai ? 504 : 502, raison: delai ? "delai" : "surcharge", message: delai ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge });
+  let texteRefus = "";
+  for (;;) {
+    try {
+      reponse = await fetch(`${baseOpenAI()}/images/edits`, { method: "POST", headers: { Authorization: `Bearer ${cle}` }, body: formulaireSans(), signal: controleur.signal });
+    } catch (erreur) {
+      clearTimeout(minuterie);
+      const delai = erreur instanceof Error && (erreur.name === "AbortError" || /aborted/i.test(erreur.message));
+      console.error(`[simulate] OpenAI ${delai ? "délai dépassé" : "injoignable"} après ${Date.now() - debut} ms :`, erreur);
+      return echec({ status: delai ? 504 : 502, raison: delai ? "delai" : "surcharge", message: delai ? MESSAGES_ECHEC.delai : MESSAGES_ECHEC.surcharge });
+    }
+    if (reponse.ok || reponse.status !== 400) break;
+    texteRefus = await reponse.text().catch(() => "");
+    const refuse = parametreRefuse(reponse.status, texteRefus, PARAMETRES_RETIRABLES.filter((p) => !retires.includes(p)));
+    if (!refuse) break;
+    retires.push(refuse);
+    if (refuse === "output_format" && !retires.includes("output_compression")) retires.push("output_compression");
+    console.warn(`[simulate] ${modele} refuse ${refuse} (HTTP 400) : appel refait une fois sans ce paramètre.`);
   }
   clearTimeout(minuterie);
 
   if (!reponse.ok) {
-    const texte = await reponse.text().catch(() => "");
+    const texte = reponse.bodyUsed ? texteRefus : await reponse.text().catch(() => "");
     const raison = classerErreurOpenAI(reponse.status, texte);
     console.error(`[simulate] OpenAI HTTP ${reponse.status} (${raison}) :`, texte.slice(0, 400));
     if (raison === "service-indisponible") void alerterPanneSimulateur(reponse.status, texte);
@@ -241,11 +288,11 @@ export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGe
     image: detail?.image_tokens ?? 0,
     sortie: donnees.usage?.output_tokens ?? 0,
   };
-  const coutDollars = coutEnDollars(usage);
+  const coutDollars = coutEnDollars(usage, modele);
   const dureeMs = Date.now() - debut;
-  console.log(`[simulate] OK en ${dureeMs} ms (${cadrage.taille}, ${entree.qualite ?? "medium"}, ${entree.planche ? "planche" : pluriel(jointes.length, "échantillon")}, ${entree.origine}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
-  const generationId = await noter({ origine: entree.origine, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: jointes.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
-  return { ok: true, image, type: typeImage(image), avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId };
+  console.log(`[simulate] OK en ${dureeMs} ms (${modele}, ${cadrage.taille}, ${entree.qualite ?? "medium"}, ${entree.planche ? "planche" : pluriel(jointes.length, "échantillon")}, ${entree.origine}${retires.length ? `, sans ${retires.join(", ")}` : ""}) ${JSON.stringify(donnees.usage ?? {})} ≈ ${coutDollars} $`);
+  const generationId = await noter({ origine: entree.origine, phase, modele, statut: "REUSSI", dureeMs, taille: cadrage.taille, echantillons: jointes.length, usage, coutDollars, dossierId: entree.dossierId, preparationId: entree.preparationId });
+  return { ok: true, image, type: typeImage(image), avant: cadrage.avant, taille: cadrage.taille, dureeMs, usage, coutDollars, generationId, parametresRetires: retires };
 }
 
 /* ── Images d'ambiance du site (mission 16, partie 2) : texte → image, sans photo ni dossier ── */

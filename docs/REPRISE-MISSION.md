@@ -5496,3 +5496,11 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
 
 ## Avancement (une ligne par lot)
 - Départ : CRM `main` 0698477 (1 487 tests), site `main` 8016ca4 (605 tests). ffmpeg 8.1 présent sur le poste.
+- A0a (jetons, codemod, tests de lisibilité) : 3ed6b49, 135 fichiers, tests 1 487 → 1 498. Bloc `@theme` (19 jetons +
+  9 d'étape + échelle de texte v2) ; `scripts/jetons-codemod.mjs` (2 900 classes, 127 fichiers, forme crochets
+  seulement) ; constantes `JETONS` / `teinte()` dans `components/pilotage/ui.tsx` ; `FOND_HEX` dans
+  `lib/application/charte.ts` ; `src/app/lisibilite.test.ts` ; `docs/CRM-V2.md` ouvert (règles, jetons, arbitrages).
+  Décision : les violets et roses de la chronologie se fondent dans `info` / `info-texte` ; #6B7280, #8B919C, #4B5563
+  dans `texte-3` ; le dégradé du tunnel garde ses 6 hex en exception du test ; aucun test existant modifié. Piège :
+  une partie des sources est en CRLF dans la copie de travail (`core.autocrlf`), les scripts conservent les fins de
+  ligne et les tests lisent en LF.

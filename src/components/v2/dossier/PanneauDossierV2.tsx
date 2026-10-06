@@ -19,6 +19,7 @@ import type { EtapeDossier, TypeDocument } from "@/lib/dossiers/constants";
 import { autresGestes, gestePrincipal, tachePrete, type AutreGeste, type GestePrincipal } from "@/lib/dossiers/geste-principal";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import type { RelancesProposables } from "@/lib/relances/proposables";
+import type { DemandeOuvertureV2 } from "@/lib/v2/dossiers";
 import { cibleDuDefilement, rubriqueDeLEtape, rubriqueDemandee, type RubriqueV2 } from "@/lib/v2/rubriques-dossier";
 import { cn } from "@/lib/utils";
 import { BOUTON_SECONDAIRE } from "../journal/GroupeParPersonne";
@@ -38,8 +39,11 @@ import { RubriquesDossier } from "./RubriquesDossier";
  * et « Autres gestes » repliés ; 3. « À faire ici » (les tâches du dossier, mêmes gestes qu'Aujourd'hui) ;
  * 4. « Ce qui s'est passé ici » (cinq lignes) ; 5. les rubriques, toutes fermées sauf celle de l'étape.
  * Les sections, modales et feuilles sont celles de la v1 ; le moteur et les routes ne changent pas.
+ * Mission 22 (A4) — la demande d'ouverture porte aussi un `geste` (`lib/v2/dossiers.ts › DemandeOuvertureV2`) : la
+ * ligne de la liste Dossiers fait exécuter son geste principal par le panneau (facture, encaissement, date du chantier,
+ * relance, avis) dès l'ouverture, par les mêmes modales et feuilles. Une `DemandeOuverture` de la v1 reste acceptée.
  */
-export function PanneauDossierV2({ dossierId, maintenant, onFermer, onMisAJour, onArchive, demande = null }: { dossierId: string | null; maintenant: Date; onFermer: () => void; onMisAJour: (detail: DossierDetail) => void; onArchive?: (dossierId: string) => void; demande?: DemandeOuverture | null }) {
+export function PanneauDossierV2({ dossierId, maintenant, onFermer, onMisAJour, onArchive, demande = null }: { dossierId: string | null; maintenant: Date; onFermer: () => void; onMisAJour: (detail: DossierDetail) => void; onArchive?: (dossierId: string) => void; demande?: DemandeOuverture | DemandeOuvertureV2 | null }) {
   const [detail, setDetail] = useState<DossierDetail | null>(null);
   const [echec, setEchec] = useState<{ dossierId: string; message: string } | null>(null);
 
@@ -138,9 +142,11 @@ function defilerVers(ids: readonly string[]): void {
   element?.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
-function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onArchive, demande }: { detail: DossierDetail; maintenant: Date; onFermer: () => void; onMisAJour: (detail: DossierDetail) => void; onRecharger: () => Promise<void>; onArchive?: (dossierId: string) => void; demande: DemandeOuverture | null }) {
+function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onArchive, demande }: { detail: DossierDetail; maintenant: Date; onFermer: () => void; onMisAJour: (detail: DossierDetail) => void; onRecharger: () => Promise<void>; onArchive?: (dossierId: string) => void; demande: DemandeOuverture | DemandeOuvertureV2 | null }) {
   const routeur = useRouter();
   const instant = maintenant.getTime();
+  // Mission 22 (A4) : le geste que la liste demande au panneau d'exécuter à l'ouverture.
+  const gesteDemande = demande && "geste" in demande ? (demande.geste ?? null) : null;
 
   /* ── Rubriques : une seule ouverte d'office, celle de l'étape (ou celle du raccourci) ────────────────────────── */
   const [ouvertes, setOuvertes] = useState<Set<RubriqueV2>>(() => new Set([demande ? rubriqueDemandee(demande.rubrique) : rubriqueDeLEtape(detail.etape)]));
@@ -157,11 +163,11 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
   };
 
   /* ── Modales et feuilles (celles de la v1) ──────────────────────────────────────────────────────────────────── */
-  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(() => (demande?.devis === "nouveau" ? { type: "DEVIS", cle: 1 } : null));
+  const [generateur, setGenerateur] = useState<{ type: TypeDocument; cle: number; remplace?: DocumentVue; variante?: boolean } | null>(() => (demande?.devis === "nouveau" ? { type: "DEVIS", cle: 1 } : gesteDemande === "FACTURE" ? { type: "FACTURE", cle: 1 } : null));
   const [depotPdf, setDepotPdf] = useState(() => (demande?.devis === "pdf" ? 1 : 0));
   const [depotGmail, setDepotGmail] = useState<string | null>(() => (demande?.devis === "gmail" && demande.piece ? demande.piece : null));
-  const [encaisser, setEncaisser] = useState(() => demande?.rubrique === "encaisser");
-  const [feuilleDate, setFeuilleDate] = useState(false);
+  const [encaisser, setEncaisser] = useState(() => demande?.rubrique === "encaisser" || gesteDemande === "ENCAISSER");
+  const [feuilleDate, setFeuilleDate] = useState(() => gesteDemande === "DATE_CHANTIER");
   const [modifierAction, setModifierAction] = useState(false);
   const [autresOuverts, setAutresOuverts] = useState(false);
   const [etapeDemandee, setEtapeDemandee] = useState<{ etape: EtapeDossier; cle: number } | null>(() => (demande?.rubrique === "etape" && demande.etape ? { etape: demande.etape, cle: 1 } : null));
@@ -277,7 +283,40 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
   // Rien de proposable (délai pas écoulé) : relancer par téléphone, le lien tel: en bouton principal.
   const affiche: GestePrincipal = principal.genre === "RELANCER" && relances && !relanceProposable && telephone ? { genre: "APPEL", libelle: "Relancer par téléphone" } : principal;
 
-  const apresSms = { onFini: ({ copie }: { copie: boolean }) => copie && relireApres() };
+  /**
+   * « Relancer » / « Demander un avis » : la relance proposable (SMS, ou la relecture du mail en STOP), sinon l'espace
+   * du client. Stable (`useCallback`) : la liste peut la demander à l'ouverture, une fois les relances lues.
+   */
+  const lancerRelance = useCallback(
+    (genre: "RELANCER" | "AVIS"): void => {
+      const apresSms = { onFini: ({ copie }: { copie: boolean }) => copie && relireApres() };
+      const a = relances?.avis[0];
+      if (genre === "RELANCER") {
+        const d = relances?.devis[0];
+        if (d && !d.stop) return ouvrirEcranSms({ proposition: d.sms ?? undefined, demande: d.sms ? undefined : ({ action: "RELANCE_DEVIS", dossierId: d.dossierId, relance: { documentId: d.documentId, rang: d.rang } } as DemandeEcranSms), ...apresSms });
+        if (d?.mail) return setRelectureMail((actuel) => ({ propositionId: d.mail!.propositionId, cle: (actuel?.cle ?? 0) + 1 }));
+        const p = relances?.photos[0];
+        if (p) return ouvrirEcranSms({ proposition: p.sms ?? undefined, demande: p.sms ? undefined : ({ action: "RELANCE_PHOTOS", dossierId: p.dossierId, relance: { type: "PHOTOS", rang: p.rang } } as DemandeEcranSms), ...apresSms });
+      }
+      if (a) return ouvrirEcranSms({ proposition: a.sms ?? undefined, demande: a.sms ? undefined : ({ action: "RELANCE_AVIS", dossierId: a.dossierId, relance: { type: "AVIS", rang: a.rang } } as DemandeEcranSms), ...apresSms });
+      // Pas encore lu, ou rien de proposable et pas de numéro : l'espace du client, où tout se voit.
+      setOuvertes((o) => new Set(o).add("espace"));
+      window.setTimeout(() => defilerVers(["rubrique-espace"]), 50);
+    },
+    [relances, relireApres]
+  );
+
+  // Mission 22 (A4) : la ligne de la liste a demandé « Relancer » ou « Demander un avis » : une fois les relances lues, une seule fois.
+  const [relanceLancee, setRelanceLancee] = useState(false);
+  useEffect(() => {
+    if ((gesteDemande !== "RELANCER" && gesteDemande !== "AVIS") || relanceLancee || !relances) return;
+    const minuterie = window.setTimeout(() => {
+      setRelanceLancee(true);
+      lancerRelance(gesteDemande);
+    }, 0);
+    return () => window.clearTimeout(minuterie);
+  }, [gesteDemande, relanceLancee, relances, lancerRelance]);
+
   function executer(geste: GestePrincipal | AutreGeste): void {
     switch (geste.genre) {
       case "TACHE":
@@ -300,22 +339,9 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
       case "ETAPE":
       case "REPRISE":
         return geste.etape ? demanderEtape(geste.etape) : ouvrirRubrique("etapes");
-      case "RELANCER": {
-        const d = relances?.devis[0];
-        if (d && !d.stop) return ouvrirEcranSms({ proposition: d.sms ?? undefined, demande: d.sms ? undefined : ({ action: "RELANCE_DEVIS", dossierId: d.dossierId, relance: { documentId: d.documentId, rang: d.rang } } as DemandeEcranSms), ...apresSms });
-        if (d?.mail) return setRelectureMail((actuel) => ({ propositionId: d.mail!.propositionId, cle: (actuel?.cle ?? 0) + 1 }));
-        const p = relances?.photos[0];
-        if (p) return ouvrirEcranSms({ proposition: p.sms ?? undefined, demande: p.sms ? undefined : ({ action: "RELANCE_PHOTOS", dossierId: p.dossierId, relance: { type: "PHOTOS", rang: p.rang } } as DemandeEcranSms), ...apresSms });
-        const a = relances?.avis[0];
-        if (a) return ouvrirEcranSms({ proposition: a.sms ?? undefined, demande: a.sms ? undefined : ({ action: "RELANCE_AVIS", dossierId: a.dossierId, relance: { type: "AVIS", rang: a.rang } } as DemandeEcranSms), ...apresSms });
-        // Pas encore lu, ou rien de proposable et pas de numéro : l'espace du client, où tout se voit.
-        return ouvrirRubrique("espace");
-      }
-      case "AVIS": {
-        const a = relances?.avis[0];
-        if (a) return ouvrirEcranSms({ proposition: a.sms ?? undefined, demande: a.sms ? undefined : ({ action: "RELANCE_AVIS", dossierId: a.dossierId, relance: { type: "AVIS", rang: a.rang } } as DemandeEcranSms), ...apresSms });
-        return ouvrirRubrique("espace");
-      }
+      case "RELANCER":
+      case "AVIS":
+        return lancerRelance(geste.genre);
       case "DEPOSER_PDF":
         return deposerPdf();
       case "PROCHAINE_ACTION":

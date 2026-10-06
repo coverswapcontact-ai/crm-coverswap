@@ -115,7 +115,8 @@ describe("même contrat que la v1, point de choix, lisibilité", () => {
   });
 
   test("le point de choix : dossiers/page.tsx lit interfaceCourante(), DossiersPilotage monte la v2 seulement en v2 (v1 par défaut, inchangée)", () => {
-    assert.match(page, /interfaceCourante\(\),\s*\]\);/);
+    // Mission 22 (A4) : la page lit l'interface d'abord, pour demander au serveur la vue de la v2 (« Chez moi »).
+    assert.match(page, /const version = await interfaceCourante\(\);/);
     assert.match(page, /<DossiersPilotage\s+interface=\{version\}/);
     assert.match(pilotage, /interface: version = "v1",/);
     assert.match(pilotage, /\{version === "v2" \? \(\s*<PanneauDossierV2/);

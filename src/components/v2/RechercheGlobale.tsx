@@ -85,6 +85,8 @@ export function RechercheGlobale({ variante }: { variante: "loupe" | "champ" }) 
     };
   }, [texte]);
 
+  const q = texte.trim();
+
   const ouvrir = (candidat: Candidat | undefined) => {
     if (!candidat) return;
     fermer();
@@ -101,11 +103,18 @@ export function RechercheGlobale({ variante }: { variante: "loupe" | "champ" }) 
       setChoisi((n) => Math.max(n - 1, 0));
     } else if (evenement.key === "Enter") {
       evenement.preventDefault();
-      ouvrir(resultats[choisi]);
+      if (resultats[choisi]) ouvrir(resultats[choisi]);
+      else if (q.length >= 2) versPersonnes();
     }
   };
 
-  const q = texte.trim();
+  // Mission 22 (A4) : la recherche mène aussi à Personnes, où la même recherche s'affiche en liste (`/leads?q=`).
+  const versPersonnes = () => {
+    const texte = q;
+    fermer();
+    routeur.push(`/leads?q=${encodeURIComponent(texte)}`);
+  };
+
   const aide = etat === "erreur" ? "La recherche n'a pas répondu : réessaie." : etat === "cherche" ? "Recherche en cours…" : q.length >= 2 && resultats.length === 0 ? "Personne ne correspond." : q.length < 2 ? "Un nom, un téléphone, une ville, un numéro de devis ou de facture." : null;
 
   return (
@@ -160,6 +169,11 @@ export function RechercheGlobale({ variante }: { variante: "loupe" | "champ" }) 
               </button>
             </div>
             {aide ? <p className="px-2 pt-3 text-petit text-texte-3">{aide}</p> : null}
+            {q.length >= 2 ? (
+              <button type="button" onClick={versPersonnes} className={cn("mt-2 flex min-h-[44px] w-full items-center rounded-[10px] px-3 text-left text-corps text-action-clair hover:bg-surface-2", TRANS_V2)}>
+                Tout chercher dans Personnes
+              </button>
+            ) : null}
             {resultats.length > 0 ? (
               <ul id={`${identifiant}-resultats`} role="listbox" className="mt-2 flex flex-col">
                 {resultats.map((candidat, n) => (

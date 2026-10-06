@@ -55,6 +55,14 @@ export type DossierResume = {
    * absent quand la liste ne l'a pas calculé (résumé refait depuis le panneau : l'écran garde le précédent).
    */
   espace?: EspaceResume | null;
+  /**
+   * Mission 22 (A4) : ce que la ligne de la liste v2 lit pour le geste principal (`lib/dossiers/geste-principal.ts`)
+   * sans ouvrir le panneau — la date du chantier, le nombre de photos, le numéro à composer. Absents d'un résumé refait
+   * depuis le panneau (la v1 n'en a pas besoin) ; la v1 ne les lit pas.
+   */
+  dateChantier?: string | null;
+  nbPhotos?: number;
+  clientTelephone?: string;
 };
 
 export type PhotoVue = { id: string; url: string; /** Mission 13 (lot 6) : la vignette 320 px, pour les listes. */ vignette: string; type: string; /** Après chantier (portfolio). */ apres: boolean };

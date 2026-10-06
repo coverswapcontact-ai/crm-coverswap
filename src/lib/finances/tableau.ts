@@ -21,6 +21,8 @@ export type LigneEncours = {
   reste: number;
   joursRetard: number | null;
   tranche: TrancheRetard;
+  /** Mission 22 (A4) : le numéro du dossier, pour « Relancer » par SMS depuis Argent (null hors CRM). */
+  telephone: string | null;
 };
 
 export type ChequeACrediter = {
@@ -61,7 +63,7 @@ async function chargerEncours(aujourdhui: string): Promise<LigneEncours[]> {
   });
   const documents = await prisma.document.findMany({
     where: { id: { in: lignes.map((ligne) => ligne.documentId).filter((id): id is string => Boolean(id)) } },
-    select: { id: true, statut: true, totalHt: true, dateEmission: true, echeanceLe: true, destinataire: true, dossierId: true },
+    select: { id: true, statut: true, totalHt: true, dateEmission: true, echeanceLe: true, destinataire: true, dossierId: true, dossier: { select: { clientTelephone: true } } },
   });
   const documentDe = new Map(documents.map((document) => [document.id, document]));
 
@@ -91,6 +93,7 @@ async function chargerEncours(aujourdhui: string): Promise<LigneEncours[]> {
           regle: regle / 100,
           reste: reste / 100,
           ...trancheRetard(echeanceJour, aujourdhui),
+          telephone: document?.dossier?.clientTelephone?.trim() || null,
         },
       ];
     })

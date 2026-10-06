@@ -351,6 +351,85 @@ le panneau garde les précédents. `GET /api/a-faire` est inchangé.
   `GET /api/dossiers/[id]` complété, 404), `components/v2/dossier/panneau-ecran.test.ts` (sources : ordre des blocs, un
   seul `bg-action`, contrat v1, point de choix, lisibilité), `app/lisibilite.test.ts` (couvre `components/v2/dossier/`).
 
+## Dossiers (lot A4)
+
+L'écran Dossiers de la v2 (`components/v2/dossiers/DossiersV2.tsx`, monté par `app/(pilotage)/dossiers/page.tsx` quand
+`interfaceCourante()` rend `v2` ; sinon `DossiersPilotage` v1, intouché, avec les mêmes données qu'avant). La page lit
+l'interface d'abord : en v2 elle demande au serveur la vue « À faire » (`pageDossiers({ vue: "A_FAIRE", recherche })`),
+c'est-à-dire « ce qui m'attend » (`whereAFaire` : la main à moi, ou le client en retard à relancer). Deux blocs :
+
+| # | Bloc | Contenu |
+|---|---|---|
+| 1 | **Quels dossiers** | les segments **Chez moi · Chez le client · Tous · Archives** (`Segments`, 44 px, un seul actif, aucun compteur) ; à droite « Vue en colonnes » / « Vue en liste » (le kanban de la v1, `VueKanban` tel quel, même préférence `localStorage["dossiers:vue"]` ; la liste par défaut) et « Ouvrir un dossier » (`CreationDossier` v1, préremplie par `?lead=`, `?client=`, `?prospect=`) ; puis la recherche (`ChampRecherche`, 16 / 17 px, `?q=`, `GET /api/dossiers?q=`) et « Plus de filtres » → « Avec un espace client » (`FiltreEspaces` v1 : qui a la main, signaux, étape de l'espace ; `?espace=`, `?etapeEspace=`) |
+| 2 | **La liste** | triée « ce qui m'attend » (`lib/v2/dossiers.ts › trierCeQuiMattend` : les actions datées d'abord, la plus ancienne en tête, donc les retards devant ; puis sans date par dernière activité ; perdus et encaissés en dernier) ; **cinq lignes puis « Voir les N autres »**, puis les pages du serveur en phrase (`PagesV2` : « Page 2 sur 4 · 51 à 100 sur 180 », Page précédente / suivante) ; une ligne (`LigneDossierV2`) = la **barre de couleur** à gauche (vert `action-clair` = chez moi, gris `texte-3` = chez le client, rouge `retard` = facture en retard ou dossier perdu ; `couleurBarre`), les **trois lignes de situation** au format du panneau (`lib/v2/situation.ts › situationDe` : « Nom · cuisine · Ville » + l'étape en mots, « Chez le client depuis vendredi 9 h — devis envoyé… », « Relancer · lundi » ; date exacte au survol), et le **bouton du geste principal** en contour (`BoutonGesteDossier` forme « ligne », règle `gesteDeLaLigne` = `gestePrincipal` sans tâche : le serveur sert désormais `dateChantier`, `nbPhotos` et `clientTelephone` dans le résumé). Toucher la ligne ouvre `PanneauDossierV2` (`?dossier=`, `?rubrique=`) |
+
+**Segments** (`lib/v2/dossiers.ts`) : Chez moi = `vue=A_FAIRE` ; Chez le client = la page « en cours » filtrée dans
+le navigateur par `coteDe` (= `mainDe` CLIENT) ; Tous = `vue=TOUS` (perdus et en pause compris) ; Archives = le volet
+`DossiersArchives` de la v1 ouvert (`?archives=1`), le segment d'avant revient à sa fermeture. Les compteurs de l'en-tête
+v1 (en cours, à faire, en retard) ne s'affichent plus (règle 8).
+
+**Le geste d'une ligne** : « Appeler » compose (`tel:`, début d'appel noté) ; « Préparer la simulation » va au
+simulateur ; « Faire le devis » ouvre le panneau avec le générateur (`?devis=nouveau`) ; « Facturer », « Encaisser »,
+« Fixer la date du chantier », « Relancer » et « Demander un avis » ouvrent le panneau qui exécute le geste à
+l'ouverture (`DemandeOuvertureV2.geste`, lu par `PanneauDossierV2` ; la relance part une fois `GET /api/relances` lu) ;
+« Passer en … » / « Reprendre en … » ouvrent la fenêtre d'étape ; « Publier la simulation » ouvre le panneau sur la
+rubrique Simulations (celle de l'étape). Un seul chemin d'exécution : les modales et feuilles du panneau.
+
+- **Décisions** : la recherche n'est pas en premier (règle 1) mais sous les segments, dans le même bloc ; la barre verte
+  est `action-clair` (le vert plein reste au bouton principal du panneau) ; « Chez le client » filtre la page de 50
+  côté navigateur (pas de nouvelle vue serveur) ; la liste est la vue par défaut sur ordinateur aussi (la v1 ouvrait le
+  kanban) ; le tri de la liste v1 (montant, ancienneté) n'est pas repris (le kanban et la v1 restent) ; « Masquer les
+  inactifs », « Perdus et en pause », la légende et `PropositionsEnAttente` ne sont pas repris (Tous, le journal et
+  À valider les couvrent).
+- **Tests** : `lib/v2/dossiers.test.ts` (segments, barre, tri, geste de la ligne, demande au panneau, cinq lignes,
+  pages), `components/v2/ecrans-a4.test.ts` (sources), `components/v2/dossier/panneau-ecran.test.ts` (ajusté : la page
+  lit l'interface d'abord).
+
+## Personnes (lot A4)
+
+Une seule page v2 pour `/leads` et `/clients` (`components/v2/personnes/PersonnesV2.tsx`, montée par les deux
+`page.tsx` en v2 ; `EcranLeads` et `ListeClients` v1 intouchés). Trois blocs :
+
+| # | Bloc | Contenu |
+|---|---|---|
+| 1 | **La recherche** | le champ en premier (`?q=`, aussi rempli par la loupe / Ctrl K de la coque : « Tout chercher dans Personnes », ou Entrée sans résultat) ; dès deux caractères, `GET /api/recherche?q=` (la même fonction que l'outil `chercher`) et les résultats **en phrases** (`LigneResultatV2` : le nom, « Dossier · Ville · Devis envoyé ») remplacent les listes ; un contact s'ouvre sur place (`PanneauEntrant`), un client ou un dossier par son chemin |
+| 2 | **Les segments** | **À appeler · À rappeler · Clients · Sans suite · Archivés** (les quatre vues de `listerLeads` et `pageClients`) ; `/clients` ouvre sur Clients, `/leads` sur À appeler (`?liste=appeler|rappeler|sans-suite|archives`) ; changer de segment change l'adresse par `replaceState` sans changer de page (`adresseDuSegment`) ; en contour : « Enchaîner les appels · N » (`ModeAppels` v1, même file que la v1 : `fileDAppels`) et « Ajouter » (un contact à appeler → `NouveauContact` ; un client particulier ou professionnel → `CreationClient`) |
+| 3 | **La liste** | cinq lignes puis « Voir les N autres », puis les pages (`GET /api/leads?vue&page`, `GET /api/clients?page`) ; un lead (`LigneLeadV2`) = le nom, « ville · état en phrase » (`etatLead` : « attend un appel depuis 12 min », « à rappeler demain 9 h », « à rappeler depuis hier 18 h », « appelé il y a 3 h », « 2 tentatives sans réponse », « a un dossier », « sans suite », « archivé hier · motif »), et **le bouton « Appeler » vert** (lien `tel:`, début d'appel noté, la fin d'appel revient comme en v1) ; un client (`LigneClientV2`) = le nom, « ville · 2 dossiers, 1 en cours », vers `/clients/<id>` (la `FicheClient` v1, sous la coque v2) |
+
+La liste se relit comme en v1 : `leads:modifies`, `appel:termine` (la file passe au suivant), retour sur l'onglet,
+réseau, chaque minute ; hors ligne, la dernière liste connue (une ligne ambre). `NotificationsAppareil` reste monté.
+
+- **Décisions** : les boutons « Appeler » des lignes sont les seuls verts de l'écran (l'énoncé les veut ainsi ;
+  « Enchaîner » et « Ajouter » en contour) ; un rappel en retard n'est pas en rouge (règle 3 : le rouge est à l'argent ;
+  la phrase « à rappeler depuis hier » le dit) ; la date de rappel se change dans la fiche, pas sur la ligne ; la
+  sélection multiple (archiver / restaurer plusieurs contacts), le filtre par source, « Sur le site » et la ligne du jour
+  ne sont pas repris (la v1 les garde ; le journal et Aujourd'hui couvrent le site et les rappels) ; `/leads` ouvre sur
+  À appeler même avec des rappels en retard (ils sont des tâches d'Aujourd'hui).
+- **Tests** : `lib/v2/personnes.test.ts` (segments et adresses, état en phrase, clients, résultats, file d'appels),
+  `components/v2/ecrans-a4.test.ts` (sources).
+
+## Argent (lot A4)
+
+L'écran Argent de la v2 (`components/v2/argent/ArgentV2.tsx`, monté par `app/(pilotage)/finances/page.tsx` en v2 ;
+`TableauFinances` v1 intouché). La page ajoute l'encaissé et le dépensé du mois courant (`encaissementsDeLaPeriode` et
+`depensesDeLaPeriode` sur [1er du mois, aujourd'hui], Paris). Six blocs au plus :
+
+| # | Bloc | Contenu |
+|---|---|---|
+| 1 | **Les trois nombres** | « À encaisser », « Encaissé ce mois (octobre 2026) », « Dépensé ce mois » (`troisNombres`), chacun en 24 px (`text-grand`, la seule taille grande) ; **rouge seulement** sur le reste à encaisser s'il contient une facture en retard. Si la règle de datation des chèques manque : une ligne « Il manque : … » et « Renseigner » (`useParametresExiges` v1) |
+| 2 | **Factures à encaisser** | une ligne par facture : numéro (→ `/dossiers?dossier=`), client, reste dû, « en retard de 12 jours » en rouge (`phraseRetard`), « émise il y a 3 jours · déjà réglé … » ; **« Encaisser »** = le bouton principal (→ `ModalePaiementFacture` v1 : « Paiement enregistré ») ; **« Relancer »** en contour (nouveau geste, `moyenDeRelance`) : avec un numéro, l'écran SMS existant avec un texte court sans nom de client (`texteRelanceFacture`, code `LIBRE`) — copier vaut relance, tracée dans le dossier par `POST /api/sms/copie`, et la ligne « Facture F-… relancée par SMS » ; sans numéro, `/mail?dossier=` ; hors CRM, une ligne qui le dit. Cinq lignes puis « Voir les N autres » |
+| 3 | **Chèques à créditer** | « 450 € · Payeur · n° 123 · reçu il y a 12 jours » (ambre au-delà de 15 jours), « Crédité » et « Rejeté » en contour (`ModaleActionEncaissement` v1) |
+| 4 | **Dépenses** | replié (ouvert par `?section=depenses`, où mène l'ancienne adresse `/depenses`), « Ajouter une dépense » → `/depenses/nouvelle` ; dedans, `ListeDepenses` v1 tel quel |
+| 5 | **Livre des recettes** | le total de l'année, les mois qui ont des recettes (du plus récent, cinq puis « Voir les N autres »), l'année précédente / suivante (`/finances?annee=`), « Exporter le livre (CSV) » (`/api/finances/livre?annee=`) |
+| 6 | **À corriger** | replié, avec son nombre ; chaque point en phrase (cinq détails puis « et N autres ») et « Corriger » |
+
+- **Décisions** : « Encaisser » est vert sur chaque ligne (l'énoncé le veut ainsi) ; le SMS de relance ne passe pas par
+  le catalogue (code `LIBRE`, déjà accepté par la copie ; aucun ajout au moteur SMS) ; un seul ajout au serveur :
+  `LigneEncours.telephone` (le numéro du dossier) ; le livre ne liste plus chaque encaissement (les mois, puis le CSV ;
+  la v1 et le Bilan les gardent) ; URSSAF, seuils et courbes restent dans le Bilan (onglet Argent), comme en v1.
+- **Tests** : `lib/v2/argent.test.ts` (trois nombres, plage du mois, phrases, SMS de relance, moyen),
+  `components/v2/ecrans-a4.test.ts` (sources).
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
@@ -361,6 +440,9 @@ le panneau garde les précédents. `GET /api/a-faire` est inchangé.
 | — (la v1 n'a pas de journal global : `Chronologie.tsx` par contact seulement) | `components/v2/journal/Journal.tsx` + `GroupeParPersonne.tsx` : « Depuis ta dernière visite », groupes par personne, filtres, « Tout vu » | `/journal` (nouvelle ; en v1 → `/taches`), bloc d'Aujourd'hui au lot A2 | lot A1, livrée |
 | Tâches (`taches/_components/EcranTaches.tsx` : en-tête, Actualiser, Ajouter, J'ai N min, Commencer, Aujourd'hui en lignes, En lot, Plus tard, Fait aujourd'hui ; panneaux, ModeTaches, FeuilleReponse) | `components/v2/taches/Aujourdhui.tsx` : Reprendre, Maintenant (carte + geste prêt), Commencer et J'ai 5/15/30 min en contour, Ensuite (5 + « Voir les N autres », Ajouter, Actualiser), En lot, Plus tard, Fait aujourd'hui, journal compact ; mêmes panneaux, même ModeTaches, même FeuilleReponse, mêmes routes | `/taches` | lot A2, livrée |
 | Panneau de dossier (`dossiers/_components/PanneauDossier.tsx` : en-tête à liséré, pastilles et badges, À compléter, prochaine action, relances, bloc Encaisser, ChangementEtape, 7 sections en capitales) | `components/v2/dossier/PanneauDossierV2.tsx` : en-tête de situation (3 lignes), un seul bouton principal + Autres gestes, À faire ici, Ce qui s'est passé ici, 13 rubriques fermées sauf celle de l'étape ; mêmes sections, modales, feuilles et routes ; `GET /api/dossiers/[id]` + `espace` + `taches` | `/dossiers?dossier=` (+ `?rubrique=`, `?devis=`), panneaux d'Aujourd'hui | lot A3, livrée |
+| Dossiers (`dossiers/_components/DossiersPilotage.tsx` : en-tête à compteurs, Tous / À faire, kanban ou liste triable, Perdus et en pause, Masquer les inactifs, Espaces, Archivés, Légende, recherche) | `components/v2/dossiers/DossiersV2.tsx` : segments Chez moi · Chez le client · Tous · Archives, recherche, « Plus de filtres » (espaces), liste « ce qui m'attend » (situation en 3 lignes + geste principal, barre de couleur, 5 lignes puis « Voir les N autres », pages), kanban en seconde vue, même panneau v2, même création, mêmes archives | `/dossiers` (+ `?dossier=`, `?rubrique=`, `?q=`, `?espace=`, `?archives=1`, `?lead=`, `?client=`, `?prospect=`) | lot A4, livrée |
+| Leads (`leads/_components/EcranLeads.tsx` : À appeler, À rappeler, Sans suite, Archivés, source, sélection, Sur le site, ligne du jour, Enchaîner, Nouveau) et Clients (`clients/_components/ListeClients.tsx` : recherche, catégories, source, archivées, doublons, Nouveau client) | `components/v2/personnes/PersonnesV2.tsx` : recherche d'abord (résultats en phrases), segments À appeler · À rappeler · Clients · Sans suite · Archivés, lignes en phrases avec « Appeler », « Enchaîner les appels » (ModeAppels), « Ajouter » (NouveauContact, CreationClient), PanneauEntrant ; la fiche client reste la v1 | `/leads` (+ `?lead=`, `?liste=`, `?appels=1`, `?q=`), `/clients` (+ `?q=`), `/clients/<id>` | lot A4, livrée |
+| Finances (`finances/_components/TableauFinances.tsx` : Reste à encaisser, Chèques, À corriger, Dépenses, Livre par encaissement, année) | `components/v2/argent/ArgentV2.tsx` : trois nombres (à encaisser, encaissé ce mois, dépensé ce mois), Factures à encaisser (Encaisser / Relancer), Chèques, Dépenses repliées (ListeDepenses), Livre par mois + CSV + année, À corriger replié ; mêmes modales, mêmes routes | `/finances` (+ `?annee=`, `?section=depenses`), `/depenses/nouvelle` | lot A4, livrée |
 
 ## Liste de contrôle par écran
 

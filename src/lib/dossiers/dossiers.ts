@@ -179,11 +179,15 @@ type DossierAvecDernierDevis = Prisma.DossierGetPayload<{
 }>;
 
 function versResume(
-  dossier: Omit<DossierAvecDernierDevis, "photos">,
+  dossier: Omit<DossierAvecDernierDevis, "photos"> & { photos?: string },
   avantSortie: EtapeActive | null,
   points: readonly PointACompleter[]
 ): DossierResume {
   return {
+    // Mission 22 (A4) : la liste v2 calcule le geste principal de chaque ligne (ajouts, la v1 ne les lit pas).
+    dateChantier: dossier.dateChantier?.toISOString() ?? null,
+    nbPhotos: dossier.photos === undefined ? undefined : lirePhotos(dossier.photos).length,
+    clientTelephone: dossier.clientTelephone,
     id: dossier.id,
     clientNom: dossier.clientNom,
     clientVille: dossier.clientVille,

@@ -11,6 +11,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.NEXT_PHASE === "phase-production-build") return;
 
+  // Mission 22 : la garde de l'essai local (CRM_ESSAI_LOCAL=1) se dit au démarrage, avant tout le reste.
+  if ((await import("@/lib/acces/essai-local")).essaiLocal()) console.warn("[essai local] actif : aucun envoi sortant (CRM_ESSAI_LOCAL=1)");
+
   // Réseau sortant : IPv4 d'abord (l'hébergeur n'a pas d'IPv6), voir le module.
   (await import("@/lib/base/reseau-sortant")).reglerReseauSortant();
 

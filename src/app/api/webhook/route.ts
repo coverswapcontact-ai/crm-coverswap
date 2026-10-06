@@ -7,6 +7,7 @@ import { rattacherLead } from "@/lib/clients/identification";
 import { classerLeadSansBloquer } from "@/lib/prospects/qualification";
 import { envoyerAccuseDeReception } from "@/lib/sms/accuse";
 import { secretWebhookValide, secretsWebhook } from "@/lib/acces/secret-webhook";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { LIMITE_PAR_CONTACT, contactDepasseLaLimite, ipDepasseLaLimite, ipDuVisiteur } from "@/lib/acces/limite-site";
 import { enregistrerImageBase64, enregistrerPhotosLead } from "@/lib/simulations/images";
 import { rattacherSimulationsSite } from "@/lib/site/simulations";
@@ -449,7 +450,10 @@ export async function POST(request: NextRequest) {
     // avons reçu, le délai de réponse, comment nous joindre. Exige un expéditeur
     // vérifié (EMAIL_FROM) : sans lui, rien ne part et on le journalise.
     if (data.source.startsWith("SITE_") && data.email && (isNew || demandeDeDevis || simulationsRattachees.length > 0)) {
-      if (!process.env.EMAIL_FROM || !process.env.RESEND_API_KEY) {
+      if (essaiLocal()) {
+        // Mission 22 : en essai local, l'accusé de réception au visiteur ne part pas.
+        refuserEnvoi("resend", "accusé de réception au visiteur");
+      } else if (!process.env.EMAIL_FROM || !process.env.RESEND_API_KEY) {
         console.warn("[webhook] accusé de réception non envoyé : EMAIL_FROM ou RESEND_API_KEY absente");
       } else {
         try {
@@ -492,7 +496,10 @@ export async function POST(request: NextRequest) {
     // - OU TOUTE demande écrite sur le site (devis, pro, contact), même d'un client déjà en base (un client
     //   qui redemande un devis est très chaud → à ne jamais rater ; un client qui écrit attend une réponse).
     const isDevis = demandeDeDevis;
-    if (isNew || demandeEcrite) {
+    if (essaiLocal() && (isNew || demandeEcrite)) {
+      // Mission 22 : en essai local, la notification du gérant ne part pas.
+      refuserEnvoi("resend", "notification du gérant (nouveau lead)");
+    } else if (isNew || demandeEcrite) {
       try {
         const resend = new Resend(process.env.RESEND_API_KEY);
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.coverswap.fr";

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { CODES_DROITS } from "./graph";
 import { GRAPH, jetonConversions, pixelId } from "./config";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 
 /**
  * Renvoi des conversions vers Meta (API Conversions, intégration CRM).
@@ -114,6 +115,8 @@ export async function envoyerConversion(demande: DemandeConversion): Promise<Res
   const { user_data, rattachement } = donneesUtilisateur(demande);
   const test = process.env.META_TEST_EVENT_CODE;
   const trace = { evenement: etape.evenement, evenementId: demande.evenementId, rattachement, valeur: demande.valeur ?? undefined, test: Boolean(test) };
+  // Mission 22 : en essai local, rien ne part vers Meta (« inactif » : le renvoi n'a pas été tenté).
+  if (essaiLocal()) return { ok: false, inactif: true, detail: refuserEnvoi("meta", etape.evenement).detail, trace };
 
   const pixel = pixelId();
   const token = jetonConversions();

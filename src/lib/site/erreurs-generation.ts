@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 
 /**
  * Ce que le visiteur du simulateur lit quand la génération échoue, et l'alerte
@@ -40,6 +41,11 @@ let derniereAlerte = 0;
  */
 export async function alerterPanneSimulateur(statut: number | undefined, detail: string, maintenant = Date.now()): Promise<boolean> {
   if (maintenant - derniereAlerte < DELAI_ENTRE_ALERTES_MS) return false;
+  // Mission 22 : en essai local, l'alerte se journalise, elle ne part pas.
+  if (essaiLocal()) {
+    refuserEnvoi("resend", `alerte de panne du simulateur (HTTP ${statut ?? "?"})`);
+    return false;
+  }
   if (!process.env.RESEND_API_KEY) return false;
   derniereAlerte = maintenant;
   try {

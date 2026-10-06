@@ -1,3 +1,4 @@
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { fournisseurBrevo } from "./brevo";
 import { fournisseurOvh, variablesOvhManquantes } from "./ovh";
 import { fournisseurSimulateur } from "./simulateur";
@@ -22,7 +23,17 @@ export type EtatFournisseur = {
  * France), puis Brevo, puis rien. Le simulateur ne se choisit jamais tout seul :
  * un CRM de production ne doit pas « envoyer » des SMS dans le vide.
  */
+/** Mission 22 : en essai local, le simulateur prend la place du fournisseur, et chaque envoi se journalise. */
+const fournisseurEssaiLocal: FournisseurSms = {
+  ...fournisseurSimulateur,
+  envoyer(demande) {
+    refuserEnvoi("sms", `${demande.texte.length} caractères`);
+    return fournisseurSimulateur.envoyer(demande);
+  },
+};
+
 export function fournisseurSms(env: NodeJS.ProcessEnv = process.env): FournisseurSms | null {
+  if (env === process.env && essaiLocal()) return fournisseurEssaiLocal;
   const impose = env.SMS_FOURNISSEUR?.trim().toLowerCase();
   if (impose === "simulateur") return fournisseurSimulateur;
   if (impose === "ovh") return fournisseurOvh;

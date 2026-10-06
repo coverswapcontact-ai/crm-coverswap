@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { consommationDuMois } from "@/lib/ia/modele";
 import { lireParametre } from "@/lib/parametres/service";
 import { COUT_ESTIME_VISION_DOLLARS, MODELE_VISION, coutEnDollars } from "@/lib/simulations/prix";
@@ -117,6 +118,8 @@ async function noter(phase: Phase, usage: string, reponse: ReponseVision | null,
  */
 export async function appelerVision<T>(phase: Phase, demande: Omit<DemandeVision, "modele">, lire: (brut: unknown) => T | null, contexte: ContexteVision = {}): Promise<ResultatVision<T>> {
   const debut = Date.now();
+  // Mission 22 : en essai local, aucun appel payant ; l'appelant continue sans (comme sans clé).
+  if (essaiLocal()) return { ok: false, raison: "cle", message: `${refuserEnvoi("openai-vision", phase).detail} : analyse sautée.`, dureeMs: 0 };
   const fournisseur = globalEssai[CLE_ESSAI] ?? fournisseurOpenAI;
   if (!globalEssai[CLE_ESSAI] && !process.env.OPENAI_API_KEY) return { ok: false, raison: "cle", message: "OPENAI_API_KEY absente : analyse sautée.", dureeMs: 0 };
   const budget = await budgetVisionDisponible();

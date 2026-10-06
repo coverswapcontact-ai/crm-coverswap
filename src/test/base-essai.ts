@@ -85,6 +85,9 @@ export const CANAUX_SORTANTS = [
  */
 export function couperCanauxSortants(env: NodeJS.ProcessEnv = process.env): void {
   for (const cle of CANAUX_SORTANTS) env[cle] = "";
+  // Mission 22 : la garde de l'essai local (CRM_ESSAI_LOCAL=1) court-circuite les entonnoirs d'envoi ; les tests qui
+  // vérifient un transport vers un faux serveur local ne doivent pas la subir. Celui qui la veut la pose lui-même.
+  env.CRM_ESSAI_LOCAL = "";
 }
 
 /** Copie neuve de la base modèle ; positionne DATABASE_URL et rend le chemin. */

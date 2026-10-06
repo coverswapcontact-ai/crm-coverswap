@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio, type TailleSortie } from "./cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI, type RaisonEchec } from "@/lib/site/erreurs-generation";
 import { pluriel } from "@/lib/commun/format";
@@ -193,8 +194,13 @@ export function definirGenerateurEssai(generateur: Generateur | null): void {
   if (generateur) globalEssai[CLE_GENERATEUR] = generateur;
   else delete globalEssai[CLE_GENERATEUR];
 }
-/** Le générateur en vigueur : celui des essais s'il est posé, sinon le vrai (OpenAI). */
-export const generateurEnVigueur = (): Generateur => globalEssai[CLE_GENERATEUR] ?? genererRendu;
+/** Mission 22 : le générateur de l'essai local — aucun appel payant, un échec « service indisponible » explicite. */
+const generateurEssaiLocal: Generateur = async (entree) => {
+  const { detail } = refuserEnvoi("openai-images", `rendu ${entree.origine}`);
+  return { ok: false, dureeMs: 0, status: 503, raison: "config", message: `${MESSAGES_ECHEC["service-indisponible"]} (${detail}.)` };
+};
+/** Le générateur en vigueur : celui de l'essai local, sinon celui des essais s'il est posé, sinon le vrai (OpenAI). */
+export const generateurEnVigueur = (): Generateur => (essaiLocal() ? generateurEssaiLocal : (globalEssai[CLE_GENERATEUR] ?? genererRendu));
 
 export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGeneration> {
   const debut = Date.now();
@@ -400,6 +406,8 @@ export async function genererAmbiance(
 ): Promise<ResultatAmbiance> {
   const debut = Date.now();
   const appelEssai = globalAppelEssai[CLE_APPEL_AMBIANCE];
+  // Mission 22 : en essai local, aucun appel payant, même avec un `appel` fourni.
+  if (essaiLocal()) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: `${refuserEnvoi("openai-images", `ambiance ${entree.format}`).detail}.` };
   if (!options.appel && !appelEssai && !process.env.OPENAI_API_KEY) return { ok: false, dureeMs: 0, status: 503, raison: "config", message: "OPENAI_API_KEY absente." };
   const appel = options.appel ?? appelEssai ?? appelAmbianceOpenAI;
   const modele = options.modele ?? modeleImage();

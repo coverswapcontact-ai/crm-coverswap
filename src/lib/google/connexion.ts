@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import prisma from "@/lib/prisma";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { AttenteExterne, ErreurDefinitive, PREFIXE_ATTENTE } from "@/lib/taches/registre";
 import { chiffrer, dechiffrer, lireCle } from "./chiffrement";
 import { applicationGooglePubliee, echeanceJetonGoogle, type EcheanceGoogle, type RappelGoogle } from "./echeance";
@@ -383,6 +384,12 @@ async function jetonAcces(portee: string, forcer = false): Promise<string> {
  */
 export async function appelGoogle(url: string, init: RequestInit & { portee: string }): Promise<Response> {
   const { portee, ...options } = init;
+  // Mission 22 : en essai local, aucune écriture chez Google (libellé Gmail, envoi, agenda, Drive) ; les lectures (GET) passent.
+  // Une réponse factice : un identifiant d'essai, et une session d'envoi Drive qui repasse par cette même garde.
+  if (essaiLocal() && (options.method ?? "GET").toUpperCase() !== "GET") {
+    refuserEnvoi("google", `${(options.method ?? "").toUpperCase()} ${url.split("?")[0]}`);
+    return new Response(JSON.stringify({ id: "essai-local", threadId: null, labels: [] }), { status: 200, headers: { "content-type": "application/json", location: "https://essai.local/session-drive" } });
+  }
   let reponse: Response | null = null;
   for (const forcer of [false, true]) {
     const jeton = await jetonAcces(portee, forcer);

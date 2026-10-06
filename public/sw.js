@@ -15,7 +15,8 @@
  * connexion n'est jamais gardée.
  */
 // v12 (mission 18, partie A) : les écrans retirés (Espaces clients, Dépenses, Tâches de fond) ne restent pas servis hors ligne.
-const VERSION = "v12";
+// v13 (mission 22, lot A0b) : les écrans en cache changent de coque (v1 ou v2 selon le drapeau et le cookie).
+const VERSION = "v13";
 const CACHE_APPLICATION = `application-${VERSION}`;
 const CACHE_ECRANS = `ecrans-${VERSION}`;
 const CACHE_DONNEES = `donnees-${VERSION}`;

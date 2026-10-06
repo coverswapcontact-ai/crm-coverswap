@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import type { ResultatCanal } from "./configuration";
 import { decrireErreur } from "./reseau";
 import { pluriel } from "@/lib/commun/format";
@@ -96,6 +97,8 @@ export async function compterAbonnes(): Promise<number> {
  * un SMS reçu sonne sur « Messages » si elle est installée, sinon sur le CRM.
  */
 export async function envoyerPushWeb(charge: ChargePush, options: { application?: "crm" | "messages" } = {}): Promise<ResultatCanal> {
+  // Mission 22 : garde avant toute lecture des abonnements — une copie de la prod en local en a de vrais.
+  if (essaiLocal()) return { canal: "pushweb", ok: true, configure: true, detail: refuserEnvoi("pushweb", charge.titre).detail };
   const prisma = await base();
   let abonnes;
   try {

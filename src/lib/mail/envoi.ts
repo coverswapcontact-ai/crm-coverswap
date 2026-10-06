@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { PORTEES_GOOGLE, connexionActive } from "@/lib/google/connexion";
 
 /**
@@ -110,7 +111,18 @@ function envoyeurGmail(compte: string): EnvoyeurMail {
   };
 }
 
+/** Mission 22 : l'envoyeur de l'essai local — un résultat réussi factice, aucun réseau, une ligne de journal. */
+const envoyeurJournal: EnvoyeurMail = {
+  nom: "essai local",
+  async envoyer(message) {
+    refuserEnvoi("mail", `« ${message.objet} » à ${message.a}`);
+    return { identifiant: `essai-local-${Date.now().toString(36)}`, fil: message.enReponseA?.fil ?? null, compte: null };
+  },
+};
+
 export async function envoyeurMail(options: { exigerGmail?: boolean } = {}): Promise<EnvoyeurMail | null> {
+  // Mission 22 : la garde passe avant l'envoyeur d'essai des tests, pour que rien ne parte même si un seam est posé.
+  if (essaiLocal()) return envoyeurJournal;
   if (globalEssai[CLE] !== undefined) return globalEssai[CLE] ?? null;
   const gmail = await connexionActive(PORTEES_GOOGLE.GMAIL_ENVOYER);
   if (gmail) return envoyeurGmail(gmail.compte);

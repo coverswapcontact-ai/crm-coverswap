@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { jourParis } from "@/lib/dossiers/dates";
 import { lireParametres } from "@/lib/parametres/service";
 import type { CleParametre } from "@/lib/parametres/definitions";
@@ -172,6 +173,8 @@ export async function appelerModele(appel: AppelModele, maintenant: Date = new D
     throw new IaIndisponible(`Budget du mois presque atteint : l'analyse (jusqu'à ${estimation.toFixed(3).replace(".", ",")} €) le dépasserait.`);
   }
 
+  // Mission 22 : en essai local, aucun appel payant ; l'appelant lit un échec explicite (comme une IA indisponible).
+  if (essaiLocal()) throw new IaIndisponible(`${refuserEnvoi("anthropic", appel.usage).detail} (essai local : le modèle n'est pas appelé).`);
   const fournisseur = globalEssai[CLE_ESSAI] ?? fournisseurAnthropic;
   const debut = Date.now();
   let reponse: ReponseModele;

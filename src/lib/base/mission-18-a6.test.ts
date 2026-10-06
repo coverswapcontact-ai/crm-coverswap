@@ -222,6 +222,7 @@ describe("anciennes adresses et application installée", () => {
   test("les raccourcis de l'application installée mènent à des écrans ; le service worker change de version (écrans retirés hors du cache)", () => {
     const manifeste = JSON.parse(lire("public/manifest-crm.webmanifest")) as { start_url: string; shortcuts: { url: string }[] };
     for (const url of [manifeste.start_url, ...manifeste.shortcuts.map((r) => r.url)]) assert.ok(existsSync(path.join(RACINE, "src/app/(pilotage)", url, "page.tsx")), url);
-    assert.match(lire("public/sw.js"), /const VERSION = "v12";/);
+    // v12 à la mission 18 ; chaque mission qui change les écrans servis hors ligne monte d'un cran (v13 : mission 22, la coque).
+    assert.ok(Number(lire("public/sw.js").match(/const VERSION = "v(\d+)";/)?.[1]) >= 12);
   });
 });

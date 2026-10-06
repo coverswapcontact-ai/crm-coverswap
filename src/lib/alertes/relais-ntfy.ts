@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { decrireErreur } from "./reseau";
 
 /**
@@ -30,6 +31,11 @@ export type DemandeRelais = { sujet: string; titre: string; priorite: string; ta
 
 /** Envoie par la passerelle. Lève avec une raison lisible si elle échoue. */
 export async function envoyerParRelais(demande: DemandeRelais, delaiMs = 12_000): Promise<{ status: number }> {
+  // Mission 22 : en essai local, rien ne part vers la passerelle du site.
+  if (essaiLocal()) {
+    refuserEnvoi("relais-ntfy", demande.titre);
+    return { status: 200 };
+  }
   const corps = JSON.stringify(demande);
   const horodatage = String(Date.now());
   // Une signature par secret connu : le site accepte celle qui correspond au sien

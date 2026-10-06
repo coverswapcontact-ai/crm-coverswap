@@ -22,6 +22,7 @@
  *    mais un mail ne fait pas sonner un téléphone : ce n'est pas un push.
  */
 import { Resend } from "resend";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 import { normaliserTelephone } from "@/lib/clients/normalisation";
 import { CANAUX, CANAUX_PUSH, variablesManquantes, type Canal, type ResultatCanal } from "./configuration";
 import { decrireErreur, envoyerAvecRepli } from "./reseau";
@@ -258,6 +259,11 @@ const ENVOIS: Record<Canal, (alerte: Alerte) => Promise<ResultatCanal>> = {
  */
 export async function alerter(alerte: Alerte, options: { canaux?: readonly Canal[]; origine?: string } = {}): Promise<ResultatCanal[]> {
   const canaux = options.canaux ?? CANAUX;
+  // Mission 22 : en essai local (CRM_ESSAI_LOCAL=1), aucun canal n'est touché ; une ligne par canal, comme si c'était parti.
+  if (essaiLocal()) {
+    const { detail } = refuserEnvoi("alertes", alerte.titre);
+    return canaux.map((canal) => ({ canal, ok: true, configure: true, detail }));
+  }
   const resultats = await Promise.all(canaux.map((canal) => ENVOIS[canal](alerte)));
   for (const r of resultats) {
     if (!r.ok && r.configure) console.error(`[alertes] ${r.canal} en échec : ${r.detail}`);

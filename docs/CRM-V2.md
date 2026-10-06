@@ -95,13 +95,86 @@ signale sur stderr toute valeur hors table sans y toucher, et conserve les fins 
 ligne se passent à la main par `JETONS` / `var(--color-…)`. Le test `src/app/lisibilite.test.ts` vérifie qu'il n'a plus
 rien à faire.
 
+## Navigation
+
+Quatre entrées et « Plus », les mêmes sur ordinateur (barre du haut, 16 px) et sur téléphone (barre du bas, cinq
+cases au pouce, libellés 14 px, zones de 64 px). Composants : `src/components/v2/CoqueV2.tsx` (serveur) et
+`NavigationV2.tsx` (client) ; aucune adresse ne change.
+
+| Entrée | Adresse | S'allume aussi sur |
+|---|---|---|
+| Aujourd'hui | `/taches` | — ; **le seul compteur** (tâches d'Aujourd'hui, `GET /api/pilotage/compteurs`, rafraîchi toutes les 60 s, au retour sur l'onglet et après chaque écriture) |
+| Dossiers | `/dossiers` | — |
+| Personnes | `/leads` | `/clients` |
+| Argent | `/finances` | `/depenses/nouvelle` (la saisie d'une dépense, raccourci de l'application installée) |
+| Plus | menu | Boîte mail `/mail`, Simulateur `/simulateur`, Site `/site`, Bilan `/analytique`, Réglages `/parametres`, À valider `/validation`, puis « Retour à l'ancienne interface » (`/api/interface?v=v1&retour=…`) |
+
+Aucun badge ailleurs : les leads en retard, les mails à traiter et les échecs de tâches sont des tâches d'Aujourd'hui.
+La recherche globale (`RechercheGlobale.tsx`) : la loupe à droite de la barre du haut, ou ⌘K / Ctrl K ; sur
+téléphone, le champ en tête du menu « Plus ». Elle interroge `GET /api/recherche?q=` (deux caractères au moins ; la
+même fonction `chercherContacts` que l'outil `chercher` du connecteur) et rend « Nom » puis « ville · état » ;
+flèches pour choisir, Entrée ouvre le chemin (`/clients/<id>`, `/leads?lead=`, `/dossiers?dossier=`). Le bandeau de
+rappel de la connexion Google reste monté. La coque garde `RetourAppel`, `HoteEcranSms`, le `Toaster` de la racine,
+le fond et le `main` aux zones sûres : les écrans v1 s'y affichent sans changement en attendant leur écran v2. Le
+seul mouvement : `TRANS_V2` (`components/v2/transitions.ts`), une transition de couleur coupée sous
+`prefers-reduced-motion`.
+
+## Bascule
+
+`CRM_INTERFACE`, lu côté serveur à chaque requête (`src/lib/interface/choix.ts`, `interfaceCourante()`), jamais au
+build :
+
+| Valeur | Effet |
+|---|---|
+| absente, `v1`, ou autre chose | la v1 pour tout le monde (une faute de frappe ne bascule rien) |
+| `v2` | la v2 pour tout le monde |
+| `apercu` | la v1 par défaut ; la v2 pour la session qui porte le cookie `crm-interface=v2` |
+
+Le cookie (`crm-interface`, `sameSite: lax`, chemin `/`, 7 jours) est posé par `GET /api/interface?v=v2&retour=/chemin`
+et effacé par `?v=v1` ; la route redirige ensuite vers `retour` (chemin relatif du CRM seulement, sinon `/taches`).
+Elle n'est pas publique : elle passe par la session, comme les autres `/api`. `?interface=v2` (ou `v1`) sur n'importe
+quelle adresse du CRM fait la même chose : `PriseInterface` (client, monté par les deux gabarits) remplace la page par
+cette route, puis revient à la même adresse sans le paramètre. Le point de choix est le gabarit
+`src/app/(pilotage)/layout.tsx` ; chaque `page.tsx` choisira son écran de la même façon
+(`const v = await interfaceCourante(); return v === "v2" ? <EcranV2 /> : <EcranV1 />`). Le service worker est passé en
+`v13` : un écran mis en cache sous une coque n'est pas servi sous l'autre.
+
+En production, le jour de la validation : `CRM_INTERFACE=v2` (ou `apercu` pour comparer d'abord) sur Railway.
+
+## Base d'essai
+
+`CRM_ESSAI_LOCAL=1` dans `.env.local` du poste (jamais sur Railway) : la garde dure de `src/lib/acces/essai-local.ts`
+(`essaiLocal()`, lecture paresseuse). Elle suffit à elle seule, y compris avec une copie des vraies données en local
+(connexion Google et abonnements push présents en base). Chaque entonnoir journalise
+« [essai local] <canal> : rien n'est parti — <résumé> », garde la ligne dans `envoisRefuses()` (les 50 dernières) et
+rend un résultat neutre explicite ; `instrumentation.ts` l'annonce au démarrage ; le bandeau
+« Base d'essai — rien ne part » (`components/v2/BandeauEssai.tsx`, ambre, 44 px) s'affiche en v1 comme en v2.
+
+| Canal | Entonnoir gardé | Ce que l'appelant lit |
+|---|---|---|
+| Telegram, ntfy, push web, mail d'alerte | `alerter()` (`lib/alertes/canaux.ts`) | une ligne « ok » par canal |
+| Push web direct | `envoyerPushWeb()` (`lib/alertes/pushweb.ts`), avant toute lecture des abonnements | « ok » |
+| Passerelle ntfy du site | `envoyerParRelais()` (`lib/alertes/relais-ntfy.ts`) | HTTP 200 |
+| Mail au client (Gmail, Resend) | `envoyeurMail()` (`lib/mail/envoi.ts`) → envoyeur « essai local », avant le seam des tests | identifiant `essai-local-…` |
+| Resend direct | accusé de réception et notification du gérant (`app/api/webhook/route.ts`), alerte de panne du simulateur (`lib/site/erreurs-generation.ts`) | rien ne part |
+| SMS | `fournisseurSms()` (`lib/sms/fournisseurs/index.ts`) → `fournisseurSimulateur` | accusé simulé |
+| Meta (conversions) | `envoyerConversion()` (`lib/meta/conversions.ts`) | `inactif` |
+| Google : libellés Gmail, envoi, Agenda, Drive | `appelGoogle()` pour toute méthode autre que GET (`lib/google/connexion.ts`) ; les lectures passent | réponse factice `{ id: "essai-local" }` |
+| Stripe | `creerSessionCheckout()` (`lib/paiement/stripe.ts`) | retour direct sur la page du client |
+| OpenAI (images, vision), Anthropic | `generateurEnVigueur()`, `genererAmbiance()`, `appelerVision()`, `appelerModele()` | échec « essai local » explicite, aucun coût |
+
+Test : `src/lib/acces/essai-local.test.ts` (les seams d'essai et `fetch` lèvent s'ils sont touchés ; onze canaux
+couverts). Les tests posent `CRM_ESSAI_LOCAL=""` dans `src/test/base-essai.ts` : ceux qui vérifient un transport vers
+un faux serveur local ne subissent pas la garde. Les données de l'essai : `docs/COMMENT-TESTER-V2.md` (lot A6) ; le
+fichier `essai-v2.db` est couvert par `*.db` dans `.gitignore`.
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
 
 | Écran v1 | Écran v2 | Adresse | État |
 |---|---|---|---|
-| | | | |
+| Coque (`components/pilotage/Navigation.tsx` : 10 onglets, 3 compteurs) | `components/v2/CoqueV2.tsx` + `NavigationV2.tsx` : Aujourd'hui, Dossiers, Personnes, Argent, Plus ; un compteur, recherche globale, bandeau d'essai | toutes | lot A0b, livrée |
 
 ## Liste de contrôle par écran
 

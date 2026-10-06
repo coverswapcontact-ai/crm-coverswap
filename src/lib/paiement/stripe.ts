@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { ErreurMetier } from "@/lib/commun/erreurs";
+import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
 
 /**
  * Mission 18 (B10) — Stripe, sans dépendance npm : l'API REST appelée par `fetch` (formulaire encodé), et la signature
@@ -76,6 +77,11 @@ export function corpsSession(demande: DemandeSession): URLSearchParams {
 
 /** Crée une session Stripe Checkout et rend son adresse. Lève une ErreurMetier (502) si Stripe refuse ou ne répond pas. */
 export async function creerSessionCheckout(demande: DemandeSession): Promise<{ id: string; url: string }> {
+  // Mission 22 : en essai local, pas de session Stripe ; le client revient sur sa page de retour.
+  if (essaiLocal()) {
+    refuserEnvoi("stripe", `${demande.libelle} (${demande.centimes} centimes)`);
+    return { id: "cs_essai_local", url: demande.retour };
+  }
   const cle = process.env.STRIPE_SECRET_KEY?.trim();
   if (!cle) throw new ErreurMetier("Le paiement par carte n'est pas ouvert : réglez par virement, ou appelez CoverSwap.", 409);
   let reponse: Response;

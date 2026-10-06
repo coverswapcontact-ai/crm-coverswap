@@ -65,6 +65,8 @@ export type SimulationClient = {
   nouvelle: boolean;
   choisie: boolean;
   commentaire: string | null;
+  /** Site 3.0 : la pièce d'exemple du site sur laquelle elle a été faite (null : sa photo) — affichée « Ambiance · avant / après ». */
+  exemple: string | null;
 };
 
 export type DevisClient = {
@@ -429,6 +431,8 @@ export async function etatEspace(espace: EspaceClient, options: { apercu?: boole
       nouvelle: s.source === "SITE" ? false : s.source === "CLIENT" ? s.vueLe === null : (s.publieeLe ?? s.createdAt).getTime() > vuesLe,
       choisie: Boolean(s.choisieLe),
       commentaire: s.commentaireClient,
+      // Site 3.0 : faite sur une pièce d'exemple du site (son nom), null sur sa photo — le site affiche « Ambiance · avant / après ».
+      exemple: s.exemple ?? null,
     })),
     // v3 : il crée lui-même ses simulations ; « CoverSwap prépare » ne s'affiche que si c'est vrai.
     simulationsEnPreparation: enPreparationCrm && !faits.devis ? { delai: DELAI_SIMULATION } : null,

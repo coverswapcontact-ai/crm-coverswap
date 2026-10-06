@@ -1808,3 +1808,33 @@ de clients (téléphone, lumière faible), par exemple depuis l'espace d'un doss
 - À recaler ensuite : `coutEstime` de `prix.ts` (0,21 $ pour medium) affiche le coût annoncé avant un rendu dans
   Paramètres › Simulateur. Il surestimerait d'un facteur 4 environ.
 - Retour en arrière : supprimer la variable.
+
+## Mission 21, relecture des phases D, E, F : la pièce d'exemple du site dite au CRM (06/10/2026)
+
+Constat important n° 1 de la relecture adverse : le CRM ne savait pas qu'une simulation du site avait été faite sur
+une **pièce d'exemple** (lot E3 du site 3.0) — l'avant généré entrait dans les photos du dossier comme une photo du
+client, et l'espace l'appelait « Votre simulation sur coverswap.fr ».
+
+**Fait** (ajouts seulement, rétrocompatible : sans le champ, rien ne change ; Prisma : aucun champ retiré)
+- Champ facultatif `exemple String?` (nom de l'avant, « cuisine-bordeaux-brillante ») sur `TravailSimulation`,
+  `SimulationSite`, `Simulation` et `SimulationEspace` (`prisma db push` au démarrage l'ajoute, colonnes nulles).
+- `POST /api/simulate` : `exemple` lu par `exempleValide` (`lib/site/cors-simulate.ts` : minuscules, chiffres, tirets,
+  80 signes), hors signature (il ne fait que dire que l'avant n'est pas une photo du visiteur) ; gardé sur le travail,
+  puis sur la `SimulationSite` (`terminerAvecRendu`), puis sur la `Simulation` du contact (`rattacherSimulationsSite`).
+- `POST /api/webhook` : `exemple` facultatif ; avec lui, **aucune photo** n'est rangée comme photo du contact (demande
+  après un échec sur un exemple) et la `Simulation` créée le porte.
+- `rangerImagesDuLead` (`dossiers/depuis-lead.ts`) : l'avant d'une simulation sur un exemple n'entre jamais dans les
+  photos du dossier (`copies.avant` vide) ; l'événement dit « sur une pièce d'exemple (…), pas sur une photo du
+  client ». Le rendu, lui, est rangé comme avant (il n'est jamais une photo du client).
+- Espace : `synchroniserSimulationsSite` titre « Ambiance · avant / après sur une pièce d'exemple » et recopie
+  `exemple` ; l'état de l'espace (`SimulationClient.exemple`) le porte : le site affiche « Ambiance · avant / après ».
+- Assistant (`voir les simulations du site`) : « AVANT (pièce d'exemple du site) » au lieu de « photo du visiteur ».
+
+**Tests** : CRM 1 482 → 1 487 (`npm test` : 1 487 verts). Nouveau `src/lib/base/mission-21-exemple.test.ts` (5) :
+le nom accepté ; `POST /api/simulate` → travail → tâche → `SimulationSite.exemple` (absent ou mal formé → null) ;
+webhook après un rendu sur un exemple (simulation marquée, dossier : le rendu seul, aucune photo du contact,
+événement, espace : titre et `exemple` dans l'état) ; contrôle sans exemple (2 photos, titre d'avant) ; demande après
+échec sur un exemple : aucune photo. `npx eslint` sur les fichiers touchés et `npm run build` passent.
+
+**Site** : branche `site-3-0` (pas encore fusionnée) — il envoie `exemple` à `prepare`, au CRM et à la demande ; il
+marche avec ce CRM comme avec l'ancien (champ ignoré).

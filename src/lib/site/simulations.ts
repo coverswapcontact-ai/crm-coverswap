@@ -43,6 +43,8 @@ export type EntreeSimulationSite = TraceMoteur & {
   campagne?: string | null;
   ipOrigine?: string | null;
   dureeMs?: number | null;
+  /** Site 3.0 : la pièce d'exemple du site ; l'avant n'est alors pas une photo du visiteur. */
+  exemple?: string | null;
 };
 
 /** L'extension d'un fichier d'après le type d'une data URL (jpg à défaut). */
@@ -71,6 +73,7 @@ export async function enregistrerSimulationSite(entree: EntreeSimulationSite): P
       scoreControle: entree.scoreControle ?? null,
       defautsControle: entree.defautsControle ?? null,
       tentatives: entree.tentatives ?? null,
+      exemple: entree.exemple ?? null,
     },
   });
   const dossier = path.join(DOSSIER_SITE, entree.parcoursId, creee.id);
@@ -114,6 +117,8 @@ export async function rattacherSimulationsSite(leadId: string, parcoursId: strin
         source: "SITE_SIMULATEUR",
         referenceChoisie: s.referenceChoisie,
         notes: references.length ? references.map((r) => `${r.libelle} : ${r.ref} (${r.nom})`).join(" | ") : null,
+        // Site 3.0 : faite sur une pièce d'exemple — l'avant n'est pas une photo du client (depuis-lead.ts ne le range pas).
+        exemple: s.exemple ?? null,
       },
     });
     const dossier = path.join(leadId, simulation.id);

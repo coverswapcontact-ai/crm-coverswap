@@ -122,6 +122,9 @@ model SimulationSite {
   scoreControle       Int? // contrôle automatique du rendu, 0 à 10
   defautsControle     String? // JSON { type, detail }[]
   tentatives          Int? // générations faites pour ce rendu (1 ou 2)
+  // Site 3.0 (mission 21) : la pièce d'exemple du site (nom de l'avant) quand le rendu n'est pas fait sur une photo du
+  // visiteur — l'avant n'est alors jamais une photo du client, et l'espace montre « Ambiance · avant / après ».
+  exemple             String?
   archiveLe        DateTime? // purge : images effacées, ligne conservée sans image
   archiveMotif     String?
   ecriture         String?
@@ -167,6 +170,7 @@ model TravailSimulation {
   // Mission 15 (partie 2) : empreinte de la photo (analyse réutilisée) et moteur employé.
   photoEmpreinte    String?
   moteur            String? // V1 | V2
+  exemple           String? // site 3.0 : pièce d'exemple du site (nom de l'avant), absente sur une photo du visiteur
   archiveLe         DateTime?
   archiveMotif      String?
   ecriture          String?
@@ -335,6 +339,7 @@ model Simulation {
   dossierId         String? // dossier où la photo avant et le rendu ont été rangés (photos de chantier, donc Drive)
   rangeeLe          DateTime?
   photosDossier     String? // JSON { avant, rendu } : identifiants des copies dans les photos du dossier (le rendu n'est pas une photo du client)
+  exemple           String? // site 3.0 : faite sur une pièce d'exemple du site (nom de l'avant) — l'avant n'est pas une photo du client
   archiveLe         DateTime? // archivage : rien ne se supprime
   archiveMotif      String?
   ecriture          String? // contexte de la dernière écriture (auteur, jeton), lu par le journal
@@ -1537,6 +1542,7 @@ model SimulationEspace {
   promptTexte       String? // consigne réellement donnée au modèle
   preparationId     String?
   simulationId      String? // Simulation du contact, quand elle a été faite sur le site
+  exemple           String? // site 3.0 : faite sur une pièce d'exemple du site — le client la voit « Ambiance · avant / après »
   coutDollars       Float? // génération par l'API
   // Mission 15 (partie 2) : moteur de prompt, direction artistique, analyse de la photo, contrôle du rendu.
   moteur              String? // V1 | V2

@@ -144,7 +144,9 @@ export async function synchroniserSimulationsSite(dossierId: string): Promise<Si
               dossierId,
               chemin: simulation.imageAfterPath!,
               photoAvant: simulation.imageBeforePath ?? simulation.imageOriginalPath,
-              titre: "Votre simulation sur coverswap.fr",
+              // Site 3.0 : sur une pièce d'exemple du site, ce n'est pas sa pièce — le site l'affiche « Ambiance · avant / après ».
+              titre: simulation.exemple ? "Ambiance · avant / après sur une pièce d'exemple" : "Votre simulation sur coverswap.fr",
+              exemple: simulation.exemple ?? null,
               source: "SITE",
               statut: "PUBLIEE",
               publieeLe: simulation.createdAt,

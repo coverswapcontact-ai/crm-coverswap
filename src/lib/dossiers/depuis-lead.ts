@@ -181,7 +181,9 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
 
   for (const simulation of simulations) {
     try {
-      const avant = simulation.imageOriginalPath ?? simulation.imageBeforePath;
+      // Site 3.0 : une simulation faite sur une pièce d'exemple du site n'a pas de photo du client — son avant n'entre
+      // jamais dans les photos du dossier (il ne servirait pas de photo « avant » d'un chantier ni d'une simulation).
+      const avant = simulation.exemple ? null : (simulation.imageOriginalPath ?? simulation.imageBeforePath);
       let rangees = 0;
       let avantOctets = 0;
       // Identifiants des copies : le rendu n'est pas une photo du client (il ne sert jamais de photo « avant »).
@@ -201,7 +203,11 @@ export async function rangerImagesDuLead(leadId: string, dossierId: string, opti
       }
       // Rien sur le disque (volume restauré sans les images, purge) : on le dit une fois sur le dossier, et on n'y revient pas.
       const contenu = [
-        rangees > 0 ? "Simulation faite sur le site : photo avant et rendu rangés dans les photos du dossier" : "Simulation faite sur le site (images introuvables sur le serveur)",
+        simulation.exemple
+          ? `Simulation faite sur le site sur une pièce d'exemple (${simulation.exemple}), pas sur une photo du client : ${rangees > 0 ? "rendu rangé dans les photos du dossier" : "rendu introuvable sur le serveur"}`
+          : rangees > 0
+            ? "Simulation faite sur le site : photo avant et rendu rangés dans les photos du dossier"
+            : "Simulation faite sur le site (images introuvables sur le serveur)",
         simulation.referenceChoisie ? `finition ${simulation.referenceChoisie}` : null,
         simulation.notes,
         simulation.prixDevis ? `${Math.round(simulation.prixDevis)} € simulés` : null,

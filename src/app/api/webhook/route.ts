@@ -72,6 +72,9 @@ const webhookSchema = z.object({
   // Le site AFFICHERA le lien de l'espace (formulaire après un rendu) : sans ce drapeau, le site ne l'ouvre pas (ancien
   // site, demande après un échec de génération) — rien ne dirait alors au dossier un « lien affiché » qui ne l'est pas.
   afficherLienEspace: z.boolean().optional().catch(undefined),
+  // Site 3.0 (mission 21) : la simulation a été faite sur une pièce d'exemple du site (son nom). Ses photos ne sont pas
+  // celles du visiteur : aucune n'est rangée comme photo du client. Facultatif (ancien site : absent).
+  exemple: z.string().regex(/^[a-z0-9][a-z0-9-]{0,79}$/).optional().catch(undefined),
 });
 
 /** Les listes Leads et Dossiers se relisent ; jamais bloquant (le lead est déjà écrit, un 500 ferait renvoyer la demande). */
@@ -349,7 +352,8 @@ export async function POST(request: NextRequest) {
     if (isNew && qualification?.priorite !== "A_ECARTER") await envoyerAccuseDeReception(lead.id);
 
     // ── Photos jointes à la demande (formulaire de devis) ──
-    const photosEcrites = parsed.data.photos?.length ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;
+    // Site 3.0 : une demande faite sur une pièce d'exemple ne porte pas de photo du visiteur — rien n'est rangé comme tel.
+    const photosEcrites = parsed.data.photos?.length && !parsed.data.exemple ? await enregistrerPhotosLead(lead.id, parsed.data.photos) : 0;
 
     // ── Simulations faites avant les coordonnées : rattachées à la fiche avec leurs images ──
     let simulationsRattachees: string[] = [];
@@ -383,6 +387,7 @@ export async function POST(request: NextRequest) {
           prixDevis: data.prixDevis,
           lienSimulation: data.lienSimulation,
           notes: data.notes,
+          exemple: parsed.data.exemple ?? null,
         },
       });
 

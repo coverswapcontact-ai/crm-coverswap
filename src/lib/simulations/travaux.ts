@@ -56,6 +56,8 @@ export type EntreeTravail = {
   source?: string | null;
   campagne?: string | null;
   ipOrigine?: string | null;
+  /** Site 3.0 : la pièce d'exemple du site (nom de l'avant) ; absente, la photo est celle du visiteur. */
+  exemple?: string | null;
 };
 
 /** La pièce d'un travail (le projet du site), cuisine à défaut. */
@@ -130,6 +132,7 @@ export async function creerTravailSimulation(entree: EntreeTravail): Promise<{ t
       source: entree.source?.slice(0, 120) ?? null,
       campagne: entree.campagne?.slice(0, 120) ?? null,
       ipOrigine: entree.ipOrigine ?? null,
+      exemple: entree.exemple ?? null,
       photoEmpreinte,
       statut: "EN_ATTENTE",
     },
@@ -169,7 +172,7 @@ async function echouer(travailId: string, raison: string, message: string, ip: s
   return { statut: "ECHEC", raison };
 }
 
-type TravailLu = { id: string; parcoursId: string; projet: string; references: string; page: string | null; source: string | null; campagne: string | null; ipOrigine: string | null; leadId: string | null; photoPath: string | null };
+type TravailLu = { id: string; parcoursId: string; projet: string; references: string; page: string | null; source: string | null; campagne: string | null; ipOrigine: string | null; leadId: string | null; photoPath: string | null; exemple?: string | null };
 type Reussite = Extract<SortiePipeline, { ok: true }>;
 
 /** Garde le rendu (SimulationSite + rattachement au lead du parcours) et pose PRETE. Une exception après OpenAI ne perd pas le rendu. */
@@ -199,6 +202,7 @@ async function terminerAvecRendu(travail: TravailLu, resultat: Reussite, demarre
       source: travail.source,
       campagne: travail.campagne,
       ipOrigine: travail.ipOrigine,
+      exemple: travail.exemple ?? null,
       dureeMs: resultat.dureeMs,
       ...trace,
     });

@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { purgerSiNecessaire, type ReferenceSimulee } from "@/lib/site/simulations";
 import { rendreSimulation, simulationAutorisee } from "@/lib/acces/limite-site";
 import { MESSAGES_ECHEC } from "@/lib/site/erreurs-generation";
-import { entetesCorsSimulateur, ipDuVisiteurSimulateur, origineSimulateurAutorisee, parcoursIdValide, travailIdValide } from "@/lib/site/cors-simulate";
+import { entetesCorsSimulateur, exempleValide, ipDuVisiteurSimulateur, origineSimulateurAutorisee, parcoursIdValide, travailIdValide } from "@/lib/site/cors-simulate";
 import { lireSelectionsCorps, resoudreSelections, signatureSelections, signatureValide } from "@/lib/site/contrat-simulate";
 import { messageZonesNonVisibles, zonesNonVisiblesPourPhoto } from "@/lib/simulateur/analyses";
 import { reglagesSimulateur } from "@/lib/simulateur/reglages";
@@ -27,7 +27,8 @@ import { suivreTravail } from "@/lib/simulations/travaux-lecture";
  * les zones (source unique) et les références (catalogue) ; le moteur (V1 revu
  * ou V2) construit lui-même la consigne. L'ancien corps asynchrone (prompt +
  * swatchUrls signés) reste accepté le temps du déploiement du site ; le contrat
- * SYNCHRONE d'avant la partie 1 est RETIRÉ (400 « contrat »).
+ * SYNCHRONE d'avant la partie 1 est RETIRÉ (400 « contrat »). Site 3.0 : `exemple` (facultatif) nomme la pièce
+ * d'exemple du site quand la photo n'est pas celle du visiteur ; gardé sur le travail puis sur la simulation.
  *
  * Vérifications DANS CET ORDRE : expiration, signature, sélections, zone non
  * visible (409 d'après l'analyse connue), puis quota (une requête forgée,
@@ -78,6 +79,8 @@ type Corps = {
   page?: unknown;
   source?: unknown;
   campagne?: unknown;
+  /** Site 3.0 : la pièce d'exemple du site (facultatif, non signé : il ne fait que dire que l'avant n'est pas une photo du visiteur). */
+  exemple?: unknown;
   /** Ancien corps asynchrone (site d'avant la partie 4) : prompt et adresses signés, références libres. */
   prompt?: unknown;
   swatchUrls?: unknown;
@@ -196,6 +199,7 @@ export async function POST(req: NextRequest) {
       source: texte(body.source, 120),
       campagne: texte(body.campagne, 120),
       ipOrigine: ip === "inconnue" ? null : ip,
+      exemple: exempleValide(body.exemple) ?? null,
     });
     return NextResponse.json({ ok: true, travailId, attenteEstimeeS }, { status: 202, headers: cors });
   } catch (err) {

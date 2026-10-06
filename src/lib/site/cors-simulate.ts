@@ -34,6 +34,14 @@ export function parcoursIdValide(valeur: unknown): string | undefined {
   return typeof valeur === "string" && /^[0-9a-fA-F-]{16,64}$/.test(valeur) ? valeur : undefined;
 }
 
+/**
+ * Site 3.0 (mission 21) : le nom d'une pièce d'exemple du site (« cuisine-bordeaux-brillante »), sinon rien. Champ
+ * facultatif : absent, la photo est celle du visiteur (ancien site compris).
+ */
+export function exempleValide(valeur: unknown): string | undefined {
+  return typeof valeur === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(valeur) ? valeur : undefined;
+}
+
 /** Identifiant de travail (cuid) bien formé, sinon rien. */
 export function travailIdValide(valeur: unknown): string | undefined {
   return typeof valeur === "string" && /^[a-z0-9]{10,40}$/i.test(valeur) ? valeur : undefined;

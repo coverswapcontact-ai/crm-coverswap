@@ -52,19 +52,19 @@ export const outilSimulationsSite = definirOutil({
       const references = lireReferences(s.references);
       const teintes = references.length ? references.map((r) => `${r.libelle || r.zone || "zone"} : ${r.nom || r.ref || "?"}${r.ref && r.nom ? ` (${r.ref})` : ""}`).join(", ") : "teintes non renseignées";
       const qui = s.leadId ? `rattachée à ${leads.get(s.leadId) ?? "un lead"} [lead:${s.leadId}]` : "anonyme (pas de coordonnées laissées)";
-      const titre = `Simulation site ${i + 1} du ${format.jourCourt(s.createdAt)} — ${LIBELLES_PROJET[s.projet] ?? s.projet} — ${teintes}${s.referenceChoisie ? ` — teinte retenue ${s.referenceChoisie}` : ""} — ${qui}${s.page ? ` — page ${s.page}` : ""}${s.source ? ` — source ${s.source}` : ""}${s.campagne ? ` — campagne ${s.campagne}` : ""}${s.archiveLe ? " — purgée (images effacées)" : ""} [simulation_site:${s.id}]`;
+      const titre = `Simulation site ${i + 1} du ${format.jourCourt(s.createdAt)} — ${LIBELLES_PROJET[s.projet] ?? s.projet} — ${teintes}${s.referenceChoisie ? ` — teinte retenue ${s.referenceChoisie}` : ""} — ${qui}${s.page ? ` — page ${s.page}` : ""}${s.source ? ` — source ${s.source}` : ""}${s.campagne ? ` — campagne ${s.campagne}` : ""}${s.exemple ? ` — sur la pièce d'exemple ${s.exemple} (pas une photo du visiteur)` : ""}${s.archiveLe ? " — purgée (images effacées)" : ""} [simulation_site:${s.id}]`;
       textes.push(titre);
       if (e.sans_images || s.archiveLe || images.length >= IMAGES_MAX_PAR_RESULTAT) continue;
       const apres = s.imageAfterPath ? await imagePourResultat((await lireImage(s.imageAfterPath).catch(() => null))?.contenu ?? null, `${titre} — APRÈS`) : null;
       if (apres) images.push(apres);
       if (s.imageBeforePath && images.length < IMAGES_MAX_PAR_RESULTAT) {
-        const avant = await imagePourResultat((await lireImage(s.imageBeforePath).catch(() => null))?.contenu ?? null, `Simulation site ${i + 1} — AVANT (photo du visiteur)`);
+        const avant = await imagePourResultat((await lireImage(s.imageBeforePath).catch(() => null))?.contenu ?? null, `Simulation site ${i + 1} — AVANT (${s.exemple ? "pièce d'exemple du site" : "photo du visiteur"})`);
         if (avant) images.push(avant);
       }
     }
     const anonymes = lignes.filter((s) => !s.leadId).length;
     const texte = total === 0 ? `Aucune simulation faite sur le site sur ${pluriel(e.jours ?? 7, "jour")}${e.lead_id ? " pour ce lead" : ""}.` : [`${pluriel(total, "simulation")} sur le site sur ${pluriel(e.jours ?? 7, "jour")} : ${pluriel(anonymes, "anonyme")}, ${pluriel(total - anonymes, "rattachée")} à un lead ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")}.`, ...textes].join("\n");
-    return { texte, images, donnees: { total, anonymes, simulations: choisies.map((s) => ({ id: s.id, le: s.createdAt.toISOString(), projet: s.projet, references: lireReferences(s.references), referenceChoisie: s.referenceChoisie, page: s.page, source: s.source, campagne: s.campagne, leadId: s.leadId, rattacheeLe: s.rattacheeLe?.toISOString() ?? null, purgee: Boolean(s.archiveLe) })) }, liens: [lien("Analytique — Site", "/analytique?onglet=site")] };
+    return { texte, images, donnees: { total, anonymes, simulations: choisies.map((s) => ({ id: s.id, le: s.createdAt.toISOString(), projet: s.projet, references: lireReferences(s.references), referenceChoisie: s.referenceChoisie, page: s.page, source: s.source, campagne: s.campagne, exemple: s.exemple ?? null, leadId: s.leadId, rattacheeLe: s.rattacheeLe?.toISOString() ?? null, purgee: Boolean(s.archiveLe) })) }, liens: [lien("Analytique — Site", "/analytique?onglet=site")] };
   },
 });
 

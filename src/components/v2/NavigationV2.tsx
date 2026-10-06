@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ChartLine, CircleCheck, FolderKanban, Globe, Mail, Menu, SlidersHorizontal, Sun, Undo2, Users, Wallet, WandSparkles, X, type LucideIcon } from "lucide-react";
 import type { RappelGoogle } from "@/lib/google/echeance";
 import { cn } from "@/lib/utils";
+import { libelleDansPlus } from "@/lib/v2/plus";
 import { appelApi } from "@/components/pilotage/client";
 import { EVENEMENT_COMPTEURS } from "@/components/pilotage/evenements";
 import { BandeauRappelGoogle } from "@/components/pilotage/RappelGoogle";
@@ -45,8 +46,10 @@ export const DANS_PLUS: readonly EntreeV2[] = [
 
 /** L'unique compteur : les tâches d'Aujourd'hui (`GET /api/pilotage/compteurs`). */
 const ENTREE_COMPTEE = "/taches";
+/** Mission 22 (A5) : dans « Plus », « À valider » dit en phrase ce qui attend (« À valider — 3 en attente »), jamais en badge. */
+const ENTREE_EN_ATTENTE = "/validation";
 
-type Compteurs = { tachesAujourdhui: number; rappelGoogle?: RappelGoogle | null };
+type Compteurs = { tachesAujourdhui: number; rappelGoogle?: RappelGoogle | null; propositionsEnAttente?: number };
 
 function estActive(pathname: string, entree: EntreeV2): boolean {
   return [entree.href, ...(entree.aussi ?? [])].some((href) => pathname === href || pathname.startsWith(`${href}/`));
@@ -65,6 +68,7 @@ export function NavigationV2() {
   const pathname = usePathname();
   const [tachesAujourdhui, setTachesAujourdhui] = useState(0);
   const [rappelGoogle, setRappelGoogle] = useState<RappelGoogle | null>(null);
+  const [propositionsEnAttente, setPropositionsEnAttente] = useState(0);
   const [plusOuvert, setPlusOuvert] = useState(false);
 
   const charger = useCallback(() => {
@@ -72,6 +76,7 @@ export function NavigationV2() {
       .then((compteurs) => {
         setTachesAujourdhui(compteurs.tachesAujourdhui ?? 0);
         setRappelGoogle(compteurs.rappelGoogle ?? null);
+        setPropositionsEnAttente(compteurs.propositionsEnAttente ?? 0);
       })
       .catch(() => {
         // Compteur indicatif : une panne réseau ne doit rien bloquer.
@@ -115,7 +120,7 @@ export function NavigationV2() {
           <li key={entree.href}>
             <Link href={entree.href} aria-current={active ? "page" : undefined} className={cn(classeLien, active ? "bg-surface-2 text-texte" : "text-texte-2 hover:bg-surface-2 hover:text-texte", TRANS_V2)}>
               <Icone size={20} aria-hidden className="text-texte-3" />
-              {entree.libelle}
+              {entree.href === ENTREE_EN_ATTENTE ? libelleDansPlus(entree.libelle, propositionsEnAttente) : entree.libelle}
             </Link>
           </li>
         );

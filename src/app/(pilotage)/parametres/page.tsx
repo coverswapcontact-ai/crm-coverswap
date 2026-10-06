@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { EnTeteEcran } from "@/components/v2/EnTeteEcran";
 import { vueAcces, vueConsignes } from "@/lib/assistant/vues-parametres";
 import { lireCompteurs } from "@/lib/dossiers/compteurs";
 import { listerPresets } from "@/lib/dossiers/presets";
 import { etatMiroir } from "@/lib/drive/synchronisation";
 import { etatConnexionGoogle } from "@/lib/google/connexion";
+import { interfaceCourante } from "@/lib/interface/choix";
 import { reglagesMail } from "@/lib/mail/reglages-vue";
 import { etatAgentMail } from "@/lib/messages/consultation";
 import { parametresPourEcran } from "@/lib/parametres/service";
@@ -22,10 +24,11 @@ export const dynamic = "force-dynamic";
 // Mission 18 (A5) : sauf l'onglet Système, lu par ses propres routes quand on l'ouvre (le contrôle de cohérence parcourt
 // tous les dossiers : il ne ralentit pas la page). `?section=systeme` (où mène /taches-de-fond) ouvre cet onglet.
 // Mission 18 (A6) : les tarifs des devis (presets) sont lus avec le reste, pour l'onglet Tarifs (`?section=tarifs`).
+// Mission 22 (A5) : en v2 (`interfaceCourante()`), le même écran v1 sous l'en-tête v2 « Réglages » ; en v1 rien ne change.
 export default async function ParametresPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parametres = await searchParams;
   const texte = (cle: string) => (typeof parametres[cle] === "string" ? (parametres[cle] as string) : null);
-  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs, presets] = await Promise.all([
+  const [initiaux, google, drive, agent, mail, modeles, acces, consignes, compteurs, presets, v] = await Promise.all([
     parametresPourEcran(),
     etatConnexionGoogle(),
     etatMiroir(),
@@ -36,8 +39,9 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
     vueConsignes(),
     lireCompteurs(),
     listerPresets(),
+    interfaceCourante(),
   ]);
-  return (
+  const ecran = (
     <OngletsParametres
       parametres={initiaux}
       connexions={{ google, drive, agent }}
@@ -51,4 +55,6 @@ export default async function ParametresPage({ searchParams }: { searchParams: P
       section={texte("section")}
     />
   );
+  if (v === "v2") return <EnTeteEcran titre="Réglages" cadre="colonne-5">{ecran}</EnTeteEcran>;
+  return ecran;
 }

@@ -430,6 +430,40 @@ L'écran Argent de la v2 (`components/v2/argent/ArgentV2.tsx`, monté par `app/(
 - **Tests** : `lib/v2/argent.test.ts` (trois nombres, plage du mois, phrases, SMS de relance, moyen),
   `components/v2/ecrans-a4.test.ts` (sources).
 
+## Écrans de Plus (lot A5)
+
+Boîte mail, Simulateur (avec le banc et les prompts), Le site, Bilan, Réglages, À valider et Nouvelle dépense **restent
+les composants de la v1** (aucune réécriture) : la coque v2 les sert tels quels, et chaque `page.tsx` les coiffe de
+`components/v2/EnTeteEcran.tsx` quand `interfaceCourante()` rend `v2` (titre en phrase, 20 px ; une ligne d'aide
+facultative ; un seul bouton principal facultatif ; `cadre` = la largeur et les marges exactes de l'écran coiffé). En
+v1, rien ne change. Le titre que l'écran v1 porte lui-même (`EnTetePage`, ou son propre `h1`) est masqué sous l'en-tête
+(`[&_h1]:hidden` : chaque écran n'a qu'un `h1`, en tête) ; son sous-titre et ses boutons restent. Dans « Plus »,
+« À valider » dit en phrase ce qui attend (« À valider — 3 en attente », `lib/v2/plus.ts`, clé `propositionsEnAttente`
+ajoutée à `GET /api/pilotage/compteurs`), jamais en badge ; `/validation?proposition=` s'ouvre dans la coque v2 depuis
+le journal et depuis Aujourd'hui.
+
+| Écran | Titre v2 (page) | Aide | Cadre | Écarts aux dix règles qui subsistent dans l'écran v1 (non corrigés : la v1 ne bouge pas) |
+|---|---|---|---|---|
+| Boîte mail | « Boîte mail » (`mail/page.tsx`) | — (le sous-titre v1 reste) | colonne-4 | nombres par vue dans les onglets (règle 8) ; mentions et heures en 11 à 13,5 px (règle 9) ; surtitre « Clients » en capitales espacées (règle 4) ; deux boutons d'en-tête (Relire, Tout nettoyer) en contour |
+| Simulateur | « Simulateur » (`simulateur/page.tsx`) ; « Banc du simulateur », « Prompts du simulateur » (sous-pages) | — | colonne-4 / large-4 | numéros d'étape en capitales espacées (« 1 · Le client ») ; aides en 11 à 13 px ; Banc et Prompts en liens d'en-tête ; un seul vert (Préparer pour ChatGPT) |
+| Le site | « Le site » (`site/page.tsx`) | — | large-5 | titres de section en capitales avec compteur (« Réalisations · 0 ») ; textes en 12 à 13 px ; un seul vert (Nouvelle publication) |
+| Bilan | « Bilan » (`analytique/page.tsx`) | « Publicité, Google, site et argent, comparés à la période d'avant. » | bilan | capitales espacées sur chaque tuile et sur « Résumé du jour » ; 10 à 13 px partout (12 textes à 10 px sur téléphone) ; bien plus de 7 blocs ; la période et les onglets en tête (règle 1) ; aucun bouton principal ; le `h1` « Analytique » (28/34 px, Space Grotesk) est masqué |
+| Réglages | « Réglages » (`parametres/page.tsx`) | — (le sous-titre v1 reste : « N à renseigner ») | colonne-5 | titres de groupes en capitales espacées ; 11 à 13,5 px ; sept onglets qui défilent ; « Nouvelle valeur » en contour par ligne ; aucun vert |
+| À valider | « À valider » (`validation/page.tsx`) | — (le sous-titre v1 reste : « N propositions… ») | colonne-5 | pastilles « NOTE » (code en capitales) et « Argent ou client » (ambre) par carte ; **« Valider » vert sur chaque carte** (règle 3) ; date exacte « 7 oct. 2026, 01:37 » au lieu de « il y a 3 h » (règle 4) ; 12 à 13 px |
+| Nouvelle dépense | « Nouvelle dépense » (`depenses/nouvelle/page.tsx`) | « Le ticket en photo, le montant, le chantier : trois gestes. » | etroit | libellés en 11,5 à 13 px ; un seul vert (Enregistrer), dans une barre fixe posée juste au-dessus de la barre du bas (`bottom-16`, aucun chevauchement) |
+
+- **Vérifié dans la coque v2** (`essai-v2.db`, 390 × 660 et 1 440) : un seul `h1` visible par écran, l'en-tête aligné
+  au pixel sur l'écran v1 (même gauche, même largeur), aucun débordement horizontal, la barre fixe de Nouvelle dépense
+  au ras de la barre du bas, le menu Plus « À valider — 2 en attente », `?proposition=` ouvert depuis le journal.
+- **Décisions** : les sous-titres v1 restent visibles (ils sont dynamiques : « 18 à renseigner », « 2 propositions ») et
+  l'aide v2 n'est posée que là où la v1 n'en a pas (Bilan, Nouvelle dépense) ; aucun bouton principal dans l'en-tête v2
+  (la v1 garde le sien : Nouvelle publication, Tout valider) ; les deux sous-pages du simulateur reçoivent le même
+  en-tête ; la coque n'a rien eu à corriger (largeurs, `padding-bottom`, barre du haut : déjà justes).
+- **Redirections** : `next.config.ts › ANCIENNES_ADRESSES` inchangé (toutes les adresses v1 restent des écrans) ;
+  `/journal` en v1 → `/taches` dans la page, selon l'interface.
+- **Tests** : `components/v2/ecrans-plus.test.ts` (sources : pages, en-tête, cadres, navigation, route, redirections),
+  `lib/v2/plus.test.ts` (phrases).
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
@@ -443,6 +477,13 @@ L'écran Argent de la v2 (`components/v2/argent/ArgentV2.tsx`, monté par `app/(
 | Dossiers (`dossiers/_components/DossiersPilotage.tsx` : en-tête à compteurs, Tous / À faire, kanban ou liste triable, Perdus et en pause, Masquer les inactifs, Espaces, Archivés, Légende, recherche) | `components/v2/dossiers/DossiersV2.tsx` : segments Chez moi · Chez le client · Tous · Archives, recherche, « Plus de filtres » (espaces), liste « ce qui m'attend » (situation en 3 lignes + geste principal, barre de couleur, 5 lignes puis « Voir les N autres », pages), kanban en seconde vue, même panneau v2, même création, mêmes archives | `/dossiers` (+ `?dossier=`, `?rubrique=`, `?q=`, `?espace=`, `?archives=1`, `?lead=`, `?client=`, `?prospect=`) | lot A4, livrée |
 | Leads (`leads/_components/EcranLeads.tsx` : À appeler, À rappeler, Sans suite, Archivés, source, sélection, Sur le site, ligne du jour, Enchaîner, Nouveau) et Clients (`clients/_components/ListeClients.tsx` : recherche, catégories, source, archivées, doublons, Nouveau client) | `components/v2/personnes/PersonnesV2.tsx` : recherche d'abord (résultats en phrases), segments À appeler · À rappeler · Clients · Sans suite · Archivés, lignes en phrases avec « Appeler », « Enchaîner les appels » (ModeAppels), « Ajouter » (NouveauContact, CreationClient), PanneauEntrant ; la fiche client reste la v1 | `/leads` (+ `?lead=`, `?liste=`, `?appels=1`, `?q=`), `/clients` (+ `?q=`), `/clients/<id>` | lot A4, livrée |
 | Finances (`finances/_components/TableauFinances.tsx` : Reste à encaisser, Chèques, À corriger, Dépenses, Livre par encaissement, année) | `components/v2/argent/ArgentV2.tsx` : trois nombres (à encaisser, encaissé ce mois, dépensé ce mois), Factures à encaisser (Encaisser / Relancer), Chèques, Dépenses repliées (ListeDepenses), Livre par mois + CSV + année, À corriger replié ; mêmes modales, mêmes routes | `/finances` (+ `?annee=`, `?section=depenses`), `/depenses/nouvelle` | lot A4, livrée |
+| Mail (`mail/_components/EcranMail.tsx` : À traiter / Clients / Administratif, recherche, Relire, Tout nettoyer, rangés) | le même écran v1 sous `components/v2/EnTeteEcran.tsx` « Boîte mail » ; les mails à traiter sont des tâches d'Aujourd'hui | `/mail` (+ `?mail=`, `?client=`, `?lead=`, `?dossier=`, `?consigne=`) | lot A5, livrée |
+| Simulateur (`simulateur/_components/EcranSimulateur.tsx`, banc, prompts) | le même écran v1 sous l'en-tête « Simulateur » (« Banc du simulateur », « Prompts du simulateur ») | `/simulateur` (+ `?dossier=`, `?preparation=`), `/simulateur/banc`, `/simulateur/prompts` | lot A5, livrée |
+| Site (`site/_components/EcranSite.tsx` : réalisations, avis, Nouvelle publication) | le même écran v1 sous l'en-tête « Le site » | `/site` | lot A5, livrée |
+| Analytique (`components/pilotage/analytique/EcranAnalytique.tsx` : onglets, périodes, sources, tuiles, courbes) | le même écran v1 sous l'en-tête « Bilan » + aide | `/analytique` (+ `?onglet=`, `?p=`, `?du=&au=`, `?source=`) | lot A5, livrée |
+| Paramètres (`parametres/_components/OngletsParametres.tsx` : sept onglets) | le même écran v1 sous l'en-tête « Réglages » | `/parametres` (+ `?section=`, `#facturation`, `#mail`) | lot A5, livrée |
+| À valider (`validation/_components/FileValidation.tsx` : en attente, en cours ou en échec, historique, Tout valider) | le même écran v1 sous l'en-tête « À valider » ; ses propositions arrivent aussi dans le journal (Valider / Ignorer en ligne) ; « À valider — N en attente » dans Plus | `/validation` (+ `?proposition=`) | lot A5, livrée |
+| Nouvelle dépense (`depenses/_components/SaisieDepense.tsx`) | le même écran v1 sous l'en-tête « Nouvelle dépense » + aide | `/depenses/nouvelle` (+ `?dossier=`) | lot A5, livrée |
 
 ## Liste de contrôle par écran
 

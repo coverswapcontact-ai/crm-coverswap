@@ -5,6 +5,7 @@ import { rappelConnexionGoogle } from "@/lib/google/connexion";
 import { compterLeadsEnRetard } from "@/lib/prospects/leads";
 import { compterAujourdhui } from "@/lib/a-faire/lecture";
 import { compterMailATraiter } from "@/lib/a-faire/ecran";
+import { compterPropositionsEnAttente } from "@/lib/validation/service";
 
 export const dynamic = "force-dynamic";
 
@@ -18,18 +19,22 @@ export const dynamic = "force-dynamic";
  *
  * Mission 17 (partie A) : l'onglet Mail compte les tâches à faire venues du mail ou des messages de l'espace client
  * (une seule source de vérité avec l'écran Tâches), et non plus les conversations « À traiter » recalculées ici.
+ *
+ * Mission 22 (A5) : `propositionsEnAttente` (ajout seulement) pour le menu « Plus » de la v2, qui le dit en phrase
+ * (« À valider — 3 en attente »), jamais en badge ; la v1 ne lit pas cette clé.
  */
 export async function GET() {
   try {
     const maintenant = new Date();
-    const [tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter] = await Promise.all([
+    const [tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente] = await Promise.all([
       compterAujourdhui(maintenant),
       compterLeadsEnRetard(),
       prisma.tache.count({ where: { statut: "ECHEC_DEFINITIF" } }),
       rappelConnexionGoogle(),
       compterMailATraiter(maintenant),
+      compterPropositionsEnAttente(),
     ]);
-    return NextResponse.json({ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter });
+    return NextResponse.json({ tachesAujourdhui, leadsEnRetard, tachesEnEchec, rappelGoogle, mailATraiter, propositionsEnAttente });
   } catch (erreur) {
     return reponseErreur(erreur, "GET /api/pilotage/compteurs");
   }

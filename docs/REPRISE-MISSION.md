@@ -5477,3 +5477,22 @@ les outils de travail de `/synthese` (exports, mois figés) et de `/finances` (U
 - Décision à valider par Lucas : « pas intéressé » dans `noter_appel` demande désormais une confirmation (comme les
   autres passages en Perdu).
 - **Reconnecter le connecteur Claude** (la liste des outils a changé).
+
+---
+
+# Mission 22 (06/10/2026) — CRM v2 « clair » derrière un drapeau, et les vidéos motion sur le site
+
+Énoncé : message de Lucas du 06/10 (copie dans `~/coverswap-photos/missions/prompt-mission-22.md`). Mandat
+d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant le rapport final (12 lignes au plus).
+
+## Cadre tenu
+- Rien de supprimé, sauvegarde avant migration, base d'essai pour les tests ; aucun secret lu ni écrit ; `src/proxy.ts`
+  jamais commité ; aucune information personnelle, aucun nom de client en clair.
+- Adresses inchangées ; moteur inchangé (Prisma : ajouts seulement ; `/api` : ajouts seulement ; outils MCP : contrats
+  inchangés, ajout `JOURNAL` à `lister` noté dans MCP-COUVERTURE) ; la v1 reste complète et servie par défaut.
+- Drapeau `CRM_INTERFACE` (absent/`v1` → v1 ; `v2` ; `apercu` → v1, v2 pour la session `?interface=v2`, cookie 7 j),
+  lu côté serveur à chaque requête ; `CRM_ESSAI_LOCAL=1` = garde dure (aucun envoi sortant) avec test et bandeau.
+- Chaque lot : tests (compteur jamais en baisse), lint, build, commit, une ligne ici ; fusion directe dans `main`.
+
+## Avancement (une ligne par lot)
+- Départ : CRM `main` 0698477 (1 487 tests), site `main` 8016ca4 (605 tests). ffmpeg 8.1 présent sur le poste.

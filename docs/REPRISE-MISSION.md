@@ -5504,3 +5504,16 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
   dans `texte-3` ; le dégradé du tunnel garde ses 6 hex en exception du test ; aucun test existant modifié. Piège :
   une partie des sources est en CRLF dans la copie de travail (`core.autocrlf`), les scripts conservent les fins de
   ligne et les tests lisent en LF.
+- A0b (drapeau, garde d'essai, coque v2, recherche) : eec2958, tests 1 498 → 1 532. `lib/interface/choix.ts`
+  (`interfaceDemandee` pure, `interfaceCourante` env + cookie), `GET /api/interface?v=&retour=` (non publique),
+  `components/v2/PriseInterface` (`?interface=` partout sans toucher le proxy) ; `lib/acces/essai-local.ts` posée à
+  onze entonnoirs (test `essai-local.test.ts`, seams et `fetch` piégés), bandeau en v1 et v2, ligne au démarrage ;
+  `CoqueV2` + `NavigationV2` + `RechercheGlobale` (`GET /api/recherche?q=`), test `components/v2/coque.test.ts` ;
+  sw `v13` ; CRM-V2 § Navigation, Bascule, Base d'essai ; `.env.local` reçu `CRM_INTERFACE=v2` et `CRM_ESSAI_LOCAL=1`
+  (`prisma/essai-v2.db` créé par `DATABASE_URL=file:./essai-v2.db npx prisma db push`, ignoré par `*.db`).
+  Décisions : libellés de la barre basse en 14 px (cinq entrées à 390 px ; 16/17 px partout ailleurs) ;
+  `?interface=v1` n'agit qu'en `apercu` (en `v2` le drapeau prime, par énoncé) ; `base-essai.ts` pose
+  `CRM_ESSAI_LOCAL=""` ; le test `mission-18-a6` accepte toute version de sw ≥ v12 ; `aussi: ["/depenses/nouvelle"]`
+  (le test de la mission 18 interdit la chaîne `/depenses`). Vérifié en local sur `prisma/essai-v2.db` (base vide) :
+  v1 sans cookie, v2 avec, bandeau, menu Plus, Ctrl K ; le `dev.db` du poste a un schéma en retard
+  (`npm run base:pousser` à lancer par Lucas s'il veut ses données locales).

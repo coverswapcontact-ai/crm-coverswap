@@ -5517,3 +5517,18 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
   (le test de la mission 18 interdit la chaîne `/depenses`). Vérifié en local sur `prisma/essai-v2.db` (base vide) :
   v1 sans cookie, v2 avec, bandeau, menu Plus, Ctrl K ; le `dev.db` du poste a un schéma en retard
   (`npm run base:pousser` à lancer par Lucas s'il veut ses données locales).
+- A1 (journal global « Depuis ta dernière visite ») : c8ff889, tests 1 532 → 1 570. `lib/chronologie/journal.ts`
+  (`journal`, `depuisDeLaVisite`, `depuisDerniereVisite`, `marquerJournalVu`, `phraseCompteurs` ; 11 sources, bruit groupé,
+  borne 30 j, `chronologie.ts` intact), 21 libellés ajoutés à `LIBELLES_TYPE_EVENEMENT`, `@@index([createdAt])` sur
+  `DossierEvenement`, paramètre `JOURNAL_VU_LE` (groupe Pilotage, visible dans Réglages : aucun mécanisme de masquage),
+  `GET /api/journal` + `POST /api/journal/vu`, `lister` JOURNAL + `filtres.filtre` (imbriqué : empreinte `6665a6b457fe`
+  avant comme après — c'est déjà celle de la dernière puce de MCP-COUVERTURE, pas `040d6c7aa53c`), ligne et
+  `donnees.depuisVisite` dans `etat_crm`, une puce dans les consignes, `lib/v2/dates.ts` (`dateRelative`, `dateExacte`,
+  `depuisLisible`), `lib/v2/journal.ts` (groupes, filtre), écran `components/v2/journal/`, page `/journal` (v2 ; v1 →
+  `/taches` ; `?jours=7`), CRM-V2 § Journal, MCP-COUVERTURE § 1, 2.18, 4.6, 4.7. Décisions : Valider / Ignorer partent
+  5 s après le geste avec « Annuler » (un rejet ne se défait pas par l'API : l'annulation est donc avant l'envoi) ;
+  « Ignorer » = motif commun INUTILE ; `ENCAISSEMENT_ENREGISTRE` et `DOSSIER_MODIFIE` viennent de leurs tables (jamais
+  en double avec l'événement) ; les propositions avec dossier ou client sont « Clients », sans personne « Système » ;
+  un paiement rejeté reste une ligne annotée. Piège : les tests qui lisent « jusqu'à maintenant » posent `fin` après
+  la base d'essai (les `updatedAt` du moment sont sinon après la borne) ; un `marquerJournalVu` daté dans le futur
+  n'est pas encore « valable » (`valableDu`). Base locale : sauvegarde puis `npm run base:pousser` → faite (dev.db du poste, sauvegarde manuelle avant ; essai-v2.db poussée aussi) ; vérifié en local : /journal à 390 × 660 et /api/health (53 outils, 6665a6b457fe).

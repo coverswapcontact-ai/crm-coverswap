@@ -1838,3 +1838,18 @@ webhook après un rendu sur un exemple (simulation marquée, dossier : le rendu 
 
 **Site** : branche `site-3-0` (pas encore fusionnée) — il envoie `exemple` à `prepare`, au CRM et à la demande ; il
 marche avec ce CRM comme avec l'ancien (champ ignoré).
+
+## Mission 21, phases B à G : le site 3.0 « La Revue » (05-06/10/2026) — LIVRÉ
+
+Détail lot par lot dans `coverswap/docs/REPRISE-LOCAL.md` ; règles graphiques dans `coverswap/docs/DESIGN.md` ;
+intentions, maillage et Lighthouse dans `coverswap/docs/SEO.md` ; captures dans `coverswap/docs/captures/site-3-0/`.
+- Branche `site-3-0` (B0 bd6d921 … G1/G2 7212184), fusionnée dans `main` du site (aea81f4), poussée le 06/10 à
+  10:33, en ligne à 10:35 ; CI de `main` verte (lint, tests, Lighthouse, captures) ; G3 Lighthouse production 829495b.
+- CRM touché par la phase E : 7b8b7c6 (rendu : nouvel appel sans le paramètre refusé, `phase`), 37e0cec (script
+  `scripts/comparer-modeles.ts`, note E5 plus haut), 2091c2c (la pièce d'exemple du site connue du CRM, jamais rangée
+  dans les photos du client, « Ambiance » dans l'espace) — en ligne vers 07:55.
+- Tests : site 288 → 605 ; CRM 1 476 → 1 487.
+- Vérifié en ligne : 11 redirections en 301 (www, coverswap.vercel.app, 7 anciennes adresses) ; pages en 200 ;
+  simulateur avec une pièce d'exemple (avant/après immédiat, aucun appel) ; espace client par le lien d'aperçu.
+- Lighthouse production (meilleur de 3) : accessibilité, bonnes pratiques et SEO 100 sur 11 pages ; performance 83 à
+  90 (objectif 90 atteint sur /realisations, la fiche matière et /contact seulement), LCP 2,9 à 3,9 s.

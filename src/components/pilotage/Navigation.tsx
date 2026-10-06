@@ -87,7 +87,7 @@ function Compteur({ valeur, ton = "vert" }: { valeur: number; ton?: "vert" | "ro
     <span
       className={cn(
         "min-w-[18px] rounded-full px-1.5 text-center text-[10.5px] leading-[18px] font-semibold tabular-nums",
-        ton === "rouge" ? "bg-[#EF4444] text-white" : "bg-[#1D9E75] text-[#0B1612]"
+        ton === "rouge" ? "bg-retard text-white" : "bg-action text-action-texte"
       )}
     >
       {valeur > 99 ? "99+" : valeur}
@@ -150,12 +150,12 @@ export function Navigation() {
       {/* Bureau : barre du haut */}
       <nav
         aria-label="Navigation principale"
-        className="sticky top-0 z-40 hidden border-b-[0.5px] border-[#2A2D34] bg-[#16181D]/95 backdrop-blur md:block"
+        className="sticky top-0 z-40 hidden border-b-[0.5px] border-trait bg-fond/95 backdrop-blur md:block"
       >
         <div className="mx-auto flex h-[52px] max-w-[1680px] items-center gap-4 px-5 lg:gap-6 lg:px-8">
-          <Link href="/taches" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-[#F2F3F5]">
+          <Link href="/taches" className="flex items-baseline gap-2 text-[14px] font-semibold tracking-tight text-texte">
             CoverSwap
-            <span className="text-[12px] font-normal text-[#6B7280]">pilotage</span>
+            <span className="text-[12px] font-normal text-texte-3">pilotage</span>
           </Link>
           <ul className="flex min-w-0 flex-1 items-center gap-1">
             {[...PRINCIPALES, ...SECONDAIRES].map((entree) => {
@@ -173,7 +173,7 @@ export function Navigation() {
                     title={entree.libelle}
                     className={cn(
                       "flex h-11 sm:h-8 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap",
-                      active ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:bg-[#1C1F25] hover:text-[#F2F3F5]",
+                      active ? "bg-surface-2 text-texte" : "text-texte-3 hover:bg-surface hover:text-texte",
                       TRANS
                     )}
                   >
@@ -193,7 +193,7 @@ export function Navigation() {
       {/* Téléphone : barre du bas, au pouce */}
       <nav
         aria-label="Navigation principale"
-        className="fixed inset-x-0 bottom-0 z-40 border-t-[0.5px] border-[#2A2D34] bg-[#16181D]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t-[0.5px] border-trait bg-fond/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
       >
         <ul
           className="grid h-16"
@@ -209,7 +209,7 @@ export function Navigation() {
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "relative flex flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                    active ? "text-[#5DCAA5]" : "text-[#9CA3AF]",
+                    active ? "text-action-clair" : "text-texte-3",
                     TRANS
                   )}
                 >
@@ -232,7 +232,7 @@ export function Navigation() {
               onClick={() => setMenuOuvert((ouvert) => !ouvert)}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                menuOuvert || secondaireActive ? "text-[#5DCAA5]" : "text-[#9CA3AF]",
+                menuOuvert || secondaireActive ? "text-action-clair" : "text-texte-3",
                 TRANS
               )}
             >
@@ -253,7 +253,7 @@ export function Navigation() {
           <div className="absolute inset-0 bg-black/40" aria-hidden />
           <div
             id="menu-plus"
-            className="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] rounded-t-[14px] border-t-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-2"
+            className="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] rounded-t-[14px] border-t-[0.5px] border-trait bg-surface p-2"
             onClick={(evenement) => evenement.stopPropagation()}
           >
             <ul className="flex flex-col">
@@ -267,11 +267,11 @@ export function Navigation() {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "flex h-12 items-center gap-3 rounded-[10px] px-3 text-[15px]",
-                        active ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#D1D5DB]",
+                        active ? "bg-surface-2 text-texte" : "text-texte-2",
                         TRANS
                       )}
                     >
-                      <Icone size={18} aria-hidden className="text-[#9CA3AF]" />
+                      <Icone size={18} aria-hidden className="text-texte-3" />
                       <span className="flex-1">{entree.libelle}</span>
                       {entree.compteur ? <Compteur valeur={compteurs[entree.compteur]} ton={tonDe(entree.compteur)} /> : null}
                     </Link>

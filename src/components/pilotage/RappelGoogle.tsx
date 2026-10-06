@@ -23,18 +23,18 @@ export function BandeauRappelGoogle({ rappel }: { rappel: RappelGoogle }) {
   return (
     <div
       role={expiree ? "alert" : "status"}
-      className={cn("border-b-[0.5px]", expiree ? "border-[#EF4444]/40 bg-[#EF4444]/10" : "border-[#EF9F27]/40 bg-[#EF9F27]/10")}
+      className={cn("border-b-[0.5px]", expiree ? "border-retard/40 bg-retard/10" : "border-attention/40 bg-attention/10")}
     >
       <div className="mx-auto flex max-w-[1680px] flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3 md:px-8">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
           {expiree ? (
-            <Link2Off size={15} aria-hidden className="mt-0.5 shrink-0 text-[#F87171]" />
+            <Link2Off size={15} aria-hidden className="mt-0.5 shrink-0 text-retard-texte" />
           ) : (
-            <AlertTriangle size={15} aria-hidden className="mt-0.5 shrink-0 text-[#F5B454]" />
+            <AlertTriangle size={15} aria-hidden className="mt-0.5 shrink-0 text-attention-texte" />
           )}
-          <p className={cn("min-w-0 text-[13px] leading-snug", expiree ? "text-[#FCA5A5]" : "text-[#F5B454]", rappel.niveau === "IMMINENTE" && "font-medium")}>
+          <p className={cn("min-w-0 text-[13px] leading-snug", expiree ? "text-retard-texte" : "text-attention-texte", rappel.niveau === "IMMINENTE" && "font-medium")}>
             {message}
-            <span className="hidden font-normal text-[#9CA3AF] sm:inline">
+            <span className="hidden font-normal text-texte-3 sm:inline">
               {" "}
               {rappel.compte} · application Google en mode Test : reconnexion tous les 7 jours.
             </span>
@@ -43,7 +43,7 @@ export function BandeauRappelGoogle({ rappel }: { rappel: RappelGoogle }) {
         <a
           href="/api/google/connexion"
           className={cn(
-            "ml-[25px] inline-flex h-11 shrink-0 items-center self-start rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] sm:ml-0 sm:h-8 sm:self-auto",
+            "ml-[25px] inline-flex h-11 shrink-0 items-center self-start rounded-[8px] bg-action px-3.5 text-[13px] font-medium text-action-texte hover:bg-action-clair sm:ml-0 sm:h-8 sm:self-auto",
             TRANS
           )}
         >

@@ -28,13 +28,13 @@ export function SignalDoublon({ lead, onRecharger }: { lead: LigneLead; onRechar
     }
   }
   return (
-    <div className="rounded-[10px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/[0.08] p-2.5">
-      <p className="flex items-start gap-1.5 text-[12.5px] leading-snug text-[#FCD9A0]">
+    <div className="rounded-[10px] border-[0.5px] border-attention/40 bg-attention/[0.08] p-2.5">
+      <p className="flex items-start gap-1.5 text-[12.5px] leading-snug text-attention-texte">
         <GitMerge size={14} className="mt-px shrink-0" aria-hidden />
         <span>
           Doublon probable — {lead.doublon.motif}.
           {lead.doublon.dossierId ? (
-            <Link href={`/dossiers?dossier=${lead.doublon.dossierId}`} className="ml-1 text-[#F5B454] underline underline-offset-2">
+            <Link href={`/dossiers?dossier=${lead.doublon.dossierId}`} className="ml-1 text-attention-texte underline underline-offset-2">
               Voir son dossier
             </Link>
           ) : null}

@@ -241,7 +241,7 @@ export function CreationDossier({
     <div
       role="tablist"
       aria-label="Origine du dossier"
-      className="mb-4 flex w-full flex-wrap items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-[3px] sm:w-fit"
+      className="mb-4 flex w-full flex-wrap items-center rounded-[9px] border-[0.5px] border-trait bg-fond p-[3px] sm:w-fit"
     >
       {(
         [
@@ -258,7 +258,7 @@ export function CreationDossier({
           onClick={() => changerMode(valeur)}
           className={cn(
             "h-11 flex-1 rounded-[7px] px-3.5 text-[13px] font-medium whitespace-nowrap sm:h-7 sm:flex-none",
-            mode === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+            mode === valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
             TRANS
           )}
         >
@@ -297,7 +297,7 @@ export function CreationDossier({
         <div>
           <label className="relative block">
             <span className="sr-only">Rechercher un client, un lead ou un prospect</span>
-            <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+            <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
             <input
               type="search"
               autoFocus
@@ -307,36 +307,36 @@ export function CreationDossier({
               className={cn(CLASSE_SAISIE, "h-11 pl-8 sm:h-9")}
             />
             {rechercheEnCours ? (
-              <Loader2 size={14} aria-hidden className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-[#6B7280]" />
+              <Loader2 size={14} aria-hidden className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-texte-3" />
             ) : null}
           </label>
           {resultats === null ? null : resultats.length === 0 ? (
-            <p className="mt-4 text-[13px] text-[#9CA3AF]">
+            <p className="mt-4 text-[13px] text-texte-3">
               Aucun client ni lead trouvé.{" "}
-              <button type="button" onClick={() => changerMode("direct")} className="text-[#5DCAA5] underline-offset-2 hover:underline">
+              <button type="button" onClick={() => changerMode("direct")} className="text-action-clair underline-offset-2 hover:underline">
                 Créer le dossier directement
               </button>
             </p>
           ) : (
-            <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34]">
+            <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-trait">
               {resultats.map((resultat) => (
-                <li key={`${resultat.origine}-${resultat.id}`} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+                <li key={`${resultat.origine}-${resultat.id}`} className="border-t-[0.5px] border-trait first:border-t-0">
                   <button
                     type="button"
                     onClick={() => choisirLead(resultat)}
-                    className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-[#22262D]", TRANS)}
+                    className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-2", TRANS)}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-medium text-[#F2F3F5]">{resultat.libelle}</span>
-                      <span className="block truncate text-[12px] text-[#6B7280]">{resultat.detail}</span>
+                      <span className="block truncate text-[13px] font-medium text-texte">{resultat.libelle}</span>
+                      <span className="block truncate text-[12px] text-texte-3">{resultat.detail}</span>
                     </span>
                     <span className="flex shrink-0 items-center gap-1.5">
                       {resultat.nbDossiers > 0 ? (
-                        <span className="rounded-full bg-[#EF9F27]/10 px-2 py-px text-[11px] text-[#EF9F27]">
+                        <span className="rounded-full bg-attention/10 px-2 py-px text-[11px] text-attention">
                           {resultat.nbDossiers} dossier{resultat.nbDossiers > 1 ? "s" : ""}
                         </span>
                       ) : null}
-                      <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-px text-[11px] text-[#9CA3AF]">
+                      <span className="rounded-full border-[0.5px] border-trait px-2 py-px text-[11px] text-texte-3">
                         {LIBELLES_ORIGINE[resultat.origine]}
                       </span>
                     </span>
@@ -351,11 +351,11 @@ export function CreationDossier({
       {formulaireVisible ? (
         <div className="space-y-4">
           {origine ? (
-            <div className="flex items-center justify-between gap-3 rounded-[9px] border-[0.5px] border-[#1D9E75]/30 bg-[#112B22]/60 px-3 py-2">
-              <p className="min-w-0 truncate text-[13px] text-[#D1FAE5]">
+            <div className="flex items-center justify-between gap-3 rounded-[9px] border-[0.5px] border-action/30 bg-action-fond/60 px-3 py-2">
+              <p className="min-w-0 truncate text-[13px] text-action-clair">
                 {LIBELLES_ORIGINE[origine.origine]} : <span className="font-medium">{origine.libelle}</span>
                 {origine.nbDossiers > 0 ? (
-                  <span className="text-[#EF9F27]"> · déjà {origine.nbDossiers} dossier{origine.nbDossiers > 1 ? "s" : ""}</span>
+                  <span className="text-attention"> · déjà {origine.nbDossiers} dossier{origine.nbDossiers > 1 ? "s" : ""}</span>
                 ) : null}
               </p>
               <Bouton variante="fantome" taille="sm" onClick={() => setOrigine(null)}>
@@ -431,11 +431,11 @@ export function CreationDossier({
           </div>
 
           <div>
-            <p className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">Photos du chantier</p>
+            <p className="mb-1.5 text-[12px] font-medium text-texte-3">Photos du chantier</p>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {photos.map((photo) => (
-                <div key={photo.cle} className="relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
-                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-1 text-[#6B7280]">
+                <div key={photo.cle} className="relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-trait bg-surface">
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-1 text-texte-3">
                     <ImageIcon size={16} aria-hidden />
                     <span className="w-full truncate text-center text-[10px]">{photo.fichier.name}</span>
                   </span>
@@ -463,7 +463,7 @@ export function CreationDossier({
                 type="button"
                 onClick={() => entreePhotos.current?.click()}
                 className={cn(
-                  "flex aspect-square flex-col items-center justify-center gap-1 rounded-[9px] border-[0.5px] border-dashed border-[#3A3E47] text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+                  "flex aspect-square flex-col items-center justify-center gap-1 rounded-[9px] border-[0.5px] border-dashed border-trait-2 text-[12px] text-texte-3 hover:border-trait-2 hover:text-texte",
                   TRANS
                 )}
               >
@@ -480,11 +480,11 @@ export function CreationDossier({
               aria-label="Choisir des photos du chantier"
               onChange={(evenement) => ajouterPhotos(evenement.target.files)}
             />
-            <p className="mt-1 text-[12px] text-[#6B7280]">Facultatives, réduites avant l&apos;envoi. Ajoutables ensuite depuis le dossier.</p>
+            <p className="mt-1 text-[12px] text-texte-3">Facultatives, réduites avant l&apos;envoi. Ajoutables ensuite depuis le dossier.</p>
           </div>
 
           {manques.length > 0 ? (
-            <p className="rounded-[8px] bg-[#22262D] px-3 py-2 text-[12px] text-[#9CA3AF]">
+            <p className="rounded-[8px] bg-surface-2 px-3 py-2 text-[12px] text-texte-3">
               Sera signalé à compléter sur le dossier : {manques.join(", ")}.
             </p>
           ) : null}

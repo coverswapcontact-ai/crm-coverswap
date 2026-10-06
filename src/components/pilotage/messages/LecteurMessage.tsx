@@ -59,20 +59,20 @@ function Analyses({ analyses }: { analyses: AnalyseVue[] }) {
   const visibles = tout ? analyses : analyses.slice(0, 2);
   return (
     <section className="mt-4">
-      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+      <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-texte-3 uppercase">
         <Bot size={13} aria-hidden /> {"Ce que l'agent en a compris"}
       </p>
       <ul className="flex flex-col gap-2">
         {visibles.map((analyse) => (
-          <li key={analyse.id} className="rounded-[8px] bg-[#16181D] px-3 py-2 text-[12.5px] leading-relaxed">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-[#6B7280]">
+          <li key={analyse.id} className="rounded-[8px] bg-fond px-3 py-2 text-[12.5px] leading-relaxed">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-texte-3">
               <span>{analyse.methode === "MODELE" ? "Lecture par l'IA" : "Règles sûres"}</span>
               <span aria-hidden>·</span>
               <span>{formatHorodatage(analyse.createdAt)}</span>
               {analyse.libelleCategorie ? (
                 <>
                   <span aria-hidden>·</span>
-                  <span className="text-[#D1D5DB]">{analyse.libelleCategorie}</span>
+                  <span className="text-texte-2">{analyse.libelleCategorie}</span>
                 </>
               ) : null}
               {analyse.confiance !== null ? (
@@ -89,12 +89,12 @@ function Analyses({ analyses }: { analyses: AnalyseVue[] }) {
               ) : null}
             </p>
             {analyse.erreur ? (
-              <p className="mt-1 flex items-start gap-1.5 text-[#F5B454]">
+              <p className="mt-1 flex items-start gap-1.5 text-attention-texte">
                 <CircleAlert size={13} aria-hidden className="mt-0.5 shrink-0" />
                 {analyse.erreur}
               </p>
             ) : null}
-            {analyse.raisonnement ? <p className="mt-1 whitespace-pre-wrap text-[#D1D5DB]">{analyse.raisonnement}</p> : null}
+            {analyse.raisonnement ? <p className="mt-1 whitespace-pre-wrap text-texte-2">{analyse.raisonnement}</p> : null}
           </li>
         ))}
       </ul>
@@ -213,7 +213,7 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
                   href={detail.lienBoite}
                   target="_blank"
                   rel="noreferrer"
-                  className={cn("mr-auto inline-flex min-h-8 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+                  className={cn("mr-auto inline-flex min-h-8 items-center gap-1 text-[12px] text-texte-3 hover:text-texte", TRANS)}
                 >
                   <ExternalLink size={12} aria-hidden /> Ouvrir dans Gmail
                 </a>
@@ -264,12 +264,12 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
               ) : null}
               {detail.boiteArchiveLe ? <Pastille titre="Retiré de la boîte de réception, sous le libellé « CoverSwap CRM/Bruit archivé »">Hors de la boîte de réception</Pastille> : null}
               {detail.client ? (
-                <Link href={`/clients/${detail.client.id}`} className={cn("inline-flex min-h-7 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+                <Link href={`/clients/${detail.client.id}`} className={cn("inline-flex min-h-7 items-center gap-1 text-[12px] text-texte-3 hover:text-texte", TRANS)}>
                   {detail.client.nom}
                 </Link>
               ) : null}
               {detail.dossier ? (
-                <Link href={`/dossiers?dossier=${detail.dossier.id}`} className={cn("inline-flex min-h-7 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+                <Link href={`/dossiers?dossier=${detail.dossier.id}`} className={cn("inline-flex min-h-7 items-center gap-1 text-[12px] text-texte-3 hover:text-texte", TRANS)}>
                   <FolderOpen size={12} aria-hidden /> {detail.dossier.objet}
                 </Link>
               ) : null}
@@ -277,7 +277,7 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
 
             {propositions.length > 0 ? (
               <section className="mt-4">
-                <p className="mb-2 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">À valider pour ce mail</p>
+                <p className="mb-2 text-[12px] font-medium tracking-wide text-texte-3 uppercase">À valider pour ce mail</p>
                 <div className="flex flex-col gap-2">
                   {[...propositions].sort((a, b) => ORDRE_PROPOSITIONS.indexOf(a.type) - ORDRE_PROPOSITIONS.indexOf(b.type)).map((proposition) => (
                     <CarteProposition
@@ -296,9 +296,9 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
 
             <section className="mt-4">
               {texte ? (
-                <p className="rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3.5 py-3 text-[13.5px] leading-relaxed break-words whitespace-pre-wrap text-[#E5E7EB]">{texte}</p>
+                <p className="rounded-[8px] border-[0.5px] border-trait bg-fond px-3.5 py-3 text-[13.5px] leading-relaxed break-words whitespace-pre-wrap text-texte">{texte}</p>
               ) : (
-                <p className="text-[13px] text-[#6B7280]">{detail.extrait ?? "Texte indisponible (mail sans texte, ou effacé au titre du RGPD)."}</p>
+                <p className="text-[13px] text-texte-3">{detail.extrait ?? "Texte indisponible (mail sans texte, ou effacé au titre du RGPD)."}</p>
               )}
               {detail.texte && detail.texteUtile && detail.texte.length > detail.texteUtile.length + 20 ? (
                 <Bouton variante="fantome" taille="sm" className="mt-1" icone={<ChevronDown size={13} aria-hidden className={cn("transition-transform", complet && "rotate-180")} />} onClick={() => setComplet((valeur) => !valeur)}>
@@ -309,28 +309,28 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
 
             {detail.pieces.length > 0 ? (
               <section className="mt-4">
-                <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+                <p className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-texte-3 uppercase">
                   <Paperclip size={13} aria-hidden /> Pièces jointes
                 </p>
                 <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {detail.pieces.map((piece) => (
-                    <li key={piece.id} className="overflow-hidden rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D]">
+                    <li key={piece.id} className="overflow-hidden rounded-[8px] border-[0.5px] border-trait bg-fond">
                       {piece.url && piece.estImage ? (
-                        <a href={piece.url} target="_blank" rel="noreferrer" className="block aspect-[4/3] bg-[#0F1115]">
+                        <a href={piece.url} target="_blank" rel="noreferrer" className="block aspect-[4/3] bg-fond">
                           {/* eslint-disable-next-line @next/next/no-img-element -- pièce servie par l'API authentifiée */}
                           <img src={piece.url} alt={piece.nom} loading="lazy" className="h-full w-full object-cover" />
                         </a>
                       ) : null}
                       <div className="px-2.5 py-2 text-[12px]">
                         {piece.url ? (
-                          <a href={piece.url} target="_blank" rel="noreferrer" className={cn("flex items-center gap-1 truncate text-[#D1D5DB] hover:text-[#F2F3F5]", TRANS)}>
+                          <a href={piece.url} target="_blank" rel="noreferrer" className={cn("flex items-center gap-1 truncate text-texte-2 hover:text-texte", TRANS)}>
                             {piece.estImage ? null : <FileText size={12} aria-hidden className="shrink-0" />}
                             <span className="truncate">{piece.nom}</span>
                           </a>
                         ) : (
-                          <p className="truncate text-[#D1D5DB]">{piece.nom}</p>
+                          <p className="truncate text-texte-2">{piece.nom}</p>
                         )}
-                        <p className="mt-0.5 text-[11px] text-[#6B7280]">{piece.statut === "CONSERVEE" ? formatTaille(piece.taille) : (piece.raison ?? "En attente de téléchargement")}</p>
+                        <p className="mt-0.5 text-[11px] text-texte-3">{piece.statut === "CONSERVEE" ? formatTaille(piece.taille) : (piece.raison ?? "En attente de téléchargement")}</p>
                       </div>
                     </li>
                   ))}
@@ -342,7 +342,7 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
 
             {detail.fil.length > 0 ? (
               <section className="mt-4">
-                <p className="mb-2 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">Même conversation</p>
+                <p className="mb-2 text-[12px] font-medium tracking-wide text-texte-3 uppercase">Même conversation</p>
                 <ul className="flex flex-col gap-1">
                   {detail.fil.map((autre) => (
                     <li key={autre.id}>
@@ -353,11 +353,11 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
                           setComplet(false);
                           setCourant(autre.id);
                         }}
-                        className={cn("flex min-h-10 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[12.5px] hover:bg-[#22262D]", TRANS)}
+                        className={cn("flex min-h-10 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left text-[12.5px] hover:bg-surface-2", TRANS)}
                       >
-                        {autre.sens === "SORTANT" ? <ArrowUpRight size={13} className="shrink-0 text-[#93C5FD]" aria-hidden /> : <ArrowDownLeft size={13} className="shrink-0 text-[#9CA3AF]" aria-hidden />}
-                        <span className="shrink-0 text-[#6B7280]">{formatHorodatage(autre.recuLe)}</span>
-                        <span className="truncate text-[#D1D5DB]">{autre.extrait ?? autre.objet ?? ""}</span>
+                        {autre.sens === "SORTANT" ? <ArrowUpRight size={13} className="shrink-0 text-info-texte" aria-hidden /> : <ArrowDownLeft size={13} className="shrink-0 text-texte-3" aria-hidden />}
+                        <span className="shrink-0 text-texte-3">{formatHorodatage(autre.recuLe)}</span>
+                        <span className="truncate text-texte-2">{autre.extrait ?? autre.objet ?? ""}</span>
                       </button>
                     </li>
                   ))}
@@ -366,7 +366,7 @@ export function LecteurMessage({ messageId, onFermer, onModifie }: { messageId: 
             ) : null}
           </div>
         ) : (
-          <p className="flex items-center gap-2 text-[13px] text-[#6B7280]">
+          <p className="flex items-center gap-2 text-[13px] text-texte-3">
             <Search size={14} aria-hidden /> Lecture…
           </p>
         )}

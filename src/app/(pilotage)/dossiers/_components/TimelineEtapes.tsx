@@ -14,7 +14,7 @@ import { formatHorodatage } from "@/lib/dossiers/dates";
 import { estEtapeActive, rangEtape } from "@/lib/dossiers/regles";
 import type { DossierDetail } from "@/lib/dossiers/types";
 import { cn } from "@/lib/utils";
-import { Bouton, CLASSE_SAISIE, COULEURS_ETAPE, TRANS } from "@/components/pilotage/ui";
+import { Bouton, CLASSE_SAISIE, COULEURS_ETAPE, TRANS, JETONS, teinte } from "@/components/pilotage/ui";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 type Statut = "passee" | "courante" | "a-venir";
@@ -69,24 +69,24 @@ export function TimelineEtapes({
               <span
                 aria-hidden
                 className="absolute top-5 bottom-0 left-[7px] w-px"
-                style={{ backgroundColor: statut === "passee" ? `${couleur}66` : "#2A2D34" }}
+                style={{ backgroundColor: statut === "passee" ? teinte(couleur, 40) : JETONS.trait }}
               />
             ) : null}
             <span
               aria-hidden
               className={cn(
                 "absolute top-[7px] left-0 flex h-[15px] w-[15px] items-center justify-center rounded-full border",
-                statut === "a-venir" && "border-[#3A3E47] bg-[#16181D]"
+                statut === "a-venir" && "border-trait-2 bg-fond"
               )}
               style={
                 statut === "courante"
-                  ? { borderColor: couleur, backgroundColor: `${couleur}33`, boxShadow: `0 0 0 4px ${couleur}22` }
+                  ? { borderColor: couleur, backgroundColor: teinte(couleur, 20), boxShadow: `0 0 0 4px ${teinte(couleur, 13)}` }
                   : statut === "passee"
                     ? { borderColor: couleur, backgroundColor: couleur }
                     : undefined
               }
             >
-              {statut === "passee" ? <Check size={9} strokeWidth={3} className="text-[#0B1612]" /> : null}
+              {statut === "passee" ? <Check size={9} strokeWidth={3} className="text-action-texte" /> : null}
             </span>
 
             <button
@@ -94,28 +94,28 @@ export function TimelineEtapes({
               aria-expanded={ouverte}
               onClick={() => basculer(etape)}
               className={cn(
-                "flex min-h-[36px] w-full items-center justify-between gap-2 rounded-[8px] px-2 text-left hover:bg-[#1C1F25]",
-                statut === "courante" && "bg-[#1C1F25]",
+                "flex min-h-[36px] w-full items-center justify-between gap-2 rounded-[8px] px-2 text-left hover:bg-surface",
+                statut === "courante" && "bg-surface",
                 TRANS
               )}
             >
               <span
                 className={cn(
                   "flex items-center gap-2 text-[13px]",
-                  statut === "courante" ? "font-medium text-[#F2F3F5]" : statut === "passee" ? "text-[#D1D5DB]" : "text-[#6B7280]"
+                  statut === "courante" ? "font-medium text-texte" : statut === "passee" ? "text-texte-2" : "text-texte-3"
                 )}
               >
                 {LIBELLES_ETAPE[etape]}
                 {statut === "courante" ? (
                   <span
                     className="rounded-full px-1.5 py-px text-[10px] font-medium"
-                    style={{ color: couleur, backgroundColor: `${couleur}1A` }}
+                    style={{ color: couleur, backgroundColor: teinte(couleur, 10) }}
                   >
                     étape actuelle
                   </span>
                 ) : null}
               </span>
-              <span className="flex items-center gap-1.5 text-[11px] text-[#6B7280]">
+              <span className="flex items-center gap-1.5 text-[11px] text-texte-3">
                 {notes.length > 0 ? `${notes.length} note${notes.length > 1 ? "s" : ""}` : null}
                 <ChevronDown size={14} aria-hidden className={cn("transition-transform", ouverte && "rotate-180")} />
               </span>
@@ -123,11 +123,11 @@ export function TimelineEtapes({
 
             {ouverte ? (
               <div className="mt-1 mb-3 space-y-2 pl-2">
-                <p className="text-[12px] text-[#6B7280]">{REGLES_ETAPES[etape].description}</p>
+                <p className="text-[12px] text-texte-3">{REGLES_ETAPES[etape].description}</p>
                 {notes.map((note) => (
-                  <div key={note.id} className="rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2">
-                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{note.contenu}</p>
-                    <p className="mt-1 text-[11px] text-[#6B7280]">{formatHorodatage(note.createdAt)}</p>
+                  <div key={note.id} className="rounded-[8px] border-[0.5px] border-trait bg-surface px-3 py-2">
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-texte">{note.contenu}</p>
+                    <p className="mt-1 text-[11px] text-texte-3">{formatHorodatage(note.createdAt)}</p>
                   </div>
                 ))}
                 <AjoutNote dossierId={detail.id} etape={etape} onAjoutee={onNoteAjoutee} />

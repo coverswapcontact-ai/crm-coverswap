@@ -183,7 +183,7 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
 
   const actions = (
     <div className="flex gap-1.5">
-      <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+      <Link href={`/simulateur?dossier=${detail.id}`} className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] font-medium text-texte hover:border-trait-2 sm:h-7">
         <WandSparkles size={13} aria-hidden /> Simulateur
       </Link>
       <Bouton taille="sm" icone={<ImagePlus size={13} aria-hidden />} onClick={() => entree.current?.click()}>
@@ -208,13 +208,13 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
       />
 
       {donnees === null ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+        <p className="text-[13px] text-texte-3">Chargement…</p>
       ) : (
         <div className="space-y-3">
           {donnees.preparations
             .filter((p) => p.mode === "API" && (p.statut === "EN_COURS" || (p.statut === "ECHEC" && Date.now() - new Date(p.le).getTime() < 86_400_000)))
             .map((p) => (
-              <div key={p.id} className={cn("rounded-[10px] border-[0.5px] px-3 py-2.5 text-[12.5px]", p.statut === "ECHEC" ? "border-[#EF4444]/35 bg-[#EF4444]/[0.07] text-[#FCA5A5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#D1D5DB]")}>
+              <div key={p.id} className={cn("rounded-[10px] border-[0.5px] px-3 py-2.5 text-[12.5px]", p.statut === "ECHEC" ? "border-attention/35 bg-attention/[0.07] text-attention-texte" : "border-trait bg-surface text-texte-2")}>
                 {p.statut === "EN_COURS" ? (
                   <span className="flex items-center gap-2">
                     <Loader2 size={13} className="animate-spin" aria-hidden /> Génération par l&apos;API en cours ({p.typeLibelle}, {p.zones.map((z) => z.ref).join(" · ")}) — le brouillon arrive ici, en général en une minute.
@@ -226,16 +226,16 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
             ))}
 
           {chatgptEnAttente ? (
-            <div className="rounded-[10px] border-[0.5px] border-[#60A5FA]/35 bg-[#60A5FA]/[0.07] px-3 py-2.5 text-[12.5px] text-[#BFDBFE]">
+            <div className="rounded-[10px] border-[0.5px] border-info/35 bg-info/[0.07] px-3 py-2.5 text-[12.5px] text-info-texte">
               Préparé pour ChatGPT le {jourHeure(chatgptEnAttente.le)} ({chatgptEnAttente.typeLibelle}, {chatgptEnAttente.zones.map((z) => `${z.etiquette.split(" · ")[0]} ${z.ref}`).join(", ")}, prompt v{chatgptEnAttente.promptVersion}) : déposez l&apos;image rendue, elle reprendra tout.
-              <button type="button" onClick={() => entree.current?.click()} className="ml-1 font-medium text-[#93C5FD] underline underline-offset-2">
+              <button type="button" onClick={() => entree.current?.click()} className="ml-1 font-medium text-info-texte underline underline-offset-2">
                 Déposer l&apos;image
               </button>
             </div>
           ) : null}
 
           {donnees.simulations.length === 0 ? (
-            <p className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4 text-[13px] text-[#9CA3AF]">Aucune simulation. Préparez-en une dans le simulateur (API ou ChatGPT), ou déposez une image.</p>
+            <p className="rounded-[12px] border-[0.5px] border-dashed border-trait p-4 text-[13px] text-texte-3">Aucune simulation. Préparez-en une dans le simulateur (API ou ChatGPT), ou déposez une image.</p>
           ) : null}
 
           {visionneuse ? <Visionneuse images={visionneuse.images} index={visionneuse.index} onIndex={(index) => setVisionneuse((v) => (v ? { ...v, index } : v))} onFermer={() => setVisionneuse(null)} /> : null}
@@ -307,7 +307,7 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
         }
       >
         {publication ? (
-          <p className="text-[13px] leading-relaxed text-[#D1D5DB]">
+          <p className="text-[13px] leading-relaxed text-texte-2">
             Le client est prévenu par mail, automatiquement : « Votre simulation est prête », avec un bouton vers son espace. Un seul mail par publication, et seulement s&apos;il a une adresse e-mail valide.
           </p>
         ) : null}
@@ -328,9 +328,9 @@ export function SimulationsDossier({ detail, onRecharger, sansTitre = false }: {
           <div className="space-y-3">
             {/* eslint-disable-next-line @next/next/no-img-element -- aperçu local */}
             <img src={depot.apercu} alt="" className="max-h-56 w-full rounded-[10px] object-contain" />
-            <label className="block text-[12px] font-medium text-[#9CA3AF]">
+            <label className="block text-[12px] font-medium text-texte-3">
               D&apos;où vient cette image ?
-              <select value={depotInfos.preparation} onChange={(e) => setDepotInfos({ ...depotInfos, preparation: e.target.value })} className="mt-1.5 h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]">
+              <select value={depotInfos.preparation} onChange={(e) => setDepotInfos({ ...depotInfos, preparation: e.target.value })} className="mt-1.5 h-11 w-full rounded-[8px] border-[0.5px] border-trait bg-fond px-2 text-[14px] text-texte [color-scheme:dark] sm:h-9 sm:text-[13px]">
                 <option value="auto">{chatgptEnAttente ? `ChatGPT — préparation du ${jourHeure(chatgptEnAttente.le)} (${chatgptEnAttente.typeLibelle})` : "La dernière préparation ChatGPT (s'il y en a une)"}</option>
                 {donnees?.preparations
                   .filter((p) => p.mode === "CHATGPT" && p.id !== chatgptEnAttente?.id)
@@ -355,8 +355,8 @@ function Groupe({ titre, aide, action, children }: { titre: string; aide: string
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="text-[12px] text-[#9CA3AF]">
-          <span className="font-medium text-[#D1D5DB]">{titre}</span> · {aide}
+        <p className="text-[12px] text-texte-3">
+          <span className="font-medium text-texte-2">{titre}</span> · {aide}
         </p>
         {action}
       </div>
@@ -369,15 +369,15 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
   const source = SOURCES[s.source];
   const [detail, setDetail] = useState<"" | "direction" | "prompt">("");
   return (
-    <li className={cn("overflow-hidden rounded-[10px] border-[0.5px] bg-[#1C1F25]", s.choisie ? "border-[#1D9E75]" : selection ? "border-[#5DCAA5]/70" : "border-[#2A2D34]", occupe?.endsWith(s.id) && "opacity-70")}>
+    <li className={cn("overflow-hidden rounded-[10px] border-[0.5px] bg-surface", s.choisie ? "border-action" : selection ? "border-action-clair/70" : "border-trait", occupe?.endsWith(s.id) && "opacity-70")}>
       <div className="relative">
-        <button type="button" onClick={() => onOuvrir("image")} className="block aspect-[3/2] w-full bg-[#16181D]" aria-label="Agrandir la simulation">
+        <button type="button" onClick={() => onOuvrir("image")} className="block aspect-[3/2] w-full bg-fond" aria-label="Agrandir la simulation">
           {/* eslint-disable-next-line @next/next/no-img-element -- image privée, servie derrière la session */}
           <img src={s.image} alt={s.titre ?? "Simulation"} className="h-full w-full object-cover" loading="lazy" />
         </button>
         {onSelection ? (
           <label className="absolute top-2 left-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55">
-            <input type="checkbox" checked={Boolean(selection)} onChange={onSelection} className="h-4 w-4 accent-[#1D9E75]" aria-label="Choisir pour publier" />
+            <input type="checkbox" checked={Boolean(selection)} onChange={onSelection} className="h-4 w-4 accent-action" aria-label="Choisir pour publier" />
           </label>
         ) : null}
         {s.avant ? (
@@ -387,7 +387,7 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
         ) : null}
       </div>
       <div className="space-y-1.5 p-2.5">
-        <p className="truncate text-[12.5px] text-[#F2F3F5]">{s.titre ?? s.typeLibelle ?? "Simulation"}</p>
+        <p className="truncate text-[12.5px] text-texte">{s.titre ?? s.typeLibelle ?? "Simulation"}</p>
         <div className="flex flex-wrap gap-1">
           <Pastille ton={source.ton}>{source.libelle}</Pastille>
           {s.promptVersion ? <Pastille>prompt v{s.promptVersion}</Pastille> : null}
@@ -396,26 +396,26 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
           {s.scoreControle !== null ? <Pastille ton={s.sousSeuil ? "ambre" : "vert"}>contrôle {s.scoreControle}/10{s.tentatives && s.tentatives > 1 ? ` · ${s.tentatives} essais` : ""}</Pastille> : null}
           {s.choisie ? <Pastille ton="vert">Choisie</Pastille> : s.vueLe ? <Pastille ton="bleu">Vue</Pastille> : null}
         </div>
-        {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-[#9CA3AF]">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})`).join(" · ")}</p> : null}
-        {s.defautsControle.length > 0 ? <p className="text-[11.5px] leading-snug text-[#F5B454]">Défauts relevés : {s.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
+        {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-texte-3">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})`).join(" · ")}</p> : null}
+        {s.defautsControle.length > 0 ? <p className="text-[11.5px] leading-snug text-attention-texte">Défauts relevés : {s.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
         {s.directionArtistique || s.promptTexte ? (
           <div className="flex flex-wrap gap-2 text-[11.5px]">
             {s.directionArtistique ? (
-              <button type="button" onClick={() => setDetail((d) => (d === "direction" ? "" : "direction"))} className="min-h-[44px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+              <button type="button" onClick={() => setDetail((d) => (d === "direction" ? "" : "direction"))} className="min-h-[44px] text-texte-3 underline underline-offset-2 sm:min-h-0">
                 {detail === "direction" ? "Masquer la direction artistique" : "Direction artistique"}
               </button>
             ) : null}
             {s.promptTexte ? (
-              <button type="button" onClick={() => setDetail((d) => (d === "prompt" ? "" : "prompt"))} className="min-h-[44px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+              <button type="button" onClick={() => setDetail((d) => (d === "prompt" ? "" : "prompt"))} className="min-h-[44px] text-texte-3 underline underline-offset-2 sm:min-h-0">
                 {detail === "prompt" ? "Masquer le prompt" : `Prompt (${s.promptTexte.length} caractères)`}
               </button>
             ) : null}
           </div>
         ) : null}
-        {detail === "direction" && s.directionArtistique ? <p className="rounded-[8px] bg-[#16181D] p-2 text-[11.5px] leading-relaxed text-[#D1D5DB]">{s.directionArtistique}</p> : null}
-        {detail === "prompt" && s.promptTexte ? <pre className="max-h-64 overflow-auto rounded-[8px] bg-[#16181D] p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB] select-all">{s.promptTexte}</pre> : null}
-        {s.commentaire ? <p className="text-[11.5px] leading-snug text-[#D1D5DB]">« {s.commentaire} »</p> : null}
-        <p className="text-[11px] text-[#6B7280]">{jourHeure(s.publieeLe ?? s.le)}</p>
+        {detail === "direction" && s.directionArtistique ? <p className="rounded-[8px] bg-fond p-2 text-[11.5px] leading-relaxed text-texte-2">{s.directionArtistique}</p> : null}
+        {detail === "prompt" && s.promptTexte ? <pre className="max-h-64 overflow-auto rounded-[8px] bg-fond p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-texte-2 select-all">{s.promptTexte}</pre> : null}
+        {s.commentaire ? <p className="text-[11.5px] leading-snug text-texte-2">« {s.commentaire} »</p> : null}
+        <p className="text-[11px] text-texte-3">{jourHeure(s.publieeLe ?? s.le)}</p>
         {children ? <div className="flex flex-wrap gap-1.5 pt-0.5">{children}</div> : null}
       </div>
     </li>

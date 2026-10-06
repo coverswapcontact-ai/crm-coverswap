@@ -53,12 +53,12 @@ function LigneTache({ tache, onChange }: { tache: TacheVue; onChange: () => void
   }
 
   return (
-    <li className="border-t-[0.5px] border-[#2A2D34] px-4 py-3 first:border-t-0">
+    <li className="border-t-[0.5px] border-trait px-4 py-3 first:border-t-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[13.5px] font-medium text-[#F2F3F5]">{tache.libelle}</p>
-          {tache.abandonnee && tache.derniereErreur ? <p className="mt-1 text-[12.5px] leading-snug break-words text-[#F5B454]">{tache.derniereErreur}</p> : null}
-          <p className="mt-0.5 text-[12px] text-[#6B7280]">
+          <p className="text-[13.5px] font-medium text-texte">{tache.libelle}</p>
+          {tache.abandonnee && tache.derniereErreur ? <p className="mt-1 text-[12.5px] leading-snug break-words text-attention-texte">{tache.derniereErreur}</p> : null}
+          <p className="mt-0.5 text-[12px] text-texte-3">
             Demandée le {formatHorodatage(tache.createdAt)} · {tache.tentatives} tentative{tache.tentatives > 1 ? "s" : ""}
             {tache.statut === "EN_ATTENTE" && tache.tentatives > 0 ? ` · nouvel essai ${formatHorodatage(tache.prochainEssaiLe)}` : ""}
             {tache.termineLe && tache.statut === "TERMINEE" ? ` · terminée le ${formatHorodatage(tache.termineLe)}` : ""}
@@ -66,9 +66,9 @@ function LigneTache({ tache, onChange }: { tache: TacheVue; onChange: () => void
         </div>
         {tache.abandonnee ? <Pastille ton="ambre">Abandonnée</Pastille> : <Pastille ton={TON_STATUT[tache.statut]}>{LIBELLES_STATUT_TACHE[tache.statut]}</Pastille>}
       </div>
-      {tache.resume && tache.statut === "TERMINEE" ? <p className="mt-1.5 text-[12px] leading-snug break-words text-[#9CA3AF]">{tache.resume}</p> : null}
+      {tache.resume && tache.statut === "TERMINEE" ? <p className="mt-1.5 text-[12px] leading-snug break-words text-texte-3">{tache.resume}</p> : null}
       {tache.derniereErreur && !tache.abandonnee ? (
-        <p className="mt-2 flex items-start gap-2 rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[12px] break-words text-[#F87171]">
+        <p className="mt-2 flex items-start gap-2 rounded-[8px] bg-attention/10 px-3 py-2 text-[12px] break-words text-attention-texte">
           <AlertTriangle size={13} aria-hidden className="mt-px shrink-0" />
           {tache.derniereErreur}
         </p>
@@ -94,10 +94,10 @@ function Repli({ titre, nombre, ton, ouvertParDefaut = false, children }: { titr
   const [ouvert, setOuvert] = useState(ouvertParDefaut);
   return (
     <section className="mt-6">
-      <button type="button" aria-expanded={ouvert} onClick={() => setOuvert((o) => !o)} className={cn("flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-1 text-left hover:bg-[#1C1F25]", TRANS)}>
-        <span className="flex-1 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">{titre}</span>
-        <span className={cn("text-[12px] tabular-nums", ton === "rouge" ? "text-[#F87171]" : "text-[#6B7280]")}>{nombre}</span>
-        <ChevronDown size={16} aria-hidden className={cn("text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
+      <button type="button" aria-expanded={ouvert} onClick={() => setOuvert((o) => !o)} className={cn("flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-1 text-left hover:bg-surface", TRANS)}>
+        <span className="flex-1 text-[12px] font-medium tracking-wide text-texte-3 uppercase">{titre}</span>
+        <span className={cn("text-[12px] tabular-nums", ton === "rouge" ? "text-attention-texte" : "text-texte-3")}>{nombre}</span>
+        <ChevronDown size={16} aria-hidden className={cn("text-texte-3 transition-transform", ouvert && "rotate-180")} />
       </button>
       {ouvert ? <div className="mt-1.5">{children}</div> : null}
     </section>
@@ -139,7 +139,7 @@ export default function EtatTaches({ initial }: { initial: Etat }) {
       >
         Tâches de fond
       </TitreSection>
-      <p className={cn("-mt-1.5 mb-4 text-[12.5px]", compteurs.ECHEC_DEFINITIF > 0 ? "text-[#F87171]" : "text-[#9CA3AF]")}>
+      <p className={cn("-mt-1.5 mb-4 text-[12.5px]", compteurs.ECHEC_DEFINITIF > 0 ? "text-attention-texte" : "text-texte-3")}>
         {compteurs.ECHEC_DEFINITIF > 0
           ? `${compteurs.ECHEC_DEFINITIF} en échec : à relancer une fois la cause réglée.`
           : `${compteurs.EN_ATTENTE + compteurs.EN_COURS} en cours ou en attente · ${compteurs.TERMINEE} terminées`}
@@ -148,10 +148,10 @@ export default function EtatTaches({ initial }: { initial: Etat }) {
       <section>
         <TitreSection>À voir · en échec, en cours, en attente ({aVoir.length})</TitreSection>
         {aVoir.length === 0 ? (
-          <EtatVide icone={<CircleCheck size={18} className="text-[#1D9E75]" aria-hidden />} titre="Rien en échec ni en attente" texte="Envois validés, miroir Drive, relève des mails et sauvegardes passent par ici." />
+          <EtatVide icone={<CircleCheck size={18} className="text-action" aria-hidden />} titre="Rien en échec ni en attente" texte="Envois validés, miroir Drive, relève des mails et sauvegardes passent par ici." />
         ) : (
           <>
-            <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+            <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
               {tranche(aVoir, pageAVoir).map((tache) => (
                 <LigneTache key={tache.id} tache={tache} onChange={() => void recharger()} />
               ))}
@@ -165,11 +165,11 @@ export default function EtatTaches({ initial }: { initial: Etat }) {
         {etat.planifications.length === 0 ? (
           <EtatVide titre="Aucun travail périodique" texte="Ils apparaissent dès qu'un volet (mail, Drive) est branché." />
         ) : (
-          <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+          <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
             {etat.planifications.map((planification) => (
-              <li key={planification.nom} className="border-t-[0.5px] border-[#2A2D34] px-4 py-3 first:border-t-0">
+              <li key={planification.nom} className="border-t-[0.5px] border-trait px-4 py-3 first:border-t-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[13.5px] font-medium text-[#F2F3F5]">{planification.libelle}</p>
+                  <p className="text-[13.5px] font-medium text-texte">{planification.libelle}</p>
                   {planification.dernierStatut === "ECHEC" ? (
                     <Pastille ton="rouge">
                       {planification.echecsConsecutifs} échec{planification.echecsConsecutifs > 1 ? "s" : ""} de suite
@@ -188,12 +188,12 @@ export default function EtatTaches({ initial }: { initial: Etat }) {
                     </Pastille>
                   )}
                 </div>
-                <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                <p className="mt-0.5 text-[12px] text-texte-3">
                   {planification.dernierDebut ? `Dernier passage ${formatHorodatage(planification.dernierDebut)}` : "Jamais passé"}
                   {planification.prochainPassage ? ` · prochain ${formatHorodatage(planification.prochainPassage)}` : ""}
                 </p>
                 {planification.derniereErreur && planification.dernierStatut === "ECHEC" ? (
-                  <p className="mt-2 rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[12px] break-words text-[#F87171]">{planification.derniereErreur}</p>
+                  <p className="mt-2 rounded-[8px] bg-attention/10 px-3 py-2 text-[12px] break-words text-attention-texte">{planification.derniereErreur}</p>
                 ) : null}
               </li>
             ))}
@@ -206,13 +206,13 @@ export default function EtatTaches({ initial }: { initial: Etat }) {
           <EtatVide titre="Aucune tâche terminée" />
         ) : (
           <>
-            <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+            <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
               {tranche(finies, pageFinies).map((tache) => (
                 <LigneTache key={tache.id} tache={tache} onChange={() => void recharger()} />
               ))}
             </ul>
             <Pagination total={finies.length} page={pageFinies + 1} parPage={PAR_PAGE} feminin onPage={(p) => setPageFinies(p - 1)} />
-            {finies.length < totalFinies ? <p className="mt-2 text-[12px] text-[#6B7280]">Les {finies.length} plus récentes sur {totalFinies}.</p> : null}
+            {finies.length < totalFinies ? <p className="mt-2 text-[12px] text-texte-3">Les {finies.length} plus récentes sur {totalFinies}.</p> : null}
           </>
         )}
       </Repli>

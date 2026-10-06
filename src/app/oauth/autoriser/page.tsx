@@ -26,39 +26,39 @@ export default async function AutoriserPage({ searchParams }: { searchParams: Pr
   const compte = (famille: "LECTURE" | "ANALYSE" | "ECRITURE") => outils.filter((o) => o.famille === famille).length;
 
   return (
-    <main className="flex min-h-screen w-full flex-1 items-center justify-center bg-[#16181D] p-4 text-[#F2F3F5]">
-      <div className="w-full max-w-[440px] rounded-[14px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-6 sm:p-7">
+    <main className="flex min-h-screen w-full flex-1 items-center justify-center bg-fond p-4 text-texte">
+      <div className="w-full max-w-[440px] rounded-[14px] border-[0.5px] border-trait bg-surface p-6 sm:p-7">
         <p className="flex items-baseline gap-2 text-[17px] font-semibold tracking-tight">
           CoverSwap
-          <span className="text-[13px] font-normal text-[#6B7280]">assistant</span>
+          <span className="text-[13px] font-normal text-texte-3">assistant</span>
         </p>
         {erreur || !demande ? (
           <>
             <h1 className="mt-4 text-[15px] font-medium">Demande d&apos;autorisation refusée</h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-[#F5B454]">{erreur}</p>
-            <p className="mt-3 text-[12.5px] leading-relaxed text-[#9CA3AF]">Rien n&apos;a été accordé. Recommence l&apos;ajout du connecteur depuis l&apos;application Claude ; si l&apos;erreur persiste, regarde Paramètres → Assistant Claude.</p>
+            <p className="mt-2 text-[13px] leading-relaxed text-attention-texte">{erreur}</p>
+            <p className="mt-3 text-[12.5px] leading-relaxed text-texte-3">Rien n&apos;a été accordé. Recommence l&apos;ajout du connecteur depuis l&apos;application Claude ; si l&apos;erreur persiste, regarde Paramètres → Assistant Claude.</p>
           </>
         ) : (
           <>
             <h1 className="mt-4 text-[15px] font-medium">
               « {demande.client.nom} » demande l&apos;accès à ton CRM
             </h1>
-            <dl className="mt-3 space-y-1.5 text-[12.5px] text-[#9CA3AF]">
+            <dl className="mt-3 space-y-1.5 text-[12.5px] text-texte-3">
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-[#6B7280]">Application</dt>
-                <dd className="break-all text-[#D1D5DB]">{demande.client.nom} <span className="text-[#6B7280]">({demande.client.origine === "CIMD" ? "identité vérifiée par document" : demande.client.origine === "DCR" ? "enregistrée dynamiquement" : "enregistrée à la main"})</span></dd>
+                <dt className="w-24 shrink-0 text-texte-3">Application</dt>
+                <dd className="break-all text-texte-2">{demande.client.nom} <span className="text-texte-3">({demande.client.origine === "CIMD" ? "identité vérifiée par document" : demande.client.origine === "DCR" ? "enregistrée dynamiquement" : "enregistrée à la main"})</span></dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-[#6B7280]">Retour vers</dt>
-                <dd className="break-all text-[#D1D5DB]">{new URL(demande.redirectUri).host}</dd>
+                <dt className="w-24 shrink-0 text-texte-3">Retour vers</dt>
+                <dd className="break-all text-texte-2">{new URL(demande.redirectUri).host}</dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-24 shrink-0 text-[#6B7280]">Au nom de</dt>
-                <dd className="break-all text-[#D1D5DB]">{utilisateur ?? "personne (connexion requise)"}</dd>
+                <dt className="w-24 shrink-0 text-texte-3">Au nom de</dt>
+                <dd className="break-all text-texte-2">{utilisateur ?? "personne (connexion requise)"}</dd>
               </div>
             </dl>
-            <div className="mt-4 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3 text-[12.5px] leading-relaxed text-[#9CA3AF]">
-              <p className="text-[#D1D5DB]">Ce que l&apos;application pourra faire, en ton nom :</p>
+            <div className="mt-4 rounded-[10px] border-[0.5px] border-trait bg-fond p-3 text-[12.5px] leading-relaxed text-texte-3">
+              <p className="text-texte-2">Ce que l&apos;application pourra faire, en ton nom :</p>
               <ul className="mt-1.5 list-disc space-y-0.5 pl-4">
                 <li>lire le CRM ({compte("LECTURE")} outils) et lancer les analyses ({compte("ANALYSE")} managers) ;</li>
                 <li>écrire ({compte("ECRITURE")} outils) : notes, étapes, planification, documents… Les actions sensibles (mail ou lien à un client, facture, encaissement, action en masse) exigent ta confirmation dans Claude ;</li>
@@ -72,10 +72,10 @@ export default async function AutoriserPage({ searchParams }: { searchParams: Pr
                 const valeur = Array.isArray(v) ? v[0] : v;
                 return typeof valeur === "string" ? <input key={cle} type="hidden" name={cle} value={valeur} /> : null;
               })}
-              <button type="submit" name="decision" value="refuser" className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] border-[0.5px] border-[#2A2D34] px-4 text-[13px] text-[#D1D5DB] hover:bg-[#23262D]">
+              <button type="submit" name="decision" value="refuser" className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] border-[0.5px] border-trait px-4 text-[13px] text-texte-2 hover:bg-surface">
                 Refuser
               </button>
-              <button type="submit" name="decision" value="accorder" disabled={!utilisateur} className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] bg-[#5DCAA5] px-4 text-[13px] font-medium text-[#0F1A16] hover:bg-[#6FD6B3] disabled:opacity-50">
+              <button type="submit" name="decision" value="accorder" disabled={!utilisateur} className="inline-flex h-11 sm:h-10 items-center justify-center rounded-[9px] bg-action-clair px-4 text-[13px] font-medium text-action-texte hover:bg-action-clair disabled:opacity-50">
                 Autoriser l&apos;accès
               </button>
             </form>

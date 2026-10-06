@@ -59,17 +59,17 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
       <TitreSection>Connexions</TitreSection>
       <div className="grid gap-2.5 md:grid-cols-2">
         <div className={cn(CARTE, "p-4")}>
-          <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+          <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
             <Link2 size={15} aria-hidden /> Compte Google (Drive, Gmail, Agenda)
           </p>
           {!google.configuree ? (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
               <Pastille ton="neutre">Non configuré</Pastille>
               <p className="mt-2">À ajouter aux variables d&apos;environnement du serveur : {google.manquantes.join(", ")}. Voir la section 15 du document d&apos;architecture.</p>
             </div>
           ) : google.connexion ? (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
-              <p className="flex items-center gap-1.5 text-[#5DCAA5]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
+              <p className="flex items-center gap-1.5 text-action-clair">
                 <CircleCheck size={14} aria-hidden /> {google.connexion.compte}
               </p>
               <p className="mt-1">Connecté depuis le {formatDateCourte(google.connexion.depuis)}</p>
@@ -78,34 +78,34 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
                   className={cn(
                     "mt-1",
                     google.connexion.echeance.niveau === "EXPIREE"
-                      ? "text-[#F87171]"
+                      ? "text-attention-texte"
                       : google.connexion.echeance.niveau === "LOINTAINE"
-                        ? "text-[#9CA3AF]"
-                        : "text-[#F5B454]"
+                        ? "text-texte-3"
+                        : "text-attention-texte"
                   )}
                 >
                   {google.connexion.echeance.niveau === "EXPIREE"
                     ? `Expirée le ${formatHorodatage(google.connexion.echeance.expireLe)} : reconnecter.`
                     : `Expire le ${formatHorodatage(google.connexion.echeance.expireLe)}, dans ${dureeRestante(google.connexion.echeance.resteMs ?? 0)}.`}{" "}
-                  <span className="text-[#6B7280]">Application Google en mode Test : reconnexion tous les 7 jours.</span>
+                  <span className="text-texte-3">Application Google en mode Test : reconnexion tous les 7 jours.</span>
                 </p>
               ) : null}
-              {google.connexion.derniereErreur ? <p className="mt-1 text-[#F87171]">{google.connexion.derniereErreur}</p> : null}
-              {google.agenda ? null : <p className="mt-1 text-[#F5B454]">Agenda : droit non accordé. Tes rappels s&apos;y inscriront dès que tu l&apos;accordes (Reconnecter).</p>}
+              {google.connexion.derniereErreur ? <p className="mt-1 text-attention-texte">{google.connexion.derniereErreur}</p> : null}
+              {google.agenda ? null : <p className="mt-1 text-attention-texte">Agenda : droit non accordé. Tes rappels s&apos;y inscriront dès que tu l&apos;accordes (Reconnecter).</p>}
               {google.agendaApiActivee ? null : (
-                <p className="mt-1 text-[#F5B454]">
+                <p className="mt-1 text-attention-texte">
                   L&apos;API Google Calendar n&apos;est pas activée dans le projet Google Cloud : à activer (console Google Cloud → API et services → Google Calendar API), puis les rappels s&apos;inscriront seuls.
-                  {google.agendaApiMessage ? <span className="mt-0.5 block break-words text-[#6B7280]">Réponse de Google : {google.agendaApiMessage}</span> : null}
+                  {google.agendaApiMessage ? <span className="mt-0.5 block break-words text-texte-3">Réponse de Google : {google.agendaApiMessage}</span> : null}
                 </p>
               )}
               {google.autresApisNonActivees.map((api) => (
-                <p key={api.api} className="mt-1 text-[#F5B454]">
+                <p key={api.api} className="mt-1 text-attention-texte">
                   L&apos;API {api.api} n&apos;est pas activée dans le projet Google Cloud : à activer (console Google Cloud → API et services → {api.api} API), puis les tâches en attente repartiront seules.
-                  {api.message ? <span className="mt-0.5 block break-words text-[#6B7280]">Réponse de Google : {api.message}</span> : null}
+                  {api.message ? <span className="mt-0.5 block break-words text-texte-3">Réponse de Google : {api.message}</span> : null}
                 </p>
               ))}
               <div className="mt-3 flex flex-wrap gap-2">
-                <a href="/api/google/connexion" className="inline-flex h-11 sm:h-8 items-center rounded-[8px] border-[0.5px] border-[#2A2D34] px-3 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47]">
+                <a href="/api/google/connexion" className="inline-flex h-11 sm:h-8 items-center rounded-[8px] border-[0.5px] border-trait px-3 text-[12px] text-texte hover:border-trait-2">
                   Reconnecter
                 </a>
                 <Bouton
@@ -120,11 +120,11 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
               </div>
             </div>
           ) : (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
               <Pastille ton="ambre">Pas connecté</Pastille>
               <p className="mt-2">Autorise le CRM à écrire dans Drive (ses propres fichiers seulement), à lire, ranger et envoyer les mails de la boîte, et à inscrire tes rappels dans l&apos;agenda.</p>
-              <p className="mt-1 text-[#F5B454]">Google n&apos;est pas connecté : tes rappels s&apos;inscriront dans l&apos;agenda dès que tu le connectes.</p>
-              <a href="/api/google/connexion" className="mt-3 inline-flex h-11 sm:h-9 items-center rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]">
+              <p className="mt-1 text-attention-texte">Google n&apos;est pas connecté : tes rappels s&apos;inscriront dans l&apos;agenda dès que tu le connectes.</p>
+              <a href="/api/google/connexion" className="mt-3 inline-flex h-11 sm:h-9 items-center rounded-[8px] bg-action px-3.5 text-[13px] font-medium text-action-texte hover:bg-action-clair">
                 Connecter le compte Google
               </a>
             </div>
@@ -132,19 +132,19 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
         </div>
 
         <div className={cn(CARTE, "p-4")}>
-          <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+          <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
             <CloudUpload size={15} aria-hidden /> Miroir Google Drive
           </p>
           {!drive.actif ? (
-            <p className="mt-2 text-[12.5px] text-[#9CA3AF]">Inactif tant qu&apos;aucun compte Google n&apos;est connecté. Le CRM reste la référence : Drive n&apos;en est qu&apos;une copie lisible.</p>
+            <p className="mt-2 text-[12.5px] text-texte-3">Inactif tant qu&apos;aucun compte Google n&apos;est connecté. Le CRM reste la référence : Drive n&apos;en est qu&apos;une copie lisible.</p>
           ) : (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
               <p>
                 {drive.aJour} élément{drive.aJour > 1 ? "s" : ""} à jour sur {drive.elements}
                 {drive.dernierPassage ? ` · dernier passage le ${formatHorodatage(drive.dernierPassage)}` : ""}
               </p>
               {drive.enErreur.length > 0 ? (
-                <ul className="mt-1.5 space-y-0.5 text-[#F5B454]">
+                <ul className="mt-1.5 space-y-0.5 text-attention-texte">
                   {drive.enErreur.slice(0, 5).map((ligne) => (
                     <li key={ligne.cle}>
                       {ligne.nom} : {ligne.erreur}
@@ -175,28 +175,28 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
         </div>
 
         <div className={cn(CARTE, "p-4")}>
-          <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+          <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
             <Mail size={15} aria-hidden /> Agent mail
           </p>
           {!agent.actif ? (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
               <Pastille ton="neutre">Inactif</Pastille>
               <p className="mt-2">{agent.raison ? `${agent.raison.charAt(0).toUpperCase()}${agent.raison.slice(1)}` : null}</p>
               <p className="mt-1">Actif, il relève la boîte toutes les 5 minutes, range seul ce qui est certain (client connu, publicité) et propose le reste. Il ne supprime ni n&apos;envoie rien.</p>
             </div>
           ) : (
-            <div className="mt-2 text-[12.5px] text-[#9CA3AF]">
+            <div className="mt-2 text-[12.5px] text-texte-3">
               <p>
                 Relève {agent.compte}
                 {agent.dernierReleve ? ` · dernier passage le ${formatHorodatage(agent.dernierReleve)}` : ""}
               </p>
               <p className="mt-1">
                 {agent.recusSeptJours} mail{agent.recusSeptJours > 1 ? "s" : ""} reçu{agent.recusSeptJours > 1 ? "s" : ""} en 7 jours ·{" "}
-                <Link href="/mail" className="text-[#5DCAA5] underline-offset-2 hover:underline">
+                <Link href="/mail" className="text-action-clair underline-offset-2 hover:underline">
                   {agent.aTrier} à trier
                 </Link>
               </p>
-              {agent.derniereErreur ? <p className="mt-1 text-[#F87171]">Dernier relevé en échec : {agent.derniereErreur}</p> : null}
+              {agent.derniereErreur ? <p className="mt-1 text-attention-texte">Dernier relevé en échec : {agent.derniereErreur}</p> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Bouton
                   taille="sm"
@@ -209,8 +209,8 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
               </div>
             </div>
           )}
-          <div className="mt-3 border-t-[0.5px] border-[#2A2D34] pt-3 text-[12.5px] text-[#9CA3AF]">
-            <p className="flex items-center gap-1.5 text-[#D1D5DB]">
+          <div className="mt-3 border-t-[0.5px] border-trait pt-3 text-[12.5px] text-texte-3">
+            <p className="flex items-center gap-1.5 text-texte-2">
               <Bot size={13} aria-hidden /> {"Lecture des mails par l'IA"}
             </p>
             {agent.ia.active ? (
@@ -224,7 +224,7 @@ export default function Connexions({ retour, initial }: { retour: { google: stri
                 {agent.ia.manquants.length > 0 ? " Réglages dans « Agent mail et IA », plus haut." : ""}
               </p>
             )}
-            <p className="mt-1 text-[#6B7280]">Sans IA, les règles sûres trient seules ; avec, l&apos;agent propose aussi notes, réponses et nouveaux dossiers, jamais exécutés sans ta validation.</p>
+            <p className="mt-1 text-texte-3">Sans IA, les règles sûres trient seules ; avec, l&apos;agent propose aussi notes, réponses et nouveaux dossiers, jamais exécutés sans ta validation.</p>
           </div>
         </div>
       </div>

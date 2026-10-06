@@ -43,7 +43,7 @@ export function CarteProposition({
   const confiance = proposition.confiance === null ? null : Math.round(proposition.confiance * 100);
 
   return (
-    <article className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
+    <article className="rounded-[11px] border-[0.5px] border-trait bg-surface p-4">
       <div className="flex flex-wrap items-center gap-1.5">
         <Pastille>{proposition.libelleType}</Pastille>
         {proposition.sensible ? (
@@ -68,12 +68,12 @@ export function CarteProposition({
         {proposition.modifiee ? <Pastille ton="bleu">Corrigée avant validation</Pastille> : null}
       </div>
 
-      <h3 className="mt-2.5 text-[14px] leading-snug font-medium text-[#F2F3F5]">{proposition.titre}</h3>
+      <h3 className="mt-2.5 text-[14px] leading-snug font-medium text-texte">{proposition.titre}</h3>
       {proposition.resume ? (
-        <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-[#9CA3AF]">{proposition.resume}</p>
+        <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap text-texte-3">{proposition.resume}</p>
       ) : null}
 
-      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[#6B7280]">
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-texte-3">
         <span className="inline-flex items-center gap-1">
           <Bot size={12} aria-hidden />
           {libelleAuteur(proposition.auteur)}
@@ -91,7 +91,7 @@ export function CarteProposition({
             <span aria-hidden>·</span>
             <Link
               href={`/dossiers?dossier=${proposition.dossierId}`}
-              className={cn("inline-flex items-center gap-1 text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+              className={cn("inline-flex items-center gap-1 text-texte-3 hover:text-texte", TRANS)}
             >
               <FolderOpen size={12} aria-hidden />
               Ouvrir le dossier
@@ -101,7 +101,7 @@ export function CarteProposition({
         {proposition.liens.map((lien) => (
           <span key={lien.href} className="contents">
             <span aria-hidden>·</span>
-            <Link href={lien.href} className={cn("inline-flex min-h-6 items-center text-[#9CA3AF] underline-offset-2 hover:text-[#F2F3F5] hover:underline", TRANS)}>
+            <Link href={lien.href} className={cn("inline-flex min-h-6 items-center text-texte-3 underline-offset-2 hover:text-texte hover:underline", TRANS)}>
               {lien.libelle}
             </Link>
           </span>
@@ -114,13 +114,13 @@ export function CarteProposition({
             type="button"
             aria-expanded={pourquoiOuvert}
             onClick={() => setPourquoiOuvert((ouvert) => !ouvert)}
-            className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1 text-[12px] text-texte-3 hover:text-texte", TRANS)}
           >
             Pourquoi ?
             <ChevronDown size={13} aria-hidden className={cn("transition-transform", pourquoiOuvert && "rotate-180")} />
           </button>
           {pourquoiOuvert ? (
-            <p className="mt-1 rounded-[8px] bg-[#16181D] px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB]">
+            <p className="mt-1 rounded-[8px] bg-fond px-3 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap text-texte-2">
               {proposition.raisonnement}
             </p>
           ) : null}
@@ -128,14 +128,14 @@ export function CarteProposition({
       ) : null}
 
       {proposition.erreurExecution ? (
-        <p className="mt-2 flex items-start gap-2 rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[12.5px] text-[#F87171]">
+        <p className="mt-2 flex items-start gap-2 rounded-[8px] bg-attention/10 px-3 py-2 text-[12.5px] text-attention-texte">
           <AlertTriangle size={14} aria-hidden className="mt-px shrink-0" />
           {proposition.erreurExecution}
         </p>
       ) : null}
 
       {proposition.statut === "REJETEE" && proposition.motifRejet ? (
-        <p className="mt-2 text-[12px] text-[#9CA3AF]">
+        <p className="mt-2 text-[12px] text-texte-3">
           Motif : {proposition.motifsRejet.find((motif) => motif.code === proposition.motifRejet)?.libelle ?? proposition.motifRejet}
           {proposition.commentaireRejet ? ` — ${proposition.commentaireRejet}` : ""}
         </p>
@@ -305,7 +305,7 @@ export function ModaleRejet({
         </div>
       }
     >
-      <p className="mb-4 text-[13px] text-[#D1D5DB]">{proposition.titre}</p>
+      <p className="mb-4 text-[13px] text-texte-2">{proposition.titre}</p>
       <Puces
         libelle="Motif"
         obligatoire

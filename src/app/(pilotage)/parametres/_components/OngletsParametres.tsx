@@ -136,10 +136,10 @@ export default function OngletsParametres({
     <div className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-8">
       <EnTetePage
         titre="Paramètres"
-        sousTitre={aRenseigner > 0 ? <span className="text-[#F5B454]">{aRenseigner} à renseigner : {aRenseigner > 1 ? "ils seront demandés" : "il sera demandé"} à la première utilisation.</span> : "Seuils, taux et règles datés. Une nouvelle valeur ne réécrit jamais le passé."}
+        sousTitre={aRenseigner > 0 ? <span className="text-attention-texte">{aRenseigner} à renseigner : {aRenseigner > 1 ? "ils seront demandés" : "il sera demandé"} à la première utilisation.</span> : "Seuils, taux et règles datés. Une nouvelle valeur ne réécrit jamais le passé."}
       />
 
-      <div ref={liste} role="tablist" aria-label="Rubriques des paramètres" className="mt-4 flex gap-1 overflow-x-auto rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-1">
+      <div ref={liste} role="tablist" aria-label="Rubriques des paramètres" className="mt-4 flex gap-1 overflow-x-auto rounded-[12px] border-[0.5px] border-trait bg-surface p-1">
         {ONGLETS.map((o) => (
           <button
             key={o.valeur}
@@ -147,7 +147,7 @@ export default function OngletsParametres({
             role="tab"
             aria-selected={onglet === o.valeur}
             onClick={() => choisir(o.valeur)}
-            className={cn("min-h-[44px] shrink-0 rounded-[9px] px-3.5 text-[13.5px] font-medium", onglet === o.valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("min-h-[44px] shrink-0 rounded-[9px] px-3.5 text-[13.5px] font-medium", onglet === o.valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte", TRANS)}
           >
             {o.libelle}
           </button>
@@ -167,14 +167,14 @@ export default function OngletsParametres({
           <GroupesParametres parametres={parametres} groupes={GROUPES_FACTURATION} onMisAJour={setParametres} />
           <Numerotation initial={compteurs} />
           <section className="mt-8">
-            <button type="button" aria-expanded={avance} onClick={() => setAvance((a) => !a)} className={cn("flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-1 text-left hover:bg-[#1C1F25]", TRANS)}>
-              <span className="flex-1 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">Avancé : seuils fiscaux et cotisations</span>
-              {avancesARenseigner > 0 ? <span className="text-[12px] text-[#F5B454] tabular-nums">{avancesARenseigner} à renseigner</span> : null}
-              <ChevronDown size={16} aria-hidden className={cn("text-[#6B7280] transition-transform", avance && "rotate-180")} />
+            <button type="button" aria-expanded={avance} onClick={() => setAvance((a) => !a)} className={cn("flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-1 text-left hover:bg-surface", TRANS)}>
+              <span className="flex-1 text-[12px] font-medium tracking-wide text-texte-3 uppercase">Avancé : seuils fiscaux et cotisations</span>
+              {avancesARenseigner > 0 ? <span className="text-[12px] text-attention-texte tabular-nums">{avancesARenseigner} à renseigner</span> : null}
+              <ChevronDown size={16} aria-hidden className={cn("text-texte-3 transition-transform", avance && "rotate-180")} />
             </button>
             {avance ? (
               <>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-[#6B7280]">Aucune valeur n&apos;est fournie par défaut : chacune se lit à la source indiquée et se fait confirmer par le comptable au besoin.</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-texte-3">Aucune valeur n&apos;est fournie par défaut : chacune se lit à la source indiquée et se fait confirmer par le comptable au besoin.</p>
                 <GroupesParametres parametres={parametres} groupes={GROUPES_AVANCES} onMisAJour={setParametres} />
               </>
             ) : null}

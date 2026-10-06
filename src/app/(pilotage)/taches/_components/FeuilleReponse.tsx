@@ -34,9 +34,9 @@ import { estSensible } from "./LigneTache";
 export type EtapeReponse = "choix" | "plusTard" | "pasAFaire";
 type Etape = EtapeReponse | "perte" | "autre" | "date";
 
-const CLASSE_CHOIX = cn("flex min-h-12 w-full items-center gap-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-4 text-left text-[15px] text-[#F2F3F5] hover:border-[#3A3E47] hover:bg-[#1C1F25] disabled:opacity-50 pointer-fine:min-h-11 sm:text-[14px]", TRANS);
+const CLASSE_CHOIX = cn("flex min-h-12 w-full items-center gap-3 rounded-[12px] border-[0.5px] border-trait bg-fond px-4 text-left text-[15px] text-texte hover:border-trait-2 hover:bg-surface disabled:opacity-50 pointer-fine:min-h-11 sm:text-[14px]", TRANS);
 const CLASSE_PUCE = (choisie: boolean) =>
-  cn("min-h-11 rounded-full border-[0.5px] px-3.5 text-[13.5px] pointer-fine:min-h-8 sm:text-[12.5px]", choisie ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS);
+  cn("min-h-11 rounded-full border-[0.5px] px-3.5 text-[13.5px] pointer-fine:min-h-8 sm:text-[12.5px]", choisie ? "border-action/60 bg-action-fond text-action-clair" : "border-trait text-texte-2 hover:border-trait-2", TRANS);
 
 /** Demain, heure de Paris, en AAAA-MM-JJ : la date la plus proche proposée par « Une date ». */
 function demainParis(): string {
@@ -65,15 +65,15 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
 
   return (
     <div className="flex max-h-[85dvh] flex-col">
-      <div className="flex items-start gap-2 border-b-[0.5px] border-[#2A2D34] px-4 pt-4 pb-3">
+      <div className="flex items-start gap-2 border-b-[0.5px] border-trait px-4 pt-4 pb-3">
         {retour ? (
-          <button type="button" onClick={() => setEtape(retour as Etape)} aria-label="Retour" className={cn("-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D] pointer-fine:h-8 pointer-fine:w-8", TRANS)}>
+          <button type="button" onClick={() => setEtape(retour as Etape)} aria-label="Retour" className={cn("-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-texte-3 hover:bg-surface-2 pointer-fine:h-8 pointer-fine:w-8", TRANS)}>
             <ArrowLeft size={17} aria-hidden />
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <SheetTitle className="text-[15.5px] leading-snug font-medium break-words text-[#F2F3F5]">{tache.titre}</SheetTitle>
-          <SheetDescription className="mt-0.5 text-[12.5px] text-[#9CA3AF]">{titreEtape[etape]}</SheetDescription>
+          <SheetTitle className="text-[15.5px] leading-snug font-medium break-words text-texte">{tache.titre}</SheetTitle>
+          <SheetDescription className="mt-0.5 text-[12.5px] text-texte-3">{titreEtape[etape]}</SheetDescription>
         </div>
       </div>
 
@@ -81,28 +81,28 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
         {etape === "choix" ? (
           <div className="grid gap-2">
             <div className="mb-1 space-y-2">
-              <p className="text-[13.5px] leading-snug break-words text-[#D1D5DB]">{ligneGrise(tache, new Date(maintenant))}</p>
+              <p className="text-[13.5px] leading-snug break-words text-texte-2">{ligneGrise(tache, new Date(maintenant))}</p>
               {marche ? (
-                <div className="rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3.5 py-2.5">
-                  <p className="text-[11.5px] font-medium tracking-wide text-[#9CA3AF] uppercase">Marche à suivre</p>
-                  <p className="mt-1 text-[14px] leading-relaxed break-words text-[#D1D5DB]">{marche}</p>
+                <div className="rounded-[12px] border-[0.5px] border-trait bg-fond px-3.5 py-2.5">
+                  <p className="text-[11.5px] font-medium tracking-wide text-texte-3 uppercase">Marche à suivre</p>
+                  <p className="mt-1 text-[14px] leading-relaxed break-words text-texte-2">{marche}</p>
                 </div>
               ) : null}
             </div>
             {sensible ? (
-              <button type="button" disabled={occupe} onClick={onApercu} className={cn(CLASSE_CHOIX, "border-[#1D9E75]/50 bg-[#112B22] text-[#5DCAA5] hover:bg-[#143528]")}>
+              <button type="button" disabled={occupe} onClick={onApercu} className={cn(CLASSE_CHOIX, "border-action/50 bg-action-fond text-action-clair hover:bg-action-fond")}>
                 <ShieldCheck size={18} aria-hidden /> Relire et valider
               </button>
             ) : (
-              <button type="button" disabled={occupe} onClick={() => onRepondre({ reponse: "FAIT" })} className={cn(CLASSE_CHOIX, "border-[#1D9E75]/50 bg-[#112B22] text-[#5DCAA5] hover:bg-[#143528]")}>
+              <button type="button" disabled={occupe} onClick={() => onRepondre({ reponse: "FAIT" })} className={cn(CLASSE_CHOIX, "border-action/50 bg-action-fond text-action-clair hover:bg-action-fond")}>
                 <Check size={18} aria-hidden /> Fait
               </button>
             )}
             <button type="button" disabled={occupe} onClick={() => setEtape("plusTard")} className={CLASSE_CHOIX}>
-              <Clock size={18} aria-hidden className="text-[#F5B454]" /> Plus tard
+              <Clock size={18} aria-hidden className="text-attention-texte" /> Plus tard
             </button>
             <button type="button" disabled={occupe} onClick={() => setEtape("pasAFaire")} className={CLASSE_CHOIX}>
-              <Ban size={18} aria-hidden className="text-[#9CA3AF]" /> Pas à faire
+              <Ban size={18} aria-hidden className="text-texte-3" /> Pas à faire
             </button>
           </div>
         ) : null}
@@ -110,7 +110,7 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
         {etape === "plusTard" ? (
           <div className="space-y-3">
             <div>
-              <p className="mb-1.5 text-[12px] text-[#9CA3AF]">Pourquoi ? (facultatif)</p>
+              <p className="mb-1.5 text-[12px] text-texte-3">Pourquoi ? (facultatif)</p>
               <div className="flex flex-wrap gap-1.5">
                 {RAISONS_PLUS_TARD.map((r) => (
                   <button key={r} type="button" aria-pressed={raisonPlusTard === r} onClick={() => setRaisonPlusTard((actuelle) => (actuelle === r ? null : r))} className={CLASSE_PUCE(raisonPlusTard === r)}>
@@ -140,11 +140,11 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
               if (date) onRepondre({ reponse: "PLUS_TARD", date, ...(raisonPlusTard ? { raison: raisonPlusTard } : {}) });
             }}
           >
-            <label className="block text-[12px] text-[#9CA3AF]" htmlFor="date-plus-tard">
+            <label className="block text-[12px] text-texte-3" htmlFor="date-plus-tard">
               Elle revient ce jour-là, à 9 h
             </label>
             <input id="date-plus-tard" type="date" min={demainParis()} value={date} onChange={(e) => setDate(e.target.value)} className={cn(CLASSE_SAISIE, "h-11 pointer-fine:h-9")} />
-            <button type="submit" disabled={!date || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-10 sm:text-[14px]", TRANS)}>
+            <button type="submit" disabled={!date || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-action text-[15px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3 pointer-fine:h-10 sm:text-[14px]", TRANS)}>
               Reporter
             </button>
           </form>
@@ -165,7 +165,7 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
                 className={CLASSE_CHOIX}
               >
                 {LIBELLES_RAISON_PAS_A_FAIRE[raison]}
-                {raison === "CLIENT_PERDU" || raison === "AUTRE" ? <span className="ml-auto text-[12px] text-[#6B7280]">…</span> : null}
+                {raison === "CLIENT_PERDU" || raison === "AUTRE" ? <span className="ml-auto text-[12px] text-texte-3">…</span> : null}
               </button>
             ))}
           </div>
@@ -199,12 +199,12 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
                 }}
               >
                 <input autoFocus value={texte} onChange={(e) => setTexte(e.target.value)} maxLength={500} placeholder="Le motif, en quelques mots" aria-label="Motif de perte" className={cn(CLASSE_SAISIE, "h-11 pointer-fine:h-9")} />
-                <button type="submit" disabled={texte.trim().length < 3 || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-10 sm:text-[14px]", TRANS)}>
+                <button type="submit" disabled={texte.trim().length < 3 || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-action text-[15px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3 pointer-fine:h-10 sm:text-[14px]", TRANS)}>
                   Client perdu
                 </button>
               </form>
             ) : (
-              <p className="text-[12px] text-[#8B919C]">{tache.dossierId ? "Le dossier passe « perdu »." : tache.leadId ? "Le contact passe « sans suite »." : ""}</p>
+              <p className="text-[12px] text-texte-3">{tache.dossierId ? "Le dossier passe « perdu »." : tache.leadId ? "Le contact passe « sans suite »." : ""}</p>
             )}
           </div>
         ) : null}
@@ -218,7 +218,7 @@ function Contenu({ tache, etapeInitiale, maintenant, occupe, onRepondre, onAperc
             }}
           >
             <textarea autoFocus value={texte} onChange={(e) => setTexte(e.target.value)} rows={3} maxLength={500} placeholder="Pourquoi elle n'est pas à faire" aria-label="Raison" className={cn(CLASSE_SAISIE, "resize-none py-2 leading-relaxed")} />
-            <button type="submit" disabled={texte.trim().length < 3 || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-[#1D9E75] text-[15px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-10 sm:text-[14px]", TRANS)}>
+            <button type="submit" disabled={texte.trim().length < 3 || occupe} className={cn("flex h-12 w-full items-center justify-center rounded-[12px] bg-action text-[15px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3 pointer-fine:h-10 sm:text-[14px]", TRANS)}>
               Pas à faire
             </button>
           </form>
@@ -246,7 +246,7 @@ export function FeuilleReponse({
 }) {
   return (
     <Sheet open={demande !== null} onOpenChange={(ouvert) => (ouvert ? undefined : onFermer())}>
-      <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-[16px] border-[#2A2D34] bg-[#1C1F25] p-0 text-[#F2F3F5] sm:mx-auto sm:max-w-md">
+      <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-[16px] border-trait bg-surface p-0 text-texte sm:mx-auto sm:max-w-md">
         {demande ? <Contenu key={`${demande.tache.id}:${demande.cle}`} tache={demande.tache} etapeInitiale={demande.etape} maintenant={maintenant} occupe={occupe} onRepondre={(entree) => onRepondre(demande.tache, entree)} onApercu={() => onApercu(demande.tache)} /> : null}
       </SheetContent>
     </Sheet>

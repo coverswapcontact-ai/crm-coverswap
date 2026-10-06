@@ -106,7 +106,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
         titre="Prompts ChatGPT"
         sousTitre="Un prompt par type de surface. Chaque modification est une nouvelle version : on revient en arrière d'un clic."
         actions={
-          <Link href="/simulateur" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+          <Link href="/simulateur" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-3 text-[13px] font-medium text-texte hover:border-trait-2 sm:h-8", TRANS)}>
             <ArrowLeft size={14} aria-hidden /> Simulateur
           </Link>
         }
@@ -114,7 +114,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
 
       <div className="mt-5 flex gap-1.5 overflow-x-auto pb-1">
         {prompts.map((p) => (
-          <button key={p.typeSurface} type="button" onClick={() => choisir(p.typeSurface)} aria-pressed={actif === p.typeSurface} className={cn("h-11 shrink-0 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8", actif === p.typeSurface ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+          <button key={p.typeSurface} type="button" onClick={() => choisir(p.typeSurface)} aria-pressed={actif === p.typeSurface} className={cn("h-11 shrink-0 rounded-full border-[0.5px] px-3 text-[13px] sm:h-8", actif === p.typeSurface ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2", TRANS)}>
             {p.libelle} <span className="text-[11px] opacity-70">v{p.versionCourante}</span>
           </button>
         ))}
@@ -122,22 +122,22 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="min-w-0 space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-[#9CA3AF]">
+          <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-texte-3">
             <Pastille ton="vert">Version {prompt.versionCourante} en service</Pastille>
             <span>depuis le {date(prompt.misAJourLe)}</span>
             <span>· zones : {prompt.zones.map((z) => ZONES[z as IdZone]?.libelle ?? z).join(", ")}</span>
           </div>
-          <details className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2 text-[12.5px] text-[#9CA3AF]">
-            <summary className="cursor-pointer text-[#D1D5DB]">Comment le prompt est rempli</summary>
+          <details className="rounded-[10px] border-[0.5px] border-trait bg-surface px-3 py-2 text-[12.5px] text-texte-3">
+            <summary className="cursor-pointer text-texte-2">Comment le prompt est rempli</summary>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>
-                <code className="text-[#5DCAA5]">[zone:…] … [/zone]</code> : section gardée seulement si la zone reçoit une teinte.
+                <code className="text-action-clair">[zone:…] … [/zone]</code> : section gardée seulement si la zone reçoit une teinte.
               </li>
               <li>
-                <code className="text-[#5DCAA5]">{"{{teinte}}"}</code> : la teinte en toutes lettres (référence, nom, couleur mesurée, veinage, finition) ; <code className="text-[#5DCAA5]">{"{{etiquette}}"}</code> : son étiquette sur la planche (« A · Meubles hauts »).
+                <code className="text-action-clair">{"{{teinte}}"}</code> : la teinte en toutes lettres (référence, nom, couleur mesurée, veinage, finition) ; <code className="text-action-clair">{"{{etiquette}}"}</code> : son étiquette sur la planche (« A · Meubles hauts »).
               </li>
               <li>
-                <code className="text-[#5DCAA5]">{"{{nombre_echantillons}}"}</code>, <code className="text-[#5DCAA5]">{"{{format}}"}</code> (landscape 3:2…), <code className="text-[#5DCAA5]">{"{{zones_inchangees}}"}</code> (zones laissées telles quelles).
+                <code className="text-action-clair">{"{{nombre_echantillons}}"}</code>, <code className="text-action-clair">{"{{format}}"}</code> (landscape 3:2…), <code className="text-action-clair">{"{{zones_inchangees}}"}</code> (zones laissées telles quelles).
               </li>
               <li>En anglais : c&apos;est la langue que le générateur d&apos;images suit le plus fidèlement. Les étiquettes de la planche restent en français.</li>
             </ul>
@@ -152,10 +152,10 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
             spellCheck={false}
             rows={24}
             aria-label={`Prompt ${prompt.libelle}`}
-            className={cn("w-full rounded-[10px] border-[0.5px] bg-[#16181D] p-3 font-mono text-[12.5px] leading-relaxed text-[#E5E7EB] focus:border-[#1D9E75]/60 focus:outline-none", lecture ? "border-[#60A5FA]/50" : "border-[#2A2D34]")}
+            className={cn("w-full rounded-[10px] border-[0.5px] bg-fond p-3 font-mono text-[12.5px] leading-relaxed text-texte focus:border-action/60 focus:outline-none", lecture ? "border-info/50" : "border-trait")}
           />
           {lecture ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-[10px] border-[0.5px] border-[#60A5FA]/35 bg-[#60A5FA]/[0.07] px-3 py-2 text-[12.5px] text-[#BFDBFE]">
+            <div className="flex flex-wrap items-center gap-2 rounded-[10px] border-[0.5px] border-info/35 bg-info/[0.07] px-3 py-2 text-[12.5px] text-info-texte">
               Lecture de la version {lecture.numero} (non modifiable).
               <Bouton taille="sm" icone={<RotateCcw size={13} aria-hidden />} chargement={occupe === `restaurer-${lecture.numero}`} onClick={() => void restaurer(lecture.numero)}>
                 Revenir à cette version
@@ -166,7 +166,7 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
             </div>
           ) : (
             <>
-              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Ce qui change, en une phrase (ex. « plus strict sur les poignées »)" className="h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 text-[14px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]" aria-label="Note de version" />
+              <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder="Ce qui change, en une phrase (ex. « plus strict sur les poignées »)" className="h-11 w-full rounded-[8px] border-[0.5px] border-trait bg-fond px-3 text-[14px] text-texte placeholder:text-texte-3 sm:h-9 sm:text-[13px]" aria-label="Note de version" />
               <div className="flex flex-wrap gap-2">
                 <Bouton icone={<ShieldCheck size={14} aria-hidden />} chargement={occupe === "verifier"} onClick={() => void verifier()}>
                   Vérifier et voir le rendu
@@ -185,41 +185,41 @@ export default function EcranPrompts({ initial }: { initial: PromptVue[] }) {
           {verification ? (
             <div className="space-y-2">
               {verification.erreurs.length === 0 && verification.avertissements.length === 0 ? (
-                <p className="flex items-center gap-1.5 text-[12.5px] text-[#5DCAA5]">
+                <p className="flex items-center gap-1.5 text-[12.5px] text-action-clair">
                   <Check size={13} aria-hidden /> Aucun problème. Aperçu rendu avec une teinte d&apos;exemple :
                 </p>
               ) : null}
               {verification.erreurs.map((e) => (
-                <p key={e} className="rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[12.5px] text-[#FCA5A5]">
+                <p key={e} className="rounded-[8px] bg-retard/10 px-3 py-2 text-[12.5px] text-retard-texte">
                   {e}
                 </p>
               ))}
               {verification.avertissements.map((a) => (
-                <p key={a} className="rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+                <p key={a} className="rounded-[8px] bg-attention/10 px-3 py-2 text-[12.5px] text-attention-texte">
                   {a}
                 </p>
               ))}
-              {verification.apercu ? <pre className="max-h-96 overflow-auto rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB]">{verification.apercu}</pre> : null}
+              {verification.apercu ? <pre className="max-h-96 overflow-auto rounded-[10px] border-[0.5px] border-trait bg-fond p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-texte-2">{verification.apercu}</pre> : null}
             </div>
           ) : null}
         </section>
 
         <aside>
-          <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+          <h2 className="mb-2 flex items-center gap-1.5 text-[12px] font-medium tracking-wide text-texte-3 uppercase">
             <History size={13} aria-hidden /> Versions
           </h2>
           <ol className="space-y-2">
             {prompt.versions.map((v) => (
-              <li key={v.numero} className={cn("rounded-[10px] border-[0.5px] bg-[#1C1F25] p-2.5", v.courante ? "border-[#1D9E75]/50" : "border-[#2A2D34]")}>
+              <li key={v.numero} className={cn("rounded-[10px] border-[0.5px] bg-surface p-2.5", v.courante ? "border-action/50" : "border-trait")}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-medium text-[#F2F3F5]">
+                  <span className="text-[13px] font-medium text-texte">
                     Version {v.numero}
-                    {v.courante ? <span className="ml-1.5 text-[11px] text-[#5DCAA5]">en service</span> : null}
+                    {v.courante ? <span className="ml-1.5 text-[11px] text-action-clair">en service</span> : null}
                   </span>
-                  <span className="text-[11px] text-[#6B7280]">{date(v.le)}</span>
+                  <span className="text-[11px] text-texte-3">{date(v.le)}</span>
                 </div>
-                {v.note ? <p className="mt-1 text-[12px] text-[#D1D5DB]">{v.note}</p> : null}
-                <p className="mt-1 text-[11.5px] text-[#8B919C]">
+                {v.note ? <p className="mt-1 text-[12px] text-texte-2">{v.note}</p> : null}
+                <p className="mt-1 text-[11.5px] text-texte-3">
                   {v.stats.simulations} simulation{v.stats.simulations > 1 ? "s" : ""} · {v.stats.publiees} publiée{v.stats.publiees > 1 ? "s" : ""} · {v.stats.masquees} masquée{v.stats.masquees > 1 ? "s" : ""} · {v.stats.choisies} choisie{v.stats.choisies > 1 ? "s" : ""}
                   {v.auteur ? ` · ${v.auteur}` : ""}
                 </p>

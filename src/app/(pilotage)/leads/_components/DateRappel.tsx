@@ -47,7 +47,7 @@ export function PuceRappel({ rappelLe, enRetard, onChoisir, occupe = false }: { 
       <span
         className={cn(
           "inline-flex h-7 items-center gap-1.5 rounded-full border-[0.5px] px-2.5 text-[12.5px] whitespace-nowrap tabular-nums",
-          rouge ? "border-[#EF4444]/50 bg-[#EF4444]/10 font-medium text-[#F87171]" : valeur ? "border-[#2A2D34] bg-[#22262D] text-[#D1D5DB]" : "border-dashed border-[#3A3E47] text-[#9CA3AF]",
+          rouge ? "border-retard/50 bg-retard/10 font-medium text-retard-texte" : valeur ? "border-trait bg-surface-2 text-texte-2" : "border-dashed border-trait-2 text-texte-3",
           occupe && "opacity-60",
           TRANS,
         )}

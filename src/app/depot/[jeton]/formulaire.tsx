@@ -138,36 +138,36 @@ export function FormulaireDepot(props: { jeton: string; titre: string; expireLe:
   return (
     <div className="mt-4">
       <h1 className="text-[15px] font-medium leading-snug">{props.titre}</h1>
-      <p className="mt-1 text-[12.5px] text-[#9CA3AF]">
+      <p className="mt-1 text-[12.5px] text-texte-3">
         Valable jusqu&apos;à {heure(props.expireLe)}, pour un seul envoi{unSeul ? " d'un fichier" : ` (${props.fichiersMax} fichiers au plus)`}. Photos (JPEG, PNG, WebP, HEIC) {props.photosSeules ? "" : "et PDF"}, {mo(props.octetsMaxFichier)} par fichier.
       </p>
 
       {phase === "fini" ? (
         <div className="mt-5 space-y-3">
           {resultats.length > 0 ? (
-            <p className="flex items-center gap-2 text-[14px] font-medium text-[#5DCAA5]">
+            <p className="flex items-center gap-2 text-[14px] font-medium text-action-clair">
               <CheckCircle2 className="size-5" /> {reussis === resultats.length ? `C'est enregistré : ${reussis} fichier${reussis > 1 ? "s" : ""}.` : `${reussis} sur ${resultats.length} enregistré${reussis > 1 ? "s" : ""}.`}
             </p>
           ) : null}
-          {erreur ? <p className="text-[13px] leading-relaxed text-[#F5B454]">{erreur}</p> : null}
+          {erreur ? <p className="text-[13px] leading-relaxed text-attention-texte">{erreur}</p> : null}
           <ul className="space-y-1.5">
             {resultats.map((r, i) => (
-              <li key={i} className={`rounded-[8px] border-[0.5px] px-3 py-2 text-[12.5px] leading-snug ${r.ok ? "border-[#2A2D34] text-[#D1D5DB]" : "border-[#5B3A1E] text-[#F5B454]"}`}>
+              <li key={i} className={`rounded-[8px] border-[0.5px] px-3 py-2 text-[12.5px] leading-snug ${r.ok ? "border-trait text-texte-2" : "border-attention/40 text-attention-texte"}`}>
                 <span className="font-medium">{r.nom}</span> : {r.message}
               </li>
             ))}
           </ul>
-          <p className="text-[12.5px] text-[#9CA3AF]">Tu peux fermer cette page. Le lien a servi : pour déposer d&apos;autres fichiers, demande un nouveau lien à l&apos;assistant.</p>
+          <p className="text-[12.5px] text-texte-3">Tu peux fermer cette page. Le lien a servi : pour déposer d&apos;autres fichiers, demande un nouveau lien à l&apos;assistant.</p>
         </div>
       ) : (
         <>
           <input ref={appareil} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { ajouter(e.target.files); e.target.value = ""; }} />
           <input ref={galerie} type="file" accept={accepte} multiple={!unSeul} className="hidden" onChange={(e) => { ajouter(e.target.files); e.target.value = ""; }} />
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <button type="button" disabled={phase !== "choix"} onClick={() => appareil.current?.click()} className="flex h-12 items-center justify-center gap-2 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#23262D] text-[14px] font-medium active:bg-[#2A2D34] disabled:opacity-50">
+            <button type="button" disabled={phase !== "choix"} onClick={() => appareil.current?.click()} className="flex h-12 items-center justify-center gap-2 rounded-[10px] border-[0.5px] border-trait bg-surface text-[14px] font-medium active:bg-trait disabled:opacity-50">
               <Camera className="size-4.5" /> Photo
             </button>
-            <button type="button" disabled={phase !== "choix"} onClick={() => galerie.current?.click()} className="flex h-12 items-center justify-center gap-2 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#23262D] text-[14px] font-medium active:bg-[#2A2D34] disabled:opacity-50">
+            <button type="button" disabled={phase !== "choix"} onClick={() => galerie.current?.click()} className="flex h-12 items-center justify-center gap-2 rounded-[10px] border-[0.5px] border-trait bg-surface text-[14px] font-medium active:bg-trait disabled:opacity-50">
               <ImagePlus className="size-4.5" /> {unSeul ? "Choisir" : "Choisir des fichiers"}
             </button>
           </div>
@@ -175,12 +175,12 @@ export function FormulaireDepot(props: { jeton: string; titre: string; expireLe:
           {choisis.length > 0 ? (
             <ul className="mt-4 grid grid-cols-3 gap-2">
               {choisis.map((c) => (
-                <li key={c.id} className="relative aspect-square overflow-hidden rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D]">
+                <li key={c.id} className="relative aspect-square overflow-hidden rounded-[8px] border-[0.5px] border-trait bg-fond">
                   {c.apercu ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={c.apercu} alt={c.fichier.name} className="size-full object-cover" />
                   ) : (
-                    <div className="flex size-full flex-col items-center justify-center gap-1 p-1 text-center text-[10.5px] text-[#9CA3AF]">
+                    <div className="flex size-full flex-col items-center justify-center gap-1 p-1 text-center text-[10.5px] text-texte-3">
                       <FileText className="size-5" />
                       <span className="line-clamp-2 break-all">{c.fichier.name}</span>
                     </div>
@@ -195,29 +195,29 @@ export function FormulaireDepot(props: { jeton: string; titre: string; expireLe:
               ))}
             </ul>
           ) : (
-            <p className="mt-4 rounded-[8px] border-[0.5px] border-dashed border-[#2A2D34] px-3 py-6 text-center text-[12.5px] text-[#6B7280]">Aucun fichier choisi.</p>
+            <p className="mt-4 rounded-[8px] border-[0.5px] border-dashed border-trait px-3 py-6 text-center text-[12.5px] text-texte-3">Aucun fichier choisi.</p>
           )}
 
           {erreur ? (
-            <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-[#F5B454]">
+            <p className="mt-3 flex items-start gap-2 text-[13px] leading-relaxed text-attention-texte">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" /> {erreur}
             </p>
           ) : null}
 
           {phase === "envoi" || phase === "preparation" ? (
             <div className="mt-4">
-              <div className="h-2 overflow-hidden rounded-full bg-[#23262D]">
-                <div className="h-full rounded-full bg-[#1D9E75] transition-[width]" style={{ width: `${phase === "preparation" ? 3 : Math.min(100, Math.round((envoyes / total) * 100))}%` }} />
+              <div className="h-2 overflow-hidden rounded-full bg-surface">
+                <div className="h-full rounded-full bg-action transition-[width]" style={{ width: `${phase === "preparation" ? 3 : Math.min(100, Math.round((envoyes / total) * 100))}%` }} />
               </div>
-              <p className="mt-1.5 text-[12px] text-[#9CA3AF]">{phase === "preparation" ? "Préparation des photos…" : `Envoi : ${mo(envoyes)} sur ${mo(total)} (${resultats.length}/${choisis.length} fichier${choisis.length > 1 ? "s" : ""})`}</p>
+              <p className="mt-1.5 text-[12px] text-texte-3">{phase === "preparation" ? "Préparation des photos…" : `Envoi : ${mo(envoyes)} sur ${mo(total)} (${resultats.length}/${choisis.length} fichier${choisis.length > 1 ? "s" : ""})`}</p>
             </div>
           ) : null}
 
-          <button type="button" disabled={choisis.length === 0 || phase !== "choix"} onClick={() => void soumettre()} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-[10px] bg-[#1D9E75] text-[15px] font-medium text-white active:bg-[#178A66] disabled:opacity-50">
+          <button type="button" disabled={choisis.length === 0 || phase !== "choix"} onClick={() => void soumettre()} className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-[10px] bg-action text-[15px] font-medium text-white active:bg-action disabled:opacity-50">
             {phase === "choix" ? <Upload className="size-4.5" /> : <Loader2 className="size-4.5 animate-spin" />}
             {phase === "choix" ? `Envoyer${choisis.length ? ` (${choisis.length})` : ""}` : "Envoi en cours…"}
           </button>
-          <p className="mt-2 text-center text-[11.5px] text-[#6B7280]">Le lien sert une seule fois : choisis tous tes fichiers avant d&apos;envoyer.</p>
+          <p className="mt-2 text-center text-[11.5px] text-texte-3">Le lien sert une seule fois : choisis tous tes fichiers avant d&apos;envoyer.</p>
         </>
       )}
     </div>

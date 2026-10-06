@@ -122,17 +122,17 @@ export const ENSEMBLE_ESSAI: EcranEnsemble = {
     titre: "Leads par jour et par source",
     sousTitre: "Depuis le lancement de la campagne, le 22 septembre",
     series: [
-      { cle: "meta", libelle: "Pub Meta", couleur: "#5DCAA5" },
-      { cle: "site", libelle: "Site", couleur: "#7AA7FF" },
-      { cle: "mail", libelle: "Mail", couleur: "#F5B454" },
+      { cle: "meta", libelle: "Pub Meta", couleur: "var(--color-action-clair)" },
+      { cle: "site", libelle: "Site", couleur: "var(--color-info-texte)" },
+      { cle: "mail", libelle: "Mail", couleur: "var(--color-attention-texte)" },
     ],
     points: CAMPAGNE.map((jour, i) => ({ jour, valeurs: { meta: LEADS_META[i], site: LEADS_SITE[i], mail: LEADS_MAIL[i] } })),
   },
   courbeDevis: {
     titre: "Devis par jour et par source",
     series: [
-      { cle: "meta", libelle: "Pub Meta", couleur: "#5DCAA5" },
-      { cle: "seo", libelle: "SEO", couleur: "#7AA7FF" },
+      { cle: "meta", libelle: "Pub Meta", couleur: "var(--color-action-clair)" },
+      { cle: "seo", libelle: "SEO", couleur: "var(--color-info-texte)" },
     ],
     points: JOURS.map((jour, i) => ({ jour, valeurs: { meta: i === 24 || i === 28 ? 1 : 0, seo: i === 27 || i === 29 ? 1 : 0 } })),
   },
@@ -224,8 +224,8 @@ export const PUBLICITE_ESSAI: EcranPublicite = {
   courbeDepense: {
     titre: "Dépense et leads par jour",
     series: [
-      { cle: "depense", libelle: "Dépense", couleur: "#5DCAA5" },
-      { cle: "leads", libelle: "Leads Meta", couleur: "#7AA7FF" },
+      { cle: "depense", libelle: "Dépense", couleur: "var(--color-action-clair)" },
+      { cle: "leads", libelle: "Leads Meta", couleur: "var(--color-info-texte)" },
     ],
     points: CAMPAGNE.map((jour, i) => ({ jour, valeurs: { depense: DEPENSE[i], leads: LEADS_META[i] } })),
   },
@@ -299,9 +299,9 @@ export const SEO_ESSAI: EcranSeo = {
     titre: "Clics et affichages par jour",
     sousTitre: "Search Console, avec 2 à 3 jours de retard",
     series: [
-      { cle: "clics", libelle: "Clics", couleur: "#7AA7FF" },
-      { cle: "impressions", libelle: "Affichages", couleur: "#93C5FD" },
-      { cle: "position", libelle: "Position", couleur: "#C4A5FF" },
+      { cle: "clics", libelle: "Clics", couleur: "var(--color-info-texte)" },
+      { cle: "impressions", libelle: "Affichages", couleur: "var(--color-info-texte)" },
+      { cle: "position", libelle: "Position", couleur: "var(--color-info-texte)" },
     ],
     points: JOURS.map((jour, i) => ({ jour, valeurs: { clics: CLICS[i], impressions: IMPRESSIONS[i], position: POSITIONS[i] } })),
   },
@@ -346,11 +346,11 @@ const parFamille = (i: number) => {
 const courbeSite: Courbe = {
   titre: "Visites par jour et par source",
   series: [
-    { cle: "seo", libelle: "SEO", couleur: "#7AA7FF" },
-    { cle: "meta", libelle: "Pub Meta", couleur: "#5DCAA5" },
-    { cle: "direct", libelle: "Direct", couleur: "#D1D5DB" },
-    { cle: "ia", libelle: "ChatGPT et IA", couleur: "#C4A5FF" },
-    { cle: "fiche-google", libelle: "Fiche Google", couleur: "#93C5FD" },
+    { cle: "seo", libelle: "SEO", couleur: "var(--color-info-texte)" },
+    { cle: "meta", libelle: "Pub Meta", couleur: "var(--color-action-clair)" },
+    { cle: "direct", libelle: "Direct", couleur: "var(--color-texte-2)" },
+    { cle: "ia", libelle: "ChatGPT et IA", couleur: "var(--color-info-texte)" },
+    { cle: "fiche-google", libelle: "Fiche Google", couleur: "var(--color-info-texte)" },
   ],
   points: JOURS.map((jour, i) => ({ jour, valeurs: parFamille(i) })),
 };

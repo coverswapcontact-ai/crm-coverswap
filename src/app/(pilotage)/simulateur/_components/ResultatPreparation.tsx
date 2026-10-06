@@ -107,8 +107,8 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
     }
   }
 
-  const etape = "flex gap-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5";
-  const numero = "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#112B22] text-[13px] font-semibold text-[#5DCAA5]";
+  const etape = "flex gap-3 rounded-[12px] border-[0.5px] border-trait bg-surface p-3.5";
+  const numero = "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-action-fond text-[13px] font-semibold text-action-clair";
 
   return (
     <div className="space-y-2.5">
@@ -123,8 +123,8 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
         <li className={etape}>
           <span className={numero}>1</span>
           <div className="min-w-0 flex-1 space-y-2">
-            <p className="text-[14px] font-medium text-[#F2F3F5]">Enregistrer les deux images dans Photos</p>
-            <p className="text-[12.5px] text-[#9CA3AF]">La photo avant (Image 1), cadrée au format de ChatGPT, et la planche des teintes (Image 2).</p>
+            <p className="text-[14px] font-medium text-texte">Enregistrer les deux images dans Photos</p>
+            <p className="text-[12.5px] text-texte-3">La photo avant (Image 1), cadrée au format de ChatGPT, et la planche des teintes (Image 2).</p>
             <div className="grid grid-cols-2 gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element -- aperçu privé */}
               <img src={preparation.photo} alt="Photo avant" className="aspect-[3/2] w-full rounded-[8px] object-cover" />
@@ -137,10 +137,10 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
               </Bouton>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <a href={`${preparation.photo}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+              <a href={`${preparation.photo}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait px-2.5 text-[12.5px] text-texte-2 hover:border-trait-2">
                 <Download size={13} aria-hidden /> Photo avant
               </a>
-              <a href={`${preparation.planche}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+              <a href={`${preparation.planche}?telecharger=1`} download className="inline-flex h-11 sm:h-9 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait px-2.5 text-[12.5px] text-texte-2 hover:border-trait-2">
                 <Download size={13} aria-hidden /> Planche des teintes
               </a>
             </div>
@@ -150,33 +150,33 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
         <li className={etape}>
           <span className={numero}>2</span>
           <div className="min-w-0 flex-1 space-y-2">
-            <p className="text-[14px] font-medium text-[#F2F3F5]">Copier le prompt</p>
+            <p className="text-[14px] font-medium text-texte">Copier le prompt</p>
             <Bouton variante={copie ? "secondaire" : "primaire"} className="h-11 w-full text-[14px] sm:h-9 sm:text-[13px]" icone={copie ? <Check size={15} aria-hidden /> : <ClipboardCopy size={15} aria-hidden />} onClick={() => void copier()}>
               {copie ? "Prompt copié" : "Copier le prompt"}
             </Bouton>
-            <button type="button" onClick={() => setVoirPrompt((v) => !v)} className="text-[12.5px] text-[#9CA3AF] underline underline-offset-2">
+            <button type="button" onClick={() => setVoirPrompt((v) => !v)} className="text-[12.5px] text-texte-3 underline underline-offset-2">
               {voirPrompt ? "Masquer le prompt" : `Lire le prompt (${(preparation.prompt ?? "").length} caractères)`}
             </button>
-            {voirPrompt ? <pre className="max-h-72 overflow-auto rounded-[8px] bg-[#16181D] p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB] select-all">{preparation.prompt}</pre> : null}
+            {voirPrompt ? <pre className="max-h-72 overflow-auto rounded-[8px] bg-fond p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-texte-2 select-all">{preparation.prompt}</pre> : null}
           </div>
         </li>
 
         <li className={etape}>
           <span className={numero}>3</span>
           <div className="min-w-0 flex-1 space-y-2">
-            <p className="text-[14px] font-medium text-[#F2F3F5]">Dans ChatGPT : coller le prompt, joindre les 2 images, envoyer</p>
-            <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] text-[14px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-9 sm:text-[13px]">
+            <p className="text-[14px] font-medium text-texte">Dans ChatGPT : coller le prompt, joindre les 2 images, envoyer</p>
+            <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] border-[0.5px] border-trait text-[14px] font-medium text-texte hover:border-trait-2 sm:h-9 sm:text-[13px]">
               <ExternalLink size={14} aria-hidden /> Ouvrir ChatGPT
             </a>
-            <p className="text-[12px] leading-relaxed text-[#8B919C]">Dans l&apos;app : « + » → Photos → les deux dernières images, collez le prompt, envoyez. Quand l&apos;image est prête : appui long → « Enregistrer dans Photos ».</p>
+            <p className="text-[12px] leading-relaxed text-texte-3">Dans l&apos;app : « + » → Photos → les deux dernières images, collez le prompt, envoyez. Quand l&apos;image est prête : appui long → « Enregistrer dans Photos ».</p>
           </div>
         </li>
 
-        <li className={cn(etape, depot === "fait" && "border-[#1D9E75]/50")}>
+        <li className={cn(etape, depot === "fait" && "border-action/50")}>
           <span className={numero}>4</span>
           <div className="min-w-0 flex-1 space-y-2">
-            <p className="text-[14px] font-medium text-[#F2F3F5]">Déposer l&apos;image rendue</p>
-            <p className="text-[12.5px] text-[#9CA3AF]">Elle arrive en brouillon dans le dossier, avec la photo avant, les teintes par zone et la version du prompt.</p>
+            <p className="text-[14px] font-medium text-texte">Déposer l&apos;image rendue</p>
+            <p className="text-[12.5px] text-texte-3">Elle arrive en brouillon dans le dossier, avec la photo avant, les teintes par zone et la version du prompt.</p>
             <input
               ref={entree}
               type="file"
@@ -189,7 +189,7 @@ export function ResultatChatGPT({ preparation, onDepose }: { preparation: Prepar
               }}
             />
             {depot === "fait" ? (
-              <Link href={`/dossiers?dossier=${preparation.dossierId}`} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] bg-[#1D9E75] text-[14px] font-medium text-[#0B1612] sm:h-9 sm:text-[13px]">
+              <Link href={`/dossiers?dossier=${preparation.dossierId}`} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] bg-action text-[14px] font-medium text-action-texte sm:h-9 sm:text-[13px]">
                 <Check size={15} aria-hidden /> Déposée : relire et publier dans le dossier
               </Link>
             ) : (
@@ -234,45 +234,45 @@ export function SuiviApi({ preparation, onFini }: { preparation: Preparation; on
 
   if (courante.statut === "EN_COURS") {
     return (
-      <div className="rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 text-[13px] text-[#D1D5DB]">
-        <p className="flex items-center gap-2 font-medium text-[#F2F3F5]">
+      <div className="rounded-[12px] border-[0.5px] border-trait bg-surface p-4 text-[13px] text-texte-2">
+        <p className="flex items-center gap-2 font-medium text-texte">
           <Loader2 size={15} className="animate-spin" aria-hidden />
           {/* L'étape est annoncée au lecteur d'écran ; le compteur de secondes reste hors de la région live. */}
           <span aria-live="polite">{courante.etape && ETAPES_API[courante.etape] ? ETAPES_API[courante.etape] : "Génération par l'API"}</span>
           <span>… {secondes} s</span>
         </p>
-        <p className="mt-1.5 text-[12.5px] text-[#9CA3AF]">{courante.moteur === "V2" ? "Une à deux minutes (analyse de la photo, rendu, contrôle)." : "En général une minute."} Tu peux quitter cet écran : l&apos;image arrive en brouillon dans le dossier, et je te préviens.</p>
-        {courante.directionArtistique ? <p className="mt-2 text-[12px] leading-relaxed text-[#9CA3AF]">Direction artistique : {courante.directionArtistique}</p> : null}
+        <p className="mt-1.5 text-[12.5px] text-texte-3">{courante.moteur === "V2" ? "Une à deux minutes (analyse de la photo, rendu, contrôle)." : "En général une minute."} Tu peux quitter cet écran : l&apos;image arrive en brouillon dans le dossier, et je te préviens.</p>
+        {courante.directionArtistique ? <p className="mt-2 text-[12px] leading-relaxed text-texte-3">Direction artistique : {courante.directionArtistique}</p> : null}
       </div>
     );
   }
   if (courante.statut === "ECHEC") {
-    return <div className="rounded-[12px] border-[0.5px] border-[#EF4444]/35 bg-[#EF4444]/[0.07] p-4 text-[13px] text-[#FCA5A5]">Génération non aboutie : {courante.erreur}</div>;
+    return <div className="rounded-[12px] border-[0.5px] border-attention/35 bg-attention/[0.07] p-4 text-[13px] text-attention-texte">Génération non aboutie : {courante.erreur}</div>;
   }
   return (
-    <div className="space-y-2.5 rounded-[12px] border-[0.5px] border-[#1D9E75]/40 bg-[#1C1F25] p-4">
-      <p className="flex items-center gap-2 text-[13px] font-medium text-[#5DCAA5]">
+    <div className="space-y-2.5 rounded-[12px] border-[0.5px] border-action/40 bg-surface p-4">
+      <p className="flex items-center gap-2 text-[13px] font-medium text-action-clair">
         <Check size={15} aria-hidden /> Simulation générée, en brouillon dans le dossier
       </p>
       <div className="flex flex-wrap gap-1.5">
         {courante.moteur ? <Pastille>moteur {courante.moteur}</Pastille> : null}
         {typeof courante.scoreControle === "number" ? <Pastille ton={courante.sousSeuil ? "ambre" : "vert"}>contrôle {courante.scoreControle}/10{courante.tentatives && courante.tentatives > 1 ? ` · ${courante.tentatives} essais` : ""}</Pastille> : null}
       </div>
-      {courante.defautsControle?.length ? <p className="text-[12px] leading-relaxed text-[#F5B454]">Défauts relevés : {courante.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
-      {courante.directionArtistique ? <p className="text-[12px] leading-relaxed text-[#9CA3AF]">Direction artistique : {courante.directionArtistique}</p> : null}
+      {courante.defautsControle?.length ? <p className="text-[12px] leading-relaxed text-attention-texte">Défauts relevés : {courante.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
+      {courante.directionArtistique ? <p className="text-[12px] leading-relaxed text-texte-3">Direction artistique : {courante.directionArtistique}</p> : null}
       {courante.prompt ? (
         <>
-          <button type="button" onClick={() => setVoirPrompt((v) => !v)} className="min-h-[44px] text-[12.5px] text-[#9CA3AF] underline underline-offset-2 sm:min-h-0">
+          <button type="button" onClick={() => setVoirPrompt((v) => !v)} className="min-h-[44px] text-[12.5px] text-texte-3 underline underline-offset-2 sm:min-h-0">
             {voirPrompt ? "Masquer le prompt" : `Lire le prompt donné au modèle (${courante.prompt.length} caractères)`}
           </button>
-          {voirPrompt ? <pre className="max-h-72 overflow-auto rounded-[8px] bg-[#16181D] p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB] select-all">{courante.prompt}</pre> : null}
+          {voirPrompt ? <pre className="max-h-72 overflow-auto rounded-[8px] bg-fond p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-texte-2 select-all">{courante.prompt}</pre> : null}
         </>
       ) : null}
       {courante.resultatId ? (
         // eslint-disable-next-line @next/next/no-img-element -- image privée servie derrière la session
         <img src={`/api/dossiers/${courante.dossierId}/simulations/${courante.resultatId}/image`} alt="Simulation générée" className="w-full rounded-[10px]" />
       ) : null}
-      <Link href={`/dossiers?dossier=${courante.dossierId}`} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] bg-[#1D9E75] text-[14px] font-medium text-[#0B1612] sm:h-9 sm:text-[13px]">
+      <Link href={`/dossiers?dossier=${courante.dossierId}`} className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[8px] bg-action text-[14px] font-medium text-action-texte sm:h-9 sm:text-[13px]">
         Relire et publier dans le dossier
       </Link>
     </div>

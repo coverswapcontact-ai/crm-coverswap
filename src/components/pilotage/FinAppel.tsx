@@ -46,10 +46,10 @@ function ChampRappel({ valeur, onChange, maintenant, defaut = null }: { valeur: 
   const date = depuisSaisieParis(valeur) ?? defaut;
   const libelle = date ? `Rappel : ${momentDuRappel(date, maintenant)}` : "Rappel : à choisir";
   return (
-    <label className={cn("relative flex min-h-[44px] items-center gap-2 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 text-[14px] text-[#E5E7EB] hover:border-[#3A3E47]", TRANS)}>
-      <CalendarClock size={15} aria-hidden className="shrink-0 text-[#5DCAA5]" />
+    <label className={cn("relative flex min-h-[44px] items-center gap-2 rounded-[10px] border-[0.5px] border-trait bg-fond px-3 text-[14px] text-texte hover:border-trait-2", TRANS)}>
+      <CalendarClock size={15} aria-hidden className="shrink-0 text-action-clair" />
       <span className="tabular-nums">{libelle}</span>
-      <span className="ml-auto text-[12.5px] text-[#5DCAA5]">Modifier</span>
+      <span className="ml-auto text-[12.5px] text-action-clair">Modifier</span>
       <input
         type="datetime-local"
         value={valeur}
@@ -136,12 +136,12 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6" role="dialog" aria-label="Comment s'est passé l'appel ?">
-      <div className="max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] w-full max-w-md overflow-y-auto overscroll-contain rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 shadow-lg shadow-black/50">
-        <p className="flex items-center gap-2 text-[15px] font-medium text-[#F2F3F5]">
-          <PhoneIncoming size={16} aria-hidden className="shrink-0 text-[#5DCAA5]" />
+      <div className="max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom)-env(safe-area-inset-top))] w-full max-w-md overflow-y-auto overscroll-contain rounded-[16px] border-[0.5px] border-trait bg-surface p-4 shadow-lg shadow-black/50">
+        <p className="flex items-center gap-2 text-[15px] font-medium text-texte">
+          <PhoneIncoming size={16} aria-hidden className="shrink-0 text-action-clair" />
           Comment ça s&apos;est passé{nom ? ` avec ${nom}` : ""} ?
         </p>
-        {infos ? <p className="mt-0.5 pl-6 text-[12.5px] text-[#8B919C]">{infos}</p> : null}
+        {infos ? <p className="mt-0.5 pl-6 text-[12.5px] text-texte-3">{infos}</p> : null}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           {ORDRE_FEUILLE.map((valeur) => (
@@ -150,7 +150,7 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
               type="button"
               aria-pressed={issue === valeur}
               onClick={() => setIssue(valeur)}
-              className={cn("min-h-[44px] rounded-[10px] border-[0.5px] px-3 text-[13.5px] font-medium", issue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+              className={cn("min-h-[44px] rounded-[10px] border-[0.5px] px-3 text-[13.5px] font-medium", issue === valeur ? "border-action/60 bg-action/15 text-action-clair" : "border-trait text-texte-2 hover:border-trait-2", TRANS)}
             >
               {LIBELLES_ISSUE[valeur]}
             </button>
@@ -161,13 +161,13 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
           <div className="mt-3 space-y-2">
             <ChampRappel valeur={rappelSansReponse} onChange={setRappelSansReponse} maintenant={maintenant} defaut={defautSansReponse} />
             {tentativesAvant >= 2 ? (
-              <div className="rounded-[10px] border-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 p-3">
-                <p className="text-[12.5px] leading-snug text-[#F5B454]">{tentativesAvant + 1}ᵉ appel sans réponse d&apos;affilée : tu peux le classer sans suite, ou le rappeler encore.</p>
+              <div className="rounded-[10px] border-[0.5px] border-attention/30 bg-attention/10 p-3">
+                <p className="text-[12.5px] leading-snug text-attention-texte">{tentativesAvant + 1}ᵉ appel sans réponse d&apos;affilée : tu peux le classer sans suite, ou le rappeler encore.</p>
                 <button
                   type="button"
                   disabled={envoi}
                   onClick={() => void enregistrer(true)}
-                  className={cn("mt-2 min-h-[44px] w-full rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 text-[13.5px] text-[#E5E7EB] hover:border-[#3A3E47] disabled:opacity-50", TRANS)}
+                  className={cn("mt-2 min-h-[44px] w-full rounded-[10px] border-[0.5px] border-trait bg-fond px-3 text-[13.5px] text-texte hover:border-trait-2 disabled:opacity-50", TRANS)}
                 >
                   Classer sans suite — plus de réponse
                 </button>
@@ -190,12 +190,12 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
             />
             {choix === "AUTRE" ? <ChampRappel valeur={autre} onChange={setAutre} maintenant={maintenant} /> : null}
             {choix === "SANS_DATE" ? (
-              <p className="text-[12.5px] text-[#8B919C]">{surDossier ? "« Rappeler », sans date, devient la prochaine action de son dossier." : "Il reste dans « À rappeler », après les rappels datés."}</p>
+              <p className="text-[12.5px] text-texte-3">{surDossier ? "« Rappeler », sans date, devient la prochaine action de son dossier." : "Il reste dans « À rappeler », après les rappels datés."}</p>
             ) : null}
           </div>
         ) : null}
 
-        {issue === "INTERESSE" ? <p className="mt-3 text-[12.5px] leading-snug text-[#8B919C]">Son dossier et son espace s&apos;ouvrent ; le SMS avec le lien de son espace te sera proposé.</p> : null}
+        {issue === "INTERESSE" ? <p className="mt-3 text-[12.5px] leading-snug text-texte-3">Son dossier et son espace s&apos;ouvrent ; le SMS avec le lien de son espace te sera proposé.</p> : null}
 
         {issue === "PAS_INTERESSE" ? (
           <div className="mt-3">
@@ -209,17 +209,17 @@ export function FeuilleFinAppel({ appel, onPlusTard, onEnregistre }: { appel: Ap
           placeholder={issue === "PAS_INTERESSE" && motif === "AUTRE" ? "Précision (obligatoire) : pourquoi il ne donne pas suite…" : "Précision (facultatif) : ce qu'il a dit, ce qu'il veut…"}
           aria-label="Précision"
           rows={2}
-          className="mt-3 w-full resize-none rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 py-2 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] focus:border-[#1D9E75]/60 focus:outline-none sm:text-[14px]"
+          className="mt-3 w-full resize-none rounded-[10px] border-[0.5px] border-trait bg-fond px-3 py-2 text-[16px] text-texte placeholder:text-texte-3 focus:border-action/60 focus:outline-none sm:text-[14px]"
         />
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onPlusTard} className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] text-[14px] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+          <button type="button" onClick={onPlusTard} className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-trait text-[14px] text-texte-2 hover:border-trait-2", TRANS)}>
             Plus tard
           </button>
           <button
             type="button"
             disabled={!pret || envoi}
             onClick={() => void enregistrer()}
-            className={cn("min-h-[44px] rounded-[10px] bg-[#1D9E75] text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280]", TRANS)}
+            className={cn("min-h-[44px] rounded-[10px] bg-action text-[14px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3", TRANS)}
           >
             {envoi ? "Enregistrement…" : "Enregistrer"}
           </button>

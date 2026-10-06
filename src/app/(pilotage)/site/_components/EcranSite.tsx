@@ -155,17 +155,17 @@ export default function EcranSite({ initiales, dossiers }: { initiales: Publicat
                   <li key={p.id} className={cn(CARTE_SOMBRE, "flex gap-3 p-3")}>
                     {p.photoApres ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`/api/dossiers/${p.dossierId}/photos/${p.photoApres.split("/").pop()?.replace(/\.[a-z0-9]+$/i, "")}`} alt="" className="h-20 w-24 shrink-0 rounded-[8px] object-cover border-[0.5px] border-[#2A2D34]" />
+                      <img src={`/api/dossiers/${p.dossierId}/photos/${p.photoApres.split("/").pop()?.replace(/\.[a-z0-9]+$/i, "")}`} alt="" className="h-20 w-24 shrink-0 rounded-[8px] object-cover border-[0.5px] border-trait" />
                     ) : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-[13.5px] text-[#F2F3F5]">{p.titre}</p>
+                        <p className="truncate text-[13.5px] text-texte">{p.titre}</p>
                         <Pastille ton={e.ton}>{e.libelle}</Pastille>
                       </div>
-                      <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                      <p className="mt-0.5 text-[12px] text-texte-3">
                         {[p.ville, p.typeProjet ? LIBELLES_TYPE_PROJET[p.typeProjet] ?? p.typeProjet : null, p.type === "AVIS" && p.note ? `${p.note}/5` : null, p.auteur, p.accordClientLe ? `accord du ${formatDateCourte(p.accordClientLe)}` : "sans accord écrit"].filter(Boolean).join(" · ")}
                       </p>
-                      {p.texte ? <p className="mt-1 line-clamp-2 text-[12.5px] text-[#9CA3AF]">{p.texte}</p> : null}
+                      {p.texte ? <p className="mt-1 line-clamp-2 text-[12.5px] text-texte-3">{p.texte}</p> : null}
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Bouton taille="sm" onClick={() => ouvrir(p)}>
                           Modifier
@@ -229,7 +229,7 @@ export default function EcranSite({ initiales, dossiers }: { initiales: Publicat
             <div className="grid gap-4 sm:grid-cols-2">
               {(["photoAvant", "photoApres"] as const).map((cle) => (
                 <fieldset key={cle}>
-                  <legend className="mb-1.5 text-[12.5px] text-[#9CA3AF]">{cle === "photoAvant" ? "Photo avant (facultative)" : "Photo après (obligatoire pour publier)"}</legend>
+                  <legend className="mb-1.5 text-[12.5px] text-texte-3">{cle === "photoAvant" ? "Photo avant (facultative)" : "Photo après (obligatoire pour publier)"}</legend>
                   <div className="grid grid-cols-3 gap-2">
                     {photos
                       .filter((ph) => (cle === "photoApres" ? ph.apres : !ph.apres))
@@ -239,13 +239,13 @@ export default function EcranSite({ initiales, dossiers }: { initiales: Publicat
                           type="button"
                           aria-pressed={saisie[cle] === ph.chemin}
                           onClick={() => setSaisie({ ...saisie, [cle]: saisie[cle] === ph.chemin ? "" : ph.chemin })}
-                          className={cn("overflow-hidden rounded-[8px] border-2", saisie[cle] === ph.chemin ? "border-[#1D9E75]" : "border-transparent hover:border-[#3A3E47]")}
+                          className={cn("overflow-hidden rounded-[8px] border-2", saisie[cle] === ph.chemin ? "border-action" : "border-transparent hover:border-trait-2")}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={ph.url} alt="" className="aspect-square w-full object-cover" />
                         </button>
                       ))}
-                    {photos.filter((ph) => (cle === "photoApres" ? ph.apres : !ph.apres)).length === 0 ? <p className="col-span-3 text-[12px] text-[#6B7280]">Aucune photo de ce type dans le dossier.</p> : null}
+                    {photos.filter((ph) => (cle === "photoApres" ? ph.apres : !ph.apres)).length === 0 ? <p className="col-span-3 text-[12px] text-texte-3">Aucune photo de ce type dans le dossier.</p> : null}
                   </div>
                 </fieldset>
               ))}

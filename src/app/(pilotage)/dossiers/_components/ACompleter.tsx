@@ -41,7 +41,7 @@ export function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMi
       key={point.code}
       className={cn(
         "flex items-center gap-0.5 rounded-full border-[0.5px] py-0.5 pr-0.5 pl-2 text-[12px]",
-        ton === "alerte" ? "border-[#EF9F27]/30 text-[#FCD9A0]" : "border-[#3A3E47] text-[#B4BAC4]"
+        ton === "alerte" ? "border-attention/30 text-attention-texte" : "border-trait-2 text-texte-2"
       )}
     >
       {point.libelle}
@@ -51,7 +51,7 @@ export function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMi
         onClick={() => basculer(point.code, true)}
         aria-label={`Masquer « ${point.libelle} » pour ce dossier`}
         title="Pas nécessaire pour ce dossier : masquer"
-        className={cn("flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-40 sm:h-5 sm:w-5", ton === "alerte" ? "text-[#F5B454]" : "text-[#8B919C]")}
+        className={cn("flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-40 sm:h-5 sm:w-5", ton === "alerte" ? "text-attention-texte" : "text-texte-3")}
       >
         <X size={12} aria-hidden />
       </button>
@@ -61,8 +61,8 @@ export function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMi
   return (
     <div className="space-y-2">
       {alertes.length > 0 ? (
-        <section aria-label="À compléter" className="rounded-[11px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] px-3.5 py-3">
-          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5B454]">
+        <section aria-label="À compléter" className="rounded-[11px] border-[0.5px] border-attention/35 bg-attention/[0.07] px-3.5 py-3">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-attention-texte">
             <AlertTriangle size={13} aria-hidden />
             À compléter · {alertes.length}
           </p>
@@ -70,8 +70,8 @@ export function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMi
         </section>
       ) : null}
       {attente.length > 0 ? (
-        <section aria-label="En attente du client" className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3.5 py-3">
-          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#B4BAC4]">
+        <section aria-label="En attente du client" className="rounded-[11px] border-[0.5px] border-trait bg-fond px-3.5 py-3">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-texte-2">
             <Hourglass size={13} aria-hidden />
             En attente du client · il peut le donner dans son espace
           </p>
@@ -79,16 +79,16 @@ export function ACompleter({ detail, onMisAJour }: { detail: DossierDetail; onMi
         </section>
       ) : null}
       {masques.length > 0 ? (
-        <div className="text-[12px] text-[#6B7280]">
-          <button type="button" onClick={() => setVoirMasques((v) => !v)} className="underline-offset-2 hover:text-[#9CA3AF] hover:underline">
+        <div className="text-[12px] text-texte-3">
+          <button type="button" onClick={() => setVoirMasques((v) => !v)} className="underline-offset-2 hover:text-texte-3 hover:underline">
             {masques.length} point{masques.length > 1 ? "s" : ""} masqué{masques.length > 1 ? "s" : ""} · {voirMasques ? "cacher" : "voir"}
           </button>
           {voirMasques ? (
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {masques.map((p) => (
-                <li key={p.code} className="flex items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] py-0.5 pr-1 pl-2 text-[#8B919C]">
+                <li key={p.code} className="flex items-center gap-1.5 rounded-full border-[0.5px] border-trait py-0.5 pr-1 pl-2 text-texte-3">
                   {p.libelle}
-                  <button type="button" disabled={occupe !== null} onClick={() => basculer(p.code, false)} className="rounded-full px-1.5 text-[#5DCAA5] hover:bg-white/5 disabled:opacity-40">
+                  <button type="button" disabled={occupe !== null} onClick={() => basculer(p.code, false)} className="rounded-full px-1.5 text-action-clair hover:bg-white/5 disabled:opacity-40">
                     Réafficher
                   </button>
                 </li>

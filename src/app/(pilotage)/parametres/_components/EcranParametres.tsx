@@ -16,13 +16,13 @@ function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; on
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false);
   const futures = parametre.historique.filter((ligne) => new Date(ligne.valableDu) > new Date());
   return (
-    <li className="border-t-[0.5px] border-[#2A2D34] px-4 py-3 first:border-t-0">
+    <li className="border-t-[0.5px] border-trait px-4 py-3 first:border-t-0">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] text-[#F2F3F5]">{parametre.libelle}</p>
+          <p className="text-[13.5px] text-texte">{parametre.libelle}</p>
           {parametre.courante ? (
-            <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
-              <span className="font-medium text-[#F2F3F5]">{formaterValeurParametre(parametre.cle, parametre.courante.valeur)}</span>
+            <p className="mt-0.5 text-[12.5px] text-texte-3">
+              <span className="font-medium text-texte">{formaterValeurParametre(parametre.cle, parametre.courante.valeur)}</span>
               {" · depuis le "}
               {formatDateCourte(parametre.courante.valableDu)}
               {parametre.courante.source ? ` · ${parametre.courante.source}` : ""}
@@ -33,7 +33,7 @@ function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; on
             </p>
           )}
           {futures.length > 0 ? (
-            <p className="mt-0.5 text-[12px] text-[#93C5FD]">
+            <p className="mt-0.5 text-[12px] text-info-texte">
               {futures.length === 1 ? `Nouvelle valeur au ${formatDateCourte(futures[0].valableDu)} : ${formaterValeurParametre(parametre.cle, futures[0].valeur)}` : `${futures.length} valeurs à venir`}
             </p>
           ) : null}
@@ -50,9 +50,9 @@ function LigneParametre({ parametre, onModifier }: { parametre: ParametreVue; on
         </span>
       </div>
       {historiqueOuvert ? (
-        <ul className="mt-2 rounded-[8px] bg-[#16181D] px-3 py-2">
+        <ul className="mt-2 rounded-[8px] bg-fond px-3 py-2">
           {parametre.historique.map((ligne) => (
-            <li key={ligne.id} className="py-0.5 text-[12px] text-[#9CA3AF]">
+            <li key={ligne.id} className="py-0.5 text-[12px] text-texte-3">
               {formaterValeurParametre(parametre.cle, ligne.valeur)} à partir du {formatDateCourte(ligne.valableDu)}
               {ligne.source ? ` · ${ligne.source}` : ""} · saisi le {formatDateCourte(ligne.saisiLe)}
             </li>
@@ -104,19 +104,19 @@ export default function GroupesParametres({ parametres, groupes, onMisAJour }: {
           <section key={groupe} id={groupe.toLowerCase()} className="mt-6 scroll-mt-4">
             <TitreSection>{GROUPES_PARAMETRES[groupe]}</TitreSection>
             {groupe === "AGENT" ? (
-              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
+              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-texte-3">
                 Facultatif : tant que ces réglages manquent, l&apos;IA ne lit aucun mail et ne coûte rien ; l&apos;agent trie avec ses règles sûres. La clé ANTHROPIC_API_KEY se pose sur le serveur, jamais ici.
               </p>
             ) : null}
             {groupe === "SIMULATEUR" ? (
-              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-[#6B7280]">
+              <p className="-mt-1 mb-3 text-[12.5px] leading-relaxed text-texte-3">
                 Coût estimé d&apos;un rendu (1 à 4 échantillons) : {QUALITES.map((q) => `${q} ${[1, 4].map((n) => `${coutEstime(n, q).toFixed(2).replace(".", ",")} $`).join(" à ")}`).join(" · ")}. Mesure de référence en medium (mai 2026) ; high ≈ ×1,7 et low ≈ ×0,4, à confirmer par le banc. L&apos;analyse de la photo et le contrôle du rendu (moteur V2) coûtent environ un demi-centime chacun.{" "}
-                <Link href="/simulateur/banc" className="text-[#5DCAA5] hover:underline">
+                <Link href="/simulateur/banc" className="text-action-clair hover:underline">
                   Banc de comparaison V1 / V2
                 </Link>
               </p>
             ) : null}
-            <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]", TRANS)}>
+            <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface", TRANS)}>
               {liste.map((parametre) => (
                 <LigneParametre key={parametre.cle} parametre={parametre} onModifier={() => ouvrir(parametre.cle)} />
               ))}

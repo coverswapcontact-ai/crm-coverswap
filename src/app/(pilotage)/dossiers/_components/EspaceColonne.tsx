@@ -14,7 +14,7 @@ import { TRANS } from "@/components/pilotage/ui";
  * et ceux du client (lien, projet de plus) dans sa fiche.
  */
 
-const couleurSignal = (ton: "rouge" | "ambre" | "gris") => (ton === "rouge" ? "text-[#F87171]" : ton === "ambre" ? "text-[#F5B454]" : "text-[#9CA3AF]");
+const couleurSignal = (ton: "rouge" | "ambre" | "gris") => (ton === "rouge" ? "text-retard-texte" : ton === "ambre" ? "text-attention-texte" : "text-texte-3");
 
 /**
  * L'icône de l'espace, teintée par le signal le plus pressant (rouge, ambre), grise sinon. Relecture de la partie A :
@@ -23,7 +23,7 @@ const couleurSignal = (ton: "rouge" | "ambre" | "gris") => (ton === "rouge" ? "t
  */
 export function IconeEspace({ espace, maintenant, className, libelle = "detaille" }: { espace: EspaceResume; maintenant: Date; className?: string; libelle?: "detaille" | "court" | "aucun" }) {
   const signal = signalPrincipal(espace);
-  const couleur = cn("inline-flex shrink-0", signal ? couleurSignal(signal.ton) : espace.revoque ? "text-[#4B5563]" : "text-[#8B919C]", className);
+  const couleur = cn("inline-flex shrink-0", signal ? couleurSignal(signal.ton) : espace.revoque ? "text-texte-3" : "text-texte-3", className);
   if (libelle === "aucun") {
     return (
       <span aria-hidden className={couleur}>
@@ -47,15 +47,15 @@ function ligneCourte(espace: EspaceResume, maintenant: Date): string {
 
 /** La colonne « Espace » du tableau (bureau). */
 export function CelluleEspace({ espace, maintenant }: { espace: EspaceResume | null | undefined; maintenant: Date }) {
-  if (!espace) return <span className="text-[12px] text-[#6B7280]">{espace === null ? "Pas d'espace" : "—"}</span>;
+  if (!espace) return <span className="text-[12px] text-texte-3">{espace === null ? "Pas d'espace" : "—"}</span>;
   const signal = signalPrincipal(espace);
   return (
     <span className="block min-w-0" title={descriptionEspace(espace, maintenant)}>
       <span className="flex min-w-0 items-center gap-1.5">
         <IconeEspace espace={espace} maintenant={maintenant} />
-        <span className={cn("truncate text-[12.5px]", espace.revoque ? "text-[#6B7280]" : "text-[#F2F3F5]")}>{espace.revoque ? "Lien désactivé" : espace.etapeLibelle}</span>
+        <span className={cn("truncate text-[12.5px]", espace.revoque ? "text-texte-3" : "text-texte")}>{espace.revoque ? "Lien désactivé" : espace.etapeLibelle}</span>
       </span>
-      <span className={cn("mt-0.5 block truncate text-[11.5px]", signal ? couleurSignal(signal.ton) : "text-[#9CA3AF]")}>{ligneCourte(espace, maintenant)}</span>
+      <span className={cn("mt-0.5 block truncate text-[11.5px]", signal ? couleurSignal(signal.ton) : "text-texte-3")}>{ligneCourte(espace, maintenant)}</span>
     </span>
   );
 }
@@ -66,9 +66,9 @@ export function LigneEspaceCourte({ espace, maintenant, className }: { espace: E
   return (
     <span className={cn("flex min-w-0 items-center gap-1.5 text-[12px]", className)} title={descriptionEspace(espace, maintenant)}>
       <IconeEspace espace={espace} maintenant={maintenant} libelle="aucun" />
-      <span className="min-w-0 truncate text-[#9CA3AF]">
+      <span className="min-w-0 truncate text-texte-3">
         {espace.revoque ? "Lien désactivé" : espace.etapeLibelle}
-        <span className={signal ? couleurSignal(signal.ton) : "text-[#6B7280]"}> · {ligneCourte(espace, maintenant)}</span>
+        <span className={signal ? couleurSignal(signal.ton) : "text-texte-3"}> · {ligneCourte(espace, maintenant)}</span>
       </span>
     </span>
   );
@@ -106,7 +106,7 @@ export function FiltreEspaces({
             type="button"
             aria-pressed={filtre === valeur}
             onClick={() => onFiltre(valeur)}
-            className={cn(CLASSE_PASTILLE, filtre === valeur ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+            className={cn(CLASSE_PASTILLE, filtre === valeur ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2", TRANS)}
           >
             {LIBELLES_FILTRE_ESPACE[valeur]}
             {compteurs ? <span className="ml-1.5 text-[11.5px] opacity-70 tabular-nums">{compteurs[valeur]}</span> : null}
@@ -117,7 +117,7 @@ export function FiltreEspaces({
         aria-label="Étape de l'espace"
         value={etape ?? "TOUTES"}
         onChange={(evenement) => onEtape(evenement.target.value === "TOUTES" ? null : (evenement.target.value as EtapeEspace))}
-        className="h-11 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8"
+        className="h-11 rounded-[8px] border-[0.5px] border-trait bg-fond px-2 text-[13px] text-texte-2 [color-scheme:dark] sm:h-8"
       >
         <option value="TOUTES">Toutes les étapes de l&apos;espace</option>
         {ETAPES_ESPACE.map((e) => (
@@ -130,7 +130,7 @@ export function FiltreEspaces({
         aria-label="Tri des espaces"
         value={tri}
         onChange={(evenement) => onTri(evenement.target.value as TriEspace)}
-        className="h-11 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#D1D5DB] [color-scheme:dark] sm:h-8"
+        className="h-11 rounded-[8px] border-[0.5px] border-trait bg-fond px-2 text-[13px] text-texte-2 [color-scheme:dark] sm:h-8"
       >
         {TRIS_ESPACE.map((t) => (
           <option key={t} value={t}>

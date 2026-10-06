@@ -17,14 +17,14 @@ import { jourHeureCourt } from "@/lib/commun/format";
  */
 
 const TON_FAMILLE: Record<FamilleChronologie, string> = {
-  MAIL: "border-[#60A5FA]/40 bg-[#60A5FA]/10 text-[#93C5FD]",
-  APPEL: "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]",
-  ESPACE: "border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#C4B5FD]",
-  DOSSIER: "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]",
-  DOCUMENT: "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]",
-  PAIEMENT: "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]",
-  NOTE: "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF]",
-  PROPOSITION: "border-[#F472B6]/40 bg-[#F472B6]/10 text-[#F9A8D4]",
+  MAIL: "border-info/40 bg-info/10 text-info-texte",
+  APPEL: "border-action/40 bg-action-fond text-action-clair",
+  ESPACE: "border-info/40 bg-info/10 text-info-texte",
+  DOSSIER: "border-trait bg-surface text-texte-2",
+  DOCUMENT: "border-attention/40 bg-attention/10 text-attention-texte",
+  PAIEMENT: "border-action/40 bg-action-fond text-action-clair",
+  NOTE: "border-trait bg-surface text-texte-3",
+  PROPOSITION: "border-info/40 bg-info/10 text-info-texte",
 };
 
 
@@ -58,42 +58,42 @@ export function Chronologie({ cible, titre = "Chronologie", limite = 60, compact
   const basculer = (f: FamilleChronologie) => setFamilles((liste) => (liste.includes(f) ? liste.filter((x) => x !== f) : [...liste, f]));
 
   return (
-    <section className={cn(!compact && "rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4")}>
+    <section className={cn(!compact && "rounded-[11px] border-[0.5px] border-trait bg-surface p-4")}>
       <TitreSection>{`${titre}${entrees ? ` · ${total}` : ""}`}</TitreSection>
       <div className="mb-3 flex flex-wrap gap-1">
         {FAMILLES_CHRONOLOGIE.map((f) => (
-          <button key={f} type="button" onClick={() => basculer(f)} aria-pressed={familles.includes(f)} className={cn("rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium", TRANS, familles.length === 0 || familles.includes(f) ? TON_FAMILLE[f] : "border-[#2A2D34] text-[#6B7280] opacity-60")}>
+          <button key={f} type="button" onClick={() => basculer(f)} aria-pressed={familles.includes(f)} className={cn("rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium", TRANS, familles.length === 0 || familles.includes(f) ? TON_FAMILLE[f] : "border-trait text-texte-3 opacity-60")}>
             {LIBELLES_FAMILLE_CHRONOLOGIE[f]}
           </button>
         ))}
       </div>
       {entrees === null ? (
-        <p className="text-[12px] text-[#6B7280]">Chargement…</p>
+        <p className="text-[12px] text-texte-3">Chargement…</p>
       ) : entrees.length === 0 ? (
         <EtatVide titre="Rien dans la chronologie" texte={familles.length ? "Avec ces filtres." : undefined} />
       ) : (
-        <ol className="divide-y-[0.5px] divide-[#2A2D34]">
+        <ol className="divide-y-[0.5px] divide-trait">
           {visibles.map((e) => (
             <li key={e.id} className="flex items-start gap-3 py-2">
-              <span className="w-[86px] shrink-0 pt-0.5 text-[11.5px] text-[#6B7280] tabular-nums">{jourHeureCourt(e.le)}</span>
+              <span className="w-[86px] shrink-0 pt-0.5 text-[11.5px] text-texte-3 tabular-nums">{jourHeureCourt(e.le)}</span>
               <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-[#E5E7EB]">
+                <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-texte">
                   <span className={cn("rounded-full border-[0.5px] px-1.5 py-0 text-[10.5px] font-medium", TON_FAMILLE[e.famille])}>{LIBELLES_FAMILLE_CHRONOLOGIE[e.famille]}</span>
                   <span className="min-w-0 truncate">{e.titre}</span>
                   {e.lien ? (
-                    <Link href={e.lien} className={cn("inline-flex items-center text-[#5DCAA5] hover:underline", TRANS)} aria-label="Ouvrir">
+                    <Link href={e.lien} className={cn("inline-flex items-center text-action-clair hover:underline", TRANS)} aria-label="Ouvrir">
                       <ArrowUpRight size={13} aria-hidden />
                     </Link>
                   ) : null}
                 </p>
-                {e.texte ? <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-[#8B919C]">{e.texte}</p> : null}
+                {e.texte ? <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-texte-3">{e.texte}</p> : null}
               </div>
             </li>
           ))}
         </ol>
       )}
       {compact && entrees && entrees.length > 12 ? (
-        <button type="button" onClick={() => setTout((v) => !v)} className="mt-2 text-[12.5px] text-[#5DCAA5] hover:underline">
+        <button type="button" onClick={() => setTout((v) => !v)} className="mt-2 text-[12.5px] text-action-clair hover:underline">
           {tout ? "Replier" : `Voir les ${entrees.length}`}
         </button>
       ) : null}

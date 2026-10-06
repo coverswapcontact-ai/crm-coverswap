@@ -42,9 +42,9 @@ export default function ReglagesMail({ initial }: { initial: Reglages }) {
       </TitreSection>
       <div className="space-y-3">
         <CarteGuide guide={reglages.guide} onMaj={setReglages} />
-        <p className="pt-3 text-[12.5px] leading-relaxed text-[#9CA3AF]">
-          Mails automatiques de l&apos;espace client : ils partent seuls, une fois par événement, si l&apos;adresse du client est connue. Une phrase, un bouton vers son espace. Variables : <code className="text-[#D1D5DB]">{"{prenom}"}</code>,{" "}
-          <code className="text-[#D1D5DB]">{"{montant}"}</code> (paiement).
+        <p className="pt-3 text-[12.5px] leading-relaxed text-texte-3">
+          Mails automatiques de l&apos;espace client : ils partent seuls, une fois par événement, si l&apos;adresse du client est connue. Une phrase, un bouton vers son espace. Variables : <code className="text-texte-2">{"{prenom}"}</code>,{" "}
+          <code className="text-texte-2">{"{montant}"}</code> (paiement).
         </p>
         {reglages.modeles.map((modele) => (
           <CarteModele key={modele.evenement} modele={modele} onMaj={setReglages} />
@@ -91,12 +91,12 @@ function CarteGuide({ guide, onMaj }: { guide: GuideStyle; onMaj: (r: Reglages) 
   return (
     <div className={cn(CARTE, "p-4")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+        <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
           <WandSparkles size={15} aria-hidden /> Guide de style des brouillons
         </p>
         <Pastille ton={guide.source === "DEFAUT" ? "neutre" : "vert"}>{SOURCES_GUIDE[guide.source]}</Pastille>
       </div>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#9CA3AF]">
+      <p className="mt-1.5 text-[12.5px] leading-relaxed text-texte-3">
         « Rédiger avec l&apos;IA » écrit comme ceci. Tirez-le de vos mails envoyés (un appel à l&apos;IA, environ 0,03 €, anonymisé), puis corrigez-le à la main si besoin.
         {guide.analyse ? ` Dernière analyse : ${guide.analyse.mails} mails${guide.analyse.longueurMoyenne ? `, ${guide.analyse.longueurMoyenne} mots en moyenne` : ""}.` : ""}
       </p>
@@ -148,7 +148,7 @@ function CarteModele({ modele, onMaj }: { modele: Modele; onMaj: (r: Reglages) =
   return (
     <div className={cn(CARTE, "p-4", !modele.actif && "opacity-75")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-[13.5px] font-medium text-[#F2F3F5]">
+        <p className="flex items-center gap-2 text-[13.5px] font-medium text-texte">
           {modele.libelle}
           {modele.actif ? <Pastille ton="vert">Part tout seul</Pastille> : <Pastille ton="ambre">Coupé</Pastille>}
         </p>
@@ -231,15 +231,15 @@ function CarteRegles({ regles, proposees, onMaj }: { regles: Regle[]; proposees:
 
   return (
     <div className={cn(CARTE, "mt-3 p-4")}>
-      <p className="text-[14px] font-medium text-[#F2F3F5]">Vos décisions sur les expéditeurs</p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">« Ne plus me montrer cet expéditeur » le range pour toujours ; un mail remonté à la main ne sera plus jamais rangé. Retirer une décision rend l&apos;expéditeur au tri ordinaire. Trois gestes identiques sur une même adresse : le CRM propose la règle ci-dessous, il ne la pose jamais seul.</p>
+      <p className="text-[14px] font-medium text-texte">Vos décisions sur les expéditeurs</p>
+      <p className="mt-1 text-[12.5px] leading-relaxed text-texte-3">« Ne plus me montrer cet expéditeur » le range pour toujours ; un mail remonté à la main ne sera plus jamais rangé. Retirer une décision rend l&apos;expéditeur au tri ordinaire. Trois gestes identiques sur une même adresse : le CRM propose la règle ci-dessous, il ne la pose jamais seul.</p>
       {proposees.length ? (
         <ul className="mt-3 space-y-2">
           {proposees.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border-[0.5px] border-[#F472B6]/35 bg-[#F472B6]/[0.06] px-3 py-2">
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[9px] border-[0.5px] border-info/35 bg-info/[0.06] px-3 py-2">
               <span className="min-w-0">
-                <span className="block text-[13px] text-[#F2F3F5]">{p.titre}</span>
-                {p.resume ? <span className="block text-[11.5px] text-[#8B919C]">{p.resume}</span> : null}
+                <span className="block text-[13px] text-texte">{p.titre}</span>
+                {p.resume ? <span className="block text-[11.5px] text-texte-3">{p.resume}</span> : null}
               </span>
               <span className="flex gap-1">
                 <Bouton taille="sm" variante="primaire" chargement={occupe === p.id} onClick={() => void decider(p, "valider")}>
@@ -265,16 +265,16 @@ function CarteRegles({ regles, proposees, onMaj }: { regles: Regle[]; proposees:
         </Bouton>
       </div>
       {regles.length === 0 ? (
-        <p className="mt-3 text-[12.5px] text-[#6B7280]">Aucune décision pour l&apos;instant.</p>
+        <p className="mt-3 text-[12.5px] text-texte-3">Aucune décision pour l&apos;instant.</p>
       ) : (
-        <ul className="mt-3 divide-y-[0.5px] divide-[#2A2D34]">
+        <ul className="mt-3 divide-y-[0.5px] divide-trait">
           {visibles.map((regle) => {
             const action = ACTIONS_REGLE[regle.action] ?? { libelle: regle.action, ton: "neutre" as const };
             return (
               <li key={regle.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span className="min-w-0">
-                  <span className="block truncate text-[13px] text-[#E5E7EB]">{regle.cible}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-[#8B919C]">
+                  <span className="block truncate text-[13px] text-texte">{regle.cible}</span>
+                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-texte-3">
                     <Pastille ton={action.ton}>{action.libelle}</Pastille>
                     {new Date(regle.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
                   </span>
@@ -288,7 +288,7 @@ function CarteRegles({ regles, proposees, onMaj }: { regles: Regle[]; proposees:
         </ul>
       )}
       {regles.length > 8 ? (
-        <button type="button" onClick={() => setTout((v) => !v)} className="mt-2 text-[12.5px] text-[#5DCAA5] hover:underline">
+        <button type="button" onClick={() => setTout((v) => !v)} className="mt-2 text-[12.5px] text-action-clair hover:underline">
           {tout ? "Replier" : `Voir les ${regles.length}`}
         </button>
       ) : null}

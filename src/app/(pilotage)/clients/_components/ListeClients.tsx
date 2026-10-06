@@ -122,20 +122,20 @@ export default function ListeClients({
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <label className="relative min-w-[200px] flex-1">
           <span className="sr-only">Rechercher un client</span>
-          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
           <input
             type="search"
             value={recherche}
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Nom, ville, e-mail, téléphone…"
             className={cn(
-              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
-              "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-trait bg-surface pr-3 pl-8 text-[16px] text-texte placeholder:text-texte-3 sm:h-8 sm:text-[13px]",
+              "hover:border-trait-2 focus:border-action/60 focus:outline-none",
               TRANS
             )}
           />
         </label>
-        <div role="tablist" aria-label="Catégorie" className="flex max-w-full items-center overflow-x-auto rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]">
+        <div role="tablist" aria-label="Catégorie" className="flex max-w-full items-center overflow-x-auto rounded-[9px] border-[0.5px] border-trait bg-surface p-[3px]">
           {FILTRES_CATEGORIE.map((filtre) => (
             <button
               key={filtre.libelle}
@@ -145,7 +145,7 @@ export default function ListeClients({
               onClick={() => setCategorie(filtre.valeur)}
               className={cn(
                 "flex h-11 shrink-0 items-center rounded-[7px] px-3 text-[13px] font-medium whitespace-nowrap sm:h-7",
-                categorie === filtre.valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+                categorie === filtre.valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
                 TRANS
               )}
             >
@@ -160,8 +160,8 @@ export default function ListeClients({
           onChange={(evenement) => setSource(evenement.target.value)}
           options={[{ valeur: "", libelle: "Toutes les sources" }, ...SOURCES_CLIENT.map((valeur) => ({ valeur, libelle: LIBELLES_SOURCE_CLIENT[valeur] }))]}
         />
-        <label className="flex min-h-11 items-center gap-2 text-[13px] text-[#9CA3AF] sm:min-h-8">
-          <input type="checkbox" checked={archives} onChange={(evenement) => setArchives(evenement.target.checked)} className="h-4 w-4 accent-[#1D9E75]" />
+        <label className="flex min-h-11 items-center gap-2 text-[13px] text-texte-3 sm:min-h-8">
+          <input type="checkbox" checked={archives} onChange={(evenement) => setArchives(evenement.target.checked)} className="h-4 w-4 accent-action" />
           Fiches archivées
         </label>
       </div>
@@ -169,38 +169,38 @@ export default function ListeClients({
       <section aria-busy={chargement} className={cn("mt-4", chargement && "opacity-60")}>
         {affiches.length === 0 ? (
           <EtatVide
-            icone={<Users size={18} className="text-[#6B7280]" aria-hidden />}
+            icone={<Users size={18} className="text-texte-3" aria-hidden />}
             titre={filtresActifs ? "Aucun client trouvé" : "Aucun client"}
             texte={filtresActifs ? undefined : "Les clients arrivent avec les leads, les dossiers et les fiches créées ici."}
           />
         ) : (
-          <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+          <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
             {affiches.map((client) => (
-              <li key={client.id} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+              <li key={client.id} className="border-t-[0.5px] border-trait first:border-t-0">
                 <Link
                   href={`/clients/${client.id}`}
-                  className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-[#22262D]", TRANS)}
+                  className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 hover:bg-surface-2", TRANS)}
                 >
                   {/* Mission 13 (lot 3) : rien de tronqué — nom · ville · dossiers, puis l'e-mail (ou le téléphone) en ligne entière. */}
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="text-[14px] font-medium break-words text-[#F2F3F5]">{client.nom}</span>
+                      <span className="text-[14px] font-medium break-words text-texte">{client.nom}</span>
                       {client.categorie !== "PARTICULIER" ? <Pastille>{LIBELLES_CATEGORIE_CLIENT[client.categorie]}</Pastille> : null}
                       {client.archiveLe ? <Pastille ton="ambre">Archivée</Pastille> : null}
                     </p>
-                    <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+                    <p className="mt-0.5 text-[12.5px] text-texte-3">
                       {[client.ville, `${client.nbDossiers} dossier${client.nbDossiers > 1 ? "s" : ""}${client.nbDossiersEnCours > 0 ? ` (${client.nbDossiersEnCours} en cours)` : ""}`].filter(Boolean).join(" · ")}
                     </p>
                     {client.email || client.telephone ? (
-                      <p className="mt-0.5 text-[12px] break-all text-[#8B919C]">{client.email ?? (client.telephone ? formaterTelephone(client.telephone) : null)}</p>
+                      <p className="mt-0.5 text-[12px] break-all text-texte-3">{client.email ?? (client.telephone ? formaterTelephone(client.telephone) : null)}</p>
                     ) : null}
-                    {client.recommandePar ? <p className="mt-0.5 text-[12px] break-words text-[#9CA3AF]">Recommandé par {client.recommandePar.nom}</p> : null}
+                    {client.recommandePar ? <p className="mt-0.5 text-[12px] break-words text-texte-3">Recommandé par {client.recommandePar.nom}</p> : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
-                    <span className="text-[13px] font-medium text-[#F2F3F5] tabular-nums">
+                    <span className="text-[13px] font-medium text-texte tabular-nums">
                       {client.montantSigne > 0 ? formatMontant(client.montantSigne) : "—"}
                     </span>
-                    <span className="text-[12px] text-[#6B7280]">
+                    <span className="text-[12px] text-texte-3">
                       {LIBELLES_SOURCE_CLIENT[client.source]} · {formatDateCourte(client.derniereActiviteLe)}
                     </span>
                   </div>

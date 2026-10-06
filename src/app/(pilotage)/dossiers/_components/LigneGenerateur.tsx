@@ -29,9 +29,9 @@ export function LigneGenerateur({
   return (
     <li>
       {ligne.type === "SECTION" ? (
-        <div className="rounded-[9px] border-[0.5px] border-[#3A3E47] bg-[#2A2D34]/50 p-2">
+        <div className="rounded-[9px] border-[0.5px] border-trait-2 bg-trait/50 p-2">
           <div className="flex items-center gap-2">
-            <Heading size={14} className="ml-1 shrink-0 text-[#9CA3AF]" aria-hidden />
+            <Heading size={14} className="ml-1 shrink-0 text-texte-3" aria-hidden />
             <input
               aria-label="Libellé de la section"
               value={ligne.libelle}
@@ -50,11 +50,11 @@ export function LigneGenerateur({
             />
           </div>
           {erreurs[`${ligne.cle}:libelle`] ? (
-            <p className="mt-1.5 pl-7 text-[12px] text-[#F87171]">{erreurs[`${ligne.cle}:libelle`]}</p>
+            <p className="mt-1.5 pl-7 text-[12px] text-attention-texte">{erreurs[`${ligne.cle}:libelle`]}</p>
           ) : null}
         </div>
       ) : (
-        <div className="rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-2.5">
+        <div className="rounded-[9px] border-[0.5px] border-trait bg-fond p-2.5">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_72px_92px_96px_96px_108px] sm:items-start">
             <div className="space-y-1.5">
               <input
@@ -107,7 +107,7 @@ export function LigneGenerateur({
               />
             </div>
             <div className="flex items-center justify-between gap-2 sm:contents">
-              <span className="text-[13px] text-[#F2F3F5] tabular-nums sm:pt-1.5 sm:text-right">
+              <span className="text-[13px] text-texte tabular-nums sm:pt-1.5 sm:text-right">
                 {(() => {
                   const quantite = lireNombre(ligne.quantite);
                   const prixUnitaire = lireNombre(ligne.prixUnitaire);
@@ -130,7 +130,7 @@ export function LigneGenerateur({
             erreurs[`${ligne.cle}:quantite`],
             erreurs[`${ligne.cle}:prixUnitaire`],
           ].filter(Boolean).length > 0 ? (
-            <p className="mt-1.5 text-[12px] text-[#F87171]">
+            <p className="mt-1.5 text-[12px] text-retard-texte">
               {[
                 erreurs[`${ligne.cle}:designation`],
                 erreurs[`${ligne.cle}:quantite`],

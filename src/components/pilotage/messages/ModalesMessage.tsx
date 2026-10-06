@@ -91,8 +91,8 @@ export function ModaleRattacher({ detail, onFermer, onFait }: { detail: MessageD
       }
     >
       {client ? (
-        <div className="flex items-center justify-between gap-2 rounded-[8px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 px-3 py-2">
-          <span className="truncate text-[13px] text-[#F2F3F5]">{client.nom}</span>
+        <div className="flex items-center justify-between gap-2 rounded-[8px] border-[0.5px] border-action/40 bg-action-fond/60 px-3 py-2">
+          <span className="truncate text-[13px] text-texte">{client.nom}</span>
           <Bouton
             variante="fantome"
             taille="sm"
@@ -121,25 +121,25 @@ export function ModaleRattacher({ detail, onFermer, onFait }: { detail: MessageD
                 <button
                   type="button"
                   onClick={() => setClient({ id: resultat.id, nom: resultat.nom })}
-                  className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-[8px] px-3 text-left text-[13px] text-[#D1D5DB] hover:bg-[#22262D]", TRANS)}
+                  className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-[8px] px-3 text-left text-[13px] text-texte-2 hover:bg-surface-2", TRANS)}
                 >
                   <span className="truncate">{resultat.nom}</span>
-                  <span className="shrink-0 text-[11.5px] text-[#6B7280]">
+                  <span className="shrink-0 text-[11.5px] text-texte-3">
                     {[resultat.ville, resultat.email, `${resultat.nbDossiersEnCours} en cours`].filter(Boolean).join(" · ")}
                   </span>
                 </button>
               </li>
             ))}
-            {recherche.trim().length >= 2 && resultats.length === 0 ? <li className="px-3 py-2 text-[12px] text-[#6B7280]">Aucun client trouvé : c&apos;est peut-être une nouvelle demande.</li> : null}
+            {recherche.trim().length >= 2 && resultats.length === 0 ? <li className="px-3 py-2 text-[12px] text-texte-3">Aucun client trouvé : c&apos;est peut-être une nouvelle demande.</li> : null}
           </ul>
         </div>
       )}
 
       {client ? (
         <div className="mt-4">
-          <p className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">Dossier</p>
+          <p className="mb-1.5 text-[12px] font-medium text-texte-3">Dossier</p>
           {dossiers === null ? (
-            <p className="text-[12px] text-[#6B7280]">Chargement des dossiers…</p>
+            <p className="text-[12px] text-texte-3">Chargement des dossiers…</p>
           ) : (
             <div role="radiogroup" className="flex flex-col gap-1">
               {[{ id: null, objet: "Sur la fiche seulement", etape: null as string | null }, ...dossiers].map((dossier) => (
@@ -151,12 +151,12 @@ export function ModaleRattacher({ detail, onFermer, onFait }: { detail: MessageD
                   onClick={() => setDossierId(dossier.id)}
                   className={cn(
                     "flex min-h-10 items-center justify-between gap-3 rounded-[8px] border-[0.5px] px-3 text-left text-[13px]",
-                    dossierId === dossier.id ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
+                    dossierId === dossier.id ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2",
                     TRANS
                   )}
                 >
                   <span className="truncate">{dossier.objet}</span>
-                  {dossier.etape ? <span className="shrink-0 text-[11.5px] text-[#6B7280]">{libelleEtape(dossier.etape)}</span> : null}
+                  {dossier.etape ? <span className="shrink-0 text-[11.5px] text-texte-3">{libelleEtape(dossier.etape)}</span> : null}
                 </button>
               ))}
             </div>
@@ -280,7 +280,7 @@ export function ModaleNouvelleDemande({ detail, onFermer, onFait }: { detail: Me
             valeur={ouvrir}
             onChange={(valeur) => setOuvrir(valeur as "OUI" | "NON")}
           />
-          <p className="mt-1.5 text-[12px] text-[#6B7280]">
+          <p className="mt-1.5 text-[12px] text-texte-3">
             {photos > 0 ? `${photos} photo${photos > 1 ? "s" : ""} reçue${photos > 1 ? "s" : ""} : ajoutée${photos > 1 ? "s" : ""} au dossier.` : "Aucune photo reçue : le dossier s'ouvre quand même, le manque y est signalé (les demander dans la réponse)."}
           </p>
         </div>
@@ -356,7 +356,7 @@ export function ModaleReponse({ detail, onFermer, onFait }: { detail: MessageDet
           <ZoneTexte libelle="Message" obligatoire rows={12} maxLength={10_000} value={brouillon.texte} onChange={(evenement) => setBrouillon({ ...brouillon, texte: evenement.target.value })} />
         </div>
       ) : (
-        <p className="text-[13px] text-[#6B7280]">Préparation du brouillon…</p>
+        <p className="text-[13px] text-texte-3">Préparation du brouillon…</p>
       )}
     </Modale>
   );

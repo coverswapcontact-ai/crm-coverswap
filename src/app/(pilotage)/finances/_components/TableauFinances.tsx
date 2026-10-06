@@ -23,8 +23,8 @@ import ListeDepenses from "./ListeDepenses";
 function AParametrer({ manquants, pourquoi, onRenseigner }: { manquants: CleParametre[]; pourquoi: string; onRenseigner: () => void }) {
   return (
     <div className={cn(CARTE, "flex flex-col gap-2.5 p-4 sm:flex-row sm:items-center")}>
-      <SlidersHorizontal size={16} aria-hidden className="shrink-0 text-[#F5B454]" />
-      <p className="flex-1 text-[13px] text-[#D1D5DB]">
+      <SlidersHorizontal size={16} aria-hidden className="shrink-0 text-attention-texte" />
+      <p className="flex-1 text-[13px] text-texte-2">
         {pourquoi} Il manque : {manquants.map((cle) => DEFINITIONS_PARAMETRES[cle].libelle.toLowerCase()).join(" ; ")}.
       </p>
       <Bouton variante="secondaire" onClick={onRenseigner}>
@@ -74,11 +74,11 @@ export default function TableauFinances({
         sousTitre="Encaisser, créditer les chèques, corriger, suivre les dépenses, tenir le livre des recettes."
         actions={
           <div className="flex items-center gap-2">
-            <Link href={adresseAnnee(annee - 1)} aria-label={`Année ${annee - 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+            <Link href={adresseAnnee(annee - 1)} aria-label={`Année ${annee - 1}`} className={cn("rounded-[8px] p-2 text-texte-3 hover:bg-surface-2 hover:text-texte", TRANS)}>
               <ChevronLeft size={16} aria-hidden />
             </Link>
-            <span className="text-[14px] font-medium text-[#F2F3F5] tabular-nums">{annee}</span>
-            <Link href={adresseAnnee(annee + 1)} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+            <span className="text-[14px] font-medium text-texte tabular-nums">{annee}</span>
+            <Link href={adresseAnnee(annee + 1)} aria-label={`Année ${annee + 1}`} className={cn("rounded-[8px] p-2 text-texte-3 hover:bg-surface-2 hover:text-texte", TRANS)}>
               <ChevronRight size={16} aria-hidden />
             </Link>
           </div>
@@ -97,43 +97,43 @@ export default function TableauFinances({
 
       {/* Mission 17 (partie B) : les chiffres (encaissé de l'année et du mois, URSSAF, seuils, encaissements par mois) sont
           dans l'Analytique, onglet Argent ; cet écran garde le travail : encaisser, créditer, corriger, tenir le livre. */}
-      <p className="mt-4 text-[13px] text-[#9CA3AF]">
+      <p className="mt-4 text-[13px] text-texte-3">
         Encaissé, URSSAF, franchise de TVA et courbes par mois&nbsp;:{" "}
-        <Link href="/analytique?onglet=argent" className="text-[#5DCAA5] hover:underline">
+        <Link href="/analytique?onglet=argent" className="text-action-clair hover:underline">
           Analytique, onglet Argent
         </Link>
         .
       </p>
 
       <section className="mt-8">
-        <TitreSection action={encours.lignes.length > 0 ? <span className="text-[13px] font-medium text-[#F5B454] tabular-nums">{formatMontant(encours.total)}</span> : undefined}>Reste à encaisser</TitreSection>
+        <TitreSection action={encours.lignes.length > 0 ? <span className="text-[13px] font-medium text-attention-texte tabular-nums">{formatMontant(encours.total)}</span> : undefined}>Reste à encaisser</TitreSection>
         {encours.lignes.length === 0 ? (
-          <p className="text-[13px] text-[#6B7280]">Aucune facture en attente de paiement.</p>
+          <p className="text-[13px] text-texte-3">Aucune facture en attente de paiement.</p>
         ) : (
           <ul className={cn(CARTE, "overflow-hidden")}>
             {encours.lignes.map((ligne) => (
-              <li key={ligne.registreId} className="flex items-center gap-3 border-t-[0.5px] border-[#2A2D34] px-4 py-3 first:border-t-0">
+              <li key={ligne.registreId} className="flex items-center gap-3 border-t-[0.5px] border-trait px-4 py-3 first:border-t-0">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     {ligne.dossierId ? (
-                      <Link href={`/dossiers?dossier=${ligne.dossierId}`} className="text-[13px] font-medium text-[#F2F3F5] tabular-nums hover:underline">
+                      <Link href={`/dossiers?dossier=${ligne.dossierId}`} className="text-[13px] font-medium text-texte tabular-nums hover:underline">
                         {ligne.numero}
                       </Link>
                     ) : (
-                      <span className="text-[13px] font-medium text-[#F2F3F5] tabular-nums">{ligne.numero}</span>
+                      <span className="text-[13px] font-medium text-texte tabular-nums">{ligne.numero}</span>
                     )}
-                    <span className="truncate text-[13px] text-[#D1D5DB]">{ligne.client}</span>
+                    <span className="truncate text-[13px] text-texte-2">{ligne.client}</span>
                     <Pastille ton={ligne.tranche === "NON_ECHUE" ? "neutre" : ligne.tranche === "J30" ? "ambre" : ligne.tranche === "INCONNUE" ? "neutre" : "rouge"}>
                       {ligne.tranche === "NON_ECHUE" || ligne.tranche === "INCONNUE" ? LIBELLES_TRANCHE[ligne.tranche] : `${ligne.joursRetard} j de retard`}
                     </Pastille>
                   </div>
-                  <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                  <p className="mt-0.5 text-[12px] text-texte-3">
                     {ligne.emiseLe ? `Émise le ${dateCourte(ligne.emiseLe)}` : "Date d'émission inconnue"}
                     {ligne.echeance && ligne.echeance !== ligne.emiseLe ? ` · échéance ${dateCourte(ligne.echeance)}` : ""}
                     {ligne.regle > 0 ? ` · déjà réglé ${formatMontant(ligne.regle)} sur ${formatMontant(ligne.montant)}` : ""}
                   </p>
                 </div>
-                <span className="shrink-0 text-[14px] font-medium text-[#F5B454] tabular-nums">{formatMontant(ligne.reste)}</span>
+                <span className="shrink-0 text-[14px] font-medium text-attention-texte tabular-nums">{formatMontant(ligne.reste)}</span>
                 <Bouton taille="icone" variante="fantome" aria-label={`Paiement reçu pour ${ligne.numero}`} onClick={() => setPaiement(ligne)}>
                   <Plus size={15} aria-hidden />
                 </Bouton>
@@ -145,16 +145,16 @@ export default function TableauFinances({
 
       {cheques.length > 0 ? (
         <section className="mt-8">
-          <TitreSection action={<span className="text-[13px] font-medium text-[#D1D5DB] tabular-nums">{formatMontant(totalCheques)}</span>}>Chèques à créditer</TitreSection>
+          <TitreSection action={<span className="text-[13px] font-medium text-texte-2 tabular-nums">{formatMontant(totalCheques)}</span>}>Chèques à créditer</TitreSection>
           <ul className={cn(CARTE, "overflow-hidden")}>
             {cheques.map((cheque) => (
-              <li key={cheque.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t-[0.5px] border-[#2A2D34] px-4 py-3 first:border-t-0">
+              <li key={cheque.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t-[0.5px] border-trait px-4 py-3 first:border-t-0">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] text-[#F2F3F5]">
+                  <p className="text-[13px] text-texte">
                     <span className="font-medium tabular-nums">{formatMontant(cheque.montant)}</span> · {cheque.payeur}
-                    {cheque.reference ? <span className="text-[#9CA3AF]"> · n° {cheque.reference}</span> : null}
+                    {cheque.reference ? <span className="text-texte-3"> · n° {cheque.reference}</span> : null}
                   </p>
-                  <p className={cn("mt-0.5 text-[12px]", cheque.joursDepuisReception > 15 ? "text-[#F5B454]" : "text-[#6B7280]")}>
+                  <p className={cn("mt-0.5 text-[12px]", cheque.joursDepuisReception > 15 ? "text-attention-texte" : "text-texte-3")}>
                     Reçu le {dateCourte(cheque.recuLe)} · il y a {cheque.joursDepuisReception} j
                   </p>
                 </div>
@@ -179,19 +179,19 @@ export default function TableauFinances({
             {qualite.map((point) => (
               <li key={point.code} className={cn(CARTE, "p-3.5")}>
                 <details>
-                  <summary className="flex cursor-pointer items-start gap-2 text-[13px] text-[#D1D5DB]">
-                    <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0 text-[#F5B454]" />
+                  <summary className="flex cursor-pointer items-start gap-2 text-[13px] text-texte-2">
+                    <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0 text-attention-texte" />
                     <span className="flex-1">
-                      {point.libelle} <span className="text-[#F5B454] tabular-nums">({point.detail.length})</span>
+                      {point.libelle} <span className="text-attention-texte tabular-nums">({point.detail.length})</span>
                     </span>
                   </summary>
-                  <ul className="mt-2 space-y-0.5 pl-6 text-[12px] text-[#9CA3AF]">
+                  <ul className="mt-2 space-y-0.5 pl-6 text-[12px] text-texte-3">
                     {point.detail.slice(0, 50).map((ligne, index) => (
                       <li key={`${point.code}:${index}`}>{ligne}</li>
                     ))}
                   </ul>
                   {point.lien ? (
-                    <Link href={point.lien} className="mt-2 inline-block pl-6 text-[12px] text-[#5DCAA5] hover:underline">
+                    <Link href={point.lien} className="mt-2 inline-block pl-6 text-[12px] text-action-clair hover:underline">
                       Corriger
                     </Link>
                   ) : null}
@@ -210,7 +210,7 @@ export default function TableauFinances({
             action={
               <a
                 href={`/api/finances/livre?annee=${annee}`}
-                className={cn("flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}
+                className={cn("flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-texte-3 hover:bg-surface-2 hover:text-texte", TRANS)}
               >
                 <Download size={13} aria-hidden /> Exporter (CSV)
               </a>
@@ -219,40 +219,40 @@ export default function TableauFinances({
             Livre des recettes {annee}
           </TitreSection>
           {recettes.donnees.lignes.length === 0 ? (
-            <p className="text-[13px] text-[#6B7280]">Aucun encaissement en {annee}.</p>
+            <p className="text-[13px] text-texte-3">Aucun encaissement en {annee}.</p>
           ) : (
             <div className={cn(CARTE, "overflow-hidden")}>
               {Array.from({ length: 12 }, (_, index) => index + 1)
                 .filter((mois) => recettes.donnees.lignes.some((ligne) => Number(ligne.jour.slice(5, 7)) === mois))
                 .map((mois) => (
                   <div key={mois}>
-                    <div className="flex justify-between border-t-[0.5px] border-[#2A2D34] bg-[#191B20] px-4 py-2 text-[12px] first:border-t-0">
-                      <span className="font-medium text-[#9CA3AF] first-letter:uppercase">{libelleMois(mois)}</span>
-                      <span className="text-[#D1D5DB] tabular-nums">{formatMontant(recettes.donnees.parMois[mois - 1])}</span>
+                    <div className="flex justify-between border-t-[0.5px] border-trait bg-surface px-4 py-2 text-[12px] first:border-t-0">
+                      <span className="font-medium text-texte-3 first-letter:uppercase">{libelleMois(mois)}</span>
+                      <span className="text-texte-2 tabular-nums">{formatMontant(recettes.donnees.parMois[mois - 1])}</span>
                     </div>
                     <ul>
                       {recettes.donnees.lignes
                         .filter((ligne) => Number(ligne.jour.slice(5, 7)) === mois)
                         .map((ligne, index) => (
-                          <li key={`${ligne.encaissementId}:${ligne.mouvement}:${index}`} className="flex gap-3 border-t-[0.5px] border-[#2A2D34] px-4 py-2.5">
-                            <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{dateCourte(ligne.jour)}</span>
+                          <li key={`${ligne.encaissementId}:${ligne.mouvement}:${index}`} className="flex gap-3 border-t-[0.5px] border-trait px-4 py-2.5">
+                            <span className="w-[74px] shrink-0 text-[12px] text-texte-3 tabular-nums">{dateCourte(ligne.jour)}</span>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] text-[#F2F3F5]">
-                                {ligne.client} <span className="text-[#9CA3AF]">· {ligne.nature}</span>
+                              <p className="truncate text-[13px] text-texte">
+                                {ligne.client} <span className="text-texte-3">· {ligne.nature}</span>
                               </p>
-                              <p className="truncate text-[12px] text-[#6B7280]">
+                              <p className="truncate text-[12px] text-texte-3">
                                 {[ligne.pieces, ligne.moyenRenseigne ? ligne.moyen : "mode de règlement non renseigné", ligne.reference ? `réf. ${ligne.reference}` : null]
                                   .filter(Boolean)
                                   .join(" · ")}
                               </p>
                               {ligne.mouvement !== "RECETTE" ? (
-                                <p className="text-[12px] text-[#F87171]">
+                                <p className="text-[12px] text-retard-texte">
                                   {ligne.mouvement === "REJET" ? "Chèque rejeté" : "Annulation"}
                                   {ligne.motif ? ` : ${ligne.motif}` : ""}
                                 </p>
                               ) : null}
                             </div>
-                            <span className={cn("shrink-0 text-[13px] tabular-nums", ligne.montant < 0 ? "text-[#F87171]" : "text-[#F2F3F5]")}>
+                            <span className={cn("shrink-0 text-[13px] tabular-nums", ligne.montant < 0 ? "text-retard-texte" : "text-texte")}>
                               {formatMontant(ligne.montant)}
                             </span>
                           </li>

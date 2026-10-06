@@ -63,12 +63,12 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
 
   const e = donnees?.espace ?? null;
   return (
-    <section className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
+    <section className="rounded-[11px] border-[0.5px] border-trait bg-surface p-4">
       <TitreSection>{e ? `Espace client · ${e.projets.length} projet${e.projets.length > 1 ? "s" : ""}` : "Espace client"}</TitreSection>
       {!donnees ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+        <p className="text-[13px] text-texte-3">Chargement…</p>
       ) : !e ? (
-        <p className="text-[13px] text-[#8B919C]">Pas encore d&apos;espace : il s&apos;ouvre depuis un de ses dossiers (« Ouvrir l&apos;espace client »). Un client n&apos;en a qu&apos;un, pour toujours : ses projets suivants s&apos;y ajoutent.</p>
+        <p className="text-[13px] text-texte-3">Pas encore d&apos;espace : il s&apos;ouvre depuis un de ses dossiers (« Ouvrir l&apos;espace client »). Un client n&apos;en a qu&apos;un, pour toujours : ses projets suivants s&apos;y ajoutent.</p>
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-1.5">
@@ -86,8 +86,8 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
             </Pastille>
           </div>
           {e.projetDemandeLe ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] px-3 py-2">
-              <span className="text-[12.5px] text-[#F5B454]">Il demande à ouvrir un projet de plus (le {jourAvecAnnee(e.projetDemandeLe)}).</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-[0.5px] border-attention/35 bg-attention/[0.07] px-3 py-2">
+              <span className="text-[12.5px] text-attention-texte">Il demande à ouvrir un projet de plus (le {jourAvecAnnee(e.projetDemandeLe)}).</span>
               <Bouton taille="sm" icone={<PlusCircle size={13} aria-hidden />} chargement={occupe === "accorder-projet"} onClick={() => void action({ action: "accorder-projet", nombre: 1 }, "Un projet de plus accordé")}>
                 Accorder un projet
               </Bouton>
@@ -95,7 +95,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
           ) : null}
           {e.lien ? (
             <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-[8px] bg-[#16181D] px-2.5 py-2 text-[12px] text-[#D1D5DB]">{e.lien}</code>
+              <code className="min-w-0 flex-1 truncate rounded-[8px] bg-fond px-2.5 py-2 text-[12px] text-texte-2">{e.lien}</code>
               <Bouton taille="sm" icone={copie ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />} onClick={() => void copier(e.lien!)}>
                 {copie ? "Copié" : "Copier"}
               </Bouton>
@@ -103,7 +103,7 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
           ) : null}
           <div className="flex flex-wrap gap-2">
             {e.apercu ? (
-              <a href={e.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+              <a href={e.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] font-medium text-texte hover:border-trait-2 sm:h-7">
                 <Eye size={13} aria-hidden /> Voir comme le client
               </a>
             ) : null}
@@ -122,14 +122,14 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
 
           <ul>
             {e.projets.map((p) => (
-              <li key={p.espaceId} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
-                <Link href={`/dossiers?dossier=${p.dossierId}`} className={cn("flex items-start justify-between gap-3 py-2 hover:bg-[#22262D]", TRANS)}>
+              <li key={p.espaceId} className="border-t-[0.5px] border-trait first:border-t-0">
+                <Link href={`/dossiers?dossier=${p.dossierId}`} className={cn("flex items-start justify-between gap-3 py-2 hover:bg-surface-2", TRANS)}>
                   <span className="min-w-0">
-                    <span className="block truncate text-[13.5px] text-[#F2F3F5]">
+                    <span className="block truncate text-[13.5px] text-texte">
                       {p.nomProjet}
-                      {p.creeParLeClient ? <span className="ml-1.5 text-[11.5px] text-[#5DCAA5]">ouvert par le client</span> : null}
+                      {p.creeParLeClient ? <span className="ml-1.5 text-[11.5px] text-action-clair">ouvert par le client</span> : null}
                     </span>
-                    <span className="text-[12px] text-[#6B7280]">{p.familles.map((f) => f.libelle).join(", ") || "Familles à préciser"}</span>
+                    <span className="text-[12px] text-texte-3">{p.familles.map((f) => f.libelle).join(", ") || "Familles à préciser"}</span>
                   </span>
                   <span className="shrink-0 text-right">
                     <Pastille ton={p.fige === "TERMINE" ? "vert" : p.fige ? "neutre" : p.attente.qui === "MOI" ? "rouge" : "neutre"}>
@@ -143,14 +143,14 @@ export function EspaceClientFiche({ clientId }: { clientId: string }) {
 
           {donnees.documents.length ? (
             <div>
-              <p className="mb-1 text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">Ses documents (ce qu&apos;il voit)</p>
+              <p className="mb-1 text-[11px] font-medium tracking-[0.06em] text-texte-3 uppercase">Ses documents (ce qu&apos;il voit)</p>
               <ul className="space-y-0.5">
                 {donnees.documents.map((d) => (
                   <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
-                    <span className="min-w-0 truncate text-[#D1D5DB]">
-                      {TYPES_DOCUMENT[d.type] ?? d.type} {d.numero} <span className="text-[#6B7280]">· {d.projet} · {jourAvecAnnee(d.le)}</span>
+                    <span className="min-w-0 truncate text-texte-2">
+                      {TYPES_DOCUMENT[d.type] ?? d.type} {d.numero} <span className="text-texte-3">· {d.projet} · {jourAvecAnnee(d.le)}</span>
                     </span>
-                    <span className="shrink-0 text-[#9CA3AF] tabular-nums">
+                    <span className="shrink-0 text-texte-3 tabular-nums">
                       {formatMontant(d.montant)} · {d.statut}
                       {d.pdf ? "" : " · sans PDF"}
                     </span>

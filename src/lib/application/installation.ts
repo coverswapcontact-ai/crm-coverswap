@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { FOND_HEX } from "./charte";
 
 /**
  * L'application installable « CoverSwap » : manifeste, icône et écrans de
@@ -42,4 +43,4 @@ export function metadonneesApplication(application: ApplicationInstallable): Met
 }
 
 /** Plein écran jusque sous l'encoche : les écrans réservent eux-mêmes les zones de sécurité. */
-export const VUE_APPLICATION: Viewport = { themeColor: "#16181D", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const VUE_APPLICATION: Viewport = { themeColor: FOND_HEX, width: "device-width", initialScale: 1, viewportFit: "cover" };

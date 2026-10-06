@@ -151,26 +151,26 @@ export default function SaisieDepense({
   if (resultat) {
     return (
       <div className="mx-auto w-full max-w-lg px-5 py-8">
-        <div className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-5 text-center">
+        <div className="rounded-[11px] border-[0.5px] border-trait bg-surface p-5 text-center">
           {resultat.enAttente ? (
-            <CloudOff size={28} aria-hidden className="mx-auto text-[#F5B454]" />
+            <CloudOff size={28} aria-hidden className="mx-auto text-attention-texte" />
           ) : (
-            <CircleCheck size={28} aria-hidden className="mx-auto text-[#5DCAA5]" />
+            <CircleCheck size={28} aria-hidden className="mx-auto text-action-clair" />
           )}
-          <p className="mt-3 text-[15px] font-medium text-[#F2F3F5]">
+          <p className="mt-3 text-[15px] font-medium text-texte">
             {resultat.enAttente ? "Enregistrée sur ce téléphone" : "Dépense enregistrée"}
           </p>
-          <p className="mt-1 text-[13px] text-[#9CA3AF]">
+          <p className="mt-1 text-[13px] text-texte-3">
             {formatMontant(resultat.montant)} · {resultat.fournisseur} · {resultat.rattache}
           </p>
           {resultat.enAttente ? (
-            <p className="mt-2 text-[12.5px] text-[#F5B454]">Pas de réseau : elle partira toute seule dès qu&apos;il revient (garder la page ouverte ou la rouvrir).</p>
+            <p className="mt-2 text-[12.5px] text-attention-texte">Pas de réseau : elle partira toute seule dès qu&apos;il revient (garder la page ouverte ou la rouvrir).</p>
           ) : null}
           <div className="mt-5 flex flex-col gap-2">
             <Bouton variante="primaire" onClick={recommencer}>
               Saisir une autre dépense
             </Bouton>
-            <Link href={ADRESSE_DEPENSES} className={cn("rounded-[8px] py-2 text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+            <Link href={ADRESSE_DEPENSES} className={cn("rounded-[8px] py-2 text-[13px] text-texte-3 hover:text-texte", TRANS)}>
               Voir les dépenses
             </Link>
           </div>
@@ -182,13 +182,13 @@ export default function SaisieDepense({
   return (
     <div className="mx-auto w-full max-w-lg px-5 py-6 pb-28 md:pb-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-[20px] font-semibold text-[#F2F3F5]">Nouvelle dépense</h1>
-        <Link href={ADRESSE_DEPENSES} className={cn("text-[13px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+        <h1 className="text-[20px] font-semibold text-texte">Nouvelle dépense</h1>
+        <Link href={ADRESSE_DEPENSES} className={cn("text-[13px] text-texte-3 hover:text-texte", TRANS)}>
           Dépenses
         </Link>
       </div>
       {attente > 0 ? (
-        <p className="mt-3 flex items-center gap-2 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+        <p className="mt-3 flex items-center gap-2 rounded-[8px] bg-attention/10 px-3 py-2 text-[12.5px] text-attention-texte">
           <CloudOff size={14} aria-hidden />
           {`${attente} dépense${attente > 1 ? "s" : ""} en attente d'envoi sur ce téléphone`}
         </p>
@@ -212,12 +212,12 @@ export default function SaisieDepense({
             onChange={(evenement) => setFichier(evenement.target.files?.[0] ?? null)}
           />
           {fichier ? (
-            <div className="relative overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+            <div className="relative overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
               {apercu && fichier.type.startsWith("image/") ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={apercu} alt="Justificatif" className="max-h-64 w-full object-contain" />
               ) : (
-                <p className="flex items-center gap-2 p-4 text-[13px] text-[#D1D5DB]">
+                <p className="flex items-center gap-2 p-4 text-[13px] text-texte-2">
                   <FileText size={16} aria-hidden /> {fichier.name}
                 </p>
               )}
@@ -238,14 +238,14 @@ export default function SaisieDepense({
               <button
                 type="button"
                 onClick={() => camera.current?.click()}
-                className={cn("flex h-24 flex-col items-center justify-center gap-1.5 rounded-[11px] border-[0.5px] border-dashed border-[#3A3E47] bg-[#1C1F25] text-[13px] text-[#D1D5DB] hover:border-[#5DCAA5]", TRANS)}
+                className={cn("flex h-24 flex-col items-center justify-center gap-1.5 rounded-[11px] border-[0.5px] border-dashed border-trait-2 bg-surface text-[13px] text-texte-2 hover:border-action-clair", TRANS)}
               >
                 <Camera size={22} aria-hidden /> Photo du ticket
               </button>
               <button
                 type="button"
                 onClick={() => galerie.current?.click()}
-                className={cn("flex h-24 flex-col items-center justify-center gap-1.5 rounded-[11px] border-[0.5px] border-dashed border-[#3A3E47] bg-[#1C1F25] text-[13px] text-[#D1D5DB] hover:border-[#5DCAA5]", TRANS)}
+                className={cn("flex h-24 flex-col items-center justify-center gap-1.5 rounded-[11px] border-[0.5px] border-dashed border-trait-2 bg-surface text-[13px] text-texte-2 hover:border-action-clair", TRANS)}
               >
                 <ImagePlus size={22} aria-hidden /> Fichier ou PDF
               </button>
@@ -273,8 +273,8 @@ export default function SaisieDepense({
         />
 
         <fieldset>
-          <legend className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">
-            Pour quel chantier <span className="text-[#5DCAA5]">*</span>
+          <legend className="mb-1.5 text-[12px] font-medium text-texte-3">
+            Pour quel chantier <span className="text-action-clair">*</span>
           </legend>
           <div className="flex flex-col gap-1.5">
             {visibles.map((chantier) => {
@@ -291,12 +291,12 @@ export default function SaisieDepense({
                   }}
                   className={cn(
                     "rounded-[9px] border-[0.5px] px-3 py-2.5 text-left",
-                    choisi ? "border-[#1D9E75]/60 bg-[#112B22]" : "border-[#2A2D34] bg-[#16181D] hover:border-[#3A3E47]",
+                    choisi ? "border-action/60 bg-action-fond" : "border-trait bg-fond hover:border-trait-2",
                     TRANS
                   )}
                 >
-                  <span className={cn("block text-[13.5px]", choisi ? "text-[#5DCAA5]" : "text-[#F2F3F5]")}>{chantier.clientNom}</span>
-                  <span className="block text-[12px] text-[#6B7280]">
+                  <span className={cn("block text-[13.5px]", choisi ? "text-action-clair" : "text-texte")}>{chantier.clientNom}</span>
+                  <span className="block text-[12px] text-texte-3">
                     {chantier.objet} · {LIBELLES_ETAPE[chantier.etape as EtapeDossier] ?? chantier.etape}
                     {chantier.dateChantier ? ` · ${formatDateCourte(chantier.dateChantier)}` : ""}
                   </span>
@@ -304,7 +304,7 @@ export default function SaisieDepense({
               );
             })}
             {chantiers.length > visibles.length ? (
-              <button type="button" onClick={() => setTousLesChantiers(true)} className="py-1 text-left text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5]">
+              <button type="button" onClick={() => setTousLesChantiers(true)} className="py-1 text-left text-[12.5px] text-texte-3 hover:text-texte">
                 Voir les {chantiers.length} chantiers
               </button>
             ) : null}
@@ -318,7 +318,7 @@ export default function SaisieDepense({
               }}
               className={cn(
                 "rounded-[9px] border-[0.5px] px-3 py-2.5 text-left text-[13.5px]",
-                rattachement?.type === "HORS" ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
+                rattachement?.type === "HORS" ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2",
                 TRANS
               )}
             >
@@ -349,7 +349,7 @@ export default function SaisieDepense({
                   key={nom}
                   type="button"
                   onClick={() => setFournisseur(nom)}
-                  className={cn("rounded-full border-[0.5px] border-[#2A2D34] px-2.5 py-1 text-[12px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+                  className={cn("rounded-full border-[0.5px] border-trait px-2.5 py-1 text-[12px] text-texte-3 hover:text-texte", TRANS)}
                 >
                   {nom}
                 </button>
@@ -370,7 +370,7 @@ export default function SaisieDepense({
         />
 
         {doublon ? (
-          <div className="rounded-[9px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 p-3 text-[13px] text-[#F5B454]">
+          <div className="rounded-[9px] border-[0.5px] border-attention/40 bg-attention/10 p-3 text-[13px] text-attention-texte">
             <p>{doublon}</p>
             <div className="mt-2 flex gap-2">
               <Bouton taille="sm" variante="secondaire" chargement={envoi} onClick={() => void enregistrer(true)}>
@@ -384,13 +384,13 @@ export default function SaisieDepense({
         ) : null}
       </div>
 
-      <div className="fixed inset-x-0 bottom-16 z-30 border-t-[0.5px] border-[#2A2D34] bg-[#16181D]/95 px-5 py-3 backdrop-blur md:static md:mt-6 md:border-0 md:bg-transparent md:p-0">
+      <div className="fixed inset-x-0 bottom-16 z-30 border-t-[0.5px] border-trait bg-fond/95 px-5 py-3 backdrop-blur md:static md:mt-6 md:border-0 md:bg-transparent md:p-0">
         <div className="mx-auto max-w-lg">
           <Bouton variante="primaire" className="w-full" icone={<Receipt size={15} aria-hidden />} disabled={!complet} chargement={envoi} onClick={() => void enregistrer()}>
             Enregistrer la dépense
           </Bouton>
           {!complet ? (
-            <p className="mt-1.5 text-center text-[11.5px] text-[#6B7280]">
+            <p className="mt-1.5 text-center text-[11.5px] text-texte-3">
               {[
                 montantLu === null || montantLu <= 0 ? "montant" : null,
                 categorie ? null : "catégorie",

@@ -70,9 +70,9 @@ function ResponsableColonne({ etape }: { etape: EtapeDossier }) {
   return (
     <span title={libelle} className="flex h-5 w-5 items-center justify-center">
       {responsable === "MOI" ? (
-        <Play size={11} strokeWidth={2.5} className="fill-current text-[#F2F3F5]" aria-hidden />
+        <Play size={11} strokeWidth={2.5} className="fill-current text-texte" aria-hidden />
       ) : (
-        <Hourglass size={11} strokeWidth={2.5} className="text-[#6B7280]" aria-hidden />
+        <Hourglass size={11} strokeWidth={2.5} className="text-texte-3" aria-hidden />
       )}
       <span className="sr-only">{libelle}</span>
     </span>
@@ -117,7 +117,7 @@ export function VueKanban({
               key={etape}
               aria-label={`${LIBELLES_ETAPE[etape]} : ${liste.length} dossier${liste.length > 1 ? "s" : ""}`}
               style={hauteur ? { maxHeight: hauteur } : undefined}
-              className="relative flex w-[84vw] max-w-[320px] shrink-0 snap-start flex-col overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#191B20] sm:w-[272px]"
+              className="relative flex w-[84vw] max-w-[320px] shrink-0 snap-start flex-col overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface sm:w-[272px]"
             >
               <span aria-hidden className="h-[3px] w-full shrink-0" style={{ backgroundColor: COULEURS_ETAPE[etape] }} />
               <header className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5 pb-2">
@@ -126,17 +126,17 @@ export function VueKanban({
                   <h2 className="truncate text-[13px] font-medium" style={{ color: COULEURS_ETAPE[etape] }}>
                     {LIBELLES_ETAPE[etape]}
                   </h2>
-                  <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{liste.length}</span>
+                  <span className="rounded-full bg-surface-2 px-1.5 text-[11px] text-texte-3 tabular-nums">{liste.length}</span>
                   {aFaire > 0 ? (
-                    <span title={`${aFaire} où j'ai la main`} className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#F2F3F5] tabular-nums">
+                    <span title={`${aFaire} où j'ai la main`} className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-texte tabular-nums">
                       <Play size={8} strokeWidth={3} className="fill-current" aria-hidden />
                       {aFaire}
                       <span className="sr-only"> à faire</span>
                     </span>
                   ) : null}
                   {retards > 0 ? (
-                    <span title={`${retards} en retard`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#F87171] tabular-nums">
-                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
+                    <span title={`${retards} en retard`} className="inline-flex items-center gap-1 text-[11px] font-semibold text-retard-texte tabular-nums">
+                      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-retard" />
                       {retards}
                       <span className="sr-only"> en retard</span>
                     </span>
@@ -144,7 +144,7 @@ export function VueKanban({
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {total > 0 ? (
-                    <span title={formatMontant(total)} className="text-[11px] text-[#6B7280] tabular-nums">
+                    <span title={formatMontant(total)} className="text-[11px] text-texte-3 tabular-nums">
                       {montantCourt(total)}
                     </span>
                   ) : null}
@@ -153,7 +153,7 @@ export function VueKanban({
               </header>
               <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain px-2 pb-2", compacte ? "gap-1.5" : "gap-2")}>
                 {liste.length === 0 ? (
-                  <p className="rounded-[9px] border-[0.5px] border-dashed border-[#2A2D34] px-3 py-6 text-center text-[12px] text-[#6B7280]">Aucun dossier</p>
+                  <p className="rounded-[9px] border-[0.5px] border-dashed border-trait px-3 py-6 text-center text-[12px] text-texte-3">Aucun dossier</p>
                 ) : (
                   liste.map((dossier) =>
                     compacte ? (
@@ -166,7 +166,7 @@ export function VueKanban({
                   )
                 )}
                 {/* D'autres dossiers en dessous : un fondu le dit, sans barre de défilement à chercher. */}
-                {compacte ? <div aria-hidden className="pointer-events-none sticky bottom-[-8px] -mt-8 h-8 shrink-0 bg-gradient-to-t from-[#191B20] to-transparent" /> : null}
+                {compacte ? <div aria-hidden className="pointer-events-none sticky bottom-[-8px] -mt-8 h-8 shrink-0 bg-gradient-to-t from-surface to-transparent" /> : null}
               </div>
             </section>
           );

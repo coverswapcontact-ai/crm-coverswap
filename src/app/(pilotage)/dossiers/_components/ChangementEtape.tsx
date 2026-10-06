@@ -71,19 +71,19 @@ function libelleTransition(transition: TransitionPossible): string {
 function ListeAvertissements({ avertissements, className }: { avertissements: Avertissement[]; className?: string }) {
   if (avertissements.length === 0) return null;
   return (
-    <div className={cn("rounded-[9px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2.5", className)}>
-      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#F5B454]">
+    <div className={cn("rounded-[9px] border-[0.5px] border-attention/40 bg-attention/10 px-3 py-2.5", className)}>
+      <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-attention-texte">
         <AlertTriangle size={13} aria-hidden />
         À savoir avant de passer
       </p>
       <ul className="mt-1.5 space-y-1">
         {avertissements.map((avertissement) => (
-          <li key={avertissement.critere} className="text-[12.5px] text-[#FCD9A0]">
+          <li key={avertissement.critere} className="text-[12.5px] text-attention-texte">
             {avertissement.message}
           </li>
         ))}
       </ul>
-      <p className="mt-2 text-[11.5px] text-[#C9A46A]">Tu peux passer quand même : ce sera noté dans l&apos;historique du dossier.</p>
+      <p className="mt-2 text-[11.5px] text-attention-texte">Tu peux passer quand même : ce sera noté dans l&apos;historique du dossier.</p>
     </div>
   );
 }
@@ -141,13 +141,13 @@ export function ChangementEtape({
   return (
     <section>
       <TitreSection>Étape</TitreSection>
-      <div className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5">
-        <p className="text-[13px] text-[#F2F3F5]">
+      <div className="rounded-[11px] border-[0.5px] border-trait bg-surface p-3.5">
+        <p className="text-[13px] text-texte">
           <span className="font-medium">{LIBELLES_ETAPE[detail.etape]}</span>
-          <span className="text-[#9CA3AF]"> · {REGLES_ETAPES[detail.etape].description}</span>
+          <span className="text-texte-3"> · {REGLES_ETAPES[detail.etape].description}</span>
         </p>
         {detail.etape === "PERDU" ? (
-          <p className="mt-1 text-[12px] text-[#F87171]">
+          <p className="mt-1 text-[12px] text-retard-texte">
             {detail.motifPerte ? `Motif : ${LIBELLES_MOTIF_PERTE[detail.motifPerte]}` : "Motif non renseigné"}
             {detail.perte?.etape ? ` · à l'étape « ${LIBELLES_ETAPE[detail.perte.etape]} »` : ""}
             {detail.perte?.concurrent ? ` · remporté par ${detail.perte.concurrent}` : ""}
@@ -156,10 +156,10 @@ export function ChangementEtape({
           </p>
         ) : null}
         {detail.etape === "PERDU" && detail.perte?.commentaire ? (
-          <p className="mt-1 text-[12px] whitespace-pre-wrap text-[#9CA3AF]">{detail.perte.commentaire}</p>
+          <p className="mt-1 text-[12px] whitespace-pre-wrap text-texte-3">{detail.perte.commentaire}</p>
         ) : null}
         {detail.dateChantier ? (
-          <p className="mt-1 text-[12px] text-[#9CA3AF]">Chantier le {formatDateCourte(detail.dateChantier)}</p>
+          <p className="mt-1 text-[12px] text-texte-3">Chantier le {formatDateCourte(detail.dateChantier)}</p>
         ) : null}
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -176,7 +176,7 @@ export function ChangementEtape({
               >
                 {libelleTransition(transition)}
                 {nombre > 0 ? (
-                  <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-[#0B1612]/25 px-1.5 text-[11px]">
+                  <span className="ml-0.5 inline-flex items-center gap-0.5 rounded-full bg-action-texte/25 px-1.5 text-[11px]">
                     <AlertTriangle size={10} aria-hidden />
                     {nombre}
                   </span>
@@ -198,7 +198,7 @@ export function ChangementEtape({
         </div>
 
         {autres.length > 0 ? (
-          <label className="mt-3 flex items-center gap-2 text-[12px] text-[#6B7280]">
+          <label className="mt-3 flex items-center gap-2 text-[12px] text-texte-3">
             <ArrowRight size={12} aria-hidden />
             <span className="sr-only">Passer à une autre étape</span>
             <select
@@ -208,7 +208,7 @@ export function ChangementEtape({
                 if (transition) setFenetre(transition);
               }}
               className={cn(
-                "h-11 max-w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-transparent px-2 text-[16px] text-[#9CA3AF] hover:border-[#3A3E47] sm:h-7 sm:text-[12px] [color-scheme:dark]",
+                "h-11 max-w-full rounded-[8px] border-[0.5px] border-trait bg-transparent px-2 text-[16px] text-texte-3 hover:border-trait-2 sm:h-7 sm:text-[12px] [color-scheme:dark]",
                 TRANS
               )}
             >
@@ -386,7 +386,7 @@ function FenetreEtape({
 
         {demandeMotif ? (
           <fieldset>
-            <legend className="mb-2 text-[12px] font-medium text-[#9CA3AF]">Motif de perte (obligatoire{motif === "AUTRE" ? ", avec une précision" : ""})</legend>
+            <legend className="mb-2 text-[12px] font-medium text-texte-3">Motif de perte (obligatoire{motif === "AUTRE" ? ", avec une précision" : ""})</legend>
             <div className="grid grid-cols-2 gap-2">
               {MOTIFS_PERTE.map((valeur) => (
                 <button
@@ -397,8 +397,8 @@ function FenetreEtape({
                   className={cn(
                     "h-11 rounded-[8px] border-[0.5px] px-3 text-left text-[13px] sm:h-9",
                     motif === valeur
-                      ? "border-[#EF4444]/50 bg-[#EF4444]/10 text-[#FCA5A5]"
-                      : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]",
+                      ? "border-retard/50 bg-retard/10 text-retard-texte"
+                      : "border-trait bg-fond text-texte-2 hover:border-trait-2",
                     TRANS
                   )}
                 >
@@ -410,8 +410,8 @@ function FenetreEtape({
         ) : null}
 
         {demandeMotif ? (
-          <div className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-            <p className="text-[12px] text-[#6B7280]">Facultatif, mais précieux pour comprendre ce qui fait perdre.</p>
+          <div className="space-y-3 rounded-[9px] border-[0.5px] border-trait p-3">
+            <p className="text-[12px] text-texte-3">Facultatif, mais précieux pour comprendre ce qui fait perdre.</p>
             <Champ
               libelle="Remporté par"
               placeholder="Entreprise, cuisiniste, ou « le client le fait lui-même »"
@@ -443,7 +443,7 @@ function FenetreEtape({
 
         {choixDevis ? (
           <div>
-            <label htmlFor="devis-signe" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+            <label htmlFor="devis-signe" className="mb-1.5 block text-[12px] font-medium text-texte-3">
               Devis signé
             </label>
             <select
@@ -470,12 +470,12 @@ function FenetreEtape({
         ) : null}
 
         {criteres.includes("ACOMPTE_ENCAISSE") && detail.paiements.acompteEnregistre ? (
-          <p className="text-[13px] text-[#5DCAA5]">Acompte déjà enregistré dans les paiements du dossier.</p>
+          <p className="text-[13px] text-action-clair">Acompte déjà enregistré dans les paiements du dossier.</p>
         ) : null}
 
         {demandeAcompte ? (
-          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">Acompte</legend>
+          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-trait p-3">
+            <legend className="px-1 text-[12px] font-medium text-texte-3">Acompte</legend>
             <Puces
               libelle="À la signature"
               options={[
@@ -509,8 +509,8 @@ function FenetreEtape({
         ) : null}
 
         {demandeSolde ? (
-          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-            <legend className="px-1 text-[12px] font-medium text-[#9CA3AF]">Paiement du solde</legend>
+          <fieldset className="space-y-3 rounded-[9px] border-[0.5px] border-trait p-3">
+            <legend className="px-1 text-[12px] font-medium text-texte-3">Paiement du solde</legend>
             <CaseACocher libelle="J'ai reçu un paiement, je l'enregistre" checked={soldeRecu} onChange={setSoldeRecu} />
             {soldeRecu ? <ChampsPaiement saisie={solde} onChange={setSolde} /> : null}
           </fieldset>
@@ -526,7 +526,7 @@ function FenetreEtape({
         ))}
 
         {transition.nature === "RETOUR" ? (
-          <p className="text-[13px] text-[#D1D5DB]">
+          <p className="text-[13px] text-texte-2">
             Le dossier quitte « {LIBELLES_ETAPE[detail.etape]} » pour revenir à « {LIBELLES_ETAPE[transition.vers]} ».
           </p>
         ) : null}

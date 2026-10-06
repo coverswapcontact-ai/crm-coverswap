@@ -140,7 +140,7 @@ function ModaleDepense({
       ) : (
         <div className="flex flex-col gap-3">
           <div>
-            <label htmlFor="rattachement" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+            <label htmlFor="rattachement" className="mb-1.5 block text-[12px] font-medium text-texte-3">
               Chantier
             </label>
             <select id="rattachement" value={rattachement} onChange={(evenement) => setRattachement(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}>
@@ -164,13 +164,13 @@ function ModaleDepense({
           <ZoneTexte libelle="Note" rows={2} maxLength={1000} value={note} onChange={(evenement) => setNote(evenement.target.value)} />
           <div className="flex flex-wrap items-center gap-3 text-[13px]">
             {depense.justificatif ? (
-              <a href={depense.justificatif.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[#5DCAA5] hover:underline">
+              <a href={depense.justificatif.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-action-clair hover:underline">
                 <FileText size={14} aria-hidden /> Voir le justificatif
               </a>
             ) : (
-              <span className="text-[#F5B454]">Sans justificatif</span>
+              <span className="text-attention-texte">Sans justificatif</span>
             )}
-            <label className={cn("flex cursor-pointer items-center gap-1.5 text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+            <label className={cn("flex cursor-pointer items-center gap-1.5 text-texte-3 hover:text-texte", TRANS)}>
               <Paperclip size={14} aria-hidden />
               {depense.justificatif ? "Remplacer" : "Ajouter"}
               <input
@@ -232,10 +232,10 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
       <TitreSection
         action={
           <div className="flex items-center gap-3">
-            {depenses.length > 0 ? <span className="text-[13px] font-medium text-[#D1D5DB] tabular-nums">{formatMontant(total)}</span> : null}
+            {depenses.length > 0 ? <span className="text-[13px] font-medium text-texte-2 tabular-nums">{formatMontant(total)}</span> : null}
             <Link
               href="/depenses/nouvelle"
-              className={cn("flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7", TRANS)}
+              className={cn("flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] text-texte hover:border-trait-2 sm:h-7", TRANS)}
             >
               <Plus size={13} aria-hidden /> Nouvelle dépense
             </Link>
@@ -244,20 +244,20 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
       >
         Dépenses {annee}
       </TitreSection>
-      <p className="-mt-1 mb-3 text-[12.5px] text-[#6B7280]">Rattachées au chantier qu&apos;elles servent, pour connaître la marge de chaque dossier.</p>
+      <p className="-mt-1 mb-3 text-[12.5px] text-texte-3">Rattachées au chantier qu&apos;elles servent, pour connaître la marge de chaque dossier.</p>
 
       {attente.length > 0 ? (
         <div className={cn(CARTE, "mb-3 p-3.5")}>
-          <p className="flex items-center gap-2 text-[13px] text-[#F5B454]">
+          <p className="flex items-center gap-2 text-[13px] text-attention-texte">
             <CloudOff size={15} aria-hidden /> {`${attente.length} dépense${attente.length > 1 ? "s" : ""} en attente d'envoi sur ce téléphone`}
           </p>
           <ul className="mt-2 space-y-1.5">
             {attente.map((envoi) => (
-              <li key={envoi.identifiant} className="flex flex-wrap items-center gap-2 text-[12.5px] text-[#9CA3AF]">
+              <li key={envoi.identifiant} className="flex flex-wrap items-center gap-2 text-[12.5px] text-texte-3">
                 <span>
                   {String(envoi.donnees.fournisseur ?? "")} · {formatMontant(Number(envoi.donnees.montant ?? 0))}
                 </span>
-                {envoi.derniereErreur ? <span className="text-[#F87171]">Refusée : {envoi.derniereErreur}</span> : null}
+                {envoi.derniereErreur ? <span className="text-attention-texte">Refusée : {envoi.derniereErreur}</span> : null}
                 {envoi.derniereErreur ? (
                   <Bouton
                     taille="sm"
@@ -278,33 +278,33 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
       {/* Mission 17 (partie B) : les chiffres (total et répartition par catégorie de la période) sont dans l'Analytique,
           onglet Argent, « Dépenses par catégorie » ; restent le travail — ce qui attend un chantier ou un justificatif — la liste et la saisie. */}
       {aRattacher > 0 || sansJustificatif > 0 ? (
-        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#F5B454]">
+        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-attention-texte">
           <AlertTriangle size={14} aria-hidden className="shrink-0" />
           {aRattacher > 0 ? <span>{aRattacher} à rattacher à un chantier</span> : null}
-          {aRattacher > 0 && sansJustificatif > 0 ? <span aria-hidden className="text-[#6B7280]">·</span> : null}
+          {aRattacher > 0 && sansJustificatif > 0 ? <span aria-hidden className="text-texte-3">·</span> : null}
           {sansJustificatif > 0 ? <span>{sansJustificatif} sans justificatif</span> : null}
         </p>
       ) : null}
 
       {depenses.length === 0 ? (
-        <p className="text-[13px] text-[#6B7280]">Aucune dépense en {annee}.</p>
+        <p className="text-[13px] text-texte-3">Aucune dépense en {annee}.</p>
       ) : (
         <div className={cn(CARTE, "overflow-hidden")}>
           {mois.map((numero) => (
             <div key={numero}>
-              <p className="border-t-[0.5px] border-[#2A2D34] bg-[#191B20] px-4 py-2 text-[12px] font-medium text-[#9CA3AF] first:border-t-0 first-letter:uppercase">{libelleMois(numero)}</p>
+              <p className="border-t-[0.5px] border-trait bg-surface px-4 py-2 text-[12px] font-medium text-texte-3 first:border-t-0 first-letter:uppercase">{libelleMois(numero)}</p>
               <ul>
                 {depenses
                   .filter((depense) => Number(jourParis(depense.payeeLe).slice(5, 7)) === numero)
                   .map((depense) => (
-                    <li key={depense.id} className="border-t-[0.5px] border-[#2A2D34]">
-                      <button type="button" onClick={() => setOuverte(depense)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-[#23262D]", TRANS)}>
-                        <span className="w-[74px] shrink-0 text-[12px] text-[#9CA3AF] tabular-nums">{formatDateCourte(depense.payeeLe)}</span>
+                    <li key={depense.id} className="border-t-[0.5px] border-trait">
+                      <button type="button" onClick={() => setOuverte(depense)} className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface", TRANS)}>
+                        <span className="w-[74px] shrink-0 text-[12px] text-texte-3 tabular-nums">{formatDateCourte(depense.payeeLe)}</span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[13px] text-[#F2F3F5]">
-                            {depense.fournisseur} <span className="text-[#9CA3AF]">· {libelleCategorie(depense.categorie)}</span>
+                          <span className="block truncate text-[13px] text-texte">
+                            {depense.fournisseur} <span className="text-texte-3">· {libelleCategorie(depense.categorie)}</span>
                           </span>
-                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-[#6B7280]">
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-texte-3">
                             {depense.dossier ? (
                               <span className="truncate">{depense.dossier.clientNom}</span>
                             ) : depense.horsChantier ? (
@@ -314,10 +314,10 @@ export default function ListeDepenses({ initiale, chantiers }: { initiale: Liste
                                 <AlertTriangle size={11} aria-hidden /> À rattacher
                               </Pastille>
                             )}
-                            {depense.justificatif ? <Paperclip size={11} aria-label="Justificatif joint" /> : <span className="text-[#F5B454]">sans justificatif</span>}
+                            {depense.justificatif ? <Paperclip size={11} aria-label="Justificatif joint" /> : <span className="text-attention-texte">sans justificatif</span>}
                           </span>
                         </span>
-                        <span className="shrink-0 text-[13px] text-[#F2F3F5] tabular-nums">{formatMontant(depense.montant)}</span>
+                        <span className="shrink-0 text-[13px] text-texte tabular-nums">{formatMontant(depense.montant)}</span>
                       </button>
                     </li>
                   ))}

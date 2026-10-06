@@ -55,17 +55,17 @@ function CarteSuivant({ suivant, onFermer }: { suivant: LeadSuivant; onFermer: (
   const numero = suivant.telephone ? numeroComposable(suivant.telephone) : "";
   return (
     <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-6" role="dialog" aria-label="Lead suivant">
-      <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4 shadow-lg shadow-black/50">
-        <p className="flex items-center gap-2 text-[15px] font-medium text-[#F2F3F5]">
-          <PhoneForwarded size={16} aria-hidden className="shrink-0 text-[#5DCAA5]" />
+      <div className="w-full max-w-md rounded-[16px] border-[0.5px] border-trait bg-surface p-4 shadow-lg shadow-black/50">
+        <p className="flex items-center gap-2 text-[15px] font-medium text-texte">
+          <PhoneForwarded size={16} aria-hidden className="shrink-0 text-action-clair" />
           <span className="min-w-0 truncate">
             Suivant : {suivant.nom}
             {suivant.ville ? ` · ${suivant.ville}` : ""}
           </span>
         </p>
-        <p className={cn("mt-0.5 pl-6 text-[12.5px]", suivant.raison === "RETARD" ? "font-medium text-[#F87171]" : "text-[#8B919C]")}>{suivant.raison === "RETARD" ? "Rappel en retard" : "Jamais appelé"}</p>
+        <p className={cn("mt-0.5 pl-6 text-[12.5px]", suivant.raison === "RETARD" ? "font-medium text-retard-texte" : "text-texte-3")}>{suivant.raison === "RETARD" ? "Rappel en retard" : "Jamais appelé"}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onFermer} className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] text-[14px] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}>
+          <button type="button" onClick={onFermer} className={cn("min-h-[44px] rounded-[10px] border-[0.5px] border-trait text-[14px] text-texte-2 hover:border-trait-2", TRANS)}>
             Plus tard
           </button>
           {numero ? (
@@ -75,12 +75,12 @@ function CarteSuivant({ suivant, onFermer }: { suivant: LeadSuivant; onFermer: (
                 noterDebutAppel(suivant.id, { nom: suivant.nom, dossierId: suivant.dossierId });
                 onFermer();
               }}
-              className={cn("flex min-h-[44px] items-center justify-center gap-2 rounded-[10px] bg-[#1D9E75] text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}
+              className={cn("flex min-h-[44px] items-center justify-center gap-2 rounded-[10px] bg-action text-[14px] font-semibold text-action-texte hover:bg-action-clair", TRANS)}
             >
               <Phone size={15} aria-hidden /> Appeler
             </a>
           ) : (
-            <p className="flex min-h-[44px] items-center justify-center rounded-[10px] bg-[#22262D] px-2 text-center text-[12.5px] text-[#F5B454]">Numéro illisible</p>
+            <p className="flex min-h-[44px] items-center justify-center rounded-[10px] bg-surface-2 px-2 text-center text-[12.5px] text-attention-texte">Numéro illisible</p>
           )}
         </div>
       </div>

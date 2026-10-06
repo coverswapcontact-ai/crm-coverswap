@@ -59,19 +59,19 @@ export function PanneauEntrant({ id, onFermer, onModifie, ligne = null, onRechar
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
+        className="gap-0 border-trait bg-fond p-0 text-texte data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
           <Contenu detail={affiche} ligne={ligne && ligne.id === affiche.id ? ligne : null} onRecharger={onRecharger} onFermer={onFermer} onMisAJour={appliquer} />
         ) : (
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
-              <SheetTitle className="text-[15px] font-medium text-[#F2F3F5]">{erreur ? "Contact indisponible" : "Chargement du contact…"}</SheetTitle>
+            <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-trait px-5 py-4">
+              <SheetTitle className="text-[15px] font-medium text-texte">{erreur ? "Contact indisponible" : "Chargement du contact…"}</SheetTitle>
               <Bouton variante="fantome" taille="icone" onClick={onFermer} aria-label="Fermer">
                 <X size={16} />
               </Bouton>
             </div>
-            {erreur ? <p className="px-5 py-6 text-[13px] text-[#F87171]">{erreur}</p> : null}
+            {erreur ? <p className="px-5 py-6 text-[13px] text-attention-texte">{erreur}</p> : null}
           </div>
         )}
       </SheetContent>
@@ -123,10 +123,10 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
+      <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-trait px-5 py-4">
         <div className="min-w-0">
-          <SheetTitle className="truncate text-[17px] font-medium text-[#F2F3F5]">{detail.nom}</SheetTitle>
-          <SheetDescription className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+          <SheetTitle className="truncate text-[17px] font-medium text-texte">{detail.nom}</SheetTitle>
+          <SheetDescription className="mt-0.5 text-[12.5px] text-texte-3">
             {[libelleSourceLead(detail.source), detail.ville, `reçu le ${formatDateCourte(detail.recuLe)}`].filter(Boolean).join(" · ")}
           </SheetDescription>
           <p className="mt-2 flex flex-wrap gap-1.5">
@@ -147,7 +147,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
         {ligne?.doublon && onRecharger && !detail.archiveLe ? <SignalDoublon lead={ligne} onRecharger={onRecharger} /> : null}
         <div className="flex flex-wrap gap-2">
           {detail.dossier ? (
-            <Link href={`/dossiers?dossier=${detail.dossier.id}`} className={cn(LIEN_ACTION, "border-[#1D9E75]/50 text-[#5DCAA5]")}>
+            <Link href={`/dossiers?dossier=${detail.dossier.id}`} className={cn(LIEN_ACTION, "border-action/50 text-action-clair")}>
               <FolderPlus size={14} aria-hidden /> Dossier · {LIBELLES_ETAPE[detail.dossier.etape as EtapeDossier] ?? detail.dossier.etape}
             </Link>
           ) : detail.archiveLe ? null : (
@@ -216,12 +216,12 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
               <div className="flex flex-wrap items-center gap-x-3">
                 <PuceRappel rappelLe={detail.rappelLe} enRetard={detail.rappelEnRetard} occupe={envoi === "rappel"} onChoisir={poserRappel} />
                 {detail.rappelLe ? (
-                  <button type="button" disabled={envoi === "rappel"} onClick={() => poserRappel(null)} className="h-11 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5] disabled:opacity-50 sm:h-8">
+                  <button type="button" disabled={envoi === "rappel"} onClick={() => poserRappel(null)} className="h-11 text-[12.5px] text-texte-3 hover:text-texte disabled:opacity-50 sm:h-8">
                     Retirer la date
                   </button>
                 ) : null}
               </div>
-              <p className="text-[12.5px] text-[#8B919C]">
+              <p className="text-[12.5px] text-texte-3">
                 {detail.dernierAppelLe
                   ? `Dernier appel le ${jourHeure(detail.dernierAppelLe)}${detail.tentatives > 0 ? ` · ${pluriel(detail.tentatives, "tentative")} sans réponse` : ""}. Il est dans « À rappeler ».`
                   : detail.dernierContactLe
@@ -245,9 +245,9 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
           <section>
             <TitreSection>Priorité de rappel</TitreSection>
             <div className={CARTE_REMPLIE}>
-              <p className="text-[13px] text-[#D1D5DB]">
+              <p className="text-[13px] text-texte-2">
                 {detail.prioriteMotif ?? "Pas encore classé."}
-                {detail.tailleCuisine ? <span className="text-[#9CA3AF]">{` · taille : ${detail.tailleCuisine}`}</span> : null}
+                {detail.tailleCuisine ? <span className="text-texte-3">{` · taille : ${detail.tailleCuisine}`}</span> : null}
               </p>
               <div className="mt-3">
                 <Puces
@@ -265,7 +265,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
           <TitreSection>Où en est-on</TitreSection>
           <div className={CARTE_REMPLIE}>
             {detail.dossier ? (
-              <p className="text-[13px] text-[#9CA3AF]">
+              <p className="text-[13px] text-texte-3">
                 {`Statut : ${(LIBELLES_STATUT_LEAD[detail.statut as StatutLead] ?? detail.statut).toLowerCase()}. Il suit maintenant le dossier : c'est le dossier qu'on fait avancer.`}
               </p>
             ) : (
@@ -323,9 +323,9 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
         <section>
           <TitreSection>Noter un échange</TitreSection>
           {detail.dossier ? (
-            <p className={cn(CARTE_REMPLIE, "text-[13px] text-[#9CA3AF]")}>
+            <p className={cn(CARTE_REMPLIE, "text-[13px] text-texte-3")}>
               {"Le suivi se note maintenant sur le dossier : "}
-              <Link href={`/dossiers?dossier=${detail.dossier.id}`} className="text-[#5DCAA5] hover:underline">
+              <Link href={`/dossiers?dossier=${detail.dossier.id}`} className="text-action-clair hover:underline">
                 ouvrir le dossier
               </Link>
               .
@@ -374,15 +374,15 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
         <section>
           <TitreSection>Échanges · {detail.echanges.length}</TitreSection>
           {detail.echanges.length === 0 ? (
-            <p className="text-[13px] text-[#6B7280]">Aucun échange noté.</p>
+            <p className="text-[13px] text-texte-3">Aucun échange noté.</p>
           ) : (
             <ol className="space-y-2">
               {detail.echanges.map((un) => (
-                <li key={un.id} className="rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2">
-                  <p className="text-[11.5px] text-[#6B7280]">
+                <li key={un.id} className="rounded-[9px] border-[0.5px] border-trait bg-surface px-3 py-2">
+                  <p className="text-[11.5px] text-texte-3">
                     {LIBELLES_TYPE_ECHANGE[un.type] ?? un.type} · {formatHorodatage(un.le)}
                   </p>
-                  <p className="mt-0.5 text-[13px] whitespace-pre-line text-[#D1D5DB]">{un.contenu}</p>
+                  <p className="mt-0.5 text-[13px] whitespace-pre-line text-texte-2">{un.contenu}</p>
                 </li>
               ))}
             </ol>
@@ -394,11 +394,11 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
             <TitreSection>Sa demande</TitreSection>
             <div className={CARTE_REMPLIE}>
               {detail.styleSouhaite ? (
-                <p className="text-[12px] text-[#6B7280]">
-                  Style souhaité : <span className="text-[#D1D5DB]">{detail.styleSouhaite}</span>
+                <p className="text-[12px] text-texte-3">
+                  Style souhaité : <span className="text-texte-2">{detail.styleSouhaite}</span>
                 </p>
               ) : null}
-              {detail.message ? <p className="mt-1 text-[13.5px] whitespace-pre-line text-[#F2F3F5]">{detail.message}</p> : null}
+              {detail.message ? <p className="mt-1 text-[13.5px] whitespace-pre-line text-texte">{detail.message}</p> : null}
             </div>
           </section>
         ) : null}
@@ -417,12 +417,12 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
           </TitreSection>
           <div className={cn(CARTE_REMPLIE, "space-y-1.5 text-[13px]")}>
             <p className="flex justify-between gap-3">
-              <span className="text-[#9CA3AF]">Projet</span>
+              <span className="text-texte-3">Projet</span>
               <span>{LIBELLES_TYPE_PROJET[detail.typeProjet] ?? detail.typeProjet}</span>
             </p>
             {detail.prixSimule ? (
               <p className="flex justify-between gap-3">
-                <span className="text-[#9CA3AF]">Prix simulé</span>
+                <span className="text-texte-3">Prix simulé</span>
                 <span className="tabular-nums">{formatMontant(detail.prixSimule)}</span>
               </p>
             ) : null}
@@ -434,7 +434,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
             ].map(([libelle, valeur]) =>
               valeur ? (
                 <p key={libelle} className="flex justify-between gap-3">
-                  <span className="text-[#9CA3AF]">{libelle}</span>
+                  <span className="text-texte-3">{libelle}</span>
                   <span className="min-w-0 truncate text-right">{valeur}</span>
                 </p>
               ) : null,
@@ -470,10 +470,10 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
                 <li key={dossier.id}>
                   <Link
                     href={`/dossiers?dossier=${dossier.id}`}
-                    className="flex items-center justify-between gap-3 text-[13px] text-[#F2F3F5] hover:text-[#5DCAA5]"
+                    className="flex items-center justify-between gap-3 text-[13px] text-texte hover:text-action-clair"
                   >
                     <span className="truncate">{dossier.objet || "Dossier"}</span>
-                    <span className="shrink-0 text-[12px] text-[#9CA3AF]">
+                    <span className="shrink-0 text-[12px] text-texte-3">
                       {LIBELLES_ETAPE[dossier.etape as EtapeDossier] ?? dossier.etape} · {formatDateCourte(dossier.ouvertLe)}
                     </span>
                   </Link>
@@ -492,7 +492,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
                   <p className="flex items-center justify-between gap-3">
                     <span>
                       Devis {devis.numero}{" "}
-                      <span className="text-[#6B7280]">
+                      <span className="text-texte-3">
                         · {devis.statut.toLowerCase()} · {formatDateCourte(devis.le)}
                       </span>
                     </span>
@@ -500,19 +500,19 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
                       href={devis.pdf}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 text-[#5DCAA5] hover:underline"
+                      className="inline-flex shrink-0 items-center gap-1 text-action-clair hover:underline"
                     >
                       {formatMontant(devis.montant)} <ExternalLink size={12} aria-hidden />
                     </a>
                   </p>
                   {devis.facture ? (
-                    <p className="flex items-center justify-between gap-3 pl-3 text-[#9CA3AF]">
+                    <p className="flex items-center justify-between gap-3 pl-3 text-texte-3">
                       <span>Facture {devis.facture.numero}</span>
                       <a
                         href={devis.facture.pdf}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1 text-[#5DCAA5] hover:underline"
+                        className="inline-flex shrink-0 items-center gap-1 text-action-clair hover:underline"
                       >
                         Voir <ExternalLink size={12} aria-hidden />
                       </a>
@@ -521,7 +521,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
                 </div>
               ))}
               {detail.ancienChantier ? (
-                <p className="text-[#9CA3AF]">
+                <p className="text-texte-3">
                   Chantier du {formatDateCourte(detail.ancienChantier.dateIntervention)} · {detail.ancienChantier.adresse} ·{" "}
                   {detail.ancienChantier.statut.toLowerCase().replace(/_/g, " ")}
                   {detail.ancienChantier.soldeRecu ? " · soldé" : detail.ancienChantier.acompteRecu ? " · acompte reçu" : ""}
@@ -534,7 +534,7 @@ function Contenu({ detail, ligne, onRecharger, onFermer, onMisAJour }: { detail:
           </section>
         ) : null}
 
-        <div className="border-t-[0.5px] border-[#2A2D34] pt-4">
+        <div className="border-t-[0.5px] border-trait pt-4">
           {detail.archiveLe ? (
             <Bouton
               icone={<ArchiveRestore size={14} aria-hidden />}

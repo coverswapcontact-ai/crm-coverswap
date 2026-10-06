@@ -70,7 +70,7 @@ function ChoixFicheClient({ detail, onFermer, onMisAJour }: { detail: DossierDet
     <Modale ouverte onFermer={onFermer} largeur="sm" titre="Rattacher une autre fiche client" description="Le changement est tracé ; l'ancienne fiche reste dans le journal.">
       <label className="relative block">
         <span className="sr-only">Rechercher un client</span>
-        <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+        <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
         <input
           type="search"
           autoFocus
@@ -81,29 +81,29 @@ function ChoixFicheClient({ detail, onFermer, onMisAJour }: { detail: DossierDet
         />
       </label>
       {resultats === null ? null : resultats.length === 0 ? (
-        <p className="mt-3 text-[13px] text-[#9CA3AF]">
+        <p className="mt-3 text-[13px] text-texte-3">
           Aucune fiche trouvée.{" "}
-          <Link href="/clients" className="text-[#5DCAA5] underline-offset-2 hover:underline">
+          <Link href="/clients" className="text-action-clair underline-offset-2 hover:underline">
             Créer la fiche dans Clients
           </Link>
         </p>
       ) : (
-        <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34]">
+        <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-trait">
           {resultats.map((client) => (
-            <li key={client.id} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+            <li key={client.id} className="border-t-[0.5px] border-trait first:border-t-0">
               <button
                 type="button"
                 disabled={envoi !== null || client.id === detail.client?.id}
                 onClick={() => void rattacher(client)}
-                className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-[#22262D] disabled:opacity-60", TRANS)}
+                className={cn("flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-2 disabled:opacity-60", TRANS)}
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-medium text-[#F2F3F5]">{client.nom}</span>
-                  <span className="block truncate text-[12px] text-[#6B7280]">
+                  <span className="block truncate text-[13px] font-medium text-texte">{client.nom}</span>
+                  <span className="block truncate text-[12px] text-texte-3">
                     {[client.ville, client.telephone ?? client.email, `${client.nbDossiers} dossier${client.nbDossiers > 1 ? "s" : ""}`].filter(Boolean).join(" · ")}
                   </span>
                 </span>
-                <span className="shrink-0 text-[12px] text-[#9CA3AF]">{client.id === detail.client?.id ? "Actuelle" : envoi === client.id ? "…" : "Rattacher"}</span>
+                <span className="shrink-0 text-[12px] text-texte-3">{client.id === detail.client?.id ? "Actuelle" : envoi === client.id ? "…" : "Rattacher"}</span>
               </button>
             </li>
           ))}
@@ -170,16 +170,16 @@ export function CoordonneesClient({
   return (
     <section>
       <TitreSection>Client et chantier</TitreSection>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2">
-        <p className="min-w-0 text-[13px] text-[#9CA3AF]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[9px] border-[0.5px] border-trait bg-surface px-3 py-2">
+        <p className="min-w-0 text-[13px] text-texte-3">
           Fiche client :{" "}
           {detail.client ? (
-            <Link href={`/clients/${detail.client.id}`} className={cn("inline-flex items-center gap-0.5 font-medium text-[#F2F3F5] hover:text-[#5DCAA5]", TRANS)}>
+            <Link href={`/clients/${detail.client.id}`} className={cn("inline-flex items-center gap-0.5 font-medium text-texte hover:text-action-clair", TRANS)}>
               {detail.client.nom}
               <ArrowUpRight size={12} aria-hidden />
             </Link>
           ) : (
-            <span className="text-[#F5B454]">aucune</span>
+            <span className="text-attention-texte">aucune</span>
           )}
         </p>
         <Bouton taille="sm" variante="fantome" onClick={() => setChoixFiche(true)}>

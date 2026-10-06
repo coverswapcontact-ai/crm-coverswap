@@ -165,7 +165,7 @@ export function ModaleModification({
                     <Champ libelle="Contact : prénom" value={champs.prenom} maxLength={80} onChange={changer("prenom")} />
                     <Champ libelle="Contact : nom" value={champs.nomFamille} maxLength={120} onChange={changer("nomFamille")} />
                   </div>
-                  <p className="mt-1 text-[12px] text-[#6B7280]">Personne qui a pris contact. Vide ces champs pour ne garder que l&apos;entreprise.</p>
+                  <p className="mt-1 text-[12px] text-texte-3">Personne qui a pris contact. Vide ces champs pour ne garder que l&apos;entreprise.</p>
                 </div>
               ) : null}
             </>
@@ -175,9 +175,9 @@ export function ModaleModification({
               <Champ libelle="Nom" value={champs.nomFamille} maxLength={120} onChange={changer("nomFamille")} />
             </div>
           )}
-          {nomManquant ? <p className="text-[12px] text-[#F87171]">Indique un prénom ou un nom : un particulier est une personne.</p> : null}
+          {nomManquant ? <p className="text-[12px] text-retard-texte">Indique un prénom ou un nom : un particulier est une personne.</p> : null}
           {identiteRetiree ? (
-            <p className="text-[12px] text-[#F5B454]">La raison sociale et le SIRET seront retirés de la fiche ; l&apos;historique les garde.</p>
+            <p className="text-[12px] text-attention-texte">La raison sociale et le SIRET seront retirés de la fiche ; l&apos;historique les garde.</p>
           ) : null}
           <Champ
             libelle={estPro ? "Adresse de facturation" : "Adresse"}

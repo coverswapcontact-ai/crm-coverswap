@@ -107,15 +107,15 @@ export function NotificationsAppareil({ application = "crm", compact = false }: 
         : { icone: <BellRing size={16} aria-hidden />, texte: compact ? "Recevoir les SMS des clients sur ce téléphone" : "Recevoir sur ce téléphone les nouveaux leads, les SMS des clients et leurs gestes dans leur espace.", bouton: "Activer" };
 
   return (
-    <div className={cn("flex items-center gap-3 border-b-[0.5px] border-[#1D9E75]/30 bg-[#1D9E75]/10 px-3.5 py-2.5 text-[12.5px] leading-snug text-[#D1D5DB]", !compact && "mb-4 rounded-[12px] border-[0.5px]")}>
-      <span className="shrink-0 text-[#5DCAA5]">{contenu.icone}</span>
+    <div className={cn("flex items-center gap-3 border-b-[0.5px] border-action/30 bg-action/10 px-3.5 py-2.5 text-[12.5px] leading-snug text-texte-2", !compact && "mb-4 rounded-[12px] border-[0.5px]")}>
+      <span className="shrink-0 text-action-clair">{contenu.icone}</span>
       <p className="min-w-0 flex-1">{contenu.texte}</p>
       {contenu.bouton ? (
-        <button type="button" disabled={occupe} onClick={() => void activer()} className={cn("h-11 sm:h-10 shrink-0 rounded-[10px] bg-[#1D9E75] px-3.5 text-[13px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-60", TRANS)}>
+        <button type="button" disabled={occupe} onClick={() => void activer()} className={cn("h-11 sm:h-10 shrink-0 rounded-[10px] bg-action px-3.5 text-[13px] font-semibold text-action-texte hover:bg-action-clair disabled:opacity-60", TRANS)}>
           {occupe ? "…" : contenu.bouton}
         </button>
       ) : (
-        <button type="button" onClick={masquer} aria-label="Masquer" className="flex h-11 sm:h-9 w-11 sm:w-9 shrink-0 items-center justify-center rounded-[8px] text-[#9CA3AF] hover:bg-[#22262D]">
+        <button type="button" onClick={masquer} aria-label="Masquer" className="flex h-11 sm:h-9 w-11 sm:w-9 shrink-0 items-center justify-center rounded-[8px] text-texte-3 hover:bg-surface-2">
           <X size={15} aria-hidden />
         </button>
       )}

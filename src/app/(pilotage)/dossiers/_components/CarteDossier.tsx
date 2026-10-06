@@ -19,7 +19,7 @@ export function PastilleRetard({ className }: { className?: string }) {
     <span
       role="img"
       aria-label="Prochaine action en retard"
-      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-[#EF4444] ring-4 ring-[#EF4444]/15", className)}
+      className={cn("inline-block h-2 w-2 shrink-0 rounded-full bg-retard ring-4 ring-retard/15", className)}
     />
   );
 }
@@ -29,7 +29,7 @@ export function PastilleACompleter({ nombre, className }: { nombre: number; clas
   return (
     <span
       title="Points à compléter sur le dossier"
-      className={cn("inline-flex items-center gap-1 rounded-full bg-[#EF9F27]/10 px-2 py-px text-[11px] font-medium text-[#F5B454]", className)}
+      className={cn("inline-flex items-center gap-1 rounded-full bg-attention/10 px-2 py-px text-[11px] font-medium text-attention-texte", className)}
     >
       <AlertTriangle size={10} aria-hidden />
       {nombre} à compléter
@@ -62,11 +62,11 @@ export function ProchaineActionResume({
     return (
       <span
         className={cn(
-          "flex items-center gap-2 rounded-[8px] border-[0.5px] border-dashed border-[#3A3E47] px-2.5 py-2 text-[12px] text-[#9CA3AF]",
+          "flex items-center gap-2 rounded-[8px] border-[0.5px] border-dashed border-trait-2 px-2.5 py-2 text-[12px] text-texte-3",
           className
         )}
       >
-        <CalendarClock size={14} className="shrink-0 text-[#6B7280]" aria-hidden />
+        <CalendarClock size={14} className="shrink-0 text-texte-3" aria-hidden />
         Aucune prochaine action
       </span>
     );
@@ -76,7 +76,7 @@ export function ProchaineActionResume({
     <span
       className={cn(
         "flex items-start gap-2 rounded-[8px] px-2.5 py-2",
-        echeance === "retard" ? "bg-[#EF4444]/10" : echeance === "aujourdhui" ? "bg-[#EF9F27]/10" : "bg-[#22262D]",
+        echeance === "retard" ? "bg-retard/10" : echeance === "aujourdhui" ? "bg-attention/10" : "bg-surface-2",
         className
       )}
     >
@@ -85,18 +85,18 @@ export function ProchaineActionResume({
         aria-hidden
         className={cn(
           "mt-px shrink-0",
-          echeance === "retard" ? "text-[#F87171]" : echeance === "aujourdhui" ? "text-[#EF9F27]" : "text-[#9CA3AF]"
+          echeance === "retard" ? "text-retard-texte" : echeance === "aujourdhui" ? "text-attention" : "text-texte-3"
         )}
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12.5px] text-[#F2F3F5]">
+        <span className="block truncate text-[12.5px] text-texte">
           {dossier.prochaineAction ?? "Action à préciser"}
         </span>
         {libelleDate ? (
           <span
             className={cn(
               "block text-[11.5px] font-medium",
-              echeance === "retard" ? "text-[#F87171]" : echeance === "aujourdhui" ? "text-[#EF9F27]" : "text-[#9CA3AF]"
+              echeance === "retard" ? "text-retard-texte" : echeance === "aujourdhui" ? "text-attention" : "text-texte-3"
             )}
           >
             {libelleDate}
@@ -126,8 +126,8 @@ export function CarteDossier({
       type="button"
       onClick={onOuvrir}
       className={cn(
-        "relative block w-full overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5 pl-4 text-left",
-        "hover:border-[#3A3E47] hover:bg-[#20232A] focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
+        "relative block w-full overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface p-3.5 pl-4 text-left",
+        "hover:border-trait-2 hover:bg-surface focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none",
         TRANS
       )}
     >
@@ -137,21 +137,21 @@ export function CarteDossier({
         <BadgeMain main={mainDe(dossier, maintenant)} motif={dossier.mainMotif} />
         {enRetard ? <PastilleRetard className="mr-1" /> : null}
       </span>
-      <span className="mt-2 block truncate text-[14px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
-      <span className="mt-0.5 block truncate text-[12px] text-[#6B7280]">{dossier.clientVille || "Ville à préciser"}</span>
-      <span className="mt-2 block truncate text-[13px] text-[#9CA3AF]">{dossier.objet || "Objet à préciser"}</span>
+      <span className="mt-2 block truncate text-[14px] font-medium text-texte">{dossier.clientNom}</span>
+      <span className="mt-0.5 block truncate text-[12px] text-texte-3">{dossier.clientVille || "Ville à préciser"}</span>
+      <span className="mt-2 block truncate text-[13px] text-texte-3">{dossier.objet || "Objet à préciser"}</span>
       <ChipsFamilles prestations={dossier.prestations ?? {}} className="mt-1.5" vide={false} />
       {dossier.aCompleter > 0 ? <PastilleACompleter nombre={dossier.aCompleter} className="mt-2" /> : null}
       <span className="mt-2 flex items-center justify-between gap-2">
         {montant !== null ? (
-          <span className="text-[13px] font-medium text-[#F2F3F5] tabular-nums">{formatMontant(montant)}</span>
+          <span className="text-[13px] font-medium text-texte tabular-nums">{formatMontant(montant)}</span>
         ) : (
-          <span className="text-[12px] text-[#6B7280]">Montant à estimer</span>
+          <span className="text-[12px] text-texte-3">Montant à estimer</span>
         )}
         {afficherEtape ? (
           <PastilleEtape etape={dossier.etape} libelle={LIBELLES_ETAPE[dossier.etape]} />
         ) : montant !== null ? (
-          <span className="text-[11px] text-[#6B7280]">
+          <span className="text-[11px] text-texte-3">
             {dossier.montantDernierDevis !== null ? "dernier devis" : "estimé"}
           </span>
         ) : null}
@@ -180,20 +180,20 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
       type="button"
       onClick={onOuvrir}
       className={cn(
-        "relative flex h-[62px] w-full shrink-0 flex-col justify-center overflow-hidden rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] py-2 pr-3 pl-4 text-left",
-        "hover:border-[#3A3E47] hover:bg-[#20232A] focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
+        "relative flex h-[62px] w-full shrink-0 flex-col justify-center overflow-hidden rounded-[10px] border-[0.5px] border-trait bg-surface py-2 pr-3 pl-4 text-left",
+        "hover:border-trait-2 hover:bg-surface focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none",
         TRANS
       )}
     >
       <Lisere couleur={couleurLisere(dossier, maintenant)} />
       <span className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-texte">{dossier.clientNom}</span>
         {/* Mission 18 (A1) : la pastille de l'espace client (teintée par son signal), le détail en infobulle. */}
         {dossier.espace ? <IconeEspace espace={dossier.espace} maintenant={maintenant} libelle="court" /> : null}
         {enRetard ? <PastilleRetard /> : null}
         {main === "MOI" || main === "A_RELANCER" ? <BadgeMain main={main} motif={dossier.mainMotif} className="px-1.5 py-0 text-[10.5px]" /> : null}
       </span>
-      <span className={cn("mt-1 flex min-w-0 items-center gap-1.5 text-[12px]", enRetard ? "text-[#F87171]" : echeance === "aujourdhui" ? "text-[#EF9F27]" : "text-[#9CA3AF]")}>
+      <span className={cn("mt-1 flex min-w-0 items-center gap-1.5 text-[12px]", enRetard ? "text-retard-texte" : echeance === "aujourdhui" ? "text-attention" : "text-texte-3")}>
         <CalendarClock size={12} className="shrink-0" aria-hidden />
         <span className="min-w-0 truncate">{dossier.prochaineAction ?? (date ? "Action à préciser" : "Aucune prochaine action")}</span>
         {quand ? <span className="shrink-0 font-medium tabular-nums">· {quand}</span> : null}
@@ -209,7 +209,7 @@ export function CarteDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
  */
 export type DemandeRaccourci = { rubrique: RubriqueDossier; etape?: EtapeDossier | null };
 const ETAPES_ENCAISSABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "FACTURE"];
-const CLASSE_RACCOURCI = cn("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5]", TRANS);
+const CLASSE_RACCOURCI = cn("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-trait px-2.5 text-[12px] text-texte-2 hover:border-trait-2 hover:text-texte", TRANS);
 
 /** Mission 13 (lot 4) : les raccourcis d'une ligne — photos, message, devis, encaisser, étape suivante — ouvrent la bonne rubrique du panneau. */
 export function RaccourcisDossier({ dossier, onOuvrir }: { dossier: Pick<DossierResume, "etape" | "etapeAvantSortie">; onOuvrir: (demande: DemandeRaccourci) => void }) {
@@ -227,7 +227,7 @@ export function RaccourcisDossier({ dossier, onOuvrir }: { dossier: Pick<Dossier
         <FileText size={16} aria-hidden />
       </button>
       {encaissable ? (
-        <button type="button" onClick={() => onOuvrir({ rubrique: "encaisser" })} aria-label="Encaisser" title="Encaisser" className={cn(CLASSE_RACCOURCI, "border-[#1D9E75]/45 text-[#5DCAA5]")}>
+        <button type="button" onClick={() => onOuvrir({ rubrique: "encaisser" })} aria-label="Encaisser" title="Encaisser" className={cn(CLASSE_RACCOURCI, "border-action/45 text-action-clair")}>
           <Euro size={16} aria-hidden />
         </button>
       ) : null}
@@ -246,34 +246,34 @@ export function LigneDossierCompacte({ dossier, maintenant, onOuvrir }: { dossie
   const main = mainDe(dossier, maintenant);
   const signal =
     echeance === "retard"
-      ? { texte: dossier.prochaineActionDate ? `retard ${joursDeRetard(dossier.prochaineActionDate, maintenant)} j` : "en retard", ton: "text-[#F87171]" }
+      ? { texte: dossier.prochaineActionDate ? `retard ${joursDeRetard(dossier.prochaineActionDate, maintenant)} j` : "en retard", ton: "text-retard-texte" }
       : echeance === "aujourdhui"
-        ? { texte: "aujourd'hui", ton: "text-[#F5B454]" }
+        ? { texte: "aujourd'hui", ton: "text-attention-texte" }
         : main === "MOI" || main === "A_RELANCER"
-          ? { texte: main === "A_RELANCER" ? "à relancer" : "à moi", ton: "text-[#5DCAA5]" }
+          ? { texte: main === "A_RELANCER" ? "à relancer" : "à moi", ton: "text-action-clair" }
           : dossier.aCompleter > 0
-            ? { texte: `${dossier.aCompleter} à compléter`, ton: "text-[#F5B454]" }
+            ? { texte: `${dossier.aCompleter} à compléter`, ton: "text-attention-texte" }
             : null;
   return (
-    <li className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
-      <button type="button" onClick={() => onOuvrir()} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none", TRANS)}>
+    <li className="border-t-[0.5px] border-trait first:border-t-0">
+      <button type="button" onClick={() => onOuvrir()} className={cn("relative flex min-h-[56px] w-full items-center gap-3 py-2 pr-2 pl-4 text-left hover:bg-surface focus-visible:bg-surface focus-visible:outline-none", TRANS)}>
         <Lisere couleur={couleurLisere(dossier, maintenant)} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-medium text-[#F2F3F5]">
+          <span className="block truncate text-[14px] font-medium text-texte">
             {dossier.clientNom}
-            {dossier.clientVille ? <span className="font-normal text-[#9CA3AF]"> · {dossier.clientVille}</span> : null}
+            {dossier.clientVille ? <span className="font-normal text-texte-3"> · {dossier.clientVille}</span> : null}
           </span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-[#9CA3AF]">
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12.5px] text-texte-3">
             <span className="truncate">
               {LIBELLES_ETAPE[dossier.etape]}
-              {montant !== null ? <span className="text-[#D1D5DB] tabular-nums"> · {formatMontant(montant)}</span> : null}
+              {montant !== null ? <span className="text-texte-2 tabular-nums"> · {formatMontant(montant)}</span> : null}
             </span>
             {signal ? <span className={cn("shrink-0 font-medium", signal.ton)}>· {signal.texte}</span> : null}
           </span>
           {dossier.espace ? <LigneEspaceCourte espace={dossier.espace} maintenant={maintenant} className="mt-0.5" /> : null}
         </span>
         {echeance === "retard" ? <PastilleRetard /> : null}
-        <ChevronRight size={16} aria-hidden className="shrink-0 text-[#4B5563]" />
+        <ChevronRight size={16} aria-hidden className="shrink-0 text-texte-3" />
       </button>
       <RaccourcisDossier dossier={dossier} onOuvrir={onOuvrir} />
     </li>

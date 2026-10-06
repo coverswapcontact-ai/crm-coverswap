@@ -54,13 +54,13 @@ function Bloc<T>({ id, titre, url, children }: { id: string; titre: string; url:
     <section id={id} className="mb-10 scroll-mt-20" aria-busy={lecture.etat === "chargement"}>
       <TitreSection>{titre}</TitreSection>
       {lecture.etat === "chargement" ? (
-        <p className="flex items-center gap-2 rounded-[11px] border-[0.5px] border-dashed border-[#2A2D34] px-4 py-6 text-[12.5px] text-[#6B7280]">
+        <p className="flex items-center gap-2 rounded-[11px] border-[0.5px] border-dashed border-trait px-4 py-6 text-[12.5px] text-texte-3">
           <Loader2 size={14} className="animate-spin" aria-hidden />
           Lecture en cours…
         </p>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border-[0.5px] border-[#EF4444]/40 bg-[#EF4444]/10 px-4 py-3">
-          <p className="min-w-0 text-[12.5px] break-words text-[#F87171]">Lecture impossible : {lecture.message}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border-[0.5px] border-retard/40 bg-retard/10 px-4 py-3">
+          <p className="min-w-0 text-[12.5px] break-words text-retard-texte">Lecture impossible : {lecture.message}</p>
           <Bouton
             taille="sm"
             icone={<RotateCw size={13} aria-hidden />}

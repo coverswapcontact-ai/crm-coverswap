@@ -47,14 +47,14 @@ export function ChoixRecommandeur({
   if (valeur.id) {
     return (
       <div>
-        <p className="mb-1.5 text-[12px] font-medium text-[#9CA3AF]">Recommandé par</p>
-        <div className="flex h-10 items-center justify-between gap-2 rounded-[8px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 px-3 sm:h-9">
-          <span className="truncate text-[13px] text-[#F2F3F5]">{valeur.nom}</span>
+        <p className="mb-1.5 text-[12px] font-medium text-texte-3">Recommandé par</p>
+        <div className="flex h-10 items-center justify-between gap-2 rounded-[8px] border-[0.5px] border-action/40 bg-action-fond/60 px-3 sm:h-9">
+          <span className="truncate text-[13px] text-texte">{valeur.nom}</span>
           <button
             type="button"
             aria-label="Retirer le recommandeur"
             onClick={() => onChange({ id: null, nom: null, texte: null })}
-            className={cn("flex h-11 sm:h-8 w-11 sm:w-8 items-center justify-center rounded-[6px] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("flex h-11 sm:h-8 w-11 sm:w-8 items-center justify-center rounded-[6px] text-texte-3 hover:text-texte", TRANS)}
           >
             <X size={14} />
           </button>
@@ -68,11 +68,11 @@ export function ChoixRecommandeur({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <label className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]" htmlFor="recherche-recommandeur">
+        <label className="mb-1.5 block text-[12px] font-medium text-texte-3" htmlFor="recherche-recommandeur">
           Recommandé par un client
         </label>
         <div className="relative">
-          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
           <input
             id="recherche-recommandeur"
             type="search"
@@ -80,14 +80,14 @@ export function ChoixRecommandeur({
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Chercher sa fiche…"
             className={cn(
-              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-9 sm:text-[13px]",
-              "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-trait bg-fond pr-3 pl-8 text-[16px] text-texte placeholder:text-texte-3 sm:h-9 sm:text-[13px]",
+              "hover:border-trait-2 focus:border-action/60 focus:outline-none",
               TRANS
             )}
           />
         </div>
         {listeVisible ? (
-          <ul className="mt-1 overflow-hidden rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D]">
+          <ul className="mt-1 overflow-hidden rounded-[8px] border-[0.5px] border-trait bg-fond">
             {resultats.map((client) => (
               <li key={client.id}>
                 <button
@@ -96,10 +96,10 @@ export function ChoixRecommandeur({
                     onChange({ id: client.id, nom: client.nom, texte: null });
                     setRecherche("");
                   }}
-                  className={cn("flex min-h-11 sm:min-h-10 w-full flex-col items-start px-3 py-1.5 text-left hover:bg-[#22262D]", TRANS)}
+                  className={cn("flex min-h-11 sm:min-h-10 w-full flex-col items-start px-3 py-1.5 text-left hover:bg-surface-2", TRANS)}
                 >
-                  <span className="text-[13px] text-[#F2F3F5]">{client.nom}</span>
-                  <span className="text-[11.5px] text-[#6B7280]">{[client.ville, `${pluriel(client.nbDossiers, "dossier")}`].filter(Boolean).join(" · ")}</span>
+                  <span className="text-[13px] text-texte">{client.nom}</span>
+                  <span className="text-[11.5px] text-texte-3">{[client.ville, `${pluriel(client.nbDossiers, "dossier")}`].filter(Boolean).join(" · ")}</span>
                 </button>
               </li>
             ))}

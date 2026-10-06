@@ -9,8 +9,8 @@ import { Bouton, PastilleEtape } from "@/components/pilotage/ui";
 function Rubrique({ titre, children }: { titre: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-2 text-[12px] font-medium text-[#F2F3F5]">{titre}</h3>
-      <div className="space-y-2 text-[12px] leading-relaxed text-[#9CA3AF]">{children}</div>
+      <h3 className="mb-2 text-[12px] font-medium text-texte">{titre}</h3>
+      <div className="space-y-2 text-[12px] leading-relaxed text-texte-3">{children}</div>
     </div>
   );
 }
@@ -30,10 +30,10 @@ export function Legende({ onFermer }: { onFermer: () => void }) {
     <section
       id="legende-dossiers"
       aria-label="Légende"
-      className="mt-3 rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4"
+      className="mt-3 rounded-[11px] border-[0.5px] border-trait bg-surface p-4"
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">Légende</h2>
+        <h2 className="text-[12px] font-medium tracking-wide text-texte-3 uppercase">Légende</h2>
         <Bouton variante="fantome" taille="icone" aria-label="Fermer la légende" onClick={onFermer} className="-mt-1 -mr-2">
           <X size={15} />
         </Bouton>
@@ -46,7 +46,7 @@ export function Legende({ onFermer }: { onFermer: () => void }) {
             {ETAPES_ACTIVES.map((etape, index) => (
               <span key={etape} className="flex items-center gap-1.5">
                 <PastilleEtape etape={etape} libelle={LIBELLES_ETAPE[etape]} />
-                {index < ETAPES_ACTIVES.length - 1 ? <ArrowRight size={11} className="text-[#4B5160]" aria-hidden /> : null}
+                {index < ETAPES_ACTIVES.length - 1 ? <ArrowRight size={11} className="text-trait-2" aria-hidden /> : null}
               </span>
             ))}
           </div>

@@ -38,20 +38,20 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
       <TitreSection>Messagerie SMS</TitreSection>
 
       <div className={cn(CARTE, "p-4")}>
-        <p className="flex items-center gap-2 text-[14px] font-medium text-[#F2F3F5]">
+        <p className="flex items-center gap-2 text-[14px] font-medium text-texte">
           <MessageSquare size={15} aria-hidden /> Fournisseur
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-[#9CA3AF]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-texte-3">
           {fournisseur.nom ? <Pastille ton={fournisseur.bidirectionnel && fournisseur.nom !== "simulateur" ? "vert" : "ambre"}>{NOMS_FOURNISSEUR[fournisseur.nom] ?? fournisseur.nom}</Pastille> : <Pastille ton="rouge">Aucun fournisseur</Pastille>}
           {fournisseur.expediteur ? <span>Expéditeur : {fournisseur.expediteur}</span> : null}
         </div>
-        {fournisseur.remarque ? <p className="mt-2 text-[12.5px] leading-relaxed text-[#F5B454]">{fournisseur.remarque}</p> : null}
+        {fournisseur.remarque ? <p className="mt-2 text-[12.5px] leading-relaxed text-attention-texte">{fournisseur.remarque}</p> : null}
         {fournisseur.aPoser.length > 0 ? (
-          <div className="mt-3 text-[12.5px] leading-relaxed text-[#9CA3AF]">
+          <div className="mt-3 text-[12.5px] leading-relaxed text-texte-3">
             <p>Variables à poser sur Railway pour le numéro OVH (envoi et réception) :</p>
             <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {fournisseur.aPoser.map((variable) => (
-                <li key={variable} className="rounded-[6px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 py-0.5 font-mono text-[11.5px] text-[#D1D5DB]">
+                <li key={variable} className="rounded-[6px] border-[0.5px] border-trait bg-fond px-2 py-0.5 font-mono text-[11.5px] text-texte-2">
                   {variable}
                 </li>
               ))}
@@ -60,9 +60,9 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
         ) : null}
       </div>
 
-      <div className="mt-6 space-y-1.5 text-[12.5px] leading-relaxed text-[#9CA3AF]">
+      <div className="mt-6 space-y-1.5 text-[12.5px] leading-relaxed text-texte-3">
         <p>
-          <span className="text-[#F2F3F5]">Un seul endroit pour les textes SMS.</span>{" "}
+          <span className="text-texte">Un seul endroit pour les textes SMS.</span>{" "}
           L&apos;écran SMS, l&apos;assistant et les relances lisent ceux-ci : ce que tu corriges ici est ce qui sera proposé la prochaine fois.
         </p>
         <p>Rien ne part tout seul, sauf les deux accusés de réception. Les autres SMS s&apos;ouvrent préremplis : tu relis, tu copies, tu colles dans Messages. Copier un SMS vaut envoi : il s&apos;écrit dans l&apos;historique du lead ou du dossier.</p>
@@ -73,7 +73,7 @@ export default function MessagerieSms({ initial }: { initial: Reponse }) {
       {GROUPES_SMS.map((groupe) =>
         duGroupe(groupe).length ? (
           <div key={groupe} className="mt-6">
-            <h3 className="mb-2 text-[12px] font-medium tracking-wide text-[#8B919C] uppercase">{LIBELLES_GROUPE_SMS[groupe]}</h3>
+            <h3 className="mb-2 text-[12px] font-medium tracking-wide text-texte-3 uppercase">{LIBELLES_GROUPE_SMS[groupe]}</h3>
             <div className="space-y-3">
               {duGroupe(groupe).map((modele) => (
                 <CarteModele key={modele.code} modele={modele} onChange={remplacer} />
@@ -116,7 +116,7 @@ function CarteModele({ modele, onChange }: { modele: ModeleCatalogue; onChange: 
   return (
     <div className={cn(CARTE, "p-4", coupe && "opacity-70")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-[#F2F3F5]">
+        <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-texte">
           {modele.libelle}
           {modele.automatique ? (
             <Pastille ton="vert">
@@ -131,10 +131,10 @@ function CarteModele({ modele, onChange }: { modele: ModeleCatalogue; onChange: 
           </Bouton>
         ) : null}
       </div>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">{modele.usage}</p>
-      <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11.5px] text-[#8B919C]">
+      <p className="mt-1 text-[12.5px] leading-relaxed text-texte-3">{modele.usage}</p>
+      <p className="mt-1.5 flex flex-wrap gap-1.5 text-[11.5px] text-texte-3">
         {modele.variables.map((variable) => (
-          <code key={variable} title={LIBELLES_VARIABLE_SMS[variable as VariableSms]} className="rounded-[6px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-1.5 py-0.5 text-[#D1D5DB]">
+          <code key={variable} title={LIBELLES_VARIABLE_SMS[variable as VariableSms]} className="rounded-[6px] border-[0.5px] border-trait bg-fond px-1.5 py-0.5 text-texte-2">
             {`{${variable}}`}
           </code>
         ))}
@@ -148,14 +148,14 @@ function CarteModele({ modele, onChange }: { modele: ModeleCatalogue; onChange: 
         aria-invalid={modifie && refus ? true : undefined}
         className={cn(CLASSE_SAISIE, "mt-3 min-h-[84px] resize-y py-2 leading-relaxed")}
       />
-      {modifie && refus ? <p className="mt-1 text-[12px] text-[#F87171]">{refus}</p> : null}
-      {!modele.id ? <p className="mt-1 text-[12px] text-[#6B7280]">Pas encore en base : il sera posé au prochain démarrage.</p> : null}
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#9CA3AF]">
+      {modifie && refus ? <p className="mt-1 text-[12px] text-retard-texte">{refus}</p> : null}
+      {!modele.id ? <p className="mt-1 text-[12px] text-texte-3">Pas encore en base : il sera posé au prochain démarrage.</p> : null}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[12px] text-texte-3">
         <p>
           {mesure.longueur} caractères · {mesure.segments} SMS
-          {!modele.lien && mesure.longueur > LONGUEUR_VISEE ? <span className="text-[#F5B454]"> · Vise {LONGUEUR_VISEE} caractères</span> : null}
-          {!mesure.gsm ? <span className={parLeFournisseur ? "text-[#F5B454]" : undefined}> · Unicode à cause de : {mesure.horsGsm.slice(0, 6).join(" ")}</span> : null}
-          <span className="text-[#6B7280]"> (avec un prénom{modele.lien ? ", le lien" : ""}{modele.variables.includes("quand") ? ", « demain vers 18 h »" : ""})</span>
+          {!modele.lien && mesure.longueur > LONGUEUR_VISEE ? <span className="text-attention-texte"> · Vise {LONGUEUR_VISEE} caractères</span> : null}
+          {!mesure.gsm ? <span className={parLeFournisseur ? "text-attention-texte" : undefined}> · Unicode à cause de : {mesure.horsGsm.slice(0, 6).join(" ")}</span> : null}
+          <span className="text-texte-3"> (avec un prénom{modele.lien ? ", le lien" : ""}{modele.variables.includes("quand") ? ", « demain vers 18 h »" : ""})</span>
         </p>
         <div className="flex flex-wrap gap-2">
           {parLeFournisseur && !mesure.gsm ? (

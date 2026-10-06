@@ -15,10 +15,10 @@ function LignePrix({ libelle, montant, accent }: { libelle: string; montant: num
   if (montant === null) return null;
   return (
     <div className="flex items-baseline justify-between gap-3 py-0.5 text-[13px]">
-      <span className="text-[#9CA3AF]">{libelle}</span>
-      <span className="text-[#F2F3F5] tabular-nums">
+      <span className="text-texte-3">{libelle}</span>
+      <span className="text-texte tabular-nums">
         {formatMontant(montant)}
-        {accent ? <span className="ml-1.5 text-[12px] text-[#9CA3AF]">{accent}</span> : null}
+        {accent ? <span className="ml-1.5 text-[12px] text-texte-3">{accent}</span> : null}
       </span>
     </div>
   );
@@ -88,7 +88,7 @@ function ModaleDatePassage({
       <div className="flex flex-col gap-3">
         <Champ libelle="Date" type="date" max={aujourdhui} value={jour} onChange={(evenement) => setJour(evenement.target.value)} erreur={jour > aujourdhui ? "La date est à venir." : null} />
         {avertissement ? (
-          <p className="flex gap-1.5 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+          <p className="flex gap-1.5 rounded-[8px] bg-attention/10 px-3 py-2 text-[12.5px] text-attention-texte">
             <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
             {avertissement}
           </p>
@@ -124,10 +124,10 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
   return (
     <section>
       <TitreSection>Délais et prix</TitreSection>
-      <div className="space-y-3 rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5">
+      <div className="space-y-3 rounded-[11px] border-[0.5px] border-trait bg-surface p-3.5">
         {courant ? (
-          <p className="flex items-center gap-2 text-[13px] text-[#F2F3F5]">
-            <Clock size={14} className="shrink-0 text-[#9CA3AF]" aria-hidden />
+          <p className="flex items-center gap-2 text-[13px] text-texte">
+            <Clock size={14} className="shrink-0 text-texte-3" aria-hidden />
             {desordre ? (
               <>
                 En « {LIBELLES_ETAPE[courant.etape]} » depuis le {formatDateCourte(courant.debut)}
@@ -137,11 +137,11 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
                 Depuis {formatDuree(courant.dureeMs)} en « {LIBELLES_ETAPE[courant.etape]} »
               </>
             )}
-            <span className="text-[#6B7280]">· dossier ouvert depuis {formatDuree(total)}</span>
+            <span className="text-texte-3">· dossier ouvert depuis {formatDuree(total)}</span>
           </p>
         ) : null}
         {desordre ? (
-          <p className="flex items-center gap-1.5 text-[12px] text-[#F5B454]">
+          <p className="flex items-center gap-1.5 text-[12px] text-attention-texte">
             <AlertTriangle size={13} className="shrink-0" aria-hidden />
             Des dates du parcours ne se suivent pas : vérifie-les ci-dessous.
           </p>
@@ -149,7 +149,7 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
 
         {total > 0 ? (
           <div>
-            <div className="flex h-2 overflow-hidden rounded-full bg-[#22262D]" aria-hidden>
+            <div className="flex h-2 overflow-hidden rounded-full bg-surface-2" aria-hidden>
               {detail.parcours.map((passage, index) => (
                 <span
                   key={`${passage.etape}-${index}`}
@@ -159,7 +159,7 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
             </div>
             <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
               {Object.entries(durees).map(([etape, duree]) => (
-                <li key={etape} className="flex items-center gap-1.5 text-[12px] text-[#9CA3AF]">
+                <li key={etape} className="flex items-center gap-1.5 text-[12px] text-texte-3">
                   <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COULEURS_ETAPE[etape as keyof typeof COULEURS_ETAPE] }} />
                   {LIBELLES_ETAPE[etape as keyof typeof LIBELLES_ETAPE]} : {formatDuree(duree ?? 0)}
                 </li>
@@ -169,15 +169,15 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
         ) : null}
 
         {detail.parcours.length > 0 ? (
-          <ol aria-label="Dates des étapes" className="border-t-[0.5px] border-[#2A2D34] pt-2">
+          <ol aria-label="Dates des étapes" className="border-t-[0.5px] border-trait pt-2">
             {detail.parcours.map((passage, index) => (
               <li key={passage.evenementId ?? `${passage.etape}-${index}`} className="flex min-h-11 sm:min-h-8 items-center justify-between gap-3 text-[13px]">
-                <span className="min-w-0 truncate text-[#9CA3AF]">{libellePassage(passage)}</span>
+                <span className="min-w-0 truncate text-texte-3">{libellePassage(passage)}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
                   {passage.dateInconnue ? (
                     <Pastille ton="ambre">date inconnue</Pastille>
                   ) : (
-                    <span className="text-[#F2F3F5] tabular-nums" title={passage.saisiLe ? `Saisi le ${formatDateCourte(passage.saisiLe)}` : undefined}>
+                    <span className="text-texte tabular-nums" title={passage.saisiLe ? `Saisi le ${formatDateCourte(passage.saisiLe)}` : undefined}>
                       {formatDateCourte(passage.debut)}
                     </span>
                   )}
@@ -193,18 +193,18 @@ export function DelaisEcarts({ detail, onMisAJour }: { detail: DossierDetail; on
         ) : null}
 
         {delaisVisibles.length > 0 ? (
-          <ul className="border-t-[0.5px] border-[#2A2D34] pt-2">
+          <ul className="border-t-[0.5px] border-trait pt-2">
             {delaisVisibles.map((ligne) => (
               <li key={ligne.libelle} className="flex justify-between gap-3 py-0.5 text-[13px]">
-                <span className="text-[#9CA3AF]">{ligne.libelle}</span>
-                <span className="text-[#F2F3F5] tabular-nums">{formatDuree(ligne.duree)}</span>
+                <span className="text-texte-3">{ligne.libelle}</span>
+                <span className="text-texte tabular-nums">{formatDuree(ligne.duree)}</span>
               </li>
             ))}
           </ul>
         ) : null}
 
         {aDesPrix ? (
-          <div className="border-t-[0.5px] border-[#2A2D34] pt-2">
+          <div className="border-t-[0.5px] border-trait pt-2">
             <LignePrix libelle="Estimation" montant={ecarts.estimation} />
             <LignePrix
               libelle="Premier devis"

@@ -60,7 +60,7 @@ export function NouveauContact({ onFermer, onCree }: { onFermer: () => void; onC
         <ListeDeroulante libelle="Projet" value={champs.typeProjet} onChange={changer("typeProjet")} options={TYPES_PROJET.map((valeur) => ({ valeur, libelle: LIBELLES_TYPE_PROJET[valeur] }))} />
         <ZoneTexte classeConteneur="sm:col-span-2" libelle="Notes" rows={3} maxLength={5000} placeholder="Ce qu'il veut, quand le rappeler…" value={champs.notes} onChange={changer("notes")} />
       </div>
-      {!nomRenseigne ? <p className="mt-2 text-[12px] text-[#6B7280]">Un prénom ou un nom suffit ; le reste se complète plus tard.</p> : null}
+      {!nomRenseigne ? <p className="mt-2 text-[12px] text-texte-3">Un prénom ou un nom suffit ; le reste se complète plus tard.</p> : null}
     </Modale>
   );
 }

@@ -61,14 +61,14 @@ export function Consentement({ client, onMiseAJour }: { client: ClientDetail; on
       {courant ? (
         <>
           <Pastille ton={courant.statut === "ACCORDE" ? "vert" : "rouge"}>{LIBELLES_STATUT_CONSENTEMENT[courant.statut]}</Pastille>
-          <p className="mt-1.5 text-[12px] text-[#9CA3AF]">
+          <p className="mt-1.5 text-[12px] text-texte-3">
             Le {formatDateCourte(courant.recueilliLe)} · {LIBELLES_MOYEN_CONSENTEMENT[courant.moyen as MoyenConsentement] ?? courant.moyen}
             {courant.preuve ? ` · ${courant.preuve}` : ""}
           </p>
           {client.consentements.length > 1 ? (
-            <ul className="mt-2 border-t-[0.5px] border-[#2A2D34] pt-2">
+            <ul className="mt-2 border-t-[0.5px] border-trait pt-2">
               {client.consentements.slice(1).map((ancien) => (
-                <li key={ancien.id} className="text-[12px] text-[#6B7280]">
+                <li key={ancien.id} className="text-[12px] text-texte-3">
                   {formatDateCourte(ancien.recueilliLe)} : {LIBELLES_STATUT_CONSENTEMENT[ancien.statut].toLowerCase()} ({LIBELLES_MOYEN_CONSENTEMENT[ancien.moyen as MoyenConsentement] ?? ancien.moyen})
                 </li>
               ))}
@@ -76,8 +76,8 @@ export function Consentement({ client, onMiseAJour }: { client: ClientDetail; on
           ) : null}
         </>
       ) : (
-        <p className="text-[13px] text-[#9CA3AF]">
-          Aucune réponse enregistrée : <span className="text-[#F2F3F5]">pas de mail commercial</span>
+        <p className="text-[13px] text-texte-3">
+          Aucune réponse enregistrée : <span className="text-texte">pas de mail commercial</span>
           {" tant que le client n'a pas dit oui."}
         </p>
       )}

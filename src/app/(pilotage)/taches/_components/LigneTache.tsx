@@ -103,8 +103,8 @@ const SEUIL_BALAYAGE = 90;
 const BORD_RETOUR = 24;
 
 /** 44 px au doigt, à toutes les largeurs ; 32 px seulement pour un pointeur fin (souris, pavé). */
-export const CLASSE_BOUTON_PRINCIPAL = "flex h-11 w-11 pointer-fine:h-8 pointer-fine:w-8 shrink-0 items-center justify-center rounded-full bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-50";
-const CLASSE_BOUTON_GRIS = "flex h-11 w-11 pointer-fine:h-8 pointer-fine:w-8 shrink-0 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]";
+export const CLASSE_BOUTON_PRINCIPAL = "flex h-11 w-11 pointer-fine:h-8 pointer-fine:w-8 shrink-0 items-center justify-center rounded-full bg-action text-action-texte hover:bg-action-clair disabled:opacity-50";
+const CLASSE_BOUTON_GRIS = "flex h-11 w-11 pointer-fine:h-8 pointer-fine:w-8 shrink-0 items-center justify-center rounded-full text-texte-3 hover:bg-surface-2 hover:text-texte";
 
 /**
  * Balayer à l'horizontale (ligne, mode Commencer) : à droite, à gauche. Ne part qu'à l'horizontale, jamais du bord
@@ -166,7 +166,7 @@ export function useBalayage({ onDroite, onGauche, bloque = false }: { onDroite: 
 export function FondBalayage({ decalage, droite = "Fait", arrondi }: { decalage: number; droite?: string; arrondi?: string }) {
   if (decalage === 0) return null;
   return (
-    <div aria-hidden className={cn("absolute inset-0 flex items-center px-5 text-[13px] font-semibold", arrondi, decalage > 0 ? "justify-start bg-[#1D9E75] text-[#06140F]" : "justify-end bg-[#EF9F27] text-[#1A1206]")}>
+    <div aria-hidden className={cn("absolute inset-0 flex items-center px-5 text-[13px] font-semibold", arrondi, decalage > 0 ? "justify-start bg-action text-action-texte" : "justify-end bg-attention text-texte-inverse")}>
       {decalage > 0 ? (
         <span className="flex items-center gap-1.5">
           <Check size={16} /> {droite}
@@ -200,7 +200,7 @@ export function BoutonPrincipal({ tache, actions, grand = false }: { tache: Tach
   const Icone = vide ? Check : estSensible(tache) && r.genre === "PAGE" ? ShieldCheck : (ICONES_RACCOURCI[r.genre] ?? ArrowUpRight);
   const libelle = vide ? "Fait" : r.libelle;
   const classe = grand
-    ? cn("flex h-16 w-full items-center justify-center gap-3 rounded-[16px] bg-[#1D9E75] px-4 text-[18px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] active:bg-[#5DCAA5]", TRANS)
+    ? cn("flex h-16 w-full items-center justify-center gap-3 rounded-[16px] bg-action px-4 text-[18px] font-semibold text-action-texte hover:bg-action-clair active:bg-action-clair", TRANS)
     : cn(CLASSE_BOUTON_PRINCIPAL, TRANS);
   const contenu = grand ? (
     <>
@@ -239,7 +239,7 @@ export function BoutonPrincipal({ tache, actions, grand = false }: { tache: Tach
  */
 function Titre({ titre }: { titre: string }) {
   const coupure = titre.indexOf(" · ");
-  const classe = "text-[14.5px] leading-snug font-medium text-[#F2F3F5]";
+  const classe = "text-[14.5px] leading-snug font-medium text-texte";
   if (coupure < 0) return <span className={cn("line-clamp-2 w-full break-words", classe)}>{titre}</span>;
   return (
     <span className={cn("flex w-full min-w-0 flex-wrap", classe)} title={titre}>
@@ -258,24 +258,24 @@ export function LigneTache({ tache, maintenant, surbrillance, occupe, actions }:
   const duree = dureeLisible(tache.dureeMin);
 
   return (
-    <li className={cn("relative overflow-hidden border-t-[0.5px] border-[#2A2D34] first:border-t-0", occupe && "opacity-60")} data-tache={tache.id}>
+    <li className={cn("relative overflow-hidden border-t-[0.5px] border-trait first:border-t-0", occupe && "opacity-60")} data-tache={tache.id}>
       <FondBalayage decalage={balayage.decalage} droite={sensible ? "Relire" : enLigne ? "Valider" : "Fait"} />
-      <div {...balayage.gestionnaires} style={balayage.style} className={cn("relative flex items-center gap-1 bg-[#1C1F25] pr-1.5", surbrillance && "bg-[#15251F] shadow-[inset_3px_0_0_#1D9E75]")}>
-        <button type="button" onClick={() => actions.onOuvrir(tache)} className={cn("flex min-h-[60px] min-w-0 flex-1 flex-col justify-center gap-0.5 py-2 pl-3.5 text-left hover:bg-[#20232A] focus-visible:bg-[#20232A] focus-visible:outline-none pointer-fine:min-h-[48px]", TRANS)}>
+      <div {...balayage.gestionnaires} style={balayage.style} className={cn("relative flex items-center gap-1 bg-surface pr-1.5", surbrillance && "bg-action-fond shadow-[inset_3px_0_0_var(--color-action)]")}>
+        <button type="button" onClick={() => actions.onOuvrir(tache)} className={cn("flex min-h-[60px] min-w-0 flex-1 flex-col justify-center gap-0.5 py-2 pl-3.5 text-left hover:bg-surface focus-visible:bg-surface focus-visible:outline-none pointer-fine:min-h-[48px]", TRANS)}>
           <Titre titre={tache.titre} />
-          <span className="line-clamp-2 w-full text-[12.5px] leading-snug break-words text-[#8B919C] sm:line-clamp-1">
+          <span className="line-clamp-2 w-full text-[12.5px] leading-snug break-words text-texte-3 sm:line-clamp-1">
             <span className="tabular-nums sm:hidden">{duree} · </span>
             {ligneGrise(tache, new Date(maintenant))}
           </span>
         </button>
-        <span className="hidden shrink-0 px-1 text-[12px] text-[#8B919C] tabular-nums sm:inline">{duree}</span>
+        <span className="hidden shrink-0 px-1 text-[12px] text-texte-3 tabular-nums sm:inline">{duree}</span>
         {enLigne ? (
           <>
-            <button type="button" disabled={occupe} onClick={() => actions.onFait(tache)} aria-label="Valider" title="Valider" className={cn("flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5] disabled:opacity-50 sm:rounded-[10px] sm:px-3 sm:text-[13px] sm:font-medium pointer-fine:h-8 pointer-fine:min-w-8", TRANS)}>
+            <button type="button" disabled={occupe} onClick={() => actions.onFait(tache)} aria-label="Valider" title="Valider" className={cn("flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-action text-action-texte hover:bg-action-clair disabled:opacity-50 sm:rounded-[10px] sm:px-3 sm:text-[13px] sm:font-medium pointer-fine:h-8 pointer-fine:min-w-8", TRANS)}>
               <Check size={18} aria-hidden className="sm:hidden" />
               <span className="hidden sm:inline">Valider</span>
             </button>
-            <button type="button" disabled={occupe} onClick={() => actions.onIgnorer(tache)} aria-label="Ignorer" title="Ignorer" className={cn("flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full border-[0.5px] border-[#2A2D34] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] disabled:opacity-50 sm:rounded-[10px] sm:px-3 sm:text-[13px] pointer-fine:h-8 pointer-fine:min-w-8", TRANS)}>
+            <button type="button" disabled={occupe} onClick={() => actions.onIgnorer(tache)} aria-label="Ignorer" title="Ignorer" className={cn("flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full border-[0.5px] border-trait text-texte-3 hover:bg-surface-2 hover:text-texte disabled:opacity-50 sm:rounded-[10px] sm:px-3 sm:text-[13px] pointer-fine:h-8 pointer-fine:min-w-8", TRANS)}>
               <X size={17} aria-hidden className="sm:hidden" />
               <span className="hidden sm:inline">Ignorer</span>
             </button>
@@ -295,13 +295,13 @@ export function LigneTache({ tache, maintenant, surbrillance, occupe, actions }:
 export function LigneFaite({ tache }: { tache: TacheVue }) {
   const pasAFaire = tache.statut === "PAS_A_FAIRE";
   return (
-    <li className="flex min-h-[52px] items-center gap-3 border-t-[0.5px] border-[#2A2D34] px-3.5 py-2 first:border-t-0">
-      <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", pasAFaire ? "bg-[#22262D] text-[#8B919C]" : "bg-[#1D9E75]/20 text-[#5DCAA5]")}>
+    <li className="flex min-h-[52px] items-center gap-3 border-t-[0.5px] border-trait px-3.5 py-2 first:border-t-0">
+      <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-full", pasAFaire ? "bg-surface-2 text-texte-3" : "bg-action/20 text-action-clair")}>
         {pasAFaire ? <X size={12} aria-hidden /> : <Check size={12} aria-hidden />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-[14px]", pasAFaire ? "text-[#9CA3AF]" : "text-[#D1D5DB]")}>{tache.titre}</span>
-        <span className="block truncate text-[12.5px] text-[#8B919C]">{ligneFaite(tache)}</span>
+        <span className={cn("block truncate text-[14px]", pasAFaire ? "text-texte-3" : "text-texte-2")}>{tache.titre}</span>
+        <span className="block truncate text-[12.5px] text-texte-3">{ligneFaite(tache)}</span>
       </span>
     </li>
   );

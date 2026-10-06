@@ -73,7 +73,7 @@ function copier(texte: string) {
 }
 
 const BOUTON_LIEN =
-  "inline-flex h-11 items-center gap-1.5 rounded-[8px] border border-[#2A2D34] px-3 text-[13px] font-medium text-[#D1D5DB] transition-colors duration-150 hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-8";
+  "inline-flex h-11 items-center gap-1.5 rounded-[8px] border border-trait px-3 text-[13px] font-medium text-texte-2 transition-colors duration-150 hover:border-trait-2 hover:text-texte sm:h-8";
 
 type InstantaneOuvert = {
   mois: string;
@@ -207,7 +207,7 @@ export function MoisFigesEtExport({
         </Bouton>
       </div>
       {anonyme ? (
-        <p className="text-[12px] text-[#9CA3AF]">
+        <p className="text-[12px] text-texte-3">
           Noms remplacés par des pseudonymes stables, dans l&apos;export comme
           dans la version rédigée.
         </p>
@@ -223,13 +223,13 @@ export function MoisFigesEtExport({
       <div className="flex flex-col gap-2">
         <p className={LBL}>Mois figés</p>
         {erreurListe ? (
-          <p className="text-[13px] text-[#F5B454]">
+          <p className="text-[13px] text-attention-texte">
             Mois figés illisibles&nbsp;: {erreurListe}
           </p>
         ) : instantanes === null ? (
-          <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+          <p className="text-[13px] text-texte-3">Chargement…</p>
         ) : instantanes.length === 0 ? (
-          <p className="text-[13px] text-[#6B7280]">
+          <p className="text-[13px] text-texte-3">
             Aucun mois figé pour l&apos;instant&nbsp;: chaque mois écoulé
             l&apos;est automatiquement.
           </p>
@@ -238,23 +238,23 @@ export function MoisFigesEtExport({
             {instantanes.map((ligne) => (
               <li
                 key={ligne.mois}
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2A2D34] py-2.5 text-[13px] last:border-b-0"
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-trait py-2.5 text-[13px] last:border-b-0"
                 data-mois-fige={ligne.mois}
               >
-                <span className="min-w-[124px] font-medium text-[#F2F3F5]">
+                <span className="min-w-[124px] font-medium text-texte">
                   {moisLong(ligne.mois)}
                 </span>
-                <span className="text-[#9CA3AF]">
+                <span className="text-texte-3">
                   encaissé{" "}
-                  <span className={cn(NUM, "text-[#D1D5DB]")}>
+                  <span className={cn(NUM, "text-texte-2")}>
                     {ligne.encaisse === null ? "—" : euros(ligne.encaisse)}
                   </span>
                 </span>
-                <span className="text-[#9CA3AF]">
+                <span className="text-texte-3">
                   {nombre(ligne.dossiersOuverts)} dossier{ligne.dossiersOuverts > 1 ? "s" : ""} ·{" "}
                   {nombre(ligne.signatures)} signature{ligne.signatures > 1 ? "s" : ""}
                 </span>
-                <span className="text-[12px] text-[#6B7280]">
+                <span className="text-[12px] text-texte-3">
                   figé le {formatDateCourte(ligne.figeLe)}
                 </span>
                 <Bouton
@@ -279,17 +279,17 @@ export function MoisFigesEtExport({
 
       {ouvert ? <InstantaneDetail instantane={ouvert} /> : null}
 
-      <details className="group rounded-[10px] border border-[#2A2D34] px-3.5 py-2.5">
-        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-[13px] text-[#D1D5DB] [&::-webkit-details-marker]:hidden">
+      <details className="group rounded-[10px] border border-trait px-3.5 py-2.5">
+        <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-[13px] text-texte-2 [&::-webkit-details-marker]:hidden">
           <BookOpen size={14} aria-hidden /> Guide de lecture de la synthèse
         </summary>
         <dl className="mt-2 flex flex-col gap-2.5">
           {GUIDE_LECTURE.map((entree) => (
             <div key={entree.titre}>
-              <dt className="text-[13px] font-medium text-[#F2F3F5]">
+              <dt className="text-[13px] font-medium text-texte">
                 {entree.titre}
               </dt>
-              <dd className="mt-0.5 text-[12px] leading-[1.45] text-[#9CA3AF]">
+              <dd className="mt-0.5 text-[12px] leading-[1.45] text-texte-3">
                 {entree.texte}
               </dd>
             </div>
@@ -302,7 +302,7 @@ export function MoisFigesEtExport({
 
 function TexteRedige({ texte, titre }: { texte: string; titre: string }) {
   return (
-    <div className="flex flex-col gap-2 rounded-[10px] bg-[#16181D] p-3.5">
+    <div className="flex flex-col gap-2 rounded-[10px] bg-fond p-3.5">
       <div className="flex items-center justify-between gap-3">
         <p className={LBL}>{titre}</p>
         <Bouton
@@ -314,7 +314,7 @@ function TexteRedige({ texte, titre }: { texte: string; titre: string }) {
           Copier
         </Bouton>
       </div>
-      <pre className="max-h-[420px] overflow-auto text-[13px] leading-relaxed whitespace-pre-wrap text-[#D1D5DB]">
+      <pre className="max-h-[420px] overflow-auto text-[13px] leading-relaxed whitespace-pre-wrap text-texte-2">
         {texte}
       </pre>
     </div>
@@ -346,23 +346,23 @@ function InstantaneDetail({ instantane }: { instantane: InstantaneOuvert }) {
   ];
   return (
     <div
-      className="flex flex-col gap-3 rounded-[10px] border border-[#2A2D34] p-3.5"
+      className="flex flex-col gap-3 rounded-[10px] border border-trait p-3.5"
       data-instantane={instantane.mois}
     >
-      <p className="flex items-start gap-2 text-[13px] text-[#D1D5DB]">
+      <p className="flex items-start gap-2 text-[13px] text-texte-2">
         <Lock
           size={15}
           aria-hidden
-          className="mt-0.5 shrink-0 text-[#93C5FD]"
+          className="mt-0.5 shrink-0 text-info-texte"
         />
         <span>
           {moisLong(instantane.mois)}, figé le{" "}
           {formatDateCourte(instantane.figeLe)}&nbsp;: ces chiffres ne se
           recalculent pas.{" "}
           {instantane.integre ? (
-            <span className="text-[#5DCAA5]">Empreinte conforme.</span>
+            <span className="text-action-clair">Empreinte conforme.</span>
           ) : (
-            <span className="font-medium text-[#F5B454]">
+            <span className="font-medium text-attention-texte">
               Empreinte non conforme&nbsp;: contenu altéré hors de
               l&apos;application.
             </span>
@@ -373,21 +373,21 @@ function InstantaneDetail({ instantane }: { instantane: InstantaneOuvert }) {
         {chiffres.map(([libelle, valeur]) => (
           <div key={libelle} className="flex flex-col gap-0.5">
             <dt className={LBL}>{libelle}</dt>
-            <dd className={cn(NUM, "text-[16px] text-[#F2F3F5]")}>{valeur}</dd>
+            <dd className={cn(NUM, "text-[16px] text-texte")}>{valeur}</dd>
           </div>
         ))}
       </dl>
       {instantane.ecarts.length === 0 ? (
-        <p className="text-[12px] text-[#6B7280]">
+        <p className="text-[12px] text-texte-3">
           Aucun écart avec un recalcul d&apos;aujourd&apos;hui.
         </p>
       ) : (
         <div className="flex flex-col gap-1">
-          <p className="text-[12px] text-[#9CA3AF]">
+          <p className="text-[12px] text-texte-3">
             Écarts avec un recalcul d&apos;aujourd&apos;hui (saisie tardive ou
             correction)&nbsp;:
           </p>
-          <ul className="flex flex-col gap-0.5 text-[12px] text-[#F5B454]">
+          <ul className="flex flex-col gap-0.5 text-[12px] text-attention-texte">
             {instantane.ecarts.map((ecart) => (
               <li key={ecart.indicateur}>
                 {ecart.indicateur}&nbsp;: figé {ecart.fige ?? "—"},
@@ -408,9 +408,9 @@ function InstantaneDetail({ instantane }: { instantane: InstantaneOuvert }) {
 /* ── Agent et qualité des données (bas de la Vue d'ensemble) ───────────── */
 
 const COULEURS_ALERTE: Record<AlerteSynthese["gravite"], string> = {
-  URGENT: "#F5B454",
-  ATTENTION: "#F5B454",
-  INFO: "#9CA3AF",
+  URGENT: "var(--color-attention-texte)",
+  ATTENTION: "var(--color-attention-texte)",
+  INFO: "var(--color-texte-3)",
 };
 
 export function AgentEtQualite({ du, au }: { du: string; au: string }) {
@@ -439,7 +439,7 @@ export function AgentEtQualite({ du, au }: { du: string; au: string }) {
           type="button"
           aria-expanded={ouvertTelephone}
           onClick={() => setOuvertTelephone((o) => !o)}
-          className="flex min-h-11 items-center text-[13px] text-[#5DCAA5] md:hidden"
+          className="flex min-h-11 items-center text-[13px] text-action-clair md:hidden"
         >
           {ouvertTelephone ? "Replier" : "Afficher"}
         </button>
@@ -453,11 +453,11 @@ export function AgentEtQualite({ du, au }: { du: string; au: string }) {
         )}
       >
         {erreur ? (
-          <p className="text-[13px] text-[#F5B454]">
+          <p className="text-[13px] text-attention-texte">
             Synthèse illisible&nbsp;: {erreur}
           </p>
         ) : !lue ? (
-          <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+          <p className="text-[13px] text-texte-3">Chargement…</p>
         ) : (
           <ContenuAgent lue={lue} />
         )}
@@ -482,7 +482,7 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
               cle: "auteur",
               titre: "Auteur",
               rendu: (ligne) => (
-                <span className="text-[#F2F3F5]">
+                <span className="text-texte">
                   {libelleAuteur(ligne.auteur)}
                 </span>
               ),
@@ -541,7 +541,7 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
           ]}
         />
         {agent.motifsRejet.length ? (
-          <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">
+          <p className="text-[12px] leading-[1.45] text-texte-3">
             Motifs de rejet&nbsp;:{" "}
             {agent.motifsRejet
               .map((motif) => `${motif.libelle} (${motif.valeur})`)
@@ -549,7 +549,7 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
           </p>
         ) : null}
         {agent.mails && agent.mails.recus > 0 ? (
-          <p className="text-[12px] leading-[1.45] text-[#9CA3AF]">
+          <p className="text-[12px] leading-[1.45] text-texte-3">
             Mails&nbsp;: {agent.mails.recus} reçus · {agent.mails.rangesSeuls}{" "}
             rangés seuls chez un client ({agent.mails.rangementsCorriges} rangés
             ailleurs ensuite) · {agent.mails.bruitArchiveSeul} publicités
@@ -564,16 +564,16 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
         <div className="flex flex-col gap-2">
           <p className={LBL}>Qualité des données</p>
           {qualite.length === 0 ? (
-            <p className="text-[13px] text-[#6B7280]">Rien à signaler.</p>
+            <p className="text-[13px] text-texte-3">Rien à signaler.</p>
           ) : (
             <ul className="flex flex-col">
               {qualite.map((point) => (
                 <li
                   key={point.cle}
-                  className="flex items-baseline justify-between gap-3 border-b border-[#2A2D34] py-2 text-[13px] last:border-b-0"
+                  className="flex items-baseline justify-between gap-3 border-b border-trait py-2 text-[13px] last:border-b-0"
                 >
-                  <span className="text-[#D1D5DB]">{point.libelle}</span>
-                  <span className={cn(NUM, "text-[#F5B454]")}>
+                  <span className="text-texte-2">{point.libelle}</span>
+                  <span className={cn(NUM, "text-attention-texte")}>
                     {nombre(point.valeur)}
                   </span>
                 </li>
@@ -595,14 +595,14 @@ function ContenuAgent({ lue }: { lue: SyntheseLue }) {
                   <span aria-hidden>●</span>
                   <span className="min-w-0 flex-1">
                     <span className="font-medium">{alerte.titre}</span>
-                    <span className="block text-[12px] text-[#9CA3AF]">
+                    <span className="block text-[12px] text-texte-3">
                       {alerte.detail}
                     </span>
                   </span>
                   {alerte.lien ? (
                     <Link
                       href={alerte.lien}
-                      className="shrink-0 text-[12px] text-[#5DCAA5] hover:text-[#8FE0C3]"
+                      className="shrink-0 text-[12px] text-action-clair hover:text-action-clair"
                     >
                       Voir
                     </Link>

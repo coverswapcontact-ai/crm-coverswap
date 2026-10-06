@@ -148,10 +148,10 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
         sousTitre="Une photo du client, une teinte par zone : par l'API, ou préparé pour ChatGPT."
         actions={
           <>
-            <Link href="/simulateur/banc" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+            <Link href="/simulateur/banc" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-3 text-[13px] font-medium text-texte hover:border-trait-2 sm:h-8", TRANS)}>
               <FlaskConical size={14} aria-hidden /> Banc
             </Link>
-            <Link href="/simulateur/prompts" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS)}>
+            <Link href="/simulateur/prompts" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-3 text-[13px] font-medium text-texte hover:border-trait-2 sm:h-8", TRANS)}>
               <BookText size={14} aria-hidden /> Prompts
             </Link>
           </>
@@ -164,19 +164,19 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
         {/* 1. Le client */}
         <Etape numero={1} titre="Le client">
           {contexte && dossierId ? (
-            <div className="rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3">
+            <div className="rounded-[12px] border-[0.5px] border-trait bg-surface p-3">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="truncate text-[14px] font-medium text-[#F2F3F5]">
+                <p className="truncate text-[14px] font-medium text-texte">
                   {contexte.dossier.clientNom}
-                  <span className="font-normal text-[#9CA3AF]">
+                  <span className="font-normal text-texte-3">
                     {" "}
                     · {contexte.dossier.ville || "ville inconnue"} · {contexte.photos.length} photo{contexte.photos.length > 1 ? "s" : ""}
                   </span>
                 </p>
               </div>
-              {contexte.projet?.resume ? <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-[#9CA3AF]">Son projet : {contexte.projet.resume}</p> : null}
+              {contexte.projet?.resume ? <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-texte-3">Son projet : {contexte.projet.resume}</p> : null}
               <div className="mt-2 flex gap-1.5">
-                <Link href={`/dossiers?dossier=${contexte.dossier.id}`} className="inline-flex h-11 sm:h-8 items-center rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:underline">
+                <Link href={`/dossiers?dossier=${contexte.dossier.id}`} className="inline-flex h-11 sm:h-8 items-center rounded-[8px] px-2 text-[12px] text-action-clair hover:underline">
                   Dossier
                 </Link>
                 <Bouton taille="sm" variante="fantome" onClick={() => { setDossierId(null); setContexte(null); }}>
@@ -194,15 +194,15 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
             {/* 2. La photo avant */}
             <Etape numero={2} titre="La photo avant">
               {contexte.photos.length === 0 ? (
-                <p className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4 text-[13px] text-[#9CA3AF]">Aucune photo du client dans ce dossier. Envoyez-lui le lien de son espace pour qu&apos;il en dépose, ou ajoutez-en depuis le dossier.</p>
+                <p className="rounded-[12px] border-[0.5px] border-dashed border-trait p-4 text-[13px] text-texte-3">Aucune photo du client dans ce dossier. Envoyez-lui le lien de son espace pour qu&apos;il en dépose, ou ajoutez-en depuis le dossier.</p>
               ) : (
                 <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {contexte.photos.map((p) => (
                     <li key={p.id}>
-                      <button type="button" onClick={() => setPhotoId(p.id)} aria-pressed={photoId === p.id} className={cn("relative block aspect-[4/3] w-full overflow-hidden rounded-[10px] border-2", photoId === p.id ? "border-[#5DCAA5]" : "border-transparent")}>
+                      <button type="button" onClick={() => setPhotoId(p.id)} aria-pressed={photoId === p.id} className={cn("relative block aspect-[4/3] w-full overflow-hidden rounded-[10px] border-2", photoId === p.id ? "border-action-clair" : "border-transparent")}>
                         {/* eslint-disable-next-line @next/next/no-img-element -- photo privée servie derrière la session */}
                         <img src={p.url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                        {photoId === p.id ? <span className="absolute top-1.5 right-1.5 rounded-full bg-[#1D9E75] px-1.5 text-[11px] font-semibold text-[#0B1612]">Avant</span> : null}
+                        {photoId === p.id ? <span className="absolute top-1.5 right-1.5 rounded-full bg-action px-1.5 text-[11px] font-semibold text-action-texte">Avant</span> : null}
                       </button>
                     </li>
                   ))}
@@ -222,21 +222,21 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                       setType(t.id);
                       setPreparation(null);
                     }}
-                    className={cn("min-h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-8", type === t.id ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+                    className={cn("min-h-11 rounded-full border-[0.5px] px-3 text-[13px] sm:min-h-8", type === t.id ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2", TRANS)}
                   >
                     {t.libelle}
                     {contexte.typeSuggere === t.id ? <span className="ml-1 text-[11px] opacity-70">· suggéré</span> : null}
                   </button>
                 ))}
               </div>
-              <p className="mt-1.5 text-[12px] text-[#8B919C]">{typeChoisi.aide}</p>
+              <p className="mt-1.5 text-[12px] text-texte-3">{typeChoisi.aide}</p>
             </Etape>
 
             {/* 4. Les teintes, zone par zone */}
             <Etape numero={4} titre="Les teintes, zone par zone">
               {styles.length > 0 || contexte.projet?.propositions ? (
-                <p className="mb-2 text-[12.5px] text-[#9CA3AF]">
-                  Ses goûts : <span className="text-[#D1D5DB]">{[...styles.map((s) => LIBELLES_STYLE[s]), contexte.projet?.propositions ? "veut des propositions" : null].filter(Boolean).join(", ")}</span> — proposés en premier.
+                <p className="mb-2 text-[12.5px] text-texte-3">
+                  Ses goûts : <span className="text-texte-2">{[...styles.map((s) => LIBELLES_STYLE[s]), contexte.projet?.propositions ? "veut des propositions" : null].filter(Boolean).join(", ")}</span> — proposés en premier.
                 </p>
               ) : null}
               <ul className="space-y-2">
@@ -244,22 +244,22 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                   const teinte = teintes[zone];
                   const demandee = !contexte.projet || contexte.projet.zones.length === 0 || contexte.projet.zones.includes(zone);
                   return (
-                    <li key={zone} className="flex items-center gap-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-2.5">
+                    <li key={zone} className="flex items-center gap-3 rounded-[12px] border-[0.5px] border-trait bg-surface p-2.5">
                       {teinte ? (
                         // eslint-disable-next-line @next/next/no-img-element -- échantillon servi par le CRM
                         <img src={teinte.image} alt="" className="h-12 w-12 shrink-0 rounded-[8px] object-cover" />
                       ) : (
-                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-dashed border-[#3A3E47] text-[11px] text-[#6B7280]">—</span>
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-dashed border-trait-2 text-[11px] text-texte-3">—</span>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13.5px] font-medium text-[#F2F3F5]">
+                        <p className="text-[13.5px] font-medium text-texte">
                           {ZONES[zone].libelle}
-                          {!demandee ? <span className="ml-1.5 text-[11px] font-normal text-[#8B919C]">(pas demandé par le client)</span> : null}
+                          {!demandee ? <span className="ml-1.5 text-[11px] font-normal text-texte-3">(pas demandé par le client)</span> : null}
                         </p>
-                        <p className="line-clamp-2 text-[12px] text-[#9CA3AF]">{teinte ? `${teinte.ref} · ${teinte.nom} · ${teinte.resume}` : "Inchangé"}</p>
+                        <p className="line-clamp-2 text-[12px] text-texte-3">{teinte ? `${teinte.ref} · ${teinte.nom} · ${teinte.resume}` : "Inchangé"}</p>
                       </div>
                       {teinte ? (
-                        <button type="button" aria-label={`Retirer la teinte de ${ZONES[zone].libelle}`} onClick={() => setTeintes((t) => ({ ...t, [zone]: undefined }))} className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-full text-[#9CA3AF] hover:bg-[#22262D]">
+                        <button type="button" aria-label={`Retirer la teinte de ${ZONES[zone].libelle}`} onClick={() => setTeintes((t) => ({ ...t, [zone]: undefined }))} className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-full text-texte-3 hover:bg-surface-2">
                           <X size={15} aria-hidden />
                         </button>
                       ) : null}
@@ -281,8 +281,8 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
                 Générer via l&apos;API{cout !== null && pret ? ` · ≈ ${dollars(cout)}` : ""}
               </Bouton>
             </div>
-            {!pret ? <p className="text-[12.5px] text-[#8B919C]">Choisis une photo et au moins une teinte.</p> : null}
-            {consommation?.cle === false ? <p className="text-[12.5px] text-[#F5B454]">Mode API indisponible : la clé OpenAI n&apos;est pas posée sur ce serveur.</p> : null}
+            {!pret ? <p className="text-[12.5px] text-texte-3">Choisis une photo et au moins une teinte.</p> : null}
+            {consommation?.cle === false ? <p className="text-[12.5px] text-attention-texte">Mode API indisponible : la clé OpenAI n&apos;est pas posée sur ce serveur.</p> : null}
 
             {preparation ? (
               <section id="resultat" className="scroll-mt-20">
@@ -325,8 +325,8 @@ export default function EcranSimulateur({ dossierInitial, preparationInitiale = 
 function Etape({ numero, titre, children }: { numero: number; titre: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-2 flex items-center gap-2 text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#22262D] text-[11px] text-[#D1D5DB]">{numero}</span>
+      <h2 className="mb-2 flex items-center gap-2 text-[12px] font-medium tracking-wide text-texte-3 uppercase">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[11px] text-texte-2">{numero}</span>
         {titre}
       </h2>
       {children}
@@ -348,26 +348,26 @@ function RechercheDossier({ onChoisir }: { onChoisir: (id: string) => void }) {
   return (
     <div>
       <div className="relative">
-        <Search size={15} className="absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" aria-hidden />
+        <Search size={15} className="absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" aria-hidden />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom, ville ou téléphone du client" className={cn(CLASSE_SAISIE, "h-11 pl-9 sm:h-9")} aria-label="Rechercher un dossier" />
       </div>
-      <ul className="mt-2 divide-y-[0.5px] divide-[#2A2D34] overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+      <ul className="mt-2 divide-y-[0.5px] divide-trait overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface">
         {(dossiers ?? []).map((d) => (
           <li key={d.id}>
-            <button type="button" onClick={() => onChoisir(d.id)} className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-[#22262D]">
+            <button type="button" onClick={() => onChoisir(d.id)} className="flex min-h-12 w-full items-center gap-3 px-3 py-2 text-left hover:bg-surface-2">
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px] text-[#F2F3F5]">{d.clientNom}</span>
-                <span className="block text-[12px] text-[#8B919C]">
+                <span className="block truncate text-[13.5px] text-texte">{d.clientNom}</span>
+                <span className="block text-[12px] text-texte-3">
                   {d.ville || "—"} · {d.photos} photo{d.photos > 1 ? "s" : ""}
                   {d.espace ? " · espace ouvert" : ""}
                 </span>
               </span>
-              <ChevronRight size={15} className="text-[#6B7280]" aria-hidden />
+              <ChevronRight size={15} className="text-texte-3" aria-hidden />
             </button>
           </li>
         ))}
-        {dossiers && dossiers.length === 0 ? <li className="px-3 py-4 text-[13px] text-[#9CA3AF]">Aucun dossier trouvé.</li> : null}
-        {dossiers === null ? <li className="px-3 py-4 text-[13px] text-[#6B7280]">Chargement…</li> : null}
+        {dossiers && dossiers.length === 0 ? <li className="px-3 py-4 text-[13px] text-texte-3">Aucun dossier trouvé.</li> : null}
+        {dossiers === null ? <li className="px-3 py-4 text-[13px] text-texte-3">Chargement…</li> : null}
       </ul>
     </div>
   );
@@ -379,26 +379,26 @@ function CompteurCredit({ consommation }: { consommation: Consommation | null })
   const { mois, solde, creditEpuise, reelOpenAI } = consommation;
   const bas = solde && solde.estime < 2;
   return (
-    <div className={cn("mt-4 space-y-1 rounded-[12px] border-[0.5px] px-3.5 py-2.5 text-[12.5px] leading-relaxed", creditEpuise || bas ? "border-[#EF4444]/40 bg-[#EF4444]/[0.07]" : "border-[#2A2D34] bg-[#1C1F25]")}>
-      <p className="text-[#D1D5DB]">
-        <Coins size={14} className="mr-1.5 inline -translate-y-px text-[#9CA3AF]" aria-hidden />
-        Crédit OpenAI ce mois : <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(mois.total)}</strong>{" "}
-        <span className="text-[#8B919C]">
+    <div className={cn("mt-4 space-y-1 rounded-[12px] border-[0.5px] px-3.5 py-2.5 text-[12.5px] leading-relaxed", creditEpuise || bas ? "border-retard/40 bg-retard/[0.07]" : "border-trait bg-surface")}>
+      <p className="text-texte-2">
+        <Coins size={14} className="mr-1.5 inline -translate-y-px text-texte-3" aria-hidden />
+        Crédit OpenAI ce mois : <strong className="font-medium text-texte tabular-nums">{dollars(mois.total)}</strong>{" "}
+        <span className="text-texte-3">
           ({mois.generations} image{mois.generations > 1 ? "s" : ""} · site {dollars(mois.site)} · CRM {dollars(mois.crm)}{mois.espace ? <> · espaces clients {dollars(mois.espace)}</> : null})
         </span>
       </p>
-      {reelOpenAI ? <p className="text-[#8B919C]">Facturé par OpenAI ce mois : {dollars(reelOpenAI.mois)}</p> : null}
+      {reelOpenAI ? <p className="text-texte-3">Facturé par OpenAI ce mois : {dollars(reelOpenAI.mois)}</p> : null}
       {creditEpuise ? (
         <p>
           <Pastille ton="rouge">Crédit épuisé (constaté le {new Date(creditEpuise.le).toLocaleDateString("fr-FR")})</Pastille>
         </p>
       ) : solde ? (
-        <p className={bas ? "text-[#F87171]" : "text-[#D1D5DB]"}>
-          Solde estimé : <strong className="font-medium tabular-nums">{dollars(solde.estime)}</strong> <span className="text-[#8B919C]">(≈ {solde.simulationsRestantes} simulations)</span>
+        <p className={bas ? "text-retard-texte" : "text-texte-2"}>
+          Solde estimé : <strong className="font-medium tabular-nums">{dollars(solde.estime)}</strong> <span className="text-texte-3">(≈ {solde.simulationsRestantes} simulations)</span>
         </p>
       ) : (
         <p>
-          <Link href="/parametres" className="text-[#F5B454] hover:underline">
+          <Link href="/parametres" className="text-attention-texte hover:underline">
             Solde inconnu : note ton solde OpenAI dans Paramètres
           </Link>
         </p>

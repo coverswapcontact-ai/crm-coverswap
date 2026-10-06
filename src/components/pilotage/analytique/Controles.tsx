@@ -99,9 +99,9 @@ const NOMS_SOURCE: Record<string, string> = {
 };
 
 function couleurEtat(etat: EtatSource): string {
-  if (etat.etat === "A_JOUR") return "#5DCAA5";
+  if (etat.etat === "A_JOUR") return "var(--color-action-clair)";
   if (etat.etat === "NON_BRANCHEE") return GRIS_ABSENT;
-  return "#F5B454";
+  return "var(--color-attention-texte)";
 }
 
 /** « Meta synchronisé à 07:02 », « Search Console à 06:40 », « Fiche Google : en attente d'accès ». */
@@ -124,26 +124,26 @@ function sourcesVisibles(sources: EtatSource[]): EtatSource[] {
 function PanneauSources({ sources, maintenant, onFermer }: { sources: EtatSource[]; maintenant: Date; onFermer: () => void }) {
   const liste = SOURCES_ENTETE.map((cle) => sources.find((etat) => etat.source === cle)).filter((etat): etat is EtatSource => Boolean(etat));
   return (
-    <div id="panneau-sources" className="rounded-[14px] border border-[#2A2D34] bg-[#1C1F25] p-4">
+    <div id="panneau-sources" className="rounded-[14px] border border-trait bg-surface p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-[10px] font-medium tracking-[0.08em] text-[#9CA3AF] uppercase md:text-[11px]">Synchronisations</p>
-        <button type="button" onClick={onFermer} aria-label="Fermer" className={cn("rounded-[8px] p-1.5 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+        <p className="text-[10px] font-medium tracking-[0.08em] text-texte-3 uppercase md:text-[11px]">Synchronisations</p>
+        <button type="button" onClick={onFermer} aria-label="Fermer" className={cn("rounded-[8px] p-1.5 text-texte-3 hover:bg-surface-2 hover:text-texte", TRANS)}>
           <X size={15} aria-hidden />
         </button>
       </div>
       <ul className="flex flex-col">
         {liste.map((etat) => (
-          <li key={etat.source} className="flex flex-col gap-2 border-t border-[#2A2D34] py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between">
+          <li key={etat.source} className="flex flex-col gap-2 border-t border-trait py-3 first:border-t-0 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[13px] text-[#F2F3F5]">
+              <p className="flex items-center gap-2 text-[13px] text-texte">
                 <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: couleurEtat(etat) }} aria-hidden />
                 {NOMS_SOURCE[etat.source]}
-                <span className="text-[#9CA3AF]">
+                <span className="text-texte-3">
                   · {etat.etat === "A_JOUR" ? "à jour" : etat.etat === "EN_ECHEC" ? "en échec" : etat.etat === "EN_ATTENTE_ACCES" ? "en attente d'accès" : "pas encore branché"}
                   {etat.estimation ? " (estimation)" : ""}
                 </span>
               </p>
-              <p className="mt-0.5 text-[12px] leading-[1.45] text-[#9CA3AF]">
+              <p className="mt-0.5 text-[12px] leading-[1.45] text-texte-3">
                 {etat.derniereReussite
                   ? `Dernière synchronisation réussie ${momentSynchro(etat.derniereReussite, maintenant)}.`
                   : etat.source === "SITE"
@@ -151,7 +151,7 @@ function PanneauSources({ sources, maintenant, onFermer }: { sources: EtatSource
                     : "Aucune synchronisation réussie pour l'instant."}
                 {etat.erreur ? ` ${etat.erreur}` : ""}
               </p>
-              {etat.aFaire ? <p className="mt-0.5 text-[12px] leading-[1.45] text-[#6B7280]">{etat.aFaire}</p> : null}
+              {etat.aFaire ? <p className="mt-0.5 text-[12px] leading-[1.45] text-texte-3">{etat.aFaire}</p> : null}
             </div>
             {etat.source !== "SITE" && etat.etat !== "NON_BRANCHEE" ? <BoutonRelancer source={etat.source} /> : null}
           </li>
@@ -168,7 +168,7 @@ function ChoixDates({ periode, requete, onFermer }: { periode: Periode; requete:
   const valide = Boolean(du && au);
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-[14px] border border-[#2A2D34] bg-[#1C1F25] p-4"
+      className="flex flex-wrap items-end gap-3 rounded-[14px] border border-trait bg-surface p-4"
       onSubmit={(evenement) => {
         evenement.preventDefault();
         if (!valide) return;
@@ -183,7 +183,7 @@ function ChoixDates({ periode, requete, onFermer }: { periode: Periode; requete:
         );
       }}
     >
-      <label className="flex flex-col gap-1 text-[12px] text-[#9CA3AF]">
+      <label className="flex flex-col gap-1 text-[12px] text-texte-3">
         Du
         <input
           type="date"
@@ -191,10 +191,10 @@ function ChoixDates({ periode, requete, onFermer }: { periode: Periode; requete:
           max={au || undefined}
           onChange={(e) => setDu(e.target.value)}
           required
-          className="h-11 rounded-[8px] border border-[#2A2D34] bg-[#16181D] px-3 text-[16px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]"
+          className="h-11 rounded-[8px] border border-trait bg-fond px-3 text-[16px] text-texte [color-scheme:dark] sm:h-9 sm:text-[13px]"
         />
       </label>
-      <label className="flex flex-col gap-1 text-[12px] text-[#9CA3AF]">
+      <label className="flex flex-col gap-1 text-[12px] text-texte-3">
         Au
         <input
           type="date"
@@ -202,7 +202,7 @@ function ChoixDates({ periode, requete, onFermer }: { periode: Periode; requete:
           min={du || undefined}
           onChange={(e) => setAu(e.target.value)}
           required
-          className="h-11 rounded-[8px] border border-[#2A2D34] bg-[#16181D] px-3 text-[16px] text-[#F2F3F5] [color-scheme:dark] sm:h-9 sm:text-[13px]"
+          className="h-11 rounded-[8px] border border-trait bg-fond px-3 text-[16px] text-texte [color-scheme:dark] sm:h-9 sm:text-[13px]"
         />
       </label>
       <div className="flex gap-2">
@@ -234,7 +234,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
       {/* Titre, synchronisations, période */}
       <div className="flex flex-col gap-3.5 md:flex-row md:items-end md:justify-between md:gap-6">
         <div className="flex items-center justify-between gap-3 md:flex-col md:items-start md:gap-1.5">
-          <h1 className="font-heading text-[28px] leading-[normal] font-semibold tracking-[-0.02em] text-[#F2F3F5] md:text-[34px]">Analytique</h1>
+          <h1 className="font-heading text-[28px] leading-[normal] font-semibold tracking-[-0.02em] text-texte md:text-[34px]">Analytique</h1>
           {/* Ordinateur : l'état de chaque source */}
           <button
             type="button"
@@ -242,7 +242,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
             aria-expanded={panneau === "sources"}
             aria-controls="panneau-sources"
             title="Voir les synchronisations et les relancer"
-            className="hidden flex-wrap items-center gap-x-4 gap-y-1 rounded-[6px] text-left text-[13px] text-[#9CA3AF] hover:text-[#D1D5DB] md:flex"
+            className="hidden flex-wrap items-center gap-x-4 gap-y-1 rounded-[6px] text-left text-[13px] text-texte-3 hover:text-texte-2 md:flex"
           >
             {visibles.map((etat, index) => (
               <span key={etat.source} className="flex items-center gap-1.5">
@@ -258,16 +258,16 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
             onClick={() => basculer("sources")}
             aria-expanded={panneau === "sources"}
             aria-controls="panneau-sources"
-            className="-my-2 flex min-h-11 items-center gap-1.5 text-[12px] text-[#9CA3AF] md:hidden"
+            className="-my-2 flex min-h-11 items-center gap-1.5 text-[12px] text-texte-3 md:hidden"
           >
-            <span className="h-[7px] w-[7px] rounded-full" style={{ background: enEchec.length > 0 ? "#F5B454" : "#5DCAA5" }} aria-hidden />
+            <span className="h-[7px] w-[7px] rounded-full" style={{ background: enEchec.length > 0 ? "var(--color-attention-texte)" : "var(--color-action-clair)" }} aria-hidden />
             {enEchec.length > 0 ? `${enEchec.length} en échec` : plusAncienne ? `à jour ${momentSynchro(plusAncienne, maintenant).replace(/^à /, "")}` : "à jour"}
           </button>
         </div>
 
         {/* Période : contrôle segmenté (ordinateur), pastilles (téléphone) */}
         <nav aria-label="Période" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:px-0">
-          <ul className="flex gap-2 md:gap-1 md:rounded-[10px] md:border md:border-[#2A2D34] md:bg-[#1C1F25] md:p-1">
+          <ul className="flex gap-2 md:gap-1 md:rounded-[10px] md:border md:border-trait md:bg-surface md:p-1">
             {PERIODES_BOUTONS.map((bouton) => {
               const actif = periodeActive === bouton.cle;
               // Téléphone : « Mois en cours » n'est pas dans la maquette (7 j, 30 j, 90 j, 12 mois, Dates) ; il n'apparaît
@@ -284,7 +284,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
                     actif={actif}
                     className={cn(
                       "flex h-[34px] items-center rounded-[17px] border px-[13px] text-[13px] font-medium whitespace-nowrap md:h-8 md:rounded-[8px] md:border-0 md:px-3.5",
-                      actif ? "border-[#F2F3F5] bg-[#F2F3F5] text-[#16181D] md:bg-[#22262D] md:text-[#F2F3F5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:text-[#F2F3F5] md:bg-transparent",
+                      actif ? "border-texte bg-texte text-texte-inverse md:bg-surface-2 md:text-texte" : "border-trait bg-surface text-texte-3 hover:text-texte md:bg-transparent",
                       TRANS
                     )}
                   >
@@ -302,8 +302,8 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
                 className={cn(
                   "flex h-[34px] items-center gap-1.5 rounded-[17px] border px-[13px] text-[13px] font-medium whitespace-nowrap md:h-8 md:rounded-[8px] md:border-0 md:px-3.5",
                   periodeActive === "libre"
-                    ? "border-[#F2F3F5] bg-[#F2F3F5] text-[#16181D] md:bg-[#22262D] md:text-[#F2F3F5]"
-                    : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:text-[#F2F3F5] md:bg-transparent",
+                    ? "border-texte bg-texte text-texte-inverse md:bg-surface-2 md:text-texte"
+                    : "border-trait bg-surface text-texte-3 hover:text-texte md:bg-transparent",
                   TRANS
                 )}
               >
@@ -328,8 +328,8 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
       {panneau === "dates" ? <ChoixDates periode={periode} requete={requete} onFermer={() => setPanneau(null)} /> : null}
 
       {/* Onglets, et le filtre par source de la Vue d'ensemble */}
-      <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-[#2A2D34]">
-        <nav aria-label="Onglets de l'Analytique" className="-mx-4 overflow-x-auto border-b border-[#2A2D34] px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:border-b-0 md:px-0">
+      <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between md:gap-4 md:border-b md:border-trait">
+        <nav aria-label="Onglets de l'Analytique" className="-mx-4 overflow-x-auto border-b border-trait px-4 [scrollbar-width:none] md:mx-0 md:overflow-visible md:border-b-0 md:px-0">
           <ul className="flex gap-[18px] md:gap-1">
             {ONGLETS_ANALYTIQUE.map((onglet) => {
               const actif = requete.onglet === onglet;
@@ -340,7 +340,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
                     actif={actif}
                     className={cn(
                       "flex h-11 items-center text-[14px] whitespace-nowrap md:h-10 md:px-3.5 md:text-[13px] md:font-medium",
-                      actif ? "text-[#F2F3F5] shadow-[inset_0_-2px_0_#5DCAA5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+                      actif ? "text-texte shadow-[inset_0_-2px_0_var(--color-action-clair)]" : "text-texte-3 hover:text-texte",
                       TRANS
                     )}
                   >
@@ -353,7 +353,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
           </ul>
         </nav>
         {requete.onglet === "ensemble" ? (
-          <label className="flex items-center gap-2 self-start text-[13px] text-[#9CA3AF] md:self-auto md:pb-1">
+          <label className="flex items-center gap-2 self-start text-[13px] text-texte-3 md:self-auto md:pb-1">
             <span>Source</span>
             <span className="relative">
               <select
@@ -367,8 +367,8 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
                   )
                 }
                 className={cn(
-                  "h-9 appearance-none rounded-[8px] border border-[#2A2D34] bg-[#1C1F25] pr-8 pl-3 text-[16px] md:h-8 md:text-[13px]",
-                  requete.source ? "text-[#F2F3F5]" : "text-[#9CA3AF]"
+                  "h-9 appearance-none rounded-[8px] border border-trait bg-surface pr-8 pl-3 text-[16px] md:h-8 md:text-[13px]",
+                  requete.source ? "text-texte" : "text-texte-3"
                 )}
                 aria-label="Filtrer par source"
               >
@@ -379,7 +379,7 @@ export function EnTeteAnalytique({ requete, periode, sources, genereLe }: { requ
                   </option>
                 ))}
               </select>
-              <ChevronDown size={14} aria-hidden className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#9CA3AF]" />
+              <ChevronDown size={14} aria-hidden className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-texte-3" />
             </span>
           </label>
         ) : null}

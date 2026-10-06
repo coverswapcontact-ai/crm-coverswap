@@ -96,7 +96,7 @@ export function AjoutTache({ onAjoutee }: { onAjoutee: (tache: TacheVue) => void
       }}
     >
       <label className="relative block">
-        <Plus size={16} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+        <Plus size={16} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
         <input value={titre} onChange={(e) => setTitre(e.target.value)} maxLength={200} placeholder="Ajouter une tâche" aria-label="Ajouter une tâche" enterKeyHint="done" className={cn(CLASSE_SAISIE, "h-11 rounded-[10px] pl-9 pointer-fine:h-9")} />
       </label>
       {ouvert ? (
@@ -104,11 +104,11 @@ export function AjoutTache({ onAjoutee }: { onAjoutee: (tache: TacheVue) => void
           <input type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} aria-label="Pour quand (facultatif)" title="Pour quand (facultatif)" className={cn(CLASSE_SAISIE, "h-11 pointer-fine:h-9")} />
           <div className="relative min-w-0">
             {cible ? (
-              <p className="flex h-11 items-center gap-2 rounded-[8px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 px-3 text-[14px] text-[#D1D5DB] pointer-fine:h-9 sm:text-[13px]">
+              <p className="flex h-11 items-center gap-2 rounded-[8px] border-[0.5px] border-action/40 bg-action-fond/60 px-3 text-[14px] text-texte-2 pointer-fine:h-9 sm:text-[13px]">
                 <span className="min-w-0 flex-1 truncate">
-                  Pour {cible.nom} <span className="text-[#8B919C]">· {GENRES[cible.genre]}</span>
+                  Pour {cible.nom} <span className="text-texte-3">· {GENRES[cible.genre]}</span>
                 </span>
-                <button type="button" onClick={() => setCible(null)} aria-label="Retirer le client" className="-mr-2 flex h-11 w-11 items-center justify-center text-[#9CA3AF] pointer-fine:h-8 pointer-fine:w-8">
+                <button type="button" onClick={() => setCible(null)} aria-label="Retirer le client" className="-mr-2 flex h-11 w-11 items-center justify-center text-texte-3 pointer-fine:h-8 pointer-fine:w-8">
                   <X size={14} aria-hidden />
                 </button>
               </p>
@@ -116,7 +116,7 @@ export function AjoutTache({ onAjoutee }: { onAjoutee: (tache: TacheVue) => void
               <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Pour qui ? (facultatif)" aria-label="Client, contact ou dossier (facultatif)" className={cn(CLASSE_SAISIE, "h-11 pointer-fine:h-9")} />
             )}
             {!cible && resultats.length > 0 ? (
-              <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#22262D] p-1 shadow-lg shadow-black/40">
+              <ul className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-[10px] border-[0.5px] border-trait bg-surface-2 p-1 shadow-lg shadow-black/40">
                 {resultats.map((r) => (
                   <li key={`${r.genre}:${r.id}`}>
                     <button
@@ -126,19 +126,19 @@ export function AjoutTache({ onAjoutee }: { onAjoutee: (tache: TacheVue) => void
                         setRecherche("");
                         setResultats([]);
                       }}
-                      className={cn("flex min-h-11 w-full flex-col justify-center rounded-[8px] px-2.5 py-1.5 text-left hover:bg-[#2A2F37] pointer-fine:min-h-9", TRANS)}
+                      className={cn("flex min-h-11 w-full flex-col justify-center rounded-[8px] px-2.5 py-1.5 text-left hover:bg-surface-2 pointer-fine:min-h-9", TRANS)}
                     >
-                      <span className="truncate text-[13.5px] text-[#F2F3F5]">
-                        {r.nom} <span className="text-[12px] text-[#8B919C]">· {GENRES[r.genre]}</span>
+                      <span className="truncate text-[13.5px] text-texte">
+                        {r.nom} <span className="text-[12px] text-texte-3">· {GENRES[r.genre]}</span>
                       </span>
-                      {r.detail ? <span className="truncate text-[12px] text-[#8B919C]">{r.detail}</span> : null}
+                      {r.detail ? <span className="truncate text-[12px] text-texte-3">{r.detail}</span> : null}
                     </button>
                   </li>
                 ))}
               </ul>
             ) : null}
           </div>
-          <button type="submit" disabled={titre.trim().length < 2 || envoi} className={cn("h-11 rounded-[10px] bg-[#1D9E75] px-4 text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-9 sm:text-[13px]", TRANS)}>
+          <button type="submit" disabled={titre.trim().length < 2 || envoi} className={cn("h-11 rounded-[10px] bg-action px-4 text-[14px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3 pointer-fine:h-9 sm:text-[13px]", TRANS)}>
             Ajouter
           </button>
         </div>

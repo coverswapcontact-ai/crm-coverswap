@@ -16,7 +16,7 @@ function colonnesSeo(titre: string): Colonne<LigneSeo>[] {
       titre,
       className: "max-w-[260px]",
       rendu: (l) => (
-        <span className="block truncate text-[#F2F3F5]" title={l.cle}>
+        <span className="block truncate text-texte" title={l.cle}>
           {l.cle}
         </span>
       ),
@@ -37,7 +37,7 @@ function colonnesSeo(titre: string): Colonne<LigneSeo>[] {
       cle: "ctr",
       titre: "CTR",
       nombre: true,
-      rendu: (l) => <span className="text-[#9CA3AF]">{formaterValeur(l.ctr, "pourcent")}</span>,
+      rendu: (l) => <span className="text-texte-3">{formaterValeur(l.ctr, "pourcent")}</span>,
     },
     {
       cle: "position",
@@ -50,7 +50,7 @@ function colonnesSeo(titre: string): Colonne<LigneSeo>[] {
       titre: "Clics vs avant",
       nombre: true,
       rendu: (l) => {
-        if (l.evolutionClics === null) return <span className="text-[#6B7280]">—</span>;
+        if (l.evolutionClics === null) return <span className="text-texte-3">—</span>;
         const sens = Math.abs(l.evolutionClics) < 0.05 ? "stable" : l.evolutionClics > 0 ? "hausse" : "baisse";
         const affichee = evolutionAffichee({
           precedente: null,
@@ -69,7 +69,7 @@ function ListeOpportunites({ titre, aide, lignes, rendu }: { titre: string; aide
     <Carte titre={titre} sousTitre={aide} gap="gap-3">
       {rendu === "affichages" ? (
         <BarresHorizontales
-          couleur="#F5B454"
+          couleur="var(--color-attention-texte)"
           lignes={lignes.map((l) => ({
             cle: l.cle,
             libelle: l.cle,
@@ -80,7 +80,7 @@ function ListeOpportunites({ titre, aide, lignes, rendu }: { titre: string; aide
         />
       ) : rendu === "position" ? (
         <BarresHorizontales
-          couleur="#7AA7FF"
+          couleur="var(--color-info-texte)"
           lignes={lignes.map((l) => ({
             cle: l.cle,
             libelle: l.cle,
@@ -121,9 +121,9 @@ export function VueSeo({ ecran }: { ecran: EcranSeo }) {
     <>
       {ecran.doublonWww?.detecte ? (
         <p className={ENCADRE}>
-          <span className="text-[#F5B454]">www et sans www indexés tous les deux.</span> Google voit deux adresses pour les mêmes pages : une redirection unique (sans www vers www, ou l&apos;inverse)
+          <span className="text-attention-texte">www et sans www indexés tous les deux.</span> Google voit deux adresses pour les mêmes pages : une redirection unique (sans www vers www, ou l&apos;inverse)
           regroupe leurs clics.
-          {ecran.doublonWww.exemples.length > 0 ? <span className="mt-1 block text-[12px] text-[#9CA3AF]">Exemples : {ecran.doublonWww.exemples.join(" · ")}</span> : null}
+          {ecran.doublonWww.exemples.length > 0 ? <span className="mt-1 block text-[12px] text-texte-3">Exemples : {ecran.doublonWww.exemples.join(" · ")}</span> : null}
         </p>
       ) : null}
 
@@ -159,7 +159,7 @@ export function VueSeo({ ecran }: { ecran: EcranSeo }) {
         <ListeOpportunites titre="En hausse" aide="Les clics montent par rapport à la période précédente" lignes={ecran.opportunites.enHausse} rendu="hausse" />
       </div>
 
-      <Carte titre="Fiche Google" action={etatFiche && etatFiche.etat !== "A_JOUR" ? <span className="text-[12px] text-[#F5B454]">{libelleEtat(etatFiche)}</span> : undefined}>
+      <Carte titre="Fiche Google" action={etatFiche && etatFiche.etat !== "A_JOUR" ? <span className="text-[12px] text-attention-texte">{libelleEtat(etatFiche)}</span> : undefined}>
         {!ecran.fiche ? (
           <EtatVideSource etat={etatFiche} quoi="Fiche Google" />
         ) : (

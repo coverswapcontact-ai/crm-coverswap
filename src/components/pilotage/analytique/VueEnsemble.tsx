@@ -67,9 +67,9 @@ export function sousTitreTunnel(ecran: Pick<EcranEnsemble, "filtreSource" | "per
 
 // « À faire » : blanc à l'ordinateur, couleur du texte au téléphone (maquette).
 const COULEURS_PHRASE = {
-  MONTE: "text-[#5DCAA5]",
-  BAISSE: "text-[#F5B454]",
-  A_FAIRE: "md:text-[#F2F3F5]",
+  MONTE: "text-action-clair",
+  BAISSE: "text-attention-texte",
+  A_FAIRE: "md:text-texte",
 } as const;
 
 export { surLaPeriode };
@@ -77,11 +77,11 @@ export { surLaPeriode };
 function ListeAlertes({ alertes, compact = false }: { alertes: Alerte[]; compact?: boolean }) {
   // Téléphone : les informations sans conséquence (gris) sont omises (maquette).
   const visibles = compact ? alertes.filter((alerte) => alerte.gravite !== "INFO") : alertes;
-  if (visibles.length === 0) return <p className="text-[13px] text-[#6B7280]">Rien à signaler.</p>;
+  if (visibles.length === 0) return <p className="text-[13px] text-texte-3">Rien à signaler.</p>;
   return (
     <ul className="flex flex-col gap-2">
       {visibles.map((alerte) => {
-        const couleur = alerte.gravite === "ATTENTION" ? "#F5B454" : "#9CA3AF";
+        const couleur = alerte.gravite === "ATTENTION" ? "var(--color-attention-texte)" : "var(--color-texte-3)";
         const texte = alerte.lien ? (
           <Link href={alerte.lien} className="underline-offset-2 hover:underline" style={{ color: couleur }}>
             {alerte.texte}
@@ -105,17 +105,17 @@ function Resume({ ecran }: { ecran: EcranEnsemble }) {
   const heure = resume ? momentSynchro(resume.genereLe, new Date(resume.genereLe)).replace(/^à /, "") : null;
   return (
     <section
-      className={cn(CARTE_A, "grid items-start gap-2.5 border-[#24463A] bg-[#1A2420] p-4 md:gap-7 md:px-[26px] md:py-[22px] lg:grid-cols-[200px_minmax(0,1fr)_280px]")}
+      className={cn(CARTE_A, "grid items-start gap-2.5 border-action/40 bg-action-fond p-4 md:gap-7 md:px-[26px] md:py-[22px] lg:grid-cols-[200px_minmax(0,1fr)_280px]")}
       aria-label="Résumé du jour"
     >
       <div className="flex flex-col gap-1.5">
-        <p className={cn(LBL, "text-[#5DCAA5]")}>
+        <p className={cn(LBL, "text-action-clair")}>
           Résumé du jour
           {heure ? <span className="md:hidden"> · {heure}</span> : null}
         </p>
-        {resume ? <p className="hidden text-[13px] text-[#9CA3AF] md:block">{dateHeureLongue(resume.genereLe)}</p> : null}
+        {resume ? <p className="hidden text-[13px] text-texte-3 md:block">{dateHeureLongue(resume.genereLe)}</p> : null}
       </div>
-      <div className="flex flex-col gap-2.5 text-[14px] leading-[1.5] text-[#E5E7EB] md:text-[15px]">
+      <div className="flex flex-col gap-2.5 text-[14px] leading-[1.5] text-texte md:text-[15px]">
         {resume && resume.phrases.length > 0 ? (
           resume.phrases.map((phrase) => (
             <p key={phrase.genre + phrase.amorce} title={phrase.sources.length > 0 ? `Sources : ${phrase.sources.join(", ")}` : undefined}>
@@ -131,7 +131,7 @@ function Resume({ ecran }: { ecran: EcranEnsemble }) {
             </p>
           ))
         ) : (
-          <p className="text-[#9CA3AF]">Le résumé se compose chaque matin à 7 h, à partir des chiffres de la veille.</p>
+          <p className="text-texte-3">Le résumé se compose chaque matin à 7 h, à partir des chiffres de la veille.</p>
         )}
       </div>
       <div className="hidden flex-col gap-2 md:flex">
@@ -176,7 +176,7 @@ function CartePublicite({ ecran }: { ecran: EcranEnsemble }) {
       ) : (
         <>
           <div className="flex flex-col gap-2">
-            <div className="flex justify-between gap-3 text-[12px] text-[#9CA3AF] md:text-[13px]">
+            <div className="flex justify-between gap-3 text-[12px] text-texte-3 md:text-[13px]">
               <span>
                 {pub.jourCampagne !== null && pub.dureeCampagne ? (
                   <>
@@ -208,21 +208,21 @@ function CartePublicite({ ecran }: { ecran: EcranEnsemble }) {
           {pub.publicites.length > 0 ? (
             <ul className="hidden flex-col md:flex">
               {pub.publicites.slice(0, 3).map((publicite) => (
-                <li key={publicite.nom} className="flex items-center justify-between gap-3 border-t border-[#2A2D34] py-3.5 last:pb-0">
+                <li key={publicite.nom} className="flex items-center justify-between gap-3 border-t border-trait py-3.5 last:pb-0">
                   <div className="flex min-w-0 flex-col gap-[3px]">
-                    <p className="truncate text-[14px] font-medium text-[#F2F3F5]">{publicite.nom}</p>
-                    <p className="truncate text-[12px] text-[#9CA3AF]">{publicite.detail}</p>
+                    <p className="truncate text-[14px] font-medium text-texte">{publicite.nom}</p>
+                    <p className="truncate text-[12px] text-texte-3">{publicite.detail}</p>
                   </div>
                   <BadgeVerdict verdict={publicite.verdict} />
                 </li>
               ))}
             </ul>
           ) : null}
-          {pub.estimation ? <p className="text-[12px] text-[#F5B454]">Dépense estimée au prorata du budget&nbsp;: Meta n&apos;est pas synchronisé.</p> : null}
+          {pub.estimation ? <p className="text-[12px] text-attention-texte">Dépense estimée au prorata du budget&nbsp;: Meta n&apos;est pas synchronisé.</p> : null}
         </>
       )}
       {googleAds && googleAds.etat !== "A_JOUR" ? (
-        <p className="hidden text-[12px] text-[#6B7280] md:block">
+        <p className="hidden text-[12px] text-texte-3 md:block">
           Google Ads&nbsp;: {googleAds.etat === "EN_ECHEC" ? "synchronisation en échec" : googleAds.etat === "EN_ATTENTE_ACCES" ? "en attente d'accès" : "pas encore branché"}
         </p>
       ) : null}
@@ -259,7 +259,7 @@ function CarteSeo({ ecran }: { ecran: EcranEnsemble }) {
           <div className="flex flex-col gap-2.5">
             <p className={LBL}>Opportunités&nbsp;: vu, jamais cliqué</p>
             <BarresHorizontales
-              couleur="#F5B454"
+              couleur="var(--color-attention-texte)"
               lignes={seo.opportunites.slice(0, 3).map((o) => ({
                 cle: o.requete,
                 libelle: o.requete,
@@ -288,10 +288,10 @@ function MiniCourbeMois({ mois }: { mois: { mois: string; vues: number }[] }) {
         role="img"
         aria-label={`Vues de la fiche par mois : ${mois.map((m) => `${moisCourt(m.mois)} ${m.vues}`).join(", ")}`}
       >
-        <path d={`M${points.split(" ").join(" L")} L300,70 L0,70 Z`} fill="#7AA7FF" fillOpacity={0.12} />
-        <polyline points={points} fill="none" stroke="#7AA7FF" strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={`M${points.split(" ").join(" L")} L300,70 L0,70 Z`} fill="var(--color-info-texte)" fillOpacity={0.12} />
+        <polyline points={points} fill="none" stroke="var(--color-info-texte)" strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
-      <div className="flex justify-between text-[11px] text-[#6B7280]">
+      <div className="flex justify-between text-[11px] text-texte-3">
         {mois.map((m) => (
           <span key={m.mois} title={`${m.vues} vues`}>
             {moisCourt(m.mois)}
@@ -312,7 +312,7 @@ function CarteFiche({ ecran }: { ecran: EcranEnsemble }) {
       className="max-md:hidden"
       action={
         enAttente ? (
-          <span className="text-[12px] text-[#F5B454]">{libelleEtat(etat)}</span>
+          <span className="text-[12px] text-attention-texte">{libelleEtat(etat)}</span>
         ) : (
           <LienDetail
             href={adresseAnalytique({
@@ -360,13 +360,13 @@ function CarteSeoFicheTelephone({ ecran }: { ecran: EcranEnsemble }) {
       )}
       {opportunite ? (
         <p className={ENCADRE}>
-          <span className="text-[#F5B454]">Opportunité&nbsp;:</span>{" "}
+          <span className="text-attention-texte">Opportunité&nbsp;:</span>{" "}
           «&nbsp;
           {opportunite.requete}&nbsp;», {formaterValeur(opportunite.impressions, "nombre")} affichages, {formaterValeur(opportunite.clics, "nombre")} clic.
         </p>
       ) : null}
       {!fiche && seo ? (
-        <p className="text-[12px] text-[#9CA3AF]">
+        <p className="text-[12px] text-texte-3">
           Fiche Google&nbsp;: {TEXTE_ETAT_FICHE[etatDe(ecran.sources, "FICHE_GOOGLE")?.etat ?? "NON_BRANCHEE"]}
         </p>
       ) : null}
@@ -390,10 +390,10 @@ function CarteQualite({ lignes }: { lignes: LigneSource[] }) {
             titre: "Source",
             className: "w-[40%]",
             rendu: (ligne) => (
-              <span className="flex items-center gap-2 text-[#F2F3F5]">
+              <span className="flex items-center gap-2 text-texte">
                 <Pastille couleur={COULEURS_FAMILLE[ligne.famille]} />
                 <span className="truncate">{ligne.libelle}</span>
-                {ligne.note ? <span className="text-[11px] text-[#6B7280]">({ligne.note})</span> : null}
+                {ligne.note ? <span className="text-[11px] text-texte-3">({ligne.note})</span> : null}
               </span>
             ),
           },
@@ -421,9 +421,9 @@ function CarteQualite({ lignes }: { lignes: LigneSource[] }) {
             nombre: true,
             rendu: (ligne) =>
               ligne.tauxDevis === null || ligne.horsTunnel ? (
-                <span className="text-[#9CA3AF]">—</span>
+                <span className="text-texte-3">—</span>
               ) : (
-                <span className={ligne.tauxDevis === meilleur && meilleur > 0 ? "font-semibold text-[#5DCAA5]" : "text-[#9CA3AF]"}>
+                <span className={ligne.tauxDevis === meilleur && meilleur > 0 ? "font-semibold text-action-clair" : "text-texte-3"}>
                   {formaterValeur(ligne.tauxDevis, "pourcent", {
                     decimales: 0,
                   })}
@@ -441,26 +441,26 @@ export function JaugePub({ ratio, plafond }: { ratio: number | null; plafond: nu
   const echelle = plafond * 1.25;
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex justify-between gap-3 text-[13px] text-[#9CA3AF]">
+      <div className="flex justify-between gap-3 text-[13px] text-texte-3">
         <span>
           Pub réinvestie sur le chiffre encaissé
           {ratio !== null ? (
             <>
               {" "}
-              · <span className={cn("font-heading tabular-nums", ratio > plafond ? "text-[#F5B454]" : "text-[#F2F3F5]")}>{formaterValeur(ratio, "pourcent")}</span>
+              · <span className={cn("font-heading tabular-nums", ratio > plafond ? "text-attention-texte" : "text-texte")}>{formaterValeur(ratio, "pourcent")}</span>
             </>
           ) : null}
         </span>
         <span className="shrink-0">plafond {formaterValeur(plafond, "pourcent", { decimales: 0 })}</span>
       </div>
       {ratio === null ? (
-        <p className="text-[12px] text-[#6B7280]">Rien d&apos;encaissé sur la période&nbsp;: ratio non calculable.</p>
+        <p className="text-[12px] text-texte-3">Rien d&apos;encaissé sur la période&nbsp;: ratio non calculable.</p>
       ) : (
         <Progression
           ratio={ratio / echelle}
           hauteur={8}
           repere={plafond / echelle}
-          couleur={ratio > plafond ? "#F5B454" : "#5DCAA5"}
+          couleur={ratio > plafond ? "var(--color-attention-texte)" : "var(--color-action-clair)"}
           titre={`${formaterValeur(ratio, "pourcent")} de l'encaissé réinvesti en publicité (plafond ${formaterValeur(plafond, "pourcent", { decimales: 0 })})`}
         />
       )}
@@ -487,11 +487,11 @@ function CarteArgent({ ecran }: { ecran: EcranEnsemble }) {
     >
       <GrilleMini>
         <MiniIndicateur libelle={`Encaissé ${surLaPeriode(periode)}`} valeur={euros(argent.encaisse)} />
-        <MiniIndicateur libelle="Devis en attente" valeur={euros(argent.devisEnAttente)} couleur={argent.devisEnAttente > 0 ? "#F5B454" : undefined} />
+        <MiniIndicateur libelle="Devis en attente" valeur={euros(argent.devisEnAttente)} couleur={argent.devisEnAttente > 0 ? "var(--color-attention-texte)" : undefined} />
         <MiniIndicateur libelle="Dépense pub" valeur={euros(argent.depensePub)} couleur={argent.depensePub === null ? GRIS_ABSENT : undefined} />
       </GrilleMini>
       <JaugePub ratio={argent.ratioPub} plafond={argent.plafond} />
-      <p className="text-[12px] text-[#6B7280]">
+      <p className="text-[12px] text-texte-3">
         Règle&nbsp;: la pub d&apos;un mois ne dépasse pas {formaterValeur(argent.plafond, "pourcent", { decimales: 0 })} de l&apos;encaissé du mois précédent (livre des recettes).
       </p>
     </Carte>
@@ -521,7 +521,7 @@ export function VueEnsemble({ ecran }: { ecran: EcranEnsemble }) {
           <TunnelBarres tunnel={tunnel} groupes={["leads"]} replierAuTelephone sansTaux={["signes"]} libelles={LIBELLES_TUNNEL} encadre={false} />
           {tunnel.perteMax ? (
             <p className={cn(ENCADRE, "px-3.5 py-3 max-md:hidden")}>
-              L&apos;étape qui perd le plus&nbsp;: <span className="text-[#F5B454]">{tunnel.perteMax.libelle}</span>. {phrasePerte(tunnel.perteMax)}
+              L&apos;étape qui perd le plus&nbsp;: <span className="text-attention-texte">{tunnel.perteMax.libelle}</span>. {phrasePerte(tunnel.perteMax)}
             </p>
           ) : null}
         </Carte>

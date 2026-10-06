@@ -61,7 +61,7 @@ export function CourbeEnsemble({ courbeLeads, courbeDevis }: { courbeLeads: Cour
             <LegendeCourbe courbe={courbe} />
           </span>
           {courbes.devis ? (
-            <div role="group" aria-label="Courbe affichée" className="flex rounded-[8px] border border-[#2A2D34] p-0.5">
+            <div role="group" aria-label="Courbe affichée" className="flex rounded-[8px] border border-trait p-0.5">
               {(["leads", "devis"] as const).map((cle) => (
                 <button
                   key={cle}
@@ -70,7 +70,7 @@ export function CourbeEnsemble({ courbeLeads, courbeDevis }: { courbeLeads: Cour
                   onClick={() => setVue(cle)}
                   className={cn(
                     "h-7 rounded-[6px] px-2.5 text-[12px] font-medium transition-colors duration-150 max-md:h-8",
-                    vue === cle ? "bg-[#22262D] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]"
+                    vue === cle ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte"
                   )}
                 >
                   {cle === "leads" ? "Leads" : "Devis"}

@@ -30,7 +30,7 @@ const VUES: { vue: Exclude<VueMail, "RANGES">; libelle: string; aide: string }[]
 
 function Mention({ ligne }: { ligne: LigneMail }) {
   if (!ligne.mention) return null;
-  const ton = ligne.mention.startsWith("Sans réponse") ? "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]" : ligne.mention === "Nouvelle demande" || ligne.mention === "Revenu" ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]";
+  const ton = ligne.mention.startsWith("Sans réponse") ? "border-attention/40 bg-attention/10 text-attention-texte" : ligne.mention === "Nouvelle demande" || ligne.mention === "Revenu" ? "border-action/40 bg-action-fond text-action-clair" : "border-trait bg-surface text-texte-2";
   return <span className={cn("inline-flex items-center rounded-full border-[0.5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)}>{ligne.mention}</span>;
 }
 
@@ -43,15 +43,15 @@ function MarquesV2({ ligne, vue }: { ligne: LigneMail; vue: VueMail }) {
   return (
     <>
       {priorite ? (
-        <span className={cn(PILL, ligne.priorite.rang === 1 ? "border-[#EF4444]/40 bg-[#EF4444]/10 text-[#F87171]" : "border-[#2A2D34] bg-[#1C1F25] text-[#B4BAC4]")}>
+        <span className={cn(PILL, ligne.priorite.rang === 1 ? "border-retard/40 bg-retard/10 text-retard-texte" : "border-trait bg-surface text-texte-2")}>
           {ligne.priorite.libelle}
           {ligne.priorite.montant !== null ? ` · ${Math.round(ligne.priorite.montant).toLocaleString("fr-FR")} €` : ""}
         </span>
       ) : null}
-      {ligne.intention ? <span className={cn(PILL, ligne.intention === "REPONSE" ? "border-[#EF9F27]/40 bg-[#EF9F27]/10 text-[#F5B454]" : ligne.intention === "ACTION" ? "border-[#60A5FA]/40 bg-[#60A5FA]/10 text-[#93C5FD]" : "border-[#2A2D34] bg-[#1C1F25] text-[#8B919C]")}>{LIBELLE_INTENTION[ligne.intention] ?? ligne.intention}</span> : null}
-      {ligne.propositionsEnAttente > 0 ? <span className={cn(PILL, "border-[#F472B6]/40 bg-[#F472B6]/10 text-[#F9A8D4]")}>{ligne.propositionsEnAttente} carte{ligne.propositionsEnAttente > 1 ? "s" : ""} à valider</span> : null}
-      {ligne.brouillonPret ? <span className={cn(PILL, "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]")}>Brouillon prêt</span> : null}
-      {ligne.snoozeJusqua && !ligne.revenu ? <span className={cn(PILL, "border-[#2A2D34] bg-[#1C1F25] text-[#8B919C]")}>Remis au {new Date(ligne.snoozeJusqua).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span> : null}
+      {ligne.intention ? <span className={cn(PILL, ligne.intention === "REPONSE" ? "border-attention/40 bg-attention/10 text-attention-texte" : ligne.intention === "ACTION" ? "border-info/40 bg-info/10 text-info-texte" : "border-trait bg-surface text-texte-3")}>{LIBELLE_INTENTION[ligne.intention] ?? ligne.intention}</span> : null}
+      {ligne.propositionsEnAttente > 0 ? <span className={cn(PILL, "border-info/40 bg-info/10 text-info-texte")}>{ligne.propositionsEnAttente} carte{ligne.propositionsEnAttente > 1 ? "s" : ""} à valider</span> : null}
+      {ligne.brouillonPret ? <span className={cn(PILL, "border-action/40 bg-action-fond text-action-clair")}>Brouillon prêt</span> : null}
+      {ligne.snoozeJusqua && !ligne.revenu ? <span className={cn(PILL, "border-trait bg-surface text-texte-3")}>Remis au {new Date(ligne.snoozeJusqua).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span> : null}
     </>
   );
 }
@@ -60,31 +60,31 @@ function LigneConversation({ ligne, vue, occupe, onOuvrir, onGeste }: { ligne: L
   const [plus, setPlus] = useState(false);
   const nom = ligne.correspondant.nom || ligne.correspondant.adresse;
   return (
-    <li className={cn("rounded-[12px] border-[0.5px] bg-[#1C1F25]", ligne.nonLu ? "border-[#3A3E47]" : "border-[#2A2D34]")}>
-      <button type="button" onClick={onOuvrir} className={cn("block w-full rounded-t-[12px] px-3.5 pt-3 pb-2 text-left hover:bg-[#20232A] focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none", TRANS)}>
+    <li className={cn("rounded-[12px] border-[0.5px] bg-surface", ligne.nonLu ? "border-trait-2" : "border-trait")}>
+      <button type="button" onClick={onOuvrir} className={cn("block w-full rounded-t-[12px] px-3.5 pt-3 pb-2 text-left hover:bg-surface focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none", TRANS)}>
         <span className="flex items-center gap-2">
-          {ligne.nonLu ? <span aria-label="Non lu" className="h-2 w-2 shrink-0 rounded-full bg-[#1D9E75]" /> : null}
-          <span className={cn("min-w-0 flex-1 truncate text-[14.5px]", ligne.nonLu ? "font-semibold text-[#F2F3F5]" : "font-medium text-[#D1D5DB]")}>
-            {ligne.sens === "SORTANT" && !ligne.automatique ? <span className="font-normal text-[#8B919C]">À : </span> : null}
+          {ligne.nonLu ? <span aria-label="Non lu" className="h-2 w-2 shrink-0 rounded-full bg-action" /> : null}
+          <span className={cn("min-w-0 flex-1 truncate text-[14.5px]", ligne.nonLu ? "font-semibold text-texte" : "font-medium text-texte-2")}>
+            {ligne.sens === "SORTANT" && !ligne.automatique ? <span className="font-normal text-texte-3">À : </span> : null}
             {nom}
           </span>
-          {ligne.nombre > 1 ? <span className="text-[11.5px] text-[#8B919C] tabular-nums">{ligne.nombre}</span> : null}
-          {ligne.pieces > 0 ? <Paperclip size={13} className="text-[#8B919C]" aria-label="Pièces jointes" /> : null}
-          <span className="shrink-0 text-[12px] text-[#8B919C] tabular-nums">{quand(ligne.recuLe)}</span>
+          {ligne.nombre > 1 ? <span className="text-[11.5px] text-texte-3 tabular-nums">{ligne.nombre}</span> : null}
+          {ligne.pieces > 0 ? <Paperclip size={13} className="text-texte-3" aria-label="Pièces jointes" /> : null}
+          <span className="shrink-0 text-[12px] text-texte-3 tabular-nums">{quand(ligne.recuLe)}</span>
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-1.5">
           <Mention ligne={ligne} />
           <MarquesV2 ligne={ligne} vue={vue} />
-          {ligne.contact ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#9CA3AF]">{ligne.contact.type === "CLIENT" ? "Client" : "Lead"} · {ligne.contact.nom}</span> : null}
-          {ligne.automatique ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[11px] text-[#8B919C]">Automatique</span> : null}
+          {ligne.contact ? <span className="rounded-full border-[0.5px] border-trait px-2 py-0.5 text-[11px] text-texte-3">{ligne.contact.type === "CLIENT" ? "Client" : "Lead"} · {ligne.contact.nom}</span> : null}
+          {ligne.automatique ? <span className="rounded-full border-[0.5px] border-trait px-2 py-0.5 text-[11px] text-texte-3">Automatique</span> : null}
         </span>
-        <span className={cn("mt-1.5 block truncate text-[13.5px]", ligne.nonLu ? "text-[#E5E7EB]" : "text-[#B4BAC4]")}>{ligne.objet || "(sans objet)"}</span>
-        {ligne.attendu ? <span className="mt-0.5 block text-[12.5px] leading-snug text-[#D1D5DB]">→ {ligne.attendu}</span> : null}
-        {ligne.extrait && !ligne.attendu ? <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-[#8B919C]">{ligne.extrait}</span> : null}
-        {ligne.range && ligne.motif ? <span className="mt-1 block text-[12px] text-[#6B7280]">Rangé : {ligne.motif}</span> : null}
+        <span className={cn("mt-1.5 block truncate text-[13.5px]", ligne.nonLu ? "text-texte" : "text-texte-2")}>{ligne.objet || "(sans objet)"}</span>
+        {ligne.attendu ? <span className="mt-0.5 block text-[12.5px] leading-snug text-texte-2">→ {ligne.attendu}</span> : null}
+        {ligne.extrait && !ligne.attendu ? <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-texte-3">{ligne.extrait}</span> : null}
+        {ligne.range && ligne.motif ? <span className="mt-1 block text-[12px] text-texte-3">Rangé : {ligne.motif}</span> : null}
       </button>
       {/* Les gestes, au pouce : sans ouvrir le mail. */}
-      <div className="flex items-center gap-1 border-t-[0.5px] border-[#2A2D34] px-1.5 py-1">
+      <div className="flex items-center gap-1 border-t-[0.5px] border-trait px-1.5 py-1">
         {ligne.range ? (
           <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("REMONTER")} icone={<ArchiveRestore size={14} aria-hidden />} className="h-11 sm:h-8">
             Remonter
@@ -99,7 +99,7 @@ function LigneConversation({ ligne, vue, occupe, onOuvrir, onGeste }: { ligne: L
             </Bouton>
             {ligne.sens === "ENTRANT" && ligne.contact?.type !== "CLIENT" ? (
               plus ? (
-                <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />} className="ml-auto h-11 text-[#F5B454] sm:h-8">
+                <Bouton taille="sm" variante="fantome" disabled={occupe} onClick={() => onGeste("NE_PLUS_MONTRER")} icone={<BellOff size={14} aria-hidden />} className="ml-auto h-11 text-attention-texte sm:h-8">
                   Ne plus me montrer cet expéditeur
                 </Bouton>
               ) : (
@@ -223,7 +223,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
         }
       />
 
-      <div role="tablist" aria-label="Vues de la boîte" className="grid grid-cols-3 gap-1 rounded-[10px] bg-[#16181D] p-1">
+      <div role="tablist" aria-label="Vues de la boîte" className="grid grid-cols-3 gap-1 rounded-[10px] bg-fond p-1">
         {VUES.map((v) => (
           <button
             key={v.vue}
@@ -231,40 +231,40 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
             role="tab"
             aria-selected={vue === v.vue}
             onClick={() => changerVue(v.vue)}
-            className={cn("flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] px-1 text-[13.5px] font-medium sm:min-h-9", vue === v.vue ? "bg-[#23272F] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#D1D5DB]", TRANS)}
+            className={cn("flex min-h-11 items-center justify-center gap-1.5 rounded-[8px] px-1 text-[13.5px] font-medium sm:min-h-9", vue === v.vue ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte-2", TRANS)}
           >
             {v.libelle}
-            <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", v.vue === "A_TRAITER" && compteurs.A_TRAITER > 0 ? "bg-[#1D9E75] font-semibold text-[#0B1612]" : "text-[#8B919C]")}>{compteurs[v.vue]}</span>
+            <span className={cn("rounded-full px-1.5 text-[11px] tabular-nums", v.vue === "A_TRAITER" && compteurs.A_TRAITER > 0 ? "bg-action font-semibold text-action-texte" : "text-texte-3")}>{compteurs[v.vue]}</span>
           </button>
         ))}
       </div>
 
       <label className="relative block">
-        <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" aria-hidden />
+        <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" aria-hidden />
         <input value={recherche} onChange={(e) => chercher(e.target.value)} placeholder="Nom, adresse, objet…" aria-label="Rechercher dans la boîte" className={cn(CLASSE_SAISIE, "h-11 pl-9 sm:h-9")} />
       </label>
 
-      {aide ? <p className="text-[12.5px] text-[#8B919C]">{aide}</p> : null}
+      {aide ? <p className="text-[12.5px] text-texte-3">{aide}</p> : null}
 
       {/* Mission 13 (lot 4) : une seule boîte — les messages écrits dans l'espace client sont ici aussi, à traiter. */}
       {vue === "A_TRAITER" && liste.messagesEspace?.length ? (
-        <section className="rounded-[12px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/50 p-3.5">
-          <h2 className="text-[12px] font-medium tracking-wide text-[#5DCAA5] uppercase">
+        <section className="rounded-[12px] border-[0.5px] border-action/40 bg-action-fond/50 p-3.5">
+          <h2 className="text-[12px] font-medium tracking-wide text-action-clair uppercase">
             Messages de l&apos;espace client · {liste.messagesEspace.length}
           </h2>
           <ul className="mt-2 space-y-1.5">
             {liste.messagesEspace.map((m) => (
               <li key={m.id}>
-                <Link href={`/dossiers?dossier=${m.dossierId}&rubrique=messages`} className={cn("block min-h-[44px] rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2 hover:border-[#3A3E47]", TRANS)}>
+                <Link href={`/dossiers?dossier=${m.dossierId}&rubrique=messages`} className={cn("block min-h-[44px] rounded-[10px] border-[0.5px] border-trait bg-surface px-3 py-2 hover:border-trait-2", TRANS)}>
                   <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#F2F3F5]">{m.clientNom}</span>
-                    <span className="shrink-0 text-[12px] text-[#8B919C]">{quand(m.le)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-texte">{m.clientNom}</span>
+                    <span className="shrink-0 text-[12px] text-texte-3">{quand(m.le)}</span>
                   </span>
-                  <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-[#D1D5DB]">
-                    {m.source !== "MESSAGE" ? <span className="text-[#8B919C]">{LIBELLES_SOURCE_MESSAGE[m.source]} · </span> : null}
+                  <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug text-texte-2">
+                    {m.source !== "MESSAGE" ? <span className="text-texte-3">{LIBELLES_SOURCE_MESSAGE[m.source]} · </span> : null}
                     {m.texte}
                   </span>
-                  <span className="mt-1 block text-[12px] text-[#5DCAA5]">Répondre dans son dossier →</span>
+                  <span className="mt-1 block text-[12px] text-action-clair">Répondre dans son dossier →</span>
                 </Link>
               </li>
             ))}
@@ -286,7 +286,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
       )}
 
       {/* Le rangé, replié : accessible, jamais sous les yeux. */}
-      <button type="button" onClick={() => changerVue(vue === "RANGES" ? "A_TRAITER" : "RANGES")} className={cn("flex w-full items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-dashed border-[#2A2D34] py-3 text-[13px] text-[#8B919C] hover:text-[#D1D5DB]", TRANS)}>
+      <button type="button" onClick={() => changerVue(vue === "RANGES" ? "A_TRAITER" : "RANGES")} className={cn("flex w-full items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] border-dashed border-trait py-3 text-[13px] text-texte-3 hover:text-texte-2", TRANS)}>
         <ChevronDown size={14} className={cn(vue === "RANGES" && "rotate-180")} aria-hidden />
         {vue === "RANGES" ? "Revenir à « À traiter »" : `Rangés (${compteurs.RANGES})`}
       </button>
@@ -307,7 +307,7 @@ export default function EcranMail({ initial, mailInitial, contactInitial, consig
           </div>
         }
       >
-        <p className="text-[14px] leading-relaxed text-[#D1D5DB]">Tout ce qui ne demande rien (déjà répondu, lu, informatif) sort de la boîte de réception et est marqué lu, dans Gmail aussi. Ce qui est « À traiter » ne bouge pas. Rien n&apos;est supprimé : tout reste dans Clients, Administratif et dans Gmail.</p>
+        <p className="text-[14px] leading-relaxed text-texte-2">Tout ce qui ne demande rien (déjà répondu, lu, informatif) sort de la boîte de réception et est marqué lu, dans Gmail aussi. Ce qui est « À traiter » ne bouge pas. Rien n&apos;est supprimé : tout reste dans Clients, Administratif et dans Gmail.</p>
       </Modale>
 
       <PanneauMail

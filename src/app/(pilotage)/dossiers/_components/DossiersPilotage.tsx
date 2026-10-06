@@ -253,13 +253,13 @@ export default function DossiersPilotage({
     <div className="mx-auto w-full max-w-[1680px] px-5 py-6 md:px-8 md:py-8">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         <div>
-          <h1 className="text-[18px] font-medium tracking-tight text-[#F2F3F5]">Dossiers en cours</h1>
-          <p className="mt-1 text-[13px] text-[#9CA3AF]">
-            {enCours} en cours · <span className="text-[#F2F3F5]">{aFaire} à faire</span>
+          <h1 className="text-[18px] font-medium tracking-tight text-texte">Dossiers en cours</h1>
+          <p className="mt-1 text-[13px] text-texte-3">
+            {enCours} en cours · <span className="text-texte">{aFaire} à faire</span>
             {enRetard > 0 ? (
               <>
                 {" · "}
-                <span className="text-[#F87171]">{enRetard} en retard</span>
+                <span className="text-retard-texte">{enRetard} en retard</span>
               </>
             ) : null}
           </p>
@@ -277,7 +277,7 @@ export default function DossiersPilotage({
         <div
           role="tablist"
           aria-label="Filtre rapide"
-          className={cn("flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]", espaceActif && "hidden")}
+          className={cn("flex items-center rounded-[9px] border-[0.5px] border-trait bg-surface p-[3px]", espaceActif && "hidden")}
         >
           <button
             type="button"
@@ -286,12 +286,12 @@ export default function DossiersPilotage({
             onClick={() => setFiltreAFaire(false)}
             className={cn(
               CLASSE_ONGLET,
-              !filtreAFaire ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+              !filtreAFaire ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
               TRANS
             )}
           >
             Tous
-            <span className="text-[11px] text-[#9CA3AF] tabular-nums">{tous}</span>
+            <span className="text-[11px] text-texte-3 tabular-nums">{tous}</span>
           </button>
           <button
             type="button"
@@ -301,7 +301,7 @@ export default function DossiersPilotage({
             className={cn(
               CLASSE_ONGLET,
               "font-semibold",
-              filtreAFaire ? "bg-[#F2F3F5] text-[#0B0D10]" : "text-[#F2F3F5] hover:bg-[#22262D]",
+              filtreAFaire ? "bg-texte text-texte-inverse" : "text-texte hover:bg-surface-2",
               TRANS
             )}
           >
@@ -310,7 +310,7 @@ export default function DossiersPilotage({
             <span
               className={cn(
                 "rounded-full px-1.5 text-[11px] tabular-nums",
-                filtreAFaire ? "bg-[#0B0D10]/10 text-[#0B0D10]" : "bg-[#22262D] text-[#F2F3F5]"
+                filtreAFaire ? "bg-texte-inverse/10 text-texte-inverse" : "bg-surface-2 text-texte"
               )}
             >
               {aFaire}
@@ -321,7 +321,7 @@ export default function DossiersPilotage({
         <div
           role="tablist"
           aria-label="Affichage"
-          className="flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]"
+          className="flex items-center rounded-[9px] border-[0.5px] border-trait bg-surface p-[3px]"
         >
           {(
             [
@@ -337,7 +337,7 @@ export default function DossiersPilotage({
               onClick={() => choisirVue(valeur)}
               className={cn(
                 CLASSE_ONGLET,
-                vue === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+                vue === valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
                 TRANS
               )}
             >
@@ -350,15 +350,15 @@ export default function DossiersPilotage({
 
         <label className="relative min-w-[180px] flex-1 sm:max-w-xs">
           <span className="sr-only">Rechercher un dossier</span>
-          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
           <input
             type="search"
             value={recherche}
             onChange={(evenement) => setRecherche(evenement.target.value)}
             placeholder="Client, ville, objet…"
             className={cn(
-              "h-11 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] pr-3 pl-8 text-[16px] text-[#F2F3F5] placeholder:text-[#6B7280] sm:h-8 sm:text-[13px]",
-              "hover:border-[#3A3E47] focus:border-[#1D9E75]/60 focus:outline-none",
+              "h-11 w-full rounded-[8px] border-[0.5px] border-trait bg-surface pr-3 pl-8 text-[16px] text-texte placeholder:text-texte-3 sm:h-8 sm:text-[13px]",
+              "hover:border-trait-2 focus:border-action/60 focus:outline-none",
               TRANS
             )}
           />
@@ -372,13 +372,13 @@ export default function DossiersPilotage({
             className={cn(
               "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
               afficherSorties
-                ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
-                : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+                ? "border-action/40 bg-action-fond text-action-clair"
+                : "border-trait bg-surface text-texte-3 hover:border-trait-2 hover:text-texte",
               TRANS
             )}
           >
             Perdus et en pause
-            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{compteurs.sorties}</span>
+            <span className="rounded-full bg-surface-2 px-1.5 text-[11px] text-texte-3 tabular-nums">{compteurs.sorties}</span>
           </button>
         )}
 
@@ -391,14 +391,14 @@ export default function DossiersPilotage({
             className={cn(
               "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
               masquerInactifs
-                ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
-                : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+                ? "border-action/40 bg-action-fond text-action-clair"
+                : "border-trait bg-surface text-texte-3 hover:border-trait-2 hover:text-texte",
               TRANS
             )}
           >
             <span className="sm:hidden">{masquerInactifs ? "Inactifs masqués" : "Inactifs"}</span>
             <span className="hidden sm:inline">{masquerInactifs ? "Inactifs masqués" : "Masquer les inactifs"}</span>
-            <span className="rounded-full bg-[#22262D] px-1.5 text-[11px] text-[#9CA3AF] tabular-nums">{inactifs}</span>
+            <span className="rounded-full bg-surface-2 px-1.5 text-[11px] text-texte-3 tabular-nums">{inactifs}</span>
           </button>
         ) : null}
 
@@ -411,8 +411,8 @@ export default function DossiersPilotage({
           className={cn(
             "inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] px-3 text-[13px] sm:h-8",
             espaceActif
-              ? "border-[#1D9E75]/40 bg-[#112B22] text-[#5DCAA5]"
-              : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5]",
+              ? "border-action/40 bg-action-fond text-action-clair"
+              : "border-trait bg-surface text-texte-3 hover:border-trait-2 hover:text-texte",
             TRANS
           )}
         >
@@ -438,12 +438,12 @@ export default function DossiersPilotage({
         </Bouton>
 
         {vue === "liste" && !espaceActif ? (
-          <label className="flex w-full items-center gap-2 text-[12px] text-[#9CA3AF] md:hidden">
+          <label className="flex w-full items-center gap-2 text-[12px] text-texte-3 md:hidden">
             Trier par
             <select
               value={tri.cle}
               onChange={(evenement) => trier(evenement.target.value as CleTri)}
-              className="h-11 sm:h-10 min-w-0 flex-1 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2 text-[16px] text-[#F2F3F5] [color-scheme:dark]"
+              className="h-11 sm:h-10 min-w-0 flex-1 rounded-[8px] border-[0.5px] border-trait bg-surface px-2 text-[16px] text-texte [color-scheme:dark]"
             >
               {(Object.keys(LIBELLES_TRI) as CleTri[]).map((cle) => (
                 <option key={cle} value={cle}>
@@ -462,19 +462,19 @@ export default function DossiersPilotage({
       <main className="mt-5">
         {total === 0 && compteurs.enCours + compteurs.sorties === 0 ? (
           <EtatVide
-            icone={<FolderOpen size={18} className="text-[#6B7280]" aria-hidden />}
+            icone={<FolderOpen size={18} className="text-texte-3" aria-hidden />}
             titre="Aucun dossier pour l'instant"
             texte="Un dossier s'ouvre à la conversion : photos du chantier, coordonnées complètes du client et nature du chantier."
           />
         ) : espaceActif && visibles.length === 0 ? (
           <EtatVide
-            icone={<Smartphone size={18} className="text-[#6B7280]" aria-hidden />}
+            icone={<Smartphone size={18} className="text-texte-3" aria-hidden />}
             titre="Aucun espace client dans ce filtre"
             texte="Un espace s'ouvre depuis un lead ou un dossier (« Ouvrir l'espace client »), puis le lien part par mail ou par SMS. Un client n'en a qu'un, pour tous ses projets."
           />
         ) : filtreAFaire && visibles.length === 0 ? (
           <EtatVide
-            icone={<CircleCheck size={18} className="text-[#1D9E75]" aria-hidden />}
+            icone={<CircleCheck size={18} className="text-action" aria-hidden />}
             titre={recherche.trim() ? "Aucun dossier à faire ne correspond" : "Rien à faire pour l'instant"}
             texte={
               recherche.trim()

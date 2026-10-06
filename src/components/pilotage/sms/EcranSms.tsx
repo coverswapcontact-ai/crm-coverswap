@@ -142,25 +142,25 @@ export function EcranSms({ proposition, demande, onFini }: { proposition?: Propo
         <DialogPrimitive.Backdrop className="fixed inset-0 z-[80] bg-black/60 supports-backdrop-filter:backdrop-blur-xs" />
         <DialogPrimitive.Popup
           className={cn(
-            "fixed inset-0 z-[80] flex flex-col bg-[#1C1F25] text-[#F2F3F5] outline-none",
+            "fixed inset-0 z-[80] flex flex-col bg-surface text-texte outline-none",
             "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
-            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:w-[calc(100%-2rem)] sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[14px] sm:border-[0.5px] sm:border-[#2A2D34] sm:pt-0 sm:pb-0 sm:shadow-lg sm:shadow-black/50"
+            "sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:w-[calc(100%-2rem)] sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[14px] sm:border-[0.5px] sm:border-trait sm:pt-0 sm:pb-0 sm:shadow-lg sm:shadow-black/50"
           )}
         >
-          <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-4 py-3">
+          <div className="flex items-start justify-between gap-3 border-b-[0.5px] border-trait px-4 py-3">
             <div className="min-w-0">
-              <DialogPrimitive.Title className="flex items-center gap-2 truncate text-[16px] font-medium text-[#F2F3F5]">
-                <MessageSquare size={16} aria-hidden className="shrink-0 text-[#5DCAA5]" />
+              <DialogPrimitive.Title className="flex items-center gap-2 truncate text-[16px] font-medium text-texte">
+                <MessageSquare size={16} aria-hidden className="shrink-0 text-action-clair" />
                 {charge ? `SMS à ${charge.nom}` : "SMS"}
               </DialogPrimitive.Title>
-              <DialogPrimitive.Description className="mt-0.5 text-[13px] text-[#9CA3AF]">
+              <DialogPrimitive.Description className="mt-0.5 text-[13px] text-texte-3">
                 {charge ? (
                   telephone ? (
-                    <a href={`tel:${telephone}`} className="inline-flex min-h-[44px] items-center gap-1.5 text-[#D1D5DB] underline decoration-[#3A3E47] underline-offset-2 sm:min-h-[32px]">
+                    <a href={`tel:${telephone}`} className="inline-flex min-h-[44px] items-center gap-1.5 text-texte-2 underline decoration-trait-2 underline-offset-2 sm:min-h-[32px]">
                       <Phone size={13} aria-hidden /> {charge.telephone}
                     </a>
                   ) : (
-                    <span className="text-[#F5B454]">Pas de numéro connu : copie le texte et envoie-le autrement.</span>
+                    <span className="text-attention-texte">Pas de numéro connu : copie le texte et envoie-le autrement.</span>
                   )
                 ) : erreur ? (
                   "SMS indisponible."
@@ -176,7 +176,7 @@ export function EcranSms({ proposition, demande, onFini }: { proposition?: Propo
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
             {erreur ? (
-              <p className="text-[13.5px] text-[#F87171]">{erreur}</p>
+              <p className="text-[13.5px] text-attention-texte">{erreur}</p>
             ) : (
               <>
                 <textarea
@@ -188,15 +188,15 @@ export function EcranSms({ proposition, demande, onFini }: { proposition?: Propo
                   placeholder={charge ? undefined : "Préparation…"}
                   className={cn(CLASSE_SAISIE, "min-h-[180px] flex-1 resize-none py-2.5 leading-relaxed sm:min-h-[200px] sm:flex-none sm:text-[14px]")}
                 />
-                <p className="mt-2 text-[12.5px] text-[#9CA3AF]">
+                <p className="mt-2 text-[12.5px] text-texte-3">
                   {mesure.longueur} caractères · {mesure.segments} SMS
-                  {!avecLien && mesure.longueur > LONGUEUR_VISEE ? <span className="text-[#F5B454]"> · Vise {LONGUEUR_VISEE} caractères</span> : null}
+                  {!avecLien && mesure.longueur > LONGUEUR_VISEE ? <span className="text-attention-texte"> · Vise {LONGUEUR_VISEE} caractères</span> : null}
                 </p>
               </>
             )}
           </div>
 
-          <div className="border-t-[0.5px] border-[#2A2D34] px-4 pt-3 pb-3">
+          <div className="border-t-[0.5px] border-trait px-4 pt-3 pb-3">
             <div className="grid grid-cols-[1fr_auto] gap-2">
               <Bouton variante="primaire" className="h-12 text-[15px] sm:h-11" icone={<Copy size={16} aria-hidden />} disabled={!charge || !texte.trim() || Boolean(erreur)} chargement={envoi} onClick={() => void copier()}>
                 {copieManuelle ? "J'ai copié le texte" : "Copier"}
@@ -206,7 +206,7 @@ export function EcranSms({ proposition, demande, onFini }: { proposition?: Propo
               </Bouton>
             </div>
             {telephone ? (
-              <a href={`sms:${telephone}`} className="mt-1 flex min-h-[44px] items-center justify-center text-[13px] text-[#9CA3AF] underline decoration-[#3A3E47] underline-offset-2 hover:text-[#F2F3F5] sm:min-h-[36px]">
+              <a href={`sms:${telephone}`} className="mt-1 flex min-h-[44px] items-center justify-center text-[13px] text-texte-3 underline decoration-trait-2 underline-offset-2 hover:text-texte sm:min-h-[36px]">
                 Ouvrir Messages
               </a>
             ) : null}

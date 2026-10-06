@@ -48,13 +48,13 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-1 items-center justify-center bg-[#16181D] p-4 text-[#F2F3F5] antialiased">
-      <div className="w-full max-w-[380px] rounded-[14px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-6 sm:p-7">
+    <div className="flex min-h-screen w-full flex-1 items-center justify-center bg-fond p-4 text-texte antialiased">
+      <div className="w-full max-w-[380px] rounded-[14px] border-[0.5px] border-trait bg-surface p-6 sm:p-7">
         <p className="flex items-baseline gap-2 text-[17px] font-semibold tracking-tight">
           CoverSwap
-          <span className="text-[13px] font-normal text-[#6B7280]">pilotage</span>
+          <span className="text-[13px] font-normal text-texte-3">pilotage</span>
         </p>
-        <p className="mt-1 text-[13px] text-[#9CA3AF]">Prospects, dossiers, finances : connecte-toi pour continuer.</p>
+        <p className="mt-1 text-[13px] text-texte-3">Prospects, dossiers, finances : connecte-toi pour continuer.</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-3.5">
           <Champ
             libelle="E-mail"
@@ -74,7 +74,7 @@ export default function SignInPage() {
             required
           />
           {error ? (
-            <p role="alert" className="text-[13px] text-[#F87171]">
+            <p role="alert" className="text-[13px] text-retard-texte">
               {error}
             </p>
           ) : null}

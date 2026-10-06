@@ -27,9 +27,9 @@ export function ChampsParametre({
 }) {
   const definition: DefinitionParametre = DEFINITIONS_PARAMETRES[cle];
   return (
-    <div className="flex flex-col gap-2.5 rounded-[9px] border-[0.5px] border-[#2A2D34] p-3">
-      <p className="text-[13px] font-medium text-[#F2F3F5]">{definition.libelle}</p>
-      <p className="text-[12px] leading-relaxed text-[#9CA3AF]">{definition.aide}</p>
+    <div className="flex flex-col gap-2.5 rounded-[9px] border-[0.5px] border-trait p-3">
+      <p className="text-[13px] font-medium text-texte">{definition.libelle}</p>
+      <p className="text-[12px] leading-relaxed text-texte-3">{definition.aide}</p>
       {definition.nature === "choix" ? (
         <ListeDeroulante
           libelle="Valeur"

@@ -260,14 +260,14 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
       <div className="mt-5">
         <NotificationsAppareil application="crm" />
         {horsLigne ? (
-          <p className="mb-4 flex items-center gap-2 rounded-[12px] border-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 px-3.5 py-2.5 text-[12.5px] text-[#F5B454]">
+          <p className="mb-4 flex items-center gap-2 rounded-[12px] border-[0.5px] border-attention/30 bg-attention/10 px-3.5 py-2.5 text-[12.5px] text-attention-texte">
             <WifiOff size={14} aria-hidden /> Hors ligne : voici la dernière liste connue. Appeler reste possible.
           </p>
         ) : null}
       </div>
 
       {vue === "A_APPELER" || vue === "A_RAPPELER" ? (
-        <button type="button" onClick={demarrerAppels} disabled={aEnchainer.length === 0} className={cn("flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] px-3 text-[16px] font-semibold disabled:bg-[#22262D] disabled:text-[#6B7280]", aEnchainer.length > 0 && "bg-[#1D9E75] text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}>
+        <button type="button" onClick={demarrerAppels} disabled={aEnchainer.length === 0} className={cn("flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] px-3 text-[16px] font-semibold disabled:bg-surface-2 disabled:text-texte-3", aEnchainer.length > 0 && "bg-action text-action-texte hover:bg-action-clair", TRANS)}>
           <PhoneForwarded size={19} aria-hidden className="shrink-0" />
           <span className="truncate">{aEnchainer.length > 0 ? `Enchaîner les appels · ${aEnchainer.length} ${aRappelerSeulement ? "en retard" : "à appeler"}` : aRappelerSeulement ? "Aucun rappel en retard sur cette page" : "Personne à appeler sur cette page"}</span>
         </button>
@@ -278,9 +278,9 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
           const nombre = { A_APPELER: donnees.compteurs.aAppeler, A_RAPPELER: donnees.compteurs.aRappeler, SANS_SUITE: donnees.compteurs.sansSuite, ARCHIVES: donnees.compteurs.archives }[valeur] ?? 0;
           const retards = valeur === "A_RAPPELER" ? (donnees.compteurs.enRetard ?? 0) : 0;
           return (
-            <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}>
+            <button key={valeur} type="button" aria-pressed={vue === valeur} onClick={() => setVue(valeur)} className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", vue === valeur ? "border-action/60 bg-action/15 text-action-clair" : "border-trait text-texte-3 hover:text-texte", TRANS)}>
               {libelle} · {nombre}
-              {retards > 0 ? <span className="font-medium text-[#F87171]"> dont {retards} en retard</span> : null}
+              {retards > 0 ? <span className="font-medium text-retard-texte"> dont {retards} en retard</span> : null}
             </button>
           );
         })}
@@ -301,12 +301,12 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
             setModeSelection((mode) => !mode);
             setSelection(new Set());
           }}
-          className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", modeSelection ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+          className={cn("h-11 sm:h-9 rounded-full border-[0.5px] px-3.5 text-[13px]", modeSelection ? "border-action/60 bg-action/15 text-action-clair" : "border-trait text-texte-3 hover:text-texte", TRANS)}
         >
           {modeSelection ? "Fin de sélection" : "Sélectionner"}
         </button>
         <label className="relative ml-auto w-full sm:w-64">
-          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+          <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
           <input value={recherche} onChange={(evenement) => setRecherche(evenement.target.value)} placeholder="Nom, téléphone, ville, campagne" aria-label="Rechercher un lead" className={cn(CLASSE_SAISIE, "h-11 sm:h-9 rounded-full pl-8 text-[13px]")} />
         </label>
       </div>
@@ -326,7 +326,7 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
           />
         </div>
       ) : (
-        <ul className="mt-4 overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+        <ul className="mt-4 overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface">
           {donnees.lignes.map((lead) => (
             <Ligne
               key={lead.id}
@@ -346,11 +346,11 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
 
       {selection.size > 0 ? (
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 px-3 pb-2 md:bottom-4">
-          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-[14px] border-[0.5px] border-[#2A2D34] bg-[#22262D] p-2.5 shadow-lg shadow-black/40">
-            <p className="px-1.5 text-[13.5px] font-medium text-[#F2F3F5]">
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 rounded-[14px] border-[0.5px] border-trait bg-surface-2 p-2.5 shadow-lg shadow-black/40">
+            <p className="px-1.5 text-[13.5px] font-medium text-texte">
               {selection.size} sélectionné{selection.size > 1 ? "s" : ""}
             </p>
-            <button type="button" onClick={() => setSelection(new Set(donnees.lignes.map((l) => l.id)))} className="h-11 sm:h-9 rounded-[10px] px-2.5 text-[12.5px] text-[#9CA3AF] hover:text-[#F2F3F5]">
+            <button type="button" onClick={() => setSelection(new Set(donnees.lignes.map((l) => l.id)))} className="h-11 sm:h-9 rounded-[10px] px-2.5 text-[12.5px] text-texte-3 hover:text-texte">
               Tout ({donnees.lignes.length})
             </button>
             <div className="ml-auto flex flex-wrap items-center gap-1.5">
@@ -372,7 +372,7 @@ export default function EcranLeads({ initial, vueInitiale, siteInitial, travauxI
                   Archiver
                 </Bouton>
               )}
-              <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-[10px] text-[#9CA3AF] hover:bg-[#2A2F37]">
+              <button type="button" onClick={() => setSelection(new Set())} aria-label="Tout désélectionner" className="flex h-11 sm:h-9 w-11 sm:w-9 items-center justify-center rounded-[10px] text-texte-3 hover:bg-surface-2">
                 <X size={16} aria-hidden />
               </button>
             </div>

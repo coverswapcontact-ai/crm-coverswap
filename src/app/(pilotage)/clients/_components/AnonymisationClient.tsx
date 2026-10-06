@@ -84,19 +84,19 @@ export function AnonymisationClient({ client, onAnonymise }: { client: ClientDet
         }
       >
         {!apercu ? (
-          <p className="text-[13px] text-[#6B7280]">Préparation de l&apos;aperçu…</p>
+          <p className="text-[13px] text-texte-3">Préparation de l&apos;aperçu…</p>
         ) : (
           <div className="flex flex-col gap-4 text-[13px] leading-relaxed">
             {bloque ? (
-              <ul className="rounded-[8px] bg-[#EF4444]/10 px-3 py-2 text-[#F87171]">
+              <ul className="rounded-[8px] bg-retard/10 px-3 py-2 text-retard-texte">
                 {apercu.bloquants.map((bloquant) => (
                   <li key={bloquant}>{bloquant}</li>
                 ))}
               </ul>
             ) : null}
             <div>
-              <p className="font-medium text-[#F2F3F5]">Effacé</p>
-              <p className="text-[#9CA3AF]">
+              <p className="font-medium text-texte">Effacé</p>
+              <p className="text-texte-3">
                 Nom, adresse, e-mails, téléphones, notes ; {pluriel(apercu.efface.dossiers, "dossier")} (coordonnées, notes, texte libre de l&apos;historique) ;{" "}
                 {pluriel(apercu.efface.photos, "photo")} et pièce{apercu.efface.photos > 1 ? "s" : ""} jointe{apercu.efface.photos > 1 ? "s" : ""} ; {pluriel(apercu.efface.mails, "mail")} ;{" "}
                 {pluriel(apercu.efface.propositions, "proposition")}
@@ -104,14 +104,14 @@ export function AnonymisationClient({ client, onAnonymise }: { client: ClientDet
               </p>
             </div>
             <div>
-              <p className="font-medium text-[#F2F3F5]">Gardé</p>
-              <p className="text-[#9CA3AF]">
+              <p className="font-medium text-texte">Gardé</p>
+              <p className="text-texte-3">
                 {`${apercu.garde.documentsEmis} document${apercu.garde.documentsEmis > 1 ? "s" : ""} émis`} (factures, avoirs, devis, avec l&apos;identité imprimée) et {pluriel(apercu.garde.encaissements, "paiement")} (payeur, montant) :
                 conservation légale. Étapes, montants et dates restent pour les statistiques, sans nom (référence {apercu.reference}).
               </p>
             </div>
             {apercu.adresses.length > 0 || apercu.telephones.length > 0 ? (
-              <div className="rounded-[8px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2 text-[#F5B454]">
+              <div className="rounded-[8px] border-[0.5px] border-attention/40 bg-attention/10 px-3 py-2 text-attention-texte">
                 <p className="font-medium">À faire à la main, hors du CRM (il ne supprime jamais rien dans Gmail)</p>
                 {apercu.adresses.length > 0 ? <p className="mt-1">Dans Gmail, chercher et supprimer les mails de : {apercu.adresses.join(", ")}.</p> : null}
                 {apercu.telephones.length > 0 ? <p className="mt-1">Sur le téléphone, retirer le contact : {apercu.telephones.join(", ")}.</p> : null}

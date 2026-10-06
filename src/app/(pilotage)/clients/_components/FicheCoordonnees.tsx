@@ -45,11 +45,11 @@ export function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onM
           <li key={coordonnee.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
             <a
               href={nature === "email" ? `mailto:${coordonnee.valeur}` : `tel:${coordonnee.valeur}`}
-              className={cn("flex min-h-11 sm:min-h-9 min-w-0 items-center gap-2 text-[13.5px] text-[#F2F3F5] hover:text-[#5DCAA5]", TRANS)}
+              className={cn("flex min-h-11 sm:min-h-9 min-w-0 items-center gap-2 text-[13.5px] text-texte hover:text-action-clair", TRANS)}
             >
-              {nature === "email" ? <Mail size={14} className="shrink-0 text-[#6B7280]" aria-hidden /> : <Phone size={14} className="shrink-0 text-[#6B7280]" aria-hidden />}
+              {nature === "email" ? <Mail size={14} className="shrink-0 text-texte-3" aria-hidden /> : <Phone size={14} className="shrink-0 text-texte-3" aria-hidden />}
               <span className="truncate">{nature === "email" ? coordonnee.valeur : formaterTelephone(coordonnee.valeur)}</span>
-              {coordonnee.libelle ? <span className="text-[12px] text-[#6B7280]">({coordonnee.libelle})</span> : null}
+              {coordonnee.libelle ? <span className="text-[12px] text-texte-3">({coordonnee.libelle})</span> : null}
             </a>
             <span className="flex items-center gap-1">
               {coordonnee.principale ? (
@@ -96,7 +96,7 @@ export function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onM
           </li>
         ))}
         {archivees.map((coordonnee) => (
-          <li key={coordonnee.id} className="py-1 text-[12px] text-[#6B7280] line-through decoration-[#6B7280]/50" title={coordonnee.archiveMotif ?? undefined}>
+          <li key={coordonnee.id} className="py-1 text-[12px] text-texte-3 line-through decoration-texte-3/50" title={coordonnee.archiveMotif ?? undefined}>
             {coordonnee.valeur.startsWith("anonymise-") ? "Effacé (RGPD)" : nature === "email" ? coordonnee.valeur : formaterTelephone(coordonnee.valeur)} — archivé
             {coordonnee.archiveMotif ? ` (${coordonnee.archiveMotif})` : ""}
           </li>
@@ -122,7 +122,7 @@ export function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onM
       }
     >
       {client.telephones.length === 0 && client.emails.length === 0 ? (
-        <p className="text-[13px] text-[#6B7280]">Aucune coordonnée.</p>
+        <p className="text-[13px] text-texte-3">Aucune coordonnée.</p>
       ) : (
         <ul>
           {rendre("telephone", client.telephones)}
@@ -130,7 +130,7 @@ export function Coordonnees({ client, onMiseAJour }: { client: ClientDetail; onM
         </ul>
       )}
       {client.adresse || client.ville ? (
-        <p className="mt-2 border-t-[0.5px] border-[#2A2D34] pt-2 text-[13px] text-[#D1D5DB]">
+        <p className="mt-2 border-t-[0.5px] border-trait pt-2 text-[13px] text-texte-2">
           {[client.adresse, [client.codePostal, client.ville].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
         </p>
       ) : null}

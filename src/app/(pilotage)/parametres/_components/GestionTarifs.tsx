@@ -110,7 +110,7 @@ function LignePreset({
   }
 
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_88px] gap-2 rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-2 sm:grid-cols-[minmax(0,1fr)_96px_104px_auto] sm:items-center">
+    <li className="grid grid-cols-[minmax(0,1fr)_88px] gap-2 rounded-[9px] border-[0.5px] border-trait bg-fond p-2 sm:grid-cols-[minmax(0,1fr)_96px_104px_auto] sm:items-center">
       <div className="col-span-2 sm:contents">
         <ChampsPreset saisie={saisie} onChange={setSaisie} invalide={prix === undefined} />
       </div>
@@ -183,7 +183,7 @@ export function GestionTarifs({
   return (
     <section id="tarifs" className="mt-8 scroll-mt-20">
       <TitreSection>Tarifs des devis</TitreSection>
-      <p className="mb-3 text-[13px] text-[#9CA3AF]">
+      <p className="mb-3 text-[13px] text-texte-3">
         Prix HT, proposés ligne par ligne dans le générateur de devis et de factures. Un prix vide se saisit à chaque
         document (carburant, péage…). Les documents déjà émis ne changent pas.
       </p>
@@ -194,7 +194,7 @@ export function GestionTarifs({
       </ul>
       <form
         onSubmit={ajouter}
-        className="mt-4 grid grid-cols-[minmax(0,1fr)_88px] gap-2 rounded-[9px] border-[0.5px] border-dashed border-[#3A3E47] p-2 sm:grid-cols-[minmax(0,1fr)_96px_104px_auto] sm:items-center"
+        className="mt-4 grid grid-cols-[minmax(0,1fr)_88px] gap-2 rounded-[9px] border-[0.5px] border-dashed border-trait-2 p-2 sm:grid-cols-[minmax(0,1fr)_96px_104px_auto] sm:items-center"
       >
         <div className="col-span-2 sm:contents">
           <ChampsPreset saisie={nouveau} onChange={setNouveau} invalide={prix === undefined} />
@@ -250,24 +250,24 @@ function TarifsParPrestation({ presets }: { presets: PresetVue[] }) {
   const familles = [...new Set(lignes.map((l) => l.familleLibelle))];
   return (
     <section className="mt-6">
-      <h3 className="text-[13px] font-medium text-[#F2F3F5]">Tarif de chaque prestation</h3>
-      <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">Le devis prérempli chiffre chaque partie cochée par le client (ou par toi) avec ce tarif. Sans tarif, le prix se saisit sur le devis.</p>
+      <h3 className="text-[13px] font-medium text-texte">Tarif de chaque prestation</h3>
+      <p className="mt-0.5 text-[12.5px] text-texte-3">Le devis prérempli chiffre chaque partie cochée par le client (ou par toi) avec ce tarif. Sans tarif, le prix se saisit sur le devis.</p>
       <div className="mt-3 space-y-3">
         {familles.map((nom) => (
           <div key={nom}>
-            <p className="mb-1 text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{nom}</p>
+            <p className="mb-1 text-[11px] font-medium tracking-[0.06em] text-texte-3 uppercase">{nom}</p>
             <ul className="space-y-1">
               {lignes
                 .filter((l) => l.familleLibelle === nom)
                 .map((l) => (
                   <li key={l.cle} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] items-center gap-2">
-                    <span className="truncate text-[13px] text-[#D1D5DB]">{l.libelle}</span>
+                    <span className="truncate text-[13px] text-texte-2">{l.libelle}</span>
                     <select
                       aria-label={`Tarif : ${l.libelle}`}
                       value={l.explicite ? (l.presetId ?? "") : ""}
                       disabled={envoi === l.cle}
                       onChange={(e) => void attribuer(l.cle, e.target.value || null)}
-                      className={cn(CLASSE_SAISIE, "h-11 px-2 text-[12.5px] sm:h-8", !l.presetId && "text-[#8B919C]")}
+                      className={cn(CLASSE_SAISIE, "h-11 px-2 text-[12.5px] sm:h-8", !l.presetId && "text-texte-3")}
                     >
                       <option value="">{l.explicite ? "Automatique" : l.presetId ? `Automatique : ${l.designation} (${l.prixUnitaire ?? "?"} €/${l.unite})` : "Automatique : aucun (prix à saisir)"}</option>
                       {presets.map((p) => (

@@ -54,33 +54,33 @@ function Contenu({ dossierId, onFini }: { dossierId: string; onFini: (pose: bool
 
   return (
     <div className="flex max-h-[85dvh] flex-col">
-      <div className="border-b-[0.5px] border-[#2A2D34] px-4 pt-4 pb-3">
-        <SheetTitle className="flex items-center gap-2 text-[15.5px] font-medium text-[#F2F3F5]">
-          <CalendarDays size={16} aria-hidden className="text-[#5DCAA5]" /> Fixer la date du chantier
+      <div className="border-b-[0.5px] border-trait px-4 pt-4 pb-3">
+        <SheetTitle className="flex items-center gap-2 text-[15.5px] font-medium text-texte">
+          <CalendarDays size={16} aria-hidden className="text-action-clair" /> Fixer la date du chantier
         </SheetTitle>
-        <SheetDescription className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+        <SheetDescription className="mt-0.5 text-[12.5px] text-texte-3">
           {donnees?.dossier ? donnees.dossier.clientNom : "Les jours libres des deux prochaines semaines"}
           {donnees?.dossier?.dateSouhaitee ? ` · souhaitée : ${jourCourt(donnees.dossier.dateSouhaitee)}` : ""}
           {donnees?.dossier?.dateChantier ? ` · déjà posée : ${jourCourt(donnees.dossier.dateChantier)}` : ""}
         </SheetDescription>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {erreur ? <p className="text-[13px] text-[#F87171]">{erreur}</p> : null}
-        {!donnees && !erreur ? <p className="text-[13px] text-[#8B919C]">Lecture de l&apos;agenda…</p> : null}
+        {erreur ? <p className="text-[13px] text-attention-texte">{erreur}</p> : null}
+        {!donnees && !erreur ? <p className="text-[13px] text-texte-3">Lecture de l&apos;agenda…</p> : null}
         {donnees ? (
           <>
-            <p className="mb-2 text-[12px] text-[#8B919C]">
+            <p className="mb-2 text-[12px] text-texte-3">
               {donnees.agenda
                 ? donnees.occupes.length
                   ? `Agenda lu : ${donnees.occupes.length} ${donnees.occupes.length > 1 ? "jours occupés écartés" : "jour occupé écarté"}.`
                   : "Agenda lu : aucun jour occupé."
                 : `Jours ouvrés proposés sans filtre (${donnees.message ?? "agenda non connecté"}).`}
             </p>
-            {donnees.libres.length === 0 ? <p className="text-[13px] text-[#F5B454]">Aucun jour libre dans les deux prochaines semaines : choisis une autre date.</p> : null}
+            {donnees.libres.length === 0 ? <p className="text-[13px] text-attention-texte">Aucun jour libre dans les deux prochaines semaines : choisis une autre date.</p> : null}
             <ul className="grid grid-cols-2 gap-2">
               {donnees.libres.map((j) => (
                 <li key={j.jour}>
-                  <button type="button" disabled={pose !== null} onClick={() => void poser(j.jour, j.libelle)} className={cn("flex min-h-12 w-full items-center justify-center rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[14px] text-[#F2F3F5] first-letter:uppercase hover:border-[#1D9E75]/60 hover:bg-[#112B22] disabled:opacity-50 pointer-fine:min-h-10 sm:text-[13px]", pose === j.jour && "border-[#1D9E75]/60 bg-[#112B22]", TRANS)}>
+                  <button type="button" disabled={pose !== null} onClick={() => void poser(j.jour, j.libelle)} className={cn("flex min-h-12 w-full items-center justify-center rounded-[12px] border-[0.5px] border-trait bg-fond px-2 text-[14px] text-texte first-letter:uppercase hover:border-action/60 hover:bg-action-fond disabled:opacity-50 pointer-fine:min-h-10 sm:text-[13px]", pose === j.jour && "border-action/60 bg-action-fond", TRANS)}>
                     {j.libelle}
                   </button>
                 </li>
@@ -94,7 +94,7 @@ function Contenu({ dossierId, onFini }: { dossierId: string; onFini: (pose: bool
               }}
             >
               <input type="date" value={autre} onChange={(e) => setAutre(e.target.value)} aria-label="Une autre date" className={cn(CLASSE_SAISIE, "h-11 flex-1 pointer-fine:h-9")} />
-              <button type="submit" disabled={!autre || pose !== null} className={cn("h-11 shrink-0 rounded-[10px] bg-[#1D9E75] px-4 text-[14px] font-semibold text-[#06140F] hover:bg-[#5DCAA5] disabled:bg-[#22262D] disabled:text-[#6B7280] pointer-fine:h-9 sm:text-[13px]", TRANS)}>
+              <button type="submit" disabled={!autre || pose !== null} className={cn("h-11 shrink-0 rounded-[10px] bg-action px-4 text-[14px] font-semibold text-action-texte hover:bg-action-clair disabled:bg-surface-2 disabled:text-texte-3 pointer-fine:h-9 sm:text-[13px]", TRANS)}>
                 Poser
               </button>
             </form>
@@ -108,7 +108,7 @@ function Contenu({ dossierId, onFini }: { dossierId: string; onFini: (pose: bool
 export function FeuilleDateChantier({ dossierId, onFini }: { dossierId: string | null; onFini: (pose: boolean) => void }) {
   return (
     <Sheet open={dossierId !== null} onOpenChange={(ouvert) => (ouvert ? undefined : onFini(false))}>
-      <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-[16px] border-[#2A2D34] bg-[#1C1F25] p-0 text-[#F2F3F5] sm:mx-auto sm:max-w-md">
+      <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-[16px] border-trait bg-surface p-0 text-texte sm:mx-auto sm:max-w-md">
         {dossierId ? <Contenu key={dossierId} dossierId={dossierId} onFini={onFini} /> : null}
       </SheetContent>
     </Sheet>

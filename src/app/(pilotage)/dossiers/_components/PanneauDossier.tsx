@@ -38,7 +38,7 @@ import { HistoriqueEvenements } from "./HistoriqueEvenements";
 import { ProchaineActionEditeur } from "./ProchaineActionEditeur";
 
 const CLASSE_PUCE_LIEN = cn(
-  "inline-flex h-11 items-center gap-1.5 rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] text-[#D1D5DB] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-7",
+  "inline-flex h-11 items-center gap-1.5 rounded-full border-[0.5px] border-trait bg-surface px-2.5 text-[12px] text-texte-2 hover:border-trait-2 hover:text-texte sm:h-7",
   TRANS
 );
 
@@ -140,14 +140,14 @@ export function PanneauDossier({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
+        className="gap-0 border-trait bg-fond p-0 text-texte data-[side=right]:w-full data-[side=right]:sm:max-w-[620px]"
       >
         {affiche ? (
           <ContenuPanneau key={`${affiche.id}:${demande?.cle ?? 0}`} detail={affiche} maintenant={maintenant} onFermer={onFermer} onMisAJour={appliquer} onRecharger={recharger} onArchive={onArchive} demande={demande} />
         ) : (
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-5 py-4">
-              <SheetTitle className="text-[15px] font-medium text-[#F2F3F5]">
+            <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-trait px-5 py-4">
+              <SheetTitle className="text-[15px] font-medium text-texte">
                 {erreur ? "Dossier indisponible" : "Chargement du dossier…"}
               </SheetTitle>
               <Bouton variante="fantome" taille="icone" onClick={onFermer} aria-label="Fermer le dossier">
@@ -155,11 +155,11 @@ export function PanneauDossier({
               </Bouton>
             </div>
             {erreur ? (
-              <p className="px-5 py-6 text-[13px] text-[#F87171]">{erreur}</p>
+              <p className="px-5 py-6 text-[13px] text-attention-texte">{erreur}</p>
             ) : (
               <div className="space-y-3 px-5 py-6" aria-hidden>
                 {[70, 45, 90, 60, 80].map((largeur) => (
-                  <div key={largeur} className="h-4 animate-pulse rounded bg-[#22262D]" style={{ width: `${largeur}%` }} />
+                  <div key={largeur} className="h-4 animate-pulse rounded bg-surface-2" style={{ width: `${largeur}%` }} />
                 ))}
               </div>
             )}
@@ -177,10 +177,10 @@ const ETAPES_ENCAISSABLES: EtapeDossier[] = ["SIGNE", "PLANIFIE", "CHANTIER", "F
 function SectionRepliable({ id, titre, resume, ouvert, onBasculer, children }: { id: string; titre: string; resume?: ReactNode; ouvert: boolean; onBasculer: () => void; children: ReactNode }) {
   return (
     <section id={id}>
-      <button type="button" aria-expanded={ouvert} onClick={onBasculer} className={cn("-mx-1 flex min-h-[44px] w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-1 text-left hover:bg-[#1C1F25]", TRANS)}>
-        <span className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">{titre}</span>
-        {!ouvert && resume ? <span className="min-w-0 flex-1 truncate text-[12px] text-[#6B7280]">{resume}</span> : <span className="flex-1" />}
-        <ChevronDown size={15} aria-hidden className={cn("shrink-0 text-[#6B7280] transition-transform", ouvert && "rotate-180")} />
+      <button type="button" aria-expanded={ouvert} onClick={onBasculer} className={cn("-mx-1 flex min-h-[44px] w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-1 text-left hover:bg-surface", TRANS)}>
+        <span className="text-[12px] font-medium tracking-wide text-texte-3 uppercase">{titre}</span>
+        {!ouvert && resume ? <span className="min-w-0 flex-1 truncate text-[12px] text-texte-3">{resume}</span> : <span className="flex-1" />}
+        <ChevronDown size={15} aria-hidden className={cn("shrink-0 text-texte-3 transition-transform", ouvert && "rotate-180")} />
       </button>
       {ouvert ? <div className="mt-2">{children}</div> : null}
     </section>
@@ -275,14 +275,14 @@ function ContenuPanneau({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="relative border-b-[0.5px] border-[#2A2D34] px-5 pt-4 pb-3">
+      <header className="relative border-b-[0.5px] border-trait px-5 pt-4 pb-3">
         <Lisere couleur={couleurLisere(detail, maintenant)} />
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <SheetTitle className="truncate text-[17px] font-medium tracking-tight text-[#F2F3F5]">
+            <SheetTitle className="truncate text-[17px] font-medium tracking-tight text-texte">
               {detail.clientNom}
             </SheetTitle>
-            <SheetDescription className="mt-0.5 text-[12px] text-[#9CA3AF]">
+            <SheetDescription className="mt-0.5 text-[12px] text-texte-3">
               {lieu} · ouvert le {formatDateCourte(detail.ouvertLe)}
             </SheetDescription>
           </div>
@@ -290,7 +290,7 @@ function ContenuPanneau({
             <X size={16} />
           </Bouton>
         </div>
-        <p className={cn("mt-2 truncate text-[13px]", detail.objet ? "text-[#D1D5DB]" : "text-[#6B7280] italic")}>{detail.objet || "Objet du chantier à préciser"}</p>
+        <p className={cn("mt-2 truncate text-[13px]", detail.objet ? "text-texte-2" : "text-texte-3 italic")}>{detail.objet || "Objet du chantier à préciser"}</p>
         <ChipsFamilles prestations={detail.prestations ?? {}} className="mt-1.5" />
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <PastilleEtape etape={detail.etape} libelle={LIBELLES_ETAPE[detail.etape]} />
@@ -298,7 +298,7 @@ function ContenuPanneau({
           {echeanceDe(detail, maintenant) === "retard" ? <PastilleRetard className="ml-1" /> : null}
         </div>
         {detail.mainMotif && mainDe(detail, maintenant) !== "AUCUNE" ? (
-          <p className="mt-1.5 text-[12px] text-[#8B919C]">
+          <p className="mt-1.5 text-[12px] text-texte-3">
             {detail.mainMotif}
             {detail.mainLe ? ` · depuis le ${formatDateCourte(detail.mainLe)}` : ""}
           </p>
@@ -347,8 +347,8 @@ function ContenuPanneau({
             onCopie={() => void onRecharger()}
           />
           {attendu !== null && attendu > 0 ? (
-            <section id="rubrique-encaisser" className="rounded-[11px] border-[0.5px] border-[#1D9E75]/40 bg-[#112B22]/60 p-3.5">
-              <p className="text-[12.5px] text-[#9CA3AF]">{detail.paiements.resteDu > 0 ? "Reste à recevoir sur les factures" : "Acompte prévu au devis, pas encore reçu"}</p>
+            <section id="rubrique-encaisser" className="rounded-[11px] border-[0.5px] border-action/40 bg-action-fond/60 p-3.5">
+              <p className="text-[12.5px] text-texte-3">{detail.paiements.resteDu > 0 ? "Reste à recevoir sur les factures" : "Acompte prévu au devis, pas encore reçu"}</p>
               <Bouton variante="primaire" className="mt-2 min-h-[44px]" icone={<Euro size={15} aria-hidden />} onClick={() => setEncaisser(true)}>
                 Encaisser {detail.paiements.resteDu > 0 ? "le solde" : "l'acompte"} {formatMontant(attendu)}
               </Bouton>

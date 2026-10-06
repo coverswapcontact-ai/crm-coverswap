@@ -36,15 +36,15 @@ export function ChoixTypeClient({ estPro, onChange }: { estPro: boolean; onChang
             onClick={() => onChange(pro)}
             className={cn(
               "flex min-h-14 items-center gap-2.5 rounded-[10px] border-[0.5px] px-3 py-2 text-left",
-              "focus-visible:ring-2 focus-visible:ring-[#1D9E75]/50 focus-visible:outline-none",
-              choisi ? "border-[#1D9E75]/60 bg-[#112B22]" : "border-[#2A2D34] bg-[#16181D] hover:border-[#3A3E47]",
+              "focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none",
+              choisi ? "border-action/60 bg-action-fond" : "border-trait bg-fond hover:border-trait-2",
               TRANS
             )}
           >
-            <Icone size={18} aria-hidden className={cn("shrink-0", choisi ? "text-[#5DCAA5]" : "text-[#6B7280]")} />
+            <Icone size={18} aria-hidden className={cn("shrink-0", choisi ? "text-action-clair" : "text-texte-3")} />
             <span className="min-w-0">
-              <span className={cn("block text-[13.5px] font-medium", choisi ? "text-[#5DCAA5]" : "text-[#F2F3F5]")}>{libelle}</span>
-              <span className="hidden text-[11.5px] text-[#6B7280] sm:block">{detail}</span>
+              <span className={cn("block text-[13.5px] font-medium", choisi ? "text-action-clair" : "text-texte")}>{libelle}</span>
+              <span className="hidden text-[11.5px] text-texte-3 sm:block">{detail}</span>
             </span>
           </button>
         );

@@ -86,7 +86,7 @@ function Section({ titre, nombre, children, action }: { titre: string; nombre?: 
   return (
     <section className="mt-6">
       <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
-        <h2 className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+        <h2 className="text-[12px] font-medium tracking-wide text-texte-3 uppercase">
           {titre}
           {nombre !== undefined ? <span className="tabular-nums"> · {nombre}</span> : null}
         </h2>
@@ -100,19 +100,19 @@ function Section({ titre, nombre, children, action }: { titre: string; nombre?: 
 function SectionRepliee({ titre, nombre, ouverte, onBasculer, children }: { titre: string; nombre: number; ouverte: boolean; onBasculer: () => void; children: React.ReactNode }) {
   return (
     <section className="mt-6">
-      <button type="button" aria-expanded={ouverte} onClick={onBasculer} className={cn("-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-2 text-left hover:bg-[#1C1F25] pointer-fine:min-h-9", TRANS)}>
-        <span className="text-[12px] font-medium tracking-wide text-[#9CA3AF] uppercase">
+      <button type="button" aria-expanded={ouverte} onClick={onBasculer} className={cn("-mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-center gap-2 rounded-[10px] px-2 text-left hover:bg-surface pointer-fine:min-h-9", TRANS)}>
+        <span className="text-[12px] font-medium tracking-wide text-texte-3 uppercase">
           {titre} <span className="tabular-nums">· {nombre}</span>
         </span>
         <span className="flex-1" />
-        <ChevronDown size={15} aria-hidden className={cn("shrink-0 text-[#6B7280] transition-transform", ouverte && "rotate-180")} />
+        <ChevronDown size={15} aria-hidden className={cn("shrink-0 text-texte-3 transition-transform", ouverte && "rotate-180")} />
       </button>
       {ouverte ? <div className="mt-1.5">{children}</div> : null}
     </section>
   );
 }
 
-const CLASSE_LISTE = "overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]";
+const CLASSE_LISTE = "overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface";
 /** Les boutons communs (32 px dès sm) : 44 px au doigt à toutes les largeurs, compacts pour un pointeur fin. */
 const CLASSE_BOUTON_DOIGT = "sm:h-11 pointer-fine:h-8";
 
@@ -522,7 +522,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       />
 
       {horsLigne ? (
-        <p className="mt-4 flex items-center gap-2 rounded-[12px] border-[0.5px] border-[#EF9F27]/30 bg-[#EF9F27]/10 px-3.5 py-2.5 text-[12.5px] text-[#F5B454]">
+        <p className="mt-4 flex items-center gap-2 rounded-[12px] border-[0.5px] border-attention/30 bg-attention/10 px-3.5 py-2.5 text-[12.5px] text-attention-texte">
           <WifiOff size={14} aria-hidden /> Hors ligne : voici la dernière liste connue.
         </p>
       ) : null}
@@ -541,7 +541,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       {toutTraite ? null : (
         <>
           <Minutes choisies={minutes} plan={plan} chargement={chargementPlan} onChoisir={setMinutes} onLancer={lancerGroupe} />
-          <button type="button" onClick={() => lancerSerie("Tâches à la suite", aujourdhui)} className={cn("mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] bg-[#1D9E75] px-3 text-[16px] font-semibold text-[#06140F] hover:bg-[#5DCAA5]", TRANS)}>
+          <button type="button" onClick={() => lancerSerie("Tâches à la suite", aujourdhui)} className={cn("mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-[14px] bg-action px-3 text-[16px] font-semibold text-action-texte hover:bg-action-clair", TRANS)}>
             <Play size={18} aria-hidden className="shrink-0" />
             <span className="truncate">{libelleCommencer(aujourdhui.length, minutesAujourdhui)}</span>
           </button>
@@ -549,10 +549,10 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       )}
 
       {toutTraite ? (
-        <section className="mt-6 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-5 py-8 text-center">
-          <CheckCircle2 size={28} aria-hidden className="mx-auto text-[#5DCAA5]" />
-          <h2 className="mt-3 text-[18px] font-medium tracking-tight text-[#F2F3F5]">Tout est traité</h2>
-          <p className="mt-1 text-[13.5px] text-[#9CA3AF]">{texteDemain(liste.demain)}</p>
+        <section className="mt-6 rounded-[12px] border-[0.5px] border-trait bg-surface px-5 py-8 text-center">
+          <CheckCircle2 size={28} aria-hidden className="mx-auto text-action-clair" />
+          <h2 className="mt-3 text-[18px] font-medium tracking-tight text-texte">Tout est traité</h2>
+          <p className="mt-1 text-[13.5px] text-texte-3">{texteDemain(liste.demain)}</p>
         </section>
       ) : (
         <Section titre="Aujourd'hui" nombre={aujourdhui.length}>
@@ -573,7 +573,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
               ))}
             </ul>
           ) : (
-            <p className="px-1 text-[13px] text-[#8B919C]">Rien encore aujourd&apos;hui.</p>
+            <p className="px-1 text-[13px] text-texte-3">Rien encore aujourd&apos;hui.</p>
           )}
         </Section>
       ) : null}
@@ -582,10 +582,10 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
         <Section titre="En lot">
           <ul className={CLASSE_LISTE}>
             {liste.lots.map((lot) => (
-              <li key={lot.cle} className="flex flex-col gap-2 border-t-[0.5px] border-[#2A2D34] px-3.5 py-3 first:border-t-0 sm:flex-row sm:items-center">
+              <li key={lot.cle} className="flex flex-col gap-2 border-t-[0.5px] border-trait px-3.5 py-3 first:border-t-0 sm:flex-row sm:items-center">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14.5px] font-medium text-[#F2F3F5]">{lot.libelle}</span>
-                  <span className="block text-[12.5px] text-[#8B919C] tabular-nums">environ {lot.dureeMin >= 60 ? `${Math.round(lot.dureeMin / 60)} h` : `${lot.dureeMin} min`} un par un</span>
+                  <span className="block truncate text-[14.5px] font-medium text-texte">{lot.libelle}</span>
+                  <span className="block text-[12.5px] text-texte-3 tabular-nums">environ {lot.dureeMin >= 60 ? `${Math.round(lot.dureeMin / 60)} h` : `${lot.dureeMin} min`} un par un</span>
                 </span>
                 <span className="flex shrink-0 gap-2">
                   <Bouton variante="secondaire" className={CLASSE_BOUTON_DOIGT} chargement={lotEnCours === lot.cle} onClick={() => void toutClasser(lot)}>
@@ -622,7 +622,7 @@ export default function EcranTaches({ initiale }: { initiale: ListeTaches }) {
       ) : null}
 
       {!toutTraite && !liste.lots.length && !plusTard.length && !liste.faitAujourdhui.length ? (
-        <p className="mt-6 flex items-center justify-center gap-2 text-[12.5px] text-[#6B7280]">
+        <p className="mt-6 flex items-center justify-center gap-2 text-[12.5px] text-texte-3">
           <ListChecks size={14} aria-hidden /> {texteDemain(liste.demain)}
         </p>
       ) : null}

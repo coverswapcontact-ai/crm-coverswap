@@ -87,8 +87,8 @@ function Fenetre({ cible, onFermer, onEnvoye }: { cible: CibleLienMail; onFermer
         </div>
       }
     >
-      {erreur ? <p className="text-[13px] text-[#F87171]">{erreur}</p> : null}
-      {!proposition && !erreur ? <p className="text-[13px] text-[#9CA3AF]">Ouverture de son espace…</p> : null}
+      {erreur ? <p className="text-[13px] text-attention-texte">{erreur}</p> : null}
+      {!proposition && !erreur ? <p className="text-[13px] text-texte-3">Ouverture de son espace…</p> : null}
       {proposition ? (
         <div className="space-y-3">
           <Champ libelle="À" type="email" inputMode="email" autoCapitalize="none" value={a} onChange={(e) => setA(e.target.value)} aide={proposition.a ? undefined : "Aucune adresse connue pour ce client : saisissez-la."} placeholder="adresse@exemple.fr" />

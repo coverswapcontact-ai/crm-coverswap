@@ -21,9 +21,9 @@ import { CARTE_A, LBL, PAD_CARTE, TITRE_CARTE } from "./base";
 
 function Ligne({ libelle, valeur, ton }: { libelle: string; valeur: React.ReactNode; ton?: "vert" | "ambre" | "rouge" | "neutre" }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-[#2A2D34] py-2 last:border-0">
-      <span className="text-[13px] text-[#9CA3AF]">{libelle}</span>
-      <span className={cn("text-right text-[13px]", ton === "vert" && "text-[#5DCAA5]", (ton === "ambre" || ton === "rouge") && "text-[#F5B454]", (!ton || ton === "neutre") && "text-[#F2F3F5]")}>
+    <div className="flex items-baseline justify-between gap-4 border-b border-trait py-2 last:border-0">
+      <span className="text-[13px] text-texte-3">{libelle}</span>
+      <span className={cn("text-right text-[13px]", ton === "vert" && "text-action-clair", (ton === "ambre" || ton === "rouge") && "text-attention-texte", (!ton || ton === "neutre") && "text-texte")}>
         {valeur}
       </span>
     </div>
@@ -48,7 +48,7 @@ function CanalNotification({ etat, essai }: { etat: EtatCanal; essai: ResultatCa
   return <Ligne libelle={`${etat.canal}${etat.pousse ? " (push)" : " (mail)"}`} valeur={valeur} ton={ton} />;
 }
 
-const SOUS_CARTE = "rounded-[10px] border border-[#2A2D34] bg-[#16181D] p-4";
+const SOUS_CARTE = "rounded-[10px] border border-trait bg-fond p-4";
 
 export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
   const [sante, setSante] = useState(initiale);
@@ -128,7 +128,7 @@ export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className={TITRE_CARTE}>Chaîne des leads Meta</h2>
-          <p className="text-[12px] text-[#9CA3AF] md:text-[13px]">Les leads Meta arrivent en direct dans le CRM : cette partie dit si la chaîne fonctionne.</p>
+          <p className="text-[12px] text-texte-3 md:text-[13px]">Les leads Meta arrivent en direct dans le CRM : cette partie dit si la chaîne fonctionne.</p>
         </div>
         <div className="flex items-center gap-2">
           <Bouton taille="sm" icone={<RefreshCw size={13} aria-hidden />} chargement={occupe === "verifier"} onClick={() => void rafraichir(true)}>
@@ -147,19 +147,19 @@ export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
         </div>
       </div>
 
-      <div className={cn("rounded-[10px] border px-3.5 py-3", complete ? "border-[#24463A] bg-[#1A2420]" : "border-[#F5B454]/40 bg-[#F5B454]/5")}>
-        <p className={cn("flex items-start gap-2 text-[13.5px] leading-relaxed", complete ? "text-[#5DCAA5]" : "text-[#F5B454]")}>
+      <div className={cn("rounded-[10px] border px-3.5 py-3", complete ? "border-action/40 bg-action-fond" : "border-attention-texte/40 bg-attention-texte/5")}>
+        <p className={cn("flex items-start gap-2 text-[13.5px] leading-relaxed", complete ? "text-action-clair" : "text-attention-texte")}>
           {complete ? <CheckCircle2 size={15} aria-hidden className="mt-0.5 shrink-0" /> : <AlertTriangle size={15} aria-hidden className="mt-0.5 shrink-0" />}
           <span>{chaine.libelle}</span>
         </p>
         {sante.alertes.length > 0 ? (
-          <ul className="mt-2 space-y-1 border-t border-[#2A2D34] pt-2 text-[13px] text-[#D1D5DB]">
+          <ul className="mt-2 space-y-1 border-t border-trait pt-2 text-[13px] text-texte-2">
             {sante.alertes.map((alerte) => (
               <li key={alerte}>• {alerte}</li>
             ))}
           </ul>
         ) : null}
-        {echecs.nombre > 0 ? <p className="mt-2 text-[13px] text-[#F5B454]">{pluriel(echecs.nombre, "lead")} reçus mais pas encore dans le CRM.</p> : null}
+        {echecs.nombre > 0 ? <p className="mt-2 text-[13px] text-attention-texte">{pluriel(echecs.nombre, "lead")} reçus mais pas encore dans le CRM.</p> : null}
       </div>
 
       {ouvert ? (
@@ -225,9 +225,9 @@ export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
               <CanalNotification key={etat.canal} etat={etat} essai={essaiNotification?.find((r) => r.canal === etat.canal) ?? null} />
             ))}
             {notifications.leadsSansPush.length > 0 ? (
-              <div className="mt-3 rounded-[10px] border border-[#F5B454]/40 bg-[#F5B454]/5 p-3">
-                <p className="text-[13px] text-[#F5B454]">{pluriel(notifications.leadsSansPush.length, "lead")} reçus sans notification poussée : le téléphone n&apos;a pas sonné.</p>
-                <ul className="mt-1 space-y-0.5 text-[12px] text-[#9CA3AF]">
+              <div className="mt-3 rounded-[10px] border border-attention-texte/40 bg-attention-texte/5 p-3">
+                <p className="text-[13px] text-attention-texte">{pluriel(notifications.leadsSansPush.length, "lead")} reçus sans notification poussée : le téléphone n&apos;a pas sonné.</p>
+                <ul className="mt-1 space-y-0.5 text-[12px] text-texte-3">
                   {notifications.leadsSansPush.slice(0, 5).map((lead) => (
                     <li key={lead.leadgenId}>
                       {lead.nom ?? `leadgen_id ${lead.leadgenId}`} · {quand(lead.quand) ?? "jamais"} · {lead.detail}
@@ -248,17 +248,17 @@ export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
               ) : null}
             </div>
             {echecs.nombre === 0 ? (
-              <p className="text-[13px] text-[#6B7280]">Aucun : tout ce que Meta a envoyé est arrivé dans le CRM.</p>
+              <p className="text-[13px] text-texte-3">Aucun : tout ce que Meta a envoyé est arrivé dans le CRM.</p>
             ) : (
               <ul className="flex flex-col">
                 {echecs.leads.map((lead) => (
-                  <li key={lead.leadgenId} className="flex flex-wrap items-center justify-between gap-3 border-t border-[#2A2D34] py-2.5 first:border-t-0">
+                  <li key={lead.leadgenId} className="flex flex-wrap items-center justify-between gap-3 border-t border-trait py-2.5 first:border-t-0">
                     <div className="min-w-0">
-                      <p className="text-[13px] text-[#F2F3F5]">
+                      <p className="text-[13px] text-texte">
                         Formulaire rempli {quand(lead.soumisLe) ?? "jamais"}
                         {lead.campagne ? ` · ${lead.campagne}` : ""}
                       </p>
-                      <p className="text-[12px] text-[#9CA3AF]">
+                      <p className="text-[12px] text-texte-3">
                         leadgen_id {lead.leadgenId} · {pluriel(lead.tentatives, "tentative")}
                         {lead.erreur ? ` · ${lead.erreur}` : ""}
                       </p>
@@ -283,14 +283,14 @@ export function ChaineMeta({ initiale }: { initiale: SanteMeta }) {
               <ul className="space-y-1">
                 {rapport.etapes.map((etape) => (
                   <li key={etape.etape} className="flex items-start gap-2 text-[13px]">
-                    <span className={etape.ok ? "text-[#5DCAA5]" : "text-[#F5B454]"}>{etape.ok ? "✓" : "✕"}</span>
-                    <span className="text-[#D1D5DB]">
-                      <span className="text-[#F2F3F5]">{etape.etape}</span> — {etape.detail}
+                    <span className={etape.ok ? "text-action-clair" : "text-attention-texte"}>{etape.ok ? "✓" : "✕"}</span>
+                    <span className="text-texte-2">
+                      <span className="text-texte">{etape.etape}</span> — {etape.detail}
                     </span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-[12px] text-[#9CA3AF]">Le contact d&apos;essai est archivé automatiquement : il n&apos;apparaît pas dans les leads.</p>
+              <p className="mt-3 text-[12px] text-texte-3">Le contact d&apos;essai est archivé automatiquement : il n&apos;apparaît pas dans les leads.</p>
             </div>
           ) : null}
         </div>

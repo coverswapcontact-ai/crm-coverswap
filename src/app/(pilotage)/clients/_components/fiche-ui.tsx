@@ -6,7 +6,7 @@ import { TitreSection } from "@/components/pilotage/ui";
 
 export function Carte({ titre, action, children }: { titre: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
+    <section className="rounded-[11px] border-[0.5px] border-trait bg-surface p-4">
       <TitreSection action={action}>{titre}</TitreSection>
       {children}
     </section>
@@ -16,8 +16,8 @@ export function Carte({ titre, action, children }: { titre: string; action?: Rea
 export function Ligne({ libelle, children }: { libelle: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 py-1.5 text-[13px]">
-      <span className="text-[#9CA3AF]">{libelle}</span>
-      <span className="min-w-0 text-right text-[#F2F3F5]">{children}</span>
+      <span className="text-texte-3">{libelle}</span>
+      <span className="min-w-0 text-right text-texte">{children}</span>
     </div>
   );
 }

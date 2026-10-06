@@ -231,7 +231,7 @@ export function ModaleDocumentExistant({
       }
     >
       {pieceGmail && !gmail ? null : gmail?.devisCrm ? (
-        <p className="text-[12.5px] text-[#9CA3AF]">PDF du mail : {gmail.nom} (le devis garde le PDF du CRM).</p>
+        <p className="text-[12.5px] text-texte-3">PDF du mail : {gmail.nom} (le devis garde le PDF du CRM).</p>
       ) : (
       <div className="flex flex-col gap-3">
         {document || pieceGmail ? null : (
@@ -290,7 +290,7 @@ export function ModaleDocumentExistant({
           <div>
             <Puces libelle="Où en est ce devis" options={STATUTS_DEVIS.map((valeur) => ({ valeur, libelle: LIBELLES_STATUT_DOCUMENT[valeur] }))} valeur={statut} onChange={setStatut} />
             {statut === "ACCEPTE" && document?.statut !== "ACCEPTE" && signeParDevisAccepte(detail.etape, detail.etapeAvantSortie) ? (
-              <p className="mt-1 text-[12px] text-[#6B7280]">Accepté (signé hors ligne) : le dossier passera en « Signé », les autres devis proposés deviendront « non retenus ».</p>
+              <p className="mt-1 text-[12px] text-texte-3">Accepté (signé hors ligne) : le dossier passera en « Signé », les autres devis proposés deviendront « non retenus ».</p>
             ) : null}
           </div>
         ) : null}
@@ -298,8 +298,8 @@ export function ModaleDocumentExistant({
           <div className="grid gap-3 sm:grid-cols-2">
             <Champ libelle="Libellé de la variante" maxLength={80} placeholder="Ex. façades + plan de travail" value={libelle} onChange={(evenement) => setLibelle(evenement.target.value)} aide="Facultatif : le client le voit dans son espace, à côté du montant." />
             {pieceGmail ? null : (
-              <label className="flex items-center gap-2 self-start pt-7 text-[13px] text-[#D1D5DB]">
-                <input type="checkbox" className="accent-[#1D9E75]" checked={visible} onChange={(evenement) => setVisible(evenement.target.checked)} />
+              <label className="flex items-center gap-2 self-start pt-7 text-[13px] text-texte-2">
+                <input type="checkbox" className="accent-action" checked={visible} onChange={(evenement) => setVisible(evenement.target.checked)} />
                 Visible dans l&apos;espace client
               </label>
             )}
@@ -307,10 +307,10 @@ export function ModaleDocumentExistant({
         ) : null}
         <Champ libelle="Objet" maxLength={160} value={objet} onChange={(evenement) => setObjet(evenement.target.value)} />
         {pieceGmail && gmail ? (
-          <p className="text-[12.5px] text-[#9CA3AF]">PDF du mail : {gmail.nom}</p>
+          <p className="text-[12.5px] text-texte-3">PDF du mail : {gmail.nom}</p>
         ) : (
         <div>
-          <label className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]" htmlFor={`${idListe}-pdf`}>
+          <label className="mb-1.5 block text-[12px] font-medium text-texte-3" htmlFor={`${idListe}-pdf`}>
             {document?.pdfUrl ? "Remplacer le PDF (l'ancien reste aux archives)" : "PDF du document"}
           </label>
           <input
@@ -318,15 +318,15 @@ export function ModaleDocumentExistant({
             type="file"
             accept="application/pdf,.pdf"
             onChange={(evenement) => setPdf(evenement.target.files?.[0] ?? null)}
-            className="block w-full text-[13px] text-[#9CA3AF] file:mr-3 file:h-9 file:rounded-[8px] file:border-[0.5px] file:border-[#2A2D34] file:bg-[#1C1F25] file:px-3 file:text-[13px] file:text-[#F2F3F5] hover:file:bg-[#22262D]"
+            className="block w-full text-[13px] text-texte-3 file:mr-3 file:h-9 file:rounded-[8px] file:border-[0.5px] file:border-trait file:bg-surface file:px-3 file:text-[13px] file:text-texte hover:file:bg-surface-2"
           />
-          <p className="mt-1 text-[12px] text-[#6B7280]">Facultatif : sans PDF, le document ne s&apos;ouvre ni ne s&apos;envoie depuis le CRM.</p>
+          <p className="mt-1 text-[12px] text-texte-3">Facultatif : sans PDF, le document ne s&apos;ouvre ni ne s&apos;envoie depuis le CRM.</p>
         </div>
         )}
 
         {absent ? (
-          <div className="rounded-[9px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2.5">
-            <p className="flex items-start gap-1.5 text-[12.5px] text-[#F5B454]">
+          <div className="rounded-[9px] border-[0.5px] border-attention/40 bg-attention/10 px-3 py-2.5">
+            <p className="flex items-start gap-1.5 text-[12.5px] text-attention-texte">
               <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
               {`${numero.trim()} n'est pas au registre des numéros. Vérifie la saisie : un numéro inscrit y reste pour toujours.`}
             </p>

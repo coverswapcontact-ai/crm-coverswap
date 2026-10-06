@@ -82,7 +82,7 @@ export function ProchaineActionEditeur({
             type="button"
             onClick={() => setDate(jourParis(new Date(Date.now() + raccourci.jours * 86_400_000)))}
             className={cn(
-              "h-11 rounded-full border-[0.5px] border-[#2A2D34] px-2.5 text-[12px] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#F2F3F5] sm:h-6 sm:text-[11px]",
+              "h-11 rounded-full border-[0.5px] border-trait px-2.5 text-[12px] text-texte-3 hover:border-trait-2 hover:text-texte sm:h-6 sm:text-[11px]",
               TRANS
             )}
           >

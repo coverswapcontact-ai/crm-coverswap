@@ -21,8 +21,8 @@ export function courbeDesMois(ecran: EcranArgent): Courbe {
     titre: "Encaissé et signé par mois",
     sousTitre: "12 mois glissants",
     series: [
-      { cle: "encaisse", libelle: "Encaissé", couleur: "#5DCAA5" },
-      { cle: "signe", libelle: "Signé", couleur: "#7AA7FF" },
+      { cle: "encaisse", libelle: "Encaissé", couleur: "var(--color-action-clair)" },
+      { cle: "signe", libelle: "Signé", couleur: "var(--color-info-texte)" },
     ],
     points: ecran.mois.map((m) => ({
       jour: m.mois,
@@ -66,19 +66,19 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
 
         <Carte titre="Pub et encaissé" sousTitre="Règle des 20 % : la pub d'un mois face à l'encaissé du mois d'avant" gap="gap-3">
           {regle.length === 0 ? (
-            <p className="text-[13px] text-[#6B7280]">Pas encore de mois à comparer.</p>
+            <p className="text-[13px] text-texte-3">Pas encore de mois à comparer.</p>
           ) : (
             <ul className="flex flex-col gap-3.5">
               {regle.slice(0, 6).map((ligne) => (
                 <li key={ligne.mois} className="flex flex-col gap-1.5" data-depasse={ligne.depasse || undefined}>
                   <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                    <span className="text-[#D1D5DB]">{moisLong(ligne.mois)}</span>
-                    <span className="text-right text-[12px] text-[#9CA3AF]">
+                    <span className="text-texte-2">{moisLong(ligne.mois)}</span>
+                    <span className="text-right text-[12px] text-texte-3">
                       {euros(ligne.depensePub)} de pub · {euros(ligne.encaissePrecedent)} encaissés avant
                     </span>
                   </div>
                   {ligne.ratio === null || ligne.depensePub === 0 ? (
-                    <p className="text-[12px] text-[#6B7280]">{ligne.depensePub > 0 ? "Rien d'encaissé le mois d'avant : ratio non calculable." : "Pas de pub ce mois-là."}</p>
+                    <p className="text-[12px] text-texte-3">{ligne.depensePub > 0 ? "Rien d'encaissé le mois d'avant : ratio non calculable." : "Pas de pub ce mois-là."}</p>
                   ) : (
                     <div className="flex items-center gap-3">
                       <div className="flex-1">
@@ -86,11 +86,11 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
                           ratio={ligne.ratio / (ligne.plafond * 1.25)}
                           hauteur={6}
                           repere={0.8}
-                          couleur={ligne.depasse ? "#F5B454" : "#5DCAA5"}
+                          couleur={ligne.depasse ? "var(--color-attention-texte)" : "var(--color-action-clair)"}
                           titre={`${formaterValeur(ligne.ratio, "pourcent")} (plafond ${formaterValeur(ligne.plafond, "pourcent", { decimales: 0 })})`}
                         />
                       </div>
-                      <span className="w-12 text-right font-heading text-[13px] tabular-nums" style={{ color: ligne.depasse ? "#F5B454" : "#F2F3F5" }}>
+                      <span className="w-12 text-right font-heading text-[13px] tabular-nums" style={{ color: ligne.depasse ? "var(--color-attention-texte)" : "var(--color-texte)" }}>
                         {formaterValeur(ligne.ratio, "pourcent")}
                       </span>
                     </div>
@@ -106,7 +106,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
         <Carte
           titre="Carnet de commandes"
           sousTitre="Devis envoyés, non signés, non annulés"
-          action={<span className="font-heading text-[15px] font-semibold text-[#F5B454] tabular-nums">{euros(totalCarnet)}</span>}
+          action={<span className="font-heading text-[15px] font-semibold text-attention-texte tabular-nums">{euros(totalCarnet)}</span>}
         >
           <Tableau
             largeurMin={480}
@@ -118,7 +118,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
                 cle: "client",
                 titre: "Client",
                 rendu: (l) => (
-                  <Link href={`/dossiers?dossier=${l.dossierId}`} className="block max-w-[200px] truncate text-[#F2F3F5] hover:text-[#8FE0C3]">
+                  <Link href={`/dossiers?dossier=${l.dossierId}`} className="block max-w-[200px] truncate text-texte hover:text-action-clair">
                     {l.client}
                   </Link>
                 ),
@@ -126,7 +126,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
               {
                 cle: "numero",
                 titre: "Devis",
-                rendu: (l) => <span className="font-heading text-[#9CA3AF] tabular-nums">{l.numero ?? "—"}</span>,
+                rendu: (l) => <span className="font-heading text-texte-3 tabular-nums">{l.numero ?? "—"}</span>,
               },
               {
                 cle: "montant",
@@ -144,7 +144,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
                 cle: "relances",
                 titre: "Relances",
                 nombre: true,
-                rendu: (l) => <span className={l.relances === 0 ? "text-[#6B7280]" : undefined}>{l.relances}</span>,
+                rendu: (l) => <span className={l.relances === 0 ? "text-texte-3" : undefined}>{l.relances}</span>,
               },
             ]}
           />
@@ -159,7 +159,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
               {
                 cle: "mois",
                 titre: "Mois",
-                rendu: (l) => <span className="text-[#F2F3F5]">{moisLong(l.mois)}</span>,
+                rendu: (l) => <span className="text-texte">{moisLong(l.mois)}</span>,
               },
               {
                 cle: "encaisse",
@@ -171,13 +171,13 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
                 cle: "signe",
                 titre: "Signé",
                 nombre: true,
-                rendu: (l) => <span className="text-[#9CA3AF]">{euros(l.signe)}</span>,
+                rendu: (l) => <span className="text-texte-3">{euros(l.signe)}</span>,
               },
               {
                 cle: "pub",
                 titre: "Pub",
                 nombre: true,
-                rendu: (l) => <span className="text-[#9CA3AF]">{euros(l.depensesPub)}</span>,
+                rendu: (l) => <span className="text-texte-3">{euros(l.depensesPub)}</span>,
               },
               {
                 cle: "marge",
@@ -201,7 +201,7 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
         >
           <BarresHorizontales
             format="euros"
-            couleur="#F5B454"
+            couleur="var(--color-attention-texte)"
             lignes={depenses.map((ligne) => ({
               cle: ligne.categorie,
               libelle: ligne.libelle,
@@ -211,9 +211,9 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
             vide="Aucune dépense saisie sur la période."
           />
           {depenses.length > 0 ? (
-            <p className="flex justify-between gap-3 border-t border-[#2A2D34] pt-3 text-[13px] text-[#9CA3AF]">
+            <p className="flex justify-between gap-3 border-t border-trait pt-3 text-[13px] text-texte-3">
               <span>Total</span>
-              <span className="font-heading text-[#F2F3F5] tabular-nums">{euros(totalDepenses)}</span>
+              <span className="font-heading text-texte tabular-nums">{euros(totalDepenses)}</span>
             </p>
           ) : null}
         </Carte>
@@ -228,11 +228,11 @@ export function VueArgent({ ecran }: { ecran: EcranArgent }) {
               {
                 cle: "source",
                 titre: "Source",
-                rendu: (l) => <span className="text-[#F2F3F5]">{l.libelle}</span>,
+                rendu: (l) => <span className="text-texte">{l.libelle}</span>,
               },
               { cle: "clients", titre: "Clients", nombre: true, rendu: (l) => formaterValeur(l.clients, "nombre") },
-              { cle: "signes", titre: "Signés", nombre: true, rendu: (l) => <span className={l.signes === 0 ? "text-[#6B7280]" : undefined}>{formaterValeur(l.signes, "nombre")}</span> },
-              { cle: "montant", titre: "Montant signé", nombre: true, rendu: (l) => (l.montantSigne > 0 ? euros(l.montantSigne) : <span className="text-[#6B7280]">—</span>) },
+              { cle: "signes", titre: "Signés", nombre: true, rendu: (l) => <span className={l.signes === 0 ? "text-texte-3" : undefined}>{formaterValeur(l.signes, "nombre")}</span> },
+              { cle: "montant", titre: "Montant signé", nombre: true, rendu: (l) => (l.montantSigne > 0 ? euros(l.montantSigne) : <span className="text-texte-3">—</span>) },
             ]}
           />
         </Carte>

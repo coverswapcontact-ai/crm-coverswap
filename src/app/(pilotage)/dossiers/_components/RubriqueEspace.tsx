@@ -13,9 +13,9 @@ export type ConfirmationEspace = { titre: string; texte: string; bouton: string;
 /** Une rubrique du bloc : titre, pastille d'état à droite, contenu. */
 export function Rubrique({ titre, etat, id, children }: { titre: string; etat?: React.ReactNode; id?: string; children: React.ReactNode }) {
   return (
-    <div id={id} className="border-t-[0.5px] border-[#2A2D34] pt-3 first:border-t-0 first:pt-0">
+    <div id={id} className="border-t-[0.5px] border-trait pt-3 first:border-t-0 first:pt-0">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase">{titre}</h4>
+        <h4 className="text-[11px] font-medium tracking-[0.06em] text-texte-3 uppercase">{titre}</h4>
         {etat}
       </div>
       {children}

@@ -48,26 +48,68 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ── Apple-inspired light theme ── */
+/* ── Mission 22 : la charte sombre en jetons (seule source ; lue par src/app/lisibilite.test.ts) ──
+   Les classes Tailwind (bg-surface, text-texte-3, border-trait/40…) et les var(--color-…) des styles en ligne
+   viennent d'ici. Le rouge est réservé à l'argent en retard et au perdu ; l'ambre aux avertissements. */
+@theme {
+  --color-fond: #16181D;
+  --color-surface: #1C1F25;
+  --color-surface-2: #22262D;
+  --color-trait: #2A2D34;
+  --color-trait-2: #3A3E47;
+  --color-texte: #F2F3F5;
+  --color-texte-2: #D1D5DB;
+  --color-texte-3: #9CA3AF;
+  --color-texte-inverse: #0B0D10;
+  --color-action: #1D9E75;
+  --color-action-texte: #06140F;
+  --color-action-clair: #5DCAA5;
+  --color-action-fond: #112B22;
+  --color-retard: #EF4444;
+  --color-retard-texte: #F87171;
+  --color-attention: #EF9F27;
+  --color-attention-texte: #F5B454;
+  --color-info: #60A5FA;
+  --color-info-texte: #93C5FD;
+  /* Les étapes du dossier, du froid au chaud (COULEURS_ETAPE dans components/pilotage/ui.tsx) :
+     facturé = attention-texte, encaissé = action-clair. */
+  --color-etape-1: #818CF8;
+  --color-etape-2: #60A5FA;
+  --color-etape-3: #22D3EE;
+  --color-etape-4: #2DD4BF;
+  --color-etape-5: #4ADE80;
+  --color-etape-6: #A3E635;
+  --color-etape-7: #FDE047;
+  --color-etape-8: #F5B454;
+  --color-etape-9: #5DCAA5;
+  /* L'échelle de texte de la v2 (text-corps, text-petit…) : 16 px ordinateur, 17 px téléphone, 14 px au minimum. */
+  --text-corps: 1rem;
+  --text-corps-tel: 1.0625rem;
+  --text-petit: 0.875rem;
+  --text-titre: 1.25rem;
+  --text-grand: 1.5rem;
+}
+
+/* ── Jetons shadcn (dialog, sheet, button) : les utiles pointent sur la charte ci-dessus ; le reste est l'ancien thème clair, laissé en place ── */
 :root {
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.13 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0 0);
-  --primary: oklch(0.55 0.22 25);
-  --primary-foreground: oklch(1 0 0);
+  --background: var(--color-fond);
+  --foreground: var(--color-texte);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-texte);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-texte);
+  --primary: var(--color-action);
+  --primary-foreground: var(--color-action-texte);
   --secondary: oklch(0.955 0.005 260);
   --secondary-foreground: oklch(0.2 0 0);
   --muted: oklch(0.955 0.005 260);
-  --muted-foreground: oklch(0.45 0 0);
+  --muted-foreground: var(--color-texte-3);
   --accent: oklch(0.955 0.005 260);
   --accent-foreground: oklch(0.2 0 0);
   --destructive: oklch(0.55 0.22 25);
-  --border: oklch(0.92 0 0);
+  --border: var(--color-trait);
   --input: oklch(0.92 0 0);
-  --ring: oklch(0.55 0.22 25);
+  --ring: var(--color-action);
   --chart-1: oklch(0.55 0.22 25);
   --chart-2: oklch(0.6 0.15 250);
   --chart-3: oklch(0.65 0.15 150);

@@ -51,16 +51,16 @@ export function RubriqueDevisEspace({
       {espace.devisProposes.length ? (
         <ul className="space-y-1">
           {espace.devisProposes.map((d) => (
-            <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-[#D1D5DB]">
+            <li key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-texte-2">
               <span>
                 Devis {d.numero}
-                {d.libelle ? <span className="text-[#8B919C]"> « {d.libelle} »</span> : null} — {euros(d.total)}
-                {d.repris ? <span className="text-[#8B919C]"> (repris)</span> : null}
-                {d.statut === "ACCEPTE" ? <span className="text-[#5DCAA5]"> · signé</span> : d.statut === "NON_RETENU" ? <span className="text-[#8B919C]"> · non retenu</span> : null}
+                {d.libelle ? <span className="text-texte-3"> « {d.libelle} »</span> : null} — {euros(d.total)}
+                {d.repris ? <span className="text-texte-3"> (repris)</span> : null}
+                {d.statut === "ACCEPTE" ? <span className="text-action-clair"> · signé</span> : d.statut === "NON_RETENU" ? <span className="text-texte-3"> · non retenu</span> : null}
               </span>
               {espace.devisProposes.length > 1 ? (
                 // Mission 13 (lot 5, B6) : chaque devis compte ses propres lectures.
-                <span className={cn("text-[12px]", d.consultations >= 3 && !espace.accord ? "text-[#F87171]" : "text-[#8B919C]")}>
+                <span className={cn("text-[12px]", d.consultations >= 3 && !espace.accord ? "text-retard-texte" : "text-texte-3")}>
                   {d.consultations > 0 ? `lu ${d.consultations} fois${d.consulteLe ? ` · dernière le ${jour(d.consulteLe)}` : ""}` : "pas encore ouvert"}
                 </span>
               ) : null}
@@ -71,8 +71,8 @@ export function RubriqueDevisEspace({
                 </Bouton>
               ) : null}
               {espace.accord ? null : (
-                <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-[#8B919C]" : "text-[#F5B454]")}>
-                  <input type="checkbox" className="accent-[#1D9E75]" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
+                <label className={cn("inline-flex cursor-pointer items-center gap-1.5 text-[12px]", d.visibleEspace ? "text-texte-3" : "text-attention-texte")}>
+                  <input type="checkbox" className="accent-action" checked={d.visibleEspace} disabled={occupe !== null} onChange={(evenement) => void visibilite(d.id, evenement.target.checked)} />
                   {d.visibleEspace ? "visible dans son espace" : !d.repris && d.statut === "GENERE" ? "masqué dans son espace (le rendre visible l'envoie : mail « Devis disponible »)" : "masqué dans son espace"}
                 </label>
               )}
@@ -80,12 +80,12 @@ export function RubriqueDevisEspace({
           ))}
         </ul>
       ) : (
-        <p className="text-[12.5px] text-[#8B919C]">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
+        <p className="text-[12.5px] text-texte-3">{espace.choix ? "Il a validé une simulation : le devis est à faire." : "L'onglet Devis de son espace est verrouillé tant qu'il n'a pas validé de simulation."}</p>
       )}
       {espace.devis && espace.devisProposes.length <= 1 ? (
-        <p className="mt-1 text-[12px] text-[#8B919C]">
+        <p className="mt-1 text-[12px] text-texte-3">
           {espace.devis.consultations > 0 ? (
-            <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-[#F87171]" : undefined}>
+            <span className={espace.devis.consultations >= 3 && !espace.accord ? "text-retard-texte" : undefined}>
               Devis ouvert {espace.devis.consultations} fois dans son espace (dernière le {jour(espace.devis.consulteLe)})
             </span>
           ) : (
@@ -94,12 +94,12 @@ export function RubriqueDevisEspace({
         </p>
       ) : null}
       {espace.accord ? (
-        <p className="mt-1 text-[13px] text-[#D1D5DB]">
+        <p className="mt-1 text-[13px] text-texte-2">
           {espace.accord.source === "ESPACE" ? `Bon pour accord donné dans son espace par ${espace.accord.nom}${espace.accord.signature ? ", signé au doigt" : ""}.` : "Devis noté « accepté » dans le CRM (signé hors de l'espace) : son espace le montre signé."}
         </p>
       ) : null}
       {espace.accordsRetires.map((a) => (
-        <p key={a.retireLe} className="mt-1 text-[12px] text-[#F5B454]">
+        <p key={a.retireLe} className="mt-1 text-[12px] text-attention-texte">
           Accord du {jour(a.le)} retiré le {jour(a.retireLe)} {a.par === "CLIENT" ? "par le client" : "par moi"}
           {a.motif ? ` : « ${a.motif} »` : ""} (preuve gardée).
         </p>

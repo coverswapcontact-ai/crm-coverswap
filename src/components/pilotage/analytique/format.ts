@@ -9,10 +9,10 @@ import type { Evolution, Format, Periode } from "@/lib/analytique/types";
 export const INSECABLE = " ";
 
 /** Couleurs des tons : favorable (vert), défavorable (ambre), neutre (gris). Aucun rouge dans l'Analytique. */
-export const COULEURS_TON = { favorable: "#5DCAA5", defavorable: "#F5B454", neutre: "#9CA3AF" } as const;
+export const COULEURS_TON = { favorable: "var(--color-action-clair)", defavorable: "var(--color-attention-texte)", neutre: "var(--color-texte-3)" } as const;
 export type Ton = keyof typeof COULEURS_TON;
 /** Donnée absente (« — ») et textes discrets. */
-export const GRIS_ABSENT = "#6B7280";
+export const GRIS_ABSENT = "var(--color-texte-3)";
 
 const formateurs = new Map<string, Intl.NumberFormat>();
 function nombreFr(valeur: number, min: number, max: number): string {

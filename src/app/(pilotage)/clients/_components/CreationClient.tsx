@@ -127,10 +127,10 @@ export function CreationClient({ onFermer, categorieInitiale = "PARTICULIER" }: 
     >
       <div className="flex flex-col gap-4">
         {doublon ? (
-          <div className="rounded-[8px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 py-2 text-[13px] text-[#F5B454]">
+          <div className="rounded-[8px] border-[0.5px] border-attention/40 bg-attention/10 px-3 py-2 text-[13px] text-attention-texte">
             {doublon.message} La paire sera proposée à la fusion si tu crées quand même.
             {doublon.clientId ? (
-              <Link href={`/clients/${doublon.clientId}`} className="ml-1 font-medium underline underline-offset-2 hover:text-[#F2F3F5]">
+              <Link href={`/clients/${doublon.clientId}`} className="ml-1 font-medium underline underline-offset-2 hover:text-texte">
                 Ouvrir sa fiche
               </Link>
             ) : null}

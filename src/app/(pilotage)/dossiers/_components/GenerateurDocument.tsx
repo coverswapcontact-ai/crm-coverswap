@@ -290,7 +290,7 @@ export function GenerateurDocument({
           </div>
         ) : (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12px] text-[#6B7280]">
+            <p className="text-[12px] text-texte-3">
               Le numéro est attribué à la génération et ne sera jamais réutilisé.
             </p>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
@@ -307,11 +307,11 @@ export function GenerateurDocument({
     >
       {resultat ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <CheckCircle2 size={30} className="text-[#1D9E75]" aria-hidden />
-          <p className="mt-1 text-[15px] font-medium text-[#F2F3F5]">
+          <CheckCircle2 size={30} className="text-action" aria-hidden />
+          <p className="mt-1 text-[15px] font-medium text-texte">
             {LIBELLES_TYPE_DOCUMENT[resultat.type]} {resultat.numero} {resultat.type === "DEVIS" ? "généré" : "générée"}
           </p>
-          <p className="text-[13px] text-[#9CA3AF]">
+          <p className="text-[13px] text-texte-3">
             {formatCentimes(resultat.totalHtCentimes)} · PDF archivé dans le dossier · étape : {LIBELLES_ETAPE[detail.etape]}
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -320,7 +320,7 @@ export function GenerateurDocument({
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-4 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5]",
+                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] bg-action px-4 text-[13px] font-medium text-action-texte hover:bg-action-clair",
                 TRANS
               )}
             >
@@ -330,7 +330,7 @@ export function GenerateurDocument({
             <a
               href={`${resultat.pdfUrl}?telecharger=1`}
               className={cn(
-                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-4 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] hover:bg-[#22262D]",
+                "inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-4 text-[13px] font-medium text-texte hover:border-trait-2 hover:bg-surface-2",
                 TRANS
               )}
             >
@@ -345,7 +345,7 @@ export function GenerateurDocument({
             <div
               role="tablist"
               aria-label="Type de document"
-              className="flex items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-[3px]"
+              className="flex items-center rounded-[9px] border-[0.5px] border-trait bg-fond p-[3px]"
             >
               {/* Un devis refait reste un devis : une facture s'annule par un avoir. */}
               {(remplace ? (["DEVIS"] as const) : (["DEVIS", "FACTURE"] as const)).map((valeur) => (
@@ -357,7 +357,7 @@ export function GenerateurDocument({
                   onClick={() => setType(valeur)}
                   className={cn(
                     "h-11 rounded-[7px] px-4 text-[13px] font-medium sm:h-7",
-                    type === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+                    type === valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
                     TRANS
                   )}
                 >
@@ -365,8 +365,8 @@ export function GenerateurDocument({
                 </button>
               ))}
             </div>
-            <p className="pb-1.5 text-[12px] text-[#9CA3AF]">
-              Prochain numéro : <span className="font-medium text-[#F2F3F5] tabular-nums">{numeroAffiche ?? "…"}</span>
+            <p className="pb-1.5 text-[12px] text-texte-3">
+              Prochain numéro : <span className="font-medium text-texte tabular-nums">{numeroAffiche ?? "…"}</span>
             </p>
           </div>
 
@@ -380,14 +380,14 @@ export function GenerateurDocument({
           />
 
           {proposition ? (
-            <p className="rounded-[9px] border-[0.5px] border-[#1D9E75]/40 bg-[#1D9E75]/[0.08] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#C9EFE1]">
-              <span className="font-medium text-[#5DCAA5]">Prérempli. </span>
+            <p className="rounded-[9px] border-[0.5px] border-action/40 bg-action/[0.08] px-3 py-2.5 text-[12.5px] leading-relaxed text-action-clair">
+              <span className="font-medium text-action-clair">Prérempli. </span>
               {proposition} Vérifie le métré, complète les prix laissés vides, ajoute tes lignes habituelles.
             </p>
           ) : null}
 
           <div>
-            <div className="mb-2 hidden grid-cols-[minmax(0,1fr)_72px_92px_96px_96px_108px] gap-2 px-2.5 text-[11px] font-medium text-[#6B7280] uppercase sm:grid">
+            <div className="mb-2 hidden grid-cols-[minmax(0,1fr)_72px_92px_96px_96px_108px] gap-2 px-2.5 text-[11px] font-medium text-texte-3 uppercase sm:grid">
               <span>Désignation</span>
               <span>Qté</span>
               <span>Unité</span>
@@ -409,7 +409,7 @@ export function GenerateurDocument({
                 />
               ))}
             </ol>
-            {erreurs.lignes ? <p className="mt-2 text-[12px] text-[#F87171]">{erreurs.lignes}</p> : null}
+            {erreurs.lignes ? <p className="mt-2 text-[12px] text-attention-texte">{erreurs.lignes}</p> : null}
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Bouton
@@ -453,7 +453,7 @@ export function GenerateurDocument({
                 rel="noopener"
                 title="Paramètres › Tarifs, dans un autre onglet"
                 className={cn(
-                  "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-7 sm:px-2.5 sm:text-[12px]",
+                  "inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium whitespace-nowrap text-texte-3 hover:bg-surface-2 hover:text-texte sm:h-7 sm:px-2.5 sm:text-[12px]",
                   TRANS
                 )}
               >
@@ -507,25 +507,25 @@ export function GenerateurDocument({
               ) : null}
             </div>
 
-            <dl className="h-fit space-y-1.5 rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3.5 text-[13px]">
+            <dl className="h-fit space-y-1.5 rounded-[11px] border-[0.5px] border-trait bg-fond p-3.5 text-[13px]">
               <div className="flex justify-between gap-3">
-                <dt className="text-[#9CA3AF]">Total HT</dt>
-                <dd className="text-[#F2F3F5] tabular-nums">{formatCentimes(montants.totalHtCentimes)}</dd>
+                <dt className="text-texte-3">Total HT</dt>
+                <dd className="text-texte tabular-nums">{formatCentimes(montants.totalHtCentimes)}</dd>
               </div>
-              <p className="text-[11px] text-[#6B7280] italic">TVA non applicable, article 293 B du CGI</p>
-              <div className="flex justify-between gap-3 border-t-[0.5px] border-[#2A2D34] pt-2 font-medium">
-                <dt className="text-[#F2F3F5]">Total TTC</dt>
-                <dd className="text-[#F87171] tabular-nums">{formatCentimes(montants.totalTtcCentimes)}</dd>
+              <p className="text-[11px] text-texte-3 italic">TVA non applicable, article 293 B du CGI</p>
+              <div className="flex justify-between gap-3 border-t-[0.5px] border-trait pt-2 font-medium">
+                <dt className="text-texte">Total TTC</dt>
+                <dd className="text-retard-texte tabular-nums">{formatCentimes(montants.totalTtcCentimes)}</dd>
               </div>
               {type === "DEVIS" && pourcentage !== null && pourcentage > 0 ? (
                 <>
                   <div className="flex justify-between gap-3 text-[12px]">
-                    <dt className="text-[#9CA3AF]">Acompte {pourcentage} %</dt>
-                    <dd className="text-[#D1D5DB] tabular-nums">{formatCentimes(montants.acompteCentimes)}</dd>
+                    <dt className="text-texte-3">Acompte {pourcentage} %</dt>
+                    <dd className="text-texte-2 tabular-nums">{formatCentimes(montants.acompteCentimes)}</dd>
                   </div>
                   <div className="flex justify-between gap-3 text-[12px]">
-                    <dt className="text-[#9CA3AF]">Solde</dt>
-                    <dd className="text-[#D1D5DB] tabular-nums">{formatCentimes(montants.soldeCentimes)}</dd>
+                    <dt className="text-texte-3">Solde</dt>
+                    <dd className="text-texte-2 tabular-nums">{formatCentimes(montants.soldeCentimes)}</dd>
                   </div>
                 </>
               ) : null}

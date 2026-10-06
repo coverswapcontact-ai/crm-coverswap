@@ -19,16 +19,16 @@ import { Pastille, Puces, Bouton, Champ, Modale, TitreSection, TRANS, ZoneTexte 
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 
 const CLASSE_LIEN_ICONE = cn(
-  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34] text-[#9CA3AF] hover:border-[#3A3E47] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8 sm:w-8",
+  "inline-flex h-11 w-11 items-center justify-center rounded-[8px] border-[0.5px] border-trait text-texte-3 hover:border-trait-2 hover:bg-surface-2 hover:text-texte sm:h-8 sm:w-8",
   TRANS
 );
 
 const TON_STATUT: Partial<Record<DocumentVue["statut"], string>> = {
-  ACCEPTE: "bg-[#112B22] text-[#5DCAA5]",
-  ANNULEE: "bg-[#EF4444]/10 text-[#F87171]",
-  REMPLACE: "bg-[#22262D] text-[#6B7280] line-through",
-  REFUSE: "bg-[#EF4444]/10 text-[#F87171]",
-  NON_RETENU: "bg-[#22262D] text-[#6B7280]",
+  ACCEPTE: "bg-action-fond text-action-clair",
+  ANNULEE: "bg-retard/10 text-retard-texte",
+  REMPLACE: "bg-surface-2 text-texte-3 line-through",
+  REFUSE: "bg-retard/10 text-retard-texte",
+  NON_RETENU: "bg-surface-2 text-texte-3",
 };
 
 /** Mission 11 : un devis émis qui ne sera pas signé — annulé, gardé en historique (jamais un devis accepté). */
@@ -139,8 +139,8 @@ function ModaleAvoir({
         }
       >
         <div className="flex flex-col gap-3">
-          <p className="text-[13px] text-[#D1D5DB]">
-            Montant de l&apos;avoir : <span className="font-medium text-[#F2F3F5]">{formatMontant(facture.totalHt)}</span>
+          <p className="text-[13px] text-texte-2">
+            Montant de l&apos;avoir : <span className="font-medium text-texte">{formatMontant(facture.totalHt)}</span>
           </p>
           <Puces
             libelle="Motif"
@@ -221,9 +221,9 @@ function ModaleEnvoiMail({ detail, document, onFermer, onEnvoye }: { detail: Dos
       }
     >
       {erreur ? (
-        <p className="text-[13px] text-[#F87171]">{erreur}</p>
+        <p className="text-[13px] text-attention-texte">{erreur}</p>
       ) : !brouillon ? (
-        <p className="text-[13px] text-[#9CA3AF]">Préparation du message…</p>
+        <p className="text-[13px] text-texte-3">Préparation du message…</p>
       ) : (
         <div className="flex flex-col gap-3">
           <Champ libelle="Destinataire" obligatoire type="email" value={brouillon.a} onChange={(evenement) => setBrouillon({ ...brouillon, a: evenement.target.value })} />
@@ -279,12 +279,12 @@ export function DocumentsDossier({
           Enregistrer un document existant
         </Bouton>
       </div>
-      {remarque ? <p className="mt-2 text-[12px] text-[#F5B454]">{remarque}</p> : null}
+      {remarque ? <p className="mt-2 text-[12px] text-attention-texte">{remarque}</p> : null}
 
       {documents.length === 0 ? (
-        <p className="mt-3 text-[12px] text-[#6B7280]">Aucun devis ni facture pour ce dossier.</p>
+        <p className="mt-3 text-[12px] text-texte-3">Aucun devis ni facture pour ce dossier.</p>
       ) : (
-        <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+        <ul className="mt-3 overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
           {documents.map((document) => {
             const avoir = document.documentsLies.find((lie) => lie.type === "AVOIR");
             const remplacant = document.documentsLies.find((lie) => lie.type === "DEVIS");
@@ -295,26 +295,26 @@ export function DocumentsDossier({
               (document.type === "DEVIS" || document.type === "FACTURE") && !["REMPLACE", "ANNULEE", "NON_RETENU"].includes(document.statut) && document.pdfUrl !== null;
             const repris = document.origine === "REPRISE";
             return (
-              <li key={document.id} className="border-t-[0.5px] border-[#2A2D34] px-3 py-2.5 first:border-t-0">
+              <li key={document.id} className="border-t-[0.5px] border-trait px-3 py-2.5 first:border-t-0">
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-[#F2F3F5]">
+                    <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-texte">
                       <span className="font-medium">
                         {LIBELLES_TYPE_DOCUMENT[document.type]} {document.numero}
                       </span>
-                      {document.libelleVariante ? <span className="text-[#9CA3AF]">« {document.libelleVariante} »</span> : null}
-                      <span className={cn("rounded-full px-1.5 py-px text-[10px]", TON_STATUT[document.statut] ?? "bg-[#22262D] text-[#9CA3AF]")}>
+                      {document.libelleVariante ? <span className="text-texte-3">« {document.libelleVariante} »</span> : null}
+                      <span className={cn("rounded-full px-1.5 py-px text-[10px]", TON_STATUT[document.statut] ?? "bg-surface-2 text-texte-3")}>
                         {/* Une facture reprise n'a pas été générée ici : elle a été émise avant le CRM. */}
                         {repris && document.statut === "GENERE" ? "Émise" : LIBELLES_STATUT_DOCUMENT[document.statut]}
                       </span>
                       {repris ? <Pastille titre="Émis avant le CRM, rattaché avec son numéro du registre">Repris</Pastille> : null}
                       {document.type === "DEVIS" && !document.visibleEspace && !["REMPLACE", "ANNULEE", "NON_RETENU"].includes(document.statut) ? <Pastille ton="ambre" titre="Le client ne le voit pas dans son espace">Masqué dans l&apos;espace</Pastille> : null}
                     </p>
-                    <p className="mt-0.5 truncate text-[12px] text-[#6B7280]">
+                    <p className="mt-0.5 truncate text-[12px] text-texte-3">
                       {document.dateEmission ? formatDateCourte(document.dateEmission) : null} · {document.objet}
                     </p>
                   </div>
-                  <span className={cn("shrink-0 text-[13px] tabular-nums", document.type === "AVOIR" ? "text-[#F87171]" : "text-[#F2F3F5]")}>
+                  <span className={cn("shrink-0 text-[13px] tabular-nums", document.type === "AVOIR" ? "text-retard-texte" : "text-texte")}>
                     {document.type === "AVOIR" ? "−" : ""}
                     {formatMontant(document.totalHt)}
                   </span>
@@ -342,20 +342,20 @@ export function DocumentsDossier({
                   ) : null}
                 </div>
                 {document.echeanceLe && document.type === "FACTURE" ? (
-                  <p className="mt-1 text-[12px] text-[#9CA3AF]">Échéance : {formatDateCourte(document.echeanceLe)}</p>
+                  <p className="mt-1 text-[12px] text-texte-3">Échéance : {formatDateCourte(document.echeanceLe)}</p>
                 ) : null}
                 {document.type === "AVOIR" && document.documentOrigine ? (
-                  <p className="mt-1 text-[12px] text-[#9CA3AF]">
+                  <p className="mt-1 text-[12px] text-texte-3">
                     Annule la facture {document.documentOrigine.numero}
                     {document.motifAvoir ? ` · ${document.motifAvoir}` : ""}
                   </p>
                 ) : null}
                 {document.type === "DEVIS" && document.documentOrigine ? (
-                  <p className="mt-1 text-[12px] text-[#9CA3AF]">Remplace le devis {document.documentOrigine.numero}</p>
+                  <p className="mt-1 text-[12px] text-texte-3">Remplace le devis {document.documentOrigine.numero}</p>
                 ) : null}
-                {avoir ? <p className="mt-1 text-[12px] text-[#F87171]">Annulée par l&apos;avoir {avoir.numero}</p> : null}
-                {remplacant ? <p className="mt-1 text-[12px] text-[#6B7280]">Remplacé par le devis {remplacant.numero}</p> : null}
-                {repris && !document.pdfUrl ? <p className="mt-1 text-[12px] text-[#9CA3AF]">PDF non importé.</p> : null}
+                {avoir ? <p className="mt-1 text-[12px] text-retard-texte">Annulée par l&apos;avoir {avoir.numero}</p> : null}
+                {remplacant ? <p className="mt-1 text-[12px] text-texte-3">Remplacé par le devis {remplacant.numero}</p> : null}
+                {repris && !document.pdfUrl ? <p className="mt-1 text-[12px] text-texte-3">PDF non importé.</p> : null}
                 {peutRefaire || peutAnnuler || peutAnnulerDevis || peutEnvoyer || repris ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {repris ? (

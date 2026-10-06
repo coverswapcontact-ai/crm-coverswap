@@ -34,7 +34,7 @@ export function PropositionsEnAttente() {
 
   if (nombre === 0) return null;
   return (
-    <Link href="/validation" className="inline-flex h-11 sm:h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/10 px-3 text-[12.5px] text-[#F5B454] hover:bg-[#EF9F27]/20">
+    <Link href="/validation" className="inline-flex h-11 sm:h-8 items-center gap-1.5 rounded-full border-[0.5px] border-attention/40 bg-attention/10 px-3 text-[12.5px] text-attention-texte hover:bg-attention/20">
       <CircleCheckBig size={13} aria-hidden /> {nombre} décision{nombre > 1 ? "s" : ""} en attente
     </Link>
   );

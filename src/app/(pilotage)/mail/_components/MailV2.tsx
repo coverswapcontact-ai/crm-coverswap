@@ -41,7 +41,7 @@ export function BlocIntention({ detail, onChange }: { detail: DetailMail; onChan
 
   if (edition) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-2.5">
+      <div className="flex flex-wrap items-center gap-2 rounded-[10px] border-[0.5px] border-trait bg-surface p-2.5">
         <select value={intention} onChange={(e) => setIntention(e.target.value)} className={cn(CLASSE_SAISIE, "w-auto")} aria-label="Intention">
           <option value="NON_CLASSE">Non classé</option>
           {INTENTIONS.map((i) => (
@@ -63,9 +63,9 @@ export function BlocIntention({ detail, onChange }: { detail: DetailMail; onChan
   return (
     <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
       {detail.intention ? <Pastille ton={TON_INTENTION[detail.intention] ?? "neutre"}>{LIBELLES_INTENTION[detail.intention as keyof typeof LIBELLES_INTENTION] ?? detail.intention}</Pastille> : <Pastille ton="neutre">Non classé</Pastille>}
-      {detail.attendu ? <span className="text-[#E5E7EB]">{detail.attendu}</span> : detail.intention ? null : <span className="text-[#8B919C]">Dites à Claude « classe mes mails », ou classez-le ici.</span>}
-      {detail.intentionPar ? <span className="text-[11px] text-[#6B7280]">{detail.intentionPar.startsWith("ASSISTANT") ? "par Claude" : "par vous"}</span> : null}
-      <button type="button" onClick={() => setEdition(true)} className={cn("inline-flex h-11 sm:h-7 items-center gap-1 rounded-[7px] px-1.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5]", TRANS)}>
+      {detail.attendu ? <span className="text-texte">{detail.attendu}</span> : detail.intention ? null : <span className="text-texte-3">Dites à Claude « classe mes mails », ou classez-le ici.</span>}
+      {detail.intentionPar ? <span className="text-[11px] text-texte-3">{detail.intentionPar.startsWith("ASSISTANT") ? "par Claude" : "par vous"}</span> : null}
+      <button type="button" onClick={() => setEdition(true)} className={cn("inline-flex h-11 sm:h-7 items-center gap-1 rounded-[7px] px-1.5 text-[12px] text-texte-3 hover:bg-surface-2 hover:text-texte", TRANS)}>
         <Pencil size={12} aria-hidden /> {detail.intention ? "Corriger" : "Classer"}
       </button>
     </div>
@@ -74,19 +74,19 @@ export function BlocIntention({ detail, onChange }: { detail: DetailMail; onChan
 
 export function BlocResume({ resume }: { resume: NonNullable<DetailMail["resume"]> }) {
   return (
-    <div className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3">
-      <p className="flex flex-wrap items-center gap-2 text-[11.5px] tracking-wide text-[#8B919C] uppercase">
+    <div className="rounded-[10px] border-[0.5px] border-trait bg-surface p-3">
+      <p className="flex flex-wrap items-center gap-2 text-[11.5px] tracking-wide text-texte-3 uppercase">
         Résumé du fil
         <span className="normal-case tracking-normal">{resume.par?.startsWith("ASSISTANT") ? "par Claude" : "par vous"} · {jourHeure(resume.le)}</span>
         {resume.perime ? <Pastille ton="ambre">De nouveaux messages depuis</Pastille> : null}
       </p>
-      <p className="mt-1.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{resume.resume}</p>
+      <p className="mt-1.5 text-[13.5px] leading-relaxed whitespace-pre-wrap text-texte">{resume.resume}</p>
       {resume.pointsEnSuspens.length ? (
-        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] text-[#D1D5DB]">
+        <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] text-texte-2">
           {resume.pointsEnSuspens.map((p, i) => (
             <li key={i}>
               {p.texte}
-              {p.date ? <span className="text-[#8B919C]"> · {new Date(`${p.date}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span> : null}
+              {p.date ? <span className="text-texte-3"> · {new Date(`${p.date}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span> : null}
             </li>
           ))}
         </ul>
@@ -116,15 +116,15 @@ export function CartesPropositions({ propositions, onChange }: { propositions: D
 
   return (
     <section aria-label="Ce que ce mail change" className="space-y-2">
-      <p className="text-[11.5px] tracking-wide text-[#8B919C] uppercase">Ce que ce mail change · {propositions.length} carte{propositions.length > 1 ? "s" : ""} à valider</p>
+      <p className="text-[11.5px] tracking-wide text-texte-3 uppercase">Ce que ce mail change · {propositions.length} carte{propositions.length > 1 ? "s" : ""} à valider</p>
       {propositions.map((p) => (
-        <div key={p.id} className={cn("rounded-[10px] border-[0.5px] p-3", p.sensible ? "border-[#EF9F27]/40 bg-[#EF9F27]/[0.06]" : "border-[#2A2D34] bg-[#1C1F25]")}>
-          <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-[#F2F3F5]">
+        <div key={p.id} className={cn("rounded-[10px] border-[0.5px] p-3", p.sensible ? "border-attention/40 bg-attention/[0.06]" : "border-trait bg-surface")}>
+          <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-medium text-texte">
             {p.titre}
             {p.sensible ? <Pastille ton="ambre">Sensible</Pastille> : null}
           </p>
-          {p.resume ? <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">{p.resume}</p> : null}
-          {p.erreurExecution ? <p className="mt-1 text-[12px] text-[#F87171]">{p.erreurExecution}</p> : null}
+          {p.resume ? <p className="mt-1 text-[12.5px] leading-relaxed text-texte-3">{p.resume}</p> : null}
+          {p.erreurExecution ? <p className="mt-1 text-[12px] text-attention-texte">{p.erreurExecution}</p> : null}
           <div className="mt-2 flex gap-1.5">
             <Bouton taille="sm" variante="primaire" className="h-11 sm:h-8" chargement={occupe === p.id} onClick={() => void decider(p.id, "valider", p.sensible, p.titre)} icone={<Check size={13} aria-hidden />}>
               Valider
@@ -162,13 +162,13 @@ export function DatesExtraites({ messageId, dates, onChange }: { messageId: stri
   return (
     <ul className="space-y-1.5">
       {dates.map((d, i) => (
-        <li key={`${d.date}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 py-2 text-[12.5px]">
+        <li key={`${d.date}-${i}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-[0.5px] border-trait bg-surface px-3 py-2 text-[12.5px]">
           <span className="min-w-0">
-            <span className="font-medium text-[#F2F3F5] tabular-nums">
+            <span className="font-medium text-texte tabular-nums">
               {new Date(`${d.date}T12:00:00`).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}
               {d.heure ? ` ${d.heure}` : ""}
             </span>
-            <span className="ml-2 text-[#8B919C]">{d.nature === "ECHEANCE" ? "échéance" : "disponibilité"} · « {d.passage} »</span>
+            <span className="ml-2 text-texte-3">{d.nature === "ECHEANCE" ? "échéance" : "disponibilité"} · « {d.passage} »</span>
           </span>
           <Bouton taille="sm" variante="secondaire" className="h-11 sm:h-8" chargement={occupe === i} onClick={() => void planifier(i)} icone={<CalendarPlus size={13} aria-hidden />}>
             Planifier
@@ -210,9 +210,9 @@ export function BoutonSnooze({ messageId, snoozeJusqua, onChange }: { messageId:
         {actif ? `Remis au ${jourHeure(snoozeJusqua)} · annuler` : "Plus tard"}
       </Bouton>
       {ouvert && !actif ? (
-        <span className="absolute left-0 z-10 mt-1 flex w-[220px] flex-col rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-1 shadow-lg">
+        <span className="absolute left-0 z-10 mt-1 flex w-[220px] flex-col rounded-[10px] border-[0.5px] border-trait bg-surface p-1 shadow-lg">
           {CHOIX_SNOOZE.map((c) => (
-            <button key={c.quand} type="button" onClick={() => void envoyer({ quand: c.quand })} className={cn("rounded-[7px] px-2.5 py-2 text-left text-[13px] text-[#E5E7EB] hover:bg-[#22262D]", TRANS)}>
+            <button key={c.quand} type="button" onClick={() => void envoyer({ quand: c.quand })} className={cn("rounded-[7px] px-2.5 py-2 text-left text-[13px] text-texte hover:bg-surface-2", TRANS)}>
               {c.libelle}
             </button>
           ))}
@@ -222,7 +222,7 @@ export function BoutonSnooze({ messageId, snoozeJusqua, onChange }: { messageId:
               const quandDit = window.prompt("Quand ? (« vendredi 14h », « 2026-10-01 09:00 », « dans 3 jours »)");
               if (quandDit?.trim()) void envoyer({ quand: quandDit.trim() });
             }}
-            className={cn("rounded-[7px] px-2.5 py-2 text-left text-[13px] text-[#9CA3AF] hover:bg-[#22262D]", TRANS)}
+            className={cn("rounded-[7px] px-2.5 py-2 text-left text-[13px] text-texte-3 hover:bg-surface-2", TRANS)}
           >
             Une autre date…
           </button>
@@ -240,13 +240,13 @@ export function BrouillonsDeposes({ brouillons, onReprendre }: { brouillons: Det
   return (
     <section aria-label="Brouillon déposé par Claude" className="space-y-2">
       {prets.map((b) => (
-        <div key={b.id} className="rounded-[10px] border-[0.5px] border-[#1D9E75]/35 bg-[#112B22]/40 p-3">
-          <p className="flex flex-wrap items-center gap-2 text-[12px] text-[#5DCAA5]">
+        <div key={b.id} className="rounded-[10px] border-[0.5px] border-action/35 bg-action-fond/40 p-3">
+          <p className="flex flex-wrap items-center gap-2 text-[12px] text-action-clair">
             <Sparkles size={13} aria-hidden /> Brouillon déposé par Claude · {jourHeure(b.createdAt)}
             {b.manques.length ? <Pastille ton="ambre">{b.manques[0]}</Pastille> : null}
           </p>
-          {b.objet ? <p className="mt-1 text-[13px] font-medium text-[#F2F3F5]">{b.objet}</p> : null}
-          <p className="mt-1 line-clamp-6 text-[13px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{b.texte}</p>
+          {b.objet ? <p className="mt-1 text-[13px] font-medium text-texte">{b.objet}</p> : null}
+          <p className="mt-1 line-clamp-6 text-[13px] leading-relaxed whitespace-pre-wrap text-texte">{b.texte}</p>
           <Bouton taille="sm" variante="primaire" className="mt-2 h-11 sm:h-8" onClick={() => onReprendre({ id: b.id, a: null, objet: b.objet ?? "", texte: b.texte ?? "" })}>
             Reprendre dans la réponse
           </Bouton>

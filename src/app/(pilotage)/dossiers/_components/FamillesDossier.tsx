@@ -18,16 +18,16 @@ import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 /** Les familles en puces : « Cuisine 3 · Mobilier 1 » (le chiffre : sous-parties cochées). Rien : « Familles à préciser ». */
 export function ChipsFamilles({ prestations, className, vide = true }: { prestations: SelectionPrestations; className?: string; vide?: boolean }) {
   const familles = famillesDe(prestations);
-  if (familles.length === 0) return vide ? <span className={cn("block text-[12px] text-[#6B7280] italic", className)}>Familles à préciser</span> : null;
+  if (familles.length === 0) return vide ? <span className={cn("block text-[12px] text-texte-3 italic", className)}>Familles à préciser</span> : null;
   return (
     <span className={cn("flex flex-wrap gap-1", className)}>
       {familles.map((id) => {
         const f = famille(id);
         const parties = (prestations[id] ?? []).map((sp) => f.sousParties.find((s) => s.id === sp)?.libelle).filter(Boolean);
         return (
-          <span key={id} title={parties.length ? `${f.libelle} : ${parties.join(", ")}` : `${f.libelle} : sous-parties à préciser`} className="inline-flex items-center gap-1 rounded-full border-[0.5px] border-[#2F3B36] bg-[#15201C] px-2 py-0.5 text-[11.5px] text-[#9FD9C2]">
+          <span key={id} title={parties.length ? `${f.libelle} : ${parties.join(", ")}` : `${f.libelle} : sous-parties à préciser`} className="inline-flex items-center gap-1 rounded-full border-[0.5px] border-action/40 bg-action-fond px-2 py-0.5 text-[11.5px] text-action-clair">
             {f.libelle}
-            {parties.length ? <span className="text-[#5E8F7B] tabular-nums">{parties.length}</span> : null}
+            {parties.length ? <span className="text-action-clair tabular-nums">{parties.length}</span> : null}
           </span>
         );
       })}
@@ -93,7 +93,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
 
   return (
     <section aria-labelledby={`familles-${detail.id}`}>
-      <TitreSection action={<span className="text-[11.5px] text-[#8B919C]" aria-live="polite">{etat === "en-cours" ? "Enregistrement…" : etat === "ok" ? "Enregistré" : "Le client coche les mêmes dans son espace"}</span>}>
+      <TitreSection action={<span className="text-[11.5px] text-texte-3" aria-live="polite">{etat === "en-cours" ? "Enregistrement…" : etat === "ok" ? "Enregistré" : "Le client coche les mêmes dans son espace"}</span>}>
         <span id={`familles-${detail.id}`}>Familles du projet</span>
       </TitreSection>
       <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -105,7 +105,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
               type="button"
               aria-pressed={cochee}
               onClick={() => basculerFamille(f.id)}
-              className={cn("flex min-h-11 sm:min-h-10 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] px-2 text-[13px] font-medium", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+              className={cn("flex min-h-11 sm:min-h-10 items-center justify-center gap-1.5 rounded-[10px] border-[0.5px] px-2 text-[13px] font-medium", cochee ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2", TRANS)}
             >
               {cochee ? <Check size={13} aria-hidden /> : null}
               {f.libelle}
@@ -117,7 +117,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
         const f = famille(id);
         return (
           <div key={id} className="mt-3">
-            <p className="text-[12px] font-medium text-[#9CA3AF]">{f.libelle}</p>
+            <p className="text-[12px] font-medium text-texte-3">{f.libelle}</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {f.sousParties.map((sp) => {
                 const cochee = (selection[id] ?? []).includes(sp.id);
@@ -129,11 +129,11 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
                     aria-checked={cochee}
                     title={sp.aide}
                     onClick={() => basculerPartie(id, sp.id)}
-                    className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1.5 rounded-full border-[0.5px] px-2.5 text-[12.5px]", cochee ? "border-[#1D9E75]/60 bg-[#112B22] text-[#5DCAA5]" : "border-[#2A2D34] bg-[#16181D] text-[#D1D5DB] hover:border-[#3A3E47]", TRANS)}
+                    className={cn("inline-flex min-h-11 sm:min-h-8 items-center gap-1.5 rounded-full border-[0.5px] px-2.5 text-[12.5px]", cochee ? "border-action/60 bg-action-fond text-action-clair" : "border-trait bg-fond text-texte-2 hover:border-trait-2", TRANS)}
                   >
                     {cochee ? <Check size={12} aria-hidden /> : null}
                     {sp.libelle}
-                    {cochee && detail.teintes?.[`${id}.${sp.id}`] ? <span className="text-[11px] text-[#9FD9C2]/80">· {detail.teintes[`${id}.${sp.id}`]}</span> : null}
+                    {cochee && detail.teintes?.[`${id}.${sp.id}`] ? <span className="text-[11px] text-action-clair/80">· {detail.teintes[`${id}.${sp.id}`]}</span> : null}
                   </button>
                 );
               })}
@@ -141,7 +141,7 @@ export function FamillesDossier({ detail, onEnregistre }: { detail: DossierDetai
           </div>
         );
       })}
-      {famillesDe(selection).length === 0 ? <p className="mt-2 text-[12.5px] text-[#8B919C]">Aucune famille encore : coche ce que le client veut rénover. Le devis prérempli, le simulateur et son espace suivent.</p> : null}
+      {famillesDe(selection).length === 0 ? <p className="mt-2 text-[12.5px] text-texte-3">Aucune famille encore : coche ce que le client veut rénover. Le devis prérempli, le simulateur et son espace suivent.</p> : null}
     </section>
   );
 }

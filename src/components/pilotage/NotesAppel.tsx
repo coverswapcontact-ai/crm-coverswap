@@ -326,11 +326,11 @@ export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: stri
   return (
     <div className={cn(grande ? "mt-5" : "mt-3")} onClick={(e) => e.stopPropagation()}>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <label htmlFor={idChamp} className={cn("font-medium text-[#9CA3AF]", grande ? "text-[13px]" : "text-[12px]")}>
+        <label htmlFor={idChamp} className={cn("font-medium text-texte-3", grande ? "text-[13px]" : "text-[12px]")}>
           {brouillon.noteId && brouillon.appelLe ? `Note de l'appel · ${dateAppel(brouillon.appelLe)}` : "Note d'appel"}
         </label>
         {brouillon.noteId ? (
-          <button type="button" onClick={nouvelAppel} className="flex h-11 sm:h-8 items-center gap-1 rounded-[8px] px-2 text-[12px] text-[#5DCAA5] hover:bg-[#1D9E75]/10">
+          <button type="button" onClick={nouvelAppel} className="flex h-11 sm:h-8 items-center gap-1 rounded-[8px] px-2 text-[12px] text-action-clair hover:bg-action/10">
             <Plus size={13} aria-hidden /> Nouvel appel
           </button>
         ) : null}
@@ -356,7 +356,7 @@ export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: stri
         enterKeyHint="enter"
         placeholder={grande ? "Ce qu'il dit, pendant ou juste après l'appel (tu peux dicter) : cuisine de 2015, veut changer les façades avant Noël…" : "Ce qu'il a dit au téléphone…"}
         className={cn(
-          "w-full resize-y rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-3 py-2.5 text-[16px] leading-relaxed text-[#F2F3F5] placeholder:text-[#6B7280] focus:border-[#1D9E75]/70 focus:outline-none",
+          "w-full resize-y rounded-[12px] border-[0.5px] border-trait bg-fond px-3 py-2.5 text-[16px] leading-relaxed text-texte placeholder:text-texte-3 focus:border-action/70 focus:outline-none",
           grande ? "min-h-[140px]" : "min-h-[64px] sm:text-[14px]"
         )}
       />
@@ -372,7 +372,7 @@ export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: stri
               className={cn(
                 "rounded-full border-[0.5px] px-3 font-medium",
                 grande ? "h-10 text-[14px]" : "h-8 text-[12.5px]",
-                actif ? "border-[#1D9E75] bg-[#1D9E75]/20 text-[#5DCAA5]" : "border-[#2A2D34] bg-[#1C1F25] text-[#9CA3AF] hover:border-[#3A3E47] hover:text-[#E5E7EB]"
+                actif ? "border-action bg-action/20 text-action-clair" : "border-trait bg-surface text-texte-3 hover:border-trait-2 hover:text-texte"
               )}
             >
               {LIBELLES_ETIQUETTE_APPEL[e]}
@@ -380,15 +380,15 @@ export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: stri
           );
         })}
       </div>
-      <p className={cn("mt-1.5 min-h-[18px] text-[12px]", envoi.etat === "attente" ? "text-[#F5B454]" : envoi.etat === "erreur" ? "text-[#F87171]" : envoi.etat === "ok" ? "text-[#5DCAA5]" : "text-[#6B7280]")} aria-live="polite" role={envoi.etat === "erreur" ? "alert" : undefined}>
+      <p className={cn("mt-1.5 min-h-[18px] text-[12px]", envoi.etat === "attente" ? "text-attention-texte" : envoi.etat === "erreur" ? "text-attention-texte" : envoi.etat === "ok" ? "text-action-clair" : "text-texte-3")} aria-live="polite" role={envoi.etat === "erreur" ? "alert" : undefined}>
         {statut}
       </p>
       {precedentes.length > 0 ? (
         <div className="mt-1">
           <ol className="space-y-2">
             {visibles.map((n) => (
-              <li key={n.id} className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D]/60 px-3 py-2">
-                <p className="text-[11.5px] text-[#8B919C]">
+              <li key={n.id} className="rounded-[10px] border-[0.5px] border-trait bg-fond/60 px-3 py-2">
+                <p className="text-[11.5px] text-texte-3">
                   Appel {dateAppel(n.appelLe)}
                   {n.issue ? ` · ${LIBELLES_ISSUE[n.issue as IssueAppel] ?? n.issue}` : ""}
                   {n.dansDossier ? " · dans le dossier" : ""}
@@ -396,18 +396,18 @@ export function NotesAppel({ leadId, notes, variante = "liste" }: { leadId: stri
                 {n.etiquettes.length > 0 ? (
                   <p className="mt-1 flex flex-wrap gap-1">
                     {n.etiquettes.map((e) => (
-                      <span key={e} className="rounded-full bg-[#22262D] px-2 py-0.5 text-[11px] text-[#D1D5DB]">
+                      <span key={e} className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-texte-2">
                         {LIBELLES_ETIQUETTE_APPEL[e]}
                       </span>
                     ))}
                   </p>
                 ) : null}
-                {n.texte ? <p className={cn("mt-1 text-[13px] leading-snug whitespace-pre-line text-[#D1D5DB]", !toutes && "line-clamp-3")}>{n.texte}</p> : null}
+                {n.texte ? <p className={cn("mt-1 text-[13px] leading-snug whitespace-pre-line text-texte-2", !toutes && "line-clamp-3")}>{n.texte}</p> : null}
               </li>
             ))}
           </ol>
           {precedentes.length > visibles.length || toutes ? (
-            <button type="button" onClick={() => setToutes((t) => !t)} className="mt-1.5 h-11 sm:h-8 text-[12px] text-[#5DCAA5] hover:underline">
+            <button type="button" onClick={() => setToutes((t) => !t)} className="mt-1.5 h-11 sm:h-8 text-[12px] text-action-clair hover:underline">
               {toutes ? "Réduire" : `Voir ${precedentes.length - visibles.length === 1 ? "l'autre appel" : `les ${precedentes.length - visibles.length} autres appels`}`}
             </button>
           ) : null}
@@ -432,11 +432,11 @@ export function NotesAppelDuLead({ leadId, variante = "fiche" }: { leadId: strin
       actif = false;
     };
   }, [leadId]);
-  if (!notes || notes.leadId !== leadId) return <p className="mt-3 text-[12px] text-[#6B7280]">Notes d&apos;appel…</p>;
+  if (!notes || notes.leadId !== leadId) return <p className="mt-3 text-[12px] text-texte-3">Notes d&apos;appel…</p>;
   return (
     <>
       <NotesAppel key={leadId} leadId={leadId} notes={notes.liste} variante={variante} />
-      {echec ? <p className="text-[12px] text-[#F5B454]">Notes précédentes indisponibles hors ligne.</p> : null}
+      {echec ? <p className="text-[12px] text-attention-texte">Notes précédentes indisponibles hors ligne.</p> : null}
     </>
   );
 }

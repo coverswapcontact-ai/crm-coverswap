@@ -103,15 +103,15 @@ function Redaction({
   }
 
   return (
-    <section aria-label="Répondre" className="space-y-2.5 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3">
+    <section aria-label="Répondre" className="space-y-2.5 rounded-[12px] border-[0.5px] border-trait bg-fond p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_1.4fr]">
         <input value={a} onChange={(e) => setA(e.target.value)} className={CLASSE_SAISIE} aria-label="Destinataire" placeholder="Destinataire" type="email" inputMode="email" autoCapitalize="none" />
         <input value={objet} onChange={(e) => setObjet(e.target.value)} className={CLASSE_SAISIE} aria-label="Objet" placeholder="Objet" disabled={Boolean(enReponseA)} />
       </div>
 
       {avecIa ? (
-        <div className="space-y-2 rounded-[10px] border-[0.5px] border-[#1D9E75]/30 bg-[#112B22]/40 p-2.5">
-          <label className="block text-[12.5px] text-[#9CA3AF]" htmlFor="consigne-ia">
+        <div className="space-y-2 rounded-[10px] border-[0.5px] border-action/30 bg-action-fond/40 p-2.5">
+          <label className="block text-[12.5px] text-texte-3" htmlFor="consigne-ia">
             Une consigne ? (facultatif) — « dis-lui que je passe jeudi », « relance-le gentiment sur le devis »
           </label>
           <input id="consigne-ia" value={consigne} onChange={(e) => setConsigne(e.target.value)} maxLength={500} className={CLASSE_SAISIE} placeholder="Votre consigne, en quelques mots" />
@@ -122,7 +122,7 @@ function Redaction({
             <Bouton variante="fantome" onClick={() => setAvecIa(false)}>
               Écrire moi-même
             </Bouton>
-            <span className="text-[11.5px] text-[#8B919C]">L&apos;IA n&apos;utilise que ce que sait le CRM ; ce qui manque devient « [à compléter] ».</span>
+            <span className="text-[11.5px] text-texte-3">L&apos;IA n&apos;utilise que ce que sait le CRM ; ce qui manque devient « [à compléter] ».</span>
           </div>
         </div>
       ) : (
@@ -130,13 +130,13 @@ function Redaction({
           {viaAssistant ? "Rédiger : via l'assistant Claude" : "Rédiger avec l'IA"}
         </Bouton>
       )}
-      {viaAssistant ? <p className="text-[12px] text-[#8B919C]">Dites-le à Claude (« réponds à … que … ») : il dépose le brouillon ici, vous l&apos;envoyez.</p> : !ia.active && ia.raison ? <p className="text-[12px] text-[#8B919C]">IA indisponible : {ia.raison}</p> : null}
+      {viaAssistant ? <p className="text-[12px] text-texte-3">Dites-le à Claude (« réponds à … que … ») : il dépose le brouillon ici, vous l&apos;envoyez.</p> : !ia.active && ia.raison ? <p className="text-[12px] text-texte-3">IA indisponible : {ia.raison}</p> : null}
 
       <textarea ref={champ} value={texte} onChange={(e) => setTexte(e.target.value)} rows={10} className={cn(CLASSE_SAISIE, "min-h-[220px] resize-y py-2.5 leading-relaxed")} aria-label="Votre message" placeholder="Votre message…" />
 
       {brouillon && (brouillon.manques.length || brouillon.corrections.length) ? (
-        <div className="rounded-[10px] border-[0.5px] border-[#EF9F27]/35 bg-[#EF9F27]/[0.07] p-2.5 text-[12.5px] text-[#FCD9A0]">
-          <p className="font-medium text-[#F5B454]">À compléter avant d&apos;envoyer</p>
+        <div className="rounded-[10px] border-[0.5px] border-attention/35 bg-attention/[0.07] p-2.5 text-[12.5px] text-attention-texte">
+          <p className="font-medium text-attention-texte">À compléter avant d&apos;envoyer</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-4">
             {[...new Set([...brouillon.manques.filter((m) => !brouillon.corrections.some((c) => c.startsWith(m))), ...brouillon.corrections])].map((m) => (
               <li key={m}>{m}</li>
@@ -146,7 +146,7 @@ function Redaction({
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[11.5px] text-[#8B919C]">{aCompleter ? "Remplacez chaque « [à compléter] » pour pouvoir envoyer." : "Envoyé depuis votre boîte Gmail, dans la conversation."}</span>
+        <span className="text-[11.5px] text-texte-3">{aCompleter ? "Remplacez chaque « [à compléter] » pour pouvoir envoyer." : "Envoyé depuis votre boîte Gmail, dans la conversation."}</span>
         <Bouton variante="primaire" onClick={() => void envoyer()} chargement={envoi} disabled={!texte.trim() || !a.trim() || !objet.trim() || aCompleter} icone={<Send size={14} aria-hidden />}>
           Envoyer
         </Bouton>
@@ -204,19 +204,19 @@ function Rattacher({ messageId, onFait }: { messageId: string; onFait: () => voi
   }
 
   return (
-    <section aria-label="Qui est-ce ?" className="space-y-2 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3">
-      <p className="text-[13px] font-medium text-[#F2F3F5]">Qui est-ce ? Rattachez-le à un client</p>
+    <section aria-label="Qui est-ce ?" className="space-y-2 rounded-[12px] border-[0.5px] border-trait bg-fond p-3">
+      <p className="text-[13px] font-medium text-texte">Qui est-ce ? Rattachez-le à un client</p>
       <label className="relative block">
-        <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" aria-hidden />
+        <Search size={15} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" aria-hidden />
         <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Nom, ville, téléphone…" aria-label="Chercher un client" className={cn(CLASSE_SAISIE, "pl-9")} />
       </label>
       {resultats.length ? (
-        <ul className="divide-y-[0.5px] divide-[#2A2D34] rounded-[10px] border-[0.5px] border-[#2A2D34]">
+        <ul className="divide-y-[0.5px] divide-trait rounded-[10px] border-[0.5px] border-trait">
           {resultats.map((c) => (
             <li key={c.id}>
-              <button type="button" disabled={occupe} onClick={() => void rattacher(c)} className={cn("flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-[13.5px] text-[#E5E7EB] hover:bg-[#20232A] disabled:opacity-50", TRANS)}>
+              <button type="button" disabled={occupe} onClick={() => void rattacher(c)} className={cn("flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-[13.5px] text-texte hover:bg-surface disabled:opacity-50", TRANS)}>
                 <span className="min-w-0 truncate">{c.nom}</span>
-                <span className="shrink-0 text-[12px] text-[#8B919C]">{c.ville ?? ""}</span>
+                <span className="shrink-0 text-[12px] text-texte-3">{c.ville ?? ""}</span>
               </button>
             </li>
           ))}
@@ -322,12 +322,12 @@ export function PanneauMail({
 
   return (
     <Sheet open={ouvert} onOpenChange={(o) => (o ? undefined : volet ? setVolet(false) : onFermer())}>
-      <SheetContent side="right" showCloseButton={false} style={glisser.style} className="gap-0 border-[#2A2D34] bg-[#16181D] p-0 text-[#F2F3F5] data-[side=right]:w-full data-[side=right]:sm:max-w-[1080px]">
+      <SheetContent side="right" showCloseButton={false} style={glisser.style} className="gap-0 border-trait bg-fond p-0 text-texte data-[side=right]:w-full data-[side=right]:sm:max-w-[1080px]">
         <div className="flex h-full min-h-0 flex-col">
-          <header {...glisser.gestionnaires} className="flex items-start justify-between gap-3 border-b-[0.5px] border-[#2A2D34] px-4 py-3">
+          <header {...glisser.gestionnaires} className="flex items-start justify-between gap-3 border-b-[0.5px] border-trait px-4 py-3">
             <div className="min-w-0">
-              <SheetTitle className="truncate text-[15.5px] font-medium text-[#F2F3F5]">{detail ? detail.objet : nouveauPour ? "Nouveau mail" : "Chargement…"}</SheetTitle>
-              <SheetDescription className="mt-0.5 truncate text-[12.5px] text-[#9CA3AF]">
+              <SheetTitle className="truncate text-[15.5px] font-medium text-texte">{detail ? detail.objet : nouveauPour ? "Nouveau mail" : "Chargement…"}</SheetTitle>
+              <SheetDescription className="mt-0.5 truncate text-[12.5px] text-texte-3">
                 {detail ? `${detail.correspondant.nom ? `${detail.correspondant.nom} · ` : ""}${detail.correspondant.adresse}` : (contexte?.contact.nom ?? "")}
               </SheetDescription>
             </div>
@@ -348,8 +348,8 @@ export function PanneauMail({
               {detail ? (
                 <>
                   <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                    {detail.classe ? <span className="rounded-full border-[0.5px] border-[#2A2D34] px-2 py-0.5 text-[#B4BAC4]">{LIBELLES_CLASSE[detail.classe] ?? detail.classe}</span> : null}
-                    {detail.motif ? <span className="text-[#8B919C]">Pourquoi ici : {detail.motif}</span> : null}
+                    {detail.classe ? <span className="rounded-full border-[0.5px] border-trait px-2 py-0.5 text-texte-2">{LIBELLES_CLASSE[detail.classe] ?? detail.classe}</span> : null}
+                    {detail.motif ? <span className="text-texte-3">Pourquoi ici : {detail.motif}</span> : null}
                   </div>
                   <BlocIntention
                     key={`${detail.messageId}:${detail.intentionLe ?? ""}`}
@@ -402,7 +402,7 @@ export function PanneauMail({
                       </>
                     )}
                     {detail.lienGmail ? (
-                      <a href={detail.lienGmail} target="_blank" rel="noopener" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] px-2.5 text-[12px] text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] sm:h-8">
+                      <a href={detail.lienGmail} target="_blank" rel="noopener" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] px-2.5 text-[12px] text-texte-3 hover:bg-surface-2 hover:text-texte sm:h-8">
                         <ExternalLink size={13} aria-hidden /> Gmail
                       </a>
                     ) : null}
@@ -420,12 +420,12 @@ export function PanneauMail({
 
                   <ol className="space-y-2.5">
                     {detail.fil.map((m) => (
-                      <li key={m.id} className={cn("rounded-[12px] border-[0.5px] p-3", m.sens === "SORTANT" ? "border-[#1D9E75]/25 bg-[#112B22]/30" : "border-[#2A2D34] bg-[#1C1F25]")}>
+                      <li key={m.id} className={cn("rounded-[12px] border-[0.5px] p-3", m.sens === "SORTANT" ? "border-action/25 bg-action-fond/30" : "border-trait bg-surface")}>
                         <p className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12.5px]">
-                          <span className="font-medium text-[#E5E7EB]">{m.sens === "SORTANT" ? (m.automatique ? "CoverSwap (automatique)" : "Vous") : (m.deNom ?? m.de)}</span>
-                          <span className="text-[#8B919C] tabular-nums">{dateHeure(m.recuLe)}</span>
+                          <span className="font-medium text-texte">{m.sens === "SORTANT" ? (m.automatique ? "CoverSwap (automatique)" : "Vous") : (m.deNom ?? m.de)}</span>
+                          <span className="text-texte-3 tabular-nums">{dateHeure(m.recuLe)}</span>
                         </p>
-                        <p className="mt-2 text-[14px] leading-relaxed whitespace-pre-wrap text-[#E5E7EB]">{m.texte || "(message vide)"}</p>
+                        <p className="mt-2 text-[14px] leading-relaxed whitespace-pre-wrap text-texte">{m.texte || "(message vide)"}</p>
                         {m.pieces.length ? (
                           <ul className="mt-2.5 flex flex-wrap gap-2">
                             {m.pieces.map((p) =>
@@ -433,12 +433,12 @@ export function PanneauMail({
                                 <li key={p.id}>
                                   <a href={p.url} target="_blank" rel="noopener" title={p.nom}>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={p.url} alt={p.nom} className="h-24 w-24 rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" loading="lazy" />
+                                    <img src={p.url} alt={p.nom} className="h-24 w-24 rounded-[8px] border-[0.5px] border-trait object-cover" loading="lazy" />
                                   </a>
                                 </li>
                               ) : (
                                 <li key={p.id}>
-                                  <a href={p.url ?? detail.lienGmail ?? "#"} target="_blank" rel="noopener" className="inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] px-2.5 text-[12.5px] text-[#D1D5DB] hover:border-[#3A3E47]">
+                                  <a href={p.url ?? detail.lienGmail ?? "#"} target="_blank" rel="noopener" className="inline-flex h-11 sm:h-10 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait px-2.5 text-[12.5px] text-texte-2 hover:border-trait-2">
                                     <Paperclip size={13} aria-hidden /> {p.nom}
                                   </a>
                                 </li>
@@ -451,7 +451,7 @@ export function PanneauMail({
                   </ol>
 
                   {detail.envois.length ? (
-                    <ul className="space-y-1 text-[12px] text-[#9CA3AF]">
+                    <ul className="space-y-1 text-[12px] text-texte-3">
                       {detail.envois.map((e) => (
                         <li key={e.id}>
                           {e.statut === "ENVOYE" ? `Envoyé à ${e.a} ${e.envoyeLe ? `le ${dateHeure(e.envoyeLe)}` : ""}` : e.statut === "ECHEC" ? `Échec de l'envoi : ${e.erreur ?? "inconnu"}` : `En cours d'envoi à ${e.a} (il attend Gmail si la connexion est coupée)`}
@@ -480,7 +480,7 @@ export function PanneauMail({
               ) : nouveauPour ? (
                 contexteNouveau ? (
                   <>
-                    {contexteNouveau.contact.emails.length === 0 ? <p className="text-[12.5px] text-[#F5B454]">Aucune adresse e-mail connue pour ce contact : saisissez-la ci-dessous (elle ne sera pas ajoutée à sa fiche).</p> : null}
+                    {contexteNouveau.contact.emails.length === 0 ? <p className="text-[12.5px] text-attention-texte">Aucune adresse e-mail connue pour ce contact : saisissez-la ci-dessous (elle ne sera pas ajoutée à sa fiche).</p> : null}
                     <Redaction
                       key={nouveauPour}
                       destinataire={contexteNouveau.contact.emails[0] ?? ""}
@@ -493,16 +493,16 @@ export function PanneauMail({
                     />
                   </>
                 ) : (
-                  <p className="text-[13px] text-[#8B919C]">Chargement du contact…</p>
+                  <p className="text-[13px] text-texte-3">Chargement du contact…</p>
                 )
               ) : (
-                <p className="text-[13px] text-[#8B919C]">Chargement…</p>
+                <p className="text-[13px] text-texte-3">Chargement…</p>
               )}
             </div>
 
             {/* Le client : une colonne sur ordinateur. */}
             {contexte ? (
-              <aside className="hidden min-h-0 overflow-y-auto border-l-[0.5px] border-[#2A2D34] px-4 py-4 lg:block">
+              <aside className="hidden min-h-0 overflow-y-auto border-l-[0.5px] border-trait px-4 py-4 lg:block">
                 <ContexteClient contexte={contexte} />
               </aside>
             ) : null}
@@ -511,7 +511,7 @@ export function PanneauMail({
 
         {/* …et un volet sur téléphone. */}
         <Sheet open={volet} onOpenChange={setVolet}>
-          <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto border-[#2A2D34] bg-[#16181D] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-[#F2F3F5]">
+          <SheetContent side="bottom" className="max-h-[85dvh] gap-0 overflow-y-auto border-trait bg-fond px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-texte">
             <SheetTitle className="sr-only">Le client</SheetTitle>
             <SheetDescription className="sr-only">Fiche, projets, dernière note d&apos;appel</SheetDescription>
             {contexte ? <ContexteClient contexte={contexte} /> : null}

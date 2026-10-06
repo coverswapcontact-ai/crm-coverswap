@@ -14,39 +14,39 @@ export function Minutes({ choisies, plan, chargement, onChoisir, onLancer }: { c
   return (
     <div className="mt-4">
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Le temps dont je dispose">
-        <span className="text-[13px] text-[#9CA3AF]">J&apos;ai</span>
+        <span className="text-[13px] text-texte-3">J&apos;ai</span>
         {CHOIX_MINUTES.map((m) => (
           <button
             key={m}
             type="button"
             aria-pressed={choisies === m}
             onClick={() => onChoisir(choisies === m ? null : m)}
-            className={cn("h-11 rounded-full border-[0.5px] px-3.5 text-[13px] tabular-nums pointer-fine:h-8", choisies === m ? "border-[#1D9E75]/60 bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#9CA3AF] hover:text-[#F2F3F5]", TRANS)}
+            className={cn("h-11 rounded-full border-[0.5px] px-3.5 text-[13px] tabular-nums pointer-fine:h-8", choisies === m ? "border-action/60 bg-action/15 text-action-clair" : "border-trait text-texte-3 hover:text-texte", TRANS)}
           >
             {libelleChoixMinutes(m)}
           </button>
         ))}
       </div>
       {choisies !== null ? (
-        <div className="mt-2 overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]" aria-live="polite">
+        <div className="mt-2 overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface" aria-live="polite">
           {!plan || plan.minutes !== choisies ? (
-            <p className="px-3.5 py-3 text-[13px] text-[#8B919C]">{chargement ? "Je regarde ce qui tient…" : "…"}</p>
+            <p className="px-3.5 py-3 text-[13px] text-texte-3">{chargement ? "Je regarde ce qui tient…" : "…"}</p>
           ) : plan.groupes.length === 0 ? (
-            <p className="px-3.5 py-3 text-[13px] text-[#8B919C]">Rien ne tient en {libelleChoixMinutes(choisies)}.</p>
+            <p className="px-3.5 py-3 text-[13px] text-texte-3">Rien ne tient en {libelleChoixMinutes(choisies)}.</p>
           ) : (
             <>
               <ul>
                 {plan.groupes.map((groupe) => (
-                  <li key={groupe.famille} className="flex min-h-[52px] items-center gap-2 border-t-[0.5px] border-[#2A2D34] py-1.5 pr-1.5 pl-3.5 first:border-t-0">
-                    <span className="min-w-0 flex-1 truncate text-[14px] text-[#F2F3F5]">{groupe.libelle}</span>
-                    <button type="button" onClick={() => onLancer(groupe)} aria-label={`Lancer : ${groupe.libelle}`} className={cn("flex h-11 shrink-0 items-center gap-1.5 rounded-[10px] border-[0.5px] border-[#1D9E75]/45 px-3 text-[13px] font-medium text-[#5DCAA5] hover:bg-[#1D9E75]/10 pointer-fine:h-8", TRANS)}>
+                  <li key={groupe.famille} className="flex min-h-[52px] items-center gap-2 border-t-[0.5px] border-trait py-1.5 pr-1.5 pl-3.5 first:border-t-0">
+                    <span className="min-w-0 flex-1 truncate text-[14px] text-texte">{groupe.libelle}</span>
+                    <button type="button" onClick={() => onLancer(groupe)} aria-label={`Lancer : ${groupe.libelle}`} className={cn("flex h-11 shrink-0 items-center gap-1.5 rounded-[10px] border-[0.5px] border-action/45 px-3 text-[13px] font-medium text-action-clair hover:bg-action/10 pointer-fine:h-8", TRANS)}>
                       <Play size={14} aria-hidden /> Lancer
                     </button>
                   </li>
                 ))}
               </ul>
               {plan.groupes.length > 1 ? (
-                <button type="button" onClick={() => onLancer(null)} className={cn("flex min-h-11 w-full items-center justify-center gap-1.5 border-t-[0.5px] border-[#2A2D34] text-[13px] text-[#5DCAA5] hover:bg-[#20232A] pointer-fine:min-h-9", TRANS)}>
+                <button type="button" onClick={() => onLancer(null)} className={cn("flex min-h-11 w-full items-center justify-center gap-1.5 border-t-[0.5px] border-trait text-[13px] text-action-clair hover:bg-surface pointer-fine:min-h-9", TRANS)}>
                   <Play size={13} aria-hidden /> Tout à la suite · {dureeLisible(plan.utilisees)}
                 </button>
               ) : null}

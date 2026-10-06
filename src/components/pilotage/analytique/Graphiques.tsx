@@ -14,7 +14,7 @@ import { formaterValeur, jourAxe, jourLongSemaine } from "./format";
  */
 
 const AXE = {
-  fill: "#6B7280",
+  fill: "var(--color-texte-3)",
   fontSize: 11,
   fontFamily: "var(--font-sans), Inter, sans-serif",
 } as const;
@@ -59,7 +59,7 @@ export const LIBELLES_COURTS_SERIE: Record<string, string> = {
 
 function Legende({ series, compact }: { series: Serie[]; compact?: boolean }) {
   return (
-    <ul className={cn("flex flex-wrap items-center text-[#D1D5DB]", compact ? "gap-x-4 gap-y-1 text-[12px]" : "gap-x-[18px] gap-y-1 text-[13px]")}>
+    <ul className={cn("flex flex-wrap items-center text-texte-2", compact ? "gap-x-4 gap-y-1 text-[12px]" : "gap-x-[18px] gap-y-1 text-[13px]")}>
       {series.map((serie, index) => (
         <li key={serie.cle} className="flex items-center gap-[7px]">
           <span
@@ -106,19 +106,19 @@ function Bulle({
       decimales: formats[v.serie.cle] === "euros" ? 2 : undefined,
     });
   return (
-    <div className="rounded-[8px] border border-[#3A3E47] bg-[#22262D] px-3 py-2 shadow-none" role="status">
-      <p className="text-[11px] text-[#9CA3AF]">{jourLongSemaine(String(label))}</p>
+    <div className="rounded-[8px] border border-trait-2 bg-surface-2 px-3 py-2 shadow-none" role="status">
+      <p className="text-[11px] text-texte-3">{jourLongSemaine(String(label))}</p>
       {series.length === 1 ? (
-        <p className="mt-1 text-[13px] text-[#F2F3F5]">{texte(valeurs[0])}</p>
+        <p className="mt-1 text-[13px] text-texte">{texte(valeurs[0])}</p>
       ) : series.length <= 3 ? (
-        <p className="mt-1 text-[13px] whitespace-nowrap text-[#F2F3F5]">{nonNulles.length === 0 ? "Aucun" : nonNulles.map((v) => `${texte(v)} ${v.serie.libelle}`).join(" · ")}</p>
+        <p className="mt-1 text-[13px] whitespace-nowrap text-texte">{nonNulles.length === 0 ? "Aucun" : nonNulles.map((v) => `${texte(v)} ${v.serie.libelle}`).join(" · ")}</p>
       ) : (
         <ul className="mt-1 flex flex-col gap-0.5 text-[13px]">
           {valeurs.map((v) => (
             <li key={v.serie.cle} className="flex items-center gap-2 whitespace-nowrap">
               <span className="h-[3px] w-3 rounded-[2px]" style={{ background: v.serie.couleur }} aria-hidden />
-              <span className="font-heading tabular-nums text-[#F2F3F5]">{texte(v)}</span>
-              <span className="text-[#9CA3AF]">{v.serie.libelle}</span>
+              <span className="font-heading tabular-nums text-texte">{texte(v)}</span>
+              <span className="text-texte-3">{v.serie.libelle}</span>
             </li>
           ))}
         </ul>
@@ -146,8 +146,8 @@ function Trace({ lignes, series, formats, hauteur, compact, aire }: { lignes: Li
             left: compact ? 2 : 0,
           }}
         >
-          <CartesianGrid vertical={false} stroke="#2A2D34" strokeDasharray={compact ? "6 10" : "3 5"} />
-          <ReferenceLine y={inverse ? undefined : 0} stroke="#2A2D34" ifOverflow="extendDomain" />
+          <CartesianGrid vertical={false} stroke="var(--color-trait)" strokeDasharray={compact ? "6 10" : "3 5"} />
+          <ReferenceLine y={inverse ? undefined : 0} stroke="var(--color-trait)" ifOverflow="extendDomain" />
           <XAxis
             hide={compact}
             dataKey="jour"
@@ -174,7 +174,7 @@ function Trace({ lignes, series, formats, hauteur, compact, aire }: { lignes: Li
             tickFormatter={(valeur: number) => graduation(valeur, format)}
           />
           <Tooltip
-            cursor={{ stroke: "#3A3E47", strokeWidth: 1 }}
+            cursor={{ stroke: "var(--color-trait-2)", strokeWidth: 1 }}
             isAnimationActive={false}
             content={(props: TooltipContentProps) => <Bulle active={props.active} label={props.label} lignes={lignes} series={series} formats={formats} />}
             wrapperStyle={{ outline: "none", zIndex: 10 }}
@@ -195,7 +195,7 @@ function Trace({ lignes, series, formats, hauteur, compact, aire }: { lignes: Li
               dot={false}
               activeDot={{
                 r: 4.5,
-                fill: "#16181D",
+                fill: "var(--color-fond)",
                 stroke: serie.couleur,
                 strokeWidth: 2,
               }}
@@ -206,7 +206,7 @@ function Trace({ lignes, series, formats, hauteur, compact, aire }: { lignes: Li
       </div>
       {/* Téléphone : trois dates sous la courbe (début, milieu, fin), comme la maquette ; jamais coupées au bord. */}
       {ticks ? (
-        <div className="mt-1.5 flex justify-between text-[11px] text-[#6B7280]" aria-hidden>
+        <div className="mt-1.5 flex justify-between text-[11px] text-texte-3" aria-hidden>
           {ticks.map((jour) => (
             <span key={jour}>{jourAxe(jour)}</span>
           ))}
@@ -242,17 +242,17 @@ export function CourbeTemps({
     ...point.valeurs,
   }));
   const formatsSeries = Object.fromEntries(courbe.series.map((serie) => [serie.cle, formatDeSerie(serie.cle, formats)]));
-  if (lignes.length === 0 || series.length === 0) return <p className="text-[13px] text-[#6B7280]">Pas encore de données sur la période.</p>;
+  if (lignes.length === 0 || series.length === 0) return <p className="text-[13px] text-texte-3">Pas encore de données sur la période.</p>;
 
   if (separer) {
     return (
       <div className={cn("grid gap-4", series.length >= 3 ? "lg:grid-cols-3" : "md:grid-cols-2")}>
         {series.map((serie) => (
           <figure key={serie.cle} className="flex min-w-0 flex-col gap-2">
-            <figcaption className="flex items-center gap-[7px] text-[13px] text-[#D1D5DB]">
+            <figcaption className="flex items-center gap-[7px] text-[13px] text-texte-2">
               <span className="h-[3px] w-3.5 rounded-[2px]" style={{ background: serie.couleur }} aria-hidden />
               {serie.libelle}
-              {formatsSeries[serie.cle] === "position" ? <span className="text-[12px] text-[#6B7280]">(plus haut, c&apos;est mieux)</span> : null}
+              {formatsSeries[serie.cle] === "position" ? <span className="text-[12px] text-texte-3">(plus haut, c&apos;est mieux)</span> : null}
             </figcaption>
             <Trace
               lignes={lignes}

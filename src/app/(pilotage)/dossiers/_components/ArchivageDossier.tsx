@@ -34,7 +34,7 @@ export function ArchivageDossier({ detail, onArchive }: { detail: DossierDetail;
   }
 
   return (
-    <section className="border-t-[0.5px] border-[#2A2D34] pt-4">
+    <section className="border-t-[0.5px] border-trait pt-4">
       <Bouton variante="fantome" taille="sm" icone={<Archive size={13} aria-hidden />} onClick={() => setOuverte(true)}>
         Archiver ce dossier
       </Bouton>
@@ -52,7 +52,7 @@ export function ArchivageDossier({ detail, onArchive }: { detail: DossierDetail;
           </div>
         }
       >
-        <ul className="mb-4 list-disc space-y-1 pl-4 text-[13px] leading-relaxed text-[#D1D5DB]">
+        <ul className="mb-4 list-disc space-y-1 pl-4 text-[13px] leading-relaxed text-texte-2">
           <li>Le dossier sort de Dossiers (filtre « Espaces » compris).</li>
           {detail.origine?.type === "LEAD" ? <li>Son lead revient dans Leads (« À appeler » ou « À rappeler »), avec ses simulations et ses photos.</li> : null}
           <li>Le lien de son espace client est désactivé.</li>
@@ -98,16 +98,16 @@ export function DossiersArchives({ ouverte, onFermer, onRestaure }: { ouverte: b
   return (
     <Modale ouverte={ouverte} onFermer={onFermer} titre="Dossiers archivés" description="Rien n'est supprimé. Restaurer un dossier le remet dans Dossiers ; son lead ressort alors de Leads." largeur="lg">
       {dossiers === null ? (
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+        <p className="text-[13px] text-texte-3">Chargement…</p>
       ) : dossiers.length === 0 ? (
         <EtatVide titre="Aucun dossier archivé" />
       ) : (
-        <ul className="divide-y-[0.5px] divide-[#2A2D34]">
+        <ul className="divide-y-[0.5px] divide-trait">
           {dossiers.map((dossier) => (
             <li key={dossier.id} className="flex items-center gap-3 py-2.5">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium text-[#F2F3F5]">{dossier.clientNom}</p>
-                <p className="text-[12px] leading-snug text-[#9CA3AF]">
+                <p className="truncate text-[13.5px] font-medium text-texte">{dossier.clientNom}</p>
+                <p className="text-[12px] leading-snug text-texte-3">
                   Archivé le {new Date(dossier.archiveLe).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
                   {dossier.archiveMotif ? ` — ${dossier.archiveMotif}` : ""}
                 </p>

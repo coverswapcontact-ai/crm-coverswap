@@ -57,7 +57,7 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
                 cle: "page",
                 titre: "Page",
                 rendu: (l) => (
-                  <span className="block max-w-[260px] truncate text-[#F2F3F5]" title={l.page}>
+                  <span className="block max-w-[260px] truncate text-texte" title={l.page}>
                     {l.page}
                   </span>
                 ),
@@ -85,7 +85,7 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
         </Carte>
         <Carte titre="Pages vues">
           <BarresHorizontales
-            couleur="#7AA7FF"
+            couleur="var(--color-info-texte)"
             lignes={ecran.pagesVues.map((p) => ({
               cle: p.page,
               libelle: p.page,
@@ -108,7 +108,7 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
                 cle: "nom",
                 titre: "Source",
                 rendu: (l) => (
-                  <span className="flex min-w-0 items-center gap-2 text-[#F2F3F5]" title={LIBELLES_FAMILLE[l.famille]}>
+                  <span className="flex min-w-0 items-center gap-2 text-texte" title={LIBELLES_FAMILLE[l.famille]}>
                     <Pastille couleur={COULEURS_FAMILLE[l.famille]} />
                     <span className="truncate">{l.nom}</span>
                   </span>
@@ -160,7 +160,7 @@ export function VueSite({ ecran }: { ecran: EcranSite }) {
           </Carte>
           <Carte titre="Pays" sousTitre="Déduit du fuseau horaire" gap="gap-3">
             <BarresHorizontales
-              couleur="#93C5FD"
+              couleur="var(--color-info-texte)"
               lignes={ecran.pays.map((p) => ({
                 cle: p.pays,
                 libelle: p.pays,

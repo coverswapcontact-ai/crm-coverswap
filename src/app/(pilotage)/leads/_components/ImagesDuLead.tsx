@@ -24,7 +24,7 @@ export function ImagesDuLead({ detail }: { detail: EntrantDetail }) {
                 {detail.photos.map((photo, index) => (
                   <button key={photo.id} type="button" onClick={() => setPhotoOuverte(index)} className="block w-full" aria-label={`Agrandir la photo ${index + 1}`}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photo.vignette} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover" />
+                    <img src={photo.vignette} alt={`Photo ${index + 1} : ${detail.nom}`} loading="lazy" className="h-24 w-full rounded-[8px] border-[0.5px] border-trait object-cover" />
                   </button>
                 ))}
               </div>
@@ -40,8 +40,8 @@ export function ImagesDuLead({ detail }: { detail: EntrantDetail }) {
                   <div key={simulation.id} className={CARTE_REMPLIE}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="text-[13.5px] text-[#F2F3F5]">{simulation.reference ?? "Simulation"}</p>
-                        <p className="text-[12px] text-[#6B7280]">
+                        <p className="text-[13.5px] text-texte">{simulation.reference ?? "Simulation"}</p>
+                        <p className="text-[12px] text-texte-3">
                           {[
                             formatDateCourte(simulation.le),
                             simulation.metresLineaires ? `${simulation.metresLineaires.toLocaleString("fr-FR")} ml` : null,
@@ -64,13 +64,13 @@ export function ImagesDuLead({ detail }: { detail: EntrantDetail }) {
                         ].map(({ src, libelle }) =>
                           src ? (
                             <button key={libelle} type="button" onClick={() => setImageOuverte(indexDeVue(detail.simulations, simulation.id, libelle === "Avant" ? "avant" : "apres"))} className="block w-full text-left" aria-label={`Agrandir : ${libelle}`}>
-                              <span className="mb-1 block text-[11.5px] text-[#6B7280]">{libelle}</span>
+                              <span className="mb-1 block text-[11.5px] text-texte-3">{libelle}</span>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={src}
                                 alt={`${libelle} : ${detail.nom}`}
                                 loading="lazy"
-                                className="h-32 w-full rounded-[8px] border-[0.5px] border-[#2A2D34] object-cover"
+                                className="h-32 w-full rounded-[8px] border-[0.5px] border-trait object-cover"
                               />
                             </button>
                           ) : (

@@ -269,8 +269,8 @@ export function RepriseDossier({
         <section>
           <TitreSection>Client</TitreSection>
           {client ? (
-            <div className="mb-3 flex items-center justify-between gap-3 rounded-[9px] border-[0.5px] border-[#1D9E75]/30 bg-[#112B22]/60 px-3 py-2">
-              <p className="min-w-0 truncate text-[13px] text-[#D1FAE5]">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-[9px] border-[0.5px] border-action/30 bg-action-fond/60 px-3 py-2">
+              <p className="min-w-0 truncate text-[13px] text-action-clair">
                 Fiche client : <span className="font-medium">{client.nom}</span>
               </p>
               <Bouton variante="fantome" taille="sm" onClick={() => setClient(null)}>
@@ -280,7 +280,7 @@ export function RepriseDossier({
           ) : (
             <label className="relative mb-3 block">
               <span className="sr-only">Rattacher à une fiche client existante</span>
-              <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+              <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
               <input
                 type="search"
                 value={recherche}
@@ -292,13 +292,13 @@ export function RepriseDossier({
                 className={cn(CLASSE_SAISIE, "h-11 pl-8 sm:h-9")}
               />
               {clients && recherche.trim().length >= 2 ? (
-                <ul className="mt-2 overflow-hidden rounded-[9px] border-[0.5px] border-[#2A2D34]">
-                  {clients.length === 0 ? <li className="px-3 py-2 text-[12.5px] text-[#9CA3AF]">Aucune fiche : une fiche sera créée depuis le nom.</li> : null}
+                <ul className="mt-2 overflow-hidden rounded-[9px] border-[0.5px] border-trait">
+                  {clients.length === 0 ? <li className="px-3 py-2 text-[12.5px] text-texte-3">Aucune fiche : une fiche sera créée depuis le nom.</li> : null}
                   {clients.map((fiche) => (
-                    <li key={fiche.id} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
-                      <button type="button" onClick={() => choisirClient(fiche)} className={cn("flex w-full flex-col px-3 py-2 text-left hover:bg-[#22262D]", TRANS)}>
-                        <span className="text-[13px] font-medium text-[#F2F3F5]">{fiche.nom}</span>
-                        <span className="text-[12px] text-[#6B7280]">{[fiche.ville, fiche.telephone ?? fiche.email].filter(Boolean).join(" · ")}</span>
+                    <li key={fiche.id} className="border-t-[0.5px] border-trait first:border-t-0">
+                      <button type="button" onClick={() => choisirClient(fiche)} className={cn("flex w-full flex-col px-3 py-2 text-left hover:bg-surface-2", TRANS)}>
+                        <span className="text-[13px] font-medium text-texte">{fiche.nom}</span>
+                        <span className="text-[12px] text-texte-3">{[fiche.ville, fiche.telephone ?? fiche.email].filter(Boolean).join(" · ")}</span>
                       </button>
                     </li>
                   ))}
@@ -398,7 +398,7 @@ export function RepriseDossier({
             Documents déjà émis
           </TitreSection>
           {documents.length === 0 ? (
-            <p className="text-[12.5px] text-[#6B7280]">Les devis et factures faits à la main, avec leur numéro du registre : rien ne sera généré.</p>
+            <p className="text-[12.5px] text-texte-3">Les devis et factures faits à la main, avec leur numéro du registre : rien ne sera généré.</p>
           ) : (
             <ul className="space-y-2">
               <datalist id={`${idListe}-devis`}>
@@ -412,7 +412,7 @@ export function RepriseDossier({
                 ))}
               </datalist>
               {documentsLus.map(({ ligne, connu }) => (
-                <li key={ligne.cle} className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3">
+                <li key={ligne.cle} className="rounded-[10px] border-[0.5px] border-trait bg-surface p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <Pastille ton={ligne.type === "DEVIS" ? "neutre" : "bleu"}>{ligne.type === "DEVIS" ? "Devis" : "Facture"}</Pastille>
                     <Bouton variante="fantome" taille="icone" className="h-11 w-11 sm:h-7 sm:w-7" aria-label="Retirer ce document" onClick={() => setDocuments((actuels) => actuels.filter((autre) => autre.cle !== ligne.cle))}>
@@ -435,13 +435,13 @@ export function RepriseDossier({
                     </div>
                   ) : null}
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <label className="text-[12px] text-[#9CA3AF]">
+                    <label className="text-[12px] text-texte-3">
                       <span className="mr-2">PDF</span>
                       <input
                         type="file"
                         accept="application/pdf,.pdf"
                         onChange={(evenement) => changerDocument(ligne.cle, { pdf: evenement.target.files?.[0] ?? null })}
-                        className="text-[12px] text-[#9CA3AF] file:mr-2 file:h-8 file:rounded-[8px] file:border-[0.5px] file:border-[#2A2D34] file:bg-[#16181D] file:px-2.5 file:text-[12px] file:text-[#F2F3F5]"
+                        className="text-[12px] text-texte-3 file:mr-2 file:h-8 file:rounded-[8px] file:border-[0.5px] file:border-trait file:bg-fond file:px-2.5 file:text-[12px] file:text-texte"
                       />
                     </label>
                     {ligne.numero.trim() && libres && !connu ? (
@@ -474,11 +474,11 @@ export function RepriseDossier({
             Paiements déjà reçus
           </TitreSection>
           {paiements.length === 0 ? (
-            <p className="text-[12.5px] text-[#6B7280]">Acomptes et soldes reçus, à leur vraie date, même avant l&apos;ouverture : ils s&apos;imputent sur les factures et devis ci-dessus.</p>
+            <p className="text-[12.5px] text-texte-3">Acomptes et soldes reçus, à leur vraie date, même avant l&apos;ouverture : ils s&apos;imputent sur les factures et devis ci-dessus.</p>
           ) : (
             <ul className="space-y-2">
               {paiements.map((ligne) => (
-                <li key={ligne.cle} className="grid items-end gap-3 rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+                <li key={ligne.cle} className="grid items-end gap-3 rounded-[10px] border-[0.5px] border-trait bg-surface p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
                   <Champ libelle="Montant (€)" obligatoire inputMode="decimal" value={ligne.montant} onChange={(evenement) => changerPaiement(ligne.cle, { montant: evenement.target.value })} />
                   <Champ libelle="Reçu le" obligatoire type="date" max={aujourdhui} value={ligne.recuLe} onChange={(evenement) => changerPaiement(ligne.cle, { recuLe: evenement.target.value })} />
                   <ListeDeroulante
@@ -496,7 +496,7 @@ export function RepriseDossier({
             </ul>
           )}
           {paiements.length > 0 ? (
-            <p className="mt-2 flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+            <p className="mt-2 flex items-center gap-1.5 text-[12px] text-texte-3">
               <Wallet size={12} aria-hidden />
               {formatMontant(paiementsLus.reduce((somme, lu) => somme + (lu.montant ?? 0), 0))} reçus au total
             </p>

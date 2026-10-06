@@ -20,7 +20,7 @@ import { CarteCas, dollars } from "./CarteCas";
 
 type Selection = { cas?: string; variante?: VarianteBanc; libelle: string; rendus: number; cout: number };
 
-const LIEN = cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3 text-[13px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-8", TRANS);
+const LIEN = cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-3 text-[13px] font-medium text-texte hover:border-trait-2 sm:h-8", TRANS);
 
 export default function EcranBanc({ initial }: { initial: EtatBanc }) {
   const [etat, setEtat] = useState(initial);
@@ -97,25 +97,25 @@ export default function EcranBanc({ initial }: { initial: EtatBanc }) {
       />
 
       {/* Le moteur en service : rappelé, jamais changé d'ici. */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-3.5 py-2.5 text-[12.5px] text-[#D1D5DB]">
+      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[12px] border-[0.5px] border-trait bg-surface px-3.5 py-2.5 text-[12.5px] text-texte-2">
         <span>Moteur en service pour le site, l&apos;espace et le CRM :</span>
         <Pastille ton={reglages.moteur === "V2" ? "vert" : "neutre"}>{reglages.moteur === "V2" ? "V2 — moteur studio" : "V1 — ancien prompt"}</Pastille>
-        <span className="text-[#8B919C]">
+        <span className="text-texte-3">
           planche {reglages.planche ? "oui" : "non"} · site {reglages.qualiteSite} · espace et CRM {reglages.qualiteEspace} · seuil {reglages.seuilControle}/10
         </span>
-        <Link href="/parametres#simulateur" className="min-h-[44px] text-[#5DCAA5] hover:underline sm:min-h-0 sm:leading-none">
+        <Link href="/parametres#simulateur" className="min-h-[44px] text-action-clair hover:underline sm:min-h-0 sm:leading-none">
           Paramètres → Simulateur
         </Link>
       </div>
 
       {/* Le coût, avant tout lancement. */}
-      <section className="mt-4 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-3.5" aria-labelledby="cout-campagne">
-        <h2 id="cout-campagne" className="text-[14px] font-medium text-[#F2F3F5]">
+      <section className="mt-4 rounded-[12px] border-[0.5px] border-trait bg-surface p-3.5" aria-labelledby="cout-campagne">
+        <h2 id="cout-campagne" className="text-[14px] font-medium text-texte">
           Campagne complète : {estimation.rendus} rendus ({estimation.cas} cas × {etat.variantes.length} variantes)
         </h2>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-[#9CA3AF]">
+        <p className="mt-1 text-[12.5px] leading-relaxed text-texte-3">
           {estimation.rendus} × {dollars(estimation.renduMin)} à {dollars(estimation.renduMax)} selon le nombre de films et la qualité, + {estimation.analyses === 1 ? "1 analyse de photo" : `${estimation.analyses} analyses de photo`} et {estimation.controles === 1 ? "1 contrôle" : `${estimation.controles} contrôles`} (≈ 0,005 $ chacun) ≈{" "}
-          <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(estimation.totalMin)}</strong>, jusqu&apos;à <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(estimation.totalMax)}</strong> si chaque rendu V2 demande une seconde tentative (contrôle sous le seuil). V1 en medium, V2 en {reglages.qualiteEspace}.
+          <strong className="font-medium text-texte tabular-nums">{dollars(estimation.totalMin)}</strong>, jusqu&apos;à <strong className="font-medium text-texte tabular-nums">{dollars(estimation.totalMax)}</strong> si chaque rendu V2 demande une seconde tentative (contrôle sous le seuil). V1 en medium, V2 en {reglages.qualiteEspace}.
           {etat.cas.length !== casLancables.length ? ` ${etat.cas.length - casLancables.length === 1 ? "1 cas sans photo est ignoré." : `${etat.cas.length - casLancables.length} cas sans photo sont ignorés.`}` : ""}
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -128,20 +128,20 @@ export default function EcranBanc({ initial }: { initial: EtatBanc }) {
             </Bouton>
           ))}
         </div>
-        <ul className="mt-3 grid gap-1 text-[12px] text-[#8B919C] sm:grid-cols-3">
+        <ul className="mt-3 grid gap-1 text-[12px] text-texte-3 sm:grid-cols-3">
           {etat.variantes.map((v) => (
             <li key={v.id}>
-              <span className="font-medium text-[#D1D5DB]">{v.libelle}</span> — {v.description}
+              <span className="font-medium text-texte-2">{v.libelle}</span> — {v.description}
             </li>
           ))}
         </ul>
       </section>
 
       {/* Le total réel : tous les rendus (rendus + contrôles) et les analyses des photos, comptés en base. */}
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-[#D1D5DB]">
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-texte-2">
         <span>
-          Total de la campagne : <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(etat.total.coutDollars)}</strong>{" "}
-          <span className="text-[#8B919C]">
+          Total de la campagne : <strong className="font-medium text-texte tabular-nums">{dollars(etat.total.coutDollars)}</strong>{" "}
+          <span className="text-texte-3">
             ({etat.total.rendus === 1 ? "1 rendu lancé" : `${etat.total.rendus} rendus lancés`} en tout, dont {dollars(etat.total.analysesDollars)} d&apos;analyses de photo · rendus affichés {dollars(coutAffiche)})
           </span>
         </span>
@@ -149,7 +149,7 @@ export default function EcranBanc({ initial }: { initial: EtatBanc }) {
         {etat.total.prets ? <Pastille ton="vert">{etat.total.prets === 1 ? "1 prêt" : `${etat.total.prets} prêts`}</Pastille> : null}
         {etat.total.echecs ? <Pastille ton="rouge">{etat.total.echecs} en échec</Pastille> : null}
       </div>
-      <p className="mt-1.5 text-[12px] text-[#6B7280]">Les images du banc restent 30 jours sur le volume, puis sont effacées (score, coût et prompt gardés) : télécharge celles à garder.</p>
+      <p className="mt-1.5 text-[12px] text-texte-3">Les images du banc restent 30 jours sur le volume, puis sont effacées (score, coût et prompt gardés) : télécharge celles à garder.</p>
 
       <div className="mt-4 space-y-3">
         {etat.cas.map((c) => (
@@ -187,8 +187,8 @@ export default function EcranBanc({ initial }: { initial: EtatBanc }) {
         }
       >
         {confirmation ? (
-          <p className="text-[13px] leading-relaxed text-[#D1D5DB]">
-            {confirmation.rendus === 1 ? "1 rendu" : `${confirmation.rendus} rendus`}, coût estimé <strong className="font-medium text-[#F2F3F5] tabular-nums">{dollars(confirmation.cout)}</strong> pour une tentative par rendu (analyses et contrôles en plus, environ un demi-centime chacun ; une seconde tentative double le rendu V2 concerné). Un cas dont la photo est introuvable, ou un rendu déjà en cours pour la même variante, est ignoré.
+          <p className="text-[13px] leading-relaxed text-texte-2">
+            {confirmation.rendus === 1 ? "1 rendu" : `${confirmation.rendus} rendus`}, coût estimé <strong className="font-medium text-texte tabular-nums">{dollars(confirmation.cout)}</strong> pour une tentative par rendu (analyses et contrôles en plus, environ un demi-centime chacun ; une seconde tentative double le rendu V2 concerné). Un cas dont la photo est introuvable, ou un rendu déjà en cours pour la même variante, est ignoré.
           </p>
         ) : null}
       </Modale>

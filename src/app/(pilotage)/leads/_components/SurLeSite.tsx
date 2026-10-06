@@ -32,12 +32,12 @@ import { pluriel, quand } from "@/lib/commun/format";
 
 function LigneSimulation({ ligne, maintenant, onImage, onLead }: { ligne: SimulationSiteLigne; maintenant: number; onImage: (() => void) | null; onLead: () => void }) {
   const vignette = ligne.image ? (
-    <button type="button" onClick={onImage ?? undefined} aria-label={`Voir la simulation ${ligne.projetLibelle}`} className="h-12 w-12 shrink-0 overflow-hidden rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#22262D]">
+    <button type="button" onClick={onImage ?? undefined} aria-label={`Voir la simulation ${ligne.projetLibelle}`} className="h-12 w-12 shrink-0 overflow-hidden rounded-[8px] border-[0.5px] border-trait bg-surface-2">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`/api/simulations-site/${ligne.id}/image`} alt="" loading="lazy" className="h-full w-full object-cover" />
     </button>
   ) : (
-    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34] text-[#6B7280]" title="Image purgée">
+    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-trait text-texte-3" title="Image purgée">
       <ImageOff size={16} aria-hidden />
     </span>
   );
@@ -45,14 +45,14 @@ function LigneSimulation({ ligne, maintenant, onImage, onLead }: { ligne: Simula
     <li className="flex items-center gap-3 px-3.5 py-2.5">
       {vignette}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] text-[#F2F3F5]">
-          {ligne.projetLibelle} <span className="text-[#9CA3AF]">· {ligne.teintes}</span>
+        <p className="truncate text-[13.5px] text-texte">
+          {ligne.projetLibelle} <span className="text-texte-3">· {ligne.teintes}</span>
         </p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-[#9CA3AF]">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-texte-3">
           <span>{quand(ligne.le, maintenant)}</span>
           <span aria-hidden>·</span>
           {ligne.leadId ? (
-            <button type="button" onClick={onLead} className="min-h-[32px] font-medium text-[#5DCAA5] underline-offset-2 hover:underline">
+            <button type="button" onClick={onLead} className="min-h-[32px] font-medium text-action-clair underline-offset-2 hover:underline">
               {ligne.leadNom ?? "lead"}
               {ligne.leadVille ? ` (${ligne.leadVille})` : ""}
             </button>
@@ -78,17 +78,17 @@ function LigneTravail({ ligne, maintenant }: { ligne: TravailSiteLigne; maintena
   const enEchec = ligne.statut === "ECHEC";
   return (
     <li className="flex items-start gap-3 px-3.5 py-2.5">
-      <span className={cn("mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-[#2A2D34]", enEchec ? "text-[#F87171]" : "text-[#9CA3AF]")} title={LIBELLE_STATUT[ligne.statut]}>
+      <span className={cn("mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] border-[0.5px] border-trait", enEchec ? "text-attention-texte" : "text-texte-3")} title={LIBELLE_STATUT[ligne.statut]}>
         {enEchec ? <AlertTriangle size={16} aria-hidden /> : <Loader2 size={16} aria-hidden className="motion-safe:animate-spin" />}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] text-[#F2F3F5]">
-          {ligne.projetLibelle} <span className="text-[#9CA3AF]">· {ligne.teintes}</span>
+        <p className="truncate text-[13.5px] text-texte">
+          {ligne.projetLibelle} <span className="text-texte-3">· {ligne.teintes}</span>
         </p>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-[#9CA3AF]">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-texte-3">
           <span>{quand(ligne.le, maintenant)}</span>
           <span aria-hidden>·</span>
-          <span className={enEchec ? "text-[#F87171]" : undefined}>{LIBELLE_STATUT[ligne.statut]}{enEchec && ligne.erreurRaison ? ` (${ligne.erreurRaison})` : ""}</span>
+          <span className={enEchec ? "text-attention-texte" : undefined}>{LIBELLE_STATUT[ligne.statut]}{enEchec && ligne.erreurRaison ? ` (${ligne.erreurRaison})` : ""}</span>
           {ligne.prevenir ? (
             <>
               <span aria-hidden>·</span>
@@ -96,7 +96,7 @@ function LigneTravail({ ligne, maintenant }: { ligne: TravailSiteLigne; maintena
             </>
           ) : null}
         </p>
-        {enEchec && ligne.erreurMessage ? <p className="mt-0.5 line-clamp-2 text-[12px] text-[#6B7280]">{ligne.erreurMessage}</p> : null}
+        {enEchec && ligne.erreurMessage ? <p className="mt-0.5 line-clamp-2 text-[12px] text-texte-3">{ligne.erreurMessage}</p> : null}
       </div>
     </li>
   );
@@ -113,23 +113,23 @@ export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: Simulatio
   const lignesTravaux = travaux?.lignes ?? [];
 
   return (
-    <section className="mt-4 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#16181D]">
+    <section className="mt-4 rounded-[12px] border-[0.5px] border-trait bg-fond">
       <button type="button" aria-expanded={ouvert} onClick={() => setOuvert((o) => !o)} className={cn("flex min-h-[44px] w-full items-center gap-2.5 px-3.5 text-left", TRANS)}>
-        <Globe size={15} aria-hidden className="shrink-0 text-[#9CA3AF]" />
-        <span className="min-w-0 flex-1 truncate text-[13.5px] text-[#F2F3F5]">
+        <Globe size={15} aria-hidden className="shrink-0 text-texte-3" />
+        <span className="min-w-0 flex-1 truncate text-[13.5px] text-texte">
           Sur le site cette semaine · {pluriel(resume.total, "simulation")}
-          {enCours > 0 ? <span className="text-[#9CA3AF]"> · {enCours} en cours</span> : null}
-          {enEchec > 0 ? <span className="text-[#F87171]"> · {enEchec} en échec</span> : null}
+          {enCours > 0 ? <span className="text-texte-3"> · {enCours} en cours</span> : null}
+          {enEchec > 0 ? <span className="text-attention-texte"> · {enEchec} en échec</span> : null}
         </span>
         {resume.total > 0 ? (
-          <span className="hidden text-[12px] text-[#9CA3AF] sm:inline">
+          <span className="hidden text-[12px] text-texte-3 sm:inline">
             {pluriel(resume.anonymes, "anonyme")} · {resume.rattachees} de leads
           </span>
         ) : null}
-        <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-[#9CA3AF] transition-transform", ouvert && "rotate-180")} />
+        <ChevronDown size={16} aria-hidden className={cn("shrink-0 text-texte-3 transition-transform", ouvert && "rotate-180")} />
       </button>
       {ouvert && lignesTravaux.length > 0 ? (
-        <ul className="divide-y-[0.5px] divide-[#2A2D34] border-t-[0.5px] border-[#2A2D34]" aria-label="Générations en cours ou en échec">
+        <ul className="divide-y-[0.5px] divide-trait border-t-[0.5px] border-trait" aria-label="Générations en cours ou en échec">
           {lignesTravaux.map((ligne) => (
             <LigneTravail key={ligne.id} ligne={ligne} maintenant={maintenant} />
           ))}
@@ -137,13 +137,13 @@ export function SurLeSite({ resume, travaux, onOuvrirLead }: { resume: Simulatio
       ) : null}
       {ouvert ? (
         resume.lignes.length === 0 ? (
-          <p className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-3 text-[12.5px] text-[#9CA3AF]">Aucune simulation faite sur coverswap.fr ces 7 derniers jours.</p>
+          <p className="border-t-[0.5px] border-trait px-3.5 py-3 text-[12.5px] text-texte-3">Aucune simulation faite sur coverswap.fr ces 7 derniers jours.</p>
         ) : (
-          <ul className="divide-y-[0.5px] divide-[#2A2D34] border-t-[0.5px] border-[#2A2D34]">
+          <ul className="divide-y-[0.5px] divide-trait border-t-[0.5px] border-trait">
             {resume.lignes.map((ligne) => (
               <LigneSimulation key={ligne.id} ligne={ligne} maintenant={maintenant} onImage={indexImage.has(ligne.id) ? () => setImage(indexImage.get(ligne.id)!) : null} onLead={() => ligne.leadId && onOuvrirLead(ligne.leadId)} />
             ))}
-            {resume.total > resume.lignes.length ? <li className="px-3.5 py-2 text-[12px] text-[#6B7280]">… et {resume.total - resume.lignes.length} de plus (l&apos;assistant les lit toutes : « voir_fichiers », genre site).</li> : null}
+            {resume.total > resume.lignes.length ? <li className="px-3.5 py-2 text-[12px] text-texte-3">… et {resume.total - resume.lignes.length} de plus (l&apos;assistant les lit toutes : « voir_fichiers », genre site).</li> : null}
           </ul>
         )
       ) : null}

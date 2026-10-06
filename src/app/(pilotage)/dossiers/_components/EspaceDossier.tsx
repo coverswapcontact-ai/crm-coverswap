@@ -154,7 +154,7 @@ export function EspaceDossier({
     return (
       <section>
         {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
-        <p className="text-[13px] text-[#6B7280]">Chargement…</p>
+        <p className="text-[13px] text-texte-3">Chargement…</p>
       </section>
     );
   }
@@ -162,8 +162,8 @@ export function EspaceDossier({
     return (
       <section>
         {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
-        <div className="rounded-[12px] border-[0.5px] border-dashed border-[#2A2D34] p-4">
-          <p className="text-[13px] text-[#9CA3AF]">Pas encore d&apos;espace pour ce dossier. Le client y déposera ses photos, validera son projet, créera ses simulations et donnera son bon pour accord, sans compte ni mot de passe.</p>
+        <div className="rounded-[12px] border-[0.5px] border-dashed border-trait p-4">
+          <p className="text-[13px] text-texte-3">Pas encore d&apos;espace pour ce dossier. Le client y déposera ses photos, validera son projet, créera ses simulations et donnera son bon pour accord, sans compte ni mot de passe.</p>
           <Bouton className="mt-3" variante="primaire" icone={<Link2 size={14} aria-hidden />} chargement={occupe === "ouvrir"} onClick={() => void lien("ouvrir", "Espace client ouvert")}>
             Ouvrir l&apos;espace client
           </Bouton>
@@ -178,22 +178,22 @@ export function EspaceDossier({
     <section>
       {sansTitre ? null : <TitreSection>Espace client</TitreSection>}
       <LienParMail cible={lienMail} onFermer={() => setLienMail(null)} onEnvoye={() => void charger()} />
-      <div className="space-y-3 rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-4">
+      <div className="space-y-3 rounded-[12px] border-[0.5px] border-trait bg-surface p-4">
         {/* Où il en est : les cinq onglets de son espace, tels qu'il les voit. */}
         <div>
           <ol className="grid grid-cols-5 gap-1">
             {espace.etapes.map((e) => (
-              <li key={e.cle} title={e.raison ?? undefined} className={cn("rounded-[8px] border-[0.5px] px-1.5 py-1.5 text-center", e.courante ? "border-[#1D9E75]/60 bg-[#1D9E75]/10" : "border-[#2A2D34] bg-[#16181D]")}>
-                <span className={cn("mx-auto mb-1 flex h-4 w-4 items-center justify-center rounded-full", e.fait ? "bg-[#1D9E75] text-[#0B1612]" : e.verrouillee ? "text-[#6B7280]" : "border-[0.5px] border-[#3A3E47]")}>
+              <li key={e.cle} title={e.raison ?? undefined} className={cn("rounded-[8px] border-[0.5px] px-1.5 py-1.5 text-center", e.courante ? "border-action/60 bg-action/10" : "border-trait bg-fond")}>
+                <span className={cn("mx-auto mb-1 flex h-4 w-4 items-center justify-center rounded-full", e.fait ? "bg-action text-action-texte" : e.verrouillee ? "text-texte-3" : "border-[0.5px] border-trait-2")}>
                   {e.fait ? <Check size={11} strokeWidth={3} aria-hidden /> : e.verrouillee ? <Lock size={11} aria-hidden /> : null}
                 </span>
-                <span className={cn("block truncate text-[10.5px] font-medium", e.courante ? "text-[#5DCAA5]" : e.fait ? "text-[#D1D5DB]" : "text-[#8B919C]")}>{e.libelle}</span>
+                <span className={cn("block truncate text-[10.5px] font-medium", e.courante ? "text-action-clair" : e.fait ? "text-texte-2" : "text-texte-3")}>{e.libelle}</span>
               </li>
             ))}
           </ol>
-          <p className="mt-2 text-[13px] text-[#F2F3F5]">
+          <p className="mt-2 text-[13px] text-texte">
             {espace.etapeLibelle}
-            <span className="text-[#9CA3AF]"> — il lui reste : {espace.resteAFaire.charAt(0).toLowerCase() + espace.resteAFaire.slice(1)}</span>
+            <span className="text-texte-3"> — il lui reste : {espace.resteAFaire.charAt(0).toLowerCase() + espace.resteAFaire.slice(1)}</span>
           </p>
         </div>
 
@@ -214,22 +214,22 @@ export function EspaceDossier({
           {espace.permanent?.confirmationRequise ? <Pastille titre="Plus de 90 jours sans visite : à la prochaine, il confirme les 4 derniers chiffres de son téléphone.">Téléphone à confirmer à sa prochaine visite</Pastille> : null}
         </div>
         {espace.autresProjets.length ? (
-          <p className="text-[12.5px] text-[#9CA3AF]">
+          <p className="text-[12.5px] text-texte-3">
             Ses autres projets :{" "}
             {espace.autresProjets.map((a, i) => (
               <span key={a.dossierId}>
                 {i ? " · " : ""}
-                <Link href={`/dossiers?dossier=${a.dossierId}`} className="text-[#D1D5DB] underline decoration-[#3A3E47] underline-offset-2 hover:text-[#F2F3F5]">
+                <Link href={`/dossiers?dossier=${a.dossierId}`} className="text-texte-2 underline decoration-trait-2 underline-offset-2 hover:text-texte">
                   {a.nom}
                 </Link>
-                {a.fige ? <span className="text-[#6B7280]"> ({a.fige.toLowerCase()})</span> : null}
+                {a.fige ? <span className="text-texte-3"> ({a.fige.toLowerCase()})</span> : null}
               </span>
             ))}
           </p>
         ) : null}
         {espace.lien ? (
           <div className="flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-[8px] bg-[#16181D] px-2.5 py-2 text-[12px] text-[#D1D5DB]">{espace.lien}</code>
+            <code className="min-w-0 flex-1 truncate rounded-[8px] bg-fond px-2.5 py-2 text-[12px] text-texte-2">{espace.lien}</code>
             <Bouton taille="sm" icone={copie ? <Check size={13} aria-hidden /> : <Copy size={13} aria-hidden />} onClick={() => void copier()}>
               {copie ? "Copié" : "Copier"}
             </Bouton>
@@ -237,7 +237,7 @@ export function EspaceDossier({
         ) : null}
         <div className="flex flex-wrap gap-2">
           {espace.apercu ? (
-            <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7">
+            <a href={espace.apercu} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] font-medium text-texte hover:border-trait-2 sm:h-7">
               <Eye size={13} aria-hidden /> Voir comme le client
             </a>
           ) : null}
@@ -246,7 +246,7 @@ export function EspaceDossier({
             <button
               type="button"
               onClick={() => setLienMail({ dossierId: detail.id, code: espace.projet || espace.simulations.length || espace.devis || espace.accord ? "LIEN_ESPACE_RAPPEL" : "LIEN_ESPACE" })}
-              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
+              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] font-medium text-texte hover:border-trait-2 sm:h-7"
             >
               <Mail size={13} aria-hidden /> Envoyer le lien par mail
             </button>
@@ -263,7 +263,7 @@ export function EspaceDossier({
                   },
                 })
               }
-              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] px-2.5 text-[12px] font-medium text-[#F2F3F5] hover:border-[#3A3E47] sm:h-7"
+              className="inline-flex h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait bg-surface px-2.5 text-[12px] font-medium text-texte hover:border-trait-2 sm:h-7"
             >
               <MessageSquare size={13} aria-hidden /> SMS avec le lien
             </button>
@@ -308,9 +308,9 @@ export function EspaceDossier({
         >
           {espace.projet ? (
             <>
-              <p className="text-[13px] text-[#D1D5DB]">{resumerSelection(espace.projet.familles) || "Aucune famille cochée"}</p>
+              <p className="text-[13px] text-texte-2">{resumerSelection(espace.projet.familles) || "Aucune famille cochée"}</p>
               {famillesDe(espace.projet.familles).some((f) => libelleTaille(f, espace.projet?.tailles[f])) ? (
-                <p className="mt-0.5 text-[12.5px] text-[#9CA3AF]">
+                <p className="mt-0.5 text-[12.5px] text-texte-3">
                   Taille :{" "}
                   {famillesDe(espace.projet.familles)
                     .map((f) => (libelleTaille(f, espace.projet?.tailles[f]) ? `${famille(f).libelle.toLowerCase()} ${libelleTaille(f, espace.projet?.tailles[f])}` : null))
@@ -318,12 +318,12 @@ export function EspaceDossier({
                     .join(", ")}
                 </p>
               ) : null}
-              {espace.projet.precisions ? <blockquote className="mt-1.5 border-l-2 border-[#3A3E47] pl-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-[#F2F3F5]">« {espace.projet.precisions} »</blockquote> : null}
+              {espace.projet.precisions ? <blockquote className="mt-1.5 border-l-2 border-trait-2 pl-2.5 text-[13px] leading-relaxed whitespace-pre-wrap text-texte">« {espace.projet.precisions} »</blockquote> : null}
             </>
           ) : (
-            <p className="text-[12.5px] text-[#8B919C]">Il n&apos;a encore rien dit de son projet.</p>
+            <p className="text-[12.5px] text-texte-3">Il n&apos;a encore rien dit de son projet.</p>
           )}
-          {!espace.projetValide && !espace.devis && !espace.accord && espace.projetManque && espace.projet ? <p className="mt-1 text-[11.5px] text-[#F5B454]">Pour valider, il manque : {espace.projetManque.charAt(0).toLowerCase() + espace.projetManque.slice(1)}</p> : null}
+          {!espace.projetValide && !espace.devis && !espace.accord && espace.projetManque && espace.projet ? <p className="mt-1 text-[11.5px] text-attention-texte">Pour valider, il manque : {espace.projetManque.charAt(0).toLowerCase() + espace.projetManque.slice(1)}</p> : null}
           <div className="mt-2 flex flex-wrap gap-1.5">
             {espace.projetValide ? (
               <Bouton taille="sm" variante="fantome" icone={<Undo2 size={13} aria-hidden />} chargement={occupe === "devalider-projet"} onClick={() => void geste({ geste: "devalider-projet" }, "Projet dévalidé : le client peut le modifier")}>
@@ -354,16 +354,16 @@ export function EspaceDossier({
         {/* Paiement : ce que lit le client, à partir des encaissements du dossier. */}
         {p ? (
           <Rubrique titre="Paiement (ce qu'il voit)" etat={p.regle ? <Pastille ton="vert">Réglé</Pastille> : <Pastille ton="ambre">Reste {euros(p.reste)}</Pastille>}>
-            <ul className="space-y-0.5 text-[13px] text-[#D1D5DB]">
+            <ul className="space-y-0.5 text-[13px] text-texte-2">
               {p.acompte ? (
                 <li>
                   Acompte {p.acompte.pct ? `(${p.acompte.pct} %) ` : ""}: {euros(p.acompte.montant)} —{" "}
-                  {p.acompte.statut === "PAYE" ? <span className="text-[#5DCAA5]">payé le {jour(p.acompte.payeLe)}{moyen(p.acompte.moyen) ? ` par ${moyen(p.acompte.moyen)}` : ""}</span> : p.acompte.statut === "PARTIEL" ? <span className="text-[#F5B454]">{euros(p.acompte.recu)} reçus</span> : <span className="text-[#F5B454]">à régler</span>}
+                  {p.acompte.statut === "PAYE" ? <span className="text-action-clair">payé le {jour(p.acompte.payeLe)}{moyen(p.acompte.moyen) ? ` par ${moyen(p.acompte.moyen)}` : ""}</span> : p.acompte.statut === "PARTIEL" ? <span className="text-attention-texte">{euros(p.acompte.recu)} reçus</span> : <span className="text-attention-texte">à régler</span>}
                 </li>
               ) : null}
               <li>
                 Solde : {euros(p.solde.montant)} —{" "}
-                {p.solde.statut === "PAYE" ? <span className="text-[#5DCAA5]">payé le {jour(p.solde.payeLe)}{moyen(p.solde.moyen) ? ` par ${moyen(p.solde.moyen)}` : ""}</span> : p.solde.statut === "PARTIEL" ? <span className="text-[#F5B454]">{euros(p.solde.recu)} reçus</span> : <span className="text-[#8B919C]">dû à la fin des travaux</span>}
+                {p.solde.statut === "PAYE" ? <span className="text-action-clair">payé le {jour(p.solde.payeLe)}{moyen(p.solde.moyen) ? ` par ${moyen(p.solde.moyen)}` : ""}</span> : p.solde.statut === "PARTIEL" ? <span className="text-attention-texte">{euros(p.solde.recu)} reçus</span> : <span className="text-texte-3">dû à la fin des travaux</span>}
               </li>
             </ul>
           </Rubrique>
@@ -371,8 +371,8 @@ export function EspaceDossier({
 
         {espace.avis ? (
           <Rubrique titre="Son avis" etat={<Pastille ton="vert">{espace.avis.note}/5</Pastille>}>
-            <p className="text-[13px] whitespace-pre-wrap text-[#F2F3F5]">{espace.avis.texte ? `« ${espace.avis.texte} »` : "Note sans commentaire."}</p>
-            {espace.avis.publication ? <p className="mt-0.5 text-[11.5px] text-[#8B919C]">Il accepte la publication sur le site.</p> : null}
+            <p className="text-[13px] whitespace-pre-wrap text-texte">{espace.avis.texte ? `« ${espace.avis.texte} »` : "Note sans commentaire."}</p>
+            {espace.avis.publication ? <p className="mt-0.5 text-[11.5px] text-texte-3">Il accepte la publication sur le site.</p> : null}
           </Rubrique>
         ) : null}
 
@@ -381,8 +381,8 @@ export function EspaceDossier({
           {espace.messages.length ? (
             <ul className="space-y-1.5">
               {espace.messages.slice(0, 12).map((m) => (
-                <li key={m.id} className={cn("rounded-[8px] border-[0.5px] px-2.5 py-1.5 text-[12.5px] leading-snug", m.auteur === "LUCAS" ? "border-[#2F3B36] bg-[#15201C] text-[#D1D5DB]" : "border-[#2A2D34] bg-[#16181D] text-[#E5E7EB]")}>
-                  <span className="text-[11px] text-[#8B919C]">
+                <li key={m.id} className={cn("rounded-[8px] border-[0.5px] px-2.5 py-1.5 text-[12.5px] leading-snug", m.auteur === "LUCAS" ? "border-action/40 bg-action-fond text-texte-2" : "border-trait bg-fond text-texte")}>
+                  <span className="text-[11px] text-texte-3">
                     {jourHeure(m.le)} · {m.auteur === "LUCAS" ? `moi${m.par?.startsWith("ASSISTANT") ? " (via Claude)" : ""}${m.luLe ? ", vue par le client" : ", pas encore vue"}` : `lui${m.source === "COMMENTAIRE" ? " (commentaire)" : m.source === "PROPOSITION" ? " (autre proposition)" : ""}${m.luLe ? "" : " · non lu"}`}
                   </span>
                   <p className="mt-0.5 whitespace-pre-line">{m.texte}</p>
@@ -390,7 +390,7 @@ export function EspaceDossier({
               ))}
             </ul>
           ) : (
-            <p className="text-[12.5px] text-[#8B919C]">Aucun message échangé dans son espace.</p>
+            <p className="text-[12.5px] text-texte-3">Aucun message échangé dans son espace.</p>
           )}
           {espace.lien ? (
             <div className="mt-2">
@@ -406,16 +406,16 @@ export function EspaceDossier({
 
         {/* Ce qu'il a fait, geste par geste. */}
         {espace.gestes.length ? (
-          <div className="border-t-[0.5px] border-[#2A2D34] pt-2">
-            <button type="button" onClick={() => setGestesOuverts((v) => !v)} className={cn("flex w-full items-center justify-between text-[11px] font-medium tracking-[0.06em] text-[#8B919C] uppercase hover:text-[#D1D5DB]", TRANS)} aria-expanded={gestesOuverts}>
+          <div className="border-t-[0.5px] border-trait pt-2">
+            <button type="button" onClick={() => setGestesOuverts((v) => !v)} className={cn("flex w-full items-center justify-between text-[11px] font-medium tracking-[0.06em] text-texte-3 uppercase hover:text-texte-2", TRANS)} aria-expanded={gestesOuverts}>
               Ses derniers gestes ({espace.gestes.length})
               <ChevronDown size={14} aria-hidden className={cn("transition-transform", gestesOuverts && "rotate-180")} />
             </button>
             {gestesOuverts ? (
               <ul className="mt-2 space-y-1.5">
                 {espace.gestes.map((g, i) => (
-                  <li key={`${g.le}-${i}`} className="text-[12.5px] leading-snug text-[#D1D5DB]">
-                    <span className="text-[#8B919C]">{jourHeure(g.le)} · {g.auteur === "LUCAS" ? "moi" : "lui"} — </span>
+                  <li key={`${g.le}-${i}`} className="text-[12.5px] leading-snug text-texte-2">
+                    <span className="text-texte-3">{jourHeure(g.le)} · {g.auteur === "LUCAS" ? "moi" : "lui"} — </span>
                     {g.contenu}
                   </li>
                 ))}
@@ -448,25 +448,25 @@ export function EspaceDossier({
       >
         {edition ? (
           <div className="space-y-4">
-            <p className="text-[12.5px] text-[#9CA3AF]">Les familles et sous-parties se cochent dans « Familles du projet », plus haut.</p>
+            <p className="text-[12.5px] text-texte-3">Les familles et sous-parties se cochent dans « Familles du projet », plus haut.</p>
             {famillesDe(espace.projet?.familles ?? {}).map((f) => {
               const q = famille(f).taille;
               const t = edition.tailles[f] ?? { repere: null, valeur: null };
               const poser = (suite: { repere: string | null; valeur: number | null }) => setEdition({ ...edition, tailles: { ...edition.tailles, [f]: suite } });
               return (
                 <div key={f}>
-                  <p className="mb-1.5 text-[12px] font-medium text-[#D1D5DB]">{q.titre}</p>
+                  <p className="mb-1.5 text-[12px] font-medium text-texte-2">{q.titre}</p>
                   {q.reperes.length ? (
                     <div className="mb-1.5 flex flex-wrap gap-1.5">
                       {q.reperes.map((r) => (
-                        <button key={r.id} type="button" aria-pressed={t.repere === r.id} onClick={() => poser(t.repere === r.id ? { repere: null, valeur: null } : { repere: r.id, valeur: r.valeur })} className={cn("h-11 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, t.repere === r.id ? "border-[#1D9E75] bg-[#1D9E75]/15 text-[#5DCAA5]" : "border-[#2A2D34] text-[#D1D5DB] hover:border-[#3A3E47]")}>
+                        <button key={r.id} type="button" aria-pressed={t.repere === r.id} onClick={() => poser(t.repere === r.id ? { repere: null, valeur: null } : { repere: r.id, valeur: r.valeur })} className={cn("h-11 rounded-[8px] border-[0.5px] px-3 text-[13px] font-medium sm:h-8 sm:text-[12px]", TRANS, t.repere === r.id ? "border-action bg-action/15 text-action-clair" : "border-trait text-texte-2 hover:border-trait-2")}>
                           {r.libelle}
                         </button>
                       ))}
                     </div>
                   ) : null}
-                  <label className="flex items-center gap-2 text-[12.5px] text-[#9CA3AF]">
-                    <input type="number" inputMode="decimal" min={q.min} max={q.max} step={q.pas} value={t.valeur ?? ""} onChange={(e) => poser({ repere: t.repere, valeur: e.target.value === "" ? null : Number(e.target.value) })} className="h-11 sm:h-9 w-24 rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#16181D] px-2 text-[13px] text-[#F2F3F5]" />
+                  <label className="flex items-center gap-2 text-[12.5px] text-texte-3">
+                    <input type="number" inputMode="decimal" min={q.min} max={q.max} step={q.pas} value={t.valeur ?? ""} onChange={(e) => poser({ repere: t.repere, valeur: e.target.value === "" ? null : Number(e.target.value) })} className="h-11 sm:h-9 w-24 rounded-[8px] border-[0.5px] border-trait bg-fond px-2 text-[13px] text-texte" />
                     {q.unite === "portes" ? "portes" : "mètres, à peu près"}
                   </label>
                 </div>
@@ -497,7 +497,7 @@ export function EspaceDossier({
           </div>
         }
       >
-        <p className="text-[13px] leading-relaxed text-[#D1D5DB]">{confirmation?.texte}</p>
+        <p className="text-[13px] leading-relaxed text-texte-2">{confirmation?.texte}</p>
       </Modale>
     </section>
   );

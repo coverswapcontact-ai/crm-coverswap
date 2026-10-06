@@ -33,7 +33,7 @@ export function ordonnerLignes(lignes: LignePublicite[]): (LignePublicite & { pr
 }
 
 const nombre = (valeur: number | null) => formaterValeur(valeur, "nombre");
-const cout = (valeur: number | null) => (valeur === null ? <span className="text-[#6B7280]">—</span> : euros(valeur));
+const cout = (valeur: number | null) => (valeur === null ? <span className="text-texte-3">—</span> : euros(valeur));
 
 function colonnes(approx: boolean): Colonne<LignePublicite & { profondeur: number }>[] {
   return [
@@ -43,11 +43,11 @@ function colonnes(approx: boolean): Colonne<LignePublicite & { profondeur: numbe
       className: "min-w-[220px] max-w-[320px]",
       rendu: (ligne) => (
         <div className="flex min-w-0 flex-col gap-0.5" style={{ paddingLeft: ligne.profondeur * 14 }}>
-          <span className={cn("truncate", ligne.niveau === "CAMPAGNE" ? "font-semibold text-[#F2F3F5]" : ligne.niveau === "ENSEMBLE" ? "text-[#E5E7EB]" : "text-[#D1D5DB]")} title={ligne.nom}>
-            {ligne.profondeur > 0 ? <span className="mr-1.5 text-[#6B7280]">{ligne.profondeur === 1 ? "└" : "·"}</span> : null}
+          <span className={cn("truncate", ligne.niveau === "CAMPAGNE" ? "font-semibold text-texte" : ligne.niveau === "ENSEMBLE" ? "text-texte" : "text-texte-2")} title={ligne.nom}>
+            {ligne.profondeur > 0 ? <span className="mr-1.5 text-texte-3">{ligne.profondeur === 1 ? "└" : "·"}</span> : null}
             {ligne.nom}
           </span>
-          {ligne.raisonVerdict ? <span className="text-[11.5px] leading-[1.35] whitespace-normal text-[#6B7280]">{ligne.raisonVerdict}</span> : null}
+          {ligne.raisonVerdict ? <span className="text-[11.5px] leading-[1.35] whitespace-normal text-texte-3">{ligne.raisonVerdict}</span> : null}
         </div>
       ),
     },
@@ -85,7 +85,7 @@ function colonnes(approx: boolean): Colonne<LignePublicite & { profondeur: numbe
       cle: "leadsPlateforme",
       titre: "Leads Meta",
       nombre: true,
-      rendu: (l) => <span className="text-[#9CA3AF]">{nombre(l.leadsPlateforme)}</span>,
+      rendu: (l) => <span className="text-texte-3">{nombre(l.leadsPlateforme)}</span>,
     },
     {
       cle: "coutParLead",
@@ -123,7 +123,7 @@ function colonnes(approx: boolean): Colonne<LignePublicite & { profondeur: numbe
       nombre: true,
       rendu: (l) =>
         l.retourSurDepense === null ? (
-          <span className="text-[#6B7280]">—</span>
+          <span className="text-texte-3">—</span>
         ) : (
           <span title={`${euros(l.encaisse)} encaissés`}>
             {formaterValeur(l.retourSurDepense, "decimal", { decimales: 1 })}
@@ -151,9 +151,9 @@ export function VuePublicite({ ecran, chaineMeta }: { ecran: EcranPublicite; cha
       <Carte titre="Campagne" gap="gap-3">
         {campagne && campagne.jour !== null ? (
           <>
-            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[13px] text-[#9CA3AF]">
+            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-[13px] text-texte-3">
               <span>
-                Jour <span className="font-heading text-[#F2F3F5] tabular-nums">{campagne.jour}</span>
+                Jour <span className="font-heading text-texte tabular-nums">{campagne.jour}</span>
                 {campagne.duree ? ` sur ${campagne.duree}` : ""}
                 {campagne.debut ? ` · lancée le ${jourAxe(campagne.debut)}` : ""}
               </span>
@@ -162,18 +162,18 @@ export function VuePublicite({ ecran, chaineMeta }: { ecran: EcranPublicite; cha
             {campagne.duree ? <Progression ratio={campagne.jour / campagne.duree} titre={`Jour ${campagne.jour} sur ${campagne.duree}`} /> : null}
             {campagne.regleDuJour ? (
               <p className={ENCADRE}>
-                <span className="text-[#5DCAA5]">Règle du jour&nbsp;:</span> {campagne.regleDuJour}
+                <span className="text-action-clair">Règle du jour&nbsp;:</span> {campagne.regleDuJour}
               </p>
             ) : null}
           </>
         ) : (
-          <p className="text-[13px] text-[#9CA3AF]">
+          <p className="text-[13px] text-texte-3">
             Aucune campagne en cours
             {campagne?.debut ? ` (dernière lancée le ${jourAxe(campagne.debut)})` : ""}. Le début, le budget et la durée se règlent dans Paramètres.
           </p>
         )}
         {ecran.estimation ? (
-          <p className="text-[12px] text-[#F5B454]">Dépense estimée au prorata du budget&nbsp;: Meta n&apos;est pas synchronisé, les coûts sont précédés de «&nbsp;≈&nbsp;».</p>
+          <p className="text-[12px] text-attention-texte">Dépense estimée au prorata du budget&nbsp;: Meta n&apos;est pas synchronisé, les coûts sont précédés de «&nbsp;≈&nbsp;».</p>
         ) : null}
       </Carte>
 

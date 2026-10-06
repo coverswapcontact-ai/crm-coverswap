@@ -4,31 +4,31 @@ import { BellRing, Hourglass, Play } from "lucide-react";
 import { ETAPES_ACTIVES, LIBELLES_ETAPE, type EtapeActive, type EtapeDossier } from "@/lib/dossiers/constants";
 import { echeanceDe, mainDe, progressionDe, type Main } from "@/lib/dossiers/pilotage";
 import { cn } from "@/lib/utils";
-import { COULEURS_ETAPE, GRIS_HORS_PARCOURS } from "@/components/pilotage/ui";
+import { COULEURS_ETAPE, GRIS_HORS_PARCOURS, JETONS } from "@/components/pilotage/ui";
 
 // Indicateurs d'état partagés par les cartes, la liste, le panneau et la légende.
 
-export const ROUGE_RETARD = "#EF4444";
-const BLANC_A_MOI = "#F2F3F5";
+export const ROUGE_RETARD = JETONS.retard;
+const BLANC_A_MOI = JETONS.texte;
 
 const BADGES: Record<Exclude<Main, "AUCUNE">, { court: string; long: string; Icone: typeof Play; classe: string }> = {
   MOI: {
     court: "À moi",
     long: "À moi de jouer",
     Icone: Play,
-    classe: "border-transparent bg-[#F2F3F5] text-[#0B0D10]",
+    classe: "border-transparent bg-texte text-texte-inverse",
   },
   A_RELANCER: {
     court: "À relancer",
     long: "À relancer : le client tarde",
     Icone: BellRing,
-    classe: "border-transparent bg-[#EF4444] text-white",
+    classe: "border-transparent bg-retard text-white",
   },
   CLIENT: {
     court: "Client",
     long: "Chez le client",
     Icone: Hourglass,
-    classe: "border-[#4B5160] bg-transparent text-[#9CA3AF]",
+    classe: "border-trait-2 bg-transparent text-texte-3",
   },
 };
 
@@ -93,7 +93,7 @@ export function BarreProgression({
             className={cn("h-1 flex-1 rounded-full", etapeSegment === "FACTURE" && "ml-[3px]")}
             style={{
               backgroundColor:
-                index < numero ? (arrete ? GRIS_HORS_PARCOURS : COULEURS_ETAPE[etapeSegment]) : "#2A2D34",
+                index < numero ? (arrete ? GRIS_HORS_PARCOURS : COULEURS_ETAPE[etapeSegment]) : JETONS.trait,
             }}
           />
         ))}

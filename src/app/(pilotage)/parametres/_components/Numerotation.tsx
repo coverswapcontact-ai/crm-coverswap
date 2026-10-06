@@ -39,21 +39,21 @@ export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
   return (
     <section className="mt-8">
       <TitreSection>Numérotation des documents</TitreSection>
-      <p className="mb-3 text-[12.5px] text-[#8B919C]">
+      <p className="mb-3 text-[12.5px] text-texte-3">
         Le prochain numéro de chaque série. Un devis fait ailleurs et enregistré avec un numéro plus grand fait avancer le compteur ; un numéro déjà inscrit au registre n&apos;est jamais réattribué.
       </p>
       {(
-        <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+        <ul className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
           {compteurs.map((c) => (
-            <li key={c.serie} className="border-t-[0.5px] border-[#2A2D34] px-3 py-3 first:border-t-0">
+            <li key={c.serie} className="border-t-[0.5px] border-trait px-3 py-3 first:border-t-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="flex items-center gap-2 text-[13.5px] font-medium text-[#F2F3F5]">
-                    <Hash size={14} aria-hidden className="text-[#8B919C]" />
+                  <p className="flex items-center gap-2 text-[13.5px] font-medium text-texte">
+                    <Hash size={14} aria-hidden className="text-texte-3" />
                     {c.libelle} {c.annee}
                     <Pastille ton="vert">prochain : {c.prochain}</Pastille>
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[#8B919C]">
+                  <p className="mt-0.5 text-[12px] text-texte-3">
                     Dernier numéro attribué par le CRM : {c.valeur !== null ? `${c.prefixe}${c.annee}-${String(c.valeur).padStart(3, "0")}` : "aucun cette année"} · plus haut inscrit au registre : {c.plusHautRegistre ? `${c.prefixe}${c.annee}-${String(c.plusHautRegistre).padStart(3, "0")}` : "aucun"}
                   </p>
                 </div>
@@ -66,11 +66,11 @@ export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
               {edition?.serie === c.serie ? (
                 <div className="mt-3 flex flex-wrap items-end gap-2">
                   <div className="w-[190px]">
-                    <label htmlFor={`prochain-${c.serie}`} className="mb-1 block text-[12px] text-[#9CA3AF]">
+                    <label htmlFor={`prochain-${c.serie}`} className="mb-1 block text-[12px] text-texte-3">
                       Prochain numéro
                     </label>
                     <div className={cn(CLASSE_SAISIE, "flex h-11 items-center gap-0.5 sm:h-9")}>
-                      <span className="shrink-0 text-[#8B919C] tabular-nums" aria-hidden>
+                      <span className="shrink-0 text-texte-3 tabular-nums" aria-hidden>
                         {c.prefixe}
                         {c.annee}-
                       </span>
@@ -83,10 +83,10 @@ export default function Numerotation({ initial }: { initial: CompteurVue[] }) {
                         pattern="[0-9]*"
                         placeholder="000"
                         aria-label={`Prochain numéro : rang après ${c.prefixe}${c.annee}-`}
-                        className="w-full min-w-0 bg-transparent tabular-nums outline-none placeholder:text-[#4B5563]"
+                        className="w-full min-w-0 bg-transparent tabular-nums outline-none placeholder:text-texte-3"
                       />
                     </div>
-                    <p className="mt-1 text-[12px] text-[#6B7280]">Au plus tôt {c.prefixe}{c.annee}-{String(c.plusHautRegistre + 1).padStart(3, "0")}.</p>
+                    <p className="mt-1 text-[12px] text-texte-3">Au plus tôt {c.prefixe}{c.annee}-{String(c.plusHautRegistre + 1).padStart(3, "0")}.</p>
                   </div>
                   <Bouton variante="primaire" chargement={envoi} disabled={!edition.valeur} onClick={() => void enregistrer()}>
                     Enregistrer

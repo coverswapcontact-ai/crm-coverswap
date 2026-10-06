@@ -61,7 +61,7 @@ function EnteteTriable({ cle, tri, onTrier, className }: { cle: CleTri; tri: Tri
       <button
         type="button"
         onClick={() => onTrier(cle)}
-        className={cn("inline-flex items-center gap-1 hover:text-[#F2F3F5]", actif ? "text-[#F2F3F5]" : "text-[#9CA3AF]", TRANS)}
+        className={cn("inline-flex items-center gap-1 hover:text-texte", actif ? "text-texte" : "text-texte-3", TRANS)}
       >
         {cle === "prochaineAction" ? "Prochaine action" : LIBELLES_TRI[cle]}
         <Icone size={12} aria-hidden />
@@ -89,16 +89,16 @@ export function VueListe({
   return (
     <>
       {/* Mobile (mission 13, lot 3) : une ligne par dossier — nom · ville, étape · montant, un signal, chevron ; le détail au toucher. */}
-      <ul className="overflow-hidden rounded-[12px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:hidden">
+      <ul className="overflow-hidden rounded-[12px] border-[0.5px] border-trait bg-surface md:hidden">
         {tries.map((dossier) => (
           <LigneDossierCompacte key={dossier.id} dossier={dossier} maintenant={maintenant} onOuvrir={(demande) => onOuvrir(dossier.id, demande)} />
         ))}
       </ul>
 
       {/* Bureau : tableau triable */}
-      <div className="hidden overflow-x-auto rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] md:block">
+      <div className="hidden overflow-x-auto rounded-[11px] border-[0.5px] border-trait bg-surface md:block">
         <table className="w-full min-w-[1240px] table-fixed text-left text-[13px]">
-          <thead className="border-b-[0.5px] border-[#2A2D34] text-[12px] text-[#9CA3AF]">
+          <thead className="border-b-[0.5px] border-trait text-[12px] text-texte-3">
             <tr>
               <th scope="col" className="w-[132px] px-3 py-2.5 pl-4 font-medium">Main</th>
               <th scope="col" className="w-[200px] px-3 py-2.5 font-medium">Client</th>
@@ -118,7 +118,7 @@ export function VueListe({
                 <tr
                   key={dossier.id}
                   onClick={() => onOuvrir(dossier.id)}
-                  className={cn("cursor-pointer border-t-[0.5px] border-[#2A2D34] first:border-t-0 hover:bg-[#22262D]", TRANS)}
+                  className={cn("cursor-pointer border-t-[0.5px] border-trait first:border-t-0 hover:bg-surface-2", TRANS)}
                 >
                   <td className="relative px-3 py-2.5 pl-4">
                     <Lisere couleur={couleurLisere(dossier, maintenant)} />
@@ -135,13 +135,13 @@ export function VueListe({
                     >
                       {echeanceDe(dossier, maintenant) === "retard" ? <PastilleRetard /> : null}
                       <span className="min-w-0">
-                        <span className="block truncate font-medium text-[#F2F3F5]">{dossier.clientNom}</span>
-                        <span className="block truncate text-[12px] text-[#6B7280]">{dossier.clientVille}</span>
+                        <span className="block truncate font-medium text-texte">{dossier.clientNom}</span>
+                        <span className="block truncate text-[12px] text-texte-3">{dossier.clientVille}</span>
                       </span>
                     </button>
                   </td>
-                  <td className="truncate px-3 py-2.5 text-[#9CA3AF]" title={dossier.objet}>
-                    {dossier.objet || <span className="text-[#6B7280] italic">Objet à préciser</span>}
+                  <td className="truncate px-3 py-2.5 text-texte-3" title={dossier.objet}>
+                    {dossier.objet || <span className="text-texte-3 italic">Objet à préciser</span>}
                     {dossier.aCompleter > 0 ? <PastilleACompleter nombre={dossier.aCompleter} className="mt-1 flex w-fit" /> : null}
                   </td>
                   <td className="px-3 py-2">
@@ -151,13 +151,13 @@ export function VueListe({
                   <td className="px-3 py-2">
                     <CelluleEspace espace={dossier.espace} maintenant={maintenant} />
                   </td>
-                  <td className="px-3 py-2.5 text-right whitespace-nowrap text-[#F2F3F5] tabular-nums">
-                    {montant !== null ? formatMontant(montant) : <span className="text-[#6B7280]">—</span>}
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap text-texte tabular-nums">
+                    {montant !== null ? formatMontant(montant) : <span className="text-texte-3">—</span>}
                   </td>
                   <td className="px-3 py-2">
                     <ProchaineActionResume dossier={dossier} maintenant={maintenant} />
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-[#9CA3AF]">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-[12px] text-texte-3">
                     {formatDistanceStrict(new Date(dossier.ouvertLe), maintenant, { locale: fr })}
                   </td>
                 </tr>

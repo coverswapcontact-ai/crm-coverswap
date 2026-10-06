@@ -84,11 +84,11 @@ export function ModalePaiement({ detail, onFermer, onFait, moyenParDefaut = null
       <div className="flex flex-col gap-3">
         <ChampsPaiement saisie={saisie} onChange={setSaisie} />
         {pieces.length === 0 ? (
-          <p className="text-[12px] text-[#9CA3AF]">Aucun devis ni facture dans ce dossier : le paiement est gardé non imputé, et imputé sur la facture à venir.</p>
+          <p className="text-[12px] text-texte-3">Aucun devis ni facture dans ce dossier : le paiement est gardé non imputé, et imputé sur la facture à venir.</p>
         ) : null}
         {pieces.length > 1 ? (
           <div>
-            <label htmlFor="piece-reglee" className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+            <label htmlFor="piece-reglee" className="mb-1.5 block text-[12px] font-medium text-texte-3">
               Ce paiement règle
             </label>
             <select id="piece-reglee" value={piece} onChange={(evenement) => setPiece(evenement.target.value)} className={cn(CLASSE_SAISIE, "h-11 sm:h-9")}>
@@ -172,7 +172,7 @@ function ModaleCorrection({ detail, encaissement, onFermer, onFait }: { detail: 
       <div className="flex flex-col gap-3">
         <ChampsPaiement saisie={saisie} onChange={setSaisie} />
         {change && moisTouches.length > 0 ? (
-          <p className="flex gap-1.5 rounded-[8px] bg-[#EF9F27]/10 px-3 py-2 text-[12.5px] text-[#F5B454]">
+          <p className="flex gap-1.5 rounded-[8px] bg-attention/10 px-3 py-2 text-[12.5px] text-attention-texte">
             <AlertTriangle size={13} aria-hidden className="mt-0.5 shrink-0" />
             Le livre des recettes de {moisTouches.map((mois) => libelleMois(`${mois}-15`)).join(" et ")} change : si ce mois est déjà déclaré, la déclaration est à corriger.
           </p>
@@ -209,22 +209,22 @@ function LigneEncaissement({
   const termine = encaissement.statut !== "VALIDE";
   const aCrediter = encaissement.statut === "VALIDE" && encaissement.moyen === "CHEQUE" && !encaissement.crediteLe;
   return (
-    <li className="border-t-[0.5px] border-[#2A2D34] px-3.5 py-3 first:border-t-0">
+    <li className="border-t-[0.5px] border-trait px-3.5 py-3 first:border-t-0">
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <span className={cn("text-[14px] font-medium tabular-nums", termine ? "text-[#6B7280] line-through" : "text-[#F2F3F5]")}>
+        <span className={cn("text-[14px] font-medium tabular-nums", termine ? "text-texte-3 line-through" : "text-texte")}>
           {formatMontant(encaissement.montant)}
         </span>
-        <span className="text-[12.5px] text-[#9CA3AF]">
+        <span className="text-[12.5px] text-texte-3">
           {encaissement.moyen ? LIBELLES_MOYEN[encaissement.moyen] : "Moyen non renseigné"}
           {encaissement.reference ? ` n° ${encaissement.reference}` : ""} · reçu le {formatDateCourte(encaissement.recuLe)}
         </span>
         {aCrediter ? <Pastille ton="ambre">À créditer</Pastille> : null}
-        {encaissement.crediteLe ? <span className="text-[12px] text-[#6B7280]">crédité le {formatDateCourte(encaissement.crediteLe)}</span> : null}
+        {encaissement.crediteLe ? <span className="text-[12px] text-texte-3">crédité le {formatDateCourte(encaissement.crediteLe)}</span> : null}
         {encaissement.statut === "REJETE" ? <Pastille ton="rouge">Rejeté le {formatDateCourte(encaissement.finLe!)}</Pastille> : null}
         {encaissement.statut === "ANNULE" ? <Pastille>Annulé</Pastille> : null}
       </div>
-      {imputations(encaissement) ? <p className="mt-0.5 text-[12px] text-[#6B7280]">{imputations(encaissement)}</p> : null}
-      {termine && encaissement.motifFin ? <p className="mt-0.5 text-[12px] text-[#9CA3AF]">Motif : {encaissement.motifFin}</p> : null}
+      {imputations(encaissement) ? <p className="mt-0.5 text-[12px] text-texte-3">{imputations(encaissement)}</p> : null}
+      {termine && encaissement.motifFin ? <p className="mt-0.5 text-[12px] text-texte-3">Motif : {encaissement.motifFin}</p> : null}
       {encaissement.statut === "VALIDE" ? (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {aCrediter ? (
@@ -270,33 +270,33 @@ export function PaiementsDossier({ detail, onMisAJour, sansTitre = false }: { de
       {sansTitre ? <div className="mb-3 flex justify-end">{actions}</div> : <TitreSection action={actions}>Paiements</TitreSection>}
 
       {!aDocuments && paiements.encaissements.length === 0 ? (
-        <p className="text-[12.5px] text-[#6B7280]">Aucun paiement enregistré.</p>
+        <p className="text-[12.5px] text-texte-3">Aucun paiement enregistré.</p>
       ) : (
-        <div className="overflow-hidden rounded-[11px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-[0.5px] border-[#2A2D34] px-3.5 py-2.5 text-[12.5px]">
+        <div className="overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b-[0.5px] border-trait px-3.5 py-2.5 text-[12.5px]">
             {factures.length > 0 ? (
               <>
-                <span className="text-[#9CA3AF]">
-                  Facturé <span className="text-[#F2F3F5] tabular-nums">{formatMontant(facture)}</span>
+                <span className="text-texte-3">
+                  Facturé <span className="text-texte tabular-nums">{formatMontant(facture)}</span>
                 </span>
-                <span className="text-[#9CA3AF]">
-                  Reçu <span className="text-[#F2F3F5] tabular-nums">{formatMontant(recu)}</span>
+                <span className="text-texte-3">
+                  Reçu <span className="text-texte tabular-nums">{formatMontant(recu)}</span>
                 </span>
                 {paiements.soldeEncaisse ? (
-                  <span className="flex items-center gap-1 text-[#5DCAA5]">
+                  <span className="flex items-center gap-1 text-action-clair">
                     <CircleCheck size={13} aria-hidden /> Factures réglées
                   </span>
                 ) : (
-                  <span className="text-[#F5B454]">
+                  <span className="text-attention-texte">
                     Reste à encaisser <span className="font-medium tabular-nums">{formatMontant(paiements.resteDu)}</span>
                   </span>
                 )}
               </>
             ) : (
-              <span className="text-[#9CA3AF]">
+              <span className="text-texte-3">
                 {recu > 0 ? (
                   <>
-                    Reçu avant facture <span className="text-[#F2F3F5] tabular-nums">{formatMontant(recu)}</span>
+                    Reçu avant facture <span className="text-texte tabular-nums">{formatMontant(recu)}</span>
                   </>
                 ) : (
                   "Aucun paiement reçu pour l'instant."
@@ -304,7 +304,7 @@ export function PaiementsDossier({ detail, onMisAJour, sansTitre = false }: { de
               </span>
             )}
             {paiements.nonAffecte > 0 ? (
-              <span className="text-[#F5B454]">{formatMontant(paiements.nonAffecte)} reçus non imputés</span>
+              <span className="text-attention-texte">{formatMontant(paiements.nonAffecte)} reçus non imputés</span>
             ) : null}
           </div>
           {paiements.encaissements.length > 0 ? (

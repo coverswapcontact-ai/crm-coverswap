@@ -16,7 +16,7 @@ function Vignette({ photo, taille, className }: { photo: PhotoVue; taille: strin
   const [illisible, setIllisible] = useState(false);
   if (illisible) {
     return (
-      <span className={cn("flex h-full w-full flex-col items-center justify-center gap-1 text-[#6B7280]", className)}>
+      <span className={cn("flex h-full w-full flex-col items-center justify-center gap-1 text-texte-3", className)}>
         <ImageOff size={18} aria-hidden />
         <span className="text-[10px]">Aperçu indisponible</span>
       </span>
@@ -155,7 +155,7 @@ export function PhotosDossier({
               setAgrandie(photo);
             }}
             className={cn(
-              "relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] hover:border-[#3A3E47]",
+              "relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-trait bg-surface hover:border-trait-2",
               TRANS
             )}
             aria-label="Agrandir la photo"
@@ -166,7 +166,7 @@ export function PhotosDossier({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2">
-        <p className="text-[12px] font-medium text-[#9CA3AF]">Après chantier · portfolio ({apres.length})</p>
+        <p className="text-[12px] font-medium text-texte-3">Après chantier · portfolio ({apres.length})</p>
         <input
           ref={entreeApres}
           type="file"
@@ -187,7 +187,7 @@ export function PhotosDossier({
         </Bouton>
       </div>
       {apres.length === 0 ? (
-        <p className="mt-1.5 text-[12px] text-[#6B7280]">Une fois la pose finie : les photos du résultat, pour le portfolio.</p>
+        <p className="mt-1.5 text-[12px] text-texte-3">Une fois la pose finie : les photos du résultat, pour le portfolio.</p>
       ) : (
         <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {apres.map((photo) => (
@@ -199,7 +199,7 @@ export function PhotosDossier({
                 setAgrandie(photo);
               }}
               className={cn(
-                "relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-[#1D9E75]/40 bg-[#1C1F25] hover:border-[#5DCAA5]",
+                "relative aspect-square overflow-hidden rounded-[9px] border-[0.5px] border-action/40 bg-surface hover:border-action-clair",
                 TRANS
               )}
               aria-label="Agrandir la photo après chantier"

@@ -35,7 +35,7 @@ export function BoutonOuvrirDossier({ leadId, nom }: { leadId: string; nom: stri
       disabled={envoi}
       title={AIDE}
       onClick={() => void ouvrir()}
-      className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-[#1D9E75] px-3.5 text-[13px] font-medium text-[#0B1612] hover:bg-[#5DCAA5] disabled:opacity-60 sm:h-8", TRANS)}
+      className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] bg-action px-3.5 text-[13px] font-medium text-action-texte hover:bg-action-clair disabled:opacity-60 sm:h-8", TRANS)}
     >
       <FolderPlus size={14} aria-hidden /> {envoi ? "Ouverture…" : "Ouvrir un dossier"}
     </button>

@@ -195,7 +195,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
       />
 
       {seule ? (
-        <div className="mt-5 flex flex-wrap items-center gap-2 rounded-[11px] border-[0.5px] border-[#1D9E75]/35 bg-[#112B22]/60 px-3.5 py-2.5 text-[13px] text-[#D1D5DB]">
+        <div className="mt-5 flex flex-wrap items-center gap-2 rounded-[11px] border-[0.5px] border-action/35 bg-action-fond/60 px-3.5 py-2.5 text-[13px] text-texte-2">
           <span className="min-w-0 flex-1">
             {cibleVue
               ? cibleVue.statut === "EN_ATTENTE"
@@ -203,10 +203,10 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
                 : "Cette proposition a déjà été décidée : la voici telle quelle."
               : "Proposition décidée. Voici le reste de la file."}
           </span>
-          <Link href="/taches" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] px-3 text-[#9CA3AF] hover:bg-[#22262D] hover:text-[#F2F3F5] pointer-fine:h-8", TRANS)}>
+          <Link href="/taches" className={cn("inline-flex h-11 items-center gap-1.5 rounded-[8px] px-3 text-texte-3 hover:bg-surface-2 hover:text-texte pointer-fine:h-8", TRANS)}>
             <ArrowLeft size={14} aria-hidden /> Tâches
           </Link>
-          <button type="button" onClick={voirToutes} className={cn("inline-flex h-11 items-center rounded-[8px] px-3 text-[#5DCAA5] hover:bg-[#1D9E75]/10 pointer-fine:h-8", TRANS)}>
+          <button type="button" onClick={voirToutes} className={cn("inline-flex h-11 items-center rounded-[8px] px-3 text-action-clair hover:bg-action/10 pointer-fine:h-8", TRANS)}>
             Voir toutes
           </button>
         </div>
@@ -215,7 +215,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
       <div
         role="tablist"
         aria-label="Propositions"
-        className="mt-5 flex w-fit items-center rounded-[9px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25] p-[3px]"
+        className="mt-5 flex w-fit items-center rounded-[9px] border-[0.5px] border-trait bg-surface p-[3px]"
       >
         {(
           [
@@ -232,7 +232,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
             onClick={() => changerOnglet(valeur)}
             className={cn(
               "flex h-11 items-center rounded-[7px] px-3 text-[13px] font-medium sm:h-7",
-              onglet === valeur ? "bg-[#272B33] text-[#F2F3F5]" : "text-[#9CA3AF] hover:text-[#F2F3F5]",
+              onglet === valeur ? "bg-surface-2 text-texte" : "text-texte-3 hover:text-texte",
               TRANS
             )}
           >
@@ -248,7 +248,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
             onClick={() => setFiltreType(null)}
             className={cn(
               "min-h-8 rounded-full border-[0.5px] px-3 text-[12px]",
-              filtreType === null ? "border-[#3A3E47] bg-[#272B33] text-[#F2F3F5]" : "border-[#2A2D34] text-[#9CA3AF]",
+              filtreType === null ? "border-trait-2 bg-surface-2 text-texte" : "border-trait text-texte-3",
               TRANS
             )}
           >
@@ -261,7 +261,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
               onClick={() => setFiltreType(type.type)}
               className={cn(
                 "min-h-8 rounded-full border-[0.5px] px-3 text-[12px]",
-                filtreType === type.type ? "border-[#3A3E47] bg-[#272B33] text-[#F2F3F5]" : "border-[#2A2D34] text-[#9CA3AF]",
+                filtreType === type.type ? "border-trait-2 bg-surface-2 text-texte" : "border-trait text-texte-3",
                 TRANS
               )}
             >
@@ -274,7 +274,7 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
       <section aria-busy={chargement} className={cn("mt-4 flex flex-col gap-2.5", chargement && "opacity-60")}>
         {visibles.length === 0 ? (
           <EtatVide
-            icone={<CircleCheck size={18} className="text-[#1D9E75]" aria-hidden />}
+            icone={<CircleCheck size={18} className="text-action" aria-hidden />}
             titre={onglet === "attente" ? "Rien à valider" : "Aucune proposition"}
             texte={
               onglet === "attente"
@@ -328,10 +328,10 @@ export default function FileValidation({ initiales, totalEnAttente, cible = null
           </div>
         }
       >
-        <ul className="flex flex-col gap-1.5 text-[13px] text-[#D1D5DB]">
+        <ul className="flex flex-col gap-1.5 text-[13px] text-texte-2">
           {groupables.map((proposition) => (
             <li key={proposition.id} className="flex gap-2">
-              <span aria-hidden className="text-[#6B7280]">
+              <span aria-hidden className="text-texte-3">
                 •
               </span>
               {proposition.titre}

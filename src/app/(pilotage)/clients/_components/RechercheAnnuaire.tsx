@@ -64,12 +64,12 @@ export function RechercheAnnuaire({ onChoisir }: { onChoisir: (entreprise: Entre
   }
 
   return (
-    <div className="rounded-[10px] border-[0.5px] border-[#2A2D34] bg-[#16181D] p-3">
-      <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium text-[#9CA3AF]">
+    <div className="rounded-[10px] border-[0.5px] border-trait bg-fond p-3">
+      <label htmlFor={id} className="mb-1.5 block text-[12px] font-medium text-texte-3">
         Chercher dans l&apos;annuaire des entreprises
       </label>
       <div className="relative">
-        <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#6B7280]" />
+        <Search size={14} aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-texte-3" />
         <input
           id={id}
           type="search"
@@ -81,33 +81,33 @@ export function RechercheAnnuaire({ onChoisir }: { onChoisir: (entreprise: Entre
           onChange={(evenement) => saisir(evenement.target.value)}
           className={cn(CLASSE_SAISIE, "h-11 pr-9 pl-8 sm:h-9")}
         />
-        {enCours ? <Loader2 size={14} aria-label="Recherche en cours" className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-[#6B7280]" /> : null}
+        {enCours ? <Loader2 size={14} aria-label="Recherche en cours" className="absolute top-1/2 right-3 -translate-y-1/2 animate-spin text-texte-3" /> : null}
       </div>
 
-      {erreur ? <p className="mt-1.5 text-[12px] text-[#F87171]">{erreur}</p> : null}
+      {erreur ? <p className="mt-1.5 text-[12px] text-attention-texte">{erreur}</p> : null}
 
       {cherchable && resultats ? (
         resultats.length === 0 ? (
-          <p className="mt-2 text-[12px] text-[#9CA3AF]">Aucune entreprise trouvée : essaie le SIRET, ou remplis la fiche à la main.</p>
+          <p className="mt-2 text-[12px] text-texte-3">Aucune entreprise trouvée : essaie le SIRET, ou remplis la fiche à la main.</p>
         ) : (
-          <ul aria-label="Entreprises trouvées" className="mt-2 max-h-72 overflow-y-auto rounded-[8px] border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
+          <ul aria-label="Entreprises trouvées" className="mt-2 max-h-72 overflow-y-auto rounded-[8px] border-[0.5px] border-trait bg-surface">
             {resultats.map((entreprise) => (
-              <li key={entreprise.siret ?? entreprise.siren} className="border-t-[0.5px] border-[#2A2D34] first:border-t-0">
+              <li key={entreprise.siret ?? entreprise.siren} className="border-t-[0.5px] border-trait first:border-t-0">
                 <button
                   type="button"
                   onClick={() => choisir(entreprise)}
-                  className={cn("flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left hover:bg-[#22262D] focus-visible:bg-[#22262D] focus-visible:outline-none", TRANS)}
+                  className={cn("flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none", TRANS)}
                 >
-                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] font-medium text-[#F2F3F5]">
+                  <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] font-medium text-texte">
                     <span>{entreprise.raisonSociale ?? "Identité non diffusible"}</span>
                     {entreprise.siege ? <Pastille>Siège</Pastille> : null}
                     {entreprise.ferme ? <Pastille ton="ambre">Fermé</Pastille> : null}
                   </span>
-                  {entreprise.enseigne ? <span className="text-[12px] text-[#D1D5DB]">{entreprise.enseigne}</span> : null}
-                  <span className="text-[12px] text-[#9CA3AF]">
+                  {entreprise.enseigne ? <span className="text-[12px] text-texte-2">{entreprise.enseigne}</span> : null}
+                  <span className="text-[12px] text-texte-3">
                     {[entreprise.adresse, [entreprise.codePostal, entreprise.ville].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "Adresse non diffusible"}
                   </span>
-                  <span className="text-[11.5px] text-[#6B7280] tabular-nums">
+                  <span className="text-[11.5px] text-texte-3 tabular-nums">
                     {entreprise.siret ? `SIRET ${formaterSiret(entreprise.siret)}` : `SIREN ${entreprise.siren}`}
                   </span>
                 </button>
@@ -116,12 +116,12 @@ export function RechercheAnnuaire({ onChoisir }: { onChoisir: (entreprise: Entre
           </ul>
         )
       ) : choisie ? (
-        <p className="mt-1.5 flex items-center gap-1 text-[12px] text-[#5DCAA5]">
+        <p className="mt-1.5 flex items-center gap-1 text-[12px] text-action-clair">
           <Check size={12} aria-hidden className="shrink-0" />
           <span>Rempli avec {choisie} : vérifie l&apos;adresse de facturation.</span>
         </p>
       ) : (
-        <p className="mt-1.5 text-[11.5px] text-[#6B7280]">Annuaire public de l&apos;État (Insee) : un clic remplit raison sociale, SIRET et adresse.</p>
+        <p className="mt-1.5 text-[11.5px] text-texte-3">Annuaire public de l&apos;État (Insee) : un clic remplit raison sociale, SIRET et adresse.</p>
       )}
     </div>
   );

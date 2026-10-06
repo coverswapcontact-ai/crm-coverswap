@@ -206,7 +206,7 @@ function SectionRelances({ titre, nombre, children }: { titre: string; nombre: n
       <TitreSection>
         {titre} · {nombre}
       </TitreSection>
-      <ul className={cn(CARTE, "divide-y-[0.5px] divide-[#2A2D34] overflow-hidden")}>{children}</ul>
+      <ul className={cn(CARTE, "divide-y-[0.5px] divide-trait overflow-hidden")}>{children}</ul>
     </section>
   );
 }
@@ -215,9 +215,9 @@ function SectionRelances({ titre, nombre, children }: { titre: string; nombre: n
 function LigneRelance({ nom, texte, note, children }: { nom: string; texte: string; note?: string | null; children: ReactNode }) {
   return (
     <li className={CLASSE_LIGNE}>
-      <p className="min-w-0 text-[13.5px] leading-snug text-[#D1D5DB]">
-        <span className="font-medium text-[#F2F3F5]">{nom}</span> — {texte}
-        {note ? <span className="block text-[12px] text-[#8B919C]">{note}</span> : null}
+      <p className="min-w-0 text-[13.5px] leading-snug text-texte-2">
+        <span className="font-medium text-texte">{nom}</span> — {texte}
+        {note ? <span className="block text-[12px] text-texte-3">{note}</span> : null}
       </p>
       {children}
     </li>
@@ -231,7 +231,7 @@ export function FeuilleRelances({ donnees, onRecharger, onFermer }: { donnees: R
   return (
     <Modale ouverte onFermer={onFermer} titre={total > 0 ? `Relances proposables · ${total}` : "Relances"} description="Copier le SMS vaut relance. Rien ne part tout seul.">
       {!donnees ? (
-        <p className="text-[13px] text-[#9CA3AF]">Lecture des relances…</p>
+        <p className="text-[13px] text-texte-3">Lecture des relances…</p>
       ) : total === 0 ? (
         <EtatVide titre="Plus aucune relance à faire" texte="Un devis sans réponse, un espace sans photo, un chantier fini sans avis ou un ancien contact à reprendre reviendra ici une fois le délai passé." />
       ) : (
@@ -271,7 +271,7 @@ export function FeuilleRelances({ donnees, onRecharger, onFermer }: { donnees: R
   );
 }
 
-const CLASSE_MORCEAU = "inline-flex h-11 items-center rounded-[8px] px-1.5 hover:text-[#F2F3F5] sm:h-8";
+const CLASSE_MORCEAU = "inline-flex h-11 items-center rounded-[8px] px-1.5 hover:text-texte sm:h-8";
 
 /**
  * Écran Leads, sous les puces (mission 14, partie 7) : « N rappels aujourd'hui · N en retard · N relances proposables ».
@@ -285,19 +285,19 @@ export function LigneDuJour({ aujourdhui, enRetard, onRappels }: { aujourdhui: n
   const total = donnees?.total ?? 0;
   return (
     <>
-      <p className="mt-3 flex flex-wrap items-center gap-x-0.5 text-[13.5px] text-[#9CA3AF]">
+      <p className="mt-3 flex flex-wrap items-center gap-x-0.5 text-[13.5px] text-texte-3">
         <BellRing size={15} aria-hidden className="mr-1 shrink-0" />
         <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, TRANS)}>
           {pluriel(aujourdhui, "rappel")} aujourd&apos;hui
         </button>
         <span aria-hidden>·</span>
-        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, enRetard > 0 && "font-medium text-[#F87171]", TRANS)}>
+        <button type="button" onClick={onRappels} className={cn(CLASSE_MORCEAU, enRetard > 0 && "font-medium text-retard-texte", TRANS)}>
           {enRetard} en retard
         </button>
         {donnees ? (
           <>
             <span aria-hidden>·</span>
-            <button type="button" onClick={() => setOuverte(true)} className={cn(CLASSE_MORCEAU, total > 0 && "text-[#F5B454]", TRANS)}>
+            <button type="button" onClick={() => setOuverte(true)} className={cn(CLASSE_MORCEAU, total > 0 && "text-attention-texte", TRANS)}>
               {pluriel(total, "relance proposable", "relances proposables")}
             </button>
           </>
@@ -327,15 +327,15 @@ export function RelancesDuDossier({ dossierId, cle, onCopie }: { dossierId: stri
   const { ouvrirSms, ouvrirMail, fenetres } = useGestes(recharger, onCopie);
   if (!donnees || donnees.total === 0) return fenetres;
   return (
-    <section id="rubrique-relances" className="rounded-[11px] border-[0.5px] border-[#EF9F27]/40 bg-[#EF9F27]/5">
-      <ul className="divide-y-[0.5px] divide-[#2A2D34]">
+    <section id="rubrique-relances" className="rounded-[11px] border-[0.5px] border-attention/40 bg-attention/5">
+      <ul className="divide-y-[0.5px] divide-trait">
         {donnees.devis.map((d) => {
           const note = noteRelanceDevis(d);
           return (
             <li key={d.documentId} className={CLASSE_LIGNE}>
-              <p className="text-[13px] text-[#F5B454]">
+              <p className="text-[13px] text-attention-texte">
                 Relance proposable : devis {d.numero} ({d.rang}/2)
-                {note ? <span className="block text-[12px] text-[#8B919C]">{note}</span> : null}
+                {note ? <span className="block text-[12px] text-texte-3">{note}</span> : null}
               </p>
               <BoutonsRelance {...gestesDuDevis(d, ouvrirSms, ouvrirMail)} />
             </li>
@@ -343,7 +343,7 @@ export function RelancesDuDossier({ dossierId, cle, onCopie }: { dossierId: stri
         })}
         {donnees.photos.map((p) => (
           <li key={p.espaceId} className={CLASSE_LIGNE}>
-            <p className="text-[13px] text-[#F5B454]">
+            <p className="text-[13px] text-attention-texte">
               Relance proposable : {texteRelancePhotos(p)} ({p.rang}/2)
             </p>
             <BoutonsRelance onSms={() => ouvrirSms(smsDesPhotos(p))} />
@@ -351,7 +351,7 @@ export function RelancesDuDossier({ dossierId, cle, onCopie }: { dossierId: stri
         ))}
         {donnees.avis.map((a) => (
           <li key={`avis:${a.espaceId}`} className={CLASSE_LIGNE}>
-            <p className="text-[13px] text-[#F5B454]">Demande d&apos;avis proposable : {texteRelanceAvis(a)}</p>
+            <p className="text-[13px] text-attention-texte">Demande d&apos;avis proposable : {texteRelanceAvis(a)}</p>
             <BoutonsRelance onSms={() => ouvrirSms(smsDeLAvis(a))} />
           </li>
         ))}

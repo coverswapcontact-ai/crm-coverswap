@@ -80,7 +80,7 @@ export function ChampsPaiement({
           valeur={saisie.moyen}
           onChange={(moyen) => changer("moyen", saisie.moyen === moyen ? null : moyen)}
         />
-        {saisie.moyen ? null : <p className="mt-1 text-[12px] text-[#9CA3AF]">Non renseigné : il sera signalé au livre des recettes.</p>}
+        {saisie.moyen ? null : <p className="mt-1 text-[12px] text-texte-3">Non renseigné : il sera signalé au livre des recettes.</p>}
       </div>
       <Champ
         libelle={saisie.moyen === "CHEQUE" ? "N° du chèque (facultatif)" : saisie.moyen === "VIREMENT" ? "Libellé du virement (facultatif)" : "Référence (facultative)"}

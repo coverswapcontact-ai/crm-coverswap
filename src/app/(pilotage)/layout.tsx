@@ -12,7 +12,7 @@ export const viewport: Viewport = VUE_APPLICATION;
 // haut sur ordinateur, barre du bas au pouce sur téléphone.
 export default function PilotageLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen w-full flex-1 bg-[#16181D] text-[#F2F3F5] antialiased selection:bg-[#1D9E75]/30">
+    <div className="min-h-screen w-full flex-1 bg-fond text-texte antialiased selection:bg-action/30">
       <Navigation />
       {/* Mission 13 (lot 4) : au retour d'un appel, « Comment ça s'est passé ? » sans passer par le panneau. */}
       <RetourAppel />

@@ -36,25 +36,25 @@ export function HistoriqueEvenements({ evenements, onRecharger }: { evenements: 
 
   return (
     <div>
-      {evenements.length === 0 ? <p className="mt-2 text-[12.5px] text-[#6B7280]">Rien encore.</p> : null}
+      {evenements.length === 0 ? <p className="mt-2 text-[12.5px] text-texte-3">Rien encore.</p> : null}
       {evenements.length > 0 ? (
         <ol className="mt-3 space-y-3">
           {liste.map((evenement) => {
             const Icone = ICONES_EVENEMENT[evenement.type] ?? MessageSquare;
             return (
               <li key={evenement.id} className="flex gap-3">
-                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[0.5px] border-[#2A2D34] bg-[#1C1F25]">
-                  <Icone size={12} className="text-[#9CA3AF]" aria-hidden />
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[0.5px] border-trait bg-surface">
+                  <Icone size={12} className="text-texte-3" aria-hidden />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[13px] break-words text-[#D1D5DB]">{evenement.contenu}</p>
-                  <p className="mt-0.5 text-[11px] text-[#6B7280]">
+                  <p className="text-[13px] break-words text-texte-2">{evenement.contenu}</p>
+                  <p className="mt-0.5 text-[11px] text-texte-3">
                     {LIBELLES_TYPE_EVENEMENT[evenement.type] ?? "Événement"} ·{" "}
                     {evenement.saisiLe ? `${formatDateCourte(evenement.date)} (saisi le ${formatDateCourte(evenement.saisiLe)})` : formatHorodatage(evenement.date)}
                     {evenement.messageId ? (
                       <>
                         {" · "}
-                        <button type="button" onClick={() => setMail(evenement.messageId)} className={cn("text-[#9CA3AF] underline-offset-2 hover:text-[#F2F3F5] hover:underline", TRANS)}>
+                        <button type="button" onClick={() => setMail(evenement.messageId)} className={cn("text-texte-3 underline-offset-2 hover:text-texte hover:underline", TRANS)}>
                           Lire le mail
                         </button>
                       </>

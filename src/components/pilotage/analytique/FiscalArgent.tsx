@@ -27,7 +27,7 @@ const estCle = (cle: string): cle is CleParametre => Object.hasOwn(DEFINITIONS_P
 export function AParametrer({ manquants, pourquoi, onRenseigner }: { manquants: CleParametre[]; pourquoi: string; onRenseigner: () => void }) {
   return (
     <div className={cn(ENCADRE, "flex flex-col gap-2.5 px-3.5 py-3 sm:flex-row sm:items-center")} data-a-parametrer={manquants.join(",")}>
-      <SlidersHorizontal size={16} aria-hidden className="shrink-0 text-[#F5B454]" />
+      <SlidersHorizontal size={16} aria-hidden className="shrink-0 text-attention-texte" />
       <p className="flex-1">
         {pourquoi} Il manque&nbsp;: {manquants.map((cle) => DEFINITIONS_PARAMETRES[cle].libelle.toLowerCase()).join(" ; ")}.
       </p>
@@ -48,21 +48,21 @@ function Seuils({ seuils }: { seuils: Fiscal["seuils"] }) {
     <ul className="flex flex-col gap-4">
       {seuils.map((seuil) => {
         const ratio = ratioSeuil(seuil);
-        const couleur = ratio !== null && ratio >= 0.8 ? "#F5B454" : "#5DCAA5";
+        const couleur = ratio !== null && ratio >= 0.8 ? "var(--color-attention-texte)" : "var(--color-action-clair)";
         const depassera = seuil.projection !== null && seuil.plafond !== null && seuil.projection > seuil.plafond;
         return (
           <li key={seuil.cle} className="flex flex-col gap-1.5" data-seuil={seuil.cle}>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[13px]">
-              <span className="text-[#D1D5DB]">{seuil.libelle}</span>
-              <span className="text-[#9CA3AF]">
-                <span className={cn(NUM, "text-[#F2F3F5]")}>{euros(seuil.atteint)}</span>
+              <span className="text-texte-2">{seuil.libelle}</span>
+              <span className="text-texte-3">
+                <span className={cn(NUM, "text-texte")}>{euros(seuil.atteint)}</span>
                 {seuil.plafond !== null ? ` sur ${euros(seuil.plafond)}` : " · seuil à renseigner"}
                 {ratio !== null ? <span style={{ color: couleur }}> · {formaterValeur(ratio, "pourcent")}</span> : null}
               </span>
             </div>
             {seuil.plafond !== null ? <Progression ratio={ratio ?? 0} hauteur={8} couleur={couleur} titre={`${euros(seuil.atteint)} encaissés depuis le 1er janvier, seuil ${euros(seuil.plafond)}`} /> : null}
             {seuil.projection !== null ? (
-              <p className={cn("text-[12px]", depassera ? "text-[#F5B454]" : "text-[#6B7280]")}>
+              <p className={cn("text-[12px]", depassera ? "text-attention-texte" : "text-texte-3")}>
                 Au rythme actuel&nbsp;: {euros(seuil.projection)} au 31 décembre{depassera ? ", seuil dépassé si le rythme continue" : ""}.
               </p>
             ) : null}
@@ -81,10 +81,10 @@ export function dateEcheance(echeance: string): string {
 
 /** L'échéance de la déclaration : à venir (ambre), passée (gris : déjà déclarée, ou à régulariser). */
 function TexteEcheance({ echeance, aujourdhui }: { echeance: string | null; aujourdhui: string }) {
-  if (!echeance) return <p className="text-[12px] text-[#9CA3AF]">Échéance à vérifier dans l&apos;espace URSSAF.</p>;
+  if (!echeance) return <p className="text-[12px] text-texte-3">Échéance à vérifier dans l&apos;espace URSSAF.</p>;
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(echeance);
-  if (iso && echeance < aujourdhui) return <p className="text-[12px] text-[#9CA3AF]">Échéance de déclaration passée ({dateEcheance(echeance)})&nbsp;: à vérifier dans l&apos;espace URSSAF.</p>;
-  return <p className="text-[12px] text-[#F5B454]">À déclarer au plus tard le {dateEcheance(echeance)}.</p>;
+  if (iso && echeance < aujourdhui) return <p className="text-[12px] text-texte-3">Échéance de déclaration passée ({dateEcheance(echeance)})&nbsp;: à vérifier dans l&apos;espace URSSAF.</p>;
+  return <p className="text-[12px] text-attention-texte">À déclarer au plus tard le {dateEcheance(echeance)}.</p>;
 }
 
 function Urssaf({ urssaf, aujourdhui }: { urssaf: NonNullable<Fiscal["urssaf"]>; aujourdhui: string }) {
@@ -94,39 +94,39 @@ function Urssaf({ urssaf, aujourdhui }: { urssaf: NonNullable<Fiscal["urssaf"]>;
       {aDeclarer ? (
         <div className="flex flex-col gap-2" data-urssaf="a-declarer">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <p className="text-[14px] font-medium text-[#F2F3F5]">
+            <p className="text-[14px] font-medium text-texte">
               À déclarer&nbsp;: <span>{aDeclarer.libelle}</span>
             </p>
-            <span className={cn(NUM, "text-[20px] font-semibold", aDeclarer.echeance && aDeclarer.echeance < aujourdhui ? "text-[#F2F3F5]" : "text-[#F5B454]")}>{euros(aDeclarer.montant)}</span>
+            <span className={cn(NUM, "text-[20px] font-semibold", aDeclarer.echeance && aDeclarer.echeance < aujourdhui ? "text-texte" : "text-attention-texte")}>{euros(aDeclarer.montant)}</span>
           </div>
           <TexteEcheance echeance={aDeclarer.echeance} aujourdhui={aujourdhui} />
           <dl className="flex flex-col gap-1 text-[13px]">
             <div className="flex justify-between gap-3">
-              <dt className="text-[#9CA3AF]">Chiffre d&apos;affaires encaissé sur la période</dt>
-              <dd className={cn(NUM, "text-[#F2F3F5]")}>{euros(aDeclarer.base)}</dd>
+              <dt className="text-texte-3">Chiffre d&apos;affaires encaissé sur la période</dt>
+              <dd className={cn(NUM, "text-texte")}>{euros(aDeclarer.base)}</dd>
             </div>
             {aDeclarer.detail.map((ligne) => (
               <div key={ligne.libelle} className="flex justify-between gap-3">
-                <dt className="text-[#9CA3AF]">{ligne.libelle}</dt>
-                <dd className={cn(NUM, "text-[#D1D5DB]")}>{euros(ligne.montant)}</dd>
+                <dt className="text-texte-3">{ligne.libelle}</dt>
+                <dd className={cn(NUM, "text-texte-2")}>{euros(ligne.montant)}</dd>
               </div>
             ))}
-            <div className="flex justify-between gap-3 border-t border-[#2A2D34] pt-1">
-              <dt className="text-[#D1D5DB]">Total estimé</dt>
-              <dd className={cn(NUM, "font-semibold text-[#F2F3F5]")}>{euros(aDeclarer.montant)}</dd>
+            <div className="flex justify-between gap-3 border-t border-trait pt-1">
+              <dt className="text-texte-2">Total estimé</dt>
+              <dd className={cn(NUM, "font-semibold text-texte")}>{euros(aDeclarer.montant)}</dd>
             </div>
           </dl>
         </div>
       ) : null}
       {enCours ? (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-[#2A2D34] pt-3 text-[13px]" data-urssaf="en-cours">
-          <span className="text-[#9CA3AF]">
-            En cours&nbsp;: <span className="text-[#D1D5DB]">{enCours.libelle}</span> · {euros(enCours.base)} encaissés
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-trait pt-3 text-[13px]" data-urssaf="en-cours">
+          <span className="text-texte-3">
+            En cours&nbsp;: <span className="text-texte-2">{enCours.libelle}</span> · {euros(enCours.base)} encaissés
           </span>
-          <span className={cn(NUM, "text-[#F2F3F5]")}>{euros(enCours.montant)} estimés</span>
+          <span className={cn(NUM, "text-texte")}>{euros(enCours.montant)} estimés</span>
         </div>
       ) : null}
-      <p className="text-[12px] text-[#6B7280]">
+      <p className="text-[12px] text-texte-3">
         Estimation sur l&apos;encaissé de chaque période URSSAF (pas la période choisie en haut de l&apos;écran), aux taux saisis dans les paramètres&nbsp;; le montant exact est calculé par
         l&apos;URSSAF sur le chiffre déclaré.
       </p>
@@ -146,9 +146,9 @@ export function FiscalArgent({ fiscal, aujourdhui }: { fiscal: EcranArgent["fisc
   const autres = manquants.filter((cle) => !manquantsUrssaf.includes(cle) && !manquantsSeuils.includes(cle));
 
   return (
-    <Carte titre="URSSAF et seuils de l'année" action={<Link href="/finances" className="text-[13px] text-[#5DCAA5] hover:text-[#8FE0C3]">Finances →</Link>} gap="gap-4">
+    <Carte titre="URSSAF et seuils de l'année" action={<Link href="/finances" className="text-[13px] text-action-clair hover:text-action-clair">Finances →</Link>} gap="gap-4">
       {!fiscal ? (
-        <p className="text-[13px] text-[#9CA3AF]">Le tableau des finances est illisible pour l&apos;instant&nbsp;: réessaie dans un moment, ou ouvre l&apos;écran Finances.</p>
+        <p className="text-[13px] text-texte-3">Le tableau des finances est illisible pour l&apos;instant&nbsp;: réessaie dans un moment, ou ouvre l&apos;écran Finances.</p>
       ) : (
         <>
           {autres.length > 0 ? <AParametrer manquants={autres} pourquoi="Pour dater les chèques dans le livre des recettes (à confirmer par le comptable)." onRenseigner={() => renseigner(autres)} /> : null}
@@ -159,7 +159,7 @@ export function FiscalArgent({ fiscal, aujourdhui }: { fiscal: EcranArgent["fisc
               {manquantsUrssaf.length > 0 ? (
                 <AParametrer manquants={manquantsUrssaf} pourquoi="Pour estimer ce qui est dû à l'URSSAF." onRenseigner={() => renseigner(manquantsUrssaf)} />
               ) : !urssaf || (!urssaf.aDeclarer && !urssaf.enCours) ? (
-                <p className="text-[13px] text-[#6B7280]">Rien à estimer pour l&apos;instant.</p>
+                <p className="text-[13px] text-texte-3">Rien à estimer pour l&apos;instant.</p>
               ) : null}
             </section>
             <section className="flex min-w-0 flex-col gap-3" aria-label="Seuils de l'année">
@@ -168,9 +168,9 @@ export function FiscalArgent({ fiscal, aujourdhui }: { fiscal: EcranArgent["fisc
               {manquantsSeuils.length > 0 ? (
                 <AParametrer manquants={manquantsSeuils} pourquoi="Pour suivre la progression vers les seuils fiscaux." onRenseigner={() => renseigner(manquantsSeuils)} />
               ) : seuils.length === 0 ? (
-                <p className="text-[13px] text-[#6B7280]">Seuils à renseigner dans Paramètres (Facturation).</p>
+                <p className="text-[13px] text-texte-3">Seuils à renseigner dans Paramètres (Facturation).</p>
               ) : (
-                <p className="text-[12px] text-[#6B7280]">Chiffre d&apos;affaires encaissé du 1er janvier à aujourd&apos;hui (livre des recettes). Les règles de dépassement sont à vérifier avec le comptable.</p>
+                <p className="text-[12px] text-texte-3">Chiffre d&apos;affaires encaissé du 1er janvier à aujourd&apos;hui (livre des recettes). Les règles de dépassement sont à vérifier avec le comptable.</p>
               )}
             </section>
           </div>
@@ -178,7 +178,7 @@ export function FiscalArgent({ fiscal, aujourdhui }: { fiscal: EcranArgent["fisc
       )}
       <p className={ENCADRE}>
         Le travail sur l&apos;argent reste dans{" "}
-        <Link href="/finances" className="text-[#5DCAA5] hover:text-[#8FE0C3]">
+        <Link href="/finances" className="text-action-clair hover:text-action-clair">
           Finances
         </Link>
         &nbsp;: reste à encaisser et saisie des paiements, chèques à créditer, points à corriger, livre des recettes et son export.

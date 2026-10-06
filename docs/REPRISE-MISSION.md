@@ -5550,3 +5550,24 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
   `aujourdhui[0]` se renouvelle depuis Plus tard (10 tâches du jour au plus) : après « Fait », la liste reste à 10.
   Mesure : `/taches` à chaud en local 0,26–0,33 s. Vérifié en local (390 × 660 et 1 440) : bouton principal visible sans
   défiler, Fait → ligne + Annuler → la tâche revient, Reprendre nommé après l'ouverture d'un dossier, journal à droite.
+- A3 (panneau de dossier) : 2be29c1, tests 1 595 → 1 630. `lib/dossiers/geste-principal.ts` (règle pure : tâche
+  prête du dossier, sinon geste de l'étape ; `autresGestes`), `lib/v2/situation.ts` (les trois lignes, `jourRelatif`
+  ajouté à `dates.ts`), `lib/v2/rubriques-dossier.ts` (rubrique ouverte par étape, `?rubrique=` conservés),
+  `lib/a-faire/lecture.ts › tachesDuDossier`, `lib/dossiers/situation.ts › completerDetail` (`GET /api/dossiers/[id]`
+  rend aussi `espace` et `taches` ; `chargerDetail` et les routes d'écriture intactes, le panneau garde les précédents),
+  `components/v2/dossier/` (`PanneauDossierV2`, `EnTeteSituation`, `AFaireIci`, `CeQuiSestPasseIci`,
+  `RubriquesDossier`), `BoutonGeste` étendu (`BoutonGesteBrut`, `BoutonGesteDossier` : un seul aiguillage des gestes
+  de tâches, `useGestesTaches`), `PanneauxRaccourcis` = `PanneauDossierV2` + `FeuillesRaccourcis` (le panneau monte
+  les feuilles sans second panneau de dossier) ; `DossiersPilotage` reçoit `interface` depuis `dossiers/page.tsx`
+  (v1 par défaut, rendu identique) ; CRM-V2 § Panneau de dossier + ligne de correspondance. Décisions : « À
+  compléter » devient une rubrique fermée ; le bloc Encaisser et `RelancesDuDossier` ne sont plus montés en v2
+  (boutons verts concurrents : encaisser et relancer sont le bouton principal à leur étape, et restent dans Paiements
+  et l'espace) ; « Relancer » sans relance proposable = « Relancer par téléphone » (`tel:`) ; « Publier la simulation »
+  ouvre la rubrique (le choix « prévenir le client » reste) ; Signé avec date posée → « Passer en planifié » ; les
+  treize rubriques comptent pour un bloc (cinq blocs au panneau). Pièges : `DATABASE_URL=file:./essai-v2.db` (chemin
+  relatif au dossier `prisma/`, pas à la racine) ; `mission-16-partie-6.test.ts` échoue quand la suite passe minuit à
+  Paris (événements « il y a 30 min » d'hier, synthèse du jour) — repassé vert à 00 h 32, rien à voir avec le lot ;
+  dans un test de sources, un `[^>]*` ne traverse pas une flèche `=>`. Vérifié en local (essai-v2.db, 390 × 660 et
+  bureau) : en-tête en trois lignes, un seul bouton vert visible sans défiler, Autres gestes, À faire ici → Fait →
+  ligne + Annuler, le bouton principal passe à « Relancer » après la tâche, `?rubrique=photos` ouvre Photos, rubrique
+  de l'étape ouverte (Devis et factures / Photos), aucune erreur de console.

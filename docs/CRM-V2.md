@@ -277,6 +277,80 @@ sont repris en pur dans `lib/v2/geste-pret.ts` ; la v2 réutilise `useBalayage`,
   `toastAnnulable`, gestes repris, échelle de texte, `TRANS_V2`, la page choisit par `interfaceCourante()`, la v1
   n'importe rien de la v2), `app/lisibilite.test.ts` (déjà en place, couvre `src/components/v2/`).
 
+## Panneau de dossier (lot A3)
+
+Le panneau d'un dossier (`components/v2/dossier/PanneauDossierV2.tsx`), monté par `DossiersPilotage` quand
+`app/(pilotage)/dossiers/page.tsx` lit `v2` (`interfaceCourante()` → prop `interface` ; sinon `PanneauDossier` v1,
+intouché) et par `PanneauxRaccourcis` d'Aujourd'hui (v2 seulement). Même contrat que la v1 (`{ dossierId, demande,
+maintenant, onFermer, onMisAJour, onArchive }`), même `Sheet` à droite (620 px, plein écran sur téléphone), même
+fermeture au pouce (geste retour, glissement depuis le bord gauche), mêmes `?dossier=`, `?rubrique=` et `?devis=`,
+même relecture toutes les 30 s et au retour sur l'onglet. Cinq blocs, dans cet ordre :
+
+| # | Bloc | Contenu |
+|---|---|---|
+| 1 | **En-tête de situation** (`EnTeteSituation`, phrases de `lib/v2/situation.ts`, le même format pour tous les écrans v2) | ligne 1 : « Nom · cuisine, salle de bain · Ville », l'étape en mots avec son point de couleur ; ligne 2 : « Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse, devis 2026-041 relu 2 fois » (`mainDe` en phrase, `depuisLisible(mainLe)`, `mainMotif` sauf « Étape « … » », puis ce que dit l'espace : devis relu ≥ 2 fois, signaux actifs) ; ligne 3 : « Relancer · lundi » (`jourRelatif`, « en retard de N jours », « Aucune prochaine action ») et « Modifier » (`ProchaineActionEditeur` v1, sous l'en-tête). Date exacte au survol. |
+| 2 | **Le bouton principal** (`BoutonGesteDossier`, règle `lib/dossiers/geste-principal.ts`) et **Autres gestes** repliés | l'unique bouton vert (56 px, plein largeur) ; « Autres gestes » = liste de lignes de 44 px : le reste des passages d'étape (suggérés d'abord, « Marquer perdu » en rouge), « Déposer un devis PDF », « Modifier la prochaine action », « Archiver le dossier » (dernier) |
+| 3 | **À faire ici** (`AFaireIci`) | les tâches du dossier (`detail.taches` : Aujourd'hui puis Plus tard), en `LigneTacheV2`, mêmes gestes qu'Aujourd'hui (`useGestesTaches`), cinq lignes puis « Voir les N autres » ; une tâche qui « ouvre le dossier » (rubrique, devis, encaissement) agit ici, jamais dans un second panneau ; rien quand le dossier n'a pas de tâche |
+| 4 | **Ce qui s'est passé ici** (`CeQuiSestPasseIci`) | cinq lignes de `GET /api/chronologie?dossier=&client=` (date relative, exacte au survol, titre, texte, lien), « Voir les N autres » déplie la `Chronologie` v1 en compact (filtres par famille) |
+| 5 | **Rubriques** (`RubriquesDossier`, `lib/v2/rubriques-dossier.ts`) | treize lignes de 44 px, titres en phrases (« Photos du chantier », « Espace client », « Devis et factures », « Paiements », « Simulations », « Étapes et notes », « Historique », « Coordonnées », « Familles et teintes », « Délais et prix », « Dépenses », « À compléter » s'il y a des points, « Archiver le dossier »), un résumé quand elles sont fermées, **toutes fermées sauf celle de l'étape** ; identifiants `rubrique-<x>` conservés pour les raccourcis |
+
+**La règle du bouton principal** (`gestePrincipal({ detail, espace, tache, maintenant })`, pure, testée) : la première
+tâche encore à faire du dossier (`tachePrete` : à faire, ou un Plus tard dont l'heure est passée) → son raccourci, le
+même bouton qu'Aujourd'hui ; sinon le geste de l'étape :
+
+| Étape | Bouton principal | Ce qu'il ouvre |
+|---|---|---|
+| Qualification | « Appeler » ; « Préparer la simulation » dès qu'une photo est reçue | lien `tel:` (début d'appel noté) ; `/simulateur?dossier=` |
+| Simulation | « Publier la simulation » s'il y a un brouillon dans l'espace (signal `BROUILLONS`) ; sinon « Faire le devis » | la rubrique Simulations (le bouton Publier de la v1, avec « prévenir le client ») ; `GenerateurDocument` devis |
+| Devis envoyé, Relance | « Relancer » | la relance proposable du dossier (`GET /api/relances?dossierId=`) : devis (SMS, ou la relecture du mail en STOP), photos, avis ; rien de proposable → « Relancer par téléphone » (`tel:`) ; sans numéro → l'espace client |
+| Signé | « Fixer la date du chantier » ; date déjà posée → « Passer en planifié » | `FeuilleDateChantier` ; fenêtre d'étape |
+| Planifié | « Passer en chantier » | `ChangementEtape` (garde-fous de la v1), dans « Étapes et notes » |
+| Chantier | « Facturer » | `GenerateurDocument` facture |
+| Facturé | « Encaisser » | `ModalePaiement` |
+| Encaissé | « Demander un avis » | le SMS d'avis proposable, sinon l'espace client |
+| Perdu, En pause | « Reprendre en « étape quittée » » | `ChangementEtape` |
+
+**La rubrique ouverte par étape** (`rubriqueDeLEtape`) : Qualification → photos ; Simulation → simulations ; Devis
+envoyé, Relance, Signé → devis ; Planifié, Chantier, Perdu, En pause → étapes et notes ; Facturé, Encaissé → paiements.
+Un `?rubrique=` ouvre la sienne à la place (`rubriqueDemandee` : photos, messages → espace, devis, encaisser → paiements,
+historique, etape), fait défiler jusqu'à elle (`cibleDuDefilement`), et pour « messages » met le curseur dans le champ
+de réponse, comme en v1.
+
+**Chaque geste répond** (règle 6) : les gestes de tâches (bloc 2 quand c'est une tâche, bloc 3) passent par
+`useGestesTaches` → ligne écrite + « Annuler » 5 s. Les gestes d'étape répondent par une ligne seule, sans « Annuler » :
+« Dossier passé à « X » » (`ChangementEtape`), « Chantier fixé au … » (`FeuilleDateChantier`), « Paiement enregistré »
+(`ModalePaiement`), « Devis généré » / « Facture générée » (le panneau, après `GenerateurDocument`), « Simulation
+publiée dans l'espace du client » (`SimulationsDossier`), « Dossier archivé » (`ArchivageDossier`), « Prochaine action
+enregistrée » ; un SMS de relance s'ouvre dans l'écran SMS (copier vaut relance). Ils ne se défont pas d'un bouton :
+une étape se corrige par un passage en arrière, un paiement par sa correction dans Paiements, un document par un avoir
+ou un devis refait.
+
+**Ce qui est réutilisé de la v1** (aucun composant réécrit) : `PhotosDossier`, `EspaceDossier`, `DocumentsDossier`,
+`PaiementsDossier` + `ModalePaiement`, `SimulationsDossier`, `FamillesDossier`, `DelaisEcarts`, `DepensesDossier`,
+`TimelineEtapes`, `CoordonneesClient`, `HistoriqueEvenements`, `ACompleter`, `ArchivageDossier`, `ChangementEtape`,
+`ProchaineActionEditeur`, `GenerateurDocument`, `ModaleDocumentExistant`, `FeuilleDateChantier`, `RelectureMail`,
+`ouvrirEcranSms`, `Chronologie`, `noterDebutAppel`. De la v2 : `useGestesTaches`, `LigneTacheV2`, `BoutonGeste`
+(étendu : `BoutonGesteBrut` = le rendu, `BoutonGesteDossier` = le bouton d'un dossier), `FeuillesRaccourcis`
+(`PanneauxRaccourcis` moins le panneau de dossier : le panneau monte le mail, le contact, la relecture, la date, la
+feuille de réponse, jamais un second panneau), `toastAnnulable`, `lib/v2/dates.ts` (+ `jourRelatif`).
+
+**Serveur** (ajouts de champs) : `GET /api/dossiers/[id]` rend le détail complété de `espace` (`EspaceResume | null`,
+par `espacesDesDossiers`) et `taches` (`TacheVue[]`, par `lib/a-faire/lecture.ts › tachesDuDossier(dossierId,
+maintenant)` : les tâches d'Aujourd'hui du dossier puis celles de Plus tard, hors lot) — `lib/dossiers/situation.ts ›
+completerDetail`. `chargerDetail` et les routes d'écriture ne changent pas : leur réponse n'a ni `espace` ni `taches`,
+le panneau garde les précédents. `GET /api/a-faire` est inchangé.
+
+- **Décisions** : « À compléter » devient une rubrique (fermée, avec son nombre) au lieu d'un bloc en tête ; le bloc
+  « Encaisser » et `RelancesDuDossier` (boutons verts concurrents de la v1) ne sont plus montés : l'encaissement et la
+  relance sont le bouton principal à leur étape, et restent dans Paiements / l'espace client ; « Publier la simulation »
+  ouvre la rubrique plutôt que de publier d'un geste (le choix « prévenir le client » de la v1 reste) ; Signé avec une
+  date déjà posée → « Passer en planifié » ; « Autres gestes » en liste de lignes (pas un menu flottant) ; les treize
+  rubriques comptent pour un bloc (une table des matières fermée), le panneau en a cinq.
+- **Tests** : `lib/dossiers/geste-principal.test.ts` (règle, autres gestes, rubriques par étape), `lib/v2/situation.test.ts`
+  (les trois lignes, `jourRelatif`), `lib/a-faire/taches-dossier.test.ts` (base d'essai : `tachesDuDossier`,
+  `GET /api/dossiers/[id]` complété, 404), `components/v2/dossier/panneau-ecran.test.ts` (sources : ordre des blocs, un
+  seul `bg-action`, contrat v1, point de choix, lisibilité), `app/lisibilite.test.ts` (couvre `components/v2/dossier/`).
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
@@ -286,6 +360,7 @@ sont repris en pur dans `lib/v2/geste-pret.ts` ; la v2 réutilise `useBalayage`,
 | Coque (`components/pilotage/Navigation.tsx` : 10 onglets, 3 compteurs) | `components/v2/CoqueV2.tsx` + `NavigationV2.tsx` : Aujourd'hui, Dossiers, Personnes, Argent, Plus ; un compteur, recherche globale, bandeau d'essai | toutes | lot A0b, livrée |
 | — (la v1 n'a pas de journal global : `Chronologie.tsx` par contact seulement) | `components/v2/journal/Journal.tsx` + `GroupeParPersonne.tsx` : « Depuis ta dernière visite », groupes par personne, filtres, « Tout vu » | `/journal` (nouvelle ; en v1 → `/taches`), bloc d'Aujourd'hui au lot A2 | lot A1, livrée |
 | Tâches (`taches/_components/EcranTaches.tsx` : en-tête, Actualiser, Ajouter, J'ai N min, Commencer, Aujourd'hui en lignes, En lot, Plus tard, Fait aujourd'hui ; panneaux, ModeTaches, FeuilleReponse) | `components/v2/taches/Aujourdhui.tsx` : Reprendre, Maintenant (carte + geste prêt), Commencer et J'ai 5/15/30 min en contour, Ensuite (5 + « Voir les N autres », Ajouter, Actualiser), En lot, Plus tard, Fait aujourd'hui, journal compact ; mêmes panneaux, même ModeTaches, même FeuilleReponse, mêmes routes | `/taches` | lot A2, livrée |
+| Panneau de dossier (`dossiers/_components/PanneauDossier.tsx` : en-tête à liséré, pastilles et badges, À compléter, prochaine action, relances, bloc Encaisser, ChangementEtape, 7 sections en capitales) | `components/v2/dossier/PanneauDossierV2.tsx` : en-tête de situation (3 lignes), un seul bouton principal + Autres gestes, À faire ici, Ce qui s'est passé ici, 13 rubriques fermées sauf celle de l'étape ; mêmes sections, modales, feuilles et routes ; `GET /api/dossiers/[id]` + `espace` + `taches` | `/dossiers?dossier=` (+ `?rubrique=`, `?devis=`), panneaux d'Aujourd'hui | lot A3, livrée |
 
 ## Liste de contrôle par écran
 

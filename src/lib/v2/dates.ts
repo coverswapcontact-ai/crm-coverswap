@@ -74,3 +74,22 @@ export function depuisLisible(valeur: string | Date, maintenant: Date = new Date
   if (jours >= 7) return `depuis ${jours} jours`;
   return `depuis ${dateRelative(date, maintenant).replace(/^il y a /, "")}`;
 }
+
+/**
+ * Un jour (sans heure), en phrase : « aujourd'hui », « demain », « hier », le jour de la semaine à moins d'une semaine
+ * (« lundi »), « il y a 3 jours », puis « le 12 oct. » (avec l'année si elle change). Pour une date posée : la prochaine
+ * action, le chantier.
+ */
+export function jourRelatif(valeur: string | Date, maintenant: Date = new Date()): string {
+  const date = instant(valeur);
+  if (!date) return "";
+  const cible = partiesParis(date);
+  const jours = ecartJours(cible.jour, partiesParis(maintenant).jour);
+  if (jours === 0) return "aujourd'hui";
+  if (jours === -1) return "demain";
+  if (jours === 1) return "hier";
+  if (jours < 0 && jours > -7) return cible.lire({ weekday: "long" });
+  if (jours > 0 && jours < 7) return `il y a ${jours} jours`;
+  const memeAnnee = cible.jour.slice(0, 4) === partiesParis(maintenant).jour.slice(0, 4);
+  return `le ${cible.lire(memeAnnee ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" })}`;
+}

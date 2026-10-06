@@ -3,6 +3,7 @@ import { pageDossiers } from "@/lib/dossiers/dossiers";
 import { clientPourDossier, leadPourDossier, prospectPourDossier } from "@/lib/dossiers/leads";
 import { estEtapeEspace } from "@/lib/espace/etapes";
 import { estFiltreEspace } from "@/lib/espace/suivi-types";
+import { interfaceCourante } from "@/lib/interface/choix";
 import DossiersPilotage from "./_components/DossiersPilotage";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +27,16 @@ export default async function DossiersPage({
   const rubrique = typeof parametres.rubrique === "string" && estRubriqueDossier(parametres.rubrique) ? parametres.rubrique : null;
   const espace = estFiltreEspace(parametres.espace) ? parametres.espace : null;
   const etapeEspace = espace && estEtapeEspace(parametres.etapeEspace) ? parametres.etapeEspace : null;
-  const [dossiers, leadInitial] = await Promise.all([
+  // Mission 22 (A3) : en v2 (`interfaceCourante()`), l'écran monte le panneau de dossier v2 ; la liste reste celle de la v1 (lot A4).
+  const [dossiers, leadInitial, version] = await Promise.all([
     pageDossiers({ page: 1, ...(espace ? { espace, etapeEspace: etapeEspace ?? undefined } : {}) }),
     client ? clientPourDossier(client) : lead ? leadPourDossier(lead) : prospect ? prospectPourDossier(prospect) : null,
+    interfaceCourante(),
   ]);
 
   return (
     <DossiersPilotage
+      interface={version}
       initial={dossiers}
       leadInitial={leadInitial}
       dossierInitialId={dossier}

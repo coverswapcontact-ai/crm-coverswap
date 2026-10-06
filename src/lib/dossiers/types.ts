@@ -19,6 +19,7 @@ import type { PointACompleter } from "./completude";
 import type { FaitsDossier } from "./regles";
 import type { DelaisCles, EcartsPrix, PassageEtape } from "./delais";
 import type { EspaceResume } from "@/lib/espace/suivi-types";
+import type { TacheVue } from "@/lib/a-faire/types";
 
 export type DossierResume = {
   id: string;
@@ -131,6 +132,12 @@ export type DossierDetail = DossierResume & {
   evenements: EvenementVue[];
   documents: DocumentVue[];
   paiements: PaiementsDossier;
+  /**
+   * Mission 22 (A3) : les tâches du dossier (celles d'Aujourd'hui d'abord, puis Plus tard), servies par
+   * `GET /api/dossiers/[id]` avec l'état de son espace (`espace`) ; absentes d'une réponse d'écriture (PATCH, étape…) :
+   * l'écran garde les précédentes.
+   */
+  taches?: TacheVue[];
 };
 
 export type PresetVue = {

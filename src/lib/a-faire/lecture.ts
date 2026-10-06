@@ -251,3 +251,13 @@ export async function lireTache(id: string): Promise<TacheVue | null> {
   const ligne = await prisma.tacheAFaire.findUnique({ where: { id } });
   return ligne && !ligne.archiveLe ? versVue(ligne) : null;
 }
+
+/**
+ * Mission 22 (A3) — les tâches d'un dossier, telles que l'écran Aujourd'hui les range : celles d'« Aujourd'hui » du
+ * dossier d'abord (dans leur ordre), puis celles de « Plus tard » (à faire au-delà des dix, ou reportées). Hors lot.
+ * Sert au panneau du dossier (« À faire ici », bouton principal) ; `GET /api/a-faire` reste tel quel.
+ */
+export async function tachesDuDossier(dossierId: string, maintenant: Date = new Date()): Promise<TacheVue[]> {
+  const liste = await listeTaches(maintenant);
+  return [...liste.aujourdhui, ...liste.plusTard].filter((t) => t.dossierId === dossierId);
+}

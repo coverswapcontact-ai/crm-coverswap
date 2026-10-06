@@ -1728,3 +1728,83 @@ Reste : rien pour ce lot ; pour Lucas, reconnecter le connecteur MCP.
 - Avant la fusion : production en bonne santé (disque 14 %, 3,8 Go libres ; cohérence sans écart sur 24 dossiers).
   La mise en route (migration `mise-en-route-18`) tourne au premier démarrage après le push, sauvegarde d'abord.
 - Empreinte des outils MCP : inchangée (53 outils), mais des descriptions ont changé → reconnecter le connecteur.
+
+## Mission 21, phase E5 : test des modèles du simulateur, sans basculer (06/10/2026)
+
+**Constat de départ** : la bascule vers `gpt-image-2.5-sunburst` ne passait pas en l'état. Le rendu envoyait
+toujours `input_fidelity`, que ce modèle refuse (HTTP 400, non facturé) : chaque simulation aurait échoué.
+
+**1. Commit 7b8b7c6** (poussé, déployé : `/api/health` rend `7b8b7c6`, status ok).
+- `genererRendu` : un 400 qui nomme `input_fidelity`, `output_format` ou `output_compression` (lu dans `error.param`,
+  sinon dans le message) refait l'appel une fois sans ce paramètre. Retirer `output_format` retire aussi
+  `output_compression`. Tout autre 400, un 429 ou un 5xx ne sont jamais rejoués.
+- Options `modele` et `phase` (défaut « rendu ») transmises à `noter()` et au calcul du coût.
+- Sans effet pour gpt-image-1, qui reçoit les mêmes paramètres qu'avant. Tests : `generation-repli.test.ts`.
+- `prix.ts` et `coutEnDollars` comptaient déjà sunburst (5 / 8 / 30 $ par million de jetons) : le coût noté est le bon.
+- Lu dans l'essai : sunburst refuse **seulement** `input_fidelity`. Il accepte `quality: medium`, `output_format: jpeg`
+  et `output_compression: 90`, et rend un JPEG en 1536 × 1024.
+
+**2. Le comparatif** : `scripts/comparer-modeles.ts` (lancé d'abord avec `--estimer`, qui annonçait 1,68 $).
+- La même simulation sur les 4 photos : cuisine, façades RM20 Sage Green, plan de travail AA14 Original Oak,
+  qualité medium, moteur V1 (réglage de production).
+- Les 2 modèles passés explicitement à chaque appel. Noté dans GenerationImage (phase `essai-modele`) de la base
+  d'essai `scratchpad/m8/essai-m8.db`.
+- **Limite** : la base locale ne contient aucune vraie photo de client. Les 4 photos retenues, lues sur place dans
+  `.uploads/` et jamais copiées dans un dépôt, sont les plus proches d'une vraie pièce : 3 photos de banque d'images
+  (noire-ilot, grise-fours, ilot-noyer) et un « avant » d'ambiance généré (chene-rustique). Ce sont des photos
+  propres et bien éclairées : elles ne disent rien d'une photo de téléphone sombre ou de travers.
+
+**Coût réel total, relu dans GenerationImage : 1,29 $** (gpt-image-1 : 4 × 0,2736 $ ; sunburst : 4 × 0,0494 $).
+Les 400 de sunburst sur `input_fidelity` n'ont pas été facturés.
+
+| Photo | Modèle | Coût réel | Durée | ΔE façades (RM20) | ΔE plan (AA14) | Contours |
+|---|---|---|---|---|---|---|
+| noire-ilot | gpt-image-1 | 0,27 $ | 30 s | colonnes 10,3 ; îlot 6,1 | 42,0 (plan de l'îlot non posé) | 11,2 |
+| noire-ilot | sunburst | 0,05 $ | 52 s | colonnes 7,0 ; îlot 6,8 | 27,2 | 12,8 |
+| grise-fours | gpt-image-1 | 0,27 $ | 30 s | hautes 32,9 ; bas 28,1 | 36,6 | 11,1 |
+| grise-fours | sunburst | 0,05 $ | 21 s | hautes 18,1 ; bas 12,5 | 35,6 | 5,5 |
+| ilot-noyer | gpt-image-1 | 0,27 $ | 31 s | colonnes 13,6 ; îlot 4,7 | 19,7 | 58,9 |
+| ilot-noyer | sunburst | 0,05 $ | 20 s | colonnes 4,5 ; îlot 4,3 | 11,5 | 13,0 |
+| chene-rustique | gpt-image-1 | 0,27 $ | 27 s | hauts 21,8 ; bas 9,7 | 26,4 | 52,4 |
+| chene-rustique | sunburst | 0,05 $ | 18 s | hauts 13,8 ; bas 1,8 | 23,3 | 13,5 |
+
+Méthode de mesure :
+- ΔE 2000 avec la méthode de `teintes.ts` : médiane d'une zone bien éclairée, après balance des blancs sur un blanc de
+  la scène ramené à #F2F2F2, comparée au hex du catalogue.
+- Contours : `ecartContours` contre l'avant (0 = identiques). Changer une matière en ajoute forcément un peu, d'où
+  10 à 13 même pour un rendu bien en place.
+- Le ΔE du plan de travail compte peu. La zone est fine et brillante, et le hex d'un bois (AA14 #6B5138) est une
+  moyenne de vignette. Les deux modèles posent un chêne plus clair que ce hex.
+
+Planche et fichiers (hors dépôt, jamais publiés) : `~/coverswap-photos/essai-modeles/planche.jpg`, rendus et
+`resultats.json`.
+
+**Mon jugement, planche regardée à pleine taille** :
+- **Fidélité de la photo** : sunburst reste superposable sur les 4 photos (contours 5,5 à 13,5). gpt-image-1 décale
+  ou zoome toute la scène sur 2 photos sur 4 (ilot-noyer 58,9, chene-rustique 52,4), alors même que `input_fidelity`
+  est à high.
+- **Rien d'autre ne bouge** :
+  - gpt-image-1 a teinté en vert la vitre de la plaque de cuisson (chene-rustique). Il n'a pas posé le plan de
+    l'îlot (noire-ilot), et il a laissé blanches les façades hautes à côté de la hotte (ilot-noyer).
+  - sunburst a assombri la crédence bois de noire-ilot (écart léger). Il a peint les façades blanches d'ilot-noyer,
+    ce qui est cohérent avec la consigne « façades ».
+- **Teinte** : sunburst est plus proche de RM20 sur 7 façades mesurées sur 8. gpt-image-1 tire vers le vert d'eau
+  clair et saturé (grise-fours 33 contre 18).
+- **Texture** : comparable sur les façades unies. Le fil du bois est plus visible avec sunburst (grise-fours), et
+  sunburst garde les reflets de la laque brillante.
+- **Durée** : sunburst prend 18 à 21 s. Un seul appel a pris 52 s, le premier du lot (400, puis nouvel appel).
+  gpt-image-1 prend 27 à 31 s.
+
+**Recommandation : passer à `gpt-image-2.5-sunburst`.** Il est 5,5 fois moins cher (0,05 $ contre 0,27 $), plus
+fidèle à la photo et plus juste en teinte. Avant de basculer pour de bon, il faut le valider sur 2 ou 3 vraies photos
+de clients (téléphone, lumière faible), par exemple depuis l'espace d'un dossier réel. Le comparatif ne l'a pas fait.
+
+**Ce que la bascule demande** :
+- Seulement la variable `OPENAI_IMAGE_MODEL=gpt-image-2.5-sunburst` sur Railway (service CRM), à poser par Lucas.
+  Rien d'autre : le repli sans `input_fidelity` est en production depuis 7b8b7c6, et le coût est compté au bon tarif.
+- Latence : chaque rendu fait d'abord un 400 non facturé, ce qui ajoute moins d'une seconde. Pour
+  l'éviter, on pourrait ne pas envoyer `input_fidelity` quand le modèle commence par `gpt-image-2.5` (ce n'est pas
+  fait).
+- À recaler ensuite : `coutEstime` de `prix.ts` (0,21 $ pour medium) affiche le coût annoncé avant un rendu dans
+  Paramètres › Simulateur. Il surestimerait d'un facteur 4 environ.
+- Retour en arrière : supprimer la variable.

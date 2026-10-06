@@ -265,6 +265,12 @@ export const DEFINITIONS_PARAMETRES = {
     nature: "texte",
     groupe: "PILOTAGE",
   },
+  DERNIER_DOSSIER_OUVERT: {
+    libelle: "Dernier dossier ouvert",
+    aide: "Posé par l'interface v2 à chaque ouverture d'un dossier (bandeau « Reprendre » d'Aujourd'hui, 48 h) : l'identifiant du dossier et l'instant, séparés par une barre verticale. Il n'y a rien à saisir ici.",
+    nature: "texte",
+    groupe: "PILOTAGE",
+  },
   CAMPAGNE_DEBUT: {
     libelle: "Début de la campagne en cours",
     aide: "Jour du lancement de la campagne Meta en cours, au format AAAA-MM-JJ. L'assistant en déduit le jour de campagne (« jour 3 sur 21 ») et la règle du protocole qui s'applique (consignes de l'assistant).",

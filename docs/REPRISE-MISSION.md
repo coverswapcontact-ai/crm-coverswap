@@ -5532,3 +5532,21 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
   un paiement rejeté reste une ligne annotée. Piège : les tests qui lisent « jusqu'à maintenant » posent `fin` après
   la base d'essai (les `updatedAt` du moment sont sinon après la borne) ; un `marquerJournalVu` daté dans le futur
   n'est pas encore « valable » (`valableDu`). Base locale : sauvegarde puis `npm run base:pousser` → faite (dev.db du poste, sauvegarde manuelle avant ; essai-v2.db poussée aussi) ; vérifié en local : /journal à 390 × 660 et /api/health (53 outils, 6665a6b457fe).
+- A2 (Aujourd'hui) : tests 1 570 → 1 595. `components/v2/taches/` : `Aujourdhui.tsx` (7 blocs : Reprendre, Maintenant,
+  Ensuite, En lot, Plus tard, Fait aujourd'hui, journal compact ; monté par `taches/page.tsx` en v2, `EcranTaches` v1
+  intouché), `CarteTache`, `BoutonGeste`, `LigneV2`, `BandeauReprendre`, `PanneauxRaccourcis`, `useListeTaches`,
+  `useGestesTaches`, `toastAnnulable` ; `lib/v2/geste-pret.ts` (règle pure du bouton principal), `lib/v2/aujourdhui.ts`
+  (blocs, bornes 5 / 3, minutes 5 / 15 / 30, `messageReponse`), `lib/v2/reprendre.ts` + `reprendre-serveur.ts`,
+  `components/v2/MemoireReprendre.tsx` (coque, dans un `Suspense`), paramètre `DERNIER_DOSSIER_OUVERT` (groupe Pilotage),
+  `POST /api/reprendre` ; CRM-V2 § Aujourd'hui + ligne de correspondance. Décisions : la v1 reste telle quelle
+  (duplication des hooks acceptée, aucun fichier v1 modifié hors `page.tsx`) ; les prédicats de `LigneTache` repris en
+  pur dans `geste-pret.ts` (un test ne doit pas importer un composant) ; « Tout vu » du journal passe en contour dans
+  Aujourd'hui (un seul bouton vert : le geste prêt) ; « J'ai N min » à trois durées (5 / 15 / 30, 390 px), l'heure
+  reste au mode Commencer ; mémoire Reprendre serveur par `POST /api/reprendre` (pas de ligne ajoutée à
+  `GET /api/dossiers/[id]`), une ligne au plus par dossier et par quart d'heure, titres génériques côté appareil et
+  nommés côté serveur ; le bandeau tient sur deux lignes à 390 px. Pièges : `Journal.tsx` prenait `new Date()` en état
+  initial → écart d'une minute entre serveur et navigateur = échec d'hydratation (corrigé : `initiale.jusqua`) ;
+  `react-hooks/set-state-in-effect` refuse un `setState` direct dans un effet (passer par `setTimeout(…, 0)`) ;
+  `aujourdhui[0]` se renouvelle depuis Plus tard (10 tâches du jour au plus) : après « Fait », la liste reste à 10.
+  Mesure : `/taches` à chaud en local 0,26–0,33 s. Vérifié en local (390 × 660 et 1 440) : bouton principal visible sans
+  défiler, Fait → ligne + Annuler → la tâche revient, Reprendre nommé après l'ouverture d'un dossier, journal à droite.

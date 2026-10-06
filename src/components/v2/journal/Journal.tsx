@@ -39,7 +39,9 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const [enAttente, setEnAttente] = useState<Set<string>>(new Set());
   const [occupe, setOccupe] = useState(false);
-  const [maintenant, setMaintenant] = useState(() => new Date());
+  // Mission 22 (A2) : l'heure du rendu serveur d'abord (`jusqua`), la même au serveur et au navigateur (sinon une
+  // minute passée entre les deux fait échouer l'hydratation) ; l'horloge de l'appareil prend le relais à la minute.
+  const [maintenant, setMaintenant] = useState(() => new Date(initiale.jusqua));
   const minuteries = useRef(new Map<string, number>());
 
   // L'heure de référence des dates relatives suit le temps (une fois par minute), sans rien faire bouger d'autre.
@@ -152,7 +154,9 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
           </p>
         </div>
         {total > 0 ? (
-          <button type="button" className={BOUTON_PRINCIPAL} onClick={() => void toutVu()} disabled={occupe}>
+          // Mission 22 (A2) : dans Aujourd'hui (compact), le seul bouton principal de l'écran est le geste prêt de
+          // « Maintenant » ; « Tout vu » y passe en contour. Sur /journal, il reste le bouton principal.
+          <button type="button" className={compact ? BOUTON_SECONDAIRE : BOUTON_PRINCIPAL} onClick={() => void toutVu()} disabled={occupe}>
             Tout vu
           </button>
         ) : null}

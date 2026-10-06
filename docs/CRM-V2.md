@@ -20,7 +20,7 @@ lire deux fois. Tous les usages et toutes les fonctionnalités restent.
 | 3 | **Un seul bouton principal par écran** (le vert `action`). Les autres gestes sont secondaires (contour) ou dans un menu. Le rouge ne sert qu'à l'argent en retard et au perdu ; pas d'orange décoratif. | Test (`src/app/lisibilite.test.ts`) : les jetons d'étape n'ont plus d'orange ; `retard` reste réservé par arbitrage (ci-dessous). Lecture : une seule `variante="primaire"` par écran v2. |
 | 4 | **Des phrases, pas des codes.** « Chez le client depuis 3 jours », pas « MAIN : CLIENT · 3 j ». Dates relatives avec la date exacte au survol ou à l'appui long. Pas de sigle, pas de capitales espacées, pas de point médian en chaîne. | Test : aucune classe `tracking-wide uppercase` dans `src/components/v2/`. Lecture des libellés (dates relatives via une seule fonction). |
 | 5 | **Même chose, même place.** La situation d'un dossier (étape · qui a la main · prochaine action) a un seul format, réutilisé partout : liste, carte, panneau, journal, recherche, tâche. | Lecture : un seul composant de situation importé par tous les écrans v2 (lot A3). Test sur ses trois lignes. |
-| 6 | **Chaque geste répond.** Une ligne écrite après chaque action, avec « Annuler » pendant 5 s. Rien ne change en silence. | Test du mécanisme généralisé (lot A2) ; parcours réel en local : chaque geste affiche sa ligne. |
+| 6 | **Chaque geste répond.** Une ligne écrite après chaque action, avec « Annuler » pendant 5 s. Rien ne change en silence. | Test du mécanisme généralisé (lot A2 : `toastAnnulable`, `aujourdhui-ecran.test.ts`) ; parcours réel en local : chaque geste affiche sa ligne. |
 | 7 | **Le retour est gratuit.** À l'arrivée : « Reprendre » et « Depuis ta dernière visite ». | Test du journal et de `JOURNAL_VU_LE` (lot A1) ; capture d'Aujourd'hui. |
 | 8 | **Compter seulement ce qui se fait.** Un seul compteur, sur Aujourd'hui. Aucun badge ailleurs. | Lecture : aucun compteur dans la barre du bas ni dans « Plus » ; test sur la coque v2. |
 | 9 | **Lisible dehors, sur un téléphone.** Contraste ≥ 4,5:1 pour tout texte ; texte courant 16 px ordinateur / 17 px téléphone ; deux tailles par carte au plus ; zones tactiles ≥ 44 px ; bouton principal visible sans défiler à 390 × 660. | Test : contraste de chaque couple de jetons déclaré ; aucune taille `text-[N px]` < 14 px dans `src/components/v2/` ; échelle `text-corps` / `text-corps-tel` / `text-petit` / `text-titre` / `text-grand`. Capture à 390 × 660. |
@@ -219,6 +219,64 @@ sauvegarde), les alertes remises, les archivés, et tout ce qui précède `depui
   `lib/v2/dates.test.ts`, `lib/v2/journal.test.ts`, `components/v2/journal/journal-ecran.test.ts` (sources),
   `lib/mcp/mcp-lister-etat.test.ts` (JOURNAL, `etat_crm`).
 
+## Aujourd'hui (lot A2)
+
+L'accueil de la v2, à `/taches` (`components/v2/taches/Aujourdhui.tsx`, monté par `app/(pilotage)/taches/page.tsx`
+quand `interfaceCourante()` rend `v2` ; sinon `EcranTaches` v1, intouché). Sept blocs au plus, dans cet ordre, rien
+d'autre au-dessus ; le journal passe à droite sur ordinateur (`lg:`), dessous sur téléphone.
+
+| # | Bloc | Contenu | Gestes |
+|---|---|---|---|
+| 1 | **Reprendre** | une ligne, seulement s'il y a quelque chose depuis moins de 48 h : « Reprendre : dossier Nom · objet — il y a 2 h » (lien) ; fermable (la croix mémorise l'instant fermé) | `BandeauReprendre` |
+| 2 | **Maintenant** | `aujourdhui[0]` en grand (`CarteTache`, extraite du corps du mode « Commencer ») : « Maintenant · environ 3 min », le titre (24 px), la raison en phrase, la marche à suivre, **l'unique bouton principal vert** = le geste prêt, puis Fait / Plus tard / Pas à faire en contour (une proposition : Valider en principal, Ignorer à côté) ; balayer à droite = Fait (Relire pour une sensible), à gauche = Plus tard. Sous la carte, en contour : « Commencer · N tâches · durée » (`ModeTaches`, la série plein écran de la v1) et « J'ai 5 / 15 / 30 min » (`GET /api/a-faire/minutes?m=` : le plan remplace la liste, « Rien ne tient » + « Tout voir » sinon) | `useGestesTaches` |
+| 3 | **Ensuite** | `aujourdhui.slice(1, 6)` en lignes sobres (`LigneTacheV2` : titre, durée · raison, bouton du geste en contour, « … » = les trois réponses ; toucher = la fiche ; balayage conservé), « Voir les N autres » ; « Ajouter une tâche » (`AjoutTache` v1) et « Actualiser » (`POST /api/a-faire/detecter`) | idem |
+| 4 | **En lot** | une ligne par lot : « Tout classer » (ligne + Annuler 5 s, défait ce classement seul) et « Revoir un par un » (série) | `toastAnnulable` |
+| 5 | **Plus tard** | replié ; trois lignes puis « Voir les N autres » | idem |
+| 6 | **Fait aujourd'hui** | replié ; `LigneFaiteV2` (titre, « fait par … à 10:12 » ou la preuve lue par le CRM) | — |
+| 7 | **Depuis ta dernière visite** | `<Journal compact />` du lot A1 (`parPage` 20, cinq groupes puis « Voir les N autres », « Tout vu » **en contour** ici : le seul bouton vert de l'écran est celui de Maintenant), lien « Tout le journal » | lot A1 |
+
+Vide : « Rien à faire maintenant. » (+ « Demain : N tâches reviennent »), « Ajouter une tâche », le journal reste.
+Hors ligne : la dernière liste connue et une ligne ambre. Le compteur de la coque est le seul badge.
+
+**La règle du bouton principal** (`lib/v2/geste-pret.ts › gestePret(tache)`, pure, testée) : une proposition qui se
+valide d'un geste → « Valider » ; une tâche à moi sans rien à ouvrir → « Fait » ; une proposition sensible (argent,
+client) → « Relire et valider » (son aperçu dans À valider : rien ne se valide d'un geste) ; un appel avec un numéro
+lisible → lien `tel:` ; une page externe → lien dans un nouvel onglet ; sinon l'action du raccourci avec son libellé
+(SMS, mail, espace, devis, encaisser, date du chantier, simulateur, relance, lead, cohérence). `BoutonGeste` rend ce
+geste en `principale` (56 px, vert, plein largeur, dans la carte) ou en `ligne` (contour, 44 px, dans Ensuite).
+
+**Chaque geste répond** (`components/v2/taches/toastAnnulable.ts`) : `toastAnnulable(message, annuler, description)`
+= la ligne écrite (« Fait », « Validé », « Plus tard · revient demain 9 h », « Pas à faire · déjà fait hors CRM »,
+« 3 tâches classées ») avec « Annuler » pendant 5 s ; côté serveur l'effet part à 6 s (`DELAI_EFFET_MS`) et
+`POST /api/a-faire/<id>/annuler` le défait encore après. Les messages sont ceux de `lib/v2/aujourdhui.ts › messageReponse`.
+
+**Reprendre** (règle 7) : deux mémoires réunies par `lib/v2/reprendre.ts › choisirReprendre` (la plus récente, 48 h ;
+même chemin → le titre nommé du serveur). Côté appareil, `localStorage["reprendre"]` = `{ chemin, titre, le }`, écrit
+par `components/v2/MemoireReprendre.tsx` (monté par la coque v2, dans un `Suspense`) à chaque `/dossiers?dossier=`,
+`/leads?lead=`, `/clients/<id>`, `/mail?mail=`, et par `useGestesTaches` quand un panneau de dossier s'ouvre depuis
+Aujourd'hui (titres génériques : « le dossier ouvert », « le contact ouvert », « la fiche client », « le mail ouvert »).
+Côté serveur, le paramètre `DERNIER_DOSSIER_OUVERT` (« <dossierId>|<ISO> », groupe Pilotage, visible dans Réglages
+avec une aide qui dit qu'il n'y a rien à saisir), écrit par `POST /api/reprendre { dossierId }` (non publique ; pas de
+seconde ligne pour le même dossier dans le quart d'heure) et lu par `lib/v2/reprendre-serveur.ts › lireReprendre`
+(le dossier nommé « dossier Nom · objet », jamais un archivé).
+
+**Ce qui a été extrait de la v1** (`EcranTaches.tsx` reste tel quel : duplication acceptée, la v1 rend exactement
+pareil) : `useListeTaches(initiale)` (relecture 4,5 s / 20 s, écoutes `pilotage:compteurs`, `leads:modifies`,
+`appel:termine`, retour sur l'onglet, réseau, hors ligne), `useGestesTaches` (repondre / annuler / lancer / appeler /
+ouvrirFiche / corriger / commencer / noterRetour ; états occupées, ouvert, réponse, retour, traitées ;
+`sessionStorage["taches:position"]` conservé), `PanneauxRaccourcis` (PanneauDossier, PanneauMail, PanneauEntrant,
+RelectureMail, FeuilleDateChantier, FeuilleReponse de la v1, montés une fois), `CarteTache` (le corps de `ModeTaches`).
+Les prédicats de `LigneTache.tsx` (`estSensible`, `valideDansLaLigne`, `raccourciDe`, `numeroDe`, `sansRaccourci`)
+sont repris en pur dans `lib/v2/geste-pret.ts` ; la v2 réutilise `useBalayage`, `FondBalayage` et `ICONES_RACCOURCI`.
+
+- **Mesure** : `/taches` à chaud en local (`next dev`, base d'essai) : 0,26 à 0,33 s (`curl -w "%{time_total}"`) ;
+  une seule requête serveur pour la liste, le journal borné à 20 lignes, Reprendre une lecture de paramètre.
+- **Tests** : `lib/v2/geste-pret.test.ts` (règle du geste prêt, blocs, ligne de réponse), `lib/v2/reprendre.test.ts`
+  (adresses, 48 h, choix), `app/api/reprendre/route.test.ts` (base d'essai : paramètre, dédoublonnage, nommé, archivé),
+  `components/v2/taches/aujourdhui-ecran.test.ts` (sources : ordre des blocs, un seul `bg-action`, cinq lignes,
+  `toastAnnulable`, gestes repris, échelle de texte, `TRANS_V2`, la page choisit par `interfaceCourante()`, la v1
+  n'importe rien de la v2), `app/lisibilite.test.ts` (déjà en place, couvre `src/components/v2/`).
+
 ## Correspondance v1 → v2
 
 À remplir par les lots A1 à A5 (une ligne par écran ; l'adresse ne change jamais).
@@ -227,6 +285,7 @@ sauvegarde), les alertes remises, les archivés, et tout ce qui précède `depui
 |---|---|---|---|
 | Coque (`components/pilotage/Navigation.tsx` : 10 onglets, 3 compteurs) | `components/v2/CoqueV2.tsx` + `NavigationV2.tsx` : Aujourd'hui, Dossiers, Personnes, Argent, Plus ; un compteur, recherche globale, bandeau d'essai | toutes | lot A0b, livrée |
 | — (la v1 n'a pas de journal global : `Chronologie.tsx` par contact seulement) | `components/v2/journal/Journal.tsx` + `GroupeParPersonne.tsx` : « Depuis ta dernière visite », groupes par personne, filtres, « Tout vu » | `/journal` (nouvelle ; en v1 → `/taches`), bloc d'Aujourd'hui au lot A2 | lot A1, livrée |
+| Tâches (`taches/_components/EcranTaches.tsx` : en-tête, Actualiser, Ajouter, J'ai N min, Commencer, Aujourd'hui en lignes, En lot, Plus tard, Fait aujourd'hui ; panneaux, ModeTaches, FeuilleReponse) | `components/v2/taches/Aujourdhui.tsx` : Reprendre, Maintenant (carte + geste prêt), Commencer et J'ai 5/15/30 min en contour, Ensuite (5 + « Voir les N autres », Ajouter, Actualiser), En lot, Plus tard, Fait aujourd'hui, journal compact ; mêmes panneaux, même ModeTaches, même FeuilleReponse, mêmes routes | `/taches` | lot A2, livrée |
 
 ## Liste de contrôle par écran
 

@@ -53,7 +53,19 @@ export type EntreePipeline = {
   surEtape?: (etape: EtapeTravail) => Promise<void> | void;
   signal?: AbortSignal;
   generateur?: Generateur;
+  /**
+   * Mission 23 (L4a) — la phase de ce rendu : `ambiance`, `ambiance-edition` et `serie-*` (images de catalogue, sans
+   * original gardé) ne sont jamais corrigées ni mesurées (`phaseSansCorrection`). Défaut : un rendu de simulation.
+   */
+  phase?: string;
+  /** Mission 23 (L4a) — la fidélité est mesurée même réglage désactivé : le banc et la campagne de calibrage seulement. */
+  mesurerFidelite?: boolean;
 };
+
+/** Mission 23 (L4a) : les phases des images de catalogue (ambiances, séries), exclues de la correction des teintes. */
+export function phaseSansCorrection(phase: string | null | undefined): boolean {
+  return phase === "ambiance" || phase === "ambiance-edition" || (typeof phase === "string" && phase.startsWith("serie-"));
+}
 
 type Reussite = Extract<ResultatGeneration, { ok: true }>;
 type Echec = Extract<ResultatGeneration, { ok: false }>;
@@ -156,12 +168,16 @@ async function genererSansCorrection(entree: EntreePipeline): Promise<SortiePipe
 }
 
 /**
- * Mission 23 (L3) — la fin du pipeline : la correction des teintes derrière le réglage `correctionTeintes` (non par
- * défaut : la fidélité est alors seulement mesurée), voir `correction-pipeline.ts`. Une erreur garde le rendu d'origine.
+ * Mission 23 (L3, L4a) — la fin du pipeline : la correction des teintes derrière le réglage `correctionTeintes`, voir
+ * `correction-pipeline.ts`. Réglage désactivé (défaut) : ni mesure ni correction, le rendu sort tel quel (sauf
+ * `mesurerFidelite`, le banc). Les images de catalogue (`phaseSansCorrection`) ne passent jamais par là. Une erreur
+ * garde le rendu d'origine.
  */
 export async function genererAvecMoteur(entree: EntreePipeline): Promise<SortiePipeline> {
   const sortie = await genererSansCorrection(entree);
   if (!sortie.ok) return sortie;
-  const c = await corrigerSortiePipeline({ avant: sortie.avant ?? entree.photo, image: sortie.image, zones: entree.zones, appliquer: entree.reglages.correctionTeintes === true, origine: entree.origine });
+  const appliquer = entree.reglages.correctionTeintes === true;
+  if (phaseSansCorrection(entree.phase) || (!appliquer && entree.mesurerFidelite !== true)) return { ...sortie, imageOriginale: null, fidelite: null };
+  const c = await corrigerSortiePipeline({ avant: sortie.avant ?? entree.photo, image: sortie.image, zones: entree.zones, appliquer, origine: entree.origine });
   return { ...sortie, image: c.image, imageOriginale: c.imageOriginale, fidelite: c.fidelite };
 }

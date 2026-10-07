@@ -545,7 +545,8 @@ async function executerRendu(options: OptionsAmbiances & { rendu: NonNullable<Op
     // En essai, la photo est réencodée (même image, autres octets) : l'analyse simulée est mise en cache sous une autre
     // empreinte que la vraie photo, et le vrai rendu lancé ensuite ne la réutilisera jamais.
     const octets = options.essai ? await (await import("sharp")).default(brute).withExif({ IFD0: { ImageDescription: "CoverSwap essai" } }).jpeg({ quality: 92 }).toBuffer() : brute;
-    const resultat = await genererAvecMoteur({ photo: octets, piece, zones, origine: "CRM", reglages, qualite: "high" });
+    // Mission 23 (L4a) : une image de catalogue, jamais corrigée ni mesurée (phase « ambiance » ; la phase notée dans GenerationImage ne change pas).
+    const resultat = await genererAvecMoteur({ photo: octets, piece, zones, origine: "CRM", reglages, qualite: "high", phase: "ambiance" });
     if (!resultat.ok) {
       bilan.echecs.push({ nom: nomApres(photo), raison: `${resultat.raison} : ${resultat.message}` });
       journal(`ÉCHEC du rendu (${resultat.raison}) : ${resultat.message}`);

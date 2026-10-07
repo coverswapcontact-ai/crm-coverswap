@@ -439,6 +439,8 @@ export async function executerRenduBanc(renduId: string, signal?: AbortSignal): 
       echeance: demarre + DELAI_TACHE_BANC_MS,
       surEtape,
       signal,
+      // Mission 23 (L4a) : le banc mesure toujours la fidélité des teintes (c'est son rôle), réglage de correction ou non.
+      mesurerFidelite: true,
     });
   } catch (erreur) {
     return echouer(erreur instanceof Error ? erreur.message : "Génération impossible.");

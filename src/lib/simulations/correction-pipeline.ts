@@ -7,8 +7,9 @@ import type { ReferenceMesure } from "./mesure-rendu";
  * CRM) et les deux moteurs :
  *  - réglage `correctionTeintes` actif (Paramètres › Simulateur, non par défaut) : le rendu corrigé remplace le rendu,
  *    l'original est rendu à part (`imageOriginale`) pour être gardé à côté (suffixe `-original`, `rendu-original.ts`) ;
- *  - réglage inactif : la fidélité est mesurée quand même, en lecture seule (l'image n'est pas touchée ; 1 à 2 s de
- *    calcul après une génération de 30 à 90 s) ;
+ *  - réglage inactif : rien (L4a) — ni mesure ni correction en production ; seuls le banc et la campagne de calibrage
+ *    demandent la mesure en lecture seule (`mesurerFidelite`, l'image n'est pas touchée) ; les images de catalogue
+ *    (ambiances, séries) ne sont jamais ni mesurées ni corrigées ;
  *  - une erreur de correction ne casse jamais une simulation : le rendu d'origine est gardé, l'erreur journalisée,
  *    la fidélité vide.
  * La mesure et la correction sont chargées à l'appel (import dynamique) : `teintes.ts` passe par `ambiances.ts`, qui

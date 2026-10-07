@@ -254,7 +254,7 @@ describe("branchement : réglage désactivé par défaut, fin du pipeline, rendu
     assert.equal((await reglages.reglagesSimulateur()).correctionTeintes, false);
   });
 
-  test("pipeline avec le réglage actif (générateur d'essai) : rendu remplacé, original rendu à part, fidélité écrite ; inactif : mesure seule", async () => {
+  test("pipeline avec le réglage actif (générateur d'essai) : rendu remplacé, original rendu à part, fidélité écrite ; inactif : ni mesure ni correction (L4a)", async () => {
     const { genererAvecMoteur } = await import("./pipeline");
     const { REGLAGES_PAR_DEFAUT } = await import("@/lib/simulateur/reglages");
     const avant = await AVANT();
@@ -280,7 +280,37 @@ describe("branchement : réglage désactivé par défaut, fin du pipeline, rendu
     if (!inactif.ok) return;
     assert.ok(inactif.image.equals(rendu), "réglage inactif : rien ne change");
     assert.equal(inactif.imageOriginale, null);
-    assert.equal(inactif.fidelite?.[0].etat, "mesuree");
+    assert.equal(inactif.fidelite, null, "réglage inactif : plus aucune mesure en production (L4a)");
+  });
+
+  test("L4a : le banc mesure toujours (mesurerFidelite), en lecture seule ; les ambiances et les séries ne sont jamais corrigées", async () => {
+    const { genererAvecMoteur, phaseSansCorrection } = await import("./pipeline");
+    const { REGLAGES_PAR_DEFAUT } = await import("@/lib/simulateur/reglages");
+    const avant = await AVANT();
+    const rendu = await png(piece(uni(hex("#A6B095"))));
+    const generateur: import("./generation").Generateur = async () => ({ ok: true, image: rendu, type: "image/png", avant, taille: "1536x1024", dureeMs: 10, usage: { texte: 1, image: 1, sortie: 1 }, coutDollars: 0, generationId: null });
+    const entree = { photo: avant, piece: "cuisine" as const, zones: [{ zone: "meubles-bas" as const, ref: "RM30" }], origine: "CRM" as const, promptV1: "essai", swatchUrlsV1: [], generateur };
+    const banc = await genererAvecMoteur({ ...entree, reglages: REGLAGES_PAR_DEFAUT, mesurerFidelite: true });
+    assert.ok(banc.ok);
+    if (!banc.ok) return;
+    assert.ok(banc.image.equals(rendu), "mesure seule : l'image n'est pas touchée");
+    assert.equal(banc.imageOriginale, null);
+    assert.equal(banc.fidelite?.[0].etat, "mesuree");
+    for (const phase of ["ambiance", "ambiance-edition", "serie-2", "serie-2-edition"]) {
+      assert.equal(phaseSansCorrection(phase), true, phase);
+      const sortie = await genererAvecMoteur({ ...entree, reglages: { ...REGLAGES_PAR_DEFAUT, correctionTeintes: true }, phase, mesurerFidelite: true });
+      assert.ok(sortie.ok);
+      if (!sortie.ok) return;
+      assert.ok(sortie.image.equals(rendu), `${phase} : image de catalogue laissée telle quelle`);
+      assert.equal(sortie.imageOriginale, null, phase);
+      assert.equal(sortie.fidelite, null, phase);
+    }
+    for (const phase of [undefined, null, "rendu", "calibrage-23", "essai-modele"]) assert.equal(phaseSansCorrection(phase), false, String(phase));
+    // Les appelants (test de sources) : le banc demande la mesure, le rendu d'ambiance est rangé en phase « ambiance ».
+    const lire = (f: string) => fs.readFile(path.join(process.cwd(), f), "utf8");
+    assert.match(await lire("src/lib/simulateur/banc/banc.ts"), /mesurerFidelite: true/);
+    assert.match(await lire("src/lib/simulations/ambiances.ts"), /genererAvecMoteur\(\{[^}]*phase: "ambiance"/);
+    for (const f of ["src/lib/simulations/travaux.ts", "src/lib/simulateur/preparation.ts"]) assert.doesNotMatch(await lire(f), /mesurerFidelite/, `${f} : la production ne mesure pas`);
   });
 
   test("une erreur de correction laisse le rendu d'origine et ne casse pas la simulation", async () => {

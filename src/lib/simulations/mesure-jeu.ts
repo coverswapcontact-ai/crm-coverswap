@@ -124,7 +124,7 @@ export async function executerMesureJeu(argv: string[], journal: (ligne: string)
         await plancheMesure(avant, rendu, m, `${id} · ${meta.origine} · moteur ${meta.moteur ?? "?"} · ${meta.modele ?? "modèle inconnu"}${meta.exemple ? " · pièce d'exemple" : ""}`, c.planche, detail);
       }
       if (!m.masque.douteux)
-        for (const s of m.surfaces) if (s.deltaE !== null && s.derive) pourAnalyse.push({ famille: familleTeinte(s.hex, s.texture.attendue), moteur: meta.moteur ?? "inconnu", modele: meta.modele ?? "inconnu", deltaE: s.deltaE, derive: s.derive });
+        for (const s of m.surfaces) if (s.deltaE !== null && s.derive) pourAnalyse.push({ famille: familleTeinte(s.hex, s.texture.attendue), moteur: meta.moteur ?? "inconnu", modele: meta.modele ?? "inconnu", deltaE: s.deltaE, deltaEChromatique: s.deltaEChromatique ?? undefined, derive: s.derive });
       const resume = m.surfaces.map((s) => `${s.ref} ${s.trouvee ? `ΔE ${virgule(s.deltaE)} (L ${signe(s.derive!.L)}, C ${signe(s.derive!.C)})${s.texture.perdue ? " texture perdue" : ""}` : "non trouvée"}`).join(" ; ");
       journal(`  ${id} : ${resume || "aucune référence connue"}${m.masque.douteux ? ` — MASQUE DOUTEUX : ${m.masque.raisons.join(" ; ")}` : ""} (${m.dureeMs} ms)`);
     } catch (e) {
@@ -153,7 +153,7 @@ export async function executerMesureJeu(argv: string[], journal: (ligne: string)
     ),
   );
   journal(`Analyse par famille (${pourAnalyse.length} surface(s), masques douteux exclus : ${douteux}, erreurs : ${erreurs}) :`);
-  for (const l of analyse) journal(`  ${l.famille.padEnd(13)} ${l.groupe.padEnd(32)} n ${String(l.n).padStart(3)} · ΔE méd. ${virgule(l.deltaEMedian).padStart(5)} · p90 ${virgule(l.deltaE90).padStart(5)} · dérive L ${signe(l.derive.L)} a ${signe(l.derive.a)} b ${signe(l.derive.b)} C* ${signe(l.derive.C)}`);
+  for (const l of analyse) journal(`  ${l.famille.padEnd(13)} ${l.groupe.padEnd(32)} n ${String(l.n).padStart(3)} · ΔE méd. ${virgule(l.deltaEMedian).padStart(5)} · p90 ${virgule(l.deltaE90).padStart(5)} · > 5 : ${String(Math.round(l.partAuDessusDe5 * 100)).padStart(3)} % · à clarté égale ${virgule(l.chromatiqueMedian).padStart(5)} · dérive L ${signe(l.derive.L)} a ${signe(l.derive.a)} b ${signe(l.derive.b)} C* ${signe(l.derive.C)}`);
   journal(`Mesures : ${o.sortie}${o.planches ? ` ; planches : ${dossierPlanches}` : ""}.`);
   return { sortie: o.sortie, cas, analyse, douteux, erreurs, planches: cas.filter((c) => c.planche).length };
 }
@@ -211,7 +211,7 @@ export async function plancheMesure(avant: string, rendu: string, m: MesureRendu
     const lignes = [
       `<tspan x="0" dy="0" font-weight="700">${echapper(`${s.ref}${s.nom ? ` ${s.nom}` : ""}`)}</tspan>`,
       `<tspan x="0" dy="20">${s.trouvee ? `${s.mesure} · catalogue ${s.hex}` : "surface non trouvée"}</tspan>`,
-      s.trouvee ? `<tspan x="0" dy="22" font-weight="700" fill="${(s.deltaE ?? 0) > 5 ? "#FF6B6B" : "#7BE07B"}">ΔE 2000 : ${virgule(s.deltaE)}</tspan>` : "",
+      s.trouvee ? `<tspan x="0" dy="22" font-weight="700" fill="${(s.deltaE ?? 0) > 5 ? "#FF6B6B" : "#7BE07B"}">ΔE 2000 : ${virgule(s.deltaE)} (clarté égale : ${virgule(s.deltaEChromatique)})</tspan>` : "",
       s.derive ? `<tspan x="0" dy="20">L ${signe(s.derive.L)} · a ${signe(s.derive.a)} · b ${signe(s.derive.b)} · C* ${signe(s.derive.C)}</tspan>` : "",
       `<tspan x="0" dy="20" fill="${s.texture.perdue ? "#FF6B6B" : "#DDDDDD"}">texture ${virgule(s.texture.mesuree)} (attendue : ${s.texture.attendue})${s.texture.perdue ? " PERDUE" : ""}</tspan>`,
       `<tspan x="0" dy="20" fill="#BBBBBB">${virgule(Math.round(s.part * 1000) / 10)} % de l'image</tspan>`,

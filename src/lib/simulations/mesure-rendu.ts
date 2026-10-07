@@ -8,8 +8,10 @@ import { blancDeZone, deltaE2000, gainsBlanc, hexVersRgb, medianeCorrigee, rgbVe
  * Aucun réseau, aucune base : sharp et du calcul.
  *
  * 1. MASQUE de la surface changée, à l'échelle de travail (grand côté `COTE_TRAVAIL` = 1024 px ; le rendu est ramené
- *    aux dimensions de l'avant, étiré comme dans `ecartContours` — ou recadré au centre si les proportions diffèrent
- *    de plus de 2 %, `recadre: true`) :
+ *    aux dimensions de l'avant, étiré comme dans `ecartContours`, même quand les proportions diffèrent : sur le jeu réel,
+ *    gpt-image-1 a étiré les photos 4:3 en 3:2, le recadrage au centre aligne moins bien ; `proportions: "etire"`) :
+ *    - l'avant d'abord ramené à l'exposition et à la dominante du rendu (`gainsGlobaux` : gpt-image-1 rééclaire souvent
+ *      toute la pièce), estimée sur toute l'image, puis hors du premier masque s'il dépasse 30 % ;
  *    - différence par pixel en Lab (ΔE 1976, conversion de `teintes.ts`), lissée par une moyenne 5 × 5 (bruit, JPEG,
  *      grain redessiné) ;
  *    - seuil `SEUIL_DIFFERENCE` (ΔE76 = 7 : un blanc cassé changé en grège, ≈ 10, passe ; le redessin d'une pièce
@@ -21,17 +23,21 @@ import { blancDeZone, deltaE2000, gainsBlanc, hexVersRgb, medianeCorrigee, rgbVe
  *    - bord flouté (gaussienne σ = 2) : `masque.flou`, pour la planche et la future correction (L3). La mesure, elle,
  *      ne lit que l'intérieur (masque érodé de 4 px : ni bord, ni halo).
  *    Masque douteux (signalé, jamais corrigé) : plus de 60 % de l'image, moins de 1 %, plus de 12 composantes
- *    (éclaté), ou contours déplacés (`ecartContours` hors masque ≥ 30, ou global ≥ 40 : rendu décalé ou zoomé).
- * 2. PLUSIEURS RÉFÉRENCES (heuristique) : chaque pixel du masque va à la référence la plus proche de sa couleur telle
+ *    (éclaté), ou contours déplacés (`ecartContours` hors masque ≥ 30, ou global ≥ 35 : rendu décalé, zoomé ou redessiné ; réglé sur le jeu réel du
+ *    07/10 : entre 35 et 50, le masque d'une scène redessinée prend le sol et les murs voisins et la médiane d'une
+ *    teinte sourde tire vers eux, ce qui donne un faux « fidèle » ; mieux vaut exclure un bon rendu de temps en temps).
+ * 2. ATTRIBUTION (heuristique) : chaque pixel du masque va à la référence la plus proche de sa couleur telle
  *    qu'elle paraîtrait sous la lumière de la scène (le hex divisé par les gains de la balance des blancs), en ΔE76
- *    avec la clarté comptée pour moitié (une ombre ne doit pas faire changer de référence) ; puis composantes par
- *    référence. Avec une seule référence, les composantes du masque. Pour chaque référence, la composante la plus
+ *    avec la clarté comptée pour moitié (une ombre ne doit pas faire changer de référence) ; à plus de 25 de toutes,
+ *    il n'est à aucune (mur, sol ou plan rééclairés par le modèle : « hors demande ») ; puis composantes par
+ *    référence. Pour chaque référence, la composante la plus
  *    fidèle est gardée ; une autre qui en est à plus de `SEUIL_HORS_DEMANDE` (ΔE 2000 = 25) est un « changement hors
  *    demande » (un plan de travail repeint, un mur) et n'entre pas dans sa mesure.
  * 3. ΔE 2000 par surface entre la médiane mesurée (`medianeCorrigee` après `gainsBlanc`) et le hex du catalogue, plus
  *    la dérive signée en L, a, b et C* (mesuré − catalogue).
  *    Balance des blancs automatique, avec les règles de `teintes.ts` : le blanc est cherché HORS du masque dans le
- *    rendu (pixels L* ≥ 60 et C* ≤ 15, au moins 0,3 % de l'image), `blancDeZone` en prend le quart le plus lumineux ;
+ *    rendu (pixels L* ≥ 60, C* ≤ 15, aucun canal ≥ 245 — ni reflet ni fenêtre —, au moins 0,3 % de l'image) ; des 10 % les plus clairs, `blancDeZone` prend le
+ *    quart le plus lumineux ;
  *    un vrai blanc (L* ≥ 70 et C* ≤ 10) règle dominante ET exposition (ramené à #F2F2F2) ; sinon (mur crème, scène
  *    sombre) la dominante seulement, à sa luminance (`exposition: false`) ; une scène sans aucun neutre clair : pas de
  *    correction (`aucune`). Gains bornés à [0,25 ; 4].
@@ -52,12 +58,14 @@ const EROSION_MESURE = 4;
 const RAYON_TEXTURE = 3;
 export const SEUIL_TEXTURE = 1.2;
 export const SEUIL_HORS_DEMANDE = 15;
+/** Au-delà (ΔE76, clarté pour moitié, contre la référence sous la lumière de la scène), un pixel changé n'est à aucune référence. */
+export const DISTANCE_PIXEL_MAX = 25;
 const ECART_HORS_DEMANDE = 8;
 const PART_MAX = 0.6;
 const PART_MIN = 0.01;
 const COMPOSANTES_MAX = 12;
 export const SEUIL_CONTOURS_HORS_MASQUE = 30;
-export const SEUIL_CONTOURS_GLOBAL = 40;
+export const SEUIL_CONTOURS_GLOBAL = 35;
 const ECHANTILLON_MAX = 12_000;
 /** Échantillon du tri des morceaux (seulement pour décider s'ils sont hors demande). */
 const ECHANTILLON_MORCEAU = 4_000;
@@ -93,6 +101,12 @@ export type SurfaceMesuree = {
   pixels: number;
   part: number;
   deltaE: number | null;
+  /**
+   * ΔE 2000 à clarté égale (L* mesuré remplacé par celui du catalogue) : la teinte et la saturation seules. La clarté
+   * dépend de la lumière de la façade face au blanc choisi (une façade à l'ombre d'un mur blanc éclairé paraît plus
+   * sombre) ; la teinte, beaucoup moins.
+   */
+  deltaEChromatique: number | null;
   /** Mesuré − catalogue, en Lab et en saturation C*. */
   derive: Derive | null;
   texture: { mesuree: number | null; attendue: ClasseTexture; perdue: boolean };
@@ -106,17 +120,19 @@ export type MesureRendu = {
   largeur: number;
   hauteur: number;
   recadre: boolean;
+  /** Proportions de l'avant et du rendu : identiques, rendu étiré (défaut) ou recadré au centre. */
+  proportions: "identiques" | "etire" | "recadre";
   masque: { part: number; composantes: number; seuil: number; douteux: boolean; raisons: string[] };
   balance: Balance;
   surfaces: SurfaceMesuree[];
   composantes: ComposanteMesuree[];
-  respect: { contoursHorsMasque: number; contoursGlobal: number; partHorsZones: number | null; partMasque: number; partHorsDemande: number };
+  respect: { contoursHorsMasque: number; contoursGlobal: number; partHorsZones: number | null; partMasque: number; partHorsDemande: number; /** Gains par canal (lumière linéaire) de l'avant vers le rendu, hors masque : 1 = pièce non rééclairée. */ exposition: Rgb };
   dureeMs: number;
   /** Seulement avec `garderMasque` : le masque flou (0-255) et, par pixel, l'indice de la surface (−1 : rien, −2 : hors demande). */
   detail?: { flou: Uint8Array; surface: Int16Array };
 };
 
-export type OptionsMesure = { seuil?: number; garderMasque?: boolean };
+export type OptionsMesure = { seuil?: number; garderMasque?: boolean; /** Proportions différentes : étirer le rendu (défaut, comme gpt-image-1 sur le jeu réel) ou le recadrer au centre. */ ajustement?: "fill" | "cover" };
 
 /* ── Petits outils d'image (masques binaires 0/1, largeur × hauteur) ── */
 
@@ -260,6 +276,55 @@ function difference(x: ImageLab, y: ImageLab, n: number): Float32Array {
   return d;
 }
 
+/* ── L'exposition globale du rendu ── */
+
+const LINEAIRE = Float64Array.from({ length: 256 }, (_, c) => versLineaire(c));
+const PAS_LOG = 0.005;
+const BORNE_LOG = 2;
+
+/**
+ * Les gains par canal (lumière linéaire) qui ramènent l'avant à l'exposition et à la dominante du rendu :
+ * gpt-image-1 redessine souvent toute la pièce un peu plus claire ou plus chaude, ce qui, sans cela, met toute l'image
+ * dans le masque. Médiane du log2 du rapport rendu / avant (histogramme au pas de 0,005), sur les pixels ni trop
+ * sombres ni saturés et hors `exclus` (le masque d'une première passe) ; gains bornés à [0,5 ; 2].
+ */
+export function gainsGlobaux(rgbA: Buffer, rgbR: Buffer, n: number, exclus: Uint8Array | null): Rgb {
+  const cases = Math.round((2 * BORNE_LOG) / PAS_LOG) + 1;
+  return [0, 1, 2].map((c) => {
+    const histo = new Uint32Array(cases);
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      if (exclus && exclus[i]) continue;
+      const a = rgbA[3 * i + c];
+      const r = rgbR[3 * i + c];
+      if (a < 20 || a > 250 || r < 5 || r > 250) continue;
+      const l = Math.log2(LINEAIRE[r] / LINEAIRE[a]);
+      histo[Math.max(0, Math.min(cases - 1, Math.round((l + BORNE_LOG) / PAS_LOG)))]++;
+      total++;
+    }
+    if (total < 1000) return 1;
+    let cumul = 0;
+    let k = 0;
+    for (; k < cases; k++) {
+      cumul += histo[k];
+      if (cumul >= total / 2) break;
+    }
+    return Math.max(0.5, Math.min(2, 2 ** (k * PAS_LOG - BORNE_LOG)));
+  }) as Rgb;
+}
+
+/** L'image RGB brute après des gains par canal en lumière linéaire. */
+function appliquerGains(rgb: Buffer, gains: Rgb): Buffer {
+  const tables = gains.map((g) => Uint8Array.from({ length: 256 }, (_, v) => Math.round(versSrgb(LINEAIRE[v] * g))));
+  const sortie = Buffer.alloc(rgb.length);
+  for (let i = 0; i < rgb.length; i += 3) {
+    sortie[i] = tables[0][rgb[i]];
+    sortie[i + 1] = tables[1][rgb[i + 1]];
+    sortie[i + 2] = tables[2][rgb[i + 2]];
+  }
+  return sortie;
+}
+
 /* ── La balance des blancs automatique ── */
 
 /** Le blanc de la scène hors du masque et les gains qui en découlent (règles de `teintes.ts`, voir l'en-tête). */
@@ -269,11 +334,15 @@ export function balanceAutomatique(rgb: Buffer, lab: ImageLab, exclus: Uint8Arra
   for (let i = 0; i < n; i++) {
     if (exclus[i]) continue;
     tous.push(i);
-    if (lab.L[i] >= 60 && lab.a[i] * lab.a[i] + lab.b[i] * lab.b[i] <= 225) candidats.push(i);
+    // Ni brûlé ni presque (reflet, lampe, fenêtre ou voilage en contre-jour : un canal ≥ 245), ni coloré.
+    if (lab.L[i] >= 60 && lab.a[i] * lab.a[i] + lab.b[i] * lab.b[i] <= 225 && rgb[3 * i] < 245 && rgb[3 * i + 1] < 245 && rgb[3 * i + 2] < 245) candidats.push(i);
   }
   const borne = (g: Rgb) => g.map((x) => Math.max(0.25, Math.min(4, x))) as Rgb;
   if (candidats.length >= Math.max(200, 0.003 * n)) {
-    const blanc = blancDeZone(pixelsDe(rgb, candidats));
+    // Le blanc éclairé : les 10 % les plus clairs des candidats (puis le quart le plus lumineux, par `blancDeZone`),
+    // pas la masse des murs et sols clairs à l'ombre.
+    candidats.sort((x, y) => lab.L[y] - lab.L[x]);
+    const blanc = blancDeZone(pixelsDe(rgb, candidats.slice(0, Math.max(200, Math.ceil(candidats.length / 10)))));
     const labBlanc = rgbVersLab(blanc);
     const vrai = labBlanc[0] >= 70 && chroma(labBlanc) <= 10;
     return { blanc: rgbVersHex(blanc), mode: vrai ? "blanc" : "dominante", gains: borne(gainsBlanc(blanc, BLANC_CIBLE, vrai)) };
@@ -308,7 +377,10 @@ function masqueChange(labA: ImageLab, labR: ImageLab, W: number, H: number, seui
   return { masque, nbComposantes: tailles.filter((t) => t > MIN_COMPOSANTE).length, pixels };
 }
 
-/** Le sous-masque des pixels du masque attribués à la référence k (la plus proche : ΔE76, clarté comptée pour moitié). */
+/**
+ * Le sous-masque des pixels du masque attribués à la référence k (la plus proche : ΔE76, clarté comptée pour moitié) ;
+ * k = −1 : les pixels à plus de `DISTANCE_PIXEL_MAX` de toutes les références (un mur, un sol, un plan rééclairés).
+ */
 function sousMasque(lab: ImageLab, masque: Uint8Array, cibles: Lab[], k: number): Uint8Array {
   const sortie = new Uint8Array(masque.length);
   for (let i = 0; i < masque.length; i++) {
@@ -325,7 +397,8 @@ function sousMasque(lab: ImageLab, masque: Uint8Array, cibles: Lab[], k: number)
         meilleure = j;
       }
     }
-    if (meilleure === k) sortie[i] = 1;
+    const loin = dMin > DISTANCE_PIXEL_MAX * DISTANCE_PIXEL_MAX;
+    if (k < 0 ? loin : !loin && meilleure === k) sortie[i] = 1;
   }
   return sortie;
 }
@@ -416,7 +489,9 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
   const echelle = COTE_TRAVAIL / Math.max(wa, ha);
   const W = Math.max(1, Math.round(wa * echelle));
   const H = Math.max(1, Math.round(ha * echelle));
-  const recadre = Math.abs((metaR.width ?? 1) / (metaR.height ?? 1) / (wa / ha) - 1) > 0.02;
+  const autresProportions = Math.abs((metaR.width ?? 1) / (metaR.height ?? 1) / (wa / ha) - 1) > 0.02;
+  const recadre = autresProportions && options.ajustement === "cover";
+  const proportions: MesureRendu["proportions"] = !autresProportions ? "identiques" : recadre ? "recadre" : "etire";
   const [rgbA, rgbR] = await Promise.all([
     sharp(avant).flatten({ background: "#ffffff" }).resize(W, H, { fit: "fill" }).removeAlpha().raw().toBuffer(),
     sharp(rendu).flatten({ background: "#ffffff" }).resize(W, H, { fit: recadre ? "cover" : "fill" }).removeAlpha().raw().toBuffer(),
@@ -426,10 +501,17 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
   const hc = Math.max(1, Math.round((lc * ha) / wa));
   const bords = Promise.all([carteBords(avant, lc, hc), carteBords(rendu, lc, hc)]);
   bords.catch(() => undefined);
-  const [labA, labR] = await Promise.all([labImage(rgbA, W, H), labImage(rgbR, W, H)]);
+  const labR = await labImage(rgbR, W, H);
 
   // 1. Le masque.
-  const { masque, nbComposantes, pixels: pixelsMasque } = masqueChange(labA, labR, W, H, seuil);
+  // L'exposition globale estimée sur toute l'image ; si le premier masque dépasse 30 %, réestimée hors de lui.
+  let exposition = gainsGlobaux(rgbA, rgbR, N, null);
+  let passe = masqueChange(await labImage(appliquerGains(rgbA, exposition), W, H), labR, W, H, seuil);
+  if (passe.pixels > 0.3 * N) {
+    exposition = gainsGlobaux(rgbA, rgbR, N, dilater(passe.masque, W, H, 6));
+    passe = masqueChange(await labImage(appliquerGains(rgbA, exposition), W, H), labR, W, H, seuil);
+  }
+  const { masque, nbComposantes, pixels: pixelsMasque } = passe;
 
   // 2. La balance des blancs, hors du masque (dilaté : pas les bords de la surface).
   const masqueLarge = dilater(masque, W, H, 6);
@@ -442,8 +524,8 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
 
   // Les morceaux : composantes par référence (ou du masque entier s'il y a 0 ou 1 référence), et leur intérieur.
   const morceaux: Morceau[] = [];
-  if (refs.length > 1) for (let k = 0; k < refs.length; k++) morceaux.push(...morceauxDe(sousMasque(labR, masque, labScene, k), W, H, k));
-  else morceaux.push(...morceauxDe(masque, W, H, refs.length ? 0 : -1));
+  if (refs.length > 0) for (let k = -1; k < refs.length; k++) morceaux.push(...morceauxDe(sousMasque(labR, masque, labScene, k), W, H, k));
+  else morceaux.push(...morceauxDe(masque, W, H, -1));
   for (const m of morceaux) {
     const lus = m.interieur.length >= 50 ? m.interieur : m.indices;
     m.mesure = medianeCorrigee([pixelsDe(rgbR, lus, ECHANTILLON_MORCEAU)], balance.gains);
@@ -455,7 +537,7 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
     const meilleur = siens[0]?.deltaE ?? 0;
     for (const m of siens.slice(1)) if ((m.deltaE ?? 0) > Math.max(SEUIL_HORS_DEMANDE, meilleur + ECART_HORS_DEMANDE)) m.horsDemande = true;
   }
-  if (refs.length === 0) for (const m of morceaux) m.horsDemande = true;
+  for (const m of morceaux) if (m.ref < 0) m.horsDemande = true;
 
   // 4. Les surfaces : médiane, ΔE, dérive, texture.
   const I = integrales(labR.L, W, H);
@@ -466,7 +548,7 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
     const indices = siens.flatMap((m) => m.indices);
     for (const i of indices) surfaceDuPixel[i] = k;
     const attendue = r.classe;
-    if (indices.length === 0) return { ref: r.ref, nom: r.nom ?? null, hex: r.hex.toUpperCase(), trouvee: false, mesure: null, brute: null, pixels: 0, part: 0, deltaE: null, derive: null, texture: { mesuree: null, attendue, perdue: false } };
+    if (indices.length === 0) return { ref: r.ref, nom: r.nom ?? null, hex: r.hex.toUpperCase(), trouvee: false, mesure: null, brute: null, pixels: 0, part: 0, deltaE: null, deltaEChromatique: null, derive: null, texture: { mesuree: null, attendue, perdue: false } };
     const interieur = siens.flatMap((m) => m.interieur);
     const lus = interieur.length >= 50 ? interieur : indices;
     const echantillon = pixelsDe(rgbR, lus);
@@ -484,6 +566,7 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
       pixels: indices.length,
       part: arrondi(indices.length / N, 4),
       deltaE: arrondi(deltaE2000(labMesure, cible)),
+      deltaEChromatique: arrondi(deltaE2000([cible[0], labMesure[1], labMesure[2]], cible)),
       derive: { L: arrondi(labMesure[0] - cible[0]), a: arrondi(labMesure[1] - cible[1]), b: arrondi(labMesure[2] - cible[2]), C: arrondi(chroma(labMesure) - chroma(cible)) },
       texture: { mesuree: texture, attendue, perdue: attendue !== "uni" && texture < SEUIL_TEXTURE },
     };
@@ -535,11 +618,12 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
     largeur: W,
     hauteur: H,
     recadre,
+    proportions,
     masque: { part: arrondi(part, 4), composantes: nbComposantes, seuil, douteux: raisons.length > 0, raisons },
     balance: { ...balance, gains: balance.gains.map((g) => arrondi(g, 3)) as Rgb },
     surfaces,
     composantes: morceaux.map((m) => ({ pixels: m.indices.length, part: arrondi(m.indices.length / N, 4), mesure: rgbVersHex(m.mesure), ref: m.ref >= 0 ? refs[m.ref].ref : null, deltaE: m.deltaE === null ? null : arrondi(m.deltaE), horsDemande: m.horsDemande })),
-    respect: { contoursHorsMasque, contoursGlobal, partHorsZones, partMasque: arrondi(part, 4), partHorsDemande: arrondi(pixelsHorsDemande / N, 4) },
+    respect: { contoursHorsMasque, contoursGlobal, partHorsZones, partMasque: arrondi(part, 4), partHorsDemande: arrondi(pixelsHorsDemande / N, 4), exposition: exposition.map((g) => arrondi(g, 3)) as Rgb },
     dureeMs: Date.now() - debut,
     ...(detail ? { detail } : {}),
   };
@@ -563,8 +647,8 @@ export function familleTeinte(hex: string, classe: ClasseTexture): FamilleTeinte
   return lab[0] >= 60 ? "uni clair" : "uni sombre";
 }
 
-export type CasAnalyse = { famille: FamilleTeinte; moteur: string; modele: string; deltaE: number; derive: Derive };
-export type LigneAnalyse = { famille: FamilleTeinte; groupe: string; n: number; deltaEMedian: number; deltaE90: number; derive: Derive };
+export type CasAnalyse = { famille: FamilleTeinte; moteur: string; modele: string; deltaE: number; deltaEChromatique?: number; derive: Derive };
+export type LigneAnalyse = { famille: FamilleTeinte; groupe: string; n: number; deltaEMedian: number; deltaE90: number; /** ΔE à clarté égale, médian. */ chromatiqueMedian: number; partAuDessusDe5: number; derive: Derive };
 
 /** Le centile p (0-100) par interpolation linéaire. */
 export function centile(valeurs: number[], p: number): number {
@@ -580,7 +664,15 @@ export function analyserParFamille(cas: CasAnalyse[]): LigneAnalyse[] {
   const lignes: LigneAnalyse[] = [];
   const ligne = (famille: FamilleTeinte, groupe: string, liste: CasAnalyse[]): LigneAnalyse => {
     const moy = (f: (d: Derive) => number) => arrondi(liste.reduce((s, c) => s + f(c.derive), 0) / liste.length);
-    return { famille, groupe, n: liste.length, deltaEMedian: arrondi(centile(liste.map((c) => c.deltaE), 50)), deltaE90: arrondi(centile(liste.map((c) => c.deltaE), 90)), derive: { L: moy((d) => d.L), a: moy((d) => d.a), b: moy((d) => d.b), C: moy((d) => d.C) } };
+    return {
+      famille,
+      groupe,
+      n: liste.length,
+      deltaEMedian: arrondi(centile(liste.map((c) => c.deltaE), 50)),
+      deltaE90: arrondi(centile(liste.map((c) => c.deltaE), 90)),
+      chromatiqueMedian: arrondi(centile(liste.map((c) => c.deltaEChromatique ?? c.deltaE), 50)),
+      partAuDessusDe5: arrondi(liste.filter((c) => c.deltaE > 5).length / liste.length, 2),
+      derive: { L: moy((d) => d.L), a: moy((d) => d.a), b: moy((d) => d.b), C: moy((d) => d.C) } };
   };
   for (const famille of FAMILLES_TEINTE) {
     const siens = cas.filter((c) => c.famille === famille);

@@ -94,11 +94,26 @@ describe("mesure d'un rendu : masque, ΔE 2000, texture, respect", () => {
     const aire = (FACADE[2] * FACADE[3]) / (W * H);
     assert.ok(Math.abs(s.part - aire) / aire < 0.1, `part ${s.part} contre ${aire}`);
     assert.ok(Math.abs(s.deltaE! - attendu) <= 1, `ΔE ${s.deltaE} contre ${attendu}`);
+    // À clarté égale, il reste l'écart de teinte et de saturation (trop vert) : plus petit, jamais nul.
+    assert.ok(s.deltaEChromatique! > 2 && s.deltaEChromatique! <= s.deltaE!, `clarté égale ${s.deltaEChromatique}`);
     // La dérive a le bon signe : plus clair (L > 0) et plus saturé (C* > 0), plus vert (a < 0).
     assert.ok(s.derive!.L > 0 && s.derive!.C > 0 && s.derive!.a < 0, JSON.stringify(s.derive));
     assert.equal(s.texture.perdue, false);
     assert.ok(m.respect.contoursHorsMasque < 5, `contours hors masque ${m.respect.contoursHorsMasque}`);
     assert.equal(m.respect.partHorsZones, null);
+  });
+
+  test("une pièce rééclairée par le modèle (+15 % partout) : l'exposition est compensée, le masque reste sur la façade", async () => {
+    const plus = (c: Rgb) => c.map((v) => teintes.versSrgb(teintes.versLineaire(v) * 1.15)) as Rgb;
+    // Un mur clair pour que le changement d'exposition, sans compensation, dépasse le seuil partout.
+    const mur: Rgb = [200, 196, 190];
+    const avant = await image(piece(uni([120, 100, 80]), [235, 235, 235], mur));
+    const rendu = await image(piece(uni(hex("#A6B095")), plus([235, 235, 235]), plus(mur)));
+    const m = await mr.mesurerRendu(avant, rendu, [ref("RM30", "#A4A38F")]);
+    assert.equal(m.masque.douteux, false, m.masque.raisons.join(" ; "));
+    for (const g of m.respect.exposition) assert.ok(Math.abs(g - 1.15) < 0.03, `exposition ${m.respect.exposition}`);
+    const aire = (FACADE[2] * FACADE[3]) / (W * H);
+    assert.ok(Math.abs(m.masque.part - aire) / aire < 0.1, `masque ${m.masque.part} contre ${aire}`);
   });
 
   test("un dégradé d'éclairage sur la surface : la médiane reste juste", async () => {
@@ -223,6 +238,7 @@ describe("classes et familles de teinte, analyse d'erreur", () => {
     ]);
     const tous = lignes.find((l) => l.famille === "uni désaturé" && l.groupe === "tous")!;
     assert.deepEqual([tous.n, tous.deltaEMedian, tous.deltaE90, tous.derive.L, tous.derive.C], [3, 4, 5.6, 2, 1]);
+    assert.deepEqual([tous.partAuDessusDe5, tous.chromatiqueMedian], [0.33, 4]);
     assert.equal(lignes.find((l) => l.famille === "uni désaturé" && l.groupe === "moteur V1")!.n, 2);
     assert.equal(lignes.find((l) => l.famille === "uni désaturé" && l.groupe === "modèle inconnu")!.n, 1);
     assert.equal(lignes[0].famille, "uni désaturé");

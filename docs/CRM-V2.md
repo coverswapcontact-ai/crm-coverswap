@@ -145,7 +145,7 @@ cases au pouce, libellés 14 px, zones de 64 px). Composants : `src/components/v
 Aucun badge ailleurs : les leads en retard, les mails à traiter et les échecs de tâches sont des tâches d'Aujourd'hui.
 La recherche globale (`RechercheGlobale.tsx`) : la loupe à droite de la barre du haut, ou ⌘K / Ctrl K ; sur
 téléphone, le champ en tête du menu « Plus ». Elle interroge `GET /api/recherche?q=` (deux caractères au moins ; la
-même fonction `chercherContacts` que l'outil `chercher` du connecteur) et rend « Nom » puis « ville · état » ;
+même fonction `chercherContacts` que l'outil `chercher` du connecteur) et rend « Nom » puis « ville, état » ;
 flèches pour choisir, Entrée ouvre le chemin (`/clients/<id>`, `/leads?lead=`, `/dossiers?dossier=`). Le bandeau de
 rappel de la connexion Google reste monté. La coque garde `RetourAppel`, `HoteEcranSms`, le `Toaster` de la racine,
 le fond et le `main` aux zones sûres : les écrans v1 s'y affichent sans changement en attendant leur écran v2. Le
@@ -248,7 +248,7 @@ sauvegarde), les alertes remises, les archivés, et tout ce qui précède `depui
   redirection vers `/taches` ; `?jours=7` lit une période fixe sans « Tout vu »). Groupes par personne (le client
   réunit ses leads et ses dossiers ; le système en dernier), 5 groupes puis « Voir les N autres », filtres en boutons
   de 44 px (un seul actif ou tous), chaque ligne = phrase + date relative (`lib/v2/dates.ts › dateRelative`, exacte au
-  survol) + lien ; « Tout vu » = l'unique bouton principal ; Valider / Ignorer sur une proposition partent 5 s plus
+  survol) + lien, cinq lignes par groupe puis « Voir les N autres » ; « Tout vu » = l'unique bouton principal, qui répond « Tout est vu. » avec « Annuler » pendant 5 s avant d'écrire, puis « Rien de nouveau depuis … » ; Valider / Ignorer sur une proposition partent 5 s plus
   tard avec « Annuler » (Ignorer = rejet « Inutile », visible ensuite dans À valider › Historique). Le lot A2 importe
   `Journal` en `compact` dans Aujourd'hui.
 - **Tests** : `lib/chronologie/journal.test.ts` (base d'essai, 13 cas), `app/api/journal/route.test.ts`,
@@ -263,12 +263,12 @@ d'autre au-dessus ; le journal passe à droite sur ordinateur (`lg:`), dessous s
 
 | # | Bloc | Contenu | Gestes |
 |---|---|---|---|
-| 1 | **Reprendre** | une ligne, seulement s'il y a quelque chose depuis moins de 48 h : « Reprendre : dossier Nom · objet — il y a 2 h » (lien) ; fermable (la croix mémorise l'instant fermé) | `BandeauReprendre` |
-| 2 | **Maintenant** | `aujourdhui[0]` en grand (`CarteTache`, extraite du corps du mode « Commencer ») : « Maintenant · environ 3 min », le titre (24 px), la raison en phrase, la marche à suivre, **l'unique bouton principal vert** = le geste prêt, puis Fait / Plus tard / Pas à faire en contour (une proposition : Valider en principal, Ignorer à côté) ; balayer à droite = Fait (Relire pour une sensible), à gauche = Plus tard. Sous la carte, en contour : « Commencer · N tâches · durée » (`ModeTaches`, la série plein écran de la v1) et « J'ai 5 / 15 / 30 min » (`GET /api/a-faire/minutes?m=` : le plan remplace la liste, « Rien ne tient » + « Tout voir » sinon) | `useGestesTaches` |
+| 1 | **Reprendre** | une ligne, seulement s'il y a quelque chose depuis moins de 48 h : « Reprendre : dossier Nom, objet — il y a 2 h » (lien ; la rubrique ouverte `?rubrique=` est retenue et rendue dans le lien, correctifs du 07/10) ; fermable (la croix mémorise l'instant fermé) | `BandeauReprendre` |
+| 2 | **Maintenant** | `aujourdhui[0]` en grand (`CarteTache`, extraite du corps du mode « Commencer ») : « Maintenant — environ 3 min », le titre (24 px), la raison en phrase, la marche à suivre, **l'unique bouton principal vert** = le geste prêt, puis Fait / Plus tard / Pas à faire en contour (une proposition : Valider en principal, Ignorer à côté) ; balayer à droite = Fait (Relire pour une sensible), à gauche = Plus tard. Sous la carte, en contour : « Commencer — N tâches, durée » (`ModeTaches`, la série plein écran de la v1) et « J'ai 5 / 15 / 30 min » (`GET /api/a-faire/minutes?m=` : le plan remplace la liste, « Rien ne tient » + « Tout voir » sinon) | `useGestesTaches` |
 | 3 | **Ensuite** | `aujourdhui.slice(1, 6)` en lignes sobres (`LigneTacheV2` : titre, durée · raison, bouton du geste en contour, « … » = les trois réponses ; toucher = la fiche ; balayage conservé), « Voir les N autres » ; « Ajouter une tâche » (`AjoutTache` v1) et « Actualiser » (`POST /api/a-faire/detecter`) | idem |
 | 4 | **En lot** | une ligne par lot : « Tout classer » (ligne + Annuler 5 s, défait ce classement seul) et « Revoir un par un » (série) | `toastAnnulable` |
 | 5 | **Plus tard** | replié ; trois lignes puis « Voir les N autres » | idem |
-| 6 | **Fait aujourd'hui** | replié ; `LigneFaiteV2` (titre, « fait par … à 10:12 » ou la preuve lue par le CRM) | — |
+| 6 | **Fait aujourd'hui** | replié ; `LigneFaiteV2` (titre, « fait par … à 10 h 12 » ou la preuve lue par le CRM, relus par `phraseV2`) ; cinq lignes puis « Voir les N autres » | — |
 | 7 | **Depuis ta dernière visite** | `<Journal compact />` du lot A1 (`parPage` 20, cinq groupes puis « Voir les N autres », « Tout vu » **en contour** ici : le seul bouton vert de l'écran est celui de Maintenant), lien « Tout le journal » | lot A1 |
 
 Vide : « Rien à faire maintenant. » (+ « Demain : N tâches reviennent »), « Ajouter une tâche », le journal reste.
@@ -282,7 +282,7 @@ lisible → lien `tel:` ; une page externe → lien dans un nouvel onglet ; sino
 geste en `principale` (56 px, vert, plein largeur, dans la carte) ou en `ligne` (contour, 44 px, dans Ensuite).
 
 **Chaque geste répond** (`components/v2/taches/toastAnnulable.ts`) : `toastAnnulable(message, annuler, description)`
-= la ligne écrite (« Fait », « Validé », « Plus tard · revient demain 9 h », « Pas à faire · déjà fait hors CRM »,
+= la ligne écrite (« Fait », « Validé », « Plus tard — revient demain 9 h », « Pas à faire — déjà fait hors CRM »,
 « 3 tâches classées ») avec « Annuler » pendant 5 s ; côté serveur l'effet part à 6 s (`DELAI_EFFET_MS`) et
 `POST /api/a-faire/<id>/annuler` le défait encore après. Les messages sont ceux de `lib/v2/aujourdhui.ts › messageReponse`.
 
@@ -324,7 +324,7 @@ même relecture toutes les 30 s et au retour sur l'onglet. Cinq blocs, dans cet 
 
 | # | Bloc | Contenu |
 |---|---|---|
-| 1 | **En-tête de situation** (`EnTeteSituation`, phrases de `lib/v2/situation.ts`, le même format pour tous les écrans v2) | ligne 1 : « Nom · cuisine, salle de bain · Ville », l'étape en mots avec son point de couleur ; ligne 2 : « Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse, devis 2026-041 relu 2 fois » (`mainDe` en phrase, `depuisLisible(mainLe)`, `mainMotif` sauf « Étape « … » », puis ce que dit l'espace : devis relu ≥ 2 fois, signaux actifs) ; ligne 3 : « Relancer · lundi » (`jourRelatif`, « en retard de N jours », « Aucune prochaine action ») et « Modifier » (`ProchaineActionEditeur` v1, sous l'en-tête). Date exacte au survol. |
+| 1 | **En-tête de situation** (`EnTeteSituation`, phrases de `lib/v2/situation.ts`, le même format pour tous les écrans v2) | ligne 1 : « Nom, cuisine, salle de bain, Ville », l'étape en mots avec son point de couleur ; ligne 2 : « Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse, devis 2026-041 relu 2 fois » (`mainDe` en phrase, `depuisLisible(mainLe)`, `mainMotif` sauf « Étape « … » », puis ce que dit l'espace : devis relu ≥ 2 fois, signaux actifs) ; ligne 3 : « Relancer — lundi » (`jourRelatif`, « en retard de N jours », « Aucune prochaine action ») et « Modifier » (`ProchaineActionEditeur` v1, sous l'en-tête). Date exacte au survol. |
 | 2 | **Le bouton principal** (`BoutonGesteDossier`, règle `lib/dossiers/geste-principal.ts`) et **Autres gestes** repliés | l'unique bouton vert (56 px, plein largeur) ; « Autres gestes » = liste de lignes de 44 px : le reste des passages d'étape (suggérés d'abord, « Marquer perdu » en rouge), « Déposer un devis PDF », « Modifier la prochaine action », « Archiver le dossier » (dernier) |
 | 3 | **À faire ici** (`AFaireIci`) | les tâches du dossier (`detail.taches` : Aujourd'hui puis Plus tard), en `LigneTacheV2`, mêmes gestes qu'Aujourd'hui (`useGestesTaches`), cinq lignes puis « Voir les N autres » ; une tâche qui « ouvre le dossier » (rubrique, devis, encaissement) agit ici, jamais dans un second panneau ; rien quand le dossier n'a pas de tâche |
 | 4 | **Ce qui s'est passé ici** (`CeQuiSestPasseIci`) | cinq lignes de `GET /api/chronologie?dossier=&client=` (date relative, exacte au survol, titre, texte, lien), « Voir les N autres » déplie la `Chronologie` v1 en compact (filtres par famille) |
@@ -396,8 +396,9 @@ c'est-à-dire « ce qui m'attend » (`whereAFaire` : la main à moi, ou le clien
 
 | # | Bloc | Contenu |
 |---|---|---|
-| 1 | **Quels dossiers** | les segments **Chez moi · Chez le client · Tous · Archives** (`Segments`, 44 px, un seul actif, aucun compteur) ; à droite « Vue en colonnes » / « Vue en liste » (le kanban de la v1, `VueKanban` tel quel, même préférence `localStorage["dossiers:vue"]` ; la liste par défaut) et « Ouvrir un dossier » (`CreationDossier` v1, préremplie par `?lead=`, `?client=`, `?prospect=`) ; puis la recherche (`ChampRecherche`, 16 / 17 px, `?q=`, `GET /api/dossiers?q=`) et « Plus de filtres » → « Avec un espace client » (`FiltreEspaces` v1 : qui a la main, signaux, étape de l'espace ; `?espace=`, `?etapeEspace=`) |
-| 2 | **La liste** | triée « ce qui m'attend » (`lib/v2/dossiers.ts › trierCeQuiMattend` : les actions datées d'abord, la plus ancienne en tête, donc les retards devant ; puis sans date par dernière activité ; perdus et encaissés en dernier) ; **cinq lignes puis « Voir les N autres »**, puis les pages du serveur en phrase (`PagesV2` : « Page 2 sur 4 · 51 à 100 sur 180 », Page précédente / suivante) ; une ligne (`LigneDossierV2`) = la **barre de couleur** à gauche (vert `action-clair` = chez moi, gris `texte-3` = chez le client, rouge `retard` = facture en retard ou dossier perdu ; `couleurBarre`), les **trois lignes de situation** au format du panneau (`lib/v2/situation.ts › situationDe` : « Nom · cuisine · Ville » + l'étape en mots, « Chez le client depuis vendredi 9 h — devis envoyé… », « Relancer · lundi » ; date exacte au survol), et le **bouton du geste principal** en contour (`BoutonGesteDossier` forme « ligne », règle `gesteDeLaLigne` = `gestePrincipal` sans tâche : le serveur sert désormais `dateChantier`, `nbPhotos` et `clientTelephone` dans le résumé). Toucher la ligne ouvre `PanneauDossierV2` (`?dossier=`, `?rubrique=`) |
+| 1 | **Quels dossiers** | la rangée de segments **Chez moi · Chez le client · Tous · Archives** (`Segments`, 44 px, un seul actif, aucun compteur), seule en haut (correctifs du 07/10) |
+| 2 | **La liste** | triée « ce qui m'attend » (`lib/v2/dossiers.ts › trierCeQuiMattend` : les actions datées d'abord, la plus ancienne en tête, donc les retards devant ; puis sans date par dernière activité ; perdus et encaissés en dernier) ; **cinq lignes puis « Voir les N autres »**, puis les pages du serveur en phrase (`PagesV2` : « Page 2 sur 4, dossiers 51 à 100 sur 180 », Page précédente / suivante) ; une ligne (`LigneDossierV2`) = la **barre de couleur** à gauche (vert `action-clair` = chez moi, gris `texte-3` = chez le client, rouge `retard` = facture en retard ou dossier perdu ; `couleurBarre`), les **trois lignes de situation** au format du panneau (`lib/v2/situation.ts › situationDe` : « Nom, cuisine, Ville » + l'étape en mots, « Chez le client depuis vendredi 9 h — devis envoyé… », « Relancer — lundi » ; date exacte au survol), et le **bouton du geste principal** en contour (`BoutonGesteDossier` forme « ligne », règle `gesteDeLaLigne` = `gestePrincipal` sans tâche : le serveur sert désormais `dateChantier`, `nbPhotos` et `clientTelephone` dans le résumé). Toucher la ligne ouvre `PanneauDossierV2` (`?dossier=`, `?rubrique=`) ; la ligne 2 (situation) est en `text-corps` / `corps-tel`, seule la ligne 3 est en `text-petit` |
+| 3 | **Chercher, filtrer, ouvrir** | sous la liste : la recherche (`ChampRecherche`, 16 / 17 px, `?q=`, `GET /api/dossiers?q=`), « Plus de filtres » → « Avec un espace client » (`FiltreEspaces` v1 : qui a la main, signaux, étape de l'espace ; `?espace=`, `?etapeEspace=`), « Vue en colonnes » / « Vue en liste » (le kanban de la v1, `VueKanban` tel quel, même préférence `localStorage["dossiers:vue"]` ; la liste par défaut) et « Ouvrir un dossier » (`CreationDossier` v1, préremplie par `?lead=`, `?client=`, `?prospect=`) |
 
 **Segments** (`lib/v2/dossiers.ts`) : Chez moi = `vue=A_FAIRE` ; Chez le client = la page « en cours » filtrée dans
 le navigateur par `coteDe` (= `mainDe` CLIENT) ; Tous = `vue=TOUS` (perdus et en pause compris) ; Archives = le volet
@@ -411,7 +412,7 @@ l'ouverture (`DemandeOuvertureV2.geste`, lu par `PanneauDossierV2` ; la relance 
 « Passer en … » / « Reprendre en … » ouvrent la fenêtre d'étape ; « Publier la simulation » ouvre le panneau sur la
 rubrique Simulations (celle de l'étape). Un seul chemin d'exécution : les modales et feuilles du panneau.
 
-- **Décisions** : la recherche n'est pas en premier (règle 1) mais sous les segments, dans le même bloc ; la barre verte
+- **Décisions** : une seule chose en haut = la rangée de segments ; la recherche, « Plus de filtres », la vue en colonnes et « Ouvrir un dossier » sont sous les cinq premières lignes (correctifs du 07/10, É7) ; la barre verte
   est `action-clair` (le vert plein reste au bouton principal du panneau) ; « Chez le client » filtre la page de 50
   côté navigateur (pas de nouvelle vue serveur) ; la liste est la vue par défaut sur ordinateur aussi (la v1 ouvrait le
   kanban) ; le tri de la liste v1 (montant, ancienneté) n'est pas repris (le kanban et la v1 restent) ; « Masquer les
@@ -428,14 +429,14 @@ Une seule page v2 pour `/leads` et `/clients` (`components/v2/personnes/Personne
 
 | # | Bloc | Contenu |
 |---|---|---|
-| 1 | **La recherche** | le champ en premier (`?q=`, aussi rempli par la loupe / Ctrl K de la coque : « Tout chercher dans Personnes », ou Entrée sans résultat) ; dès deux caractères, `GET /api/recherche?q=` (la même fonction que l'outil `chercher`) et les résultats **en phrases** (`LigneResultatV2` : le nom, « Dossier · Ville · Devis envoyé ») remplacent les listes ; un contact s'ouvre sur place (`PanneauEntrant`), un client ou un dossier par son chemin |
-| 2 | **Les segments** | **À appeler · À rappeler · Clients · Sans suite · Archivés** (les quatre vues de `listerLeads` et `pageClients`) ; `/clients` ouvre sur Clients, `/leads` sur À appeler (`?liste=appeler|rappeler|sans-suite|archives`) ; changer de segment change l'adresse par `replaceState` sans changer de page (`adresseDuSegment`) ; en contour : « Enchaîner les appels · N » (`ModeAppels` v1, même file que la v1 : `fileDAppels`) et « Ajouter » (un contact à appeler → `NouveauContact` ; un client particulier ou professionnel → `CreationClient`) |
-| 3 | **La liste** | cinq lignes puis « Voir les N autres », puis les pages (`GET /api/leads?vue&page`, `GET /api/clients?page`) ; un lead (`LigneLeadV2`) = le nom, « ville · état en phrase » (`etatLead` : « attend un appel depuis 12 min », « à rappeler demain 9 h », « à rappeler depuis hier 18 h », « appelé il y a 3 h », « 2 tentatives sans réponse », « a un dossier », « sans suite », « archivé hier · motif »), et **le bouton « Appeler » vert** (lien `tel:`, début d'appel noté, la fin d'appel revient comme en v1) ; un client (`LigneClientV2`) = le nom, « ville · 2 dossiers, 1 en cours », vers `/clients/<id>` (la `FicheClient` v1, sous la coque v2) |
+| 1 | **La recherche** | le champ en premier (`?q=`, aussi rempli par la loupe / Ctrl K de la coque : « Tout chercher dans Personnes », ou Entrée sans résultat) ; dès deux caractères, `GET /api/recherche?q=` (la même fonction que l'outil `chercher`) et les résultats **en phrases** (`LigneResultatV2` : le nom, un dossier au format de situation de la v2, trois lignes par `situationDeCandidat` ; un contact ou un client : « Contact — Ville, à rappeler demain ») remplacent les listes ; un contact s'ouvre sur place (`PanneauEntrant`), un client ou un dossier par son chemin |
+| 2 | **Les segments** | **À appeler · À rappeler · Clients · Sans suite · Archivés** (les quatre vues de `listerLeads` et `pageClients`) ; `/clients` ouvre sur Clients, `/leads` sur À appeler (`?liste=appeler|rappeler|sans-suite|archives`) ; changer de segment change l'adresse par `replaceState` sans changer de page (`adresseDuSegment`) ; en contour : « Enchaîner les appels » (sans nombre) (`ModeAppels` v1, même file que la v1 : `fileDAppels`) et « Ajouter » (un contact à appeler → `NouveauContact` ; un client particulier ou professionnel → `CreationClient`) |
+| 3 | **La liste** | cinq lignes puis « Voir les N autres », puis les pages (`GET /api/leads?vue&page`, `GET /api/clients?page`) ; un lead (`LigneLeadV2`) = le nom, « ville, état en phrase » (`etatLead` : « attend un appel depuis 12 min », « à rappeler demain 9 h », « à rappeler depuis hier 18 h », « appelé il y a 3 h », « 2 tentatives sans réponse », « a un dossier », « sans suite », « archivé hier, motif »), et **le bouton « Appeler »** (vert sur la première ligne seulement, le contact le plus urgent ; en contour ensuite — correctifs du 07/10 ; lien `tel:`, début d'appel noté, la fin d'appel revient comme en v1) ; un client (`LigneClientV2`) = le nom, « ville, 2 dossiers, 1 en cours », vers `/clients/<id>` (la `FicheClient` v1, sous la coque v2) |
 
 La liste se relit comme en v1 : `leads:modifies`, `appel:termine` (la file passe au suivant), retour sur l'onglet,
 réseau, chaque minute ; hors ligne, la dernière liste connue (une ligne ambre). `NotificationsAppareil` reste monté.
 
-- **Décisions** : les boutons « Appeler » des lignes sont les seuls verts de l'écran (l'énoncé les veut ainsi ;
+- **Décisions** : le seul « Appeler » vert est celui de la première ligne, les autres sont en contour (même motif qu'Aujourd'hui ; correctifs du 07/10 ;
   « Enchaîner » et « Ajouter » en contour) ; un rappel en retard n'est pas en rouge (règle 3 : le rouge est à l'argent ;
   la phrase « à rappeler depuis hier » le dit) ; la date de rappel se change dans la fiche, pas sur la ligne ; la
   sélection multiple (archiver / restaurer plusieurs contacts), le filtre par source, « Sur le site » et la ligne du jour
@@ -453,13 +454,13 @@ L'écran Argent de la v2 (`components/v2/argent/ArgentV2.tsx`, monté par `app/(
 | # | Bloc | Contenu |
 |---|---|---|
 | 1 | **Les trois nombres** | « À encaisser », « Encaissé ce mois (octobre 2026) », « Dépensé ce mois » (`troisNombres`), chacun en 24 px (`text-grand`, la seule taille grande) ; **rouge seulement** sur le reste à encaisser s'il contient une facture en retard. Si la règle de datation des chèques manque : une ligne « Il manque : … » et « Renseigner » (`useParametresExiges` v1) |
-| 2 | **Factures à encaisser** | une ligne par facture : numéro (→ `/dossiers?dossier=`), client, reste dû, « en retard de 12 jours » en rouge (`phraseRetard`), « émise il y a 3 jours · déjà réglé … » ; **« Encaisser »** = le bouton principal (→ `ModalePaiementFacture` v1 : « Paiement enregistré ») ; **« Relancer »** en contour (nouveau geste, `moyenDeRelance`) : avec un numéro, l'écran SMS existant avec un texte court sans nom de client (`texteRelanceFacture`, code `LIBRE`) — copier vaut relance, tracée dans le dossier par `POST /api/sms/copie`, et la ligne « Facture F-… relancée par SMS » ; sans numéro, `/mail?dossier=` ; hors CRM, une ligne qui le dit. Cinq lignes puis « Voir les N autres » |
-| 3 | **Chèques à créditer** | « 450 € · Payeur · n° 123 · reçu il y a 12 jours » (ambre au-delà de 15 jours), « Crédité » et « Rejeté » en contour (`ModaleActionEncaissement` v1) |
+| 2 | **Factures à encaisser** | une ligne par facture : numéro (→ `/dossiers?dossier=`), client, reste dû, « en retard de 12 jours » en rouge (`phraseRetard`), « émise il y a 3 jours, déjà réglé … » ; **« Encaisser »** = le bouton principal, vert sur la première ligne seulement (la facture la plus en retard), en contour ensuite (correctifs du 07/10 ; → `ModalePaiementFacture` v1 : « Paiement enregistré ») ; **« Relancer »** en contour (nouveau geste, `moyenDeRelance`) : avec un numéro, l'écran SMS existant avec un texte court sans nom de client (`texteRelanceFacture`, code `LIBRE`) — copier vaut relance, tracée dans le dossier par `POST /api/sms/copie`, et la ligne « Facture F-… relancée par SMS » ; sans numéro, `/mail?dossier=` ; hors CRM, une ligne qui le dit. Cinq lignes puis « Voir les N autres » |
+| 3 | **Chèques à créditer** | « 450 € — Payeur, n° 123, reçu il y a 12 jours » (ambre au-delà de 15 jours), « Crédité » et « Rejeté » en contour (« Rejeté » en gris `texte-3`, pas en ambre) (`ModaleActionEncaissement` v1) |
 | 4 | **Dépenses** | replié (ouvert par `?section=depenses`, où mène l'ancienne adresse `/depenses`), « Ajouter une dépense » → `/depenses/nouvelle` ; dedans, `ListeDepenses` v1 tel quel |
 | 5 | **Livre des recettes** | le total de l'année, les mois qui ont des recettes (du plus récent, cinq puis « Voir les N autres »), l'année précédente / suivante (`/finances?annee=`), « Exporter le livre (CSV) » (`/api/finances/livre?annee=`) |
 | 6 | **À corriger** | replié, avec son nombre ; chaque point en phrase (cinq détails puis « et N autres ») et « Corriger » |
 
-- **Décisions** : « Encaisser » est vert sur chaque ligne (l'énoncé le veut ainsi) ; le SMS de relance ne passe pas par
+- **Décisions** : « Encaisser » est vert sur la première ligne, en contour ensuite (même motif qu'Aujourd'hui : Maintenant vert, Ensuite contour ; correctifs du 07/10) ; le SMS de relance ne passe pas par
   le catalogue (code `LIBRE`, déjà accepté par la copie ; aucun ajout au moteur SMS) ; un seul ajout au serveur :
   `LigneEncours.telephone` (le numéro du dossier) ; le livre ne liste plus chaque encaissement (les mois, puis le CSV ;
   la v1 et le Bilan les gardent) ; URSSAF, seuils et courbes restent dans le Bilan (onglet Argent), comme en v1.
@@ -499,6 +500,63 @@ le journal et depuis Aujourd'hui.
   `/journal` en v1 → `/taches` dans la page, selon l'interface.
 - **Tests** : `components/v2/ecrans-plus.test.ts` (sources : pages, en-tête, cadres, navigation, route, redirections),
   `lib/v2/plus.test.ts` (phrases).
+
+## Relecture du 07/10 (correctifs après les deux relectures adverses)
+
+Deux relecteurs ont vérifié les lots A0a à A5 (HEAD 2433078, 1 687 tests) : l'un sur le cadre, les régressions et la
+sécurité ; l'autre sur la lisibilité à l'écran (390 × 660 et 1 440). Les décisions ont été prises avant ce lot et ne se
+rediscutent pas. Chaque ligne : l'écart → la correction → la preuve.
+
+### Cadre, régressions, sécurité (relecture 1)
+
+| Écart | Correction | Preuve |
+|---|---|---|
+| Redirection ouverte : `GET /api/interface?retour=%2F%09%2F%2Fevil.com` sortait du CRM (`new URL` avale la tabulation) | `cheminDeRetour` résout le chemin contre une origine factice et refuse tout ce qui en sort ou contient un espace, une tabulation ou un retour à la ligne | `app/api/interface/route.test.ts` (cas de la tabulation, 303 vers `/taches`) |
+| `deconnecterGoogle()` révoquait le jeton chez Google sans la garde d'essai : une copie de prod en local révoquait le jeton de production | garde `essaiLocal()` → `refuserEnvoi("google", "révocation du jeton")`, la ligne locale reste datée | `lib/acces/essai-local.test.ts` (transport piégé jamais touché, ligne datée) ; la liste des canaux gardés est asserte exacte (onze), plus de tautologie |
+| `DossiersPilotage` (v1) importait `PanneauDossierV2` et portait une prop `interface` : code mort depuis A4, la v2 entrait dans le bundle v1 | import, prop et branche retirés ; `DossiersPilotage` est revenu à son état d'après le codemod (`git diff 3ed6b49` vide) ; `dossiers/page.tsx` est l'unique point de choix | `components/v2/dossier/panneau-ecran.test.ts`, `ecrans-a4.test.ts` ; `app/lisibilite.test.ts › frontière v1 / v2` : hors `components/v2`, `lib/v2`, les `page.tsx`, le gabarit `(pilotage)/layout.tsx` et les tests, seuls `app/api/reprendre/route.ts`, `lib/assistant/outils/etat.ts` et `lib/assistant/outils/lister.ts` importent la v2 (liste exacte) |
+| § Arbitrages incomplet : 43 fusions de la `TABLE` du codemod non notées | la table complète « hex d'avant → jeton » (62 valeurs, 23 jetons) ci-dessus | lue depuis `scripts/jetons-codemod.mjs › TABLE` |
+| `completerDetail` : le commentaire disait « les champs du détail priment », le spread faisait l'inverse | `{ ...situation, ...detail }` (`chargerDetail` ne pose ni `espace` ni `taches` : rien ne dépendait de l'inverse) | `lib/a-faire/taches-dossier.test.ts` inchangé et vert |
+| Deux occurrences du prénom dans REPRISE § Mission 22 | « le gérant », « l'utilisateur » | `grep` |
+| Les lignes `Parametre` de `JOURNAL_VU_LE` et `DERNIER_DOSSIER_OUVERT` s'accumulent sans purge | **dette, non corrigée** : une purge supposerait un `delete` sur `Parametre`, que la couche du journal refuse (`SuppressionInterdite`, `lib/journal/injection.ts` ; test « une saisie ne se modifie pas » de `lib/parametres/parametres.test.ts`) ; la règle « rien ne se supprime, tout s'archive » prime. Ordre de grandeur : une ligne par « Tout vu » et une par dossier ouvert et par quart d'heure, soit quelques milliers de lignes par an, lues par index `[cle, valableDu]` | — |
+| `?interface=v2` sans drapeau (ou sous `v1`) est sans effet ; en `v2`, aucun moyen de revoir la v1 | dit dans § Bascule ; **décision** : en `CRM_INTERFACE=v2`, le cookie `crm-interface=v1` (posé par `?interface=v1`, 7 jours) ramène la v1 pour comparer, `?interface=v2` la rend ; le lien « Retour à l'ancienne interface » reste | `lib/interface/choix.test.ts`, `app/api/interface/route.test.ts` ; vérifié en local avec `CRM_INTERFACE=v2` : `?interface=v1` puis `?interface=v2` |
+
+Non corrigés, notés : les `setTimeout(…, 0)` qui contournent `react-hooks/set-state-in-effect` (`ArgentV2`, `PersonnesV2`,
+`BandeauReprendre`, `Aujourdhui`, `PanneauDossierV2`, `useGestesTaches`) restent une dette de forme : l'état dérivé ou
+`useSyncExternalStore` sont la forme propre, à reprendre écran par écran.
+
+### Lisibilité à l'écran (relecture 2)
+
+| Écart | Correction | Preuve |
+|---|---|---|
+| É1 (systémique) : `tailwind-merge` prenait `text-corps`, `text-petit`… pour des couleurs et n'en gardait qu'une avec `text-texte` : titres, lignes et champs rendus à 14 px | `lib/utils.ts › cn` = `extendTailwindMerge` avec l'échelle v2 déclarée dans le groupe `font-size` ; `SheetTitle` / `SheetDescription` gardent la taille v2 fournie (la dernière l'emporte, `text-base` / `text-sm` tombent) ; la v1 ne change pas | `app/lisibilite.test.ts` (chaque taille de `components/v2` et `lib/v2` survit à `cn(taille, "text-texte")`) ; mesuré à l'écran : titre du panneau 20 px, situation 17 px à 390, bouton principal 17 px, trois nombres d'Argent 24 px, barre basse 14 px, champs 17 px |
+| É2 : le toast de sonner (`richColors`) en 13 px, contraste faible, « Annuler » 32 px | `app/layout.tsx` : `Toaster theme="dark"` avec les jetons de la charte (`bg-surface`, `text-texte`, `border-trait`, 16 px, bouton d'action `bg-action` / `text-action-texte` en 44 px) ; **décision** : la v1 reçoit le même toast — une sécurité de lisibilité, pas un écran | contraste des couples mesuré par le test des jetons ; `getBoundingClientRect` du bouton ≥ 44 px |
+| É3 : la ligne de réponse du journal se rend en haut, hors de vue après un geste plus bas | `scrollIntoView({ block: "nearest" })` sur la ligne de réponse à chaque réponse | `journal-ecran.test.ts` |
+| É4 : « Tout vu » écrivait tout de suite, sans « Annuler » | il répond « Tout est vu. » avec « Annuler » pendant 5 s (la liste s'efface, revient sur Annuler), puis écrit, puis « Rien de nouveau depuis … » (`dateRelative`) | `journal-ecran.test.ts` |
+| É5, É6 : « Annuler » du journal en `h-9` (36 px) ; le numéro de facture d'Argent, lien de 20 px | `h-9` retiré (44 px par `BOUTON_SECONDAIRE`) ; le lien du numéro en `inline-flex min-h-11 items-center` ; relevé `getBoundingClientRect` de tout `button, a` des sept écrans v2 | mesures à 390 × 660 (voir REPRISE) |
+| É7 : Dossiers commençait par deux rangées d'outils (segments + vue + création, puis recherche + filtres) | en haut la seule rangée de segments ; recherche, « Plus de filtres », vue en colonnes et « Ouvrir un dossier » sous les cinq premières lignes (bloc 3) ; première ligne de dossier visible à y < 120 à 390 × 660 | `ecrans-a4.test.ts` (ordre des trois blocs) ; mesure |
+| É8 : Personnes et Argent, un bouton vert par ligne (cinq verts à l'écran) | **décision** : le vert reste à la première ligne (le contact le plus urgent, la facture la plus en retard), contour ensuite — le motif d'Aujourd'hui (Maintenant vert, Ensuite contour) | `ecrans-a4.test.ts` |
+| É9 : points médians en chaîne dans les phrases (« Nom · cuisine · Ville », « Relancer · lundi », « Page 2 sur 4 · 51 à 100 ») | virgules et tirets partout dans `lib/v2` et `components/v2` (« Nom, salle de bain, Montpellier », « Relancer — lundi », « Commencer — 7 tâches, 16 min », « Page 2 sur 4, dossiers 51 à 100 sur 180 », « 450 € — Payeur, n° 123, reçu hier ») ; les phrases v1 relues par `phraseV2` (É12) perdent aussi leur point médian | `app/lisibilite.test.ts` : aucun « · » hors commentaires dans `lib/v2` et `components/v2` (seule exception : `lib/v2/phrases.ts`, qui le retire) |
+| É10 : un dossier trouvé par la recherche n'avait qu'une phrase courte, pas la situation | `lib/assistant/recherche.ts` : un candidat DOSSIER porte `etape`, `main`, `mainLe`, `mainMotif`, `prochaineAction`, `prochaineActionDate` (ajout de champs) ; `lib/v2/situation.ts › situationDeCandidat` ; `LigneResultatV2` rend les trois lignes. **Dette** : seuls les dossiers portent la situation complète ; une ligne de tâche ou du journal reste « titre + phrase » | `lib/v2/situation.test.ts`, `ecrans-a4.test.ts` |
+| É11 : `prefers-reduced-motion` respecté par `TRANS_V2` seulement (feuilles, modales, sonner bougeaient) | `globals.css` : règle globale `@media (prefers-reduced-motion: reduce)` qui coupe animations et transitions partout ; **décision** : elle s'applique aussi à la v1 (une sécurité d'accessibilité, pas un écran) | `app/lisibilite.test.ts` (globals.css) ; vérifié à l'écran avec l'émulation |
+| É12 : des codes et des dates brutes dans les phrases héritées de la v1 (« NOTE », « 28/09 à 14 h », « à 10:12 ») | `lib/v2/phrases.ts › phraseV2(texte, maintenant)` : dates `jj/mm(/aaaa)( à h h mm | à hh:mm)` en relatif (`jourRelatif` / `dateRelative`), codes en capitales → libellés existants (`LIBELLES_TYPE_EVENEMENT`, `_TYPE_DOCUMENT`, `_TYPE_ECHANGE`, `_ETAPE`, raisons), « 10:12 » → « 10 h 12 », sigles d'usage (SMS, CRM, PDF…) conservés ; `titreV2` pour « Appeler · Nom » → « Appeler — Nom » ; appliqués à `ligneGrise`, `ligneFaite`, titres et raisons des lignes v2, de la carte Maintenant et du journal | `lib/v2/phrases.test.ts` (six tests, vingt-cinq cas) |
+| É13 : listes sans borne (Fait aujourd'hui, lignes d'un groupe du journal, résultats de recherche, Autres gestes) | cinq lignes puis « Voir les N autres » sur chacune (`LIGNES_GROUPE_VISIBLES`, `ENSUITE_VISIBLES`, `LIGNES_VISIBLES`) | tests de sources |
+| d3 : des nombres dans les titres de blocs (« Ensuite · 7 », « Fait aujourd'hui · 3 », « Factures à encaisser · 4 », « À corriger · 2 », « Enchaîner les appels · 5 », « clients 4, argent 0, système 3 ») | retirés ; le seul nombre permis est dans « Voir les N autres » et dans le compteur de la coque ; les totaux utiles d'Argent passent en phrase sous leur liste (« En attente de crédit : … », « Encaissé en 2026 : … ») ; `TitreRepliable` n'a plus de `nombre`. **Gardé** : « À valider — N en attente » dans Plus (une phrase dans un menu, décision A5) | `journal-ecran.test.ts`, lecture |
+| d1 : Reprendre oubliait la rubrique ouverte | `contexteDepuisAdresse` retient `?rubrique=` et le rend dans le lien | `lib/v2/reprendre.test.ts` |
+| d5 : ligne Dossiers, la situation (ligne 2) en 14 px | ligne 2 en `text-corps-tel` / `text-corps` ; seule la ligne 3 reste en `text-petit` | `ecrans-a4.test.ts` ; mesure 17 px à 390 |
+| d6 : « Rejeté » en ambre (un chèque rejeté n'est pas un avertissement) ; résumé de rubrique « 0 devis · 0 facture » | « Rejeté » en gris `texte-3` ; « 0 devis, 0 facture » | `ecrans-a4.test.ts` |
+
+### Laissés à l'utilisateur (non corrigés, à trancher)
+
+- **É14, les écrans v1 coiffés** (Bilan : 10 px et capitales ; Réglages : 12,5 px ; Simulateur ; Site : les fautes
+  « Aucune réalisations », « Aucune avi » ; À valider : deux verts ; Mail : trois compteurs) : une passe de lisibilité v1
+  (hors cadre de la mission : « rien de la v1 n'est modifié ») ou une dérogation nommée dans § Écrans de Plus.
+- **d4, les relectures périodiques** (4,5 s / 20 s, 30 s, 60 s) peuvent changer « Maintenant » pendant la lecture : geler
+  la liste 60 s après une interaction si c'est simple (`useListeTaches`), sinon dette.
+- **d7, les gestes d'étape sans « Annuler »** (passage d'étape, date du chantier, paiement, document : modales v1) :
+  une étape se corrige par un passage en arrière, un paiement par sa correction ; un « Annuler » 5 s supposerait
+  d'ajouter un délai d'effet côté serveur, comme pour les tâches (`DELAI_EFFET_MS`).
+- **d9, l'aperçu de marque de l'espace client** (charte du site, exception nommée du test anti-hex) : reste tel quel
+  tant que la charte du site n'a pas ses jetons.
 
 ## Correspondance v1 → v2
 

@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
+import { essaiLocal, gardeLevee, refuserEnvoi } from "@/lib/acces/essai-local";
 import { cadrerPourGeneration, recadrerRendu, tailleSelonRatio, type TailleSortie } from "./cadrage";
 import { MESSAGES_ECHEC, alerterPanneSimulateur, classerErreurOpenAI, type RaisonEchec } from "@/lib/site/erreurs-generation";
 import { pluriel } from "@/lib/commun/format";
@@ -200,7 +200,7 @@ const generateurEssaiLocal: Generateur = async (entree) => {
   return { ok: false, dureeMs: 0, status: 503, raison: "config", message: `${MESSAGES_ECHEC["service-indisponible"]} (${detail}.)` };
 };
 /** Le générateur en vigueur : celui de l'essai local, sinon celui des essais s'il est posé, sinon le vrai (OpenAI). */
-export const generateurEnVigueur = (): Generateur => (essaiLocal() ? generateurEssaiLocal : (globalEssai[CLE_GENERATEUR] ?? genererRendu));
+export const generateurEnVigueur = (): Generateur => (essaiLocal() && !gardeLevee("openai-images") ? generateurEssaiLocal : (globalEssai[CLE_GENERATEUR] ?? genererRendu));
 
 export async function genererRendu(entree: EntreeGeneration): Promise<ResultatGeneration> {
   const debut = Date.now();

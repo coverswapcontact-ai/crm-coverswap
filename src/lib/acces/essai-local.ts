@@ -22,6 +22,26 @@ export function essaiLocal(): boolean {
   return process.env.CRM_ESSAI_LOCAL === "1";
 }
 
+/**
+ * Mission 23 (L4a) — la seule levée de la garde : la campagne de calibrage (`npm run simulateur:calibrer`, lancée à la
+ * main, `CALIBRAGE_23_PAYANT=1` sur sa ligne de commande) lève la garde pour OpenAI images et vision, dans SON processus
+ * seulement (rien n'est écrit, `.env.local` n'est ni lu ni modifié) ; tous les autres canaux restent coupés. Jamais
+ * appelée par l'application.
+ */
+export type CanalLevable = "openai-images" | "openai-vision";
+const memoireLevees = globalThis as unknown as { __coverswapGardesLevees?: Set<CanalLevable> };
+const levees = () => (memoireLevees.__coverswapGardesLevees ??= new Set());
+
+export function leverGardePourCanaux(canaux: readonly CanalLevable[]): void {
+  for (const c of canaux) levees().add(c);
+}
+export function retablirGarde(): void {
+  levees().clear();
+}
+export function gardeLevee(canal: CanalLevable): boolean {
+  return levees().has(canal);
+}
+
 /** Le message du bandeau et des journaux : une seule formulation partout. */
 export const MESSAGE_ESSAI_LOCAL = "Base d'essai — rien ne part";
 

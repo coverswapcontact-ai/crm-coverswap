@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { essaiLocal, refuserEnvoi } from "@/lib/acces/essai-local";
+import { essaiLocal, gardeLevee, refuserEnvoi } from "@/lib/acces/essai-local";
 import { consommationDuMois } from "@/lib/ia/modele";
 import { lireParametre } from "@/lib/parametres/service";
 import { COUT_ESTIME_VISION_DOLLARS, MODELE_VISION, coutEnDollars } from "@/lib/simulations/prix";
@@ -93,14 +93,14 @@ export async function budgetVisionDisponible(maintenant: Date = new Date()): Pro
 }
 
 /** D'où vient l'appel (compteur du simulateur ventilé par origine) : le site, l'espace du client ou le CRM. */
-export type ContexteVision = { origine?: "SITE" | "CRM" | "ESPACE"; dossierId?: string | null; preparationId?: string | null; signal?: AbortSignal };
+export type ContexteVision = { origine?: "SITE" | "CRM" | "ESPACE"; dossierId?: string | null; preparationId?: string | null; signal?: AbortSignal; /** Mission 23 (L4a) : la phase notée dans GenerationImage à la place de `analyse` / `controle` (campagne de calibrage : `calibrage-23`). */ phase?: string };
 
 async function noter(phase: Phase, usage: string, reponse: ReponseVision | null, dureeMs: number, erreur: string | null, contexte: ContexteVision): Promise<number> {
   const jetons = { texte: reponse?.jetonsEntree ?? 0, image: 0, sortie: reponse?.jetonsSortie ?? 0 };
   const coutDollars = reponse ? coutEnDollars(jetons, MODELE_VISION) : 0;
   try {
     await prisma.generationImage.create({
-      data: { origine: contexte.origine ?? "CRM", phase, modele: MODELE_VISION, statut: erreur ? "ECHEC" : "REUSSI", erreur: erreur?.slice(0, 500) ?? null, dureeMs, echantillons: 0, jetonsTexte: jetons.texte, jetonsImage: 0, jetonsSortie: jetons.sortie, coutDollars: reponse ? coutDollars : null, dossierId: contexte.dossierId ?? null, preparationId: contexte.preparationId ?? null },
+      data: { origine: contexte.origine ?? "CRM", phase: contexte.phase ?? phase, modele: MODELE_VISION, statut: erreur ? "ECHEC" : "REUSSI", erreur: erreur?.slice(0, 500) ?? null, dureeMs, echantillons: 0, jetonsTexte: jetons.texte, jetonsImage: 0, jetonsSortie: jetons.sortie, coutDollars: reponse ? coutDollars : null, dossierId: contexte.dossierId ?? null, preparationId: contexte.preparationId ?? null },
     });
     await prisma.appelIa.create({
       data: { usage, modele: MODELE_VISION, jetonsEntree: jetons.texte, jetonsSortie: jetons.sortie, coutEuros: Math.round(coutDollars * EUROS_PAR_DOLLAR * 10_000) / 10_000, dureeMs, statut: erreur ? "ECHEC" : "REUSSI", erreur: erreur?.slice(0, 1000) ?? null },
@@ -119,7 +119,8 @@ async function noter(phase: Phase, usage: string, reponse: ReponseVision | null,
 export async function appelerVision<T>(phase: Phase, demande: Omit<DemandeVision, "modele">, lire: (brut: unknown) => T | null, contexte: ContexteVision = {}): Promise<ResultatVision<T>> {
   const debut = Date.now();
   // Mission 22 : en essai local, aucun appel payant ; l'appelant continue sans (comme sans clé).
-  if (essaiLocal()) return { ok: false, raison: "cle", message: `${refuserEnvoi("openai-vision", phase).detail} : analyse sautée.`, dureeMs: 0 };
+  // Mission 23 (L4a) : levée pour sa seule commande par la campagne de calibrage (`gardeLevee`), jamais par l'application.
+  if (essaiLocal() && !gardeLevee("openai-vision")) return { ok: false, raison: "cle", message: `${refuserEnvoi("openai-vision", phase).detail} : analyse sautée.`, dureeMs: 0 };
   const fournisseur = globalEssai[CLE_ESSAI] ?? fournisseurOpenAI;
   if (!globalEssai[CLE_ESSAI] && !process.env.OPENAI_API_KEY) return { ok: false, raison: "cle", message: "OPENAI_API_KEY absente : analyse sautée.", dureeMs: 0 };
   const budget = await budgetVisionDisponible();

@@ -77,7 +77,7 @@ export const EN_COURS_PERDUE_MS = 2 * 60_000;
  * vision maintenant (ligne EN_COURS posée avant, résultat écrit après). Une
  * analyse en cours ailleurs (tâche du site) est attendue jusqu'à `attendreMs`.
  */
-export async function obtenirAnalyse(photo: Buffer, pieceId: IdPiece, options: { parcoursId?: string | null; dossierId?: string | null; preparationId?: string | null; origine?: "SITE" | "CRM" | "ESPACE"; signal?: AbortSignal; attendreMs?: number } = {}): Promise<EtatAnalyse> {
+export async function obtenirAnalyse(photo: Buffer, pieceId: IdPiece, options: { parcoursId?: string | null; dossierId?: string | null; preparationId?: string | null; origine?: "SITE" | "CRM" | "ESPACE"; signal?: AbortSignal; attendreMs?: number; /** Mission 23 (L4a) : phase notée dans GenerationImage (calibrage). */ phase?: string } = {}): Promise<EtatAnalyse> {
   const empreinte = empreintePhoto(photo);
   const connue = await prisma.analysePhoto.findFirst({ where: { ...AVEC_ARCHIVES, empreinte } });
   if (connue && !connue.archiveLe) {
@@ -92,7 +92,7 @@ export async function obtenirAnalyse(photo: Buffer, pieceId: IdPiece, options: {
     create: { empreinte, piece: pieceId, parcoursId: options.parcoursId ?? null, statut: "EN_COURS" },
     update: { piece: pieceId, statut: "EN_COURS", raison: null, archiveLe: null, archiveMotif: null, ...(options.parcoursId ? { parcoursId: options.parcoursId } : {}) },
   });
-  const resultat = await analyserPhoto(photo, pieceId, undefined, { dossierId: options.dossierId, preparationId: options.preparationId, origine: options.origine, signal: options.signal });
+  const resultat = await analyserPhoto(photo, pieceId, undefined, { dossierId: options.dossierId, preparationId: options.preparationId, origine: options.origine, signal: options.signal, ...(options.phase ? { phase: options.phase } : {}) });
   if (resultat.ok) {
     await prisma.analysePhoto.update({ where: { empreinte }, data: { statut: "PRETE", json: JSON.stringify(resultat.donnees), raison: null, coutDollars: resultat.coutDollars } });
     return { empreinte, statut: "PRETE", piece: pieceId, analyse: resultat.donnees, raison: null };

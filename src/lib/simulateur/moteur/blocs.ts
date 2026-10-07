@@ -61,6 +61,13 @@ export function blocImages(ctx: ContexteBlocs): string {
     return titre(TITRES.IMAGES, `Image 1 is the photograph of the room. ${liste} of Cover Styl' adhesive decor film, one per material: they show a material, not a scene — never copy their framing, borders or lighting into the result. If the images arrive in another order, recognise them by content: the room is Image 1, the flat samples are the others.`);
   }
   const tuiles = ctx.entree.zones.length;
+  if (ctx.entree.variante === "planche-neutre") {
+    // Mission 23 (L4a) : la planche neutre de la campagne de calibrage ; seule cette phrase change dans le prompt.
+    return titre(
+      TITRES.IMAGES,
+      `Image 1 is the photograph of the room. Image 2 is the labelled sample board: a neutral mid-grey sheet with ${tuiles === 1 ? "one large square sample" : `${tuiles} large square samples`} of Cover Styl' adhesive decor film, each labelled with its letter and the zone it goes on, and a pure white reference square in its top right corner. Read each sample's true colour against that white square and the neutral grey. The board shows materials, not a scene — never copy its grey background, its white square, its labels or any text into the result. If the images arrive in another order, recognise them by content: the room is Image 1, the grey sheet of samples is Image 2.`
+    );
+  }
   return titre(
     TITRES.IMAGES,
     `Image 1 is the photograph of the room. Image 2 is the labelled sample board: a light grey sheet with ${tuiles === 1 ? "one square sample" : `${tuiles} square samples`} of Cover Styl' adhesive decor film, each labelled with its letter and the zone it goes on. The board shows materials, not a scene — never copy its grey background, its labels or any text into the result. If the images arrive in another order, recognise them by content: the room is Image 1, the grey sheet of samples is Image 2.`

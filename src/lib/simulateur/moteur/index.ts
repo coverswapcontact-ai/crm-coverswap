@@ -2,6 +2,7 @@ import { ZONES_MAX, estIdZone, type IdZone } from "../zones";
 import { blocAffectation, blocArtDirection, blocAvoid, blocFinalCheck, blocImages, blocLocked, blocMethode, blocOutput, blocPiece, blocQualitePhoto, blocRealisme, blocRole, type ContexteBlocs, type FilmDistinct } from "./blocs";
 import { directionArtistique } from "./direction-artistique";
 import { BLOCS, type EntreeMoteur, type Etiquette, type NomBloc, type PromptConstruit, type ZoneMoteur } from "./types";
+import { blocCouleurDeplacee, construirePromptRetouche } from "./variantes";
 
 /**
  * L'assembleur du moteur (mission 15, partie 2) : `construirePrompt(entree)`
@@ -10,8 +11,8 @@ import { BLOCS, type EntreeMoteur, type Etiquette, type NomBloc, type PromptCons
  * le CRM (mode API), la bibliothèque ChatGPT et le banc appellent.
  */
 
-export type { AnalysePhoto, EntreeMoteur, Etiquette, FormatImage, ModeMoteur, PromptConstruit, ReferenceMoteur, ZoneMoteur } from "./types";
-export { BLOCS, formatDepuisDimensions } from "./types";
+export type { AnalysePhoto, EntreeMoteur, Etiquette, FormatImage, ModeMoteur, PromptConstruit, ReferenceMoteur, VarianteMoteur, ZoneMoteur } from "./types";
+export { BLOCS, VARIANTES_MOTEUR, estVarianteMoteur, formatDepuisDimensions } from "./types";
 export { directionArtistique } from "./direction-artistique";
 
 const LETTRES: Etiquette[] = ["A", "B", "C", "D"];
@@ -55,7 +56,18 @@ export function construirePrompt(entree: EntreeMoteur): PromptConstruit {
     FINAL_CHECK: blocFinalCheck(ctx),
     OUTPUT: blocOutput(ctx),
   };
-  return { texte: BLOCS.map((b) => blocs[b]).join("\n\n"), blocs, directionArtistique: direction, version: "v2" };
+  // Mission 23 (L4a) : les variantes de la campagne de calibrage ; sans variante (ou `actuel`), le texte d'avant à l'octet près.
+  const variante = entree.variante ?? "actuel";
+  const parties = BLOCS.map((b) => blocs[b]);
+  const texte =
+    variante === "retouche"
+      ? construirePromptRetouche(ctx)
+      : variante === "ordre"
+        ? [blocCouleurDeplacee(ctx, "tete"), ...parties].join("\n\n")
+        : variante === "ordre-fin"
+          ? [...parties, blocCouleurDeplacee(ctx, "fin")].join("\n\n")
+          : parties.join("\n\n");
+  return { texte, blocs, directionArtistique: direction, version: "v2", variante };
 }
 
 /** Vrai si le texte contient un emoji ou un pictogramme (interdit dans un prompt). */

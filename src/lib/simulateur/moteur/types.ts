@@ -54,6 +54,19 @@ export type AnalysePhoto = {
   qualite_photo: { verdict: "bonne" | "floue" | "sombre" | "contre-jour" | "trop-loin"; conseil: string };
 };
 
+/**
+ * Mission 23 (L4a) — les variantes du prompt, pour la campagne de calibrage seulement (jamais un réglage de
+ * production) : `actuel` (défaut, le prompt studio inchangé) ; `retouche` (prompt court en mode édition, teinte en mots,
+ * surfaces nommées une à une, `variantes.ts`) ; `planche-neutre` (vignettes plus grandes sur un gris neutre avec une
+ * mire blanche) ; `ordre` (la consigne de teinte du prompt actuel placée en tête) ; `ordre-fin` (la même, répétée en fin).
+ */
+export const VARIANTES_MOTEUR = ["actuel", "retouche", "planche-neutre", "ordre", "ordre-fin"] as const;
+export type VarianteMoteur = (typeof VARIANTES_MOTEUR)[number];
+
+export function estVarianteMoteur(valeur: unknown): valeur is VarianteMoteur {
+  return typeof valeur === "string" && (VARIANTES_MOTEUR as readonly string[]).includes(valeur);
+}
+
 export type EntreeMoteur = {
   piece: IdPiece;
   zones: ZoneMoteur[];
@@ -62,6 +75,8 @@ export type EntreeMoteur = {
   mode: ModeMoteur;
   /** Défauts relevés par le contrôle de la tentative précédente, rappelés dans FINAL CHECK. */
   defautsPrecedents?: string[];
+  /** Mission 23 (L4a) : la variante de calibrage ; absente ou `actuel` : le prompt studio, à l'octet près. */
+  variante?: VarianteMoteur;
 };
 
 /** Les 12 blocs, dans l'ordre imposé. */
@@ -70,9 +85,12 @@ export type NomBloc = (typeof BLOCS)[number];
 
 export type PromptConstruit = {
   texte: string;
+  /** Les 12 blocs du prompt studio (pour une variante de calibrage, ceux du prompt actuel : `texte` porte la variante). */
   blocs: Record<NomBloc, string>;
   directionArtistique: string;
   version: "v2";
+  /** Mission 23 (L4a) : la variante rendue (`actuel` par défaut). */
+  variante: VarianteMoteur;
 };
 
 /** Un défaut relevé par le contrôle automatique du rendu. */

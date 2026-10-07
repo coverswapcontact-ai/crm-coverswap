@@ -1,5 +1,5 @@
 import { analyseDe, imageEchantillon, referenceObligatoire, type Reference } from "@/lib/simulateur/catalogue";
-import { construirePrompt, etiquettesPour, filmsDistincts } from "@/lib/simulateur/moteur";
+import { construirePrompt, etiquettesPour, filmsDistincts, type VarianteMoteur } from "@/lib/simulateur/moteur";
 import { formatDeLaPhoto } from "@/lib/simulateur/moteur/analyse-photo";
 import { controlerRendu, defautsEnPhrases } from "@/lib/simulateur/moteur/controle-rendu";
 import { construirePlanche } from "@/lib/simulateur/moteur/planche";
@@ -60,6 +60,13 @@ export type EntreePipeline = {
   phase?: string;
   /** Mission 23 (L4a) — la fidélité est mesurée même réglage désactivé : le banc et la campagne de calibrage seulement. */
   mesurerFidelite?: boolean;
+  /**
+   * Mission 23 (L4a) — campagne de calibrage seulement : la phase notée dans `GenerationImage` pour TOUS les appels de ce
+   * rendu (génération, analyse, contrôle : `calibrage-23`, celle que le plafond relit) ; défaut : les phases habituelles.
+   */
+  phaseNotee?: string;
+  /** Mission 23 (L4a) — campagne de calibrage seulement : la variante du prompt (V2) ; défaut `actuel`, le prompt studio. */
+  variante?: VarianteMoteur;
 };
 
 /** Mission 23 (L4a) : les phases des images de catalogue (ambiances, séries), exclues de la correction des teintes. */
@@ -93,18 +100,20 @@ async function echantillonsBruts(zones: ZoneMoteur[]): Promise<Buffer[]> {
 }
 
 /** La planche des zones (une tuile par zone, lettre + zone, référence et nom). */
-export async function plancheDesZones(zones: ZoneMoteur[], sousTitre: string): Promise<Buffer> {
+export async function plancheDesZones(zones: ZoneMoteur[], sousTitre: string, options: { neutre?: boolean } = {}): Promise<Buffer> {
   const tuiles = await Promise.all(
     zones.map(async (z) => ({ etiquette: `${z.etiquette} · ${ZONES_SIMULATEUR[z.zone].libelle}`, ref: z.reference.ref, nom: z.reference.nom, resume: resumerTeinte({ ...z.reference, id: z.reference.ref }, z.reference.couleur ?? null), image: await imageEchantillon(z.reference.ref) }))
   );
-  return construirePlanche(tuiles, sousTitre);
+  return construirePlanche(tuiles, sousTitre, options);
 }
 
 async function genererSansCorrection(entree: EntreePipeline): Promise<SortiePipeline> {
   const generateur = entree.generateur ?? generateurEnVigueur();
   const qualite = entree.qualite ?? qualitePourOrigine(entree.reglages, entree.origine);
   const empreinte = empreintePhoto(entree.photo);
-  const commun = { photo: entree.photo, origine: entree.origine, qualite, dossierId: entree.dossierId, preparationId: entree.preparationId, signal: entree.signal };
+  const commun = { photo: entree.photo, origine: entree.origine, qualite, dossierId: entree.dossierId, preparationId: entree.preparationId, signal: entree.signal, ...(entree.phaseNotee ? { phase: entree.phaseNotee } : {}) };
+  const contexteVision = { dossierId: entree.dossierId, preparationId: entree.preparationId, origine: entree.origine, signal: entree.signal, ...(entree.phaseNotee ? { phase: entree.phaseNotee } : {}) };
+  const variante = entree.variante ?? "actuel";
 
   if (entree.reglages.moteur === "V1") {
     await entree.surEtape?.("rendu");
@@ -120,14 +129,15 @@ async function genererSansCorrection(entree: EntreePipeline): Promise<SortiePipe
 
   // V2 — 1) l'analyse de la photo (réutilisée, attendue si elle est en cours, sinon faite maintenant ; jamais bloquante).
   await entree.surEtape?.("analyse");
-  const etatAnalyse = await obtenirAnalyse(entree.photo, entree.piece, { parcoursId: entree.parcoursId, dossierId: entree.dossierId, preparationId: entree.preparationId, origine: entree.origine, signal: entree.signal });
+  const etatAnalyse = await obtenirAnalyse(entree.photo, entree.piece, { parcoursId: entree.parcoursId, ...contexteVision });
   const analyse = etatAnalyse.analyse;
 
   // 2) Les matières : références, couleurs, planche ou échantillons, format.
   await entree.surEtape?.("matieres");
   const zones = await zonesMoteur(entree.zones);
   const format = (await formatDeLaPhoto(entree.photo)) ?? analyse?.format ?? "paysage";
-  const planche = entree.reglages.planche ? await plancheDesZones(zones, `CoverSwap · ${lirePiece(entree.piece).libelle}`) : null;
+  const neutre = variante === "planche-neutre";
+  const planche = entree.reglages.planche || neutre ? await plancheDesZones(zones, `CoverSwap · ${lirePiece(entree.piece).libelle}`, { neutre }) : null;
   const swatches = planche ? undefined : await echantillonsBruts(zones);
   const mode = planche ? "api-planche" : "api-swatches";
   const zonesControle = zones.map((z) => ({ zone: z.zone, ref: z.reference.ref, nom: z.reference.nom }));
@@ -140,14 +150,14 @@ async function genererSansCorrection(entree: EntreePipeline): Promise<SortiePipe
   let tentatives = 0;
   for (let tentative = 1; tentative <= 2; tentative++) {
     tentatives = tentative;
-    const construit = construirePrompt({ piece: entree.piece, zones, analyse, format, mode, defautsPrecedents });
+    const construit = construirePrompt({ piece: entree.piece, zones, analyse, format, mode, defautsPrecedents, ...(variante !== "actuel" ? { variante } : {}) });
     const resultat = await generateur({ ...commun, prompt: construit.texte, planche, swatches });
     if (!resultat.ok) {
       if (meilleure) break; // la première a réussi : on la garde
       return { ...resultat, moteur: "V2", empreinte, tentatives };
     }
     coutTotal += resultat.coutDollars;
-    const controle = await controlerRendu(resultat.avant ?? entree.photo, resultat.image, zonesControle, { dossierId: entree.dossierId, preparationId: entree.preparationId, origine: entree.origine, signal: entree.signal });
+    const controle = await controlerRendu(resultat.avant ?? entree.photo, resultat.image, zonesControle, contexteVision);
     if (controle.ok) coutTotal += controle.coutDollars;
     const score = controle.ok ? controle.donnees.score : null;
     const defauts = controle.ok ? controle.donnees.defauts : null;

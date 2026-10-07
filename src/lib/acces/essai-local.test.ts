@@ -25,11 +25,13 @@ let erreursGeneration: typeof import("@/lib/site/erreurs-generation");
 let relais: typeof import("@/lib/alertes/relais-ntfy");
 let vision: typeof import("@/lib/simulateur/moteur/vision");
 let generation: typeof import("@/lib/simulations/generation");
+let prisma: typeof import("@/lib/prisma").default;
 
 before(async () => {
   process.env.CRM_ESSAI_LOCAL = "1";
   globalThis.fetch = piege("fetch") as unknown as typeof fetch;
   garde = await import("./essai-local");
+  prisma = (await import("@/lib/prisma")).default;
   garde.oublierEnvoisRefuses();
   [canaux, pushweb, mail, sms, meta, google, stripe, erreursGeneration, relais, vision, generation] = await Promise.all([
     import("@/lib/alertes/canaux"),
@@ -171,9 +173,17 @@ describe("CRM_ESSAI_LOCAL=1 : aucun envoi sortant", () => {
     assert.equal(ambiance.ok, false);
   });
 
-  test("le registre porte une ligne par canal gardé (10 canaux au moins)", () => {
+  test("deconnecterGoogle() : le jeton n'est pas révoqué chez Google (transport jamais touché), la ligne locale est datée", async () => {
+    const connexion = await prisma.connexionGoogle.create({ data: { compte: "essai@exemple.test", jetonChiffre: "chiffre-factice", portees: google.PORTEES_GOOGLE.GMAIL_ENVOYER } });
+    google.definirTransportGoogleEssai(piege("transport Google (révocation)") as unknown as Parameters<typeof google.definirTransportGoogleEssai>[0]);
+    await google.deconnecterGoogle();
+    const relue = await prisma.connexionGoogle.findUniqueOrThrow({ where: { id: connexion.id } });
+    assert.ok(relue.deconnecteLe, "la ligne locale est datée");
+    assert.ok(garde.envoisRefuses().some((ligne) => ligne.canal === "google" && ligne.resume === "révocation du jeton"));
+  });
+
+  test("le registre porte exactement une ligne par canal gardé (onze canaux)", () => {
     const attendus = ["alertes", "pushweb", "mail", "sms", "meta", "google", "stripe", "resend", "relais-ntfy", "openai-vision", "openai-images"];
-    for (const canal of attendus) assert.ok(canauxRefuses().includes(canal), canal);
-    assert.ok(attendus.length >= 8);
+    assert.deepEqual(canauxRefuses().sort(), [...attendus].sort());
   });
 });

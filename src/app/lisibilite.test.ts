@@ -216,3 +216,25 @@ describe(`src/components/v2 (${V2.length} sources) : tailles et capitales de la 
     assert.doesNotMatch("text-[14px] text-[16px]", INTERDITS[1][1]);
   });
 });
+
+/**
+ * Correctifs du 07/10 (relecture 1, 2.1) — la frontière entre la v1 et la v2 : hors `src/components/v2`, `src/lib/v2`,
+ * les `page.tsx`, le gabarit `(pilotage)/layout.tsx` et les tests, seuls les fichiers nommés ici importent quelque chose
+ * de la v2 (routes et outils ajoutés par la mission). Un composant v1 qui importerait la v2 ferait entrer celle-ci dans
+ * son bundle : la liste est exacte, ni plus, ni moins.
+ */
+describe("frontière v1 / v2 : qui importe components/v2 ou lib/v2", () => {
+  const AUTORISES = new Set([
+    "app/api/reprendre/route.ts", // POST /api/reprendre (A2) : la mémoire serveur de « Reprendre »
+    "lib/assistant/outils/etat.ts", // etat_crm (A1) : « Depuis ta dernière visite » en date relative
+    "lib/assistant/outils/lister.ts", // lister JOURNAL (A1) : mêmes phrases que l'écran
+  ]);
+  test("aucun fichier v1 n'importe la v2 ; les exceptions sont exactes", () => {
+    const sources = [...fichiers(join(SRC, "app")), ...fichiers(join(SRC, "components")), ...fichiers(join(SRC, "lib"))].filter((f) => {
+      const n = nom(f);
+      return !n.startsWith("components/v2/") && !n.startsWith("lib/v2/") && !/(^|\/)page\.tsx$/.test(n) && n !== "app/(pilotage)/layout.tsx" && !/\.test\.tsx?$/.test(n);
+    });
+    const importent = sources.filter((f) => /from "@\/(components|lib)\/v2\//.test(lire(f))).map(nom).sort();
+    assert.deepEqual(importent, [...AUTORISES].sort());
+  });
+});

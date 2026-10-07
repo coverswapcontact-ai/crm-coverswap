@@ -15,8 +15,6 @@ import { CreationDossier } from "./CreationDossier";
 import { FiltreEspaces } from "./EspaceColonne";
 import { Legende } from "./Legende";
 import { PanneauDossier, type DemandeOuverture } from "./PanneauDossier";
-import { PanneauDossierV2 } from "@/components/v2/dossier/PanneauDossierV2";
-import type { Interface } from "@/lib/interface/choix";
 import { VueKanban } from "./VueKanban";
 import { type DemandeRaccourci } from "./CarteDossier";
 import { LIBELLES_TRI, SENS_PAR_DEFAUT, VueListe, type CleTri, type Tri } from "./VueListe";
@@ -86,7 +84,6 @@ export default function DossiersPilotage({
   demandeInitiale = null,
   espaceInitial = null,
   archivesInitiales = false,
-  interface: version = "v1",
 }: {
   /** Mission 13 (lot 6) : la première page (50), rendue par le serveur avec l'écran ; le reste se demande page par page. */
   initial: PageDossiers;
@@ -98,8 +95,6 @@ export default function DossiersPilotage({
   espaceInitial?: { filtre: FiltreEspace; etape: EtapeEspace | null } | null;
   /** ?archives=1 : les dossiers archivés ouverts d'emblée. */
   archivesInitiales?: boolean;
-  /** Mission 22 (A3) : le point de choix du panneau — `PanneauDossierV2` dans la coque v2, `PanneauDossier` sinon (par défaut). */
-  interface?: Interface;
 }) {
   const [dossiers, setDossiers] = useState(initial.dossiers);
   const [total, setTotal] = useState(initial.total);
@@ -504,31 +499,17 @@ export default function DossiersPilotage({
         <Pagination total={total} page={page} onPage={(p) => setPageDemandee({ page: p, cle: cleFiltres })} />
       </main>
 
-      {version === "v2" ? (
-        <PanneauDossierV2
-          dossierId={dossierOuvertId}
-          demande={demande && demande.dossierId === dossierOuvertId ? demande.demande : null}
-          maintenant={maintenant}
-          onFermer={() => setDossierOuvertId(null)}
-          onMisAJour={mettreAJour}
-          onArchive={(id) => {
-            setDossiers((liste) => liste.filter((dossier) => dossier.id !== id));
-            setDossierOuvertId(null);
-          }}
-        />
-      ) : (
-        <PanneauDossier
-          dossierId={dossierOuvertId}
-          demande={demande && demande.dossierId === dossierOuvertId ? demande.demande : null}
-          maintenant={maintenant}
-          onFermer={() => setDossierOuvertId(null)}
-          onMisAJour={mettreAJour}
-          onArchive={(id) => {
-            setDossiers((liste) => liste.filter((dossier) => dossier.id !== id));
-            setDossierOuvertId(null);
-          }}
-        />
-      )}
+      <PanneauDossier
+        dossierId={dossierOuvertId}
+        demande={demande && demande.dossierId === dossierOuvertId ? demande.demande : null}
+        maintenant={maintenant}
+        onFermer={() => setDossierOuvertId(null)}
+        onMisAJour={mettreAJour}
+        onArchive={(id) => {
+          setDossiers((liste) => liste.filter((dossier) => dossier.id !== id));
+          setDossierOuvertId(null);
+        }}
+      />
       <DossiersArchives ouverte={archivesOuvertes} onFermer={() => setArchivesOuvertes(false)} onRestaure={() => void rafraichir()} />
 
       <CreationDossier

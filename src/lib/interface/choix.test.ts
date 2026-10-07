@@ -18,9 +18,11 @@ describe("interfaceDemandee (pure)", () => {
     assert.equal(interfaceDemandee({ env: "v1", cookie: "v2" }), "v1");
   });
 
-  test("v2 : la v2 pour tout le monde, même avec un cookie v1", () => {
+  test("v2 : la v2 pour tout le monde ; seule la session qui porte le cookie v1 revient à la v1 (pour comparer)", () => {
     assert.equal(interfaceDemandee({ env: "v2", cookie: undefined }), "v2");
-    assert.equal(interfaceDemandee({ env: "v2", cookie: "v1" }), "v2");
+    assert.equal(interfaceDemandee({ env: "v2", cookie: "v2" }), "v2");
+    assert.equal(interfaceDemandee({ env: "v2", cookie: "autre" }), "v2");
+    assert.equal(interfaceDemandee({ env: "v2", cookie: "v1" }), "v1");
     assert.equal(interfaceDemandee({ env: " V2 ", cookie: null }), "v2");
   });
 

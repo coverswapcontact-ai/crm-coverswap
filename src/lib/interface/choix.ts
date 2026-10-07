@@ -3,7 +3,8 @@
  *
  * Drapeau `CRM_INTERFACE`, lu côté serveur à chaque requête (jamais au build) :
  *  - absent ou `v1` : l'interface actuelle ;
- *  - `v2` : la nouvelle, pour tout le monde ;
+ *  - `v2` : la nouvelle, pour tout le monde — sauf la session qui a ouvert `?interface=v1` (cookie `crm-interface=v1`),
+ *    qui revient à la v1 pour comparer (correctifs du 07/10) ; `?interface=v2` la ramène ;
  *  - `apercu` : la v1 par défaut, la v2 pour la session qui a ouvert `?interface=v2`
  *    (cookie `crm-interface` posé pour 7 jours par `GET /api/interface`, `?interface=v1` pour revenir).
  * Toute autre valeur vaut `v1` : une faute de frappe sur Railway ne change rien en production.
@@ -18,8 +19,9 @@ export const DUREE_COOKIE_S = 7 * 24 * 3600;
 
 export function interfaceDemandee({ env, cookie }: { env: string | undefined | null; cookie: string | undefined | null }): Interface {
   const drapeau = (env ?? "").trim().toLowerCase();
-  if (drapeau === "v2") return "v2";
-  if (drapeau === "apercu") return (cookie ?? "").trim() === "v2" ? "v2" : "v1";
+  const demande = (cookie ?? "").trim();
+  if (drapeau === "v2") return demande === "v1" ? "v1" : "v2";
+  if (drapeau === "apercu") return demande === "v2" ? "v2" : "v1";
   return "v1";
 }
 

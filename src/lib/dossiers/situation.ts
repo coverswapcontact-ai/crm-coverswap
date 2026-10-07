@@ -15,8 +15,8 @@ export async function situationDuDossier(dossierId: string, maintenant: Date = n
   return { espace: espaces.get(dossierId) ?? null, taches };
 }
 
-/** Le détail d'un dossier complété de sa situation ; les champs du détail priment. */
+/** Le détail d'un dossier complété de sa situation ; les champs du détail priment (`chargerDetail` ne pose ni `espace` ni `taches`). */
 export async function completerDetail(detail: DossierDetail, maintenant: Date = new Date()): Promise<DossierDetail> {
   const situation = await situationDuDossier(detail.id, maintenant);
-  return { ...detail, ...situation };
+  return { ...situation, ...detail };
 }

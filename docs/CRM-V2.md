@@ -82,6 +82,39 @@ Couples mesurés par le test (tous ≥ 4,5:1) : `texte`, `texte-2`, `texte-3`, `
   La couleur de la barre du navigateur (`themeColor`) lit `FOND_HEX` de `src/lib/application/charte.ts`, testée égale
   au jeton `fond`.
 
+### Les couleurs d'avant → les jetons (table du codemod, `scripts/jetons-codemod.mjs › TABLE`)
+
+Soixante-deux valeurs à crochets, vingt-trois jetons : dix-neuf valeurs gardent leur teinte (le jeton porte le même
+hex), quarante-trois se fondent dans un jeton voisin. Une valeur se lit avec le préfixe de la classe (`text-`, `bg-`,
+`border-`…) ; une seule dépend du préfixe (#16181D en `text-` est le texte inversé, ailleurs le fond). Les quatre
+dernières lignes gardent une opacité (le codemod ne les remplace que sans opacité déjà posée).
+
+| Jeton | Hex d'avant |
+|---|---|
+| `fond` | #16181D, #0F1115 |
+| `surface` | #1C1F25, #20232A, #23262D, #191B20 |
+| `surface-2` | #22262D, #272B33, #2A2F37, #23272F |
+| `trait` | #2A2D34 |
+| `trait-2` | #3A3E47, #4B5160 |
+| `texte` | #F2F3F5, #E5E7EB |
+| `texte-2` | #D1D5DB, #B4BAC4 |
+| `texte-3` | #9CA3AF, #6B7280, #8B919C, #4B5563 |
+| `texte-inverse` | #0B0D10, #1A1206, #16181D (en `text-` seulement) |
+| `action` | #1D9E75, #178A66 |
+| `action-texte` | #06140F, #0B1612, #0F1A16 |
+| `action-clair` | #5DCAA5, #8FE0C3, #D1FAE5, #9FD9C2, #C9EFE1, #5E8F7B, #6FD6B3 |
+| `action-fond` | #112B22, #143528, #15201C, #1A2420, #15251F |
+| `retard` | #EF4444 |
+| `retard-texte` | #F87171, #FCA5A5 |
+| `attention` | #EF9F27 |
+| `attention-texte` | #F5B454, #FCD9A0, #C9A46A |
+| `info` | #60A5FA, #F472B6, #A78BFA |
+| `info-texte` | #93C5FD, #7AA7FF, #F9A8D4, #C4B5FD, #BFDBFE, #C4A5FF |
+| `action/40` | #2F3B36, #24463A |
+| `attention/40` | #5B3A1E |
+| `attention/15` | #3A2A10 |
+| `attention/10` | #2B2414 |
+
 ### Le codemod
 
 ```
@@ -127,14 +160,17 @@ build :
 | Valeur | Effet |
 |---|---|
 | absente, `v1`, ou autre chose | la v1 pour tout le monde (une faute de frappe ne bascule rien) |
-| `v2` | la v2 pour tout le monde |
+| `v2` | la v2 pour tout le monde ; la session qui porte le cookie `crm-interface=v1` (`?interface=v1`) revient à la v1, pour comparer, et `?interface=v2` la ramène (décision des correctifs du 07/10) |
 | `apercu` | la v1 par défaut ; la v2 pour la session qui porte le cookie `crm-interface=v2` |
 
-Le cookie (`crm-interface`, `sameSite: lax`, chemin `/`, 7 jours) est posé par `GET /api/interface?v=v2&retour=/chemin`
-et effacé par `?v=v1` ; la route redirige ensuite vers `retour` (chemin relatif du CRM seulement, sinon `/taches`).
-Elle n'est pas publique : elle passe par la session, comme les autres `/api`. `?interface=v2` (ou `v1`) sur n'importe
-quelle adresse du CRM fait la même chose : `PriseInterface` (client, monté par les deux gabarits) remplace la page par
-cette route, puis revient à la même adresse sans le paramètre. Le point de choix est le gabarit
+Le cookie (`crm-interface`, `sameSite: lax`, chemin `/`, 7 jours) vaut `v2` ou `v1` ; il est posé par
+`GET /api/interface?v=v2|v1&retour=/chemin`, qui redirige ensuite vers `retour` (un chemin relatif du CRM seulement :
+résolu contre une origine factice, refusé s'il en sort ou s'il contient un espace, une tabulation ou un retour à la
+ligne ; sinon `/taches`). Elle n'est pas publique : elle passe par la session, comme les autres `/api`. `?interface=v2`
+(ou `v1`) sur n'importe quelle adresse du CRM fait la même chose : `PriseInterface` (client, monté par les deux
+gabarits) remplace la page par cette route, puis revient à la même adresse sans le paramètre. Sans drapeau (absent ou
+`v1`), `?interface=v2` est donc sans effet : le cookie est posé, la v1 reste servie — c'est voulu, une session ne
+bascule rien tant que le serveur n'est pas en `apercu` ou en `v2`. Le point de choix est le gabarit
 `src/app/(pilotage)/layout.tsx` ; chaque `page.tsx` choisira son écran de la même façon
 (`const v = await interfaceCourante(); return v === "v2" ? <EcranV2 /> : <EcranV1 />`). Le service worker est passé en
 `v13` : un écran mis en cache sous une coque n'est pas servi sous l'autre.

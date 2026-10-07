@@ -30,6 +30,7 @@ export default async function DossiersPage({
   const etapeEspace = espace && estEtapeEspace(parametres.etapeEspace) ? parametres.etapeEspace : null;
   // Mission 22 (A3, A4) : en v2 (`interfaceCourante()`), l'écran Dossiers v2 (liste « Chez moi » = le filtre « À faire »
   // du serveur, `?q=` respecté) avec le panneau v2 ; la v1 est servie telle quelle, avec les mêmes données qu'avant.
+  // Cette page est l'unique point de choix : `DossiersPilotage` (v1) ne connaît rien de la v2.
   const version = await interfaceCourante();
   const q = version === "v2" && typeof parametres.q === "string" ? parametres.q.slice(0, 120) : "";
   const [dossiers, leadInitial] = await Promise.all([
@@ -53,7 +54,6 @@ export default async function DossiersPage({
 
   return (
     <DossiersPilotage
-      interface={version}
       initial={dossiers}
       leadInitial={leadInitial}
       dossierInitialId={dossier}

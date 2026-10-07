@@ -229,7 +229,10 @@ export async function deconnecterGoogle(): Promise<void> {
   const connexion = await prisma.connexionGoogle.findFirst({ where: { deconnecteLe: null } });
   if (!connexion) return;
   const { configuration } = configurationGoogle();
-  if (configuration) {
+  if (essaiLocal()) {
+    // Base d'essai (copie de prod possible) : le jeton de production n'est jamais révoqué ; la ligne locale est datée.
+    refuserEnvoi("google", "révocation du jeton");
+  } else if (configuration) {
     try {
       const jeton = dechiffrer(connexion.jetonChiffre, configuration.cle);
       await transport()(URL_REVOCATION, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: jeton }) });

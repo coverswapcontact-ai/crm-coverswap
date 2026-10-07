@@ -5482,7 +5482,7 @@ les outils de travail de `/synthese` (exports, mois figés) et de `/finances` (U
 
 # Mission 22 (06/10/2026) — CRM v2 « clair » derrière un drapeau, et les vidéos motion sur le site
 
-Énoncé : message de Lucas du 06/10 (copie dans `~/coverswap-photos/missions/prompt-mission-22.md`). Mandat
+Énoncé : message du gérant du 06/10 (copie dans `~/coverswap-photos/missions/prompt-mission-22.md`). Mandat
 d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant le rapport final (12 lignes au plus).
 
 ## Cadre tenu
@@ -5516,7 +5516,7 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
   `CRM_ESSAI_LOCAL=""` ; le test `mission-18-a6` accepte toute version de sw ≥ v12 ; `aussi: ["/depenses/nouvelle"]`
   (le test de la mission 18 interdit la chaîne `/depenses`). Vérifié en local sur `prisma/essai-v2.db` (base vide) :
   v1 sans cookie, v2 avec, bandeau, menu Plus, Ctrl K ; le `dev.db` du poste a un schéma en retard
-  (`npm run base:pousser` à lancer par Lucas s'il veut ses données locales).
+  (`npm run base:pousser` à lancer par l'utilisateur s'il veut ses données locales).
 - A1 (journal global « Depuis ta dernière visite ») : c8ff889, tests 1 532 → 1 570. `lib/chronologie/journal.ts`
   (`journal`, `depuisDeLaVisite`, `depuisDerniereVisite`, `marquerJournalVu`, `phraseCompteurs` ; 11 sources, bruit groupé,
   borne 30 j, `chronologie.ts` intact), 21 libellés ajoutés à `LIBELLES_TYPE_EVENEMENT`, `@@index([createdAt])` sur

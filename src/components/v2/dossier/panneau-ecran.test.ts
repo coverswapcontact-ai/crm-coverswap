@@ -114,14 +114,16 @@ describe("même contrat que la v1, point de choix, lisibilité", () => {
     assert.match(panneau, /prefers-reduced-motion: reduce/);
   });
 
-  test("le point de choix : dossiers/page.tsx lit interfaceCourante(), DossiersPilotage monte la v2 seulement en v2 (v1 par défaut, inchangée)", () => {
+  test("le point de choix : dossiers/page.tsx lit interfaceCourante() et choisit seul ; DossiersPilotage (v1) ne connaît pas la v2", () => {
     // Mission 22 (A4) : la page lit l'interface d'abord, pour demander au serveur la vue de la v2 (« Chez moi »).
+    // Correctifs du 07/10 : la prop `interface` et la branche v2 de DossiersPilotage (code mort depuis A4) sont retirées.
     assert.match(page, /const version = await interfaceCourante\(\);/);
-    assert.match(page, /<DossiersPilotage\s+interface=\{version\}/);
-    assert.match(pilotage, /interface: version = "v1",/);
-    assert.match(pilotage, /\{version === "v2" \? \(\s*<PanneauDossierV2/);
-    assert.match(pilotage, /\) : \(\s*<PanneauDossier\s/);
+    assert.match(page, /if \(version === "v2"\) \{\s*return \(\s*<DossiersV2/);
+    assert.match(page, /<DossiersPilotage\s+initial=\{dossiers\}/);
+    assert.ok(!pilotage.includes("PanneauDossierV2") && !pilotage.includes("interface"), "DossiersPilotage ne monte que PanneauDossier");
+    assert.match(pilotage, /<PanneauDossier\s+dossierId=\{dossierOuvertId\}/);
     assert.ok(!v1.includes("components/v2") && !v1.includes("lib/v2"), "la v1 n'importe rien de la v2");
+    assert.ok(!pilotage.includes("components/v2") && !pilotage.includes("lib/v2"), "DossiersPilotage n'importe rien de la v2");
     // Le serveur : ajout de champs seulement.
     const route = lire("app/api/dossiers/[id]/route.ts");
     assert.match(route, /completerDetail\(await chargerDetail\(id\)\)/);

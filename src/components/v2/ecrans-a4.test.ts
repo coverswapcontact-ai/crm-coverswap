@@ -177,7 +177,7 @@ describe("lisible dehors, rien ne bouge tout seul, les pages et la v1", () => {
     assert.match(pageDossiers, /const version = await interfaceCourante\(\);/);
     assert.match(pageDossiers, /version === "v2" && !espace \? \{ vue: "A_FAIRE", recherche: q \|\| undefined \} : \{\}/);
     assert.match(pageDossiers, /if \(version === "v2"\) \{\s*return \(\s*<DossiersV2/);
-    assert.match(pageDossiers, /<DossiersPilotage\s+interface=\{version\}/);
+    assert.match(pageDossiers, /<DossiersPilotage\s+initial=\{dossiers\}/);
     assert.match(pageLeads, /if \(v === "v2"\) \{[\s\S]*segmentDeLaListe\(parametres\.liste, "A_APPELER"\)[\s\S]*<PersonnesV2 segmentInitial=\{segment\}/);
     assert.match(pageLeads, /return <EcranLeads initial=\{initial\} vueInitiale=\{vue\}/);
     assert.match(pageClients, /<PersonnesV2 segmentInitial="CLIENTS" leads=\{null\} clients=\{await pageClients\(\{ page: 1 \}\)\}/);

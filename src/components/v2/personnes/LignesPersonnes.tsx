@@ -25,8 +25,9 @@ import { TRANS_V2 } from "../transitions";
 const LIGNE = cn("flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-2 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none", TRANS_V2);
 const NOM = "truncate text-corps-tel font-medium text-texte md:text-corps";
 const SOUS = "line-clamp-2 text-petit leading-snug break-words text-texte-3";
-const APPELER = cn("mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-action text-action-texte hover:bg-action-clair focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none", TRANS_V2);
-const APPELER_CONTOUR = cn("mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-trait-2 bg-surface text-texte hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none", TRANS_V2);
+// A6 : le bouton porte son mot (« Appeler »), pas seulement le pictogramme (règle 4), comme la ligne de Dossiers.
+const APPELER = cn("mr-2 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[8px] bg-action px-4 text-corps font-semibold text-action-texte hover:bg-action-clair focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none", TRANS_V2);
+const APPELER_CONTOUR = cn("mr-2 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[8px] border border-trait-2 bg-surface px-4 text-corps font-medium text-texte hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none", TRANS_V2);
 
 export function LigneLeadV2({ lead, maintenant, principal = false, onOuvrir }: { lead: LigneLead; maintenant: Date; /** La première ligne de la liste : le seul « Appeler » vert. */ principal?: boolean; onOuvrir: (id: string) => void }) {
   const sous = [lead.ville, etatLead(lead, maintenant)].filter(Boolean).join(", ");
@@ -38,7 +39,8 @@ export function LigneLeadV2({ lead, maintenant, principal = false, onOuvrir }: {
       </button>
       {lead.archiveLe ? null : lead.telephoneLien ? (
         <a href={lead.telephoneLien} onClick={() => noterDebutAppel(lead.id, { nom: lead.nom, dossierId: lead.dossierId })} aria-label={`Appeler ${lead.nom}`} title={lead.telephone ?? undefined} className={principal ? APPELER : APPELER_CONTOUR}>
-          <Phone size={20} aria-hidden />
+          <Phone size={18} aria-hidden />
+          Appeler
         </a>
       ) : (
         <span className="mr-2 flex h-11 w-11 shrink-0 items-center justify-center text-texte-3" title="Pas de numéro">

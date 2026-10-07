@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { FILTRES_JOURNAL, LIBELLES_FILTRE_JOURNAL, type EntreeJournal, type FiltreJournal, type ResultatJournal } from "@/lib/chronologie/journal-types";
-import { dateRelative, depuisLisible } from "@/lib/v2/dates";
-import { GROUPES_VISIBLES, basculerFiltre, compteEnMots, filtrer, grouperParPersonne } from "@/lib/v2/journal";
+import { depuisLisible } from "@/lib/v2/dates";
+import { GROUPES_VISIBLES, basculerFiltre, compteEnMots, filtrer, grouperParPersonne, phraseRienDeNouveau } from "@/lib/v2/journal";
 import { DUREE_ANNULATION_MS } from "../taches/toastAnnulable";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
@@ -119,7 +119,7 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
     [retirer]
   );
 
-  /** « Tout vu » : « Tout est vu. » avec « Annuler » pendant 5 s, puis l'écriture, puis « Rien de nouveau depuis … ». */
+  /** « Tout vu » : « Tout est vu. » avec « Annuler » pendant 5 s, puis l'écriture ; l'en-tête passe à « Rien de nouveau depuis … ». */
   const toutVu = useCallback(() => {
     setToutVuEnAttente(true);
     const annuler = () => {
@@ -137,7 +137,8 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
         setDepuis(pose);
         setEntrees([]);
         setToutMontrer(false);
-        setReponse({ texte: `Rien de nouveau depuis ${dateRelative(pose, new Date())}.` });
+        // A6 : la ligne de réponse confirme le geste ; l'en-tête dit « Rien de nouveau depuis … » (pas deux fois la même phrase).
+        setReponse({ texte: "Tout est vu." });
       } catch (erreur) {
         setReponse({ texte: messageErreur(erreur), erreur: true });
       } finally {
@@ -172,7 +173,7 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
         <div className="flex flex-col gap-1">
           <Titre className="text-titre font-semibold text-texte">{titre}</Titre>
           <p className="text-corps-tel text-texte-2 md:text-corps">
-            {total > 0 ? `${depuisLisible(depuis, maintenant).replace(/^depuis/, "Depuis")} : ${compteEnMots(total)}` : `Rien de nouveau depuis ${vuLe ? dateRelative(vuLe, maintenant) : depuisLisible(depuis, maintenant).replace(/^depuis /, "")}.`}
+            {total > 0 ? `${depuisLisible(depuis, maintenant).replace(/^depuis/, "Depuis")} : ${compteEnMots(total)}` : phraseRienDeNouveau(vuLe, depuis, maintenant)}
           </p>
         </div>
         {total > 0 && !toutVuEnAttente ? (

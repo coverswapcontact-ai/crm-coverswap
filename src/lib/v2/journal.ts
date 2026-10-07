@@ -1,4 +1,5 @@
 import type { EntreeJournal, FiltreJournal } from "@/lib/chronologie/journal-types";
+import { dateRelative } from "./dates";
 
 /**
  * Mission 22 (A1) — la logique pure de l'écran « Depuis ta dernière visite » (components/v2/journal), importable par
@@ -75,3 +76,17 @@ export function compteEnMots(total: number): string {
   if (total <= 0) return "rien de nouveau";
   return total === 1 ? "1 chose" : `${total} choses`;
 }
+
+/**
+ * Mission 22 (A6) — la phrase du journal vide, après « Tout vu » : « Rien de nouveau depuis hier 18 h 40. »,
+ * « Rien de nouveau depuis 3 h. », et, juste après le geste, « Rien de nouveau : tout est vu à l'instant. » (jamais
+ * « depuis à l'instant » ni « depuis il y a 3 h »). `vuLe` = le dernier « Tout vu » ; sans lui, le début de la
+ * période lue.
+ */
+export function phraseRienDeNouveau(vuLe: string | Date | null | undefined, depuis: string | Date, maintenant: Date): string {
+  const moment = dateRelative(vuLe ?? depuis, maintenant);
+  if (!moment) return "Rien de nouveau.";
+  if (moment === "à l'instant") return "Rien de nouveau : tout est vu à l'instant.";
+  return `Rien de nouveau depuis ${moment.replace(/^il y a /, "")}.`;
+}
+

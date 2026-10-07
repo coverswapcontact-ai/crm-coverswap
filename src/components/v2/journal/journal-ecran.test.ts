@@ -21,7 +21,9 @@ describe("Journal.tsx : une seule chose en haut, un seul bouton principal, deux 
     assert.equal((ecran.match(/BOUTON_PRINCIPAL\}/g) ?? []).length, 1, "posée une seule fois");
     assert.match(ecran, /envoyerJson<\{ vuLe: string \}>\("\/api\/journal\/vu", "POST"\)/);
     assert.match(ecran, /setEntrees\(\[\]\)/);
-    assert.match(ecran, /Rien de nouveau depuis/);
+    // A6 : la phrase du journal vide vient de lib/v2/journal.ts (jamais « depuis à l'instant »), une seule fois à l'écran.
+    assert.match(ecran, /phraseRienDeNouveau\(vuLe, depuis, maintenant\)/);
+    assert.ok(!/[`"]Rien de nouveau depuis/.test(ecran), "la phrase n'est pas écrite deux fois (en-tête + ligne de réponse)");
   });
 
   test("cinq groupes visibles puis « Voir les N autres » ; les trois filtres Clients · Argent · Système, un seul actif ou tous", () => {

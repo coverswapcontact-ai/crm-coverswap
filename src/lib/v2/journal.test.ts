@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { EntreeJournal } from "@/lib/chronologie/journal-types";
-import { GROUPES_VISIBLES, basculerFiltre, clePersonne, compteEnMots, filtrer, grouperParPersonne } from "./journal";
+import { GROUPES_VISIBLES, basculerFiltre, clePersonne, compteEnMots, filtrer, grouperParPersonne, phraseRienDeNouveau } from "./journal";
 
 /** Mission 22 (A1) — la logique pure de l'écran du journal : groupes par personne, système à part, filtre, compte. */
 function entree(partiel: Partial<EntreeJournal> & Pick<EntreeJournal, "id" | "le">): EntreeJournal {
@@ -53,5 +53,14 @@ describe("filtre et compte", () => {
 
   test("le compte en mots", () => {
     assert.deepEqual([compteEnMots(0), compteEnMots(1), compteEnMots(6)], ["rien de nouveau", "1 chose", "6 choses"]);
+  });
+
+  test("la phrase du journal vide : jamais « depuis à l'instant » ni « depuis il y a 3 h » (A6)", () => {
+    const maintenant = new Date("2026-10-07T10:00:00.000Z"); // 12 h à Paris
+    assert.equal(phraseRienDeNouveau("2026-10-07T09:59:50.000Z", "2026-10-05T10:00:00.000Z", maintenant), "Rien de nouveau : tout est vu à l'instant.");
+    assert.equal(phraseRienDeNouveau("2026-10-07T07:00:00.000Z", "2026-10-05T10:00:00.000Z", maintenant), "Rien de nouveau depuis 3 h.");
+    assert.equal(phraseRienDeNouveau("2026-10-06T16:40:00.000Z", "2026-10-05T10:00:00.000Z", maintenant), "Rien de nouveau depuis hier 18 h 40.");
+    assert.equal(phraseRienDeNouveau(null, "2026-10-05T10:00:00.000Z", maintenant), "Rien de nouveau depuis lundi 12 h.");
+    assert.equal(phraseRienDeNouveau(null, "", maintenant), "Rien de nouveau.");
   });
 });

@@ -6,6 +6,7 @@ import { IMAGES_MAX_PAR_RESULTAT, imagePourResultat, ko } from "../images";
 import { octetsDeLaPhoto, photosDuContact } from "../photos";
 import { cibler } from "./cible";
 import { pluriel } from "@/lib/commun/format";
+import { resumerFidelite } from "@/lib/simulations/fidelite";
 
 /**
  * Voir (mission 10) : les photos d'un dossier ou d'un lead, et les simulations
@@ -68,7 +69,7 @@ export const outilVoirSimulations = definirOutil({
   nom: "voir_simulations",
   titre: "Voir les simulations d'un dossier (avant / après)",
   description:
-    "Rend les simulations d'un dossier comme de vraies images : l'après, et l'avant quand il existe ; pour chacune les teintes posées par zone, la source (site, client, CRM), le statut (brouillon, publiée, masquée), si le client l'a vue, choisie ou commentée, le moteur et le score du contrôle automatique (mission 15). Les 4 plus récentes par défaut (8 au plus) ; « simulation_id » pour une seule ; « avec_prompt » : le texte du prompt donné au modèle et la direction artistique de chaque simulation (pour comparer avec les prompts « studio »).",
+    "Rend les simulations d'un dossier comme de vraies images : l'après, et l'avant quand il existe ; pour chacune les teintes posées par zone, la source (site, client, CRM), le statut (brouillon, publiée, masquée), si le client l'a vue, choisie ou commentée, le moteur et le score du contrôle automatique (mission 15), la fidélité des teintes mesurée (« teinte fidèle à 2,1 » ou « à régénérer », mission 23). Les 4 plus récentes par défaut (8 au plus) ; « simulation_id » pour une seule ; « avec_prompt » : le texte du prompt donné au modèle et la direction artistique de chaque simulation (pour comparer avec les prompts « studio »).",
   niveau: "LECTURE",
   schema: z.object({
     dossierId: z.string().max(40).optional(),
@@ -93,7 +94,7 @@ export const outilVoirSimulations = definirOutil({
     const lignes: string[] = [];
     for (const [i, s] of choisies.entries()) {
       const teintes = s.zones.length ? s.zones.map((z) => `${z.libelle} : ${z.nom} (${z.ref})`).join(", ") : "teintes non renseignées";
-      const etat = [LIBELLES_STATUT[s.statut] ?? s.statut, s.vueLe ? `vue par le client le ${format.jourCourt(s.vueLe)}` : s.statut === "PUBLIEE" ? "pas encore vue par le client" : null, s.choisie ? "CHOISIE par le client" : null, s.commentaire ? `commentaire : « ${s.commentaire} »` : null, s.moteur ? `moteur ${s.moteur}` : null, s.scoreControle !== null ? `contrôle ${s.scoreControle}/10${s.tentatives && s.tentatives > 1 ? ` en ${s.tentatives} essais` : ""}` : null].filter(Boolean).join(" ; ");
+      const etat = [LIBELLES_STATUT[s.statut] ?? s.statut, s.vueLe ? `vue par le client le ${format.jourCourt(s.vueLe)}` : s.statut === "PUBLIEE" ? "pas encore vue par le client" : null, s.choisie ? "CHOISIE par le client" : null, s.commentaire ? `commentaire : « ${s.commentaire} »` : null, s.moteur ? `moteur ${s.moteur}` : null, s.scoreControle !== null ? `contrôle ${s.scoreControle}/10${s.tentatives && s.tentatives > 1 ? ` en ${s.tentatives} essais` : ""}` : null, resumerFidelite(s.fidelite)?.texte ?? null].filter(Boolean).join(" ; ");
       const titre = `Simulation ${i + 1}${s.titre ? ` « ${s.titre} »` : ""} du ${format.jourCourt(s.le)} — ${LIBELLES_SOURCE[s.source] ?? s.source} — ${s.typeLibelle ?? "surface non renseignée"} — ${teintes} — ${etat} [simulation:${s.id}]`;
       lignes.push(titre);
       if (e.avec_prompt) {
@@ -110,7 +111,7 @@ export const outilVoirSimulations = definirOutil({
       }
     }
     const texte = [`${r.ids.nom} : ${pluriel(liste.length, "simulation")}${espace ? "" : " (pas d'espace client ouvert)"} ; ${pluriel(choisies.length, "décrite")}, ${pluriel(images.length, "image jointe", "images jointes")} (après, puis avant quand elle existe).`, ...lignes].join("\n");
-    return { texte, images, donnees: { total: liste.length, simulations: choisies.map((s) => ({ id: s.id, titre: s.titre, source: s.source, statut: s.statut, type: s.typeSurface, zones: s.zones, le: s.le, publieeLe: s.publieeLe, vueLe: s.vueLe, choisie: s.choisie, commentaire: s.commentaire, avant: Boolean(s.avant), moteur: s.moteur, scoreControle: s.scoreControle, tentatives: s.tentatives, ...(e.avec_prompt ? { promptTexte: s.promptTexte, directionArtistique: s.directionArtistique, defautsControle: s.defautsControle } : {}) })) }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`), lien("Simulateur", `/simulateur?dossier=${r.ids.dossierId}`)] };
+    return { texte, images, donnees: { total: liste.length, simulations: choisies.map((s) => ({ id: s.id, titre: s.titre, source: s.source, statut: s.statut, type: s.typeSurface, zones: s.zones, le: s.le, publieeLe: s.publieeLe, vueLe: s.vueLe, choisie: s.choisie, commentaire: s.commentaire, avant: Boolean(s.avant), moteur: s.moteur, scoreControle: s.scoreControle, tentatives: s.tentatives, fidelite: s.fidelite ? { resume: resumerFidelite(s.fidelite)?.texte ?? null, zones: s.fidelite.map((f) => ({ zone: f.zone, ref: f.ref, etat: f.etat, deltaEAvant: f.deltaEAvant, deltaEApres: f.deltaEApres, deltaETeinteAvant: f.deltaETeinteAvant, deltaETeinteApres: f.deltaETeinteApres, ...(f.raison ? { raison: f.raison } : {}) })) } : null, ...(e.avec_prompt ? { promptTexte: s.promptTexte, directionArtistique: s.directionArtistique, defautsControle: s.defautsControle } : {}) })) }, liens: [lien("Dossier", `/dossiers?dossier=${r.ids.dossierId}`), lien("Simulateur", `/simulateur?dossier=${r.ids.dossierId}`)] };
   },
 });
 

@@ -125,10 +125,12 @@ export async function rattacherSimulationsSite(leadId: string, parcoursId: strin
     const imageBeforePath = await deplacerImage(s.imageBeforePath, dossier, "before.jpg");
     // Le rendu garde son type (JPEG depuis la mission 15, PNG avant).
     const imageAfterPath = await deplacerImage(s.imageAfterPath, dossier, `after${path.posix.extname(s.imageAfterPath ?? "") || ".png"}`);
+    // Mission 23 (L3) : le rendu d'origine (correction des teintes) suit le rendu ; son chemin reste sur la SimulationSite.
+    const renduOriginal = s.renduOriginal ? ((await deplacerImage(s.renduOriginal, dossier, `after-original${path.posix.extname(s.renduOriginal) || ".png"}`)) ?? s.renduOriginal) : null;
     await prisma.simulation.update({ where: { id: simulation.id }, data: { imageBeforePath, imageAfterPath } });
     await prisma.simulationSite.update({
       where: { id: s.id },
-      data: { leadId, simulationId: simulation.id, rattacheeLe: new Date(), imageBeforePath: imageBeforePath ? null : s.imageBeforePath, imageAfterPath: imageAfterPath ? null : s.imageAfterPath },
+      data: { leadId, simulationId: simulation.id, rattacheeLe: new Date(), imageBeforePath: imageBeforePath ? null : s.imageBeforePath, imageAfterPath: imageAfterPath ? null : s.imageAfterPath, renduOriginal },
     });
     creees.push(simulation.id);
   }
@@ -141,13 +143,13 @@ export async function purgerSimulationsSite(maintenant: Date = new Date()): Prom
   const perimees = await prisma.simulationSite.findMany({ where: { leadId: null, archiveLe: null, createdAt: { lt: limite } }, take: 200 });
   const base = resolveUploadsDir();
   for (const s of perimees) {
-    for (const chemin of [s.imageBeforePath, s.imageAfterPath]) {
+    for (const chemin of [s.imageBeforePath, s.imageAfterPath, s.renduOriginal]) {
       if (chemin) await fs.rm(path.join(base, chemin), { force: true }).catch(() => undefined);
     }
     await fs.rm(path.join(base, DOSSIER_SITE, s.parcoursId, s.id), { recursive: true, force: true }).catch(() => undefined);
     await prisma.simulationSite.update({
       where: { id: s.id },
-      data: { imageBeforePath: null, imageAfterPath: null, ipOrigine: null, archiveLe: maintenant, archiveMotif: "Sans demande de devis après 30 jours : images effacées" },
+      data: { imageBeforePath: null, imageAfterPath: null, renduOriginal: null, ipOrigine: null, archiveLe: maintenant, archiveMotif: "Sans demande de devis après 30 jours : images effacées" },
     });
   }
   return perimees.length;

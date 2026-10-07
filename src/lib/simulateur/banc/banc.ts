@@ -8,6 +8,7 @@ import { estPhotoApres, idPhoto, lireFichier, lirePhotos } from "@/lib/dossiers/
 import { AVEC_ARCHIVES } from "@/lib/journal/extension";
 import { extensionDe, typeImage } from "@/lib/simulations/generation";
 import { effacerImage } from "@/lib/simulations/images";
+import { ecrireRenduOriginal } from "@/lib/simulations/rendu-original";
 import { genererAvecMoteur, type SortiePipeline } from "@/lib/simulations/pipeline";
 import { COUT_ESTIME_VISION_DOLLARS, coutEstime, type Qualite } from "@/lib/simulations/prix";
 import type { EtapeTravail } from "@/lib/simulations/travaux-lecture";
@@ -452,6 +453,7 @@ export async function executerRenduBanc(renduId: string, signal?: AbortSignal): 
     const absolu = path.join(path.resolve(resolveUploadsDir()), relatif);
     await fs.mkdir(path.dirname(absolu), { recursive: true });
     await fs.writeFile(absolu, resultat.image);
+    const renduOriginal = await ecrireRenduOriginal(relatif, resultat.imageOriginale);
     const dims = await dimensionsImage(resultat.image);
     await prisma.renduBanc.update({
       where: { id: r.id },
@@ -469,6 +471,8 @@ export async function executerRenduBanc(renduId: string, signal?: AbortSignal): 
         dureeMs: Date.now() - demarre,
         promptTexte: resultat.prompt,
         directionArtistique: resultat.directionArtistique,
+        fidelite: resultat.fidelite ? JSON.stringify(resultat.fidelite) : null,
+        renduOriginal,
         termineLe: new Date(),
       },
     });
@@ -490,10 +494,11 @@ export async function executerRenduBanc(renduId: string, signal?: AbortSignal): 
  */
 export async function purgerRendusBanc(maintenant: Date = new Date()): Promise<number> {
   const limite = new Date(maintenant.getTime() - RETENTION_BANC_MS);
-  const perimes = await prisma.renduBanc.findMany({ where: { archiveLe: null, chemin: { not: null }, statut: { in: ["PRET", "ECHEC"] }, createdAt: { lt: limite } }, take: 200, select: { id: true, chemin: true } });
+  const perimes = await prisma.renduBanc.findMany({ where: { archiveLe: null, chemin: { not: null }, statut: { in: ["PRET", "ECHEC"] }, createdAt: { lt: limite } }, take: 200, select: { id: true, chemin: true, renduOriginal: true } });
   for (const r of perimes) {
     await effacerImage(r.chemin);
-    await prisma.renduBanc.update({ where: { id: r.id }, data: { chemin: null, archiveLe: maintenant, archiveMotif: "Rendu du banc de plus de 30 jours : image effacée" } });
+    if (r.renduOriginal) await effacerImage(r.renduOriginal);
+    await prisma.renduBanc.update({ where: { id: r.id }, data: { chemin: null, renduOriginal: null, archiveLe: maintenant, archiveMotif: "Rendu du banc de plus de 30 jours : image effacée" } });
   }
   return perimes.length;
 }

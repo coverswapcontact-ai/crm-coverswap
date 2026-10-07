@@ -19,6 +19,7 @@ import { texteDuCatalogue } from "@/lib/sms/modeles";
 import { estMobileFrancais, prenomDuContact } from "@/lib/sms/texte";
 import { reglagesSimulateur } from "@/lib/simulateur/reglages";
 import { lireZones, surfaceDepuisLibelle, typeSurface, type ZoneTeinte } from "@/lib/simulateur/types-surface";
+import { lireFidelite, type FideliteSurface } from "./fidelite";
 
 /**
  * Les simulations d'un dossier — toutes, d'où qu'elles viennent :
@@ -80,16 +81,16 @@ export async function ecrireImageSimulation(dossierId: string, octets: Buffer, e
 /* ── Simulations faites sur le site ───────────────────────────────── */
 
 /** Ce qu'on relit sur la SimulationSite d'origine : les références, et ce que le moteur a produit (mission 15, partie 2). */
-type OrigineSite = { references: string; moteur: string | null; promptTexte: string | null; directionArtistique: string | null; analyse: string | null; scoreControle: number | null; defautsControle: string | null; tentatives: number | null };
+type OrigineSite = { references: string; moteur: string | null; promptTexte: string | null; directionArtistique: string | null; analyse: string | null; scoreControle: number | null; defautsControle: string | null; tentatives: number | null; fidelite: string | null; renduOriginal: string | null };
 
 /** La simulation d'origine du parcours (`SimulationSite`) d'une simulation du contact, archivée comprise ; null si elle n'existe plus. */
 async function origineDuSite(simulationId: string): Promise<OrigineSite | null> {
-  return prisma.simulationSite.findFirst({ where: { ...AVEC_ARCHIVES, simulationId }, select: { references: true, moteur: true, promptTexte: true, directionArtistique: true, analyse: true, scoreControle: true, defautsControle: true, tentatives: true } });
+  return prisma.simulationSite.findFirst({ where: { ...AVEC_ARCHIVES, simulationId }, select: { references: true, moteur: true, promptTexte: true, directionArtistique: true, analyse: true, scoreControle: true, defautsControle: true, tentatives: true, fidelite: true, renduOriginal: true } });
 }
 
 /** Les traces du moteur d'une simulation du site, telles qu'elles s'écrivent sur la SimulationEspace (vides sans origine). */
 function traceDuSite(origine: OrigineSite | null) {
-  return { moteur: origine?.moteur ?? null, promptTexte: origine?.promptTexte ?? null, directionArtistique: origine?.directionArtistique ?? null, analyse: origine?.analyse ?? null, scoreControle: origine?.scoreControle ?? null, defautsControle: origine?.defautsControle ?? null, tentatives: origine?.tentatives ?? null };
+  return { moteur: origine?.moteur ?? null, promptTexte: origine?.promptTexte ?? null, directionArtistique: origine?.directionArtistique ?? null, analyse: origine?.analyse ?? null, scoreControle: origine?.scoreControle ?? null, defautsControle: origine?.defautsControle ?? null, tentatives: origine?.tentatives ?? null, fidelite: origine?.fidelite ?? null, renduOriginal: origine?.renduOriginal ?? null };
 }
 
 /** Zones et teintes d'une simulation du site, relues sur la simulation d'origine du parcours. */
@@ -234,6 +235,8 @@ export type SimulationVue = {
   sousSeuil: boolean;
   defautsControle: { type: string; detail: string }[];
   tentatives: number | null;
+  /** Mission 23 (L3) : fidélité des teintes par zone (`correction-teintes.ts`), null si elle n'a pas été mesurée. */
+  fidelite: FideliteSurface[] | null;
 };
 
 function lireDefautsControle(json: string | null): { type: string; detail: string }[] {
@@ -272,6 +275,7 @@ function versVue(dossierId: string, s: SimulationEspace, seuilControle: number):
     sousSeuil: typeof s.scoreControle === "number" && s.scoreControle < seuilControle,
     defautsControle: lireDefautsControle(s.defautsControle),
     tentatives: s.tentatives,
+    fidelite: lireFidelite(s.fidelite),
   };
 }
 
@@ -315,6 +319,7 @@ export async function listerSimulationsDossier(dossierId: string): Promise<{ esp
         sousSeuil: typeof trace.scoreControle === "number" && trace.scoreControle < seuil,
         defautsControle: lireDefautsControle(trace.defautsControle),
         tentatives: trace.tentatives,
+        fidelite: lireFidelite(trace.fidelite),
       });
     }
   }

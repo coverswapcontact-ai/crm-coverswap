@@ -122,6 +122,10 @@ model SimulationSite {
   scoreControle       Int? // contrôle automatique du rendu, 0 à 10
   defautsControle     String? // JSON { type, detail }[]
   tentatives          Int? // générations faites pour ce rendu (1 ou 2)
+  // Mission 23 (L3) : fidélité des teintes mesurée (JSON FideliteSurface[], correction-teintes.ts) et rendu d'origine gardé
+  // quand la correction des teintes l'a remplacé (même dossier, suffixe -original).
+  fidelite            String?
+  renduOriginal       String?
   // Site 3.0 (mission 21) : la pièce d'exemple du site (nom de l'avant) quand le rendu n'est pas fait sur une photo du
   // visiteur — l'avant n'est alors jamais une photo du client, et l'espace montre « Ambiance · avant / après ».
   exemple             String?
@@ -1552,6 +1556,10 @@ model SimulationEspace {
   scoreControle       Int?
   defautsControle     String? // JSON { type, detail }[]
   tentatives          Int?
+  // Mission 23 (L3) : fidélité des teintes mesurée (JSON FideliteSurface[], correction-teintes.ts) et rendu d'origine gardé
+  // quand la correction des teintes l'a remplacé (même dossier, suffixe -original).
+  fidelite            String?
+  renduOriginal       String?
   publieeLe         DateTime?
   masqueeLe         DateTime?
   vueLe             DateTime? // première fois que le client l'a vue
@@ -1658,6 +1666,10 @@ model PreparationSimulation {
   scoreControle       Int?
   defautsControle     String? // JSON { type, detail }[]
   tentatives          Int?
+  // Mission 23 (L3) : fidélité des teintes mesurée (JSON FideliteSurface[], correction-teintes.ts) et rendu d'origine gardé
+  // quand la correction des teintes l'a remplacé (même dossier, suffixe -original).
+  fidelite            String?
+  renduOriginal       String?
   archiveLe     DateTime?
   archiveMotif  String?
   ecriture      String?
@@ -1744,6 +1756,10 @@ model RenduBanc {
   score               Int?
   defauts             String? // JSON { type, detail }[]
   tentatives          Int?
+  // Mission 23 (L3) : fidélité des teintes mesurée (JSON FideliteSurface[], correction-teintes.ts) et rendu d'origine gardé
+  // quand la correction des teintes l'a remplacé (même dossier, suffixe -original).
+  fidelite            String?
+  renduOriginal       String?
   coutDollars         Float? // rendu(s) + contrôle(s), réel
   dureeMs             Int?
   promptTexte         String?

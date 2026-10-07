@@ -41,8 +41,14 @@ import { blancDeZone, deltaE2000, gainsBlanc, hexVersRgb, medianeCorrigee, rgbVe
  *    un vrai blanc (L* ≥ 70 et C* ≤ 10) règle dominante ET exposition (ramené à #F2F2F2) ; sinon (mur crème, scène
  *    sombre) la dominante seulement, à sa luminance (`exposition: false`) ; une scène sans aucun neutre clair : pas de
  *    correction (`aucune`). Gains bornés à [0,25 ; 4].
- * 4. TEXTURE : l'écart-type de L* sur des fenêtres de 7 × 7 px dans l'intérieur de la surface, en médiane. Un bois ou
- *    une pierre sous `SEUIL_TEXTURE` (1,2) est « perdue » (devenu aplat). Classe attendue : `classeTexture`.
+ * 4. TEXTURE : l'écart-type de L* sur des fenêtres de 7 × 7 px dans l'intérieur de la surface, en médiane (`mesuree`),
+ *    puis ramené à une clarté de 50 (`relative` = mesurée × 50 / max(L* brut de la surface, 15)) : le fil d'un bois
+ *    foncé ou les veines d'une pierre sombre ont un écart en L* proportionnellement plus petit. Un bois ou une pierre
+ *    dont la texture relative est sous `SEUIL_TEXTURE` (1,0) est « perdue » (devenue aplat). Classe attendue :
+ *    `classeTexture`. Recalé en L3 (07/10) après lecture à pleine taille des surfaces du jeu réel : l'ancien seuil
+ *    absolu (1,2 sur la valeur mesurée) donnait de faux « perdue » sur des noyers et teck foncés au fil bien visible
+ *    (A4, AT06, H5) et sur des marbres noirs veinés (MK14, U50) ; les vrais aplats (pierres claires lissées, pin devenu
+ *    carrelage uni) restent dessous.
  * 5. RESPECT de la pièce : `ecartContours` (cartes de `planches.ts`, 768 px) hors du masque (dilaté) et global ; la part
  *    du masque hors des zones demandées si chaque référence a ses zones, sinon null ; la part du masque dans l'image.
  */
@@ -53,10 +59,11 @@ const RAYON_LISSAGE = 2;
 const RAYON_OUVERTURE = 3;
 const RAYON_FERMETURE = 6;
 export const MIN_COMPOSANTE = 2_500;
-const SIGMA_BORD = 2;
 const EROSION_MESURE = 4;
 const RAYON_TEXTURE = 3;
-export const SEUIL_TEXTURE = 1.2;
+export const SEUIL_TEXTURE = 1.0;
+/** Le bord flou du masque (σ de la gaussienne, à l'échelle de travail) : la planche et la correction (L3). */
+export const SIGMA_BORD = 2;
 export const SEUIL_HORS_DEMANDE = 15;
 /** Au-delà (ΔE76, clarté pour moitié, contre la référence sous la lumière de la scène), un pixel changé n'est à aucune référence. */
 export const DISTANCE_PIXEL_MAX = 25;
@@ -109,7 +116,8 @@ export type SurfaceMesuree = {
   deltaEChromatique: number | null;
   /** Mesuré − catalogue, en Lab et en saturation C*. */
   derive: Derive | null;
-  texture: { mesuree: number | null; attendue: ClasseTexture; perdue: boolean };
+  /** `mesuree` : écart-type local de L* en médiane ; `relative` : ramené à une clarté de 50 (voir l'en-tête). */
+  texture: { mesuree: number | null; relative?: number | null; attendue: ClasseTexture; perdue: boolean };
 };
 
 export type ComposanteMesuree = { pixels: number; part: number; mesure: string; ref: string | null; deltaE: number | null; horsDemande: boolean };
@@ -477,7 +485,10 @@ function horsMasque(bords: Uint8Array, lc: number, hc: number, masque: Uint8Arra
 const sharpModule = async () => (await import("sharp")).default;
 
 /** Mesure un rendu contre sa photo avant (fichiers), pour les références demandées. Voir l'en-tête. */
-export async function mesurerRendu(avant: string, rendu: string, references: ReferenceMesure[], options: OptionsMesure = {}): Promise<MesureRendu> {
+/** Une image : un fichier, ou ses octets (le pipeline corrige un rendu qu'il n'a pas encore écrit). */
+export type SourceImage = string | Buffer;
+
+export async function mesurerRendu(avant: SourceImage, rendu: SourceImage, references: ReferenceMesure[], options: OptionsMesure = {}): Promise<MesureRendu> {
   const debut = Date.now();
   const sharp = await sharpModule();
   const seuil = options.seuil ?? SEUIL_DIFFERENCE;
@@ -499,7 +510,8 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
   const N = W * H;
   const lc = LARGEUR_CONTOURS;
   const hc = Math.max(1, Math.round((lc * ha) / wa));
-  const bords = Promise.all([carteBords(avant, lc, hc), carteBords(rendu, lc, hc)]);
+  // `carteBords` est typé fichier, mais sharp lit aussi des octets (planches.ts n'est pas touché : fins de ligne).
+  const bords = Promise.all([carteBords(avant as string, lc, hc), carteBords(rendu as string, lc, hc)]);
   bords.catch(() => undefined);
   const labR = await labImage(rgbR, W, H);
 
@@ -548,27 +560,30 @@ export async function mesurerRendu(avant: string, rendu: string, references: Ref
     const indices = siens.flatMap((m) => m.indices);
     for (const i of indices) surfaceDuPixel[i] = k;
     const attendue = r.classe;
-    if (indices.length === 0) return { ref: r.ref, nom: r.nom ?? null, hex: r.hex.toUpperCase(), trouvee: false, mesure: null, brute: null, pixels: 0, part: 0, deltaE: null, deltaEChromatique: null, derive: null, texture: { mesuree: null, attendue, perdue: false } };
+    if (indices.length === 0) return { ref: r.ref, nom: r.nom ?? null, hex: r.hex.toUpperCase(), trouvee: false, mesure: null, brute: null, pixels: 0, part: 0, deltaE: null, deltaEChromatique: null, derive: null, texture: { mesuree: null, relative: null, attendue, perdue: false } };
     const interieur = siens.flatMap((m) => m.interieur);
     const lus = interieur.length >= 50 ? interieur : indices;
     const echantillon = pixelsDe(rgbR, lus);
     const mesure = medianeCorrigee([echantillon], balance.gains);
     const labMesure = rgbVersLab(mesure);
     const cible = labCatalogue[k];
-    const texture = arrondi(textureMediane(I, W, H, lus), 2);
+    const brute = medianeCorrigee([echantillon]);
+    const ecartLocal = textureMediane(I, W, H, lus);
+    const texture = arrondi(ecartLocal, 2);
+    const relative = arrondi((ecartLocal * 50) / Math.max(15, rgbVersLab(brute)[0]), 2);
     return {
       ref: r.ref,
       nom: r.nom ?? null,
       hex: r.hex.toUpperCase(),
       trouvee: true,
       mesure: rgbVersHex(mesure),
-      brute: rgbVersHex(medianeCorrigee([echantillon])),
+      brute: rgbVersHex(brute),
       pixels: indices.length,
       part: arrondi(indices.length / N, 4),
       deltaE: arrondi(deltaE2000(labMesure, cible)),
       deltaEChromatique: arrondi(deltaE2000([cible[0], labMesure[1], labMesure[2]], cible)),
       derive: { L: arrondi(labMesure[0] - cible[0]), a: arrondi(labMesure[1] - cible[1]), b: arrondi(labMesure[2] - cible[2]), C: arrondi(chroma(labMesure) - chroma(cible)) },
-      texture: { mesuree: texture, attendue, perdue: attendue !== "uni" && texture < SEUIL_TEXTURE },
+      texture: { mesuree: texture, relative, attendue, perdue: attendue !== "uni" && relative < SEUIL_TEXTURE },
     };
   });
   let pixelsHorsDemande = 0;

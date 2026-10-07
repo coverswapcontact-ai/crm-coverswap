@@ -10,6 +10,8 @@ import { empreintePhoto, obtenirAnalyse } from "@/lib/simulateur/analyses";
 import { qualitePourOrigine, type Moteur, type ReglagesSimulateur } from "@/lib/simulateur/reglages";
 import { resumerTeinte } from "@/lib/simulateur/teintes";
 import { ZONES_SIMULATEUR, piece as lirePiece, type IdPiece, type IdZone } from "@/lib/simulateur/zones";
+import { corrigerSortiePipeline } from "./correction-pipeline";
+import type { FideliteSurface } from "./fidelite";
 import { DELAI_OPENAI_MS, generateurEnVigueur, type Generateur, type ResultatGeneration } from "./generation";
 import type { Qualite } from "./prix";
 import type { EtapeTravail } from "./travaux-lecture";
@@ -57,7 +59,7 @@ type Reussite = Extract<ResultatGeneration, { ok: true }>;
 type Echec = Extract<ResultatGeneration, { ok: false }>;
 
 export type SortiePipeline =
-  | (Reussite & { moteur: Moteur; prompt: string; directionArtistique: string | null; analyse: AnalysePhoto | null; empreinte: string; scoreControle: number | null; defautsControle: DefautRendu[] | null; tentatives: number; coutTotalDollars: number })
+  | (Reussite & { moteur: Moteur; prompt: string; directionArtistique: string | null; analyse: AnalysePhoto | null; empreinte: string; scoreControle: number | null; defautsControle: DefautRendu[] | null; tentatives: number; coutTotalDollars: number; /** Mission 23 (L3) : fidélité des teintes mesurée, et le rendu d'origine quand la correction l'a remplacé. */ fidelite?: FideliteSurface[] | null; imageOriginale?: Buffer | null })
   | (Echec & { moteur: Moteur; empreinte: string; tentatives: number });
 
 /** Une référence du catalogue telle que le moteur la lit, couleur mesurée comprise (cache du CRM, sinon `hex` du site). */
@@ -86,7 +88,7 @@ export async function plancheDesZones(zones: ZoneMoteur[], sousTitre: string): P
   return construirePlanche(tuiles, sousTitre);
 }
 
-export async function genererAvecMoteur(entree: EntreePipeline): Promise<SortiePipeline> {
+async function genererSansCorrection(entree: EntreePipeline): Promise<SortiePipeline> {
   const generateur = entree.generateur ?? generateurEnVigueur();
   const qualite = entree.qualite ?? qualitePourOrigine(entree.reglages, entree.origine);
   const empreinte = empreintePhoto(entree.photo);
@@ -151,4 +153,15 @@ export async function genererAvecMoteur(entree: EntreePipeline): Promise<SortieP
   }
   const { score, defauts, ...reussite } = meilleure!;
   return { ...reussite, moteur: "V2", analyse, empreinte, scoreControle: score, defautsControle: defauts, tentatives, coutTotalDollars: Math.round(coutTotal * 10_000) / 10_000 };
+}
+
+/**
+ * Mission 23 (L3) — la fin du pipeline : la correction des teintes derrière le réglage `correctionTeintes` (non par
+ * défaut : la fidélité est alors seulement mesurée), voir `correction-pipeline.ts`. Une erreur garde le rendu d'origine.
+ */
+export async function genererAvecMoteur(entree: EntreePipeline): Promise<SortiePipeline> {
+  const sortie = await genererSansCorrection(entree);
+  if (!sortie.ok) return sortie;
+  const c = await corrigerSortiePipeline({ avant: sortie.avant ?? entree.photo, image: sortie.image, zones: entree.zones, appliquer: entree.reglages.correctionTeintes === true, origine: entree.origine });
+  return { ...sortie, image: c.image, imageOriginale: c.imageOriginale, fidelite: c.fidelite };
 }

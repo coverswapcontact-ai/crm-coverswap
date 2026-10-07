@@ -13,6 +13,7 @@ import { enregistrerTraitement } from "@/lib/taches/registre";
 import { resolveUploadsDir } from "@/lib/uploads";
 import { effacerImage, enregistrerImageBase64, imageBase64Acceptable } from "./images";
 import { definirGenerateurEssai, extensionDe, generateurEnVigueur, typeImage } from "./generation";
+import { ecrireRenduOriginal } from "./rendu-original";
 import { genererAvecMoteur, type SortiePipeline } from "./pipeline";
 import { notifierTravailPret } from "./prevenir";
 import { attenteEstimeeS, lireSwatchUrls, MESSAGE_INTERROMPUE, MESSAGE_STOCKAGE, type EtapeTravail } from "./travaux-lecture";
@@ -212,6 +213,16 @@ async function terminerAvecRendu(travail: TravailLu, resultat: Reussite, demarre
     console.error("[simulate] stockage du rendu impossible :", erreur);
     await echouer(travail.id, "stockage", MESSAGE_STOCKAGE, null, demarreLe);
     throw erreur;
+  }
+  // Mission 23 (L3) : la fidélité des teintes et, si la correction a remplacé le rendu, l'original à côté (non bloquant).
+  if (resultat.fidelite || resultat.imageOriginale) {
+    try {
+      const ecrite = await prisma.simulationSite.findUnique({ where: { id: simulationSiteId }, select: { imageAfterPath: true } });
+      const renduOriginal = await ecrireRenduOriginal(ecrite?.imageAfterPath, resultat.imageOriginale);
+      await prisma.simulationSite.update({ where: { id: simulationSiteId }, data: { fidelite: resultat.fidelite ? JSON.stringify(resultat.fidelite) : null, renduOriginal } });
+    } catch (erreur) {
+      console.error("[simulate] fidélité des teintes non enregistrée (non bloquant) :", erreur);
+    }
   }
   // La photo du visiteur ne servait qu'à la tâche : la SimulationSite garde l'avant, le fichier du travail est effacé
   // (volume de 500 Mo ; « Réessayer » renvoie la photo depuis le navigateur).

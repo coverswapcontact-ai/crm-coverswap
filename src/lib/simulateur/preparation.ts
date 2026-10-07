@@ -12,6 +12,7 @@ import { photosDuClient } from "@/lib/espace/service";
 import { mettreEnFile } from "@/lib/taches/file";
 import { coutEstime, extensionDe, typeImage } from "@/lib/simulations/generation";
 import { ecrireImageSimulation, lireImage } from "@/lib/simulations/dossier";
+import { ecrireRenduOriginal } from "@/lib/simulations/rendu-original";
 import { genererAvecMoteur, type SortiePipeline } from "@/lib/simulations/pipeline";
 import { tailleSelonRatio } from "@/lib/simulations/cadrage";
 import type { EtapeTravail } from "@/lib/simulations/travaux-lecture";
@@ -284,6 +285,7 @@ function traceDe(resultat: Reussite) {
     scoreControle: resultat.scoreControle,
     defautsControle: resultat.defautsControle ? JSON.stringify(resultat.defautsControle) : null,
     tentatives: resultat.tentatives,
+    fidelite: resultat.fidelite ? JSON.stringify(resultat.fidelite) : null,
   };
 }
 
@@ -313,7 +315,7 @@ async function publierSimulationDuClient(
     const ordre = await prisma.simulationEspace.count({ where: { espaceId: espace.id } });
     const maintenant = new Date();
     const titre = `Votre simulation — ${zones.map((z) => z.nom).join(", ")}`.slice(0, 80);
-    const trace = traceDe(resultat);
+    const trace = { ...traceDe(resultat), renduOriginal: await ecrireRenduOriginal(chemin, resultat.imageOriginale) };
     const teintes = zones.map((z) => `${z.libelle} — ${z.nom} (${z.ref})`).join(" · ");
     const cout = `≈ ${resultat.coutTotalDollars.toFixed(2).replace(".", ",")} $${resultat.scoreControle !== null ? `, contrôle ${resultat.scoreControle}/10${resultat.tentatives > 1 ? ` en ${resultat.tentatives} essais` : ""}` : ""}`;
     const { simulation, suites } = await prisma.$transaction(async (tx) => {
@@ -406,10 +408,10 @@ export async function executerGenerationApi(preparationId: string, signal?: Abor
     return publierSimulationDuClient(p, type, zones, resultat, dossier?.clientNom ?? "Le client", sousSeuil ? { seuil: reglages.seuilControle } : null);
   }
 
-  const trace = traceDe(resultat);
   return avecActeur(ACTEUR_API, async () => {
     const { espace } = await ouvrirEspace(p.dossierId);
     const chemin = await ecrireImageSimulation(p.dossierId, resultat.image, extensionDe(resultat.type ?? typeImage(resultat.image)));
+    const trace = { ...traceDe(resultat), renduOriginal: await ecrireRenduOriginal(chemin, resultat.imageOriginale) };
     const ordre = await prisma.simulationEspace.count({ where: { espaceId: espace.id } });
     const simulation = await prisma.$transaction(async (tx) => {
       const creee = await tx.simulationEspace.create({

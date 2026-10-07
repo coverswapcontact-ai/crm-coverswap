@@ -392,7 +392,7 @@ describe("génération V2 du site : analyse, planche, contrôle, seconde tentati
     const { genererAvecMoteur, BUDGET_SECONDE_TENTATIVE_MS } = await import("@/lib/simulations/pipeline");
     assert.ok(BUDGET_SECONDE_TENTATIVE_MS > 200_000 && BUDGET_SECONDE_TENTATIVE_MS < 300_000, "un rendu (180 s), son contrôle (40 s) et une marge");
     scoresControle = [5, 9];
-    const reglages = { moteur: "V2" as const, planche: true, qualiteSite: "medium" as const, qualiteEspace: "high" as const, seuilControle: 7 };
+    const reglages = { moteur: "V2" as const, planche: true, qualiteSite: "medium" as const, qualiteEspace: "high" as const, seuilControle: 7, correctionTeintes: false };
     const resultat = await genererAvecMoteur({ photo: PHOTO_JPEG, piece: "cuisine", zones: [{ zone: "meubles-hauts", ref: "AB02" }], origine: "SITE", reglages, echeance: Date.now() + 30_000 });
     assert.ok(resultat.ok);
     assert.deepEqual([resultat.ok && resultat.tentatives, resultat.ok && resultat.scoreControle, appelsGenerateur.length], [1, 5, 1], "sous le seuil, mais la première est gardée");

@@ -10,6 +10,7 @@ import { Visionneuse, type ImageVisionneuse } from "@/components/pilotage/Vision
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { jourHeure } from "@/lib/commun/format";
+import { detailFidelite, resumerFidelite, type FideliteSurface } from "@/lib/simulations/fidelite";
 
 /**
  * Les simulations du dossier, d'où qu'elles viennent (site, API, ChatGPT,
@@ -48,6 +49,8 @@ type Simulation = {
   sousSeuil: boolean;
   defautsControle: { type: string; detail: string }[];
   tentatives: number | null;
+  /** Mission 23 (L3) : fidélité des teintes par zone (mesurée, ou après correction), null si non mesurée. */
+  fidelite?: FideliteSurface[] | null;
 };
 type Preparation = { id: string; mode: "CHATGPT" | "API"; statut: string; typeLibelle: string; zones: { etiquette: string; ref: string; nom: string }[]; erreur: string | null; le: string; promptVersion: number | null };
 type Donnees = { espace: { id: string; lien: string | null } | null; simulations: Simulation[]; preparations: Preparation[]; sms: { texte: string | null; raison?: string; dejaPrevenuLe?: string; attente?: string } };
@@ -368,6 +371,11 @@ function Groupe({ titre, aide, action, children }: { titre: string; aide: string
 function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s: Simulation; selection?: boolean; onSelection?: () => void; occupe: string | null; onOuvrir: (quoi: "image" | "avant") => void; children?: React.ReactNode }) {
   const source = SOURCES[s.source];
   const [detail, setDetail] = useState<"" | "direction" | "prompt">("");
+  const fidelite = resumerFidelite(s.fidelite);
+  const detailZone = (z: Zone) => {
+    const f = s.fidelite?.find((x) => x.zone === z.zone && x.ref === z.ref) ?? s.fidelite?.find((x) => x.ref === z.ref);
+    return f ? ` — ${detailFidelite(f)}` : "";
+  };
   return (
     <li className={cn("overflow-hidden rounded-[10px] border-[0.5px] bg-surface", s.choisie ? "border-action" : selection ? "border-action-clair/70" : "border-trait", occupe?.endsWith(s.id) && "opacity-70")}>
       <div className="relative">
@@ -394,9 +402,10 @@ function Vignette({ s, selection, onSelection, occupe, onOuvrir, children }: { s
           {s.coutDollars ? <Pastille>{s.coutDollars.toFixed(2).replace(".", ",")} $</Pastille> : null}
           {s.moteur ? <Pastille>moteur {s.moteur}</Pastille> : null}
           {s.scoreControle !== null ? <Pastille ton={s.sousSeuil ? "ambre" : "vert"}>contrôle {s.scoreControle}/10{s.tentatives && s.tentatives > 1 ? ` · ${s.tentatives} essais` : ""}</Pastille> : null}
+          {fidelite ? <Pastille ton={fidelite.etat === "a_regenerer" ? "ambre" : fidelite.etat === "fidele" ? "vert" : "neutre"}>{fidelite.texte}</Pastille> : null}
           {s.choisie ? <Pastille ton="vert">Choisie</Pastille> : s.vueLe ? <Pastille ton="bleu">Vue</Pastille> : null}
         </div>
-        {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-texte-3">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})`).join(" · ")}</p> : null}
+        {s.zones.length > 0 ? <p className="text-[11.5px] leading-snug text-texte-3">{s.zones.map((z) => `${z.libelle || z.zone} : ${z.nom || z.ref} (${z.ref})${detailZone(z)}`).join(" · ")}</p> : null}
         {s.defautsControle.length > 0 ? <p className="text-[11.5px] leading-snug text-attention-texte">Défauts relevés : {s.defautsControle.map((d) => d.detail).join(" · ")}</p> : null}
         {s.directionArtistique || s.promptTexte ? (
           <div className="flex flex-wrap gap-2 text-[11.5px]">

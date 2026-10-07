@@ -217,6 +217,12 @@
   Aucune clé de premier niveau ajoutée : empreinte avant **`6665a6b457fe`** → après **`6665a6b457fe`** (53 outils). La
   description d'`agir_systeme` change : reconnecter le connecteur. Trace de chaque export : registre des appels
   (`AppelOutil`, session `ECRAN`, outil `export_jeu_essai`, acteur dans `commande`) et une ligne de log.
+- **Mission 23, L3 (07/10/2026)** : la fidélité des teintes (`simulations/correction-teintes.ts`, `fidelite.ts`) est
+  enregistrée par simulation (champ JSON `fidelite`) et lue par `voir_fichiers` (genre `simulations`) : l'`etat` de chaque
+  simulation dit « teinte fidèle à 2,1 », « écart de teinte 6,2 (non corrigé) » ou « à régénérer », et `donnees` gagne
+  `simulations[].fidelite` (`resume`, puis par zone : état, ΔE avant / après, à clarté égale, raison). Aucun paramètre ni
+  clé de premier niveau ajouté, description de `voir_fichiers` inchangée : empreinte avant **`6665a6b457fe`** → après
+  **`6665a6b457fe`** (53 outils). Écran : badge après « contrôle » dans la liste des simulations du dossier (v1 et v2).
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.

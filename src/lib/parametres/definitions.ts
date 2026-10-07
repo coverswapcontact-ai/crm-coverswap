@@ -367,6 +367,16 @@ export const DEFINITIONS_PARAMETRES = {
     ],
     groupe: "SIMULATEUR",
   },
+  SIMULATEUR_CORRECTION_TEINTES: {
+    libelle: "Correction des teintes après le rendu",
+    aide: "Oui : chaque rendu est recalé sur la teinte du catalogue, surface par surface, sous la lumière de la pièce (le grain du bois et les ombres restent) ; le rendu d'origine est gardé à côté. Une surface que le modèle a mal posée n'est pas retouchée et la simulation est marquée « à régénérer ». Non (par défaut) : le rendu est livré tel quel, sa fidélité est seulement mesurée.",
+    nature: "choix",
+    options: [
+      { valeur: "NON", libelle: "Non" },
+      { valeur: "OUI", libelle: "Oui" },
+    ],
+    groupe: "SIMULATEUR",
+  },
   NOTIF_SIMULATION_SITE_PRETE: {
     libelle: "Mail « simulation prête » aux visiteurs du site (« Me prévenir »)",
     aide: "Sur coverswap.fr, un visiteur qui attend son rendu peut laisser son adresse pour être prévenu. Actif (par défaut) : UN mail part quand le rendu est prêt, avec l'image jointe et le lien pour le retrouver. Inactif : rien ne part (la demande reste notée sur le lead). Un numéro de téléphone seul ne déclenche jamais de SMS.",

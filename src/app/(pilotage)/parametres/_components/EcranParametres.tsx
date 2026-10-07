@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { History, Pencil } from "lucide-react";
+import { Download, History, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { ChampsParametre, saisieVide, versCorps } from "@/components/pilotage/SaisieParametres";
@@ -115,6 +115,17 @@ export default function GroupesParametres({ parametres, groupes, onMisAJour }: {
                   Banc de comparaison V1 / V2
                 </Link>
               </p>
+            ) : null}
+            {groupe === "SIMULATEUR" ? (
+              <div className="-mt-1 mb-3 flex flex-col items-start gap-1.5">
+                <a href="/api/simulateur/jeu-essai?n=150" download className="inline-flex min-h-11 items-center gap-1.5 rounded-[8px] border-[0.5px] border-trait px-2.5 text-[12.5px] text-texte-2 hover:border-trait-2 sm:min-h-9">
+                  <Download className="size-3.5" aria-hidden />
+                  Exporter le jeu d&apos;essai (150 dernières simulations, sans coordonnées)
+                </a>
+                <p className="text-[12.5px] leading-relaxed text-texte-3">
+                  Un zip : pour chaque simulation du site ou d&apos;un espace, la photo avant, le rendu et une fiche (zones et références, moteur, modèle, contrôle). Identifiants opaques, aucun nom, téléphone, e-mail ni adresse. Sert au calibrage des teintes.
+                </p>
+              </div>
             ) : null}
             <ul className={cn("overflow-hidden rounded-[11px] border-[0.5px] border-trait bg-surface", TRANS)}>
               {liste.map((parametre) => (

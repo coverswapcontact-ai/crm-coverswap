@@ -209,6 +209,14 @@
   démonstration). La section 2.19 rapproche chaque écran v2 des lignes déjà couvertes (les écrans v2 réutilisent les
   routes et les services de la v1) ; deux gestes de confort n'ont pas d'outil et sont dits en « manque » sans en
   ajouter (Reprendre côté serveur, le texte prêt de la relance d'une facture par SMS).
+- **Mission 23, L1 (07/10/2026)** : export du jeu d'essai du simulateur (`simulateur/jeu-essai.ts`, zip « stored » maison
+  `exports/zip.ts`, `GET /api/simulateur/jeu-essai?n=150`, 1 à 300) : les N simulations les plus récentes du site et des
+  espaces, photo avant, rendu et `meta.json` (zones, moteur, modèle au mieux, contrôle), identifiants opaques, aucune
+  donnée de contact. Écran : lien-bouton dans Paramètres › Simulateur (PA12). Outil : `agir_systeme` gagne l'action
+  **EXPORTER_JEU_ESSAI** (lecture : disponibles par origine, lien absolu de la route, derniers exports ; pas le zip).
+  Aucune clé de premier niveau ajoutée : empreinte avant **`6665a6b457fe`** → après **`6665a6b457fe`** (53 outils). La
+  description d'`agir_systeme` change : reconnecter le connecteur. Trace de chaque export : registre des appels
+  (`AppelOutil`, session `ECRAN`, outil `export_jeu_essai`, acteur dans `commande`) et une ligne de log.
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -740,6 +748,7 @@ dans l'Analytique les outils de l'ancien écran Synthèse. Si la relecture les r
 | PA9 | Drive › « Vérifier Drive » | POST /api/drive/synchroniser {verifier:true} | R | agir_systeme (VERIFIER_DRIVE) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
 | PA10 | Agent mail › « Relever maintenant » | POST /api/messages/relever | R | agir_systeme (RELEVER_MAILS) | couvert | `mcp-gestes.test.ts` › « SYNCHRONISER_DRIVE, VERIFIER_DRIVE, RELEVER_MAILS, ESSAI_META… » |
 | PA11 | Marque de l'espace client (rien à régler) | — | L | — | sans objet | — |
+| PA12 | Simulateur › « Exporter le jeu d'essai (150 dernières simulations, sans coordonnées) » : zip téléchargé (mission 23, L1) | GET /api/simulateur/jeu-essai?n=150 | L (trace `AppelOutil` ECRAN) | agir_systeme (EXPORTER_JEU_ESSAI : disponibles, lien de la route, derniers exports ; le zip se télécharge connecté) | couvert | `simulateur/jeu-essai.test.ts` › « l'action rend les simulations disponibles par origine, le lien absolu… » ; « la route : 200, zip en pièce jointe… » |
 
 #### Facturation
 
@@ -1504,6 +1513,7 @@ par expéditeur, ou plus de 3 fils.
 | LANCER_BANC (cas, variante) | `simulateur/banc/banc.ts › lancerBanc` (aperçu = `estimerCampagne`) | S-€ | S16 |
 | REVOQUER_ACCES (application, jeton, tout) | `oauth/serveur.ts › revoquerClient` / `revoquerJeton` / `revoquerTout` | S-sécu (« tout » coupe aussi la session qui l'appelle : l'aperçu le dit) | PC3–PC5 |
 | DECONNECTER_GOOGLE | `google/connexion.ts › deconnecterGoogle` | S-sécu | PA6 |
+| EXPORTER_JEU_ESSAI (sans paramètre) | `simulateur/jeu-essai.ts › simulationsDisponibles`, `derniersExportsJeu` ; lien vers `GET /api/simulateur/jeu-essai?n=150` (`collecterJeuEssai` + `fluxJeuEssai`) | L (rien n'est écrit ; le zip n'est pas rendu à Claude) | PA12 |
 
 ### 4.14 Fusions et retraits : correspondance ancien → nouveau
 

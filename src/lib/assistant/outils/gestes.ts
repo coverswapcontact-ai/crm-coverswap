@@ -31,6 +31,7 @@ import { MOTIFS_ANONYMISATION } from "@/lib/rgpd/propositions";
 import { apercuAnonymisation } from "@/lib/rgpd/anonymisation";
 import { anonymiserClient } from "@/lib/rgpd/conservation";
 import { etatBanc, lancerBanc } from "@/lib/simulateur/banc/banc";
+import { N_JEU_PAR_DEFAUT, derniersExportsJeu, simulationsDisponibles } from "@/lib/simulateur/jeu-essai";
 import { changerStatutSimulation, publierSimulations } from "@/lib/simulations/dossier";
 import { publierPublication, retirerPublication } from "@/lib/site/publications";
 import { annulerTache, relancerTache } from "@/lib/taches/file";
@@ -524,7 +525,7 @@ export const outilAnonymiserClient = definirOutil({
 
 /* ── agir_systeme ───────────────────────────────────────────────────── */
 
-export const ACTIONS_SYSTEME = ["DETECTER_TACHES", "RELANCER_TACHE", "ANNULER_TACHE", "CORRIGER_INCOHERENCE", "RELANCER_SYNCHRO", "SYNCHRONISER_DRIVE", "VERIFIER_DRIVE", "RELEVER_MAILS", "ESSAI_META", "TESTER_NOTIFICATION", "REJOUER_META", "LANCER_BANC", "REVOQUER_ACCES", "DECONNECTER_GOOGLE"] as const;
+export const ACTIONS_SYSTEME = ["DETECTER_TACHES", "RELANCER_TACHE", "ANNULER_TACHE", "CORRIGER_INCOHERENCE", "RELANCER_SYNCHRO", "SYNCHRONISER_DRIVE", "VERIFIER_DRIVE", "RELEVER_MAILS", "ESSAI_META", "TESTER_NOTIFICATION", "REJOUER_META", "LANCER_BANC", "REVOQUER_ACCES", "DECONNECTER_GOOGLE", "EXPORTER_JEU_ESSAI"] as const;
 
 
 const schemaAgirSysteme = z.object({
@@ -564,7 +565,7 @@ export const outilAgirSysteme = definirOutil({
   nom: "agir_systeme",
   titre: "Les gestes techniques (tâches de fond, cohérence, synchronisations, Meta, banc, accès)",
   description:
-    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis, ou envoie un mail au client) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous ; toujours sensible : des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible). Les états se lisent par « etat_crm ».",
+    "DETECTER_TACHES (« Actualiser » : une passe de tous les détecteurs) ; RELANCER_TACHE / ANNULER_TACHE (id d'une tâche de fond ; annuler est sensible : un envoi peut ne jamais partir) ; CORRIGER_INCOHERENCE (cle ; sensible quand la correction change une étape ou un devis, ou envoie un mail au client) ; RELANCER_SYNCHRO d'une source de l'Analytique ; SYNCHRONISER_DRIVE, VERIFIER_DRIVE ; RELEVER_MAILS ; ESSAI_META (faux lead ESSAI, notifier) ; TESTER_NOTIFICATION (ALERTES : tous les canaux ; APPAREIL : push web) ; REJOUER_META (un leadgen_id, ou tous ; toujours sensible : des SMS d'accusé peuvent partir) ; LANCER_BANC (cas, variante : coût d'images OpenAI, aperçu du coût puis confirmation) ; REVOQUER_ACCES (application_id, jeton_id ou tout : sensible) ; DECONNECTER_GOOGLE (sensible) ; EXPORTER_JEU_ESSAI (lecture : les simulations disponibles par origine, le lien du zip du jeu d'essai du simulateur — 150 dernières, sans coordonnées, à ouvrir connecté — et les derniers exports ; le zip lui-même n'est pas rendu). Les états se lisent par « etat_crm ».",
   niveau: "REVERSIBLE",
   schema: schemaAgirSysteme,
   sensible: async (e) => {
@@ -683,6 +684,17 @@ export const outilAgirSysteme = definirOutil({
       case "DECONNECTER_GOOGLE":
         await deconnecterGoogle();
         return { texte: "Compte Google déconnecté : la connexion reste dans l'historique, datée. Lucas reconnecte depuis Paramètres.", liens: [lien("Paramètres", "/parametres")] };
+      case "EXPORTER_JEU_ESSAI": {
+        // Mission 23 (L1) : le zip se télécharge par la route, sous la session de Lucas ; l'outil donne le lien et l'état.
+        const [disponibles, derniers] = await Promise.all([simulationsDisponibles(), derniersExportsJeu()]);
+        const dernier = derniers[0];
+        const derniersExports = derniers.map((x) => ({ le: x.le.toISOString(), par: x.par, resume: x.resume }));
+        return {
+          texte: `Jeu d'essai du simulateur : ${disponibles.site} du site, ${disponibles.espace} des espaces disponibles ; l'export prend les ${N_JEU_PAR_DEFAUT} plus récentes lisibles (photo avant, rendu, fiche ; aucune coordonnée). Le zip se télécharge par le lien, connecté au CRM (ou Paramètres › Simulateur › « Exporter le jeu d'essai »).${dernier ? ` Dernier export : ${format.jour(dernier.le)}${dernier.resume ? `, ${dernier.resume}` : ""}.` : " Aucun export encore."}`,
+          donnees: { disponibles, n: N_JEU_PAR_DEFAUT, derniersExports },
+          liens: [lien("Télécharger le jeu d'essai (zip)", `/api/simulateur/jeu-essai?n=${N_JEU_PAR_DEFAUT}`), lien("Paramètres › Simulateur", "/parametres#simulateur")],
+        };
+      }
     }
   },
 });

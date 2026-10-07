@@ -10,7 +10,8 @@
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "base:sauvegarder": "node scripts/sauvegarder-base.mjs manuelle",
     "base:pousser": "node scripts/avant-demarrage.mjs && prisma db push && tsx scripts/preparer-base.ts",
-    "simulateur:prompts": "tsx scripts/generer-prompts-defaut.ts"
+    "simulateur:prompts": "tsx scripts/generer-prompts-defaut.ts",
+    "simulateur:mesurer-jeu": "tsx scripts/mesurer-jeu.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

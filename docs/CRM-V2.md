@@ -202,7 +202,10 @@ rend un résultat neutre explicite ; `instrumentation.ts` l'annonce au démarrag
 Test : `src/lib/acces/essai-local.test.ts` (les seams d'essai et `fetch` lèvent s'ils sont touchés ; onze canaux
 couverts). Les tests posent `CRM_ESSAI_LOCAL=""` dans `src/test/base-essai.ts` : ceux qui vérifient un transport vers
 un faux serveur local ne subissent pas la garde. Les données de l'essai : `docs/COMMENT-TESTER-V2.md` (lot A6) ; le
-fichier `essai-v2.db` est couvert par `*.db` dans `.gitignore`.
+fichier `essai-v2.db` est couvert par `*.db` dans `.gitignore`. La base de démonstration est écrite par
+`scripts/demo-v2.mjs` (données fictives et neutres, rejouable, après `npm run base:pousser` ; `seed.mjs` facultatif
+avant) : dix contacts, sept dossiers de Qualification à Encaissé, une facture en retard, un chèque, une proposition, un
+message d'espace, une tâche de fond en échec, un appel noté.
 
 ## Journal « Depuis ta dernière visite » (lot A1)
 
@@ -557,6 +560,45 @@ Non corrigés, notés : les `setTimeout(…, 0)` qui contournent `react-hooks/se
   d'ajouter un délai d'effet côté serveur, comme pour les tâches (`DELAI_EFFET_MS`).
 - **d9, l'aperçu de marque de l'espace client** (charte du site, exception nommée du test anti-hex) : reste tel quel
   tant que la charte du site n'a pas ses jetons.
+
+## Vérification du 07/10 (lot A6) — le scénario joué, règle par règle
+
+Joué de bout en bout en local (`next dev` sur 3001, `prisma/essai-v2.db` rebâtie par `npm run base:pousser` puis
+`scripts/demo-v2.mjs`, `CRM_INTERFACE=v2`, `CRM_ESSAI_LOCAL=1`, service worker désinscrit et caches vidés avant de
+juger), à 390 × 660 puis à 1 440 × 900 : Aujourd'hui (Maintenant → Fait → « Fait — … » avec Annuler → la tâche
+revient ; Voir les 4 autres ; Tout vu → « Tout est vu. » avec Annuler ; dossier ouvert depuis le journal), Dossiers
+(segments, ligne en trois lignes, panneau : en-tête, un seul vert, Autres gestes, rubrique de l'étape ouverte),
+Personnes (recherche, Ctrl K, Appeler), Argent (trois nombres, Encaisser, Relancer), les sept écrans de Plus,
+`?interface=v1` puis `?interface=v2`. Le tableau dit, pour chaque règle et chaque écran, OK ou l'écart constaté ;
+les écarts qui tiennent dans `src/components/v2/` ou `src/lib/v2/` ont été corrigés dans ce lot (lignes « corrigé »).
+
+| Règle | Aujourd'hui | Journal | Dossiers | Panneau | Personnes | Argent | Plus (7 écrans) |
+|---|---|---|---|---|---|---|---|
+| 1 Une seule chose en haut | OK (Reprendre puis Maintenant) | OK (titre, phrase) | OK (segments ; première ligne à y = 130 avec le bandeau d'essai) | OK (en-tête de situation) | OK (la recherche) | OK (les trois nombres) | OK (en-tête v2 ; Bilan : période et onglets v1 dessous, noté A5) |
+| 2 Deux niveaux | OK (7 blocs, 5 lignes puis « Voir les 4 autres ») | OK (5 groupes, 5 lignes) | OK (5 lignes puis « Voir les N autres ») | OK (5 blocs, Autres gestes « Voir les 8 autres », rubriques fermées) | OK (5 lignes puis « Voir les 2 autres ») | OK (6 blocs, Dépenses et À corriger repliés) | écart v1 noté (Bilan > 7 blocs) |
+| 3 Un seul bouton principal | OK (le geste prêt ; Tout vu en contour) | OK (Tout vu) | OK (aucun vert : les gestes en contour) | OK au niveau du panneau ; **écart v1** : « Générer un devis » vert dans la rubrique Devis et factures ouverte (`DocumentsDossier` v1, non corrigé) | OK (Appeler vert sur la première ligne) | OK (Encaisser vert sur la facture la plus en retard ; rouge seulement sur le retard) | écart v1 noté (À valider : un vert par carte) |
+| 4 Des phrases, pas des codes | OK (« rappel prévu hier 18 h », « devis relu 2 fois sans signer ») | **corrigé** : « Rien de nouveau depuis à l'instant. » (et la phrase écrite deux fois) → `lib/v2/journal.ts › phraseRienDeNouveau` : « Rien de nouveau : tout est vu à l'instant. », « Rien de nouveau depuis hier 18 h 40. », la ligne de réponse dit « Tout est vu. » | OK | OK dans les cinq blocs ; écart v1 dans la rubrique ouverte (« 03/10/2026 · objet ») | **corrigé** : « Appeler » n'était qu'un pictogramme → le mot « Appeler » sur chaque ligne (`LignesPersonnes.tsx`), comme la ligne de Dossiers | OK (« en retard de 25 jours », « reçu le 25 sept. ») | écarts v1 notés A5 |
+| 5 Même format de situation | OK (titres par `titreV2`) | OK | OK (`situationDe`) | OK (`EnTeteSituation`) | OK (résultats de recherche : dossiers en trois lignes) | OK (facture : numéro, client, reste, retard) | — |
+| 6 Chaque geste répond | OK (Fait → ligne + Annuler, la tâche revient après Annuler) | OK (Tout vu, Valider, Ignorer : 5 s + Annuler) | OK (les gestes passent par le panneau) | OK (tâches : ligne + Annuler ; étapes : ligne seule, d7) | OK (fin d'appel au retour) | OK (« Paiement enregistré », « Facture relancée par SMS ») | v1 |
+| 7 Reprendre + Depuis ta dernière visite | OK (« Reprendre : dossier Nom, objet — il y a N min » ; le journal compact) | OK | — | — | — | — | — |
+| 8 Un seul compteur | OK (le compteur de la coque) | OK | OK | OK | OK | OK | écart v1 noté (Mail : trois nombres d'onglets) |
+| 9 Lisible dehors | OK (bouton principal à y ≈ 290–370 à 390 × 660 ; 17 px ; tout `button, a` ≥ 44 px) | OK (44 px) | OK (44 px) | OK à 390 ; à 1 440, huit boutons v1 de la rubrique ouverte font 28–32 px (`DocumentsDossier`) | OK (44 px, champ 17 px) | OK (Encaisser à y = 536–580 à 390 × 660 ; nombres 24 px) | écarts v1 : Mail « Relire » 42 × 44, Réglages « Nouvelle valeur » / « Renseigner » 28 px, lien « Banc de comparaison » 15 px, Personnes à 1 440 « Activer » 40 px (`NotificationsAppareil`) |
+| 10 Rien ne bouge | OK | OK | OK | OK | OK | OK | OK (sous `prefers-reduced-motion`, 0 animation et 0 transition en cours sur les huit écrans) |
+
+**Mesures** (07/10, base de démonstration) : `/taches` à chaud 0,30 s, 0,30 s, 0,31 s (`curl -w "%{time_total}"`,
+`GET /api/a-faire` 0,04 s) ; contrastes : `src/app/lisibilite.test.ts` vert (chaque couple de jetons ≥ 4,5:1) ; zones
+tactiles : relevé `getBoundingClientRect` de tout `button, a` visible sur les huit écrans, aux deux largeurs — aucun
+élément v2 sous 44 px, les seuls restants sont des composants v1 réutilisés (ci-dessus) ; `prefers-reduced-motion`
+(émulation Playwright) : `animationDuration` et `transitionDuration` nulles partout ; `/api/health` : 53 outils,
+empreinte `6665a6b457fe`.
+
+**Captures** (`docs/captures/mission-22/`, données de démonstration seulement, PNG ≤ 300 Ko, 390 × 660 à l'échelle 2 et
+1 440 × 900) : `aujourdhui`, `dossiers`, `panneau`, `personnes`, `argent`, `journal`, `plus-mail`, `reglages`, chacune en
+`-390.png` et `-1440.png`.
+
+**Reste noté, non corrigé (v1)** : les boutons v1 sous 44 px et le second vert de la rubrique Devis et factures
+(panneau), les écarts des écrans de Plus (É14), l'adresse de la boîte dans le sous-titre v1 de Boîte mail (l'adresse
+publique du site, pas une donnée personnelle).
 
 ## Correspondance v1 → v2
 

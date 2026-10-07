@@ -204,6 +204,11 @@
   avant **`6665a6b457fe`** → après **`6665a6b457fe`** (53 outils ; la valeur `040d6c7aa53c` citée par l'énoncé du lot
   est celle d'avant la puce précédente). Les descriptions de `lister` et d'`etat_crm` changent : reconnecter le
   connecteur. Écran : 2.18 (J1–J4).
+- **Mission 22, A6 (07/10/2026)** : vérification de la v2 de bout en bout. Aucun outil, paramètre ni description ne
+  change : empreinte **`6665a6b457fe`** (53 outils), relevée sur `/api/health` en local (`next dev`, base de
+  démonstration). La section 2.19 rapproche chaque écran v2 des lignes déjà couvertes (les écrans v2 réutilisent les
+  routes et les services de la v1) ; deux gestes de confort n'ont pas d'outil et sont dits en « manque » sans en
+  ajouter (Reprendre côté serveur, le texte prêt de la relance d'une facture par SMS).
 - **Sources** : inventaires de travail faits avant les parties A et B, puis vérifiés et complétés sur le code actuel
   (`src/app/(pilotage)/**`, `src/app/api/**`, `src/components/pilotage/**`). Schémas des 84 outils relus un par un :
   nom, niveau, description et paramètres, sortis du catalogue au format JSON Schema.
@@ -917,6 +922,22 @@ Hors gestes sans objet, **402 actions** relèvent du MCP.
 | J2 | « Tout le journal » : une période fixe (`?jours=7`, 30 au plus) | GET /api/journal?depuis&jusqua&page | L | lister (JOURNAL, vue TOUT, filtres.du / filtres.au, page) | couvert | `mcp-lister-etat.test.ts` › « JOURNAL vue TOUT avec filtres.filtre ARGENT et du/au… » |
 | J3 | « Tout vu » (pose `JOURNAL_VU_LE`) | POST /api/journal/vu | R | modifier PARAMETRE (JOURNAL_VU_LE, instant ISO) | couvert | `app/api/journal/route.test.ts` › « POST /api/journal/vu pose JOURNAL_VU_LE… » ; `mcp-generiques.test.ts` (PARAMETRE) |
 | J4 | Valider / Ignorer une proposition depuis le journal (5 s, « Annuler ») | POST /api/validation/[id]/valider, …/rejeter (motif INUTILE) | S-client / R | valider_proposition / ignorer_proposition | couvert | `mcp-v2.test.ts` (propositions) ; `components/v2/journal/journal-ecran.test.ts` |
+
+### 2.19 Les écrans de la v2 (mission 22, `CRM_INTERFACE=v2`) — même routes, mêmes outils
+
+La v2 ne change ni les adresses, ni `/api`, ni les services : chaque geste d'un écran v2 est un geste déjà inventorié
+plus haut, rendu autrement. Le tableau dit, écran par écran, où sont ses lignes et ce qui manque. Vérifié au lot A6
+sur la base de démonstration (`scripts/demo-v2.mjs`), le 07/10/2026.
+
+| # | Écran v2 | Gestes de l'écran | Lignes couvertes (outil) | Manque |
+|---|---|---|---|---|
+| V1 | Aujourd'hui (`/taches`) | Maintenant et son geste prêt (appel, SMS, mail, espace, devis, encaisser, date du chantier, simulateur, relance, cohérence) ; Fait / Plus tard / Pas à faire et « Annuler » 5 s ; Ensuite, « Voir les N autres » ; Commencer ; J'ai 5 / 15 / 30 min ; En lot ; Plus tard ; Fait aujourd'hui ; Ajouter une tâche ; Actualiser | T1–T4, T6–T19, T21–T36 (`taches`, `repondre_tache` dont ANNULER, `noter_appel`, `noter_sms`, `lire_mail`, `repondre_espace`, `generer_document`, `saisir_encaissement`, `modifier` DOSSIER, `preparer_simulation`, `valider_proposition`, `agir_systeme`, `creer` TACHE) ; T5, T20, T37 sans objet | **Reprendre** : la mémoire côté serveur (`DERNIER_DOSSIER_OUVERT`, `POST /api/reprendre`) n'a pas d'outil — confort d'écran, l'assistant ouvre un dossier par `lire_fiche` |
+| V2 | Journal « Depuis ta dernière visite » (`/journal`, bloc d'Aujourd'hui) | lecture, filtres, « Voir les N autres », Tout vu (5 s, Annuler), Valider / Ignorer une proposition | J1–J4 (`lister` JOURNAL, `modifier` PARAMETRE, `valider_proposition`, `ignorer_proposition`) | — |
+| V3 | Dossiers (`/dossiers`) | segments Chez moi · Chez le client · Tous · Archives ; la liste « ce qui m'attend » ; le geste de la ligne (appeler, préparer la simulation, publier, faire le devis, relancer, fixer la date, passer en …, facturer, encaisser, demander un avis, reprendre) ; recherche ; « Plus de filtres » (espaces) ; vue en colonnes ; ouvrir un dossier | D1, D2, D4, D5, D7, D8, D12–D15, E1–E4 (`lister` DOSSIERS, `chercher`, `restaurer`, `creer` DOSSIER, `lister` ENTREPRISES) ; les gestes de la ligne = ceux du panneau (DP) ; D3 sans objet | — |
+| V4 | Panneau de dossier (`/dossiers?dossier=`) | en-tête de situation ; le bouton principal (tâche prête, sinon geste de l'étape) ; Autres gestes (passages d'étape, déposer un devis PDF, prochaine action, archiver) ; À faire ici ; Ce qui s'est passé ici ; treize rubriques (les composants v1) | DP1–DP92 (`lire_fiche`, `changer_etape`, `modifier` DOSSIER prochaine_action / date_chantier, `ajouter_fichier`, `archiver`, `generer_document`, `saisir_encaissement`, `relancer`, `noter_sms`, `geste_espace`, `publier`…) ; T19 ; les tâches du dossier = `taches` (dossier) | — |
+| V5 | Personnes (`/leads`, `/clients`) | recherche (la loupe, Ctrl K) ; segments À appeler · À rappeler · Clients · Sans suite · Archivés ; Appeler (`tel:`) ; Enchaîner les appels ; Ajouter (contact, client) ; fiche du contact (`PanneauEntrant`) ; fiche client (v1) | L1–L9, L11, L12, L14, L15, L18, LF1–LF27, C1–C30 (`chercher`, `lister` LEADS / CLIENTS, `noter_appel`, `creer` LEAD / CLIENT, `modifier` LEAD, `lire_fiche`) ; L10, L13, L16 sans objet | — (la sélection multiple, le filtre par source et « Sur le site » ne sont pas en v2 : la v1 et leurs lignes restent) |
+| V6 | Argent (`/finances`, `/depenses/nouvelle`) | les trois nombres ; Factures à encaisser : Encaisser, Relancer (SMS libre à copier, sinon le mail) ; Chèques : Crédité, Rejeté ; Dépenses ; Livre par mois, CSV, année ; À corriger ; Renseigner | F1, F3–F6, F8–F10, X1–X10 (`lister` ENCOURS / CHEQUES / QUALITE_FINANCES / LIVRE / DEPENSES, `manager_finances`, `saisir_encaissement`, `modifier` ENCAISSEMENT, `annuler_encaissement`, `modifier` PARAMETRE, `creer` DEPENSE) ; la relance tracée par `noter_sms` (code LIBRE, texte) ; F7 sans objet | **Relancer une facture** : le texte prêt (`lib/v2/argent.ts › texteRelanceFacture`) n'est servi par aucun outil ; l'assistant écrit le sien et le note par `noter_sms` |
+| V7 | Plus (Boîte mail, Simulateur, Le site, Bilan, Réglages, À valider, Nouvelle dépense) | les écrans v1 sous l'en-tête v2 ; « À valider — N en attente » dans le menu | leurs sections (2.6, 2.8, 2.9, 2.12, 2.13, 2.14, X7–X10) ; le nombre en attente = `lister` PROPOSITIONS / `taches` (D10) | — |
 
 ## 3. Les manques, par domaine
 

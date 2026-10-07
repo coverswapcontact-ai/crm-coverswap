@@ -6,6 +6,7 @@ import { FondBalayage, useBalayage } from "@/app/(pilotage)/taches/_components/L
 import type { TacheVue } from "@/lib/a-faire/types";
 import { dureeLisible, ligneFaite, ligneGrise } from "@/lib/a-faire/affichage";
 import { libelleBalayageDroite } from "@/lib/v2/geste-pret";
+import { phraseV2, titreV2 } from "@/lib/v2/phrases";
 import { cn } from "@/lib/utils";
 import { TRANS_V2 } from "../transitions";
 import { BoutonGeste } from "./BoutonGeste";
@@ -25,9 +26,9 @@ export function LigneTacheV2({ tache, maintenant, surbrillance, occupe, actions 
       <FondBalayage decalage={balayage.decalage} droite={libelleBalayageDroite(tache)} />
       <div {...balayage.gestionnaires} style={balayage.style} className={cn("relative flex items-center gap-2 bg-surface py-1 pr-2", surbrillance && "bg-action-fond")}>
         <button type="button" onClick={() => actions.onOuvrir(tache)} className={cn("flex min-h-11 min-w-0 flex-1 flex-col justify-center gap-0.5 py-2 pl-4 text-left hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none", TRANS_V2)}>
-          <span className="line-clamp-2 text-corps-tel leading-snug font-medium break-words text-texte md:text-corps">{tache.titre}</span>
+          <span className="line-clamp-2 text-corps-tel leading-snug font-medium break-words text-texte md:text-corps">{titreV2(tache.titre, new Date(maintenant))}</span>
           <span className="line-clamp-2 text-petit leading-snug break-words text-texte-3">
-            {dureeLisible(tache.dureeMin)} · {ligneGrise(tache, new Date(maintenant))}
+            {dureeLisible(tache.dureeMin)} — {phraseV2(ligneGrise(tache, new Date(maintenant)), new Date(maintenant))}
           </span>
         </button>
         <BoutonGeste tache={tache} actions={actions} forme="ligne" disabled={occupe} />
@@ -40,14 +41,15 @@ export function LigneTacheV2({ tache, maintenant, surbrillance, occupe, actions 
 }
 
 /** Une ligne de « Fait aujourd'hui » : la coche (ou la croix), le titre, et pourquoi (la preuve lue par le CRM, ou qui a répondu). */
-export function LigneFaiteV2({ tache }: { tache: TacheVue }) {
+export function LigneFaiteV2({ tache, maintenant }: { tache: TacheVue; maintenant: number }) {
   const pasAFaire = tache.statut === "PAS_A_FAIRE";
+  const instant = new Date(maintenant);
   return (
     <li className="flex min-h-11 items-center gap-3 border-t border-trait px-4 py-2 first:border-t-0">
       <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px]", pasAFaire ? "bg-surface-2 text-texte-3" : "bg-action-fond text-action-clair")}>{pasAFaire ? <X size={14} aria-hidden /> : <Check size={14} aria-hidden />}</span>
       <span className="min-w-0 flex-1">
-        <span className={cn("block truncate text-corps-tel md:text-corps", pasAFaire ? "text-texte-3" : "text-texte-2")}>{tache.titre}</span>
-        <span className="block truncate text-petit text-texte-3">{ligneFaite(tache)}</span>
+        <span className={cn("block truncate text-corps-tel md:text-corps", pasAFaire ? "text-texte-3" : "text-texte-2")}>{titreV2(tache.titre, instant)}</span>
+        <span className="block truncate text-petit text-texte-3">{phraseV2(ligneFaite(tache), instant)}</span>
       </span>
     </li>
   );

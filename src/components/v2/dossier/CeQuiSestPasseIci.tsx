@@ -41,7 +41,7 @@ export function CeQuiSestPasseIci({ cible, cle, maintenant }: { cible: { dossier
   return (
     <section aria-labelledby="passe-ici-titre" className="flex flex-col gap-2">
       <h2 id="passe-ici-titre" className="px-1 text-titre font-semibold text-texte">
-        Ce qui s&apos;est passé ici{lu ? <span className="text-texte-3"> · {lu.total}</span> : null}
+        Ce qui s&apos;est passé ici
       </h2>
       {tout ? (
         <div className="rounded-[11px] border border-trait bg-surface p-4">

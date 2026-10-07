@@ -200,3 +200,17 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
+
+/* Mission 22 (correctifs du 07/10), règle 10 « rien ne bouge tout seul » : sous `prefers-reduced-motion`, plus aucune
+   animation ni transition, où qu'elles viennent (feuilles, modales, sonner, v1 comprise : une sécurité d'accessibilité,
+   pas un écran). Les `animate-spin` d'attente s'arrêtent aussi : l'icône reste, immobile. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

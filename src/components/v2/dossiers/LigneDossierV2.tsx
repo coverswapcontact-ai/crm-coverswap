@@ -52,7 +52,7 @@ export function LigneDossierV2({ dossier, maintenant, onOuvrir }: { dossier: Dos
               {lignes.etape}
             </span>
           </span>
-          <span title={dossier.mainLe ? dateExacte(dossier.mainLe) : undefined} className="line-clamp-2 text-petit leading-snug break-words text-texte-2">
+          <span title={dossier.mainLe ? dateExacte(dossier.mainLe) : undefined} className="line-clamp-2 text-corps-tel leading-snug break-words text-texte-2 md:text-corps">
             {lignes.situation}
           </span>
           <span title={dossier.prochaineActionDate ? dateExacte(dossier.prochaineActionDate) : undefined} className="truncate text-petit text-texte-3">

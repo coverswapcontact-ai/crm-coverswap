@@ -26,5 +26,5 @@ export async function lireReprendre(maintenant: Date = new Date()): Promise<Cont
   const dossier = await prisma.dossier.findFirst({ where: { id: memoire.dossierId }, select: { id: true, clientNom: true, objet: true } });
   if (!dossier) return null;
   const objet = dossier.objet.trim();
-  return { chemin: `/dossiers?dossier=${encodeURIComponent(dossier.id)}`, titre: objet ? `dossier ${dossier.clientNom} · ${objet.charAt(0).toLowerCase()}${objet.slice(1)}` : `dossier ${dossier.clientNom}`, le: memoire.le, dossierId: dossier.id };
+  return { chemin: `/dossiers?dossier=${encodeURIComponent(dossier.id)}`, titre: objet ? `dossier ${dossier.clientNom}, ${objet.charAt(0).toLowerCase()}${objet.slice(1)}` : `dossier ${dossier.clientNom}`, le: memoire.le, dossierId: dossier.id };
 }

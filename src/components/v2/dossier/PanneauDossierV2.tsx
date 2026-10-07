@@ -19,9 +19,11 @@ import type { EtapeDossier, TypeDocument } from "@/lib/dossiers/constants";
 import { autresGestes, gestePrincipal, tachePrete, type AutreGeste, type GestePrincipal } from "@/lib/dossiers/geste-principal";
 import type { DocumentVue, DossierDetail } from "@/lib/dossiers/types";
 import type { RelancesProposables } from "@/lib/relances/proposables";
+import { ENSUITE_VISIBLES, libelleVoirAutres } from "@/lib/v2/aujourdhui";
 import type { DemandeOuvertureV2 } from "@/lib/v2/dossiers";
 import { cibleDuDefilement, rubriqueDeLEtape, rubriqueDemandee, type RubriqueV2 } from "@/lib/v2/rubriques-dossier";
 import { cn } from "@/lib/utils";
+import { TRANS_V2 } from "../transitions";
 import { BOUTON_SECONDAIRE } from "../journal/GroupeParPersonne";
 import { BoutonGesteDossier } from "../taches/BoutonGeste";
 import { FeuillesRaccourcis } from "../taches/PanneauxRaccourcis";
@@ -170,6 +172,7 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
   const [feuilleDate, setFeuilleDate] = useState(() => gesteDemande === "DATE_CHANTIER");
   const [modifierAction, setModifierAction] = useState(false);
   const [autresOuverts, setAutresOuverts] = useState(false);
+  const [autresTout, setAutresTout] = useState(false);
   const [etapeDemandee, setEtapeDemandee] = useState<{ etape: EtapeDossier; cle: number } | null>(() => (demande?.rubrique === "etape" && demande.etape ? { etape: demande.etape, cle: 1 } : null));
   const [relectureMail, setRelectureMail] = useState<{ propositionId: string; cle: number } | null>(null);
   const faireDevis = () => setGenerateur((actuel) => ({ type: "DEVIS", cle: (actuel?.cle ?? 0) + 1 }));
@@ -262,6 +265,8 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
   const espace = detail.espace ?? null;
   const principal = gestePrincipal({ detail, espace, tache, maintenant });
   const autres = autresGestes(detail, principal);
+  // Correctifs du 07/10 (É13) : cinq autres gestes visibles, puis « Voir les N autres ».
+  const autresVisibles = autresTout ? autres : autres.slice(0, ENSUITE_VISIBLES);
   const telephone = telephoneDe(detail);
   const noterAppel = () => noterDebutAppel(detail.origine?.type === "LEAD" ? detail.origine.id : `dossier:${detail.id}`, { nom: detail.clientNom, dossierId: detail.id });
 
@@ -386,7 +391,7 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
             </button>
             {autresOuverts ? (
               <ul className="overflow-hidden rounded-[11px] border border-trait bg-surface">
-                {autres.map((g) => (
+                {autresVisibles.map((g) => (
                   <li key={`${g.genre}:${g.etape ?? ""}`} className="border-t border-trait first:border-t-0">
                     <button
                       type="button"
@@ -400,6 +405,13 @@ function ContenuV2({ detail, maintenant, onFermer, onMisAJour, onRecharger, onAr
                     </button>
                   </li>
                 ))}
+                {autres.length > autresVisibles.length ? (
+                  <li className="border-t border-trait">
+                    <button type="button" onClick={() => setAutresTout(true)} className={cn("flex min-h-11 w-full items-center px-4 py-2 text-left text-corps-tel text-texte-2 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none md:text-corps", TRANS_V2)}>
+                      {libelleVoirAutres(autres.length - autresVisibles.length)}
+                    </button>
+                  </li>
+                ) : null}
               </ul>
             ) : null}
           </section>

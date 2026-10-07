@@ -50,10 +50,10 @@ type LeadPourEtat = Pick<LigneLead, "archiveLe" | "archiveMotif" | "statut" | "a
 /**
  * L'état d'un lead en une phrase : « attend un appel depuis 12 min », « à rappeler demain 9 h », « à rappeler depuis
  * hier 18 h », « appelé il y a 3 jours », « contacté lundi 9 h », « arrivé il y a 2 h » ; puis « 2 tentatives sans
- * réponse », « a un dossier » ; « sans suite » ; « archivé hier 18 h · motif ».
+ * réponse », « a un dossier » ; « sans suite » ; « archivé hier 18 h, motif ».
  */
 export function etatLead(lead: LeadPourEtat, maintenant: Date): string {
-  if (lead.archiveLe) return `archivé ${dateRelative(lead.archiveLe, maintenant)}${lead.archiveMotif ? ` · ${lead.archiveMotif}` : ""}`;
+  if (lead.archiveLe) return `archivé ${dateRelative(lead.archiveLe, maintenant)}${lead.archiveMotif ? `, ${lead.archiveMotif}` : ""}`;
   if (lead.statut === "PERDU") return "sans suite";
   const parties: string[] = [];
   if (lead.attendDepuis) parties.push(`attend un appel ${depuisLisible(lead.attendDepuis, maintenant)}`);
@@ -63,7 +63,7 @@ export function etatLead(lead: LeadPourEtat, maintenant: Date): string {
   else parties.push(`arrivé ${dateRelative(lead.recuLe, maintenant)}`);
   if (lead.tentatives > 0) parties.push(pluriel(lead.tentatives, "tentative sans réponse", "tentatives sans réponse"));
   if (lead.dossierId) parties.push("a un dossier");
-  return parties.join(" · ");
+  return parties.join(", ");
 }
 
 /** « 2 dossiers, 1 en cours », « 1 dossier », « aucun dossier ». */
@@ -74,9 +74,10 @@ export function phraseDossiersClient(nbDossiers: number, nbEnCours: number): str
 
 const TYPES_RESULTAT: Record<Candidat["type"], string> = { CLIENT: "Client", LEAD: "Contact", DOSSIER: "Dossier" };
 
-/** La seconde ligne d'un résultat de recherche : « Dossier · Ville · Devis envoyé ». */
+/** La seconde ligne d'un résultat de recherche (contact, client) : « Contact — Ville, à rappeler demain », « Client — 2 dossiers » ; un dossier passe par `situationDeCandidat`. */
 export function phraseResultat(candidat: Pick<Candidat, "type" | "ville" | "etat">): string {
-  return [TYPES_RESULTAT[candidat.type], candidat.ville, candidat.etat].filter((m) => m && m.trim()).join(" · ");
+  const reste = [candidat.ville, candidat.etat].filter((m) => m && m.trim()).join(", ");
+  return reste ? `${TYPES_RESULTAT[candidat.type]} — ${reste}` : TYPES_RESULTAT[candidat.type];
 }
 
 /**

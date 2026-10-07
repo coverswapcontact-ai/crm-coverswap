@@ -82,10 +82,10 @@ describe("aujourdhui : blocs, bornes, ligne de réponse", () => {
     const appel = tache({ genre: "APPEL", libelle: "Appeler", telephone: "0611223344" });
     assert.equal(messageReponse(appel, { reponse: "FAIT" }, null, maintenant), "Fait");
     assert.equal(messageReponse(tache({ genre: "VALIDER", propositionId: "p" }, {}, "VALIDER"), { reponse: "FAIT" }, null, maintenant), "Validé");
-    assert.equal(messageReponse(appel, { reponse: "PLUS_TARD", quand: "DEMAIN" }, { plusTardJusqua: "2026-10-07T07:00:00.000Z" }, maintenant), "Plus tard · revient demain 9 h");
+    assert.equal(messageReponse(appel, { reponse: "PLUS_TARD", quand: "DEMAIN" }, { plusTardJusqua: "2026-10-07T07:00:00.000Z" }, maintenant), "Plus tard — revient demain 9 h");
     assert.equal(messageReponse(appel, { reponse: "PLUS_TARD", quand: "DEMAIN" }, null, maintenant), "Plus tard");
     assert.equal(messageReponse(tache({ genre: "VALIDER", propositionId: "p" }, {}, "VALIDER"), { reponse: "PAS_A_FAIRE", raison: "PAS_PERTINENT" }, null, maintenant), "Ignoré");
-    assert.equal(messageReponse(appel, { reponse: "PAS_A_FAIRE", raison: "DEJA_FAIT" }, null, maintenant), "Pas à faire · déjà fait hors crm");
-    assert.equal(messageReponse(appel, { reponse: "PAS_A_FAIRE", raison: "AUTRE", texte: "parce que" }, null, maintenant), "Pas à faire · autre");
+    assert.equal(messageReponse(appel, { reponse: "PAS_A_FAIRE", raison: "DEJA_FAIT" }, null, maintenant), "Pas à faire — déjà fait hors crm");
+    assert.equal(messageReponse(appel, { reponse: "PAS_A_FAIRE", raison: "AUTRE", texte: "parce que" }, null, maintenant), "Pas à faire — autre");
   });
 });

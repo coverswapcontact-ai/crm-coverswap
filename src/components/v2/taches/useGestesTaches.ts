@@ -15,6 +15,7 @@ import type { EntreeReponse, ResultatAnnulation, ResultatReponse } from "@/lib/a
 import type { TacheVue } from "@/lib/a-faire/types";
 import { nomDuTitre } from "@/lib/a-faire/affichage";
 import { messageReponse } from "@/lib/v2/aujourdhui";
+import { titreV2 } from "@/lib/v2/phrases";
 import { estSensible, propositionDe, raccourciDe } from "@/lib/v2/geste-pret";
 import { memoriserReprendre } from "../reprendre-client";
 import { toastAnnulable } from "./toastAnnulable";
@@ -120,7 +121,7 @@ export function useGestesTaches({ ordre, relire, relireApres, masquer, demasquer
     try {
       const resultat = await envoyerJson<ResultatReponse>(`/api/a-faire/${tache.id}/reponse`, "POST", entree);
       setRetour({ id: tache.id, suivante });
-      toastAnnulable(messageReponse(tache, entree, resultat.tache, Date.now()), () => void annuler(tache), tache.titre);
+      toastAnnulable(messageReponse(tache, entree, resultat.tache, Date.now()), () => void annuler(tache), titreV2(tache.titre));
       if (resultat.regle?.creee) toast.info("Une règle est proposée", { description: "La même raison revient souvent : elle attend ta décision dans « À valider »." });
       relireApres();
     } catch (erreur) {

@@ -134,9 +134,9 @@ export function decouperLignes<T>(lignes: readonly T[], tout: boolean, visibles 
   return { visibles: lignes.slice(0, visibles), reste: lignes.length - visibles };
 }
 
-/** « Page 2 sur 4 · 51 à 100 sur 180 » ; vide quand tout tient sur une page. */
+/** « Page 2 sur 4, dossiers 51 à 100 sur 180 » ; vide quand tout tient sur une page. */
 export function phrasePage(page: number, parPage: number, total: number): string {
   if (total <= parPage) return "";
   const derniere = Math.max(1, Math.ceil(total / parPage));
-  return `Page ${page} sur ${derniere} · ${(page - 1) * parPage + 1} à ${Math.min(page * parPage, total)} sur ${total}`;
+  return `Page ${page} sur ${derniere}, dossiers ${(page - 1) * parPage + 1} à ${Math.min(page * parPage, total)} sur ${total}`;
 }

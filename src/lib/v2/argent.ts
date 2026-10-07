@@ -46,17 +46,17 @@ export function phraseRetard(ligne: Pick<LigneEncours, "joursRetard" | "tranche"
   return null;
 }
 
-/** « émise le 12 oct. · déjà réglé 200 € sur 1 200 € ». */
+/** « émise le 12 oct., déjà réglé 200 € sur 1 200 € ». */
 export function phraseFacture(ligne: Pick<LigneEncours, "emiseLe" | "regle" | "montant">, maintenant: Date): string {
   const parties = [ligne.emiseLe ? `émise ${jourRelatif(ligne.emiseLe, maintenant)}` : "date d'émission inconnue"];
   if (ligne.regle > 0) parties.push(`déjà réglé ${formatMontant(ligne.regle)} sur ${formatMontant(ligne.montant)}`);
-  return parties.join(" · ");
+  return parties.join(", ");
 }
 
-/** « 450 € · Payeur · n° 123 · reçu il y a 12 jours » ; `vieux` quand il attend depuis plus de 15 jours. */
+/** « 450 € — Payeur, n° 123, reçu il y a 12 jours » ; `vieux` quand il attend depuis plus de 15 jours. */
 export function phraseCheque(cheque: Pick<ChequeACrediter, "montant" | "payeur" | "reference" | "recuLe" | "joursDepuisReception">, maintenant: Date): { texte: string; vieux: boolean } {
-  const parties = [formatMontant(cheque.montant), cheque.payeur, cheque.reference ? `n° ${cheque.reference}` : null, `reçu ${jourRelatif(cheque.recuLe, maintenant)}`];
-  return { texte: parties.filter(Boolean).join(" · "), vieux: cheque.joursDepuisReception > 15 };
+  const parties = [cheque.payeur, cheque.reference ? `n° ${cheque.reference}` : null, `reçu ${jourRelatif(cheque.recuLe, maintenant)}`];
+  return { texte: `${formatMontant(cheque.montant)} — ${parties.filter(Boolean).join(", ")}`, vieux: cheque.joursDepuisReception > 15 };
 }
 
 /** Le code d'un SMS libre pour la trace (`lib/sms/copie.ts › CODE_LIBRE`) : le texte n'est pas dans le catalogue. */
@@ -90,7 +90,7 @@ export function moyenDeRelance(ligne: Pick<LigneEncours, "dossierId" | "telephon
   return ligne.telephone ? "SMS" : "MAIL";
 }
 
-/** Les mois de l'année qui ont des recettes, du plus récent au plus ancien : « Octobre · 3 100 € » (majuscule initiale). */
+/** Les mois de l'année qui ont des recettes, du plus récent au plus ancien : « Octobre — 3 100 € » (majuscule initiale). */
 export function moisDuLivre(parMois: readonly number[], annee: number, maintenant: Date): { mois: number; libelle: string; montant: number }[] {
   const courant = jourParis(maintenant);
   const dernier = courant.startsWith(String(annee)) ? Number(courant.slice(5, 7)) : 12;

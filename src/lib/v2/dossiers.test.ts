@@ -136,7 +136,7 @@ describe("deux niveaux : cinq lignes puis « Voir les N autres », les pages en 
 
   test("phrasePage", () => {
     assert.equal(phrasePage(1, 50, 40), "");
-    assert.equal(phrasePage(2, 50, 180), "Page 2 sur 4 · 51 à 100 sur 180");
-    assert.equal(phrasePage(4, 50, 180), "Page 4 sur 4 · 151 à 180 sur 180");
+    assert.equal(phrasePage(2, 50, 180), "Page 2 sur 4, dossiers 51 à 100 sur 180");
+    assert.equal(phrasePage(4, 50, 180), "Page 4 sur 4, dossiers 151 à 180 sur 180");
   });
 });

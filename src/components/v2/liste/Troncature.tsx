@@ -58,13 +58,12 @@ export function ChampRecherche({ valeur, onChange, placeholder, libelle, autoFoc
   );
 }
 
-/** Un bloc replié : son titre, un nombre en gris, « Voir » / « Replier ». */
-export function TitreRepliable({ id, titre, nombre, ouvert, onBasculer }: { id: string; titre: string; nombre?: number | string | null; ouvert: boolean; onBasculer: () => void }) {
+/** Un bloc replié : son titre, « Voir » / « Replier ». Aucun nombre dans un titre (correctifs du 07/10, d3). */
+export function TitreRepliable({ id, titre, ouvert, onBasculer }: { id: string; titre: string; ouvert: boolean; onBasculer: () => void }) {
   return (
     <button type="button" aria-expanded={ouvert} aria-controls={`${id}-contenu`} onClick={onBasculer} className={REPLI_V2}>
       <span id={`${id}-titre`} className={TITRE_BLOC_V2}>
         {titre}
-        {nombre !== undefined && nombre !== null && nombre !== "" ? <span className="text-texte-3"> · {nombre}</span> : null}
       </span>
       <span className="flex items-center gap-1 text-corps text-texte-3">
         {ouvert ? "Replier" : "Voir"}

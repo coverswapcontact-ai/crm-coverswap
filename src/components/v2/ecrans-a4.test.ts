@@ -34,9 +34,11 @@ const ordre = (source: string, reperes: string[]) => {
 };
 
 describe("Dossiers v2 : la liste « ce qui m'attend », les segments, une ligne = la situation + le geste", () => {
-  test("deux blocs dans l'ordre (segments et recherche, puis la liste) ; le panneau, les archives et la création de la v1 derrière", () => {
-    ordre(dossiers, ["{/* 1. Ce qui m'attend : les segments, puis la recherche */}", "{/* 2. La liste (ou les colonnes) */}", "<PanneauDossierV2", "<DossiersArchives", "<CreationDossier"]);
-    assert.equal((dossiers.match(/\{\/\* \d\. /g) ?? []).length, 2);
+  test("trois blocs dans l'ordre (les segments seuls en haut, la liste, puis chercher / filtrer / ouvrir) ; le panneau, les archives et la création de la v1 derrière", () => {
+    // Correctifs du 07/10 (É7) : une seule chose en haut = la rangée de segments ; recherche, filtres, vue et création sous les cinq premières lignes.
+    ordre(dossiers, ["{/* 1. Quels dossiers : la rangée de segments, rien d'autre en haut (correctifs du 07/10, É7) */}", "{/* 2. La liste (ou les colonnes) */}", "<BoutonVoirAutres reste={decoupe.reste}", "{/* 3. Chercher, filtrer, ouvrir : sous les cinq premières lignes, jamais en tête */}", "<ChampRecherche", "aria-expanded={plusDeFiltres}", "{vue === \"liste\" ? \"Vue en colonnes\" : \"Vue en liste\"}", "onClick={ouvrirCreation} className={BOUTON_SECONDAIRE}", "<PanneauDossierV2", "<DossiersArchives", "<CreationDossier"]);
+    assert.equal((dossiers.match(/\{\/\* \d\. /g) ?? []).length, 3);
+    assert.match(dossiers, /<section aria-label="Quels dossiers">\s*<Segments/);
     assert.match(dossiers, /options=\{SEGMENTS_DOSSIERS\}/);
     assert.match(dossiers, /vue: vueDuSegment\(f\.segment\)/);
     assert.match(dossiers, /trierCeQuiMattend\(retenus, maintenant\)/);
@@ -102,6 +104,12 @@ describe("Personnes v2 : la recherche d'abord, puis les segments, puis la liste"
     assert.match(lignesPersonnes, /href=\{`\/clients\/\$\{client\.id\}`\}/);
     assert.match(lignesPersonnes, /noterDebutAppel\(lead\.id, \{ nom: lead\.nom, dossierId: lead\.dossierId \}\)/);
     assert.match(lignesPersonnes, /phraseResultat\(candidat\)/);
+    // Correctifs du 07/10 (É8, É10) : « Appeler » vert sur la première ligne seulement ; un dossier trouvé se lit au format de situation.
+    assert.match(lignesPersonnes, /className=\{principal \? APPELER : APPELER_CONTOUR\}/);
+    assert.match(personnes, /principal=\{index === 0\}/);
+    assert.match(lignesPersonnes, /situationDeCandidat\(candidat, maintenant\)/);
+    assert.match(lire("lib/assistant/recherche.ts"), /prochaineActionDate\?: string \| null;/);
+    assert.match(personnes, /decouperLignes\(resultats \?\? \[\], toutResultats, LIGNES_VISIBLES\)/);
     for (const composant of ["<ModeAppels", "<PanneauEntrant", "<NouveauContact", "<CreationClient", "<NotificationsAppareil"]) assert.ok(personnes.includes(composant), composant);
     assert.match(personnes, /fileDAppels\(segment, lignes\)/);
     assert.match(personnes, /Enchaîner les appels/);
@@ -138,7 +146,10 @@ describe("Argent v2 : trois nombres en haut, puis six blocs au plus", () => {
 
   test("Encaisser = le bouton principal de chaque facture (ModalePaiementFacture) ; Relancer = SMS prêt à copier, sinon le mail du dossier ; une ligne après le geste", () => {
     assert.equal((argent.match(/(?<![\w-])bg-action(?![\w/-])/g) ?? []).length, 1, "un seul dessin de bouton vert : Encaisser");
-    assert.match(argent, /className=\{BOUTON_ENCAISSER\}>\s*<Euro size=\{18\} aria-hidden \/> Encaisser/);
+    // Correctifs du 07/10 (É8) : le vert à la première ligne seulement (la facture la plus en retard), contour ensuite.
+    assert.match(argent, /className=\{index === 0 \? BOUTON_ENCAISSER : BOUTON_ENCAISSER_LIGNE\}>\s*<Euro size=\{18\} aria-hidden \/> Encaisser/);
+    assert.match(argent, /const BOUTON_ENCAISSER_LIGNE = cn\(BOUTON_SECONDAIRE, "gap-2"\);/);
+    assert.match(argent, /className=\{cn\(BOUTON_SECONDAIRE, "text-texte-3"\)\}>\s*Rejeté/);
     assert.match(argent, /onClick=\{\(\) => relancer\(ligne\)\} className=\{BOUTON_SECONDAIRE\}>\s*Relancer/);
     assert.match(argent, /proposition: propositionRelanceFacture\(ligne\)/);
     assert.match(argent, /toast\.success\(`Facture \$\{ligne\.numero\} relancée par SMS`/);

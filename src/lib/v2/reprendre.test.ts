@@ -9,6 +9,9 @@ const ilYA = (heures: number) => new Date(maintenant.getTime() - heures * 3_600_
 describe("contexteDepuisAdresse : les adresses qui se reprennent (inchangées)", () => {
   test("dossier, contact, fiche client, mail ; rien pour les listes", () => {
     assert.deepEqual(contexteDepuisAdresse("/dossiers", "dossier=abc&espace=1"), { chemin: "/dossiers?dossier=abc", titre: "le dossier ouvert", dossierId: "abc" });
+    // Correctifs du 07/10 (d1) : la rubrique ouverte revient avec le dossier.
+    assert.deepEqual(contexteDepuisAdresse("/dossiers", "dossier=abc&rubrique=devis"), { chemin: "/dossiers?dossier=abc&rubrique=devis", titre: "le dossier ouvert", dossierId: "abc" });
+    assert.equal(contexteDepuisAdresse("/dossiers", "rubrique=devis"), null);
     assert.deepEqual(contexteDepuisAdresse("/leads", new URLSearchParams("lead=l1")), { chemin: "/leads?lead=l1", titre: "le contact ouvert", dossierId: null });
     assert.deepEqual(contexteDepuisAdresse("/clients/c1", ""), { chemin: "/clients/c1", titre: "la fiche client", dossierId: null });
     assert.deepEqual(contexteDepuisAdresse("/mail", "mail=m1"), { chemin: "/mail?mail=m1", titre: "le mail ouvert", dossierId: null });
@@ -43,13 +46,13 @@ describe("estRecent, valeur serveur, choix entre les deux mémoires", () => {
 
   test("le plus récent l'emporte ; le même chemin prend le titre nommé du serveur ; fermé = plus rien ; vieux = rien", () => {
     const local = { chemin: "/leads?lead=l1", titre: "le contact ouvert", le: ilYA(1) };
-    const serveur = { chemin: "/dossiers?dossier=d1", titre: "dossier Essai · cuisine", le: ilYA(3), dossierId: "d1" };
+    const serveur = { chemin: "/dossiers?dossier=d1", titre: "dossier Essai, cuisine", le: ilYA(3), dossierId: "d1" };
     assert.deepEqual(choisirReprendre(local, serveur, maintenant), local);
     assert.deepEqual(choisirReprendre({ ...local, le: ilYA(5) }, serveur, maintenant), serveur);
     assert.deepEqual(choisirReprendre(null, serveur, maintenant), serveur);
     assert.deepEqual(choisirReprendre(local, null, maintenant), local);
     const memeDossier = { chemin: "/dossiers?dossier=d1", titre: "le dossier ouvert", le: ilYA(1), dossierId: "d1" };
-    assert.deepEqual(choisirReprendre(memeDossier, serveur, maintenant), { ...memeDossier, titre: "dossier Essai · cuisine" });
+    assert.deepEqual(choisirReprendre(memeDossier, serveur, maintenant), { ...memeDossier, titre: "dossier Essai, cuisine" });
     assert.equal(choisirReprendre({ ...local, le: ilYA(49) }, { ...serveur, le: ilYA(50) }, maintenant), null);
     assert.equal(choisirReprendre(local, serveur, maintenant, local.le), null, "fermé à cet instant");
     assert.deepEqual(choisirReprendre(local, serveur, maintenant, ilYA(2)), local, "fermé avant : le plus récent revient");
@@ -57,6 +60,6 @@ describe("estRecent, valeur serveur, choix entre les deux mémoires", () => {
   });
 
   test("la phrase : « Reprendre : dossier Essai · cuisine — il y a 3 h »", () => {
-    assert.equal(phraseReprendre({ titre: "dossier Essai · cuisine", le: ilYA(3) }, maintenant), "Reprendre : dossier Essai · cuisine — il y a 3 h");
+    assert.equal(phraseReprendre({ titre: "dossier Essai, cuisine", le: ilYA(3) }, maintenant), "Reprendre : dossier Essai, cuisine — il y a 3 h");
   });
 });

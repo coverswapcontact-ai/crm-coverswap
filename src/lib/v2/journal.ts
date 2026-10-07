@@ -7,6 +7,8 @@ import type { EntreeJournal, FiltreJournal } from "@/lib/chronologie/journal-typ
  */
 
 export const GROUPES_VISIBLES = 5;
+/** Correctifs du 07/10 (É13) : dans un groupe, cinq lignes avant « Voir les N autres ». */
+export const LIGNES_GROUPE_VISIBLES = 5;
 export const CLE_SYSTEME = "systeme";
 
 export type GroupeJournal = {

@@ -48,6 +48,7 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
   const [tout, setTout] = useState(false);
   const [q, setQ] = useState(qInitial);
   const [resultats, setResultats] = useState<Candidat[] | null>(null);
+  const [toutResultats, setToutResultats] = useState(false);
   const [etatRecherche, setEtatRecherche] = useState<"repos" | "cherche" | "erreur">("repos");
   const [ouvert, setOuvert] = useState<string | null>(leadInitial);
   const [menuAjout, setMenuAjout] = useState(false);
@@ -131,6 +132,7 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
         .then(({ resultats: trouves }) => {
           if (!valide) return;
           setResultats(trouves);
+          setToutResultats(false);
           setEtatRecherche("repos");
         })
         .catch(() => valide && setEtatRecherche("erreur"));
@@ -198,6 +200,7 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
   const parPage = segment === "CLIENTS" ? (clientsPage?.parPage ?? 50) : (listeLeads?.parPage ?? 50);
   const decoupeLeads = decouperLignes(lignes, tout, LIGNES_VISIBLES);
   const decoupeClients = decouperLignes(clientsPage?.clients ?? [], tout, LIGNES_VISIBLES);
+  const decoupeResultats = decouperLignes(resultats ?? [], toutResultats, LIGNES_VISIBLES);
   const instant = useMemo(() => new Date(maintenant), [maintenant]);
   const segmentDAppels = segment === "A_APPELER" || segment === "A_RAPPELER";
   const aideRecherche = etatRecherche === "erreur" ? "La recherche n'a pas répondu : réessaie." : etatRecherche === "cherche" && !resultats ? "Recherche en cours…" : resultats && resultats.length === 0 ? "Personne ne correspond." : null;
@@ -229,11 +232,14 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
           <section aria-label="Résultats" aria-busy={etatRecherche === "cherche"} className="flex flex-col gap-3">
             {aideRecherche ? <p className="px-1 text-corps-tel text-texte-3 md:text-corps">{aideRecherche}</p> : null}
             {resultats && resultats.length > 0 ? (
-              <ul className={LISTE_V2}>
-                {resultats.map((candidat) => (
-                  <LigneResultatV2 key={`${candidat.type}-${candidat.id}`} candidat={candidat} onOuvrirLead={setOuvert} />
-                ))}
-              </ul>
+              <>
+                <ul className={LISTE_V2}>
+                  {decoupeResultats.visibles.map((candidat) => (
+                    <LigneResultatV2 key={`${candidat.type}-${candidat.id}`} candidat={candidat} maintenant={instant} onOuvrirLead={setOuvert} />
+                  ))}
+                </ul>
+                <BoutonVoirAutres reste={decoupeResultats.reste} onClick={() => setToutResultats(true)} />
+              </>
             ) : null}
           </section>
         ) : (
@@ -245,7 +251,7 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
                 {segmentDAppels ? (
                   <button type="button" onClick={demarrerAppels} disabled={aEnchainer.length === 0} className={cn(BOUTON_SECONDAIRE, "gap-2")}>
                     <PhoneForwarded size={18} aria-hidden />
-                    {aEnchainer.length > 0 ? `Enchaîner les appels · ${aEnchainer.length}` : "Enchaîner les appels"}
+                    Enchaîner les appels
                   </button>
                 ) : null}
                 <div className="relative">
@@ -312,8 +318,8 @@ export function PersonnesV2({ segmentInitial, leads, clients, leadInitial = null
               ) : (
                 <>
                   <ul className={LISTE_V2}>
-                    {decoupeLeads.visibles.map((lead) => (
-                      <LigneLeadV2 key={lead.id} lead={lead} maintenant={instant} onOuvrir={setOuvert} />
+                    {decoupeLeads.visibles.map((lead, index) => (
+                      <LigneLeadV2 key={lead.id} lead={lead} maintenant={instant} principal={index === 0} onOuvrir={setOuvert} />
                     ))}
                   </ul>
                   <BoutonVoirAutres reste={decoupeLeads.reste} onClick={() => setTout(true)} />

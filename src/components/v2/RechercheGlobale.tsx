@@ -185,7 +185,7 @@ export function RechercheGlobale({ variante }: { variante: "loupe" | "champ" }) 
                       className={cn("flex min-h-[44px] w-full flex-col justify-center rounded-[10px] px-3 py-2 text-left", n === choisi ? "bg-surface-2 text-texte" : "text-texte-2 hover:bg-surface-2", TRANS_V2)}
                     >
                       <span className="text-corps-tel md:text-corps">{candidat.nom}</span>
-                      <span className="text-petit text-texte-3">{[candidat.ville, candidat.etat].filter(Boolean).join(" · ")}</span>
+                      <span className="text-petit text-texte-3">{[candidat.ville, candidat.etat].filter(Boolean).join(", ")}</span>
                     </button>
                   </li>
                 ))}

@@ -34,6 +34,8 @@ import { TRANS_V2 } from "../transitions";
 export type MoisArgent = { encaisse: number; depense: number; libelle: string };
 
 const BOUTON_ENCAISSER = cn("inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[8px] bg-action px-4 text-corps font-semibold text-action-texte hover:bg-action-clair focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50", TRANS_V2);
+/** Correctifs du 07/10 (É8) : le vert reste à la première ligne (la facture la plus en retard) ; les autres « Encaisser » sont en contour, comme Ensuite après Maintenant. */
+const BOUTON_ENCAISSER_LIGNE = cn(BOUTON_SECONDAIRE, "gap-2");
 
 export function ArgentV2({ initial, depenses, mois, section }: { initial: Tableau; depenses: { liste: Depenses; chantiers: ChantierPropose[] }; mois: MoisArgent; section: string | null }) {
   const routeur = useRouter();
@@ -95,7 +97,6 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
   const livre = recettes.etat === "OK" ? moisDuLivre(recettes.donnees.parMois, annee, maintenant) : [];
   const decoupeLivre = decouperLignes(livre, toutLivre, ENCOURS_VISIBLES);
   const adresseAnnee = (valeur: number) => `/finances?annee=${valeur}${section ? `&section=${section}` : ""}`;
-  const pointsACorriger = qualite.reduce((n, point) => n + point.detail.length, 0);
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-6">
@@ -125,21 +126,21 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
         {/* 2. L'encours : une facture par ligne, Encaisser en principal, Relancer en contour */}
         <section aria-labelledby="encours-titre" className="flex flex-col gap-3">
           <h2 id="encours-titre" className={cn(TITRE_BLOC_V2, "px-1")}>
-            Factures à encaisser{encours.lignes.length ? <span className="text-texte-3"> · {encours.lignes.length}</span> : null}
+            Factures à encaisser
           </h2>
           {encours.lignes.length === 0 ? (
             <Vide>Aucune facture en attente de paiement.</Vide>
           ) : (
             <>
               <ul className={LISTE_V2}>
-                {decoupeEncours.visibles.map((ligne) => {
+                {decoupeEncours.visibles.map((ligne, index) => {
                   const retard = phraseRetard(ligne);
                   return (
                     <li key={ligne.registreId} className={cn(LIGNE_V2, "flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center")}>
                       <div className="min-w-0 flex-1">
                         <p className="flex flex-wrap items-center gap-x-2 text-corps-tel text-texte md:text-corps">
                           {ligne.dossierId ? (
-                            <Link href={`/dossiers?dossier=${ligne.dossierId}`} className="font-medium tabular-nums hover:underline">
+                            <Link href={`/dossiers?dossier=${ligne.dossierId}`} className="inline-flex min-h-11 items-center font-medium tabular-nums hover:underline">
                               {ligne.numero}
                             </Link>
                           ) : (
@@ -152,7 +153,7 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
                         <p className="text-petit text-texte-3">{phraseFacture(ligne, maintenant)}</p>
                       </div>
                       <div className="flex shrink-0 gap-2">
-                        <button type="button" onClick={() => setPaiement(ligne)} className={BOUTON_ENCAISSER}>
+                        <button type="button" onClick={() => setPaiement(ligne)} className={index === 0 ? BOUTON_ENCAISSER : BOUTON_ENCAISSER_LIGNE}>
                           <Euro size={18} aria-hidden /> Encaisser
                         </button>
                         <button type="button" onClick={() => relancer(ligne)} className={BOUTON_SECONDAIRE}>
@@ -172,7 +173,7 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
         {cheques.length > 0 ? (
           <section aria-labelledby="cheques-titre" className="flex flex-col gap-3">
             <h2 id="cheques-titre" className={cn(TITRE_BLOC_V2, "px-1")}>
-              Chèques à créditer <span className="text-texte-3">· {formatMontant(totalCheques)}</span>
+              Chèques à créditer
             </h2>
             <ul className={LISTE_V2}>
               {decoupeCheques.visibles.map((cheque) => {
@@ -184,7 +185,7 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
                       <button type="button" onClick={() => setAction({ type: "credit", cheque })} className={BOUTON_SECONDAIRE}>
                         Crédité
                       </button>
-                      <button type="button" onClick={() => setAction({ type: "rejet", cheque })} className={cn(BOUTON_SECONDAIRE, "text-attention-texte")}>
+                      <button type="button" onClick={() => setAction({ type: "rejet", cheque })} className={cn(BOUTON_SECONDAIRE, "text-texte-3")}>
                         Rejeté
                       </button>
                     </div>
@@ -193,12 +194,13 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
               })}
             </ul>
             <BoutonVoirAutres reste={decoupeCheques.reste} onClick={() => setToutCheques(true)} />
+            <p className="px-1 text-corps-tel text-texte-2 md:text-corps">En attente de crédit : {formatMontant(totalCheques)}.</p>
           </section>
         ) : null}
 
         {/* 4. Les dépenses (l'écran de la v1, replié) */}
         <section id={SECTION_DEPENSES} aria-labelledby="depenses-v2-titre" className="flex scroll-mt-20 flex-col gap-2">
-          <TitreRepliable id="depenses-v2" titre={`Dépenses ${annee}`} nombre={depenses.liste.depenses.length ? formatMontant(depenses.liste.total) : null} ouvert={depensesOuvertes} onBasculer={() => setDepensesOuvertes((v) => !v)} />
+          <TitreRepliable id="depenses-v2" titre={`Dépenses ${annee}`} ouvert={depensesOuvertes} onBasculer={() => setDepensesOuvertes((v) => !v)} />
           <Link href="/depenses/nouvelle" className={cn(BOUTON_SECONDAIRE, "self-start")}>
             Ajouter une dépense
           </Link>
@@ -214,7 +216,6 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
           <div className="flex flex-wrap items-center justify-between gap-2 px-1">
             <h2 id="livre-titre" className={TITRE_BLOC_V2}>
               Livre des recettes {annee}
-              {recettes.etat === "OK" ? <span className="text-texte-3"> · {formatMontant(recettes.donnees.total)}</span> : null}
             </h2>
             <nav aria-label="Année" className="flex items-center gap-2">
               <Link href={adresseAnnee(annee - 1)} className={BOUTON_SECONDAIRE}>
@@ -240,6 +241,7 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
                 ))}
               </ul>
               <BoutonVoirAutres reste={decoupeLivre.reste} onClick={() => setToutLivre(true)} />
+              <p className="px-1 text-corps-tel text-texte-2 md:text-corps">Encaissé en {annee} : {formatMontant(recettes.donnees.total)}.</p>
             </>
           )}
           {recettes.etat === "OK" ? (
@@ -252,14 +254,12 @@ export function ArgentV2({ initial, depenses, mois, section }: { initial: Tablea
         {/* 6. À corriger, replié */}
         {qualite.length > 0 ? (
           <section aria-labelledby="qualite-titre" className="flex flex-col gap-2">
-            <TitreRepliable id="qualite" titre="À corriger pour des chiffres justes" nombre={pointsACorriger} ouvert={qualiteOuverte} onBasculer={() => setQualiteOuverte((v) => !v)} />
+            <TitreRepliable id="qualite" titre="À corriger pour des chiffres justes" ouvert={qualiteOuverte} onBasculer={() => setQualiteOuverte((v) => !v)} />
             {qualiteOuverte ? (
               <ul id="qualite-contenu" className={LISTE_V2}>
                 {qualite.map((point) => (
                   <li key={point.code} className={cn(LIGNE_V2, "flex flex-col gap-1 px-4 py-3")}>
-                    <p className="text-corps-tel text-texte md:text-corps">
-                      {point.libelle} <span className="text-texte-3">· {point.detail.length}</span>
-                    </p>
+                    <p className="text-corps-tel text-texte md:text-corps">{point.libelle}</p>
                     <p className="text-petit text-texte-3">
                       {point.detail.slice(0, ENCOURS_VISIBLES).join(" ; ")}
                       {point.detail.length > ENCOURS_VISIBLES ? ` ; et ${point.detail.length - ENCOURS_VISIBLES} autres` : ""}

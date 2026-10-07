@@ -1,9 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { EntreeJournal } from "@/lib/chronologie/journal-types";
-import type { GroupeJournal } from "@/lib/v2/journal";
+import { libelleVoirAutres } from "@/lib/v2/aujourdhui";
+import { LIGNES_GROUPE_VISIBLES, type GroupeJournal } from "@/lib/v2/journal";
 import { dateExacte, dateRelative } from "@/lib/v2/dates";
+import { phraseV2 } from "@/lib/v2/phrases";
 import { cn } from "@/lib/utils";
 import { TRANS_V2 } from "../transitions";
 
@@ -18,6 +21,9 @@ export const BOUTON_SECONDAIRE = cn("inline-flex h-11 items-center justify-cente
 export type GesteProposition = "valider" | "ignorer";
 
 export function GroupeParPersonne({ groupe, maintenant, enAttente, onGeste }: { groupe: GroupeJournal; maintenant: Date; enAttente: ReadonlySet<string>; onGeste: (entree: EntreeJournal, geste: GesteProposition) => void }) {
+  // Correctifs du 07/10 (É13) : cinq lignes par personne, puis « Voir les N autres ».
+  const [tout, setTout] = useState(false);
+  const visibles = tout ? groupe.entrees : groupe.entrees.slice(0, LIGNES_GROUPE_VISIBLES);
   return (
     <section aria-labelledby={`journal-${groupe.cle}`} className="rounded-[11px] border border-trait bg-surface p-4">
       <h2 id={`journal-${groupe.cle}`} className="text-corps-tel font-semibold text-texte md:text-corps">
@@ -30,16 +36,21 @@ export function GroupeParPersonne({ groupe, maintenant, enAttente, onGeste }: { 
         )}
       </h2>
       <ul className="mt-1 flex flex-col divide-y divide-trait/60">
-        {groupe.entrees.map((e) => (
+        {visibles.map((e) => (
           <Ligne key={e.id} entree={e} maintenant={maintenant} enAttente={enAttente.has(e.id)} onGeste={onGeste} />
         ))}
       </ul>
+      {groupe.entrees.length > visibles.length ? (
+        <button type="button" className={cn(BOUTON_SECONDAIRE, "mt-2")} onClick={() => setTout(true)}>
+          {libelleVoirAutres(groupe.entrees.length - visibles.length)}
+        </button>
+      ) : null}
     </section>
   );
 }
 
 function Ligne({ entree: e, maintenant, enAttente, onGeste }: { entree: EntreeJournal; maintenant: Date; enAttente: boolean; onGeste: (entree: EntreeJournal, geste: GesteProposition) => void }) {
-  const phrase = `${e.titre}${e.texte ? ` — ${e.texte}` : ""}${e.occurrences > 1 ? ` · ${e.occurrences} fois` : ""}`;
+  const phrase = `${phraseV2(e.titre, maintenant)}${e.texte ? ` — ${phraseV2(e.texte, maintenant)}` : ""}${e.occurrences > 1 ? `, ${e.occurrences} fois` : ""}`;
   const quand = (
     <time dateTime={e.le} title={dateExacte(e.le)} className="shrink-0 text-petit text-texte-3">
       {dateRelative(e.le, maintenant)}

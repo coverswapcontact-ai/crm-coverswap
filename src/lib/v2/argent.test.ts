@@ -46,12 +46,12 @@ describe("l'encours et les chèques, en phrases", () => {
   });
 
   test("« émise il y a 3 jours · déjà réglé 200 € sur 1 200 € »", () => {
-    assert.equal(phraseFacture({ emiseLe: "2026-10-04", regle: 200, montant: 1200 }, maintenant), "émise il y a 3 jours · déjà réglé 200,00 € sur 1 200,00 €");
+    assert.equal(phraseFacture({ emiseLe: "2026-10-04", regle: 200, montant: 1200 }, maintenant), "émise il y a 3 jours, déjà réglé 200,00 € sur 1 200,00 €");
     assert.equal(phraseFacture({ emiseLe: null, regle: 0, montant: 100 }, maintenant), "date d'émission inconnue");
   });
 
   test("« 450 € · Payeur · n° 123 · reçu hier », vieux au-delà de 15 jours", () => {
-    assert.deepEqual(phraseCheque({ montant: 450, payeur: "Payeur A", reference: "123", recuLe: "2026-10-06", joursDepuisReception: 1 }, maintenant), { texte: "450,00 € · Payeur A · n° 123 · reçu hier", vieux: false });
+    assert.deepEqual(phraseCheque({ montant: 450, payeur: "Payeur A", reference: "123", recuLe: "2026-10-06", joursDepuisReception: 1 }, maintenant), { texte: "450,00 € — Payeur A, n° 123, reçu hier", vieux: false });
     assert.equal(phraseCheque({ montant: 450, payeur: "Payeur A", reference: null, recuLe: "2026-09-10", joursDepuisReception: 27 }, maintenant).vieux, true);
   });
 

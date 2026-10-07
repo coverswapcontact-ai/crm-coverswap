@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FILTRES_JOURNAL, LIBELLES_FILTRE_JOURNAL, type EntreeJournal, type FiltreJournal, type ResultatJournal } from "@/lib/chronologie/journal-types";
 import { dateRelative, depuisLisible } from "@/lib/v2/dates";
 import { GROUPES_VISIBLES, basculerFiltre, compteEnMots, filtrer, grouperParPersonne } from "@/lib/v2/journal";
+import { DUREE_ANNULATION_MS } from "../taches/toastAnnulable";
 import { cn } from "@/lib/utils";
 import { appelApi, envoyerJson, messageErreur } from "@/components/pilotage/client";
 import { TRANS_V2 } from "../transitions";
@@ -19,7 +20,7 @@ import { BOUTON_SECONDAIRE, GroupeParPersonne, type GesteProposition } from "./G
  */
 export type DonneesJournal = ResultatJournal & { vuLe: string | null };
 
-const DELAI_ANNULATION_MS = 5_000;
+const DELAI_ANNULATION_MS = DUREE_ANNULATION_MS;
 /** « Ignorer » = rejeter avec le motif commun « Inutile » (validation/types.ts › MOTIFS_REJET_COMMUNS). */
 const MOTIF_IGNORER = "INUTILE";
 
@@ -39,6 +40,10 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
   const [reponse, setReponse] = useState<Reponse | null>(null);
   const [enAttente, setEnAttente] = useState<Set<string>>(new Set());
   const [occupe, setOccupe] = useState(false);
+  // Correctifs du 07/10 (É4) : « Tout vu » part 5 s plus tard, comme Valider ; la liste s'efface tout de suite et revient sur « Annuler ».
+  const [toutVuEnAttente, setToutVuEnAttente] = useState(false);
+  const minuterieToutVu = useRef<number | null>(null);
+  const ligneReponse = useRef<HTMLParagraphElement>(null);
   // Mission 22 (A2) : l'heure du rendu serveur d'abord (`jusqua`), la même au serveur et au navigateur (sinon une
   // minute passée entre les deux fait échouer l'hydratation) ; l'horloge de l'appareil prend le relais à la minute.
   const [maintenant, setMaintenant] = useState(() => new Date(initiale.jusqua));
@@ -53,10 +58,15 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
     const encours = minuteries.current;
     return () => {
       for (const m of encours.values()) window.clearTimeout(m);
+      if (minuterieToutVu.current) window.clearTimeout(minuterieToutVu.current);
     };
   }, []);
+  // Correctifs du 07/10 (É3) : la ligne de réponse se rend en haut du journal ; si le geste a eu lieu plus bas, elle est amenée en vue.
+  useEffect(() => {
+    if (reponse) ligneReponse.current?.scrollIntoView({ block: "nearest" });
+  }, [reponse]);
 
-  const visibles = filtrer(entrees, filtre);
+  const visibles = toutVuEnAttente ? [] : filtrer(entrees, filtre);
   const groupes = grouperParPersonne(visibles);
   const montres = toutMontrer ? groupes : groupes.slice(0, GROUPES_VISIBLES);
   const caches = groupes.length - montres.length;
@@ -109,20 +119,33 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
     [retirer]
   );
 
-  const toutVu = useCallback(async () => {
-    setOccupe(true);
-    try {
-      const { vuLe: pose } = await envoyerJson<{ vuLe: string }>("/api/journal/vu", "POST");
-      setVuLe(pose);
-      setDepuis(pose);
-      setEntrees([]);
-      setToutMontrer(false);
-      setReponse({ texte: `Fait. Rien de nouveau depuis ${dateRelative(pose, new Date())}.` });
-    } catch (erreur) {
-      setReponse({ texte: messageErreur(erreur), erreur: true });
-    } finally {
-      setOccupe(false);
-    }
+  /** « Tout vu » : « Tout est vu. » avec « Annuler » pendant 5 s, puis l'écriture, puis « Rien de nouveau depuis … ». */
+  const toutVu = useCallback(() => {
+    setToutVuEnAttente(true);
+    const annuler = () => {
+      if (minuterieToutVu.current) window.clearTimeout(minuterieToutVu.current);
+      minuterieToutVu.current = null;
+      setToutVuEnAttente(false);
+      setReponse({ texte: "Annulé : le journal reste à lire." });
+    };
+    minuterieToutVu.current = window.setTimeout(async () => {
+      minuterieToutVu.current = null;
+      setOccupe(true);
+      try {
+        const { vuLe: pose } = await envoyerJson<{ vuLe: string }>("/api/journal/vu", "POST");
+        setVuLe(pose);
+        setDepuis(pose);
+        setEntrees([]);
+        setToutMontrer(false);
+        setReponse({ texte: `Rien de nouveau depuis ${dateRelative(pose, new Date())}.` });
+      } catch (erreur) {
+        setReponse({ texte: messageErreur(erreur), erreur: true });
+      } finally {
+        setOccupe(false);
+        setToutVuEnAttente(false);
+      }
+    }, DELAI_ANNULATION_MS);
+    setReponse({ texte: "Tout est vu.", annuler });
   }, []);
 
   const suite = useCallback(async () => {
@@ -150,30 +173,29 @@ export function Journal({ initiale, compact = false, titre = "Depuis ta dernièr
           <Titre className="text-titre font-semibold text-texte">{titre}</Titre>
           <p className="text-corps-tel text-texte-2 md:text-corps">
             {total > 0 ? `${depuisLisible(depuis, maintenant).replace(/^depuis/, "Depuis")} : ${compteEnMots(total)}` : `Rien de nouveau depuis ${vuLe ? dateRelative(vuLe, maintenant) : depuisLisible(depuis, maintenant).replace(/^depuis /, "")}.`}
-            {total > 0 ? <span className="text-texte-3"> · clients {initiale.compteurs.CLIENTS}, argent {initiale.compteurs.ARGENT}, système {initiale.compteurs.SYSTEME}</span> : null}
           </p>
         </div>
-        {total > 0 ? (
+        {total > 0 && !toutVuEnAttente ? (
           // Mission 22 (A2) : dans Aujourd'hui (compact), le seul bouton principal de l'écran est le geste prêt de
           // « Maintenant » ; « Tout vu » y passe en contour. Sur /journal, il reste le bouton principal.
-          <button type="button" className={compact ? BOUTON_SECONDAIRE : BOUTON_PRINCIPAL} onClick={() => void toutVu()} disabled={occupe}>
+          <button type="button" className={compact ? BOUTON_SECONDAIRE : BOUTON_PRINCIPAL} onClick={toutVu} disabled={occupe}>
             Tout vu
           </button>
         ) : null}
       </header>
 
       {reponse ? (
-        <p role="status" aria-live="polite" className={cn("flex min-h-11 flex-wrap items-center gap-3 rounded-[8px] border px-4 py-2 text-corps-tel md:text-corps", reponse.erreur ? "border-attention/60 bg-surface text-attention-texte" : "border-action/40 bg-action-fond text-action-clair")}>
+        <p ref={ligneReponse} role="status" aria-live="polite" className={cn("flex min-h-11 flex-wrap items-center gap-3 rounded-[8px] border px-4 py-2 text-corps-tel md:text-corps", reponse.erreur ? "border-attention/60 bg-surface text-attention-texte" : "border-action/40 bg-action-fond text-action-clair")}>
           <span>{reponse.texte}</span>
           {reponse.annuler ? (
-            <button type="button" className={cn(BOUTON_SECONDAIRE, "h-9")} onClick={reponse.annuler}>
+            <button type="button" className={BOUTON_SECONDAIRE} onClick={reponse.annuler}>
               Annuler
             </button>
           ) : null}
         </p>
       ) : null}
 
-      {total > 0 ? (
+      {total > 0 && !toutVuEnAttente ? (
         <div role="group" aria-label="Filtrer le journal" className="flex flex-wrap gap-2">
           {FILTRES_JOURNAL.map((f) => (
             <button key={f} type="button" aria-pressed={filtre === f} className={FILTRE(filtre === f)} onClick={() => setFiltre((actif) => basculerFiltre(actif, f))}>

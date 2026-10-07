@@ -22,10 +22,11 @@ import { BoutonVoirAutres, ChampRecherche, LISTE_V2, PagesV2, Vide } from "../li
 import { LigneDossierV2 } from "./LigneDossierV2";
 
 /**
- * Mission 22 (A4) — l'écran Dossiers de la v2 (`/dossiers`, docs/CRM-V2.md § Dossiers) : la liste « ce qui m'attend »
- * d'abord (le filtre « À faire » du serveur, triée retards en tête), les segments Chez moi · Chez le client · Tous ·
- * Archives, la recherche (`?q=`), une ligne = la situation en trois lignes + le geste principal, cinq lignes puis
- * « Voir les N autres », puis les pages du serveur. Le kanban de la v1 reste en seconde vue (« Vue en colonnes »,
+ * Mission 22 (A4) — l'écran Dossiers de la v2 (`/dossiers`, docs/CRM-V2.md § Dossiers) : les segments Chez moi · Chez
+ * le client · Tous · Archives seuls en haut (correctifs du 07/10, É7), la liste « ce qui m'attend » (le filtre « À faire »
+ * du serveur, triée retards en tête ; une ligne = la situation en trois lignes + le geste principal, cinq lignes puis
+ * « Voir les N autres », puis les pages du serveur), et sous elle la recherche (`?q=`), « Plus de filtres », la vue en
+ * colonnes et « Ouvrir un dossier ». Le kanban de la v1 reste en seconde vue (« Vue en colonnes »,
  * même préférence `localStorage["dossiers:vue"]`). Le panneau est celui de la v2 ; création, archives et filtre
  * « Espaces » sont les composants de la v1. Mêmes adresses : `?dossier=`, `?rubrique=`, `?espace=`, `?archives=1`,
  * `?lead=` / `?client=` / `?prospect=` (création préremplie). Aucun badge, aucun compteur.
@@ -208,43 +209,9 @@ export function DossiersV2({ initial, leadInitial, dossierInitialId, demandeInit
     <div className="mx-auto w-full max-w-5xl px-4 py-4 md:px-8 md:py-6">
       <h1 className="sr-only">Dossiers</h1>
       <div className="flex flex-col gap-4">
-        {/* 1. Ce qui m'attend : les segments, puis la recherche */}
-        <section aria-label="Quels dossiers" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Segments libelle="Quels dossiers" options={SEGMENTS_DOSSIERS} actif={segment} onChoisir={choisirSegment} />
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => choisirVue(vue === "liste" ? "kanban" : "liste")} aria-pressed={vue === "kanban"} className={cn(BOUTON_SECONDAIRE, "gap-2 px-3")}>
-                {vue === "liste" ? <Columns3 size={18} aria-hidden /> : <List size={18} aria-hidden />}
-                {vue === "liste" ? "Vue en colonnes" : "Vue en liste"}
-              </button>
-              <button type="button" onClick={ouvrirCreation} className={BOUTON_SECONDAIRE}>
-                Ouvrir un dossier
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <ChampRecherche valeur={recherche} onChange={(v) => { setRecherche(v); setTout(false); }} placeholder="Client, ville, objet…" libelle="Rechercher un dossier" />
-            <button type="button" aria-expanded={plusDeFiltres} onClick={() => setPlusDeFiltres((v) => !v)} className={cn(BOUTON_SECONDAIRE, "shrink-0")}>
-              Plus de filtres
-            </button>
-          </div>
-          {plusDeFiltres ? (
-            <div className="flex flex-col gap-2 rounded-[11px] border border-trait bg-surface p-3">
-              <button
-                type="button"
-                aria-pressed={filtreEspace !== null}
-                onClick={() => {
-                  setFiltreEspace(filtreEspace ? null : "TOUS");
-                  setEtapeEspace(null);
-                  setTout(false);
-                }}
-                className={cn(BOUTON_SECONDAIRE, "self-start", filtreEspace && "border-action bg-action-fond text-action-clair")}
-              >
-                Avec un espace client
-              </button>
-              {filtreEspace ? <FiltreEspaces filtre={filtreEspace} etape={etapeEspace} tri={triEspace} compteurs={compteursEspaces} onFiltre={setFiltreEspace} onEtape={setEtapeEspace} onTri={setTriEspace} /> : null}
-            </div>
-          ) : null}
+        {/* 1. Quels dossiers : la rangée de segments, rien d'autre en haut (correctifs du 07/10, É7) */}
+        <section aria-label="Quels dossiers">
+          <Segments libelle="Quels dossiers" options={SEGMENTS_DOSSIERS} actif={segment} onChoisir={choisirSegment} />
         </section>
 
         {/* 2. La liste (ou les colonnes) */}
@@ -274,6 +241,42 @@ export function DossiersV2({ initial, leadInitial, dossierInitialId, demandeInit
             </>
           )}
           {segment !== "ARCHIVES" ? <PagesV2 total={total} page={page} parPage={initial.parPage} onPage={(p) => { setPageDemandee({ page: p, cle: cleFiltres }); setTout(false); }} /> : null}
+        </section>
+
+        {/* 3. Chercher, filtrer, ouvrir : sous les cinq premières lignes, jamais en tête */}
+        <section aria-label="Chercher, filtrer, ouvrir un dossier" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ChampRecherche valeur={recherche} onChange={(v) => { setRecherche(v); setTout(false); }} placeholder="Client, ville, objet…" libelle="Rechercher un dossier" />
+            <button type="button" aria-expanded={plusDeFiltres} onClick={() => setPlusDeFiltres((v) => !v)} className={cn(BOUTON_SECONDAIRE, "shrink-0")}>
+              Plus de filtres
+            </button>
+          </div>
+          {plusDeFiltres ? (
+            <div className="flex flex-col gap-2 rounded-[11px] border border-trait bg-surface p-3">
+              <button
+                type="button"
+                aria-pressed={filtreEspace !== null}
+                onClick={() => {
+                  setFiltreEspace(filtreEspace ? null : "TOUS");
+                  setEtapeEspace(null);
+                  setTout(false);
+                }}
+                className={cn(BOUTON_SECONDAIRE, "self-start", filtreEspace && "border-action bg-action-fond text-action-clair")}
+              >
+                Avec un espace client
+              </button>
+              {filtreEspace ? <FiltreEspaces filtre={filtreEspace} etape={etapeEspace} tri={triEspace} compteurs={compteursEspaces} onFiltre={setFiltreEspace} onEtape={setEtapeEspace} onTri={setTriEspace} /> : null}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => choisirVue(vue === "liste" ? "kanban" : "liste")} aria-pressed={vue === "kanban"} className={cn(BOUTON_SECONDAIRE, "gap-2 px-3")}>
+              {vue === "liste" ? <Columns3 size={18} aria-hidden /> : <List size={18} aria-hidden />}
+              {vue === "liste" ? "Vue en colonnes" : "Vue en liste"}
+            </button>
+            <button type="button" onClick={ouvrirCreation} className={BOUTON_SECONDAIRE}>
+              Ouvrir un dossier
+            </button>
+          </div>
         </section>
       </div>
 

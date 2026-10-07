@@ -139,7 +139,7 @@ export function NavigationV2() {
       {/* Ordinateur : la barre du haut */}
       <nav aria-label="Navigation principale" className="sticky top-0 z-40 hidden border-b-[0.5px] border-trait bg-fond/95 backdrop-blur md:block">
         <div className="mx-auto flex h-14 max-w-[1680px] items-center gap-3 px-5 lg:px-8">
-          <Link href="/taches" className="mr-2 text-corps font-semibold text-texte">
+          <Link href="/taches" className="mr-2 inline-flex min-h-11 items-center text-corps font-semibold text-texte">
             CoverSwap
           </Link>
           <ul className="flex min-w-0 flex-1 items-center gap-1">

@@ -43,13 +43,13 @@ export function libelleVoirAutres(nombre: number): string {
   return nombre === 1 ? "Voir l'autre" : `Voir les ${nombre} autres`;
 }
 
-/** La ligne écrite après une réponse : « Fait », « Validé », « Plus tard · revient demain 9 h », « Pas à faire · déjà fait hors CRM ». */
+/** La ligne écrite après une réponse : « Fait », « Validé », « Plus tard — revient demain 9 h », « Pas à faire — déjà fait hors CRM ». */
 export function messageReponse(tache: Pick<TacheVue, "raccourci" | "donnees" | "type">, entree: EntreeReponse, apres: Pick<TacheVue, "plusTardJusqua"> | null, maintenant: number): string {
   if (entree.reponse === "FAIT") return valideDansLaLigne(tache) ? "Validé" : "Fait";
-  if (entree.reponse === "PLUS_TARD") return apres?.plusTardJusqua ? `Plus tard · revient ${momentLisible(apres.plusTardJusqua, new Date(maintenant))}` : "Plus tard";
+  if (entree.reponse === "PLUS_TARD") return apres?.plusTardJusqua ? `Plus tard — revient ${momentLisible(apres.plusTardJusqua, new Date(maintenant))}` : "Plus tard";
   if (tache.type === "VALIDER" && entree.raison === "PAS_PERTINENT") return "Ignoré";
   const raison = entree.raison && entree.raison in LIBELLES_RAISON_PAS_A_FAIRE ? LIBELLES_RAISON_PAS_A_FAIRE[entree.raison as RaisonPasAFaire].toLowerCase() : null;
-  return raison ? `Pas à faire · ${raison}` : "Pas à faire";
+  return raison ? `Pas à faire — ${raison}` : "Pas à faire";
 }
 
 /** « Rien à faire maintenant. » et, s'il y a de quoi, « Demain : 3 tâches reviennent ». */

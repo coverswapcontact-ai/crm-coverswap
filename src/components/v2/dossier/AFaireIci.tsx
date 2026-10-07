@@ -21,7 +21,7 @@ export function AFaireIci({ taches, maintenant, occupees, surbrillance, actions 
   return (
     <section aria-labelledby="a-faire-ici-titre" className="flex flex-col gap-2">
       <h2 id="a-faire-ici-titre" className="px-1 text-titre font-semibold text-texte">
-        À faire ici <span className="text-texte-3">· {taches.length}</span>
+        À faire ici
       </h2>
       <ul className={CLASSE_LISTE_V2}>
         {visibles.map((tache) => (

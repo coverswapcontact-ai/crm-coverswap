@@ -10,7 +10,7 @@ import { pluriel } from "@/lib/commun/format";
 import type { ResultatLot } from "@/lib/a-faire/reponses";
 import type { ListeTaches, LotVue, PlanMinutes, TacheVue } from "@/lib/a-faire/types";
 import { dureeLisible, libelleChoixMinutes } from "@/lib/a-faire/affichage";
-import { MINUTES_V2, PLUS_TARD_VISIBLES, decouper, libelleVoirAutres, phraseVide } from "@/lib/v2/aujourdhui";
+import { ENSUITE_VISIBLES, MINUTES_V2, PLUS_TARD_VISIBLES, decouper, libelleVoirAutres, phraseVide } from "@/lib/v2/aujourdhui";
 import type { ContexteReprendre } from "@/lib/v2/reprendre";
 import { cn } from "@/lib/utils";
 import { Journal, type DonneesJournal } from "../journal/Journal";
@@ -48,6 +48,7 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
   const [plusTardOuvert, setPlusTardOuvert] = useState(false);
   const [plusTardTout, setPlusTardTout] = useState(false);
   const [faitOuvert, setFaitOuvert] = useState(false);
+  const [faitTout, setFaitTout] = useState(false);
   const [minutes, setMinutes] = useState<number | null>(null);
   const [plan, setPlan] = useState<PlanMinutes | null>(null);
   const [chargementPlan, setChargementPlan] = useState(false);
@@ -147,7 +148,7 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
       const resultat = await envoyerJson<{ nouvelles: number; cochees: number; liste: ListeTaches }>("/api/a-faire/detecter", "POST");
       remplacer(resultat.liste);
       const parties = [resultat.nouvelles ? pluriel(resultat.nouvelles, "nouvelle") : null, resultat.cochees ? `${pluriel(resultat.cochees, "cochée", "cochées")} par le CRM` : null].filter(Boolean);
-      toast.success("Liste à jour", { description: parties.length ? parties.join(" · ") : "Rien de nouveau." });
+      toast.success("Liste à jour", { description: parties.length ? parties.join(", ") : "Rien de nouveau." });
     } catch (erreur) {
       toast.error("Actualisation impossible", { description: messageErreur(erreur) });
     } finally {
@@ -157,6 +158,7 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
 
   const ligne = (tache: TacheVue) => <LigneTacheV2 key={tache.id} tache={tache} maintenant={maintenant} surbrillance={surbrillance === tache.id} occupe={occupees.has(tache.id)} actions={actions} />;
   const plusTardVisibles = plusTardTout ? plusTard : plusTard.slice(0, PLUS_TARD_VISIBLES);
+  const faitVisibles = faitTout ? liste.faitAujourdhui : liste.faitAujourdhui.slice(0, ENSUITE_VISIBLES);
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-4 md:px-8 md:py-6 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8">
@@ -177,10 +179,10 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
           <>
             <CarteTache key={blocs.maintenant.id} tache={blocs.maintenant} maintenant={maintenant} occupe={occupees.has(blocs.maintenant.id)} actions={actions} onPasAFaire={(tache) => gestes.demanderReponse(tache, "pasAFaire")} />
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Commencer, ou le temps dont je dispose">
-              <button type="button" onClick={() => lancerSerie(planActif ? `${libelleChoixMinutes(planActif.minutes)} · ${pluriel(vue.length, "tâche")}` : "Tâches à la suite", vue)} className={cn(BOUTON_SECONDAIRE, "gap-2")}>
+              <button type="button" onClick={() => lancerSerie(planActif ? `${libelleChoixMinutes(planActif.minutes)} — ${pluriel(vue.length, "tâche")}` : "Tâches à la suite", vue)} className={cn(BOUTON_SECONDAIRE, "gap-2")}>
                 <Play size={18} aria-hidden /> Commencer
                 <span className="text-texte-3">
-                  · {pluriel(vue.length, "tâche")} · {dureeLisible(planActif ? planActif.utilisees : minutesAujourdhui)}
+                  — {pluriel(vue.length, "tâche")}, {dureeLisible(planActif ? planActif.utilisees : minutesAujourdhui)}
                 </span>
               </button>
               {MINUTES_V2.map((m) => (
@@ -210,7 +212,7 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
         <section aria-labelledby="ensuite-titre" className="flex flex-col gap-2">
           <div className="flex min-h-11 items-center justify-between gap-2 px-1">
             <h2 id="ensuite-titre" className={TITRE_BLOC}>
-              Ensuite{blocs.ensuite.length ? <span className="text-texte-3"> · {blocs.ensuite.length + blocs.autres.length}</span> : null}
+              Ensuite
             </h2>
             <button type="button" onClick={() => void actualiser()} disabled={actualisation} title="Relire le CRM maintenant (sinon toutes les 15 minutes)" className={cn("flex min-h-11 items-center gap-2 rounded-[8px] px-2 text-corps text-texte-3 hover:bg-surface hover:text-texte focus-visible:ring-2 focus-visible:ring-action/50 focus-visible:outline-none disabled:opacity-50", TRANS_V2)}>
               <RefreshCw size={18} aria-hidden className={cn(actualisation && "animate-spin motion-reduce:animate-none")} /> Actualiser
@@ -274,7 +276,7 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
           <section aria-labelledby="plus-tard-titre" className="flex flex-col gap-2">
             <button type="button" aria-expanded={plusTardOuvert} onClick={() => setPlusTardOuvert((o) => !o)} className={REPLI}>
               <span id="plus-tard-titre" className={TITRE_BLOC}>
-                Plus tard <span className="text-texte-3">· {plusTard.length}</span>
+                Plus tard
               </span>
               <span className="text-corps text-texte-3">{plusTardOuvert ? "Replier" : "Voir"}</span>
             </button>
@@ -296,16 +298,23 @@ export function Aujourdhui({ initiale, journal, reprendre }: { initiale: ListeTa
           <section aria-labelledby="fait-titre" className="flex flex-col gap-2">
             <button type="button" aria-expanded={faitOuvert} onClick={() => setFaitOuvert((o) => !o)} className={REPLI}>
               <span id="fait-titre" className={TITRE_BLOC}>
-                Fait aujourd&apos;hui <span className="text-texte-3">· {liste.faitAujourdhui.length}</span>
+                Fait aujourd&apos;hui
               </span>
               <span className="text-corps text-texte-3">{faitOuvert ? "Replier" : "Voir"}</span>
             </button>
             {faitOuvert ? (
-              <ul className={CLASSE_LISTE_V2}>
-                {liste.faitAujourdhui.map((tache) => (
-                  <LigneFaiteV2 key={tache.id} tache={tache} />
-                ))}
-              </ul>
+              <>
+                <ul className={CLASSE_LISTE_V2}>
+                  {faitVisibles.map((tache) => (
+                    <LigneFaiteV2 key={tache.id} tache={tache} maintenant={maintenant} />
+                  ))}
+                </ul>
+                {liste.faitAujourdhui.length > faitVisibles.length ? (
+                  <button type="button" onClick={() => setFaitTout(true)} className={cn(BOUTON_SECONDAIRE, "self-start")}>
+                    {libelleVoirAutres(liste.faitAujourdhui.length - faitVisibles.length)}
+                  </button>
+                ) : null}
+              </>
             ) : null}
           </section>
         ) : null}

@@ -5,6 +5,7 @@ import { FondBalayage, useBalayage } from "@/app/(pilotage)/taches/_components/L
 import type { TacheVue } from "@/lib/a-faire/types";
 import { dureeLisible, ligneGrise, marcheASuivre } from "@/lib/a-faire/affichage";
 import { gestePret, libelleBalayageDroite } from "@/lib/v2/geste-pret";
+import { phraseV2, titreV2 } from "@/lib/v2/phrases";
 import { cn } from "@/lib/utils";
 import { BOUTON_SECONDAIRE } from "../journal/GroupeParPersonne";
 import { TRANS_V2 } from "../transitions";
@@ -30,11 +31,11 @@ export function CarteTache({ tache, maintenant, occupe, actions, onPasAFaire }: 
     <section aria-labelledby="maintenant-titre" data-tache={tache.id} className={cn("relative overflow-hidden rounded-[11px] border border-trait bg-surface", occupe && "opacity-60")}>
       <FondBalayage decalage={balayage.decalage} droite={libelleBalayageDroite(tache)} arrondi="rounded-[11px]" />
       <div {...balayage.gestionnaires} style={balayage.style} className="relative bg-surface p-4">
-        <p className="text-corps-tel text-texte-3 md:text-corps">Maintenant · environ {dureeLisible(tache.dureeMin)}</p>
+        <p className="text-corps-tel text-texte-3 md:text-corps">Maintenant — environ {dureeLisible(tache.dureeMin)}</p>
         <h2 id="maintenant-titre" className="mt-1 text-grand leading-tight font-semibold break-words text-texte">
-          {tache.titre}
+          {titreV2(tache.titre, new Date(maintenant))}
         </h2>
-        <p className="mt-1 text-corps-tel leading-snug text-texte-2 md:text-corps">{ligneGrise(tache, new Date(maintenant))}</p>
+        <p className="mt-1 text-corps-tel leading-snug text-texte-2 md:text-corps">{phraseV2(ligneGrise(tache, new Date(maintenant)), new Date(maintenant))}</p>
         {marche ? <p className="mt-3 rounded-[8px] border border-trait bg-fond px-3 py-2 text-corps-tel leading-relaxed break-words text-texte-2 md:text-corps">Marche à suivre : {marche}</p> : null}
 
         <div className="mt-4">
@@ -61,7 +62,7 @@ export function CarteTache({ tache, maintenant, occupe, actions, onPasAFaire }: 
             </button>
           ) : null}
         </div>
-        <p className={cn("mt-3 text-center text-corps text-texte-3 pointer-fine:hidden", TRANS_V2)}>Balayer à droite : {libelleBalayageDroite(tache).toLowerCase()} · à gauche : plus tard</p>
+        <p className={cn("mt-3 text-center text-corps text-texte-3 pointer-fine:hidden", TRANS_V2)}>Balayer à droite : {libelleBalayageDroite(tache).toLowerCase()} — à gauche : plus tard</p>
       </div>
     </section>
   );

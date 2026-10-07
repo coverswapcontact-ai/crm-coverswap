@@ -34,7 +34,18 @@ describe("Journal.tsx : une seule chose en haut, un seul bouton principal, deux 
   });
 
   test("chaque geste répond : une ligne écrite (role=status) et « Annuler » pendant 5 s ; le POST ne part qu'après", () => {
-    assert.match(ecran, /const DELAI_ANNULATION_MS = 5_000;/);
+    assert.match(ecran, /const DELAI_ANNULATION_MS = DUREE_ANNULATION_MS;/);
+    assert.match(lire("components/v2/taches/toastAnnulable.ts"), /export const DUREE_ANNULATION_MS = 5_000;/);
+    // Correctifs du 07/10 (É4) : « Tout vu » part aussi 5 s plus tard, avec « Annuler » ; « Tout est vu. » puis « Rien de nouveau depuis … ».
+    assert.match(ecran, /minuterieToutVu\.current = window\.setTimeout\(async \(\) => \{[\s\S]*?await envoyerJson<\{ vuLe: string \}>\("\/api\/journal\/vu", "POST"\)/);
+    assert.match(ecran, /setReponse\(\{ texte: "Tout est vu\.", annuler \}\)/);
+    assert.match(ecran, /const visibles = toutVuEnAttente \? \[\] : filtrer\(entrees, filtre\);/);
+    // Correctifs du 07/10 (É3) : la ligne de réponse est amenée en vue ; (É5) « Annuler » en 44 px (plus de h-9).
+    assert.match(ecran, /ligneReponse\.current\?\.scrollIntoView\(\{ block: "nearest" \}\)/);
+    assert.ok(!ecran.includes('"h-9"'), "Annuler fait 44 px");
+    // (É13) cinq lignes par groupe ; (d3) plus de compteurs « clients 4, argent 0, système 3 » dans l'en-tête.
+    assert.match(groupe, /groupe\.entrees\.slice\(0, LIGNES_GROUPE_VISIBLES\)/);
+    assert.ok(!ecran.includes("initiale.compteurs."), "aucun nombre dans le titre du journal");
     assert.match(ecran, /window\.setTimeout\(async \(\) => \{[\s\S]*?await envoyerJson\(chemin, "POST"/);
     assert.match(ecran, /role="status" aria-live="polite"/);
     assert.match(ecran, />\s*Annuler\s*</);

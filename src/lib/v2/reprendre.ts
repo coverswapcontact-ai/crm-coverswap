@@ -16,7 +16,7 @@ export const DUREE_REPRENDRE_MS = 48 * 3_600_000;
 export type ContexteReprendre = {
   /** L'adresse à rouvrir (inchangée : /dossiers?dossier=…, /leads?lead=…, /clients/<id>, /mail?mail=…). */
   chemin: string;
-  /** « le dossier ouvert » côté appareil ; « dossier Nom · objet » quand le serveur le connaît. */
+  /** « le dossier ouvert » côté appareil ; « dossier Nom, objet » quand le serveur le connaît. */
   titre: string;
   /** L'instant ISO de l'ouverture. */
   le: string;
@@ -28,7 +28,9 @@ export type ContexteReprendre = {
 export function contexteDepuisAdresse(pathname: string, recherche: string | URLSearchParams): Omit<ContexteReprendre, "le"> | null {
   const parametres = typeof recherche === "string" ? new URLSearchParams(recherche) : recherche;
   const dossier = parametres.get("dossier");
-  if (pathname === "/dossiers" && dossier) return { chemin: `/dossiers?dossier=${encodeURIComponent(dossier)}`, titre: "le dossier ouvert", dossierId: dossier };
+  // Correctifs du 07/10 (d1) : la rubrique ouverte (`?rubrique=`) se retient et se restitue dans le lien.
+  const rubrique = parametres.get("rubrique");
+  if (pathname === "/dossiers" && dossier) return { chemin: `/dossiers?dossier=${encodeURIComponent(dossier)}${rubrique ? `&rubrique=${encodeURIComponent(rubrique)}` : ""}`, titre: "le dossier ouvert", dossierId: dossier };
   const lead = parametres.get("lead");
   if (pathname === "/leads" && lead) return { chemin: `/leads?lead=${encodeURIComponent(lead)}`, titre: "le contact ouvert", dossierId: null };
   const client = /^\/clients\/([^/]+)$/.exec(pathname)?.[1];
@@ -76,7 +78,7 @@ export function choisirReprendre(local: ContexteReprendre | null, serveur: Conte
   return choisi;
 }
 
-/** « Reprendre : dossier Martin · cuisine — il y a 2 h ». */
+/** « Reprendre : dossier Martin, cuisine — il y a 2 h ». */
 export function phraseReprendre(contexte: Pick<ContexteReprendre, "titre" | "le">, maintenant: Date): string {
   return `Reprendre : ${contexte.titre} — ${dateRelative(contexte.le, maintenant)}`;
 }

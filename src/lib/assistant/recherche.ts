@@ -30,7 +30,32 @@ export type Candidat = {
   leadId: string | null;
   dossierId: string | null;
   chemin: string;
+  /**
+   * Mission 22 (correctifs du 07/10), pour un DOSSIER seulement (ajout de champs) : de quoi rendre la situation au
+   * format unique de la v2 (`lib/v2/situation.ts › situationDeCandidat`) dans les résultats de recherche. Les dates sont
+   * en ISO (la route les sert en JSON).
+   */
+  etape?: EtapeDossier;
+  main?: "MOI" | "CLIENT" | null;
+  mainLe?: string | null;
+  mainMotif?: string | null;
+  prochaineAction?: string | null;
+  prochaineActionDate?: string | null;
 };
+
+type DossierSituation = { etape: string; main: string | null; mainLe: Date | null; mainMotif: string | null; prochaineAction: string | null; prochaineActionDate: Date | null };
+const SELECT_SITUATION = { main: true, mainLe: true, mainMotif: true, prochaineAction: true, prochaineActionDate: true } as const;
+/** Les champs de situation d'un dossier, prêts pour le JSON de la route. */
+function situationDuCandidat(d: DossierSituation): Pick<Candidat, "etape" | "main" | "mainLe" | "mainMotif" | "prochaineAction" | "prochaineActionDate"> {
+  return {
+    etape: d.etape as EtapeDossier,
+    main: d.main === "MOI" || d.main === "CLIENT" ? d.main : null,
+    mainLe: d.mainLe?.toISOString() ?? null,
+    mainMotif: d.mainMotif,
+    prochaineAction: d.prochaineAction,
+    prochaineActionDate: d.prochaineActionDate?.toISOString() ?? null,
+  };
+}
 
 const sansAccents = (texte: string) => texte.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const mots = (texte: string) => sansAccents(texte).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((m) => m.length >= 2);
@@ -86,11 +111,11 @@ export async function chercherContacts(texte: string, options: { limite?: number
       select: { id: true, archiveLe: true, prenom: true, nom: true, ville: true, email: true, telephone: true, statut: true, clientId: true, dossiers: { where: { archiveLe: null }, select: { id: true }, take: 1 } },
       take: 3000,
     }),
-    prisma.dossier.findMany({ where: { ...archives }, select: { id: true, archiveLe: true, clientNom: true, clientVille: true, clientAdresse: true, clientCp: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true }, take: 3000 }),
+    prisma.dossier.findMany({ where: { ...archives }, select: { id: true, archiveLe: true, clientNom: true, clientVille: true, clientAdresse: true, clientCp: true, objet: true, etape: true, clientId: true, leadId: true, clientEmail: true, clientTelephone: true, ...SELECT_SITUATION }, take: 3000 }),
   ]);
   // Un numéro de devis ou de facture (« 2026-037 », « F-2026-012 ») : le dossier du document (mission 10).
   const numero = /^[A-Z]{0,3}-?\d{4}-\d{2,6}$/i.test(brut) ? brut.toUpperCase() : null;
-  const documents = numero ? await prisma.document.findMany({ where: { numero: { contains: numero.replace(/^[A-Z]+-/, "") }, archiveLe: null }, select: { id: true, type: true, numero: true, dossier: { select: { id: true, clientNom: true, clientVille: true, objet: true, etape: true, clientId: true, leadId: true } } }, take: 5 }) : [];
+  const documents = numero ? await prisma.document.findMany({ where: { numero: { contains: numero.replace(/^[A-Z]+-/, "") }, archiveLe: null }, select: { id: true, type: true, numero: true, dossier: { select: { id: true, clientNom: true, clientVille: true, objet: true, etape: true, clientId: true, leadId: true, ...SELECT_SITUATION } } }, take: 5 }) : [];
 
   const candidats: Candidat[] = [];
   const ajouter = (c: Candidat) => {
@@ -124,13 +149,13 @@ export async function chercherContacts(texte: string, options: { limite?: number
   }
   for (const doc of documents) {
     const d = doc.dossier;
-    ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape} · ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "avoir"} ${doc.numero}`, motif: `numéro de ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "document"}`, score: 1, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
+    ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape} · ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "avoir"} ${doc.numero}`, motif: `numéro de ${doc.type === "DEVIS" ? "devis" : doc.type === "FACTURE" ? "facture" : "document"}`, score: 1, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}`, ...situationDuCandidat(d) });
   }
   // Une adresse (« 30 boulevard Joliot-Curie ») : tous les mots cherchés dans l'adresse du dossier (numéro compris).
   const motsAdresse = sansAccents(brut).replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((m) => (m.length >= 2 || /^\d+$/.test(m)) && !MOTS_VIDES.has(m));
   const ressembleAUneAdresse = motsAdresse.length >= 2 && /\d/.test(brut) && !telephone;
   for (const d of dossiers) {
-    const base = { type: "DOSSIER" as const, id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape}${archive(d)}`, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` };
+    const base = { type: "DOSSIER" as const, id: d.id, nom: titreDossier(d), ville: d.clientVille || null, etat: `${LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape}${archive(d)}`, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}`, ...situationDuCandidat(d) };
     if (memeTelephone(d.clientTelephone)) ajouter({ ...base, score: 1, motif: "téléphone" });
     else if (memeEmail(d.clientEmail)) ajouter({ ...base, score: 1, motif: "e-mail" });
     else {
@@ -146,7 +171,7 @@ export async function chercherContacts(texte: string, options: { limite?: number
   // Une ville seule (« Montpellier ») : tout ce qui s'y trouve, si rien d'autre ne correspond.
   if (candidats.length === 0 && recherche.length === 1) {
     const ville = recherche[0];
-    for (const d of dossiers) if (d.clientVille && sansAccents(d.clientVille).includes(ville)) ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, motif: "ville", score: 0.6, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}` });
+    for (const d of dossiers) if (d.clientVille && sansAccents(d.clientVille).includes(ville)) ajouter({ type: "DOSSIER", id: d.id, nom: titreDossier(d), ville: d.clientVille, etat: LIBELLES_ETAPE[d.etape as EtapeDossier] ?? d.etape, motif: "ville", score: 0.6, clientId: d.clientId, leadId: d.leadId, dossierId: d.id, chemin: `/dossiers?dossier=${d.id}`, ...situationDuCandidat(d) });
     for (const l of leads) if (l.ville && sansAccents(l.ville).includes(ville)) ajouter({ type: "LEAD", id: l.id, nom: `${l.prenom} ${l.nom}`.trim(), ville: l.ville, etat: `lead ${(LIBELLES_STATUT_LEAD[l.statut as StatutLead] ?? l.statut).toLowerCase()}`, motif: "ville", score: 0.6, clientId: l.clientId, leadId: l.id, dossierId: l.dossiers[0]?.id ?? null, chemin: `/leads?lead=${l.id}` });
   }
   const ordre: Record<TypeContact, number> = { DOSSIER: 0, CLIENT: 1, LEAD: 2 };

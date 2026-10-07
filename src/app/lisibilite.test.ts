@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { describe, test } from "node:test";
 import { reecrire } from "../../scripts/jetons-codemod.mjs";
+import { cn } from "@/lib/utils";
 
 /**
  * Mission 22 (lot A0a) — la passe de lisibilité, vérifiée sur les sources comme `theme.test.ts` du site :
@@ -236,5 +237,52 @@ describe("frontière v1 / v2 : qui importe components/v2 ou lib/v2", () => {
     });
     const importent = sources.filter((f) => /from "@\/(components|lib)\/v2\//.test(lire(f))).map(nom).sort();
     assert.deepEqual(importent, [...AUTORISES].sort());
+  });
+});
+
+/**
+ * Correctifs du 07/10 (relecture 2) — règle 4 (des phrases, pas des codes) et règle 9 (l'échelle de texte de la v2).
+ */
+describe("src/lib/v2 et src/components/v2 : aucun point médian dans une phrase ; l'échelle de texte survit à cn()", () => {
+  const SOURCES_V2 = [...fichiers(join(SRC, "lib", "v2")), ...fichiers(join(SRC, "components", "v2"))];
+  /** Le seul endroit où le point médian a sa place : la fonction qui le retire des phrases de la v1. */
+  const EXCEPTION_POINT_MEDIAN = new Set(["lib/v2/phrases.ts"]);
+  const sansCommentaires = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+
+  test("aucun « · » hors commentaires (virgules et tirets à la place) ; l'exception est exacte", () => {
+    const constats: string[] = [];
+    for (const f of SOURCES_V2) {
+      if (EXCEPTION_POINT_MEDIAN.has(nom(f))) {
+        assert.ok(lire(f).includes("·"), `${nom(f)} : exception sans objet`);
+        continue;
+      }
+      sansCommentaires(lire(f)).split("\n").forEach((ligne, i) => {
+        if (ligne.includes("·")) constats.push(`${nom(f)}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(constats, []);
+    assert.equal(sansCommentaires("const a = 1; // x · y\n/* « a · b » */ const b = 2;"), "const a = 1; \n const b = 2;");
+  });
+
+  test("cn() garde text-corps, text-corps-tel, text-petit, text-titre et text-grand devant une couleur, et fond text-base / text-sm avec eux", () => {
+    const tailles = new Set<string>();
+    for (const f of SOURCES_V2) for (const t of lire(f).match(/(?<![\w-])(?:md:|lg:|sm:)?text-(?:corps-tel|corps|petit|titre|grand)(?![\w-])/g) ?? []) tailles.add(t);
+    assert.ok(tailles.size >= 5, [...tailles].join(" "));
+    for (const t of tailles) assert.ok(cn(t, "text-texte").split(" ").includes(t), `${t} disparaît derrière text-texte`);
+    for (const t of tailles) assert.ok(cn("text-texte-3", t).split(" ").includes("text-texte-3"), `${t} efface la couleur`);
+    assert.equal(cn("font-heading text-base font-medium text-foreground", "text-titre leading-tight font-semibold break-words text-texte"), "font-heading text-titre leading-tight font-semibold break-words text-texte");
+    assert.equal(cn("text-sm text-muted-foreground", "mt-2 text-corps-tel leading-snug break-words text-texte md:text-corps"), "mt-2 text-corps-tel leading-snug break-words text-texte md:text-corps");
+    assert.equal(cn("text-petit", "text-corps"), "text-corps");
+    // La v1 ne change pas : ses tailles se fondent comme avant.
+    assert.equal(cn("text-sm text-[13px]", "text-base"), "text-base");
+  });
+});
+
+describe("globals.css : rien ne bouge tout seul sous prefers-reduced-motion (correctifs du 07/10, É11)", () => {
+  test("une règle globale coupe animations et transitions, feuilles, modales et sonner compris ; la v1 la reçoit aussi", () => {
+    const bloc = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    assert.ok(bloc.length > 0, "la règle existe");
+    for (const declaration of ["animation-duration: 0.001ms !important", "animation-iteration-count: 1 !important", "transition-duration: 0.001ms !important", "scroll-behavior: auto !important"]) assert.ok(bloc.includes(declaration), declaration);
+    assert.match(bloc, /\*,\s*\*::before,\s*\*::after\s*\{/);
   });
 });

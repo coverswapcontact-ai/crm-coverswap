@@ -93,9 +93,9 @@ describe("l'état d'un lead en une phrase", () => {
   });
 
   test("les compléments : tentatives sans réponse, a un dossier ; sans suite ; archivé", () => {
-    assert.equal(etatLead(lead({ rappelLe: "2026-10-08T07:00:00.000Z", tentatives: 2, dossierId: "d1" }), maintenant), "à rappeler demain 9 h · 2 tentatives sans réponse · a un dossier");
+    assert.equal(etatLead(lead({ rappelLe: "2026-10-08T07:00:00.000Z", tentatives: 2, dossierId: "d1" }), maintenant), "à rappeler demain 9 h, 2 tentatives sans réponse, a un dossier");
     assert.equal(etatLead(lead({ statut: "PERDU" }), maintenant), "sans suite");
-    assert.equal(etatLead(lead({ archiveLe: "2026-10-06T16:00:00.000Z", archiveMotif: "Hors zone" }), maintenant), "archivé hier 18 h · Hors zone");
+    assert.equal(etatLead(lead({ archiveLe: "2026-10-06T16:00:00.000Z", archiveMotif: "Hors zone" }), maintenant), "archivé hier 18 h, Hors zone");
     // Aucune capitale espacée, aucun sigle.
     assert.doesNotMatch(etatLead(lead({ tentatives: 1 }), maintenant), /[A-Z]{3,}/);
   });
@@ -109,9 +109,9 @@ describe("clients, résultats, file d'appels", () => {
   });
 
   test("« Dossier · Ville · Devis envoyé »", () => {
-    assert.equal(phraseResultat({ type: "DOSSIER", ville: "Ville", etat: "Devis envoyé" }), "Dossier · Ville · Devis envoyé");
-    assert.equal(phraseResultat({ type: "LEAD", ville: null, etat: "À traiter" }), "Contact · À traiter");
-    assert.equal(phraseResultat({ type: "CLIENT", ville: "", etat: "2 dossiers" }), "Client · 2 dossiers");
+    assert.equal(phraseResultat({ type: "DOSSIER", ville: "Ville", etat: "Devis envoyé" }), "Dossier — Ville, Devis envoyé");
+    assert.equal(phraseResultat({ type: "LEAD", ville: null, etat: "À traiter" }), "Contact — À traiter");
+    assert.equal(phraseResultat({ type: "CLIENT", ville: "", etat: "2 dossiers" }), "Client — 2 dossiers");
   });
 
   test("la file des appels : jamais appelés sans les « à écarter » (simulations d'abord) ; rappels en retard ; rien ailleurs", () => {

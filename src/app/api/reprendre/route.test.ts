@@ -49,7 +49,7 @@ describe("POST /api/reprendre", () => {
     const lu = await serveur.lireReprendre(maintenant);
     assert.ok(lu);
     assert.equal(lu.chemin, `/dossiers?dossier=${dossierId}`);
-    assert.equal(lu.titre, "dossier Rose Essaireprendre · cuisine en chêne");
+    assert.equal(lu.titre, "dossier Rose Essaireprendre, cuisine en chêne");
     assert.equal(lu.dossierId, dossierId);
     assert.ok(maintenant.getTime() - Date.parse(lu.le) < 60_000);
     assert.equal(await serveur.lireReprendre(new Date(maintenant.getTime() + 49 * H)), null, "après 48 h");

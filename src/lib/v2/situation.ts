@@ -1,3 +1,4 @@
+import type { Candidat } from "@/lib/assistant/recherche";
 import type { EspaceResume } from "@/lib/espace/suivi-types";
 import { LIBELLES_ETAPE, type EtapeDossier } from "@/lib/dossiers/constants";
 import { joursDeRetard } from "@/lib/dossiers/dates";
@@ -9,9 +10,9 @@ import { depuisLisible, jourRelatif } from "./dates";
  * Mission 22 (A3) — le format unique de la situation d'un dossier (règle 5 de docs/CRM-V2.md : même chose, même
  * place), en trois lignes de phrases, pur et importable par tous les écrans v2 (panneau, puis listes, recherche,
  * journal) :
- *  1. qui / quoi : « Nom · cuisine, salle de bain · Ville » (l'étape s'affiche à côté, en mots) ;
+ *  1. qui / quoi : « Nom, cuisine, salle de bain, Ville » (l'étape s'affiche à côté, en mots) ;
  *  2. où en est-on et depuis quand : « Chez le client depuis vendredi 9 h — devis envoyé, relu 2 fois » ;
- *  3. la prochaine action et sa date : « Relancer · lundi » ou « Aucune prochaine action ».
+ *  3. la prochaine action et sa date : « Relancer — lundi » ou « Aucune prochaine action ».
  */
 export type DossierPourSituation = {
   clientNom: string;
@@ -34,7 +35,7 @@ export function pieceLisible(prestations: SelectionPrestations | null | undefine
 
 /** Ligne 1 : le nom, la pièce, la ville (les morceaux vides sautent). */
 export function ligneQuiQuoi(detail: Pick<DossierPourSituation, "clientNom" | "clientVille" | "prestations">): string {
-  return [detail.clientNom, pieceLisible(detail.prestations), detail.clientVille].filter((m) => m && m.trim()).join(" · ");
+  return [detail.clientNom, pieceLisible(detail.prestations), detail.clientVille].filter((m) => m && m.trim()).join(", ");
 }
 
 /** Qui a la main, en phrase. */
@@ -89,11 +90,36 @@ export function quandProchaineAction(detail: Pick<DossierPourSituation, "etape" 
   return jourRelatif(detail.prochaineActionDate, maintenant);
 }
 
-/** Ligne 3 : « Relancer · lundi », « Action à préciser · demain », « Aucune prochaine action ». */
+/** Ligne 3 : « Relancer — lundi », « Action à préciser — demain », « Aucune prochaine action ». */
 export function ligneProchaineAction(detail: Pick<DossierPourSituation, "etape" | "prochaineAction" | "prochaineActionDate">, maintenant: Date): string {
   const quand = quandProchaineAction(detail, maintenant);
   if (!detail.prochaineAction && !quand) return "Aucune prochaine action";
-  return [detail.prochaineAction ?? "Action à préciser", quand].filter(Boolean).join(" · ");
+  return [detail.prochaineAction ?? "Action à préciser", quand].filter(Boolean).join(" — ");
+}
+
+/**
+ * Mission 22 (correctifs du 07/10) — la situation d'un résultat de recherche : pour un DOSSIER qui porte ses champs
+ * (`lib/assistant/recherche.ts`, ajout de champs), les mêmes trois lignes que partout (sans la pièce : la recherche ne
+ * lit pas les prestations ; sans l'espace) ; null pour un contact, un client, ou un dossier servi sans situation
+ * (`etape` absent) — l'écran garde alors sa phrase courte. Dette : seuls les dossiers portent la situation complète.
+ */
+export function situationDeCandidat(candidat: Pick<Candidat, "type" | "nom" | "ville" | "etape" | "main" | "mainLe" | "mainMotif" | "prochaineAction" | "prochaineActionDate">, maintenant: Date): { quiQuoi: string; etape: string; situation: string; prochaineAction: string } | null {
+  if (candidat.type !== "DOSSIER" || !candidat.etape) return null;
+  return situationDe(
+    {
+      clientNom: candidat.nom,
+      clientVille: candidat.ville ?? "",
+      etape: candidat.etape,
+      prestations: {},
+      main: candidat.main ?? null,
+      mainLe: candidat.mainLe ?? null,
+      mainMotif: candidat.mainMotif ?? null,
+      prochaineAction: candidat.prochaineAction ?? null,
+      prochaineActionDate: candidat.prochaineActionDate ?? null,
+    },
+    null,
+    maintenant
+  );
 }
 
 /** Les trois lignes d'un coup, et l'étape en mots. */

@@ -60,10 +60,10 @@ export function RubriquesDossier({ detail, ouvertes, onBasculer, gestes, etapeDe
   const resumes: Partial<Record<RubriqueV2, ReactNode>> = {
     completer: pluriel(detail.completude.length, "point"),
     photos: pluriel(detail.photos.length, "photo"),
-    devis: `${pluriel(nbDevis, "devis", "devis")} · ${pluriel(nbFactures, "facture")}`,
+    devis: `${pluriel(nbDevis, "devis", "devis")}, ${pluriel(nbFactures, "facture")}`,
     paiements: detail.paiements.resteDu > 0 ? `reste dû ${formatMontant(detail.paiements.resteDu)}` : detail.paiements.acompteEnregistre ? "acompte reçu" : "aucun paiement",
     historique: detail.evenements[0]?.contenu,
-    coordonnees: [detail.clientTelephone, detail.clientEmail].filter(Boolean).join(" · "),
+    coordonnees: [detail.clientTelephone, detail.clientEmail].filter(Boolean).join(", "),
     delais: detail.dateChantier ? "chantier daté" : undefined,
   };
   const contenu: Record<RubriqueV2, ReactNode | null> = {

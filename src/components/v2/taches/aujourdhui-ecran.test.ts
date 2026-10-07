@@ -80,7 +80,7 @@ describe("chaque geste répond, la position revient, Reprendre", () => {
   test("toastAnnulable : la ligne écrite et « Annuler » pendant 5 s, utilisée par les réponses et les lots", () => {
     assert.match(toastSource, /export const DUREE_ANNULATION_MS = 5_000;/);
     assert.match(toastSource, /action: \{ label: "Annuler", onClick: \(\) => annuler\(\) \}/);
-    assert.match(gestes, /toastAnnulable\(messageReponse\(tache, entree, resultat\.tache, Date\.now\(\)\), \(\) => void annuler\(tache\), tache\.titre\)/);
+    assert.match(gestes, /toastAnnulable\(messageReponse\(tache, entree, resultat\.tache, Date\.now\(\)\), \(\) => void annuler\(tache\), titreV2\(tache\.titre\)\)/);
     assert.match(ecran, /toastAnnulable\(pluriel\(resultat\.classees, "tâche classée", "tâches classées"\), \(\) => void annulerLot\(lot, resultat\.le\)/);
     assert.match(gestes, /`\/api\/a-faire\/\$\{tache\.id\}\/annuler`/);
     assert.match(gestes, /`\/api\/a-faire\/\$\{tache\.id\}\/reponse`/);

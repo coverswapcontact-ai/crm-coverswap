@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { EspaceResume } from "@/lib/espace/suivi-types";
 import { jourRelatif } from "./dates";
-import { faitDeLaMain, ligneProchaineAction, ligneQuiQuoi, ligneSituation, phraseMain, pieceLisible, quandProchaineAction, signauxLisibles, situationDe, type DossierPourSituation } from "./situation";
+import { faitDeLaMain, ligneProchaineAction, ligneQuiQuoi, ligneSituation, phraseMain, pieceLisible, quandProchaineAction, signauxLisibles, situationDe, situationDeCandidat, type DossierPourSituation } from "./situation";
 
 /** Mission 22 (A3) — les trois lignes de situation d'un dossier, en phrases (règle 5), et le jour relatif. */
 const maintenant = new Date("2026-10-06T14:30:00.000Z"); // mardi 6 octobre 2026, 16 h 30 à Paris
@@ -40,7 +40,7 @@ describe("ligne 1 : qui / quoi", () => {
   test("le nom, la pièce en minuscules, la ville ; les morceaux vides sautent", () => {
     assert.equal(pieceLisible({ CUISINE: [], SDB: [] }), "cuisine, salle de bain");
     assert.equal(pieceLisible({}), "");
-    assert.equal(ligneQuiQuoi(dossier()), "Client Essai · cuisine, salle de bain · Lattes");
+    assert.equal(ligneQuiQuoi(dossier()), "Client Essai, cuisine, salle de bain, Lattes");
     assert.equal(ligneQuiQuoi(dossier({ prestations: {}, clientVille: "" })), "Client Essai");
   });
 });
@@ -91,15 +91,36 @@ describe("ligne 3 : la prochaine action et sa date", () => {
   });
 
   test("la ligne", () => {
-    assert.equal(ligneProchaineAction(dossier(), maintenant), "Relancer · lundi");
-    assert.equal(ligneProchaineAction(dossier({ prochaineAction: null }), maintenant), "Action à préciser · lundi");
+    assert.equal(ligneProchaineAction(dossier(), maintenant), "Relancer — lundi");
+    assert.equal(ligneProchaineAction(dossier({ prochaineAction: null }), maintenant), "Action à préciser — lundi");
     assert.equal(ligneProchaineAction(dossier({ prochaineActionDate: null }), maintenant), "Relancer");
     assert.equal(ligneProchaineAction(dossier({ prochaineAction: null, prochaineActionDate: null }), maintenant), "Aucune prochaine action");
   });
 
   test("situationDe : les trois lignes et l'étape en mots, sans sigle ni capitales espacées", () => {
     const s = situationDe(dossier(), espace(), maintenant);
-    assert.deepEqual(s, { quiQuoi: "Client Essai · cuisine, salle de bain · Lattes", etape: "Devis envoyé", situation: "Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse", prochaineAction: "Relancer · lundi" });
-    for (const ligne of Object.values(s)) assert.doesNotMatch(ligne, /MAIN|CLIENT ·|\b[A-Z]{3,}\b/);
+    assert.deepEqual(s, { quiQuoi: "Client Essai, cuisine, salle de bain, Lattes", etape: "Devis envoyé", situation: "Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse", prochaineAction: "Relancer — lundi" });
+    for (const ligne of Object.values(s)) assert.doesNotMatch(ligne, /MAIN|CLIENT ·|·|\b[A-Z]{3,}\b/);
+  });
+});
+
+describe("situationDeCandidat : un résultat de recherche au même format (correctifs du 07/10)", () => {
+  test("un dossier qui porte ses champs : les trois lignes, sans pièce ; un contact, un client, un dossier sans étape : null", () => {
+    const maintenant = new Date("2026-10-07T10:00:00.000Z");
+    const base = { nom: "Client Essai", ville: "Lattes", etape: "DEVIS_ENVOYE" as const, main: "CLIENT" as const, mainLe: "2026-10-02T07:00:00.000Z", mainMotif: "Devis envoyé : en attente de sa réponse", prochaineAction: "Relancer", prochaineActionDate: "2026-10-12T00:00:00.000Z" };
+    assert.deepEqual(situationDeCandidat({ type: "DOSSIER", ...base }, maintenant), {
+      quiQuoi: "Client Essai, Lattes",
+      etape: "Devis envoyé",
+      situation: "Chez le client depuis vendredi 9 h — devis envoyé : en attente de sa réponse",
+      prochaineAction: "Relancer — lundi",
+    });
+    assert.equal(situationDeCandidat({ type: "LEAD", ...base }, maintenant), null);
+    assert.equal(situationDeCandidat({ type: "CLIENT", ...base }, maintenant), null);
+    assert.equal(situationDeCandidat({ type: "DOSSIER", nom: "Sans", ville: null }, maintenant), null);
+    const sansRien = situationDeCandidat({ type: "DOSSIER", nom: "Client Essai", ville: null, etape: "QUALIFICATION" }, maintenant);
+    assert.ok(sansRien);
+    assert.equal(sansRien.quiQuoi, "Client Essai");
+    assert.equal(sansRien.prochaineAction, "Aucune prochaine action");
+    for (const ligne of Object.values(sansRien)) assert.doesNotMatch(ligne, /·/);
   });
 });

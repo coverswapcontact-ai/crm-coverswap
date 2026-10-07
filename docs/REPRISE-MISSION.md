@@ -5587,5 +5587,6 @@ d'autonomie complète, décision la plus simple notée ici, aucun arrêt avant l
 
 ## Avancement (une ligne par lot)
 - Départ : CRM main 53f0c87 (1 701 tests). Dépenses OpenAI de la mission : 0 $.
+- Correction de contexte (07/10) : `calibrage/lattes/` = 4 rendus ChatGPT jugés fidèles d'un autre dossier (exemples de bons rendus, pas la preuve du défaut) ; le cas RM30 est une simulation du site du 06/10 (V1, #A6B095 contre #A4A38F, ΔE ≈ 6), elle sera dans l'export. Variante prioritaire de P3 : prompt court en mode retouche (« EDIT Image 1, do not create a new image », teinte en mots en plus du hex — « muted, dusty, greyish olive, closer to grey than to green, NOT fresh green » —, surfaces nommées une à une, liste de ce qui reste identique, « compare with the sample before you output; if greener or brighter, desaturate toward grey »), construit par `construirePrompt` en version générique, contre le prompt actuel.
 
 
